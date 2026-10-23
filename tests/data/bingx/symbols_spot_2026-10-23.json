@@ -1,0 +1,5 @@
+{"code":0,"msg":"","retryable":0,"data":{"symbols":[
+{"symbol":"CAKE-USDT","minQty":2.672,"maxQty":10689.471,"minNotional":1,"maxNotional":173228.34612018,"maxMarketNotional":173228.34612018,"status":1,"tickSize":0.001,"stepSize":0.001,"apiStateSell":true,"apiStateBuy":true,"timeOnline":0,"offTime":0,"maintainTime":0,"displayName":"CAKE-USDT"},
+{"symbol":"BTC-USDT","minQty":0.0001826,"maxQty":18.2663756,"minNotional":0.5,"maxNotional":7588825.16352942,"maxMarketNotional":7588825.16352942,"status":1,"tickSize":0.01,"stepSize":0.000001,"apiStateSell":true,"apiStateBuy":true,"timeOnline":0,"offTime":0,"maintainTime":0,"displayName":"BTC-USDT"},
+{"symbol":"TWT-USDT","minQty":4.52,"maxQty":90415.914,"minNotional":1,"maxNotional":173004.15910201,"maxMarketNotional":173004.15910201,"status":1,"tickSize":0.0001,"stepSize":0.001,"apiStateSell":true,"apiStateBuy":true,"timeOnline":0,"offTime":0,"maintainTime":0,"displayName":"TWT-USDT"}
+]}}

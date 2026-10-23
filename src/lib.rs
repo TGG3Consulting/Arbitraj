@@ -15,3 +15,4 @@ pub mod notify;
 pub mod secrets;
 pub mod settings;
 pub mod storage;
+pub mod venues;

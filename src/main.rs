@@ -67,11 +67,27 @@ async fn run() -> Result<(), String> {
         notifier.clone(),
     ));
 
+    // Адаптеры площадок: создаются здесь и регистрируются в шлюзе; ядро видит их только через шлюз.
+    let registry = Registry::new();
+    let raw = arb::storage::raw_log::RawLog::start(args.data_dir.clone(), settings.clone());
+    let bingx_ctx = arb::venues::bingx::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw,
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::bingx::Bingx::new(
+            bingx_ctx,
+        )))
+        .await;
+
     let state = AppState {
         db,
         settings,
         journal: journal.clone(),
-        registry: Registry::new(),
+        registry,
         vault,
         notifier: notifier.clone(),
         http,

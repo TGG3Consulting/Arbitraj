@@ -108,6 +108,7 @@ secrets/ — ключи и токены только в памяти; разбл
 | 2026-10-23 | Уведомления в Telegram: события по каталогу, вкл/выкл и площадки по каждому, «Проверить подключение» (getMe + getChat) | src/notify/* , src/api/check.rs | notify.*, http.timeout_ms; секрет telegram.bot_token | ждёт #2 (экран «Уведомления») |
 | 2026-10-23 | Секреты: зашифрованный файл (Argon2id + XChaCha20-Poly1305), разблокировка паролем, ключи только в памяти | src/secrets/*, src/api/secrets.rs | security.* | ждёт #2 (экран «Разблокировка», поля ключей) |
 | 2026-10-23 | Защита веб-сервера от чужих страниц (Host/Origin) | src/api/guard.rs | аргументы --listen, --allow-origin | — |
+| 2026-10-23 | Адаптер BingX (спот): справочник монет и сетей, стаканы по WebSocket, котировка на объём, ордер, вывод, депозит, балансы, «Проверить подключение» | src/venues/bingx/*, src/storage/raw_log.rs | venue.* (bingx), raw.*, feed.stale_after_ms; секреты bingx.api_key, bingx.api_secret | ждёт #2 (экран «Площадки») |
 
 ## Открытые вопросы
 

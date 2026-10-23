@@ -37,6 +37,7 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",
         ErrorCode::TxNotIncluded => "send.tx_not_included",
+        ErrorCode::OutcomeUnknown => "send.outcome_unknown",
         _ => return None,
     })
 }
@@ -67,6 +68,21 @@ pub async fn on_error(
     if let Some(paused) = risk::on_error(core, venue) {
         let t = format!("Площадка {} на паузе: {paused}", venue.0);
         deps.notify("risk.stop", Some(&venue.0), &t).await;
+    }
+    // Исход неизвестен (транзакция могла исполниться): повтор — риск двойного вывода или обмена. Не повторяем при
+    // любых правилах шлюза, площадка — на паузу до ручной проверки.
+    if err.code == ErrorCode::OutcomeUnknown {
+        let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
+        super::engine::lk(&core.inner.risk)
+            .venue_paused
+            .insert(venue.clone(), why.clone());
+        deps.notify(
+            "risk.stop",
+            Some(&venue.0),
+            &format!("Площадка {} на паузе: {why}", venue.0),
+        )
+        .await;
+        return Next::Stop;
     }
     let rules = match crate::storage::rules::list(&deps.db).await {
         Ok(r) => r,

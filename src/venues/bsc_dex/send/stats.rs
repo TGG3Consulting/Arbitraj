@@ -67,4 +67,11 @@ impl Stats {
             let _ = out.try_send(MarketEvent::SendChannel(snapshot));
         }
     }
+
+    /// Событие ядру (например очередь кошелька) без ожидания: нет канала — ничего. Ошибок нет.
+    pub fn emit(&self, ev: MarketEvent) {
+        if let Some(out) = self.out.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+            let _ = out.try_send(ev);
+        }
+    }
 }

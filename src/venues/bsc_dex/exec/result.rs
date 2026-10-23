@@ -20,8 +20,8 @@ use super::super::wallet::balances::BNB;
 use super::fill;
 use super::txs;
 
-/// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded / NonceConflict с фактом транзакции; BadResponse —
-/// обмен в блоке, но суммы не считаются (с сырыми числами и фактом транзакции).
+/// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded с фактом транзакции; OutcomeUnknown (ядро не
+/// повторяет, площадка на паузу) — «вытеснена» или обмен в блоке, а суммы не считаются (сырые числа и факт «в блоке»).
 /// Принимает: запрос, итог транзакции, кошелёк, (токен входа, токен выхода), (decimals монеты, decimals USDT).
 pub fn result(
     ctx: &Ctx,
@@ -44,8 +44,8 @@ pub fn result(
         (TxOutcome::Replaced, _) => {
             return Err(ctx
                 .err(
-                    ErrorCode::NonceConflict,
-                    format!("Nonce занят другой транзакцией, tx {}", d.chain.hash),
+                    ErrorCode::OutcomeUnknown,
+                    format!("Nonce занят, а своей квитанции нет за send.replaced_confirm_blocks — исход обмена tx {} неизвестен, нужна ручная проверка", d.chain.hash),
                 )
                 .with_tx(d.chain));
         }
@@ -80,7 +80,7 @@ pub fn result(
     ) else {
         return Err(ctx
             .err(
-                ErrorCode::BadResponse,
+                ErrorCode::OutcomeUnknown,
                 format!(
                     "Обмен в блоке, tx {}, но суммы не переводятся в числа: монет {coins_u} (decimals {coin_dec}), USDT {usdt_u} (decimals {usdt_dec}), газ {:?}",
                     d.chain.hash, d.chain.gas_bnb

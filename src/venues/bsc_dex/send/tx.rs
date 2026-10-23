@@ -4,6 +4,7 @@
 //! Кто вызывает: exec/txs.rs, send/cancel.rs, send/track.rs.
 //! От чего зависит: node/rpc.rs, node/mod.rs (chainId), ctx.rs.
 //! Настройки: send.gas_limit_margin_pct, send.max_wait_blocks, send.bundle_max_blocks, send.cancel_gas_bump_pct,
+//! send.replaced_confirm_blocks, send.cancel_max_gas_gwei, send.cancel_max_attempts, send.queue_max_wait_s,
 //! feed.stale_after_ms [bsc_dex].
 //!
 //! eth_estimateGas — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/execute.yaml#L43-L60 ;
@@ -22,6 +23,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::BSC_CHAIN_ID;
 use super::super::node::rpc;
+use super::super::num;
 
 /// Настройки ожидания и отмены — читаются до отправки: не задано — транзакция не уходит.
 #[derive(Debug, Clone, Copy)]
@@ -34,6 +36,14 @@ pub struct SendCfg {
     pub bump_pct: Decimal,
     /// feed.stale_after_ms — нет нового блока дольше: предупреждение в журнал (очередь кошелька ждёт дальше).
     pub stale: Duration,
+    /// send.replaced_confirm_blocks — nonce занят без своей квитанции: сколько ещё блоков искать её.
+    pub replaced_confirm: u64,
+    /// send.cancel_max_gas_gwei в wei — потолок цены газа отмены.
+    pub cancel_max_wei: U256,
+    /// send.cancel_max_attempts — сколько отмен одной транзакции.
+    pub cancel_max_attempts: u64,
+    /// send.queue_max_wait_s — сколько ждать итога одной транзакции до остановки очереди.
+    pub queue_max_wait: Duration,
 }
 
 impl SendCfg {
@@ -45,6 +55,19 @@ impl SendCfg {
             bundle_max: ctx.int("send.bundle_max_blocks")?,
             bump_pct: ctx.dec("send.cancel_gas_bump_pct")?,
             stale: Duration::from_millis(ctx.int("feed.stale_after_ms")?),
+            replaced_confirm: ctx.int("send.replaced_confirm_blocks")?,
+            cancel_max_wei: num::to_units(
+                ctx.dec("send.cancel_max_gas_gwei")? * Decimal::from(1_000_000_000u64),
+                0,
+            )
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::NotConfigured,
+                    "send.cancel_max_gas_gwei не переводится в wei",
+                )
+            })?,
+            cancel_max_attempts: ctx.int("send.cancel_max_attempts")?,
+            queue_max_wait: Duration::from_secs(ctx.int("send.queue_max_wait_s")?),
         };
         if cfg.max_wait < cfg.bundle_max {
             return Err(ctx.err(

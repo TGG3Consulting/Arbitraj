@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 
 use crate::core::types::{
     Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, TransferStatus, VenueId, WithdrawRequest,
+    Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::GatewayResult;
@@ -137,21 +137,25 @@ impl Venue for BscDex {
         Ok(w.to_string())
     }
 
-    /// Статус зачисления по квитанции (wallet/transfer_status.rs: ненулевой Transfer на кошелёк, send.deposit_confirmations);
-    /// «Зачислен» или «отклонён» снимает ожидаемое поступление (wallet/inflows.rs). Ошибки: узел, NotConfigured, BadResponse.
+    /// Статус зачисления; любое завершение снимает ожидаемое поступление — wallet/deposit.rs.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
-        let ctx = &self.p.ctx;
-        let w = wallet::signer::address(ctx)?;
-        let t =
-            wallet::transfer_status::deposit_status(ctx, &self.p.tokens, asset, tx_hash, w).await?;
-        if matches!(
-            t.status,
-            TransferStatus::Credited | TransferStatus::Rejected
-        ) && let (Some(token), Ok(h)) = (asset.bsc_contract, tx_hash.parse())
-        {
-            self.p.inflows.done(token, h);
-        }
-        Ok(t)
+        wallet::deposit::status(&self.p, asset, tx_hash).await
+    }
+
+    /// Вывод на кошелёк не состоялся — ожидание поступления снято (wallet/deposit.rs). Ошибок нет.
+    async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
+        wallet::deposit::abandoned(&self.p, asset).await;
+        Ok(())
+    }
+
+    /// Очередь транзакций кошелька (wallet/nonce.rs). Ошибок нет.
+    async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
+        Ok(wallet::deposit::queue(&self.p))
+    }
+
+    /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.
+    async fn release_wallet_queue(&self, by: &str) -> GatewayResult<WalletQueue> {
+        wallet::deposit::release(&self.p, by).await
     }
 
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.

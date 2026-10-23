@@ -122,3 +122,31 @@ pub struct ChainTx {
     /// Чаевые билдеру в BNB (если были).
     pub tip_bnb: Option<Decimal>,
 }
+
+/// Состояние очереди транзакций кошелька DEX (решение 45): одна транзакция за раз, до занятия её nonce в блоке.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum WalletQueueState {
+    /// Свободна.
+    Free,
+    /// Ждёт итога транзакции.
+    Busy {
+        nonce: u64,
+        hash: B256,
+        since: DateTime<Utc>,
+    },
+    /// Остановлена до ручной проверки: исход транзакции неизвестен (лимиты отмены, время ожидания, узел недоступен).
+    /// Отправки DEX не идут, пока человек не снимет очередь («Снять очередь после ручной проверки»).
+    Halted {
+        reason: String,
+        nonce: Option<u64>,
+        hash: Option<B256>,
+        since: DateTime<Utc>,
+    },
+}
+
+/// Очередь кошелька площадки DEX — для экрана и уведомлений.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WalletQueue {
+    pub venue: super::market::VenueId,
+    pub state: WalletQueueState,
+}

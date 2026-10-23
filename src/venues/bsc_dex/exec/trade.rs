@@ -106,6 +106,15 @@ pub async fn send_plan(
 ) -> GatewayResult<txs::Done> {
     for (to, data) in &p.approvals {
         let d = txs::send(env, slot, *to, data.clone(), U256::ZERO, false, None).await?;
+        if d.chain.outcome == TxOutcome::Replaced {
+            return Err(env
+                .ctx
+                .err(
+                    ErrorCode::OutcomeUnknown,
+                    "Исход разрешения (approve) неизвестен — nonce занят, квитанции нет",
+                )
+                .with_tx(d.chain));
+        }
         if d.chain.outcome != TxOutcome::Included {
             return Err(env
                 .ctx

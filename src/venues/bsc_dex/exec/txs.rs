@@ -11,18 +11,17 @@
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
-use alloy_primitives::{Address, B256, Bytes, U64, U256};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use rust_decimal::Decimal;
-use serde_json::json;
 
 use crate::core::types::{ChainTx, SendMethod, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
-use super::super::node::rpc;
 use super::super::num;
 use super::super::quote::gas::GasPrice;
+use super::super::send::settle::{self, After};
 use super::super::send::stats::Stats;
 use super::super::send::track::{self, Receipt, Tracked, Watch};
 use super::super::send::tx::{self, SendCfg};
@@ -115,21 +114,31 @@ pub async fn send(
         channels: channels.clone(),
     };
     let hold = slot.hold();
-    let task_ctx = ctx.clone();
+    let after = After {
+        ctx,
+        heads: &env.heads,
+        stats: &env.stats,
+        cfg: &cfg,
+        from,
+        nonce,
+        hash: signed.hash,
+    };
+    settle::busy(&after, &hold);
+    let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
+    let hash = signed.hash;
     let job = tokio::spawn(async move {
         let t = track::resolve(watch).await;
         drop(keep);
-        hold.consumed(nonce + 1);
-        // Бандл с чаевыми занимает и nonce + 1: следующий nonce — по счётчику узла, если он уже больше.
-        if let Ok(n) = rpc::call::<U64>(
-            &task_ctx,
-            "eth_getTransactionCount",
-            json!([from, "latest"]),
-        )
-        .await
-        {
-            hold.consumed(n.to());
-        }
+        let a = After {
+            ctx: &task_ctx,
+            heads: &task_heads,
+            stats: &task_stats,
+            cfg: &cfg,
+            from,
+            nonce,
+            hash,
+        };
+        settle::settle(&a, &hold, &t).await;
         t
     });
     let t = job.await.map_err(|e| {
@@ -139,6 +148,15 @@ pub async fn send(
         )
     })?;
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
+    if let Some(why) = &t.unresolved {
+        let chain = chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
+        return Err(ctx
+            .err(
+                ErrorCode::OutcomeUnknown,
+                format!("Исход транзакции {} неизвестен ({why}) — очередь кошелька остановлена до ручной проверки", signed.hash),
+            )
+            .with_tx(chain));
+    }
     Ok(Done {
         chain: chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
         receipt: t.receipt,

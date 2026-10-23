@@ -6,6 +6,7 @@
 
 pub mod approve;
 pub mod balances;
+pub mod deposit;
 pub mod inflows;
 pub mod nonce;
 pub mod signer;

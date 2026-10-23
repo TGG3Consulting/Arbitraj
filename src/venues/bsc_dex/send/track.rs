@@ -1,160 +1,132 @@
 //! Файл: venues/bsc_dex/send/track.rs
 //! Что делает: итог транзакции — только через свой узел (решение 42), независимо от канала, и до тех пор, пока её
 //! nonce не занят в блоке. На каждый новый блок (newHeads) — eth_getTransactionReceipt по исходной транзакции и её
-//! отменам. Квитанция исходной — «в блоке» (status 0x1) или «откат» (0x0); квитанция отмены — «не попала» (газ
-//! отмены — в факте). Нет квитанции дольше send.max_wait_blocks: nonce кошелька («latest») занят — ещё раз квитанции,
-//! нет — «вытеснена» (чужая транзакция с тем же ключом); не занят — отмена (send/cancel.rs) и снова ждём.
-//! Сбой чтения квитанции или nonce, нет новых блоков — не ошибка: повтор на следующем блоке, очередь ждёт.
+//! отменам. Квитанция исходной — «в блоке» (status 0x1) или «откат» (0x0); квитанция отмены — «не попала».
+//! Нет квитанции дольше send.max_wait_blocks: nonce («latest») не занят — отмена (send/cancel.rs), дороже каждый раз;
+//! занят — ещё send.replaced_confirm_blocks блоков ищем свою квитанцию и eth_getTransactionByHash (узел мог ещё не
+//! проиндексировать, балансировщик RPC), только потом «вытеснена». Сбой узла, нет блоков — не ошибка: повтор.
+//! Исход не установлен: лимит отмен (send.cancel_max_attempts), потолок цены газа отмены (send.cancel_max_gas_gwei),
+//! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь).
 //! Кто вызывает: exec/txs.rs (задача трекера держит место в очереди кошелька).
-//! От чего зависит: node/rpc.rs, node/heads.rs, send/receipt.rs, send/cancel.rs, send/stats.rs, send/tx.rs (SendCfg), ctx.rs.
-//! Настройки: send.max_wait_blocks, send.cancel_gas_bump_pct, send.bundle_max_blocks, feed.stale_after_ms (SendCfg).
+//! От чего зависит: node/rpc.rs, send/track_util.rs, send/receipt.rs, send/cancel.rs, send/tx.rs (SendCfg), ctx.rs.
+//! Настройки: send.max_wait_blocks, send.replaced_confirm_blocks, send.cancel_*, send.queue_max_wait_s,
+//! send.bundle_max_blocks, feed.stale_after_ms (SendCfg).
 //!
-//! Источники: квитанция (status, blockNumber, gasUsed, effectiveGasPrice, logs) —
-//! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165 ;
-//! null, пока нет в блоке — узел BSC internal/ethapi/api.go#L2211-L2229; eth_getTransactionCount «latest» —
-//! execution-apis src/eth/state.yaml; схема трекера — research/flow/bsc_send.md, раздел 5.
+//! Источники: квитанция — execution-apis 16caee27 src/eth/transaction.yaml#L127-L165; null, пока нет в блоке — узел BSC
+//! internal/ethapi/api.go#L2211-L2229; eth_getTransactionCount «latest» — src/eth/state.yaml; схема трекера —
+//! research/flow/bsc_send.md, раздел 5.
 
-use alloy_primitives::{Address, B256, U64, U256};
+use std::time::Instant;
+
+use alloy_primitives::U64;
 use serde_json::json;
 
 use crate::core::types::TxOutcome;
 use crate::storage::journal::Level;
 
-use super::super::ctx::Ctx;
-use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::cancel;
-use super::ready::Ready;
 use super::receipt;
 pub use super::receipt::Receipt;
-use super::stats::Stats;
-use super::tx::SendCfg;
+use super::track_util::{Quiet, heads_rx, landed, next_head};
+pub use super::track_util::{Tracked, Watch};
 
-/// Итог: nonce занят в блоке.
-pub struct Tracked {
-    pub outcome: TxOutcome,
-    /// Квитанция исходной транзакции (в блоке / откат).
-    pub receipt: Option<Receipt>,
-    /// Отмена, занявшая nonce: хеш и квитанция (исходная не попала).
-    pub cancel: Option<(B256, Receipt)>,
-}
-
-/// Что отслеживать.
-pub struct Watch {
-    pub ctx: Ctx,
-    pub heads: Heads,
-    pub stats: Stats,
-    /// Каналы исходной транзакции — в них же уходит отмена.
-    pub ready: Vec<Ready>,
-    pub cfg: SendCfg,
-    pub hash: B256,
-    pub nonce: u64,
-    pub from: Address,
-    /// Цена газа исходной транзакции, wei.
-    pub price: U256,
-    pub sent_block: u64,
-    /// Каналы, принявшие (или не ответившие ясно) — для счётчиков.
-    pub channels: Vec<String>,
-}
-
-/// Ждёт, пока nonce не занят в блоке (см. шапку). Возвращает: итог. Ошибок нет — сбои узла повторяются.
+/// Ждёт, пока nonce не занят в блоке или исход не признан неизвестным (см. шапку). Возвращает: итог.
+/// Ошибок нет — сбои узла повторяются.
 pub async fn resolve(w: Watch) -> Tracked {
     let ctx = &w.ctx;
-    let mut rx = w.heads.watch();
+    let started = Instant::now();
+    let mut rx = heads_rx(&w.heads);
+    let mut quiet = Quiet::new(ctx, w.hash);
     let mut ours = vec![w.hash];
-    let (mut price, mut since) = (w.price, w.sent_block);
+    let (mut price, mut since, mut cancels) = (w.price, w.sent_block, 0u64);
+    let mut taken_at: Option<u64> = None;
     loop {
-        match tokio::time::timeout(w.cfg.stale, rx.changed()).await {
-            Ok(Ok(())) => {}
-            Ok(Err(_)) => {
-                warn(ctx, format!("поток новых блоков закрыт — {} ждёт", w.hash)).await;
-                tokio::time::sleep(w.cfg.stale).await;
-                continue;
-            }
-            Err(_) => {
-                warn(ctx, format!("нет новых блоков дольше feed.stale_after_ms — итог {} пока неизвестен, очередь кошелька ждёт", w.hash)).await;
-                continue;
-            }
+        if started.elapsed() > w.cfg.queue_max_wait {
+            let why = format!(
+                "итог не установлен за send.queue_max_wait_s; последний сбой: {}",
+                quiet.reason()
+            );
+            return Tracked::bare(TxOutcome::Pending, Some(why));
         }
-        let Some(head) = rx.borrow_and_update().clone() else {
+        let Some(head) = next_head(&mut rx, &w.cfg, &mut quiet).await else {
             continue;
         };
         match receipt::find(ctx, &ours).await {
             Ok(Some((i, r))) => return landed(&w, &ours, i, r),
-            Ok(None) => {}
+            Ok(None) => quiet.ok("receipt").await,
             Err(e) => {
-                warn(
-                    ctx,
-                    format!(
-                        "квитанция {}: {} — повтор на следующем блоке",
-                        w.hash, e.message
-                    ),
-                )
-                .await;
+                quiet
+                    .warn("receipt", format!("квитанция не прочитана: {}", e.message))
+                    .await;
                 continue;
             }
         }
-        if head.number <= since + w.cfg.max_wait {
+        if let Some(at) = taken_at {
+            // Nonce занят, своей квитанции нет: узел знает нашу транзакцию в блоке — ждём квитанцию дальше.
+            match receipt::in_block(ctx, &ours).await {
+                Ok(true) => continue,
+                Ok(false) if head >= at + w.cfg.replaced_confirm => {
+                    return Tracked::bare(TxOutcome::Replaced, None);
+                }
+                Ok(false) => continue,
+                Err(e) => {
+                    quiet
+                        .warn(
+                            "by_hash",
+                            format!("eth_getTransactionByHash: {}", e.message),
+                        )
+                        .await;
+                    continue;
+                }
+            }
+        }
+        if head <= since + w.cfg.max_wait {
             continue;
         }
         let count: U64 =
             match rpc::call(ctx, "eth_getTransactionCount", json!([w.from, "latest"])).await {
                 Ok(c) => c,
                 Err(e) => {
-                    warn(
-                        ctx,
-                        format!("nonce кошелька: {} — повтор на следующем блоке", e.message),
-                    )
-                    .await;
+                    quiet
+                        .warn(
+                            "nonce",
+                            format!("nonce кошелька не прочитан: {}", e.message),
+                        )
+                        .await;
                     continue;
                 }
             };
         if count.to::<u64>() > w.nonce {
-            // Nonce занят: квитанция нашей транзакции могла появиться между чтениями — читаем ещё раз.
-            match receipt::find(ctx, &ours).await {
-                Ok(Some((i, r))) => return landed(&w, &ours, i, r),
-                Ok(None) => {
-                    return Tracked {
-                        outcome: TxOutcome::Replaced,
-                        receipt: None,
-                        cancel: None,
-                    };
-                }
-                Err(e) => {
-                    warn(
-                        ctx,
-                        format!(
-                            "квитанция {}: {} — повтор на следующем блоке",
-                            w.hash, e.message
-                        ),
-                    )
-                    .await;
-                    continue;
-                }
-            }
+            taken_at = Some(head);
+            continue;
         }
-        since = head.number;
-        match cancel::price(ctx, price, &w.cfg, &w.ready) {
-            Ok(p) => price = p,
-            Err(e) => {
-                warn(ctx, format!("отмена {}: {}", w.hash, e.message)).await;
-                continue;
-            }
+        since = head;
+        if cancels >= w.cfg.cancel_max_attempts {
+            let why = format!(
+                "отмен уже {cancels} (send.cancel_max_attempts), nonce {} не занят",
+                w.nonce
+            );
+            return Tracked::bare(TxOutcome::Pending, Some(why));
         }
+        price = match cancel::price(ctx, price, &w.cfg, &w.ready) {
+            Ok(p) if p <= w.cfg.cancel_max_wei => p,
+            Ok(p) => {
+                let why =
+                    format!("цена газа следующей отмены {p} wei выше send.cancel_max_gas_gwei");
+                return Tracked::bare(TxOutcome::Pending, Some(why));
+            }
+            Err(e) => return Tracked::bare(TxOutcome::Pending, Some(e.message)),
+        };
+        cancels += 1;
         match cancel::send(
-            ctx,
-            &w.stats,
-            &w.ready,
-            w.from,
-            w.nonce,
-            price,
-            head.number,
-            &w.cfg,
+            ctx, &w.stats, &w.ready, w.from, w.nonce, price, head, &w.cfg,
         )
         .await
         {
             Ok(h) => {
                 ours.push(h);
+                quiet.ok("cancel").await;
                 let msg = format!(
                     "{} не попала за send.max_wait_blocks — отмена {h} (nonce {}, {price} wei)",
                     w.hash, w.nonce
@@ -164,49 +136,11 @@ pub async fn resolve(w: Watch) -> Tracked {
             }
             Err(e) => {
                 let msg = format!(
-                    "отмена {} (nonce {}, {price} wei) не ушла: {} — следующая через send.max_wait_blocks",
-                    w.hash, w.nonce, e.message
+                    "отмена (nonce {}, {price} wei) не ушла: {}",
+                    w.nonce, e.message
                 );
-                warn(ctx, msg).await;
+                quiet.warn("cancel", msg).await;
             }
         }
     }
-}
-
-/// Итог по найденной квитанции; счётчики канала («в блоке» — только если канал один, см. send/README.md).
-fn landed(w: &Watch, ours: &[B256], i: usize, r: Receipt) -> Tracked {
-    if i > 0 {
-        return Tracked {
-            outcome: TxOutcome::NotIncluded,
-            receipt: None,
-            cancel: Some((ours[i], r)),
-        };
-    }
-    let ok = r.status == U64::from(1u8);
-    if let [id] = w.channels.as_slice() {
-        let gas = r.gas_bnb();
-        w.stats.update(id, |s| {
-            s.included += 1;
-            if !ok {
-                s.reverted += 1;
-                if let Some(g) = gas {
-                    s.gas_wasted_bnb += g;
-                }
-            }
-        });
-    }
-    Tracked {
-        outcome: if ok {
-            TxOutcome::Included
-        } else {
-            TxOutcome::Reverted
-        },
-        receipt: Some(r),
-        cancel: None,
-    }
-}
-
-/// Предупреждение трекера в журнал. Ошибок нет.
-async fn warn(ctx: &Ctx, msg: String) {
-    ctx.log(Level::Warn, "send.track", msg, None).await;
 }

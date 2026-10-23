@@ -95,7 +95,14 @@ pub async fn send(
                 Next::Retry { pause_ms } => {
                     tokio::time::sleep(Duration::from_millis(pause_ms)).await
                 }
-                Next::Stop => return Err(e.message),
+                Next::Stop => {
+                    // Вывода не будет — получатель снимает ожидание поступления (DEX: wallet/inflows.rs). Исход
+                    // неизвестен — перевод мог уйти: ожидание остаётся (до ручной проверки или срока).
+                    if e.code != ErrorCode::OutcomeUnknown {
+                        let _ = gw_to.deposit_abandoned(asset).await;
+                    }
+                    return Err(e.message);
+                }
             },
         }
     };
@@ -109,6 +116,7 @@ pub async fn send(
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
+                let _ = gw_to.deposit_abandoned(asset).await;
                 return Err(e.message);
             }
             Err(e) if e.message != last => {

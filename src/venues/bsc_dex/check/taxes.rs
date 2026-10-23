@@ -1,11 +1,11 @@
 //! Файл: venues/bsc_dex/check/taxes.rs
-//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле V2/V3 (налоги — по первому
-//! удачному, V2 впереди: только они поддерживают монеты с налогом), газ покупки и продажи — по каждому пулу.
+//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле (налоги — по первому
+//! удачному; V2 впереди: только они поддерживают монеты с налогом), газ обмена и разрешений — по каждому пулу.
 //! Источник USDT для пробы — другой пул V2/V3 реестра с наибольшим балансом USDT (проверяемый пул не трогается).
 //! Итог — CoinCheck: налоги известны, или «проверка не прошла» с причиной (чёрный список у ядра).
 //! Кто вызывает: check/cycle.rs.
 //! От чего зависит: check/probe.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
-//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы), dex.deadline_s [bsc_dex], dex.router и dex.quoter [вид пула].
+//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6 (модель налога у
 //! Uniswap SDK: buyFeeBps/sellFeeBps — доля, удерживаемая при переводе).
@@ -73,41 +73,43 @@ async fn run(
     let wallet = signer::address(ctx)?;
     let usdt_dec = tokens.decimals(ctx, usdt).await?;
     let probe = num::to_units(ctx.dec("check.probe_usdt")?, usdt_dec).unwrap_or(U256::ZERO);
-    let deadline = U256::from(block_time + ctx.int("dex.deadline_s")?);
     let mut pools: Vec<Entry> = reg
         .by_ticker(ticker)
         .into_iter()
-        .filter(|e| e.valid && matches!(e.pool.kind, PoolKind::V2 | PoolKind::V3))
+        .filter(|e| e.valid)
         .collect();
-    pools.sort_by_key(|e| e.pool.kind != PoolKind::V2);
+    // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
+    pools.sort_by_key(|e| match e.pool.kind {
+        PoolKind::V2 => 0,
+        PoolKind::V3 => 1,
+        _ => 2,
+    });
     if pools.is_empty() {
         return Ok(Err(
-            "нет пула V2/V3 для пробного обмена (проба через Universal Router V4 — шаг 1d)".into(),
+            "нет достоверного пула с USDT для пробного обмена".into()
         ));
     }
     let mut taxes = None;
     let mut reasons = Vec::new();
     for e in &pools {
-        let PoolRef::Contract(addr) = e.pool.reference else {
-            continue;
+        let exclude = match e.pool.reference {
+            PoolRef::Contract(a) => Some(a),
+            PoolRef::Singleton { .. } => None,
         };
-        let Some(source) = usdt_source(ctx, reg, usdt, addr, probe).await? else {
+        let Some(source) = usdt_source(ctx, reg, usdt, exclude, probe).await? else {
             return Ok(Err(format!(
                 "нет другого пула с {probe} единиц USDT для пробы"
             )));
         };
-        let router = ctx.dex_addr("dex.router", e.family.id)?;
-        let quoter = if e.pool.kind == PoolKind::V3 {
-            Some(ctx.dex_addr("dex.quoter", e.family.id)?)
-        } else {
-            None
-        };
-        match probe::run(ctx, e, source, wallet, probe, router, quoter, deadline).await? {
+        match probe::run(ctx, e, source, wallet, probe, block_time).await? {
             Ok(m) => {
                 checks.update_pool(&e.pool.reference, |f| {
                     f.gas_buy = Some(m.gas_buy);
-                    f.gas_sell = m.gas_sell;
+                    f.gas_approve_buy = Some(m.gas_approve_buy);
+                    f.gas_sell = m.gas_sell.map(|g| g.0);
+                    f.gas_approve_sell = m.gas_sell.map(|g| g.1);
                 });
+                checks.set_transfer_gas(ticker, m.gas_transfer);
                 if taxes.is_none() {
                     taxes = Some(percent(&m, tokens.decimals(ctx, e.coin).await?));
                 }
@@ -146,14 +148,14 @@ async fn usdt_source(
     ctx: &Ctx,
     reg: &Registry,
     usdt: Address,
-    exclude: Address,
+    exclude: Option<Address>,
     need: U256,
 ) -> GatewayResult<Option<Address>> {
     let list: Vec<Address> = reg
         .refs()
         .into_iter()
         .filter_map(|r| match r {
-            PoolRef::Contract(a) if a != exclude => Some(a),
+            PoolRef::Contract(a) if Some(a) != exclude => Some(a),
             _ => None,
         })
         .collect();

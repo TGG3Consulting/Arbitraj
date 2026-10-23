@@ -1,7 +1,15 @@
 # venues/bsc_dex/exec — исполнение обмена
 
+Прямой обмен в одном пуле (V2, V3, V4) — через Universal Router своей DEX: только в нём есть проверка
+реально полученного баланса в той же транзакции (`BALANCE_CHECK_ERC20`, решение 40) и одна схема разрешений (Permit2).
+
 | Файл | Что делает |
 | --- | --- |
-| `calls.rs` | Данные вызова прямого обмена V2/V3 через роутер своей DEX (V2 — обычная или FOT-функция; PancakeSwap V3 — SwapRouter; Uniswap V3 — SwapRouter02.multicall с deadline) |
-
-Отправка, V4 (Universal Router), проверка реально полученного баланса, трекер — шаг 1d.
+| `ur.rs` | Команды Universal Router, формат по DEX и версии (Uniswap 2.0 / 2.1.1+), BALANCE_CHECK_ERC20, execute |
+| `swap_v2v3.rs` | Входы V2_SWAP_EXACT_IN / V3_SWAP_EXACT_IN |
+| `swap_v4.rs` | Вход V4_SWAP / INFI_SWAP: обмен + SETTLE_ALL + TAKE_ALL |
+| `plan.rs` | План: недостающие разрешения + execute(обмен, проверка баланса) |
+| `txs.rs` | Одна транзакция: каналы, цена и лимит газа, подпись, чаевые, отправка, итог |
+| `trade.rs` | Сделка: пересчёт по живому пулу, худшая цена, минимум, разрешения, обмен |
+| `result.rs` | Итог сделки по квитанции |
+| `fill.rs` | Суммы по событиям Transfer |

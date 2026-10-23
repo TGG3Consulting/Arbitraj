@@ -16,8 +16,11 @@
   import { showValue, choiceLabel } from '../lib/labels.js';
   import ErrorText from './ErrorText.svelte';
 
-  /** def — описание из схемы; scope — {kind, id?}; label — подпись области; options — варианты для TextList. */
-  let { def, scope, label = '', options = null } = $props();
+  /**
+   * def — описание из схемы; scope — {kind, id?}; label — подпись области; options — варианты для TextList;
+   * only — для Choice: какие из def.choices показать (например способы, которые есть у канала); null — все.
+   */
+  let { def, scope, label = '', options = null, only = null } = $props();
 
   const current = $derived(store.values[valueKey(def.name, scope)]);
   let draft = $state(null);
@@ -89,7 +92,7 @@
   {:else if def.kind === 'Choice'}
     <select value={draft ?? current ?? ''} onchange={(e) => (draft = e.currentTarget.value)}>
       <option value="" disabled>— выбрать —</option>
-      {#each def.choices as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
+      {#each def.choices.filter((c) => !only || only.includes(c)) as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
     </select>
     <button disabled={busy || draft === null || draft === current} onclick={() => save(draft)}>Сохранить</button>
   {:else if def.kind === 'TextList' && options}

@@ -34,6 +34,10 @@ Proxy подменяет Host на адрес бэкенда (`changeOrigin`), O
 | Разблокировка (`unlock`) | `src/pages/Unlock.svelte` | `GET /api/secrets/status`, `/known`; `POST /api/secrets/create`, `/unlock`, `/lock`, `/password`; `PUT`/`DELETE /api/secrets/{name}` |
 | Площадки (`venues`) | `src/pages/Venues.svelte` | `GET /api/venues`; настройки области Venue из схемы; секреты площадки (`scope` = id); `POST /api/check/venue/{id}`; у DEX — `GET /api/venues/{id}/dex-families` (область «DEX»), `GET /api/channels/{id}` (ключ канала, `POST /api/check/channel/{venue}/{id}`) |
 | Настройки (`settings`) | `src/pages/Settings.svelte` | `GET /api/settings/schema`, `GET`/`PUT /api/settings`, `GET /api/settings/history`; области «DEX» и «канал» — id от адаптера DEX (нет адаптера — «нет данных»); виды значений: выбор из списка, адрес BSC, верхняя граница целого |
+| Монеты (`coins`) | `src/pages/Coins.svelte` | `GET /api/coins` (503 — «нет данных»), `POST /api/coins/recheck`; ручной чёрный список — `PUT /api/settings` (`coin.blocked`, `coin.blocked_note`); WS `coin_check`, `pool_check`, `coin_block` |
+| Ручное управление (`manual`) | `src/pages/Manual.svelte` | `GET /api/manual`, `POST /api/manual/command`; WS `stuck_alert`, `manual` |
+| Каналы отправки (`channels`) | `src/pages/Channels.svelte` | `GET /api/channels/{venue}`, настройки области «канал», ключ канала, `POST /api/check/channel/{venue}/{id}`; WS `send_channel` |
+| Статистика газа (`gas`) | `src/pages/GasStats.svelte` | `GET /api/gas-stats`; WS `gas_stats` |
 | Правила шлюза (`rules`) | `src/pages/Rules.svelte` | `GET`/`POST /api/rules`, `PUT /api/rules/{id}`, `GET /api/rules/meta`, `GET /api/venues` |
 | Уведомления (`notify`) | `src/pages/Notifications.svelte` | события из схемы; `notify.*`, `http.timeout_ms`; секрет `telegram.bot_token`; `POST /api/check/telegram` |
 | Журнал (`journal`) | `src/pages/Journal.svelte` | `GET /api/journal?limit=N&before=ID`; живые записи из `/api/ws` |

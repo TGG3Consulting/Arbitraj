@@ -3,14 +3,15 @@
   Что делает: блок «Каналы отправки» площадки DEX на экране «Площадки»: по каждому каналу от адаптера
     (GET /api/channels/{venue}) — название, открытый/закрытый, способы отправки, ссылки на документацию,
     поле ключа (секрет из SendChannelInfo.secret, если каналу нужен ключ; значение не показывается никогда)
-    и «Проверить подключение» (POST /api/check/channel/{venue}/{id}). Настройки каналов — область «канал».
+    и «Проверить подключение» (POST /api/check/channel/{venue}/{id}). Настройки и статистика каналов — экран «Каналы отправки».
   Кто вызывает: pages/Venues.svelte.
-  От чего зависит: lib/secrets.svelte.js, lib/labels.js, components/SecretRow.svelte,
+  От чего зависит: lib/secrets.svelte.js, lib/router.svelte.js, lib/labels.js, components/SecretRow.svelte,
     CheckConnection.svelte.
-  Настройки: нет (channel.* — экран «Настройки», область «канал»); секреты channel.<id>.key.
+  Настройки: нет (channel.* — экран «Каналы отправки»); секреты channel.<id>.key.
 -->
 <script>
   import { secrets } from '../lib/secrets.svelte.js';
+  import { href } from '../lib/router.svelte.js';
   import { methodLabel } from '../lib/labels.js';
   import SecretRow from './SecretRow.svelte';
   import CheckConnection from './CheckConnection.svelte';
@@ -23,7 +24,7 @@
 </script>
 
 <h3>Каналы отправки</h3>
-<p class="muted">Включение, способ, газ и чаевые — область «канал» на экране «Настройки».</p>
+<p class="muted">Включение, способ, газ и чаевые, статистика — на экране <a href={href('channels')}>«Каналы отправки»</a>.</p>
 {#each channels as { info } (info.id)}
   <div class="card">
     <header>

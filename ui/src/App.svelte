@@ -18,6 +18,10 @@
   import Venues from './pages/Venues.svelte';
   import Settings from './pages/Settings.svelte';
   import Rules from './pages/Rules.svelte';
+  import Coins from './pages/Coins.svelte';
+  import Manual from './pages/Manual.svelte';
+  import Channels from './pages/Channels.svelte';
+  import GasStats from './pages/GasStats.svelte';
   import Notifications from './pages/Notifications.svelte';
   import Journal from './pages/Journal.svelte';
 
@@ -25,6 +29,10 @@
   const PAGES = [
     { id: 'unlock', title: 'Разблокировка', page: Unlock },
     { id: 'venues', title: 'Площадки', page: Venues },
+    { id: 'coins', title: 'Монеты', page: Coins },
+    { id: 'manual', title: 'Ручное управление', page: Manual },
+    { id: 'channels', title: 'Каналы отправки', page: Channels },
+    { id: 'gas', title: 'Статистика газа', page: GasStats },
     { id: 'settings', title: 'Настройки', page: Settings },
     { id: 'rules', title: 'Правила шлюза', page: Rules },
     { id: 'notify', title: 'Уведомления', page: Notifications },

@@ -11,5 +11,7 @@ pub mod result;
 pub mod swap_v2v3;
 pub mod swap_v4;
 pub mod trade;
+pub mod trade_smart;
 pub mod txs;
+pub mod universal;
 pub mod ur;

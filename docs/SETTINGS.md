@@ -167,9 +167,9 @@
 | dex.pool_manager | CLPoolManager / BinPoolManager / PoolManager | адрес | V4 |
 | dex.vault | Vault | адрес | PancakeSwap Infinity |
 | dex.state_view | StateView | адрес | Uniswap V4 |
-| dex.universal_router | Universal Router своей DEX — прямой обмен в пуле V4 | адрес | V4 |
-| dex.universal_router_version | Версия Universal Router (у Uniswap: 2.0 / 2.1.1 / 2.1.2 — разный формат обмена) | версия | V4 |
-| dex.permit2 | Permit2 своей DEX (у PancakeSwap и Uniswap разные) | адрес | V4 |
+| dex.universal_router | Universal Router своей DEX — прямой обмен в пуле любого вида (решение 40: проверка баланса в той же транзакции) | адрес | все |
+| dex.universal_router_version | Версия Universal Router (у Uniswap: 2.0 / 2.1.1 / 2.1.2 — разный формат обмена) | версия | все виды Uniswap |
+| dex.permit2 | Permit2 своей DEX (у PancakeSwap и Uniswap разные) | адрес | все |
 | dex.scan_from_block | С какого блока искать события создания пулов | блок | все |
 | dex.v2_fee_pct | Комиссия пула V2 (из кода пары своей DEX) | % | V2 |
 

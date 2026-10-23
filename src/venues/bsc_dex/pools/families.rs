@@ -42,6 +42,9 @@ pub struct Family {
     pub docs: &'static [&'static str],
 }
 
+/// Имя DEX PancakeSwap: её пулы исполняет Universal Router PancakeSwap Infinity (умный режим, решение 38).
+pub const PANCAKESWAP: &str = "pancakeswap";
+
 const PCS_V2: &[&str] = &["https://developer.pancakeswap.finance/contracts/v2/addresses"];
 const PCS_V3: &[&str] = &["https://developer.pancakeswap.finance/contracts/v3/addresses"];
 const PCS_INF: &[&str] =
@@ -54,10 +57,10 @@ const UNI_V4: &[&str] = &["https://developers.uniswap.org/docs/protocols/v4/depl
 /// Все виды пулов адаптера.
 #[rustfmt::skip]
 pub static FAMILIES: &[Family] = &[
-    Family { id: "pancakeswap_v2", dex: "pancakeswap", kind: PoolKind::V2, proto: Proto::V2, title: "PancakeSwap V2", docs: PCS_V2 },
-    Family { id: "pancakeswap_v3", dex: "pancakeswap", kind: PoolKind::V3, proto: Proto::PancakeV3, title: "PancakeSwap V3", docs: PCS_V3 },
-    Family { id: "pancakeswap_infinity_cl", dex: "pancakeswap", kind: PoolKind::Cl, proto: Proto::InfinityCl, title: "PancakeSwap Infinity CL", docs: PCS_INF },
-    Family { id: "pancakeswap_infinity_bin", dex: "pancakeswap", kind: PoolKind::Bin, proto: Proto::InfinityBin, title: "PancakeSwap Infinity Bin", docs: PCS_INF },
+    Family { id: "pancakeswap_v2", dex: PANCAKESWAP, kind: PoolKind::V2, proto: Proto::V2, title: "PancakeSwap V2", docs: PCS_V2 },
+    Family { id: "pancakeswap_v3", dex: PANCAKESWAP, kind: PoolKind::V3, proto: Proto::PancakeV3, title: "PancakeSwap V3", docs: PCS_V3 },
+    Family { id: "pancakeswap_infinity_cl", dex: PANCAKESWAP, kind: PoolKind::Cl, proto: Proto::InfinityCl, title: "PancakeSwap Infinity CL", docs: PCS_INF },
+    Family { id: "pancakeswap_infinity_bin", dex: PANCAKESWAP, kind: PoolKind::Bin, proto: Proto::InfinityBin, title: "PancakeSwap Infinity Bin", docs: PCS_INF },
     Family { id: "uniswap_v2", dex: "uniswap", kind: PoolKind::V2, proto: Proto::V2, title: "Uniswap V2", docs: UNI_V2 },
     Family { id: "uniswap_v3", dex: "uniswap", kind: PoolKind::V3, proto: Proto::UniswapV3, title: "Uniswap V3", docs: UNI_V3 },
     Family { id: "uniswap_v4", dex: "uniswap", kind: PoolKind::Cl, proto: Proto::UniswapV4, title: "Uniswap V4", docs: UNI_V4 },

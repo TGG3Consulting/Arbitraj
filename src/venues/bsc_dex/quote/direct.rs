@@ -4,9 +4,9 @@
 //! Покупка Q монет: сколько USDT отдать, чтобы после налога покупки и крючка пришло Q (точный выход из пула);
 //! продажа Q монет: сколько USDT придёт (в пул доходит Q за вычетом налога продажи, точный вход).
 //! Не хватает ликвидности в прочитанных пределах — fillable_qty меньше qty.
-//! Кто вызывает: quote/mod.rs ← mod.rs (контракт quote).
+//! Кто вызывает: quote/mod.rs ← mod.rs (контракт quote), quote/smart.rs (расчёт доли в пуле), exec/trade*.rs.
 //! От чего зависит: quote/select.rs, quote/pool_quote.rs, quote/costs.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs.
-//! Настройки: dex.swap_mode [bsc_dex] («direct»; «smart» — шаг 1e); через вызываемые — см. их шапки.
+//! Настройки: нет своих; через вызываемые — см. их шапки.
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
@@ -50,7 +50,15 @@ pub fn best(
     let mut reasons = Vec::new();
     for e in entries {
         let r = select::usable(ctx, &q.checks, &e, side, usdt_dec).and_then(|u| {
-            one(ctx, e.clone(), u, side, qty, &taxes, coin_dec, usdt_dec).map_err(|err| err.message)
+            calc(ctx, &e, &u, side, qty, &taxes, (coin_dec, usdt_dec))
+                .map(|(swapped, coins, usdt)| Candidate {
+                    entry: e.clone(),
+                    usable: u,
+                    swapped,
+                    coins,
+                    usdt,
+                })
+                .map_err(|err| err.message)
         });
         match r {
             Ok(c) => {
@@ -74,7 +82,7 @@ pub fn best(
 }
 
 /// Налоги монеты из проверки. Ошибки: CoinNotChecked, CoinCheckFailed.
-fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
+pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
     match q.checks.coin(&asset.ticker).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => Ok(t),
         Some(CheckState::Failed { reason }) => Err(q.ctx.err(
@@ -88,18 +96,18 @@ fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
     }
 }
 
-/// Расчёт в одном пуле. Ошибки: NoRoute (математика), BadResponse (числа не помещаются).
-#[allow(clippy::too_many_arguments)]
-fn one(
+/// Расчёт в одном пуле. Принимает: пул, его допуск, сторону, количество монет, налоги, (decimals монеты, USDT).
+/// Возвращает: (обмен в пуле, монет получим/продадим, USDT отдадим/получим).
+/// Ошибки: NoRoute (математика, налоги забирают всё), BadResponse (числа не помещаются).
+pub fn calc(
     ctx: &Ctx,
-    e: Entry,
-    u: Usable,
+    e: &Entry,
+    u: &Usable,
     side: Side,
     qty: Decimal,
     t: &TokenTaxes,
-    coin_dec: u8,
-    usdt_dec: u8,
-) -> GatewayResult<Candidate> {
+    (coin_dec, usdt_dec): (u8, u8),
+) -> GatewayResult<(Swapped, Decimal, Decimal)> {
     let keep = |pct: Decimal| Decimal::ONE - pct / Decimal::ONE_HUNDRED;
     let bad = || {
         ctx.err(
@@ -107,20 +115,17 @@ fn one(
             "сумма не переводится в единицы токена",
         )
     };
-    let (swapped, coins, usdt) = match side {
+    match side {
         Side::Buy => {
             let k = keep(t.buy_pct) * keep(u.hook_pct);
             if k <= Decimal::ZERO {
                 return Err(ctx.err(ErrorCode::NoRoute, "налог покупки и крючок забирают всё"));
             }
             let pool_out = ceil_units(qty / k, coin_dec).ok_or_else(bad)?;
-            let s = pool_quote::swap(ctx, &e, e.usdt, false, pool_out)?;
+            let s = pool_quote::swap(ctx, e, e.usdt, false, pool_out)?;
             let got = num::to_decimal(s.amount_out, coin_dec).ok_or_else(bad)? * k;
-            (
-                s.clone(),
-                got.min(qty),
-                num::to_decimal(s.amount_in, usdt_dec).ok_or_else(bad)?,
-            )
+            let usdt = num::to_decimal(s.amount_in, usdt_dec).ok_or_else(bad)?;
+            Ok((s, got.min(qty), usdt))
         }
         Side::Sell => {
             let k = keep(t.sell_pct);
@@ -128,20 +133,13 @@ fn one(
                 return Err(ctx.err(ErrorCode::NoRoute, "налог продажи забирает всё"));
             }
             let into_pool = num::to_units(qty * k, coin_dec).ok_or_else(bad)?;
-            let s = pool_quote::swap(ctx, &e, e.coin, true, into_pool)?;
+            let s = pool_quote::swap(ctx, e, e.coin, true, into_pool)?;
             let used = num::to_decimal(s.amount_in, coin_dec).ok_or_else(bad)?;
             let sold = if s.complete { qty } else { used / k };
             let out = num::to_decimal(s.amount_out, usdt_dec).ok_or_else(bad)? * keep(u.hook_pct);
-            (s, sold.min(qty), out)
+            Ok((s, sold.min(qty), out))
         }
-    };
-    Ok(Candidate {
-        entry: e,
-        usable: u,
-        swapped,
-        coins,
-        usdt,
-    })
+    }
 }
 
 /// Лучше ли кандидат a, чем b: сначала полнота, затем цена (покупка — дешевле, продажа — дороже за монету).

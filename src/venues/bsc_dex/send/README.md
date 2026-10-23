@@ -26,3 +26,16 @@
 | `bloxroute_protect.rs` | bloXroute Protect RPC (бесплатный) |
 | `bloxroute_cloud.rs` | bloXroute Cloud API (ключ) |
 | `flashblock.rs` | Flashblock (ключ, только бандл) |
+
+## BlockRazor RPC: противоречие документации бандла
+
+Страница https://docs.blockrazor.io/transaction-submission/rpc/bsc/eth_sendbundle.md в заголовке называет метод
+`eth_sendBundle`, а в примере запроса — `eth_sendMevBundle`; поле списка транзакций — то `txs`, то `Txs`.
+Решение техлида (Issue #7): бандл через BlockRazor RPC не подключать, канал работает только одиночной отправкой
+(`eth_sendRawTransaction`); верное имя метода и поля проверим на реальных ответах API.
+
+## Счётчик «в блоке»
+
+`sent` и `rejected` считаются по каждому каналу. «В блоке» (`included`, `reverted`, сожжённый газ) — только каналу,
+если отправляли в один канал: при параллельной отправке неизвестно, какой канал довёз транзакцию. Счётчика для
+отправки целиком в стыке `SendChannelStats` нет — запрос на изменение стыка.

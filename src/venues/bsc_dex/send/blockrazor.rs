@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/send/blockrazor.rs
 //! Что делает: канал BlockRazor RPC (бесплатный, без ключа) — eth_sendRawTransaction; режим (default / fullprivacy /
 //! maxbackrun) — путь в channel.url. Бандл через RPC не подключён: документация противоречит сама себе (в заголовке
-//! eth_sendBundle, в примере eth_sendMevBundle; поле txs/Txs) — вопрос Тиграну в Issue #7.
+//! eth_sendBundle, в примере eth_sendMevBundle; поле txs/Txs). Решение техлида (Issue #7): бандл не подключать,
+//! канал работает только одиночной отправкой; противоречие проверим на реальных ответах.
 //! Кто вызывает: send/channels.rs.
 //! От чего зависит: send/channel.rs.
 //! Настройки: channel.* [blockrazor].

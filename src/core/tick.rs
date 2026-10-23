@@ -1,6 +1,7 @@
 //! Файл: core/tick.rs
 //! Что делает: поток данных одного тика (ARCHITECTURE.md): событие адаптера → market_state →
-//! пересчёт только направлений этой монеты, где участвует площадка (2×(N−1)) → signal → «Живой экран».
+//! пересчёт только направлений этой монеты, где участвует площадка (2×(N−1)) → signal → «Живой экран»;
+//! кандидат — в очередь полного расчёта (candidates.rs); цены — в замеры волатильности (vol.rs).
 //! Новые стаканы, пулы и проверки толкают пересборку справочника. Пересчёт одной монеты идёт
 //! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор.
 //! Кто вызывает: core/engine.rs (задача run).
@@ -39,7 +40,10 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 venue,
                 tokens,
                 first,
+                block,
+                at,
             } => {
+                lk(&core.inner.clock).sample(block, at);
                 if first {
                     core.request_rebuild();
                 }
@@ -136,6 +140,13 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
     let params = Params::read(&core.inner.deps.settings);
     for dir in dirs {
         let prices = super::prices::for_direction(&core.inner.deps, &dir, ref_price).await;
+        if let Ok(p) = &prices {
+            // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды.
+            let now = Utc::now();
+            let mut vol = lk(&core.inner.vol);
+            vol.sample(&dir.buy_on, &dir.asset, Side::Buy, p.buy, now);
+            vol.sample(&dir.sell_on, &dir.asset, Side::Sell, p.sell, now);
+        }
         let view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
         let was_anomaly = rd(&core.inner.spreads)
             .get(&dir)
@@ -143,6 +154,9 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         if view.state == State::Anomaly && !was_anomaly {
             // ТЗ, шаг 3: аномальный спред — перечитать статусы ввода и вывода напрямую из API.
             core.inner.kick_networks.notify_waiters();
+        }
+        if view.state == State::Candidate {
+            super::candidates::enqueue(core, &dir);
         }
         wr(&core.inner.spreads).insert(dir.clone(), view.clone());
         core.inner.live.send(CoreEvent::Spread(view));

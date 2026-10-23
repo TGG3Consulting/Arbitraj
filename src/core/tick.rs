@@ -6,7 +6,7 @@
 //! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор.
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, market_state.rs, prices.rs, signal.rs, view.rs.
-//! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs).
+//! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min.
 
 use chrono::Utc;
 use tokio::sync::mpsc;
@@ -40,10 +40,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 venue,
                 tokens,
                 first,
-                block,
-                at,
             } => {
-                lk(&core.inner.clock).sample(block, at);
                 if first {
                     core.request_rebuild();
                 }
@@ -145,9 +142,10 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         if let Ok(p) = &prices {
             // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды.
             let now = Utc::now();
+            let w = window_min(core);
             let mut vol = lk(&core.inner.vol);
-            vol.sample(&dir.buy_on, &dir.asset, Side::Buy, p.buy, now);
-            vol.sample(&dir.sell_on, &dir.asset, Side::Sell, p.sell, now);
+            vol.sample(&dir.buy_on, &dir.asset, Side::Buy, p.buy, now, w);
+            vol.sample(&dir.sell_on, &dir.asset, Side::Sell, p.sell, now, w);
         }
         let view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
         let was_anomaly = rd(&core.inner.spreads)
@@ -163,4 +161,13 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         wr(&core.inner.spreads).insert(dir.clone(), view.clone());
         core.inner.live.send(CoreEvent::Spread(view));
     }
+}
+
+/// Окно волатильности, минуты (profit.sigma_window_min, решение 49). None — не задано.
+pub fn window_min(core: &Core) -> Option<u64> {
+    core.inner
+        .deps
+        .settings
+        .integer("profit.sigma_window_min", Default::default())
+        .ok()
 }

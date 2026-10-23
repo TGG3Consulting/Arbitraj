@@ -122,3 +122,56 @@ async fn open_deal_halted_after_restart() {
     assert_eq!(deals.len(), 1);
     assert_eq!(deals[0].step, Step::Halted);
 }
+
+#[tokio::test]
+async fn transit_history_survives_restart() {
+    let d = dir("transit");
+    let c = cake();
+    {
+        let (core, _) = start(&d).await;
+        arb::core::transit::record(&core, &c.asset, &c.buy_on, &c.sell_on, Decimal::from(240))
+            .await;
+        arb::core::transit::record(&core, &c.asset, &c.buy_on, &c.sell_on, Decimal::from(360))
+            .await;
+    }
+    let (core, settings) = start(&d).await;
+    let rows = core.transits();
+    assert_eq!(rows[0]["count"], 2);
+    // «вручную + авто»: набралось 2 перевода при пороге 2 — T = среднее (300 с), а не ручное значение.
+    for (n, v) in [
+        ("profit.transit_mode", json!("manual_auto")),
+        ("profit.transit_auto_after", json!(2)),
+        ("profit.default_transit_time_s", json!(900)),
+    ] {
+        settings
+            .set(
+                n,
+                if n == "profit.default_transit_time_s" {
+                    Scope::Venue("bingx".into())
+                } else {
+                    Scope::Global
+                },
+                Some(v),
+                "тест",
+            )
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        arb::core::transit::seconds(&core, &c).unwrap(),
+        Decimal::from(300)
+    );
+    settings
+        .set(
+            "profit.transit_mode",
+            Scope::Global,
+            Some(json!("manual")),
+            "тест",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        arb::core::transit::seconds(&core, &c).unwrap(),
+        Decimal::from(900)
+    );
+}

@@ -149,7 +149,7 @@ pub async fn send(
             Ok(t) if t.status == TransferStatus::Credited => {
                 let secs = Decimal::from((Utc::now() - started).num_milliseconds())
                     / Decimal::ONE_THOUSAND;
-                super::transfer_watch::record_transit(core, asset, from, to, secs);
+                super::transit::record(core, asset, from, to, secs).await;
                 super::transfer_watch::release(core, asset, to).await;
                 let text = format!(
                     "{deal} {} {}: зачислено на {} за {secs} с",

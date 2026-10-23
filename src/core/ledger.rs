@@ -113,17 +113,6 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
 /// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.
 pub async fn load(core: &Core) {
     let deps = &core.inner.deps;
-    if let Err(e) = super::persist::init(&deps.db).await {
-        deps.log(
-            Level::Error,
-            "core.ledger",
-            None,
-            format!("Таблица учёта ядра не создана: {e}"),
-            None,
-        )
-        .await;
-        return;
-    }
     let deals = match super::persist::load::<Deal>(&deps.db, KIND).await {
         Ok(d) => d,
         Err(e) => {

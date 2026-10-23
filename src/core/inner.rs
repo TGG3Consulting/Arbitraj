@@ -29,7 +29,7 @@ use super::registry::CoinEntry;
 use super::risk::Risk;
 use super::signal::{Signals, SpreadView};
 use super::view::Live;
-use super::vol::{BlockClock, Volatility};
+use super::vol::Volatility;
 
 /// Ключ истории времени в пути: монета, A, B.
 pub type TransitKey = (Asset, VenueId, VenueId);
@@ -55,8 +55,6 @@ pub struct Inner {
     pub signals: Mutex<Signals>,
     /// Волатильность цен по замерам сигнала (vol.rs).
     pub vol: Mutex<Volatility>,
-    /// Среднее время блока BSC по событиям пулов (vol.rs).
-    pub clock: Mutex<BlockClock>,
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// На какие монеты подписана каждая площадка.
     pub subs: tokio::sync::Mutex<HashMap<VenueId, Vec<Asset>>>,
@@ -67,8 +65,8 @@ pub struct Inner {
     pub queued: Mutex<HashSet<Direction>>,
     /// Последняя причина отказа по направлению (чтобы не повторять её в журнале).
     pub last_reject: Mutex<HashMap<Direction, String>>,
-    /// История времени в пути: (монета, A, B) → (сумма секунд, число переводов). Ведёт transfers.rs.
-    pub transits: Mutex<HashMap<TransitKey, (Decimal, u64)>>,
+    /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
+    pub transits: Mutex<HashMap<TransitKey, Vec<Decimal>>>,
     /// Деньги в открытых сделках (limits.rs). Ведёт executor.rs.
     pub exposure: Mutex<Exposure>,
     /// Канал событий адаптеров (передаётся в subscribe_market).
@@ -115,7 +113,6 @@ impl Inner {
             not_checked: Mutex::default(),
             signals: Mutex::default(),
             vol: Mutex::default(),
-            clock: Mutex::default(),
             spreads: RwLock::default(),
             subs: tokio::sync::Mutex::default(),
             ticking: Mutex::default(),

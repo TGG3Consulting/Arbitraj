@@ -6,4 +6,4 @@
 | `journal.rs` | Журнал: запись + живой поток в интерфейс |
 | `rules.rs` | Правила шлюза: список, создание, изменение |
 
-Таблицы: `settings`, `settings_history`, `rules`, `journal`. Позже: сделки, переводы, сырые сообщения (zstd).
+Таблицы: `settings`, `settings_history`, `rules`, `journal`, `core_state` (учёт ядра: сделки, переводы, газ, ручное управление — вид, id, JSON; core/persist.rs). Сырые сообщения — файлы zstd (raw_log.rs).

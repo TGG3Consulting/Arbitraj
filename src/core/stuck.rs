@@ -1,12 +1,12 @@
 //! Файл: core/stuck.rs
 //! Что делает: застрявшая монета (решение 37) — монеты у бота, а продавать невыгодно. Три взаимоисключающих
-//! режима (stuck.mode): «Ожидание» — на каждый тик монеты проверяем, стало ли выгодно, не дольше
+//! режима (stuck.mode); «невыгодно» — итог сделки ниже нуля (решение 47): «Ожидание» — на каждый тик монеты проверяем, стало ли выгодно, не дольше
 //! stuck.wait_ms, затем продажа по рынку; «Порог убытка» — убыток ≤ stuck.max_loss_pct — продажа по рынку,
 //! больше — алерт с кнопками «Продать сейчас» и «Беру на себя» (manual.rs); «Перегон» — на площадку, где
 //! лучше с учётом затрат перевода, не больше stuck.max_relays раз, затем продажа по рынку.
 //! Кто вызывает: executor.rs, sell.rs.
 //! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs.
-//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays, money.min_profit_usd.
+//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
 
@@ -91,15 +91,11 @@ async fn wait(core: &Core, mut deal: Deal) {
         Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await,
     };
     let until = Instant::now() + Duration::from_millis(ms);
-    let min = core
-        .inner
-        .deps
-        .settings
-        .decimal("money.min_profit_usd", At::default());
     while next_tick(core, &deal, Some(until)).await {
         let v = super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await;
-        if let (Ok((v, _)), Ok(min)) = (v, &min)
-            && deal.result_if(v) >= *min
+        // Решение 47: выгодно — итог сделки не ниже нуля.
+        if let Ok((v, _)) = v
+            && super::sell::profitable(&deal, v)
         {
             return super::sell::market(core, deal, "ожидание: стало выгодно").await;
         }

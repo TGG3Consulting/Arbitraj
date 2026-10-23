@@ -1,13 +1,12 @@
 //! Файл: core/transfer_watch.rs
 //! Что делает: наблюдение за переводом (шаг 6 ТЗ): перевод дольше transfer.max_time_s — уведомление
 //! exec.transfer_slow и карантин монеты (route.quarantine_in); дошёл — карантин снят (route.quarantine_out);
-//! фактическое время в пути — в историю для T (dirctx.rs).
+//! фактическое время в пути пишет transit.rs.
 //! Кто вызывает: core/transfers.rs.
 //! От чего зависит: engine.rs, risk.rs, settings.
 //! Настройки: transfer.max_time_s (по площадке получателя и монете).
 
 use chrono::Utc;
-use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, VenueId};
 use crate::settings::read::At;
@@ -44,16 +43,6 @@ pub async fn slow(
         .await;
     deps.notify("exec.transfer_slow", Some(&to.0), &text).await;
     deps.notify("route.quarantine_in", Some(&to.0), &text).await;
-}
-
-/// История времени в пути (монета, откуда, куда) — для T в расчёте. Ошибок нет.
-pub fn record_transit(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, secs: Decimal) {
-    let mut t = lk(&core.inner.transits);
-    let e = t
-        .entry((asset.clone(), from.clone(), to.clone()))
-        .or_insert((Decimal::ZERO, 0));
-    e.0 += secs;
-    e.1 += 1;
 }
 
 /// Перевод дошёл: если монета была в карантине из-за медленного перевода — снять и уведомить.

@@ -51,6 +51,12 @@ impl ApiError {
         Self(StatusCode::BAD_REQUEST, msg.into())
     }
 
+    /// 503 — нет данных: источника ещё нет (например ядро не подключено к веб-серверу).
+    /// Интерфейс показывает «нет данных» с этой причиной; выдуманных чисел нет (CLAUDE.md).
+    pub fn no_data(msg: impl Into<String>) -> Self {
+        Self(StatusCode::SERVICE_UNAVAILABLE, msg.into())
+    }
+
     /// Ошибка шлюза → ответ интерфейсу (src/api/README.md):
     /// NotApplicable — 400 «не применимо» (функция не для этой площадки, например список DEX у биржи);
     /// VenueNotConnected — 404 (площадки нет в реестре шлюза); остальное — 502 (сбой площадки).

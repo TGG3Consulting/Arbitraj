@@ -8,6 +8,8 @@
 //! Настройки: dex.enabled, dex.pool_enabled [DEX], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! dex.min_pool_liquidity_usd [bsc_dex].
 //!
+//! Динамическая комиссия V4 (fee = DYNAMIC_FEE_FLAG) — группа B: её влияние измеряется квотером
+//! (check/hooks_probe.rs), так техлид подтвердил в Issue #7.
 //! Решения 30–32: пока проверка не закончена — торговли нет; не допущенный крючок — пул исключается.
 //! Ликвидность пула в USDT — сколько USDT пул отдаёт при продаже в него монет до границы прочитанной карты
 //! (тиков/бинов) или до конца резерва V2: та же математика, что и котировка.
@@ -25,6 +27,7 @@ use super::super::pools::registry::Entry;
 use super::pool_quote;
 
 /// Что известно о допущенном пуле для котировки.
+#[derive(Debug, Clone)]
 pub struct Usable {
     /// Газ обмена этой стороны (единиц).
     pub gas: u64,

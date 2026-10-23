@@ -19,6 +19,7 @@ use alloy_primitives::{Address, Bytes, U256};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::pools::families::PANCAKESWAP;
 use super::super::pools::registry::Entry;
 
 /// Команды Universal Router (Commands.sol, одинаковые номера у PancakeSwap и Uniswap).
@@ -46,7 +47,7 @@ pub enum Format {
 
 /// Формат по DEX пула и настройке версии. Ошибки: NotConfigured (версия не задана или неизвестна).
 pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
-    if e.family.dex == "pancakeswap" {
+    if e.family.dex == PANCAKESWAP {
         return Ok(Format::Pancake);
     }
     match ctx.dex_text("dex.universal_router_version", e.family.id)?.trim() {

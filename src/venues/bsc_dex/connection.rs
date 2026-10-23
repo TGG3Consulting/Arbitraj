@@ -1,13 +1,14 @@
 //! Файл: venues/bsc_dex/connection.rs
 //! Что делает: «Проверить подключение» площадки DEX — узел по HTTP (сеть, номер блока), узел по WebSocket
-//! (сеть, подписка newHeads получает блок), кошелёк (ключ → адрес, баланс BNB). Ответ — «Подключено»
+//! (сеть, подписка newHeads получает блок), поддержка eth_simulateV1 (без неё налоги монет не проверить — торговли
+//! нет, ответ техлида в Issue #7), кошелёк (ключ → адрес, баланс BNB). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs.
 //! Настройки: bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
 //! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке); секреты bsc.node_*_key, bsc_dex.wallet_key.
 //!
-//! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads —
+//! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads, eth_simulateV1 —
 //! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
 //! так проверку предлагает research/flow/bsc_dex.md, схема адаптера п. 9.
 
@@ -29,6 +30,7 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     let parts = [
         ("Узел HTTP", http(ctx).await),
         ("Узел WebSocket", ws(ctx).await),
+        ("Симуляция", simulate(ctx).await),
         ("Кошелёк", wallet(ctx).await),
     ];
     let ok = parts.iter().all(|(_, r)| r.is_ok());
@@ -88,6 +90,21 @@ async fn ws(ctx: &Ctx) -> Result<String, String> {
         }
     };
     run.await.map_err(|e| e.message)
+}
+
+/// Поддержка eth_simulateV1: пустой блок вызовов на «latest» (execution-apis src/eth/execute.yaml, eth_simulateV1).
+/// Любая ошибка узла — проверка налогов невозможна. Возвращает: описание или текст причины.
+async fn simulate(ctx: &Ctx) -> Result<String, String> {
+    let payload = json!({ "blockStateCalls": [{ "calls": [] }], "validation": false });
+    let r: GatewayResult<serde_json::Value> =
+        rpc::call(ctx, "eth_simulateV1", json!([payload, "latest"])).await;
+    match r {
+        Ok(_) => Ok("узел поддерживает eth_simulateV1".into()),
+        Err(e) => Err(format!(
+            "узел не поддерживает eth_simulateV1 — проверка налогов невозможна, торговли нет ({})",
+            e.message
+        )),
+    }
 }
 
 /// Кошелёк: ключ из секретов → адрес, баланс BNB.

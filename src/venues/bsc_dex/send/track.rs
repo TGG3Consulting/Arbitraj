@@ -84,7 +84,10 @@ pub async fn wait(
         if let Some(r) = receipt {
             let ok = r.status == U64::from(1u8);
             let gas = r.gas_bnb().unwrap_or_default();
-            for id in channels {
+            // «В блоке» засчитывается каналу, только если отправляли в один канал: при параллельной отправке
+            // неизвестно, какой канал довёз транзакцию (ответ техлида в Issue #7). Счётчика «в блоке» для отправки
+            // целиком в стыке SendChannelStats нет — запрос на изменение стыка в отчёте.
+            if let [id] = channels {
                 stats.update(id, |s| {
                     s.included += 1;
                     if !ok {

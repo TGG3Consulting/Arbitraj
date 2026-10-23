@@ -6,6 +6,7 @@
     Integer — число (не целое уходит как текст, бэкенд объяснит ошибку), верхняя граница def.max проверяется
     до отправки; Decimal — строкой (без потери точности); Choice — выбор из def.choices (русские подписи);
     Address — адрес BSC, формат 0x + 40 шестнадцатеричных знаков проверяется до отправки (окончательно — бэкенд);
+    AddressList — адреса BSC через запятую, формат каждого проверяется так же;
     остальное — текст. Значения по умолчанию нет: поле показывает текущее значение или пусто.
   Кто вызывает: components/SettingCard.svelte, pages/Notifications.svelte, pages/Venues.svelte.
   От чего зависит: lib/settings.svelte.js, lib/labels.js, components/ErrorText.svelte.
@@ -45,6 +46,10 @@
     if (def.kind === 'Integer' && typeof value === 'number' && def.max != null && value > def.max) {
       return `Значение ${value} больше допустимого ${def.max}`;
     }
+    if (def.kind === 'AddressList') {
+      const bad = value.find((a) => !ADDRESS.test(a));
+      if (bad !== undefined) return `«${bad}» — не адрес сети BSC (0x и 40 шестнадцатеричных знаков)`;
+    }
     if (def.kind === 'Address' && !ADDRESS.test(value)) {
       return `«${value}» — не адрес сети BSC (0x и 40 шестнадцатеричных знаков)`;
     }
@@ -55,7 +60,7 @@
   function parse(text) {
     const t = text.trim();
     if (def.kind === 'Integer') return /^\d+$/.test(t) ? Number(t) : t;
-    if (def.kind === 'TextList') return t ? t.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    if (def.kind === 'TextList' || def.kind === 'AddressList') return t ? t.split(',').map((s) => s.trim()).filter(Boolean) : [];
     return t;
   }
 
@@ -106,8 +111,8 @@
     <input
       value={draft ?? raw}
       oninput={(e) => (draft = e.currentTarget.value)}
-      placeholder={def.kind === 'TextList' ? 'через запятую' : def.kind === 'Address' ? '0x…' : def.unit}
-      class:addr={def.kind === 'Address'}
+      placeholder={def.kind === 'TextList' ? 'через запятую' : def.kind === 'AddressList' ? '0x…, 0x… через запятую' : def.kind === 'Address' ? '0x…' : def.unit}
+      class:addr={def.kind === 'Address' || def.kind === 'AddressList'}
       onkeydown={(e) => e.key === 'Enter' && draft !== null && save(parse(draft))}
     />
     <button disabled={busy || draft === null} onclick={() => save(parse(draft))}>Сохранить</button>

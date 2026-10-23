@@ -4,6 +4,7 @@
 //! и налог на перевод), минимумы вывода и минимальный депозит B (неизвестен — сделки нет), доля
 //! глубины B (коэффициент h), возврат USDT в каждой сделке (решение 34), запас на движение цены
 //! r = k·σ·√T. Всё переводится в USDT (convert.rs). Затраты в монете уменьшают количество, а не сумму.
+//! Каждая строка несёт шаг маршрута обмена (решение 52) — экран группирует расчёт по шагам.
 //! Кто вызывает: core/profit.rs (подбор объёма), позже executor.rs (предпроверка).
 //! От чего зависит: core/types, convert.rs, dirctx.rs, deps.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
@@ -12,9 +13,9 @@ use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, MathematicalOps};
 use serde::Serialize;
 
-use crate::core::types::{Cost, CostKind, Direction, Quote, Side};
+use crate::core::types::{Cost, CostKind, Direction, Quote, RouteStep, Side};
 
-use super::convert::{self, Rates};
+use super::convert;
 use super::deps::Deps;
 use super::dirctx::DirCtx;
 
@@ -26,12 +27,15 @@ pub struct CostLine {
     pub stage: &'static str,
     pub amount: Decimal,
     pub asset: String,
-    /// В USDT по живым ценам.
-    pub usdt: Decimal,
+    /// В USDT по живым ценам. None — только у затраты «в цене» без живой цены её валюты (показ;
+    /// в итог она не входит — уже в средней цене котировки).
+    pub usdt: Option<Decimal>,
     /// Уже в средней цене котировки — повторно не вычитается.
     pub in_price: bool,
     /// Затрата в монете: уменьшает количество (до продажи доходит меньше) — повторно не вычитается.
     pub in_qty: bool,
+    /// Шаг маршрута обмена (решение 52): «USDT → BNB», «BNB → монета»; None — не шаг обмена.
+    pub step: Option<RouteStep>,
 }
 
 /// Расчёт направления на объём.
@@ -135,25 +139,27 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
         ),
         "ядро",
     ));
-    let bnb = convert::bnb_total(&lines.iter().map(|(c, _)| c.clone()).collect::<Vec<_>>());
-    let rates = Rates {
-        quote: cx.quote.clone(),
-        coin: coin.clone(),
-        coin_price: qa.avg_price,
-        bnb: if bnb.is_zero() {
-            None
-        } else {
-            Some(convert::bnb_price(deps, &cx.cex, bnb).await?)
-        },
-    };
+    // Живые цены всех валют затрат (BNB, промежуточные монеты шагов маршрута — решение 52).
+    // Цены нужны обязательно для затрат, которые вычитаются; затраты «в цене» — только для показа.
+    let must: Vec<Cost> = lines
+        .iter()
+        .filter(|(c, _)| !c.in_price)
+        .map(|(c, _)| c.clone())
+        .collect();
+    let rates = convert::rates(deps, &cx.cex, cx.quote.clone(), &coin, qa.avg_price, &must).await?;
     let mut costs = vec![];
     let mut costs_usdt = Decimal::ZERO;
     for (c, stage) in lines {
-        let usdt = convert::to_usdt(&c, &rates)?;
         let in_qty = c.asset == coin && stage != "B";
-        if !c.in_price && !in_qty {
-            costs_usdt += usdt;
-        }
+        let usdt = if c.in_price {
+            convert::to_usdt(&c, &rates).ok()
+        } else {
+            let u = convert::to_usdt(&c, &rates)?;
+            if !in_qty {
+                costs_usdt += u;
+            }
+            Some(u)
+        };
         costs.push(CostLine {
             kind: c.kind,
             stage,
@@ -162,6 +168,7 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
             usdt,
             in_price: c.in_price,
             in_qty,
+            step: c.step,
         });
     }
     let invested = qty * qa.avg_price;

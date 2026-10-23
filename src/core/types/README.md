@@ -5,7 +5,7 @@
 | `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
 | `pool.rs` | PoolKind (V2/V3/Cl/Bin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
 | `trade.rs` | Side, Quote (котировка на объём + затраты + маршрут DEX), TradeRequest, TradeStatus, TradeResult |
-| `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене), RouteMode, RouteHop, RouteLeg, DexRoute |
+| `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене, шаг маршрута), RouteStep (номер шага и пара токенов, решение 52), RouteMode, RouteHop, RouteLeg, DexRoute |
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |

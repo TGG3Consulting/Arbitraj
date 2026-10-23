@@ -19,7 +19,7 @@ use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::settings::read::At;
 
-use super::convert::{self, Rates};
+use super::convert;
 use super::engine::{Core, rd};
 use super::rules_apply::{self, Next};
 
@@ -164,22 +164,21 @@ pub async fn sell_value(
             },
         )
         .map_err(|e| e.message)?;
-    let bnb = convert::bnb_total(&q.costs);
     let cex: Vec<VenueId> = rd(&core.inner.kinds)
         .iter()
         .filter(|(_, k)| *k == VenueKind::Cex)
         .map(|(v, _)| v.clone())
         .collect();
-    let rates = Rates {
-        quote: vec![quote],
-        coin: a.ticker.clone(),
-        coin_price: q.avg_price,
-        bnb: if bnb.is_zero() {
-            None
-        } else {
-            Some(convert::bnb_price(&core.inner.deps, &cex, bnb).await?)
-        },
-    };
+    let priced: Vec<_> = q.costs.iter().filter(|c| !c.in_price).cloned().collect();
+    let rates = convert::rates(
+        &core.inner.deps,
+        &cex,
+        vec![quote],
+        &a.ticker,
+        q.avg_price,
+        &priced,
+    )
+    .await?;
     let mut net = qty * q.avg_price;
     for c in q.costs.iter().filter(|c| !c.in_price) {
         net -= convert::to_usdt(c, &rates)?;

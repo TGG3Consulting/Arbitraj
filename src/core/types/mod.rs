@@ -21,7 +21,7 @@ pub use check::{
 pub use control::{
     CoinGasStats, CommandSource, CommandTx, ManualAction, ManualCommand, ManualHolding, StuckAlert,
 };
-pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode};
+pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{HookGroup, HookInfo, Pool, PoolKind, PoolRef, PoolState};
 pub use send::{ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome};

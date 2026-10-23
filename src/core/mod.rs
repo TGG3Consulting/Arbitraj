@@ -22,6 +22,7 @@ pub mod fills;
 pub mod gas_stats;
 pub mod ids;
 pub mod inner;
+pub mod intermediate;
 pub mod ledger;
 pub mod limits;
 pub mod manual;

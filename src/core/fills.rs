@@ -13,7 +13,7 @@ use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::convert::{self, Rates};
+use super::convert;
 use super::deal::Deal;
 use super::engine::{Core, rd};
 
@@ -38,25 +38,21 @@ async fn usdt(
             },
         )
         .map_err(|e| e.message)?;
-    let bnb = if c.asset == convert::GAS_TICKER {
-        let cex: Vec<VenueId> = rd(&core.inner.kinds)
-            .iter()
-            .filter(|(_, k)| *k == VenueKind::Cex)
-            .map(|(v, _)| v.clone())
-            .collect();
-        Some(convert::bnb_price(&core.inner.deps, &cex, c.amount).await?)
-    } else {
-        None
-    };
-    convert::to_usdt(
-        c,
-        &Rates {
-            quote: vec![quote],
-            coin: coin.to_string(),
-            coin_price: price,
-            bnb,
-        },
+    let cex: Vec<VenueId> = rd(&core.inner.kinds)
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Cex)
+        .map(|(v, _)| v.clone())
+        .collect();
+    let rates = convert::rates(
+        &core.inner.deps,
+        &cex,
+        vec![quote],
+        coin,
+        price,
+        std::slice::from_ref(c),
     )
+    .await?;
+    convert::to_usdt(c, &rates)
 }
 
 /// Добавляет затрату: в монете — уменьшает количество; иначе — в spent (USDT).

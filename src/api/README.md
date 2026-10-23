@@ -49,7 +49,7 @@
 
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
-| `GET /api/coins` | — | `[{asset: Asset, venues: [VenueId], taxes: CheckState<TokenTaxes>, tax_source, checked_at, block: CoinBlock \| null, pools: [{venue, family, kind: PoolKind, pool: PoolRef, fee_pips, hooks: HookInfo \| null, check: PoolCheck \| null, admission: String \| null, block: u64, received_at}], checks: [CoinCheck], problem: String \| null, presence: [Presence], directions: [Direction]}]` — `pools[].block` — номер блока, по которому получено состояние пула; `admission` — причина исключения пула (крючок, проверка), null — пул допущен |
+| `GET /api/coins` | — | `[{asset: Asset, venues: [VenueId], taxes: CheckState<TokenTaxes>, tax_source, checked_at, block: CoinBlock \| null, pools: [{venue, family, kind: PoolKind, pool: PoolRef, fee_pips, hooks: HookInfo \| null, check: PoolCheck \| null, pair: String, admission: String \| null, block: u64, received_at}], via: [{venue, via}], checks: [CoinCheck], problem: String \| null, presence: [Presence], directions: [Direction]}]` — `pools[].block` — номер блока, по которому получено состояние пула; `admission` — причина исключения пула (крючок, проверка), null — пул допущен; `pair` — второй токен пула (USDT или промежуточная монета); `via` — через какую промежуточную монету допущена монета без пула с USDT (решение 52) |
 | `POST /api/coins/recheck` | `{venue: VenueId, assets: [Asset]}` (тикер + адрес контракта: одинаковый тикер бывает разными токенами) | `{ok, details}` — шлюз `recheck_coins`; биржа отвечает «не применимо» |
 | ручной чёрный список | `PUT /api/settings` `{name:"coin.blocked", scope:{kind:"Coin",id:"CAKE"}, value:true}` (+ `coin.blocked_note`) | как у настроек |
 | WS `/api/ws` | — | `{"type":"coin_check","data":CoinCheck}`, `{"type":"pool_check","data":PoolCheck}`, `{"type":"coin_block","data":{asset, block: CoinBlock \| null}}` (null — вышла из списка) |
@@ -83,7 +83,7 @@
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
 | `GET /api/spreads` | — | `[SpreadView]`: `{direction, prices, spread_pct, state, above_since, updates, at}`; `state` — `"Below"`, `"Holding"`, `"Candidate"`, `"Anomaly"`, `{"NoPrice": причина}`, `{"NotConfigured": причина}`, `{"Cooldown": {until}}` |
-| `GET /api/candidates` | — | `[{direction, verdict, at}]`, новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}` |
+| `GET /api/candidates` | — | `[{direction, verdict, at}]`, новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
 | `GET /api/deals` | — | `[Deal]` (core/deal.rs): шаг, где монеты, вложено, выручка, затраты, план, факт покупки/переводов/продаж, хронология, итог |
 | `GET /api/transits` | — | `[{asset, from, to, count, avg_s}]` |
 | `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine, day, day_result_usd}` |

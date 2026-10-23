@@ -92,6 +92,25 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
                 ))
             }
         }
+        Kind::AddressList => {
+            let arr = value.as_array().ok_or("Ожидается список адресов 0x…")?;
+            let mut out = Vec::new();
+            for v in arr {
+                let a = v.as_str().map(str::trim).unwrap_or_default();
+                let ok = a.len() == 42
+                    && a.starts_with("0x")
+                    && a.parse::<alloy_primitives::Address>().is_ok();
+                if !ok {
+                    return Err(format!(
+                        "«{a}» — не адрес сети BSC (0x и 40 шестнадцатеричных знаков)"
+                    ));
+                }
+                if !out.contains(&Value::String(a.to_string())) {
+                    out.push(Value::String(a.to_string()));
+                }
+            }
+            Ok(Value::Array(out))
+        }
         Kind::TextList => {
             let arr = value.as_array().ok_or("Ожидается список")?;
             let items: Option<Vec<Value>> = arr

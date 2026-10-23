@@ -14,7 +14,7 @@ use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::convert::{self, Rates};
+use super::convert;
 use super::deal::{Deal, Step};
 use super::engine::{Core, rd};
 
@@ -50,22 +50,20 @@ async fn value_at(
             },
         )
         .map_err(|e| e.message)?;
-    let bnb = convert::bnb_total(&costs);
     let cex: Vec<VenueId> = rd(&core.inner.kinds)
         .iter()
         .filter(|(_, k)| *k == VenueKind::Cex)
         .map(|(v, _)| v.clone())
         .collect();
-    let rates = Rates {
-        quote: vec![quote],
-        coin: a.ticker.clone(),
-        coin_price: q.avg_price,
-        bnb: if bnb.is_zero() {
-            None
-        } else {
-            Some(convert::bnb_price(&core.inner.deps, &cex, bnb).await?)
-        },
-    };
+    let rates = convert::rates(
+        &core.inner.deps,
+        &cex,
+        vec![quote],
+        &a.ticker,
+        q.avg_price,
+        &costs,
+    )
+    .await?;
     let mut out = v;
     for c in costs.iter().filter(|c| c.asset != a.ticker) {
         out -= convert::to_usdt(c, &rates)?;

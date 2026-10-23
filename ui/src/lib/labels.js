@@ -19,6 +19,7 @@ const KIND = {
   Ip: 'IP-адрес',
   Choice: 'выбор из списка',
   Address: 'адрес BSC (0x…)',
+  AddressList: 'список адресов BSC',
 };
 const LIMIT = {
   None: '',

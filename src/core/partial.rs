@@ -34,7 +34,7 @@ fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
         .costs
         .iter()
         .filter(|l| l.stage == "A" && !l.in_price && !l.in_qty)
-        .map(|l| l.usdt)
+        .filter_map(|l| l.usdt)
         .sum();
     c.proceeds - (c.costs_usdt - buy_costs) - deal.invested - deal.spent
 }

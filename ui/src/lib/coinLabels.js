@@ -60,3 +60,22 @@ export function poolRefText(p) {
   if (p?.Singleton) return `${p.Singleton.id} в ${p.Singleton.manager}`;
   return JSON.stringify(p);
 }
+
+const EXCLUSION = {
+  NoBscNetwork: 'нет сети BSC',
+  NoContract: 'биржа не сообщила адрес контракта',
+  NoSpotBook: 'стакан не пришёл (нет пары на споте?)',
+  NoUsdtAddress: 'неизвестен адрес USDT в BSC',
+  NoUsdtPool: 'нет пула с USDT',
+};
+
+/**
+ * Причина отсева монеты на площадке (core/registry.rs, Exclusion). Принимает: строку или {вариант: данные}.
+ * Возвращает: текст по-русски.
+ */
+export function exclusionText(e) {
+  if (typeof e === 'string') return EXCLUSION[e] ?? e;
+  if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
+  if (e?.IntermediateNotConfigured) return `промежуточные монеты (решение 52) не заданы: ${e.IntermediateNotConfigured}`;
+  return JSON.stringify(e);
+}

@@ -20,6 +20,8 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
     d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),
     d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "Вид пула включён (id области — вид пула, например pancakeswap_v3) (решение 31)"),
+    d("DEX", "dex.intermediate_enabled", K::Bool, L::None, "да/нет", V, "Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и монеты с пулом только с промежуточной допускаются; нет — только пулы с USDT"),
+    d("DEX", "dex.intermediate_tokens", K::AddressList, L::None, "адреса BSC", V, "Промежуточные монеты (решение 52): адреса токенов в BSC (например WBNB). Нужен, если dex.intermediate_enabled = да"),
     d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не слушаются"),
     d("DEX", "dex.multicall", K::Address, L::None, "адрес", V, "Контракт Multicall для пачек eth_call (адрес — из официальной документации)"),
     d("DEX", "dex.pools_per_sub", K::Integer, L::Positive, "штук", V, "Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics)"),

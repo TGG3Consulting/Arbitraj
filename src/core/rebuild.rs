@@ -37,6 +37,7 @@ pub async fn watch_settings(core: Core) {
         "hooks.",
         "venue.enabled",
         "venue.quote_asset",
+        "dex.intermediate_",
     ]);
     while w.next().await.is_some() {
         core.request_rebuild();
@@ -98,6 +99,11 @@ fn build(
     let pool_ok =
         |p: &Pool| blacklist::pool_admission(p, market.pool_check(&p.venue, &p.reference), s);
     let nets = rd(&core.inner.networks);
+    let intermediate: HashMap<VenueId, super::intermediate::Intermediate> = venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| (v.clone(), super::intermediate::read(s, v)))
+        .collect();
     registry::build(&Inputs {
         venues,
         networks: &nets,
@@ -105,6 +111,7 @@ fn build(
         quote,
         market: &market,
         pool_ok: &pool_ok,
+        intermediate: &intermediate,
     })
 }
 

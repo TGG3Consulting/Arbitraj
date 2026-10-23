@@ -14,3 +14,19 @@ pub use vault::Vault;
 
 /// Имя секрета токена Telegram-бота.
 pub const TELEGRAM_BOT_TOKEN: &str = "telegram.bot_token";
+
+/// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
+/// Новая площадка или сервис добавляет сюда свои секреты.
+pub static KNOWN: &[(&str, &str, &str)] = &[
+    (
+        TELEGRAM_BOT_TOKEN,
+        "telegram",
+        "Токен Telegram-бота (BotFather)",
+    ),
+    ("bingx.api_key", "bingx", "API-ключ BingX"),
+    (
+        "bingx.api_secret",
+        "bingx",
+        "Секретный ключ BingX (Secret Key)",
+    ),
+];

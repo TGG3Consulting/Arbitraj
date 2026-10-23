@@ -10,6 +10,7 @@
 | `GET /api/journal?limit=N[&before=ID]` | Журнал |
 | `POST /api/check/telegram` | «Проверить подключение» Telegram |
 | `POST /api/check/venue/{id}` | «Проверить подключение» площадки |
+| `GET /api/secrets/known` | Известные секреты: имя, площадка, описание |
 | `GET /api/secrets/status` | Создан ли файл, разблокировано ли, имена секретов (без значений) |
 | `POST /api/secrets/create`, `/unlock`, `/lock`, `/password` | Создать файл, разблокировать, заблокировать, сменить пароль |
 | `PUT /api/secrets/{name}`, `DELETE /api/secrets/{name}` | Добавить/заменить, удалить секрет (нужен пароль) |

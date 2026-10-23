@@ -42,6 +42,13 @@ CREATE TABLE IF NOT EXISTS journal (
     message TEXT NOT NULL,
     data TEXT
 );
+CREATE TABLE IF NOT EXISTS core_state (
+    kind TEXT NOT NULL,
+    id   TEXT NOT NULL,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (kind, id)
+);
 ";
 
 /// Ошибка базы.

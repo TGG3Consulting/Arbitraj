@@ -1,8 +1,7 @@
 //! Файл: core/persist.rs
 //! Что делает: учёт ядра в SQLite — сделки, переводы, статистика газа, алерты, ручное управление,
 //! итог дня (ТЗ, стек: «Сделки, переводы, учёт — SQLite»). Одна таблица core_state: вид, id, JSON.
-//! Таблица создаётся ядром через общий доступ к базе (storage/db.rs, Db::call); схема — здесь,
-//! в зоне ядра (перенос в storage/ — вопрос в Issue #8).
+//! Схема таблицы — в storage/db.rs; ядро пишет и читает через Db::call.
 //! Кто вызывает: ledger.rs, gas_stats.rs, manual.rs, transfers.rs.
 //! От чего зависит: storage/db.rs, serde_json.
 //! Настройки: нет.
@@ -13,21 +12,6 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::storage::db::{Db, DbError};
-
-/// Схема таблицы учёта ядра.
-const SCHEMA: &str = "
-CREATE TABLE IF NOT EXISTS core_state (
-    kind TEXT NOT NULL,
-    id   TEXT NOT NULL,
-    body TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (kind, id)
-);";
-
-/// Создаёт таблицу, если её нет. Ошибки: база.
-pub async fn init(db: &Db) -> Result<(), DbError> {
-    db.call(|c| c.execute_batch(SCHEMA)).await
-}
 
 /// Сохраняет запись (новую или поверх старой). Принимает: вид, id, значение. Ошибки: база, JSON.
 pub async fn save<T: Serialize>(db: &Db, kind: &str, id: &str, v: &T) -> Result<(), DbError> {

@@ -2,13 +2,11 @@
 //! Что делает: всё, что нужно расчёту направления и не зависит от объёма: площадки и их данные о сети
 //! BSC, сеть для вывода и депозита, котируемые монеты, адрес USDT, σ на B, время в пути T, k, h,
 //! режим возврата USDT, минимумы вывода и минимальный депозит. Собирается один раз на кандидата.
-//! Время в пути: история наших переводов по монете и направлению (ledger), а пока её нет —
-//! profit.default_transit_time_s; если B — биржа и известны число подтверждений депозита (её API)
-//! и среднее время блока (vol.rs), берётся большее из двух (ТЗ, шаг 4).
+//! Время в пути — transit.rs (решение 50); σ — по окну profit.sigma_window_min (решение 49, vol.rs).
 //! Кто вызывает: core/profit.rs, позже executor.rs.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, settings.
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
-//! profit.default_transit_time_s (по A), usdt_return.mode.
+//! profit.sigma_window_min, usdt_return.mode (+ transit.rs).
 
 use rust_decimal::Decimal;
 
@@ -70,7 +68,16 @@ impl DirCtx {
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
             .map(|(v, _)| v.clone())
             .collect();
-        let sigma = lk(&core.inner.vol).sigma(&dir.sell_on, &dir.asset, Side::Sell)?;
+        let window = s
+            .integer("profit.sigma_window_min", At::default())
+            .map_err(|e| e.message)?;
+        let sigma = lk(&core.inner.vol).sigma(
+            &dir.sell_on,
+            &dir.asset,
+            Side::Sell,
+            window,
+            chrono::Utc::now(),
+        )?;
         let coin_at = At {
             venue: None,
             coin: Some(&dir.asset.ticker),
@@ -87,7 +94,7 @@ impl DirCtx {
         let mode = s
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
-        let transit_s = transit(core, dir, &b)?;
+        let transit_s = super::transit::seconds(core, dir)?;
         Ok(DirCtx {
             dir: dir.clone(),
             a,
@@ -141,36 +148,6 @@ impl DirCtx {
             Some(_) => Ok(()),
         }
     }
-}
-
-/// Время в пути, секунды. Ошибки: не задана profit.default_transit_time_s и нет истории.
-fn transit(core: &Core, dir: &Direction, b: &Presence) -> Result<Decimal, String> {
-    let key = (dir.asset.clone(), dir.buy_on.clone(), dir.sell_on.clone());
-    if let Some((sum, n)) = lk(&core.inner.transits).get(&key).copied()
-        && n > 0
-    {
-        return Ok(sum / Decimal::from(n));
-    }
-    let base = core
-        .inner
-        .deps
-        .settings
-        .integer(
-            "profit.default_transit_time_s",
-            At {
-                venue: Some(&dir.buy_on.0),
-                coin: None,
-            },
-        )
-        .map(Decimal::from)
-        .map_err(|e| e.message)?;
-    let conf = b
-        .info
-        .as_ref()
-        .and_then(|i| i.deposit_confirmations)
-        .zip(lk(&core.inner.clock).seconds_per_block())
-        .map(|(n, spb)| Decimal::from(n) * spb);
-    Ok(conf.map_or(base, |c| c.max(base)))
 }
 
 /// Область настройки «площадка». Принимает: площадку. Возвращает: At для чтения настроек.

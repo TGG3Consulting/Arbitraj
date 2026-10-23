@@ -2,15 +2,14 @@
 //! Что делает: сделка целиком (шаг 5 ТЗ): предпроверка → покупка на A → перевод на B → продажа на B.
 //! После каждого шага результат пересчитывается по факту. Не исполнилась покупка — сделка закрыта
 //! без монет (стартовое правило шлюза: отменить, больше не пробовать — повтор только по правилу).
-//! Покупка исполнилась частично — пересчёт прибыли на фактический объём (ТЗ, шаг 5): не проходит порог —
-//! монеты на A уходят в режим застрявшей монеты (stuck.rs). Вывод отклонён — то же. Продажа: выгодно
-//! сейчас — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
+//! Покупка исполнилась частично — решение 48 (partial.rs): больший итог из «довезти и продать» и
+//! «продать обратно на A». Вывод не состоялся — монеты на A, режим застрявшей монеты. Продажа: выгодно
+//! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
 
 use chrono::Utc;
-use rust_decimal::Decimal;
 
 use crate::core::types::{Direction, Side};
 use crate::storage::journal::Level;
@@ -107,11 +106,28 @@ async fn run(core: &Core, d: Direction) {
     );
     deps.notify("deal.buy_filled", Some(&d.buy_on.0), &text)
         .await;
-    if r.filled_qty < plan.qty
-        && let Err(why) = recheck_partial(core, &deal).await
-    {
-        deal.note(format!("Частичная покупка: {why}"));
-        return super::stuck::handle(core, deal).await;
+    if r.filled_qty < plan.qty {
+        // Решение 48: больший итог из «довезти» и «продать на A»; застрявшая монета не включается.
+        match super::partial::choose(core, &deal).await {
+            super::partial::Choice::Deliver(x) => {
+                deal.note(format!(
+                    "Частичная покупка: довезти и продать (итог {} USDT)",
+                    x.round_dp(4)
+                ));
+            }
+            super::partial::Choice::SellBack(x) => {
+                let why = format!(
+                    "частичная покупка: продать на A выгоднее (итог {} USDT)",
+                    x.round_dp(4)
+                );
+                deal.note(why.clone());
+                return super::sell::market(core, deal, &why).await;
+            }
+            super::partial::Choice::Neither(e) => {
+                let why = format!("частичная покупка: ни один путь не считается — {e}");
+                return super::ledger::finish(core, &mut deal, Step::Halted, &why).await;
+            }
+        }
     }
     // Перевод на B.
     deal.step = Step::Transfer;
@@ -129,34 +145,4 @@ async fn run(core: &Core, d: Direction) {
     deal.step = Step::Selling;
     super::ledger::save(core, &deal).await;
     super::sell::sell_or_stuck(core, deal).await;
-}
-
-/// Частичная покупка: пересчёт полного расчёта на фактический объём с фактической ценой покупки.
-/// Ошибка — текст: прибыль ниже порога или объём не проходит минимумы.
-async fn recheck_partial(core: &Core, deal: &Deal) -> Result<(), String> {
-    let cx = super::dirctx::DirCtx::build(core, &deal.direction)?;
-    let c = super::costs::evaluate(&core.inner.deps, &cx, deal.qty).await?;
-    // В расчёте покупка по текущей котировке — заменяем её фактом.
-    let profit = c.profit_usd + c.invested - deal.invested - deal.spent;
-    let s = &core.inner.deps.settings;
-    let min = s
-        .decimal("money.min_profit_usd", Default::default())
-        .map_err(|e| e.message)?;
-    let pct = s
-        .decimal("money.min_profit_pct", Default::default())
-        .map_err(|e| e.message)?;
-    let profit_pct = if deal.invested.is_zero() {
-        Decimal::ZERO
-    } else {
-        profit / deal.invested * Decimal::ONE_HUNDRED
-    };
-    if profit < min || profit_pct < pct {
-        return Err(format!(
-            "на фактический объём {} прибыль {} USDT ({}%) ниже порога",
-            deal.qty,
-            profit.round_dp(4),
-            profit_pct.round_dp(4)
-        ));
-    }
-    Ok(())
 }

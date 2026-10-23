@@ -1,24 +1,33 @@
 //! Файл: core/vol.rs
-//! Что делает: то, что ядро измеряет само «по нашим записям» (ТЗ, шаг 4) без единого параметра:
-//! волатильность цены монеты на площадке σ (за секунду, по всем замерам с запуска: σ² = Σ(ln pᵢ/pᵢ₋₁)² / Σ Δt)
-//! и среднее время блока BSC (по событиям пулов: Σ Δt / Σ Δблоков). Память — O(1) на монету.
-//! Кто вызывает: core/tick.rs (замеры цен сигнала), core/market_state.rs (блоки пулов), costs.rs (σ, время блока).
+//! Что делает: волатильность цены монеты на площадке σ (за секунду) «по нашим записям» (ТЗ, шаг 4)
+//! по окну последних N минут (решение 49, настройка profit.sigma_window_min):
+//! σ² = Σ(ln pᵢ/pᵢ₋₁)² / Σ Δt по замерам внутри окна. Замеры старше окна удаляются — память ограничена окном.
+//! Окно не задано — замеры не копятся (хранится только последняя цена), σ нет — сделки нет.
+//! Кто вызывает: core/tick.rs (замеры цен сигнала), core/dirctx.rs (σ на B).
 //! От чего зависит: rust_decimal (ln, sqrt), chrono.
-//! Настройки: нет.
+//! Настройки: profit.sigma_window_min (окно передаёт вызывающий).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rust_decimal::{Decimal, MathematicalOps};
 
 use crate::core::types::{Asset, Side, VenueId};
 
-/// Накопитель волатильности одного ряда цен.
+/// Ряд цен: последняя цена и шаги внутри окна (время шага, квадрат лог-доходности, Δt в секундах).
 #[derive(Default, Clone)]
 struct Series {
     last: Option<(Decimal, DateTime<Utc>)>,
-    sum_sq: Decimal,
-    sum_dt_s: Decimal,
+    steps: VecDeque<(DateTime<Utc>, Decimal, Decimal)>,
+}
+
+impl Series {
+    /// Удаляет шаги старше начала окна.
+    fn prune(&mut self, from: DateTime<Utc>) {
+        while self.steps.front().is_some_and(|(t, _, _)| *t < from) {
+            self.steps.pop_front();
+        }
+    }
 }
 
 /// Волатильность по площадке, монете и стороне (цена покупки и продажи — разные ряды).
@@ -29,8 +38,8 @@ pub struct Volatility {
 }
 
 impl Volatility {
-    /// Добавляет замер цены. Принимает: площадку, монету, сторону, цену, время. Ошибок нет:
-    /// неположительная цена или время не вперёд — замер пропускается.
+    /// Добавляет замер цены. Принимает: площадку, монету, сторону, цену, время, окно в минутах
+    /// (None — не задано: шаги не копятся). Ошибок нет: неположительная цена или время не вперёд — пропуск.
     pub fn sample(
         &mut self,
         venue: &VenueId,
@@ -38,6 +47,7 @@ impl Volatility {
         side: Side,
         p: Decimal,
         at: DateTime<Utc>,
+        window_min: Option<u64>,
     ) {
         if p <= Decimal::ZERO {
             return;
@@ -46,63 +56,52 @@ impl Volatility {
             .map
             .entry((venue.clone(), asset.clone(), side == Side::Sell))
             .or_default();
-        if let Some((prev, t)) = s.last {
-            let dt = Decimal::from((at - t).num_milliseconds()) / Decimal::ONE_THOUSAND;
-            if dt <= Decimal::ZERO {
-                return;
+        match (s.last, window_min) {
+            (Some((_, t)), _) if at <= t => return,
+            (Some((prev, t)), Some(w)) => {
+                let dt = Decimal::from((at - t).num_milliseconds()) / Decimal::ONE_THOUSAND;
+                let r = (p / prev).ln();
+                s.steps.push_back((at, r * r, dt));
+                s.prune(at - Duration::minutes(w as i64));
             }
-            let r = (p / prev).ln();
-            s.sum_sq += r * r;
-            s.sum_dt_s += dt;
+            (_, None) => s.steps.clear(),
+            _ => {}
         }
         s.last = Some((p, at));
     }
 
-    /// σ за секунду (доля, не %). Err — замеров ещё нет (меньше двух цен с разным временем).
-    pub fn sigma(&self, venue: &VenueId, asset: &Asset, side: Side) -> Result<Decimal, String> {
+    /// σ за секунду (доля, не %) по окну последних window_min минут.
+    /// Ошибка — текст: замеров в окне нет (меньше двух цен с разным временем).
+    pub fn sigma(
+        &mut self,
+        venue: &VenueId,
+        asset: &Asset,
+        side: Side,
+        window_min: u64,
+        now: DateTime<Utc>,
+    ) -> Result<Decimal, String> {
+        let none = || {
+            format!(
+                "волатильность {} на {} за последние {window_min} мин ещё не измерена",
+                asset.ticker, venue.0
+            )
+        };
         let s = self
             .map
-            .get(&(venue.clone(), asset.clone(), side == Side::Sell))
-            .filter(|s| s.sum_dt_s > Decimal::ZERO)
-            .ok_or_else(|| {
-                format!(
-                    "волатильность {} на {} ещё не измерена (нужно больше замеров цены)",
-                    asset.ticker, venue.0
-                )
-            })?;
-        (s.sum_sq / s.sum_dt_s)
+            .get_mut(&(venue.clone(), asset.clone(), side == Side::Sell))
+            .ok_or_else(none)?;
+        s.prune(now - Duration::minutes(window_min as i64));
+        let (sq, dt) = s
+            .steps
+            .iter()
+            .fold((Decimal::ZERO, Decimal::ZERO), |(a, b), (_, r, d)| {
+                (a + r, b + d)
+            });
+        if dt <= Decimal::ZERO {
+            return Err(none());
+        }
+        (sq / dt)
             .sqrt()
             .ok_or_else(|| "волатильность не вычисляется".to_string())
-    }
-}
-
-/// Часы сети BSC по событиям пулов: среднее время блока.
-#[derive(Default)]
-pub struct BlockClock {
-    last: Option<(u64, DateTime<Utc>)>,
-    sum_dt_s: Decimal,
-    sum_blocks: Decimal,
-}
-
-impl BlockClock {
-    /// Замер: номер блока и время получения. Учитываются только шаги вперёд. Ошибок нет.
-    pub fn sample(&mut self, block: u64, at: DateTime<Utc>) {
-        match self.last {
-            Some((b, t)) if block > b => {
-                let dt = Decimal::from((at - t).num_milliseconds()) / Decimal::ONE_THOUSAND;
-                if dt > Decimal::ZERO {
-                    self.sum_dt_s += dt;
-                    self.sum_blocks += Decimal::from(block - b);
-                }
-                self.last = Some((block, at));
-            }
-            None => self.last = Some((block, at)),
-            _ => {}
-        }
-    }
-
-    /// Среднее время блока, секунды. None — ещё не измерено.
-    pub fn seconds_per_block(&self) -> Option<Decimal> {
-        (self.sum_blocks > Decimal::ZERO).then(|| self.sum_dt_s / self.sum_blocks)
     }
 }

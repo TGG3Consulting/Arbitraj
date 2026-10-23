@@ -59,6 +59,7 @@ impl Core {
         super::ledger::load(&core).await;
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
+        super::transit::load(&core).await;
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

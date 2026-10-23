@@ -32,9 +32,6 @@ pub enum Touched {
         venue: VenueId,
         tokens: (Address, Address),
         first: bool,
-        /// Блок состояния и время получения — для часов сети (vol.rs).
-        block: u64,
-        at: chrono::DateTime<chrono::Utc>,
     },
     /// Площадка объявила данные монеты недостоверными — стакан удалён.
     Invalidated {
@@ -75,14 +72,11 @@ impl MarketState {
             MarketEvent::Pool(p) => {
                 let key = (p.venue.clone(), p.reference.clone());
                 let (venue, tokens) = (p.venue.clone(), (p.token0, p.token1));
-                let (block, at) = (p.block, p.received_at);
                 let first = self.pools.insert(key, p).is_none();
                 Touched::Pool {
                     venue,
                     tokens,
                     first,
-                    block,
-                    at,
                 }
             }
             MarketEvent::Invalidated { venue, ticker } => {

@@ -5,6 +5,7 @@
 //! Настройки: bsc.node_ws_url, bsc.node_http_url, http.timeout_ms, venue.ws_* [bsc_dex], feed.stale_after_ms [bsc_dex].
 
 pub mod abi;
+pub mod abi_dex;
 pub mod call;
 pub mod heads;
 pub mod jsonrpc;

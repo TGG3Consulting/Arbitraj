@@ -4,6 +4,9 @@
 //! От чего зависит: ctx.rs, node/*.
 //! Настройки: нет своих; секрет bsc_dex.wallet_key.
 
+pub mod approve;
 pub mod balances;
 pub mod nonce;
 pub mod signer;
+pub mod transfer;
+pub mod transfer_status;

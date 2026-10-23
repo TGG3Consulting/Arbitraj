@@ -34,6 +34,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))
         .route("/api/venues", get(venues::list))
+        .route("/api/venues/kinds", get(venues::kinds))
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/channels/{venue}", get(dex::channels))
         .route("/api/coins", get(coins::list))

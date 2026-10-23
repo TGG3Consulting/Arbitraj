@@ -1,18 +1,19 @@
 //! Файл: core/transit.rs
-//! Что делает: время в пути T для запаса r (решение 50). Переключатель profit.transit_mode:
-//! «вручную» (manual) — всегда profit.default_transit_time_s; «вручную + авто» (manual_auto) — время из
+//! Что делает: время в пути T для запаса r (решения 50, 51). Настройки — свои у каждого направления
+//! перевода (область — площадка, с которой переводим). Переключатель profit.transit_mode:
+//! «вручную» (manual) — всегда profit.transit_manual_s; «вручную + авто» (manual_auto) — время из
 //! настройки, пока по монете в этом направлении меньше profit.transit_auto_after переводов, затем —
 //! среднее по последним profit.transit_auto_after реальным переводам. Расчёт по подтверждениям блоков
 //! не используется. История переводов хранится в учёте ядра (SQLite) и переживает перезапуск.
 //! Кто вызывает: core/dirctx.rs (T), core/transfer_watch.rs (запись перевода), core/engine.rs (загрузка).
 //! От чего зависит: engine.rs, persist.rs, settings.
-//! Настройки: profit.transit_mode, profit.transit_auto_after, profit.default_transit_time_s (по площадке A).
+//! Настройки: profit.transit_mode, profit.transit_manual_s, profit.transit_auto_after (по площадке-источнику).
 
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{Asset, Direction, VenueId};
-use crate::settings::read::At;
+use crate::settings::scope::Scope;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
@@ -83,22 +84,18 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
     }
 }
 
-/// Время в пути направления, секунды. Ошибки: текст «не задана настройка …» или неизвестный режим.
+/// Время в пути направления, секунды. Все три настройки — ровно в области площадки-источника перевода
+/// (A, откуда выводим; решение 51): bingx — BingX → кошелёк, bsc_dex — кошелёк → биржа.
+/// Статистика — по монете и направлению (откуда, куда).
+/// Ошибки: текст «не задана настройка … [venue:…]» или неизвестный режим.
 pub fn seconds(core: &Core, d: &Direction) -> Result<Decimal, String> {
     let s = &core.inner.deps.settings;
-    let coin = At {
-        venue: None,
-        coin: Some(&d.asset.ticker),
-    };
-    let mode = s.text("profit.transit_mode", coin).map_err(|e| e.message)?;
+    let from = Scope::Venue(d.buy_on.0.clone());
+    let mode = s
+        .text_in("profit.transit_mode", &from)
+        .map_err(|e| e.message)?;
     let manual = s
-        .integer(
-            "profit.default_transit_time_s",
-            At {
-                venue: Some(&d.buy_on.0),
-                coin: None,
-            },
-        )
+        .integer_in("profit.transit_manual_s", &from)
         .map(Decimal::from)
         .map_err(|e| e.message)?;
     // Варианты настройки — manual / manual_auto (settings/catalog/base.rs).
@@ -106,7 +103,7 @@ pub fn seconds(core: &Core, d: &Direction) -> Result<Decimal, String> {
         "manual" => Ok(manual),
         "manual_auto" => {
             let n = s
-                .integer("profit.transit_auto_after", At::default())
+                .integer_in("profit.transit_auto_after", &from)
                 .map_err(|e| e.message)? as usize;
             let t = lk(&core.inner.transits);
             let hist = t.get(&(d.asset.clone(), d.buy_on.clone(), d.sell_on.clone()));
@@ -118,7 +115,10 @@ pub fn seconds(core: &Core, d: &Direction) -> Result<Decimal, String> {
                 _ => Ok(manual),
             }
         }
-        other => Err(format!("неизвестный режим profit.transit_mode = {other}")),
+        other => Err(format!(
+            "неизвестный режим profit.transit_mode = {other} [{}]",
+            from.to_key()
+        )),
     }
 }
 

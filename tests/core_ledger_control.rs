@@ -139,37 +139,47 @@ async fn transit_history_survives_restart() {
     let (core, settings) = start(&d).await;
     let rows = core.transits();
     assert_eq!(rows[0]["count"], 2);
-    // «вручную + авто»: набралось 2 перевода при пороге 2 — T = среднее (300 с), а не ручное значение.
-    for (n, v) in [
-        ("profit.transit_mode", json!("manual_auto")),
-        ("profit.transit_auto_after", json!(2)),
-        ("profit.default_transit_time_s", json!(900)),
+    // Решение 51: настройки — по площадке-источнику перевода (bingx → кошелёк здесь); у обратного
+    // направления (bsc_dex) свои значения. «вручную + авто»: набралось 2 перевода при пороге 2 — T = 300 с.
+    let bx = Scope::Venue("bingx".into());
+    let dx = Scope::Venue("bsc_dex".into());
+    for (sc, n, v) in [
+        (&bx, "profit.transit_mode", json!("manual_auto")),
+        (&bx, "profit.transit_auto_after", json!(2)),
+        (&bx, "profit.transit_manual_s", json!(900)),
+        (&dx, "profit.transit_mode", json!("manual")),
+        (&dx, "profit.transit_manual_s", json!(1200)),
     ] {
-        settings
-            .set(
-                n,
-                if n == "profit.default_transit_time_s" {
-                    Scope::Venue("bingx".into())
-                } else {
-                    Scope::Global
-                },
-                Some(v),
-                "тест",
-            )
-            .await
-            .unwrap();
+        settings.set(n, sc.clone(), Some(v), "тест").await.unwrap();
     }
     assert_eq!(
         arb::core::transit::seconds(&core, &c).unwrap(),
         Decimal::from(300)
     );
+    // Обратное направление: своя настройка «вручную», статистики bingx → bsc_dex оно не видит.
+    let back = Direction {
+        asset: c.asset.clone(),
+        buy_on: c.sell_on.clone(),
+        sell_on: c.buy_on.clone(),
+    };
+    assert_eq!(
+        arb::core::transit::seconds(&core, &back).unwrap(),
+        Decimal::from(1200)
+    );
+    // Глобально эти настройки не задаются — только по площадке-источнику.
+    assert!(
+        settings
+            .set(
+                "profit.transit_mode",
+                Scope::Global,
+                Some(json!("manual")),
+                "тест"
+            )
+            .await
+            .is_err()
+    );
     settings
-        .set(
-            "profit.transit_mode",
-            Scope::Global,
-            Some(json!("manual")),
-            "тест",
-        )
+        .set("profit.transit_mode", bx, Some(json!("manual")), "тест")
         .await
         .unwrap();
     assert_eq!(

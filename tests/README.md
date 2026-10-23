@@ -6,3 +6,5 @@
 Кнопки Telegram (callback_data, клавиатура, команда ядру, «только свой чат») — tests/notify_buttons.rs, чистые функции; записанных ответов getUpdates пока нет.
 Ядро на записанных стаканах BingX (состояние рынка, грубый спред, чёрный список без проверок) — tests/core_market_signal.rs.
 Ядро целиком на настоящей SQLite (режим «Стоп» после запуска, торговля без money.*/risk.* не включается, Telegram только из своего чата, сделка после перезапуска) — tests/core_ledger_control.rs.
+Отправка DEX без сети (send.max_wait_blocks ≥ send.bundle_max_blocks, цена газа отмены, обмен без минимума не собирается, поступление и обмен того же токена не совпадают) — tests/bsc_dex_send.rs, настоящая SQLite.
+Порядок событий пула DEX в одном блоке по logIndex — tests/bsc_dex_events.rs.

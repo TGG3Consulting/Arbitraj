@@ -10,7 +10,7 @@
 //! Сигнатуры — шапка node/abi_dex.rs (официальные интерфейсы Uniswap v2/v3, pancake-v3, infinity-periphery, v4-periphery).
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::aliases::{I24, U24, U160};
+use alloy_primitives::aliases::{U24, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::PoolKind;
@@ -47,7 +47,11 @@ pub fn request(
             ));
         }
         (PoolKind::V3, _) => {
-            let fee = U24::from(e.pool.fee_pips.unwrap_or_default());
+            let fee = U24::from(
+                e.pool
+                    .fee_pips
+                    .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула V3 нет fee"))?,
+            );
             let p = IQuoterV2::QuoteExactInputSingleParams {
                 tokenIn: token_in,
                 tokenOut: token_out,
@@ -75,8 +79,7 @@ pub fn request(
             IInfinityQuoter::quoteExactInputSingleCall { params: p }.abi_encode()
         }
         (_, Some(PoolKey::Uniswap(k))) => {
-            let spacing = I24::try_from(k.tick_spacing)
-                .map_err(|_| ctx.err(ErrorCode::BadResponse, "tickSpacing вне int24"))?;
+            let spacing = k.tick_spacing;
             let key = IV4Quoter::PoolKey {
                 currency0: k.currency0,
                 currency1: k.currency1,

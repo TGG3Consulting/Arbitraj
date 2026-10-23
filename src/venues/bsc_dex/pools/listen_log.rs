@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/pools/listen_log.rs
 //! Что делает: один лог подписки пулов — найти пул (по адресу или по PoolId у менеджера), отбросить уже учтённое
-//! (блок ≤ синхронизированного), применить событие, перечитать бины или весь пул (реорг, расхождение), отправить
+//! (позиция (блок, logIndex) не позже последней учтённой), применить событие, перечитать бины или весь пул (реорг,
+//! расхождение), отправить
 //! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
@@ -46,8 +47,12 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     let Some(entry) = p.reg.get(&r) else {
         return Ok(());
     };
-    let block = log.block_number.unwrap_or(entry.synced_block);
-    if !log.removed && block <= entry.synced_block {
+    let (Some(block), Some(index)) = (log.block_number, log.log_index) else {
+        return Err(End::Broken(
+            "лог подписки без blockNumber/logIndex — порядок событий неизвестен".into(),
+        ));
+    };
+    if !log.removed && entry.has_applied(block, index) {
         return Ok(());
     }
     let applied = if log.removed {
@@ -75,13 +80,16 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
                 .await;
             // Реорг: читаем текущий блок; иначе — конец блока события (поздние события блока уже учтены в нём).
             let at = if log.removed {
-                latest(p).await.unwrap_or(block)
+                latest(p).await
             } else {
-                block
+                Ok(block)
             };
-            load::refresh(&p.ctx, &p.tokens, &entry, at)
-                .await
-                .map(|e| p.reg.put(e))
+            match at {
+                Ok(at) => load::refresh(&p.ctx, &p.tokens, &entry, at)
+                    .await
+                    .map(|e| p.reg.put(e)),
+                Err(e) => Err(e),
+            }
         }
     };
     if let Err(e) = res {

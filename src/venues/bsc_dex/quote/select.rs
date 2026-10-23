@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/quote/select.rs
 //! Что делает: можно ли использовать пул в котировке и сделке прямо сейчас — с понятной причиной, если нельзя:
 //! пул достоверен; DEX и вид пула включены; группа крючка допущена (hooks.allowed_groups), влияние B/C измерено
-//! и в допуске (hooks.max_impact_b_pct / _c_pct); пул сверен с квотером без расхождения; газ стороны измерен
+//! и в допуске (hooks.max_impact_b_pct / _c_pct); пул сверен с квотером без расхождения (любой пул, с крючком тоже); газ стороны измерен
 //! пробным обменом; ликвидность в USDT не ниже dex.min_pool_liquidity_usd.
 //! Кто вызывает: quote/direct.rs.
 //! От чего зависит: check/state.rs, pools/registry.rs, quote/pool_quote.rs, tokens.rs, num.rs.
@@ -57,12 +57,11 @@ pub fn usable(
     }
     let facts: PoolFacts = checks.pool(&e.pool.reference);
     let hook_pct = hook(ctx, e, &facts, side)?;
-    if hook_pct.is_zero() {
-        match &facts.quoter {
-            Some(Ok(())) => {}
-            Some(Err(why)) => return Err(why.clone()),
-            None => return Err("пул ещё не сверен с квотером".into()),
-        }
+    // Сверка с квотером обязательна для всех пулов, с крючком тоже (check/quoter_cycle.rs).
+    match &facts.quoter {
+        Some(Ok(())) => {}
+        Some(Err(why)) => return Err(why.clone()),
+        None => return Err("пул ещё не сверен с квотером".into()),
     }
     let gas = match side {
         Side::Buy => facts.gas_buy,

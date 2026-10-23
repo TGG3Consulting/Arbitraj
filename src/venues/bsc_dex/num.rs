@@ -16,14 +16,25 @@ use rust_decimal::Decimal;
 pub const BNB_DECIMALS: u8 = 18;
 
 /// Целое в минимальных единицах → Decimal.
-/// Принимает: сумму, decimals. Возвращает: Decimal; None — не помещается в Decimal (больше 28 значащих цифр
-/// или decimals больше 28).
+/// Мантисса Decimal — 96 бит (до ~7,9·10^28). Не помещается с полными decimals (огромный выпуск токена) — младшие
+/// знаки дробной части отбрасываются вниз, пока число не поместится: точность — 28 значащих цифр, переполнения нет.
+/// Принимает: сумму, decimals. Возвращает: Decimal; None — decimals больше 28 или целая часть больше ~7,9·10^28.
 pub fn to_decimal(v: U256, decimals: u8) -> Option<Decimal> {
-    if u32::from(decimals) > Decimal::MAX_SCALE {
+    let mut scale = u32::from(decimals);
+    if scale > Decimal::MAX_SCALE {
         return None;
     }
-    let n: i128 = i128::try_from(v).ok()?;
-    Decimal::try_from_i128_with_scale(n, u32::from(decimals)).ok()
+    let max = U256::from(u128::MAX >> 32);
+    let ten = U256::from(10u8);
+    let mut v = v;
+    while v > max {
+        if scale == 0 {
+            return None;
+        }
+        v /= ten;
+        scale -= 1;
+    }
+    Decimal::try_from_i128_with_scale(i128::try_from(v).ok()?, scale).ok()
 }
 
 /// Decimal → целое в минимальных единицах, остаток меньше единицы отбрасывается (округление вниз).
@@ -61,5 +72,21 @@ mod tests {
         );
         assert!(to_units(Decimal::from_str("-1").unwrap(), 2).is_none());
         assert!(to_decimal(U256::MAX, 18).is_none());
+    }
+
+    /// Огромный выпуск: 10^12 монет с 18 знаками (10^30 единиц) не помещается с полными знаками — младшие знаки
+    /// отбрасываются вниз, целая часть точна.
+    #[test]
+    fn huge_supply_truncates_low_digits() {
+        let ten = U256::from(10u8);
+        let v = ten.pow(U256::from(30u8)) + U256::from(123u8);
+        // 10^30 + 123 → два младших знака отброшены: 10^28 + 1 с 16 знаками.
+        assert_eq!(
+            to_decimal(v, 18).unwrap(),
+            Decimal::from_str("1000000000000.0000000000000001").unwrap()
+        );
+        let max96 = U256::from(u128::MAX >> 32);
+        assert_eq!(to_decimal(max96, 0).unwrap(), Decimal::MAX);
+        assert!(to_decimal(max96 + U256::from(1u8), 0).is_none());
     }
 }

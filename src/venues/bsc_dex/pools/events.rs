@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/events.rs
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки.
-//! Кто вызывает: pools/listen.rs.
+//! Кто вызывает: pools/listen_log.rs.
 //! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, families.rs, registry.rs.
 //! Настройки: нет.
 
@@ -46,7 +46,9 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         && matches!(r, Applied::Updated | Applied::Bins(_))
     {
         e.pool.block = b;
+        // Позиция последнего применённого события: остальные события того же блока (logIndex больше) ещё впереди.
         e.synced_block = b;
+        e.synced_log = log.log_index;
         e.pool.received_at = chrono::Utc::now();
     }
     r

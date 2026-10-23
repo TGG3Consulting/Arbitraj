@@ -2,11 +2,11 @@
 //! Что делает: план умного маршрута для Universal Router PancakeSwap Infinity (решение 38): каждая доля — своя
 //! команда обмена в своём пуле (V2_SWAP_EXACT_IN / V3_SWAP_EXACT_IN / INFI_SWAP), платит кошелёк через Permit2
 //! (payerIsUser = true), получатель — кошелёк, минимум выхода — свой у каждой доли; последней командой —
-//! BALANCE_CHECK_ERC20 «баланс выходного токена кошелька ≥ текущий + сумма минимумов» (решение 40: проверка реально
-//! полученного в той же транзакции). Разрешения: ERC-20 → Permit2 и Permit2 → Universal Router на сумму всех долей.
+//! BALANCE_CHECK_ERC20 «баланс выходного токена кошелька ≥ база + сумма минимумов» (решение 40: проверка реально
+//! полученного в той же транзакции; база читается прямо перед подписью — exec/plan.rs, Plan::data). Разрешения: ERC-20 → Permit2 и Permit2 → Universal Router на сумму всех долей.
 //! Кто вызывает: exec/trade_smart.rs.
 //! От чего зависит: exec/ur.rs, exec/swap_v2v3.rs, exec/swap_v4.rs, exec/plan.rs (Plan, Order), wallet/approve.rs,
-//! wallet/balances.rs, pools/registry.rs.
+//! pools/registry.rs.
 //! Настройки: smart.universal_router, smart.permit2, dex.deadline_s [bsc_dex]; через вызываемые —
 //! dex.approve_unlimited, dex.permit2_expiration_s.
 //!
@@ -24,14 +24,14 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::pools::families::PANCAKESWAP;
 use super::super::pools::registry::Entry;
-use super::super::wallet::{approve, balances};
+use super::super::wallet::approve;
 use super::plan::{Order, Plan};
-use super::ur::{self, Format};
+use super::ur::Format;
 use super::{swap_v2v3, swap_v4};
 
 /// План умного маршрута. Принимает: доли (пул, обмен) — у всех один токен входа и один выхода; кошелёк;
 /// время блока (секунды). Ошибки: NotConfigured (адреса, срок), Internal (пустой маршрут, разные токены,
-/// пул не PancakeSwap), узел (разрешения, баланс).
+/// пул не PancakeSwap, минимум доли 0), узел (разрешения).
 pub async fn build(
     ctx: &Ctx,
     legs: &[(Entry, Order)],
@@ -57,6 +57,15 @@ pub async fn build(
                 ),
             ));
         }
+        if o.min_out.is_zero() {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!(
+                    "{}: минимум доли 0 — обмен без минимума не отправляется",
+                    e.family.title
+                ),
+            ));
+        }
         total_in = total_in.saturating_add(o.amount_in);
         total_min = total_min.saturating_add(o.min_out);
         steps.push(match e.pool.kind {
@@ -65,14 +74,12 @@ pub async fn build(
         });
     }
     let approvals = approve::missing(ctx, tin, wallet, permit2, router, total_in, now).await?;
-    let before = balances::token_units(ctx, tout, wallet).await?;
-    steps.push((
-        ur::BALANCE_CHECK_ERC20,
-        ur::balance_check(wallet, tout, before.saturating_add(total_min)),
-    ));
-    Ok(Plan {
-        approvals,
-        router,
-        data: ur::execute(steps, deadline),
-    })
+    Plan::new(
+        ctx,
+        (approvals, router, wallet),
+        tout,
+        steps,
+        total_min,
+        deadline,
+    )
 }

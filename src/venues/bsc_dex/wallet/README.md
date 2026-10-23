@@ -6,8 +6,9 @@
 | --- | --- |
 | `mod.rs` | Модуль |
 | `signer.rs` | Ключ → подписант alloy, адрес, подпись EIP-155/EIP-2718, хеш до отправки (тест — официальный пример EIP-155) |
-| `nonce.rs` | Строгая очередь: одна транзакция кошелька за раз; nonce — `eth_getTransactionCount(адрес, "latest")` |
+| `nonce.rs` | Строгая очередь: одна транзакция кошелька за раз, до занятия её nonce в блоке; nonce — `eth_getTransactionCount(адрес, "latest")`, не меньше запомненного |
+| `inflows.rs` | Ожидаемые поступления в кошелёк и идущие обмены: не совпадают по времени (база BALANCE_CHECK_ERC20) |
 | `balances.rs` | Балансы: BNB (`eth_getBalance`) и известные токены (`balanceOf`) |
 | `approve.rs` | Разрешения ERC-20 → Permit2 и Permit2 → Universal Router: каких не хватает (`dex.approve_unlimited`, `dex.permit2_expiration_s`) |
 | `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу), стоимость перевода |
-| `transfer_status.rs` | Статусы вывода и зачисления по квитанции |
+| `transfer_status.rs` | Статусы вывода и зачисления по квитанции; «Зачислен» — ненулевой Transfer на кошелёк и `send.deposit_confirmations` блоков |

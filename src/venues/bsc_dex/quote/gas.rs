@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/quote/gas.rs
 //! Что делает: цена газа для расчёта и отправки — eth_gasPrice узла с надбавкой send.gas_price_markup_pct;
 //! запрашивается не чаще одного раза на блок (значение до прихода нового блока — из памяти).
-//! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (send/*, шаг 1d).
-//! Кто вызывает: quote/direct.rs, позже exec/*.
+//! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (exec/txs.rs) и в котировке (quote/mod.rs).
+//! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs.
 //! От чего зависит: node/rpc.rs, node/heads.rs, num.rs.
 //! Настройки: send.gas_price_markup_pct [bsc_dex]; узел — bsc.node_http_url.
 //!

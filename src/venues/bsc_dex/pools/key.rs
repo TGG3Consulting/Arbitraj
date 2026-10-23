@@ -56,7 +56,8 @@ pub struct UniswapPoolKeyData {
     pub currency0: Address,
     pub currency1: Address,
     pub fee: u32,
-    pub tick_spacing: i32,
+    /// tickSpacing в типе ABI (int24): ключ из события Initialize, без перевода и потерь.
+    pub tick_spacing: I24,
     pub hooks: Address,
 }
 
@@ -82,7 +83,7 @@ impl PoolKey {
                 currency0: k.currency0,
                 currency1: k.currency1,
                 fee: U24::from(k.fee),
-                tickSpacing: I24::try_from(k.tick_spacing).unwrap_or(I24::ZERO),
+                tickSpacing: k.tick_spacing,
                 hooks: k.hooks,
             }
             .abi_encode(),

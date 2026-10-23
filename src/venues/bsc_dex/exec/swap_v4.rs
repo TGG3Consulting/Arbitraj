@@ -15,7 +15,7 @@
 //! https://github.com/Uniswap/sdks/blob/ecffab39cb8eba0ceb1a8c0052fd287f7765fcc8/sdks/v4-sdk/src/utils/v4Planner.ts#L86-L121 .
 
 use alloy::sol_types::SolValue;
-use alloy_primitives::aliases::{I24, U24};
+use alloy_primitives::aliases::U24;
 use alloy_primitives::{Bytes, U256};
 
 use crate::core::types::PoolKind;
@@ -77,8 +77,7 @@ pub fn command(ctx: &Ctx, e: &Entry, f: Format, o: &Order) -> GatewayResult<(u8,
             (action, p.abi_encode())
         }
         (PoolKey::Uniswap(k), fmt) => {
-            let spacing = I24::try_from(k.tick_spacing)
-                .map_err(|_| ctx.err(ErrorCode::Internal, "tickSpacing вне int24"))?;
+            let spacing = k.tick_spacing;
             let pk = UniKey {
                 currency0: k.currency0,
                 currency1: k.currency1,

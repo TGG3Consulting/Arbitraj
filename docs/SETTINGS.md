@@ -150,7 +150,6 @@
 | smart.universal_router | Universal Router PancakeSwap Infinity — исполнитель умного маршрута | адрес | по площадке DEX |
 | smart.permit2 | Permit2 PancakeSwap для умного режима | адрес | по площадке DEX |
 | smart.mixed_quoter | MixedQuoter PancakeSwap — сверка умного маршрута | адрес | по площадке DEX |
-| smart.max_hops | Сколько пулов подряд в одной доле | пулов | по площадке DEX |
 | smart.max_splits | На сколько долей можно делить вход | долей | по площадке DEX |
 | smart.split_step_pct | Шаг доли при поиске деления входа | % | по площадке DEX |
 
@@ -180,7 +179,9 @@
 | send.gas_limit_margin_pct | Запас к оценке газа eth_estimateGas | % | по площадке DEX |
 | send.gas_price_markup_pct | Надбавка к цене газа eth_gasPrice (не ниже минимума канала) | % | по площадке DEX |
 | send.max_wait_blocks | Сколько блоков ждать попадания транзакции; дольше — не попала, без повторов | блоков | по площадке DEX |
-| send.bundle_max_blocks | Бандл: maxBlockNumber = текущий блок + это число | блоков | по площадке DEX |
+| send.bundle_max_blocks | Бандл: maxBlockNumber = текущий блок + это число (не больше send.max_wait_blocks, иначе отправка не работает) | блоков | по площадке DEX |
+| send.cancel_gas_bump_pct | Не попала за send.max_wait_blocks — отмена: 0 BNB себе с тем же nonce, цена газа выше прошлой на столько % (очередь кошелька ждёт, пока nonce не занят в блоке) | % | по площадке DEX |
+| send.deposit_confirmations | Зачисление в кошелёк (депозит DEX): «Зачислен» — только при ненулевом Transfer монеты на кошелёк и когда после блока перевода прошло столько блоков | блоков | по площадке DEX |
 
 ### Каналы отправки (область «канал», id — из списка адаптера DEX)
 

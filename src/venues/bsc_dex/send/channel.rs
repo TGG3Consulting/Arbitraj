@@ -19,13 +19,11 @@ pub enum Single {
     Bloxroute,
 }
 
-/// Бандл.
+/// Бандл. Только с пределом блока (maxBlockNumber): бандл без предела не истекает сам (см. send/blink.rs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bundle {
     /// eth_sendBundle {txs, maxBlockNumber} (48 Club, BlockRazor Builder, JetBuilder, NodeReal, Flashblock).
     Standard,
-    /// eth_sendBundle {txs} — на BSC пересылается только txs (Blink).
-    TxsOnly,
     /// bloXroute Cloud API: blxr_submit_bundle {txs без 0x, blockchain_network, max_block_number}.
     Bloxroute,
 }

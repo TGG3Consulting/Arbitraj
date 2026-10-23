@@ -120,7 +120,7 @@ pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log, usdt: Address) -> Gateway
                 currency0: e.currency0,
                 currency1: e.currency1,
                 fee: e.fee.to(),
-                tick_spacing: spacing,
+                tick_spacing: e.tickSpacing,
                 hooks: e.hooks,
             };
             (e.id, PoolKey::Uniswap(k), Some(spacing), None)

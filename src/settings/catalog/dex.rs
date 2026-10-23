@@ -34,7 +34,6 @@ pub static DEX: &[SettingDef] = &[
     d("Умный режим", "smart.universal_router", K::Address, L::None, "адрес", V, "Universal Router PancakeSwap Infinity, исполнитель умного маршрута (решение 38)"),
     d("Умный режим", "smart.permit2", K::Address, L::None, "адрес", V, "Permit2 PancakeSwap для умного режима"),
     d("Умный режим", "smart.mixed_quoter", K::Address, L::None, "адрес", V, "MixedQuoter PancakeSwap — сверка умного маршрута"),
-    d("Умный режим", "smart.max_hops", K::Integer, L::Positive, "пулов", V, "Сколько пулов подряд в одной доле маршрута"),
     d("Умный режим", "smart.max_splits", K::Integer, L::Positive, "долей", V, "На сколько долей можно делить вход"),
     d("Умный режим", "smart.split_step_pct", K::Decimal, L::Percent, "%", V, "Шаг доли при поиске деления входа"),
     d("Контракты DEX", "dex.factory", K::Address, L::None, "адрес", DX, "V2/V3: фабрика пулов"),

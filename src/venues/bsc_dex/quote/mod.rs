@@ -2,9 +2,10 @@
 //! Что делает: котировка на объём для контракта quote — режим dex.swap_mode: «direct» (лучший одиночный пул,
 //! решение 29) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
 //! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
+//! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
-//! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs.
+//! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов).
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
 //! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
 
@@ -70,7 +71,12 @@ impl Quoting {
         })?;
         let coin_dec = self.tokens.decimals(ctx, first.coin).await?;
         let usdt_dec = self.tokens.decimals(ctx, first.usdt).await?;
-        let gas = self.gas.wei(ctx, &self.heads).await?;
+        // Цена газа — как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов (exec/txs.rs).
+        let gas = self
+            .gas
+            .wei(ctx, &self.heads)
+            .await?
+            .max(super::send::planned_floor(ctx)?);
         let usdt = ctx.text("venue.quote_asset")?;
         let taxes = direct::taxes(self, asset)?;
         let mut q = if mode == "smart" {
@@ -81,8 +87,13 @@ impl Quoting {
             costs::quote(ctx, asset, side, qty, &best, &taxes, gas, &usdt)?
         };
         if let Some(units) = approve_gas(self, &q, coin_dec, usdt_dec).await? {
-            let bnb = num::to_decimal(gas.saturating_mul(U256::from(units)), num::BNB_DECIMALS)
-                .unwrap_or_default();
+            let wei = gas.saturating_mul(U256::from(units));
+            let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    format!("Газ разрешений {wei} wei не переводится в BNB"),
+                )
+            })?;
             q.costs
                 .push(Cost::new(CostKind::ApproveGas, bnb, BNB, false));
         }

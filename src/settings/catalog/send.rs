@@ -19,6 +19,8 @@ pub static SEND: &[SettingDef] = &[
     d("Отправка", "send.gas_price_markup_pct", K::Decimal, L::NonNegative, "%", V, "Надбавка к цене газа eth_gasPrice (не ниже минимума канала)"),
     d("Отправка", "send.max_wait_blocks", K::Integer, L::Positive, "блоков", V, "Сколько блоков ждать попадания транзакции; дольше — не попала, без повторов"),
     d("Отправка", "send.bundle_max_blocks", K::Integer, L::Positive, "блоков", V, "Бандл: maxBlockNumber = текущий блок + это число"),
+    d("Отправка", "send.cancel_gas_bump_pct", K::Decimal, L::Positive, "%", V, "Не попала за send.max_wait_blocks — отмена: 0 BNB себе с тем же nonce, цена газа выше прошлой на столько %"),
+    d("Кошелёк", "send.deposit_confirmations", K::Integer, L::NonNegative, "блоков", V, "Зачисление в кошелёк: «Зачислен» только когда после блока перевода прошло столько блоков и перевод на кошелёк ненулевой"),
     d("Каналы отправки", "channel.enabled", K::Bool, L::None, "да/нет", CH, "Канал включён (несколько закрытых — параллельно, без чаевых; открытый — только один)"),
     d("Каналы отправки", "channel.url", K::Url, L::None, "URL", CH, "Адрес канала из его официальной документации; ключ в адресе — как {key}"),
     d("Каналы отправки", "channel.method", K::Choice, L::None, "способ", CH, "Способ отправки: одиночная / бандл (решение 43)").choices(&["single", "bundle"]),

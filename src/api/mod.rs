@@ -8,6 +8,7 @@ pub mod check;
 pub mod guard;
 pub mod journal;
 pub mod rules;
+pub mod secrets;
 pub mod server;
 pub mod settings;
 pub mod state;

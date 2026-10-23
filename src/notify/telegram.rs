@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
+use zeroize::Zeroizing;
 
 /// Предел длины текста sendMessage — константа протокола:
 /// «text … 1-4096 characters after entities parsing», https://core.telegram.org/bots/api#sendmessage
@@ -67,14 +68,19 @@ pub enum TgError {
 pub struct Telegram {
     http: reqwest::Client,
     base_url: String,
-    token: String,
+    token: Zeroizing<String>,
     timeout: Duration,
 }
 
 impl Telegram {
     /// Создаёт клиента.
     /// Принимает: общий HTTP-клиент, адрес API (из настроек), токен (из секретов), таймаут (из настроек).
-    pub fn new(http: reqwest::Client, base_url: &str, token: String, timeout: Duration) -> Self {
+    pub fn new(
+        http: reqwest::Client,
+        base_url: &str,
+        token: Zeroizing<String>,
+        timeout: Duration,
+    ) -> Self {
         Self {
             http,
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -86,10 +92,15 @@ impl Telegram {
     /// Вызывает метод Bot API.
     /// Принимает: имя метода и параметры JSON. Возвращает: поле result. Ошибки: TgError.
     async fn call(&self, method: &str, params: Value) -> Result<Value, TgError> {
-        let url = format!("{}/bot{}/{}", self.base_url, self.token, method);
+        let url = Zeroizing::new(format!(
+            "{}/bot{}/{}",
+            self.base_url,
+            self.token.as_str(),
+            method
+        ));
         let resp = self
             .http
-            .post(url)
+            .post(url.as_str())
             .timeout(self.timeout)
             .json(&params)
             .send()

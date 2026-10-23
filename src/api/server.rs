@@ -13,7 +13,7 @@ use tokio::net::TcpListener;
 
 use super::guard::{self, Guard};
 use super::state::AppState;
-use super::{check, journal, rules, settings, ws};
+use super::{check, journal, rules, secrets, settings, ws};
 
 /// Собирает все маршруты API под защитой Host/Origin (api/guard.rs).
 pub fn router(state: AppState, guard: Guard) -> Router {
@@ -26,6 +26,15 @@ pub fn router(state: AppState, guard: Guard) -> Router {
         .route("/api/journal", get(journal::list))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
+        .route("/api/secrets/status", get(secrets::status))
+        .route("/api/secrets/create", post(secrets::create))
+        .route("/api/secrets/unlock", post(secrets::unlock))
+        .route("/api/secrets/lock", post(secrets::lock))
+        .route("/api/secrets/password", post(secrets::password))
+        .route(
+            "/api/secrets/{name}",
+            put(secrets::put).delete(secrets::delete),
+        )
         .route("/api/ws", get(ws::upgrade))
         .with_state(state)
         .layer(axum::middleware::from_fn_with_state(guard, guard::check))

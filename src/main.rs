@@ -48,7 +48,7 @@ async fn run() -> Result<(), String> {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
-    let vault = Vault::locked();
+    let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
     let http = reqwest::Client::builder()
         // Редиректы выключены: в адресе запроса может быть токен, его нельзя отдавать другому адресу.
         .redirect(reqwest::redirect::Policy::none())
@@ -73,6 +73,7 @@ async fn run() -> Result<(), String> {
         journal: journal.clone(),
         registry: Registry::new(),
         vault,
+        notifier: notifier.clone(),
         http,
         changes,
         journal_live,

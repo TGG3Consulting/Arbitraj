@@ -11,6 +11,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::gateway::registry::Registry;
+use crate::notify::dispatch::Notifier;
 use crate::secrets::Vault;
 use crate::settings::live::Change;
 use crate::settings::store::Store;
@@ -25,6 +26,7 @@ pub struct AppState {
     pub journal: Journal,
     pub registry: Registry,
     pub vault: Vault,
+    pub notifier: Notifier,
     pub http: reqwest::Client,
     /// Поток изменений настроек — для WebSocket интерфейса.
     pub changes: broadcast::Sender<Change>,

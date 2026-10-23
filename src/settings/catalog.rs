@@ -77,6 +77,10 @@ pub static CATALOG: &[SettingDef] = &[
     d("Уведомления", "notify.event.venues", K::TextList, L::None, "список", E, "Для каких площадок присылать (пусто — для всех)"),
     d("Уведомления", "notify.event.condition", K::Text, L::None, "зависит от события", E, "Условие отправки, где оно имеет смысл (формат — этап 5)"),
     d("Уведомления", "notify.summary_interval_s", K::Integer, L::Positive, "секунды", G, "Как часто присылать сводку"),
+    d("Безопасность", "security.kdf_memory_kib", K::Integer, L::Positive, "КиБ", G, "Argon2id: память на вывод ключа из пароля (OWASP: не меньше 19456)"),
+    d("Безопасность", "security.kdf_iterations", K::Integer, L::Positive, "проходов", G, "Argon2id: число проходов (OWASP: не меньше 2 при 19456 КиБ)"),
+    d("Безопасность", "security.kdf_parallelism", K::Integer, L::Positive, "потоков", G, "Argon2id: число потоков"),
+    d("Безопасность", "security.password_min_len", K::Integer, L::Positive, "символов", G, "Минимальная длина пароля секретов"),
     d("Система", "http.timeout_ms", K::Integer, L::Positive, "мс", G, "Сколько ждать ответа внешнего сервиса по HTTP (Telegram, REST площадок)"),
 ];
 

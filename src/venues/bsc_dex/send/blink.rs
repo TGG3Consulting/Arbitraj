@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/send/blink.rs
 //! Что делает: три канала Blink (бывший Merkle, решение 41): два публичных адреса из официальных страниц продукта
-//! (bsc.merkle.io и bsc.blink.io) и личный адрес с ключом (bsc.blinklabs.xyz/v1/{key}). Одиночная —
-//! eth_sendRawTransaction; бандл — eth_sendBundle {txs}: на BSC пересылается только txs, откат запрещён.
-//! Чаевых в документации нет.
+//! (bsc.merkle.io и bsc.blink.io) и личный адрес с ключом (bsc.blinklabs.xyz/v1/{key}). Только одиночная
+//! отправка — eth_sendRawTransaction. Бандл не используется: «Only txs is forwarded» — у бандла Blink на BSC нет
+//! maxBlockNumber, он не истекает сам и может попасть в блок после отмены и освобождения nonce (замечание проверки
+//! адаптера). Чаевых в документации нет.
 //! Кто вызывает: send/channels.rs.
 //! От чего зависит: send/channel.rs.
 //! Настройки: channel.* [blink_merkle], [blink_public], [blink_private]; секрет channel.blink_private.key.
@@ -11,7 +12,7 @@
 //! https://docs.blinklabs.xyz/blink/bnb-smart-chain-bsc/api-reference.md (методы, «Only txs is forwarded…»,
 //! «no transaction can be opted into reverting») — research/flow/bsc_builders.md, раздел 1.
 
-use super::channel::{Auth, Bundle, Channel, Single};
+use super::channel::{Auth, Channel, Single};
 
 const DOCS: &[&str] = &[
     "https://docs.blinklabs.xyz/blink/bnb-smart-chain-bsc/api-reference.md",
@@ -24,7 +25,7 @@ pub const MERKLE: Channel = Channel {
     title: "Blink (Merkle), публичный bsc.merkle.io",
     private: true,
     single: Some(Single::Raw),
-    bundle: Some(Bundle::TxsOnly),
+    bundle: None,
     tips: false,
     auth: Auth::None,
     docs: DOCS,
@@ -36,7 +37,7 @@ pub const PUBLIC: Channel = Channel {
     title: "Blink, публичный bsc.blink.io",
     private: true,
     single: Some(Single::Raw),
-    bundle: Some(Bundle::TxsOnly),
+    bundle: None,
     tips: false,
     auth: Auth::None,
     docs: DOCS,
@@ -48,7 +49,7 @@ pub const PRIVATE: Channel = Channel {
     title: "Blink, личный адрес (ключ)",
     private: true,
     single: Some(Single::Raw),
-    bundle: Some(Bundle::TxsOnly),
+    bundle: None,
     tips: false,
     auth: Auth::UrlKey,
     docs: DOCS,

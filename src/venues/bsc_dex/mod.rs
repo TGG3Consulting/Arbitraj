@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 
 use crate::core::types::{
     Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, VenueId, WithdrawRequest,
+    Transfer, TransferStatus, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::GatewayResult;
@@ -64,22 +64,30 @@ impl BscDex {
 
 #[async_trait]
 impl Venue for BscDex {
+    /// Идентификатор площадки (`bsc_dex`). Ошибок нет.
     fn id(&self) -> VenueId {
         self.p.ctx.venue()
     }
 
+    /// Вид площадки — DEX. Ошибок нет.
     fn kind(&self) -> VenueKind {
         VenueKind::Dex
     }
 
+    /// «Проверить подключение»: узел HTTP (eth_chainId = 56, eth_blockNumber), узел WebSocket (newHeads), кошелёк,
+    /// eth_simulateV1 — connection.rs (execution-apis src/eth, коммит 16caee27). Ошибок нет: причина — в ответе.
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
         Ok(connection::check(&self.p.ctx).await)
     }
 
+    /// Монеты DEX с достоверными пулами (адрес токена — из пула, сеть BSC) — coins.rs. Ошибки: NotConfigured.
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
         coins::networks(&self.p.ctx, &self.p.registry)
     }
 
+    /// Подписка на рынок: newHeads, пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
+    /// циклы проверок; события — в `out` (pools/market.rs). Прежние задачи подписки останавливаются.
+    /// Ошибки: NotConfigured (venue.quote_asset, dex.*), узел.
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,
@@ -95,37 +103,64 @@ impl Venue for BscDex {
         Ok(())
     }
 
+    /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
+    /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
         self.p.quoting().quote(asset, side, qty).await
     }
 
+    /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
+    /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         exec::trade::trade(&self.p.quoting(), &self.p.env(), &self.p.nonces, req).await
     }
 
+    /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
+    /// Ошибки: InvalidAddress, NotConfigured, каналы, TxNotIncluded / WithdrawRejected (с фактом транзакции).
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
         wallet::transfer::withdraw(&self.p.env(), &self.p.tokens, &self.p.nonces, req).await
     }
 
+    /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.
+    /// Ошибки: узел, хеш не 32 байта, BadResponse.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         let w = wallet::signer::address(&self.p.ctx)?;
         wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w).await
     }
 
-    async fn deposit_address(&self, _asset: &Asset, _network: &str) -> GatewayResult<String> {
-        Ok(wallet::signer::address(&self.p.ctx)?.to_string())
-    }
-
-    async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+    /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —
+    /// wallet/inflows.rs. Ошибки: ключ кошелька, NotConfigured (у монеты нет адреса в BSC).
+    async fn deposit_address(&self, asset: &Asset, _network: &str) -> GatewayResult<String> {
         let w = wallet::signer::address(&self.p.ctx)?;
-        wallet::transfer_status::deposit_status(&self.p.ctx, &self.p.tokens, asset, tx_hash, w)
-            .await
+        let token = wallet::transfer::token(&self.p.ctx, asset)?;
+        self.p.inflows.expect(token).await;
+        Ok(w.to_string())
     }
 
+    /// Статус зачисления по квитанции (wallet/transfer_status.rs: ненулевой Transfer на кошелёк, send.deposit_confirmations);
+    /// «Зачислен» или «отклонён» снимает ожидаемое поступление (wallet/inflows.rs). Ошибки: узел, NotConfigured, BadResponse.
+    async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+        let ctx = &self.p.ctx;
+        let w = wallet::signer::address(ctx)?;
+        let t =
+            wallet::transfer_status::deposit_status(ctx, &self.p.tokens, asset, tx_hash, w).await?;
+        if matches!(
+            t.status,
+            TransferStatus::Credited | TransferStatus::Rejected
+        ) && let (Some(token), Ok(h)) = (asset.bsc_contract, tx_hash.parse())
+        {
+            self.p.inflows.done(token, h);
+        }
+        Ok(t)
+    }
+
+    /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         wallet::balances::all(&self.p.ctx, &self.p.tokens).await
     }
 
+    /// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод — wallet/transfer.rs.
+    /// Ошибки: CoinNotChecked / CoinCheckFailed, узел.
     async fn withdraw_cost(
         &self,
         asset: &Asset,
@@ -135,20 +170,25 @@ impl Venue for BscDex {
         wallet::transfer::cost(&self.p.env(), &self.p.checks, asset, network, amount).await
     }
 
+    /// Кнопка «Перепроверить»: будит циклы налогов, крючков и сверки с квотером (итоги — события). Ошибок нет.
     async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {
         // Циклы проверяют все монеты подписки; кнопка будит их сразу (итоги — событиями CoinCheck / PoolCheck).
         self.p.wake.notify_waiters();
         Ok(())
     }
 
+    /// DEX и виды пулов (id области настроек «DEX») — pools/families.rs. Ошибок нет.
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
         Ok(pools::families::for_ui())
     }
 
+    /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
         Ok(send::channels::ALL.iter().map(|c| c.info()).collect())
     }
 
+    /// «Проверить подключение» канала: пустая транзакция — канал отвечает ошибкой JSON-RPC (send/check.rs; документация
+    /// канала — в шапке его файла). Ошибки: неизвестный id.
     async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck> {
         send::check::check(&self.p.ctx, id).await
     }

@@ -15,7 +15,7 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, CoinCheck, PoolKind, PoolRef, TokenTaxes};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
@@ -72,7 +72,12 @@ async fn run(
 ) -> GatewayResult<Result<TokenTaxes, String>> {
     let wallet = signer::address(ctx)?;
     let usdt_dec = tokens.decimals(ctx, usdt).await?;
-    let probe = num::to_units(ctx.dec("check.probe_usdt")?, usdt_dec).unwrap_or(U256::ZERO);
+    let probe = num::to_units(ctx.dec("check.probe_usdt")?, usdt_dec).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::NotConfigured,
+            "check.probe_usdt не переводится в единицы USDT",
+        )
+    })?;
     let mut pools: Vec<Entry> = reg
         .by_ticker(ticker)
         .into_iter()

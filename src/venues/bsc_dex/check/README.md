@@ -10,5 +10,5 @@
 | `taxes.rs` | Проверка монеты: пробы по всем пулам (V2 впереди), источник USDT — другой пул V2/V3 реестра |
 | `hooks_probe.rs` | Влияние крючка V4 группы B/C: квотер (исполняет крючок) против математики |
 | `cycle.rs` | Циклы налогов (`tax.recheck_interval_s`) и крючков (`hooks.recheck_interval_s`), события CoinCheck / PoolCheck |
-| `quoter_cycle.rs` | Цикл сверки с квотером (`dex.quoter_check_s`) |
+| `quoter_cycle.rs` | Цикл сверки с квотером (`dex.quoter_check_s`) всех пулов; у пулов с крючком B/C — за вычетом измеренного влияния |
 

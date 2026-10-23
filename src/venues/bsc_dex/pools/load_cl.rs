@@ -69,10 +69,15 @@ pub async fn load(
             .collect();
         let words = call::view_many(ctx, reader, &calls, tag).await?;
         let found = set_ticks(lo, &words, spacing);
-        let calls: Vec<_> = found
+        let calls = found
             .iter()
-            .map(|t| IInfinityCl::getPoolTickInfoCall { id, tick: i24(*t) })
-            .collect();
+            .map(|t| {
+                Ok(IInfinityCl::getPoolTickInfoCall {
+                    id,
+                    tick: i24(ctx, *t)?,
+                })
+            })
+            .collect::<GatewayResult<Vec<_>>>()?;
         let infos = call::view_many(ctx, reader, &calls, tag).await?;
         found
             .iter()
@@ -96,13 +101,15 @@ pub async fn load(
             .collect();
         let words = call::view_many(ctx, reader, &calls, tag).await?;
         let found = set_ticks(lo, &words, spacing);
-        let calls: Vec<_> = found
+        let calls = found
             .iter()
-            .map(|t| IStateView::getTickLiquidityCall {
-                poolId: id,
-                tick: i24(*t),
+            .map(|t| {
+                Ok(IStateView::getTickLiquidityCall {
+                    poolId: id,
+                    tick: i24(ctx, *t)?,
+                })
             })
-            .collect();
+            .collect::<GatewayResult<Vec<_>>>()?;
         let infos = call::view_many(ctx, reader, &calls, tag).await?;
         found
             .iter()
@@ -149,9 +156,9 @@ fn set_ticks(first: i16, words: &[U256], spacing: i32) -> Vec<i32> {
     out
 }
 
-/// int24 для ABI (тик всегда в пределах int24 по TickMath). Ошибок нет.
-fn i24(t: i32) -> I24 {
-    I24::try_from(t).unwrap_or(I24::ZERO)
+/// int24 для ABI. Ошибки: BadResponse — тик вне int24 (по TickMath так не бывает: значит, данные битмапа неверны).
+fn i24(ctx: &Ctx, t: i32) -> GatewayResult<I24> {
+    I24::try_from(t).map_err(|_| ctx.err(ErrorCode::BadResponse, format!("тик {t} вне int24")))
 }
 
 /// Список (тик, данные) → карта. Ошибок нет.

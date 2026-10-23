@@ -130,7 +130,6 @@ impl Ready {
             (SendMethod::Single, Some(Single::Bloxroute), _) => {
                 ("bsc_private_tx", json!({ "transaction": no0x(&txs[0]) }))
             }
-            (_, _, Some(Bundle::TxsOnly)) => ("eth_sendBundle", json!([{ "txs": txs }])),
             (_, _, Some(Bundle::Bloxroute)) => (
                 "blxr_submit_bundle",
                 json!({ "txs": txs.iter().map(no0x).collect::<Vec<_>>(), "blockchain_network": NETWORK, "max_block_number": max_block }),

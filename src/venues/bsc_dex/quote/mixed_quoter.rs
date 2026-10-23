@@ -26,7 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
-use super::quoter::diff_pct;
+use super::quoter::{diff_pct, less_hook};
 
 const V2_EXACT_INPUT_SINGLE: u8 = 0x02;
 const V3_EXACT_INPUT_SINGLE: u8 = 0x03;
@@ -66,7 +66,12 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
         .collect::<GatewayResult<Vec<_>>>()?;
     let outs = call::view_many(ctx, to, &calls, "latest").await?;
     for (l, out) in legs.iter().zip(outs) {
-        let local = less_hook(l.local_out, l.hook_pct);
+        let local = less_hook(l.local_out, l.hook_pct).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::QuoteMismatch,
+                format!("влияние крючка {}% не считается", l.hook_pct),
+            )
+        })?;
         match diff_pct(local, out.amountOut) {
             Some(d) if d <= limit => {}
             d => {
@@ -84,14 +89,6 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
         }
     }
     Ok(())
-}
-
-/// Выход за вычетом влияния крючка: out · (1e6 − pct·1e4) / 1e6 (миллионные доли, как пипсы комиссий). Ошибок нет.
-fn less_hook(out: U256, pct: Decimal) -> U256 {
-    let million = U256::from(1_000_000u32);
-    let ppm = (pct * Decimal::from(10_000u32)).round();
-    let ppm = U256::from(u64::try_from(ppm).unwrap_or(0)).min(million);
-    out.saturating_mul(million - ppm) / million
 }
 
 /// Вызов quoteMixedExactInput для одной доли (один пул). Ошибки: Internal (нет fee у V3 или ключа у V4).

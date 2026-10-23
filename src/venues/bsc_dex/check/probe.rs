@@ -16,6 +16,8 @@
 //! Ограничение (подтверждено техлидом, Issue #7): налог перевода меряется на пустой адрес, а не на депозит биржи —
 //! монета, у которой налог зависит от получателя (белые/чёрные списки), может взять на депозит другой налог;
 //! факт перевода сверяется по событиям Transfer (exec/fill.rs).
+//! Минимум выхода пробы — 1 минимальная единица токена: проба меряет налог и не должна откатываться из-за минимума,
+//! а минимум 0 запрещён (exec/plan.rs). Проба только симулируется (eth_simulateV1), в сеть не уходит.
 
 use alloy_primitives::{Address, U256, keccak256};
 
@@ -27,6 +29,7 @@ use super::super::exec::plan::{self, Order};
 use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
+use super::super::wallet::balances;
 use super::probe_calls as pc;
 use super::simulate::{self, Call};
 
@@ -68,7 +71,7 @@ pub async fn run(
             token_in: usdt,
             token_out: coin,
             amount_in: usdt_amount,
-            min_out: U256::ZERO,
+            min_out: U256::from(1u8),
         },
         now,
         true,
@@ -90,7 +93,7 @@ pub async fn run(
     list.push(Call {
         from: wallet,
         to: buy.router,
-        input: buy.data,
+        input: buy.data(balances::token_units(ctx, coin, wallet).await?),
     });
     list.push(pc::balance(wallet, coin, wallet));
     let first = simulate::run(ctx, &list).await?;
@@ -107,6 +110,8 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };
+    // База USDT для проверки продажи: в симуляции USDT источника уже потрачен на покупку — остаётся реальный баланс.
+    let usdt_base = balances::token_units(ctx, usdt, wallet).await?;
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
     let sell = plan::build(
@@ -117,7 +122,7 @@ pub async fn run(
             token_in: coin,
             token_out: usdt,
             amount_in: rest,
-            min_out: U256::ZERO,
+            min_out: U256::from(1u8),
         },
         now,
         true,
@@ -139,7 +144,7 @@ pub async fn run(
     list.push(Call {
         from: wallet,
         to: sell.router,
-        input: sell.data,
+        input: sell.data(usdt_base),
     });
     let all = simulate::run(ctx, &list).await?;
     if let Some((i, r)) = all.iter().enumerate().take(base + 5).find(|(_, r)| !r.ok()) {

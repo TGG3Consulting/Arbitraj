@@ -52,7 +52,7 @@ pub async fn withdraw(
     })?;
     let slot = nonces.acquire(ctx).await?;
     let data = Bytes::from(IERC20::transferCall { to, value: units }.abi_encode());
-    let d = txs::send(env, slot.from, token, data, U256::ZERO).await?;
+    let d = txs::send(env, &slot, token, data, U256::ZERO, false, None).await?;
     drop(slot);
     match d.chain.outcome {
         TxOutcome::Included => {}
@@ -118,8 +118,13 @@ pub async fn cost(
         )
     })?;
     let price = env.gas.wei(ctx, &env.heads).await?;
-    let bnb = num::to_decimal(price.saturating_mul(U256::from(gas)), num::BNB_DECIMALS)
-        .unwrap_or_default();
+    let wei = price.saturating_mul(U256::from(gas));
+    let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            format!("Газ перевода {wei} wei не переводится в BNB"),
+        )
+    })?;
     Ok(vec![
         Cost::new(CostKind::TransferGas, bnb, BNB, false),
         Cost::new(

@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/parts.rs
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
-//! счётчики каналов, сигнал «перепроверить») и сборка окружений для котировки, сделки и слушателей пулов.
+//! ожидаемые поступления, счётчики каналов, сигнал «перепроверить») и сборка окружений для котировки, сделки и слушателей пулов.
 //! Кто вызывает: mod.rs.
-//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs.
+//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
+//! wallet/inflows.rs.
 //! Настройки: нет.
 
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use super::quote::Quoting;
 use super::quote::gas::GasPrice;
 use super::send::stats::Stats;
 use super::tokens::Tokens;
+use super::wallet::inflows::Inflows;
 use super::wallet::nonce::Nonces;
 
 /// Состояние адаптера. Дешёво клонируется.
@@ -31,6 +33,7 @@ pub struct Parts {
     pub heads: Heads,
     pub tokens: Tokens,
     pub nonces: Nonces,
+    pub inflows: Inflows,
     pub registry: Registry,
     pub scanned: Scanned,
     pub checks: Checks,
@@ -47,6 +50,7 @@ impl Parts {
             heads: Heads::default(),
             tokens: Tokens::default(),
             nonces: Nonces::default(),
+            inflows: Inflows::default(),
             registry: Registry::default(),
             scanned: Scanned::default(),
             checks: Checks::default(),
@@ -75,6 +79,7 @@ impl Parts {
             heads: self.heads.clone(),
             stats: self.stats.clone(),
             gas: self.gas.clone(),
+            inflows: self.inflows.clone(),
         }
     }
 

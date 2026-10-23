@@ -1,10 +1,11 @@
 //! Файл: venues/bsc_dex/exec/trade_smart.rs
 //! Что делает: сделка по умному маршруту из котировки (решение 38): пересчёт каждой доли по живому состоянию её
-//! пула, проверка средней цены против худшей допустимой, минимум выхода по каждой доле, сверка долей с MixedQuoter
+//! пула (перед этим — повторная проба крючка B/C, решение 32), проверка средней цены против худшей допустимой, минимум
+//! выхода по каждой доле, ожидаемые поступления выходного токена (wallet/inflows.rs), сверка долей с MixedQuoter
 //! PancakeSwap, разрешения и один execute Universal Router PancakeSwap со всеми долями и итоговой проверкой баланса
 //! (exec/universal.rs), ожидание итога своим узлом, факт по логам Transfer. Повторов нет (стартовое правило Тиграна).
 //! Кто вызывает: exec/trade.rs.
-//! От чего зависит: exec/universal.rs, exec/trade.rs (общие шаги), exec/result.rs, quote/direct.rs, quote/select.rs,
+//! От чего зависит: exec/universal.rs, exec/trade.rs (общие шаги), exec/precheck.rs, exec/result.rs, quote/direct.rs, quote/select.rs,
 //! quote/mixed_quoter.rs, wallet/nonce.rs, pools/registry.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, send.*, channel.*.
 //!
@@ -21,9 +22,9 @@ use super::super::quote::mixed_quoter::{self, Leg};
 use super::super::quote::{Quoting, direct, select};
 use super::super::wallet::nonce::Nonces;
 use super::plan::Order;
-use super::trade::{check_price, order, send_plan};
+use super::trade::{check_price, order, send_plan, worst_positive};
 use super::txs::Env;
-use super::{result, universal};
+use super::{precheck, result, universal};
 
 /// Доля, пересчитанная по живому состоянию.
 struct Live {
@@ -45,6 +46,7 @@ pub async fn trade(
     route: &DexRoute,
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
+    worst_positive(ctx, &req)?;
     let taxes = direct::taxes(q, &req.asset)?;
     let weights: Vec<Decimal> = route
         .legs
@@ -64,6 +66,7 @@ pub async fn trade(
     let mut live = Vec::with_capacity(route.legs.len());
     let (mut coins, mut usdt, mut left) = (Decimal::ZERO, Decimal::ZERO, req.qty);
     let mut decs = (0u8, 0u8);
+    let mut guard = None;
     for (i, (leg, w)) in route.legs.iter().zip(&weights).enumerate() {
         let [hop] = leg.hops.as_slice() else {
             return Err(ctx.err(
@@ -76,6 +79,12 @@ pub async fn trade(
             .get(&hop.pool)
             .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))?;
         if i == 0 {
+            let out_token = if req.side == Side::Buy {
+                e.coin
+            } else {
+                e.usdt
+            };
+            guard = Some(env.inflows.swap(ctx, out_token).await?);
             decs = (
                 q.tokens.decimals(ctx, e.coin).await?,
                 q.tokens.decimals(ctx, e.usdt).await?,
@@ -87,6 +96,7 @@ pub async fn trade(
             (req.qty * w / total).min(left)
         };
         left -= qty;
+        precheck::hook_again(q, &e).await?;
         let u = select::usable(ctx, &q.checks, &e, req.side, decs.1)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{}: {why}", e.family.title)))?;
         let (s, c, x) = direct::calc(ctx, &e, &u, req.side, qty, &taxes, decs)?;
@@ -120,7 +130,8 @@ pub async fn trade(
     let wallet = slot.from;
     let now = q.heads.fresh(ctx)?.timestamp;
     let p = universal::build(ctx, &plan_legs, wallet, now).await?;
-    let d = send_plan(env, wallet, p).await?;
+    let guard = guard.ok_or_else(|| ctx.err(ErrorCode::Internal, "умный маршрут без долей"))?;
+    let d = send_plan(env, &slot, p, guard).await?;
     drop(slot);
     result::result(ctx, req, d, wallet, pair, decs)
 }

@@ -16,7 +16,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::{U48, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
@@ -77,13 +77,13 @@ pub async fn missing(
     .await?;
     if U256::from(p.amount) < amount || p.expiration.to::<u64>() <= now {
         out.push(permit2_approve(
-            token, permit2, ur, amount, unlimited, expiration,
-        ));
+            ctx, token, permit2, ur, amount, unlimited, expiration,
+        )?);
     }
     Ok(out)
 }
 
-/// Все разрешения сразу (для пробного обмена в симуляции). Ошибки: NotConfigured.
+/// Все разрешения сразу (для пробного обмена в симуляции). Ошибки: NotConfigured, BadResponse (см. permit2_approve).
 pub fn all(
     ctx: &Ctx,
     token: Address,
@@ -96,7 +96,7 @@ pub fn all(
     let expiration = now + ctx.int("dex.permit2_expiration_s")?;
     Ok(vec![
         erc20_approve(token, permit2, if unlimited { U256::MAX } else { amount }),
-        permit2_approve(token, permit2, ur, amount, unlimited, expiration),
+        permit2_approve(ctx, token, permit2, ur, amount, unlimited, expiration)?,
     ])
 }
 
@@ -108,21 +108,34 @@ fn erc20_approve(token: Address, spender: Address, value: U256) -> Approval {
     )
 }
 
-/// Permit2.approve; сумма больше uint160 или «без ограничения» — uint160.max. Ошибок нет.
+/// Permit2.approve: «без ограничения» (dex.approve_unlimited) — uint160.max, иначе ровно сумма сделки.
+/// Ошибки: BadResponse — сумма больше uint160 (разрешение молча не расширяется до максимума);
+/// NotConfigured — срок (время блока + dex.permit2_expiration_s) больше uint48.
 fn permit2_approve(
+    ctx: &Ctx,
     token: Address,
     permit2: Address,
     ur: Address,
     amount: U256,
     unlimited: bool,
     expiration: u64,
-) -> Approval {
+) -> GatewayResult<Approval> {
     let amount = if unlimited {
         U160::MAX
     } else {
-        U160::checked_from_limbs_slice(amount.as_limbs()).unwrap_or(U160::MAX)
+        U160::checked_from_limbs_slice(amount.as_limbs()).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                format!("Сумма разрешения {amount} больше uint160 Permit2"),
+            )
+        })?
     };
-    let exp = U48::try_from(expiration).unwrap_or(U48::MAX);
+    let exp = U48::try_from(expiration).map_err(|_| {
+        ctx.err(
+            ErrorCode::NotConfigured,
+            format!("Срок Permit2 {expiration} больше uint48 — проверьте dex.permit2_expiration_s"),
+        )
+    })?;
     let data = IPermit2::approveCall {
         token,
         spender: ur,
@@ -130,5 +143,5 @@ fn permit2_approve(
         expiration: exp,
     }
     .abi_encode();
-    (permit2, Bytes::from(data))
+    Ok((permit2, Bytes::from(data)))
 }

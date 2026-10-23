@@ -100,7 +100,10 @@ async fn rescan(p: &Pools, w: &Watch) -> GatewayResult<()> {
             .collect()
     };
     for f in fresh {
-        let ticker = w.coins.get(&f.coin).cloned().unwrap_or_default();
+        // Пулы ищутся только по монетам подписки — монета без тикера значит, что подписка сменилась: пропускаем.
+        let Some(ticker) = w.coins.get(&f.coin).cloned() else {
+            continue;
+        };
         p.ctx
             .log(
                 Level::Info,

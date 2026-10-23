@@ -143,6 +143,7 @@ pub async fn entry(
         ticks: l.ticks,
         bins: l.bins,
         synced_block: block,
+        synced_log: None,
         valid: true,
     })
 }
@@ -170,6 +171,7 @@ pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> Gatew
     out.ticks = l.ticks;
     out.bins = l.bins;
     out.synced_block = block;
+    out.synced_log = None;
     out.valid = true;
     Ok(out)
 }

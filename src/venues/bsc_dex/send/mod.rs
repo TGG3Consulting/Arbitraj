@@ -17,6 +17,7 @@ pub mod blockrazor;
 pub mod blockrazor_builder;
 pub mod bloxroute_cloud;
 pub mod bloxroute_protect;
+pub mod cancel;
 pub mod channel;
 pub mod channels;
 pub mod check;
@@ -28,8 +29,10 @@ pub mod nodereal;
 pub mod nodereal_api;
 pub mod public;
 pub mod ready;
+pub mod receipt;
 pub mod stats;
 pub mod track;
+pub mod tx;
 
 use alloy_primitives::{Bytes, U256};
 use futures_util::future::join_all;
@@ -70,13 +73,13 @@ pub fn select(ctx: &Ctx, stats: &Stats) -> GatewayResult<Vec<Ready>> {
     Ok(ready)
 }
 
-/// Нижняя граница цены газа: наибольший минимум выбранных каналов (решение 44). Ошибок нет.
+/// Нижняя граница цены газа: наибольший минимум выбранных каналов (решение 44); каналов нет — границы нет (0).
+/// Ошибок нет.
 pub fn gas_floor(ready: &[Ready]) -> U256 {
     ready
         .iter()
         .map(|r| r.min_gas_wei)
-        .max()
-        .unwrap_or(U256::ZERO)
+        .fold(U256::ZERO, U256::max)
 }
 
 /// Чаевые разрешены: ровно один канал, бандл, чаевые включены. Возвращает адрес и сумму (wei).
@@ -87,9 +90,29 @@ pub fn tip(ready: &[Ready]) -> Option<(alloy_primitives::Address, U256)> {
     }
 }
 
+/// Итог отправки в каналы.
+#[derive(Debug, Clone, Default)]
+pub struct Dispatched {
+    /// Каналы, которые приняли транзакцию.
+    pub accepted: Vec<String>,
+    /// Каналы без ясного ответа (таймаут, обрыв, ответ не разобран): транзакция могла дойти и попасть в блок.
+    pub uncertain: Vec<String>,
+}
+
+impl Dispatched {
+    /// Все каналы, где транзакция может быть. Ошибок нет.
+    pub fn all(&self) -> Vec<String> {
+        self.accepted
+            .iter()
+            .chain(&self.uncertain)
+            .cloned()
+            .collect()
+    }
+}
+
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
-/// (только при одном канале), предел блока бандла. Возвращает: id принявших каналов.
-/// Ошибки: ChannelRejected — не принял ни один (причины всех каналов в тексте).
+/// (только при одном канале), предел блока бандла. Возвращает: кто принял и кто не ответил ясно.
+/// Ошибки: ChannelRejected — все каналы ответили отказом (транзакции точно нигде нет; причины всех каналов в тексте).
 pub async fn dispatch(
     ctx: &Ctx,
     stats: &Stats,
@@ -97,7 +120,7 @@ pub async fn dispatch(
     tx: &Bytes,
     tip_tx: Option<&Bytes>,
     max_block: u64,
-) -> GatewayResult<Vec<String>> {
+) -> GatewayResult<Dispatched> {
     let jobs = ready.iter().map(|r| {
         let mut txs = vec![tx.clone()];
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {
@@ -105,13 +128,13 @@ pub async fn dispatch(
         }
         async move { (r.ch.id, r.send(ctx, &txs, max_block).await) }
     });
-    let mut ok = Vec::new();
+    let mut out = Dispatched::default();
     let mut why = Vec::new();
     for (id, res) in join_all(jobs).await {
         match res {
             Ok(()) => {
                 stats.update(id, |s| s.sent += 1);
-                ok.push(id.to_string());
+                out.accepted.push(id.to_string());
             }
             Err(e) => {
                 stats.update(id, |s| {
@@ -127,17 +150,24 @@ pub async fn dispatch(
                     None,
                 )
                 .await;
+                // Нет ясного ответа — запрос мог дойти до канала: транзакция считается отправленной.
+                if matches!(
+                    e.code,
+                    ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::BadResponse
+                ) {
+                    out.uncertain.push(id.to_string());
+                }
                 why.push(format!("{id}: {}", e.message));
             }
         }
     }
-    if ok.is_empty() {
+    if out.accepted.is_empty() && out.uncertain.is_empty() {
         return Err(ctx.err(
             ErrorCode::ChannelRejected,
             format!("Ни один канал не принял транзакцию: {}", why.join("; ")),
         ));
     }
-    Ok(ok)
+    Ok(out)
 }
 
 /// Чаевые, которые будут заплачены при текущих настройках каналов (для расчёта затрат, решение 35):
@@ -148,4 +178,20 @@ pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     tip(&ready).map(|(_, amount)| amount)
+}
+
+/// Нижняя граница цены газа по каналам, готовым сейчас (для расчёта затрат: газ в котировке не ниже того, с которым
+/// транзакция реально уйдёт). Ошибки: NotConfigured — нет ни одного готового канала.
+pub fn planned_floor(ctx: &Ctx) -> GatewayResult<U256> {
+    let ready: Vec<Ready> = channels::ALL
+        .iter()
+        .filter_map(|c| ready::prepare(ctx, c).ok())
+        .collect();
+    if ready.is_empty() {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            "Нет ни одного готового канала отправки — газ сделки не считается",
+        ));
+    }
+    Ok(gas_floor(&ready))
 }

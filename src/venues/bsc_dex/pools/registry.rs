@@ -35,8 +35,11 @@ pub struct Entry {
     pub ticks: Option<TickMap>,
     /// Bin: резервы бинов; иначе None.
     pub bins: Option<BinMap>,
-    /// Состояние верно на конец этого блока; события с блоком ≤ него уже учтены.
+    /// Последний учтённый блок: состояние верно на конец этого блока (synced_log = None) или сразу после
+    /// события с этим logIndex в нём (synced_log = Some).
     pub synced_block: u64,
+    /// logIndex последнего применённого события в synced_block; None — учтён весь блок (состояние прочитано на нём).
+    pub synced_log: Option<u64>,
     /// false — подписка оборвалась или карта разошлась с событием: данным верить нельзя до перечитывания.
     pub valid: bool,
 }
@@ -45,6 +48,16 @@ pub struct Entry {
 #[derive(Clone, Default)]
 pub struct Registry {
     inner: Arc<RwLock<HashMap<PoolRef, Entry>>>,
+}
+
+impl Entry {
+    /// Учтено ли уже событие с позицией (блок, logIndex). Порядок событий — (blockNumber, logIndex)
+    /// (execution-apis src/schemas/receipt.yaml, Log.logIndex — «index of the log in the block»).
+    /// Ошибок нет.
+    pub fn has_applied(&self, block: u64, log_index: u64) -> bool {
+        block < self.synced_block
+            || (block == self.synced_block && self.synced_log.is_none_or(|i| log_index <= i))
+    }
 }
 
 impl Registry {

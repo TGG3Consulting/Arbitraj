@@ -20,7 +20,8 @@ use super::super::wallet::balances::BNB;
 use super::fill;
 use super::txs;
 
-/// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded / NonceConflict с фактом транзакции.
+/// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded / NonceConflict с фактом транзакции; BadResponse —
+/// обмен в блоке, но суммы не считаются (с сырыми числами и фактом транзакции).
 /// Принимает: запрос, итог транзакции, кошелёк, (токен входа, токен выхода), (decimals монеты, decimals USDT).
 pub fn result(
     ctx: &Ctx,
@@ -53,8 +54,11 @@ pub fn result(
                 .err(
                     ErrorCode::TxNotIncluded,
                     format!(
-                        "Транзакция не попала в блок за send.max_wait_blocks, tx {}",
-                        d.chain.hash
+                        "Транзакция не попала в блок за send.max_wait_blocks, tx {}{}",
+                        d.chain.hash,
+                        d.cancel.as_ref().map_or(String::new(), |(h, _)| format!(
+                            " — nonce занят отменой {h}"
+                        ))
                     ),
                 )
                 .with_tx(d.chain));
@@ -67,8 +71,23 @@ pub fn result(
     } else {
         (spent, got)
     };
-    let coins = num::to_decimal(coins_u, coin_dec).unwrap_or_default();
-    let usdt = num::to_decimal(usdt_u, usdt_dec).unwrap_or_default();
+    // Обмен уже в блоке: факт не теряется — если сумма не помещается в Decimal, ошибка с сырыми числами и фактом
+    // транзакции (статус «в блоке» — по квитанции), а не тихий 0 («не исполнена» → риск повтора).
+    let (Some(coins), Some(usdt), Some(fee)) = (
+        num::to_decimal(coins_u, coin_dec),
+        num::to_decimal(usdt_u, usdt_dec),
+        d.chain.gas_bnb,
+    ) else {
+        return Err(ctx
+            .err(
+                ErrorCode::BadResponse,
+                format!(
+                    "Обмен в блоке, tx {}, но суммы не переводятся в числа: монет {coins_u} (decimals {coin_dec}), USDT {usdt_u} (decimals {usdt_dec}), газ {:?}",
+                    d.chain.hash, d.chain.gas_bnb
+                ),
+            )
+            .with_tx(d.chain));
+    };
     let status = if coins.is_zero() {
         TradeStatus::NotFilled
     } else if coins < req.qty {
@@ -84,7 +103,7 @@ pub fn result(
         } else {
             usdt / coins
         },
-        fee: d.chain.gas_bnb.unwrap_or_default(),
+        fee,
         fee_asset: BNB.to_string(),
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),

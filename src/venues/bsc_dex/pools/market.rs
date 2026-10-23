@@ -136,14 +136,10 @@ fn chunks(found: &[Found], coins: &HashMap<Address, String>, per: usize) -> Vec<
                     subs::by_pool_id(m, &ids, &topic0)
                 }
             };
+            // Пулы найдены по монетам подписки, у каждой есть тикер; без тикера пул не слушается.
             let with_tickers = part
                 .iter()
-                .map(|f| {
-                    (
-                        (*f).clone(),
-                        coins.get(&f.coin).cloned().unwrap_or_default(),
-                    )
-                })
+                .filter_map(|f| coins.get(&f.coin).map(|t| ((*f).clone(), t.clone())))
                 .collect();
             out.push((format!("{family}-{i}"), with_tickers, filter));
         }

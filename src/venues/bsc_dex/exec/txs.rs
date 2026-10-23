@@ -1,18 +1,17 @@
 //! Файл: venues/bsc_dex/exec/txs.rs
 //! Что делает: одна транзакция кошелька от начала до итога: каналы (send/mod.rs), цена газа (eth_gasPrice + надбавка,
 //! не ниже минимума выбранных каналов), лимит газа (eth_estimateGas — заодно проверка, что вызов не откатится, —
-//! плюс запас), подпись (EIP-155, legacy), чаевые (только один канал и бандл), отправка, ожидание итога своим узлом.
-//! Nonce — текущий счётчик кошелька в блоках: транзакции идут строго по очереди внутри места в очереди (решение 45).
+//! плюс запас), подпись (EIP-155, legacy), чаевые (только по просьбе вызывающего — один раз на сделку, к транзакции
+//! обмена; и только один канал и бандл), отправка, ожидание итога своим узлом до занятия nonce в блоке.
+//! Ожидание идёт в отдельной задаче, которая держит место в очереди кошелька (wallet/nonce.rs, Hold): даже если
+//! вызывающий прерван, следующая транзакция кошелька не возьмёт nonce, пока этот не занят (решение 45).
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
-//! От чего зависит: send/*, quote/gas.rs, wallet/signer.rs, node/rpc.rs, node/heads.rs, num.rs.
-//! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks [bsc_dex]; через вызываемые — channel.*, send.*.
+//! От чего зависит: send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
+//! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
 //!
-//! eth_estimateGas — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/execute.yaml#L43-L60 ;
-//! legacy-транзакция с chainId (EIP-155) — https://eips.ethereum.org/EIPS/eip-155 ; база газа в BSC всегда 0 —
-//! research/flow/bsc_dex.md, раздел 5 (поэтому цена газа — одна gasPrice).
+//! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
-use alloy::consensus::TxLegacy;
-use alloy_primitives::{Address, B256, Bytes, TxKind, U64, U256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256};
 use rust_decimal::Decimal;
 use serde_json::json;
 
@@ -20,14 +19,16 @@ use crate::core::types::{ChainTx, SendMethod, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::node::BSC_CHAIN_ID;
 use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::super::num;
 use super::super::quote::gas::GasPrice;
 use super::super::send::stats::Stats;
-use super::super::send::track::{self, Receipt};
+use super::super::send::track::{self, Receipt, Tracked, Watch};
+use super::super::send::tx::{self, SendCfg};
 use super::super::send::{self};
+use super::super::wallet::inflows::{Inflows, SwapGuard};
+use super::super::wallet::nonce::Slot;
 use super::super::wallet::signer;
 
 /// Всё для отправки. Дешёво клонируется.
@@ -37,58 +38,61 @@ pub struct Env {
     pub heads: Heads,
     pub stats: Stats,
     pub gas: GasPrice,
+    /// Ожидаемые поступления в кошелёк и идущие обмены (wallet/inflows.rs).
+    pub inflows: Inflows,
 }
 
-/// Итог транзакции.
+/// Итог транзакции (nonce занят в блоке).
 pub struct Done {
     pub chain: ChainTx,
     pub receipt: Option<Receipt>,
+    /// Отмена, занявшая nonce (исходная не попала): хеш и квитанция.
+    pub cancel: Option<(B256, Receipt)>,
 }
 
-/// Отправляет вызов и ждёт итога. Принимает: окружение, отправителя, адрес, данные, сумму BNB (wei).
-/// Возвращает: Done (итог может быть «откат» / «не попала» — решает вызывающий).
-/// Ошибки: настройки, нет каналов, eth_estimateGas откатился (текст узла — транзакция не отправлялась), каналы не приняли.
+/// Отправляет вызов и ждёт, пока его nonce не занят в блоке. Принимает: окружение, место в очереди кошелька, адрес,
+/// данные, сумму BNB (wei), чаевые (true — только для транзакции обмена), отметку «идёт обмен» (wallet/inflows.rs —
+/// снимается вместе с местом в очереди, когда nonce занят).
+/// Возвращает: Done (итог может быть «откат» / «не попала» / «вытеснена» — решает вызывающий).
+/// Ошибки (транзакция не ушла ни в один канал): настройки, нет каналов, eth_estimateGas откатился (текст узла),
+/// все каналы ответили отказом; Internal — задача трекера упала.
 pub async fn send(
     env: &Env,
-    from: Address,
+    slot: &Slot,
     to: Address,
     data: Bytes,
     value: U256,
+    with_tip: bool,
+    keep: Option<SwapGuard>,
 ) -> GatewayResult<Done> {
     let ctx = &env.ctx;
+    let cfg = SendCfg::read(ctx)?;
     let ready = send::select(ctx, &env.stats)?;
     let price = env
         .gas
         .wei(ctx, &env.heads)
         .await?
         .max(send::gas_floor(&ready));
-    let nonce: U64 = rpc::call(ctx, "eth_getTransactionCount", json!([from, "latest"])).await?;
-    let nonce = nonce.to::<u64>();
-    let gas = limit(ctx, from, to, &data, value).await?;
-    let tx = legacy(nonce, price, gas, to, value, data);
-    let signed = signer::sign(ctx, tx)?;
-    let tip = match send::tip(&ready) {
+    let from = slot.from;
+    let nonce = slot.nonce(ctx).await?;
+    let gas = tx::limit(ctx, from, to, &data, value).await?;
+    let signed = signer::sign(ctx, tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;
+    let tip = match send::tip(&ready).filter(|_| with_tip) {
         Some((tip_to, amount)) => {
-            let g = limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
-            Some((
-                signer::sign(
-                    ctx,
-                    legacy(nonce + 1, price, g, tip_to, amount, Bytes::new()),
-                )?,
-                amount,
-            ))
+            let g = tx::limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
+            let t = tx::legacy(ctx, nonce + 1, price, g, tip_to, amount, Bytes::new())?;
+            Some((signer::sign(ctx, t)?, amount))
         }
         None => None,
     };
     let head = env.heads.fresh(ctx)?;
-    let max_block = head.number + ctx.int("send.bundle_max_blocks")?;
-    let channels = send::dispatch(
+    let d = send::dispatch(
         ctx,
         &env.stats,
         &ready,
         &signed.raw,
         tip.as_ref().map(|t| &t.0.raw),
-        max_block,
+        head.number + cfg.bundle_max,
     )
     .await?;
     let method = if ready.iter().all(|r| r.method == SendMethod::Bundle) {
@@ -96,78 +100,71 @@ pub async fn send(
     } else {
         SendMethod::Single
     };
-    let t = track::wait(
-        ctx,
-        &env.heads,
-        &env.stats,
-        signed.hash,
+    let channels = d.all();
+    let watch = Watch {
+        ctx: ctx.clone(),
+        heads: env.heads.clone(),
+        stats: env.stats.clone(),
+        ready,
+        cfg,
+        hash: signed.hash,
         nonce,
         from,
-        head.number,
-        &channels,
-    )
-    .await?;
+        price,
+        sent_block: head.number,
+        channels: channels.clone(),
+    };
+    let hold = slot.hold();
+    let task_ctx = ctx.clone();
+    let job = tokio::spawn(async move {
+        let t = track::resolve(watch).await;
+        drop(keep);
+        hold.consumed(nonce + 1);
+        // Бандл с чаевыми занимает и nonce + 1: следующий nonce — по счётчику узла, если он уже больше.
+        if let Ok(n) = rpc::call::<U64>(
+            &task_ctx,
+            "eth_getTransactionCount",
+            json!([from, "latest"]),
+        )
+        .await
+        {
+            hold.consumed(n.to());
+        }
+        t
+    });
+    let t = job.await.map_err(|e| {
+        ctx.err(
+            ErrorCode::Internal,
+            format!("задача трекера {} упала: {e}", signed.hash),
+        )
+    })?;
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
     Ok(Done {
         chain: chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
         receipt: t.receipt,
+        cancel: t.cancel,
     })
 }
 
-/// Лимит газа: eth_estimateGas × (1 + send.gas_limit_margin_pct/100). Ошибки: откат (текст узла), настройка.
-async fn limit(
-    ctx: &Ctx,
-    from: Address,
-    to: Address,
-    data: &Bytes,
-    value: U256,
-) -> GatewayResult<u64> {
-    let est: U64 = rpc::call(
-        ctx,
-        "eth_estimateGas",
-        json!([{ "from": from, "to": to, "input": data, "value": value }]),
-    )
-    .await?;
-    let margin = ctx.dec("send.gas_limit_margin_pct")?;
-    let g = Decimal::from(est.to::<u64>()) * (Decimal::ONE + margin / Decimal::ONE_HUNDRED);
-    u64::try_from(g.ceil()).map_err(|_| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            format!("Лимит газа {g} не помещается"),
-        )
-    })
-}
-
-/// Legacy-транзакция с chainId BSC (EIP-155). Ошибок нет.
-fn legacy(nonce: u64, price: U256, gas: u64, to: Address, value: U256, input: Bytes) -> TxLegacy {
-    TxLegacy {
-        chain_id: Some(BSC_CHAIN_ID),
-        nonce,
-        gas_price: price.saturating_to::<u128>(),
-        gas_limit: gas,
-        to: TxKind::Call(to),
-        value,
-        input,
-    }
-}
-
-/// ChainTx из итога ожидания. Ошибок нет.
+/// ChainTx из итога. Не попала и nonce заняла отмена — газ отмены (он потрачен) в gas_used / gas_bnb, блока нет
+/// (хеш отмены — в Done.cancel и в журнале; поля в стыке ChainTx нет — запрос на изменение стыка). Ошибок нет.
 fn chain_tx(
     hash: B256,
     nonce: u64,
     channels: Vec<String>,
     method: SendMethod,
-    t: &track::Tracked,
+    t: &Tracked,
     tip_bnb: Option<Decimal>,
 ) -> ChainTx {
-    let r = t.receipt.as_ref();
+    let r = t.receipt.as_ref().or(t.cancel.as_ref().map(|c| &c.1));
+    let own = t.receipt.as_ref();
     ChainTx {
         hash,
         nonce,
         channels,
         method,
         outcome: t.outcome,
-        block: r.map(|r| r.block_number.to()),
+        block: own.map(|r| r.block_number.to()),
         gas_used: r.map(|r| r.gas_used.to()),
         gas_bnb: r.and_then(|r| r.gas_bnb()),
         tip_bnb: if t.outcome == TxOutcome::Included || t.outcome == TxOutcome::Reverted {

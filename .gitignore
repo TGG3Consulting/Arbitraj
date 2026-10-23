@@ -18,7 +18,7 @@ secrets.enc
 # Интерфейс
 /ui/node_modules/
 /ui/dist/
-/ui/.svelte-kit/
+/ui/build/
 
 # Системное
 .DS_Store

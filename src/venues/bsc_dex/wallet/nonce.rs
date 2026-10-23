@@ -3,7 +3,11 @@
 //! транзакция — от подписи до момента, когда её nonce занят в блоке (её самой, отменой или чужой транзакцией).
 //! Очередь не освобождается раньше: ни ошибка чтения квитанции, ни «не попала», ни отмена вызывающего (сделка
 //! прервана) — место держит задача трекера (exec/txs.rs), пока nonce не занят.
-//! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, wallet/transfer.rs (место в очереди), exec/txs.rs (nonce, удержание).
+//! Исход не установлен (лимиты отмены, время ожидания send.queue_max_wait_s, nonce не перечитан) — очередь
+//! «остановлена до ручной проверки»: новые транзакции не берутся, пока человек не снимет её (release, кнопка
+//! «Снять очередь после ручной проверки»). Состояние — WalletQueueState (экран, уведомления).
+//! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, wallet/transfer.rs (место в очереди), exec/txs.rs (nonce, удержание),
+//! mod.rs (wallet_queue, release_wallet_queue).
 //! От чего зависит: ctx.rs, node/rpc.rs, wallet/signer.rs.
 //! Настройки: узел — bsc.node_http_url.
 //!
@@ -19,28 +23,43 @@
 
 use std::sync::{Arc, Mutex as StdMutex};
 
-use alloy_primitives::{Address, U64};
+use alloy_primitives::{Address, B256, U64};
+use chrono::Utc;
 use serde_json::json;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
-use crate::gateway::errors::GatewayResult;
+use crate::core::types::WalletQueueState;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
 use super::signer;
 
 /// Очередь кошелька: одна на адаптер. Дешёво клонируется.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Nonces {
     lock: Arc<Mutex<()>>,
     /// Наименьший nonce, который может взять следующая транзакция (прошлые заняты в блоке). None — не было отправок.
     next: Arc<StdMutex<Option<u64>>>,
+    /// Состояние очереди (свободна / ждёт итога / остановлена до ручной проверки).
+    state: Arc<StdMutex<WalletQueueState>>,
+}
+
+impl Default for Nonces {
+    fn default() -> Self {
+        Self {
+            lock: Arc::default(),
+            next: Arc::default(),
+            state: Arc::new(StdMutex::new(WalletQueueState::Free)),
+        }
+    }
 }
 
 /// Место в очереди: пока живо оно или хотя бы одно удержание (`hold`), другие транзакции кошелька ждут.
 pub struct Slot {
     guard: Arc<OwnedMutexGuard<()>>,
     next: Arc<StdMutex<Option<u64>>>,
+    state: Arc<StdMutex<WalletQueueState>>,
     /// Адрес кошелька.
     pub from: Address,
 }
@@ -50,19 +69,45 @@ pub struct Slot {
 pub struct Hold {
     _guard: Arc<OwnedMutexGuard<()>>,
     next: Arc<StdMutex<Option<u64>>>,
+    state: Arc<StdMutex<WalletQueueState>>,
 }
 
 impl Nonces {
     /// Встаёт в очередь (ждёт, пока прошлая транзакция кошелька займёт свой nonce в блоке).
-    /// Возвращает: Slot. Ошибки: ключ кошелька (SecretsLocked, NotConfigured).
+    /// Возвращает: Slot. Ошибки: OutcomeUnknown — очередь остановлена до ручной проверки (причина в тексте);
+    /// ключ кошелька (SecretsLocked, NotConfigured).
     pub async fn acquire(&self, ctx: &Ctx) -> GatewayResult<Slot> {
         let guard = self.lock.clone().lock_owned().await;
+        if let WalletQueueState::Halted { reason, .. } = self.state() {
+            return Err(ctx.err(
+                ErrorCode::OutcomeUnknown,
+                format!("Очередь кошелька остановлена до ручной проверки: {reason}"),
+            ));
+        }
         let from = signer::address(ctx)?;
         Ok(Slot {
             guard: Arc::new(guard),
             next: self.next.clone(),
+            state: self.state.clone(),
             from,
         })
+    }
+
+    /// Состояние очереди. Ошибок нет.
+    pub fn state(&self) -> WalletQueueState {
+        self.state.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// «Снять очередь после ручной проверки»: остановленная очередь снова свободна, запомненный nonce забыт (берётся
+    /// у узла). Возвращает: новое состояние. Ошибки: Err(причина) — очередь не остановлена.
+    pub fn release(&self) -> Result<WalletQueueState, String> {
+        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        if !matches!(*st, WalletQueueState::Halted { .. }) {
+            return Err("очередь кошелька не остановлена — снимать нечего".into());
+        }
+        *st = WalletQueueState::Free;
+        *self.next.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        Ok(st.clone())
     }
 
     /// Занята ли очередь сейчас (для интерфейса и журнала). Ошибок нет.
@@ -86,11 +131,42 @@ impl Slot {
         Hold {
             _guard: self.guard.clone(),
             next: self.next.clone(),
+            state: self.state.clone(),
         }
     }
 }
 
 impl Hold {
+    /// Очередь ждёт итога транзакции. Возвращает: новое состояние. Ошибок нет.
+    pub fn busy(&self, nonce: u64, hash: B256) -> WalletQueueState {
+        self.set(WalletQueueState::Busy {
+            nonce,
+            hash,
+            since: Utc::now(),
+        })
+    }
+
+    /// Итог установлен — очередь свободна. Возвращает: новое состояние. Ошибок нет.
+    pub fn free(&self) -> WalletQueueState {
+        self.set(WalletQueueState::Free)
+    }
+
+    /// Исход не установлен — очередь остановлена до ручной проверки. Возвращает: новое состояние. Ошибок нет.
+    pub fn halt(&self, reason: String, nonce: u64, hash: B256) -> WalletQueueState {
+        self.set(WalletQueueState::Halted {
+            reason,
+            nonce: Some(nonce),
+            hash: Some(hash),
+            since: Utc::now(),
+        })
+    }
+
+    /// Ставит состояние. Ошибок нет.
+    fn set(&self, s: WalletQueueState) -> WalletQueueState {
+        *self.state.lock().unwrap_or_else(|p| p.into_inner()) = s.clone();
+        s
+    }
+
     /// Nonce занят в блоке: следующий — не меньше `next`. Ошибок нет.
     pub fn consumed(&self, next: u64) {
         let mut n = self.next.lock().unwrap_or_else(|p| p.into_inner());

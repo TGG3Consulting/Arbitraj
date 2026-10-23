@@ -110,6 +110,10 @@ fn codes() -> Vec<CodeMeta> {
         c(C::GasBelowChannelMin, "Цена газа ниже минимума канала"),
         c(C::TxNotIncluded, "Транзакция не попала в блок вовремя"),
         c(C::NonceConflict, "Nonce неверный или занят"),
+        c(
+            C::OutcomeUnknown,
+            "Исход транзакции неизвестен — только ручная проверка (не повторяется)",
+        ),
         c(C::Internal, "Внутренняя ошибка нашего кода"),
     ]
 }
@@ -124,6 +128,7 @@ const _: fn(C) = |code| match code {
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
     C::NonceConflict => {}
+    C::OutcomeUnknown => {}
 };
 
 /// Все действия — порядок как в gateway/rules.rs.

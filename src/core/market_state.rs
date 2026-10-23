@@ -14,7 +14,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
 use crate::core::types::{
-    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId,
+    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId, WalletQueue,
 };
 use crate::gateway::events::MarketEvent;
 
@@ -44,6 +44,8 @@ pub enum Touched {
     CoinCheck(CoinCheck),
     PoolCheck(PoolCheck),
     Channel(SendChannelStats),
+    /// Очередь кошелька DEX изменилась (остановлена — уведомление, core/tick.rs).
+    WalletQueue(WalletQueue),
 }
 
 /// Рыночное состояние в памяти.
@@ -104,6 +106,7 @@ impl MarketState {
                 self.channels.insert(s.id.clone(), s.clone());
                 Touched::Channel(s)
             }
+            MarketEvent::WalletQueue(q) => Touched::WalletQueue(q),
         }
     }
 

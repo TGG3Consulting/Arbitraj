@@ -11,6 +11,8 @@
 | `GET /api/venues` | Площадки, зарегистрированные в шлюзе (id по алфавиту) |
 | `GET /api/venues/{id}/dex-families` | DEX и виды пулов адаптера (id области «DEX»); биржа — 400 «не применимо» |
 | `GET /api/channels/{venue}` | Каналы отправки адаптера DEX (id области «канал»): `[{info, stats}]`; `stats: null` — ядро ещё не отдаёт статистику |
+| `GET /api/wallet-queue/{venue}` | Очередь транзакций кошелька DEX: свободна / ждёт итога (nonce, хеш) / остановлена до ручной проверки (причина) |
+| `POST /api/wallet-queue/{venue}/release` | «Снять очередь после ручной проверки» — только остановленную; иначе 400 |
 | `GET /api/journal?limit=N[&before=ID]` | Журнал |
 | `GET /api/coins`, `POST /api/coins/recheck` | Экран «Монеты»: справочник (сейчас 503 «нет данных» — ядро не подключено); «Перепроверить» — шлюз `recheck_coins` |
 | `GET /api/manual`, `POST /api/manual/command` | Экран «Ручное управление» (сейчас 503: нет данных, команда не выполняется и пишется в журнал) |
@@ -61,6 +63,8 @@
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
 | `GET /api/channels/{venue}` | — | `[{info: SendChannelInfo, stats: SendChannelStats \| null}]` — шлюз `send_channels` + последние события ядра; биржа — 400 «не применимо» |
+| `GET /api/wallet-queue/{venue}` | — | `WalletQueue {venue, state: Free \| Busy{nonce, hash, since} \| Halted{reason, nonce, hash, since}}` — шлюз `wallet_queue`; биржа — 400 |
+| `POST /api/wallet-queue/{venue}/release` | — | `WalletQueue` после снятия — шлюз `release_wallet_queue`; очередь не остановлена — 400 |
 | `POST /api/check/channel/{venue}/{id}` | — | `{ok, details}` — шлюз `check_send_channel`, пишется в журнал |
 | настройки канала | `PUT /api/settings` с `scope:{kind:"Channel",id:"club48"}` (`channel.*`); ключ — `PUT /api/secrets/channel.<id>.key` | как у настроек и секретов |
 | WS `/api/ws` | — | `{"type":"send_channel","data":SendChannelStats}` |

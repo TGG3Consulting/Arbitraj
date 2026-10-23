@@ -70,6 +70,10 @@ async fn max_wait_must_cover_bundle_blocks() {
     set(&c, "send.bundle_max_blocks", json!(5)).await;
     set(&c, "send.cancel_gas_bump_pct", json!("12.5")).await;
     set(&c, "feed.stale_after_ms", json!(3000)).await;
+    set(&c, "send.replaced_confirm_blocks", json!(20)).await;
+    set(&c, "send.cancel_max_gas_gwei", json!("5")).await;
+    set(&c, "send.cancel_max_attempts", json!(3)).await;
+    set(&c, "send.queue_max_wait_s", json!(600)).await;
     let e = SendCfg::read(&c).unwrap_err();
     assert_eq!(e.code, ErrorCode::NotConfigured);
     assert!(e.message.contains("send.max_wait_blocks"));
@@ -183,7 +187,7 @@ async fn inflow_and_swap_do_not_overlap() {
     // Другой токен не ждёт.
     drop(f.swap(&c, COIN).await.unwrap());
     // Зачислено — обмен идёт; повторный статус того же перевода не снимает чужое ожидание.
-    let tx = alloy_primitives::B256::repeat_byte(7);
+    let tx = "0x07";
     f.done(USDT, tx);
     let guard = f.swap(&c, USDT).await.unwrap();
     // Пока идёт обмен, адрес депозита USDT ждёт.
@@ -197,4 +201,16 @@ async fn inflow_and_swap_do_not_overlap() {
         still.is_err(),
         "повторный статус того же хеша не снимает новое ожидание"
     );
+}
+
+#[tokio::test]
+async fn abandoned_withdrawal_releases_swap() {
+    let c = ctx("abandon").await;
+    set(&c, "transfer.max_time_s", json!(3600)).await;
+    let f = Inflows::default();
+    f.expect(COIN).await;
+    // Вывод на кошелёк не состоялся — ожидание снято, обмен идёт сразу.
+    f.abandoned(COIN);
+    let ok = tokio::time::timeout(Duration::from_millis(50), f.swap(&c, COIN)).await;
+    assert!(ok.is_ok());
 }

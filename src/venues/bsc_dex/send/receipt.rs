@@ -53,3 +53,21 @@ pub async fn find(ctx: &Ctx, ours: &[B256]) -> GatewayResult<Option<(usize, Rece
     }
     Ok(None)
 }
+
+/// Есть ли среди наших хешей транзакция, которую узел знает уже в блоке (eth_getTransactionByHash: blockNumber не null)
+/// — квитанция может появиться позже (узел ещё индексирует, балансировщик RPC). Ошибки: узел.
+/// eth_getTransactionByHash — execution-apis 16caee27 src/eth/transaction.yaml (null — не найдена).
+pub async fn in_block(ctx: &Ctx, ours: &[B256]) -> GatewayResult<bool> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Tx {
+        block_number: Option<U64>,
+    }
+    for h in ours {
+        let t: Option<Tx> = rpc::call(ctx, "eth_getTransactionByHash", json!([h])).await?;
+        if t.and_then(|t| t.block_number).is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}

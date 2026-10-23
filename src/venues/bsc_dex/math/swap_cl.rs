@@ -89,7 +89,8 @@ pub fn swap(s: &ClState, zero_for_one: bool, exact_in: bool, amount: U256) -> Op
         total_out = total_out.checked_add(a_out)?;
         if sqrt == sqrt_next {
             if initialized {
-                let net = s.ticks.ticks.get(&next).map(|t| t.net).unwrap_or(0);
+                // Инициализированный тик без данных в карте — карта не сходится с битмапом: расчёт невозможен.
+                let net = s.ticks.ticks.get(&next)?.net;
                 let net = if zero_for_one {
                     net.checked_neg()?
                 } else {

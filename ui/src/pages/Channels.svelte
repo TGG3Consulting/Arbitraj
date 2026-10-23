@@ -4,14 +4,16 @@
     вкл/выкл, способ одиночная/бандл, минимальная цена газа, чаевые вкл/выкл + сумма, адрес, ключ,
     «Проверить подключение», состояние и статистика (отправлено, в блоке, откатов, газ впустую).
     Общие настройки отправки (send.*) — на «Площадках». Нет адаптера DEX — «нет данных» с причиной.
-    Живое сообщение send_channel — список перечитывается (lib/dex.svelte.js).
+    Живое сообщение send_channel — список перечитывается (lib/dex.svelte.js). Над каналами — очередь кошелька
+    (components/WalletQueue.svelte): состояние и «Снять очередь после ручной проверки».
   Кто вызывает: App.svelte.
-  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, NoData.svelte.
+  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, NoData.svelte.
   Настройки: channel.* (через ChannelCard).
 -->
 <script>
   import { dex, whyNoDex } from '../lib/dex.svelte.js';
   import ChannelCard from '../components/ChannelCard.svelte';
+  import WalletQueue from '../components/WalletQueue.svelte';
   import NoData from '../components/NoData.svelte';
 
   /** Площадки, давшие список каналов: [[id, channels]]. */
@@ -32,6 +34,7 @@
 {:else}
   {#each withChannels as [venue, channels] (venue)}
     <h2>{venue}</h2>
+    <WalletQueue {venue} />
     {#each channels as channel (channel.info.id)}
       <ChannelCard {venue} {channel} />
     {:else}

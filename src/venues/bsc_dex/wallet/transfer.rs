@@ -28,7 +28,8 @@ use super::super::tokens::Tokens;
 use super::balances::BNB;
 use super::nonce::Nonces;
 
-/// Перевод монеты на адрес. Ошибки: адрес, сеть, нет адреса токена, каналы, не попала / откат (с фактом транзакции).
+/// Перевод монеты на адрес. Ошибки: адрес, сеть, нет адреса токена, каналы, не попала / откат (с фактом транзакции),
+/// OutcomeUnknown — nonce занят без своей квитанции или очередь остановлена (повторять вывод нельзя).
 pub async fn withdraw(
     env: &Env,
     tokens: &Tokens,
@@ -61,6 +62,15 @@ pub async fn withdraw(
                 .err(
                     ErrorCode::WithdrawRejected,
                     format!("Перевод откатился в блоке, tx {}", d.chain.hash),
+                )
+                .with_tx(d.chain));
+        }
+        TxOutcome::Replaced => {
+            // Nonce занят, своей квитанции нет: перевод мог уйти — повтор вывода опасен, только ручная проверка.
+            return Err(ctx
+                .err(
+                    ErrorCode::OutcomeUnknown,
+                    format!("Исход перевода tx {} неизвестен (nonce занят, квитанции нет) — нужна ручная проверка", d.chain.hash),
                 )
                 .with_tx(d.chain));
         }

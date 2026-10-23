@@ -13,7 +13,7 @@ mod dex;
 mod send;
 mod trade;
 
-use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef};
+use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
 /// Возвращает: SettingDef без вариантов выбора и без верхней границы (их добавляют .choices() и .max()).
@@ -42,6 +42,7 @@ const fn d(
         } else {
             DexId::None
         },
+        venue_role: VenueRole::Venue,
     }
 }
 

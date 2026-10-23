@@ -2,7 +2,8 @@
   Файл: ui/src/components/SettingCard.svelte
   Что делает: карточка одной настройки на экране «Настройки»: имя, описание, единица, вид значения,
     ограничение, допустимые области и значения по областям:
-    вся система; каждая площадка из GET /api/venues; монеты — уже заданные + ввод тикера;
+    вся система; каждая площадка из GET /api/venues (у настроек времени в пути — подпись направлением
+    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод тикера;
     события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
     (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Свои id для DEX и
     каналов не вводятся: их даёт только адаптер. Кнопка «История».
@@ -11,7 +12,7 @@
   Настройки: любая — по описанию из схемы.
 -->
 <script>
-  import { store } from '../lib/settings.svelte.js';
+  import { store, venueScopeLabel } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import SettingEditor from './SettingEditor.svelte';
@@ -70,7 +71,7 @@
   {/if}
   {#if def.scopes.includes('Venue')}
     {#each store.venues as v (v)}
-      <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={`площадка ${v}`} />
+      <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
     {:else}
       <p class="muted">Площадок в шлюзе нет — значение по площадке задать не для чего.</p>
     {/each}

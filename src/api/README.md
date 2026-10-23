@@ -9,6 +9,7 @@
 | `GET /api/rules`, `POST /api/rules`, `PUT /api/rules/{id}` | Правила шлюза |
 | `GET /api/rules/meta` | Справочник для формы правил: коды ошибок, действия с параметрами, виды области |
 | `GET /api/venues` | Площадки, зарегистрированные в шлюзе (id по алфавиту) |
+| `GET /api/venues/kinds` | Площадки с видом `[{id, kind: "Cex" \| "Dex"}]` — подпись направления перевода у настроек `venue_role: "TransferSource"` (решение 51) |
 | `GET /api/venues/{id}/dex-families` | DEX и виды пулов адаптера (id области «DEX»); биржа — 400 «не применимо» |
 | `GET /api/channels/{venue}` | Каналы отправки адаптера DEX (id области «канал»): `[{info, stats}]`; `stats: null` — по каналу ещё не было событий |
 | `GET /api/journal?limit=N[&before=ID]` | Журнал |

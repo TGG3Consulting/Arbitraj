@@ -76,6 +76,16 @@ pub enum DexId {
     Family,
 }
 
+/// Что означает область «площадка» у настройки (решение 51).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum VenueRole {
+    /// Обычная настройка площадки.
+    Venue,
+    /// Площадка — источник перевода монеты: значение относится к направлению перевода «с этой площадки»
+    /// (bingx — вывод BingX → кошелёк; bsc_dex — кошелёк → биржа). Интерфейс подписывает его направлением.
+    TransferSource,
+}
+
 /// Описание одной настройки.
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingDef {
@@ -98,6 +108,8 @@ pub struct SettingDef {
     pub max: Option<u64>,
     /// Для области «DEX»: id — имя DEX или вид пула (DexId::None — области «DEX» нет).
     pub dex_id: DexId,
+    /// Смысл области «площадка»: обычная или источник перевода (решение 51).
+    pub venue_role: VenueRole,
 }
 
 impl SettingDef {
@@ -109,6 +121,14 @@ impl SettingDef {
     /// Задаёт смысл id области «DEX». Принимает: DexId. Возвращает: описание с ним.
     pub const fn dex_id(self, dex_id: DexId) -> Self {
         SettingDef { dex_id, ..self }
+    }
+
+    /// Помечает область «площадка» как источник перевода (решение 51). Возвращает: описание с пометкой.
+    pub const fn transfer_source(self) -> Self {
+        SettingDef {
+            venue_role: VenueRole::TransferSource,
+            ..self
+        }
     }
 
     /// Задаёт верхнюю границу целого. Принимает: границу. Возвращает: описание с границей.

@@ -33,6 +33,30 @@ pub async fn view<C: SolCall>(
     decode::<C>(&out)
 }
 
+/// Несколько вызовов одного вида одним HTTP-запросом (пачка JSON-RPC), на одном блоке.
+/// Принимает: адрес контракта, вызовы, блок. Возвращает: ответы в том же порядке.
+/// Ошибки: любая ошибка любого вызова — ошибка целиком (половина данных — не факт).
+pub async fn view_many<C: SolCall>(
+    ctx: &Ctx,
+    to: Address,
+    calls: &[C],
+    block: &str,
+) -> GatewayResult<Vec<C::Return>> {
+    let params: Vec<(&str, serde_json::Value)> = calls
+        .iter()
+        .map(|c| {
+            let data = Bytes::from(c.abi_encode());
+            ("eth_call", json!([{ "to": to, "input": data }, block]))
+        })
+        .collect();
+    let mut out = Vec::with_capacity(calls.len());
+    for r in rpc::batch(ctx, &params).await? {
+        let bytes: Bytes = super::jsonrpc::decode(&r?, SOURCE)?;
+        out.push(decode::<C>(&bytes)?);
+    }
+    Ok(out)
+}
+
 /// Разбор ответа функции из байт.
 /// Принимает: байты ответа. Возвращает: значение. Ошибка BadResponse — байты не по ABI функции.
 pub fn decode<C: SolCall>(out: &[u8]) -> GatewayResult<C::Return> {

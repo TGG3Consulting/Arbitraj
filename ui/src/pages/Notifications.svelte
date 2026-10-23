@@ -11,7 +11,7 @@
 -->
 <script>
   import { store, defOf } from '../lib/settings.svelte.js';
-  import { secrets } from '../lib/secrets.svelte.js';
+  import { secrets, TELEGRAM_TOKEN as TOKEN } from '../lib/secrets.svelte.js';
   import { href } from '../lib/router.svelte.js';
   import SettingEditor from '../components/SettingEditor.svelte';
   import CheckConnection from '../components/CheckConnection.svelte';
@@ -20,7 +20,6 @@
   const CONNECTION = ['notify.telegram_api_url', 'notify.telegram_chat', 'http.timeout_ms'];
   const SUMMARY = 'notify.summary_interval_s';
   const PER_EVENT = { enabled: 'notify.event.enabled', venues: 'notify.event.venues', condition: 'notify.event.condition' };
-  const TOKEN = 'telegram.bot_token';
 
   const groups = $derived.by(() => {
     const out = new Map();

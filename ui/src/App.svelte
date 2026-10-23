@@ -10,6 +10,7 @@
   import { connect, reconnectOnEvents } from './lib/live.svelte.js';
   import { start as startSettings } from './lib/settings.svelte.js';
   import { start as startSecrets } from './lib/secrets.svelte.js';
+  import { start as startDex } from './lib/dex.svelte.js';
   import { route, href } from './lib/router.svelte.js';
   import LockBanner from './components/LockBanner.svelte';
   import LiveBanner from './components/LiveBanner.svelte';
@@ -32,6 +33,7 @@
 
   startSettings();
   startSecrets();
+  startDex();
   connect();
   reconnectOnEvents();
 

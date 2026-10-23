@@ -5,6 +5,7 @@
 //! Настройки: нет своих; адрес — аргумент запуска --listen.
 
 pub mod check;
+pub mod dex;
 pub mod guard;
 pub mod journal;
 pub mod rules;

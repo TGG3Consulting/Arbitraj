@@ -183,6 +183,7 @@ src/venues/bsc_dex/
 | 2026-10-23 | Защита веб-сервера от чужих страниц (Host/Origin) | src/api/guard.rs | аргументы --listen, --allow-origin | — |
 | 2026-10-23 | Адаптер BingX (спот): справочник монет и сетей, стаканы по WebSocket, котировка на объём, ордер, вывод, депозит, балансы, «Проверить подключение» | src/venues/bingx/*, src/storage/raw_log.rs | venue.* (bingx), raw.*, feed.stale_after_ms; секреты bingx.api_key, bingx.api_secret | экран «Площадки»: проверка подключения, ключи, настройки площадки (статусы соединений — когда бэкенд начнёт их отдавать) |
 | 2026-10-23 | Веб-интерфейс (Svelte 5 + Vite): экраны «Разблокировка», «Площадки», «Настройки», «Правила шлюза», «Уведомления», «Журнал»; живые обновления через WebSocket; раздача собранного интерфейса бэкендом | ui/*, src/api/venues.rs, src/api/rules_meta.rs, src/api/static_ui.rs, src/api/server.rs, src/cli.rs | — (аргумент запуска --ui-dir) | все перечисленные |
+| 2026-10-23 | Интерфейс: области настроек «DEX» и «канал» (id — от адаптера DEX), виды значений «выбор из списка», «адрес BSC», верхняя граница целого; на «Площадках» — виды пулов DEX, ключи и «Проверить подключение» каналов, ключи площадок, ещё не подключённых в шлюзе | src/api/dex.rs, src/api/check.rs, src/api/state.rs, ui/src/lib/dex.svelte.js, ui/src/components/DexFamilies.svelte, VenueChannels.svelte, SettingEditor.svelte, SettingCard.svelte | dex.*, smart.*, channel.* (без новых); секреты bsc_dex.wallet_key, bsc.node_*_key, channel.<id>.key | «Площадки», «Настройки» |
 
 ## Открытые вопросы
 

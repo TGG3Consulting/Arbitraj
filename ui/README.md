@@ -32,8 +32,8 @@ Proxy подменяет Host на адрес бэкенда (`changeOrigin`), O
 | Экран (`#/…`) | Файл | Данные и действия |
 | --- | --- | --- |
 | Разблокировка (`unlock`) | `src/pages/Unlock.svelte` | `GET /api/secrets/status`, `/known`; `POST /api/secrets/create`, `/unlock`, `/lock`, `/password`; `PUT`/`DELETE /api/secrets/{name}` |
-| Площадки (`venues`) | `src/pages/Venues.svelte` | `GET /api/venues`; настройки области Venue из схемы; секреты площадки (`scope` = id); `POST /api/check/venue/{id}` |
-| Настройки (`settings`) | `src/pages/Settings.svelte` | `GET /api/settings/schema`, `GET`/`PUT /api/settings`, `GET /api/settings/history` |
+| Площадки (`venues`) | `src/pages/Venues.svelte` | `GET /api/venues`; настройки области Venue из схемы; секреты площадки (`scope` = id); `POST /api/check/venue/{id}`; у DEX — `GET /api/venues/{id}/dex-families` (область «DEX»), `GET /api/channels/{id}` (ключ канала, `POST /api/check/channel/{venue}/{id}`) |
+| Настройки (`settings`) | `src/pages/Settings.svelte` | `GET /api/settings/schema`, `GET`/`PUT /api/settings`, `GET /api/settings/history`; области «DEX» и «канал» — id от адаптера DEX (нет адаптера — «нет данных»); виды значений: выбор из списка, адрес BSC, верхняя граница целого |
 | Правила шлюза (`rules`) | `src/pages/Rules.svelte` | `GET`/`POST /api/rules`, `PUT /api/rules/{id}`, `GET /api/rules/meta`, `GET /api/venues` |
 | Уведомления (`notify`) | `src/pages/Notifications.svelte` | события из схемы; `notify.*`, `http.timeout_ms`; секрет `telegram.bot_token`; `POST /api/check/telegram` |
 | Журнал (`journal`) | `src/pages/Journal.svelte` | `GET /api/journal?limit=N&before=ID`; живые записи из `/api/ws` |

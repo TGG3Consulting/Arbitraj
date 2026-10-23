@@ -10,6 +10,7 @@ use axum::response::{IntoResponse, Response};
 use serde_json::json;
 use tokio::sync::broadcast;
 
+use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::gateway::registry::Registry;
 use crate::notify::dispatch::Notifier;
 use crate::secrets::Vault;
@@ -50,6 +51,23 @@ impl ApiError {
         Self(StatusCode::BAD_REQUEST, msg.into())
     }
 
+    /// Ошибка шлюза → ответ интерфейсу (src/api/README.md):
+    /// NotApplicable — 400 «не применимо» (функция не для этой площадки, например список DEX у биржи);
+    /// VenueNotConnected — 404 (площадки нет в реестре шлюза); остальное — 502 (сбой площадки).
+    /// Текст — сообщение шлюза как есть, с площадкой.
+    pub fn gateway(e: GatewayError) -> Self {
+        let status = match e.code {
+            ErrorCode::NotApplicable => StatusCode::BAD_REQUEST,
+            ErrorCode::VenueNotConnected => StatusCode::NOT_FOUND,
+            _ => StatusCode::BAD_GATEWAY,
+        };
+        let text = match &e.venue {
+            Some(v) => format!("{} ({}): {}", v.0, code_name(e.code), e.message),
+            None => format!("{}: {}", code_name(e.code), e.message),
+        };
+        Self(status, text)
+    }
+
     /// 500 — внутренняя ошибка (подробности — в лог процесса).
     pub fn internal(err: impl std::fmt::Display) -> Self {
         tracing::error!(%err, "ошибка обработчика API");
@@ -60,5 +78,33 @@ impl ApiError {
     }
 }
 
+/// Имя единого кода ошибки, как его сериализует serde (например «NotApplicable»).
+/// Принимает: код. Возвращает: строку. Ошибок нет.
+fn code_name(code: ErrorCode) -> String {
+    serde_json::to_value(code)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_else(|| format!("{code:?}"))
+}
+
 /// Кто меняет настройки через интерфейс. Авторизация веб-сервера — открытый вопрос (ARCHITECTURE.md).
 pub const CHANGED_BY_UI: &str = "интерфейс";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ошибка шлюза получает HTTP-код по контракту src/api/README.md («не применимо» — 400).
+    #[test]
+    fn gateway_error_status() {
+        let v = Some(crate::core::types::VenueId("bingx".into()));
+        let na = ApiError::gateway(GatewayError::new(ErrorCode::NotApplicable, v.clone(), "x"));
+        assert_eq!(na.0, StatusCode::BAD_REQUEST);
+        assert_eq!(na.1, "bingx (NotApplicable): x");
+        let nc = ApiError::gateway(GatewayError::new(ErrorCode::VenueNotConnected, v, "y"));
+        assert_eq!(nc.0, StatusCode::NOT_FOUND);
+        let other = ApiError::gateway(GatewayError::new(ErrorCode::Timeout, None, "z"));
+        assert_eq!(other.0, StatusCode::BAD_GATEWAY);
+        assert_eq!(other.1, "Timeout: z");
+    }
+}

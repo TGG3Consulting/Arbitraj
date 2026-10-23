@@ -1,6 +1,8 @@
 // Файл: ui/src/lib/api.js
 // Что делает: запросы к REST бэкенда (src/api). Ошибка бэкенда превращается в Error с его текстом как есть:
 //   JSON {"error": "..."} → текст error; простой текст (например отказ api/guard.rs) → этот текст.
+//   У ошибки есть поле status — HTTP-код (0 — запрос не дошёл): по нему экраны отличают
+//   «не применимо» (400), «площадка не подключена» (404), «нет данных» (503) — src/api/README.md.
 // Кто вызывает: все экраны и хранилища ui/src/lib/*.svelte.js.
 // От чего зависит: fetch браузера.
 // Настройки: нет. Адрес — тот же сервер, что отдал страницу (или proxy vite в разработке).
@@ -9,7 +11,7 @@
  * Что делает: отправляет запрос и разбирает ответ.
  * Принимает: метод, путь (/api/...), тело (объект → JSON) или undefined.
  * Возвращает: разобранный JSON ответа (или null для пустого ответа).
- * Ошибки: Error с текстом бэкенда; Error «Нет связи с сервером: …», если запрос не дошёл.
+ * Ошибки: Error с текстом бэкенда и status; Error «Нет связи с сервером: …» (status 0), если запрос не дошёл.
  */
 export async function request(method, path, body) {
   const init = { method, headers: {} };
@@ -21,7 +23,7 @@ export async function request(method, path, body) {
   try {
     res = await fetch(path, init);
   } catch (e) {
-    throw new Error(`Нет связи с сервером: ${e.message}`);
+    throw Object.assign(new Error(`Нет связи с сервером: ${e.message}`), { status: 0 });
   }
   const text = await res.text();
   let data = null;
@@ -34,7 +36,7 @@ export async function request(method, path, body) {
   }
   if (!res.ok) {
     const reason = data && typeof data === 'object' && 'error' in data ? data.error : data;
-    throw new Error(reason || `Ошибка ${res.status} ${res.statusText}`);
+    throw Object.assign(new Error(reason || `Ошибка ${res.status} ${res.statusText}`), { status: res.status });
   }
   return data;
 }

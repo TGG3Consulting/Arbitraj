@@ -1,13 +1,14 @@
 //! Файл: api/check.rs
-//! Что делает: кнопки «Проверить подключение» — Telegram и площадки.
+//! Что делает: кнопки «Проверить подключение» — Telegram, площадки и каналы отправки DEX.
 //! Ответ всегда {ok, details}: «Подключено …» или точная причина сбоя.
 //! Каждая проверка пишется в журнал.
-//! Кто вызывает: интерфейс (экраны «Уведомления», «Площадки»).
+//! Кто вызывает: интерфейс (экраны «Уведомления», «Площадки», «Каналы отправки»).
 //! От чего зависит: api/state.rs, notify/check.rs, gateway/registry.rs.
 //! Настройки: те, что нужны проверяемому подключению.
 //!
 //! POST /api/check/telegram
 //! POST /api/check/venue/{id}
+//! POST /api/check/channel/{venue}/{id}
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -43,6 +44,30 @@ pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<C
         },
     };
     log(&st, Some(&id), &id, &res).await;
+    Json(res)
+}
+
+/// Проверка одного канала отправки площадки DEX (шлюз `check_send_channel`).
+/// Принимает: id площадки и id канала. Ошибок нет: причина сбоя (в т.ч. «не применимо»
+/// для биржи и «площадка не подключена») — в details.
+pub async fn channel(
+    State(st): State<AppState>,
+    Path((venue, id)): Path<(String, String)>,
+) -> Json<ConnectionCheck> {
+    let res = match st.registry.get(&VenueId(venue.clone())).await {
+        Ok(v) => v
+            .check_send_channel(&id)
+            .await
+            .unwrap_or_else(|e| ConnectionCheck {
+                ok: false,
+                details: e.message,
+            }),
+        Err(e) => ConnectionCheck {
+            ok: false,
+            details: e.message,
+        },
+    };
+    log(&st, Some(&venue), &format!("канала {id} ({venue})"), &res).await;
     Json(res)
 }
 

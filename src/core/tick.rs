@@ -93,6 +93,8 @@ fn assets_by_tokens(
 
 /// Ставит пересчёт монеты: если он уже идёт — отмечает повтор, иначе запускает задачу.
 fn schedule(core: &Core, asset: Asset, venue: VenueId) {
+    // Тик монеты — тем, кто ждёт её цены (режим «Ожидание», stuck.rs).
+    let _ = core.inner.coin_ticks.send(asset.clone());
     {
         let mut t = lk(&core.inner.ticking);
         if let Some(again) = t.get_mut(&asset) {

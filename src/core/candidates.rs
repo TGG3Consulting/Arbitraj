@@ -2,7 +2,7 @@
 //! Что делает: отдельная очередь тяжёлого расчёта (ТЗ: «шаг 4 идёт отдельной очередью и только по
 //! прошедшим фильтр»). Кандидат от signal.rs попадает в очередь один раз, пока не посчитан; расчёт —
 //! profit.rs. Итог — на «Живой экран» (событие candidate); прошедший — в журнал, Telegram
-//! (deal.candidate); отказ — в журнал с причиной (повтор той же причины
+//! (deal.candidate) и на исполнение (executor.rs); отказ — в журнал с причиной (повтор той же причины
 //! по направлению не пишется, чтобы журнал не тонул).
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run).
 //! От чего зависит: engine.rs, profit.rs, view.rs.
@@ -21,6 +21,10 @@ use super::view::CoreEvent;
 /// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
 /// (следующий тик поставит снова). Ошибок нет.
 pub fn enqueue(core: &Core, d: &Direction) {
+    // По направлению уже идёт сделка — новый расчёт не нужен (одна сделка на направление).
+    if lk(&core.inner.active).contains(d) {
+        return;
+    }
     if !lk(&core.inner.queued).insert(d.clone()) {
         return;
     }
@@ -58,6 +62,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
                 .await;
                 deps.notify("deal.candidate", Some(&d.buy_on.0), &text)
                     .await;
+                super::executor::accepted(&core, calc).await;
             }
             Verdict::Reject { reason, best } => {
                 let same = lk(&core.inner.last_reject).insert(d.clone(), reason.clone())

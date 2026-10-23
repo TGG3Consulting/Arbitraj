@@ -3,13 +3,16 @@
   Что делает: карточка одной настройки на экране «Настройки»: имя, описание, единица, вид значения,
     ограничение, допустимые области и значения по областям:
     вся система; каждая площадка из GET /api/venues; монеты — уже заданные + ввод тикера;
-    события — уже заданные + выбор кода из схемы. Кнопка «История».
+    события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
+    (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Свои id для DEX и
+    каналов не вводятся: их даёт только адаптер. Кнопка «История».
   Кто вызывает: pages/Settings.svelte.
-  От чего зависит: lib/settings.svelte.js, lib/labels.js, components/SettingEditor.svelte, SettingHistory.svelte.
+  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, components/SettingEditor.svelte, SettingHistory.svelte.
   Настройки: любая — по описанию из схемы.
 -->
 <script>
   import { store } from '../lib/settings.svelte.js';
+  import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
@@ -33,6 +36,20 @@
   function add(kind, id) {
     const v = id.trim();
     if (v && !added[kind].includes(v)) added[kind] = [...added[kind], v];
+  }
+
+  /**
+   * Области вида kind (Dex/Channel) для показа: от адаптера + уже заданные.
+   * Принимает: вид. Возвращает: [{id, title, unknown}] — unknown: адаптер такой id сейчас не сообщает.
+   */
+  function adapterScopes(kind) {
+    const fromAdapter =
+      kind === 'Dex'
+        ? dexIdsFor(def.name)
+        : allChannels().map((c) => ({ id: c.info.id, title: c.info.title }));
+    const out = new Map(fromAdapter.map((x) => [x.id, { ...x, unknown: false }]));
+    for (const id of idsOf(kind)) if (!out.has(id)) out.set(id, { id, title: id, unknown: true });
+    return [...out.values()];
   }
 
   const eventTitle = (code) => store.schema.events.find((e) => e.code === code)?.title ?? code;
@@ -83,6 +100,17 @@
       </button>
     </div>
   {/if}
+
+  {#each ['Dex', 'Channel'].filter((k) => def.scopes.includes(k)) as kind (kind)}
+    {#each adapterScopes(kind) as sc (sc.id)}
+      <SettingEditor {def} scope={{ kind, id: sc.id }} label={sc.unknown ? `${sc.id} (адаптер не сообщает)` : `${sc.title} · ${sc.id}`} />
+    {:else}
+      <p class="nodata">
+        Нет данных: {scopeLabel(kind)} — список даёт адаптер DEX, сейчас ни одна площадка его не дала.
+        {dex.loaded && whyNoDex() ? whyNoDex() : ''}
+      </p>
+    {/each}
+  {/each}
 
   <button class="quiet" onclick={() => (showHistory = !showHistory)}>
     {showHistory ? 'Скрыть историю' : 'История'}

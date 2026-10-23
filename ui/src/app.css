@@ -58,3 +58,8 @@ pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 4px
 code { font-size: 13px; overflow-wrap: anywhere; }
 td code { white-space: nowrap; }
 .setting-line { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; }
+input.addr { width: 27em; max-width: 100%; font-family: ui-monospace, monospace; }
+details > summary { cursor: pointer; color: var(--accent); margin: 6px 0; }
+.tag { display: inline-block; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; color: var(--muted); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.nodata { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }

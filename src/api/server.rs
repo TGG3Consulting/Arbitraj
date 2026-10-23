@@ -17,7 +17,7 @@ use tokio::net::TcpListener;
 
 use super::guard::{self, Guard};
 use super::state::AppState;
-use super::{check, journal, rules, rules_meta, secrets, settings, static_ui, venues, ws};
+use super::{check, dex, journal, rules, rules_meta, secrets, settings, static_ui, venues, ws};
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
 /// Host/Origin (api/guard.rs).
@@ -31,9 +31,12 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))
         .route("/api/venues", get(venues::list))
+        .route("/api/venues/{id}/dex-families", get(dex::families))
+        .route("/api/channels/{venue}", get(dex::channels))
         .route("/api/journal", get(journal::list))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
+        .route("/api/check/channel/{venue}/{id}", post(check::channel))
         .route("/api/secrets/known", get(secrets::known))
         .route("/api/secrets/status", get(secrets::status))
         .route("/api/secrets/create", post(secrets::create))

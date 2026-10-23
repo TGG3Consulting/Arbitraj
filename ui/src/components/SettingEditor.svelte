@@ -3,7 +3,9 @@
   Что делает: значение одной настройки в одной области — показ («не задано», если нет), ввод,
     «Сохранить» и «Очистить» (PUT /api/settings; value:null — очистить). Ошибка бэкенда — как есть.
     Ввод по виду значения: Bool — кнопки «да»/«нет»; TextList — галочки из options или список через запятую;
-    Integer — число (не целое уходит как текст, бэкенд объяснит ошибку); Decimal — строкой (без потери точности);
+    Integer — число (не целое уходит как текст, бэкенд объяснит ошибку), верхняя граница def.max проверяется
+    до отправки; Decimal — строкой (без потери точности); Choice — выбор из def.choices (русские подписи);
+    Address — адрес BSC, формат 0x + 40 шестнадцатеричных знаков проверяется до отправки (окончательно — бэкенд);
     остальное — текст. Значения по умолчанию нет: поле показывает текущее значение или пусто.
   Кто вызывает: components/SettingCard.svelte, pages/Notifications.svelte, pages/Venues.svelte.
   От чего зависит: lib/settings.svelte.js, lib/labels.js, components/ErrorText.svelte.
@@ -11,7 +13,7 @@
 -->
 <script>
   import { store, valueKey, setValue } from '../lib/settings.svelte.js';
-  import { showValue } from '../lib/labels.js';
+  import { showValue, choiceLabel } from '../lib/labels.js';
   import ErrorText from './ErrorText.svelte';
 
   /** def — описание из схемы; scope — {kind, id?}; label — подпись области; options — варианты для TextList. */
@@ -29,6 +31,23 @@
   );
   const chosen = $derived(picked ?? (Array.isArray(current) ? current : []));
 
+  // Формат адреса EVM (20 байт в hex) — задан самим протоколом, не настройка (docs/CODING_STANDARDS.md).
+  const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+
+  /**
+   * Проверка до отправки — только то, что задано схемой (def.max) или форматом протокола (адрес).
+   * Принимает: значение. Возвращает: причину по-русски или ''.
+   */
+  function precheck(value) {
+    if (def.kind === 'Integer' && typeof value === 'number' && def.max != null && value > def.max) {
+      return `Значение ${value} больше допустимого ${def.max}`;
+    }
+    if (def.kind === 'Address' && !ADDRESS.test(value)) {
+      return `«${value}» — не адрес сети BSC (0x и 40 шестнадцатеричных знаков)`;
+    }
+    return '';
+  }
+
   /** Текст поля → значение для бэкенда по виду настройки. */
   function parse(text) {
     const t = text.trim();
@@ -39,8 +58,9 @@
 
   /** Сохраняет значение (null — очистить). Ошибка бэкенда показывается под полем. */
   async function save(value) {
+    error = value === null ? '' : precheck(value);
+    if (error) return;
     busy = true;
-    error = '';
     try {
       await setValue(def.name, scope, value);
       draft = null;
@@ -60,11 +80,18 @@
 <div class="editor">
   {#if label}<span class="scope">{label}</span>{/if}
   <span class={current === undefined ? 'unset' : 'value'}>
-    {current === undefined ? 'не задано' : showValue(current)}
+    {current === undefined ? 'не задано' : def.kind === 'Choice' ? choiceLabel(current) : showValue(current)}
   </span>
+  {#if def.kind === 'Integer' && def.max != null}<span class="muted">не больше {def.max}</span>{/if}
   {#if def.kind === 'Bool'}
     <button disabled={busy || current === true} onclick={() => save(true)}>да</button>
     <button disabled={busy || current === false} onclick={() => save(false)}>нет</button>
+  {:else if def.kind === 'Choice'}
+    <select value={draft ?? current ?? ''} onchange={(e) => (draft = e.currentTarget.value)}>
+      <option value="" disabled>— выбрать —</option>
+      {#each def.choices as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
+    </select>
+    <button disabled={busy || draft === null || draft === current} onclick={() => save(draft)}>Сохранить</button>
   {:else if def.kind === 'TextList' && options}
     {#each options as opt (opt)}
       <label class="inline"><input type="checkbox" checked={chosen.includes(opt)} onchange={() => toggle(opt)} />{opt}</label>
@@ -76,7 +103,8 @@
     <input
       value={draft ?? raw}
       oninput={(e) => (draft = e.currentTarget.value)}
-      placeholder={def.kind === 'TextList' ? 'через запятую' : def.unit}
+      placeholder={def.kind === 'TextList' ? 'через запятую' : def.kind === 'Address' ? '0x…' : def.unit}
+      class:addr={def.kind === 'Address'}
       onkeydown={(e) => e.key === 'Enter' && draft !== null && save(parse(draft))}
     />
     <button disabled={busy || draft === null} onclick={() => save(parse(draft))}>Сохранить</button>

@@ -11,6 +11,9 @@
 import { get } from './api.js';
 import { onLive } from './live.svelte.js';
 
+/** Имя секрета токена Telegram (src/secrets/mod.rs, TELEGRAM_BOT_TOKEN) — экраны «Уведомления» и «Площадки». */
+export const TELEGRAM_TOKEN = 'telegram.bot_token';
+
 /** status: {file_exists, unlocked, names} или null — ещё не загружено; known: [{name, scope, description}]. */
 export const secrets = $state({ status: null, known: [], error: '' });
 

@@ -6,7 +6,8 @@
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet):
 //! - GET /openApi/wallets/v1/capital/config/getall — networkList: network, depositEnable, withdrawEnable,
-//!   withdrawFee, withdrawMin, withdrawMax, minConfirm, contractAddress (поле есть в api-ai-skills от
+//!   withdrawFee, withdrawMin, withdrawMax, minConfirm, depositMin (только в официальном примере ответа,
+//!   в таблице полей его нет), contractAddress (поле есть в api-ai-skills от
 //!   2026-10-22; в примере docs-v3 его нет — проверяется на реальном ответе).
 //! - GET /openApi/wallets/v1/capital/deposit/address — data.data[]: coin, network, address, tag, status.
 
@@ -65,8 +66,10 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
                 withdraw_fee: num::dec_opt(n, "withdrawFee")?,
                 withdraw_min: num::dec_opt(n, "withdrawMin")?,
                 withdraw_max: num::dec_opt(n, "withdrawMax")?,
-                // Поля минимального депозита в официальной документации config/getall нет.
-                deposit_min: None,
+                // depositMin есть в официальном примере ответа config/getall (docs-v3), но его нет
+                // в таблице полей ответа. Нет поля в реальном ответе — None, и ядро по такой
+                // монете сделку не делает (решение 35: минимальный депозит неизвестен).
+                deposit_min: num::dec_opt(n, "depositMin")?,
                 deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
                 updated_at: Utc::now(),
             });

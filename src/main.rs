@@ -2,7 +2,7 @@
 //! Что делает: запуск системы — разбор аргументов, база, настройки, журнал, секреты,
 //! уведомления, шлюз, ядро и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
 //! Кто вызывает: операционная система (запуск программы).
-//! От чего зависит: все модули. Адаптеры площадок регистрируются здесь (пока их нет).
+//! От чего зависит: все модули. Адаптеры площадок (BingX, DEX в сети BSC) регистрируются здесь.
 //! Настройки: свои — нет; аргументы запуска — cli.rs.
 
 use std::process::ExitCode;
@@ -75,11 +75,23 @@ async fn run() -> Result<(), String> {
         vault: vault.clone(),
         http: http.clone(),
         journal: journal.clone(),
-        raw,
+        raw: raw.clone(),
     };
     registry
         .register(std::sync::Arc::new(arb::venues::bingx::Bingx::new(
             bingx_ctx,
+        )))
+        .await;
+    let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw,
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::bsc_dex::BscDex::new(
+            dex_ctx,
         )))
         .await;
 

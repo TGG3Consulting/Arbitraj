@@ -153,7 +153,7 @@ impl Venue for BscDex {
 
     /// Очередь транзакций кошелька (wallet/nonce.rs). Ошибок нет.
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
-        Ok(wallet::deposit::queue(&self.p))
+        Ok(wallet::deposit::queue(&self.p).await)
     }
 
     /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.

@@ -9,6 +9,7 @@ pub mod balances;
 pub mod deposit;
 pub mod inflows;
 pub mod nonce;
+pub mod queue_store;
 pub mod signer;
 pub mod transfer;
 pub mod transfer_status;

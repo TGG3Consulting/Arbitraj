@@ -33,7 +33,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
-use super::signer;
+use super::{queue_store, signer};
 
 /// Очередь кошелька: одна на адаптер. Дешёво клонируется.
 #[derive(Clone)]
@@ -43,6 +43,8 @@ pub struct Nonces {
     next: Arc<StdMutex<Option<u64>>>,
     /// Состояние очереди (свободна / ждёт итога / остановлена до ручной проверки).
     state: Arc<StdMutex<WalletQueueState>>,
+    /// Прочитано ли состояние из SQLite после запуска (wallet/queue_store.rs).
+    restored: Arc<Mutex<bool>>,
 }
 
 impl Default for Nonces {
@@ -51,6 +53,7 @@ impl Default for Nonces {
             lock: Arc::default(),
             next: Arc::default(),
             state: Arc::new(StdMutex::new(WalletQueueState::Free)),
+            restored: Arc::default(),
         }
     }
 }
@@ -78,6 +81,7 @@ impl Nonces {
     /// ключ кошелька (SecretsLocked, NotConfigured).
     pub async fn acquire(&self, ctx: &Ctx) -> GatewayResult<Slot> {
         let guard = self.lock.clone().lock_owned().await;
+        self.restore(ctx).await;
         if let WalletQueueState::Halted { reason, .. } = self.state() {
             return Err(ctx.err(
                 ErrorCode::OutcomeUnknown,
@@ -91,6 +95,27 @@ impl Nonces {
             state: self.state.clone(),
             from,
         })
+    }
+
+    /// Один раз после запуска читает состояние из SQLite (wallet/queue_store.rs); не прочитано — очередь
+    /// остановлена до ручной проверки (лучше стоять, чем отправить второй раз). Ошибок нет.
+    pub async fn restore(&self, ctx: &Ctx) {
+        let mut done = self.restored.lock().await;
+        if *done {
+            return;
+        }
+        *done = true;
+        let st = match queue_store::load(ctx).await {
+            Ok(Some(s)) => s,
+            Ok(None) => return,
+            Err(e) => WalletQueueState::Halted {
+                reason: format!("состояние очереди после запуска не прочитано из SQLite: {e}"),
+                nonce: None,
+                hash: None,
+                since: Utc::now(),
+            },
+        };
+        *self.state.lock().unwrap_or_else(|p| p.into_inner()) = st;
     }
 
     /// Состояние очереди. Ошибок нет.

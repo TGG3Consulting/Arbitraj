@@ -5,5 +5,6 @@
 | `db.rs` | Открывает SQLite (`<data-dir>/arb.sqlite`), создаёт таблицы, выполняет запросы в отдельном потоке |
 | `journal.rs` | Журнал: запись + живой поток в интерфейс |
 | `rules.rs` | Правила шлюза: список, создание, изменение |
+| `wallet_queue.rs` | Состояние очереди кошелька DEX (переживает перезапуск) |
 
-Таблицы: `settings`, `settings_history`, `rules`, `journal`, `core_state` (учёт ядра: сделки, переводы, газ, ручное управление — вид, id, JSON; core/persist.rs). Сырые сообщения — файлы zstd (raw_log.rs).
+Таблицы: `settings`, `settings_history`, `rules`, `journal`, `wallet_queue` (очередь кошелька DEX — площадка, JSON состояния), `core_state` (учёт ядра: сделки, переводы, газ, ручное управление — вид, id, JSON; core/persist.rs). Сырые сообщения — файлы zstd (raw_log.rs).

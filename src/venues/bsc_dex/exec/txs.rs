@@ -123,7 +123,7 @@ pub async fn send(
         nonce,
         hash: signed.hash,
     };
-    settle::busy(&after, &hold);
+    settle::busy(&after, &hold).await;
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let hash = signed.hash;
     let job = tokio::spawn(async move {
@@ -164,8 +164,8 @@ pub async fn send(
     })
 }
 
-/// ChainTx из итога. Не попала и nonce заняла отмена — газ отмены (он потрачен) в gas_used / gas_bnb, блока нет
-/// (хеш отмены — в Done.cancel и в журнале; поля в стыке ChainTx нет — запрос на изменение стыка). Ошибок нет.
+/// ChainTx из итога. Газ — только самой транзакции (её квитанция); отмена, занявшая nonce, — отдельно
+/// (cancel_hash, cancel_gas_bnb). Ошибок нет.
 fn chain_tx(
     hash: B256,
     nonce: u64,
@@ -174,7 +174,6 @@ fn chain_tx(
     t: &Tracked,
     tip_bnb: Option<Decimal>,
 ) -> ChainTx {
-    let r = t.receipt.as_ref().or(t.cancel.as_ref().map(|c| &c.1));
     let own = t.receipt.as_ref();
     ChainTx {
         hash,
@@ -183,12 +182,14 @@ fn chain_tx(
         method,
         outcome: t.outcome,
         block: own.map(|r| r.block_number.to()),
-        gas_used: r.map(|r| r.gas_used.to()),
-        gas_bnb: r.and_then(|r| r.gas_bnb()),
+        gas_used: own.map(|r| r.gas_used.to()),
+        gas_bnb: own.and_then(|r| r.gas_bnb()),
         tip_bnb: if t.outcome == TxOutcome::Included || t.outcome == TxOutcome::Reverted {
             tip_bnb
         } else {
             None
         },
+        cancel_hash: t.cancel.as_ref().map(|c| c.0),
+        cancel_gas_bnb: t.cancel.as_ref().and_then(|c| c.1.gas_bnb()),
     }
 }

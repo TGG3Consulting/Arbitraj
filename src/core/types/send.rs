@@ -121,6 +121,12 @@ pub struct ChainTx {
     pub gas_bnb: Option<Decimal>,
     /// Чаевые билдеру в BNB (если были).
     pub tip_bnb: Option<Decimal>,
+    /// Отмена (0 BNB себе с тем же nonce), занявшая nonce вместо этой транзакции; None — отмены не было.
+    #[serde(default)]
+    pub cancel_hash: Option<B256>,
+    /// Газ отмены в BNB — потрачен; отдельно от газа самой транзакции (gas_bnb). None — отмены не было.
+    #[serde(default)]
+    pub cancel_gas_bnb: Option<Decimal>,
 }
 
 /// Состояние очереди транзакций кошелька DEX (решение 45): одна транзакция за раз, до занятия её nonce в блоке.

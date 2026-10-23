@@ -22,6 +22,7 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::super::wallet::nonce::Hold;
+use super::super::wallet::queue_store;
 use super::stats::Stats;
 use super::track_util::{Quiet, Tracked, next_head};
 use super::tx::SendCfg;
@@ -37,9 +38,9 @@ pub struct After<'a> {
     pub hash: B256,
 }
 
-/// Транзакция ушла: очередь ждёт её итога (событие ядру). Ошибок нет.
-pub fn busy(a: &After<'_>, hold: &Hold) {
-    emit(a, hold.busy(a.nonce, a.hash));
+/// Транзакция ушла: очередь ждёт её итога (SQLite, событие ядру). Ошибок нет.
+pub async fn busy(a: &After<'_>, hold: &Hold) {
+    emit(a, hold.busy(a.nonce, a.hash)).await;
 }
 
 /// Итог есть: очередь свободна (nonce перечитан) или остановлена до ручной проверки. Ошибок нет.
@@ -59,7 +60,7 @@ pub async fn settle(a: &After<'_>, hold: &Hold, t: &Tracked) {
         match rpc::call::<U64>(a.ctx, "eth_getTransactionCount", json!([a.from, "latest"])).await {
             Ok(n) if n.to::<u64>() > a.nonce => {
                 hold.consumed(n.to());
-                emit(a, hold.free());
+                emit(a, hold.free()).await;
                 return;
             }
             Ok(_) => {
@@ -98,11 +99,12 @@ async fn halt(a: &After<'_>, hold: &Hold, why: String) {
             None,
         )
         .await;
-    emit(a, hold.halt(why, a.nonce, a.hash));
+    emit(a, hold.halt(why, a.nonce, a.hash)).await;
 }
 
-/// Событие WalletQueue ядру. Ошибок нет.
-fn emit(a: &After<'_>, state: WalletQueueState) {
+/// Сохраняет состояние в SQLite (переживает перезапуск) и шлёт событие WalletQueue ядру. Ошибок нет.
+async fn emit(a: &After<'_>, state: WalletQueueState) {
+    queue_store::save(a.ctx, &state).await;
     a.stats.emit(MarketEvent::WalletQueue(WalletQueue {
         venue: a.ctx.venue(),
         state,

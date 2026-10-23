@@ -46,8 +46,9 @@ pub async fn abandoned(p: &Parts, asset: &Asset) {
     }
 }
 
-/// Состояние очереди кошелька. Ошибок нет.
-pub fn queue(p: &Parts) -> WalletQueue {
+/// Состояние очереди кошелька (после запуска — из SQLite). Ошибок нет.
+pub async fn queue(p: &Parts) -> WalletQueue {
+    p.nonces.restore(&p.ctx).await;
     WalletQueue {
         venue: p.ctx.venue(),
         state: p.nonces.state(),
@@ -58,12 +59,14 @@ pub fn queue(p: &Parts) -> WalletQueue {
 /// Принимает: кто снимает. Ошибки: NotApplicable — очередь не остановлена.
 pub async fn release(p: &Parts, by: &str) -> GatewayResult<WalletQueue> {
     let ctx = &p.ctx;
+    p.nonces.restore(ctx).await;
     let state = p
         .nonces
         .release()
         .map_err(|why| ctx.err(ErrorCode::NotApplicable, why))?;
     let msg = format!("Очередь кошелька снята вручную после проверки ({by})");
     ctx.log(Level::Warn, "send.queue_released", msg, None).await;
+    super::queue_store::save(ctx, &state).await;
     let q = WalletQueue {
         venue: ctx.venue(),
         state,

@@ -8,6 +8,9 @@
 //! От чего зависит: quote/path.rs, quote/pool_quote.rs (комиссия V4), pools/mids.rs, num.rs, core/types (Cost, RouteStep).
 //! Настройки: dex.v2_fee_pct [вид пула V2].
 //!
+//! Проскальзывания отдельным видом затраты нет (ответ техлида, Issue #7): цена каждого шага уже посчитана по реальной
+//! ликвидности его пула (математика пула — в средней цене котировки), а exec.dex_slippage_pct — защита минимумом выхода
+//! при исполнении, не затрата.
 //! Шаг маршрута и валюты затрат — стык core/types/cost.rs (RouteStep, Cost::with_step) и ответ ядра в PR #25.
 
 use alloy_primitives::{Address, U256};

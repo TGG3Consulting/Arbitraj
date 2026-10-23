@@ -139,6 +139,8 @@
 | dex.swap_mode | `direct` — прямой (лучший пул) / `smart` — умный (Universal Router) | выбор | по площадке DEX |
 | dex.enabled | DEX включена (id — имя DEX: `pancakeswap`, `uniswap`) | да/нет | по DEX |
 | dex.pool_enabled | Вид пула включён (id — вид пула, например `pancakeswap_v3`) | да/нет | по DEX |
+| dex.intermediate_enabled | Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и в торговлю допускаются монеты с пулом только с промежуточной; нет — только пулы с USDT | да/нет | по площадке DEX |
+| dex.intermediate_tokens | Промежуточные монеты — адреса токенов BSC (адрес — главный идентификатор, не тикер). Включено, а список не задан или пуст — «не задано», монета без пула с USDT не допускается | список адресов | по площадке DEX |
 | dex.min_pool_liquidity_usd | Пулы с ликвидностью ниже не слушаются | USDT | по площадке DEX |
 | dex.multicall | Контракт Multicall для пачек eth_call | адрес | по площадке DEX |
 | dex.pools_per_sub | Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics) | штук | по площадке DEX |
@@ -263,7 +265,7 @@
 ## Виды значений
 
 `Decimal`, `Integer` (может иметь верхнюю границу `max`), `Bool`, `Text`, `Url` (только https/wss), `TextList`, `Ip`,
-`Choice` (один из вариантов `choices`), `Address` (адрес BSC: 0x + 40 hex). Описание — `src/settings/schema.rs`.
+`Choice` (один из вариантов `choices`), `Address` (адрес BSC: 0x + 40 hex), `AddressList` (список адресов BSC). Описание — `src/settings/schema.rs`.
 
 Область «площадка» у настроек времени в пути (`profit.transit_*`) означает **площадку, с которой переводим** (решение 51):
 `bingx` — вывод BingX → кошелёк, `bsc_dex` — кошелёк → биржа. В схеме это `venue_role: "TransferSource"`; интерфейс подписывает области направлением.

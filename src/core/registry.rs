@@ -32,6 +32,8 @@ pub enum Exclusion {
     NoUsdtPool,
     /// Пулы есть, но все исключены (крючки, проверки) — причины по пулам.
     PoolsExcluded(Vec<String>),
+    /// Пула с USDT нет, а промежуточные монеты (решение 52) не заданы как надо — причина.
+    IntermediateNotConfigured(String),
 }
 
 /// Монета на одной площадке.
@@ -48,6 +50,8 @@ pub struct Presence {
     pub excluded: Vec<Exclusion>,
     /// Данные биржи о сети BSC (комиссия, минимумы, подтверждения); у DEX — None.
     pub info: Option<CoinNetworkInfo>,
+    /// DEX: монета допущена только через промежуточную монету (адрес) — пула с USDT нет (решение 52).
+    pub via: Option<Address>,
 }
 
 /// Монета справочника.
@@ -116,6 +120,8 @@ pub struct Inputs<'a> {
     pub market: &'a MarketState,
     /// Допуск пула (blacklist::pool_admission с настройками).
     pub pool_ok: &'a dyn Fn(&Pool) -> Result<(), String>,
+    /// Промежуточные монеты по каждой площадке DEX (intermediate.rs, решение 52).
+    pub intermediate: &'a HashMap<VenueId, super::intermediate::Intermediate>,
 }
 
 /// Адрес USDT в BSC: из справочника бирж (котируемая монета в сети BSC).

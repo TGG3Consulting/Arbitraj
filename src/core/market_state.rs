@@ -149,7 +149,8 @@ impl MarketState {
         None
     }
 
-    /// Пулы монеты с USDT на площадке. Принимает: площадку, адрес монеты, адрес USDT.
+    /// Пулы пары токенов на площадке (монета с USDT или с промежуточной монетой, решение 52).
+    /// Принимает: площадку, адрес монеты, адрес второго токена.
     pub fn usdt_pools(&self, venue: &VenueId, token: Address, usdt: Address) -> Vec<&Pool> {
         self.pools
             .iter()

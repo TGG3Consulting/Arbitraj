@@ -77,6 +77,15 @@ impl Store {
             .ok_or_else(|| bad(name))
     }
 
+    /// Список адресов сети BSC с подстановкой областей (монета → площадка → система).
+    /// Ошибки: NotConfigured, Internal.
+    pub fn addresses(&self, name: &str, at: At) -> Result<Vec<Address>, GatewayError> {
+        self.list(name, at)?
+            .iter()
+            .map(|s| s.parse().map_err(|_| bad(name)))
+            .collect()
+    }
+
     /// Адрес сети BSC с подстановкой областей (монета → площадка → система).
     /// Ошибки: NotConfigured, Internal.
     pub fn address(&self, name: &str, at: At) -> Result<Address, GatewayError> {

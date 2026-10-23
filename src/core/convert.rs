@@ -1,10 +1,13 @@
 //! Файл: core/convert.rs
-//! Что делает: перевод затрат в USDT по живым ценам (решение 35): USDT — как есть, монета сделки —
-//! по её цене в этой сделке, BNB (газ, чаевые) — по живому стакану BNB-USDT биржи: котировка шлюза
-//! на нужное количество BNB (адаптер проверяет свежесть, устарело — ошибка, сделки нет).
-//! Кто вызывает: core/costs.rs, позже ledger.rs (факт сделки).
-//! От чего зависит: core/types, deps.rs (шлюз), settings.
-//! Настройки: venue.quote_asset (котируемая монета площадки).
+//! Что делает: перевод затрат в USDT по живым ценам (решения 35, 52): котируемая монета — как есть,
+//! монета сделки — по её цене в этой сделке, любая другая валюта (BNB — газ и чаевые; промежуточная
+//! монета маршрута, например на шаге «USDT → BNB») — котировкой шлюза по живому стакану биржи на нужное
+//! количество (для BNB — стакан BNB-USDT BingX). Живой цены нет — затрату не перевести, сделки нет.
+//! Кто вызывает: core/costs.rs, trade_ops.rs, fills.rs, relay.rs, gas_stats.rs.
+//! От чего зависит: core/types, deps.rs (шлюз).
+//! Настройки: нет своих (котируемая монета — venue.quote_asset читают вызывающие).
+
+use std::collections::HashMap;
 
 use rust_decimal::Decimal;
 
@@ -31,24 +34,21 @@ pub struct Rates {
     /// Тикер монеты сделки и её цена в USDT.
     pub coin: String,
     pub coin_price: Decimal,
-    /// Цена BNB в USDT; None — газа в сделке нет, цена не нужна.
-    pub bnb: Option<Decimal>,
+    /// Живые цены остальных валют затрат (BNB, промежуточные монеты), USDT за единицу.
+    pub prices: HashMap<String, Decimal>,
 }
 
-/// Затрата в USDT. Принимает: затрату, курсы. Ошибки: затрата в BNB, а цены BNB нет;
-/// затрата в неизвестной валюте (такую сделку не считаем — «не торгуем вслепую»).
+/// Затрата в USDT. Принимает: затрату, курсы. Ошибки: нет курса валюты затраты («не торгуем вслепую»).
 pub fn to_usdt(c: &Cost, r: &Rates) -> Result<Decimal, String> {
     if r.quote.iter().any(|q| q == &c.asset) {
         Ok(c.amount)
     } else if c.asset == r.coin {
         Ok(c.amount * r.coin_price)
-    } else if c.asset == GAS_TICKER {
-        r.bnb
-            .map(|p| c.amount * p)
-            .ok_or_else(|| "нет цены BNB для пересчёта газа".to_string())
+    } else if let Some(p) = r.prices.get(&c.asset) {
+        Ok(c.amount * p)
     } else {
         Err(format!(
-            "затрата {:?} в {} — нет курса для пересчёта в USDT",
+            "затрата {:?} в {} — нет живой цены для пересчёта в USDT",
             c.kind, c.asset
         ))
     }
@@ -63,21 +63,67 @@ pub fn bnb_total(costs: &[Cost]) -> Decimal {
         .sum()
 }
 
-/// Цена BNB в USDT по живому стакану биржи: средняя цена покупки нужного количества BNB.
-/// Принимает: зависимости, биржи (по порядку — первая ответившая), количество BNB.
-/// Возвращает: цену. Ошибки: ни одна биржа не дала свежую котировку BNB (причины перечислены).
-pub async fn bnb_price(deps: &Deps, cex: &[VenueId], qty: Decimal) -> Result<Decimal, String> {
+/// Цена валюты в USDT по живому стакану биржи: средняя цена покупки нужного количества.
+/// Принимает: зависимости, биржи (по порядку — первая ответившая), тикер, количество.
+/// Возвращает: цену. Ошибки: ни одна биржа не дала свежую котировку (причины перечислены).
+pub async fn price_of(
+    deps: &Deps,
+    cex: &[VenueId],
+    ticker: &str,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    let asset = Asset {
+        ticker: ticker.to_string(),
+        bsc_contract: None,
+    };
     let mut why = vec![];
     for v in cex {
         let q = match deps.gw.get(v).await {
-            Ok(a) => a.quote(&gas_asset(), Side::Buy, qty).await,
+            Ok(a) => a.quote(&asset, Side::Buy, qty).await,
             Err(e) => Err(e),
         };
         match q {
             Ok(q) if q.fillable_qty >= qty && !q.avg_price.is_zero() => return Ok(q.avg_price),
-            Ok(q) => why.push(format!("{}: глубины BNB {} < {qty}", v.0, q.fillable_qty)),
+            Ok(q) => why.push(format!(
+                "{}: глубины {ticker} {} < {qty}",
+                v.0, q.fillable_qty
+            )),
             Err(e) => why.push(format!("{}: {}", v.0, e.message)),
         }
     }
-    Err(format!("нет живой цены BNB: {}", why.join("; ")))
+    Err(format!("нет живой цены {ticker}: {}", why.join("; ")))
+}
+
+/// Цена BNB в USDT по живому стакану биржи (газ). Ошибки: как у price_of.
+pub async fn bnb_price(deps: &Deps, cex: &[VenueId], qty: Decimal) -> Result<Decimal, String> {
+    price_of(deps, cex, GAS_TICKER, qty).await
+}
+
+/// Собирает курсы для набора затрат: живая цена каждой валюты, кроме котируемых и монеты сделки,
+/// на всё её количество в этих затратах. Ошибки: нет живой цены хотя бы одной валюты.
+pub async fn rates(
+    deps: &Deps,
+    cex: &[VenueId],
+    quote: Vec<String>,
+    coin: &str,
+    coin_price: Decimal,
+    costs: &[Cost],
+) -> Result<Rates, String> {
+    let mut need: HashMap<String, Decimal> = HashMap::new();
+    for c in costs
+        .iter()
+        .filter(|c| !quote.contains(&c.asset) && c.asset != coin)
+    {
+        *need.entry(c.asset.clone()).or_default() += c.amount;
+    }
+    let mut prices = HashMap::new();
+    for (ticker, qty) in need.into_iter().filter(|(_, q)| !q.is_zero()) {
+        prices.insert(ticker.clone(), price_of(deps, cex, &ticker, qty).await?);
+    }
+    Ok(Rates {
+        quote,
+        coin: coin.to_string(),
+        coin_price,
+        prices,
+    })
 }

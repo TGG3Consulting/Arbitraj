@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+alloy = { version = "2.5.0", default-features = false, features = ["std", "sol-types", "consensus", "eips", "network", "signer-local", "rpc-types", "serde", "json-rpc", "k256"] }
 alloy-primitives = { version = "1.7.3", features = ["serde"] }
 argon2 = "0.6.0"
 async-trait = "0.1.92"

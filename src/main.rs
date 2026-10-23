@@ -1,0 +1,96 @@
+//! Файл: main.rs
+//! Что делает: запуск системы — разбор аргументов, база, настройки, журнал, секреты,
+//! уведомления, шлюз и веб-сервер интерфейса.
+//! Кто вызывает: операционная система (запуск программы).
+//! От чего зависит: все модули. Адаптеры площадок регистрируются здесь (пока их нет).
+//! Настройки: свои — нет; аргументы запуска — cli.rs.
+
+use std::process::ExitCode;
+
+use tokio::sync::broadcast;
+
+use arb::api::state::AppState;
+use arb::gateway::registry::Registry;
+use arb::notify::dispatch::Notifier;
+use arb::secrets::Vault;
+use arb::settings::live::Watch;
+use arb::settings::store::Store;
+use arb::storage::db::Db;
+use arb::storage::journal::{Journal, Level};
+
+/// Ёмкость внутренних потоков событий для интерфейса: если интерфейс отстаёт больше,
+/// он получает «lagged» и перечитывает данные по REST. Это не порог торговли, а размер буфера в памяти.
+const LIVE_BUFFER: usize = 1024;
+
+/// Имя файла базы в папке данных.
+const DB_FILE: &str = "arb.sqlite";
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    tracing_subscriber::fmt::init();
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            tracing::error!("{e}");
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Собирает и запускает все компоненты.
+/// Ошибки: неверные аргументы, нет доступа к папке данных, база, занят адрес.
+async fn run() -> Result<(), String> {
+    let args = arb::cli::parse(std::env::args().skip(1))?;
+    std::fs::create_dir_all(&args.data_dir)
+        .map_err(|e| format!("Папка данных {:?}: {e}", args.data_dir))?;
+    let db = Db::open(&args.data_dir.join(DB_FILE)).map_err(|e| e.to_string())?;
+
+    let (changes, _) = broadcast::channel(LIVE_BUFFER);
+    let (journal_live, _) = broadcast::channel(LIVE_BUFFER);
+    let settings = Store::load(db.clone(), changes.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    let journal = Journal::new(db.clone(), journal_live.clone());
+    let vault = Vault::locked();
+    let http = reqwest::Client::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let notifier = Notifier {
+        http: http.clone(),
+        settings: settings.clone(),
+        vault: vault.clone(),
+        journal: journal.clone(),
+    };
+
+    // Изменения настроек — в журнал и в Telegram (если событие включено).
+    tokio::spawn(arb::notify::settings_watch::run(
+        Watch::new(changes.subscribe(), vec![]),
+        notifier.clone(),
+    ));
+
+    let state = AppState {
+        db,
+        settings,
+        journal: journal.clone(),
+        registry: Registry::new(),
+        vault,
+        http,
+        changes,
+        journal_live,
+    };
+    let listener = tokio::net::TcpListener::bind(args.listen)
+        .await
+        .map_err(|e| format!("Не удалось занять адрес {}: {e}", args.listen))?;
+
+    let started = format!("Система запущена, интерфейс: http://{}", args.listen);
+    tracing::info!("{started}");
+    let _ = journal
+        .write(Level::Info, "system.started", None, started.clone(), None)
+        .await;
+    notifier.send("system.started", None, &started).await;
+
+    arb::api::server::serve(listener, state)
+        .await
+        .map_err(|e| format!("Веб-сервер остановился: {e}"))
+}

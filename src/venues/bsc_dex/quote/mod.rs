@@ -9,6 +9,7 @@
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
 //! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
 
+pub mod approve_gas;
 pub mod costs;
 pub mod direct;
 pub mod direct_route;
@@ -25,12 +26,13 @@ pub mod smart;
 pub mod smart_quote;
 pub mod steps;
 pub mod via;
+pub mod via_pools;
 
 use rust_decimal::Decimal;
 
 use alloy_primitives::U256;
 
-use crate::core::types::{Asset, Cost, CostKind, Quote, RouteMode, Side};
+use crate::core::types::{Asset, Cost, CostKind, Quote, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::check::state::Checks;
@@ -41,7 +43,6 @@ use super::pools::mids::Mids;
 use super::pools::registry::Registry;
 use super::tokens::Tokens;
 use super::wallet::balances::BNB;
-use super::wallet::{approve, signer};
 use gas::GasPrice;
 use steps::Names;
 use via::Via;
@@ -127,7 +128,7 @@ impl Quoting {
             Some(s) => c.with_step(s.clone()),
             None => c,
         };
-        if let Some(units) = approve_gas(self, &q, coin_dec, usdt_dec).await? {
+        if let Some(units) = approve_gas::units(self, &q, coin_dec, usdt_dec).await? {
             let wei = gas.saturating_mul(U256::from(units));
             let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
                 ctx.err(
@@ -146,75 +147,4 @@ impl Quoting {
         }
         Ok(q)
     }
-}
-
-/// Газ разрешений, если их у кошелька ещё нет (решение 35: «газ approve, первый раз на монету»): текущие разрешения
-/// ERC-20 → Permit2 и Permit2 → Universal Router маршрута против суммы сделки; газ — измеренный пробным обменом
-/// в первом пуле маршрута (разрешения одни на токен, от пула не зависят).
-/// Возвращает: единицы газа или None — разрешения уже есть. Ошибки: ключ кошелька, адреса, узел, газ не измерен.
-async fn approve_gas(
-    q: &Quoting,
-    quote: &Quote,
-    coin_dec: u8,
-    usdt_dec: u8,
-) -> GatewayResult<Option<u64>> {
-    let ctx = &q.ctx;
-    let bad = || {
-        ctx.err(
-            ErrorCode::BadResponse,
-            "сумма не переводится в единицы токена",
-        )
-    };
-    let route = quote
-        .route
-        .as_ref()
-        .ok_or_else(|| ctx.err(ErrorCode::Internal, "у котировки нет маршрута"))?;
-    let hop = route
-        .legs
-        .first()
-        .and_then(|l| l.hops.first())
-        .ok_or_else(|| ctx.err(ErrorCode::Internal, "в маршруте нет пула"))?;
-    let e = q
-        .reg
-        .get(&hop.pool)
-        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "пул маршрута больше не в реестре"))?;
-    let (token, amount) = match quote.side {
-        Side::Buy => (
-            e.usdt,
-            num::to_units(quote.avg_price * quote.fillable_qty, usdt_dec),
-        ),
-        Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
-    };
-    let amount = amount.ok_or_else(bad)?;
-    let (ur, permit2) = if route.mode == RouteMode::Smart {
-        (
-            ctx.addr("smart.universal_router")?,
-            ctx.addr("smart.permit2")?,
-        )
-    } else {
-        (
-            ctx.dex_addr("dex.universal_router", e.family.id)?,
-            ctx.dex_addr("dex.permit2", e.family.id)?,
-        )
-    };
-    let wallet = signer::address(ctx)?;
-    let now = q.heads.fresh(ctx)?.timestamp;
-    if approve::missing(ctx, token, wallet, permit2, ur, amount, now)
-        .await?
-        .is_empty()
-    {
-        return Ok(None);
-    }
-    let f = q.checks.pool(&e.pool.reference);
-    let g = if quote.side == Side::Buy {
-        f.gas_approve_buy
-    } else {
-        f.gas_approve_sell
-    };
-    g.map(Some).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::CoinNotChecked,
-            "газ разрешений не измерен пробным обменом",
-        )
-    })
 }

@@ -89,11 +89,10 @@ async fn run() -> Result<(), String> {
         journal: journal.clone(),
         raw,
     };
-    registry
-        .register(std::sync::Arc::new(arb::venues::bsc_dex::BscDex::new(
-            dex_ctx,
-        )))
-        .await;
+    let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
+    // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
+    dex.watch_settings(changes.subscribe());
+    registry.register(std::sync::Arc::new(dex)).await;
 
     // Ядро: работает с площадками только через шлюз; интерфейс читает его состояние через AppState.core.
     let core = arb::core::Core::start(arb::core::deps::Deps {

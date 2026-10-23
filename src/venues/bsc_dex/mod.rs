@@ -22,6 +22,7 @@ pub mod num;
 pub mod parts;
 pub mod pools;
 pub mod quote;
+pub mod resubscribe;
 pub mod send;
 pub mod tokens;
 pub mod wallet;
@@ -43,8 +44,8 @@ use parts::Parts;
 /// Адаптер DEX.
 pub struct BscDex {
     p: Parts,
-    /// Задачи текущей подписки: при новой подписке старые останавливаются (без дублей соединений).
-    tasks: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    /// Подписка на рынок: задачи, последний список, пересборка при изменении настроек промежуточных монет.
+    subs: resubscribe::Subs,
 }
 
 impl BscDex {
@@ -52,8 +53,17 @@ impl BscDex {
     pub fn new(ctx: ctx::Ctx) -> Self {
         Self {
             p: Parts::new(ctx),
-            tasks: std::sync::Mutex::new(Vec::new()),
+            subs: resubscribe::Subs::default(),
         }
+    }
+
+    /// Пересобирать подписку при изменении dex.intermediate_* (решение 52) — resubscribe.rs. Принимает: приёмник
+    /// изменений настроек. Возвращает: задачу наблюдателя. Ошибок нет.
+    pub fn watch_settings(
+        &self,
+        rx: tokio::sync::broadcast::Receiver<crate::settings::live::Change>,
+    ) -> tokio::task::JoinHandle<()> {
+        self.subs.watch(self.p.clone(), rx)
     }
 
     /// Общее состояние (для проверок и тестов). Ошибок нет.
@@ -93,14 +103,7 @@ impl Venue for BscDex {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        let pools = self.p.pools(out);
-        let new = pools::market::subscribe(&pools, &self.p.scanned, &self.p.wake, assets).await?;
-        let mut tasks = self.tasks.lock().unwrap_or_else(|p| p.into_inner());
-        for old in tasks.drain(..) {
-            old.abort();
-        }
-        *tasks = new;
-        Ok(())
+        self.subs.subscribe(&self.p, assets, out).await
     }
 
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).

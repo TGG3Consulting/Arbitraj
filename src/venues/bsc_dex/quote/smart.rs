@@ -87,7 +87,7 @@ fn pairs(v: &Via<'_>, mids: &[(Mid, u8)], qty: Decimal, why: &mut Vec<String>) -
                 if let Ok(p) = v.calc(m, *dec, a, b, qty)
                     && best
                         .as_ref()
-                        .is_none_or(|x| super::via::better(&p, &x.0, v.side))
+                        .is_none_or(|x| super::via_pools::better(&p, &x.0, v.side))
                 {
                     best = Some((p, a.clone(), b.clone()));
                 }

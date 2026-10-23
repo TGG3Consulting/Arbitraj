@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use alloy_primitives::Address;
+use rust_decimal::Decimal;
 use tokio::sync::{Notify, mpsc};
 
 use crate::core::types::{Asset, CoinNetworkInfo, Direction, VenueId};
@@ -19,10 +20,15 @@ use crate::gateway::events::MarketEvent;
 
 use super::blacklist::Blacklist;
 use super::deps::Deps;
+use super::limits::Exposure;
 use super::market_state::MarketState;
 use super::registry::CoinEntry;
 use super::signal::{Signals, SpreadView};
 use super::view::{CoreEvent, Live};
+use super::vol::{BlockClock, Volatility};
+
+/// Ключ истории времени в пути: монета, A, B.
+pub type TransitKey = (Asset, VenueId, VenueId);
 
 /// Общее состояние ядра.
 pub struct Inner {
@@ -43,11 +49,24 @@ pub struct Inner {
     /// Сколько монет ждали проверки налогов при прошлой пересборке (для coin.check_done).
     pub not_checked: Mutex<usize>,
     pub signals: Mutex<Signals>,
+    /// Волатильность цен по замерам сигнала (vol.rs).
+    pub vol: Mutex<Volatility>,
+    /// Среднее время блока BSC по событиям пулов (vol.rs).
+    pub clock: Mutex<BlockClock>,
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// На какие монеты подписана каждая площадка.
     pub subs: tokio::sync::Mutex<HashMap<VenueId, Vec<Asset>>>,
     /// Монеты, по которым идёт пересчёт тика: значение true — пришёл ещё тик, пересчитать снова.
     pub ticking: Mutex<HashMap<Asset, bool>>,
+    /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
+    pub cand_tx: mpsc::Sender<Direction>,
+    pub queued: Mutex<HashSet<Direction>>,
+    /// Последняя причина отказа по направлению (чтобы не повторять её в журнале).
+    pub last_reject: Mutex<HashMap<Direction, String>>,
+    /// История времени в пути: (монета, A, B) → (сумма секунд, число переводов). Ведёт transfers.rs.
+    pub transits: Mutex<HashMap<TransitKey, (Decimal, u64)>>,
+    /// Деньги в открытых сделках (limits.rs). Ведёт executor.rs.
+    pub exposure: Mutex<Exposure>,
     /// Канал событий адаптеров (передаётся в subscribe_market).
     pub market_tx: mpsc::Sender<MarketEvent>,
     /// «Толчок» обновления сетей бирж (аномальный спред — перечитать статусы ввода и вывода).
@@ -82,6 +101,7 @@ impl Core {
     /// Принимает: зависимости. Возвращает: ядро. Ошибок нет — всё, что не так, пишется в журнал.
     pub async fn start(deps: Deps) -> Core {
         let (market_tx, market_rx) = mpsc::channel(deps.buffer);
+        let (cand_tx, cand_rx) = mpsc::channel(deps.buffer);
         let mut kinds = vec![];
         for id in deps.gw.ids().await {
             if let Ok(v) = deps.gw.get(&id).await {
@@ -102,9 +122,16 @@ impl Core {
                 excluded_pools: Mutex::default(),
                 not_checked: Mutex::default(),
                 signals: Mutex::default(),
+                vol: Mutex::default(),
+                clock: Mutex::default(),
                 spreads: RwLock::default(),
                 subs: tokio::sync::Mutex::default(),
                 ticking: Mutex::default(),
+                cand_tx,
+                queued: Mutex::default(),
+                last_reject: Mutex::default(),
+                transits: Mutex::default(),
+                exposure: Mutex::default(),
                 market_tx,
                 kick_networks: Notify::new(),
                 kick_rebuild: Notify::new(),
@@ -112,6 +139,7 @@ impl Core {
         };
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
+        tokio::spawn(super::candidates::run(core.clone(), cand_rx));
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
         for (id, kind) in kinds {
             if kind == VenueKind::Cex {

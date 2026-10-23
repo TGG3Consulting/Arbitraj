@@ -1,7 +1,8 @@
 //! Файл: notify/telegram.rs
 //! Что делает: обращения к Telegram Bot API — проверка бота (getMe), проверка чата (getChat),
 //! отправка сообщения (sendMessage). Ответ Telegram разбирается по официальной документации.
-//! Кто вызывает: notify/dispatch.rs (отправка), notify/check.rs (проверка подключения).
+//! Кто вызывает: notify/dispatch.rs (отправка), notify/check.rs (проверка подключения),
+//! notify/tg_buttons.rs (кнопки: те же вызовы через call_with).
 //! От чего зависит: reqwest.
 //! Настройки: адрес API и таймаут передаёт вызывающий (notify.telegram_api_url, http.timeout_ms).
 //!
@@ -21,9 +22,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use zeroize::Zeroizing;
 
-/// Предел длины текста sendMessage — константа протокола:
-/// «text … 1-4096 characters after entities parsing», https://core.telegram.org/bots/api#sendmessage
-const MAX_TEXT_CHARS: usize = 4096;
+use super::tg_text::fit_text;
 
 /// Ответ Bot API (раздел «Making requests»).
 #[derive(Debug, Deserialize)]
@@ -52,6 +51,8 @@ pub enum TgError {
     Api {
         description: String,
         details: String,
+        /// parameters.retry_after — через сколько секунд можно повторить (если Telegram прислал).
+        retry_after: Option<i64>,
     },
     /// Нет ответа за отведённое время.
     #[error("Telegram не ответил за отведённое время")]
@@ -89,9 +90,25 @@ impl Telegram {
         }
     }
 
-    /// Вызывает метод Bot API.
+    /// Вызывает метод Bot API с таймаутом из настроек (http.timeout_ms).
     /// Принимает: имя метода и параметры JSON. Возвращает: поле result. Ошибки: TgError.
     async fn call(&self, method: &str, params: Value) -> Result<Value, TgError> {
+        self.call_with(method, params, self.timeout).await
+    }
+
+    /// Таймаут HTTP из настроек (http.timeout_ms) — для расчёта таймаута длинного опроса.
+    pub(super) fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    /// Вызывает метод Bot API со своим таймаутом (нужно длинному опросу getUpdates).
+    /// Принимает: имя метода, параметры JSON, таймаут. Возвращает: поле result. Ошибки: TgError.
+    pub(super) async fn call_with(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, TgError> {
         let url = Zeroizing::new(format!(
             "{}/bot{}/{}",
             self.base_url,
@@ -101,7 +118,7 @@ impl Telegram {
         let resp = self
             .http
             .post(url.as_str())
-            .timeout(self.timeout)
+            .timeout(timeout)
             .json(&params)
             .send()
             .await
@@ -118,6 +135,7 @@ impl Telegram {
             Err(TgError::Api {
                 description: body.description.unwrap_or_else(|| "без описания".into()),
                 details: details(body.error_code, body.parameters.as_ref()),
+                retry_after: body.parameters.as_ref().and_then(|p| p.retry_after),
             })
         }
     }
@@ -141,26 +159,9 @@ impl Telegram {
         Ok(name.to_string())
     }
 
-    /// sendMessage — отправка текста. Текст длиннее предела протокола обрезается с пометкой «…».
-    /// Ошибки: TgError.
+    /// sendMessage — отправка текста (длинный обрезается, см. fit_text). Ошибки: TgError.
     pub async fn send(&self, chat_id: &str, text: &str) -> Result<(), TgError> {
-        // Считаем строже — в единицах UTF-16 (эмодзи = 2): так предел не будет превышен
-        // при любом способе подсчёта на стороне Telegram.
-        let text = if text.encode_utf16().count() > MAX_TEXT_CHARS {
-            let mut t = String::new();
-            let mut units = 0;
-            for ch in text.chars() {
-                units += ch.len_utf16();
-                if units > MAX_TEXT_CHARS - 1 {
-                    break;
-                }
-                t.push(ch);
-            }
-            t.push('…');
-            t
-        } else {
-            text.to_string()
-        };
+        let text = fit_text(text);
         self.call("sendMessage", json!({ "chat_id": chat_id, "text": text }))
             .await
             .map(|_| ())

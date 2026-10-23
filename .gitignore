@@ -1,0 +1,25 @@
+# Сборка Rust
+/target/
+
+# Секреты — никогда в репозиторий (docs/SECURITY.md)
+secrets.enc
+*.key
+.env
+.env.*
+
+# Данные и логи
+/data/
+/logs/
+*.sqlite
+*.sqlite-journal
+*.db
+*.zst
+
+# Интерфейс
+/ui/node_modules/
+/ui/dist/
+/ui/.svelte-kit/
+
+# Системное
+.DS_Store
+Thumbs.db

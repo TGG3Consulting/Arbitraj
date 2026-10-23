@@ -49,7 +49,7 @@ pub fn best(
     let mut best: Option<Candidate> = None;
     let mut reasons = Vec::new();
     for e in entries {
-        let r = select::usable(ctx, &q.checks, &e, side, usdt_dec).and_then(|u| {
+        let r = select::usable(q, &e, side, usdt_dec).and_then(|u| {
             calc(ctx, &e, &u, side, qty, &taxes, (coin_dec, usdt_dec))
                 .map(|(swapped, coins, usdt)| Candidate {
                     entry: e.clone(),
@@ -158,7 +158,7 @@ fn better(a: &Candidate, b: &Candidate, side: Side) -> bool {
 }
 
 /// Decimal → минимальные единицы с округлением вверх. None — не помещается.
-fn ceil_units(v: Decimal, decimals: u8) -> Option<U256> {
+pub fn ceil_units(v: Decimal, decimals: u8) -> Option<U256> {
     let u = num::to_units(v, decimals)?;
     if num::to_decimal(u, decimals)? < v {
         Some(u + U256::from(1u8))

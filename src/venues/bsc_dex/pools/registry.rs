@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/registry.rs
 //! Что делает: реестр пулов адаптера в памяти — пул в формате ядра плюс то, что нужно только адаптеру:
-//! монета пула, ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
+//! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
 //! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs.
 //! Настройки: нет.
@@ -23,11 +23,12 @@ pub struct Entry {
     pub family: &'static Family,
     /// Пул в формате ядра (состояние, блок, крючок).
     pub pool: Pool,
-    /// Тикер монеты пула (вторая валюта — USDT).
+    /// Тикер монеты пула.
     pub ticker: String,
     /// Адрес монеты пула.
     pub coin: Address,
-    /// Адрес USDT.
+    /// Встречный токен пула: USDT или промежуточная монета (решение 52) — пулы «монета — промежуточная»
+    /// и «промежуточная — USDT» (у второй монета — промежуточная, встречный — USDT).
     pub usdt: Address,
     /// Ключ V4 (CL, Bin); у V2/V3 — None.
     pub key: Option<PoolKey>,
@@ -80,6 +81,15 @@ impl Registry {
     pub fn update<T>(&self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         m.get_mut(r).map(f)
+    }
+
+    /// Пулы пары «монета — встречный токен» (копии). Ошибок нет.
+    pub fn by_pair(&self, coin: Address, quote: Address) -> Vec<Entry> {
+        let m = self.inner.read().unwrap_or_else(|p| p.into_inner());
+        m.values()
+            .filter(|e| e.coin == coin && e.usdt == quote)
+            .cloned()
+            .collect()
     }
 
     /// Все пулы монеты (копии). Ошибок нет.

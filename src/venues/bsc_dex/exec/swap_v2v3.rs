@@ -1,8 +1,10 @@
 //! Файл: venues/bsc_dex/exec/swap_v2v3.rs
 //! Что делает: входы команд Universal Router V2_SWAP_EXACT_IN и V3_SWAP_EXACT_IN для обмена в одном пуле:
 //! abi.encode(recipient, amountIn, amountOutMin, path, payerIsUser[, minHopPriceX36]). Путь V2 — address[];
-//! путь V3 — упакованные байты tokenIn(20) | fee(3) | tokenOut(20). Платит пользователь (payerIsUser = true, Permit2).
-//! Кто вызывает: exec/build.rs.
+//! путь V3 — упакованные байты tokenIn(20) | fee(3) | tokenOut(20). Платит пользователь (payerIsUser = true, Permit2)
+//! или роутер — второй шаг пути через промежуточную монету (payerIsUser = false, amountIn = CONTRACT_BALANCE:
+//! весь баланс роутера, research/flow/bsc_smart_router.md, разделы 2.5 и 3.1).
+//! Кто вызывает: exec/plan.rs, exec/universal.rs.
 //! От чего зависит: exec/ur.rs (Format), pools/registry.rs.
 //! Настройки: нет.
 //!
@@ -23,7 +25,8 @@ use super::super::pools::registry::Entry;
 use super::plan::Order;
 use super::ur::{Format, V2_SWAP_EXACT_IN, V3_SWAP_EXACT_IN};
 
-/// Команда и её вход. Принимает: пул (V2/V3), формат, обмен (токены, вход, минимум выхода), получателя.
+/// Команда и её вход. Принимает: пул (V2/V3), формат, обмен (токены, вход, минимум выхода), получателя (кошелёк или
+/// ADDRESS_THIS — роутер), платит ли кошелёк (false — роутер из своего баланса).
 /// Ошибки: Internal — пул не V2/V3 или у V3 нет fee.
 pub fn command(
     ctx: &Ctx,
@@ -31,6 +34,7 @@ pub fn command(
     f: Format,
     o: &Order,
     to: Address,
+    payer_user: bool,
 ) -> GatewayResult<(u8, Bytes)> {
     let (tin, tout, amount_in, min_out) = (o.token_in, o.token_out, o.amount_in, o.min_out);
     let min_hop = f == Format::Uniswap211;
@@ -39,9 +43,9 @@ pub fn command(
         PoolKind::V2 => {
             let path = vec![tin, tout];
             let input = if min_hop {
-                (to, amount_in, min_out, path, true, empty).abi_encode_params()
+                (to, amount_in, min_out, path, payer_user, empty).abi_encode_params()
             } else {
-                (to, amount_in, min_out, path, true).abi_encode_params()
+                (to, amount_in, min_out, path, payer_user).abi_encode_params()
             };
             Ok((V2_SWAP_EXACT_IN, Bytes::from(input)))
         }
@@ -56,9 +60,9 @@ pub fn command(
             path.extend_from_slice(tout.as_slice());
             let path = Bytes::from(path);
             let input = if min_hop {
-                (to, amount_in, min_out, path, true, empty).abi_encode_params()
+                (to, amount_in, min_out, path, payer_user, empty).abi_encode_params()
             } else {
-                (to, amount_in, min_out, path, true).abi_encode_params()
+                (to, amount_in, min_out, path, payer_user).abi_encode_params()
             };
             Ok((V3_SWAP_EXACT_IN, Bytes::from(input)))
         }

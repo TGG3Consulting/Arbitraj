@@ -33,7 +33,7 @@ pub async fn hook_again(q: &Quoting, e: &Entry) -> GatewayResult<()> {
     {
         return Ok(());
     }
-    let Some(pc) = hooks_probe::check_pool(&q.ctx, &q.tokens, e).await else {
+    let Some(pc) = hooks_probe::check_pool(&q.ctx, &q.tokens, &q.reg, e).await else {
         return Ok(());
     };
     let failed = match &pc.impact {

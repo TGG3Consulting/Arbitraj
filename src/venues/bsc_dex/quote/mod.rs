@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/mod.rs
-//! Что делает: котировка на объём для контракта quote — режим dex.swap_mode: «direct» (лучший одиночный пул,
-//! решение 29) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
+//! Что делает: котировка на объём для контракта quote — режим dex.swap_mode: «direct» (лучший одиночный пул или пара
+//! пулов через промежуточную монету, решения 29, 52 — quote/direct_route.rs) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
 //! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
 //! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
 //! Кто вызывает: mod.rs (контракт quote).
@@ -11,14 +11,20 @@
 
 pub mod costs;
 pub mod direct;
+pub mod direct_route;
 pub mod gas;
 pub mod mixed_quoter;
+pub mod path;
+pub mod pick;
 pub mod pool_quote;
 pub mod quoter;
 pub mod quoter_calls;
+pub mod rate;
 pub mod select;
 pub mod smart;
 pub mod smart_quote;
+pub mod steps;
+pub mod via;
 
 use rust_decimal::Decimal;
 
@@ -31,11 +37,14 @@ use super::check::state::Checks;
 use super::ctx::Ctx;
 use super::node::heads::Heads;
 use super::num;
+use super::pools::mids::Mids;
 use super::pools::registry::Registry;
 use super::tokens::Tokens;
 use super::wallet::balances::BNB;
 use super::wallet::{approve, signer};
 use gas::GasPrice;
+use steps::Names;
+use via::Via;
 
 /// Всё, что нужно котировке. Дешёво клонируется.
 #[derive(Clone)]
@@ -46,6 +55,8 @@ pub struct Quoting {
     pub tokens: Tokens,
     pub heads: Heads,
     pub gas: GasPrice,
+    /// Промежуточные монеты (решение 52).
+    pub mids: Mids,
 }
 
 impl Quoting {
@@ -62,29 +73,59 @@ impl Quoting {
             ));
         }
         self.heads.fresh(ctx)?;
-        let entries = self.reg.by_ticker(&asset.ticker);
-        let first = entries.first().ok_or_else(|| {
+        let usdt = self.tokens.usdt(ctx)?;
+        let coin = asset.bsc_contract.ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,
-                format!("{}: пулов с USDT нет", asset.ticker),
+                format!("{}: нет адреса контракта в BSC", asset.ticker),
             )
         })?;
-        let coin_dec = self.tokens.decimals(ctx, first.coin).await?;
-        let usdt_dec = self.tokens.decimals(ctx, first.usdt).await?;
+        // Пулы монеты с USDT; пулы с промежуточными монетами считает quote/via.rs (решение 52).
+        let entries: Vec<_> = self
+            .reg
+            .by_pair(coin, usdt)
+            .into_iter()
+            .filter(|e| e.ticker == asset.ticker)
+            .collect();
+        let coin_dec = self.tokens.decimals(ctx, coin).await?;
+        let usdt_dec = self.tokens.decimals(ctx, usdt).await?;
+        let mut mids = Vec::new();
+        for m in self.mids.active(ctx) {
+            let d = self.tokens.decimals(ctx, m.address).await?;
+            mids.push((m, d));
+        }
         // Цена газа — как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов (exec/txs.rs).
         let gas = self
             .gas
             .wei(ctx, &self.heads)
             .await?
             .max(super::send::planned_floor(ctx)?);
-        let usdt = ctx.text("venue.quote_asset")?;
+        let usdt_ticker = ctx.text("venue.quote_asset")?;
         let taxes = direct::taxes(self, asset)?;
+        let v = Via {
+            q: self,
+            coin,
+            usdt,
+            side,
+            taxes: &taxes,
+            coin_dec,
+            usdt_dec,
+        };
+        let names = Names {
+            usdt: (usdt, &usdt_ticker),
+            coin: (coin, &asset.ticker),
+            mids: &self.mids,
+        };
         let mut q = if mode == "smart" {
-            let decs = (coin_dec, usdt_dec);
-            smart_quote::quote(self, asset, side, qty, entries, &taxes, decs, gas, &usdt).await?
+            smart_quote::quote(&v, &names, asset, qty, entries, &mids, gas).await?
         } else {
-            let (best, taxes) = direct::best(self, asset, side, qty, entries, coin_dec, usdt_dec)?;
-            costs::quote(ctx, asset, side, qty, &best, &taxes, gas, &usdt)?
+            direct_route::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
+        };
+        // Газ разрешений и чаевые — к первому шагу маршрута (разрешения — на токен входа первого шага).
+        let first = q.costs.iter().find_map(|c| c.step.clone());
+        let with_step = |c: Cost| match &first {
+            Some(s) => c.with_step(s.clone()),
+            None => c,
         };
         if let Some(units) = approve_gas(self, &q, coin_dec, usdt_dec).await? {
             let wei = gas.saturating_mul(U256::from(units));
@@ -95,13 +136,13 @@ impl Quoting {
                 )
             })?;
             q.costs
-                .push(Cost::new(CostKind::ApproveGas, bnb, BNB, false));
+                .push(with_step(Cost::new(CostKind::ApproveGas, bnb, BNB, false)));
         }
         if let Some(tip) =
             super::send::planned_tip(ctx).and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
         {
             q.costs
-                .push(Cost::new(CostKind::ChannelTip, tip, BNB, false));
+                .push(with_step(Cost::new(CostKind::ChannelTip, tip, BNB, false)));
         }
         Ok(q)
     }

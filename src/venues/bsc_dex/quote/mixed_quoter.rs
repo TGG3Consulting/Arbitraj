@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/quote/mixed_quoter.rs
-//! Что делает: сверка умного маршрута перед отправкой — выход каждой доли по MixedQuoter PancakeSwap
+//! Что делает: сверка умного маршрута перед отправкой — выход каждой доли (один пул или путь через промежуточную
+//! монету: paths = токены по порядку, действие и параметры на каждый пул) по MixedQuoter PancakeSwap
 //! (quoteMixedExactInput, eth_call на «latest») против локального расчёта доли. Квотер исполняет настоящий обмен
 //! (с крючками) и откатывается внутри, поэтому локальный выход сравнивается с учётом влияния крючка.
 //! Расхождение больше dex.quoter_max_diff_pct хотя бы у одной доли — сделки нет.
@@ -15,9 +16,8 @@
 //! research/flow/bsc_smart_router.md, раздел 3.3.
 
 use alloy::sol_types::SolValue;
+use alloy_primitives::Bytes;
 use alloy_primitives::aliases::U24;
-use alloy_primitives::{Address, Bytes, U256};
-use rust_decimal::Decimal;
 
 use crate::core::types::PoolKind;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -26,6 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
+use super::path::Path;
 use super::quoter::{diff_pct, less_hook};
 
 const V2_EXACT_INPUT_SINGLE: u8 = 0x02;
@@ -42,34 +43,33 @@ alloy::sol! {
     }
 }
 
-/// Доля для сверки.
+/// Доля для сверки: путь (один пул или два через промежуточную монету).
 pub struct Leg<'a> {
-    pub entry: &'a Entry,
-    pub token_in: Address,
-    pub token_out: Address,
-    /// Сколько доходит до пула.
-    pub amount_in: U256,
-    /// Локальный выход пула (минимальные единицы).
-    pub local_out: U256,
-    /// Влияние крючка, % (квотер его включает, локальная математика — нет).
-    pub hook_pct: Decimal,
+    pub path: &'a Path,
 }
 
-/// Сверка всех долей. Возвращает: Ok(()) — все в допуске. Ошибки: NotConfigured (адрес, допуск),
-/// узел (откат квотера — его текст), QuoteMismatch (расхождение — с цифрами), Internal (у пула V4 нет ключа).
+/// Сверка всех долей. Квотер исполняет весь путь доли (с крючками каждого пула); локальный выход последнего пула
+/// берётся за вычетом влияния его крючка (влияние крючка первого пула уже учтено во входе второго — quote/via.rs).
+/// Возвращает: Ok(()) — все в допуске. Ошибки: NotConfigured (адрес, допуск), узел (откат квотера — его текст),
+/// QuoteMismatch (расхождение — с цифрами), Internal (у пула V4 нет ключа, пустой путь).
 pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
     let to = ctx.addr("smart.mixed_quoter")?;
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
     let calls = legs
         .iter()
-        .map(|l| request(ctx, l))
+        .map(|l| request(ctx, l.path))
         .collect::<GatewayResult<Vec<_>>>()?;
     let outs = call::view_many(ctx, to, &calls, "latest").await?;
     for (l, out) in legs.iter().zip(outs) {
-        let local = less_hook(l.local_out, l.hook_pct).ok_or_else(|| {
+        let last = l
+            .path
+            .hops
+            .last()
+            .ok_or_else(|| ctx.err(ErrorCode::Internal, "доля без пулов"))?;
+        let local = less_hook(last.swapped.amount_out, last.usable.hook_pct).ok_or_else(|| {
             ctx.err(
                 ErrorCode::QuoteMismatch,
-                format!("влияние крючка {}% не считается", l.hook_pct),
+                format!("влияние крючка {}% не считается", last.usable.hook_pct),
             )
         })?;
         match diff_pct(local, out.amountOut) {
@@ -79,8 +79,8 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
                     ErrorCode::QuoteMismatch,
                     format!(
                         "{} {}: расчёт {local} против MixedQuoter {} — расхождение {} > {limit}% (dex.quoter_max_diff_pct)",
-                        l.entry.family.title,
-                        l.entry.ticker,
+                        last.entry.family.title,
+                        last.entry.ticker,
                         out.amountOut,
                         d.map_or("не считается".into(), |d| format!("{d}%"))
                     ),
@@ -91,10 +91,32 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
     Ok(())
 }
 
-/// Вызов quoteMixedExactInput для одной доли (один пул). Ошибки: Internal (нет fee у V3 или ключа у V4).
-fn request(ctx: &Ctx, l: &Leg<'_>) -> GatewayResult<IMixedQuoter::quoteMixedExactInputCall> {
-    let e = l.entry;
-    let (action, param) = match e.pool.kind {
+/// Вызов quoteMixedExactInput для доли: путь токенов, действие и параметры на каждый пул, вход первого пула.
+/// Ошибки: Internal (пустой путь, нет fee у V3 или ключа у V4).
+fn request(ctx: &Ctx, p: &Path) -> GatewayResult<IMixedQuoter::quoteMixedExactInputCall> {
+    let first = p
+        .hops
+        .first()
+        .ok_or_else(|| ctx.err(ErrorCode::Internal, "доля без пулов"))?;
+    let mut paths = vec![first.token_in];
+    let (mut actions, mut params) = (Vec::new(), Vec::new());
+    for h in &p.hops {
+        let (a, b) = hop(ctx, &h.entry)?;
+        paths.push(h.token_out);
+        actions.push(a);
+        params.push(b);
+    }
+    Ok(IMixedQuoter::quoteMixedExactInputCall {
+        paths,
+        actions: Bytes::from(actions),
+        params,
+        amountIn: first.swapped.amount_in,
+    })
+}
+
+/// Действие и параметры одного пула. Ошибки: Internal (нет fee у V3 или ключа у V4).
+fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
+    Ok(match e.pool.kind {
         PoolKind::V2 => (V2_EXACT_INPUT_SINGLE, Bytes::new()),
         PoolKind::V3 => {
             let fee = e
@@ -128,11 +150,5 @@ fn request(ctx: &Ctx, l: &Leg<'_>) -> GatewayResult<IMixedQuoter::quoteMixedExac
             };
             (action, Bytes::from(p.abi_encode()))
         }
-    };
-    Ok(IMixedQuoter::quoteMixedExactInputCall {
-        paths: vec![l.token_in, l.token_out],
-        actions: Bytes::from(vec![action]),
-        params: vec![param],
-        amountIn: l.amount_in,
     })
 }

@@ -1,10 +1,11 @@
 //! Файл: venues/bsc_dex/exec/plan.rs
-//! Что делает: план прямого обмена в одном пуле через Universal Router своей DEX: недостающие разрешения (Permit2)
+//! Что делает: план обмена через Universal Router своей DEX (один пул или путь через промежуточную монету — по команде
+//! на шаг, exec/chain.rs): недостающие разрешения (Permit2)
 //! и вызов execute — обмен + BALANCE_CHECK_ERC20 «баланс выходного токена кошелька ≥ база + минимум»
 //! (решение 40: проверка реально полученного — всегда, в той же транзакции). База — баланс кошелька, прочитанный
 //! прямо перед подписью обмена (после разрешений): данные execute собираются только тогда (`Plan::data`).
 //! Кто вызывает: exec/trade.rs, check/probe.rs.
-//! От чего зависит: exec/ur.rs, exec/swap_v2v3.rs, exec/swap_v4.rs, wallet/approve.rs, pools/registry.rs.
+//! От чего зависит: exec/ur.rs, exec/chain.rs, wallet/approve.rs, pools/registry.rs.
 //! Настройки: dex.universal_router, dex.permit2, dex.universal_router_version [вид пула], dex.deadline_s,
 //! dex.approve_unlimited, dex.permit2_expiration_s [bsc_dex].
 //!
@@ -15,13 +16,13 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::PoolKind;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::pools::registry::Entry;
 use super::super::wallet::approve::{self, Approval};
-use super::{swap_v2v3, swap_v4, ur};
+use super::chain::{self, Step};
+use super::ur;
 
 /// План обмена.
 #[derive(Debug, Clone)]
@@ -93,35 +94,57 @@ pub struct Order {
     pub min_out: U256,
 }
 
-/// Строит план для кошелька. Принимает: пул, кошелёк, обмен, время блока (секунды), нужны ли все разрешения
-/// (true — для симуляции, без чтения текущих). Ошибки: NotConfigured (адреса, версия, срок), Internal (минимум 0), узел.
+/// Строит план для кошелька через Universal Router своей DEX (вид пула первого шага; у пути через промежуточную
+/// монету оба пула — одного Universal Router, quote/direct_route.rs). Принимает: шаги (exec/chain.rs), кошелёк, время
+/// блока (секунды), нужны ли все разрешения (true — для симуляции, без чтения текущих).
+/// Ошибки: NotConfigured (адреса, версия, срок), Internal (нет шагов, минимум 0), узел.
 pub async fn build(
     ctx: &Ctx,
-    e: &Entry,
+    steps: &[Step],
     wallet: Address,
-    o: &Order,
     now: u64,
     all_approvals: bool,
 ) -> GatewayResult<Plan> {
+    let (Some(first), Some(last)) = (steps.first(), steps.last()) else {
+        return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
+    };
+    let e = &first.entry;
     let router = ctx.dex_addr("dex.universal_router", e.family.id)?;
     let permit2 = ctx.dex_addr("dex.permit2", e.family.id)?;
     let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
     let fmt = ur::format(ctx, e)?;
+    let o = &first.order;
     let approvals = if all_approvals {
         approve::all(ctx, o.token_in, permit2, router, o.amount_in, now)?
     } else {
         approve::missing(ctx, o.token_in, wallet, permit2, router, o.amount_in, now).await?
     };
-    let swap = match e.pool.kind {
-        PoolKind::V2 | PoolKind::V3 => swap_v2v3::command(ctx, e, fmt, o, wallet)?,
-        PoolKind::Cl | PoolKind::Bin => swap_v4::command(ctx, e, fmt, o)?,
-    };
+    let mut commands = Vec::with_capacity(steps.len());
+    for s in steps {
+        if s.order.min_out.is_zero() {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "минимум шага 0 — обмен без минимума не отправляется",
+            ));
+        }
+        commands.push(chain::command(ctx, s, fmt, wallet)?);
+    }
     Plan::new(
         ctx,
         (approvals, router, wallet),
-        o.token_out,
-        vec![swap],
-        o.min_out,
+        last.order.token_out,
+        commands,
+        last.order.min_out,
         deadline,
     )
+}
+
+/// Один шаг «кошелёк → пул → кошелёк» (пробный обмен, прямой обмен в одном пуле). Ошибок нет.
+pub fn single(e: &Entry, order: Order) -> Vec<Step> {
+    vec![Step {
+        entry: e.clone(),
+        order,
+        from_wallet: true,
+        to_wallet: true,
+    }]
 }

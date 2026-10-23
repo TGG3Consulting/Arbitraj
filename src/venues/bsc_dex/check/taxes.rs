@@ -1,10 +1,12 @@
 //! Файл: venues/bsc_dex/check/taxes.rs
 //! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле (налоги — по первому
 //! удачному; V2 впереди: только они поддерживают монеты с налогом), газ обмена и разрешений — по каждому пулу.
-//! Источник USDT для пробы — другой пул V2/V3 реестра с наибольшим балансом USDT (проверяемый пул не трогается).
+//! Источник встречного токена для пробы — другой пул V2/V3 реестра с наибольшим его балансом (проверяемый пул не
+//! трогается). Пул с промежуточной монетой (решение 52): сумма пробы check.probe_usdt пересчитывается в неё
+//! (quote/rate.rs) — так налог монеты меряется и на этом шаге.
 //! Итог — CoinCheck: налоги известны, или «проверка не прошла» с причиной (чёрный список у ядра).
 //! Кто вызывает: check/cycle.rs.
-//! От чего зависит: check/probe.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
+//! От чего зависит: check/probe.rs, quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
 //! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6 (модель налога у
@@ -22,6 +24,7 @@ use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
+use super::super::quote::rate;
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
 use super::probe::{self, Measured};
@@ -90,9 +93,7 @@ async fn run(
         _ => 2,
     });
     if pools.is_empty() {
-        return Ok(Err(
-            "нет достоверного пула с USDT для пробного обмена".into()
-        ));
+        return Ok(Err("нет достоверного пула для пробного обмена".into()));
     }
     let mut taxes = None;
     let mut reasons = Vec::new();
@@ -101,12 +102,22 @@ async fn run(
             PoolRef::Contract(a) => Some(a),
             PoolRef::Singleton { .. } => None,
         };
-        let Some(source) = usdt_source(ctx, reg, usdt, exclude, probe).await? else {
-            return Ok(Err(format!(
-                "нет другого пула с {probe} единиц USDT для пробы"
-            )));
+        // Пул с промежуточной монетой (решение 52): сумма пробы — в ней, по живому пулу «промежуточная — USDT».
+        let amount = match rate::from_usdt(ctx, reg, usdt, e.usdt, probe) {
+            Ok(a) => a,
+            Err(err) => {
+                reasons.push(format!("{}: {}", e.family.title, err.message));
+                continue;
+            }
         };
-        match probe::run(ctx, e, source, wallet, probe, block_time).await? {
+        let Some(source) = quote_source(ctx, reg, e.usdt, exclude, amount).await? else {
+            reasons.push(format!(
+                "{}: нет другого пула с {amount} единиц {} для пробы",
+                e.family.title, e.usdt
+            ));
+            continue;
+        };
+        match probe::run(ctx, e, source, wallet, amount, block_time).await? {
             Ok(m) => {
                 checks.update_pool(&e.pool.reference, |f| {
                     f.gas_buy = Some(m.gas_buy);
@@ -147,9 +158,9 @@ fn percent(m: &Measured, decimals: u8) -> Option<TokenTaxes> {
     })
 }
 
-/// Источник USDT для пробы: пул V2/V3 реестра (не проверяемый) с наибольшим балансом USDT ≥ суммы пробы.
-/// Ошибки: узел. None — такого пула нет.
-async fn usdt_source(
+/// Источник встречного токена (USDT или промежуточной монеты) для пробы: пул V2/V3 реестра (не проверяемый)
+/// с наибольшим балансом этого токена ≥ суммы пробы. Ошибки: узел. None — такого пула нет.
+async fn quote_source(
     ctx: &Ctx,
     reg: &Registry,
     usdt: Address,

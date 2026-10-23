@@ -4,7 +4,7 @@
 //! и в допуске (hooks.max_impact_b_pct / _c_pct); пул сверен с квотером без расхождения (любой пул, с крючком тоже); газ стороны измерен
 //! пробным обменом; ликвидность в USDT не ниже dex.min_pool_liquidity_usd.
 //! Кто вызывает: quote/direct.rs.
-//! От чего зависит: check/state.rs, pools/registry.rs, quote/pool_quote.rs, tokens.rs, num.rs.
+//! От чего зависит: check/state.rs, pools/registry.rs, quote/pool_quote.rs, quote/rate.rs, tokens.rs, num.rs.
 //! Настройки: dex.enabled, dex.pool_enabled [DEX], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! dex.min_pool_liquidity_usd [bsc_dex].
 //!
@@ -20,11 +20,11 @@ use rust_decimal::Decimal;
 use crate::core::types::{CheckState, HookGroup, Side};
 use crate::settings::read::At;
 
-use super::super::check::state::{Checks, PoolFacts};
+use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
 use super::super::num;
 use super::super::pools::registry::Entry;
-use super::pool_quote;
+use super::{Quoting, pool_quote, rate};
 
 /// Что известно о допущенном пуле для котировки.
 #[derive(Debug, Clone)]
@@ -36,13 +36,8 @@ pub struct Usable {
 }
 
 /// Проверка пула. Возвращает: Ok(Usable) или Err(причина, почему пул не используется).
-pub fn usable(
-    ctx: &Ctx,
-    checks: &Checks,
-    e: &Entry,
-    side: Side,
-    usdt_decimals: u8,
-) -> Result<Usable, String> {
+pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<Usable, String> {
+    let (ctx, checks) = (&q.ctx, &q.checks);
     if !e.valid {
         return Err("данные пула недостоверны (обрыв или перечитывание)".into());
     }
@@ -71,7 +66,7 @@ pub fn usable(
     let min = ctx
         .dec("dex.min_pool_liquidity_usd")
         .map_err(|e| e.message)?;
-    let depth = liquidity_usdt(ctx, e, usdt_decimals).ok_or("ликвидность пула не считается")?;
+    let depth = liquidity_usdt(q, e, usdt_decimals).ok_or("ликвидность пула не считается")?;
     if depth < min {
         return Err(format!(
             "ликвидность {depth} USDT ниже dex.min_pool_liquidity_usd ({min})"
@@ -133,9 +128,12 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
     Ok(impact.max(Decimal::ZERO))
 }
 
-/// Ликвидность пула в USDT (см. шапку). None — расчёт невозможен.
-pub fn liquidity_usdt(ctx: &Ctx, e: &Entry, usdt_decimals: u8) -> Option<Decimal> {
+/// Ликвидность пула в USDT (см. шапку); у пула с промежуточной монетой (решение 52) выход в ней пересчитывается
+/// в USDT по живому пулу «промежуточная — USDT» (quote/rate.rs). None — расчёт невозможен.
+pub fn liquidity_usdt(q: &Quoting, e: &Entry, usdt_decimals: u8) -> Option<Decimal> {
     let all = U256::from(u128::MAX);
-    let r = pool_quote::swap(ctx, e, e.coin, true, all).ok()?;
-    num::to_decimal(r.amount_out, usdt_decimals)
+    let r = pool_quote::swap(&q.ctx, e, e.coin, true, all).ok()?;
+    let usdt = q.tokens.usdt(&q.ctx).ok()?;
+    let out = rate::to_usdt(&q.ctx, &q.reg, usdt, e.usdt, r.amount_out).ok()?;
+    num::to_decimal(out, usdt_decimals)
 }

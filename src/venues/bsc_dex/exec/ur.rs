@@ -28,6 +28,13 @@ pub const V2_SWAP_EXACT_IN: u8 = 0x08;
 pub const BALANCE_CHECK_ERC20: u8 = 0x0e;
 pub const V4_SWAP: u8 = 0x10;
 
+/// «Весь баланс роутера» как сумма входа — ActionConstants.CONTRACT_BALANCE = 1 << 255: infinity-periphery 56a7a4f5
+/// src/libraries/ActionConstants.sol#L14, v4-periphery 0c4e5bd3 src/libraries/ActionConstants.sol#L13 (их используют
+/// оба Universal Router: Payments.sol, V3SwapRouter.sol).
+pub const CONTRACT_BALANCE: U256 = U256::from_limbs([0, 0, 0, 0x8000_0000_0000_0000]);
+/// Получатель «сам роутер» — ActionConstants.ADDRESS_THIS = address(2): там же, #L20 / #L19; map() в Dispatcher.sol.
+pub const ADDRESS_THIS: Address = Address::with_last_byte(2);
+
 alloy::sol! {
     interface IUniversalRouter {
         function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable;

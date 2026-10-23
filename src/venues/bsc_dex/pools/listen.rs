@@ -32,6 +32,7 @@ use super::super::node::heads::Heads;
 use super::super::node::{rpc, ws::Conn};
 use super::super::tokens::Tokens;
 use super::discover::Found;
+use super::mids::Mids;
 use super::registry::Registry;
 use super::{listen_log, load};
 
@@ -46,6 +47,8 @@ pub struct Pools {
     pub checks: Checks,
     /// Последний блок сети.
     pub heads: Heads,
+    /// Промежуточные монеты (решение 52).
+    pub mids: Mids,
 }
 
 /// Чем кончилась сессия.

@@ -3,7 +3,7 @@
 //! биржи) и их decimals, прочитанные из самих контрактов (ERC-20 decimals()) один раз.
 //! Кто вызывает: mod.rs (subscribe_market кладёт монеты), wallet/balances.rs, pools/*, quote/*, exec/*.
 //! От чего зависит: ctx.rs, node/call.rs, node/abi.rs, core/types (Asset).
-//! Настройки: нет.
+//! Настройки: venue.quote_asset [bsc_dex] (тикер USDT).
 //!
 //! decimals — из контракта токена: https://eips.ethereum.org/EIPS/eip-20 (decimals). Адрес токена — только из
 //! справочника ядра (API биржи, CLAUDE.md: «адрес контракта у биржи совпадает с адресом токена в пуле»).
@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use alloy_primitives::Address;
 
 use crate::core::types::Asset;
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::ctx::Ctx;
 use super::node::abi::IERC20;
@@ -53,6 +53,26 @@ impl Tokens {
     /// Текущий список токенов. Ошибок нет.
     pub fn all(&self) -> Vec<Token> {
         self.list.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// Тикер токена по адресу. None — такой монеты в подписке нет.
+    pub fn ticker_of(&self, address: Address) -> Option<String> {
+        self.all()
+            .into_iter()
+            .find(|t| t.address == address)
+            .map(|t| t.ticker)
+    }
+
+    /// Адрес USDT — монеты с тикером venue.quote_asset [bsc_dex] из подписки ядра (адрес — из API биржи).
+    /// Ошибки: NotConfigured — тикер не задан или такой монеты с адресом в подписке нет.
+    pub fn usdt(&self, ctx: &Ctx) -> GatewayResult<Address> {
+        let quote = ctx.text("venue.quote_asset")?;
+        self.by_ticker(&quote).map(|t| t.address).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::NotConfigured,
+                format!("В списке монет ядра нет {quote} (venue.quote_asset) с адресом в BSC"),
+            )
+        })
     }
 
     /// Токен по тикеру. None — такой монеты в подписке нет.

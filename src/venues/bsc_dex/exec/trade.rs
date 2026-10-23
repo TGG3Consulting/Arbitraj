@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/exec/trade.rs
-//! Что делает: покупка или продажа на DEX по маршруту из котировки («прямой» режим, один пул): пересчёт по живому
-//! состоянию пула, проверка худшей цены, минимум «получить не меньше», разрешения (Permit2), обмен через Universal
+//! Что делает: покупка или продажа на DEX по маршруту из котировки («прямой» режим: один пул или пара пулов через
+//! промежуточную монету, решение 52 — exec/live.rs, exec/chain.rs): пересчёт по живому состоянию пулов, проверка худшей цены, минимум «получить не меньше», разрешения (Permit2), обмен через Universal
 //! Router с проверкой реально полученного баланса в той же транзакции, ожидание итога своим узлом, факт по логам.
 //! Перед сделкой (решение 32) — повторная проба крючка B/C и сверка с квотером на сумме сделки (exec/precheck.rs);
 //! выходной токен не должен ждать поступлений в кошелёк во время обмена (wallet/inflows.rs); база проверки баланса
@@ -9,17 +9,18 @@
 //! Умный маршрут (RouteMode::Smart) — exec/trade_smart.rs; общие шаги (минимум доли, проверка цены, отправка
 //! разрешений и обмена) — здесь.
 //! Кто вызывает: mod.rs (контракт trade), exec/trade_smart.rs (общие шаги).
-//! От чего зависит: exec/plan.rs, exec/order.rs, exec/precheck.rs, exec/trade_smart.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
+//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/trade_smart.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs, pools/registry.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
 //!
 //! Минимум выхода и проверка цены — exec/order.rs (худшая цена ≤ 0 или минимум 0 — ошибка до отправки).
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256};
 
 use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::balances;
 use super::super::wallet::inflows::SwapGuard;
@@ -28,7 +29,7 @@ pub use super::order::{check_price, order, worst_positive};
 use super::plan::{self, Plan};
 use super::trade_smart;
 use super::txs::{self, Env};
-use super::{precheck, result};
+use super::{chain, live, precheck, result};
 
 /// Сделка. Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой), CoinNotChecked, настройки, каналы,
 /// SwapReverted / TxNotIncluded / NonceConflict (с фактом транзакции).
@@ -45,53 +46,68 @@ pub async fn trade(
             "В запросе нет маршрута DEX из котировки",
         )
     })?;
-    let hop = match (route.mode, route.legs.as_slice()) {
+    let leg = match (route.mode, route.legs.as_slice()) {
         (RouteMode::Smart, _) => return trade_smart::trade(q, env, nonces, req, &route).await,
-        (RouteMode::Direct, [leg]) if leg.hops.len() == 1 => leg.hops[0].clone(),
+        (RouteMode::Direct, [leg]) => leg.clone(),
         _ => {
-            return Err(ctx.err(
-                ErrorCode::NoRoute,
-                "Прямой маршрут должен быть одной долей в одном пуле",
-            ));
+            return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
         }
     };
     worst_positive(ctx, &req)?;
-    let e = q
-        .reg
-        .get(&hop.pool)
-        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))?;
-    let out_token = if req.side == Side::Buy {
-        e.coin
-    } else {
-        e.usdt
-    };
+    let (coin, usdt, decs) = sides(q, &req).await?;
+    let out_token = if req.side == Side::Buy { coin } else { usdt };
     let guard = env.inflows.swap(ctx, out_token).await?;
-    precheck::hook_again(q, &e).await?;
-    let decs = (
-        q.tokens.decimals(ctx, e.coin).await?,
-        q.tokens.decimals(ctx, e.usdt).await?,
-    );
-    // Тот же расчёт, что у котировки, но только по пулу маршрута и по состоянию на сейчас (с допуском пула).
-    let (c, _) = direct::best(
+    let taxes = direct::taxes(q, &req.asset)?;
+    let v = Via {
         q,
-        &req.asset,
-        req.side,
-        req.qty,
-        vec![e.clone()],
-        decs.0,
-        decs.1,
-    )?;
-    check_price(ctx, &req, c.coins, c.usdt)?;
-    let o = order(ctx, &req, &e, req.qty, (c.coins, c.usdt), decs)?;
-    let (pool_in, pool_out) = (c.swapped.amount_in, c.swapped.amount_out);
-    precheck::quoter_now(ctx, &e, o.token_in, pool_in, pool_out, c.usable.hook_pct).await?;
+        coin,
+        usdt,
+        side: req.side,
+        taxes: &taxes,
+        coin_dec: decs.0,
+        usdt_dec: decs.1,
+    };
+    // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
+    let path = live::path(&v, &leg.hops, req.qty, true).await?;
+    check_price(ctx, &req, path.coins, path.usdt)?;
+    let steps = chain::steps(ctx, &req, &path, req.qty, decs)?;
+    for h in &path.hops {
+        let (pool_in, pool_out) = (h.swapped.amount_in, h.swapped.amount_out);
+        precheck::quoter_now(
+            ctx,
+            &h.entry,
+            h.token_in,
+            pool_in,
+            pool_out,
+            h.usable.hook_pct,
+        )
+        .await?;
+    }
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let now = q.heads.fresh(ctx)?.timestamp;
-    let p = plan::build(ctx, &e, wallet, &o, now, false).await?;
+    let p = plan::build(ctx, &steps, wallet, now, false).await?;
     let d = send_plan(env, &slot, p, guard).await?;
     drop(slot);
-    result::result(ctx, req, d, wallet, (o.token_in, o.token_out), decs)
+    let tin = if req.side == Side::Buy { usdt } else { coin };
+    result::result(ctx, req, d, wallet, (tin, out_token), decs)
+}
+
+/// Адреса монеты и USDT и их decimals. Ошибки: NoRoute (у монеты нет адреса в BSC), NotConfigured, узел.
+pub async fn sides(q: &Quoting, req: &TradeRequest) -> GatewayResult<(Address, Address, (u8, u8))> {
+    let ctx = &q.ctx;
+    let coin = req.asset.bsc_contract.ok_or_else(|| {
+        ctx.err(
+            ErrorCode::NoRoute,
+            format!("{}: нет адреса контракта в BSC", req.asset.ticker),
+        )
+    })?;
+    let usdt = q.tokens.usdt(ctx)?;
+    let decs = (
+        q.tokens.decimals(ctx, coin).await?,
+        q.tokens.decimals(ctx, usdt).await?,
+    );
+    Ok((coin, usdt, decs))
 }
 
 /// Разрешения по порядку (без чаевых), затем обмен: база проверки баланса — баланс выходного токена кошелька,

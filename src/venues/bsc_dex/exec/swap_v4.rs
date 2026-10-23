@@ -2,7 +2,12 @@
 //! Что делает: вход команды V4_SWAP / INFI_SWAP (0x10) Universal Router для обмена в одном пуле V4:
 //! abi.encode(bytes actions, bytes[] params), действия [обмен с точным входом, SETTLE_ALL(вход, максимум),
 //! TAKE_ALL(выход, минимум)] — минимум проверяется и в обмене (amountOutMinimum), и при получении (TAKE_ALL).
-//! Кто вызывает: exec/build.rs.
+//! Путь через промежуточную монету (решение 52, правила SDK — research/flow/bsc_smart_router.md, раздел 3.1):
+//! первый шаг — выход роутеру TAKE(валюта, ADDRESS_THIS, OPEN_DELTA); второй — SETTLE(валюта, CONTRACT_BALANCE,
+//! payerIsUser = false) из баланса роутера, обмен с amountIn = OPEN_DELTA (весь кредит), TAKE_ALL на кошелёк
+//! (SETTLE 0x0b, TAKE 0x0e — Actions.sol; DeltaResolver._mapSettleAmount/_mapTakeAmount, CLRouterBase.sol#L26-L31;
+//! Uniswap — v4-periphery 0c4e5bd3 V4Router.sol#L67-L74, #L86).
+//! Кто вызывает: exec/plan.rs, exec/universal.rs.
 //! От чего зависит: exec/ur.rs (Format), pools/key.rs, pools/registry.rs.
 //! Настройки: нет.
 //!
@@ -25,11 +30,13 @@ use super::super::ctx::Ctx;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
 use super::plan::Order;
-use super::ur::{Format, V4_SWAP};
+use super::ur::{ADDRESS_THIS, CONTRACT_BALANCE, Format, V4_SWAP};
 
 const SWAP_EXACT_IN_SINGLE: u8 = 0x06;
 const BIN_SWAP_EXACT_IN_SINGLE: u8 = 0x1c;
+const SETTLE: u8 = 0x0b;
 const SETTLE_ALL: u8 = 0x0c;
+const TAKE: u8 = 0x0e;
 const TAKE_ALL: u8 = 0x0f;
 
 alloy::sol! {
@@ -40,16 +47,28 @@ alloy::sol! {
     struct UniSingle211 { UniKey poolKey; bool zeroForOne; uint128 amountIn; uint128 amountOutMinimum; uint256 minHopPriceX36; bytes hookData; }
 }
 
-/// Команда V4_SWAP/INFI_SWAP и вход. Принимает: пул V4, формат, обмен (токены, вход, минимум выхода).
-/// Ошибки: Internal (нет ключа), NoRoute (суммы больше uint128).
-pub fn command(ctx: &Ctx, e: &Entry, f: Format, o: &Order) -> GatewayResult<(u8, Bytes)> {
+/// Команда V4_SWAP/INFI_SWAP и вход. Принимает: пул V4, формат, обмен (токены, вход, минимум выхода), платит ли кошелёк
+/// (false — роутер всем своим балансом), получает ли кошелёк (false — роутер). Ошибки: Internal (нет ключа или оба
+/// шага с роутером), NoRoute (суммы больше uint128).
+pub fn command(
+    ctx: &Ctx,
+    e: &Entry,
+    f: Format,
+    o: &Order,
+    (from_wallet, to_wallet): (bool, bool),
+) -> GatewayResult<(u8, Bytes)> {
     let (tin, tout, amount_in, min_out) = (o.token_in, o.token_out, o.amount_in, o.min_out);
     let key = e
         .key
         .as_ref()
         .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула V4 нет ключа"))?;
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
-    let a_in: u128 = amount_in.try_into().map_err(|_| big())?;
+    // Из баланса роутера — amountIn = OPEN_DELTA (0): весь кредит после SETTLE (ActionConstants.sol#L11).
+    let a_in: u128 = if from_wallet {
+        amount_in.try_into().map_err(|_| big())?
+    } else {
+        0
+    };
     let a_min: u128 = min_out.try_into().map_err(|_| big())?;
     let zero_for_one = tin == e.pool.token0;
     let (action, swap) = match (key, f) {
@@ -108,11 +127,39 @@ pub fn command(ctx: &Ctx, e: &Entry, f: Format, o: &Order) -> GatewayResult<(u8,
             (SWAP_EXACT_IN_SINGLE, enc)
         }
     };
-    let actions = Bytes::from(vec![action, SETTLE_ALL, TAKE_ALL]);
-    let params = vec![
-        Bytes::from(swap),
-        Bytes::from((tin, amount_in).abi_encode_params()),
-        Bytes::from((tout, min_out).abi_encode_params()),
-    ];
+    let take_all = Bytes::from((tout, min_out).abi_encode_params());
+    let (actions, params) = match (from_wallet, to_wallet) {
+        (true, true) => (
+            vec![action, SETTLE_ALL, TAKE_ALL],
+            vec![
+                Bytes::from(swap),
+                Bytes::from((tin, amount_in).abi_encode_params()),
+                take_all,
+            ],
+        ),
+        (true, false) => (
+            vec![action, SETTLE_ALL, TAKE],
+            vec![
+                Bytes::from(swap),
+                Bytes::from((tin, amount_in).abi_encode_params()),
+                Bytes::from((tout, ADDRESS_THIS, U256::ZERO).abi_encode_params()),
+            ],
+        ),
+        (false, true) => (
+            vec![SETTLE, action, TAKE_ALL],
+            vec![
+                Bytes::from((tin, CONTRACT_BALANCE, false).abi_encode_params()),
+                Bytes::from(swap),
+                take_all,
+            ],
+        ),
+        (false, false) => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "шаг V4 и из роутера, и роутеру — путь длиннее двух шагов",
+            ));
+        }
+    };
+    let actions = Bytes::from(actions);
     Ok((V4_SWAP, Bytes::from((actions, params).abi_encode_params())))
 }

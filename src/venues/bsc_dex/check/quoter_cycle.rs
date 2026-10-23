@@ -5,7 +5,7 @@
 //! влияния крючка на покупку (check/hooks_probe.rs; сверка идёт на check.probe_usdt USDT — это покупка). Влияние ещё не
 //! измерено или проверка крючка не прошла — сверка не пройдена, пул не используется (quote/select.rs).
 //! Кто вызывает: pools/market.rs.
-//! От чего зависит: quote/quoter.rs, check/state.rs (влияние крючка), pools/listen.rs (Pools), tokens.rs, num.rs.
+//! От чего зависит: quote/quoter.rs, quote/rate.rs, check/state.rs (влияние крючка), pools/listen.rs (Pools), tokens.rs, num.rs.
 //! Настройки: dex.quoter_check_s, dex.quoter_max_diff_pct, check.probe_usdt [bsc_dex].
 //!
 //! «Сверка: периодически и перед сделкой — квотер; расхождение выше порога → стоп по пулу» —
@@ -14,6 +14,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use alloy_primitives::U256;
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
@@ -24,7 +25,7 @@ use crate::storage::journal::Level;
 use super::super::num;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
-use super::super::quote::quoter;
+use super::super::quote::{quoter, rate};
 use super::state::Checks;
 
 /// Цикл сверки с квотером всех достоверных пулов (см. шапку). Ошибок нет: сбой — причина в итоге пула.
@@ -38,17 +39,11 @@ pub async fn run(p: Pools, wake: Arc<Notify>) {
             let hook = hook_buy_pct(&p.checks, &e);
             let res = match hook {
                 Err(why) => Err(why),
-                Ok(pct) => match p
-                    .tokens
-                    .decimals(&p.ctx, e.usdt)
-                    .await
-                    .and_then(|d| p.ctx.dec("check.probe_usdt").map(|v| num::to_units(v, d)))
-                {
-                    Ok(Some(amount)) => quoter::compare(&p.ctx, &e, e.usdt, amount, pct)
+                Ok(pct) => match probe(&p, &e).await {
+                    Ok(amount) => quoter::compare(&p.ctx, &e, e.usdt, amount, pct)
                         .await
                         .unwrap_or_else(|err| Err(err.message)),
-                    Ok(None) => Err("check.probe_usdt не переводится в единицы USDT".into()),
-                    Err(err) => Err(err.message),
+                    Err(why) => Err(why),
                 },
             };
             if let Err(why) = &res {
@@ -95,4 +90,18 @@ fn hook_buy_pct(checks: &Checks, e: &Entry) -> Result<Decimal, String> {
         Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
         _ => Err("влияние крючка ещё не измерено — сверка с квотером невозможна".into()),
     }
+}
+
+/// Сумма сверки во встречном токене пула: check.probe_usdt USDT, для пула с промежуточной монетой (решение 52) —
+/// пересчёт по живому пулу «промежуточная — USDT» (quote/rate.rs). Err — причина.
+async fn probe(p: &Pools, e: &Entry) -> Result<U256, String> {
+    let usdt = p.tokens.usdt(&p.ctx).map_err(|e| e.message)?;
+    let dec = p
+        .tokens
+        .decimals(&p.ctx, usdt)
+        .await
+        .map_err(|e| e.message)?;
+    let v = p.ctx.dec("check.probe_usdt").map_err(|e| e.message)?;
+    let amount = num::to_units(v, dec).ok_or("check.probe_usdt не переводится в единицы USDT")?;
+    rate::from_usdt(&p.ctx, &p.reg, usdt, e.usdt, amount).map_err(|e| e.message)
 }

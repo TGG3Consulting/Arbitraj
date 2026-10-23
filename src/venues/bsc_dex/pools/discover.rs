@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/pools/discover.rs
-//! Что делает: поиск пулов «монета/USDT» по всем включённым видам пулов. V2 — getPair фабрики по каждой монете;
+//! Что делает: поиск пулов «монета — встречный токен» (USDT или промежуточная монета, решение 52) по всем включённым
+//! видам пулов. V2 — getPair фабрики по каждой монете;
 //! V3 и V4 — история событий создания (PoolCreated, Initialize) с USDT в индексированном поле. Прочитанная
 //! история хранится в памяти: следующий поиск читает только новые блоки.
 //! Кто вызывает: pools/market.rs.
@@ -30,7 +31,7 @@ pub struct Found {
     pub reference: PoolRef,
     pub token0: Address,
     pub token1: Address,
-    /// Монета пула (не USDT).
+    /// Монета пула (не встречный токен: не USDT и не промежуточная, с которой искали).
     pub coin: Address,
     /// V3 — fee из события; V4 — PoolKey.fee (0x800000 — динамическая); V2 — None.
     pub fee_pips: Option<u32>,
@@ -43,26 +44,27 @@ pub struct Found {
 /// История вида пула: последний прочитанный блок и найденные пулы.
 type History = (u64, Vec<Found>);
 
-/// Прочитанная история событий по виду пула: до какого блока и что найдено (все USDT-пулы, любые монеты).
+/// Прочитанная история событий по виду пула и встречному токену (USDT или промежуточная монета, решение 52):
+/// до какого блока и что найдено (все пулы с этим токеном, любые монеты).
 #[derive(Clone, Default)]
 pub struct Scanned {
-    inner: Arc<Mutex<HashMap<&'static str, History>>>,
+    inner: Arc<Mutex<HashMap<(&'static str, Address), History>>>,
 }
 
 impl Scanned {
-    /// Найденное и последний прочитанный блок вида пула. None — ещё не читали.
-    fn get(&self, family: &str) -> Option<(u64, Vec<Found>)> {
+    /// Найденное и последний прочитанный блок вида пула со встречным токеном. None — ещё не читали.
+    fn get(&self, family: &'static str, quote: Address) -> Option<(u64, Vec<Found>)> {
         self.inner
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .get(family)
+            .get(&(family, quote))
             .cloned()
     }
 
     /// Дописывает новые пулы и сдвигает прочитанный блок.
-    fn extend(&self, family: &'static str, to: u64, mut found: Vec<Found>) {
+    fn extend(&self, family: &'static str, quote: Address, to: u64, mut found: Vec<Found>) {
         let mut m = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        let e = m.entry(family).or_default();
+        let e = m.entry((family, quote)).or_default();
         e.0 = to;
         e.1.append(&mut found);
     }
@@ -88,8 +90,8 @@ pub async fn enabled(ctx: &Ctx, f: &Family) -> bool {
     }
 }
 
-/// Все пулы монет с USDT по включённым видам.
-/// Принимает: монеты (адрес → тикер), адрес USDT, текущий блок, память истории.
+/// Все пулы монет со встречным токеном по включённым видам.
+/// Принимает: монеты (адрес → тикер), встречный токен (USDT или промежуточная монета), текущий блок, память истории.
 /// Возвращает: найденные пулы. Ошибка вида пула (не задан адрес, узел) пишется в журнал, вид пропускается;
 /// остальные виды ищутся дальше — так видно, что именно не настроено.
 pub async fn find_all(
@@ -137,7 +139,7 @@ async fn from_history(
     head: u64,
     scanned: &Scanned,
 ) -> GatewayResult<Vec<Found>> {
-    let from = match scanned.get(f.id) {
+    let from = match scanned.get(f.id, usdt) {
         Some((to, _)) => to + 1,
         None => ctx.dex_int("dex.scan_from_block", f.id)?,
     };
@@ -148,9 +150,9 @@ async fn from_history(
             }
             _ => discover_v4::scan(ctx, f, usdt, from, head).await?,
         };
-        scanned.extend(f.id, head, found);
+        scanned.extend(f.id, usdt, head, found);
     }
-    Ok(scanned.get(f.id).map(|(_, v)| v).unwrap_or_default())
+    Ok(scanned.get(f.id, usdt).map(|(_, v)| v).unwrap_or_default())
 }
 
 /// Пара токенов, отсортированная по адресу (currency0 < currency1 — так во всех видах пулов). Ошибок нет.

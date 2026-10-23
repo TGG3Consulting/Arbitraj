@@ -18,6 +18,7 @@ use super::exec::txs::Env;
 use super::node::heads::Heads;
 use super::pools::discover::Scanned;
 use super::pools::listen::Pools;
+use super::pools::mids::Mids;
 use super::pools::registry::Registry;
 use super::quote::Quoting;
 use super::quote::gas::GasPrice;
@@ -35,6 +36,8 @@ pub struct Parts {
     pub nonces: Nonces,
     pub inflows: Inflows,
     pub registry: Registry,
+    /// Промежуточные монеты (решение 52).
+    pub mids: Mids,
     pub scanned: Scanned,
     pub checks: Checks,
     pub gas: GasPrice,
@@ -52,6 +55,7 @@ impl Parts {
             nonces: Nonces::default(),
             inflows: Inflows::default(),
             registry: Registry::default(),
+            mids: Mids::default(),
             scanned: Scanned::default(),
             checks: Checks::default(),
             gas: GasPrice::default(),
@@ -69,6 +73,7 @@ impl Parts {
             tokens: self.tokens.clone(),
             heads: self.heads.clone(),
             gas: self.gas.clone(),
+            mids: self.mids.clone(),
         }
     }
 
@@ -93,6 +98,7 @@ impl Parts {
             out,
             checks: self.checks.clone(),
             heads: self.heads.clone(),
+            mids: self.mids.clone(),
         }
     }
 }

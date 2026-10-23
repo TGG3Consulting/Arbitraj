@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/check/hooks_probe.rs
 //! Что делает: влияние крючка пула V4 группы B/C (решение 32) — пробный обмен квотером своей DEX (он исполняет
 //! крючки) против локальной математики пула без крючка, на сумме check.probe_usdt: покупка (USDT → монета)
-//! и продажа (полученные монеты → USDT). Влияние, % = (математика − квотер) / математика · 100; положительное —
+//! и продажа (полученные монеты → USDT). Пул с промежуточной монетой (решение 52) — проба в ней (quote/rate.rs). Влияние, % = (математика − квотер) / математика · 100; положительное —
 //! получаем меньше. Ошибка пробы (откат квотера, крючок требует hookData и т.п.) — Failed с причиной.
 //! Кто вызывает: check/cycle.rs.
 //! От чего зависит: quote/quoter.rs, quote/pool_quote.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs.
@@ -19,17 +19,22 @@ use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::pools::registry::Entry;
-use super::super::quote::{pool_quote, quoter};
+use super::super::pools::registry::{Entry, Registry};
+use super::super::quote::{pool_quote, quoter, rate};
 use super::super::tokens::Tokens;
 
 /// Проверка пула. Возвращает: PoolCheck (None — у пула нет крючка группы B/C, проверять нечего).
-pub async fn check_pool(ctx: &Ctx, tokens: &Tokens, e: &Entry) -> Option<PoolCheck> {
+pub async fn check_pool(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    reg: &Registry,
+    e: &Entry,
+) -> Option<PoolCheck> {
     let hooks = e.pool.hooks.as_ref()?;
     if hooks.group == HookGroup::A {
         return None;
     }
-    let impact = match measure(ctx, tokens, e).await {
+    let impact = match measure(ctx, tokens, reg, e).await {
         Ok(Ok(i)) => CheckState::Known(i),
         Ok(Err(reason)) => CheckState::Failed { reason },
         Err(err) => CheckState::Failed {
@@ -54,11 +59,18 @@ pub async fn check_pool(ctx: &Ctx, tokens: &Tokens, e: &Entry) -> Option<PoolChe
 async fn measure(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     e: &Entry,
 ) -> GatewayResult<Result<HookImpact, String>> {
-    let usdt_dec = tokens.decimals(ctx, e.usdt).await?;
+    let usdt = tokens.usdt(ctx)?;
+    let usdt_dec = tokens.decimals(ctx, usdt).await?;
     let Some(p) = num::to_units(ctx.dec("check.probe_usdt")?, usdt_dec) else {
         return Ok(Err("check.probe_usdt не переводится в единицы USDT".into()));
+    };
+    // Пул с промежуточной монетой (решение 52): проба — в ней, по живому пулу «промежуточная — USDT».
+    let p = match rate::from_usdt(ctx, reg, usdt, e.usdt, p) {
+        Ok(a) => a,
+        Err(err) => return Ok(Err(err.message)),
     };
     let local_buy = pool_quote::swap(ctx, e, e.usdt, true, p)?;
     let remote_buy = quoter::out(ctx, e, e.usdt, p).await?;

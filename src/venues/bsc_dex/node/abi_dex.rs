@@ -6,7 +6,8 @@
 //! Настройки: нет (адреса — dex.router, dex.quoter по виду пула).
 //!
 //! Сигнатуры из официальных исходников:
-//! - V2 Router02: swapExactTokensForTokens(…, deadline), …SupportingFeeOnTransferTokens, getAmountsOut —
+//! - V2 Router02: WETH() (обёртка нативной монеты — в BSC WBNB; IUniswapV2Router01.sol#L5, IPancakeRouter01.sol#L5
+//!   pancake-swap-periphery d769a6d1), swapExactTokensForTokens(…, deadline), …SupportingFeeOnTransferTokens, getAmountsOut —
 //!   https://github.com/Uniswap/v2-periphery/blob/ed24991304291297c3b4a52818d02f46a17aa9a2/contracts/interfaces/IUniswapV2Router02.sol#L24-L30 ,
 //!   …/IUniswapV2Router01.sol#L61-L94 (PancakeRouter — те же: research/flow/bsc_dex.md, раздел 5).
 //! - PancakeSwap V3 SwapRouter.exactInputSingle (с deadline в структуре) —
@@ -25,6 +26,7 @@
 
 alloy::sol! {
     interface IV2Router {
+        function WETH() external pure returns (address);
         function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
         function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external returns (uint256[] memory amounts);
         function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external;

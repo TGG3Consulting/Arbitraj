@@ -65,14 +65,16 @@ pub async fn run(
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     let buy = plan::build(
         ctx,
-        e,
+        &plan::single(
+            e,
+            Order {
+                token_in: usdt,
+                token_out: coin,
+                amount_in: usdt_amount,
+                min_out: U256::from(1u8),
+            },
+        ),
         wallet,
-        &Order {
-            token_in: usdt,
-            token_out: coin,
-            amount_in: usdt_amount,
-            min_out: U256::from(1u8),
-        },
         now,
         true,
     )
@@ -116,14 +118,16 @@ pub async fn run(
     let rest = bought - half - quarter;
     let sell = plan::build(
         ctx,
-        e,
+        &plan::single(
+            e,
+            Order {
+                token_in: coin,
+                token_out: usdt,
+                amount_in: rest,
+                min_out: U256::from(1u8),
+            },
+        ),
         wallet,
-        &Order {
-            token_in: coin,
-            token_out: usdt,
-            amount_in: rest,
-            min_out: U256::from(1u8),
-        },
         now,
         true,
     )

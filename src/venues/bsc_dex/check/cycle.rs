@@ -101,7 +101,7 @@ pub async fn hooks(p: Pools, wake: Arc<Notify>) {
             if !e.valid {
                 continue;
             }
-            if let Some(pc) = hooks_probe::check_pool(&p.ctx, &p.tokens, &e).await {
+            if let Some(pc) = hooks_probe::check_pool(&p.ctx, &p.tokens, &p.reg, &e).await {
                 if let CheckState::Failed { reason } = &pc.impact {
                     p.ctx
                         .log(

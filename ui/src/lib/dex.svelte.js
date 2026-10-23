@@ -97,20 +97,16 @@ export function whyNoDex() {
   return reasons.join('; ');
 }
 
-// Настройки области «DEX», у которых id — имя DEX («pancakeswap»), а не вид пула («pancakeswap_v3»).
-// Источник — src/settings/catalog/dex.rs (комментарий к области DX) и docs/SETTINGS.md. Схема бэкенда этого
-// пока не сообщает (запрос на изменение стыка — Issue #9); остальные dex.* с областью DEX задаются по виду пула.
-const DEX_LEVEL = ['dex.enabled'];
-
 /**
- * Какие id области «DEX» подходят настройке.
- * Принимает: имя настройки. Возвращает: [{id, title}] от адаптеров DEX.
+ * Какие id области «DEX» подходят настройке. Чей это id — из схемы бэкенда (SettingDef.dex_id:
+ * «Dex» — имя DEX, «Family» — вид пула; src/settings/schema.rs).
+ * Принимает: описание настройки. Возвращает: [{id, title}] от адаптеров DEX.
  */
-export function dexIdsFor(name) {
+export function dexIdsFor(def) {
   const { dexes, families } = dexScopeIds();
-  if (DEX_LEVEL.includes(name)) return dexes.map((d) => ({ id: d.id, title: `DEX ${d.id}` }));
+  if (isDexLevel(def)) return dexes.map((d) => ({ id: d.id, title: `DEX ${d.id}` }));
   return families.map((f) => ({ id: f.family, title: f.title }));
 }
 
-/** Является ли настройка настройкой уровня DEX (а не вида пула). Принимает: имя. Возвращает: bool. */
-export const isDexLevel = (name) => DEX_LEVEL.includes(name);
+/** Является ли настройка настройкой уровня DEX (а не вида пула). Принимает: описание. Возвращает: bool. */
+export const isDexLevel = (def) => def?.dex_id === 'Dex';

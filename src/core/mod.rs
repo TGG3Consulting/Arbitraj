@@ -20,6 +20,7 @@ pub mod engine;
 pub mod executor;
 pub mod fills;
 pub mod gas_stats;
+pub mod ids;
 pub mod inner;
 pub mod ledger;
 pub mod limits;

@@ -63,6 +63,8 @@ pub struct Inner {
     /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
     pub cand_tx: mpsc::Sender<Direction>,
     pub queued: Mutex<HashSet<Direction>>,
+    /// Последний расчёт кандидата по направлению: {direction, verdict, at} — для «Живого экрана».
+    pub candidates: Mutex<HashMap<Direction, serde_json::Value>>,
     /// Последняя причина отказа по направлению (чтобы не повторять её в журнале).
     pub last_reject: Mutex<HashMap<Direction, String>>,
     /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
@@ -118,6 +120,7 @@ impl Inner {
             ticking: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),
+            candidates: Mutex::default(),
             last_reject: Mutex::default(),
             transits: Mutex::default(),
             exposure: Mutex::default(),

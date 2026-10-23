@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use chrono::{NaiveDate, Utc};
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::types::{Asset, Direction, VenueId};
 use crate::settings::catalog;
@@ -22,7 +22,7 @@ use super::engine::{Core, lk};
 use super::view::CoreEvent;
 
 /// Режим системы.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Mode {
     /// Новые сделки не открываются; после запуска система в этом режиме до команды «Старт».
     Stopped,

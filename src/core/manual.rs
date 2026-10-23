@@ -85,8 +85,15 @@ pub async fn load(core: &Core) {
 /// Алерт «убыток выше порога»: сделка ждёт решения человека. Уведомление stuck.loss_alert несёт id алерта
 /// (кнопки Telegram — по notify/catalog.rs). Ошибок нет.
 pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Decimal) {
+    let id = match super::ids::uuid_v4() {
+        Ok(id) => id,
+        Err(e) => {
+            let why = format!("алерт не создан ({e}) — монеты на месте, нужна ручная проверка");
+            return super::ledger::finish(core, &mut deal, Step::Halted, &why).await;
+        }
+    };
     let alert = StuckAlert {
-        id: format!("a{}", deal.id),
+        id,
         deal_id: deal.id.clone(),
         venue: deal.at.clone(),
         asset: deal.direction.asset.clone(),
@@ -113,9 +120,11 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Decimal) {
     lk(&core.inner.alerts).insert(alert.id.clone(), (alert.clone(), deal));
     persist(core).await;
     core.inner.live.send(CoreEvent::StuckAlert(alert.clone()));
+    // Кнопки «Продать сейчас» и «Беру на себя» несут id алерта (notify/callback.rs).
     core.inner
         .deps
-        .notify("stuck.loss_alert", Some(&alert.venue.0), &text)
+        .notifier
+        .send_with_buttons("stuck.loss_alert", Some(&alert.venue.0), &text, &alert.id)
         .await;
 }
 
@@ -139,7 +148,7 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
     let h = ManualHolding {
-        id: format!("h{}", deal.id),
+        id: super::ids::uuid_v4().unwrap_or_else(|_| alert.id.clone()),
         deal_id: deal.id.clone(),
         venue: alert.venue.clone(),
         asset: alert.asset.clone(),

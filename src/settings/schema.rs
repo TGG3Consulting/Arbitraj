@@ -65,6 +65,17 @@ pub enum ScopeKind {
     Channel,
 }
 
+/// Что означает id области «DEX» у настройки (Issue #9: интерфейсу нужно знать, чей это id).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum DexId {
+    /// Область «DEX» у настройки не задаётся.
+    None,
+    /// id — имя DEX («pancakeswap»), например dex.enabled.
+    Dex,
+    /// id — вид пула («pancakeswap_v3»): адреса контрактов, dex.pool_enabled и прочие dex.*.
+    Family,
+}
+
 /// Описание одной настройки.
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingDef {
@@ -85,12 +96,19 @@ pub struct SettingDef {
     /// Верхняя граница целого числа, если она задана решением или протоколом (ссылка — в описании);
     /// None — без верхней границы.
     pub max: Option<u64>,
+    /// Для области «DEX»: id — имя DEX или вид пула (DexId::None — области «DEX» нет).
+    pub dex_id: DexId,
 }
 
 impl SettingDef {
     /// Задаёт варианты выбора (для Kind::Choice). Принимает: список. Возвращает: описание с вариантами.
     pub const fn choices(self, choices: &'static [&'static str]) -> Self {
         SettingDef { choices, ..self }
+    }
+
+    /// Задаёт смысл id области «DEX». Принимает: DexId. Возвращает: описание с ним.
+    pub const fn dex_id(self, dex_id: DexId) -> Self {
+        SettingDef { dex_id, ..self }
     }
 
     /// Задаёт верхнюю границу целого. Принимает: границу. Возвращает: описание с границей.

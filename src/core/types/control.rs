@@ -35,7 +35,7 @@ pub struct CoinGasStats {
 /// (режим «Порог убытка», решение 37). Алерт в Telegram с кнопками «Продать сейчас» и «Беру на себя».
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StuckAlert {
-    /// Идентификатор алерта — его несут кнопки Telegram и интерфейса.
+    /// Идентификатор алерта — UUID (36 знаков): его несут кнопки Telegram (callback_data ≤ 64 байт) и интерфейса.
     pub id: String,
     pub deal_id: String,
     pub venue: VenueId,
@@ -85,5 +85,13 @@ pub enum ManualAction {
 pub struct ManualCommand {
     pub action: ManualAction,
     pub source: CommandSource,
+    /// Кто нажал: у Telegram — пользователь (id и @username, как его описал notify); у интерфейса — None
+    /// (авторизации веб-сервера пока нет). Для журнала.
+    #[serde(default)]
+    pub by: Option<String>,
     pub at: DateTime<Utc>,
 }
+
+/// Канал команд человека ядру: notify (кнопки Telegram) кладёт команду, ядро выполняет (core/commands.rs).
+/// Отправка — try_send: очередь полна — нажавший видит «команда не передана, нажмите ещё раз».
+pub type CommandTx = tokio::sync::mpsc::Sender<ManualCommand>;

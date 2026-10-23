@@ -13,7 +13,7 @@ use crate::core::types::{Asset, CommandSource, ManualAction, ManualCommand, Venu
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::engine::Core;
+use super::engine::{Core, lk};
 use super::risk::{self, Mode};
 
 impl Core {
@@ -47,13 +47,31 @@ impl Core {
                 .settings
                 .text("notify.telegram_chat", At::default())
                 .map_err(|e| e.message)?;
-            if chat != &ours {
+            // Настройка может быть @username чата — тогда совпадение уже проверил notify (press::chat_matches),
+            // у ядра есть только числовой id.
+            if chat != &ours && !ours.starts_with('@') {
                 return Err(format!("чат {chat} — не настроенный чат уведомлений"));
             }
         }
-        let who = match &cmd.source {
-            CommandSource::Ui => "интерфейс".to_string(),
-            CommandSource::Telegram { chat } => format!("Telegram {chat}"),
+        // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).
+        let gone = match &cmd.action {
+            ManualAction::SellNow { alert_id } | ManualAction::TakeOver { alert_id } => {
+                (!lk(&self.inner.alerts).contains_key(alert_id))
+                    .then(|| format!("алерт {alert_id}"))
+            }
+            ManualAction::ReturnToBot { holding_id } => (!lk(&self.inner.holdings)
+                .contains_key(holding_id))
+            .then(|| format!("запись {holding_id}")),
+        };
+        if let Some(what) = gone {
+            return Ok(format!(
+                "{what} уже закрыт(а) или не существует — команда проигнорирована"
+            ));
+        }
+        let who = match (&cmd.source, &cmd.by) {
+            (CommandSource::Ui, _) => "интерфейс".to_string(),
+            (CommandSource::Telegram { chat }, Some(by)) => format!("Telegram {chat}, {by}"),
+            (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
         };
         match &cmd.action {
             ManualAction::SellNow { alert_id } => super::manual::sell_now(self, alert_id).await,
@@ -115,5 +133,20 @@ impl Core {
     /// Состояние экрана «Управление».
     pub fn control(&self) -> risk::Risk {
         risk::snapshot(self)
+    }
+}
+
+impl Core {
+    /// Канал команд для кнопок Telegram (core/types/control.rs, CommandTx): каждая команда выполняется
+    /// по очереди через Core::command. Размер очереди — --live-buffer. Ошибок нет.
+    pub fn command_channel(&self) -> crate::core::types::CommandTx {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(self.inner.deps.buffer);
+        let core = self.clone();
+        tokio::spawn(async move {
+            while let Some(cmd) = rx.recv().await {
+                let _ = core.command(cmd).await;
+            }
+        });
+        tx
     }
 }

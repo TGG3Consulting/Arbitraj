@@ -1,8 +1,10 @@
 //! Файл: api/ws.rs
-//! Что делает: WebSocket для интерфейса — живой поток изменений настроек и записей журнала.
-//! Сообщение: {"type":"settings","data":{…}} или {"type":"journal","data":{…}}.
+//! Что делает: WebSocket для интерфейса — живой поток изменений настроек, записей журнала и событий ядра.
+//! Сообщение: {"type":"settings","data":{…}}, {"type":"journal","data":{…}} или событие ядра
+//! (core/view.rs: coin_check, pool_check, coin_block, stuck_alert, manual, send_channel, gas_stats,
+//! spread, coins, candidate, deal, balances, control).
 //! Кто вызывает: интерфейс (подключается к /api/ws).
-//! От чего зависит: api/state.rs, settings/live.rs, storage/journal.rs.
+//! От чего зависит: api/state.rs, settings/live.rs, storage/journal.rs, core (Core::subscribe).
 //! Настройки: нет.
 
 use axum::extract::State;
@@ -23,6 +25,7 @@ pub async fn upgrade(State(st): State<AppState>, ws: WebSocketUpgrade) -> Respon
 async fn stream(mut socket: WebSocket, st: AppState) {
     let mut changes = st.changes.subscribe();
     let mut journal = st.journal_live.subscribe();
+    let mut core = st.core.subscribe();
     loop {
         let msg = tokio::select! {
             r = changes.recv() => match r {
@@ -32,6 +35,12 @@ async fn stream(mut socket: WebSocket, st: AppState) {
             },
             r = journal.recv() => match r {
                 Ok(e) => json!({ "type": "journal", "data": e }),
+                Err(RecvError::Lagged(n)) => json!({ "type": "lagged", "skipped": n }),
+                Err(RecvError::Closed) => break,
+            },
+            // События ядра уже в виде {"type": …, "data": …} (core/view.rs).
+            r = core.recv() => match r {
+                Ok(e) => serde_json::to_value(e).unwrap_or_else(|e| json!({ "type": "error", "data": e.to_string() })),
                 Err(RecvError::Lagged(n)) => json!({ "type": "lagged", "skipped": n }),
                 Err(RecvError::Closed) => break,
             },

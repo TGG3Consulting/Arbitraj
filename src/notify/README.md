@@ -17,6 +17,6 @@
 Настройки: `notify.*`, `http.timeout_ms`. Токен — секрет `telegram.bot_token`.
 Кнопки (`stuck.loss_alert`: «Продать сейчас», «Беру на себя»): событие отправляется через `Notifier::send_with_buttons`
 с id алерта; `updates.rs` слушает getUpdates длинным опросом (`notify.updates_timeout_s`), принимает нажатия только
-из `notify.telegram_chat` и отдаёт ядру `ManualCommand` (core/types/control.rs) в канал `press::CommandTx`.
-Паузы перед повтором после ошибки getUpdates в каталоге нет — после ошибки приём ждёт изменения настроек или сигнала `wake`.
+из `notify.telegram_chat` и отдаёт ядру `ManualCommand` (core/types/control.rs, поле `by` — кто нажал) в канал `CommandTx`.
+После ошибки getUpdates — пауза `notify.updates_retry_ms` и повтор (`retry_after` из ответа Telegram сильнее). Канал команд — `core::types::CommandTx` (стык), его даёт `Core::command_channel()`; `wake` подаёт api после разблокировки, смены и блокировки секретов.
 Условие события (`notify.event.condition`) проверяется с этапа 5; пока условие задано — событие не отправляется, причина пишется в журнал.

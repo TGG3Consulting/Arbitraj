@@ -1,6 +1,7 @@
 <!--
   Файл: ui/src/App.svelte
-  Что делает: каркас интерфейса — меню экранов, плашки «Система заблокирована» и «Нет живой связи»,
+  Что делает: каркас интерфейса — меню экранов, плашки «Система заблокирована», «Нет живой связи»
+    и режима системы («Старт/Стоп/Пауза»),
     выбор экрана по адресу (#/экран). Запускает живой поток и общие хранилища один раз.
   Кто вызывает: main.js.
   От чего зависит: lib/*, components/LockBanner.svelte, LiveBanner.svelte, pages/*.
@@ -11,13 +12,17 @@
   import { start as startSettings } from './lib/settings.svelte.js';
   import { start as startSecrets } from './lib/secrets.svelte.js';
   import { start as startDex } from './lib/dex.svelte.js';
+  import { start as startControl } from './lib/control.svelte.js';
   import { route, href } from './lib/router.svelte.js';
   import LockBanner from './components/LockBanner.svelte';
   import LiveBanner from './components/LiveBanner.svelte';
+  import ControlBar from './components/ControlBar.svelte';
   import Unlock from './pages/Unlock.svelte';
   import Venues from './pages/Venues.svelte';
   import Settings from './pages/Settings.svelte';
   import Rules from './pages/Rules.svelte';
+  import Live from './pages/Live.svelte';
+  import Deals from './pages/Deals.svelte';
   import Coins from './pages/Coins.svelte';
   import Manual from './pages/Manual.svelte';
   import Channels from './pages/Channels.svelte';
@@ -29,6 +34,8 @@
   const PAGES = [
     { id: 'unlock', title: 'Разблокировка', page: Unlock },
     { id: 'venues', title: 'Площадки', page: Venues },
+    { id: 'live', title: 'Живой экран', page: Live },
+    { id: 'deals', title: 'Сделки', page: Deals },
     { id: 'coins', title: 'Монеты', page: Coins },
     { id: 'manual', title: 'Ручное управление', page: Manual },
     { id: 'channels', title: 'Каналы отправки', page: Channels },
@@ -42,6 +49,7 @@
   startSettings();
   startSecrets();
   startDex();
+  startControl();
   connect();
   reconnectOnEvents();
 
@@ -56,6 +64,7 @@
 </nav>
 <LockBanner />
 <LiveBanner />
+<ControlBar />
 <main>
   {#key current.id}<current.page />{/key}
 </main>

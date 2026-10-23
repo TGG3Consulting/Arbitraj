@@ -9,8 +9,8 @@
 //! GET /api/venues/{id}/dex-families — [DexFamily]; биржа — 400 «не применимо»
 //! GET /api/channels/{venue}         — [{info: SendChannelInfo, stats: SendChannelStats | null}]
 //!
-//! Статистику каналов (решение 42) ведёт ядро по событиям адаптера. Пока ядро её не отдаёт,
-//! stats = null — интерфейс показывает «нет данных». Чисел из головы нет.
+//! Статистику каналов (решение 42) ведёт ядро по событиям адаптера (Core::channel_stats). Пока событий
+//! канала не было — stats = null, интерфейс показывает «нет данных». Чисел из головы нет.
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -49,7 +49,7 @@ pub async fn families(
 }
 
 /// Каналы отправки площадки (шлюз `send_channels`) со статистикой.
-/// Принимает: id площадки. Возвращает: каналы; stats = null, пока ядро не отдаёт статистику.
+/// Принимает: id площадки. Возвращает: каналы; stats = null, пока по каналу не было событий.
 /// Ошибки: 400 — у площадки нет каналов (биржа); 404 — площадка не подключена; 502 — сбой адаптера.
 pub async fn channels(
     State(st): State<AppState>,
@@ -61,11 +61,14 @@ pub async fn channels(
         .await
         .map_err(ApiError::gateway)?;
     let list = venue.send_channels().await.map_err(ApiError::gateway)?;
-    // Источника статистики (ядро, core/types/send.rs → SendChannelStats) в api пока нет:
-    // честно отдаём null, а не нули.
+    // Статистика — из ядра (последние события SendChannel адаптера); нет события — null, а не нули.
+    let stats = st.core.channel_stats();
     let views = list
         .into_iter()
-        .map(|info| ChannelView { info, stats: None })
+        .map(|info| {
+            let s = stats.iter().find(|s| s.id == info.id).cloned();
+            ChannelView { info, stats: s }
+        })
         .collect();
     Ok(Json(views))
 }

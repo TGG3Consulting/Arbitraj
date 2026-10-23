@@ -38,9 +38,9 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
     while let Some(d) = rx.recv().await {
         let verdict = profit::decide(&core, &d).await;
         lk(&core.inner.queued).remove(&d);
-        core.inner.live.send(CoreEvent::Candidate(
-            json!({ "direction": d, "verdict": verdict }),
-        ));
+        let row = json!({ "direction": d, "verdict": verdict, "at": chrono::Utc::now() });
+        lk(&core.inner.candidates).insert(d.clone(), row.clone());
+        core.inner.live.send(CoreEvent::Candidate(row));
         let deps = &core.inner.deps;
         let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
         match verdict {
@@ -79,5 +79,19 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
                 }
             }
         }
+    }
+}
+
+impl Core {
+    /// Последние расчёты кандидатов по направлениям (новые сверху) — «Живой экран».
+    pub fn candidates(&self) -> serde_json::Value {
+        let mut v: Vec<serde_json::Value> = lk(&self.inner.candidates).values().cloned().collect();
+        v.sort_by(|a, b| b["at"].as_str().cmp(&a["at"].as_str()));
+        serde_json::Value::Array(v)
+    }
+
+    /// Последняя статистика каналов отправки (события адаптеров DEX) — экран «Каналы отправки».
+    pub fn channel_stats(&self) -> Vec<crate::core::types::SendChannelStats> {
+        super::engine::rd(&self.inner.market).channels()
     }
 }

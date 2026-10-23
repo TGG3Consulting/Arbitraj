@@ -1,15 +1,18 @@
 //! Файл: api/state.rs
 //! Что делает: общее состояние веб-сервера и единый формат ошибки ответа.
 //! Кто вызывает: все обработчики api/*.
-//! От чего зависит: settings, storage, gateway, notify, secrets.
+//! От чего зависит: settings, storage, gateway, notify, secrets, core (Core).
 //! Настройки: нет.
+
+use std::sync::Arc;
 
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
-use tokio::sync::broadcast;
+use tokio::sync::{Notify, broadcast};
 
+use crate::core::Core;
 use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::gateway::registry::Registry;
 use crate::notify::dispatch::Notifier;
@@ -33,6 +36,11 @@ pub struct AppState {
     pub changes: broadcast::Sender<Change>,
     /// Поток записей журнала — для WebSocket интерфейса.
     pub journal_live: broadcast::Sender<Entry>,
+    /// Ядро: состояние экранов, живой поток (Core::subscribe), команды человека и управление.
+    pub core: Core,
+    /// Сигнал «секреты изменились» (создание, разблокировка, смена, удаление, блокировка) для приёма
+    /// кнопок Telegram (notify/updates.rs, Updates::wake).
+    pub secrets_wake: Arc<Notify>,
 }
 
 /// Ошибка ответа: HTTP-код и понятный текст по-русски.

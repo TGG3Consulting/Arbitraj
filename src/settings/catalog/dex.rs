@@ -10,7 +10,7 @@
 //! или вид пула («pancakeswap_v3») для остальных dex.* с этой областью.
 
 use super::{DX, G, V, d};
-use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
+use crate::settings::schema::{DexId, Kind as K, Limit as L, SettingDef};
 
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
@@ -18,7 +18,7 @@ pub static DEX: &[SettingDef] = &[
     d("Узел BSC", "bsc.node_ws_url", K::Url, L::None, "URL", G, "WebSocket узла BSC (подписки logs, newHeads); ключ провайдера в адресе — как {key}, сам ключ — секрет bsc.node_ws_key"),
     d("Узел BSC", "bsc.node_http_url", K::Url, L::None, "URL", G, "HTTP узла BSC (eth_call, eth_getLogs, eth_estimateGas, квитанции); ключ — как {key}, секрет bsc.node_http_key"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
-    d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)"),
+    d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),
     d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "Вид пула включён (id области — вид пула, например pancakeswap_v3) (решение 31)"),
     d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не слушаются"),
     d("DEX", "dex.multicall", K::Address, L::None, "адрес", V, "Контракт Multicall для пачек eth_call (адрес — из официальной документации)"),

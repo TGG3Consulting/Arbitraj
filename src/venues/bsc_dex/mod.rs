@@ -10,11 +10,14 @@
 //! 1b (пулы), 1c (математика, котировка, проверки), 1d (исполнение, каналы отправки), 1e (умный режим).
 //! Функции следующих шагов пока честно отвечают ошибкой Internal «ещё не сделано» — без выдуманных данных.
 
+pub mod coins;
 pub mod connection;
 pub mod ctx;
 pub mod errors;
+pub mod math;
 pub mod node;
 pub mod num;
+pub mod pools;
 pub mod tokens;
 pub mod wallet;
 
@@ -32,6 +35,9 @@ use crate::gateway::events::MarketEvent;
 
 use ctx::Ctx;
 use node::heads::Heads;
+use pools::discover::Scanned;
+use pools::listen::Pools;
+use pools::registry::Registry;
 use tokens::Tokens;
 use wallet::nonce::Nonces;
 
@@ -44,6 +50,12 @@ pub struct BscDex {
     tokens: Tokens,
     /// Строгая очередь транзакций кошелька (решение 45).
     nonces: Nonces,
+    /// Пулы в памяти.
+    registry: Registry,
+    /// Прочитанная история событий создания пулов.
+    scanned: Scanned,
+    /// Задачи текущей подписки: при новой подписке старые останавливаются.
+    tasks: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
 impl BscDex {
@@ -54,6 +66,9 @@ impl BscDex {
             heads: Heads::default(),
             tokens: Tokens::default(),
             nonces: Nonces::default(),
+            registry: Registry::default(),
+            scanned: Scanned::default(),
+            tasks: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -92,16 +107,27 @@ impl Venue for BscDex {
     }
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
-        Err(self.not_yet("справочник монет", "1b"))
+        coins::networks(&self.ctx, &self.registry)
     }
 
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,
-        _out: mpsc::Sender<MarketEvent>,
+        out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        self.tokens.set(&assets);
-        Err(self.not_yet("подписка на пулы", "1b"))
+        let p = Pools {
+            ctx: self.ctx.clone(),
+            reg: self.registry.clone(),
+            tokens: self.tokens.clone(),
+            out,
+        };
+        let new = pools::market::subscribe(&p, &self.heads, &self.scanned, assets).await?;
+        let mut tasks = self.tasks.lock().unwrap_or_else(|p| p.into_inner());
+        for old in tasks.drain(..) {
+            old.abort();
+        }
+        *tasks = new;
+        Ok(())
     }
 
     async fn quote(&self, _asset: &Asset, _side: Side, _qty: Decimal) -> GatewayResult<Quote> {
@@ -146,7 +172,7 @@ impl Venue for BscDex {
     }
 
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
-        Err(self.not_yet("список видов пулов", "1b"))
+        Ok(pools::families::for_ui())
     }
 
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {

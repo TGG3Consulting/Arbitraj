@@ -9,6 +9,7 @@ pub mod call;
 pub mod heads;
 pub mod jsonrpc;
 pub mod rpc;
+pub mod subs;
 pub mod ws;
 pub mod ws_task;
 

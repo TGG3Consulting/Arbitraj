@@ -30,11 +30,11 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Quote, Side, TradeRequest, TradeResult, Transfer, VenueId,
-    WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
+    Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, Venue, VenueKind};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
 use book::Books;
@@ -62,6 +62,16 @@ impl Bingx {
             books: Books::default(),
             fees: Fees::default(),
         }
+    }
+
+    /// Ответ «не применимо» для функций контракта, которых у биржи нет (они только у DEX).
+    /// Принимает: что именно не применимо. Возвращает: ошибку NotApplicable с площадкой BingX.
+    fn not_applicable(&self, what: &str) -> GatewayError {
+        self.ctx.tag(GatewayError::new(
+            ErrorCode::NotApplicable,
+            None,
+            format!("BingX — биржа: {what} к ней не применимо"),
+        ))
     }
 }
 
@@ -134,5 +144,30 @@ impl Venue for Bingx {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    async fn withdraw_cost(
+        &self,
+        asset: &Asset,
+        network: &str,
+        amount: Decimal,
+    ) -> GatewayResult<Vec<Cost>> {
+        wallet::withdraw_cost(&self.ctx, asset, network, amount).await
+    }
+
+    async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {
+        Err(self.not_applicable("проверка налогов токена и крючков пулов"))
+    }
+
+    async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
+        Err(self.not_applicable("список видов пулов DEX"))
+    }
+
+    async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
+        Err(self.not_applicable("список каналов отправки транзакций"))
+    }
+
+    async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
+        Err(self.not_applicable("проверка канала отправки транзакций"))
     }
 }

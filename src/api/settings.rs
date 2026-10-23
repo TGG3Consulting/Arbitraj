@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::notify::catalog::EVENTS;
-use crate::settings::catalog::CATALOG;
+use crate::settings::catalog;
 use crate::settings::live::Change;
 use crate::settings::store::SetError;
 use crate::settings::value::Scope;
@@ -24,7 +24,8 @@ use super::state::{ApiError, AppState, CHANGED_BY_UI};
 
 /// Каталог настроек и событий. Ошибок нет.
 pub async fn schema() -> Json<Value> {
-    Json(json!({ "settings": CATALOG, "events": EVENTS }))
+    let settings: Vec<_> = catalog::all().collect();
+    Json(json!({ "settings": settings, "events": EVENTS }))
 }
 
 /// Все заданные значения. Ошибок нет.

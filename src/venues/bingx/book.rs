@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, OrderBook, PriceLevel, Quote, Side};
+use crate::core::types::{Asset, Cost, CostKind, OrderBook, PriceLevel, Quote, Side};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -93,7 +93,14 @@ impl Books {
             qty,
             fillable_qty: filled,
             avg_price: avg,
-            fee_usdt: notional * rates.taker,
+            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            costs: vec![Cost::new(
+                CostKind::TradeFee,
+                notional * rates.taker,
+                "USDT",
+                false,
+            )],
+            route: None,
             at: book.received_at,
         })
     }

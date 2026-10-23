@@ -111,6 +111,7 @@ pub fn result(
         fee,
         fee_asset,
         venue_ref: order_id,
+        chain: None,
         finished_at: Utc::now(),
     })
 }

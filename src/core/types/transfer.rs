@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::cost::Cost;
 use super::market::{Asset, VenueId};
 
 /// Данные площадки о монете в одной сети: можно ли ввести и вывести, сколько стоит вывод.
@@ -24,6 +25,8 @@ pub struct CoinNetworkInfo {
     pub withdraw_fee: Option<Decimal>,
     pub withdraw_min: Option<Decimal>,
     pub withdraw_max: Option<Decimal>,
+    /// Минимальный депозит (решение 35: меньше — сделки нет); None — площадка не сообщила.
+    pub deposit_min: Option<Decimal>,
     /// Сколько подтверждений сети ждёт площадка для зачисления депозита.
     pub deposit_confirmations: Option<u32>,
     pub updated_at: DateTime<Utc>,
@@ -67,6 +70,8 @@ pub struct Transfer {
     pub venue_ref: String,
     /// Хеш транзакции в сети; None — ещё не отправлен.
     pub tx_hash: Option<String>,
+    /// Фактическая стоимость перевода (комиссия вывода биржи или газ кошелька); None — площадка не сообщила.
+    pub fee: Option<Cost>,
     pub updated_at: DateTime<Utc>,
 }
 

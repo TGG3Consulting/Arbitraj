@@ -1,10 +1,11 @@
 //! Файл: core/types/market.rs
-//! Что делает: типы рыночных данных — площадка, монета, направление, стакан, состояние пула.
+//! Что делает: типы рыночных данных — площадка, монета, направление, стакан.
+//! Пулы DEX — в core/types/pool.rs.
 //! Кто вызывает: весь проект (ядро, шлюз, адаптеры через контракт).
-//! От чего зависит: rust_decimal (цены и объёмы), alloy-primitives (адреса и числа блокчейна).
+//! От чего зависит: rust_decimal (цены и объёмы), alloy-primitives (адрес контракта).
 //! Настройки: нет.
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -52,35 +53,6 @@ pub struct OrderBook {
     pub asks: Vec<PriceLevel>,
     /// Время площадки; None — площадка его не прислала.
     pub exchange_time: Option<DateTime<Utc>>,
-    /// Время получения на нашем сервере.
-    pub received_at: DateTime<Utc>,
-}
-
-/// Состояние пула DEX. Цену и котировку на объём считает адаптер DEX.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PoolState {
-    /// Пул V2: остатки двух токенов.
-    V2 { reserve0: U256, reserve1: U256 },
-    /// Пул V3: текущая цена в формате протокола, ликвидность и тик.
-    V3 {
-        sqrt_price_x96: U256,
-        liquidity: u128,
-        tick: i32,
-    },
-}
-
-/// Пул DEX с его текущим состоянием.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Pool {
-    /// Площадка (конкретная DEX).
-    pub venue: VenueId,
-    /// Адрес контракта пула.
-    pub address: Address,
-    pub token0: Address,
-    pub token1: Address,
-    pub state: PoolState,
-    /// Номер блока, в котором получено состояние.
-    pub block: u64,
     /// Время получения на нашем сервере.
     pub received_at: DateTime<Utc>,
 }

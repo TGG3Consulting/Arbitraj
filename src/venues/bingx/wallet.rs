@@ -14,7 +14,9 @@ use chrono::Utc;
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::core::types::{Asset, CoinNetworkInfo};
+use rust_decimal::Decimal;
+
+use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -63,12 +65,54 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
                 withdraw_fee: num::dec_opt(n, "withdrawFee")?,
                 withdraw_min: num::dec_opt(n, "withdrawMin")?,
                 withdraw_max: num::dec_opt(n, "withdrawMax")?,
+                // Поля минимального депозита в официальной документации config/getall нет.
+                deposit_min: None,
                 deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
                 updated_at: Utc::now(),
             });
         }
     }
     Ok(out)
+}
+
+/// Стоимость вывода: комиссия вывода withdrawFee из config/getall (в монетах) — docs-v3.
+/// Официально комиссия считается системой по газу, опубликованное значение — справочное
+/// (support-статья Fee Schedule); факт — transactionFee в истории выводов.
+/// Принимает: монету, сеть, сумму (комиссия от суммы не зависит). Возвращает: [WithdrawFee].
+/// Ошибки: монеты или сети нет в справочнике, BingX не сообщил комиссию, связь.
+pub async fn withdraw_cost(
+    ctx: &Ctx,
+    asset: &Asset,
+    network: &str,
+    _amount: Decimal,
+) -> GatewayResult<Vec<Cost>> {
+    let all = coin_networks(ctx).await?;
+    let info = all
+        .iter()
+        .find(|c| c.asset.ticker == asset.ticker && c.network == network)
+        .ok_or_else(|| {
+            ctx.tag(GatewayError::new(
+                ErrorCode::NotConfigured,
+                None,
+                format!("У {} нет сети {network} в справочнике BingX", asset.ticker),
+            ))
+        })?;
+    let fee = info.withdraw_fee.ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!(
+                "BingX не сообщил комиссию вывода {} в сети {network}",
+                asset.ticker
+            ),
+        ))
+    })?;
+    Ok(vec![Cost::new(
+        CostKind::WithdrawFee,
+        fee,
+        asset.ticker.clone(),
+        false,
+    )])
 }
 
 /// Адрес депозита монеты в сети. Ошибки: сети нет у монеты, связь.

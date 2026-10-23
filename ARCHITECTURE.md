@@ -37,7 +37,7 @@ secrets/ — ключи и токены только в памяти; разбл
 | core | gateway (контракт, события, ошибки), settings, storage | venues — никогда напрямую |
 | gateway | core/types (только типы), settings, storage; адаптеры получает через реестр | остальное core |
 | venues/* | settings, storage, свои внутренние файлы | core, другие адаптеры |
-| api | core (команды и состояние), settings, notify | venues напрямую |
+| api | core (команды и состояние), gateway (реестр: проверка подключения, списки DEX и каналов), settings, notify | venues напрямую |
 | notify | settings, storage; получает события от core и gateway | venues напрямую |
 | settings | storage, gateway/errors (код «не задано») | — |
 | secrets | gateway/errors | всё остальное |
@@ -56,21 +56,34 @@ secrets/ — ключи и токены только в памяти; разбл
 | Вывести, статус вывода | ID вывода, хеш транзакции, статус |
 | Адрес депозита, статус депозита | Адрес в BSC, статус зачисления |
 | Балансы | USDT, монеты, BNB на газ |
-| Ошибки | Единый код ошибки + исходный ответ площадки |
+| Ошибки | Единый код ошибки + исходный ответ площадки (+ факт транзакции в сети, если она уже ушла) |
 | Проверить подключение | «Подключено» или точная причина сбоя (неверный ключ, нет прав, IP не разрешён, таймаут и т.д.) |
+| Стоимость вывода `withdraw_cost` | Биржа — комиссия вывода из API; DEX — газ перевода (BNB) и налог на перевод |
+| Перепроверить монеты `recheck_coins` | DEX — налоги и крючки сейчас; результаты — событиями CoinCheck / PoolCheck. Биржа — `NotApplicable` |
+| Виды пулов `dex_families` | DEX — DEX и виды пулов (id области настроек «DEX»). Биржа — `NotApplicable` |
+| Каналы отправки `send_channels`, `check_send_channel` | DEX — список каналов и «Проверить подключение» канала. Биржа — `NotApplicable` |
+
+Котировка (`Quote`) несёт список затрат `costs` (вид, сумма, в чём, учтено ли в цене) и, у DEX, маршрут `route`
+(прямой пул или умный). Ядро добавляет свои затраты (вывод, возврат USDT, запас r) и переводит всё в USDT —
+так собирается полный список затрат решения 35.
+
+События адаптера идут в канал из `subscribe_market`: стакан, пул, «данные недостоверны», проверка налогов монеты,
+проверка крючка пула, состояние канала отправки.
 
 ### Стыки (утверждает Тигран до фазы 2, docs/AGENTS.md)
 
 | Стык | Файл |
 | --- | --- |
-| Общие типы ядра | src/core/types/market.rs, trade.rs, transfer.rs |
+| Общие типы ядра | src/core/types/: market.rs, pool.rs (пулы V2/V3/CL/Bin, крючки A/B/C), trade.rs (котировка с затратами и маршрутом), cost.rs, transfer.rs, check.rs (налоги, крючки, чёрный список), send.rs (каналы, транзакция в сети), control.rs (статистика газа, застрявшие монеты, ручное управление) |
 | Контракт адаптера `Venue` | src/gateway/contract.rs |
 | Единые коды ошибок | src/gateway/errors.rs |
-| События шлюза | src/gateway/events.rs |
+| События адаптера и шлюза | src/gateway/events.rs |
 | Модель правил шлюза | src/gateway/rules.rs |
-| Каталог настроек | src/settings/catalog.rs (зеркало docs/SETTINGS.md) |
-| Каталог событий уведомлений | src/notify/catalog.rs |
-| REST и WebSocket для интерфейса | src/api/server.rs (список маршрутов), src/api/README.md |
+| Описание настройки и области | src/settings/schema.rs, src/settings/scope.rs (области: система, площадка, монета, событие, DEX, канал) |
+| Каталог настроек | src/settings/catalog/ (зеркало docs/SETTINGS.md) |
+| Каталог событий уведомлений (с кнопками) | src/notify/catalog.rs |
+| Известные секреты | src/secrets/mod.rs (`KNOWN`) |
+| REST и WebSocket для интерфейса | src/api/server.rs (список маршрутов), src/api/README.md (в т.ч. будущие маршруты экранов DEX) |
 
 ## Поток данных одного тика
 
@@ -86,14 +99,74 @@ secrets/ — ключи и токены только в памяти; разбл
 
 | Шаг ТЗ | Файлы |
 | --- | --- |
-| 1. Справочник монет и направлений | core/registry.rs, venues/*/wallet.rs, venues/bsc_dex/pools.rs |
-| 2. Прослушка цен | venues/*/ws.rs, venues/bsc_dex/node.rs, core/market_state.rs |
+| 1. Справочник монет и направлений | core/registry.rs, core/blacklist.rs, venues/bingx/wallet.rs, venues/bsc_dex/pools/*, venues/bsc_dex/check/* |
+| 2. Прослушка цен | venues/bingx/ws*.rs, venues/bsc_dex/node/*, venues/bsc_dex/pools/events_*.rs, core/market_state.rs |
 | 3. Сигнал и фильтр шума | core/signal.rs |
-| 4. Расчёт выгодности | core/profit.rs, venues/bsc_dex/price_v2.rs, price_v3.rs |
-| 5. Исполнение | core/executor.rs, core/transfers.rs, venues/*/ |
-| 6. Контроль и учёт | core/ledger.rs, core/risk.rs |
+| 4. Расчёт выгодности | core/profit.rs, core/costs.rs, core/convert.rs, venues/bsc_dex/math/*, venues/bsc_dex/quote/* |
+| 5. Исполнение | core/executor.rs, core/transfers.rs, core/usdt_return.rs, core/stuck.rs, venues/bingx/trade.rs, venues/bsc_dex/exec/*, venues/bsc_dex/send/* |
+| 6. Контроль и учёт | core/ledger.rs, core/gas_stats.rs, core/manual.rs, core/risk.rs |
 | Правила шлюза | gateway/rules.rs |
+| Команды человека (интерфейс, кнопки Telegram) | core/commands.rs, notify/updates.rs, api/* |
 | Интерфейс | api/*, ui/* |
+
+## Карта ядра (core/) — план, этапы 2–5
+
+Каждый файл ≤ ~200 строк; ядро видит площадки только через шлюз.
+
+| Файл | Что делает | Настройки |
+| --- | --- | --- |
+| types/* | Общие типы (стык) | — |
+| registry.rs | Справочник: монеты биржи ∩ пулы DEX, адрес контракта совпадает, ввод/вывод BSC открыт | — |
+| blacklist.rs | Чёрный список: проверка не прошла, налог выше порога, ручной; выход сам после перепроверки | tax.max_*, coin.blocked* |
+| market_state.rs | Стаканы, пулы, свежесть, проверки монет и пулов из событий адаптеров | feed.stale_after_ms |
+| signal.rs | Грубый спред, фильтр шума | signal.* |
+| convert.rs | Перевод затрат в USDT по живым ценам (BNB, монета) | — |
+| costs.rs | Полный список затрат направления (решение 35): котировки обеих сторон + вывод + возврат USDT + запас r | usdt_return.mode, profit.* |
+| profit.rs | Объём, прибыль, порог | money.*, profit.* |
+| executor.rs | Покупка → перевод → продажа через шлюз | exec.* |
+| transfers.rs | Вывод, ожидание депозита, минимальный депозит | transfer.* |
+| usdt_return.rs | Перегон USDT между биржей и кошельком (решение 34) | usdt_return.* |
+| stuck.rs | Застрявшая монета: ожидание / порог убытка / перегон (решение 37) | stuck.* |
+| manual.rs | «Беру на себя», «Вернуть боту» — учёт по реальному балансу | — |
+| commands.rs | Команды из интерфейса и кнопок Telegram (`ManualCommand`) | — |
+| ledger.rs | План против факта, сверка балансов | ledger.* |
+| gas_stats.rs | Статистика газа по монете (решение 36) | — |
+| risk.rs | Стоп-условия | risk.* |
+
+## Раскладка адаптера DEX (venues/bsc_dex/) — план
+
+Один адаптер = одна площадка `bsc_dex` (один кошелёк, один узел); внутри — DEX (PancakeSwap, Uniswap), виды пулов и каналы отправки.
+Каждый файл ≤ ~200 строк, у каждой функции — ссылка на официальный источник (research/flow/bsc_*.md).
+
+```text
+src/venues/bsc_dex/
+├── README.md          официальные источники, адреса, расхождения
+├── mod.rs             реализация контракта Venue
+├── ctx.rs             окружение: настройки (площадка, DEX, канал), секреты, журнал, сырые сообщения
+├── errors.rs          ответы узла и каналов → единые коды
+├── node/              rpc.rs (JSON-RPC по HTTP), ws.rs (WSS, переподключение), subs.rs (пачки подписок logs),
+│                      heads.rs (newHeads, свежесть, реорги), multicall.rs, abi.rs (селекторы и topic0 со ссылками)
+├── wallet/            signer.rs (ключ из секретов, подпись alloy), nonce.rs (строгая очередь, решение 45),
+│                      balances.rs, approve.rs (approve, Permit2), transfer.rs (перевод на биржу)
+├── pools/             discover_v2.rs, discover_v3.rs, discover_v4.rs (Initialize, PoolId), registry.rs,
+│                      events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, hooks.rs (флаги → группа A/B/C)
+├── math/              v2.rs, full_math.rs, tick_math.rs, sqrt_price_math.rs, tick_bitmap.rs,
+│                      swap_v3.rs, swap_cl.rs (V4: знак, композиция комиссий), bin_price.rs, bin_swap.rs, bin_fee.rs
+├── quote/             direct.rs (лучший пул), smart.rs (маршрут по пулам PancakeSwap), costs.rs (затраты котировки),
+│                      quoter.rs (сверка с квотером / MixedQuoter)
+├── check/             taxes.rs (пробный обмен eth_call: покупка, продажа, перевод), hooks_probe.rs, cycle.rs (цикл, события)
+├── exec/              v2.rs, v3.rs, v4.rs (прямой обмен), universal.rs (умный режим), build.rs (газ, проверка баланса,
+│                      eth_call перед отправкой), track.rs (квитанция, откат, «не попала»)
+└── send/              mod.rs (общий контракт канала, выбор, параллельная отправка), stats.rs, по файлу на канал:
+                       public.rs, mev_guard.rs, club48.rs, blockrazor.rs, blockrazor_builder.rs, blink.rs (3 канала),
+                       jetbuilder.rs, nodereal.rs, nodereal_api.rs, bloxroute_protect.rs, bloxroute_cloud.rs, flashblock.rs
+```
+
+Виды пулов (id области «DEX»): `pancakeswap_v2`, `pancakeswap_v3`, `pancakeswap_infinity_cl`, `pancakeswap_infinity_bin`,
+`uniswap_v2`, `uniswap_v3`, `uniswap_v4`; DEX: `pancakeswap`, `uniswap`.
+Каналы (id области «канал», решение 41): `public`, `pancake_mev_guard`, `club48`, `blockrazor`, `blockrazor_builder`,
+`blink_merkle`, `blink_public`, `blink_private`, `jetbuilder`, `nodereal`, `nodereal_api`, `bloxroute_protect`,
+`bloxroute_cloud`, `flashblock`. Список id — в коде адаптера (это перечень его модулей), адреса и ключи — настройки и секреты.
 
 ## Готовые фичи
 
@@ -117,3 +190,4 @@ secrets/ — ключи и токены только в памяти; разбл
 | --- | --- |
 | Авторизация доступа к веб-серверу. До решения — запуск только на 127.0.0.1; чужие Host/Origin отклоняются (api/guard.rs) | Тигран |
 | Формат условия правила и условия события уведомлений | Этап 5 |
+| Вопросы по стыкам DEX (минимальный депозит BingX, источник цены BNB, длинный опрос Telegram и др.) | Тигран, отчёт PR «Стыки DEX и ядра» |

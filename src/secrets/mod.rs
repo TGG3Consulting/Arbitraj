@@ -29,4 +29,48 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bingx",
         "Секретный ключ BingX (Secret Key)",
     ),
+    // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
+    // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
+    // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.
+    (
+        "bsc_dex.wallet_key",
+        "bsc_dex",
+        "Приватный ключ кошелька бота в сети BSC (решение 45: один кошелёк)",
+    ),
+    (
+        "bsc.node_ws_key",
+        "bsc_dex",
+        "Ключ провайдера узла BSC для адреса WebSocket ({key} в bsc.node_ws_url)",
+    ),
+    (
+        "bsc.node_http_key",
+        "bsc_dex",
+        "Ключ провайдера узла BSC для адреса HTTP ({key} в bsc.node_http_url)",
+    ),
+    // Платные каналы отправки (решение 41: канал с ключом не используется, пока ключ не введён).
+    (
+        "channel.blink_private.key",
+        "bsc_dex",
+        "Blink: ключ личного адреса bsc.blinklabs.xyz/v1/{key} (портал portal.blinklabs.xyz)",
+    ),
+    (
+        "channel.bloxroute_cloud.key",
+        "bsc_dex",
+        "bloXroute Cloud API: заголовок Authorization (Account Portal)",
+    ),
+    (
+        "channel.nodereal_api.key",
+        "bsc_dex",
+        "NodeReal Bundle Service API: ключ в адресе bsc-mainnet.nodereal.io/{key} (тариф Growth+)",
+    ),
+    (
+        "channel.blockrazor_builder.key",
+        "bsc_dex",
+        "BlockRazor Builder: заголовок Authorization (платный доступ)",
+    ),
+    (
+        "channel.flashblock.key",
+        "bsc_dex",
+        "Flashblock: заголовок Authorization (регистрация flashblock.trade)",
+    ),
 ];

@@ -15,7 +15,7 @@ use chrono::Utc;
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::core::types::{Asset, Transfer, TransferStatus, WithdrawRequest};
+use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -69,6 +69,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         status: TransferStatus::Pending,
         venue_ref: num::text(&data, "id")?,
         tx_hash: None,
+        fee: None, // станет известна из истории выводов (transactionFee)
         updated_at: Utc::now(),
     })
 }
@@ -165,10 +166,14 @@ fn transfer(
     venue_ref: &str,
     status: TransferStatus,
 ) -> GatewayResult<Transfer> {
+    let ticker = num::text(rec, "coin")?;
+    // transactionFee — только в истории выводов (docs-v3), у депозита его нет.
+    let fee = num::dec_opt(rec, "transactionFee")?
+        .map(|f| Cost::new(CostKind::WithdrawFee, f, ticker.clone(), false));
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
-            ticker: num::text(rec, "coin")?,
+            ticker,
             bsc_contract: None,
         },
         network: num::text_opt(rec, "network").unwrap_or_default(),
@@ -176,6 +181,7 @@ fn transfer(
         status,
         venue_ref: venue_ref.to_string(),
         tx_hash: num::text_opt(rec, "txId"),
+        fee,
         updated_at: Utc::now(),
     })
 }

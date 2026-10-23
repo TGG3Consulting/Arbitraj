@@ -19,7 +19,7 @@ use crate::storage::raw_log::RawLog;
 
 /// Идентификатор площадки. Это имя самого адаптера, по нему ищутся его настройки и секреты.
 pub const ID: &str = "bingx";
-/// Имя секрета API-ключа.
+/// Имя секрета API-ключа (тот же список — secrets::KNOWN, для интерфейса).
 pub const SECRET_API_KEY: &str = "bingx.api_key";
 /// Имя секрета секретного ключа (для подписи HMAC).
 pub const SECRET_API_SECRET: &str = "bingx.api_secret";

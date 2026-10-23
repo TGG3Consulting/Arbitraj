@@ -26,6 +26,7 @@ pub fn router(state: AppState, guard: Guard) -> Router {
         .route("/api/journal", get(journal::list))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
+        .route("/api/secrets/known", get(secrets::known))
         .route("/api/secrets/status", get(secrets::status))
         .route("/api/secrets/create", post(secrets::create))
         .route("/api/secrets/unlock", post(secrets::unlock))

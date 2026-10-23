@@ -6,6 +6,7 @@
 //! От чего зависит: api/state.rs, secrets/vault.rs, settings (параметры Argon2id и длина пароля).
 //! Настройки: security.kdf_memory_kib, security.kdf_iterations, security.kdf_parallelism, security.password_min_len.
 //!
+//! GET  /api/secrets/known
 //! GET  /api/secrets/status
 //! POST /api/secrets/create    {password}
 //! POST /api/secrets/unlock    {password}
@@ -38,6 +39,15 @@ pub struct Body {
 pub struct PasswordBody {
     old: Zeroizing<String>,
     new: Zeroizing<String>,
+}
+
+/// Известные секреты (имя, площадка, описание) — чтобы интерфейс показал, что нужно ввести.
+pub async fn known() -> Json<serde_json::Value> {
+    let list: Vec<serde_json::Value> = crate::secrets::KNOWN
+        .iter()
+        .map(|(n, scope, d)| serde_json::json!({ "name": n, "scope": scope, "description": d }))
+        .collect();
+    Json(serde_json::Value::Array(list))
 }
 
 /// Состояние: создан ли файл, разблокировано ли, имена секретов. Ошибок нет.

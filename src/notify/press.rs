@@ -21,8 +21,8 @@ use super::callback;
 use super::telegram::Telegram;
 use super::tg_buttons::{CallbackQuery, Chat};
 
-/// Канал команд человека ядру. Стык: тип канала утверждает техлид (запрос в Issue #10).
-pub type CommandTx = mpsc::Sender<ManualCommand>;
+/// Канал команд человека ядру — стык core/types/control.rs.
+pub use crate::core::types::CommandTx;
 
 /// Всё, что нужно для обработки нажатий. Живёт, пока работает приём (notify/updates.rs).
 pub struct Press<'a> {
@@ -95,6 +95,7 @@ impl Press<'_> {
             source: CommandSource::Telegram {
                 chat: msg.chat.id.to_string(),
             },
+            by: Some(who.clone()),
             at: Utc::now(),
         };
         let result = match self.commands.try_send(cmd) {

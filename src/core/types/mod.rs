@@ -19,7 +19,7 @@ pub use check::{
     BlockReason, CheckState, CoinBlock, CoinCheck, HookImpact, PoolCheck, TaxKind, TokenTaxes,
 };
 pub use control::{
-    CoinGasStats, CommandSource, ManualAction, ManualCommand, ManualHolding, StuckAlert,
+    CoinGasStats, CommandSource, CommandTx, ManualAction, ManualCommand, ManualHolding, StuckAlert,
 };
 pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};

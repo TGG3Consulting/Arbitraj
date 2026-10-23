@@ -7,6 +7,7 @@
 pub mod check;
 pub mod coins;
 pub mod control;
+pub mod core_api;
 pub mod dex;
 pub mod guard;
 pub mod journal;

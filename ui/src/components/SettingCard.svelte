@@ -45,7 +45,7 @@
   function adapterScopes(kind) {
     const fromAdapter =
       kind === 'Dex'
-        ? dexIdsFor(def.name)
+        ? dexIdsFor(def)
         : allChannels().map((c) => ({ id: c.info.id, title: c.info.title }));
     const out = new Map(fromAdapter.map((x) => [x.id, { ...x, unknown: false }]));
     for (const id of idsOf(kind)) if (!out.has(id)) out.set(id, { id, title: id, unknown: true });

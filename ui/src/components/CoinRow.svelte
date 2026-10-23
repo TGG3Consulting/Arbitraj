@@ -2,7 +2,8 @@
   Файл: ui/src/components/CoinRow.svelte
   Что делает: одна монета на экране «Монеты»: тикер и адрес, площадки, налоги (покупка, продажа, перевод)
     и состояние проверки, источник и время проверки, чёрный список с причиной; пулы монеты — площадка, вид,
-    ссылка на пул, комиссия, крючок и его группа A/B/C, проверка влияния крючка, блокировка пула.
+    ссылка на пул, комиссия, крючок и его группа A/B/C, проверка влияния крючка, причина исключения пула
+    (admission), номер блока состояния (block).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: pages/Coins.svelte.
   От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte.
@@ -26,15 +27,13 @@
   async function recheck(venue) {
     busy = true;
     try {
-      result = await post('/api/coins/recheck', { venue, tickers: [coin.asset.ticker] });
+      result = await post('/api/coins/recheck', { venue, assets: [coin.asset] });
     } catch (e) {
       result = { ok: false, details: e.message };
     }
     busy = false;
   }
 
-  /** Блокировка пула для показа: причина, если есть, иначе как есть. */
-  const poolBlock = (b) => (b?.reason !== undefined ? blockReason(b.reason) : JSON.stringify(b));
 </script>
 
 <article class="card">
@@ -54,7 +53,7 @@
       <tbody>
         {#each coin.pools as p, i (i)}
           {@const chk = p.check ? checkState(p.check.impact, impactText) : null}
-          <tr class:off={p.block}>
+          <tr class:off={p.admission}>
             <td>{p.venue}</td>
             <td><code>{p.family}</code> {poolKindLabel(p.kind)}</td>
             <td><code>{poolRefText(p.pool)}</code></td>
@@ -62,9 +61,9 @@
             <td>{p.hooks ? `${hookGroupLabel(p.hooks.group)}${p.hooks.dynamic_fee ? ', динамическая комиссия' : ''}` : 'нет'}</td>
             <td>
               {#if chk}<span class={chk.cls}>{chk.text}</span>{:else}<span class="muted">не требуется / нет данных</span>{/if}
-              {#if p.block}<div class="err">{poolBlock(p.block)}</div>{/if}
+              {#if p.admission}<div class="err">пул исключён: {p.admission}</div>{/if}
             </td>
-            <td>{p.received_at ? showTime(p.received_at) : '—'}</td>
+            <td>{p.received_at ? showTime(p.received_at) : '—'}{#if p.block != null} <span class="muted">· блок {p.block}</span>{/if}</td>
           </tr>
         {/each}
       </tbody>

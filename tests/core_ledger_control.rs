@@ -1,7 +1,7 @@
 //! Файл: tests/core_ledger_control.rs
 //! Что делает: проверяет ядро целиком на настоящей SQLite во временной папке (без площадок в реестре):
 //! после запуска система в режиме «Стоп»; торговля не включается, пока не заданы money.* и risk.*;
-//! кнопка Telegram из чужого чата отклоняется; незакрытая сделка после перезапуска помечается
+//! кнопка Telegram из чужого чата отклоняется, по закрытому алерту — игнорируется; незакрытая сделка после перезапуска помечается
 //! «прервана перезапуском»; алерта нет — команда отклоняется.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets. Моков нет.
@@ -100,12 +100,14 @@ async fn telegram_only_from_configured_chat() {
             alert_id: "нет".into(),
         },
         source: CommandSource::Telegram { chat: chat.into() },
+        by: Some("тест".into()),
         at: Utc::now(),
     };
     let e = core.command(cmd("200")).await.unwrap_err();
     assert!(e.contains("не настроенный чат"), "{e}");
-    let e = core.command(cmd("100")).await.unwrap_err();
-    assert!(e.contains("алерта"), "{e}");
+    // Из своего чата, но алерта нет (уже закрыт) — спокойно игнорируется (Issue #10).
+    let ok = core.command(cmd("100")).await.unwrap();
+    assert!(ok.contains("проигнорирована"), "{ok}");
 }
 
 #[tokio::test]

@@ -13,7 +13,7 @@ mod dex;
 mod send;
 mod trade;
 
-use super::schema::{Kind as K, Limit as L, ScopeKind as S, SettingDef};
+use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef};
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
 /// Возвращает: SettingDef без вариантов выбора и без верхней границы (их добавляют .choices() и .max()).
@@ -36,7 +36,25 @@ const fn d(
         group,
         choices: &[],
         max: None,
+        // Область «DEX»: по умолчанию в каталоге id — вид пула; настройки уровня DEX отмечаются .dex_id(Dex).
+        dex_id: if has_dex(scopes) {
+            DexId::Family
+        } else {
+            DexId::None
+        },
     }
+}
+
+/// Есть ли среди областей область «DEX» (const fn — без итераторов).
+const fn has_dex(scopes: &[S]) -> bool {
+    let mut i = 0;
+    while i < scopes.len() {
+        if matches!(scopes[i], S::Dex) {
+            return true;
+        }
+        i += 1;
+    }
+    false
 }
 
 const G: &[S] = &[S::Global];
@@ -78,6 +96,12 @@ mod tests {
         for s in all() {
             assert_eq!(s.kind == K::Choice, !s.choices.is_empty(), "{}", s.name);
             assert!(!s.scopes.is_empty(), "{}", s.name);
+            assert_eq!(
+                s.scopes.contains(&S::Dex),
+                s.dex_id != DexId::None,
+                "{}",
+                s.name
+            );
         }
     }
 }

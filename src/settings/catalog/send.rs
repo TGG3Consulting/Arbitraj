@@ -21,7 +21,7 @@ pub static SEND: &[SettingDef] = &[
     d("Отправка", "send.bundle_max_blocks", K::Integer, L::Positive, "блоков", V, "Бандл: maxBlockNumber = текущий блок + это число"),
     d("Каналы отправки", "channel.enabled", K::Bool, L::None, "да/нет", CH, "Канал включён (несколько закрытых — параллельно, без чаевых; открытый — только один)"),
     d("Каналы отправки", "channel.url", K::Url, L::None, "URL", CH, "Адрес канала из его официальной документации; ключ в адресе — как {key}"),
-    d("Каналы отправки", "channel.method", K::Choice, L::None, "способ", CH, "Способ отправки: одиночная / бандл (решение 43)").choices(&["single", "bundle"]),
+    d("Каналы отправки", "channel.method", K::Choice, L::None, "способ", CH, "Способ отправки: одиночная / бандл (решение 43)").choices(crate::core::types::SendMethod::CHOICES),
     d("Каналы отправки", "channel.min_gas_price_gwei", K::Decimal, L::Positive, "gwei", CH, "Минимальная цена газа канала; ниже — в канал не отправляется (решение 44)"),
     d("Каналы отправки", "channel.tip_enabled", K::Bool, L::None, "да/нет", CH, "Чаевые билдеру включены (только при отправке в один канал)"),
     d("Каналы отправки", "channel.tip_bnb", K::Decimal, L::Positive, "BNB", CH, "Сумма чаевых билдеру"),

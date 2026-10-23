@@ -67,6 +67,8 @@ pub async fn create(
         .await
         .map_err(ApiError::bad)?;
     log(&st, Level::Info, "Создан файл секретов").await;
+    // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
+    st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
 }
 
@@ -91,6 +93,8 @@ pub async fn unlock(
             .send("system.secrets_unlocked", None, "Секреты разблокированы")
             .await
     });
+    // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
+    st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
 }
 
@@ -98,6 +102,7 @@ pub async fn unlock(
 pub async fn lock(State(st): State<AppState>) -> Json<Status> {
     st.vault.lock();
     log(&st, Level::Info, "Секреты заблокированы").await;
+    st.secrets_wake.notify_one();
     Json(st.vault.status())
 }
 
@@ -122,6 +127,8 @@ pub async fn put(
         &format!("Секрет {name} добавлен или заменён"),
     )
     .await;
+    // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
+    st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
 }
 
@@ -137,6 +144,8 @@ pub async fn delete(
         .await
         .map_err(ApiError::bad)?;
     log(&st, Level::Info, &format!("Секрет {name} удалён")).await;
+    // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
+    st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
 }
 
@@ -152,6 +161,8 @@ pub async fn password(
         .await
         .map_err(ApiError::bad)?;
     log(&st, Level::Info, "Пароль секретов изменён").await;
+    // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
+    st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
 }
 

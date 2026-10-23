@@ -22,6 +22,20 @@ pub enum SendMethod {
     Bundle,
 }
 
+impl SendMethod {
+    /// Варианты настройки channel.method — в том же порядке, что и способы (стык: каталог настроек
+    /// берёт их отсюда, интерфейс сопоставляет способ канала с вариантом через это значение).
+    pub const CHOICES: &'static [&'static str] = &["single", "bundle"];
+
+    /// Значение настройки channel.method для способа. Ошибок нет.
+    pub const fn setting_value(self) -> &'static str {
+        match self {
+            SendMethod::Single => Self::CHOICES[0],
+            SendMethod::Bundle => Self::CHOICES[1],
+        }
+    }
+}
+
 /// Описание канала — что умеет по официальной документации. Даёт адаптер DEX.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendChannelInfo {

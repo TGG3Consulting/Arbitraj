@@ -18,8 +18,8 @@
   let { families } = $props();
 
   const defs = $derived((store.schema?.settings ?? []).filter((d) => d.scopes.includes('Dex')));
-  const dexDefs = $derived(defs.filter((d) => isDexLevel(d.name)));
-  const familyDefs = $derived(defs.filter((d) => !isDexLevel(d.name)));
+  const dexDefs = $derived(defs.filter((d) => isDexLevel(d)));
+  const familyDefs = $derived(defs.filter((d) => !isDexLevel(d)));
   /** Виды пулов по DEX: [[dex, [DexFamily]]]. */
   const byDex = $derived.by(() => {
     const out = new Map();

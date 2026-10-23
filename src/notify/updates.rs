@@ -5,14 +5,14 @@
 //! «recalculate offset after each server response»); обновление подтверждается следующим вызовом.
 //! Кто вызывает: main.rs (запускает задачу run).
 //! От чего зависит: notify/client.rs, notify/tg_buttons.rs, notify/press.rs, settings, secrets, storage/journal.
-//! Настройки: notify.updates_timeout_s (параметр timeout getUpdates), notify.telegram_chat,
+//! Настройки: notify.updates_timeout_s (параметр timeout getUpdates), notify.updates_retry_ms, notify.telegram_chat,
 //! notify.telegram_api_url, http.timeout_ms; секрет telegram.bot_token.
 //!
 //! Нет настройки, токена или связи — приём не работает, причина пишется в журнал, задача ждёт
 //! изменения настроек notify.* / http.timeout_ms или сигнала wake (разблокировка или смена секретов).
-//! Паузы перед повтором после ошибки в каталоге настроек нет (запрос в Issue #10), поэтому после ошибки
-//! сети или Telegram задача тоже ждёт изменения настроек или wake. Исключение — retry_after из ответа
-//! Telegram (ResponseParameters, https://core.telegram.org/bots/api#responseparameters): ждём столько, сколько сказал Telegram.
+//! После ошибки сети или Telegram — пауза notify.updates_retry_ms и повтор (не задана — ждём изменения
+//! настроек или wake); retry_after из ответа Telegram (ResponseParameters,
+//! https://core.telegram.org/bots/api#responseparameters) сильнее: ждём столько, сколько сказал Telegram.
 //!
 //! getUpdates: https://core.telegram.org/bots/api#getupdates
 
@@ -124,7 +124,11 @@ pub async fn run(u: Updates, mut watch: Watch) {
                         retry_after: Some(s),
                         ..
                     } if *s > 0 => Some(Duration::from_secs(s.unsigned_abs())),
-                    _ => None,
+                    _ => u
+                        .settings
+                        .integer("notify.updates_retry_ms", At::default())
+                        .ok()
+                        .map(Duration::from_millis),
                 };
                 u.log(Level::Error, format!("getUpdates: {e}")).await;
                 if !u.idle(&mut watch, &mut offset, retry).await {

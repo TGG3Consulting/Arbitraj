@@ -1,6 +1,6 @@
 //! Файл: main.rs
 //! Что делает: запуск системы — разбор аргументов, база, настройки, журнал, секреты,
-//! уведомления, шлюз, ядро и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
+//! уведомления (и приём кнопок Telegram), шлюз, ядро и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
 //! Кто вызывает: операционная система (запуск программы).
 //! От чего зависит: все модули. Адаптеры площадок регистрируются здесь (пока их нет).
 //! Настройки: свои — нет; аргументы запуска — cli.rs.
@@ -83,9 +83,8 @@ async fn run() -> Result<(), String> {
         )))
         .await;
 
-    // Ядро: работает с площадками только через шлюз. Состояние ядра для интерфейса (Core::coins_json,
-    // Core::subscribe и др.) подключит агент интерфейса в api (запрос в Issue #8).
-    let _core = arb::core::Core::start(arb::core::deps::Deps {
+    // Ядро: работает с площадками только через шлюз; интерфейс читает его состояние через AppState.core.
+    let core = arb::core::Core::start(arb::core::deps::Deps {
         gw: registry.clone(),
         settings: settings.clone(),
         journal: journal.clone(),
@@ -95,6 +94,27 @@ async fn run() -> Result<(), String> {
         buffer: args.live_buffer,
     })
     .await;
+
+    // Кнопки Telegram → команды ядру (CommandTx, core/types/control.rs). wake — сигнал «секреты
+    // изменились» от api/secrets.rs: приём начинает заново с актуальным токеном.
+    let secrets_wake = std::sync::Arc::new(tokio::sync::Notify::new());
+    tokio::spawn(arb::notify::updates::run(
+        arb::notify::updates::Updates {
+            http: http.clone(),
+            settings: settings.clone(),
+            vault: vault.clone(),
+            journal: journal.clone(),
+            commands: core.command_channel(),
+            wake: secrets_wake.clone(),
+        },
+        Watch::new(
+            changes.subscribe(),
+            arb::notify::updates::WATCH_PREFIXES
+                .iter()
+                .map(|p| p.to_string())
+                .collect(),
+        ),
+    ));
 
     let state = AppState {
         db,
@@ -106,6 +126,8 @@ async fn run() -> Result<(), String> {
         http,
         changes,
         journal_live,
+        core,
+        secrets_wake,
     };
     let guard = arb::api::guard::Guard::new(&args.listen.to_string(), &args.allow_origins);
     let listener = tokio::net::TcpListener::bind(args.listen)

@@ -33,8 +33,10 @@ pub enum Msg {
         asks: Vec<PriceLevel>,
         exchange_time: Option<DateTime<Utc>>,
     },
-    /// Ответ на подписку: код 0 — успех; иначе причина.
-    SubAck { code: i64, msg: String },
+    /// Ответ на подписку: код 0 — успех; иначе причина. id — идентификатор нашей подписки.
+    SubAck { id: String, code: i64, msg: String },
+    /// Стакан пары пришёл, но разобрать его нельзя — данные этой пары недостоверны.
+    BadDepth { symbol: String, reason: String },
     /// Другое (сохраняется только в сырых сообщениях).
     Other,
 }
@@ -48,16 +50,16 @@ pub fn gunzip(data: &[u8]) -> Result<String, String> {
     Ok(s)
 }
 
-/// Разбирает текст сообщения. Ошибка — сообщение со стаканом, но с неверными данными.
-pub fn parse(text: &str) -> Result<Msg, String> {
+/// Разбирает текст сообщения. Ошибок не бывает: неразборчивый стакан — Msg::BadDepth, прочее — Msg::Other.
+pub fn parse(text: &str) -> Msg {
     if text == "Ping" {
-        return Ok(Msg::Ping);
+        return Msg::Ping;
     }
     let Ok(v) = serde_json::from_str::<Value>(text) else {
-        return Ok(Msg::Other);
+        return Msg::Other;
     };
     if v.get("ping").is_some() {
-        return Ok(Msg::Ping);
+        return Msg::Ping;
     }
     let data_type = v
         .get("dataType")
@@ -67,20 +69,27 @@ pub fn parse(text: &str) -> Result<Msg, String> {
         && ch.starts_with("depth")
         && data.is_object()
     {
-        let mut asks = levels(data, "asks")?;
-        let mut bids = levels(data, "bids")?;
+        let (mut asks, mut bids) = match (levels(data, "asks"), levels(data, "bids")) {
+            (Ok(a), Ok(b)) => (a, b),
+            (Err(reason), _) | (_, Err(reason)) => {
+                return Msg::BadDepth {
+                    symbol: symbol.to_string(),
+                    reason,
+                };
+            }
+        };
         asks.sort_by_key(|a| a.price);
         bids.sort_by_key(|b| std::cmp::Reverse(b.price));
         let exchange_time = v
             .get("timestamp")
             .and_then(Value::as_i64)
             .and_then(|ms| Utc.timestamp_millis_opt(ms).single());
-        return Ok(Msg::Depth {
+        return Msg::Depth {
             symbol: symbol.to_string(),
             bids,
             asks,
             exchange_time,
-        });
+        };
     }
     if let Some(code) = v.get("code").and_then(Value::as_i64)
         && v.get("data").is_none_or(Value::is_null)
@@ -90,9 +99,14 @@ pub fn parse(text: &str) -> Result<Msg, String> {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        return Ok(Msg::SubAck { code, msg });
+        let id = v
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        return Msg::SubAck { id, code, msg };
     }
-    Ok(Msg::Other)
+    Msg::Other
 }
 
 /// Собирает OrderBook ядра.

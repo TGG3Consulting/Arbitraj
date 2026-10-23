@@ -3,7 +3,8 @@
 //! и проверкой фактического исполнения (количество, средняя цена, комиссия).
 //! Кто вызывает: mod.rs (trade из контракта).
 //! От чего зависит: rest.rs, symbols.rs, num.rs, ctx.rs.
-//! Настройки: venue.order_time_in_force (например IOC — что не исполнилось сразу, отменяется биржей).
+//! Настройки: venue.order_time_in_force (например IOC — что не исполнилось сразу, отменяется биржей);
+//! ожидание итога и отмена остатка — order_state.rs.
 //!
 //! Официальная документация:
 //! - POST /openApi/spot/v1/trade/order — symbol, side (BUY/SELL), type (LIMIT), quantity, price,
@@ -14,22 +15,22 @@
 //! Количество округляется вниз до stepSize, цена — до tickSize в безопасную сторону
 //! (покупка — вниз, продажа — вверх), сумма проверяется по minNotional (Spot trading symbols).
 
-use chrono::Utc;
 use reqwest::Method;
 use rust_decimal::{Decimal, RoundingStrategy};
-use serde_json::Value;
 
-use crate::core::types::{Side, TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
 use super::errors::Op;
 use super::symbols::Symbols;
-use super::{num, rest};
+use super::{num, order_state, rest};
 
 /// Ставит ордер и возвращает фактический результат.
-/// Ошибки: OrderRejected (пара не торгуется, сумма меньше минимальной, отказ BingX),
-/// Timeout — ордер отправлен, но результат не получен (нужна проверка вручную или правилом шлюза).
+/// Ждёт окончательного состояния ордера; не дождался — отменяет остаток (правило Тиграна:
+/// не исполнился — отменяем, больше не пробуем) и возвращает то, что реально исполнилось.
+/// Ошибки: OrderRejected (пара не торгуется, сумма вне пределов, отказ BingX),
+/// Timeout — ордер отправлен, но итог не получен (нужна проверка правилом шлюза).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let buy = req.side == Side::Buy;
@@ -52,6 +53,27 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
             RoundingStrategy::AwayFromZero
         },
     );
+    if qty <= Decimal::ZERO || price <= Decimal::ZERO {
+        return Err(reject(
+            ctx,
+            format!(
+                "{}: после округления по шагам количество {qty} или цена {price} не больше нуля",
+                rules.symbol
+            ),
+        ));
+    }
+    if let Some(max) = rules.max_notional
+        && qty * price > max
+    {
+        return Err(reject(
+            ctx,
+            format!(
+                "{}: сумма {} больше максимальной {max}",
+                rules.symbol,
+                qty * price
+            ),
+        ));
+    }
     if let Some(min) = rules.min_notional
         && qty * price < min
     {
@@ -88,67 +110,8 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
     )
     .await?;
     let order_id = num::text(&placed, "orderId")?;
-    let q = vec![
-        ("symbol", rules.symbol.clone()),
-        ("orderId", order_id.clone()),
-    ];
-    let state = rest::signed(
-        ctx,
-        Method::GET,
-        "/openApi/spot/v1/trade/query",
-        q,
-        Op::Other,
-    )
-    .await
-    .map_err(|e| {
-        ctx.tag(GatewayError::new(
-            ErrorCode::Timeout,
-            None,
-            format!(
-                "Ордер {order_id} отправлен, но его состояние не получено: {}",
-                e.message
-            ),
-        ))
-    })?;
-    result(ctx, req, &state, order_id)
-}
-
-/// Результат по ответу «Query Order details».
-fn result(ctx: &Ctx, req: TradeRequest, s: &Value, order_id: String) -> GatewayResult<TradeResult> {
-    let orig = num::dec(s, "origQty")?;
-    let filled = num::dec(s, "executedQty")?;
-    let quote = num::dec(s, "cummulativeQuoteQty")?;
-    let status = if filled.is_zero() {
-        TradeStatus::NotFilled
-    } else if filled < orig {
-        TradeStatus::PartiallyFilled
-    } else {
-        TradeStatus::Filled
-    };
-    let avg = if filled.is_zero() {
-        Decimal::ZERO
-    } else {
-        quote / filled
-    };
-    let fee = num::dec_opt(s, "fee")?.unwrap_or(Decimal::ZERO).abs();
-    let fee_asset = num::text_opt(s, "feeAsset").unwrap_or_default();
-    if fee_asset.is_empty() && !fee.is_zero() {
-        return Err(ctx.tag(GatewayError::new(
-            ErrorCode::BadResponse,
-            None,
-            format!("Ордер {order_id}: комиссия без валюты"),
-        )));
-    }
-    Ok(TradeResult {
-        request: req,
-        status,
-        filled_qty: filled,
-        avg_price: avg,
-        fee,
-        fee_asset,
-        venue_ref: order_id,
-        finished_at: Utc::now(),
-    })
+    let state = order_state::settle(ctx, &rules.symbol, &order_id).await?;
+    order_state::result(ctx, req, &state, order_id)
 }
 
 /// Округление до шага (шаг 0 — без округления).

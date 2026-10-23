@@ -3,7 +3,7 @@
 //! разрешены ли покупка и продажа через API) — справочник в памяти с обновлением по запросу.
 //! Кто вызывает: trade.rs (округление и проверки перед ордером), market.rs (список пар для подписки).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: venue.quote_asset.
+//! Настройки: venue.quote_asset, venue.symbols_refresh_s (как часто перечитывать правила пар).
 //!
 //! Официальная документация: «Spot trading symbols» GET /openApi/spot/v1/common/symbols
 //! https://bingx-api.github.io/docs-v3/#/en/Spot/Market%20Data/Spot%20trading%20symbols
@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -21,7 +22,7 @@ use super::ctx::Ctx;
 use super::{num, rest};
 
 /// Статус «пара торгуется» — по официальной документации.
-const STATUS_ONLINE: i64 = 1;
+pub const STATUS_ONLINE: i64 = 1;
 
 /// Правила одной пары.
 #[derive(Debug, Clone)]
@@ -49,6 +50,7 @@ impl SymbolRules {
 #[derive(Clone, Default)]
 pub struct Symbols {
     map: Arc<RwLock<HashMap<String, SymbolRules>>>,
+    loaded: Arc<RwLock<Option<Instant>>>,
 }
 
 impl Symbols {
@@ -60,7 +62,19 @@ impl Symbols {
         let map = parse_list(&data, &quote)?;
         let n = map.len();
         *self.map.write().unwrap_or_else(|p| p.into_inner()) = map;
+        *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
         Ok(n)
+    }
+
+    /// Перечитывает справочник, если он не загружен или старше venue.symbols_refresh_s.
+    /// Ошибки: настройки, связь, ответ BingX.
+    pub async fn ensure_fresh(&self, ctx: &Ctx) -> GatewayResult<()> {
+        let max_age = Duration::from_secs(ctx.int("venue.symbols_refresh_s")?);
+        let loaded = *self.loaded.read().unwrap_or_else(|p| p.into_inner());
+        if loaded.is_none_or(|at| at.elapsed() >= max_age) {
+            self.refresh(ctx).await?;
+        }
+        Ok(())
     }
 
     /// Правила пары по тикеру. Ошибка BadResponse — такой пары у BingX нет (или справочник не загружен).

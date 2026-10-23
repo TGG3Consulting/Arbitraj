@@ -8,7 +8,7 @@
 //! - GET /openApi/wallets/v1/capital/config/getall — networkList: network, depositEnable, withdrawEnable,
 //!   withdrawFee, withdrawMin, withdrawMax, minConfirm, contractAddress (поле есть в api-ai-skills от
 //!   2026-10-22; в примере docs-v3 его нет — проверяется на реальном ответе).
-//! - GET /openApi/wallets/v1/capital/deposit/address — data.data[]: coin, network, address, tag.
+//! - GET /openApi/wallets/v1/capital/deposit/address — data.data[]: coin, network, address, tag, status.
 
 use chrono::Utc;
 use reqwest::Method;
@@ -84,7 +84,11 @@ pub async fn deposit_address(ctx: &Ctx, asset: &Asset, network: &str) -> Gateway
     let list = num::arr(&data, "data")?;
     let found = list
         .iter()
-        .find(|a| num::text_opt(a, "network").as_deref() == Some(network));
+        // status по docs-v3: 0 — адрес активирован, 1 — запрошен, 2 — не запрошен. Нет поля — как в примере docs-v3.
+        .find(|a| {
+            num::text_opt(a, "network").as_deref() == Some(network)
+                && num::text_opt(a, "status").is_none_or(|s| s == "0")
+        });
     let found = found.ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::InvalidAddress,

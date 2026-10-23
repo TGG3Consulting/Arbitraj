@@ -1,7 +1,7 @@
 //! Файл: venues/bingx/rest.rs
 //! Что делает: запросы REST к BingX — публичные и подписанные (HMAC SHA256), разбор ответа
 //! {code, msg, data}, перевод ошибок в коды шлюза, переход на резервный адрес только при сбое сети.
-//! Кто вызывает: файлы адаптера BingX (symbols, wallet, account, trade, fees, listen_key).
+//! Кто вызывает: файлы адаптера BingX (symbols, wallet, transfers, account, trade, order_state, fees).
 //! От чего зависит: ctx.rs, errors.rs, hmac, sha2, reqwest.
 //! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms;
 //! секреты bingx.api_key, bingx.api_secret.
@@ -24,6 +24,9 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use super::ctx::Ctx;
 use super::errors::{self, Op};
 
+/// Предел recvWindow — из официальной документации (authentication.md: «maximum is 5000»).
+const MAX_RECV_WINDOW_MS: u64 = 5000;
+
 /// Параметры запроса: пары ключ — значение.
 pub type Params = Vec<(&'static str, String)>;
 
@@ -44,7 +47,15 @@ pub async fn signed(
     op: Op,
 ) -> GatewayResult<Value> {
     let (key, secret) = ctx.keys()?;
-    params.push(("recvWindow", ctx.int("venue.recv_window_ms")?.to_string()));
+    let recv = ctx.int("venue.recv_window_ms")?;
+    if recv > MAX_RECV_WINDOW_MS {
+        return Err(ctx.tag(GatewayError::new(
+            ErrorCode::NotConfigured,
+            None,
+            format!("venue.recv_window_ms = {recv}: у BingX не больше {MAX_RECV_WINDOW_MS}"),
+        )));
+    }
+    params.push(("recvWindow", recv.to_string()));
     params.push((
         "timestamp",
         chrono::Utc::now().timestamp_millis().to_string(),
@@ -131,7 +142,9 @@ async fn send(
         }
         match req.send().await {
             Ok(resp) => return parse(resp, op).await,
-            Err(e) if e.is_timeout() || e.is_connect() || e.is_request() => {
+            // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
+            // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
+            Err(e) if e.is_connect() || (op == Op::Other && e.is_timeout()) => {
                 last = Some(errors::from_network(e))
             }
             Err(e) => return Err(errors::from_network(e)),

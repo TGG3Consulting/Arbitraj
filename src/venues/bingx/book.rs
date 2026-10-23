@@ -80,7 +80,7 @@ impl Books {
             Side::Sell => &book.bids,
         };
         let (filled, notional) = walk(levels, qty);
-        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?).await?;
+        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
         let avg = if filled.is_zero() {
             Decimal::ZERO
         } else {

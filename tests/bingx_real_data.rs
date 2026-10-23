@@ -32,29 +32,27 @@ fn d(s: &str) -> Decimal {
 #[test]
 fn ping_and_sub_acks() {
     let m = messages();
-    assert!(matches!(
-        depth::parse(&m[0]),
-        Ok(Msg::SubAck { code: 0, .. })
-    ));
+    assert!(matches!(depth::parse(&m[0]), Msg::SubAck { code: 0, .. }));
     match depth::parse(&m[2]) {
-        Ok(Msg::SubAck { code, msg }) => {
+        Msg::SubAck { id, code, msg } => {
+            assert_eq!(id, "t-3");
             assert_eq!(code, 100400);
             assert!(msg.contains("NOSUCH-USDT"));
         }
         _ => panic!("ожидался ответ на подписку с ошибкой"),
     }
-    assert!(matches!(depth::parse(&m[5]), Ok(Msg::Ping)));
+    assert!(matches!(depth::parse(&m[5]), Msg::Ping));
 }
 
 #[test]
 fn depth_levels_sorted_best_first() {
     let m = messages();
-    let Ok(Msg::Depth {
+    let Msg::Depth {
         symbol,
         bids,
         asks,
         exchange_time,
-    }) = depth::parse(&m[4])
+    } = depth::parse(&m[4])
     else {
         panic!("ожидался стакан")
     };
@@ -71,7 +69,7 @@ fn depth_levels_sorted_best_first() {
 #[test]
 fn quote_walks_levels() {
     let m = messages();
-    let Ok(Msg::Depth { asks, .. }) = depth::parse(&m[4]) else {
+    let Msg::Depth { asks, .. } = depth::parse(&m[4]) else {
         panic!()
     };
     let (filled, notional) = book::walk(&asks, d("100"));

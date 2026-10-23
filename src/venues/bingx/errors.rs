@@ -33,6 +33,9 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         100419 => ErrorCode::IpNotAllowed,
         100410 => ErrorCode::RateLimited,
         100202 => ErrorCode::InsufficientBalance,
+        // «Система занята / запрос не выполнен»: для ордера и вывода итог неизвестен — Timeout
+        // (нужна проверка), для остального — площадка недоступна.
+        100500 if op != Op::Other => ErrorCode::Timeout,
         100500 => ErrorCode::Unreachable,
         _ => match op {
             Op::Trade => ErrorCode::OrderRejected,

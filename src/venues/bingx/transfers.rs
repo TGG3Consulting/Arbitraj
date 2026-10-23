@@ -22,6 +22,9 @@ use super::ctx::Ctx;
 use super::errors::{self, Op};
 use super::{num, rest};
 
+/// Длина withdrawOrderId — «less than 100 characters» (официальная документация Withdraw).
+const MAX_WITHDRAW_ORDER_ID: usize = 99;
+
 /// Вывод. withdrawOrderId — идентификатор сделки ядра (только буквы и цифры, по документации).
 /// Возвращает: перевод в статусе Pending с ID BingX. Ошибки: настройки, ключи, отказ BingX.
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
@@ -30,7 +33,18 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         .deal_id
         .chars()
         .filter(char::is_ascii_alphanumeric)
+        .take(MAX_WITHDRAW_ORDER_ID)
         .collect();
+    if order_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
+        return Err(ctx.tag(GatewayError::new(
+            ErrorCode::WithdrawRejected,
+            None,
+            format!(
+                "Вывод не отправлен: пустой ID сделки или сумма {} не больше нуля",
+                req.amount
+            ),
+        )));
+    }
     let params = vec![
         ("coin", req.asset.ticker.clone()),
         ("network", req.network.clone()),
@@ -129,7 +143,11 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
     })?;
     let status = match num::int(rec, "status")? {
         0 | 6 => TransferStatus::Sent,
-        1 => TransferStatus::Credited,
+        // Официальные источники расходятся в значении 1 (docs-v3: «зачислен», api-ai-skills: «не зачислен»),
+        // поэтому «зачислен» — только если вдобавок набраны все подтверждения сети (confirmTimes «x/y», x ≥ y).
+        // Проверяется на первом реальном депозите (README адаптера).
+        1 if confirmations_complete(rec) => TransferStatus::Credited,
+        1 => TransferStatus::Sent,
         other => {
             return Err(errors::bad(
                 &format!("неизвестный статус депозита {other}"),
@@ -160,4 +178,18 @@ fn transfer(
         tx_hash: num::text_opt(rec, "txId"),
         updated_at: Utc::now(),
     })
+}
+
+/// Набраны ли все подтверждения: поле confirmTimes вида «x/y» и x ≥ y. Нет поля или другой вид — нет.
+fn confirmations_complete(rec: &Value) -> bool {
+    let Some(ct) = num::text_opt(rec, "confirmTimes") else {
+        return false;
+    };
+    let Some((done, need)) = ct.split_once('/') else {
+        return false;
+    };
+    match (done.trim().parse::<u64>(), need.trim().parse::<u64>()) {
+        (Ok(d), Ok(n)) => n > 0 && d >= n,
+        _ => false,
+    }
 }

@@ -95,6 +95,21 @@ fn codes() -> Vec<CodeMeta> {
         c(C::StaleData, "Данные устарели — торговать нельзя"),
         c(C::VenueNotConnected, "Адаптер площадки не подключён"),
         c(C::BadResponse, "Ответ площадки не удалось разобрать"),
+        c(C::NotApplicable, "Функция к этой площадке не применима"),
+        c(
+            C::CoinNotChecked,
+            "Налог монеты или крючок ещё не проверены",
+        ),
+        c(C::CoinCheckFailed, "Проверка монеты или пула не прошла"),
+        c(C::NoRoute, "Нет допустимого пула или маршрута"),
+        c(
+            C::QuoteMismatch,
+            "Проверка перед отправкой разошлась с расчётом",
+        ),
+        c(C::ChannelRejected, "Канал отправки не принял транзакцию"),
+        c(C::GasBelowChannelMin, "Цена газа ниже минимума канала"),
+        c(C::TxNotIncluded, "Транзакция не попала в блок вовремя"),
+        c(C::NonceConflict, "Nonce неверный или занят"),
         c(C::Internal, "Внутренняя ошибка нашего кода"),
     ]
 }
@@ -106,6 +121,9 @@ const _: fn(C) = |code| match code {
     C::SecretsLocked | C::InsufficientBalance | C::OrderRejected | C::OrderNotFilled => {}
     C::PartialFill | C::WithdrawRejected | C::DepositNotCredited | C::SwapReverted => {}
     C::StaleData | C::VenueNotConnected | C::BadResponse | C::Internal => {}
+    C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
+    C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
+    C::NonceConflict => {}
 };
 
 /// Все действия — порядок как в gateway/rules.rs.

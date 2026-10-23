@@ -22,6 +22,53 @@
 
 Ответ ошибки: `{"error": "понятная причина"}`. Чужие Host/Origin отклоняются (`guard.rs`). Авторизации пока нет — запускать только на 127.0.0.1 (открытый вопрос).
 
+## Будущие маршруты экранов DEX и ядра (контракт, без реализации)
+
+Типы — из `src/core/types/` и `src/gateway/contract.rs` (JSON — как их serde). Ошибка — `{"error": …}`.
+Данные приходят из ядра (оно хранит последние события адаптеров) и из реестра шлюза; к адаптерам напрямую api не ходит.
+Настройки этих экранов меняются обычным `PUT /api/settings` (области `coin`, `dex`, `channel`).
+
+### Экран «Монеты» (налоги, крючки, чёрные списки)
+
+| Маршрут | Запрос | Ответ |
+| --- | --- | --- |
+| `GET /api/coins` | — | `[{asset: Asset, venues: [VenueId], taxes: CheckState<TokenTaxes>, tax_source, checked_at, block: CoinBlock \| null, pools: [{venue, family, kind: PoolKind, pool: PoolRef, fee_pips, hooks: HookInfo \| null, check: PoolCheck \| null, block, received_at}]}]` |
+| `POST /api/coins/recheck` | `{venue: VenueId, tickers: [String]}` | `{ok, details}` — шлюз `recheck_coins`; биржа отвечает «не применимо» |
+| ручной чёрный список | `PUT /api/settings` `{name:"coin.blocked", scope:{kind:"Coin",id:"CAKE"}, value:true}` (+ `coin.blocked_note`) | как у настроек |
+| WS `/api/ws` | — | `{"type":"coin_check","data":CoinCheck}`, `{"type":"pool_check","data":PoolCheck}`, `{"type":"coin_block","data":{asset, block: CoinBlock \| null}}` (null — вышла из списка) |
+
+### Экран «Ручное управление» (решение 37)
+
+| Маршрут | Запрос | Ответ |
+| --- | --- | --- |
+| `GET /api/manual` | — | `{alerts: [StuckAlert], holdings: [ManualHolding]}` |
+| `POST /api/manual/command` | `{action: ManualAction}` — `{"SellNow":{"alert_id":…}}`, `{"TakeOver":{"alert_id":…}}`, `{"ReturnToBot":{"holding_id":…}}` | `{ok, details}`; источник команды — `CommandSource::Ui`, пишется в журнал |
+| WS `/api/ws` | — | `{"type":"stuck_alert","data":StuckAlert}`, `{"type":"manual","data":{alerts, holdings}}` |
+
+### Экран «Каналы отправки» (решения 33, 41–44)
+
+| Маршрут | Запрос | Ответ |
+| --- | --- | --- |
+| `GET /api/channels/{venue}` | — | `[{info: SendChannelInfo, stats: SendChannelStats \| null}]` — шлюз `send_channels` + последние события ядра; биржа — 400 «не применимо» |
+| `POST /api/check/channel/{venue}/{id}` | — | `{ok, details}` — шлюз `check_send_channel`, пишется в журнал |
+| настройки канала | `PUT /api/settings` с `scope:{kind:"Channel",id:"club48"}` (`channel.*`); ключ — `PUT /api/secrets/channel.<id>.key` | как у настроек и секретов |
+| WS `/api/ws` | — | `{"type":"send_channel","data":SendChannelStats}` |
+
+### Экран «Статистика газа» (решение 36)
+
+| Маршрут | Запрос | Ответ |
+| --- | --- | --- |
+| `GET /api/gas-stats` | — | `[CoinGasStats]`, по монетам |
+| WS `/api/ws` | — | `{"type":"gas_stats","data":CoinGasStats}` |
+
+### DEX и виды пулов (экран «Площадки», настройки области «DEX»)
+
+«Проверить подключение» узла BSC и кошелька — существующий `POST /api/check/venue/bsc_dex` (адаптер DEX, `check_connection`).
+
+| Маршрут | Запрос | Ответ |
+| --- | --- | --- |
+| `GET /api/venues/{id}/dex-families` | — | `[DexFamily]` — шлюз `dex_families`; биржа — 400 «не применимо» |
+
 ## Файлы
 
 | Файл | Что делает |

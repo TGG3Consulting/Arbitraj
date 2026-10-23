@@ -1,0 +1,111 @@
+//! Файл: core/types/cost.rs
+//! Что делает: затраты сделки (вид, сумма, в чём) и маршрут обмена на DEX (прямой пул или умный).
+//! Кто вызывает: адаптеры (котировка, стоимость вывода), ядро (полный список затрат, решение 35),
+//! интерфейс (расчёт кандидата).
+//! От чего зависит: core/types/pool.rs, rust_decimal.
+//! Настройки: нет.
+//!
+//! Правило: адаптер кладёт в котировку всё, что знает о своей стороне сделки; ядро добавляет своё
+//! (вывод, возврат USDT, запас на движение цены) и переводит всё в USDT по живым ценам.
+
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+
+use super::pool::{PoolKind, PoolRef};
+
+/// Вид затраты. Список — решение 35 и CLAUDE.md («все затраты»).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CostKind {
+    /// Торговая комиссия биржи (в той валюте, что списывает биржа).
+    TradeFee,
+    /// Комиссия пула (V2 — из настройки; V3 — fee(); V4 — текущая lp+protocol).
+    PoolFee,
+    /// Остаток от округления количества по шагу биржи.
+    StepRemainder,
+    /// Газ обмена (BNB).
+    Gas,
+    /// Газ разрешения approve/Permit2 — только в первый раз на монету (BNB).
+    ApproveGas,
+    /// Газ перевода монеты из кошелька на биржу (BNB).
+    TransferGas,
+    /// Налог токена при покупке.
+    BuyTax,
+    /// Налог токена при продаже.
+    SellTax,
+    /// Налог токена при переводе.
+    TransferTax,
+    /// Влияние крючка группы B/C, измеренное пробным обменом.
+    HookImpact,
+    /// Чаевые каналу отправки (BNB).
+    ChannelTip,
+    /// Комиссия вывода биржи.
+    WithdrawFee,
+    /// Стоимость перегона USDT обратно (режим «в каждой сделке», решение 34) — считает ядро.
+    UsdtReturn,
+    /// Запас на движение цены за время перевода r = k·σ·√T — считает ядро.
+    PriceMoveReserve,
+}
+
+/// Одна затрата.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Cost {
+    pub kind: CostKind,
+    /// Сумма в единицах `asset`, неотрицательная.
+    pub amount: Decimal,
+    /// В чём: «USDT», «BNB» или тикер монеты.
+    pub asset: String,
+    /// true — уже учтено в средней цене котировки (показывается для прозрачности, повторно не вычитается);
+    /// false — вычитается отдельно.
+    pub in_price: bool,
+}
+
+impl Cost {
+    /// Создаёт затрату. Принимает: вид, сумму, актив, учтена ли в цене. Ошибок нет.
+    pub fn new(kind: CostKind, amount: Decimal, asset: impl Into<String>, in_price: bool) -> Self {
+        Self {
+            kind,
+            amount,
+            asset: asset.into(),
+            in_price,
+        }
+    }
+}
+
+/// Режим обмена на DEX (решения 29, 38).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RouteMode {
+    /// Лучший одиночный пул, прямой контракт обмена.
+    Direct,
+    /// Маршрут через несколько пулов (хопы, доли), исполняет официальный Universal Router.
+    Smart,
+}
+
+/// Один пул на пути доли.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RouteHop {
+    /// Вид пула у адаптера (id области «DEX»).
+    pub family: String,
+    pub kind: PoolKind,
+    pub pool: PoolRef,
+}
+
+/// Доля маршрута: часть входа идёт по цепочке пулов.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RouteLeg {
+    /// Доля входа, 0–1. У прямого обмена — одна доля 1.
+    pub share: Decimal,
+    pub hops: Vec<RouteHop>,
+    /// Ожидаемый выход доли по расчёту адаптера (в единицах выходного актива).
+    pub expected_out: Decimal,
+}
+
+/// Маршрут обмена на DEX, на который рассчитана котировка; тот же маршрут уходит в TradeRequest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DexRoute {
+    pub mode: RouteMode,
+    pub legs: Vec<RouteLeg>,
+    /// Блок, по состоянию которого посчитан маршрут.
+    pub block: u64,
+    /// Оценка газа обмена (единиц газа).
+    pub gas_units: u64,
+}

@@ -1,66 +1,17 @@
 //! Файл: settings/value.rs
-//! Что делает: область значения (Scope) и проверка значения настройки по её типу и ограничению.
+//! Что делает: проверка значения настройки по её типу, ограничению, вариантам и верхней границе.
+//! Область значения (Scope) — в settings/scope.rs, здесь переэкспортируется для старых путей.
 //! Кто вызывает: settings/store.rs при каждой записи; api/settings.rs (разбор области из запроса).
-//! От чего зависит: settings/schema.rs, rust_decimal, reqwest::Url (разбор адреса).
+//! От чего зависит: settings/schema.rs, settings/scope.rs, rust_decimal, reqwest::Url, alloy-primitives.
 //! Настройки: нет.
 
 use std::str::FromStr;
 
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::schema::{Kind, Limit, ScopeKind, SettingDef};
-
-/// Конкретная область значения: вся система, площадка, монета или событие.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "id")]
-pub enum Scope {
-    Global,
-    Venue(String),
-    Coin(String),
-    Event(String),
-}
-
-impl Scope {
-    /// Вид области. Ошибок нет.
-    pub fn kind(&self) -> ScopeKind {
-        match self {
-            Scope::Global => ScopeKind::Global,
-            Scope::Venue(_) => ScopeKind::Venue,
-            Scope::Coin(_) => ScopeKind::Coin,
-            Scope::Event(_) => ScopeKind::Event,
-        }
-    }
-
-    /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:CAKE», «event:trade_closed».
-    pub fn to_key(&self) -> String {
-        match self {
-            Scope::Global => "global".to_string(),
-            Scope::Venue(v) => format!("venue:{v}"),
-            Scope::Coin(c) => format!("coin:{c}"),
-            Scope::Event(e) => format!("event:{e}"),
-        }
-    }
-
-    /// Разбор строки из SQLite обратно в область.
-    /// Возвращает: Scope или None, если строка не в известном формате.
-    pub fn from_key(key: &str) -> Option<Scope> {
-        if key == "global" {
-            return Some(Scope::Global);
-        }
-        let (kind, id) = key.split_once(':')?;
-        if id.is_empty() {
-            return None;
-        }
-        match kind {
-            "venue" => Some(Scope::Venue(id.to_string())),
-            "coin" => Some(Scope::Coin(id.to_string())),
-            "event" => Some(Scope::Event(id.to_string())),
-            _ => None,
-        }
-    }
-}
+use super::schema::{Kind, Limit, SettingDef};
+pub use super::scope::Scope;
 
 /// Проверяет значение по описанию настройки.
 /// Принимает: описание, область, значение (JSON из интерфейса).
@@ -91,7 +42,10 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
                 .as_u64()
                 .ok_or("Ожидается целое неотрицательное число")?;
             check_limit(def.limit, Decimal::from(num))?;
-            Ok(Value::from(num))
+            match def.max {
+                Some(max) if num > max => Err(format!("Значение {num} больше допустимого {max}")),
+                _ => Ok(Value::from(num)),
+            }
         }
         Kind::Bool => value
             .as_bool()
@@ -118,6 +72,26 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
                 .map(|_| Value::String(s.to_string()))
                 .map_err(|_| format!("«{s}» — не IP-адрес"))
         }
+        Kind::Choice => match value.as_str().map(str::trim) {
+            Some(c) if def.choices.contains(&c) => Ok(Value::String(c.to_string())),
+            _ => Err(format!(
+                "Ожидается один из вариантов: {}",
+                def.choices.join(", ")
+            )),
+        },
+        Kind::Address => {
+            let s = value.as_str().ok_or("Ожидается адрес 0x…")?.trim();
+            let ok = s.len() == 42
+                && s.starts_with("0x")
+                && s.parse::<alloy_primitives::Address>().is_ok();
+            if ok {
+                Ok(Value::String(s.to_string()))
+            } else {
+                Err(format!(
+                    "«{s}» — не адрес сети BSC (0x и 40 шестнадцатеричных знаков)"
+                ))
+            }
+        }
         Kind::TextList => {
             let arr = value.as_array().ok_or("Ожидается список")?;
             let items: Option<Vec<Value>> = arr
@@ -136,7 +110,9 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
 fn check_scope_id(scope: &Scope) -> Result<(), String> {
     match scope {
         Scope::Global => Ok(()),
-        Scope::Venue(id) | Scope::Coin(id) if id.trim().is_empty() => {
+        Scope::Venue(id) | Scope::Coin(id) | Scope::Dex(id) | Scope::Channel(id)
+            if id.trim().is_empty() =>
+        {
             Err("Не указан идентификатор области".into())
         }
         Scope::Event(code) if crate::notify::catalog::find(code).is_none() => {

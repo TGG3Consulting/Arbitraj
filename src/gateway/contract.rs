@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Quote, Side, TradeRequest, TradeResult, Transfer, VenueId,
-    WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, PoolKind, Quote, SendChannelInfo, Side, TradeRequest,
+    TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 
 use super::errors::GatewayResult;
@@ -39,8 +39,25 @@ pub struct ConnectionCheck {
     pub details: String,
 }
 
+/// Вид пула, который умеет адаптер DEX: id области настроек «DEX» и что это.
+/// Нужен интерфейсу, чтобы показать настройки dex.* по каждой DEX и виду пула.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexFamily {
+    /// Имя DEX — id области «DEX» для dex.enabled (например «pancakeswap»).
+    pub dex: String,
+    /// Вид пула — id области «DEX» для dex.pool_enabled и адресов контрактов (например «pancakeswap_v3»).
+    pub family: String,
+    pub kind: PoolKind,
+    /// Название для интерфейса.
+    pub title: String,
+    /// Ссылки на официальную документацию (адреса контрактов).
+    pub docs: Vec<String>,
+}
+
 /// Контракт адаптера. Все функции возвращают данные в формате ядра.
 /// Ошибки площадки адаптер переводит в коды gateway/errors.rs.
+/// Функция, которая к площадке не применима, честно отвечает ошибкой NotApplicable —
+/// никаких выдуманных данных (CLAUDE.md, «Никаких моков и заглушек»).
 #[async_trait]
 pub trait Venue: Send + Sync {
     /// Идентификатор площадки. Не может ошибиться.
@@ -93,4 +110,32 @@ pub trait Venue: Send + Sync {
     /// Балансы всех активов на площадке (или в кошельке для DEX).
     /// Ошибки: ключ, связь.
     async fn balances(&self) -> GatewayResult<Vec<Balance>>;
+
+    /// Сколько стоит вывести монету с площадки: биржа — комиссия вывода из её API;
+    /// DEX — газ перевода из кошелька (BNB) и налог токена на перевод.
+    /// Принимает: монету, сеть, сумму. Возвращает: список затрат (Cost).
+    /// Ошибки: нет данных, сеть не найдена, монета не проверена (DEX: CoinNotChecked).
+    async fn withdraw_cost(
+        &self,
+        asset: &Asset,
+        network: &str,
+        amount: Decimal,
+    ) -> GatewayResult<Vec<Cost>>;
+
+    /// Перепроверить налоги монет и крючки их пулов сейчас, не дожидаясь цикла (кнопка в интерфейсе).
+    /// Результаты приходят событиями CoinCheck / PoolCheck в канал subscribe_market.
+    /// Ошибки: NotApplicable — у площадки нет такой проверки (биржа).
+    async fn recheck_coins(&self, assets: Vec<Asset>) -> GatewayResult<()>;
+
+    /// Виды пулов, которые умеет адаптер DEX (для настроек dex.* в интерфейсе).
+    /// Ошибки: NotApplicable — не DEX.
+    async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>>;
+
+    /// Каналы отправки транзакций, которые умеет адаптер (решение 41).
+    /// Ошибки: NotApplicable — у площадки нет каналов отправки (биржа).
+    async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>>;
+
+    /// «Проверить подключение» одного канала отправки: адрес, ключ, сеть.
+    /// Возвращает: ConnectionCheck. Ошибки: NotApplicable (биржа); неизвестный канал — NotConfigured.
+    async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck>;
 }

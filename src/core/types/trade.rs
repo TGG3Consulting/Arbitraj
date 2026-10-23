@@ -1,7 +1,7 @@
 //! Файл: core/types/trade.rs
 //! Что делает: типы торговли — сторона сделки, котировка на объём, запрос и результат покупки/продажи.
 //! Кто вызывает: ядро (расчёт, исполнение), шлюз и адаптеры через контракт.
-//! От чего зависит: core/types/market.rs.
+//! От чего зависит: core/types/market.rs, cost.rs (затраты, маршрут DEX), send.rs (транзакция в сети).
 //! Настройки: нет.
 //!
 //! Покупка и продажа описываются одинаково для биржи и DEX:
@@ -11,7 +11,9 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::cost::{Cost, DexRoute};
 use super::market::{Asset, VenueId};
+use super::send::ChainTx;
 
 /// Сторона сделки.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,10 +33,14 @@ pub struct Quote {
     pub qty: Decimal,
     /// Количество, которое площадка реально может исполнить (меньше qty, если не хватает ликвидности).
     pub fillable_qty: Decimal,
-    /// Средняя цена исполнения в USDT.
+    /// Средняя цена исполнения в USDT. Проскальзывание уже внутри (уровни стакана / математика пула);
+    /// у DEX внутри и всё, что помечено в costs как in_price (комиссия пула, налог, влияние крючка).
     pub avg_price: Decimal,
-    /// Торговая комиссия площадки (у DEX — комиссия пула) в USDT.
-    pub fee_usdt: Decimal,
+    /// Затраты этой стороны сделки, известные площадке (CostKind): торговая комиссия, комиссия пула,
+    /// газ, approve, чаевые канала, налоги, влияние крючка, остаток от округления.
+    pub costs: Vec<Cost>,
+    /// DEX: маршрут, на который посчитана котировка (прямой пул или умный). Биржа — None.
+    pub route: Option<DexRoute>,
     /// Время, на которое рассчитана котировка.
     pub at: DateTime<Utc>,
 }
@@ -52,6 +58,8 @@ pub struct TradeRequest {
     pub worst_price: Decimal,
     /// Идентификатор сделки ядра, для связи с журналом.
     pub deal_id: String,
+    /// DEX: маршрут из котировки — адаптер перепроверяет его (eth_call) перед отправкой. Биржа — None.
+    pub route: Option<DexRoute>,
 }
 
 /// Итоговое состояние исполнения.
@@ -69,11 +77,13 @@ pub struct TradeResult {
     pub status: TradeStatus,
     pub filled_qty: Decimal,
     pub avg_price: Decimal,
-    /// Фактическая комиссия.
+    /// Фактическая комиссия (у DEX — газ в BNB, подробности в chain).
     pub fee: Decimal,
     /// В чём взята комиссия (монета, USDT, BNB за газ).
     pub fee_asset: String,
     /// Идентификатор ордера на бирже или хеш транзакции свопа.
     pub venue_ref: String,
+    /// DEX: транзакция в сети (каналы, блок, газ). Биржа — None.
+    pub chain: Option<ChainTx>,
     pub finished_at: DateTime<Utc>,
 }

@@ -8,6 +8,8 @@ pub mod catalog;
 pub mod history;
 pub mod live;
 pub mod read;
+pub mod read_scope;
 pub mod schema;
+pub mod scope;
 pub mod store;
 pub mod value;

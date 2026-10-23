@@ -1,45 +1,16 @@
-//! Файл: settings/catalog.rs
-//! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
-//! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
-//! От чего зависит: settings/schema.rs.
-//! Настройки: это и есть их список.
-//!
-//! Новая настройка: строка в docs/SETTINGS.md + строка здесь + поле в интерфейсе.
+//! Файл: settings/catalog/base.rs
+//! Что делает: базовые настройки — деньги и риск, расчёт, сигнал, исполнение, переводы, площадки (биржи),
+//! уведомления, безопасность, система. Значений нет.
+//! Кто вызывает: settings/catalog/mod.rs.
+//! От чего зависит: settings/catalog/mod.rs (короткая запись d и наборы областей).
+//! Настройки: это и есть их список (зеркало docs/SETTINGS.md).
 
-use super::schema::{Kind as K, Limit as L, ScopeKind as S, SettingDef};
+use super::{E, G, GC, GV, V, VC, d};
+use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 
-/// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
-/// Возвращает: SettingDef.
-const fn d(
-    group: &'static str,
-    name: &'static str,
-    kind: K,
-    limit: L,
-    unit: &'static str,
-    scopes: &'static [S],
-    description: &'static str,
-) -> SettingDef {
-    SettingDef {
-        name,
-        kind,
-        limit,
-        unit,
-        scopes,
-        description,
-        group,
-    }
-}
-
-const G: &[S] = &[S::Global];
-const GV: &[S] = &[S::Global, S::Venue];
-const GC: &[S] = &[S::Global, S::Coin];
-const V: &[S] = &[S::Venue];
-const VC: &[S] = &[S::Venue, S::Coin];
-const E: &[S] = &[S::Event];
-
-/// Все настройки системы. Порядок — как в docs/SETTINGS.md.
+/// Базовые настройки. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
-pub static CATALOG: &[SettingDef] = &[
+pub static BASE: &[SettingDef] = &[
     d("Деньги и риск", "money.min_profit_usd", K::Decimal, L::Positive, "USDT", G, "Минимальная прибыль сделки после всех затрат"),
     d("Деньги и риск", "money.min_profit_pct", K::Decimal, L::Percent, "%", G, "Минимальная прибыль в процентах от вложенного"),
     d("Деньги и риск", "money.max_per_trade_usd", K::Decimal, L::Positive, "USDT", GV, "Максимум вложений в одну сделку"),
@@ -56,8 +27,6 @@ pub static CATALOG: &[SettingDef] = &[
     d("Сигнал", "signal.route_cooldown_s", K::Integer, L::NonNegative, "секунды", G, "Пауза направления после сделки или ошибки"),
     d("Сигнал", "feed.stale_after_ms", K::Integer, L::Positive, "мс", V, "Цена без обновлений дольше этого считается устаревшей"),
     d("Исполнение", "exec.dex_slippage_pct", K::Decimal, L::Percent, "%", V, "Допуск проскальзывания в свопе на DEX (минимум на выходе)"),
-    d("Исполнение", "exec.sell_wait_max_s", K::Integer, L::NonNegative, "секунды", G, "Сколько ждать лучшей цены, если спред схлопнулся за время перевода"),
-    d("Исполнение", "exec.max_loss_on_sell_pct", K::Decimal, L::Percent, "%", G, "Допустимый убыток при вынужденной продаже"),
     d("Переводы и контроль", "transfer.max_time_s", K::Integer, L::Positive, "секунды", VC, "Перевод дольше этого — карантин и уведомление"),
     d("Переводы и контроль", "ledger.reconcile_interval_s", K::Integer, L::Positive, "секунды", G, "Как часто сверять балансы"),
     d("Переводы и контроль", "risk.max_errors_in_row", K::Integer, L::Positive, "штук", V, "Ошибок API или вывода подряд до паузы площадки"),
@@ -83,15 +52,13 @@ pub static CATALOG: &[SettingDef] = &[
     d("Площадки", "venue.symbols_refresh_s", K::Integer, L::Positive, "секунды", V, "Как часто перечитывать правила пар (шаги, минимальная сумма, статус)"),
     d("Площадки", "venue.fee_requests_per_sec", K::Integer, L::Positive, "в секунду", V, "Сколько запросов ставок комиссии в секунду (у BingX не больше 2)"),
     d("Площадки", "venue.fee_cache_s", K::Integer, L::Positive, "секунды", V, "Как часто обновлять ставки торговой комиссии"),
-    d("Площадки", "bsc.node_ws_url", K::Url, L::None, "URL", G, "Адрес узла BSC (провайдер или свой узел)"),
-    d("Площадки", "dex.enabled", K::Bool, L::None, "да/нет", V, "Конкретная DEX включена"),
-    d("Площадки", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не слушаются"),
     d("Уведомления", "notify.telegram_api_url", K::Url, L::None, "URL", G, "Адрес Telegram Bot API (из официальной документации core.telegram.org/bots/api)"),
     d("Уведомления", "notify.telegram_chat", K::Text, L::None, "ID чата", G, "Куда слать уведомления"),
     d("Уведомления", "notify.event.enabled", K::Bool, L::None, "да/нет", E, "Присылать ли это событие"),
     d("Уведомления", "notify.event.venues", K::TextList, L::None, "список", E, "Для каких площадок присылать (пусто — для всех)"),
     d("Уведомления", "notify.event.condition", K::Text, L::None, "зависит от события", E, "Условие отправки, где оно имеет смысл (формат — этап 5)"),
     d("Уведомления", "notify.summary_interval_s", K::Integer, L::Positive, "секунды", G, "Как часто присылать сводку"),
+    d("Уведомления", "notify.updates_timeout_s", K::Integer, L::Positive, "секунды", G, "Кнопки Telegram: таймаут длинного опроса getUpdates (параметр timeout в официальной документации Bot API)"),
     d("Безопасность", "security.kdf_memory_kib", K::Integer, L::Positive, "КиБ", G, "Argon2id: память на вывод ключа из пароля (OWASP: не меньше 19456)"),
     d("Безопасность", "security.kdf_iterations", K::Integer, L::Positive, "проходов", G, "Argon2id: число проходов (OWASP: не меньше 2 при 19456 КиБ)"),
     d("Безопасность", "security.kdf_parallelism", K::Integer, L::Positive, "потоков", G, "Argon2id: число потоков"),
@@ -102,9 +69,3 @@ pub static CATALOG: &[SettingDef] = &[
     d("Система", "raw.rotate_s", K::Integer, L::Positive, "секунды", G, "Как часто начинать новый файл сырых сообщений"),
     d("Система", "http.timeout_ms", K::Integer, L::Positive, "мс", G, "Сколько ждать ответа внешнего сервиса по HTTP (Telegram, REST площадок)"),
 ];
-
-/// Ищет описание настройки по имени.
-/// Принимает: имя. Возвращает: описание или None, если такой настройки нет.
-pub fn find(name: &str) -> Option<&'static SettingDef> {
-    CATALOG.iter().find(|s| s.name == name)
-}

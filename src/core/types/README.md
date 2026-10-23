@@ -2,9 +2,15 @@
 
 | Файл | Типы |
 | --- | --- |
-| `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook, PoolState (V2/V3), Pool |
-| `trade.rs` | Side, Quote (котировка на объём), TradeRequest, TradeStatus, TradeResult |
+| `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
+| `pool.rs` | PoolKind (V2/V3/Cl/Bin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
+| `trade.rs` | Side, Quote (котировка на объём + затраты + маршрут DEX), TradeRequest, TradeStatus, TradeResult |
+| `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене), RouteMode, RouteHop, RouteLeg, DexRoute |
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
+| `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
+| `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
+| `control.rs` | CoinGasStats, StuckAlert, ManualHolding, ManualAction, ManualCommand, CommandSource |
 
-Деньги — `rust_decimal::Decimal`, значения блокчейна — `alloy_primitives::U256`/`Address`.
+Деньги — `rust_decimal::Decimal`, значения блокчейна — `alloy_primitives::U256`/`Address`/`B256`.
+Карта тиков V3/CL и резервы бинов Bin в стык не входят — они живут внутри адаптера DEX (нужны только его математике).
 Это стык: менять только через запрос на изменение стыка (`docs/AGENTS.md`).

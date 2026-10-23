@@ -18,7 +18,9 @@ async fn fresh(name: &str) -> (Store, broadcast::Receiver<arb::settings::live::C
     std::fs::create_dir_all(&dir).unwrap();
     let db = Db::open(&dir.join("t.sqlite")).unwrap();
     let (tx, rx) = broadcast::channel(16);
-    (Store::load(db, tx).await.unwrap(), rx)
+    let (jtx, _) = broadcast::channel(16);
+    let journal = arb::storage::journal::Journal::new(db.clone(), jtx);
+    (Store::load(db, tx, journal).await.unwrap(), rx)
 }
 
 #[tokio::test]
@@ -163,4 +165,57 @@ async fn clear_removes_value() {
         s.integer("ledger.reconcile_interval_s", At::default())
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn same_value_writes_nothing() {
+    let (s, _) = fresh("same").await;
+    assert!(
+        s.set("signal.min_hold_ms", Scope::Global, Some(json!(5)), "т")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        s.set("signal.min_hold_ms", Scope::Global, Some(json!(5)), "т")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        s.history(Some("signal.min_hold_ms".into()), 10)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn concurrent_writes_keep_cache_equal_to_db() {
+    let (s, _) = fresh("race").await;
+    let mut tasks = Vec::new();
+    for i in 1..=20u64 {
+        let s = s.clone();
+        tasks.push(tokio::spawn(async move {
+            s.set(
+                "signal.min_hold_updates",
+                Scope::Global,
+                Some(json!(i)),
+                "т",
+            )
+            .await
+            .unwrap();
+        }));
+    }
+    for t in tasks {
+        t.await.unwrap();
+    }
+    // Последняя запись в истории должна совпадать со значением в памяти.
+    let last = s
+        .history(Some("signal.min_hold_updates".into()), 1)
+        .await
+        .unwrap();
+    let cached = s.integer("signal.min_hold_updates", At::default()).unwrap();
+    assert_eq!(last[0]["new"], json!(cached));
 }

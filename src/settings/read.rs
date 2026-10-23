@@ -29,6 +29,7 @@ fn not_set(name: &str) -> GatewayError {
     )
 }
 
+/// Ошибка «значение хранится в неверном виде» (повреждение базы). Принимает: имя настройки.
 fn bad(name: &str) -> GatewayError {
     GatewayError::new(
         ErrorCode::Internal,

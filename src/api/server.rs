@@ -11,11 +11,12 @@ use axum::Router;
 use axum::routing::{get, post, put};
 use tokio::net::TcpListener;
 
+use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{check, journal, rules, settings, ws};
 
-/// Собирает все маршруты API.
-pub fn router(state: AppState) -> Router {
+/// Собирает все маршруты API под защитой Host/Origin (api/guard.rs).
+pub fn router(state: AppState, guard: Guard) -> Router {
     Router::new()
         .route("/api/settings/schema", get(settings::schema))
         .route("/api/settings", get(settings::values).put(settings::set))
@@ -27,10 +28,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/check/venue/{id}", post(check::venue))
         .route("/api/ws", get(ws::upgrade))
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(guard, guard::check))
 }
 
 /// Запускает сервер и работает до остановки процесса.
-/// Принимает: открытый слушатель и состояние. Ошибки: сбой сервера.
-pub async fn serve(listener: TcpListener, state: AppState) -> std::io::Result<()> {
-    axum::serve(listener, router(state)).await
+/// Принимает: открытый слушатель, состояние, защиту. Ошибки: сбой сервера.
+pub async fn serve(listener: TcpListener, state: AppState, guard: Guard) -> std::io::Result<()> {
+    axum::serve(listener, router(state, guard)).await
 }

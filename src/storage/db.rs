@@ -51,6 +51,8 @@ pub enum DbError {
     Sqlite(#[from] rusqlite::Error),
     #[error("Поток базы завершился с ошибкой: {0}")]
     Join(String),
+    #[error("Не удалось преобразовать данные: {0}")]
+    Json(String),
     #[error("Доступ к базе заблокирован после сбоя другого запроса")]
     Poisoned,
 }

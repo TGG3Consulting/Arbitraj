@@ -24,3 +24,6 @@ secrets.enc
 # Системное
 .DS_Store
 Thumbs.db
+
+*.sqlite-wal
+*.sqlite-shm

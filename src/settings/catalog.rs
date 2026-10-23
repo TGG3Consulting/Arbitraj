@@ -8,7 +8,8 @@
 
 use super::schema::{Kind as K, Limit as L, ScopeKind as S, SettingDef};
 
-/// Короткая запись одной настройки.
+/// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
+/// Возвращает: SettingDef.
 const fn d(
     group: &'static str,
     name: &'static str,

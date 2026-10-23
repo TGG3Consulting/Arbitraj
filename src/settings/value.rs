@@ -74,6 +74,7 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
             scope.kind()
         ));
     }
+    check_scope_id(scope)?;
     match def.kind {
         Kind::Decimal => {
             let text = match value {
@@ -104,9 +105,10 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
             let s = value.as_str().ok_or("Ожидается адрес")?.trim();
             let url = reqwest::Url::parse(s).map_err(|e| format!("Неверный адрес: {e}"))?;
             match url.scheme() {
-                "http" | "https" | "ws" | "wss" => Ok(Value::String(s.to_string())),
+                // Только защищённые соединения: в адресе может быть ключ или токен.
+                "https" | "wss" => Ok(Value::String(s.to_string())),
                 other => Err(format!(
-                    "Схема «{other}» не поддерживается: нужен http(s) или ws(s)"
+                    "Схема «{other}» не подходит: нужно защищённое соединение https или wss"
                 )),
             }
         }
@@ -126,6 +128,21 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
                 .map(Value::Array)
                 .ok_or_else(|| "Все элементы списка должны быть текстом".into())
         }
+    }
+}
+
+/// Проверка области: идентификатор не пустой, событие есть в каталоге уведомлений.
+/// Возвращает Err с причиной, если область неверная.
+fn check_scope_id(scope: &Scope) -> Result<(), String> {
+    match scope {
+        Scope::Global => Ok(()),
+        Scope::Venue(id) | Scope::Coin(id) if id.trim().is_empty() => {
+            Err("Не указан идентификатор области".into())
+        }
+        Scope::Event(code) if crate::notify::catalog::find(code).is_none() => {
+            Err(format!("События «{code}» нет в каталоге уведомлений"))
+        }
+        _ => Ok(()),
     }
 }
 

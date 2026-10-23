@@ -37,7 +37,7 @@ pub async fn list(db: &Db) -> Result<Vec<Rule>, DbError> {
 /// Создаёт правило. Поле id во входе игнорируется.
 /// Возвращает: правило с присвоенным id. Ошибки: база.
 pub async fn create(db: &Db, mut rule: Rule) -> Result<Rule, DbError> {
-    let body = serde_json::to_string(&rule).map_err(|e| DbError::Join(e.to_string()))?;
+    let body = serde_json::to_string(&rule).map_err(|e| DbError::Json(e.to_string()))?;
     let id = db
         .call(move |c| {
             c.execute(
@@ -55,7 +55,7 @@ pub async fn create(db: &Db, mut rule: Rule) -> Result<Rule, DbError> {
 /// Возвращает: true — правило найдено и изменено. Ошибки: база.
 pub async fn update(db: &Db, rule: Rule) -> Result<bool, DbError> {
     let id = rule.id;
-    let body = serde_json::to_string(&rule).map_err(|e| DbError::Join(e.to_string()))?;
+    let body = serde_json::to_string(&rule).map_err(|e| DbError::Json(e.to_string()))?;
     let n = db
         .call(move |c| {
             c.execute(

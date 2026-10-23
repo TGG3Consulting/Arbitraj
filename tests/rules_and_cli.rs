@@ -58,5 +58,27 @@ fn cli_requires_both_args() {
     let a = |v: &[&str]| arb::cli::parse(v.iter().map(|s| s.to_string()));
     assert!(a(&[]).is_err());
     assert!(a(&["--data-dir", "d"]).is_err());
-    assert!(a(&["--data-dir", "d", "--listen", "127.0.0.1:8080"]).is_ok());
+    assert!(a(&["--data-dir", "d", "--listen", "127.0.0.1:8080"]).is_err());
+    assert!(
+        a(&[
+            "--data-dir",
+            "d",
+            "--listen",
+            "127.0.0.1:8080",
+            "--live-buffer",
+            "0"
+        ])
+        .is_err()
+    );
+    assert!(
+        a(&[
+            "--data-dir",
+            "d",
+            "--listen",
+            "127.0.0.1:8080",
+            "--live-buffer",
+            "64"
+        ])
+        .is_ok()
+    );
 }

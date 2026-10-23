@@ -8,6 +8,8 @@
 //! GET /api/rules        — все правила
 //! POST /api/rules       — создать (id игнорируется)
 //! PUT /api/rules/{id}   — заменить правило
+//! Два включённых правила на одно событие и одну область запрещены.
+//! Правило с условием пока не применяется (формат условия — этап 5); интерфейс должен это показывать.
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -33,6 +35,7 @@ pub async fn create(
     State(st): State<AppState>,
     Json(rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
+    no_duplicate(&st, &rule).await?;
     let saved = store::create(&st.db, rule)
         .await
         .map_err(ApiError::internal)?;
@@ -56,6 +59,12 @@ pub async fn update(
     Json(mut rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
     rule.id = id;
+    no_duplicate(&st, &rule).await?;
+    let old = store::list(&st.db)
+        .await
+        .map_err(ApiError::internal)?
+        .into_iter()
+        .find(|r| r.id == id);
     let found = store::update(&st.db, rule.clone())
         .await
         .map_err(ApiError::internal)?;
@@ -72,8 +81,28 @@ pub async fn update(
             "rules.updated",
             None,
             format!("Изменено правило №{id}"),
-            Some(json!(rule)),
+            Some(json!({ "old": old, "new": rule })),
         )
         .await;
     Ok(Json(rule))
+}
+
+/// Не даёт завести второе включённое правило на то же событие и ту же область:
+/// иначе неясно, какое из них сработает.
+/// Ошибки: 400 — такое правило уже есть; 500 — база.
+async fn no_duplicate(st: &AppState, rule: &Rule) -> Result<(), ApiError> {
+    if !rule.enabled {
+        return Ok(());
+    }
+    let all = store::list(&st.db).await.map_err(ApiError::internal)?;
+    match all
+        .iter()
+        .find(|r| r.id != rule.id && r.enabled && r.event == rule.event && r.scope == rule.scope)
+    {
+        Some(r) => Err(ApiError::bad(format!(
+            "Уже есть включённое правило №{} на это событие и эту область — измените или выключите его",
+            r.id
+        ))),
+        None => Ok(()),
+    }
 }

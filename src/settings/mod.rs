@@ -5,6 +5,7 @@
 //! Настройки: все настройки системы (docs/SETTINGS.md). Значений по умолчанию нет.
 
 pub mod catalog;
+pub mod history;
 pub mod live;
 pub mod read;
 pub mod schema;

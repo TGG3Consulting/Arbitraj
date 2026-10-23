@@ -26,6 +26,25 @@ pub struct Change {
     pub at: DateTime<Utc>,
 }
 
+impl Change {
+    /// Понятная строка для журнала и Telegram: «имя [область]: старое → новое (кто: …)».
+    pub fn describe(&self) -> String {
+        let shown = |v: &Option<Value>| {
+            v.as_ref()
+                .map(|x| x.to_string())
+                .unwrap_or_else(|| "не задано".into())
+        };
+        format!(
+            "{} [{}]: {} → {} (кто: {})",
+            self.name,
+            self.scope.to_key(),
+            shown(&self.old),
+            shown(&self.new),
+            self.by
+        )
+    }
+}
+
 /// Подписка компонента на изменения своих настроек.
 pub struct Watch {
     rx: broadcast::Receiver<Change>,

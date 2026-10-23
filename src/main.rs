@@ -18,10 +18,6 @@ use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::{Journal, Level};
 
-/// Ёмкость внутренних потоков событий для интерфейса: если интерфейс отстаёт больше,
-/// он получает «lagged» и перечитывает данные по REST. Это не порог торговли, а размер буфера в памяти.
-const LIVE_BUFFER: usize = 1024;
-
 /// Имя файла базы в папке данных.
 const DB_FILE: &str = "arb.sqlite";
 
@@ -46,14 +42,16 @@ async fn run() -> Result<(), String> {
         .map_err(|e| format!("Папка данных {:?}: {e}", args.data_dir))?;
     let db = Db::open(&args.data_dir.join(DB_FILE)).map_err(|e| e.to_string())?;
 
-    let (changes, _) = broadcast::channel(LIVE_BUFFER);
-    let (journal_live, _) = broadcast::channel(LIVE_BUFFER);
-    let settings = Store::load(db.clone(), changes.clone())
+    let (changes, _) = broadcast::channel(args.live_buffer);
+    let (journal_live, _) = broadcast::channel(args.live_buffer);
+    let journal = Journal::new(db.clone(), journal_live.clone());
+    let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
-    let journal = Journal::new(db.clone(), journal_live.clone());
     let vault = Vault::locked();
     let http = reqwest::Client::builder()
+        // Редиректы выключены: в адресе запроса может быть токен, его нельзя отдавать другому адресу.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| e.to_string())?;
     let notifier = Notifier {
@@ -79,6 +77,7 @@ async fn run() -> Result<(), String> {
         changes,
         journal_live,
     };
+    let guard = arb::api::guard::Guard::new(&args.listen.to_string(), &args.allow_origins);
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await
         .map_err(|e| format!("Не удалось занять адрес {}: {e}", args.listen))?;
@@ -90,7 +89,7 @@ async fn run() -> Result<(), String> {
         .await;
     notifier.send("system.started", None, &started).await;
 
-    arb::api::server::serve(listener, state)
+    arb::api::server::serve(listener, state, guard)
         .await
         .map_err(|e| format!("Веб-сервер остановился: {e}"))
 }

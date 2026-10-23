@@ -2,7 +2,7 @@
 //! Что делает: список событий, которые можно присылать в Telegram — по ТЗ,
 //! раздел «Уведомления в Telegram». Каждое событие включается и настраивается в интерфейсе
 //! (notify.event.enabled / venues / condition с областью «событие»).
-//! Кто вызывает: notify/dispatch.rs, api/notify.rs (список для экрана «Уведомления»).
+//! Кто вызывает: notify/dispatch.rs, api/settings.rs (список для экрана «Уведомления»).
 //! От чего зависит: serde.
 //! Настройки: нет (настройки событий — в settings).
 //!
@@ -21,6 +21,7 @@ pub struct EventDef {
     pub title: &'static str,
 }
 
+/// Короткая запись одного события. Принимает: группу, код, название. Возвращает: EventDef.
 const fn e(group: &'static str, code: &'static str, title: &'static str) -> EventDef {
     EventDef { code, group, title }
 }

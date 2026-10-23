@@ -46,12 +46,12 @@ pub struct SetBody {
     value: Option<Value>,
 }
 
-/// Меняет значение. Возвращает: изменение (старое и новое).
+/// Меняет значение. Возвращает: изменение (старое и новое) или null — значение не изменилось.
 /// Ошибки: 400 — нет такой настройки или неверное значение; 500 — база.
 pub async fn set(
     State(st): State<AppState>,
     Json(b): Json<SetBody>,
-) -> Result<Json<Change>, ApiError> {
+) -> Result<Json<Option<Change>>, ApiError> {
     let value = b.value.filter(|v| !v.is_null());
     match st
         .settings

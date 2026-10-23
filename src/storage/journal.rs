@@ -1,7 +1,7 @@
 //! Файл: storage/journal.rs
 //! Что делает: журнал системы в SQLite — ошибки, уведомления, изменения настроек, события.
 //! Каждая запись также уходит в живой поток для интерфейса (broadcast).
-//! Кто вызывает: settings/store.rs, notify/, api/, шлюз (ошибки).
+//! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/; позже шлюз (ошибки).
 //! От чего зависит: storage/db.rs, tokio::sync::broadcast.
 //! Настройки: нет.
 
@@ -129,7 +129,14 @@ impl Journal {
                         level: match level.as_str() {
                             "Error" => Level::Error,
                             "Warn" => Level::Warn,
-                            _ => Level::Info,
+                            "Info" => Level::Info,
+                            other => {
+                                return Err(rusqlite::Error::InvalidColumnType(
+                                    2,
+                                    other.to_string(),
+                                    rusqlite::types::Type::Text,
+                                ));
+                            }
                         },
                         kind: r.get(3)?,
                         venue: r.get(4)?,

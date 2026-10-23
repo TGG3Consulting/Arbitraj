@@ -31,14 +31,27 @@ struct ApiResponse {
     result: Option<Value>,
     description: Option<String>,
     error_code: Option<i64>,
+    /// Поле «parameters» (ResponseParameters): retry_after — через сколько секунд можно повторить,
+    /// migrate_to_chat_id — новый ID чата после перевода группы в супергруппу.
+    parameters: Option<ResponseParameters>,
+}
+
+/// ResponseParameters: https://core.telegram.org/bots/api#responseparameters
+#[derive(Debug, Deserialize)]
+struct ResponseParameters {
+    retry_after: Option<i64>,
+    migrate_to_chat_id: Option<i64>,
 }
 
 /// Ошибка обращения к Telegram с понятной причиной.
 #[derive(Debug, thiserror::Error)]
 pub enum TgError {
     /// Telegram ответил ok=false — причина из поля description.
-    #[error("Telegram отказал ({code}): {description}")]
-    Api { code: i64, description: String },
+    #[error("Telegram отказал: {description}{details}")]
+    Api {
+        description: String,
+        details: String,
+    },
     /// Нет ответа за отведённое время.
     #[error("Telegram не ответил за отведённое время")]
     Timeout,
@@ -92,8 +105,8 @@ impl Telegram {
                 .ok_or_else(|| TgError::BadResponse("нет поля result".into()))
         } else {
             Err(TgError::Api {
-                code: body.error_code.unwrap_or_default(),
                 description: body.description.unwrap_or_else(|| "без описания".into()),
+                details: details(body.error_code, body.parameters.as_ref()),
             })
         }
     }
@@ -120,8 +133,18 @@ impl Telegram {
     /// sendMessage — отправка текста. Текст длиннее предела протокола обрезается с пометкой «…».
     /// Ошибки: TgError.
     pub async fn send(&self, chat_id: &str, text: &str) -> Result<(), TgError> {
-        let text = if text.chars().count() > MAX_TEXT_CHARS {
-            let mut t: String = text.chars().take(MAX_TEXT_CHARS - 1).collect();
+        // Считаем строже — в единицах UTF-16 (эмодзи = 2): так предел не будет превышен
+        // при любом способе подсчёта на стороне Telegram.
+        let text = if text.encode_utf16().count() > MAX_TEXT_CHARS {
+            let mut t = String::new();
+            let mut units = 0;
+            for ch in text.chars() {
+                units += ch.len_utf16();
+                if units > MAX_TEXT_CHARS - 1 {
+                    break;
+                }
+                t.push(ch);
+            }
             t.push('…');
             t
         } else {
@@ -140,4 +163,19 @@ fn net_error(e: reqwest::Error) -> TgError {
     } else {
         TgError::Network(e.without_url().to_string())
     }
+}
+
+/// Дополнения к причине отказа: код ошибки и параметры ответа, если Telegram их прислал.
+fn details(code: Option<i64>, p: Option<&ResponseParameters>) -> String {
+    let mut out = String::new();
+    if let Some(c) = code {
+        out.push_str(&format!(" (код {c})"));
+    }
+    if let Some(s) = p.and_then(|p| p.retry_after) {
+        out.push_str(&format!(", повторить можно через {s} с"));
+    }
+    if let Some(id) = p.and_then(|p| p.migrate_to_chat_id) {
+        out.push_str(&format!(", группа стала супергруппой — новый ID чата {id}"));
+    }
+    out
 }

@@ -1,19 +1,23 @@
 //! Файл: settings/store.rs
 //! Что делает: хранилище настроек — значения в SQLite + копия в памяти для быстрого чтения,
-//! история изменений (кто, когда, старое и новое значение), рассылка изменений на лету.
+//! запись изменения в историю и журнал, рассылка изменений на лету.
 //! Кто вызывает: api/settings.rs (чтение и запись), все компоненты (чтение через settings/read.rs).
-//! От чего зависит: storage/db.rs, settings/catalog.rs, settings/value.rs, settings/live.rs.
+//! От чего зависит: storage/db.rs, storage/journal.rs, settings/catalog.rs, settings/value.rs, settings/live.rs.
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
+//!
+//! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
+//! История — settings/history.rs.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use chrono::Utc;
-use rusqlite::{OptionalExtension, params};
-use serde_json::Value;
-use tokio::sync::broadcast;
+use rusqlite::params;
+use serde_json::{Value, json};
+use tokio::sync::{Mutex, broadcast};
 
 use crate::storage::db::{Db, DbError};
+use crate::storage::journal::{Journal, Level};
 
 use super::catalog;
 use super::live::Change;
@@ -35,16 +39,23 @@ type Key = (String, Scope);
 /// Хранилище настроек. Дешёво клонируется.
 #[derive(Clone)]
 pub struct Store {
-    db: Db,
+    pub(super) db: Db,
     cache: Arc<RwLock<HashMap<Key, Value>>>,
     changes: broadcast::Sender<Change>,
+    journal: Journal,
+    /// Изменения — строго по одному.
+    writer: Arc<Mutex<()>>,
 }
 
 impl Store {
     /// Загружает все заданные значения из базы в память.
-    /// Принимает: базу и отправителя изменений (его слушают компоненты и интерфейс).
-    /// Ошибки: база. Строки с неизвестной областью пропускаются с предупреждением.
-    pub async fn load(db: Db, changes: broadcast::Sender<Change>) -> Result<Self, DbError> {
+    /// Принимает: базу, отправителя изменений (его слушают компоненты и интерфейс), журнал.
+    /// Ошибки: база. Повреждённые строки пропускаются с записью в лог процесса.
+    pub async fn load(
+        db: Db,
+        changes: broadcast::Sender<Change>,
+        journal: Journal,
+    ) -> Result<Self, DbError> {
         let rows: Vec<(String, String, String)> = db
             .call(|c| {
                 let mut st = c.prepare("SELECT name, scope, value FROM settings")?;
@@ -61,13 +72,15 @@ impl Store {
                 (Some(s), Ok(v)) => {
                     map.insert((name, s), v);
                 }
-                _ => tracing::warn!(%name, %scope, "пропущена повреждённая строка настроек"),
+                _ => tracing::error!(%name, %scope, "пропущена повреждённая строка настроек"),
             }
         }
         Ok(Self {
             db,
             cache: Arc::new(RwLock::new(map)),
             changes,
+            journal,
+            writer: Arc::new(Mutex::new(())),
         })
     }
 
@@ -101,45 +114,55 @@ impl Store {
             .collect()
     }
 
-    /// Задаёт или очищает значение (None — очистить), пишет историю, рассылает изменение.
-    /// Принимает: имя, область, значение, кто меняет. Ошибки: неизвестное имя, неверное значение, база.
+    /// Задаёт или очищает значение (None — очистить): база + история, кэш, журнал, рассылка.
+    /// Если значение не изменилось — ничего не пишет и возвращает None.
+    /// Принимает: имя, область, значение, кто меняет.
+    /// Ошибки: неизвестное имя, неверное значение или область, база.
     pub async fn set(
         &self,
         name: &str,
         scope: Scope,
         value: Option<Value>,
         by: &str,
-    ) -> Result<Change, SetError> {
+    ) -> Result<Option<Change>, SetError> {
         let def = catalog::find(name).ok_or_else(|| SetError::Unknown(name.to_string()))?;
         let new = match value {
             Some(v) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
             None => None,
         };
-        let (n, sk, by_s) = (name.to_string(), scope.to_key(), by.to_string());
-        let new_text = new.as_ref().map(|v| v.to_string());
-        let old_text: Option<String> = self
-            .db
+        let _turn = self.writer.lock().await;
+        let old = self.get_exact(name, &scope);
+        if old == new {
+            return Ok(None);
+        }
+        let at = Utc::now();
+        let (n, sk, by_s, at_s) = (
+            name.to_string(),
+            scope.to_key(),
+            by.to_string(),
+            at.to_rfc3339(),
+        );
+        let (old_t, new_t) = (
+            old.as_ref().map(Value::to_string),
+            new.as_ref().map(Value::to_string),
+        );
+        self.db
             .call(move |c| {
                 let tx = c.transaction()?;
-                let now = Utc::now().to_rfc3339();
-                let old: Option<String> = tx
-                    .query_row("SELECT value FROM settings WHERE name=?1 AND scope=?2", params![n, sk], |r| r.get(0))
-                    .optional()?;
-                match &new_text {
+                match &new_t {
                     Some(v) => tx.execute(
                         "INSERT INTO settings (name, scope, value, updated_at) VALUES (?1, ?2, ?3, ?4)
                          ON CONFLICT(name, scope) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-                        params![n, sk, v, now],
+                        params![n, sk, v, at_s],
                     )?,
                     None => tx.execute("DELETE FROM settings WHERE name=?1 AND scope=?2", params![n, sk])?,
                 };
                 tx.execute(
                     "INSERT INTO settings_history (name, scope, old_value, new_value, changed_by, changed_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    params![n, sk, old, new_text, by_s, now],
+                    params![n, sk, old_t, new_t, by_s, at_s],
                 )?;
-                tx.commit()?;
-                Ok(old)
+                tx.commit()
             })
             .await?;
         {
@@ -153,42 +176,25 @@ impl Store {
         let change = Change {
             name: name.to_string(),
             scope,
-            old: old_text.and_then(|t| serde_json::from_str(&t).ok()),
+            old,
             new,
             by: by.to_string(),
-            at: Utc::now(),
+            at,
         };
+        let text = change.describe();
+        // Ошибка журнала уже выведена в лог процесса; само изменение сохранено в базе и истории.
+        let _ = self
+            .journal
+            .write(
+                Level::Info,
+                "settings.changed",
+                None,
+                text,
+                Some(json!(change)),
+            )
+            .await;
         // Нет слушателей — не ошибка.
         let _ = self.changes.send(change.clone());
-        Ok(change)
-    }
-
-    /// История изменений, новые первыми.
-    /// Принимает: имя (или None — все), сколько записей (задаёт интерфейс). Ошибки: база.
-    pub async fn history(&self, name: Option<String>, limit: u32) -> Result<Vec<Value>, DbError> {
-        self.db
-            .call(move |c| {
-                let mut st = c.prepare(
-                    "SELECT name, scope, old_value, new_value, changed_by, changed_at FROM settings_history
-                     WHERE (?1 IS NULL OR name = ?1) ORDER BY id DESC LIMIT ?2",
-                )?;
-                let it = st.query_map(params![name, limit], |r| {
-                    Ok(serde_json::json!({
-                        "name": r.get::<_, String>(0)?, "scope": r.get::<_, String>(1)?,
-                        "old": parse(r.get::<_, Option<String>>(2)?), "new": parse(r.get::<_, Option<String>>(3)?),
-                        "by": r.get::<_, String>(4)?, "at": r.get::<_, String>(5)?,
-                    }))
-                })?;
-                it.collect()
-            })
-            .await
-    }
-}
-
-/// Значение из истории (JSON-текст) → JSON; повреждённый текст отдаётся как есть строкой.
-fn parse(text: Option<String>) -> Value {
-    match text {
-        Some(t) => serde_json::from_str(&t).unwrap_or(Value::String(t)),
-        None => Value::Null,
+        Ok(Some(change))
     }
 }

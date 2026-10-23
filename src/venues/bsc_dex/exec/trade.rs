@@ -19,6 +19,7 @@ use alloy_primitives::{Address, U256};
 
 use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::events::MarketEvent;
 
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
@@ -56,7 +57,14 @@ pub async fn trade(
     worst_positive(ctx, &req)?;
     let (coin, usdt, decs) = sides(q, &req).await?;
     let out_token = if req.side == Side::Buy { coin } else { usdt };
-    let guard = env.inflows.swap(ctx, out_token).await?;
+    let notice = |text: String| {
+        env.stats.emit(MarketEvent::Notice {
+            venue: ctx.venue(),
+            code: "dex.swap_waits_inflow".into(),
+            text,
+        });
+    };
+    let guard = env.inflows.swap(ctx, out_token, &notice).await?;
     let taxes = direct::taxes(q, &req.asset)?;
     let v = Via {
         q,

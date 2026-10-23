@@ -65,11 +65,6 @@ impl BscDex {
     ) -> tokio::task::JoinHandle<()> {
         self.subs.watch(self.p.clone(), rx)
     }
-
-    /// Общее состояние (для проверок и тестов). Ошибок нет.
-    pub fn parts(&self) -> &Parts {
-        &self.p
-    }
 }
 
 #[async_trait]
@@ -157,8 +152,8 @@ impl Venue for BscDex {
     }
 
     /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.
-    async fn release_wallet_queue(&self, by: &str) -> GatewayResult<WalletQueue> {
-        wallet::deposit::release(&self.p, by).await
+    async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
+        wallet::deposit::release(&self.p, by, pending_ok).await
     }
 
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.

@@ -5,7 +5,8 @@
 //! списком, чтобы новые адреса искались сразу, без перезапуска (выключение действует и без пересборки — pools/mids.rs).
 //! Кто вызывает: mod.rs (subscribe_market, watch_settings).
 //! От чего зависит: parts.rs, pools/market.rs, settings/live.rs (Watch).
-//! Настройки: dex.intermediate_* (следит за изменениями).
+//! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
+//! Настройки: dex.intermediate_*, dex.native_ticker (следит за изменениями).
 
 use std::sync::{Arc, Mutex};
 
@@ -39,7 +40,17 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        // Очередь кошелька после запуска — из SQLite; остановленная — сразу ядру (уведомление, экран).
+        p.nonces.restore(&p.ctx).await;
         let pools = p.pools(out.clone());
+        if let st @ crate::core::types::WalletQueueState::Halted { .. } = p.nonces.state() {
+            let q = crate::core::types::WalletQueue {
+                venue: p.ctx.venue(),
+                state: st,
+                nonce_taken: None,
+            };
+            let _ = out.try_send(MarketEvent::WalletQueue(q));
+        }
         let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());
         for old in tasks.drain(..) {
@@ -55,7 +66,10 @@ impl Subs {
     pub fn watch(&self, p: Parts, rx: broadcast::Receiver<Change>) -> JoinHandle<()> {
         let me = self.clone();
         tokio::spawn(async move {
-            let mut w = Watch::new(rx, vec!["dex.intermediate_".into()]);
+            let mut w = Watch::new(
+                rx,
+                vec!["dex.intermediate_".into(), "dex.native_ticker".into()],
+            );
             while let Some(c) = w.next().await {
                 let last = me.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
                 let Some((assets, out)) = last else { continue };

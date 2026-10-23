@@ -150,9 +150,11 @@ pub trait Venue: Send + Sync {
     }
 
     /// «Снять очередь после ручной проверки»: очередь, остановленная с неизвестным исходом, снова свободна.
-    /// Принимает: кто снимает (для журнала). Ошибки: NotApplicable (биржа); очередь не остановлена — NotApplicable.
-    async fn release_wallet_queue(&self, by: &str) -> GatewayResult<WalletQueue> {
-        let _ = by;
+    /// Принимает: кто снимает (для журнала); подтверждено ли снятие при ещё не занятом nonce (висящая транзакция
+    /// может пройти позже). Ошибки: NotApplicable (биржа; очередь не остановлена); NonceConflict — nonce ещё не занят,
+    /// а подтверждения нет.
+    async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
+        let _ = (by, pending_ok);
         Err(GatewayError::new(
             ErrorCode::NotApplicable,
             Some(self.id()),

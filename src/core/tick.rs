@@ -64,28 +64,14 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 core.request_rebuild();
             }
             Touched::Channel(s) => core.inner.live.send(CoreEvent::SendChannel(s)),
-            Touched::WalletQueue(q) => wallet_queue(&core, q).await,
+            Touched::WalletQueue { queue, prev } => {
+                super::queue_notify::wallet_queue(&core, queue, prev).await
+            }
+            Touched::Notice { venue, code, text } => {
+                core.inner.deps.notify(&code, Some(&venue.0), &text).await
+            }
         }
     }
-}
-
-/// Очередь кошелька DEX: остановлена до ручной проверки или снята — уведомление (send.queue_halted /
-/// send.queue_released). Занята / свободна — без уведомления. Ошибок нет.
-async fn wallet_queue(core: &Core, q: crate::core::types::WalletQueue) {
-    use crate::core::types::WalletQueueState as S;
-    let venue = q.venue.0.clone();
-    let (code, text) = match &q.state {
-        S::Halted { reason, .. } => (
-            "send.queue_halted",
-            format!("{venue}: отправки остановлены до ручной проверки — {reason}"),
-        ),
-        S::Free => (
-            "send.queue_released",
-            format!("{venue}: очередь кошелька свободна"),
-        ),
-        S::Busy { .. } => return,
-    };
-    core.inner.deps.notify(code, Some(&venue), &text).await;
 }
 
 /// Монета справочника по тикеру (тикеры приходят от бирж; у DEX — тот, что передан в подписку).

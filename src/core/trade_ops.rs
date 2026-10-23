@@ -21,6 +21,7 @@ use crate::settings::read::At;
 
 use super::convert;
 use super::engine::{Core, rd};
+use super::op_error::OpError;
 use super::rules_apply::{self, Next};
 
 /// Вид площадки из реестра. Ошибка: площадки нет.
@@ -81,7 +82,7 @@ pub async fn trade(
     qty: Decimal,
     route: Option<DexRoute>,
     avg: Decimal,
-) -> Result<TradeResult, String> {
+) -> Result<TradeResult, OpError> {
     let op = if side == Side::Buy {
         "Покупка"
     } else {
@@ -128,7 +129,7 @@ pub async fn trade(
         };
         match rules_apply::on_error(core, op, v, Some(deal), &err, attempt).await {
             Next::Retry { pause_ms } => tokio::time::sleep(Duration::from_millis(pause_ms)).await,
-            Next::Stop => return Err(err.message),
+            Next::Stop => return Err(OpError::from(&err)),
         }
     }
 }

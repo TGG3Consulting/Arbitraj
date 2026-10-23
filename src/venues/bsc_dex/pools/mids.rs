@@ -1,14 +1,15 @@
 //! Файл: venues/bsc_dex/pools/mids.rs
 //! Что делает: промежуточные монеты (решение 52) — переключатель dex.intermediate_enabled и список адресов
 //! dex.intermediate_tokens [bsc_dex]; у каждой — тикер для затрат: тикер биржи по адресу (монета из подписки ядра)
-//! или «BNB», если адрес — обёртка нативной монеты (WETH() роутера V2 своей DEX; ядро пересчитывает WBNB как BNB 1:1).
+//! или тикер нативной монеты на бирже (dex.native_ticker), если адрес — её обёртка (WETH() роутера V2 своей DEX; ядро
+//! пересчитывает WBNB как BNB 1:1). Настройка не задана — обёртка не используется (причина в журнал).
 //! Тикер неизвестен — монета не используется (ядро не пересчитает её затраты в USDT), причина — в журнал.
 //! Промежуточная монета с любым налогом (покупки, продажи, перевода) в маршруте не используется — решение техлида
 //! (Issue #7), проверка — quote/via_pools.rs.
 //! Список найденных промежуточных монет хранится в памяти (Mids) — котировка и сделка читают его.
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs, pools/discover.rs.
-//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens [bsc_dex]; dex.router [вид пула V2] (WETH()).
+//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker [bsc_dex]; dex.router [вид пула V2] (WETH()).
 //!
 //! WETH() — IUniswapV2Router01.sol#L5 (v2-periphery ed249913), IPancakeRouter01.sol#L5 (pancake-swap-periphery
 //! d769a6d1); «WBNB 1:1 к BNB по контракту обёртки» — ответ ядра в PR #25.
@@ -24,7 +25,6 @@ use super::super::ctx::Ctx;
 use super::super::node::abi_dex::IV2Router;
 use super::super::node::call;
 use super::super::tokens::Tokens;
-use super::super::wallet::balances::BNB;
 use super::discover;
 use super::families::{FAMILIES, Proto};
 
@@ -83,16 +83,22 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
         ));
     }
     let wrapped = wrapped_native(ctx).await;
+    let native = ctx.text("dex.native_ticker");
     let mut out = Vec::new();
     for address in list {
-        let ticker = tokens
-            .ticker_of(address)
-            .or_else(|| wrapped.contains(&address).then(|| BNB.to_string()));
+        let ticker = match tokens.ticker_of(address) {
+            Some(t) => Ok(t),
+            None if wrapped.contains(&address) => native.clone().map_err(|e| e.message),
+            None => Err(
+                "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2)"
+                    .to_string(),
+            ),
+        };
         match ticker {
-            Some(ticker) => out.push(Mid { address, ticker }),
-            None => {
+            Ok(ticker) => out.push(Mid { address, ticker }),
+            Err(why) => {
                 let msg = format!(
-                    "Промежуточная монета {address}: биржа не знает этот адрес и это не обёртка BNB (WETH() роутера V2) — затраты не пересчитать, не используется"
+                    "Промежуточная монета {address}: {why} — затраты не пересчитать, не используется"
                 );
                 ctx.log(Level::Warn, "dex.intermediate", msg, None).await;
             }

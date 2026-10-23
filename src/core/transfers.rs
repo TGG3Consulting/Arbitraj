@@ -19,6 +19,7 @@ use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, rd};
+use super::op_error::OpError;
 use super::rules_apply::{self, Next};
 use super::wait::{Pacer, Unit};
 
@@ -65,7 +66,7 @@ pub async fn send(
     to: &VenueId,
     asset: &Asset,
     qty: Decimal,
-) -> Result<(Transfer, Transfer), String> {
+) -> Result<(Transfer, Transfer), OpError> {
     let deps = &core.inner.deps;
     let gw_from = deps.gw.get(from).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get(to).await.map_err(|e| e.message)?;
@@ -101,7 +102,7 @@ pub async fn send(
                     if e.code != ErrorCode::OutcomeUnknown {
                         let _ = gw_to.deposit_abandoned(asset).await;
                     }
-                    return Err(e.message);
+                    return Err(OpError::from(&e));
                 }
             },
         }
@@ -117,7 +118,7 @@ pub async fn send(
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
                 let _ = gw_to.deposit_abandoned(asset).await;
-                return Err(e.message);
+                return Err(OpError::from(&e));
             }
             Err(e) if e.message != last => {
                 deps.log(

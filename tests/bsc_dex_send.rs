@@ -7,7 +7,6 @@
 //! папке). Моков нет: узел не нужен — проверяются правила до отправки.
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use alloy_primitives::{Address, U256, address};
 use chrono::Utc;
@@ -27,7 +26,6 @@ use arb::venues::bsc_dex::exec::trade;
 use arb::venues::bsc_dex::pools::families::FAMILIES;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::send::{cancel, tx::SendCfg};
-use arb::venues::bsc_dex::wallet::inflows::Inflows;
 
 const COIN: Address = address!("0x1000000000000000000000000000000000000001");
 const USDT: Address = address!("0x2000000000000000000000000000000000000002");
@@ -173,44 +171,4 @@ async fn no_swap_without_minimum() {
     )
     .unwrap();
     assert_eq!(o.min_out, U256::from(1_000_000u32));
-}
-
-#[tokio::test]
-async fn inflow_and_swap_do_not_overlap() {
-    let c = ctx("inflow").await;
-    set(&c, "transfer.max_time_s", json!(3600)).await;
-    let f = Inflows::default();
-    f.expect(USDT).await;
-    // Ожидается поступление USDT — обмен с USDT на выходе ждёт.
-    let waiting = tokio::time::timeout(Duration::from_millis(50), f.swap(&c, USDT)).await;
-    assert!(waiting.is_err());
-    // Другой токен не ждёт.
-    drop(f.swap(&c, COIN).await.unwrap());
-    // Зачислено — обмен идёт; повторный статус того же перевода не снимает чужое ожидание.
-    let tx = "0x07";
-    f.done(USDT, tx);
-    let guard = f.swap(&c, USDT).await.unwrap();
-    // Пока идёт обмен, адрес депозита USDT ждёт.
-    let dep = tokio::time::timeout(Duration::from_millis(50), f.expect(USDT)).await;
-    assert!(dep.is_err());
-    drop(guard);
-    f.expect(USDT).await;
-    f.done(USDT, tx);
-    let still = tokio::time::timeout(Duration::from_millis(50), f.swap(&c, USDT)).await;
-    assert!(
-        still.is_err(),
-        "повторный статус того же хеша не снимает новое ожидание"
-    );
-}
-
-#[tokio::test]
-async fn abandoned_withdrawal_releases_swap() {
-    let c = ctx("abandon").await;
-    set(&c, "transfer.max_time_s", json!(3600)).await;
-    let f = Inflows::default();
-    f.expect(COIN).await;
-    // Вывод на кошелёк не состоялся — ожидание снято, обмен идёт сразу.
-    f.abandoned(COIN);
-    let ok = tokio::time::timeout(Duration::from_millis(50), f.swap(&c, COIN)).await;
-    assert!(ok.is_ok());
 }

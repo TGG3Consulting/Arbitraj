@@ -37,7 +37,6 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",
         ErrorCode::TxNotIncluded => "send.tx_not_included",
-        ErrorCode::OutcomeUnknown => "send.outcome_unknown",
         _ => return None,
     })
 }
@@ -62,27 +61,35 @@ pub async fn on_error(
         Some(json!({ "deal": deal, "error": err })),
     )
     .await;
+    // Исход неизвестен (транзакция могла исполниться): повтор — риск двойного вывода или обмена. Не повторяем при
+    // любых правилах шлюза, площадка — на паузу до ручной проверки. Уведомление и пауза — один раз на смену
+    // состояния: остановленная очередь кошелька отвечает так на каждую попытку.
+    if err.code == ErrorCode::OutcomeUnknown {
+        let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
+        let fresh = {
+            let mut r = super::engine::lk(&core.inner.risk);
+            if r.venue_paused.contains_key(venue) {
+                false
+            } else {
+                r.venue_paused.insert(venue.clone(), why.clone());
+                true
+            }
+        };
+        if fresh {
+            risk::publish(core);
+            deps.notify("send.outcome_unknown", Some(&venue.0), &text)
+                .await;
+            let t = format!("Площадка {} на паузе: {why}", venue.0);
+            deps.notify("risk.stop", Some(&venue.0), &t).await;
+        }
+        return Next::Stop;
+    }
     if let Some(code) = event_of(err.code) {
         deps.notify(code, Some(&venue.0), &text).await;
     }
     if let Some(paused) = risk::on_error(core, venue) {
         let t = format!("Площадка {} на паузе: {paused}", venue.0);
         deps.notify("risk.stop", Some(&venue.0), &t).await;
-    }
-    // Исход неизвестен (транзакция могла исполниться): повтор — риск двойного вывода или обмена. Не повторяем при
-    // любых правилах шлюза, площадка — на паузу до ручной проверки.
-    if err.code == ErrorCode::OutcomeUnknown {
-        let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
-        super::engine::lk(&core.inner.risk)
-            .venue_paused
-            .insert(venue.clone(), why.clone());
-        deps.notify(
-            "risk.stop",
-            Some(&venue.0),
-            &format!("Площадка {} на паузе: {why}", venue.0),
-        )
-        .await;
-        return Next::Stop;
     }
     let rules = match crate::storage::rules::list(&deps.db).await {
         Ok(r) => r,

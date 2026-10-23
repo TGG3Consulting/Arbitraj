@@ -12,6 +12,7 @@ pub mod dex;
 pub mod guard;
 pub mod journal;
 pub mod rules;
+pub mod rules_codes;
 pub mod rules_meta;
 pub mod secrets;
 pub mod server;

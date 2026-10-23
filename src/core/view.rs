@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 
 use crate::core::types::{
     Asset, CoinBlock, CoinCheck, CoinGasStats, ManualHolding, PoolCheck, SendChannelStats,
-    StuckAlert,
+    StuckAlert, WalletQueue,
 };
 
 use super::signal::SpreadView;
@@ -35,6 +35,8 @@ pub enum CoreEvent {
         holdings: Vec<ManualHolding>,
     },
     SendChannel(SendChannelStats),
+    /// Очередь кошелька DEX (свободна / ждёт итога / остановлена до ручной проверки).
+    WalletQueue(WalletQueue),
     GasStats(CoinGasStats),
     /// Строка «Живого экрана»: спред направления и его состояние.
     Spread(SpreadView),

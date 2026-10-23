@@ -15,6 +15,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{
     CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId, WalletQueue,
+    WalletQueueState,
 };
 use crate::gateway::events::MarketEvent;
 
@@ -41,8 +42,17 @@ pub enum Touched {
     CoinCheck(CoinCheck),
     PoolCheck(PoolCheck),
     Channel(SendChannelStats),
-    /// Очередь кошелька DEX изменилась (остановлена — уведомление, core/tick.rs).
-    WalletQueue(WalletQueue),
+    /// Очередь кошелька DEX изменилась: новое и прошлое состояние (уведомления — core/tick.rs).
+    WalletQueue {
+        queue: WalletQueue,
+        prev: Option<WalletQueueState>,
+    },
+    /// Сообщение адаптера для уведомлений.
+    Notice {
+        venue: VenueId,
+        code: String,
+        text: String,
+    },
 }
 
 /// Рыночное состояние в памяти.
@@ -55,6 +65,8 @@ pub struct MarketState {
     pool_checks: HashMap<(VenueId, PoolRef), PoolCheck>,
     /// Каналы отправки по id (в SendChannelStats площадки нет; каналы есть только у адаптера DEX).
     channels: HashMap<String, SendChannelStats>,
+    /// Последнее состояние очереди кошелька по площадке DEX — уведомления только на смену состояния.
+    queues: HashMap<VenueId, WalletQueueState>,
 }
 
 impl MarketState {
@@ -100,7 +112,11 @@ impl MarketState {
                 self.channels.insert(s.id.clone(), s.clone());
                 Touched::Channel(s)
             }
-            MarketEvent::WalletQueue(q) => Touched::WalletQueue(q),
+            MarketEvent::Notice { venue, code, text } => Touched::Notice { venue, code, text },
+            MarketEvent::WalletQueue(q) => {
+                let prev = self.queues.insert(q.venue.clone(), q.state.clone());
+                Touched::WalletQueue { queue: q, prev }
+            }
         }
     }
 

@@ -36,6 +36,12 @@ pub enum MarketEvent {
     SendChannel(SendChannelStats),
     /// DEX: состояние очереди транзакций кошелька изменилось (остановлена до ручной проверки, снята, занята).
     WalletQueue(WalletQueue),
+    /// Сообщение адаптера для уведомлений: код события из notify/catalog.rs и текст (ядро шлёт, если событие включено).
+    Notice {
+        venue: VenueId,
+        code: String,
+        text: String,
+    },
 }
 
 /// Состояние подключения площадки.

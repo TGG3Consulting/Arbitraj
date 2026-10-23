@@ -59,8 +59,8 @@ impl Default for Risk {
     }
 }
 
-/// Публикует состояние управления в интерфейс.
-fn publish(core: &Core) {
+/// Публикует состояние управления в интерфейс. Ошибок нет.
+pub fn publish(core: &Core) {
     let r = lk(&core.inner.risk).clone();
     if let Ok(v) = serde_json::to_value(r) {
         core.inner.live.send(CoreEvent::Control(v));

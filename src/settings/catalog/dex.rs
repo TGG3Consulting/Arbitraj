@@ -21,6 +21,8 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),
     d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "Вид пула включён (id области — вид пула, например pancakeswap_v3) (решение 31)"),
     d("DEX", "dex.intermediate_enabled", K::Bool, L::None, "да/нет", V, "Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и монеты с пулом только с промежуточной допускаются; нет — только пулы с USDT"),
+    d("DEX", "dex.inflow_wait_notify_s", K::Integer, L::Positive, "секунды", V, "Обмен ждёт ожидаемого поступления того же токена в кошелёк дольше — одно уведомление в Telegram (dex.swap_waits_inflow)"),
+    d("DEX", "dex.native_ticker", K::Text, L::None, "тикер", V, "Как биржа называет нативную монету BSC (BNB): этим тикером записываются затраты шага через её обёртку (WETH() роутера V2 своей DEX, WBNB 1:1)"),
     d("DEX", "dex.intermediate_tokens", K::AddressList, L::None, "адреса BSC", V, "Промежуточные монеты (решение 52): адреса токенов в BSC (например WBNB). Нужен, если dex.intermediate_enabled = да"),
     d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не слушаются"),
     d("DEX", "dex.multicall", K::Address, L::None, "адрес", V, "Контракт Multicall для пачек eth_call (адрес — из официальной документации)"),

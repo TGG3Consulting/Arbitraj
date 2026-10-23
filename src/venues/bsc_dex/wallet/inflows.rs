@@ -17,7 +17,7 @@
 //!
 //! Кто вызывает: mod.rs (deposit_address, deposit_status, deposit_abandoned), exec/trade.rs, exec/trade_smart.rs.
 //! От чего зависит: ctx.rs.
-//! Настройки: transfer.max_time_s [bsc_dex].
+//! Настройки: transfer.max_time_s, dex.inflow_wait_notify_s [bsc_dex].
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -56,11 +56,19 @@ pub struct SwapGuard {
 }
 
 impl Inflows {
-    /// Ждёт, пока ожидаемых поступлений токена нет, и ставит отметку «идёт обмен».
-    /// Ошибки: NotConfigured (transfer.max_time_s).
-    pub async fn swap(&self, ctx: &Ctx, token: Address) -> GatewayResult<SwapGuard> {
+    /// Ждёт, пока ожидаемых поступлений токена нет, и ставит отметку «идёт обмен». Ждёт дольше
+    /// dex.inflow_wait_notify_s — одно уведомление dex.swap_waits_inflow (событие Notice ядру через `notice`).
+    /// Ошибки: NotConfigured (transfer.max_time_s, dex.inflow_wait_notify_s).
+    pub async fn swap(
+        &self,
+        ctx: &Ctx,
+        token: Address,
+        notice: &(dyn Fn(String) + Sync),
+    ) -> GatewayResult<SwapGuard> {
         let ttl = Duration::from_secs(ctx.int("transfer.max_time_s")?);
-        let mut told = false;
+        let alert = Duration::from_secs(ctx.int("dex.inflow_wait_notify_s")?);
+        let started = Instant::now();
+        let (mut told, mut alerted) = (false, false);
         loop {
             let wake = self.changed.notified();
             tokio::pin!(wake);
@@ -97,7 +105,14 @@ impl Inflows {
                 );
                 ctx.log(Level::Info, "dex.inflow", msg, None).await;
             }
-            match wait {
+            if !alerted && started.elapsed() >= alert {
+                alerted = true;
+                notice(format!(
+                    "Обмен ждёт ожидаемого поступления {token} в кошелёк дольше dex.inflow_wait_notify_s ({n} поступлений)"
+                ));
+            }
+            let to_alert = (!alerted).then(|| alert.saturating_sub(started.elapsed()));
+            match [wait, to_alert].into_iter().flatten().min() {
                 Some(d) => {
                     let _ = tokio::time::timeout(d, wake).await;
                 }

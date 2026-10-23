@@ -108,5 +108,6 @@ async fn emit(a: &After<'_>, state: WalletQueueState) {
     a.stats.emit(MarketEvent::WalletQueue(WalletQueue {
         venue: a.ctx.venue(),
         state,
+        nonce_taken: None,
     }));
 }

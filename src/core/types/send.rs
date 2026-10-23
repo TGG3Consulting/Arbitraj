@@ -155,4 +155,9 @@ pub enum WalletQueueState {
 pub struct WalletQueue {
     pub venue: super::market::VenueId,
     pub state: WalletQueueState,
+    /// Только у остановленной очереди с известным nonce: занят ли он уже в блоке (nonce кошелька на «latest»).
+    /// false — висящая транзакция ещё может пройти позже: снятие — только с отдельным подтверждением.
+    /// None — не остановлена, nonce неизвестен или узел не ответил.
+    #[serde(default)]
+    pub nonce_taken: Option<bool>,
 }

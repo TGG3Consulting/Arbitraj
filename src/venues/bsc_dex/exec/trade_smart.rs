@@ -17,6 +17,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::events::MarketEvent;
 
 use super::super::quote::mixed_quoter::{self, Leg};
 use super::super::quote::path::Path;
@@ -57,7 +58,14 @@ pub async fn trade(
     }
     let (coin, usdt, decs) = sides(q, &req).await?;
     let out_token = if req.side == Side::Buy { coin } else { usdt };
-    let guard = env.inflows.swap(ctx, out_token).await?;
+    let notice = |text: String| {
+        env.stats.emit(MarketEvent::Notice {
+            venue: ctx.venue(),
+            code: "dex.swap_waits_inflow".into(),
+            text,
+        });
+    };
+    let guard = env.inflows.swap(ctx, out_token, &notice).await?;
     let v = Via {
         q,
         coin,

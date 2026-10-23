@@ -3,7 +3,7 @@
 //! слушатели пачек пулов (dex.pools_per_sub), наблюдатель новых пулов, головы сети. Возвращает задачи — при новой
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
-//! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
+//! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
 //! events.rs, registry.rs.
 //! Настройки: venue.quote_asset [bsc_dex] (тикер USDT в списке ядра), dex.pools_per_sub; через вызываемые — dex.*.
 //!
@@ -15,13 +15,14 @@ use std::sync::{Arc, Mutex};
 
 use alloy_primitives::{Address, U64};
 use serde_json::json;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::core::types::{Asset, PoolRef};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
-use super::super::node::heads::Heads;
+use super::super::check::{cycle, quoter_cycle};
 use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
@@ -29,12 +30,12 @@ use super::events;
 use super::listen::{self, Pools};
 
 /// Запускает всё для подписки на рынок.
-/// Принимает: окружение пулов, головы сети, память истории, монеты ядра.
+/// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
 /// Возвращает: задачи. Ошибки: NotConfigured (venue.quote_asset, нет USDT в списке, dex.pools_per_sub), узел.
 pub async fn subscribe(
     p: &Pools,
-    heads: &Heads,
     scanned: &Scanned,
+    wake: &Arc<Notify>,
     assets: Vec<Asset>,
 ) -> GatewayResult<Vec<JoinHandle<()>>> {
     p.tokens.set(&assets);
@@ -56,7 +57,7 @@ pub async fn subscribe(
         .collect();
     let per = subs::per_sub(&p.ctx)?;
     let head: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
-    let mut tasks = vec![tokio::spawn(heads.clone().run(p.ctx.clone()))];
+    let mut tasks = vec![tokio::spawn(p.heads.clone().run(p.ctx.clone()))];
 
     let found = discover::find_all(&p.ctx, &coins, usdt, head.to(), scanned).await;
     p.reg
@@ -72,6 +73,15 @@ pub async fn subscribe(
     for (name, chunk, filter) in chunks(&found, &coins, per) {
         tasks.push(tokio::spawn(listen::run(p.clone(), name, chunk, filter)));
     }
+    // Проверки (решения 30, 32): налоги, крючки, сверка с квотером — по циклам и по кнопке «Перепроверить».
+    tasks.push(tokio::spawn(cycle::taxes(
+        p.clone(),
+        coins.clone(),
+        usdt,
+        wake.clone(),
+    )));
+    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.clone())));
+    tasks.push(tokio::spawn(quoter_cycle::run(p.clone(), wake.clone())));
     let extra = Arc::new(Mutex::new(Vec::new()));
     let w = Watch {
         coins,

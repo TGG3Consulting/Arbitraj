@@ -23,7 +23,9 @@ use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
+use super::super::check::state::Checks;
 use super::super::ctx::Ctx;
+use super::super::node::heads::Heads;
 use super::super::node::{rpc, ws::Conn};
 use super::super::tokens::Tokens;
 use super::discover::Found;
@@ -37,6 +39,10 @@ pub struct Pools {
     pub reg: Registry,
     pub tokens: Tokens,
     pub out: mpsc::Sender<MarketEvent>,
+    /// Итоги проверок монет и пулов.
+    pub checks: Checks,
+    /// Последний блок сети.
+    pub heads: Heads,
 }
 
 /// Чем кончилась сессия.

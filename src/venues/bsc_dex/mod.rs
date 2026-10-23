@@ -10,14 +10,17 @@
 //! 1b (пулы), 1c (математика, котировка, проверки), 1d (исполнение, каналы отправки), 1e (умный режим).
 //! Функции следующих шагов пока честно отвечают ошибкой Internal «ещё не сделано» — без выдуманных данных.
 
+pub mod check;
 pub mod coins;
 pub mod connection;
 pub mod ctx;
 pub mod errors;
+pub mod exec;
 pub mod math;
 pub mod node;
 pub mod num;
 pub mod pools;
+pub mod quote;
 pub mod tokens;
 pub mod wallet;
 
@@ -33,11 +36,14 @@ use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use check::state::Checks;
 use ctx::Ctx;
 use node::heads::Heads;
 use pools::discover::Scanned;
 use pools::listen::Pools;
 use pools::registry::Registry;
+use quote::Quoting;
+use quote::gas::GasPrice;
 use tokens::Tokens;
 use wallet::nonce::Nonces;
 
@@ -54,6 +60,12 @@ pub struct BscDex {
     registry: Registry,
     /// Прочитанная история событий создания пулов.
     scanned: Scanned,
+    /// Итоги проверок монет и пулов.
+    checks: Checks,
+    /// Цена газа (кэш на блок).
+    gas: GasPrice,
+    /// Сигнал «перепроверить сейчас» циклам проверок (recheck_coins).
+    wake: std::sync::Arc<tokio::sync::Notify>,
     /// Задачи текущей подписки: при новой подписке старые останавливаются.
     tasks: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
@@ -68,6 +80,9 @@ impl BscDex {
             nonces: Nonces::default(),
             registry: Registry::default(),
             scanned: Scanned::default(),
+            checks: Checks::default(),
+            gas: GasPrice::default(),
+            wake: std::sync::Arc::new(tokio::sync::Notify::new()),
             tasks: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -80,6 +95,18 @@ impl BscDex {
     /// Очередь транзакций кошелька (для exec/*, wallet/*). Ошибок нет.
     pub fn nonces(&self) -> &Nonces {
         &self.nonces
+    }
+
+    /// Окружение котировки. Ошибок нет.
+    pub fn quoting(&self) -> Quoting {
+        Quoting {
+            ctx: self.ctx.clone(),
+            reg: self.registry.clone(),
+            checks: self.checks.clone(),
+            tokens: self.tokens.clone(),
+            heads: self.heads.clone(),
+            gas: self.gas.clone(),
+        }
     }
 
     /// Ответ для функций, которые появятся в следующих шагах Issue #7.
@@ -120,8 +147,10 @@ impl Venue for BscDex {
             reg: self.registry.clone(),
             tokens: self.tokens.clone(),
             out,
+            checks: self.checks.clone(),
+            heads: self.heads.clone(),
         };
-        let new = pools::market::subscribe(&p, &self.heads, &self.scanned, assets).await?;
+        let new = pools::market::subscribe(&p, &self.scanned, &self.wake, assets).await?;
         let mut tasks = self.tasks.lock().unwrap_or_else(|p| p.into_inner());
         for old in tasks.drain(..) {
             old.abort();
@@ -130,8 +159,8 @@ impl Venue for BscDex {
         Ok(())
     }
 
-    async fn quote(&self, _asset: &Asset, _side: Side, _qty: Decimal) -> GatewayResult<Quote> {
-        Err(self.not_yet("котировка", "1c"))
+    async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        self.quoting().quote(asset, side, qty).await
     }
 
     async fn trade(&self, _req: TradeRequest) -> GatewayResult<TradeResult> {
@@ -168,7 +197,9 @@ impl Venue for BscDex {
     }
 
     async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {
-        Err(self.not_yet("проверка налогов и крючков", "1c"))
+        // Циклы проверяют все монеты подписки; кнопка будит их сразу (итоги — событиями CoinCheck / PoolCheck).
+        self.wake.notify_waiters();
+        Ok(())
     }
 
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {

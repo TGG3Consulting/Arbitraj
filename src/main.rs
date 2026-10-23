@@ -1,6 +1,6 @@
 //! Файл: main.rs
 //! Что делает: запуск системы — разбор аргументов, база, настройки, журнал, секреты,
-//! уведомления, шлюз и веб-сервер интерфейса.
+//! уведомления, шлюз и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
 //! Кто вызывает: операционная система (запуск программы).
 //! От чего зависит: все модули. Адаптеры площадок регистрируются здесь (пока их нет).
 //! Настройки: свои — нет; аргументы запуска — cli.rs.
@@ -99,14 +99,20 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| format!("Не удалось занять адрес {}: {e}", args.listen))?;
 
-    let started = format!("Система запущена, интерфейс: http://{}", args.listen);
+    let started = match &args.ui_dir {
+        Some(_) => format!("Система запущена, интерфейс: http://{}", args.listen),
+        None => format!(
+            "Система запущена без раздачи интерфейса (--ui-dir не задан), API: http://{}",
+            args.listen
+        ),
+    };
     tracing::info!("{started}");
     let _ = journal
         .write(Level::Info, "system.started", None, started.clone(), None)
         .await;
     notifier.send("system.started", None, &started).await;
 
-    arb::api::server::serve(listener, state, guard)
+    arb::api::server::serve(listener, state, guard, args.ui_dir)
         .await
         .map_err(|e| format!("Веб-сервер остановился: {e}"))
 }

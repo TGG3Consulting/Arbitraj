@@ -1,28 +1,36 @@
 //! Файл: api/server.rs
-//! Что делает: маршруты веб-сервера и его запуск.
+//! Что делает: маршруты веб-сервера и его запуск; если задан --ui-dir — ещё и раздача
+//! собранного интерфейса (api/static_ui.rs).
 //! Кто вызывает: main.rs.
 //! От чего зависит: axum, api/*.
-//! Настройки: адрес прослушивания — аргумент запуска --listen (нужен до загрузки настроек).
+//! Настройки: адрес прослушивания и папка интерфейса — аргументы запуска --listen и --ui-dir
+//! (нужны до загрузки настроек).
 //!
 //! Авторизация доступа к веб-серверу — открытый вопрос (ARCHITECTURE.md, «Открытые вопросы»).
 //! До решения запускать только на локальном адресе ПК (например 127.0.0.1).
 
+use std::path::PathBuf;
+
 use axum::Router;
-use axum::routing::{get, post, put};
+use axum::routing::{any, get, post, put};
 use tokio::net::TcpListener;
 
 use super::guard::{self, Guard};
 use super::state::AppState;
-use super::{check, journal, rules, secrets, settings, ws};
+use super::{check, journal, rules, rules_meta, secrets, settings, static_ui, venues, ws};
 
-/// Собирает все маршруты API под защитой Host/Origin (api/guard.rs).
-pub fn router(state: AppState, guard: Guard) -> Router {
-    Router::new()
+/// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
+/// Host/Origin (api/guard.rs).
+/// Принимает: состояние, защиту, папку собранного интерфейса (None — только API).
+pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router {
+    let api = Router::new()
         .route("/api/settings/schema", get(settings::schema))
         .route("/api/settings", get(settings::values).put(settings::set))
         .route("/api/settings/history", get(settings::history))
         .route("/api/rules", get(rules::list).post(rules::create))
+        .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))
+        .route("/api/venues", get(venues::list))
         .route("/api/journal", get(journal::list))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
@@ -37,12 +45,24 @@ pub fn router(state: AppState, guard: Guard) -> Router {
             put(secrets::put).delete(secrets::delete),
         )
         .route("/api/ws", get(ws::upgrade))
-        .with_state(state)
-        .layer(axum::middleware::from_fn_with_state(guard, guard::check))
+        // Неизвестный адрес API — 404 с причиной, а не страница интерфейса.
+        .route("/api/{*rest}", any(static_ui::api_not_found))
+        .with_state(state);
+    let app = match ui_dir {
+        Some(dir) => api.fallback_service(static_ui::service(&dir)),
+        None => api,
+    };
+    app.layer(axum::middleware::from_fn_with_state(guard, guard::check))
 }
 
 /// Запускает сервер и работает до остановки процесса.
-/// Принимает: открытый слушатель, состояние, защиту. Ошибки: сбой сервера.
-pub async fn serve(listener: TcpListener, state: AppState, guard: Guard) -> std::io::Result<()> {
-    axum::serve(listener, router(state, guard)).await
+/// Принимает: открытый слушатель, состояние, защиту, папку интерфейса (None — только API).
+/// Ошибки: сбой сервера.
+pub async fn serve(
+    listener: TcpListener,
+    state: AppState,
+    guard: Guard,
+    ui_dir: Option<PathBuf>,
+) -> std::io::Result<()> {
+    axum::serve(listener, router(state, guard, ui_dir)).await
 }

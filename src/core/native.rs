@@ -15,8 +15,8 @@
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{CoinNetworkInfo, VenueId};
-use crate::gateway::contract::VenueKind;
+use crate::core::types::{Asset, CoinNetworkInfo, Side, VenueId};
+use crate::gateway::contract::{Venue, VenueKind};
 use crate::settings::read::At;
 use crate::settings::store::Store;
 
@@ -96,6 +96,46 @@ pub fn map(core: &Core, venue: &VenueId, list: Vec<CoinNetworkInfo>) -> Vec<Coin
     };
     let bsc = s.text("venue.bsc_network", at).ok();
     apply(list, bsc.as_deref(), &n)
+}
+
+/// BNB на DEX: из количества вычитается газ продажи (BNB-затраты котировки продажи на это количество: газ обмена,
+/// обёртки, чаевые) — продажа платит его из резерва, и сделка «Вернуть боту» не должна в него упереться. Остальные
+/// монеты и площадки — без изменений. Принимает: ядро, шлюз площадки, площадку, монету, количество.
+/// Возвращает: количество и заметку для хронологии (котировки нет — газ не вычтен; отказ резерва при продаже тогда
+/// уводит сделку в «застрявшую монету», core/sell.rs). Ошибок нет.
+pub async fn minus_sell_gas(
+    core: &Core,
+    gw: &std::sync::Arc<dyn Venue>,
+    venue: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+) -> (Decimal, Option<String>) {
+    if asset.ticker != super::convert::GAS_TICKER
+        || super::trade_ops::kind(core, venue).ok() != Some(VenueKind::Dex)
+    {
+        return (qty, None);
+    }
+    match gw.quote(asset, Side::Sell, qty).await {
+        Ok(q) => {
+            let gas: Decimal = q
+                .costs
+                .iter()
+                .filter(|c| super::convert::is_gas(c.kind) && c.asset == super::convert::GAS_TICKER)
+                .map(|c| c.amount)
+                .sum();
+            (
+                qty - gas,
+                Some(format!("BNB: за вычетом газа продажи {gas}")),
+            )
+        }
+        Err(e) => (
+            qty,
+            Some(format!(
+                "BNB: газ продажи не оценён ({}) — не вычтен",
+                e.message
+            )),
+        ),
+    }
 }
 
 /// Тикер нативной монеты по текущим настройкам площадок DEX (read). None — не задано или расходится. Ошибок нет.

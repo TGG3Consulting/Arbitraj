@@ -143,3 +143,67 @@ fn gas_never_in_coin_qty() {
         "BNB"
     ));
 }
+
+/// Газ возврата USDT (решение 34) остаётся газом: у сделки с BNB он не в количестве, а предпроверка резерва его видит.
+/// Газ — настоящий: перевод 5 USDT в симуляции узла (tests/data/native_2026-10-25, 51591) × цена газа настоящего вывода
+/// BNB с BingX (0x5f5e100 wei).
+#[test]
+fn usdt_return_gas_stays_gas() {
+    use arb::core::convert::{in_coin, usdt_return};
+    use arb::core::costs::CostLine;
+    use arb::core::precheck::gas_need;
+    use arb::core::types::{Cost, CostKind};
+    use rust_decimal::Decimal;
+    let rec: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            "tests/data/native_2026-10-25/arb_native_responses_2026-10-25.json",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let sim = rec["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == "native wrap/unwrap simulate")
+        .unwrap();
+    let hex =
+        |v: &Value| u64::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
+    let gas = hex(&sim["response"]["result"][0]["calls"][1]["gasUsed"]);
+    assert_eq!(gas, 51_591);
+    let w: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            "tests/data/native_2026-10-25/arb_bingx_bnb_withdraw_2026-10-25.json",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let price = hex(&w["results"][0]["response"]["result"]["gasPrice"]);
+    let bnb = Decimal::from(gas * price) / Decimal::from(10u64.pow(18));
+    let ret = usdt_return(Cost::new(CostKind::TransferGas, bnb, "BNB", false));
+    assert_eq!(ret.kind, CostKind::TransferGas, "газ не переименовывается");
+    assert!(
+        !in_coin(&ret, "BNB"),
+        "газ возврата у сделки с BNB — не в количестве"
+    );
+    let tax = usdt_return(Cost::new(CostKind::TransferTax, 1.into(), "USDT", false));
+    assert_eq!(tax.kind, CostKind::UsdtReturn);
+    let line = |c: Cost, stage: &'static str| CostLine {
+        kind: c.kind,
+        stage,
+        amount: c.amount,
+        asset: c.asset,
+        usdt: None,
+        in_price: false,
+        in_qty: false,
+        step: None,
+    };
+    let lines = [
+        line(ret, "возврат USDT"),
+        line(tax, "возврат USDT"),
+        line(Cost::new(CostKind::Gas, bnb, "BNB", false), "B"),
+        line(Cost::new(CostKind::Gas, bnb, "BNB", false), "A"),
+    ];
+    assert_eq!(gas_need(&lines, &["B", "возврат USDT"]), bnb + bnb);
+    assert_eq!(gas_need(&lines, &["A", "перевод"]), bnb);
+}

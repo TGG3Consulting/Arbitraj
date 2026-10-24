@@ -13,7 +13,7 @@ use crate::core::types::{Direction, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
-use super::costs::Calc;
+use super::costs::{Calc, CostLine};
 use super::engine::{Core, wr};
 use super::profit::{self, Verdict};
 
@@ -99,6 +99,17 @@ pub async fn bnb_ok(core: &Core, v: &VenueId, need: Decimal) -> Result<(), Strin
     Ok(())
 }
 
+/// Газ (BNB) транзакций сделки на одной площадке: строки расчёта её стадий с газом в BNB (газ обмена, разрешений,
+/// перевода, обёртки, чаевые; у «возврат USDT» — газ перевода USDT, convert::usdt_return). Ошибок нет.
+pub fn gas_need(costs: &[CostLine], stages: &[&str]) -> Decimal {
+    costs
+        .iter()
+        .filter(|l| stages.contains(&l.stage) && l.asset == super::convert::GAS_TICKER)
+        .filter(|l| super::convert::is_gas(l.kind))
+        .map(|l| l.amount)
+        .sum()
+}
+
 /// Предпроверка. Возвращает: свежий расчёт для сделки. Ошибки: текст причины отказа.
 pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
     super::risk::can_open(core, d)?;
@@ -129,14 +140,7 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
         if super::trade_ops::kind(core, v)? != VenueKind::Dex {
             continue;
         }
-        let need: Decimal = c
-            .costs
-            .iter()
-            .filter(|l| stages.contains(&l.stage) && l.asset == super::convert::GAS_TICKER)
-            .filter(|l| super::convert::is_gas(l.kind))
-            .map(|l| l.amount)
-            .sum();
-        if let Err(e) = bnb_ok(core, v, need).await {
+        if let Err(e) = bnb_ok(core, v, gas_need(&c.costs, &stages)).await {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
             return Err(e);
         }

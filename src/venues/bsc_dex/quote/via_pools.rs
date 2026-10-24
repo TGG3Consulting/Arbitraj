@@ -1,15 +1,16 @@
 //! Файл: venues/bsc_dex/quote/via_pools.rs
 //! Что делает: пулы и выбор пути через промежуточную монету (решение 52): допуск промежуточной монеты (проверена, без
 //! налогов), пулы шагов P1 «промежуточная — USDT» и P2 «монета — промежуточная» (монета с налогом — только V2, решение
-//! 39), лучшая пара пулов по всем промежуточным монетам. Расчёт пути в паре — quote/via.rs.
+//! 39; BNB со стороны BNB — только V2/V3, решение 62), лучшая пара пулов по всем промежуточным монетам. Расчёт пути в паре — quote/via.rs.
 //! Кто вызывает: quote/direct_route.rs, quote/smart.rs, exec/live.rs.
 //! От чего зависит: quote/via.rs, quote/select.rs, check/state.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{CheckState, PoolKind, Side};
+use crate::core::types::{Asset, CheckState, PoolKind, Side};
 
+use super::super::exec::native;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::path::Path;
@@ -45,7 +46,22 @@ impl Via<'_> {
             ok
         };
         let p1 = pick(self.q.reg.by_pair(m.address, self.usdt));
-        let p2 = pick(self.q.reg.by_pair(self.coin, m.address));
+        // BNB (решение 62): шаг со стороны BNB — только V2/V3 (exec/native.rs::pool_ok); V4 / Infinity — мимо с причиной,
+        // и путь через m не собирается — котировка берёт прямой маршрут (quote/direct_route.rs, smart_ways.rs).
+        let native = self.native();
+        let (p2, off): (Vec<Entry>, Vec<Entry>) = self
+            .q
+            .reg
+            .by_pair(self.coin, m.address)
+            .into_iter()
+            .partition(|e| !native || native::pool_ok(e.pool.kind));
+        let p2 = pick(p2);
+        why.extend(off.iter().map(|e| {
+            format!(
+                "{}: BNB через V4 / Infinity не поддержан (решение 62)",
+                e.family.title
+            )
+        }));
         if p1.is_empty() || p2.is_empty() {
             return Err(format!(
                 "через {}: нет допущенной пары пулов ({})",
@@ -54,6 +70,19 @@ impl Via<'_> {
             ));
         }
         Ok((p1, p2))
+    }
+
+    /// Монета пути — нативная BNB (решение 62): тикер монеты из подписки и адрес = обёртка по настройкам. Ошибок нет.
+    pub fn native(&self) -> bool {
+        self.q.tokens.ticker_of(self.coin).is_some_and(|ticker| {
+            native::is_native(
+                &self.q.ctx,
+                &Asset {
+                    ticker,
+                    bsc_contract: Some(self.coin),
+                },
+            )
+        })
     }
 
     /// Промежуточная монета проверена и без налогов (см. шапку). Возвращает: Ok или причину.

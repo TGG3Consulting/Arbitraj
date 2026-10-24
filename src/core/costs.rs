@@ -122,10 +122,10 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
             .withdraw_cost(&cx.usdt, &cx.net_b, proceeds)
             .await
             .map_err(|e| format!("{}: стоимость возврата USDT: {}", d.sell_on.0, e.message))?;
-        lines.extend(rc.into_iter().map(|mut c| {
-            c.kind = CostKind::UsdtReturn;
-            (c, "возврат USDT")
-        }));
+        lines.extend(
+            rc.into_iter()
+                .map(|c| (convert::usdt_return(c), "возврат USDT")),
+        );
     }
     // Запас r = k·σ·√T от выручки (ТЗ, шаг 4).
     let sqrt_t = cx.transit_s.sqrt().ok_or("время в пути не вычисляется")?;

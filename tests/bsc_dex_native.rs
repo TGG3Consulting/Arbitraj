@@ -171,3 +171,62 @@ async fn write_native_calls() {
         std::fs::write(file, serde_json::to_string_pretty(&v).unwrap() + "\n").unwrap();
     }
 }
+
+/// Путь BNB через промежуточную: шаг со стороны BNB в пуле Infinity / V4 отфильтрован (решение 62) — путь через эту
+/// промежуточную не собирается, с причиной, и котировка берёт прямой маршрут (quote/direct_route.rs).
+#[tokio::test]
+async fn via_skips_infinity_on_native_side() {
+    use arb::core::types::{Asset, CheckState, CoinCheck, PoolRef, TokenTaxes, VenueId};
+    use arb::venues::bsc_dex::parts::Parts;
+    use arb::venues::bsc_dex::pools::mids::Mid;
+    use arb::venues::bsc_dex::quote::via::Via;
+    // Промежуточная — CAKE (адрес как у BingX в сети BSC, записи tests/data/indexers_2026-10-24).
+    let cake = alloy_primitives::address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82");
+    let p = Parts::new(ctx("via").await);
+    let asset = |t: &str, a| Asset {
+        ticker: t.into(),
+        bsc_contract: Some(a),
+    };
+    p.tokens
+        .set(&[asset("BNB", WBNB), asset("USDT", USDT), asset("CAKE", cake)]);
+    let zero = TokenTaxes {
+        buy_pct: 0.into(),
+        sell_pct: 0.into(),
+        transfer_pct: 0.into(),
+    };
+    p.checks.set_coin(CoinCheck {
+        venue: VenueId("bsc_dex".into()),
+        asset: asset("CAKE", cake),
+        taxes: CheckState::Known(zero.clone()),
+        source: "тест".into(),
+        checked_at: None,
+    });
+    // P1 «CAKE — USDT» (V2), P2 «BNB — CAKE» (Infinity CL) — у P2 сторона BNB.
+    let mut p1 = entry("pancakeswap_v2", None);
+    (p1.coin, p1.usdt, p1.ticker) = (cake, USDT, "CAKE".into());
+    p1.pool.reference = PoolRef::Contract(cake);
+    let mut p2 = entry("pancakeswap_infinity_cl", None);
+    (p2.coin, p2.usdt) = (WBNB, cake);
+    p2.pool.reference = PoolRef::Contract(WBNB);
+    p.registry.put(p1);
+    p.registry.put(p2);
+    let q = p.quoting();
+    let mid = Mid {
+        address: cake,
+        ticker: "CAKE".into(),
+    };
+    for side in [Side::Sell, Side::Buy] {
+        let v = Via {
+            q: &q,
+            coin: WBNB,
+            usdt: USDT,
+            side,
+            taxes: &zero,
+            coin_dec: 18,
+            usdt_dec: 18,
+        };
+        assert!(v.native());
+        let why = v.pools(&mid, &|_| true).unwrap_err();
+        assert!(why.contains("не поддержан"), "{why}");
+    }
+}

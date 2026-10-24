@@ -11,6 +11,8 @@
 
 use rust_decimal::Decimal;
 
+use crate::gateway::errors::ErrorCode;
+
 use crate::core::types::{Quote, Side};
 
 use super::deal::{Deal, Step};
@@ -81,6 +83,16 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             }
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
             super::usdt_return::after_deal(core, &deal).await;
+        }
+        // BNB на DEX (решение 62): отказ резерва на газ (InsufficientBalance) — монета на месте, просто газ продажи
+        // сейчас не помещается сверх резерва: «застрявшая монета» (stuck.rs), а не остановка сделки.
+        Err(e)
+            if e.code == Some(ErrorCode::InsufficientBalance)
+                && a.ticker == super::convert::GAS_TICKER =>
+        {
+            deal.note(format!("продажа не прошла: {e} — застрявшая монета"));
+            super::ledger::save(core, &deal).await;
+            Box::pin(super::stuck::handle(core, deal)).await
         }
         Err(e) => {
             super::ledger::finish(

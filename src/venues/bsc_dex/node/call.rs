@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/node/call.rs
-//! Что делает: eth_call к контракту с ABI-кодированием запроса и разбором ответа (alloy sol!).
+//! Что делает: eth_call к контракту с ABI-кодированием запроса и разбором ответа (alloy sol!); пачка вызовов —
+//! через Multicall3 (dex.multicall3) или пачкой JSON-RPC.
 //! Кто вызывает: wallet/*, pools/*, check/*, quote/*, exec/*.
 //! От чего зависит: node/rpc.rs, errors.rs, alloy::sol_types.
 //! Настройки: узел — bsc.node_http_url.
@@ -33,15 +34,40 @@ pub async fn view<C: SolCall>(
     decode::<C>(&out)
 }
 
-/// Несколько вызовов одного вида одним HTTP-запросом (пачка JSON-RPC), на одном блоке.
-/// Принимает: адрес контракта, вызовы, блок. Возвращает: ответы в том же порядке.
-/// Ошибки: любая ошибка любого вызова — ошибка целиком (половина данных — не факт).
+/// Несколько вызовов одного вида на одном блоке: при заданном dex.multicall3 — одним eth_call через Multicall3
+/// (node/multicall.rs), иначе пачкой JSON-RPC одним HTTP-запросом. Принимает: адрес контракта, вызовы, блок.
+/// Возвращает: ответы в том же порядке. Ошибки: любая ошибка любого вызова — ошибка целиком (половина данных — не факт).
 pub async fn view_many<C: SolCall>(
     ctx: &Ctx,
     to: Address,
     calls: &[C],
     block: &str,
 ) -> GatewayResult<Vec<C::Return>> {
+    if calls.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::with_capacity(calls.len());
+    if let Some(mc) = super::multicall::address(ctx) {
+        let list: Vec<(Address, Bytes)> = calls
+            .iter()
+            .map(|c| (to, Bytes::from(c.abi_encode())))
+            .collect();
+        for (i, r) in super::multicall::aggregate(ctx, mc, &list, block)
+            .await?
+            .into_iter()
+            .enumerate()
+        {
+            let bytes = r.map_err(|why| {
+                errors::bad(
+                    &format!("{} №{i} через Multicall3: {why}", C::SIGNATURE),
+                    SOURCE,
+                    "",
+                )
+            })?;
+            out.push(decode::<C>(&bytes)?);
+        }
+        return Ok(out);
+    }
     let params: Vec<(&str, serde_json::Value)> = calls
         .iter()
         .map(|c| {
@@ -49,12 +75,30 @@ pub async fn view_many<C: SolCall>(
             ("eth_call", json!([{ "to": to, "input": data }, block]))
         })
         .collect();
-    let mut out = Vec::with_capacity(calls.len());
     for r in rpc::batch(ctx, &params).await? {
         let bytes: Bytes = super::jsonrpc::decode(&r?, SOURCE)?;
         out.push(decode::<C>(&bytes)?);
     }
     Ok(out)
+}
+
+/// Много вызовов одного вида на одном блоке (поиск пулов по монетам): при заданном dex.multicall3 — одним eth_call
+/// (view_many), иначе — отдельными eth_call, как раньше (большую пачку JSON-RPC провайдер может не принять).
+/// Принимает: адрес контракта, вызовы, блок. Возвращает: ответы в том же порядке. Ошибки: как у view_many / view.
+pub async fn view_list<C: SolCall>(
+    ctx: &Ctx,
+    to: Address,
+    calls: &[C],
+    block: &str,
+) -> GatewayResult<Vec<C::Return>> {
+    if super::multicall::address(ctx).is_some() {
+        return view_many(ctx, to, calls, block).await;
+    }
+    let each = calls.iter().map(|c| view(ctx, to, c, block));
+    futures_util::future::join_all(each)
+        .await
+        .into_iter()
+        .collect()
 }
 
 /// Разбор ответа функции из байт.

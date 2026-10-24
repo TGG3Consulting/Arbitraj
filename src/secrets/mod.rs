@@ -47,6 +47,16 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bsc_dex",
         "Ключ провайдера узла BSC для адреса HTTP ({key} в bsc.node_http_url)",
     ),
+    (
+        "bsc.node_http_key_backup",
+        "bsc_dex",
+        "Ключ резервного провайдера узла BSC для адреса HTTP ({key} в bsc.node_http_url_backup)",
+    ),
+    (
+        "bsc.node_ws_key_backup",
+        "bsc_dex",
+        "Ключ резервного провайдера узла BSC для адреса WebSocket ({key} в bsc.node_ws_url_backup)",
+    ),
     // Платные каналы отправки (решение 41: канал с ключом не используется, пока ключ не введён).
     (
         "channel.blink_private.key",

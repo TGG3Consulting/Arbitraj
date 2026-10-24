@@ -24,6 +24,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::errors;
+use super::failover::{self, Link, Node};
 use super::jsonrpc;
 use super::ws_task::{self, Cmd};
 
@@ -48,15 +49,39 @@ pub struct Conn {
 }
 
 impl Conn {
-    /// Открывает соединение и запускает его задачу.
+    /// Открывает соединение с основным узлом, при сбое подключения — с резервным (node/failover.rs).
     /// Принимает: окружение, имя соединения (для журнала и сырых сообщений).
     /// Возвращает: соединение. Ошибки: NotConfigured/SecretsLocked (адрес, ключ, таймауты), Timeout, Unreachable.
     pub async fn open(ctx: &Ctx, name: &str) -> GatewayResult<Conn> {
-        let url = ctx.node_url("bsc.node_ws_url", SECRET_WS_KEY)?;
+        let urls = ctx.failover.urls(ctx, Link::Ws)?;
+        let n = urls.len();
+        let mut last = None;
+        for (i, (node, url)) in urls.into_iter().enumerate() {
+            match Self::connect(ctx, name, &url).await {
+                Ok(c) => {
+                    if node == Node::Main {
+                        ctx.failover.main_ok(ctx, Link::Ws).await;
+                    }
+                    return Ok(c);
+                }
+                Err(e) if failover::switchable(&e) && i + 1 < n => {
+                    if node == Node::Main {
+                        ctx.failover.trip(ctx, Link::Ws, &e.message).await;
+                    }
+                    last = Some(e);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last.unwrap_or_else(|| ctx.err(ErrorCode::NotConfigured, "нет адреса узла WebSocket")))
+    }
+
+    /// Соединение по заданному адресу (основной или резервный — решает open, проверка подключения — сама).
+    /// Принимает: окружение, имя, адрес с ключом. Возвращает: соединение. Ошибки: таймауты не заданы, Timeout, Unreachable.
+    pub async fn connect(ctx: &Ctx, name: &str, url: &str) -> GatewayResult<Conn> {
         let timeout = ctx.timeout()?;
         let silence = Duration::from_millis(ctx.int("venue.ws_silence_ms")?);
-        let connect =
-            tokio::time::timeout(timeout, tokio_tungstenite::connect_async(url.as_str())).await;
+        let connect = tokio::time::timeout(timeout, tokio_tungstenite::connect_async(url)).await;
         let ws = match connect {
             Err(_) => {
                 return Err(ctx.err(

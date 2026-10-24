@@ -12,7 +12,6 @@
 use std::collections::HashMap;
 
 use alloy_primitives::Address;
-use futures_util::future::join_all;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
@@ -36,17 +35,16 @@ pub async fn find(
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let tag = block_tag(block);
     let list: Vec<Address> = coins.keys().copied().collect();
-    let calls = list.iter().map(|coin| {
-        let c = IV2Factory::getPairCall {
-            tokenA: *coin,
+    let calls: Vec<_> = list
+        .iter()
+        .map(|item| IV2Factory::getPairCall {
+            tokenA: *item,
             tokenB: usdt,
-        };
-        let tag = tag.clone();
-        async move { call::view(ctx, factory, &c, &tag).await }
-    });
+        })
+        .collect();
+    let found = call::view_list(ctx, factory, &calls, &tag).await?;
     let mut out = Vec::new();
-    for (coin, pair) in list.iter().zip(join_all(calls).await) {
-        let pair = pair?;
+    for (coin, pair) in list.iter().zip(found) {
         if pair == Address::ZERO {
             continue;
         }

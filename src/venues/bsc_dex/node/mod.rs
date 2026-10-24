@@ -7,8 +7,10 @@
 pub mod abi;
 pub mod abi_dex;
 pub mod call;
+pub mod failover;
 pub mod heads;
 pub mod jsonrpc;
+pub mod multicall;
 pub mod pace;
 pub mod rpc;
 pub mod subs;

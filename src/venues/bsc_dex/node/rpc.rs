@@ -3,7 +3,8 @@
 //! eth_getBalance, eth_estimateGas, eth_getTransactionReceipt и т.п. Плюс общий POST JSON для каналов отправки.
 //! Кто вызывает: node/*, wallet/*, pools/*, check/*, exec/*, send/* (через post).
 //! От чего зависит: ctx.rs (адрес bsc.node_http_url с ключом, http.timeout_ms), node/jsonrpc.rs, errors.rs.
-//! Темп и повтор на «превышен лимит» — node/pace.rs (bsc.node_http_rps, правило шлюза RateLimited).
+//! Темп и повтор на «превышен лимит» — node/pace.rs (bsc.node_http_rps, правило шлюза RateLimited); сбой основного
+//! узла — тот же запрос на резервный (node/failover.rs), и только потом правило шлюза.
 //! Настройки: bsc.node_http_url, http.timeout_ms, bsc.node_http_rps; секрет bsc.node_http_key (если в адресе есть {key}).
 //!
 //! Транспорт — HTTP POST с телом JSON-RPC 2.0 (https://www.jsonrpc.org/specification, разделы 4–6);
@@ -22,6 +23,7 @@ use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::errors::{self, Op};
+use super::failover::{self, Link, Node};
 use super::{jsonrpc, pace};
 
 /// Источник ошибок для текста причины.
@@ -40,9 +42,8 @@ pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -
 /// Один запрос к узлу, result — сырой.
 /// Принимает: метод, параметры. Возвращает: сырой result. Ошибки: как у call.
 pub async fn call_raw(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<Box<RawValue>> {
-    let url = ctx.node_url("bsc.node_http_url", SECRET_HTTP_KEY)?;
     let body = jsonrpc::request(1, method, &params);
-    let text = pace::run(ctx, 1, || post(ctx, &url, &body, &[], SOURCE)).await?;
+    let text = pace::run(ctx, 1, || to_node(ctx, &body)).await?;
     jsonrpc::parse_text(&text, SOURCE, Op::Read)
 }
 
@@ -54,9 +55,8 @@ pub async fn call_unpaced<T: DeserializeOwned>(
     method: &str,
     params: Value,
 ) -> GatewayResult<T> {
-    let url = ctx.node_url("bsc.node_http_url", SECRET_HTTP_KEY)?;
     let body = jsonrpc::request(1, method, &params);
-    let text = post(ctx, &url, &body, &[], SOURCE).await?;
+    let text = to_node(ctx, &body).await?;
     let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read)?;
     jsonrpc::decode(&raw, SOURCE)
 }
@@ -71,7 +71,6 @@ pub async fn batch(
     if calls.is_empty() {
         return Ok(Vec::new());
     }
-    let url = ctx.node_url("bsc.node_http_url", SECRET_HTTP_KEY)?;
     let body = Value::Array(
         calls
             .iter()
@@ -79,7 +78,7 @@ pub async fn batch(
             .map(|(i, (m, p))| jsonrpc::request(i as u64, m, p))
             .collect(),
     );
-    let text = pace::run(ctx, calls.len(), || post(ctx, &url, &body, &[], SOURCE)).await?;
+    let text = pace::run(ctx, calls.len(), || to_node(ctx, &body)).await?;
     let list: Vec<Response> = serde_json::from_str(&text).map_err(|e| {
         // Узел может ответить одним объектом-ошибкой на всю пачку.
         match jsonrpc::parse_text(&text, SOURCE, Op::Read) {
@@ -101,6 +100,32 @@ pub async fn batch(
             r.ok_or_else(|| errors::bad(&format!("нет ответа на запрос {i} пачки"), SOURCE, &text))
         })
         .collect()
+}
+
+/// Тело JSON-RPC узлу BSC: основной, при сбое (связь, таймаут, 5xx, 429) — резервный (node/failover.rs).
+/// Принимает: тело. Возвращает: текст ответа. Ошибки: адрес/ключ не заданы; ошибка последнего узла.
+async fn to_node(ctx: &Ctx, body: &Value) -> GatewayResult<String> {
+    let urls = ctx.failover.urls(ctx, Link::Http)?;
+    let n = urls.len();
+    let mut last = None;
+    for (i, (node, url)) in urls.into_iter().enumerate() {
+        match post(ctx, &url, body, &[], SOURCE).await {
+            Ok(t) => {
+                if node == Node::Main {
+                    ctx.failover.main_ok(ctx, Link::Http).await;
+                }
+                return Ok(t);
+            }
+            Err(e) if failover::switchable(&e) && i + 1 < n => {
+                if node == Node::Main {
+                    ctx.failover.trip(ctx, Link::Http, &e.message).await;
+                }
+                last = Some(e);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| errors::bad("нет адреса узла", SOURCE, "")))
 }
 
 /// POST JSON по адресу и текст ответа; HTTP-статус не 2xx — ошибка по статусу.

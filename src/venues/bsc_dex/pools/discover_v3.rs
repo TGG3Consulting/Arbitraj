@@ -19,7 +19,6 @@ use std::collections::HashMap;
 
 use alloy_primitives::Address;
 use alloy_primitives::aliases::U24;
-use futures_util::future::join_all;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -49,18 +48,17 @@ pub async fn find(
         .filter(|c| **c != quote)
         .flat_map(|c| tiers.iter().map(move |(fee, sp)| (*c, *fee, *sp)))
         .collect();
-    let calls = list.iter().map(|(coin, fee, _)| {
-        let c = IV3Factory::getPoolCall {
-            tokenA: *coin,
+    let calls: Vec<_> = list
+        .iter()
+        .map(|item| IV3Factory::getPoolCall {
+            tokenA: item.0,
             tokenB: quote,
-            fee: U24::from(*fee),
-        };
-        let tag = tag.clone();
-        async move { call::view(ctx, factory, &c, &tag).await }
-    });
+            fee: U24::from(item.1),
+        })
+        .collect();
+    let found = call::view_list(ctx, factory, &calls, &tag).await?;
     let mut out = Vec::new();
-    for ((coin, fee, spacing), pool) in list.iter().zip(join_all(calls).await) {
-        let pool = pool?;
+    for ((coin, fee, spacing), pool) in list.iter().zip(found) {
         if pool == Address::ZERO {
             continue;
         }

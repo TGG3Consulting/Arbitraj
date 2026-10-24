@@ -13,6 +13,7 @@
 pub mod check;
 pub mod coins;
 pub mod connection;
+pub mod connection_extra;
 pub mod ctx;
 pub mod errors;
 pub mod exec;

@@ -23,6 +23,7 @@ use arb::core::subscribe::dex_tradable;
 use arb::core::types::{Asset, CoinNetworkInfo, Pool, VenueId};
 use arb::gateway::contract::VenueKind;
 use arb::gateway::events::MarketEvent;
+use arb::venues::bingx::pairs::Snapshot;
 use arb::venues::bingx::symbols;
 
 fn fixture() -> Value {
@@ -80,6 +81,9 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         .collect();
     let networks = HashMap::from([(bingx(), nets)]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
+    let bsc_network = HashMap::from([(bingx(), "BEP20".to_string())]);
+    // Свежесть справочника пар (pairs_fresh.rs) на подписку DEX не влияет — не проверяется.
+    let pairs_fresh = HashMap::new();
     let intermediate = HashMap::new();
     let pool_ok = |_: &Pool| Ok(());
     registry::build(&Inputs {
@@ -87,6 +91,8 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         networks: &networks,
         usdt: Some(addr(&fx["usdt"])),
         quote: &quote,
+        bsc_network: &bsc_network,
+        pairs_fresh: &pairs_fresh,
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
@@ -104,25 +110,24 @@ fn dex_list(fx: &Value, m: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Vec<
     out
 }
 
-/// SpotPairs так, как его шлёт адаптер BingX: монеты подписки с парой status 1 в справочнике пар.
+/// SpotPairs так, как его шлёт адаптер BingX (venues/bingx/pairs.rs): монеты подписки по справочнику пар.
 fn spot_pairs(fx: &Value) -> MarketEvent {
     let raw = std::fs::read_to_string("tests/data/bingx/symbols_spot_2026-10-23.json").unwrap();
     let v: Value = serde_json::from_str(&raw).unwrap();
-    let map = symbols::parse_list(&v["data"], "USDT").unwrap();
-    let tickers = fx["pools"]
+    let syms = symbols::Symbols::default();
+    // Время получения — время стакана той же записи 2026-10-23 (tests/data/bingx/README.md); подписке DEX оно не важно.
+    let at = chrono::DateTime::from_timestamp_millis(1792770730466).unwrap();
+    syms.load(symbols::parse_list(&v["data"], "USDT").unwrap(), at);
+    let assets: Vec<Asset> = fx["pools"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|p| p["ticker"].as_str().unwrap().to_string())
-        .filter(|t| {
-            map.get(t)
-                .is_some_and(|r| r.status == symbols::STATUS_ONLINE)
+        .map(|p| Asset {
+            ticker: p["ticker"].as_str().unwrap().to_string(),
+            bsc_contract: Some(addr(&p["token"])),
         })
         .collect();
-    MarketEvent::SpotPairs {
-        venue: bingx(),
-        tickers,
-    }
+    Snapshot::build(&syms, &assets).event(bingx(), at)
 }
 
 #[test]
@@ -167,6 +172,8 @@ fn coin_without_bingx_pair_is_not_in_dex_subscription() {
     m.apply(MarketEvent::SpotPairs {
         venue: bingx(),
         tickers: vec![],
+        pairs: vec![],
+        loaded_at: Utc::now(),
     });
     assert!(dex_list(&fx, &m, &kinds).is_empty());
 }

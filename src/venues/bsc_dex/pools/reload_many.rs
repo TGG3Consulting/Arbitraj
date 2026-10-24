@@ -86,8 +86,11 @@ async fn load_group(
         listen_log::note_refill(p, &entry);
         let pool = entry.pool.clone();
         p.reg.put(entry);
+        p.loading.done(&f.reference);
         listen_log::emit(p, pool)?;
         out.push(Ok(()));
     }
+    // Прочитанные уходят из «загружается» (loading.rs).
+    p.loading.publish(p).await;
     Ok(out)
 }

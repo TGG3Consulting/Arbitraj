@@ -15,7 +15,7 @@
 //! Настройки: нет своих.
 
 use super::market_state::MarketState;
-use super::registry::CoinEntry;
+use super::registry::{CoinEntry, Presence};
 use crate::core::types::{Asset, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::storage::journal::Level;
@@ -75,14 +75,25 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
 /// Монета, известная бирже только по адресу (сеть BSC есть, пары нет — например BITLIGHT), не нужна.
 /// Принимает: монету справочника, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
 pub fn dex_tradable(c: &CoinEntry, kinds: &[(VenueId, VenueKind)], market: &MarketState) -> bool {
-    c.asset.bsc_contract.is_some()
-        && c.presence.iter().any(|p| {
-            kinds
-                .iter()
-                .any(|(v, k)| v == &p.venue && *k == VenueKind::Cex)
-                && p.info.is_some()
-                && market.spot_pair(&p.venue, &c.asset.ticker)
-        })
+    c.asset.bsc_contract.is_some() && cex_pair(&c.presence, &c.asset.ticker, kinds, market)
+}
+
+/// Есть ли у монеты на какой-либо бирже сеть BSC (данные сети — Presence::info) и торгуемая спот-пара — то же
+/// условие подписки DEX (dex_tradable), и по нему же справочник ставит монете DEX-присутствие (registry_build.rs).
+/// Принимает: присутствия монеты, тикер, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
+pub fn cex_pair(
+    presence: &[Presence],
+    ticker: &str,
+    kinds: &[(VenueId, VenueKind)],
+    market: &MarketState,
+) -> bool {
+    presence.iter().any(|p| {
+        kinds
+            .iter()
+            .any(|(v, k)| v == &p.venue && *k == VenueKind::Cex)
+            && p.info.is_some()
+            && market.spot_pair(&p.venue, ticker)
+    })
 }
 
 /// Приводит подписки всех площадок к справочнику. Подписка площадки идёт отдельной задачей: пересборка её не ждёт

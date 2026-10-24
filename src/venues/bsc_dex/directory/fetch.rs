@@ -16,9 +16,9 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
+use super::due::stops;
 use super::gt_http::{self, Got};
 use super::gt_parse::{self, IndexedPool};
-use super::refresh::stops;
 use super::store;
 
 /// Список DEX сети по всем страницам (links.next). Сбой связи — в журнал, список прежний.

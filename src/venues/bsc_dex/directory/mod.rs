@@ -7,6 +7,7 @@
 //! Настройки: index.* [bsc_dex] — docs/SETTINGS.md, раздел «Справочник пулов».
 
 pub mod check;
+pub mod due;
 pub mod fetch;
 pub mod gt_http;
 pub mod gt_parse;

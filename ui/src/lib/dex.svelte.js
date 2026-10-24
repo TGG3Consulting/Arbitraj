@@ -121,9 +121,9 @@ export function whyNoDex() {
 }
 
 /**
- * Какие id области «DEX» подходят настройке. Чей это id — из схемы бэкенда (SettingDef.dex_id:
- * «Dex» — имя DEX, «Family» — вид пула; src/settings/schema.rs).
- * Принимает: описание настройки. Возвращает: [{id, title}] от адаптеров DEX.
+ * Какие id области «DEX» подходят настройке: DEX из таблицы сопоставления (dex.kind задан, решение 58; id — id DEX
+ * у индексатора). Новую DEX подключают в таблице на «Площадках». Принимает: описание (уровень DEX — dex_id «Dex»).
+ * Возвращает: [{id, title}] от адаптеров DEX.
  */
 export function dexIdsFor(def) {
   const { dexes, families } = dexScopeIds();

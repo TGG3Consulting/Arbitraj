@@ -5,7 +5,7 @@
 //! execute(commands, inputs, deadline). Формат входов зависит от DEX и версии Universal Router Uniswap.
 //! Кто вызывает: exec/build.rs, check/probe.rs.
 //! От чего зависит: exec/swap_v2v3.rs, exec/swap_v4.rs, pools/registry.rs, ctx.rs.
-//! Настройки: dex.universal_router_version [вид пула Uniswap]: «2.0», «2.1.1», «2.1.2».
+//! Настройки: dex.universal_router_version [DEX]: «pancakeswap_infinity», «2.0», «2.1.1», «2.1.2».
 //!
 //! Источники: PancakeSwap — https://github.com/pancakeswap/pancake-v4-universal-router/blob/1b6d479e1f76361f5950d1168d9392361e73a1e8/src/libraries/Commands.sol#L15-L35 ,
 //! src/base/Dispatcher.sol#L61-L76, #L167-L182, #L247-L259; execute — src/UniversalRouter.sol#L33.
@@ -19,7 +19,6 @@ use alloy_primitives::{Address, Bytes, U256};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::pools::families::PANCAKESWAP;
 use super::super::pools::registry::Entry;
 
 /// Команды Universal Router (Commands.sol, одинаковые номера у PancakeSwap и Uniswap).
@@ -52,17 +51,15 @@ pub enum Format {
     Uniswap211,
 }
 
-/// Формат по DEX пула и настройке версии. Ошибки: NotConfigured (версия не задана или неизвестна).
+/// Формат по настройке dex.universal_router_version DEX пула. Ошибки: NotConfigured (версия не задана или неизвестна).
 pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
-    if e.family.dex == PANCAKESWAP {
-        return Ok(Format::Pancake);
-    }
     match ctx.dex_text("dex.universal_router_version", e.family.id)?.trim() {
+        "pancakeswap_infinity" => Ok(Format::Pancake),
         "2.0" => Ok(Format::Uniswap20),
         "2.1.1" | "2.1.2" => Ok(Format::Uniswap211),
         v => Err(ctx.err(
             ErrorCode::NotConfigured,
-            format!("dex.universal_router_version [{}] = «{v}»: известны 2.0, 2.1.1, 2.1.2 (официальный SDK)", e.family.id),
+            format!("dex.universal_router_version [{}] = «{v}»: известны pancakeswap_infinity, 2.0, 2.1.1, 2.1.2", e.family.id),
         )),
     }
 }

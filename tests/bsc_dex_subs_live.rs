@@ -20,7 +20,7 @@ use arb::core::types::PoolRef;
 use arb::venues::bsc_dex::pools::attach::split;
 use arb::venues::bsc_dex::pools::discover::Found;
 use arb::venues::bsc_dex::pools::events;
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::group::{Topics, filter};
 
 fn fixture() -> Value {
@@ -95,7 +95,8 @@ fn split_respects_open_group_and_limit() {
 fn shallow_pool_hears_only_liquidity_adds() {
     let fx = fixture();
     let s = &fx["shallow_pool"];
-    let f = FAMILIES.iter().find(|f| f.id == s["family"]).unwrap();
+    // В записи — прежний id вида пула PancakeSwap V3 (до решения 58), вид — pancakeswap_v3.
+    let f = families::make(s["family"].as_str().unwrap(), "pancakeswap_v3").unwrap();
     let pool = addr(&s["pool"]);
     let (coin, usdt) = (addr(&s["coin"]), addr(&fx["usdt"]));
     let (token0, token1) = if coin < usdt {
@@ -135,14 +136,11 @@ fn shallow_pool_hears_only_liquidity_adds() {
 #[test]
 fn v4_live_topics_are_in_their_lists() {
     let fx = fixture();
-    let u4 = FAMILIES.iter().find(|f| f.id == "uniswap_v4").unwrap();
+    let u4 = families::make("uniswap_v4", "uniswap_v4").unwrap();
     let ml = b256(&fx["uniswap_v4_modify_liquidity_log"]["topics"][0]);
     assert!(events::topics(u4).contains(&ml));
     assert_eq!(events::liquidity_topics(u4), vec![ml]);
-    let bin = FAMILIES
-        .iter()
-        .find(|f| f.id == "pancakeswap_infinity_bin")
-        .unwrap();
+    let bin = families::make("pancakeswap_infinity_bin", "pancakeswap_infinity_bin").unwrap();
     let t = b256(&fx["infinity_bin_log"]["topics"][0]);
     assert!(
         events::topics(bin).contains(&t),

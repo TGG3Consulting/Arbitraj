@@ -6,7 +6,7 @@
 //! и один execute Universal Router PancakeSwap со всеми долями и итоговой проверкой баланса (exec/universal.rs),
 //! ожидание итога своим узлом, факт по логам Transfer. Повторов нет (стартовое правило Тиграна).
 //! Кто вызывает: exec/trade.rs.
-//! От чего зависит: exec/live.rs, exec/chain.rs, exec/universal.rs, exec/trade.rs (общие шаги), exec/result.rs,
+//! От чего зависит: exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/result.rs,
 //! quote/direct.rs, quote/via.rs, quote/mixed_quoter.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, send.*, channel.*.
 //!
@@ -19,6 +19,7 @@ use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use super::super::pools::registry::Entry;
 use super::super::quote::mixed_quoter::{self, Leg};
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
@@ -26,7 +27,7 @@ use super::super::quote::{Quoting, direct};
 use super::super::wallet::nonce::Nonces;
 use super::trade::{check_price, send_plan, sides, worst_positive};
 use super::txs::Env;
-use super::{chain, live, result, universal};
+use super::{chain, live, precheck_sim, result, universal};
 
 /// Сделка по умному маршруту. Ошибки: NoRoute (доля не годится, пул пропал или не допущен), QuoteMismatch
 /// (цена хуже допустимой, расхождение с MixedQuoter), CoinNotChecked, настройки, каналы,
@@ -100,6 +101,11 @@ pub async fn trade(
     let wallet = slot.from;
     let now = q.heads.timestamp(ctx).await?;
     let plan = universal::build(ctx, &steps, wallet, now).await?;
+    let entries: Vec<&Entry> = paths
+        .iter()
+        .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
+        .collect();
+    precheck_sim::emitters(ctx, &plan, &entries).await?;
     let d = send_plan(env, &slot, plan, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };

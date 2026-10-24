@@ -43,9 +43,10 @@ pub struct ConnectionCheck {
 /// Нужен интерфейсу, чтобы показать настройки dex.* по каждой DEX и виду пула.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DexFamily {
-    /// Имя DEX — id области «DEX» для dex.enabled (например «pancakeswap»).
+    /// Имя DEX. С решения 58 каждая DEX индексатора — своя строка таблицы сопоставления: dex = family = id DEX у
+    /// индексатора (например «pancakeswap-v3-bsc»).
     pub dex: String,
-    /// Вид пула — id области «DEX» для dex.pool_enabled и адресов контрактов (например «pancakeswap_v3»).
+    /// id области «DEX» для dex.kind, dex.pool_enabled и адресов контрактов (id DEX у индексатора).
     pub family: String,
     pub kind: PoolKind,
     /// Название для интерфейса.

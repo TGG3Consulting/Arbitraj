@@ -182,9 +182,9 @@ impl Venue for BscDex {
         Ok(())
     }
 
-    /// DEX и виды пулов (id области настроек «DEX») — pools/families.rs. Ошибок нет.
+    /// DEX с видом пулов из таблицы сопоставления (id области «DEX» = id DEX индексатора) — pools/families.rs. Ошибок нет.
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
-        Ok(pools::families::for_ui())
+        Ok(pools::families::for_ui(&self.p.ctx))
     }
 
     /// Справочник пулов от индексатора (решение 58) — directory/. Ошибок нет: нет данных — пустые списки и причина.

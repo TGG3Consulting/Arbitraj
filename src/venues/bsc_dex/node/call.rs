@@ -101,6 +101,63 @@ pub async fn view_list<C: SolCall>(
         .collect()
 }
 
+/// Разные вызовы (разные контракты и функции) на одном блоке, каждый со своим итогом: при заданном dex.multicall3 —
+/// одним eth_call через Multicall3.aggregate3 (allowFailure), иначе пачкой JSON-RPC. Нужен проверке пулов справочника:
+/// поддельный «пул» может откатить вызов — это ответ, а не сбой. Принимает: (контракт, данные), блок.
+/// Возвращает: по каждому вызову байты ответа или текст отката. Ошибки: узел, BadResponse (ответ aggregate3).
+pub async fn try_many(
+    ctx: &Ctx,
+    calls: &[(Address, Bytes)],
+    block: &str,
+) -> GatewayResult<Vec<Result<Bytes, String>>> {
+    if calls.is_empty() {
+        return Ok(Vec::new());
+    }
+    if let Some(mc) = super::multicall::address(ctx) {
+        return super::multicall::aggregate(ctx, mc, calls, block).await;
+    }
+    let params: Vec<(&str, serde_json::Value)> = calls
+        .iter()
+        .map(|(to, data)| ("eth_call", json!([{ "to": to, "input": data }, block])))
+        .collect();
+    let mut out = Vec::with_capacity(calls.len());
+    for r in rpc::batch(ctx, &params).await? {
+        out.push(match r {
+            Ok(v) => super::jsonrpc::decode::<Bytes>(&v, SOURCE).map_err(|e| e.message),
+            Err(e) => Err(e.message),
+        });
+    }
+    Ok(out)
+}
+
+/// Ответ одного вызова пачки по частям: Ok(Ok) — байты, Ok(Err) — откат (это ответ), Err — сбой узла на его части.
+pub type Piece = Result<Result<Bytes, String>, String>;
+
+/// try_many частями по `size` вызовов: сбой узла на одной части не мешает остальным (её вызовы — Err).
+/// Принимает: вызовы, блок, размер части (0 — все вызовы «сбой»). Возвращает: ответ каждого вызова по порядку.
+/// Ошибок нет.
+pub async fn try_chunks(
+    ctx: &Ctx,
+    calls: &[(Address, Bytes)],
+    block: &str,
+    size: usize,
+) -> Vec<Piece> {
+    if size == 0 {
+        return calls
+            .iter()
+            .map(|_| Err("размер части пачки 0".to_string()))
+            .collect();
+    }
+    let mut out = Vec::with_capacity(calls.len());
+    for part in calls.chunks(size) {
+        match try_many(ctx, part, block).await {
+            Ok(list) => out.extend(list.into_iter().map(Ok)),
+            Err(e) => out.extend(part.iter().map(|_| Err(e.message.clone()))),
+        }
+    }
+    out
+}
+
 /// Разбор ответа функции из байт.
 /// Принимает: байты ответа. Возвращает: значение. Ошибка BadResponse — байты не по ABI функции.
 pub fn decode<C: SolCall>(out: &[u8]) -> GatewayResult<C::Return> {

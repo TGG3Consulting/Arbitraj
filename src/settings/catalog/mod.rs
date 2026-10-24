@@ -10,7 +10,7 @@
 //! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе.
 
 mod base;
-mod dex;
+pub mod dex;
 mod index;
 mod send;
 mod trade;

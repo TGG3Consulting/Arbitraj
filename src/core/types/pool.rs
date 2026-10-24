@@ -115,7 +115,8 @@ pub struct Pool {
     pub token0: Address,
     pub token1: Address,
     /// Постоянная комиссия пула, единицы 1e-6: V3 — `fee()`, V4 — `PoolKey.fee`.
-    /// None — комиссия не из пула: V2 (настройка dex.v2_fee_pct) или динамическая V4 (lp_fee в состоянии).
+    /// V2 — своя комиссия пары (прочитана с пары, если у DEX она своя у каждой пары), иначе None — dex.v2_fee_pct DEX.
+    /// None у V4 — динамическая комиссия (lp_fee в состоянии).
     pub fee_pips: Option<u32>,
     /// V3 и CL: tickSpacing; иначе None.
     pub tick_spacing: Option<i32>,

@@ -73,7 +73,7 @@ pub enum ScopeKind {
 pub enum DexId {
     /// Область «DEX» у настройки не задаётся.
     None,
-    /// id — имя DEX («pancakeswap»), например dex.enabled.
+    /// id — имя DEX («pancakeswap»). С решения 58 таких настроек нет (dex.enabled удалена) — вариант остаётся в стыке.
     Dex,
     /// id — вид пула («pancakeswap_v3»): адреса контрактов, dex.pool_enabled и прочие dex.*.
     Family,

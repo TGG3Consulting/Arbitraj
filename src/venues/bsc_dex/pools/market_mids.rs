@@ -6,33 +6,29 @@
 //! От чего зависит: discover.rs, created.rs (Watch), mids.rs.
 //! Настройки: через вызываемые — dex.* [вид пула].
 //!
-//! Поиск — тот же, что для USDT (V2/V3 — фабрика; V4 — фоновая загрузка истории, history_v4.rs):
-//! research/flow/bsc_dex.md, раздел 2; research/flow/bsc_v4.md, раздел 3.
+//! Пулы — те же, что для USDT: из справочника индексатора, проверенные на узле (решение 58, pools/index.rs).
 
 use std::collections::HashMap;
 
 use alloy_primitives::Address;
 
 use super::super::ctx::Ctx;
-use super::discover::{self, Found, Scanned};
+use super::discover::{self, Found};
 use super::mids::Mid;
 
+/// Монеты наблюдателя новых пулов и его встречный токен (промежуточная монета) — по каждой промежуточной.
+pub type MidWatches = Vec<(HashMap<Address, String>, Address)>;
+
 /// Пулы «монета — промежуточная» и монеты для наблюдателей новых пулов по каждой промежуточной.
-/// Принимает: окружение, монеты подписки, промежуточные монеты, текущий блок, память истории.
+/// Принимает: окружение, монеты подписки, промежуточные монеты.
 /// Возвращает: (пулы, [(монеты, промежуточная)]). Ошибок нет: сбой вида пула — в журнал (discover.rs).
-pub async fn find(
-    ctx: &Ctx,
-    coins: &HashMap<Address, String>,
-    mids: &[Mid],
-    head: u64,
-    scanned: &Scanned,
-) -> (Vec<Found>, Vec<(HashMap<Address, String>, Address)>) {
+pub fn find(ctx: &Ctx, coins: &HashMap<Address, String>, mids: &[Mid]) -> (Vec<Found>, MidWatches) {
     let mut found = Vec::new();
     let mut watches = Vec::new();
     for m in mids {
         let mut list = coins.clone();
         list.remove(&m.address);
-        found.extend(discover::find_all(ctx, &list, m.address, head, scanned, false).await);
+        found.extend(discover::find_all(ctx, &list, m.address));
         watches.push((list, m.address));
     }
     (found, watches)

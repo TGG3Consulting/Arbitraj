@@ -9,7 +9,7 @@
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs,
 //! directory/check.rs (индексатор справочника пулов).
 //! Настройки: bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
-//! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке), dex.enabled, dex.pool_enabled, dex.pool_manager [V4]; секреты bsc.node_*_key, bsc_dex.wallet_key.
+//! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке), dex.pool_enabled, dex.pool_manager [V4], dex.history_scan; секреты bsc.node_*_key, bsc_dex.wallet_key.
 //!
 //! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads, eth_simulateV1, eth_getCode —
 //! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
@@ -27,7 +27,7 @@ use super::ctx::Ctx;
 use super::node::ws::Conn;
 use super::node::{BSC_CHAIN_ID, rpc};
 use super::pools::deploy_block;
-use super::pools::families::{FAMILIES, Proto};
+use super::pools::families::{self, Proto};
 use super::wallet::{balances, signer};
 
 /// Полная проверка. Возвращает: ConnectionCheck (ok — только если все части в порядке). Ошибок нет.
@@ -131,9 +131,12 @@ async fn simulate(ctx: &Ctx) -> Result<String, String> {
 /// Возвращает: описание или текст причины (в том числе «нужен архивный узел»).
 async fn history(ctx: &Ctx) -> Result<String, String> {
     let mut parts = Vec::new();
-    for f in FAMILIES.iter().filter(|f| {
+    // История V4 необязательна (решение 58): пулы V4 — из справочника; узел с историей нужен, только если она включена.
+    if !ctx.flag("dex.history_scan").unwrap_or(false) {
+        return Ok("не нужна: история V4 не читается (dex.history_scan)".into());
+    }
+    for f in families::all(ctx).into_iter().filter(|f| {
         !matches!(f.proto, Proto::V2 | Proto::PancakeV3 | Proto::UniswapV3)
-            && ctx.dex_flag("dex.enabled", f.dex).unwrap_or(false)
             && ctx.dex_flag("dex.pool_enabled", f.id).unwrap_or(false)
     }) {
         let manager = ctx

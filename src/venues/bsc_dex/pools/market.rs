@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/pools/market.rs
 //! Что делает: подписка на рынок DEX (контракт subscribe_market): монеты и USDT из списка ядра, промежуточные монеты
-//! (решение 52: пулы «монета — промежуточная» и «промежуточная — USDT»), поиск пулов,
-//! слушатели пачек пулов (dex.pools_per_sub), наблюдатель новых пулов, головы сети; пулы V4 — фоновая загрузка истории
-//! (history_v4.rs), подписка её не ждёт. Возвращает задачи — при новой
+//! (решение 52: пулы «монета — промежуточная» и «промежуточная — USDT»), пулы из справочника индексатора с проверкой на
+//! узле (решение 58: index.rs, обновления — directory/refresh.rs), слушатели пачек пулов (dex.pools_per_sub),
+//! наблюдатель новых пулов (события создания), головы сети; необязательная история V4 (history_v4.rs). Возвращает задачи — при новой
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
 //! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
@@ -30,7 +30,7 @@ use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
 use super::listen::{self, Pools};
-use super::{history_v4, market_mids, mids};
+use super::{history_v4, index, index_watch, market_mids, mids};
 
 /// Запускает всё для подписки на рынок.
 /// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
@@ -52,7 +52,8 @@ pub async fn subscribe(
     let per = subs::per_sub(&p.ctx)?;
     // Без опроса блоков нет свежести — подписка не начинается, ядро повторит её после задания настройки.
     super::super::node::heads::poll_every(&p.ctx)?;
-    let head: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
+    // Узел отвечает — иначе подписка не начинается (ядро повторит).
+    let _: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
     let mut tasks = vec![tokio::spawn(p.heads.clone().run(p.ctx.clone()))];
 
     // Промежуточные монеты (решение 52): выключено — пусто; не задано — в журнал, только USDT.
@@ -66,18 +67,11 @@ pub async fn subscribe(
     };
     p.mids.set(mid_list.clone());
     let all = market_mids::with_mids(&coins, &mid_list);
-    // Справочник пулов от индексатора (решение 58): монеты и промежуточные, пары с USDT и промежуточными.
-    let quotes: HashSet<Address> = std::iter::once(usdt)
-        .chain(mid_list.iter().map(|m| m.address))
-        .collect();
-    tasks.push(tokio::spawn(super::super::directory::refresh::run(
-        p.ctx.clone(),
-        all.clone(),
-        quotes,
-        None,
-    )));
-    let mut found = discover::find_all(&p.ctx, &all, usdt, head.to(), scanned, false).await;
-    let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list, head.to(), scanned).await;
+    // Справочник пулов от индексатора (решение 58): сохранённый — проверка на узле до первого поиска, обновления — задачей.
+    let (refresh, dir_rx) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
+    tasks.push(refresh);
+    let mut found = discover::find_all(&p.ctx, &all, usdt);
+    let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list);
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     found.extend(via.into_iter().filter(|f| seen.insert(f.reference.clone())));
     let is_mid = |a: &Address| mid_list.iter().any(|m| m.address == *a);
@@ -86,7 +80,7 @@ pub async fn subscribe(
             || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt)
     });
     let msg = format!(
-        "DEX: найдено пулов V2/V3 с {quote} и промежуточными монетами ({}): {} по {} монетам; V4 — загружается в фоне",
+        "DEX: пулов из справочника (проверены на узле) с {quote} и промежуточными монетами ({}): {} по {} монетам",
         mid_list.len(),
         found.len(),
         coins.len()
@@ -136,7 +130,14 @@ pub async fn subscribe(
     for w in &watches {
         tasks.push(tokio::spawn(created::run(p.clone(), w.clone())));
     }
-    // Пулы V4 — в фоне: подписка V2/V3 уже работает, пулы V4 подключаются по мере загрузки истории.
+    // Справочник обновил монеты — проверка их пулов и подключение новых (решение 58).
+    tasks.push(tokio::spawn(index_watch::watch(
+        p.clone(),
+        dir_rx,
+        watches.clone(),
+        wake.clone(),
+    )));
+    // История V4 — необязательна (dex.history_scan): пулы Uniswap V4 без позиций через PositionManager.
     tasks.push(tokio::spawn(history_v4::run(
         p.clone(),
         scanned.clone(),

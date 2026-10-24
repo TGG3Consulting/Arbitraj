@@ -5,9 +5,10 @@
 //! от имени кошелька бота (без подписи): USDT на кошелёк из другого пула → разрешения → расчёт без налога
 //! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод половины на адрес, где лежат токены
 //! пула (налог продажи: насколько вырос его баланс) → перевод четверти на пустой адрес (налог перевода) →
-//! разрешения и продажа остатка (газ продажи).
+//! разрешения и продажа остатка (газ продажи). В покупке и продаже проверяется, что обмен сделал сам этот пул
+//! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике.
 //! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/simulate.rs, check/probe_calls.rs, exec/plan.rs, quote/quoter_calls.rs, pools/registry.rs.
+//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/plan.rs, quote/quoter_calls.rs, pools/registry.rs.
 //! Настройки: через вызываемые; dex.vault [Infinity] — где лежат токены пулов Infinity.
 //!
 //! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Токены V2/V3 лежат в самом пуле,
@@ -22,7 +23,7 @@
 use alloy_primitives::{Address, U256, keccak256};
 
 use crate::core::types::{PoolKind, PoolRef};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::plan::{self, Order};
@@ -30,6 +31,7 @@ use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::balances;
+use super::emitter;
 use super::probe_calls as pc;
 use super::simulate::{self, Call};
 
@@ -51,7 +53,8 @@ pub struct Measured {
 }
 
 /// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, время блока.
-/// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.).
+/// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
+/// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs).
 pub async fn run(
     ctx: &Ctx,
     e: &Entry,
@@ -102,6 +105,10 @@ pub async fn run(
     let (q, x) = (1 + n_appr, 2 + n_appr);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
         return pc::buy_revert(ctx, i, r, q).map(Err);
+    }
+    // Кто меняет (решение 59): обмен должен сделать сам этот пул — иначе пул исключён, проверка «не проверено».
+    if let Err(why) = emitter::check(ctx, &[e], &first[x].logs).await {
+        return Err(ctx.err(ErrorCode::NotConfigured, why));
     }
     let (Some(buy_expected), Some(bought)) = (
         quoter_calls::decode(e, &first[q].return_data),
@@ -161,6 +168,11 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ баланса не по ABI".into()));
     };
+    if sell_ok(&all)
+        && let Err(why) = emitter::check(ctx, &[e], &all[all.len() - 1].logs).await
+    {
+        return Err(ctx.err(ErrorCode::NotConfigured, why));
+    }
     let gas = |r: &[simulate::CallResult]| r.iter().map(|c| c.gas_used.to::<u64>()).sum::<u64>();
     let sell_appr = &all[base + 5..all.len() - 1];
     let sell_swap = &all[all.len() - 1];
@@ -177,6 +189,11 @@ pub async fn run(
         gas_sell: (sell_swap.ok() && sell_appr.iter().all(|c| c.ok()))
             .then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
+}
+
+/// Продажа пробы прошла (последний вызов). Ошибок нет.
+fn sell_ok(all: &[simulate::CallResult]) -> bool {
+    all.last().is_some_and(|c| c.ok())
 }
 
 /// Адрес, где лежат токены пула: V2/V3 — сам пул; Infinity — Vault (dex.vault); Uniswap V4 — PoolManager.

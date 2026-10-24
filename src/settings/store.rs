@@ -122,7 +122,8 @@ impl Store {
     /// Задаёт или очищает значение (None — очистить): база + история, кэш, журнал, рассылка.
     /// Если значение не изменилось — ничего не пишет и возвращает None.
     /// Принимает: имя, область, значение, кто меняет.
-    /// Ошибки: неизвестное имя, неверное значение или область, база.
+    /// Ошибки: неизвестное имя (кроме очистки уже сохранённого значения устаревшей настройки), неверное значение
+    /// или область, база.
     pub async fn set(
         &self,
         name: &str,
@@ -130,10 +131,16 @@ impl Store {
         value: Option<Value>,
         by: &str,
     ) -> Result<Option<Change>, SetError> {
-        let def = catalog::find(name).ok_or_else(|| SetError::Unknown(name.to_string()))?;
-        let new = match value {
-            Some(v) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
-            None => None,
+        // Имени нет в каталоге (настройку удалили из кода, например dex.enabled) — разрешено только очистить
+        // оставшееся значение: задать его нельзя (решение 59: устаревшие настройки удаляет человек из интерфейса).
+        let new = match (catalog::find(name), value) {
+            (Some(def), Some(v)) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
+            (_, None)
+                if catalog::find(name).is_some() || self.get_exact(name, &scope).is_some() =>
+            {
+                None
+            }
+            _ => return Err(SetError::Unknown(name.to_string())),
         };
         let _turn = self.writer.lock().await;
         let old = self.get_exact(name, &scope);

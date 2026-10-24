@@ -4,7 +4,7 @@
 //! по флагам считается группа крючка. Читаются все Initialize менеджера одним проходом (фильтр только topic0):
 //! встречный токен (USDT или промежуточная монета) выбирается уже из прочитанного (discover.rs) — так история
 //! не читается заново на каждый встречный токен.
-//! Кто вызывает: pools/discover.rs, pools/history_v4.rs, pools/history_store.rs.
+//! Кто вызывает: pools/discover.rs, pools/history_v4.rs, pools/history_store.rs, pools/created.rs, pools/verify_v4.rs (from_key).
 //! От чего зависит: ctx.rs, pools/scan.rs, abi_v4.rs, key.rs, hooks.rs, discover.rs (Found).
 //! Настройки: через scan.rs — dex.logs_block_batch, dex.scan_progress_s.
 //!
@@ -121,11 +121,25 @@ pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Found> {
     if key.id() != id {
         return Err(mismatch(ctx, f, id, key.id()));
     }
+    Ok(from_key(f, manager, id, key, spacing, step))
+}
+
+/// Найденный пул V4 по ключу (из события Initialize или из ключа у менеджера / PositionManager — pools/verify_v4.rs).
+/// Принимает: вид, менеджер, PoolId (уже сверенный с ключом), ключ, tickSpacing (CL), binStep (Bin).
+/// Возвращает: Found; coin = currency0 до выбора встречного токена (discover::against). Ошибок нет.
+pub fn from_key(
+    f: &'static Family,
+    manager: Address,
+    id: B256,
+    key: PoolKey,
+    spacing: Option<i32>,
+    step: Option<u32>,
+) -> Found {
     let (token0, token1) = match &key {
         PoolKey::Infinity(k) => (k.currency0, k.currency1),
         PoolKey::Uniswap(k) => (k.currency0, k.currency1),
     };
-    Ok(Found {
+    Found {
         family: f,
         reference: PoolRef::Singleton { manager, id },
         token0,
@@ -136,7 +150,7 @@ pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Found> {
         bin_step: step,
         hooks: Some(hooks::info(&key)),
         key: Some(key),
-    })
+    }
 }
 
 /// Ошибка «PoolId из ключа не совпал с PoolId события».

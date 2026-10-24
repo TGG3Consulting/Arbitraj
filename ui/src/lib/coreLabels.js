@@ -1,7 +1,9 @@
 // Файл: ui/src/lib/coreLabels.js
 // Что делает: подписи данных ядра по-русски: режим системы, состояние направления на «Живом экране»,
 //   шаг сделки, вердикт кандидата. Значения — как их сериализует ядро (src/api/README.md).
-// Кто вызывает: components/ControlBar.svelte, components/SpreadCell.svelte, pages/Live.svelte, pages/Deals.svelte.
+//   Короткое состояние для компактной строки и причина отдельно — для всплывающего окна (Issue #33).
+// Кто вызывает: components/ControlBar.svelte, components/SpreadCell.svelte, components/LiveCoinModal.svelte,
+//   pages/Live.svelte, pages/Deals.svelte.
 // От чего зависит: lib/labels.js (showTime).
 // Настройки: нет.
 
@@ -37,6 +39,32 @@ export function spreadState(s) {
   if (s?.NotConfigured !== undefined) return { text: `не задано: ${s.NotConfigured}`, cls: 'unset' };
   if (s?.Cooldown) return { text: `пауза до ${showTime(s.Cooldown.until)}`, cls: 'muted' };
   return { text: JSON.stringify(s), cls: '' };
+}
+
+/**
+ * Короткое состояние направления для строки «Живого экрана» (одно-два слова, без причины).
+ * Принимает: State (строка или {вариант: данные}). Возвращает: {text, cls, icon}.
+ */
+export function spreadShort(s) {
+  if (s === 'Below') return { text: 'ниже порога', cls: 'muted', icon: '○' };
+  if (s === 'Holding') return { text: 'держится', cls: 'warn-text', icon: '◐' };
+  if (s === 'Candidate') return { text: 'кандидат', cls: 'ok', icon: '●' };
+  if (s === 'Anomaly') return { text: 'аномалия', cls: 'err', icon: '!' };
+  if (s?.NoPrice !== undefined) return { text: 'нет цены', cls: 'muted', icon: '—' };
+  if (s?.NotConfigured !== undefined) return { text: 'не задано', cls: 'unset', icon: '?' };
+  if (s?.Cooldown) return { text: 'пауза', cls: 'muted', icon: '‖' };
+  return { text: JSON.stringify(s), cls: '', icon: '' };
+}
+
+/**
+ * Причина состояния целиком (для всплывающего окна): текст ядра у NoPrice / NotConfigured,
+ * «до <время>» у Cooldown. Принимает: State. Возвращает: строку или null — причины нет.
+ */
+export function spreadReason(s) {
+  if (s?.NoPrice !== undefined) return s.NoPrice;
+  if (s?.NotConfigured !== undefined) return s.NotConfigured;
+  if (s?.Cooldown) return `пауза до ${showTime(s.Cooldown.until)}`;
+  return null;
 }
 
 /** Направление строкой: «CAKE: bingx → bsc_dex». */

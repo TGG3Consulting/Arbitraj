@@ -1,14 +1,16 @@
 <!--
   Файл: ui/src/components/SpreadCell.svelte
-  Что делает: одна ячейка «Живого экрана» — одно направление монеты (купить на A → продать на B):
-    спред %, порог комиссий %, состояние фильтра шума, цены покупки и продажи.
-    Нет спреда (state NoPrice / NotConfigured / нет направления в данных) — «—», причина во всплывающей подсказке.
+  Что делает: одна компактная ячейка «Живого экрана» — одно направление монеты (купить на A → продать на B)
+    в одну строку (Issue #33): спред % (3 знака), порог комиссий % (3 знака), короткое состояние со значком.
+    Без цен, адресов и причин — они во всплывающем окне по щелчку на строке (LiveCoinModal.svelte).
+    Нет направления в данных ядра — «—» с причиной в подсказке.
   Кто вызывает: components/LiveCoins.svelte.
-  От чего зависит: lib/coreLabels.js (spreadState).
+  От чего зависит: lib/coreLabels.js (spreadShort), lib/fmt.js (fmtPct).
   Настройки: нет.
 -->
 <script>
-  import { spreadState } from '../lib/coreLabels.js';
+  import { spreadShort } from '../lib/coreLabels.js';
+  import { fmtPct } from '../lib/fmt.js';
 
   /**
    * v — SpreadView направления или undefined (ядро не прислало это направление);
@@ -16,27 +18,16 @@
    */
   let { v, missing } = $props();
 
-  const st = $derived(v ? spreadState(v.state) : null);
+  const st = $derived(v ? spreadShort(v.state) : null);
   const above = $derived(v?.spread_pct != null && v?.prices && Number(v.spread_pct) > Number(v.prices.fees_pct));
-  /** Подсказка: состояние с причиной и число обновлений подряд выше порога. */
-  const tip = $derived(v ? `${st.text}${v.updates ? ` · ${v.updates} обн. подряд выше порога` : ''}` : missing);
 </script>
 
-<td class="leg" title={tip}>
-  {#if !v}
-    <span class="muted">—</span>
-  {:else}
-    <div class="num big" class:ok={above}>{v.spread_pct ?? '—'}{v.spread_pct != null ? ' %' : ''}</div>
-    <div class="small">порог {v.prices?.fees_pct ?? '—'}{v.prices ? ' %' : ''}</div>
-    <div class="small {st.cls}">{st.text}</div>
-    {#if v.prices}
-      <div class="small muted">{v.prices.buy} → {v.prices.sell}</div>
-    {/if}
-  {/if}
-</td>
+<td class="num spread" class:ok={above} title={v ? '' : missing}>{v ? fmtPct(v.spread_pct) : '—'}</td>
+<td class="num muted">{v?.prices ? fmtPct(v.prices.fees_pct) : '—'}</td>
+<td class="state {st?.cls ?? 'muted'}">{#if st}<span class="icon">{st.icon}</span> {st.text}{:else}—{/if}</td>
 
 <style>
-  .leg { vertical-align: top; min-width: 150px; }
-  .big { font-size: 1.1em; font-weight: 600; text-align: left; }
-  .small { font-size: 0.85em; }
+  .spread { font-weight: 600; }
+  .state { border-right: 1px solid var(--line); }
+  .icon { display: inline-block; width: 1em; text-align: center; }
 </style>

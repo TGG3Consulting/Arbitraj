@@ -26,6 +26,7 @@ nav a { color: var(--muted); text-decoration: none; padding: 4px 0; border-botto
 nav a.active { color: var(--text); border-color: var(--accent); }
 .brand { margin-right: 8px; }
 main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 48px; }
+main.wide { max-width: none; }
 h1 { font-size: 22px; } h2 { font-size: 18px; margin: 20px 0 8px; } h3 { font-size: 16px; margin: 16px 0 6px; }
 h4 { font-size: 14px; margin: 12px 0 4px; color: var(--muted); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
@@ -68,3 +69,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .banner.control.stop { background: var(--lock-bg); }
 .banner.control.run { background: var(--panel); }
 .banner.control > div { flex-basis: 100%; }
+/* Компактная таблица (Issue #33): строки не переносятся, прокручивается только таблица в обёртке .tscroll. */
+.tscroll { overflow-x: auto; max-width: 100%; margin: 8px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+table.compact { display: table; width: 100%; margin: 0; }
+table.compact th, table.compact td { white-space: nowrap; padding: 4px 8px; vertical-align: middle; }
+table.compact thead th { font-size: 13px; color: var(--muted); font-weight: 600; }
+table.compact tr.click { cursor: pointer; }
+table.compact tr.click:hover td { background: var(--bg); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0; }

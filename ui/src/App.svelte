@@ -2,7 +2,7 @@
   Файл: ui/src/App.svelte
   Что делает: каркас интерфейса — меню экранов, плашки «Система заблокирована», «Нет живой связи»
     и режима системы («Старт/Стоп/Пауза»),
-    выбор экрана по адресу (#/экран). Запускает живой поток и общие хранилища один раз.
+    выбор экрана по адресу (#/экран); «Живой экран» и «Монеты» — во всю ширину окна (Issue #33). Запускает живой поток и общие хранилища один раз.
   Кто вызывает: main.js.
   От чего зависит: lib/*, components/LockBanner.svelte, LiveBanner.svelte, pages/*.
   Настройки: нет.
@@ -30,13 +30,16 @@
   import Notifications from './pages/Notifications.svelte';
   import Journal from './pages/Journal.svelte';
 
-  /** Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой. */
+  /**
+   * Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой.
+   * wide — экран во всю ширину окна (широкие таблицы, Issue #33); остальные — колонкой по центру.
+   */
   const PAGES = [
     { id: 'unlock', title: 'Разблокировка', page: Unlock },
     { id: 'venues', title: 'Площадки', page: Venues },
-    { id: 'live', title: 'Живой экран', page: Live },
+    { id: 'live', title: 'Живой экран', page: Live, wide: true },
     { id: 'deals', title: 'Сделки', page: Deals },
-    { id: 'coins', title: 'Монеты', page: Coins },
+    { id: 'coins', title: 'Монеты', page: Coins, wide: true },
     { id: 'manual', title: 'Ручное управление', page: Manual },
     { id: 'channels', title: 'Каналы отправки', page: Channels },
     { id: 'gas', title: 'Статистика газа', page: GasStats },
@@ -65,6 +68,6 @@
 <LockBanner />
 <LiveBanner />
 <ControlBar />
-<main>
+<main class:wide={current.wide}>
   {#key current.id}<current.page />{/key}
 </main>

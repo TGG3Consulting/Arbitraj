@@ -59,8 +59,8 @@ pub struct Inner {
     /// Волатильность цен по замерам сигнала (vol.rs).
     pub vol: Mutex<Volatility>,
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
-    /// На какие монеты подписана каждая площадка.
-    pub subs: tokio::sync::Mutex<HashMap<VenueId, Vec<Asset>>>,
+    /// Подписки площадок: на что подписана, идёт ли подписка, причина сбоя (sub_state.rs).
+    pub subs: Mutex<super::sub_state::SubState>,
     /// Монеты, по которым идёт пересчёт тика: значение true — пришёл ещё тик, пересчитать снова.
     pub ticking: Mutex<HashMap<Asset, bool>>,
     /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
@@ -123,7 +123,7 @@ impl Inner {
             signals: Mutex::default(),
             vol: Mutex::default(),
             spreads: RwLock::default(),
-            subs: tokio::sync::Mutex::default(),
+            subs: Mutex::default(),
             ticking: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),

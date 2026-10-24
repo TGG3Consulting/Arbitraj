@@ -51,6 +51,7 @@ pub mod rules_apply;
 pub mod sell;
 pub mod signal;
 pub mod stuck;
+pub mod sub_state;
 pub mod subscribe;
 pub mod tick;
 pub mod touched;

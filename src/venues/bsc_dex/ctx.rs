@@ -41,6 +41,8 @@ pub struct Ctx {
     pub pace: super::node::pace::Pace,
     /// Резервный узел: удержание на нём после сбоя основного (node/failover.rs).
     pub failover: super::node::failover::Failover,
+    /// Справочник пулов от индексатора: очередь запросов и состояние (directory/, решение 58).
+    pub index: super::directory::Directory,
 }
 
 impl Ctx {

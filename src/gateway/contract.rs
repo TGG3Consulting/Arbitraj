@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, PoolKind, Quote, SendChannelInfo, Side, TradeRequest,
-    TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 
 use super::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -159,6 +159,16 @@ pub trait Venue: Send + Sync {
             ErrorCode::NotApplicable,
             Some(self.id()),
             "у площадки нет очереди кошелька",
+        ))
+    }
+
+    /// Справочник пулов от индексатора (решение 58): DEX индексатора, пулы монет и что с каждым сделал адаптер
+    /// (взят, DEX не подключена, проверка на узле не прошла). Ошибки: NotApplicable — не DEX.
+    async fn pool_directory(&self) -> GatewayResult<PoolDirectory> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет справочника пулов",
         ))
     }
 

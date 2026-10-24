@@ -15,6 +15,7 @@ pub mod coins;
 pub mod connection;
 pub mod connection_extra;
 pub mod ctx;
+pub mod directory;
 pub mod errors;
 pub mod exec;
 pub mod math;
@@ -33,8 +34,8 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::GatewayResult;
@@ -184,6 +185,11 @@ impl Venue for BscDex {
     /// DEX и виды пулов (id области настроек «DEX») — pools/families.rs. Ошибок нет.
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
         Ok(pools::families::for_ui())
+    }
+
+    /// Справочник пулов от индексатора (решение 58) — directory/. Ошибок нет: нет данных — пустые списки и причина.
+    async fn pool_directory(&self) -> GatewayResult<PoolDirectory> {
+        Ok(directory::snapshot(&self.p.ctx))
     }
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.

@@ -6,6 +6,7 @@
 - API-ключ и секрет BingX — с правом торговли и вывода.
 - Приватный ключ кошелька в сети BSC (`bsc_dex.wallet_key`) — им бот подписывает свопы, переводы и разрешения.
 - Токен Telegram-бота для уведомлений.
+- Ключ CoinGecko для справочника пулов (`index.api_key`, решение 58) — только при заданном заголовке `index.key_header`; идёт в заголовке запроса, в журнал и сырые сообщения не попадает.
 - Ключи провайдера узла BSC (`bsc.node_ws_key`, `bsc.node_http_key`) и резервного провайдера (`bsc.node_ws_key_backup`, `bsc.node_http_key_backup`) — если провайдер ставит ключ в адрес; в настройке адреса пишется `{key}`.
 - Ключи платных каналов отправки `channel.<id>.key` (Blink, bloXroute Cloud API, NodeReal Bundle API, BlockRazor Builder, Flashblock).
 - Полный список с описаниями — `KNOWN` в `src/secrets/mod.rs`.

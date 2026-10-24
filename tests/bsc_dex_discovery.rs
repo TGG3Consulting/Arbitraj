@@ -42,6 +42,7 @@ async fn ctx(d: &std::path::Path) -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        index: Default::default(),
         settings,
         vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
         http: reqwest::Client::new(),

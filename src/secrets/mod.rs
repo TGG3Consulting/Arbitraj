@@ -38,6 +38,11 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "Приватный ключ кошелька бота в сети BSC (решение 45: один кошелёк)",
     ),
     (
+        "index.api_key",
+        "bsc_dex",
+        "Ключ CoinGecko для справочника пулов (решение 58): заголовок — настройка index.key_header; без неё ключ не нужен",
+    ),
+    (
         "bsc.node_ws_key",
         "bsc_dex",
         "Ключ провайдера узла BSC для адреса WebSocket ({key} в bsc.node_ws_url)",

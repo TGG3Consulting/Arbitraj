@@ -11,6 +11,7 @@
 | `GET /api/venues` | Площадки, зарегистрированные в шлюзе (id по алфавиту) |
 | `GET /api/venues/kinds` | Площадки с видом `[{id, kind: "Cex" \| "Dex"}]` — подпись направления перевода у настроек `venue_role: "TransferSource"` (решение 51) |
 | `GET /api/venues/{id}/dex-families` | DEX и виды пулов адаптера (id области «DEX»); биржа — 400 «не применимо» |
+| `GET /api/venues/{id}/pool-directory` | Справочник пулов от индексатора (решение 58): `PoolDirectory {source, network, attribution_text, attribution_url, dexes: [{id, name}], dexes_at, tokens: [{token, ticker, fetched_at, pages, total, error}], pools: [{token, dex_id, pool, base, quote, base_symbol, quote_symbol, reserve_usd, status}], error}`; `status` — `"Unchecked"`, `"Taken"`, `{"NotConnected": причина}`, `{"Rejected": причина}`, `{"Unsupported": причина}` (например нативный BNB); биржа — 400 |
 | `GET /api/channels/{venue}` | Каналы отправки адаптера DEX (id области «канал»): `[{info, stats}]`; `stats: null` — по каналу ещё не было событий |
 | `GET /api/wallet-queue/{venue}` | Очередь транзакций кошелька DEX: свободна / ждёт итога (nonce, хеш) / остановлена до ручной проверки (причина) |
 | `POST /api/wallet-queue/{venue}/release` | «Снять очередь после ручной проверки» `{pending_ok}` — только остановленную (иначе 400); nonce ещё не занят без `pending_ok` — 409, интерфейс просит второе подтверждение |

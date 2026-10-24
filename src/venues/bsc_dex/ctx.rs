@@ -39,6 +39,8 @@ pub struct Ctx {
     pub raw: RawLog,
     /// Общая очередь запросов к узлу HTTP (node/pace.rs).
     pub pace: super::node::pace::Pace,
+    /// Резервный узел: удержание на нём после сбоя основного (node/failover.rs).
+    pub failover: super::node::failover::Failover,
 }
 
 impl Ctx {

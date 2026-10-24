@@ -28,6 +28,7 @@
 | `num.rs` | Суммы блокчейна U256 ↔ Decimal с decimals токена |
 | `tokens.rs` | Монеты из подписки ядра (адрес — из API биржи) и их decimals из контракта |
 | `connection.rs` | «Проверить подключение»: узел HTTP, узел WebSocket (newHeads), eth_simulateV1, история состояния для V4, кошелёк (адрес, BNB) |
+| `connection_extra.rs` | «Проверить подключение»: резервный узел HTTP и WebSocket, Multicall3 (код по адресу) |
 | `coins.rs` | Справочник монет DEX (coin_networks): монеты с достоверными пулами |
 | `pools/` | Пулы: виды, поиск, состояние, живые обновления, крючки (свой README) |
 | `math/` | Точная математика пулов (свой README) |

@@ -3,7 +3,7 @@
 //! (сеть, подписка newHeads получает блок), поддержка eth_simulateV1 (без неё налоги монет не проверить — торговли
 //! нет, ответ техлида в Issue #7), доступ к истории состояния для включённых видов пулов V4 (блок развёртывания
 //! менеджера по eth_getCode — pools/deploy_block.rs; без архивного узла пулы V4 не найти), кошелёк (ключ → адрес,
-//! баланс BNB). Ответ — «Подключено»
+//! баланс BNB), резервный узел HTTP и WebSocket и Multicall3 (connection_extra.rs). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs.
@@ -34,6 +34,15 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     let parts = [
         ("Узел HTTP", http(ctx).await),
         ("Узел WebSocket", ws(ctx).await),
+        (
+            "Резервный узел HTTP",
+            super::connection_extra::backup_http(ctx).await,
+        ),
+        (
+            "Резервный узел WebSocket",
+            super::connection_extra::backup_ws(ctx).await,
+        ),
+        ("Multicall3", super::connection_extra::multicall3(ctx).await),
         ("Симуляция", simulate(ctx).await),
         ("История состояния", history(ctx).await),
         ("Кошелёк", wallet(ctx).await),

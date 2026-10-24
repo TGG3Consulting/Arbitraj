@@ -1,7 +1,7 @@
 // Файл: ui/src/lib/coreLabels.js
 // Что делает: подписи данных ядра по-русски: режим системы, состояние направления на «Живом экране»,
 //   шаг сделки, вердикт кандидата. Значения — как их сериализует ядро (src/api/README.md).
-// Кто вызывает: components/ControlBar.svelte, pages/Live.svelte, pages/Deals.svelte.
+// Кто вызывает: components/ControlBar.svelte, components/SpreadCell.svelte, pages/Live.svelte, pages/Deals.svelte.
 // От чего зависит: lib/labels.js (showTime).
 // Настройки: нет.
 

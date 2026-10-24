@@ -17,7 +17,10 @@ pub mod fees;
 pub mod market;
 pub mod num;
 pub mod order_state;
+pub mod pairs;
+pub mod pairs_watch;
 pub mod rest;
+pub mod subs;
 pub mod symbols;
 pub mod trade;
 pub mod transfers;
@@ -40,13 +43,14 @@ use crate::gateway::events::MarketEvent;
 use book::Books;
 use ctx::Ctx;
 use fees::Fees;
+use subs::{Parts, Subs};
 use symbols::Symbols;
 
 /// Адаптер BingX.
 pub struct Bingx {
     ctx: Ctx,
-    /// Задачи текущей подписки: при новой подписке старые останавливаются (без дублей соединений).
-    tasks: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    /// Текущая подписка: задачи соединений и обновление справочника пар (subs.rs).
+    subs: Subs,
     symbols: Symbols,
     books: Books,
     fees: Fees,
@@ -57,7 +61,7 @@ impl Bingx {
     pub fn new(ctx: Ctx) -> Self {
         Self {
             ctx,
-            tasks: std::sync::Mutex::new(Vec::new()),
+            subs: Subs::default(),
             symbols: Symbols::default(),
             books: Books::default(),
             fees: Fees::default(),
@@ -98,21 +102,13 @@ impl Venue for Bingx {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        let new = market::subscribe(
-            &self.ctx,
-            &self.symbols,
-            &self.books,
-            &self.fees,
-            assets,
-            out,
-        )
-        .await?;
-        let mut tasks = self.tasks.lock().unwrap_or_else(|p| p.into_inner());
-        for old in tasks.drain(..) {
-            old.abort();
-        }
-        *tasks = new;
-        Ok(())
+        let parts = Parts {
+            ctx: self.ctx.clone(),
+            symbols: self.symbols.clone(),
+            books: self.books.clone(),
+            fees: self.fees.clone(),
+        };
+        self.subs.subscribe(&parts, assets, out).await
     }
 
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {

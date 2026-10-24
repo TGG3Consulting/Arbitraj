@@ -63,8 +63,9 @@ export function poolRefText(p) {
 
 const EXCLUSION = {
   NoBscNetwork: 'нет сети BSC',
-  NoContract: 'биржа не сообщила адрес контракта',
-  NoSpotBook: 'стакан не пришёл (нет пары на споте?)',
+  NoContract: 'сеть BSC есть, адреса контракта нет',
+  NoSpotBook: 'нет стакана: пары нет на споте или стакан ещё не пришёл',
+  NoApiTrading: 'пара не торгуется через API (apiStateBuy/Sell)',
   NoUsdtAddress: 'неизвестен адрес USDT в BSC',
   NoUsdtPool: 'нет пула с USDT',
 };
@@ -75,7 +76,23 @@ const EXCLUSION = {
  */
 export function exclusionText(e) {
   if (typeof e === 'string') return EXCLUSION[e] ?? e;
+  if (e?.PairsStale !== undefined) return `справочнику пар не верим: ${e.PairsStale}`;
+  if (e?.PairNotTrading !== undefined) return `пара не торгуется (status ${e.PairNotTrading})`;
   if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
   if (e?.IntermediateNotConfigured) return `промежуточные монеты (решение 52) не заданы: ${e.IntermediateNotConfigured}`;
   return JSON.stringify(e);
+}
+
+/**
+ * Что закрыто у монеты на площадке, где она есть (presence без причин отсева): ввод, вывод, покупка или продажа
+ * через API (core/registry.rs Presence: can_receive, can_send, can_buy, can_sell). Направления с закрытой стороной
+ * не считаются. Принимает: элемент presence. Возвращает: массив строк (пусто — всё открыто).
+ */
+export function limitsText(p) {
+  const out = [];
+  if (!p.can_receive) out.push('ввод закрыт');
+  if (!p.can_send) out.push('вывод закрыт');
+  if (p.can_buy === false) out.push('покупка через API закрыта (apiStateBuy)');
+  if (p.can_sell === false) out.push('продажа через API закрыта (apiStateSell)');
+  return out;
 }

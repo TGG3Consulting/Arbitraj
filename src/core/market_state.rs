@@ -1,6 +1,7 @@
 //! Файл: core/market_state.rs
 //! Что делает: всё, что ядро знает о рынке прямо сейчас (шаг 2 ТЗ): стаканы бирж, пулы DEX,
-//! проверки налогов монет и крючков пулов, состояние каналов отправки — из событий адаптеров.
+//! проверки налогов монет и крючков пулов, состояние каналов отправки, монеты с торгуемой спот-парой у биржи
+//! (для подписки DEX, core/subscribe.rs) — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -8,7 +9,7 @@
 //! только он знает, живо ли соединение (BingX шлёт стакан лишь при изменении, см. venues/bingx/book.rs).
 //! Ядро не торгует без свежей котировки — значит, не торгует по устаревшим данным.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
@@ -33,6 +34,8 @@ pub struct MarketState {
     channels: HashMap<String, SendChannelStats>,
     /// Последнее состояние очереди кошелька по площадке DEX — уведомления только на смену состояния.
     queues: HashMap<VenueId, WalletQueueState>,
+    /// Биржа → монеты с торгуемой спот-парой (MarketEvent::SpotPairs).
+    spot: HashMap<VenueId, HashSet<String>>,
 }
 
 impl MarketState {
@@ -79,6 +82,10 @@ impl MarketState {
                 Touched::Channel(s)
             }
             MarketEvent::Notice { venue, code, text } => Touched::Notice { venue, code, text },
+            MarketEvent::SpotPairs { venue, tickers } => {
+                self.spot.insert(venue, tickers.into_iter().collect());
+                Touched::SpotPairs
+            }
             MarketEvent::CheckPass {
                 venue,
                 ok,
@@ -103,6 +110,12 @@ impl MarketState {
         self.pools
             .retain(|(v, _), p| !(v == venue && (p.token0 == token || p.token1 == token)));
         before - self.pools.len()
+    }
+
+    /// Есть ли у монеты торгуемая спот-пара на бирже — по последнему SpotPairs этой биржи (до него — нет).
+    /// Не зависит от стаканов: разрыв связи и «недостоверно» список не меняют. Ошибок нет.
+    pub fn spot_pair(&self, venue: &VenueId, ticker: &str) -> bool {
+        self.spot.get(venue).is_some_and(|s| s.contains(ticker))
     }
 
     /// Стакан монеты на площадке. None — стакана нет (не пришёл или объявлен недостоверным).

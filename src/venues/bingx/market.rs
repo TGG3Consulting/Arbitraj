@@ -1,6 +1,7 @@
 //! Файл: venues/bingx/market.rs
 //! Что делает: подписка на стаканы BingX по списку монет: делит монеты на соединения
 //! (venue.ws_symbols_per_conn монет на соединение) и запускает по задаче на соединение.
+//! Монеты с торгуемой парой сообщает ядру событием SpotPairs (по ним ядро подписывает DEX).
 //! Кто вызывает: mod.rs (subscribe_market из контракта).
 //! От чего зависит: ws.rs, symbols.rs, book.rs, ctx.rs.
 //! Настройки: venue.ws_symbols_per_conn, venue.depth_levels.
@@ -12,7 +13,7 @@
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::core::types::Asset;
+use crate::core::types::{Asset, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
@@ -82,6 +83,15 @@ pub async fn subscribe(
             )
             .await;
     }
+    // Ядру — монеты с торгуемой парой (status = 1 по «Spot trading symbols», symbols.rs): по ним ядро подписывает
+    // DEX (core/subscribe.rs). Шлётся при каждой подписке, в том числе пустой (площадка выключена — пар нет).
+    let tickers = ok.iter().map(|(a, _)| a.ticker.clone()).collect();
+    let _ = out
+        .send(MarketEvent::SpotPairs {
+            venue: VenueId(super::ctx::ID.to_string()),
+            tickers,
+        })
+        .await;
     let chunks: Vec<Vec<(Asset, String)>> =
         ok.chunks(per_conn as usize).map(|c| c.to_vec()).collect();
     let mut tasks = Vec::new();

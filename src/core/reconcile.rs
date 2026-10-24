@@ -2,11 +2,11 @@
 //! Что делает: сверка балансов (шаг 6 ТЗ) раз в ledger.reconcile_interval_s: балансы всех включённых
 //! площадок через шлюз → экран «Балансы»; монеты, которые по учёту бота лежат на площадке (открытые
 //! сделки не в пути), должны там быть — меньше — расхождение: новые сделки останавливаются (пауза)
-//! и уведомление risk.reconcile_mismatch. Плюс: мало BNB на газ у DEX (risk.low_bnb), мало USDT для
-//! покупок (risk.low_usdt: свободно меньше money.max_per_trade_usd площадки), возврат USDT «отдельно».
+//! и уведомление risk.reconcile_mismatch. Плюс: мало BNB на газ у DEX (risk.low_bnb), мало USDT
+//! (risk.low_usdt по порогу alert.min_usdt площадки — low_usdt.rs, решение 54), возврат USDT «отдельно».
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs.
-//! Настройки: ledger.reconcile_interval_s, money.max_per_trade_usd, risk.min_bnb_balance, venue.quote_asset.
+//! Настройки: ledger.reconcile_interval_s, alert.min_usdt (через low_usdt.rs), risk.min_bnb_balance, venue.quote_asset.
 
 use std::collections::{HashMap, HashSet};
 
@@ -91,15 +91,8 @@ async fn once(core: &Core) -> Vec<(&'static str, Option<String>, String)> {
         if let Ok(q) = deps.settings.text("venue.quote_asset", at) {
             let f: Decimal = b.iter().filter(|x| x.asset == q).map(|x| x.free).sum();
             free_usdt.insert(v.clone(), f);
-            if let Ok(min) = deps.settings.decimal("money.max_per_trade_usd", at)
-                && f < min
-            {
-                out.push((
-                    "risk.low_usdt",
-                    Some(v.0.clone()),
-                    format!("{}: свободно {f} {q} — меньше лимита сделки {min}", v.0),
-                ));
-            }
+            // Решение 54: свой порог алерта по площадке, один раз на пересечение (low_usdt.rs).
+            super::low_usdt::check(core, &v, f, &q).await;
         }
         if kind == VenueKind::Dex
             && let Err(e) = super::precheck::bnb_ok(core, &v).await

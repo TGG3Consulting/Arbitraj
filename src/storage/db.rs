@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS wallet_queue (
     body  TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS daily_result (
+    day  TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS core_state (
     kind TEXT NOT NULL,
     id   TEXT NOT NULL,

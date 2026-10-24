@@ -60,6 +60,10 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         "«Вернуть боту»: {qty} по реальному балансу (было взято {})",
         h.qty
     ));
+    // Решение 53: доля предварительного убытка «Беру на себя» переходит к сделке «Вернуть боту».
+    let mut old = old;
+    super::daily::transfer(core, &mut old, &mut deal, share).await;
+    super::ledger::save(core, &old).await;
     lk(&core.inner.holdings).remove(holding_id);
     super::manual::persist(core).await;
     super::ledger::save(core, &deal).await;

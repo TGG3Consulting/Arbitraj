@@ -56,10 +56,13 @@ impl Core {
             inner: Arc::new(Inner::new(deps, kinds.clone(), market_tx, cand_tx)),
         };
         // Учёт ядра: сделки, статистика газа, ручное управление — до запуска задач.
+        // Итог дня — раньше сделок: прерванные перезапуском сделки сразу добавляют предварительный убыток.
+        super::daily::load(&core).await;
         super::ledger::load(&core).await;
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
         super::transit::load(&core).await;
+        super::low_usdt::load(&core).await;
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

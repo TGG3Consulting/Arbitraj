@@ -2,7 +2,7 @@
   Файл: ui/src/components/ControlBar.svelte
   Что делает: плашка режима системы на всех экранах (решение 46): «Стоп» (после запуска — до команды «Старт»),
     «В работе», «Пауза» и причина; кнопки «Старт», «Пауза», «Стоп»; паузы площадок и карантины монет
-    с кнопками снятия; итог дня. Команды уходят ядру (POST /api/control…) и пишутся в журнал.
+    с кнопками снятия; итог дня — всего, факт и предварительная часть, неразобранные предварительные убытки сделок (решение 53). Команды уходят ядру (POST /api/control…) и пишутся в журнал.
   Кто вызывает: App.svelte.
   От чего зависит: lib/control.svelte.js, lib/coreLabels.js.
   Настройки: нет.
@@ -19,7 +19,9 @@
   {#if r}
     <strong>Режим: {modeLabel(r.mode)}</strong>
     {#if r.reason}<span>— {r.reason}</span>{/if}
-    <span class="muted">· итог дня {r.day_result_usd} USDT</span>
+    <span class="muted" title="Предварительный — убыток по худшему варианту остановленных сделок и «Беру на себя» (решение 53); после разбора заменяется фактическим">
+      · итог дня {r.day.date}: {r.day.result_usd} USDT (факт {r.day.final_usd}, предварительно {r.day.provisional_usd})
+    </span>
     <span class="row inline">
       <button disabled={control.busy || r.mode === 'Running'} onclick={() => setMode('Running')}>Старт</button>
       <button class="quiet" disabled={control.busy || r.mode !== 'Running'} onclick={() => setMode('Paused')}>Пауза</button>
@@ -27,6 +29,9 @@
     </span>
     {#each Object.entries(r.venue_paused) as [v, why] (v)}
       <div>Площадка <code>{v}</code> на паузе: {why} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+    {/each}
+    {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
+      <div class="muted">Предварительный убыток сделки <code>{deal}</code>: {usd} USDT (учтён {day}) — ждёт разбора</div>
     {/each}
     {#each Object.entries(r.quarantine) as [t, why] (t)}
       <div>Монета <code>{t}</code> в карантине: {why} <button class="quiet" onclick={() => releaseCoin(t)}>Снять карантин</button></div>

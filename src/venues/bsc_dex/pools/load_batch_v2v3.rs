@@ -133,11 +133,17 @@ pub fn v3_ticks(ans: &[Bytes]) -> Result<BTreeMap<i32, TickData>, String> {
     Ok(ticks)
 }
 
-/// Выполняет ступень: все вызовы всех пулов вместе частями по `size`, ответы — обратно по пулам.
+/// Выполняет ступень: все вызовы всех пулов вместе частями по `size`, ответы — обратно по пулам (split).
 /// Ошибок нет: откат или сбой части — причина у пула.
 pub async fn run(ctx: &Ctx, stage: &Stage, tag: &str, size: usize) -> Answers {
     let flat: Vec<(Address, Bytes)> = stage.iter().flatten().cloned().collect();
-    let mut pieces = call::try_chunks(ctx, &flat, tag, size).await.into_iter();
+    split(stage, call::try_chunks(ctx, &flat, tag, size).await)
+}
+
+/// Ответы пачки (по вызову подряд) → по пулам: у пула все байты его вызовов или причина — первый откат или сбой
+/// части; откат одного вызова задевает только его пул. Принимает: ступень, ответы по порядку. Ошибок нет.
+pub fn split(stage: &Stage, pieces: Vec<call::Piece>) -> Answers {
+    let mut pieces = pieces.into_iter();
     stage
         .iter()
         .map(|calls| {

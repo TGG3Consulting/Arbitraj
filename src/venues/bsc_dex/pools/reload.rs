@@ -11,7 +11,6 @@ use crate::storage::journal::Level;
 
 use super::discover::Found;
 use super::listen::{End, Pools};
-use super::load_batch::{self, Want};
 use super::{listen_log, load};
 
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
@@ -109,56 +108,4 @@ pub async fn load_one(
     }
 }
 
-/// Чтение многих пулов на одном блоке пачками (load_batch.rs, решение 61) и отправка ядру прочитанных.
-/// Принимает: (пул, тикер) по порядку, блок. Возвращает: по каждому Ok — прочитан, Err(причина) — нет (как load_one).
-/// Ошибки: End — ядро закрыло канал.
-pub async fn load_many(
-    p: &Pools,
-    items: &[(&Found, &str)],
-    block: u64,
-) -> Result<Vec<Result<(), String>>, End> {
-    let known: Vec<_> = items.iter().map(|(f, _)| p.reg.get(&f.reference)).collect();
-    let wants: Vec<Want> = items
-        .iter()
-        .zip(&known)
-        .map(|((f, _), e)| match e {
-            Some(e) => Want {
-                family: e.family,
-                reference: &f.reference,
-                spacing: e.pool.tick_spacing,
-                step: e.pool.bin_step,
-                usdt: e.usdt,
-                token1: e.pool.token1,
-            },
-            None => Want {
-                family: f.family,
-                reference: &f.reference,
-                spacing: f.tick_spacing,
-                step: f.bin_step,
-                usdt: listen_log::found_usdt(f),
-                token1: f.token1,
-            },
-        })
-        .collect();
-    let loaded = load_batch::states(&p.ctx, &p.tokens, &wants, block).await;
-    let mut out = Vec::with_capacity(items.len());
-    for (((f, ticker), e), l) in items.iter().zip(&known).zip(loaded) {
-        let l = match l {
-            Ok(l) => l,
-            Err(why) => {
-                out.push(Err(why));
-                continue;
-            }
-        };
-        let entry = match e {
-            Some(e) => load::renewed(e, block, l),
-            None => load::built(&p.ctx, f, ticker, listen_log::found_usdt(f), block, l),
-        };
-        listen_log::note_refill(p, &entry);
-        let pool = entry.pool.clone();
-        p.reg.put(entry);
-        listen_log::emit(p, pool)?;
-        out.push(Ok(()));
-    }
-    Ok(out)
-}
+pub use super::reload_many::load_many;

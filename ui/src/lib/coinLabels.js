@@ -68,6 +68,7 @@ const EXCLUSION = {
   NoApiTrading: 'пара не торгуется через API (apiStateBuy/Sell)',
   NoUsdtAddress: 'неизвестен адрес USDT в BSC',
   NoUsdtPool: 'нет пула с USDT',
+  PoolsLoading: 'пулы найдены и проверены, состояние ещё загружается (решение 61)',
 };
 
 /**

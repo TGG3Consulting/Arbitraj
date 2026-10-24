@@ -2,9 +2,9 @@
 // Что делает: итог отбора монеты и фильтры экрана «Монеты» (Issue #33) — только по структурированным полям
 //   GET /api/coins (core/coins_view.rs), без разбора русского текста:
 //   directions (прошла), presence[].excluded (Exclusion из core/registry.rs), block.reason (BlockReason из
-//   core/types/check.rs), taxes (CheckState), pools[].admission (не null — пул исключён правилом крючков,
-//   core/blacklist.rs pool_admission), problem, presence[].can_send / can_receive (вывод / ввод),
-//   presence[].can_buy / can_sell (покупка / продажа через API — у BingX apiStateBuy / apiStateSell).
+//   core/types/check.rs), taxes (CheckState), problem, presence[].can_send / can_receive (вывод / ввод),
+//   presence[].can_buy / can_sell (покупка / продажа через API — у BingX apiStateBuy / apiStateSell). «Крючок» — только
+//   по PoolsExcluded (исключены все пулы монеты); исключённые пулы при допущенных — в окне монеты, не в итоге.
 // Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte.
 // От чего зависит: ничего (чистые функции над данными ядра).
 // Настройки: нет.
@@ -22,6 +22,7 @@ export const RESULTS = [
   ['pairs_stale', 'справочник пар устарел'],
   ['no_book', 'нет стакана'],
   ['no_usdt_pool', 'нет пула с USDT'],
+  ['pools_loading', 'пулы найдены, загружаются'],
   ['hook', 'крючок'],
   ['tax', 'налог'],
   ['blacklist', 'в чёрном списке'],
@@ -45,6 +46,8 @@ function exclusionCode(e) {
   if (e?.PairNotTrading !== undefined) return 'pair_off';
   if (e?.PairsStale !== undefined) return 'pairs_stale';
   if (e === 'NoUsdtPool' || e === 'NoUsdtAddress' || e?.IntermediateNotConfigured !== undefined) return 'no_usdt_pool';
+  if (e === 'PoolsLoading') return 'pools_loading';
+  // «Крючок» — только когда исключены ВСЕ пулы монеты (PoolsExcluded); исключённый пул при допущенных — не причина.
   if (e?.PoolsExcluded) return 'hook';
   return 'other';
 }
@@ -74,7 +77,6 @@ export function reasons(c) {
     // Покупка или продажа через API закрыта с одной стороны — закрыто только своё направление.
     if (p.can_buy === false || p.can_sell === false) out.add('no_api');
   }
-  if (c.pools?.some((p) => p.admission != null)) out.add('hook');
   if (c.block) out.add(blockCode(c.block.reason));
   if (c.taxes === 'NotChecked') out.add('not_checked');
   if (c.taxes?.Failed) out.add('check_failed');

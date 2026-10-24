@@ -143,7 +143,7 @@ pub async fn load(
 }
 
 /// Тики по установленным битам слов битмапа. Принимает: первое слово, слова, tickSpacing. Ошибок нет.
-fn set_ticks(first: i16, words: &[U256], spacing: i32) -> Vec<i32> {
+pub fn set_ticks(first: i16, words: &[U256], spacing: i32) -> Vec<i32> {
     let mut out = Vec::new();
     for (i, w) in words.iter().enumerate() {
         let word = i32::from(first) + i as i32;
@@ -157,7 +157,7 @@ fn set_ticks(first: i16, words: &[U256], spacing: i32) -> Vec<i32> {
 }
 
 /// int24 для ABI. Ошибки: BadResponse — тик вне int24 (по TickMath так не бывает: значит, данные битмапа неверны).
-fn i24(ctx: &Ctx, t: i32) -> GatewayResult<I24> {
+pub fn i24(ctx: &Ctx, t: i32) -> GatewayResult<I24> {
     I24::try_from(t).map_err(|_| ctx.err(ErrorCode::BadResponse, format!("тик {t} вне int24")))
 }
 

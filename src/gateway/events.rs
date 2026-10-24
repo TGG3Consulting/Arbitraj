@@ -6,6 +6,7 @@
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
+use alloy_primitives::Address;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +66,9 @@ pub enum MarketEvent {
         code: String,
         text: String,
     },
+    /// DEX: монеты, у которых пулы найдены и проверены, но состояние ещё не прочитано (решение 61) — полный список,
+    /// заменяет прежний. Ядро показывает «пулы найдены, загружаются», а не «нет пула с USDT».
+    PoolsLoading { venue: VenueId, coins: Vec<Address> },
 }
 
 /// Состояние спот-пары монеты на бирже (из справочника пар биржи) — для справочника ядра (core/presence.rs).

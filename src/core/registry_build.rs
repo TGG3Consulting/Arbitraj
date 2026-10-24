@@ -1,6 +1,6 @@
 //! Файл: core/registry_build.rs
 //! Что делает: сборка справочника монет (core/registry.rs) из сетей бирж, рынка и пулов DEX: присутствие на каждой
-//! бирже и — только для монет подписки DEX (core/subscribe.rs) — на каждой DEX; адрес USDT в BSC по справочникам бирж.
+//! бирже и — только для монет подписки DEX (core/subscribe.rs cex_pair) — на каждой DEX; адрес USDT в BSC по справочникам бирж.
 //! Кто вызывает: core/rebuild.rs, tests/core_dex_subscription.rs.
 //! От чего зависит: registry.rs (CoinEntry, Presence), presence.rs, market_state.rs, intermediate.rs, gateway/contract.
 //! Настройки: нет своих.
@@ -106,7 +106,11 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
     coins
         .into_values()
         .map(|(asset, mut presence)| {
-            if let Some(token) = asset.bsc_contract {
+            // DEX ищет пулы только монет своей подписки (core/subscribe.rs: то же условие, cex_pair) — у остальных
+            // DEX-присутствия нет: «нет пула с USDT» им не ставится (решение 61).
+            let searched =
+                super::subscribe::cex_pair(&presence, &asset.ticker, inp.venues, inp.market);
+            if let Some(token) = asset.bsc_contract.filter(|_| searched) {
                 for v in &dex {
                     presence.push(super::presence::dex(v, token, inp));
                 }

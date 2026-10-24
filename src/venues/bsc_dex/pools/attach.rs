@@ -60,6 +60,8 @@ pub async fn attach(p: &Pools, w: &Watch, found: Vec<Found>, each: bool) -> Gate
         }
     }
     let n = fresh.len();
+    p.loading.add(&fresh);
+    p.loading.publish(p).await;
     for (key, family, list) in batches::by_family(&fresh, &w.coins) {
         place(p, w, &key, family, list, per);
     }

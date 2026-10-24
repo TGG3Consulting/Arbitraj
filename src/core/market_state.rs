@@ -2,23 +2,21 @@
 //! Что делает: всё, что ядро знает о рынке прямо сейчас (шаг 2 ТЗ): стаканы бирж, пулы DEX,
 //! проверки налогов монет и крючков пулов, состояние каналов отправки, монеты с торгуемой спот-парой у биржи
 //! (для подписки DEX, core/subscribe.rs) и состояние их пар (статус, покупка и продажа через API — для справочника,
-//! core/presence.rs) — из событий адаптеров.
+//! core/presence.rs), монеты с найденными, но ещё не прочитанными пулами DEX — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
+//! Чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
-//! Настройки: нет. Свежесть цены проверяет адаптер при каждой котировке (feed.stale_after_ms):
-//! только он знает, живо ли соединение (BingX шлёт стакан лишь при изменении, см. venues/bingx/book.rs).
-//! Ядро не торгует без свежей котировки — значит, не торгует по устаревшим данным.
+//! Настройки: нет. Свежесть цены проверяет адаптер при каждой котировке (feed.stale_after_ms): только он знает,
+//! живо ли соединение (venues/bingx/book.rs); без свежей котировки ядро не торгует.
 
 use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 
 use crate::core::types::{
-    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId,
-    WalletQueueState,
+    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, VenueId, WalletQueueState,
 };
 use crate::gateway::events::{MarketEvent, SpotPairState};
 
@@ -27,21 +25,23 @@ pub use super::touched::Touched;
 /// Рыночное состояние в памяти.
 #[derive(Default)]
 pub struct MarketState {
-    books: HashMap<(VenueId, String), OrderBook>,
-    pools: HashMap<(VenueId, PoolRef), Pool>,
+    pub(super) books: HashMap<(VenueId, String), OrderBook>,
+    pub(super) pools: HashMap<(VenueId, PoolRef), Pool>,
     /// Проверка налогов: ключ — площадка DEX и адрес контракта монеты.
-    coin_checks: HashMap<(VenueId, Address), CoinCheck>,
-    pool_checks: HashMap<(VenueId, PoolRef), PoolCheck>,
+    pub(super) coin_checks: HashMap<(VenueId, Address), CoinCheck>,
+    pub(super) pool_checks: HashMap<(VenueId, PoolRef), PoolCheck>,
     /// Каналы отправки по id (в SendChannelStats площадки нет; каналы есть только у адаптера DEX).
-    channels: HashMap<String, SendChannelStats>,
+    pub(super) channels: HashMap<String, SendChannelStats>,
     /// Последнее состояние очереди кошелька по площадке DEX — уведомления только на смену состояния.
-    queues: HashMap<VenueId, WalletQueueState>,
+    pub(super) queues: HashMap<VenueId, WalletQueueState>,
     /// Биржа → монеты с торгуемой спот-парой (MarketEvent::SpotPairs).
-    spot: HashMap<VenueId, HashSet<String>>,
+    pub(super) spot: HashMap<VenueId, HashSet<String>>,
+    /// DEX → монеты, чьи пулы найдены, но ещё не прочитаны (MarketEvent::PoolsLoading, решение 61).
+    pub(super) loading: HashMap<VenueId, HashSet<Address>>,
     /// Биржа → тикер → состояние пары (статус, покупка и продажа через API) из того же SpotPairs.
-    pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
+    pub(super) pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
     /// Биржа → когда её справочник пар последний раз получен (SpotPairs.loaded_at; свежесть — pairs_fresh.rs).
-    pairs_at: HashMap<VenueId, DateTime<Utc>>,
+    pub(super) pairs_at: HashMap<VenueId, DateTime<Utc>>,
 }
 
 impl MarketState {
@@ -110,104 +110,16 @@ impl MarketState {
                 venue,
                 counts: [ok, failed, waiting, nc],
             },
+            MarketEvent::PoolsLoading { venue, coins } => {
+                let now: HashSet<Address> = coins.into_iter().collect();
+                let changed = self.loading.get(&venue) != Some(&now);
+                self.loading.insert(venue, now);
+                Touched::PoolsLoading { changed }
+            }
             MarketEvent::WalletQueue(q) => {
                 let prev = self.queues.insert(q.venue.clone(), q.state.clone());
                 Touched::WalletQueue { queue: q, prev }
             }
         }
-    }
-
-    /// Удаляет пулы токена на площадке (DEX объявил данные монеты недостоверными).
-    /// Принимает: площадку, адрес токена. Возвращает: сколько пулов удалено.
-    pub fn drop_pools_of(&mut self, venue: &VenueId, token: Address) -> usize {
-        let before = self.pools.len();
-        self.pools
-            .retain(|(v, _), p| !(v == venue && (p.token0 == token || p.token1 == token)));
-        before - self.pools.len()
-    }
-
-    /// Есть ли у монеты торгуемая спот-пара на бирже — по последнему SpotPairs этой биржи (до него — нет).
-    /// Не зависит от стаканов: разрыв связи и «недостоверно» список не меняют. Ошибок нет.
-    pub fn spot_pair(&self, venue: &VenueId, ticker: &str) -> bool {
-        self.spot.get(venue).is_some_and(|s| s.contains(ticker))
-    }
-
-    /// Состояние спот-пары монеты на бирже по последнему SpotPairs (core/presence.rs). None — биржа ещё не прислала
-    /// SpotPairs или пары у монеты в справочнике биржи нет. Ошибок нет.
-    pub fn pair(&self, venue: &VenueId, ticker: &str) -> Option<&SpotPairState> {
-        self.pairs.get(venue).and_then(|m| m.get(ticker))
-    }
-
-    /// Когда справочник пар биржи последний раз получен от неё. None — SpotPairs ещё не было. Ошибок нет.
-    pub fn pairs_loaded_at(&self, venue: &VenueId) -> Option<DateTime<Utc>> {
-        self.pairs_at.get(venue).copied()
-    }
-
-    /// Стакан монеты на площадке. None — стакана нет (не пришёл или объявлен недостоверным).
-    pub fn book(&self, venue: &VenueId, ticker: &str) -> Option<&OrderBook> {
-        self.books.get(&(venue.clone(), ticker.to_string()))
-    }
-
-    /// Лучшая цена стакана: для покупки — лучший ask, для продажи — лучший bid. None — нет уровней.
-    pub fn best(&self, venue: &VenueId, ticker: &str, side: Side) -> Option<Decimal> {
-        let b = self.book(venue, ticker)?;
-        let levels = match side {
-            Side::Buy => &b.asks,
-            Side::Sell => &b.bids,
-        };
-        levels.first().map(|l| l.price)
-    }
-
-    /// Цена самого глубокого уровня, до которого дойдёт объём qty (худшая цена лимитного ордера,
-    /// чтобы исполнить весь объём по текущему стакану). None — нет стакана или глубины не хватает.
-    pub fn deepest_price(
-        &self,
-        venue: &VenueId,
-        ticker: &str,
-        side: Side,
-        qty: Decimal,
-    ) -> Option<Decimal> {
-        let b = self.book(venue, ticker)?;
-        let levels = match side {
-            Side::Buy => &b.asks,
-            Side::Sell => &b.bids,
-        };
-        let mut left = qty;
-        for l in levels {
-            left -= l.qty;
-            if left <= Decimal::ZERO {
-                return Some(l.price);
-            }
-        }
-        None
-    }
-
-    /// Пулы пары токенов на площадке (монета с USDT или с промежуточной монетой, решение 52).
-    /// Принимает: площадку, адрес монеты, адрес второго токена.
-    pub fn usdt_pools(&self, venue: &VenueId, token: Address, usdt: Address) -> Vec<&Pool> {
-        self.pools
-            .iter()
-            .filter(|((v, _), p)| {
-                v == venue
-                    && ((p.token0 == token && p.token1 == usdt)
-                        || (p.token1 == token && p.token0 == usdt))
-            })
-            .map(|(_, p)| p)
-            .collect()
-    }
-
-    /// Последняя проверка налогов монеты на площадке DEX. None — проверок ещё не было.
-    pub fn coin_check(&self, venue: &VenueId, token: Address) -> Option<&CoinCheck> {
-        self.coin_checks.get(&(venue.clone(), token))
-    }
-
-    /// Последняя проверка крючка пула. None — проверок не было.
-    pub fn pool_check(&self, venue: &VenueId, pool: &PoolRef) -> Option<&PoolCheck> {
-        self.pool_checks.get(&(venue.clone(), pool.clone()))
-    }
-
-    /// Последнее состояние всех каналов отправки (для экрана «Каналы отправки»).
-    pub fn channels(&self) -> Vec<SendChannelStats> {
-        self.channels.values().cloned().collect()
     }
 }

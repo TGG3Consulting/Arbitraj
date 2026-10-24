@@ -48,6 +48,8 @@ pub struct Pools {
     pub mids: Mids,
     /// Стартовая загрузка, «пул готов», журнал без спама (pools/progress.rs).
     pub signals: Signals,
+    /// Пулы, ждущие первого чтения — для «пулы найдены, загружаются» в ядре (loading.rs, решение 61).
+    pub loading: super::loading::Loading,
 }
 
 /// Чем кончилась сессия.

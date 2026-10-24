@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS core_state (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (kind, id)
 );
+CREATE TABLE IF NOT EXISTS venue_state (
+    venue TEXT NOT NULL,
+    kind  TEXT NOT NULL,
+    id    TEXT NOT NULL,
+    body  TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (venue, kind, id)
+);
 ";
 
 /// Ошибка базы.

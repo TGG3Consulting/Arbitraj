@@ -9,4 +9,5 @@ pub mod db;
 pub mod journal;
 pub mod raw_log;
 pub mod rules;
+pub mod venue_state;
 pub mod wallet_queue;

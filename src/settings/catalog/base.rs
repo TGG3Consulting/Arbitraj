@@ -60,7 +60,6 @@ pub static BASE: &[SettingDef] = &[
     d("Уведомления", "notify.event.enabled", K::Bool, L::None, "да/нет", E, "Присылать ли это событие"),
     d("Уведомления", "notify.event.venues", K::TextList, L::None, "список", E, "Для каких площадок присылать (пусто — для всех)"),
     d("Уведомления", "notify.event.condition", K::Text, L::None, "зависит от события", E, "Условие отправки, где оно имеет смысл (формат — этап 5)"),
-    d("Уведомления", "notify.summary_interval_s", K::Integer, L::Positive, "секунды", G, "Как часто присылать сводку"),
     d("Уведомления", "notify.updates_timeout_s", K::Integer, L::Positive, "секунды", G, "Кнопки Telegram: таймаут длинного опроса getUpdates (параметр timeout в официальной документации Bot API)"),
     d("Уведомления", "notify.updates_retry_ms", K::Integer, L::Positive, "мс", G, "Кнопки Telegram: пауза перед повтором getUpdates после ошибки сети или Telegram (retry_after из ответа Telegram сильнее)"),
     d("Безопасность", "security.kdf_memory_kib", K::Integer, L::Positive, "КиБ", G, "Argon2id: память на вывод ключа из пароля (OWASP: не меньше 19456)"),

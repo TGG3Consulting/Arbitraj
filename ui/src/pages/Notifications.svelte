@@ -2,7 +2,7 @@
   Файл: ui/src/pages/Notifications.svelte
   Что делает: экран «Уведомления» — подключение Telegram (адрес Bot API, ID чата, таймаут HTTP,
     токен бота — переход к секрету на экране «Разблокировка», «Проверить подключение» → POST /api/check/telegram),
-    интервал сводки и события из схемы (schema.events) по группам: по каждому вкл/выкл
+    события из схемы (schema.events) по группам: по каждому вкл/выкл
     (notify.event.enabled), площадки (notify.event.venues, пусто — все), условие (notify.event.condition).
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/router.svelte.js,
@@ -18,7 +18,6 @@
 
   // Имена настроек и секрета — из каталога бэкенда (src/settings/catalog.rs, src/secrets/mod.rs).
   const CONNECTION = ['notify.telegram_api_url', 'notify.telegram_chat', 'http.timeout_ms'];
-  const SUMMARY = 'notify.summary_interval_s';
   const PER_EVENT = { enabled: 'notify.event.enabled', venues: 'notify.event.venues', condition: 'notify.event.condition' };
 
   const groups = $derived.by(() => {
@@ -59,12 +58,6 @@
       <a href={href('unlock', TOKEN)}>Ввести или заменить на экране «Разблокировка»</a>
     </p>
     <CheckConnection url="/api/check/telegram" />
-  </section>
-
-  <section class="card">
-    <h2>Сводка</h2>
-    <p class="muted">{defOf(SUMMARY)?.description}</p>
-    {@render setting(SUMMARY, { kind: 'Global' }, SUMMARY)}
   </section>
 
   <h2>События</h2>

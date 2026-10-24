@@ -27,7 +27,7 @@
 | `errors.rs` | Ответы узла (JSON-RPC, HTTP, сеть) → единые коды шлюза |
 | `num.rs` | Суммы блокчейна U256 ↔ Decimal с decimals токена |
 | `tokens.rs` | Монеты из подписки ядра (адрес — из API биржи) и их decimals из контракта |
-| `connection.rs` | «Проверить подключение»: узел HTTP, узел WebSocket (newHeads), кошелёк (адрес, BNB) |
+| `connection.rs` | «Проверить подключение»: узел HTTP, узел WebSocket (newHeads), eth_simulateV1, история состояния для V4, кошелёк (адрес, BNB) |
 | `coins.rs` | Справочник монет DEX (coin_networks): монеты с достоверными пулами |
 | `pools/` | Пулы: виды, поиск, состояние, живые обновления, крючки (свой README) |
 | `math/` | Точная математика пулов (свой README) |

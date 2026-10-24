@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/created.rs
 //! Что делает: новые пулы «монета/USDT» в реальном времени. Подписка на события создания с USDT в индексированном
-//! поле (PairCreated V2, PoolCreated V3, Initialize V4); любое такое событие — сигнал дочитать историю
-//! (discover.rs — только новые блоки) и запустить слушателя для пулов, которых ещё нет.
+//! поле (PairCreated V2, PoolCreated V3, Initialize V4); событие с одной из монет подписки (адрес монеты в
+//! индексированном поле события) — сигнал повторить поиск (discover.rs: V2/V3 — вызовы фабрики, V4 — только новые
+//! блоки истории) и запустить слушателя для пулов, которых ещё нет. Пулы чужих монет поиск не запускают.
 //! Сразу после подписки — то же дочитывание: пулы, созданные между первым поиском и подпиской, не теряются.
 //! Кто вызывает: pools/market.rs.
 //! От чего зависит: ctx.rs, node/ws.rs, node/rpc.rs, discover.rs, listen.rs, families.rs, abi_v2v3.rs, abi_v4.rs.
@@ -62,13 +63,22 @@ async fn session(p: &Pools, w: &Watch) -> String {
         Err(e) => return e.message,
     };
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let mine: Arc<HashSet<B256>> = Arc::new(
+        w.coins
+            .keys()
+            .map(|a| B256::left_padding_from(a.as_slice()))
+            .collect(),
+    );
     for filter in filters(p, w.usdt).await {
         match conn.subscribe(json!(["logs", filter])).await {
             Ok(mut sub) => {
                 let tx = tx.clone();
+                let mine = mine.clone();
                 tokio::spawn(async move {
-                    while sub.rx.recv().await.is_some() {
-                        let _ = tx.send(());
+                    while let Some(raw) = sub.rx.recv().await {
+                        if relevant(raw.get(), &mine) {
+                            let _ = tx.send(());
+                        }
                     }
                 });
             }
@@ -123,6 +133,16 @@ async fn rescan(p: &Pools, w: &Watch) -> GatewayResult<()> {
         w.tasks.lock().unwrap_or_else(|x| x.into_inner()).push(h);
     }
     Ok(())
+}
+
+/// Касается ли событие создания монет подписки: адрес монеты — в одном из индексированных полей (topics[1..]).
+/// Принимает: сырой лог, адреса монет (32 байта). Возвращает: да/нет; лог не разобран — да (поиск безопасен,
+/// пропуск — нет). Ошибок нет.
+pub fn relevant(raw: &str, mine: &HashSet<B256>) -> bool {
+    match serde_json::from_str::<alloy::rpc::types::Log>(raw) {
+        Ok(log) => log.topics().iter().skip(1).any(|t| mine.contains(t)),
+        Err(_) => true,
+    }
 }
 
 /// Фильтры событий создания с USDT в token0/currency0 или token1/currency1 по включённым видам.

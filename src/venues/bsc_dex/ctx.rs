@@ -120,6 +120,21 @@ impl Ctx {
         self.settings.text_in(name, &scope).map_err(|e| self.tag(e))
     }
 
+    /// Список строк в области «DEX» (вид TextList). Ошибки: NotConfigured (не задан), Internal (не список строк).
+    pub fn dex_list(&self, name: &str, id: &str) -> Result<Vec<String>, GatewayError> {
+        let v = self.settings.get_exact(name, &Scope::Dex(id.to_string()));
+        let v = v.ok_or_else(|| {
+            let m = format!("Не задана настройка {name} [dex:{id}] — задайте её в интерфейсе");
+            self.err(ErrorCode::NotConfigured, m)
+        })?;
+        let list = v.as_array().and_then(|a| {
+            a.iter()
+                .map(|x| x.as_str().map(str::to_string))
+                .collect::<Option<Vec<_>>>()
+        });
+        list.ok_or_else(|| self.err(ErrorCode::Internal, format!("{name}: хранится не списком")))
+    }
+
     /// Целое из настроек всей системы (например http.timeout_ms). Ошибки: NotConfigured, Internal.
     pub fn global_int(&self, name: &str) -> Result<u64, GatewayError> {
         self.settings

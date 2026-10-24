@@ -19,7 +19,7 @@
 | `cancel.rs` | Отмена не попавшей: 0 BNB себе с тем же nonce, цена газа выше на `send.cancel_gas_bump_pct` |
 | `tx.rs` | Лимит газа (eth_estimateGas + запас), legacy-транзакция EIP-155, настройки ожидания и отмены (`SendCfg`) |
 | `stats.rs` | Счётчики каналов и событие SendChannel |
-| `public.rs` | Открытая отправка (свой узел) |
+| `public.rs` | Открытая отправка (свой узел или провайдер; `{key}` в channel.url — ключ узла bsc.node_http_key) |
 | `mev_guard.rs` | PancakeSwap MEV Guard |
 | `club48.rs` | 48 Club (Privacy RPC / Puissant) |
 | `blockrazor.rs` | BlockRazor RPC (только одиночная: документация бандла противоречива) |

@@ -1,17 +1,17 @@
 //! Файл: venues/bsc_dex/pools/discover.rs
 //! Что делает: поиск пулов «монета — встречный токен» (USDT или промежуточная монета, решение 52) по всем включённым
-//! видам пулов. V2 — getPair фабрики по каждой монете;
-//! V3 и V4 — история событий создания (PoolCreated, Initialize) с USDT в индексированном поле. Прочитанная
-//! история хранится в памяти: следующий поиск читает только новые блоки.
-//! Кто вызывает: pools/market.rs.
-//! От чего зависит: ctx.rs, pools/discover_v2.rs, discover_v3.rs, discover_v4.rs, families.rs, key.rs, hooks.rs.
-//! Настройки: dex.enabled [DEX], dex.pool_enabled [вид пула], dex.scan_from_block [вид пула], адреса dex.* [вид пула].
+//! видам пулов. V2 — getPair фабрики, V3 — getPool фабрики по уровням комиссии (без истории событий);
+//! V4 — история событий Initialize менеджера от блока его развёртывания (deploy_block.rs). Прочитанная история V4
+//! хранится в памяти: следующий поиск читает только новые блоки.
+//! Кто вызывает: pools/market.rs, market_mids.rs, created.rs.
+//! От чего зависит: ctx.rs, pools/discover_v2.rs, discover_v3.rs, discover_v4.rs, deploy_block.rs, families.rs, key.rs, hooks.rs.
+//! Настройки: dex.enabled [DEX], dex.pool_enabled [вид пула], dex.pool_manager [вид пула V4], адреса dex.* [вид пула].
 //!
-//! Поиск по событиям создания — research/flow/bsc_dex.md, раздел 2 и схема п. 2; research/flow/bsc_v4.md, раздел 3
-//! («единственный источник списка пулов V4 — логи Initialize»).
+//! V2/V3 — research/flow/bsc_dex.md, раздел 2 и схема п. 2 (getPair, getPool); V4 — research/flow/bsc_v4.md,
+//! раздел 3 («единственный источник списка пулов V4 — логи Initialize»).
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use alloy_primitives::Address;
 
@@ -22,7 +22,7 @@ use crate::storage::journal::Level;
 use super::super::ctx::Ctx;
 use super::families::{FAMILIES, Family, Proto};
 use super::key::PoolKey;
-use super::{discover_v2, discover_v3, discover_v4};
+use super::{deploy_block, discover_v2, discover_v3, discover_v4};
 
 /// Найденный пул: всё, что известно до чтения состояния.
 #[derive(Debug, Clone)]
@@ -41,33 +41,14 @@ pub struct Found {
     pub hooks: Option<HookInfo>,
 }
 
-/// История вида пула: последний прочитанный блок и найденные пулы.
-type History = (u64, Vec<Found>);
+/// История вида пула V4: адрес менеджера, последний прочитанный блок, все найденные пулы (любые валюты).
+type History = (Address, u64, Vec<Found>);
 
-/// Прочитанная история событий по виду пула и встречному токену (USDT или промежуточная монета, решение 52):
-/// до какого блока и что найдено (все пулы с этим токеном, любые монеты).
+/// Прочитанная история событий Initialize по видам пулов V4. Замок держится на время дочитывания:
+/// одновременные поиски (USDT, промежуточные монеты, новые пулы) не читают одни и те же блоки дважды.
 #[derive(Clone, Default)]
 pub struct Scanned {
-    inner: Arc<Mutex<HashMap<(&'static str, Address), History>>>,
-}
-
-impl Scanned {
-    /// Найденное и последний прочитанный блок вида пула со встречным токеном. None — ещё не читали.
-    fn get(&self, family: &'static str, quote: Address) -> Option<(u64, Vec<Found>)> {
-        self.inner
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(&(family, quote))
-            .cloned()
-    }
-
-    /// Дописывает новые пулы и сдвигает прочитанный блок.
-    fn extend(&self, family: &'static str, quote: Address, to: u64, mut found: Vec<Found>) {
-        let mut m = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        let e = m.entry((family, quote)).or_default();
-        e.0 = to;
-        e.1.append(&mut found);
-    }
+    inner: Arc<tokio::sync::Mutex<HashMap<&'static str, History>>>,
 }
 
 /// Включён ли вид пула: dex.enabled [DEX] и dex.pool_enabled [вид]. Не задано — выключен (с записью в журнал).
@@ -108,6 +89,9 @@ pub async fn find_all(
         }
         let res = match f.proto {
             Proto::V2 => discover_v2::find(ctx, f, coins, usdt, head).await,
+            Proto::PancakeV3 | Proto::UniswapV3 => {
+                discover_v3::find(ctx, f, coins, usdt, head).await
+            }
             _ => from_history(ctx, f, usdt, head, scanned).await.map(|all| {
                 all.into_iter()
                     .filter(|p| coins.contains_key(&p.coin))
@@ -130,29 +114,48 @@ pub async fn find_all(
     out
 }
 
-/// Пулы V3/V4 из истории событий: дочитывает новые блоки до head.
-/// Ошибки: NotConfigured (dex.scan_from_block, адрес фабрики или менеджера), узел.
+/// Пулы V4 со встречным токеном из истории событий: дочитывает новые блоки до head. Первый раз (или новый адрес
+/// менеджера) — от блока развёртывания менеджера (deploy_block.rs).
+/// Ошибки: NotConfigured (dex.pool_manager, нет контракта), узел (нет истории состояния, лимиты eth_getLogs).
 async fn from_history(
     ctx: &Ctx,
     f: &'static Family,
-    usdt: Address,
+    quote: Address,
     head: u64,
     scanned: &Scanned,
 ) -> GatewayResult<Vec<Found>> {
-    let from = match scanned.get(f.id, usdt) {
-        Some((to, _)) => to + 1,
-        None => ctx.dex_int("dex.scan_from_block", f.id)?,
+    let manager = ctx.dex_addr("dex.pool_manager", f.id)?;
+    let mut m = scanned.inner.lock().await;
+    let from = match m.get(f.id) {
+        Some((addr, to, _)) if *addr == manager => to + 1,
+        _ => {
+            m.remove(f.id);
+            deploy_block::get(ctx, f, manager).await?
+        }
     };
     if from <= head {
-        let found = match f.proto {
-            Proto::PancakeV3 | Proto::UniswapV3 => {
-                discover_v3::scan(ctx, f, usdt, from, head).await?
-            }
-            _ => discover_v4::scan(ctx, f, usdt, from, head).await?,
-        };
-        scanned.extend(f.id, usdt, head, found);
+        let mut found = discover_v4::scan(ctx, f, manager, from, head).await?;
+        let e = m.entry(f.id).or_insert((manager, 0, Vec::new()));
+        e.1 = head;
+        e.2.append(&mut found);
     }
-    Ok(scanned.get(f.id, usdt).map(|(_, v)| v).unwrap_or_default())
+    let all = m
+        .get(f.id)
+        .map(|(_, _, v)| v.as_slice())
+        .unwrap_or_default();
+    Ok(all.iter().filter_map(|p| against(p, quote)).collect())
+}
+
+/// Пул со встречным токеном: coin — другая валюта пула. None — токена в пуле нет. Ошибок нет.
+pub fn against(p: &Found, quote: Address) -> Option<Found> {
+    let coin = if p.token0 == quote {
+        p.token1
+    } else if p.token1 == quote {
+        p.token0
+    } else {
+        return None;
+    };
+    Some(Found { coin, ..p.clone() })
 }
 
 /// Пара токенов, отсортированная по адресу (currency0 < currency1 — так во всех видах пулов). Ошибок нет.

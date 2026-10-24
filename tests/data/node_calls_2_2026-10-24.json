@@ -1,0 +1,250 @@
+{
+  "about": "Второй проход (tests/bsc_dex_node_calls.rs): getPool фабрик V3 по полям из первого прохода — на том же блоке 0x7b8a659; eth_getLogs событий обмена — последние 1000 блоков до него (если узел не даёт такой диапазон — уменьшить fromBlock и указать в записи).",
+  "block": "0x7b8a659",
+  "calls": [
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000055d398326f99059ff775485246999027b319795500000000000000000000000000000000000000000000000000000000000009c4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000000000000000000000000000000000000000000000000000000000009c4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000055d398326f99059ff775485246999027b31979550000000000000000000000000000000000000000000000000000000000000bb8",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000055d398326f99059ff775485246999027b319795500000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000018d0e455b3491e09210292d3953157a4bf1044440000000000000000000000000000000000000000000000000000000000002710",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c0000000000000000000000000000000000000000000000000000000000000064",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000055d398326f99059ff775485246999027b319795500000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f80000000000000000000000007130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c00000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000055d398326f99059ff775485246999027b31979550000000000000000000000000000000000000000000000000000000000000064",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f80000000000000000000000007130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c0000000000000000000000000000000000000000000000000000000000000bb8",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a getPool",
+      "params": [
+        {
+          "input": "0x1698ee8200000000000000000000000018d0e455b3491e09210292d3953157a4bf1044440000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f80000000000000000000000000000000000000000000000000000000000000bb8",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000055d398326f99059ff775485246999027b319795500000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 getPool",
+      "params": [
+        {
+          "input": "0x1698ee820000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f80000000000000000000000008ac76a51cc950d9822d68b83fe1ad97b32cd580d00000000000000000000000000000000000000000000000000000000000001f4",
+          "to": "0x0bfbcf9fa4f9c56b0f40a671ad40e0805a091865"
+        },
+        "0x7b8a659"
+      ]
+    },
+    {
+      "method": "eth_getLogs",
+      "name": "CAKE/WBNB PancakeSwap V2 Swap",
+      "params": [
+        {
+          "address": "0x0ed7e52944161450477ee417de9cd3a859b14fd0",
+          "fromBlock": "0x7b8a272",
+          "toBlock": "0x7b8a659",
+          "topics": [
+            "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "eth_getLogs",
+      "name": "CAKE/USDT PancakeSwap V3 Swap",
+      "params": [
+        {
+          "address": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1",
+          "fromBlock": "0x7b8a272",
+          "toBlock": "0x7b8a659",
+          "topics": [
+            "0x19b47279256b2a23a1665c810c8d55a1758940ee09377d4f8d26497a3577dc83"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "eth_getLogs",
+      "name": "CAKE/USDT Uniswap V3 Swap",
+      "params": [
+        {
+          "address": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a",
+          "fromBlock": "0x7b8a272",
+          "toBlock": "0x7b8a659",
+          "topics": [
+            "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "eth_getLogs",
+      "name": "CAKE/USDT Infinity CL Swap",
+      "params": [
+        {
+          "address": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b",
+          "fromBlock": "0x7b8a272",
+          "toBlock": "0x7b8a659",
+          "topics": [
+            "0x04206ad2b7c0f463bff3dd4f33c5735b0f2957a351e4f79763a4fa9e775dd237",
+            "0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb"
+          ]
+        }
+      ]
+    }
+  ]
+}

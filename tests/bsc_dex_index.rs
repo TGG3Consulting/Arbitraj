@@ -1,21 +1,17 @@
 //! Файл: tests/bsc_dex_index.rs
 //! Что делает: пулы из справочника индексатора → пулы подписки (решение 58) без сети: таблица сопоставления
 //! «DEX индексатора → вид» (не подключена, не поддерживается, выключена, не хватает адреса), итог по пулам CAKE из
-//! живого ответа GeckoTerminal 2026-10-24, проверка пула на узле — чистые решения по ответам: чужая фабрика, чужие
-//! токены (пул-подделка «比特币 / Cake»), пул не в реестре фабрики, своя комиссия пары Biswap (swapFee / 1000), ключ
-//! пула Infinity у менеджера (PoolId, менеджер, валюты).
+//! живого ответа GeckoTerminal 2026-10-24, сбой узла — «не проверен», своя комиссия пары Biswap (swapFee / 1000),
+//! «кто меняет», очистка устаревших настроек.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools, directory}, arb::settings (настоящая SQLite во временной папке).
-//! ЖДУТ ЗАПИСИ: ответов узла BSC в записи пока нет (из песочницы узлы недоступны) — тесты решений проверки на узле
-//! (wrong_factory_or_tokens_rejected, v3_abi_by_lm_pool, infinity_key_from_manager) собраны из адресов записи индексатора
-//! и официальных страниц адресов; список точных вызовов для записи — tests/data/node_calls_2026-10-24.json. После записи
-//! техлидом эти тесты переводятся на записанные ответы.
+//! Решения проверки пула на живых ответах узла — tests/bsc_dex_node_verify.rs. who_swaps — события обмена заданы
+//! адресами из записи (реальных логов обмена в записи пока нет: eth_getLogs — во втором проходе,
+//! tests/data/node_calls_2_2026-10-24.json).
 
 use std::collections::HashSet;
-use std::str::FromStr;
 
-use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, B256, Bytes, U256, address};
+use alloy_primitives::{Address, U256, address};
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
@@ -28,17 +24,13 @@ use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::directory::{TokenEntry, gt_parse};
 use arb::venues::bsc_dex::pools::families::{self, Proto};
-use arb::venues::bsc_dex::pools::key::{InfinityPoolKeyData, PoolKey};
-use arb::venues::bsc_dex::pools::verify::{self, Candidate, Read};
-use arb::venues::bsc_dex::pools::{index, verify_v4};
+use arb::venues::bsc_dex::pools::index;
+use arb::venues::bsc_dex::pools::verify;
 
 const CAKE: Address = address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82");
 const USDT: Address = address!("0x55d398326f99059ff775485246999027b3197955");
-/// PancakeSwap V3 Factory и Uniswap V3 Factory (BNB) — официальные страницы адресов (indexer_research.md, 2.1).
+/// PancakeSwap V3 Factory (BNB) — официальная страница адресов (indexer_research.md, 2.1).
 const PCS_V3_FACTORY: Address = address!("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865");
-const UNI_V3_FACTORY: Address = address!("0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7");
-/// PancakeSwap Infinity CLPoolManager (developer.pancakeswap.finance, адреса Infinity).
-const CL_MANAGER: Address = address!("0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b");
 
 /// Окружение на настоящей SQLite без настроек.
 async fn ctx(tag: &str) -> Ctx {
@@ -280,80 +272,6 @@ async fn orphan_setting_only_cleared() {
     );
 }
 
-/// Кандидат: пул CAKE/USDT PancakeSwap V3 из записи GeckoTerminal.
-fn cand() -> Candidate {
-    Candidate {
-        family: families::make("pancakeswap-v3-bsc", "pancakeswap_v3").unwrap(),
-        pool: "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1".into(),
-        coin: CAKE,
-        quote: USDT,
-    }
-}
-
-#[test]
-fn wrong_factory_or_tokens_rejected() {
-    let (t0, t1) = if CAKE < USDT {
-        (CAKE, USDT)
-    } else {
-        (USDT, CAKE)
-    };
-    let ok = Read {
-        factory: PCS_V3_FACTORY,
-        token0: t0,
-        token1: t1,
-        fee: Some(2500),
-        spacing: Some(50),
-        v2_fee: None,
-    };
-    assert!(verify::check(&cand(), PCS_V3_FACTORY, &ok).is_ok());
-    let alien = Read {
-        factory: UNI_V3_FACTORY,
-        ..ok.clone()
-    };
-    let why = verify::check(&cand(), PCS_V3_FACTORY, &alien).unwrap_err();
-    assert!(why.starts_with("factory() пула ="), "{why}");
-    // Пул-подделка «比特币 / Cake» из записи (резерв $7,7 млн по индексатору): токен 0xb595… — не USDT.
-    let fake = address!("0xb595a01086043ff14babdf0c41191d5163777777");
-    let bad = Read {
-        token0: fake.min(CAKE),
-        token1: fake.max(CAKE),
-        ..ok
-    };
-    assert!(
-        verify::check(&cand(), PCS_V3_FACTORY, &bad)
-            .unwrap_err()
-            .starts_with("токены пула")
-    );
-    // Реестр фабрики: getPool возвращает тот же адрес — пул её; другой — нет.
-    let pool = Address::from_str(&cand().pool).unwrap();
-    assert!(verify::registered(pool, &pool.abi_encode()).is_ok());
-    assert!(
-        verify::registered(pool, &Address::ZERO.abi_encode())
-            .unwrap_err()
-            .contains("не знает")
-    );
-}
-
-#[test]
-fn v3_abi_by_lm_pool() {
-    let pcs = families::make("pancakeswap-v3-bsc", "pancakeswap_v3").unwrap();
-    let uni = families::make("uniswap-bsc", "uniswap_v3").unwrap();
-    let lm = Ok(Bytes::from(Address::ZERO.abi_encode()));
-    let none: Result<Bytes, String> = Err("откат".into());
-    assert!(verify::v3_abi(pcs, Some(&lm)).is_ok());
-    assert!(
-        verify::v3_abi(pcs, Some(&none))
-            .unwrap_err()
-            .contains("не пул PancakeSwap V3")
-    );
-    assert!(verify::v3_abi(uni, Some(&none)).is_ok());
-    assert!(
-        verify::v3_abi(uni, Some(&lm))
-            .unwrap_err()
-            .contains("это пул PancakeSwap V3")
-    );
-}
-
 #[test]
 fn biswap_pair_fee() {
     // BiswapPair.sol: swapFee = 1 по умолчанию (0,1%), максимум 1000; формула balance·1000 − amountIn·swapFee.
@@ -364,72 +282,6 @@ fn biswap_pair_fee() {
         verify::v2_fee_pips(U256::from(1u8), 0)
             .unwrap_err()
             .contains("= 0")
-    );
-}
-
-#[test]
-fn infinity_key_from_manager() {
-    let f = families::make("pancakeswap-infinity-clmm", "pancakeswap_infinity_cl").unwrap();
-    let (c0, c1) = if CAKE < USDT {
-        (CAKE, USDT)
-    } else {
-        (USDT, CAKE)
-    };
-    let params = B256::from(U256::from(10u32) << 16); // tickSpacing 10, без флагов крючка
-    let key = InfinityPoolKeyData {
-        currency0: c0,
-        currency1: c1,
-        hooks: Address::ZERO,
-        manager: CL_MANAGER,
-        fee: 500,
-        parameters: params,
-    };
-    let id = PoolKey::Infinity(key.clone()).id();
-    let answer = |m: Address| {
-        Ok(Bytes::from(
-            (c0, c1, Address::ZERO, m, U256::from(500u32), params).abi_encode_params(),
-        ))
-    };
-    let c = Candidate {
-        family: f,
-        pool: format!("{id}"),
-        coin: CAKE,
-        quote: USDT,
-    };
-    let found = verify_v4::decide(
-        &c,
-        id,
-        CL_MANAGER,
-        answer(CL_MANAGER),
-        Err("не нужен".into()),
-    )
-    .unwrap();
-    assert_eq!(
-        (found.coin, found.tick_spacing, found.fee_pips),
-        (CAKE, Some(10), Some(500))
-    );
-    // Менеджер не знает PoolId — в ответе нулевой менеджер.
-    let why = verify_v4::decide(
-        &c,
-        id,
-        CL_MANAGER,
-        answer(Address::ZERO),
-        Err("не нужен".into()),
-    )
-    .unwrap_err();
-    assert!(why.starts_with("менеджер не знает этот PoolId"), "{why}");
-    // Чужой PoolId с тем же ключом — отказ.
-    let other = B256::repeat_byte(7);
-    assert!(
-        verify_v4::decide(
-            &c,
-            other,
-            CL_MANAGER,
-            answer(CL_MANAGER),
-            Err(String::new())
-        )
-        .unwrap_err()
-        .contains("PoolId")
     );
 }
 

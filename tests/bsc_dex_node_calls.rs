@@ -120,3 +120,116 @@ fn write_node_calls() {
     )
     .unwrap();
 }
+
+/// Второй проход (по записанным ответам первого): реестр фабрик V3 getPool(token0, token1, fee) по прочитанным полям
+/// пулов PancakeSwap V3 и Uniswap V3 на том же блоке, и eth_getLogs событий обмена нескольких пулов (настоящие логи для
+/// проверки «кто меняет», check/emitter.rs). Пишет tests/data/node_calls_2_2026-10-24.json.
+#[test]
+#[ignore = "вручную: пишет список вызовов второго прохода"]
+fn write_node_calls_second_pass() {
+    use alloy::sol_types::SolEvent;
+    use alloy_primitives::aliases::U24;
+    use arb::venues::bsc_dex::pools::abi_v2v3::{
+        IPancakeV3Pool, IUniswapV3Pool, IV2Pair, IV3Factory,
+    };
+    use arb::venues::bsc_dex::pools::abi_v4::IInfinityCl;
+
+    let text = std::fs::read_to_string(
+        "tests/data/indexers_2026-10-24/arb_node_responses_2026-10-24.json",
+    )
+    .unwrap();
+    let rec: Value = serde_json::from_str(&text).unwrap();
+    let block = rec["block"].as_str().unwrap().to_string();
+    let get = |name: &str| -> Bytes {
+        let r = rec["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["name"] == name)
+            .unwrap();
+        r["response"]["result"].as_str().unwrap().parse().unwrap()
+    };
+    let factories = [
+        (
+            "pancakeswap-v3-bsc",
+            address!("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"),
+        ),
+        (
+            "uniswap-bsc",
+            address!("0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"),
+        ),
+    ];
+    let mut out = Vec::new();
+    for r in rec["results"].as_array().unwrap() {
+        let name = r["name"].as_str().unwrap();
+        let Some(base) = name.strip_suffix(" factory()") else {
+            continue;
+        };
+        let Some((_, factory)) = factories
+            .iter()
+            .find(|(d, _)| base.split(' ').nth(1) == Some(*d))
+        else {
+            continue;
+        };
+        let addr = |b: Bytes| Address::from_slice(&b[12..32]);
+        let t0 = addr(get(&format!("{base} token0()")));
+        let t1 = addr(get(&format!("{base} token1()")));
+        let fee = u32::from_be_bytes(get(&format!("{base} fee()"))[28..32].try_into().unwrap());
+        let d = IV3Factory::getPoolCall {
+            tokenA: t0,
+            tokenB: t1,
+            fee: U24::from(fee),
+        }
+        .abi_encode();
+        out.push(
+            json!({ "name": format!("{base} getPool"), "method": "eth_call",
+            "params": [{ "to": factory, "input": Bytes::from(d) }, block] }),
+        );
+    }
+    let n: u64 = u64::from_str_radix(block.trim_start_matches("0x"), 16).unwrap();
+    let from = format!("{:#x}", n - 999);
+    let logs = [
+        (
+            "CAKE/WBNB PancakeSwap V2 Swap",
+            address!("0x0ed7e52944161450477ee417de9cd3a859b14fd0"),
+            IV2Pair::Swap::SIGNATURE_HASH,
+            None,
+        ),
+        (
+            "CAKE/USDT PancakeSwap V3 Swap",
+            address!("0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"),
+            IPancakeV3Pool::Swap::SIGNATURE_HASH,
+            None,
+        ),
+        (
+            "CAKE/USDT Uniswap V3 Swap",
+            address!("0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"),
+            IUniswapV3Pool::Swap::SIGNATURE_HASH,
+            None,
+        ),
+        (
+            "CAKE/USDT Infinity CL Swap",
+            address!("0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b"),
+            IInfinityCl::Swap::SIGNATURE_HASH,
+            Some("0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb"),
+        ),
+    ];
+    for (name, a, t0, id) in logs {
+        let topics = match id {
+            Some(i) => json!([t0, i]),
+            None => json!([t0]),
+        };
+        out.push(json!({ "name": name, "method": "eth_getLogs",
+            "params": [{ "address": a, "topics": topics, "fromBlock": from, "toBlock": block }] }));
+    }
+    let doc = json!({
+        "about": format!("Второй проход (tests/bsc_dex_node_calls.rs): getPool фабрик V3 по полям из первого прохода — на том же блоке {block}; eth_getLogs событий обмена — последние 1000 блоков до него (если узел не даёт такой диапазон — уменьшить fromBlock и указать в записи)."),
+        "block": block,
+        "calls": out,
+    });
+    std::fs::write(
+        "tests/data/node_calls_2_2026-10-24.json",
+        serde_json::to_string_pretty(&doc).unwrap(),
+    )
+    .unwrap();
+}

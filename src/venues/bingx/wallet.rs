@@ -17,7 +17,7 @@ use serde_json::Value;
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind};
+use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -35,6 +35,17 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
         Op::Other,
     )
     .await?;
+    parse_networks(&data, &bsc, &ctx.venue())
+}
+
+/// Разбор ответа config/getall (data — массив монет с networkList). Адрес контракта ставится только сети с названием
+/// bsc (venue.bsc_network); пустой или неразборчивый адрес (у BNB в BEP20 — "") — None: ядро покажет «сеть BSC есть,
+/// адреса контракта нет». Принимает: data ответа, название сети BSC, площадку. Ошибки: BadResponse — формат.
+pub fn parse_networks(
+    data: &Value,
+    bsc: &str,
+    venue: &VenueId,
+) -> GatewayResult<Vec<CoinNetworkInfo>> {
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("data не массив", &data.to_string()))?;
@@ -49,7 +60,7 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
                 None
             };
             out.push(CoinNetworkInfo {
-                venue: ctx.venue(),
+                venue: venue.clone(),
                 asset: Asset {
                     ticker: ticker.clone(),
                     bsc_contract: contract,

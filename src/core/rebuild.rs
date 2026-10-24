@@ -6,7 +6,7 @@
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
 //! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, settings.
-//! Настройки: venue.enabled, venue.quote_asset (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
+//! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
 
@@ -31,12 +31,13 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 6] = [
+const REGISTRY: [&str; 7] = [
     "coin.",
     "tax.",
     "hooks.",
     "venue.enabled",
     "venue.quote_asset",
+    "venue.bsc_network",
     "dex.intermediate_",
 ];
 
@@ -69,6 +70,7 @@ pub async fn rebuild(core: &Core) {
         .cloned()
         .collect();
     let mut quote = HashMap::new();
+    let mut bsc = HashMap::new();
     for (v, _) in venues.iter().filter(|(_, k)| *k == VenueKind::Cex) {
         let at = At {
             venue: Some(&v.0),
@@ -77,9 +79,12 @@ pub async fn rebuild(core: &Core) {
         if let Ok(q) = s.text("venue.quote_asset", at) {
             quote.insert(v.clone(), q);
         }
+        if let Ok(n) = s.text("venue.bsc_network", at) {
+            bsc.insert(v.clone(), n);
+        }
     }
     let usdt = registry::usdt_address(&rd(&inner.networks), &quote);
-    let mut coins = build(core, &venues, &quote, usdt.as_ref().ok().copied());
+    let mut coins = build(core, &venues, &quote, &bsc, usdt.as_ref().ok().copied());
     let changes = apply_blacklist(core, &mut coins);
     for ch in changes {
         super::rebuild_report::report_block(core, ch).await;
@@ -106,6 +111,7 @@ fn build(
     core: &Core,
     venues: &[(VenueId, VenueKind)],
     quote: &HashMap<VenueId, String>,
+    bsc_network: &HashMap<VenueId, String>,
     usdt: Option<alloy_primitives::Address>,
 ) -> Vec<CoinEntry> {
     let s = &core.inner.deps.settings;
@@ -123,6 +129,7 @@ fn build(
         networks: &nets,
         usdt,
         quote,
+        bsc_network,
         market: &market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,

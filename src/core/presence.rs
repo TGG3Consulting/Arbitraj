@@ -1,10 +1,11 @@
 //! Файл: core/presence.rs
 //! Что делает: есть ли монета на одной площадке и в какой роли (часть справочника, шаг 1 ТЗ):
-//! у биржи — сеть BSC с адресом контракта, ввод и вывод, пришедший стакан; у DEX — допущенный пул с USDT
+//! у биржи — сеть BSC с адресом контракта, ввод и вывод, пара торгуется (статус, покупка и продажа через API),
+//! пришедший стакан; у DEX — допущенный пул с USDT
 //! для того же адреса контракта или — если включено (решение 52) — пул с промежуточной монетой из списка.
 //! Кто вызывает: core/registry.rs (build).
 //! От чего зависит: core/types, market_state.rs, registry.rs (Presence, Exclusion, Inputs).
-//! Настройки: нет.
+//! Настройки: нет своих (название сети BSC — venue.bsc_network — читает rebuild.rs).
 
 use alloy_primitives::Address;
 
@@ -14,28 +15,40 @@ use super::intermediate::Intermediate;
 use super::market_state::MarketState;
 use super::registry::{Exclusion, Inputs, Presence};
 
-/// Монета на бирже: сеть BSC (по адресу контракта, который адаптер ставит только для сети BSC),
-/// статусы ввода и вывода, стакан. Ошибок нет.
+/// Монета на бирже: сеть BSC и адрес контракта (адаптер ставит адрес только для сети BSC; сеть узнаётся по
+/// названию bsc — venue.bsc_network), статусы ввода и вывода, состояние спот-пары (MarketEvent::SpotPairs) и стакан.
+/// Причины по порядку: нет сети BSC → сеть есть, адреса нет → пары нет (или справочник пар ещё не пришёл) →
+/// пара не торгуется по статусу → через API нельзя ни купить, ни продать → стакан не пришёл.
+/// Покупка и продажа через API по отдельности закрывают свою сторону (can_buy / can_sell), а не всю монету.
+/// Принимает: биржу, тикер, сети монеты, название сети BSC (None — не задано), рынок. Ошибок нет.
 pub fn cex(
     venue: &VenueId,
     ticker: &str,
     nets: &[&CoinNetworkInfo],
+    bsc: Option<&str>,
     market: &MarketState,
 ) -> Presence {
-    let bsc = nets.iter().find(|i| i.asset.bsc_contract.is_some());
-    let mut excluded = vec![];
-    match bsc {
-        None => excluded.push(Exclusion::NoBscNetwork),
-        Some(_) if market.book(venue, ticker).is_none() => excluded.push(Exclusion::NoSpotBook),
-        Some(_) => {}
-    }
+    let with_contract = nets.iter().find(|i| i.asset.bsc_contract.is_some());
+    let net = with_contract.or_else(|| nets.iter().find(|i| Some(i.network.as_str()) == bsc));
+    let pair = market.pair(venue, ticker);
+    let excluded = match (net, with_contract, pair) {
+        (None, _, _) => vec![Exclusion::NoBscNetwork],
+        (Some(_), None, _) => vec![Exclusion::NoContract],
+        (_, _, None) => vec![Exclusion::NoSpotBook],
+        (_, _, Some(p)) if !p.online => vec![Exclusion::PairNotTrading(p.status)],
+        (_, _, Some(p)) if !p.api_buy && !p.api_sell => vec![Exclusion::NoApiTrading],
+        _ if market.book(venue, ticker).is_none() => vec![Exclusion::NoSpotBook],
+        _ => vec![],
+    };
     Presence {
         venue: venue.clone(),
-        network: bsc.map(|i| i.network.clone()),
-        can_receive: bsc.is_some_and(|i| i.deposit_enabled),
-        can_send: bsc.is_some_and(|i| i.withdraw_enabled),
+        network: net.map(|i| i.network.clone()),
+        can_receive: net.is_some_and(|i| i.deposit_enabled),
+        can_send: net.is_some_and(|i| i.withdraw_enabled),
+        can_buy: pair.is_some_and(|p| p.api_buy),
+        can_sell: pair.is_some_and(|p| p.api_sell),
         excluded,
-        info: bsc.map(|i| (*i).clone()),
+        info: with_contract.map(|i| (*i).clone()),
         via: None,
     }
 }
@@ -75,6 +88,8 @@ pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
         network: None,
         can_receive: true,
         can_send: true,
+        can_buy: true,
+        can_sell: true,
         excluded,
         info: None,
         via,

@@ -1,0 +1,752 @@
+{
+ "code": 0,
+ "timestamp": 1792871487210,
+ "data": [
+  {
+   "coin": "USDT",
+   "name": "USDT",
+   "networkList": [
+    {
+     "name": "USDT",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+     "needTagOrMemo": "false",
+     "displayName": "USDT20"
+    },
+    {
+     "name": "USDT",
+     "network": "TRC20",
+     "isDefault": true,
+     "minConfirm": 2,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "1.5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+     "needTagOrMemo": "false",
+     "displayName": "usdttrc20"
+    },
+    {
+     "name": "USDT",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.15",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "3",
+     "depositMin": "0.1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x55d398326f99059ff775485246999027b3197955",
+     "needTagOrMemo": "false",
+     "displayName": "USDTBEP20"
+    },
+    {
+     "name": "USDT",
+     "network": "SOL",
+     "isDefault": true,
+     "minConfirm": 50,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "1.00000000000000000001",
+     "depositMin": "0.5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+     "needTagOrMemo": "false",
+     "displayName": "USDTSOL"
+    },
+    {
+     "name": "USDT",
+     "network": "POLYGON",
+     "isDefault": true,
+     "minConfirm": 450,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.8",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "10",
+     "depositMin": "0.5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+     "needTagOrMemo": "false",
+     "displayName": "USDTPOLYGON"
+    },
+    {
+     "name": "USDT",
+     "network": "ARBITRUM",
+     "isDefault": true,
+     "minConfirm": 3000,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.5",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "0.5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+     "needTagOrMemo": "false",
+     "displayName": "USDTARBITRUM"
+    },
+    {
+     "name": "USDT",
+     "network": "OPTIMISM",
+     "isDefault": true,
+     "minConfirm": 600,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "1.1",
+     "depositMin": "2",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
+     "needTagOrMemo": "false",
+     "displayName": "USDTOPTIMISM"
+    },
+    {
+     "name": "USDT",
+     "network": "TON",
+     "isDefault": true,
+     "minConfirm": 25,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.017",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "5",
+     "depositMin": "5",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
+     "needTagOrMemo": "false",
+     "displayName": "USDTTON"
+    },
+    {
+     "name": "USDT",
+     "network": "OPBNB",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "5",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3",
+     "needTagOrMemo": "false",
+     "displayName": "USDTOPBNB"
+    },
+    {
+     "name": "USDT",
+     "network": "APT",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.01",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 6,
+     "depositPrecision": 6,
+     "contractAddress": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+     "needTagOrMemo": "false",
+     "displayName": "USDTAPT"
+    },
+    {
+     "name": "USDT",
+     "network": "STABLECHAIN",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1.5",
+     "withdrawMax": "4999934.34",
+     "withdrawMin": "5",
+     "depositMin": "1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "USDTSTABLECHAIN"
+    }
+   ]
+  },
+  {
+   "coin": "PONS",
+   "name": "PONS",
+   "networkList": [
+    {
+     "name": "PONS",
+     "network": "ROBINHOOD",
+     "isDefault": true,
+     "minConfirm": 5000,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1.6",
+     "withdrawMax": "22081589.63034933",
+     "withdrawMin": "6.849691",
+     "depositMin": "14",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x39dbed3a2bd333467115de45665cc57f813c4571",
+     "needTagOrMemo": "false",
+     "displayName": "PONS"
+    }
+   ]
+  },
+  {
+   "coin": "BNB",
+   "name": "BNB",
+   "networkList": [
+    {
+     "name": "BNB",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.0005",
+     "withdrawMax": "6849.88196128",
+     "withdrawMin": "0.005",
+     "depositMin": "0.0006",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "BNBBEP20"
+    },
+    {
+     "name": "BNB",
+     "network": "XTERIOB",
+     "isDefault": true,
+     "minConfirm": 24,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.001422",
+     "withdrawMax": "6849.88196128",
+     "withdrawMin": "0.006644",
+     "depositMin": "0.008",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "BNBXTERIOB"
+    },
+    {
+     "name": "BNB",
+     "network": "Opbnb",
+     "isDefault": true,
+     "minConfirm": 30,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.000013",
+     "withdrawMax": "6849.88196128",
+     "withdrawMin": "0.006644",
+     "depositMin": "0.008",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "BNBOPBNB"
+    }
+   ]
+  },
+  {
+   "coin": "NIULAI",
+   "name": "NIULAI",
+   "networkList": [
+    {
+     "name": "NIULAI",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "8",
+     "withdrawMax": "94019073.71192177",
+     "withdrawMin": "9",
+     "depositMin": "16",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xbeea1d618e533a387d941f58a7d4c9b7bd377777",
+     "needTagOrMemo": "false",
+     "displayName": "牛来"
+    }
+   ]
+  },
+  {
+   "coin": "CAKE",
+   "name": "CAKE",
+   "networkList": [
+    {
+     "name": "CAKE",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.2",
+     "withdrawMax": "2438992.3609756",
+     "withdrawMin": "0.22",
+     "depositMin": "0.45",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+     "needTagOrMemo": "false",
+     "displayName": "CAKE"
+    },
+    {
+     "name": "CAKE",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.4",
+     "withdrawMax": "2438992.3609756",
+     "withdrawMin": "2.004812",
+     "depositMin": "2.2",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x152649ea73beab28c5b49b26eb48f7ead6d4c898",
+     "needTagOrMemo": "false",
+     "displayName": "CAKEERC20"
+    }
+   ]
+  },
+  {
+   "coin": "EGLD",
+   "name": "EGLD",
+   "networkList": [
+    {
+     "name": "EGLD",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.12",
+     "withdrawMax": "1535606.36977886",
+     "withdrawMin": "0.13",
+     "depositMin": "0.26",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xbf7c81fff98bbe61b40ed186e4afd6ddd01337fe",
+     "needTagOrMemo": "false",
+     "displayName": "EGLD"
+    },
+    {
+     "name": "EGLD",
+     "network": "EGLD",
+     "isDefault": true,
+     "minConfirm": 4,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.0025",
+     "withdrawMax": "1535606.36977886",
+     "withdrawMin": "1.252819",
+     "depositMin": "0.01",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "",
+     "needTagOrMemo": "false",
+     "displayName": "EGLDEGLD"
+    }
+   ]
+  },
+  {
+   "coin": "RAMP",
+   "name": "RAMP",
+   "networkList": [
+    {
+     "name": "RAMP",
+     "network": "ERC20",
+     "isDefault": true,
+     "minConfirm": 64,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "10",
+     "withdrawMax": "25427176.56711619",
+     "withdrawMin": "26.419096",
+     "depositMin": "209.523811",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "needTagOrMemo": "false",
+     "displayName": "RAMP"
+    },
+    {
+     "name": "RAMP",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "2.11",
+     "withdrawMax": "25427176.56711619",
+     "withdrawMin": "26.419096",
+     "depositMin": "49",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "needTagOrMemo": "false",
+     "displayName": "RAMPBEP20"
+    }
+   ]
+  },
+  {
+   "coin": "SEA",
+   "name": "SEA",
+   "networkList": [
+    {
+     "name": "SEA",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "0.17",
+     "withdrawMax": "1652079.43249234",
+     "withdrawMin": "1.716528",
+     "depositMin": "0.35",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x26193c7fa4354ae49ec53ea2cebc513dc39a10aa",
+     "needTagOrMemo": "false",
+     "displayName": "SEA"
+    }
+   ]
+  },
+  {
+   "coin": "XEC",
+   "name": "XEC",
+   "networkList": [
+    {
+     "name": "XEC",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": true,
+     "withdrawFee": "77760",
+     "withdrawMax": "772787378670.78825347",
+     "withdrawMin": "85537",
+     "depositMin": "139665",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x0ef2e7602add1733bfdb17ac3094d0421b502ca3",
+     "needTagOrMemo": "false",
+     "displayName": "XEC"
+    }
+   ]
+  },
+  {
+   "coin": "ZBC",
+   "name": "ZBC",
+   "networkList": [
+    {
+     "name": "ZBC",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "30.98",
+     "withdrawMax": "160254305.76923076",
+     "withdrawMin": "160.256411",
+     "depositMin": "302.52105",
+     "withdrawPrecision": 8,
+     "depositPrecision": 8,
+     "needTagOrMemo": "false",
+     "displayName": "ZBC"
+    }
+   ]
+  },
+  {
+   "coin": "SOLV",
+   "name": "SOLV",
+   "networkList": [
+    {
+     "name": "SOLV",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "88",
+     "withdrawMax": "878723082.60105448",
+     "withdrawMin": "97",
+     "depositMin": "169",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xabe8e5cabe24cb36df9540088fd7ce1175b9bc52",
+     "needTagOrMemo": "false",
+     "displayName": "SOLV"
+    }
+   ]
+  },
+  {
+   "coin": "TUT",
+   "name": "TUT",
+   "networkList": [
+    {
+     "name": "TUT",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "29",
+     "withdrawMax": "287517788.3841288",
+     "withdrawMin": "32",
+     "depositMin": "51",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xcaae2a2f939f51d97cdfa9a86e79e3f085b799f3",
+     "needTagOrMemo": "false",
+     "displayName": "TUT"
+    }
+   ]
+  },
+  {
+   "coin": "USD1",
+   "name": "USD1",
+   "networkList": [
+    {
+     "name": "USD1",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0",
+     "withdrawMax": "5000734.4575132",
+     "withdrawMin": "5.002001",
+     "depositMin": "1",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d",
+     "needTagOrMemo": "false",
+     "displayName": "USD1"
+    },
+    {
+     "name": "USD1",
+     "network": "TRC20",
+     "isDefault": true,
+     "minConfirm": 2,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "1.5",
+     "withdrawMax": "5000734.4575132",
+     "withdrawMin": "5.000651",
+     "depositMin": "5",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "TPFqcBAaaUMCSVRCqPaQ9QnzKhmuoLR6Rc",
+     "needTagOrMemo": "false",
+     "displayName": "USD1TRC20"
+    }
+   ]
+  },
+  {
+   "coin": "SKYAI",
+   "name": "SKYAI",
+   "networkList": [
+    {
+     "name": "SKYAI",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": false,
+     "depositEnable": false,
+     "withdrawFee": "17",
+     "withdrawMax": "159895565.71794051",
+     "withdrawMin": "18",
+     "depositMin": "34",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x92aa03137385f18539301349dcfc9ebc923ffb10",
+     "needTagOrMemo": "false",
+     "displayName": "SKYAI"
+    }
+   ]
+  },
+  {
+   "coin": "RWA",
+   "name": "RWA",
+   "networkList": [
+    {
+     "name": "RWA",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "350.14",
+     "withdrawMax": "3965054988.10467882",
+     "withdrawMin": "3714.710253",
+     "depositMin": "860",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x9c8b5ca345247396bdfac0395638ca9045c6586e",
+     "needTagOrMemo": "false",
+     "displayName": "RWA"
+    }
+   ]
+  },
+  {
+   "coin": "B",
+   "name": "B",
+   "networkList": [
+    {
+     "name": "B",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "3.4",
+     "withdrawMax": "38217032.33203393",
+     "withdrawMin": "4",
+     "depositMin": "8",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x6bdcce4a559076e37755a78ce0c06214e59e4444",
+     "needTagOrMemo": "false",
+     "displayName": "B"
+    }
+   ]
+  },
+  {
+   "coin": "TAG",
+   "name": "TAG",
+   "networkList": [
+    {
+     "name": "TAG",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "1141",
+     "withdrawMax": "11203079408.46963925",
+     "withdrawMin": "1255",
+     "depositMin": "2036",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x208bf3e7da9639f1eaefa2de78c23396b0682025",
+     "needTagOrMemo": "false",
+     "displayName": "TAG"
+    }
+   ]
+  },
+  {
+   "coin": "TA",
+   "name": "TA",
+   "networkList": [
+    {
+     "name": "TA",
+     "network": "LINEA",
+     "isDefault": true,
+     "minConfirm": 200,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "0.952",
+     "withdrawMax": "93807398.49906191",
+     "withdrawMin": "95.201828",
+     "depositMin": "54.536442",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x539ae81a166e5e80aed211731563e549c411b140",
+     "needTagOrMemo": "false",
+     "displayName": "TA"
+    },
+    {
+     "name": "TA",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "9.76",
+     "withdrawMax": "93807398.49906191",
+     "withdrawMin": "95.201828",
+     "depositMin": "23",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0x539ae81a166e5e80aed211731563e549c411b140",
+     "needTagOrMemo": "false",
+     "displayName": "TABEP20"
+    }
+   ]
+  },
+  {
+   "coin": "XPIN",
+   "name": "XPIN",
+   "networkList": [
+    {
+     "name": "XPIN",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": true,
+     "withdrawFee": "736",
+     "withdrawMax": "7047123805.49682875",
+     "withdrawMin": "809",
+     "depositMin": "1287",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xd955c9ba56fb1ab30e34766e252a97ccce3d31a6",
+     "needTagOrMemo": "false",
+     "displayName": "XPIN"
+    }
+   ]
+  },
+  {
+   "coin": "BLUAI",
+   "name": "BLUAI",
+   "networkList": [
+    {
+     "name": "BLUAI",
+     "network": "BEP20",
+     "isDefault": true,
+     "minConfirm": 10,
+     "withdrawEnable": true,
+     "depositEnable": false,
+     "withdrawFee": "57",
+     "withdrawMax": "535324875.80299785",
+     "withdrawMin": "62",
+     "depositMin": "101",
+     "withdrawPrecision": 8,
+     "depositPrecision": 18,
+     "contractAddress": "0xed9ae3def8d6f052971bb8b6d1975ff267cf9aad",
+     "needTagOrMemo": "false",
+     "displayName": "BLUAI"
+    }
+   ]
+  }
+ ]
+}

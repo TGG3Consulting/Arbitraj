@@ -1,8 +1,10 @@
 //! Файл: core/registry.rs
 //! Что делает: справочник монет и направлений (шаг 1 ТЗ) — первичный фильтр с видимой причиной отсева:
-//! монета есть на споте биржи (пришёл стакан); биржа выводит и принимает её по сети BSC; у монеты есть
+//! монета есть на споте биржи (пара торгуется по статусу и через API, пришёл стакан); биржа выводит и принимает её
+//! по сети BSC (адрес контракта сообщён); у монеты есть
 //! пул с USDT на DEX; адрес контракта у биржи совпадает с адресом токена в пуле (монета узнаётся
-//! по адресу контракта, а не по тикеру). Направление A→B есть, только если A выводит, B принимает.
+//! по адресу контракта, а не по тикеру). Направление A→B есть, только если на A можно купить через API и вывести,
+//! а на B — принять и продать через API (каждая сторона — независимо).
 //! Кто вызывает: core/engine.rs (пересобирает после событий), core/coins_view.rs (экран «Монеты»).
 //! От чего зависит: core/types, market_state.rs, blacklist.rs, gateway/contract (вид площадки).
 //! Настройки: нет своих (сеть BSC и котируемая монета уже приведены адаптером и ядром).
@@ -24,8 +26,14 @@ pub enum Exclusion {
     NoBscNetwork,
     /// Сеть BSC есть, но биржа не сообщила адрес контракта.
     NoContract,
-    /// Стакан монеты не пришёл: пары нет на споте или подписка ещё не ответила.
+    /// Стакан монеты не пришёл: пары нет в справочнике пар биржи (или биржа ещё не прислала справочник),
+    /// или подписка ещё не ответила.
     NoSpotBook,
+    /// Пара есть в справочнике биржи, но не торгуется по статусу — код статуса так, как его отдала биржа.
+    PairNotTrading(i64),
+    /// Пара торгуется, но через API нельзя ни купить, ни продать (у BingX — apiStateBuy и apiStateSell = false):
+    /// ордер через API не пройдёт.
+    NoApiTrading,
     /// Не известен адрес USDT в BSC (ни одна биржа не сообщила его) — пулы искать не с чем.
     NoUsdtAddress,
     /// Пула с USDT для этого адреса контракта на DEX нет.
@@ -44,8 +52,12 @@ pub struct Presence {
     pub network: Option<String>,
     /// Можно продавать сюда (депозит открыт; у DEX — всегда).
     pub can_receive: bool,
-    /// Можно покупать отсюда и выводить (вывод открыт; у DEX — всегда).
+    /// Можно выводить отсюда (вывод открыт; у DEX — всегда).
     pub can_send: bool,
+    /// Можно купить здесь через API (у биржи — пара разрешает покупку через API; у DEX — всегда).
+    pub can_buy: bool,
+    /// Можно продать здесь через API (у биржи — пара разрешает продажу через API; у DEX — всегда).
+    pub can_sell: bool,
     /// Пусто — монета на площадке есть.
     pub excluded: Vec<Exclusion>,
     /// Данные биржи о сети BSC (комиссия, минимумы, подтверждения); у DEX — None.
@@ -75,7 +87,7 @@ impl CoinEntry {
             .collect()
     }
 
-    /// Рабочие направления: A выводит, B принимает, монета не в чёрном списке. Оба направления
+    /// Рабочие направления: на A можно купить и вывести, на B — принять и продать, монета не в чёрном списке. Оба направления
     /// каждой пары считаются независимо (решение 5). Пусто — у монеты нет направлений.
     pub fn directions(&self) -> Vec<Direction> {
         if self.block.is_some() || self.problem.is_some() {
@@ -87,8 +99,11 @@ impl CoinEntry {
             .filter(|p| p.excluded.is_empty())
             .collect();
         let mut out = vec![];
-        for a in ok.iter().filter(|p| p.can_send) {
-            for b in ok.iter().filter(|p| p.can_receive && p.venue != a.venue) {
+        for a in ok.iter().filter(|p| p.can_send && p.can_buy) {
+            for b in ok
+                .iter()
+                .filter(|p| p.can_receive && p.can_sell && p.venue != a.venue)
+            {
                 out.push(Direction {
                     asset: self.asset.clone(),
                     buy_on: a.venue.clone(),
@@ -117,6 +132,9 @@ pub struct Inputs<'a> {
     pub usdt: Option<Address>,
     /// Котируемая монета каждой биржи (venue.quote_asset) — сама в справочник не входит.
     pub quote: &'a HashMap<VenueId, String>,
+    /// Название сети BSC у каждой биржи (venue.bsc_network): отличает «нет сети BSC» от «сеть BSC есть,
+    /// адреса контракта нет» (presence.rs). Нет биржи в списке — различить нельзя, причина «нет сети BSC».
+    pub bsc_network: &'a HashMap<VenueId, String>,
     pub market: &'a MarketState,
     /// Допуск пула (blacklist::pool_admission с настройками).
     pub pool_ok: &'a dyn Fn(&Pool) -> Result<(), String>,
@@ -164,7 +182,8 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 .push(i);
         }
         for (ticker, nets) in by_ticker {
-            let p = super::presence::cex(venue, ticker, &nets, inp.market);
+            let bsc = inp.bsc_network.get(venue).map(String::as_str);
+            let p = super::presence::cex(venue, ticker, &nets, bsc, inp.market);
             let asset = Asset {
                 ticker: ticker.to_string(),
                 bsc_contract: p.info.as_ref().and_then(|i| i.asset.bsc_contract),

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Cost, Side, VenueId};
+use crate::core::types::{Asset, Cost, CostKind, Side, VenueId};
 
 use super::deps::Deps;
 
@@ -25,6 +25,25 @@ pub fn gas_asset() -> Asset {
         ticker: GAS_TICKER.to_string(),
         bsc_contract: None,
     }
+}
+
+/// Газ сети и чаевые канала: платятся с BNB кошелька (резерв на газ, risk.min_bnb_balance), а не из монеты сделки —
+/// даже когда монета сделки сама BNB (решение 62). Ошибок нет.
+pub fn is_gas(k: CostKind) -> bool {
+    matches!(
+        k,
+        CostKind::Gas
+            | CostKind::ApproveGas
+            | CostKind::TransferGas
+            | CostKind::WrapGas
+            | CostKind::ChannelTip
+    )
+}
+
+/// Затрата в монете сделки — уменьшает количество (комиссия биржи в монете, налог): та же валюта и не газ.
+/// Газ в BNB у сделки с BNB — не в количестве, а в затратах (решение 62). Ошибок нет.
+pub fn in_coin(c: &Cost, coin: &str) -> bool {
+    c.asset == coin && !is_gas(c.kind)
 }
 
 /// Курсы для перевода затрат одной сделки.

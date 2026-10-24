@@ -1,0 +1,155 @@
+//! Файл: tests/bsc_dex_native.rs
+//! Что делает: нативная монета BNB (решение 62) без сети:
+//! 1) план сделки: продажа BNB — команды Universal Router [WRAP_ETH, обмен (платит роутер), BALANCE_CHECK_ERC20], value
+//!    транзакции = сумма; покупка — [обмен (выход роутеру), UNWRAP_WETH(кошелёк, минимум)], без BALANCE_CHECK и value;
+//!    входы WRAP/UNWRAP — abi.encode(recipient, amount) (Dispatcher.sol обоих UR, exec/ur.rs); то же для V3 через UR
+//!    PancakeSwap и Uniswap (путь tokenIn | fee | tokenOut);
+//! 2) путь через промежуточную с пулом V4 на стороне BNB — честный отказ NoRoute;
+//! 3) списки ТОЧНЫХ вызовов узла для записи (tests/data/native_calls_2026-10-24.json и native_calls_2_2026-10-25.json)
+//!    собраны этим же кодом — тест сверяет файлы с кодом. Перезаписать: cargo test --test bsc_dex_native -- --ignored
+//!
+//! Живые ответы узла — tests/bsc_dex_native_live.rs.
+//! Кто вызывает: cargo test.
+//! От чего зависит: tests/native_common (окружение, план, вызовы), arb::venues::bsc_dex::exec::{native, chain, ur}.
+
+mod native_common;
+
+use alloy::sol_types::SolValue;
+use alloy_primitives::{Address, Bytes, U256};
+use serde_json::Value;
+
+use arb::core::types::Side;
+use arb::gateway::errors::ErrorCode;
+use arb::venues::bsc_dex::exec::chain::Step;
+use arb::venues::bsc_dex::exec::native;
+use arb::venues::bsc_dex::exec::plan::Order;
+use arb::venues::bsc_dex::exec::ur::{self, ADDRESS_THIS};
+use arb::venues::bsc_dex::pools::registry::Entry;
+use native_common::*;
+
+#[tokio::test]
+async fn sell_wraps_and_buy_unwraps() {
+    let c = ctx("plan").await;
+    let wallet = HOLDER;
+    let amount = U256::from(10u64).pow(U256::from(16u8));
+    let sell = native_plan(
+        &c,
+        &entry("pancakeswap_v2", None),
+        Side::Sell,
+        amount,
+        wallet,
+    )
+    .await;
+    assert!(
+        sell.approvals.is_empty(),
+        "продажа BNB: платит роутер, разрешений нет"
+    );
+    assert_eq!(sell.value(), amount);
+    let (cmds, inputs) = decode(&sell.data(U256::from(5u8)));
+    assert_eq!(
+        cmds,
+        vec![ur::WRAP_ETH, ur::V2_SWAP_EXACT_IN, ur::BALANCE_CHECK_ERC20]
+    );
+    assert_eq!(
+        inputs[0],
+        Bytes::from((ADDRESS_THIS, amount).abi_encode_params())
+    );
+    // V2: (recipient, amountIn, amountOutMin, path, payerIsUser = false).
+    let (to, a_in, _, path, payer): (Address, U256, U256, Vec<Address>, bool) =
+        SolValue::abi_decode_params(&inputs[1]).unwrap();
+    assert_eq!(
+        (to, a_in, path, payer),
+        (wallet, amount, vec![WBNB, USDT], false)
+    );
+    assert_eq!(inputs[2], ur::balance_check(wallet, USDT, U256::from(6u8)));
+
+    let usdt = U256::from(5u64) * U256::from(10u64).pow(U256::from(18u8));
+    let buy = native_plan(&c, &entry("pancakeswap_v2", None), Side::Buy, usdt, wallet).await;
+    assert_eq!(buy.value(), U256::ZERO);
+    let (cmds, inputs) = decode(&buy.data(U256::ZERO));
+    assert_eq!(cmds, vec![ur::V2_SWAP_EXACT_IN, ur::UNWRAP_WETH]);
+    let (to, _, _, path, _): (Address, U256, U256, Vec<Address>, bool) =
+        SolValue::abi_decode_params(&inputs[0]).unwrap();
+    assert_eq!((to, path), (ADDRESS_THIS, vec![USDT, WBNB]));
+    assert_eq!(
+        inputs[1],
+        Bytes::from((wallet, U256::from(1u8)).abi_encode_params())
+    );
+}
+
+#[tokio::test]
+async fn v4_two_hop_on_native_side_is_refused() {
+    let c = ctx("v4").await;
+    let o = |a, b| Order {
+        token_in: a,
+        token_out: b,
+        amount_in: U256::from(1u8),
+        min_out: U256::from(1u8),
+    };
+    let step = |e: Entry, ord, fw, tw| Step {
+        entry: e,
+        order: ord,
+        from_wallet: fw,
+        to_wallet: tw,
+    };
+    let mut legs = vec![vec![
+        step(
+            entry("pancakeswap_infinity_cl", None),
+            o(WBNB, USDT),
+            true,
+            false,
+        ),
+        step(entry("pancakeswap_v2", None), o(USDT, WBNB), false, true),
+    ]];
+    let err = native::adapt(&c, Side::Sell, &mut legs).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NoRoute);
+}
+
+/// V3: продажа и покупка BNB через UR PancakeSwap и Uniswap — те же команды, путь V3 с комиссией 500.
+#[tokio::test]
+async fn v3_through_both_routers() {
+    let c = ctx("v3").await;
+    let e16 = U256::from(10u64).pow(U256::from(16u8));
+    for kind in ["pancakeswap_v3", "uniswap_v3"] {
+        let e = entry(kind, Some(500));
+        let sell = native_plan(&c, &e, Side::Sell, e16, HOLDER).await;
+        assert_eq!(sell.value(), e16);
+        let (cmds, inputs) = decode(&sell.data(U256::ZERO));
+        assert_eq!(
+            cmds,
+            vec![ur::WRAP_ETH, ur::V3_SWAP_EXACT_IN, ur::BALANCE_CHECK_ERC20]
+        );
+        let (to, a_in, _, path, payer): (Address, U256, U256, Bytes, bool) =
+            SolValue::abi_decode_params(&inputs[1]).unwrap();
+        let mut want = WBNB.to_vec();
+        want.extend_from_slice(&[0, 0x01, 0xf4]);
+        want.extend_from_slice(USDT.as_slice());
+        assert_eq!(
+            (to, a_in, path.to_vec(), payer),
+            (HOLDER, e16, want, false),
+            "{kind}"
+        );
+        let buy = native_plan(&c, &e, Side::Buy, e16, HOLDER).await;
+        let (cmds, _) = decode(&buy.data(U256::ZERO));
+        assert_eq!(cmds, vec![ur::V3_SWAP_EXACT_IN, ur::UNWRAP_WETH], "{kind}");
+    }
+}
+
+#[tokio::test]
+async fn native_calls_files_match_code() {
+    for (file, want) in [(CALLS, calls().await), (CALLS2, calls2::calls2().await)] {
+        let have: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        assert_eq!(
+            have, want,
+            "{file} устарел: cargo test --test bsc_dex_native -- --ignored"
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "вручную: пишет списки вызовов для записи ответов узла"]
+async fn write_native_calls() {
+    for (file, v) in [(CALLS, calls().await), (CALLS2, calls2::calls2().await)] {
+        std::fs::write(file, serde_json::to_string_pretty(&v).unwrap() + "\n").unwrap();
+    }
+}

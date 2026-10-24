@@ -45,6 +45,10 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         ),
         ("Multicall3", super::connection_extra::multicall3(ctx).await),
         (
+            "Обёртка нативной монеты",
+            super::connection_extra::native_wrapped(ctx).await,
+        ),
+        (
             "Справочник пулов (индексатор)",
             super::directory::check::check(ctx).await,
         ),

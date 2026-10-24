@@ -3,6 +3,7 @@
 //! пулов через промежуточную монету, решения 29, 52 — quote/direct_route.rs) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
 //! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
 //! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
+//! Нативная монета BNB (решение 62): газ обёртки — quote/native_gas.rs; у продажи BNB разрешений нет (approve_gas.rs).
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов).
@@ -16,6 +17,7 @@ pub mod direct_route;
 pub mod emptiness;
 pub mod gas;
 pub mod mixed_quoter;
+pub mod native_gas;
 pub mod path;
 pub mod pick;
 pub mod pool_quote;
@@ -144,6 +146,13 @@ impl Quoting {
             })?;
             q.costs
                 .push(with_step(Cost::new(CostKind::ApproveGas, bnb, BNB, false)));
+        }
+        // Нативная монета BNB (решение 62): газ WRAP_ETH / UNWRAP_WETH сверх обмена токеном — quote/native_gas.rs.
+        if let Some((c, units)) = native_gas::cost(self, &q, gas)? {
+            q.costs.push(with_step(c));
+            if let Some(r) = q.route.as_mut() {
+                r.gas_units += units;
+            }
         }
         if let Some(tip) =
             super::send::planned_tip(ctx).and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))

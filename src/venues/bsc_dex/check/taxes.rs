@@ -8,7 +8,7 @@
 //! обмен действительно выполнен и откатился. Нет достоверного пула, нет источника пробы, сбой узла, не задана
 //! настройка — «не проверено» (NotChecked): это не свойство монеты, чёрного списка нет (Outcome::Wait / Config).
 //! Кто вызывает: check/cycle.rs.
-//! От чего зависит: check/probe.rs, quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
+//! От чего зависит: check/probe.rs, check/native_probe.rs (нативная BNB, решение 62), quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
 //! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6 (модель налога у
@@ -27,7 +27,7 @@ use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::{rate, select};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
-use super::probe;
+use super::{native_probe, probe};
 use super::state::Checks;
 use super::taxes_util::{Sources, percent, quote_source};
 
@@ -168,6 +168,8 @@ async fn run(
                     f.gas_approve_sell = m.gas_sell.map(|g| g.1);
                 });
                 checks.set_transfer_gas(ticker, m.gas_transfer);
+                // Нативная монета BNB (решение 62): газ WRAP/UNWRAP и нативного перевода.
+                native_probe::after(ctx, checks, e, (source, wallet), amount, heads, &m).await;
                 if taxes.is_none() {
                     taxes = Some(percent(&m, tokens.decimals(ctx, e.coin).await?));
                 }

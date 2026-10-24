@@ -14,6 +14,7 @@
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
 //!
 //! Минимум выхода и проверка цены — exec/order.rs (худшая цена ≤ 0 или минимум 0 — ошибка до отправки).
+//! Нативная монета BNB (решение 62) — exec/native.rs: WRAP_ETH / UNWRAP_WETH в той же транзакции, резерв на газ не трогается.
 
 use alloy_primitives::{Address, U256};
 
@@ -27,6 +28,7 @@ use super::super::quote::{Quoting, direct};
 use super::super::wallet::balances;
 use super::super::wallet::inflows::SwapGuard;
 use super::super::wallet::nonce::{Nonces, Slot};
+use super::native::{self, Wrap};
 pub use super::order::{check_price, order, worst_positive};
 use super::plan::{self, Plan};
 use super::trade_smart;
@@ -79,20 +81,29 @@ pub async fn trade(
     // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
     let path = live::path(&v, &leg.hops, req.qty, true).await?;
     check_price(ctx, &req, path.coins, path.usdt)?;
-    let steps = chain::steps(ctx, &req, &path, req.qty, decs)?;
+    let mut legs = vec![chain::steps(ctx, &req, &path, req.qty, decs)?];
+    let is_native = native::is_native(ctx, &req.asset);
+    let wrap = if is_native {
+        native::adapt(ctx, req.side, &mut legs)?
+    } else {
+        Wrap::None
+    };
     for h in &path.hops {
         precheck::quoter_now(ctx, &h.entry, h.token_in, &h.swapped, h.usable.hook_pct).await?;
     }
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let (at, now) = q.heads.at(ctx).await?;
-    let p = plan::build(ctx, &steps, wallet, now, false).await?;
+    let p = plan::build(ctx, &legs[0], wallet, now, false)
+        .await?
+        .with_native(wrap);
+    let router = is_native.then_some(p.router);
     let entries: Vec<&Entry> = path.hops.iter().map(|h| &h.entry).collect();
     precheck_sim::emitters(ctx, &p, &entries, at).await?;
     let d = send_plan(env, &slot, p, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    result::result(ctx, req, d, wallet, (tin, out_token), decs)
+    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
 }
 
 /// Адреса монеты и USDT и их decimals. Ошибки: NoRoute (у монеты нет адреса в BSC), NotConfigured, узел.
@@ -144,14 +155,10 @@ pub async fn send_plan(
         }
     }
     let base = balances::token_units(&env.ctx, p.token_out, p.wallet).await?;
-    txs::send(
-        env,
-        slot,
-        p.router,
-        p.data(base),
-        U256::ZERO,
-        true,
-        Some(guard),
-    )
-    .await
+    let data = p.data(base);
+    // Продажа BNB (решение 62): сумма и газ — только сверх резерва на газ (exec/native.rs).
+    if !p.value().is_zero() {
+        native::reserve_ok(env, p.wallet, (p.router, &data), p.value()).await?;
+    }
+    txs::send(env, slot, p.router, data, p.value(), true, Some(guard)).await
 }

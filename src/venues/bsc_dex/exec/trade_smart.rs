@@ -12,6 +12,7 @@
 //!
 //! Количество доли: продажа — qty × доля входа (RouteLeg.share); покупка — qty × ожидаемые монеты доли / все
 //! ожидаемые монеты; последняя доля получает остаток, чтобы сумма долей была ровно qty.
+//! Нативная монета BNB (решение 62) — exec/native.rs: одна WRAP_ETH на все доли продажи / одна UNWRAP_WETH покупки.
 
 use rust_decimal::Decimal;
 
@@ -25,6 +26,7 @@ use super::super::quote::path::Path;
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::nonce::Nonces;
+use super::native::{self, Wrap};
 use super::trade::{check_price, send_plan, sides, worst_positive};
 use super::txs::Env;
 use super::{chain, live, precheck_sim, result, universal};
@@ -97,10 +99,19 @@ pub async fn trade(
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, &req, p, *qty, decs)?);
     }
+    let is_native = native::is_native(ctx, &req.asset);
+    let wrap = if is_native {
+        native::adapt(ctx, req.side, &mut steps)?
+    } else {
+        Wrap::None
+    };
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let (at, now) = q.heads.at(ctx).await?;
-    let plan = universal::build(ctx, &steps, wallet, now).await?;
+    let plan = universal::build(ctx, &steps, wallet, now)
+        .await?
+        .with_native(wrap);
+    let router = is_native.then_some(plan.router);
     let entries: Vec<&Entry> = paths
         .iter()
         .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
@@ -109,5 +120,5 @@ pub async fn trade(
     let d = send_plan(env, &slot, plan, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    result::result(ctx, req, d, wallet, (tin, out_token), decs)
+    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
 }

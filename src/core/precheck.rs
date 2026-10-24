@@ -29,6 +29,8 @@ async fn transfer_open(
         .coin_networks()
         .await
         .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
+    // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
+    let list = super::native::map(core, v, list);
     let open = list
         .iter()
         .find(|i| {
@@ -69,8 +71,9 @@ fn pair_side(core: &Core, v: &VenueId, d: &Direction, buy: bool) -> Result<(), S
     super::pairs_fresh::side(&market, v, &d.asset.ticker, buy, &limit, chrono::Utc::now())
 }
 
-/// BNB на газ у DEX-площадки. Ошибка — текст (мало BNB или баланс не получен).
-pub async fn bnb_ok(core: &Core, v: &VenueId) -> Result<(), String> {
+/// BNB на газ у DEX-площадки: свободный нативный BNB ≥ резерв risk.min_bnb_balance + газ транзакций сделки на ней
+/// (need; сверка балансов — 0). Ошибка — текст (мало BNB, резерв не задан или баланс не получен).
+pub async fn bnb_ok(core: &Core, v: &VenueId, need: Decimal) -> Result<(), String> {
     let min = core
         .inner
         .deps
@@ -87,8 +90,11 @@ pub async fn bnb_ok(core: &Core, v: &VenueId) -> Result<(), String> {
         .filter(|x| x.asset == super::convert::GAS_TICKER)
         .map(|x| x.free)
         .sum();
-    if have < min {
-        return Err(format!("{}: BNB на газ {have} меньше минимума {min}", v.0));
+    if have < min + need {
+        return Err(format!(
+            "{}: BNB на газ {have} меньше минимума {min} + газ сделки {need}",
+            v.0
+        ));
     }
     Ok(())
 }
@@ -103,15 +109,37 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
                 pair_side(core, v, d, withdraw)?;
             }
             VenueKind::Dex => {
-                if let Err(e) = bnb_ok(core, v).await {
+                if let Err(e) = bnb_ok(core, v, Decimal::ZERO).await {
                     core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
                     return Err(e);
                 }
             }
         }
     }
-    match profit::decide(core, d).await {
-        Verdict::Accept(c) => Ok(c),
-        Verdict::Reject { reason, .. } => Err(format!("пересчёт перед покупкой: {reason}")),
+    let c = match profit::decide(core, d).await {
+        Verdict::Accept(c) => c,
+        Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
+    };
+    // Решение 62: газ всех транзакций сделки на DEX — сверх резерва, иначе после покупки BNB перевод на биржу
+    // упадёт с InsufficientBalance и монета застрянет. A — покупка и перевод, B — продажа и возврат USDT.
+    for (v, stages) in [
+        (&d.buy_on, ["A", "перевод"]),
+        (&d.sell_on, ["B", "возврат USDT"]),
+    ] {
+        if super::trade_ops::kind(core, v)? != VenueKind::Dex {
+            continue;
+        }
+        let need: Decimal = c
+            .costs
+            .iter()
+            .filter(|l| stages.contains(&l.stage) && l.asset == super::convert::GAS_TICKER)
+            .filter(|l| super::convert::is_gas(l.kind))
+            .map(|l| l.amount)
+            .sum();
+        if let Err(e) = bnb_ok(core, v, need).await {
+            core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
+            return Err(e);
+        }
     }
+    Ok(c)
 }

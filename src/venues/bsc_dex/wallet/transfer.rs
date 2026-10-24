@@ -1,9 +1,11 @@
 //! Файл: venues/bsc_dex/wallet/transfer.rs
 //! Что делает: «вывод» для DEX — перевод монеты из кошелька бота на адрес (депозит биржи) транзакцией ERC-20 transfer
-//! через каналы отправки и ожидание итога своим узлом; стоимость перевода — газ (измерен пробным переводом) и налог
-//! на перевод (проверка монеты). Статусы по квитанции — wallet/transfer_status.rs.
-//! Кто вызывает: mod.rs (контракт withdraw, withdraw_cost), wallet/transfer_status.rs.
-//! От чего зависит: exec/txs.rs, exec/fill.rs, send/track.rs, check/state.rs, quote/gas.rs, tokens.rs, num.rs, wallet/nonce.rs.
+//! через каналы отправки и ожидание итога своим узлом. Стоимость перевода — wallet/transfer_cost.rs, статусы по
+//! квитанции — wallet/transfer_status.rs.
+//! Нативная монета BNB (решение 62, exec/native.rs): перевод — нативный (value на адрес депозита, без данных), только
+//! сверх резерва на газ risk.min_bnb_balance.
+//! Кто вызывает: mod.rs (контракт withdraw), wallet/transfer_status.rs, wallet/transfer_cost.rs (стоимость перевода).
+//! От чего зависит: exec/txs.rs, exec/native.rs, exec/fill.rs, send/track.rs, tokens.rs, num.rs, wallet/nonce.rs.
 //! Настройки: venue.bsc_network [bsc_dex] (какую сеть принимаем в запросе); через вызываемые — send.*, channel.*.
 //!
 //! transfer(to, value), событие Transfer — https://eips.ethereum.org/EIPS/eip-20 ; квитанция —
@@ -15,18 +17,20 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 
 use crate::core::types::{
-    Asset, CheckState, Cost, CostKind, Transfer, TransferStatus, TxOutcome, WithdrawRequest,
+    Asset, Cost, CostKind, Transfer, TransferStatus, TxOutcome, WithdrawRequest,
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::check::state::Checks;
 use super::super::ctx::Ctx;
+use super::super::exec::native;
 use super::super::exec::txs::{self, Env};
 use super::super::node::abi::IERC20;
 use super::super::num;
 use super::super::tokens::Tokens;
 use super::balances::BNB;
 use super::nonce::Nonces;
+/// Стоимость перевода — в wallet/transfer_cost.rs (контракт withdraw_cost зовёт её отсюда, mod.rs).
+pub use super::transfer_cost::cost;
 
 /// Перевод монеты на адрес. Ошибки: адрес, сеть, нет адреса токена, каналы, не попала / откат (с фактом транзакции),
 /// OutcomeUnknown — nonce занят без своей квитанции или очередь остановлена (повторять вывод нельзя).
@@ -45,15 +49,27 @@ pub async fn withdraw(
         )
     })?;
     let token = token(ctx, &req.asset)?;
-    let units = num::to_units(req.amount, tokens.decimals(ctx, token).await?).ok_or_else(|| {
+    let native = native::is_native(ctx, &req.asset);
+    let dec = if native {
+        num::BNB_DECIMALS
+    } else {
+        tokens.decimals(ctx, token).await?
+    };
+    let units = num::to_units(req.amount, dec).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
             "сумма не переводится в единицы токена",
         )
     })?;
     let slot = nonces.acquire(ctx).await?;
-    let data = Bytes::from(IERC20::transferCall { to, value: units }.abi_encode());
-    let d = txs::send(env, &slot, token, data, U256::ZERO, false, None).await?;
+    let (target, data, value) = if native {
+        native::reserve_ok(env, slot.from, (to, &Bytes::new()), units).await?;
+        (to, Bytes::new(), units)
+    } else {
+        let data = IERC20::transferCall { to, value: units }.abi_encode();
+        (token, Bytes::from(data), U256::ZERO)
+    };
+    let d = txs::send(env, &slot, target, data, value, false, None).await?;
     drop(slot);
     match d.chain.outcome {
         TxOutcome::Included => {}
@@ -96,54 +112,6 @@ pub async fn withdraw(
         d.chain.hash,
         fee,
     ))
-}
-
-/// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод (% проверки монеты).
-/// Ошибки: CoinNotChecked / CoinCheckFailed, сеть, узел (цена газа).
-pub async fn cost(
-    env: &Env,
-    checks: &Checks,
-    asset: &Asset,
-    network: &str,
-    amount: Decimal,
-) -> GatewayResult<Vec<Cost>> {
-    let ctx = &env.ctx;
-    same_network(ctx, network)?;
-    let pct = match checks.coin(&asset.ticker).map(|c| c.taxes) {
-        Some(CheckState::Known(t)) => t.transfer_pct,
-        Some(CheckState::Failed { reason }) => {
-            return Err(ctx.err(ErrorCode::CoinCheckFailed, reason));
-        }
-        _ => {
-            return Err(ctx.err(
-                ErrorCode::CoinNotChecked,
-                format!("{}: налоги не проверены", asset.ticker),
-            ));
-        }
-    };
-    let gas = checks.transfer_gas(&asset.ticker).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::CoinNotChecked,
-            format!("{}: газ перевода не измерен", asset.ticker),
-        )
-    })?;
-    let price = env.gas.wei(ctx, &env.heads).await?;
-    let wei = price.saturating_mul(U256::from(gas));
-    let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            format!("Газ перевода {wei} wei не переводится в BNB"),
-        )
-    })?;
-    Ok(vec![
-        Cost::new(CostKind::TransferGas, bnb, BNB, false),
-        Cost::new(
-            CostKind::TransferTax,
-            amount * pct / Decimal::ONE_HUNDRED,
-            &asset.ticker,
-            false,
-        ),
-    ])
 }
 
 /// Адрес токена монеты. Ошибки: NotConfigured — у монеты нет адреса в BSC.

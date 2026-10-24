@@ -95,16 +95,25 @@ async fn once(core: &Core) -> Vec<(&'static str, Option<String>, String)> {
             super::low_usdt::check(core, &v, f, &q).await;
         }
         if kind == VenueKind::Dex
-            && let Err(e) = super::precheck::bnb_ok(core, &v).await
+            && let Err(e) = super::precheck::bnb_ok(core, &v, Decimal::ZERO).await
         {
             out.push(("risk.low_bnb", Some(v.0.clone()), e));
         }
         for ((ev, ticker), need) in expected.iter().filter(|((ev, _), _)| ev == &v) {
-            let have: Decimal = b
+            let total: Decimal = b
                 .iter()
                 .filter(|x| &x.asset == ticker)
                 .map(|x| x.free + x.locked)
                 .sum();
+            // BNB на DEX (решение 62): нативный + WBNB (адаптер отдаёт WBNB в locked строки BNB) минус резерв на газ —
+            // резерв монетами сделки не считается; резерв не задан — сверить нельзя, это и есть причина.
+            let have = match super::native::spendable(core, ev, ticker, total) {
+                Ok(h) => h,
+                Err(e) => {
+                    out.push(("risk.reconcile_mismatch", Some(ev.0.clone()), e));
+                    continue;
+                }
+            };
             if have < *need {
                 out.push((
                     "risk.reconcile_mismatch",

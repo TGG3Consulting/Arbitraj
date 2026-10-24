@@ -1,0 +1,70 @@
+{
+ "about": "Вывод 0.01998 BNB с BingX (комиссия 0.0005), 2026-10-24 12:10:02, сеть BEP20; TxID из «Истории вывода» BingX. Ответы узла https://bsc-dataseed.bnbchain.org, записано в браузере 2026-10-25.",
+ "txid": "0x84762200f2bce717c0725ffa926d43f57313c8279d38f2c88189deeaa6391df6",
+ "results": [
+  {
+   "name": "tx",
+   "request": {
+    "method": "eth_getTransactionByHash",
+    "params": [
+     "0x84762200f2bce717c0725ffa926d43f57313c8279d38f2c88189deeaa6391df6"
+    ]
+   },
+   "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+     "blockHash": "0x434fd261227286a02301d7ad8c04246a285eb6380d36798b7f2f9a31f0b90178",
+     "blockNumber": "0x7b7d27d",
+     "from": "0x4e58c1183b91df3708fb5861ff3531dc128e6e11",
+     "gas": "0x249f0",
+     "gasPrice": "0x5f5e100",
+     "maxFeePerGas": "0x5f5e100",
+     "maxPriorityFeePerGas": "0x5f5e100",
+     "hash": "0x84762200f2bce717c0725ffa926d43f57313c8279d38f2c88189deeaa6391df6",
+     "input": "0x",
+     "nonce": "0x383d",
+     "to": "0x1c8f435a7a86a47490e9c9e15cd1af573985d94d",
+     "transactionIndex": "0x2d",
+     "value": "0x4534f4f0398000",
+     "type": "0x2",
+     "accessList": [],
+     "chainId": "0x38",
+     "v": "0x1",
+     "r": "0xce38fecca33fd66138e429181eae5792635b340f27248ca1fd4a4c04d5b55246",
+     "s": "0x6e339c7beb054752af8e057cf2618ca9fba27e766d33880629669f18a6454025",
+     "yParity": "0x1"
+    }
+   }
+  },
+  {
+   "name": "receipt",
+   "request": {
+    "method": "eth_getTransactionReceipt",
+    "params": [
+     "0x84762200f2bce717c0725ffa926d43f57313c8279d38f2c88189deeaa6391df6"
+    ]
+   },
+   "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+     "type": "0x2",
+     "from": "0x4e58c1183b91df3708fb5861ff3531dc128e6e11",
+     "to": "0x1c8f435a7a86a47490e9c9e15cd1af573985d94d",
+     "status": "0x1",
+     "cumulativeGasUsed": "0x559685",
+     "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+     "logs": [],
+     "transactionHash": "0x84762200f2bce717c0725ffa926d43f57313c8279d38f2c88189deeaa6391df6",
+     "contractAddress": null,
+     "gasUsed": "0x5208",
+     "blockHash": "0x434fd261227286a02301d7ad8c04246a285eb6380d36798b7f2f9a31f0b90178",
+     "blockNumber": "0x7b7d27d",
+     "transactionIndex": "0x2d",
+     "effectiveGasPrice": "0x5f5e100"
+    }
+   }
+  }
+ ]
+}

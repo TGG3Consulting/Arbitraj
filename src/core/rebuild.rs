@@ -48,6 +48,11 @@ const REGISTRY: [&str; 8] = [
 pub async fn watch_settings(core: Core) {
     let mut w = core.inner.deps.watch(&[]);
     while let Some(c) = w.next().await {
+        // Сопоставление нативной монеты с обёрткой (решение 62) делается при чтении справочника сетей бирж —
+        // его изменение перечитывает справочник сразу (native.rs), дальше пересборка — как обычно.
+        if super::native::affects(&c.name) {
+            core.inner.kick_networks.notify_waiters();
+        }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {
             core.request_rebuild();
         }

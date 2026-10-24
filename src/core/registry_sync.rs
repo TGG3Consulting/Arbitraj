@@ -6,7 +6,8 @@
 //! при массовой смене (transfer_status.rs).
 //! Кто вызывает: core/engine.rs — одна задача на каждую биржу.
 //! От чего зависит: engine.rs, wait.rs, gateway (coin_networks), settings.
-//! Настройки: venue.enabled, venue.status_poll_ms, venue.status_bulk_min (по площадке).
+//! Настройки: venue.enabled, venue.status_poll_ms, venue.status_bulk_min (по площадке); сопоставление нативной
+//! монеты с обёрткой (решение 62) — native.rs.
 
 use std::collections::HashMap;
 
@@ -48,6 +49,8 @@ pub async fn run(core: Core, venue: VenueId) {
             match res {
                 Ok(list) => {
                     last_err = None;
+                    // Нативная монета (BNB без адреса) ↔ обёртка WBNB по настройке DEX — решение 62 (native.rs).
+                    let list = super::native::map(&core, &venue, list);
                     report_changes(&core, &venue, &list).await;
                     wr(&core.inner.networks).insert(venue.clone(), list);
                     core.request_rebuild();

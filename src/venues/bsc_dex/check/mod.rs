@@ -9,6 +9,7 @@
 pub mod cycle;
 pub mod emitter;
 pub mod hooks_probe;
+pub mod native_probe;
 pub mod probe;
 pub mod probe_calls;
 pub mod quoter_cycle;

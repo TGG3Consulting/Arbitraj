@@ -55,13 +55,14 @@ async fn usdt(
     convert::to_usdt(c, &rates)
 }
 
-/// Добавляет затрату: в монете — уменьшает количество; иначе — в spent (USDT).
+/// Добавляет затрату: в монете — уменьшает количество; иначе — в spent (USDT). Газ — всегда в spent, даже у сделки
+/// с BNB: он платится из резерва на газ, а не из монет сделки (решение 62, convert::in_coin) — так же, как в плане.
 async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c: Cost) {
     if c.amount.is_zero() {
         return;
     }
     let coin = deal.direction.asset.ticker.clone();
-    if c.asset == coin {
+    if convert::in_coin(&c, &coin) {
         deal.qty -= c.amount;
         return;
     }
@@ -103,7 +104,7 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
 }
 
 /// Факт перевода → учёт: монеты теперь на получателе в количестве «сколько дошло»; затраты вывода
-/// не в монете (газ кошелька) — в spent (в монете они уже в разнице «отправлено − дошло»).
+/// не в монете (газ кошелька, у BNB тоже — из резерва) — в spent (в монете они уже в разнице «отправлено − дошло»).
 /// Принимает: сделку, вывод (с комиссией), зачисление, получателя, цену монеты.
 pub async fn transfer(
     core: &Core,
@@ -116,7 +117,7 @@ pub async fn transfer(
     deal.qty = t.amount;
     deal.at = to.clone();
     if let Some(c) = sent.fee.clone()
-        && c.asset != deal.direction.asset.ticker
+        && !convert::in_coin(&c, &deal.direction.asset.ticker)
     {
         charge(core, deal, &sent.venue, price, c).await;
     }

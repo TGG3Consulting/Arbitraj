@@ -45,15 +45,24 @@ pub async fn token_units(ctx: &Ctx, token: Address, owner: Address) -> GatewayRe
 }
 
 /// Все балансы кошелька: BNB и каждый известный токен.
-/// Принимает: список токенов. Возвращает: балансы (locked = 0: у кошелька нет заблокированных сумм).
+/// Принимает: список токенов. Возвращает: балансы (locked = 0: у кошелька нет заблокированных сумм; исключение —
+/// обёртка нативной монеты WBNB в строке BNB, решение 62).
 /// Ошибки: ключ кошелька, узел; ошибка по любому токену — ошибка целиком (половина балансов — не факт).
 pub async fn all(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Balance>> {
     let owner = signer::address(ctx)?;
     let mut out = vec![balance(ctx, BNB, bnb(ctx, owner).await?)];
     let list = tokens.all();
     let found = join_all(list.iter().map(|t| one(ctx, tokens, t, owner))).await;
+    let native = super::super::exec::native::wrapped(ctx);
     for (t, r) in list.iter().zip(found) {
-        out.push(balance(ctx, &t.ticker, r?));
+        let free = r?;
+        // Нативная монета (решение 62): WBNB — та же монета BNB, но на газ и нативный перевод не годится без
+        // UNWRAP — в locked строки BNB (сверка ядра считает free + locked, газ — только free).
+        if native.as_ref() == Some(&(t.ticker.clone(), t.address)) && t.ticker == BNB {
+            out[0].locked += free;
+            continue;
+        }
+        out.push(balance(ctx, &t.ticker, free));
     }
     Ok(out)
 }

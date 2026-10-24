@@ -1,7 +1,8 @@
 //! Файл: core/rebuild.rs
 //! Что делает: пересборка справочника монет и направлений (registry.rs) вместе с чёрным списком
 //! (blacklist.rs) — по «толчку»: новый справочник сетей, новый пул или стакан, проверка монеты или
-//! крючка, изменение настроек монет, налогов, крючков и площадок. Толчки подряд сливаются.
+//! крючка, изменение настроек монет, налогов, крючков и площадок, а при неудавшейся подписке площадки — изменение
+//! любой настройки. Толчки подряд сливаются.
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
 //! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, settings.
@@ -16,7 +17,7 @@ use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
 use super::blacklist::{self, BlockChange, TaxLimits};
-use super::engine::{Core, rd, wr};
+use super::engine::{Core, lk, rd, wr};
 use super::registry::{self, CoinEntry, Exclusion, Inputs};
 use super::registry_sync::enabled;
 use super::view::CoreEvent;
@@ -29,19 +30,32 @@ pub async fn run(core: Core) {
     }
 }
 
-/// Задача: изменение настроек, от которых зависит справочник, — толчок пересборки.
+/// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
+const REGISTRY: [&str; 6] = [
+    "coin.",
+    "tax.",
+    "hooks.",
+    "venue.enabled",
+    "venue.quote_asset",
+    "dex.intermediate_",
+];
+
+/// Задача: изменение настроек справочника — толчок пересборки. Пока подписка какой-то площадки не удалась
+/// (sub_state.rs), толчок даёт изменение любой настройки: адаптер мог упасть на любой своей (например
+/// bsc.node_http_rps), и после того как её задали, подписка возвращается сама, без перезапуска.
 pub async fn watch_settings(core: Core) {
-    let mut w = core.inner.deps.watch(&[
-        "coin.",
-        "tax.",
-        "hooks.",
-        "venue.enabled",
-        "venue.quote_asset",
-        "dex.intermediate_",
-    ]);
-    while w.next().await.is_some() {
-        core.request_rebuild();
+    let mut w = core.inner.deps.watch(&[]);
+    while let Some(c) = w.next().await {
+        if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {
+            core.request_rebuild();
+        }
     }
+}
+
+/// Нужна ли пересборка после изменения настройки `name`: настройка справочника или есть неудавшаяся подписка.
+/// Ошибок нет.
+pub fn retry_on(name: &str, any_failed: bool) -> bool {
+    any_failed || REGISTRY.iter().any(|p| name.starts_with(p))
 }
 
 /// Пересобирает справочник и чёрный список, публикует итог, обновляет подписки площадок.

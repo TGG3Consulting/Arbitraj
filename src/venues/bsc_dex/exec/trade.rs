@@ -9,7 +9,7 @@
 //! Умный маршрут (RouteMode::Smart) — exec/trade_smart.rs; общие шаги (минимум доли, проверка цены, отправка
 //! разрешений и обмена) — здесь.
 //! Кто вызывает: mod.rs (контракт trade), exec/trade_smart.rs (общие шаги).
-//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/trade_smart.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
+//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/precheck_sim.rs (кто меняет), exec/trade_smart.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs, pools/registry.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
 //!
@@ -21,6 +21,7 @@ use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use super::super::pools::registry::Entry;
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::balances;
@@ -30,7 +31,7 @@ pub use super::order::{check_price, order, worst_positive};
 use super::plan::{self, Plan};
 use super::trade_smart;
 use super::txs::{self, Env};
-use super::{chain, live, precheck, result};
+use super::{chain, live, precheck, precheck_sim, result};
 
 /// Сделка. Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой), CoinNotChecked, настройки, каналы,
 /// SwapReverted / TxNotIncluded / NonceConflict (с фактом транзакции).
@@ -86,6 +87,8 @@ pub async fn trade(
     let wallet = slot.from;
     let now = q.heads.timestamp(ctx).await?;
     let p = plan::build(ctx, &steps, wallet, now, false).await?;
+    let entries: Vec<&Entry> = path.hops.iter().map(|h| &h.entry).collect();
+    precheck_sim::emitters(ctx, &p, &entries).await?;
     let d = send_plan(env, &slot, p, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };

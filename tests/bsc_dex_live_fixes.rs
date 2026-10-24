@@ -88,7 +88,7 @@ fn recheck_button_queues_only_given_coins() {
 
 /// Запись пула для проверки пустоты.
 fn entry(state: PoolState) -> Entry {
-    let family = families::make("pancakeswap_v3", "v3_fork_pancake").unwrap();
+    let family = families::make("pancakeswap_v3", "pancakeswap_v3").unwrap();
     Entry {
         family,
         pool: Pool {

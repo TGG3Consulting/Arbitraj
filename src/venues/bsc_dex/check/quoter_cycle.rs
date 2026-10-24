@@ -28,6 +28,7 @@ use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
 use super::super::num;
+use super::super::pools::index_watch;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::pools::registry::Entry;
@@ -43,6 +44,8 @@ const NOT_SET: &str = "Не задана настройка";
 pub async fn run(p: Pools, queue: Queue) {
     let mut first = true;
     loop {
+        // Своя комиссия пар V2 (dex.v2_fee_source = pool) — заново с пары перед сверкой (pools/index_watch.rs).
+        index_watch::refresh_fees(&p).await;
         let mut tally = Tally::default();
         for r in p.reg.refs() {
             one(&p, &r, first, &mut tally).await;

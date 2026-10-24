@@ -2,7 +2,8 @@
 //! Что делает: одно событие создания пула → пул подписки (решение 58: между обновлениями справочника). Источник события
 //! (адрес контракта и topic0) сверяется с подключёнными DEX: V2 PairCreated / V3 PoolCreated своей фабрики — пул из
 //! события проверяется на узле (verify.rs: токены, реестр фабрики, своя комиссия пары) и подключается; V4 Initialize
-//! своего менеджера — ключ из события, PoolId сверяется (discover_v4::parse). Встречный токен — наблюдателя.
+//! своего менеджера — ключ из события, PoolId сверяется (discover_v4::parse), затем та же проверка ключа у менеджера.
+//! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
 //! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
 //! Настройки: dex.factory, dex.pool_manager [DEX].
@@ -15,6 +16,8 @@ use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256};
 
 use super::super::ctx::Ctx;
+use super::super::directory::gt_parse::IndexedPool;
+use super::super::directory::pool_key;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
 use super::attach;
@@ -22,8 +25,9 @@ use super::created::Watch;
 use super::discover::against;
 use super::discover_v4;
 use super::families::{self, Family, Proto};
+use super::index;
 use super::listen::Pools;
-use super::verify::{self, Candidate};
+use super::verify::{self, Candidate, Verdict};
 
 /// Источники событий создания подключённых DEX: (адрес, topic0, V4 ли, вид). Ошибок нет.
 pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
@@ -77,28 +81,70 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
     else {
         return Ok(()); // DEX выключили на лету — событие не нужно.
     };
-    let found = if v4 {
+    let c = if v4 {
         let all = discover_v4::parse(&p.ctx, f, &log).map_err(|e| e.message)?;
-        against(&all, w.usdt).into_iter().collect()
-    } else {
-        let c = candidate(f, &log, w.usdt)?;
-        let r = verify::verify(&p.ctx, std::slice::from_ref(&c))
-            .await
-            .map_err(|e| e.message)?;
-        match r.into_iter().next() {
-            Some(Ok(found)) => vec![found],
-            Some(Err(why)) => return Err(format!("{} {}: отклонён — {why}", f.id, c.pool)),
-            None => Vec::new(),
+        let Some(x) = against(&all, w.usdt) else {
+            return Ok(());
+        };
+        let pool = pool_key(&x.reference);
+        Candidate {
+            family: f,
+            pool,
+            coin: x.coin,
+            quote: w.usdt,
         }
+    } else {
+        candidate(f, &log, w.usdt)?
     };
-    let found = found
-        .into_iter()
-        .filter(|x| w.coins.contains_key(&x.coin))
-        .collect();
+    if !w.coins.contains_key(&c.coin) {
+        return Ok(());
+    }
+    // Пул из события — тоже в справочнике (источник — событие, не индексатор) и в той же проверке (index::record).
+    remember(p, w, &c);
+    let v = verify::verify(&p.ctx, std::slice::from_ref(&c))
+        .await
+        .map_err(|e| e.message)?;
+    index::record(&p.ctx, std::slice::from_ref(&c), v.clone()).await;
+    let found = match v.into_iter().next() {
+        Some(Verdict::Taken(found)) => vec![*found],
+        Some(Verdict::Rejected(why)) => {
+            return Err(format!("{} {}: отклонён — {why}", f.id, c.pool));
+        }
+        Some(Verdict::Failed(why)) => {
+            return Err(format!("{} {}: не проверен (узел) — {why}", f.id, c.pool));
+        }
+        None => Vec::new(),
+    };
     attach::attach(p, w, found, true)
         .await
         .map(|_| ())
         .map_err(|e| e.message)
+}
+
+/// Пул из события — в справочник (поле events: показ на «Монетах», перепроверка вместе с пулами индексатора).
+/// Ошибок нет.
+fn remember(p: &Pools, w: &Watch, c: &Candidate) {
+    let sym = |a: Address| {
+        w.coins
+            .get(&a)
+            .cloned()
+            .unwrap_or_else(|| format!("{a:#x}"))
+    };
+    let item = IndexedPool {
+        dex_id: c.family.id.to_string(),
+        pool: c.pool.clone(),
+        base: c.coin,
+        quote: c.quote,
+        base_symbol: sym(c.coin),
+        quote_symbol: sym(c.quote),
+        reserve_usd: None,
+    };
+    p.ctx.index.with(|s| {
+        let list = s.events.entry(c.coin).or_default();
+        if !list.iter().any(|x| x.pool == item.pool) {
+            list.push(item);
+        }
+    });
 }
 
 /// Кандидат из события V2/V3: пул, монета (не встречный токен), встречный токен. Ошибка — лог не по ABI или во

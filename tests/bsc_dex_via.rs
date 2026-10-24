@@ -66,7 +66,7 @@ async fn ctx() -> Ctx {
         (
             "dex.kind",
             Scope::Dex("pancakeswap_v2".into()),
-            json!("v2_fork"),
+            json!("pancakeswap_v2"),
         ),
         (
             "dex.pool_enabled",
@@ -78,13 +78,35 @@ async fn ctx() -> Ctx {
             Scope::Dex("pancakeswap_v2".into()),
             json!("0.25"),
         ),
-    ] {
+    ]
+    .into_iter()
+    .chain(row())
+    {
         c.settings
             .set(name, scope, Some(val), "тест")
             .await
             .unwrap();
     }
     c
+}
+
+/// Остальные настройки строки DEX, без которых она «не подключена» (pools/families.rs, required): адреса — условные,
+/// сеть в тесте не нужна; формат Universal Router — PancakeSwap Infinity.
+fn row() -> Vec<(&'static str, Scope, serde_json::Value)> {
+    let s = Scope::Dex("pancakeswap_v2".into());
+    let a = json!("0x4000000000000000000000000000000000000004");
+    vec![
+        ("dex.universal_router", s.clone(), a.clone()),
+        (
+            "dex.universal_router_version",
+            s.clone(),
+            json!("pancakeswap_infinity"),
+        ),
+        ("dex.permit2", s.clone(), a.clone()),
+        ("dex.factory", s.clone(), a.clone()),
+        ("dex.router", s.clone(), a),
+        ("dex.v2_fee_source", s, json!("fixed")),
+    ]
 }
 
 /// Пара V2 с резервами (token0 < token1 по адресу).
@@ -96,7 +118,7 @@ fn pair(
     r_coin: u128,
     r_quote: u128,
 ) -> Entry {
-    let f = families::make("pancakeswap_v2", "v2_fork").unwrap();
+    let f = families::make("pancakeswap_v2", "pancakeswap_v2").unwrap();
     let (t0, t1, r0, r1) = if coin < quote {
         (coin, quote, r_coin, r_quote)
     } else {

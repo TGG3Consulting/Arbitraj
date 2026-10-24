@@ -95,8 +95,8 @@ fn split_respects_open_group_and_limit() {
 fn shallow_pool_hears_only_liquidity_adds() {
     let fx = fixture();
     let s = &fx["shallow_pool"];
-    // В записи — прежний id вида пула PancakeSwap V3 (до решения 58), вид — форк V3 с ABI PancakeSwap.
-    let f = families::make(s["family"].as_str().unwrap(), "v3_fork_pancake").unwrap();
+    // В записи — прежний id вида пула PancakeSwap V3 (до решения 58), вид — pancakeswap_v3.
+    let f = families::make(s["family"].as_str().unwrap(), "pancakeswap_v3").unwrap();
     let pool = addr(&s["pool"]);
     let (coin, usdt) = (addr(&s["coin"]), addr(&fx["usdt"]));
     let (token0, token1) = if coin < usdt {

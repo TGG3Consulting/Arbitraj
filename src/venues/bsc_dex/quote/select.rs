@@ -5,7 +5,7 @@
 //! пробным обменом; ликвидность в USDT не ниже dex.min_pool_liquidity_usd.
 //! Кто вызывает: quote/direct.rs.
 //! От чего зависит: check/state.rs, pools/registry.rs, quote/pool_quote.rs, quote/rate.rs, tokens.rs, num.rs.
-//! Настройки: dex.pool_enabled [DEX], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
+//! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! dex.min_pool_liquidity_usd [bsc_dex].
 //!
 //! Динамическая комиссия V4 (fee = DYNAMIC_FEE_FLAG) — группа B: её влияние измеряется квотером
@@ -23,6 +23,7 @@ use crate::settings::read::At;
 use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
 use super::super::num;
+use super::super::pools::families;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
 use super::{Quoting, pool_quote, rate};
@@ -49,10 +50,10 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     if let Some(why) = deep_enough(ctx, &q.reg, &q.tokens, e, usdt_decimals)? {
         return Err(why);
     }
-    match ctx.dex_flag("dex.pool_enabled", e.family.id) {
-        Ok(true) => {}
-        Ok(false) => return Err("DEX выключена (dex.pool_enabled)".into()),
-        Err(err) => return Err(err.message),
+    // DEX подключена и её вид не менялся на лету (pools/families.rs); пул не исключён проверкой «кто меняет».
+    families::still(ctx, e.family)?;
+    if let Some(why) = ctx.index.banned(&e.pool.reference) {
+        return Err(why);
     }
     let facts: PoolFacts = checks.pool(&e.pool.reference);
     let hook_pct = hook(ctx, e, &facts, side)?;

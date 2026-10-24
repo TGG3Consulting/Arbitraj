@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/verify_rules.rs
 //! Что делает: решения проверки пула V2/V3 по прочитанному с узла — без сети (решение 58): разбор ответов полей пула,
-//! сверка фабрики и токенов с настройками и монетой, ответ реестра фабрики, своя комиссия пары V2 в миллионных долях.
+//! сверка фабрики и токенов с настройками и монетой, ABI V3 (PancakeSwap или Uniswap — по lmPool()), ответ реестра фабрики, своя комиссия пары V2 в миллионных долях.
 //! Кто вызывает: pools/verify.rs; tests/bsc_dex_index.rs.
 //! От чего зависит: abi_check.rs, abi_v2v3.rs, discover.rs (sorted), families.rs, verify.rs (Candidate).
 //! Настройки: нет (значения передаёт вызывающий).
@@ -58,9 +58,28 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
             let s =
                 P::tickSpacingCall::abi_decode_returns(bytes(4, "tickSpacing()")?).map_err(dec)?;
             r.spacing = Some(s.as_i32());
+            v3_abi(f, got.get(5))?;
         }
     }
     Ok(())
+}
+
+/// ABI V3 по узлу: у пула PancakeSwap V3 есть lmPool() (PancakeV3Pool.sol#L106, pancake-v3-contracts 98684794),
+/// у Uniswap V3 его нет (UniswapV3Pool.sol без fallback — вызов откатывается). Вид DEX должен совпасть с пулом:
+/// разбор событий и slot0 у них разный. Принимает: вид, ответ lmPool(). Ошибка — причина отказа.
+pub fn v3_abi(f: &Family, lm: Option<&Result<Bytes, String>>) -> Result<(), String> {
+    let has = matches!(lm, Some(Ok(b)) if b.len() >= 32);
+    match (f.proto, has) {
+        (Proto::PancakeV3, false) => Err(format!(
+            "у пула нет lmPool() — это не пул PancakeSwap V3, а вид DEX {} — PancakeSwap V3",
+            f.id
+        )),
+        (Proto::UniswapV3, true) => Err(format!(
+            "пул отвечает lmPool() — это пул PancakeSwap V3, а вид DEX {} — Uniswap V3",
+            f.id
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// Сверка полей с настройками и монетой (без сети). Принимает: кандидата, фабрику DEX из настроек, прочитанное.
@@ -95,9 +114,12 @@ pub fn registered(pool: Address, answer: &[u8]) -> Result<(), String> {
     }
 }
 
-/// Комиссия пары V2 в миллионных долях: значение метода × 1 000 000 / делитель. Ошибка — не меньше 100%.
+/// Комиссия пары V2 в миллионных долях: значение метода × 1 000 000 / делитель. Ошибка — делитель 0, не меньше 100%.
 pub fn v2_fee_pips(value: U256, denominator: u64) -> Result<u32, String> {
-    let pips = value.saturating_mul(U256::from(1_000_000u32)) / U256::from(denominator.max(1));
+    if denominator == 0 {
+        return Err("делитель комиссии пары dex.v2_fee_denominator = 0".into());
+    }
+    let pips = value.saturating_mul(U256::from(1_000_000u32)) / U256::from(denominator);
     match u32::try_from(pips) {
         Ok(p) if p < 1_000_000 => Ok(p),
         _ => Err(format!(

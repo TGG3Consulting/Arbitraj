@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/check/simulate.rs
 //! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния последнего блока, без
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
-//! Кто вызывает: check/probe.rs.
+//! Кто вызывает: check/probe.rs, exec/precheck_sim.rs.
 //! От чего зависит: node/rpc.rs, ctx.rs.
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
@@ -37,6 +37,17 @@ pub struct CallResult {
     pub gas_used: U64,
     #[serde(default)]
     pub error: Option<CallError>,
+    /// События вызова (execute.yaml CallResult.logs) — по ним видно, какой контракт сделал обмен (check/emitter.rs).
+    #[serde(default)]
+    pub logs: Vec<SimLog>,
+}
+
+/// Событие вызова: контракт и темы (остальные поля не нужны).
+#[derive(Debug, Clone, Deserialize)]
+pub struct SimLog {
+    pub address: Address,
+    #[serde(default)]
+    pub topics: Vec<alloy_primitives::B256>,
 }
 
 /// Ошибка вызова (откат).

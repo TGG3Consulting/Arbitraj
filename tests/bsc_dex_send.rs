@@ -89,7 +89,7 @@ async fn max_wait_must_cover_bundle_blocks() {
 
 /// Пара V2 «монета — USDT».
 fn entry() -> Entry {
-    let family = families::make("pancakeswap_v2", "v2_fork").unwrap();
+    let family = families::make("pancakeswap_v2", "pancakeswap_v2").unwrap();
     Entry {
         family,
         pool: Pool {

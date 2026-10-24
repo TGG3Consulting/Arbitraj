@@ -11,6 +11,7 @@ pub mod live;
 pub mod order;
 pub mod plan;
 pub mod precheck;
+pub mod precheck_sim;
 pub mod result;
 pub mod swap_v2v3;
 pub mod swap_v4;

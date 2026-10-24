@@ -130,6 +130,34 @@ pub async fn try_many(
     Ok(out)
 }
 
+/// Ответ одного вызова пачки по частям: Ok(Ok) — байты, Ok(Err) — откат (это ответ), Err — сбой узла на его части.
+pub type Piece = Result<Result<Bytes, String>, String>;
+
+/// try_many частями по `size` вызовов: сбой узла на одной части не мешает остальным (её вызовы — Err).
+/// Принимает: вызовы, блок, размер части (0 — все вызовы «сбой»). Возвращает: ответ каждого вызова по порядку.
+/// Ошибок нет.
+pub async fn try_chunks(
+    ctx: &Ctx,
+    calls: &[(Address, Bytes)],
+    block: &str,
+    size: usize,
+) -> Vec<Piece> {
+    if size == 0 {
+        return calls
+            .iter()
+            .map(|_| Err("размер части пачки 0".to_string()))
+            .collect();
+    }
+    let mut out = Vec::with_capacity(calls.len());
+    for part in calls.chunks(size) {
+        match try_many(ctx, part, block).await {
+            Ok(list) => out.extend(list.into_iter().map(Ok)),
+            Err(e) => out.extend(part.iter().map(|_| Err(e.message.clone()))),
+        }
+    }
+    out
+}
+
 /// Разбор ответа функции из байт.
 /// Принимает: байты ответа. Возвращает: значение. Ошибка BadResponse — байты не по ABI функции.
 pub fn decode<C: SolCall>(out: &[u8]) -> GatewayResult<C::Return> {

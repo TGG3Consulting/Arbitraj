@@ -46,7 +46,7 @@ fn sync(block: u64, index: u64, r0: u64, r1: u64) -> Log {
 
 /// Запись пары V2, прочитанная на конце блока `block`.
 fn entry(block: u64) -> Entry {
-    let family = families::make("pancakeswap_v2", "v2_fork").unwrap();
+    let family = families::make("pancakeswap_v2", "pancakeswap_v2").unwrap();
     Entry {
         family,
         pool: Pool {

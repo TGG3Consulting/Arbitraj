@@ -1,0 +1,2474 @@
+{
+  "about": "Точные вызовы узла BSC для записи (tests/bsc_dex_node_calls.rs). Сначала eth_blockNumber, затем все eth_call на том же блоке: в params вместо \"latest\" поставить номер блока из первого ответа (0x…). Ответы — как вернул узел: {name, request, response}. V3 getPool — вторым проходом по ответам fee().",
+  "calls": [
+    {
+      "method": "eth_blockNumber",
+      "name": "block",
+      "params": []
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x133b3d95bad5405d14d53473671200e9342896bf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-infinity-clmm 0x54c27041dfa246727d9351613eb35da028ddf377225d8db9e68ca3b569b5ba24 CLPoolManager poolIdToPoolKey",
+      "params": [
+        {
+          "input": "0x0e2d484a54c27041dfa246727d9351613eb35da028ddf377225d8db9e68ca3b569b5ba24",
+          "to": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-infinity-clmm 0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb CLPoolManager poolIdToPoolKey",
+      "params": [
+        {
+          "input": "0x0e2d484a47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb",
+          "to": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000085e43bf8faaf04ceddcd03d6c07438b72606a988",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v1-bsc 0xa527a61703d82139f8a06bc30097cc9caa2df5a6 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xa527a61703d82139f8a06bc30097cc9caa2df5a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-v4-bsc 0x4630fb37706efaf996be1ee54b6841f8d9548ac42ae6cebc02511d891726d1e6 PositionManager poolKeys",
+      "params": [
+        {
+          "input": "0x86b6be7d4630fb37706efaf996be1ee54b6841f8d9548ac42ae6cebc0200000000000000",
+          "to": "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000055d398326f99059ff775485246999027b3197955",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x8ec186cd1ad51c380bd23fde29f852226647616c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x804678fa97d91b974ec2af3c843270886528a9e6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000e9e7cea3dedca5984780bafc599bd69add087d56",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-infinity-clmm 0x737a7d974a19bafb34c8d74d898188c9b59689b91f291fa6ade69f71fa0f5afa CLPoolManager poolIdToPoolKey",
+      "params": [
+        {
+          "input": "0x0e2d484a737a7d974a19bafb34c8d74d898188c9b59689b91f291fa6ade69f71fa0f5afa",
+          "to": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000018d0e455b3491e09210292d3953157a4bf104444",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xeb7528398b2725e1e0374734a87320132223a5c6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap-infinity-clmm 0xaf12088595c0d5615f1e9da6033a435705d60037c2a4230dd5e135aab9dcfeb5 CLPoolManager poolIdToPoolKey",
+      "params": [
+        {
+          "input": "0x0e2d484aaf12088595c0d5615f1e9da6033a435705d60037c2a4230dd5e135aab9dcfeb5",
+          "to": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000b7ec60cf8ef96ed48b119277bc7a954a87f27388",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000024cefa61d9b075e42f0c1e16cf93fd78f0000000",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-v4-bsc 0xd02643e9323895f4b562c92f3e6ced7e77db73cd8ab057ec685d1dc710551a6b PositionManager poolKeys",
+      "params": [
+        {
+          "input": "0x86b6be7dd02643e9323895f4b562c92f3e6ced7e77db73cd8ab057ec6800000000000000",
+          "to": "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000085e43bf8faaf04ceddcd03d6c07438b72606a988",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x58f04aada1051885a3c4e296aab0a454ea1233a3 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x58f04aada1051885a3c4e296aab0a454ea1233a3"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000055d398326f99059ff775485246999027b3197955",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x8829abfa1a7b017078195c10a966d7411a0c9515 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x8829abfa1a7b017078195c10a966d7411a0c9515"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH thena-v3 0x7d1d3649232f28bf7467e9cdb27e6d902c16a165 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x7d1d3649232f28bf7467e9cdb27e6d902c16a165"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000b7ec60cf8ef96ed48b119277bc7a954a87f27388",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xf9878a5dd55edc120fde01893ea713a4f032229c"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007 PancakeSwap V2 getPair",
+      "params": [
+        {
+          "input": "0xe6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb73bb2505ac4643d5c0a99c2a1f34b3dfd09d11",
+          "to": "0xca143ce32fe78f1f7019d7d551a6402fc5350c73"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH topaz 0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x7955874b0ad6efbb5ffe6e93e50b8aef4cd9be53"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 factory()",
+      "params": [
+        {
+          "input": "0xc45a0155",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 token0()",
+      "params": [
+        {
+          "input": "0x0dfe1681",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 token1()",
+      "params": [
+        {
+          "input": "0xd21220a7",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 fee()",
+      "params": [
+        {
+          "input": "0xddca3f43",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 tickSpacing()",
+      "params": [
+        {
+          "input": "0xd0c93a7c",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664 lmPool()",
+      "params": [
+        {
+          "input": "0x540d4918",
+          "to": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "Uniswap V4 PositionManager poolManager()",
+      "params": [
+        {
+          "input": "0xdc4c90d3",
+          "to": "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b"
+        },
+        "latest"
+      ]
+    },
+    {
+      "method": "eth_call",
+      "name": "Multicall3 aggregate3 всех 223 вызовов выше",
+      "params": [
+        {
+          "input": "0x82ad56cb000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000df0000000000000000000000000000000000000000000000000000000000001be00000000000000000000000000000000000000000000000000000000000001c800000000000000000000000000000000000000000000000000000000000001d200000000000000000000000000000000000000000000000000000000000001dc00000000000000000000000000000000000000000000000000000000000001e600000000000000000000000000000000000000000000000000000000000001f000000000000000000000000000000000000000000000000000000000000001fa00000000000000000000000000000000000000000000000000000000000002080000000000000000000000000000000000000000000000000000000000000212000000000000000000000000000000000000000000000000000000000000021c00000000000000000000000000000000000000000000000000000000000002260000000000000000000000000000000000000000000000000000000000000230000000000000000000000000000000000000000000000000000000000000023a0000000000000000000000000000000000000000000000000000000000000244000000000000000000000000000000000000000000000000000000000000024e00000000000000000000000000000000000000000000000000000000000002580000000000000000000000000000000000000000000000000000000000000262000000000000000000000000000000000000000000000000000000000000026c00000000000000000000000000000000000000000000000000000000000002760000000000000000000000000000000000000000000000000000000000000280000000000000000000000000000000000000000000000000000000000000028a0000000000000000000000000000000000000000000000000000000000000294000000000000000000000000000000000000000000000000000000000000029e00000000000000000000000000000000000000000000000000000000000002a800000000000000000000000000000000000000000000000000000000000002b200000000000000000000000000000000000000000000000000000000000002bc00000000000000000000000000000000000000000000000000000000000002c600000000000000000000000000000000000000000000000000000000000002d000000000000000000000000000000000000000000000000000000000000002da00000000000000000000000000000000000000000000000000000000000002e400000000000000000000000000000000000000000000000000000000000002ee00000000000000000000000000000000000000000000000000000000000002f800000000000000000000000000000000000000000000000000000000000003040000000000000000000000000000000000000000000000000000000000000310000000000000000000000000000000000000000000000000000000000000031a0000000000000000000000000000000000000000000000000000000000000324000000000000000000000000000000000000000000000000000000000000032e00000000000000000000000000000000000000000000000000000000000003380000000000000000000000000000000000000000000000000000000000000342000000000000000000000000000000000000000000000000000000000000034c000000000000000000000000000000000000000000000000000000000000035a0000000000000000000000000000000000000000000000000000000000000364000000000000000000000000000000000000000000000000000000000000036e00000000000000000000000000000000000000000000000000000000000003780000000000000000000000000000000000000000000000000000000000000382000000000000000000000000000000000000000000000000000000000000038c000000000000000000000000000000000000000000000000000000000000039600000000000000000000000000000000000000000000000000000000000003a200000000000000000000000000000000000000000000000000000000000003ac00000000000000000000000000000000000000000000000000000000000003b600000000000000000000000000000000000000000000000000000000000003c000000000000000000000000000000000000000000000000000000000000003ca00000000000000000000000000000000000000000000000000000000000003d400000000000000000000000000000000000000000000000000000000000003de00000000000000000000000000000000000000000000000000000000000003ec00000000000000000000000000000000000000000000000000000000000003f60000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000040a0000000000000000000000000000000000000000000000000000000000000414000000000000000000000000000000000000000000000000000000000000041e00000000000000000000000000000000000000000000000000000000000004280000000000000000000000000000000000000000000000000000000000000432000000000000000000000000000000000000000000000000000000000000043c00000000000000000000000000000000000000000000000000000000000004460000000000000000000000000000000000000000000000000000000000000450000000000000000000000000000000000000000000000000000000000000045a00000000000000000000000000000000000000000000000000000000000004640000000000000000000000000000000000000000000000000000000000000472000000000000000000000000000000000000000000000000000000000000047c00000000000000000000000000000000000000000000000000000000000004860000000000000000000000000000000000000000000000000000000000000490000000000000000000000000000000000000000000000000000000000000049a00000000000000000000000000000000000000000000000000000000000004a400000000000000000000000000000000000000000000000000000000000004ae00000000000000000000000000000000000000000000000000000000000004ba00000000000000000000000000000000000000000000000000000000000004c400000000000000000000000000000000000000000000000000000000000004ce00000000000000000000000000000000000000000000000000000000000004d800000000000000000000000000000000000000000000000000000000000004e200000000000000000000000000000000000000000000000000000000000004ec00000000000000000000000000000000000000000000000000000000000004f60000000000000000000000000000000000000000000000000000000000000504000000000000000000000000000000000000000000000000000000000000050e00000000000000000000000000000000000000000000000000000000000005180000000000000000000000000000000000000000000000000000000000000522000000000000000000000000000000000000000000000000000000000000052c00000000000000000000000000000000000000000000000000000000000005360000000000000000000000000000000000000000000000000000000000000540000000000000000000000000000000000000000000000000000000000000054c00000000000000000000000000000000000000000000000000000000000005560000000000000000000000000000000000000000000000000000000000000560000000000000000000000000000000000000000000000000000000000000056a0000000000000000000000000000000000000000000000000000000000000574000000000000000000000000000000000000000000000000000000000000057e0000000000000000000000000000000000000000000000000000000000000588000000000000000000000000000000000000000000000000000000000000059600000000000000000000000000000000000000000000000000000000000005a000000000000000000000000000000000000000000000000000000000000005aa00000000000000000000000000000000000000000000000000000000000005b400000000000000000000000000000000000000000000000000000000000005be00000000000000000000000000000000000000000000000000000000000005c800000000000000000000000000000000000000000000000000000000000005d200000000000000000000000000000000000000000000000000000000000005e000000000000000000000000000000000000000000000000000000000000005ea00000000000000000000000000000000000000000000000000000000000005f400000000000000000000000000000000000000000000000000000000000005fe00000000000000000000000000000000000000000000000000000000000006080000000000000000000000000000000000000000000000000000000000000612000000000000000000000000000000000000000000000000000000000000061c00000000000000000000000000000000000000000000000000000000000006260000000000000000000000000000000000000000000000000000000000000630000000000000000000000000000000000000000000000000000000000000063a0000000000000000000000000000000000000000000000000000000000000644000000000000000000000000000000000000000000000000000000000000064e00000000000000000000000000000000000000000000000000000000000006580000000000000000000000000000000000000000000000000000000000000662000000000000000000000000000000000000000000000000000000000000066c00000000000000000000000000000000000000000000000000000000000006760000000000000000000000000000000000000000000000000000000000000680000000000000000000000000000000000000000000000000000000000000068a0000000000000000000000000000000000000000000000000000000000000694000000000000000000000000000000000000000000000000000000000000069e00000000000000000000000000000000000000000000000000000000000006a800000000000000000000000000000000000000000000000000000000000006b200000000000000000000000000000000000000000000000000000000000006bc00000000000000000000000000000000000000000000000000000000000006c600000000000000000000000000000000000000000000000000000000000006d000000000000000000000000000000000000000000000000000000000000006da00000000000000000000000000000000000000000000000000000000000006e400000000000000000000000000000000000000000000000000000000000006ee00000000000000000000000000000000000000000000000000000000000006f80000000000000000000000000000000000000000000000000000000000000702000000000000000000000000000000000000000000000000000000000000070c00000000000000000000000000000000000000000000000000000000000007160000000000000000000000000000000000000000000000000000000000000720000000000000000000000000000000000000000000000000000000000000072a0000000000000000000000000000000000000000000000000000000000000734000000000000000000000000000000000000000000000000000000000000073e00000000000000000000000000000000000000000000000000000000000007480000000000000000000000000000000000000000000000000000000000000752000000000000000000000000000000000000000000000000000000000000075c00000000000000000000000000000000000000000000000000000000000007660000000000000000000000000000000000000000000000000000000000000770000000000000000000000000000000000000000000000000000000000000077a00000000000000000000000000000000000000000000000000000000000007840000000000000000000000000000000000000000000000000000000000000792000000000000000000000000000000000000000000000000000000000000079e00000000000000000000000000000000000000000000000000000000000007a800000000000000000000000000000000000000000000000000000000000007b200000000000000000000000000000000000000000000000000000000000007bc00000000000000000000000000000000000000000000000000000000000007c600000000000000000000000000000000000000000000000000000000000007d000000000000000000000000000000000000000000000000000000000000007da00000000000000000000000000000000000000000000000000000000000007e400000000000000000000000000000000000000000000000000000000000007ee00000000000000000000000000000000000000000000000000000000000007f80000000000000000000000000000000000000000000000000000000000000802000000000000000000000000000000000000000000000000000000000000080c00000000000000000000000000000000000000000000000000000000000008160000000000000000000000000000000000000000000000000000000000000824000000000000000000000000000000000000000000000000000000000000082e00000000000000000000000000000000000000000000000000000000000008380000000000000000000000000000000000000000000000000000000000000842000000000000000000000000000000000000000000000000000000000000084c00000000000000000000000000000000000000000000000000000000000008560000000000000000000000000000000000000000000000000000000000000860000000000000000000000000000000000000000000000000000000000000086a0000000000000000000000000000000000000000000000000000000000000874000000000000000000000000000000000000000000000000000000000000087e00000000000000000000000000000000000000000000000000000000000008880000000000000000000000000000000000000000000000000000000000000892000000000000000000000000000000000000000000000000000000000000089c00000000000000000000000000000000000000000000000000000000000008a600000000000000000000000000000000000000000000000000000000000008b000000000000000000000000000000000000000000000000000000000000008ba00000000000000000000000000000000000000000000000000000000000008c400000000000000000000000000000000000000000000000000000000000008ce00000000000000000000000000000000000000000000000000000000000008d800000000000000000000000000000000000000000000000000000000000008e600000000000000000000000000000000000000000000000000000000000008f000000000000000000000000000000000000000000000000000000000000008fa0000000000000000000000000000000000000000000000000000000000000904000000000000000000000000000000000000000000000000000000000000090e00000000000000000000000000000000000000000000000000000000000009180000000000000000000000000000000000000000000000000000000000000922000000000000000000000000000000000000000000000000000000000000092c00000000000000000000000000000000000000000000000000000000000009360000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000000000000000000000000094a0000000000000000000000000000000000000000000000000000000000000954000000000000000000000000000000000000000000000000000000000000095e00000000000000000000000000000000000000000000000000000000000009680000000000000000000000000000000000000000000000000000000000000972000000000000000000000000000000000000000000000000000000000000097c00000000000000000000000000000000000000000000000000000000000009860000000000000000000000000000000000000000000000000000000000000990000000000000000000000000000000000000000000000000000000000000099a00000000000000000000000000000000000000000000000000000000000009a800000000000000000000000000000000000000000000000000000000000009b200000000000000000000000000000000000000000000000000000000000009bc00000000000000000000000000000000000000000000000000000000000009c600000000000000000000000000000000000000000000000000000000000009d000000000000000000000000000000000000000000000000000000000000009da00000000000000000000000000000000000000000000000000000000000009e400000000000000000000000000000000000000000000000000000000000009ee00000000000000000000000000000000000000000000000000000000000009f80000000000000000000000000000000000000000000000000000000000000a020000000000000000000000000000000000000000000000000000000000000a0c0000000000000000000000000000000000000000000000000000000000000a160000000000000000000000000000000000000000000000000000000000000a200000000000000000000000000000000000000000000000000000000000000a2e0000000000000000000000000000000000000000000000000000000000000a380000000000000000000000000000000000000000000000000000000000000a420000000000000000000000000000000000000000000000000000000000000a4c0000000000000000000000000000000000000000000000000000000000000a560000000000000000000000000000000000000000000000000000000000000a600000000000000000000000000000000000000000000000000000000000000a6a0000000000000000000000000000000000000000000000000000000000000a740000000000000000000000000000000000000000000000000000000000000a7e0000000000000000000000000000000000000000000000000000000000000a880000000000000000000000000000000000000000000000000000000000000a920000000000000000000000000000000000000000000000000000000000000a9c0000000000000000000000000000000000000000000000000000000000000aa600000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000000ed7e52944161450477ee417de9cd3a859b14fd0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a1000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a10000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a1000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a1000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a1000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000007f51c8aaa6b0599abd16674e2b17fec7a9f674a1000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000133b3d95bad5405d14d53473671200e9342896bf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c56000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c560000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c56000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c56000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c56000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000afb2da14056725e3ba3a30dd846b6bbbd7886c56000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000fe4fe5b4575c036ac6d5cccfe13660020270e27a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000a0ffb9c1ce1fe56963b0321b32e7a0302114058b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000240e2d484a54c27041dfa246727d9351613eb35da028ddf377225d8db9e68ca3b569b5ba2400000000000000000000000000000000000000000000000000000000000000000000000000000000a0ffb9c1ce1fe56963b0321b32e7a0302114058b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000240e2d484a47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb00000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000de52cff316d8a70256bee647073312c1aa7ee2cf000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000085e43bf8faaf04ceddcd03d6c07438b72606a98800000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000a527a61703d82139f8a06bc30097cc9caa2df5a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000007a4a5c919ae2541aed11041a1aeee68f1287f95b00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002486b6be7d4630fb37706efaf996be1ee54b6841f8d9548ac42ae6cebc020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000a39af17ce4a8eb807e076805da1e2b8ea7d0755b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000055d398326f99059ff775485246999027b3197955000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000008ec186cd1ad51c380bd23fde29f852226647616c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000804678fa97d91b974ec2af3c843270886528a9e6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000e9e7cea3dedca5984780bafc599bd69add087d56000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc06000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc060000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc06000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc06000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc06000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000008e8410f4878079fc03a287a7ded4a65afb87cc06000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000a0ffb9c1ce1fe56963b0321b32e7a0302114058b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000240e2d484a737a7d974a19bafb34c8d74d898188c9b59689b91f291fa6ade69f71fa0f5afa000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db90000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000005ffc1857a39a8d63e556e988f8e28ce6cf7d0db9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000018d0e455b3491e09210292d3953157a4bf10444400000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000eb7528398b2725e1e0374734a87320132223a5c6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000a0ffb9c1ce1fe56963b0321b32e7a0302114058b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000240e2d484aaf12088595c0d5615f1e9da6033a435705d60037c2a4230dd5e135aab9dcfeb500000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000570e2162d9ba3000a088ea1680e21616d177b7c0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce82000000000000000000000000b7ec60cf8ef96ed48b119277bc7a954a87f2738800000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c30000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000a458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000000e09fabb73bd3ade0a17ecc321fd13a19e81ce8200000000000000000000000024cefa61d9b075e42f0c1e16cf93fd78f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000d0e226f674bbf064f54ab47f42473ff80db98cba000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d49180000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a01550000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe16810000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a70000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f430000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c0000000000000000000000000000000000000000000000000000000000000000000000000000000062fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a5000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a50000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a5000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a5000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a5000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000be141893e4c6ad9272e8c04bab7e6a10604501a5000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000000f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a60000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000004bba1018b967e59220b22ca03f68821a3276c9a6000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da61000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da610000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da61000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da61000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da61000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000009f599f3d64a9d99ea21e68127bb6ce99f893da61000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d49180000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a01550000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe16810000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a70000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f430000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c0000000000000000000000000000000000000000000000000000000000000000000000000000000074e4716e431f45807dcf19f284c7aa99f18a4fbc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c000000000000000000000000000000000000000000000000000000000000000000000000000000007a4a5c919ae2541aed11041a1aeee68f1287f95b00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002486b6be7dd02643e9323895f4b562c92f3e6ced7e77db73cd8ab057ec6800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000003fb2623567e21f8c50f0ae86f54ef4849b4eb47b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b950000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b9500000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b950000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b950000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b950000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000272c9c291a24349c5cc79ac10d6d4c9fb780b950000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000085e43bf8faaf04ceddcd03d6c07438b72606a988000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000000416e8dd7d165f5e5af5065abfe6accc2945d58a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d49180000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a01550000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a30000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe16810000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a70000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f430000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c0000000000000000000000000000000000000000000000000000000000000000000000000000000058f04aada1051885a3c4e296aab0a454ea1233a3000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000531febfeb9a61d948c384acfbe6dcc51057aea7e000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f800000000000000000000000055d398326f99059ff775485246999027b3197955000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c9515000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c95150000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c9515000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c9515000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c9515000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000008829abfa1a7b017078195c10a966d7411a0c9515000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a165000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a1650000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a165000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a165000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a165000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000007d1d3649232f28bf7467e9cdb27e6d902c16a165000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef38000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef380000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef38000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef38000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef38000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000007fbef458f5c980a1701716a73c480e9b3e9bef38000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000b7ec60cf8ef96ed48b119277bc7a954a87f2738800000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000f9878a5dd55edc120fde01893ea713a4f032229c000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a030007000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a0300070000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a030007000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a030007000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a030007000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000a06ba58ce2a79fdd92345fd96050c0ad1a030007000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000ca143ce32fe78f1f7019d7d551a6402fc5350c73000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044e6a439050000000000000000000000002170ed0880ac9a755fd29b2688956bd959f933f8000000000000000000000000bb73bb2505ac4643d5c0a99c2a1f34b3dfd09d11000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be53000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a0155000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be530000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe1681000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be53000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a7000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be53000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f43000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be53000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c000000000000000000000000000000000000000000000000000000000000000000000000000000007955874b0ad6efbb5ffe6e93e50b8aef4cd9be53000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d491800000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a664000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004c45a015500000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a6640000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000040dfe168100000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a664000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d21220a700000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a664000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004ddca3f4300000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a664000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d0c93a7c00000000000000000000000000000000000000000000000000000000000000000000000000000000539e0ebfffd39e54a0f7e5f8fec40ade7933a664000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004540d4918000000000000000000000000000000000000000000000000000000000000000000000000000000007a4a5c919ae2541aed11041a1aeee68f1287f95b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004dc4c90d300000000000000000000000000000000000000000000000000000000",
+          "to": "0xca11bde05977b3631167028862be2a173976ca11"
+        },
+        "latest"
+      ]
+    }
+  ]
+}

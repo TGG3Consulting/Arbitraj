@@ -12,6 +12,25 @@
 use super::{DX, G, V, d};
 use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 
+/// Варианты dex.kind — единственный список: по нему же адаптер DEX выбирает модуль пулов (pools/families.rs, тест
+/// сверяет оба направления). Это перечень модулей адаптера, а не список DEX (решения 58, 59).
+pub const DEX_KINDS: &[&str] = &[
+    "pancakeswap_v2",
+    "pancakeswap_v3",
+    "pancakeswap_infinity_cl",
+    "pancakeswap_infinity_bin",
+    "uniswap_v2",
+    "uniswap_v3",
+    "uniswap_v4",
+    "v2_fork",
+    "v3_fork",
+    "v3_fork_pancake",
+    "unsupported",
+];
+
+/// Варианты dex.universal_router_version — форматы команд Universal Router (exec/ur.rs).
+pub const UR_FORMATS: &[&str] = &["pancakeswap_infinity", "2.0", "2.1.1", "2.1.2"];
+
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
@@ -24,7 +43,7 @@ pub static DEX: &[SettingDef] = &[
     d("Узел BSC", "bsc.node_http_url", K::Url, L::None, "URL", G, "HTTP узла BSC (eth_call, eth_getLogs, eth_estimateGas, квитанции); ключ — как {key}, секрет bsc.node_http_key"),
     d("DEX", "dex.multicall3", K::Address, L::None, "адрес", V, "Multicall3 (github.com/mds1/multicall3): пачка чтений — один eth_call вместо N (у NodeReal 20 CU за eth_call). Не задан — пачкой JSON-RPC (N вызовов), поиск пулов — по вызову на пару"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
-    d("DEX", "dex.kind", K::Choice, L::None, "вид", DX, "Таблица сопоставления (решение 58): вид пулов DEX индексатора (id области — id DEX у индексатора, например pancakeswap-v3-bsc): форк V2, форк V3 с ABI Uniswap или PancakeSwap, PancakeSwap Infinity CL / Bin, Uniswap V4 или «не поддерживается». Не задан — пулы этой DEX не берутся («DEX не подключена»)").choices(&["v2_fork", "v3_fork", "v3_fork_pancake", "pancakeswap_infinity_cl", "pancakeswap_infinity_bin", "uniswap_v4", "unsupported"]),
+    d("DEX", "dex.kind", K::Choice, L::None, "вид", DX, "Таблица сопоставления (решения 58, 59): вид пулов DEX индексатора (id области — id DEX у индексатора, например pancakeswap-v3-bsc). В сделки идут только виды с исполнением через Universal Router своей фабрики: pancakeswap_v2, pancakeswap_v3, pancakeswap_infinity_cl, pancakeswap_infinity_bin, uniswap_v2, uniswap_v3, uniswap_v4. Форки (v2_fork, v3_fork, v3_fork_pancake) — пока «не подключена к сделкам: нет своего пути исполнения»; unsupported — не поддерживается. Не задан — пулы DEX не берутся").choices(DEX_KINDS),
     d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — id DEX у индексатора). Нет — её пулы не берутся из справочника и не торгуются"),
     d("DEX", "dex.intermediate_enabled", K::Bool, L::None, "да/нет", V, "Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и монеты с пулом только с промежуточной допускаются; нет — только пулы с USDT"),
     d("DEX", "dex.inflow_wait_notify_s", K::Integer, L::Positive, "секунды", V, "Обмен ждёт ожидаемого поступления того же токена в кошелёк дольше — одно уведомление в Telegram (dex.swap_waits_inflow)"),
@@ -32,6 +51,8 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.intermediate_tokens", K::AddressList, L::None, "адреса BSC", V, "Промежуточные монеты (решение 52): адреса токенов в BSC (например WBNB). Нужен, если dex.intermediate_enabled = да"),
     d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не котируются, не сверяются с квотером и не участвуют в пробе налогов (фильтр — первым); у таких пулов в подписке узла только добавление ликвидности — пул снова слушается полностью, когда вырастет"),
     d("DEX", "dex.pool_load_retries", K::Integer, L::Positive, "попыток", V, "Состояние пула не прочиталось при подключении (сбой узла): сколько раз повторить чтение — по разу на каждый новый блок; дальше пул недостоверен до переподключения подписки"),
+    d("DEX", "dex.verify_batch", K::Integer, L::Positive, "вызовов", V, "Проверка пулов справочника на узле (решение 58): сколько вызовов в одном eth_call Multicall3 (или в одной пачке JSON-RPC без него); сбой одной части не мешает остальным"),
+    d("DEX", "dex.verify_retry_s", K::Integer, L::Positive, "секунды", V, "Проверка пулов справочника не выполнена из-за узла (нет связи, 429): повтор через столько секунд"),
     d("DEX", "dex.pools_per_sub", K::Integer, L::Positive, "штук", V, "Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics)"),
     d("DEX", "dex.logs_block_batch", K::Integer, L::Positive, "блоков", V, "Сколько блоков в одном eth_getLogs при чтении истории Initialize пулов V4 (не больше лимита провайдера узла)"),
     d("DEX", "dex.history_scan", K::Bool, L::None, "да/нет", V, "Необязательно (решение 58: пулы V4 и Infinity — из справочника, проверка по ключу у менеджера). Читать историю пулов V4 (разовое чтение Initialize, eth_getLogs) — нужна только для пулов Uniswap V4 без позиций через PositionManager: нет или не задана — не читается (место сохраняется, найденное слушается)"),
@@ -57,7 +78,7 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.vault", K::Address, L::None, "адрес", DX, "PancakeSwap Infinity: Vault"),
     d("Контракты DEX", "dex.state_view", K::Address, L::None, "адрес", DX, "Uniswap V4: StateView (чтение состояния пула)"),
     d("Контракты DEX", "dex.universal_router", K::Address, L::None, "адрес", DX, "Universal Router этой DEX — прямой обмен в её пуле любого вида (решение 40: проверка баланса в той же транзакции). Universal Router знает только свою фабрику: адрес — с официальной страницы той же DEX. Не задан — пулы DEX не берутся («не подключена»): пул без роутера в сделках не участвует. Совпадает со smart.universal_router — пулы DEX идут и в умный маршрут"),
-    d("Контракты DEX", "dex.universal_router_version", K::Choice, L::None, "версия", DX, "Формат команд Universal Router этой DEX: pancakeswap_infinity — Universal Router PancakeSwap Infinity; 2.0 / 2.1.1 / 2.1.2 — версии Universal Router Uniswap (официальный SDK)").choices(&["pancakeswap_infinity", "2.0", "2.1.1", "2.1.2"]),
+    d("Контракты DEX", "dex.universal_router_version", K::Choice, L::None, "версия", DX, "Формат команд Universal Router этой DEX: pancakeswap_infinity — Universal Router PancakeSwap Infinity; 2.0 / 2.1.1 / 2.1.2 — версии Universal Router Uniswap (официальный SDK)").choices(UR_FORMATS),
     d("Контракты DEX", "dex.permit2", K::Address, L::None, "адрес", DX, "Permit2 своей DEX (у PancakeSwap и Uniswap — разные)"),
     d("Контракты DEX", "dex.v2_fee_source", K::Choice, L::None, "источник", DX, "V2: откуда комиссия пары — fixed: одна на всю DEX (dex.v2_fee_pct, из кода пары своей DEX); pool: своя у каждой пары, читается с пары методом dex.v2_fee_method при проверке пула (например Biswap: swapFee())").choices(&["fixed", "pool"]),
     d("Контракты DEX", "dex.v2_fee_pct", K::Decimal, L::Percent, "%", DX, "V2 (dex.v2_fee_source = fixed): комиссия пары (из кода пары своей DEX)"),

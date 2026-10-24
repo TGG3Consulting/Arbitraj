@@ -5,7 +5,7 @@
 //! тот же PoolId (keccak256 ключа), менеджер в ключе — менеджер DEX из настроек, валюты — монета и встречный токен.
 //! Так история событий Initialize (dex.history_scan) для этих пулов не нужна.
 //! Кто вызывает: pools/verify.rs.
-//! От чего зависит: ctx.rs, node/call.rs (try_many), abi_check.rs, key.rs, discover_v4.rs (from_key), discover.rs.
+//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_check.rs, key.rs, discover_v4.rs (from_key), discover.rs.
 //! Настройки: dex.pool_manager, dex.position_manager [DEX].
 //!
 //! ABI и ссылки — abi_check.rs; PoolKey и PoolId — key.rs (research/flow/bsc_v4.md, раздел 2).
@@ -14,8 +14,6 @@ use std::str::FromStr;
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, FixedBytes};
-
-use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
@@ -26,10 +24,11 @@ use super::families::Proto;
 use super::key::{
     InfinityPoolKeyData, PoolKey, UniswapPoolKeyData, infinity_bin_step, infinity_tick_spacing,
 };
-use super::verify::Candidate;
+use super::verify::{Candidate, Verdict};
 
-/// Проверка пачки кандидатов V4. Возвращает: по каждому найденный пул или причину. Ошибки: узел.
-pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Result<Found, String>>> {
+/// Проверка пачки кандидатов V4 частями по `size` вызовов. Возвращает: итог по каждому (сбой узла на части — Failed).
+/// Ошибок нет.
+pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
     let mut plans: Vec<Result<(B256, Address, Address), String>> = Vec::new();
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for c in cands {
@@ -71,20 +70,29 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Result<
             Err(w) => plans.push(Err(w)),
         }
     }
-    let got = call::try_many(ctx, &calls, "latest").await?;
+    let got = call::try_chunks(ctx, &calls, "latest", size).await;
     let mut got = got.into_iter();
     let mut out = Vec::new();
+    let none = || Err("нет ответа".to_string());
     for (c, plan) in cands.iter().zip(plans) {
-        out.push(plan.and_then(|(id, manager, _)| {
-            let key = got.next().unwrap_or_else(|| Err("нет ответа".into()));
-            let pm = match c.family.proto {
-                Proto::UniswapV4 => got.next().unwrap_or_else(|| Err("нет ответа".into())),
-                _ => Err("не нужен".into()),
-            };
-            decide(c, id, manager, key, pm)
-        }));
+        let Ok((id, manager, _)) = plan else {
+            out.push(Verdict::Rejected(plan.err().unwrap_or_default()));
+            continue;
+        };
+        let key = got.next().unwrap_or_else(none);
+        let pm = match c.family.proto {
+            Proto::UniswapV4 => got.next().unwrap_or_else(none),
+            _ => Ok(Err("не нужен".into())),
+        };
+        out.push(match (key, pm) {
+            (Err(node), _) | (_, Err(node)) => Verdict::Failed(node),
+            (Ok(key), Ok(pm)) => match decide(c, id, manager, key, pm) {
+                Ok(f) => Verdict::Taken(Box::new(f)),
+                Err(w) => Verdict::Rejected(w),
+            },
+        });
     }
-    Ok(out)
+    out
 }
 
 /// Решение по ответам (без сети). Принимает: кандидата, PoolId, менеджер из настроек, ответ ключа, ответ poolManager()

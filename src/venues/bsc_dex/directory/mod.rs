@@ -13,6 +13,9 @@ pub mod gt_parse;
 pub mod limit;
 pub mod refresh;
 pub mod store;
+pub mod view;
+
+pub use view::snapshot;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -20,12 +23,11 @@ use std::sync::{Arc, RwLock};
 use alloy_primitives::Address;
 use chrono::{DateTime, Utc};
 
-use crate::core::types::{
-    DirectoryPool, DirectoryStatus, DirectoryToken, IndexerDex, PoolDirectory,
-};
+use crate::core::types::{DirectoryStatus, IndexerDex};
 
 use super::node::pace::Pace;
 use super::pools::discover::Found;
+use crate::core::types::PoolRef;
 use gt_parse::IndexedPool;
 
 /// Монета справочника.
@@ -56,6 +58,10 @@ pub struct Snap {
     pub taken: HashMap<String, Found>,
     /// Отказы, уже записанные в журнал (пул и причина) — каждый один раз.
     pub logged: HashSet<String>,
+    /// Пулы, исключённые проверкой «кто меняет» (Universal Router меняет в другом пуле, check/emitter.rs): причина.
+    pub banned: HashMap<PoolRef, String>,
+    /// Пулы из событий создания (не от индексатора) по монете — тоже в справочнике и в проверке (pools/index.rs).
+    pub events: HashMap<Address, Vec<IndexedPool>>,
     /// DEX индексатора с пулами, но не подключённые — для одной записи журнала на смену списка.
     pub unconnected: BTreeSet<String>,
     pub error: Option<String>,
@@ -75,13 +81,37 @@ impl Directory {
         f(&mut self.snap.write().unwrap_or_else(|p| p.into_inner()))
     }
 
+    /// Причина исключения пула проверкой «кто меняет». None — не исключён. Ошибок нет.
+    pub fn banned(&self, r: &PoolRef) -> Option<String> {
+        self.snap
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .banned
+            .get(r)
+            .cloned()
+    }
+
+    /// Исключить пул: Universal Router его DEX меняет в другом пуле (check/emitter.rs). Пул снимается со «взятых»,
+    /// в справочнике — «отклонён» с причиной. Возвращает: true — исключён впервые (для одной записи журнала).
+    pub fn ban(&self, r: &PoolRef, why: &str) -> bool {
+        self.with(|s| {
+            let key = pool_key(r);
+            s.taken.remove(&key);
+            s.status
+                .insert(key, DirectoryStatus::Rejected(why.to_string()));
+            s.banned.insert(r.clone(), why.to_string()).is_none()
+        })
+    }
+
     /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора.
     /// Возвращает: (монета, по которой спрашивали, пул). Ошибок нет.
     pub fn relevant(&self) -> Vec<(Address, IndexedPool)> {
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut out = Vec::new();
-        for (token, t) in &s.tokens {
-            for p in &t.pools {
+        let events = s.events.iter().map(|(a, l)| (a, l.as_slice()));
+        let lists = s.tokens.iter().map(|(a, t)| (a, t.pools.as_slice()));
+        for (token, list) in lists.chain(events) {
+            for p in list {
                 if is_relevant(*token, p, &s.quotes) {
                     out.push((*token, p.clone()));
                 }
@@ -89,73 +119,14 @@ impl Directory {
         }
         out
     }
-
-    /// Справочник для интерфейса: источник, DEX, монеты, пулы с итогом. Принимает: источник, сеть, подпись
-    /// (из настроек, может не быть). Ошибок нет.
-    pub fn view(
-        &self,
-        source: Option<String>,
-        network: Option<String>,
-        attr: (Option<String>, Option<String>),
-    ) -> PoolDirectory {
-        let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
-        let mut tokens = Vec::new();
-        let mut pools = Vec::new();
-        for (addr, t) in &s.tokens {
-            tokens.push(DirectoryToken {
-                token: *addr,
-                ticker: t.ticker.clone(),
-                fetched_at: t.fetched_at,
-                pages: t.pages,
-                total: t.pools.len(),
-                error: t.error.clone(),
-            });
-            let shown = |p: &&IndexedPool| is_relevant(*addr, p, &s.quotes) || is_native(*addr, p);
-            for p in t.pools.iter().filter(shown) {
-                let status = if is_native(*addr, p) {
-                    DirectoryStatus::Unsupported(NATIVE.into())
-                } else {
-                    s.status
-                        .get(&p.pool)
-                        .cloned()
-                        .unwrap_or(DirectoryStatus::Unchecked)
-                };
-                pools.push(DirectoryPool {
-                    token: *addr,
-                    dex_id: p.dex_id.clone(),
-                    pool: p.pool.clone(),
-                    base: p.base,
-                    quote: p.quote,
-                    base_symbol: p.base_symbol.clone(),
-                    quote_symbol: p.quote_symbol.clone(),
-                    reserve_usd: p.reserve_usd,
-                    status,
-                });
-            }
-        }
-        tokens.sort_by(|a, b| a.ticker.cmp(&b.ticker));
-        PoolDirectory {
-            source,
-            network,
-            attribution_text: attr.0,
-            attribution_url: attr.1,
-            dexes: s.dexes.clone(),
-            dexes_at: s.dexes_at,
-            tokens,
-            pools,
-            error: s.error.clone(),
-        }
-    }
 }
 
-/// Справочник для интерфейса (контракт pool_directory) с источником и подписью из настроек. Ошибок нет.
-pub fn snapshot(ctx: &super::ctx::Ctx) -> PoolDirectory {
-    let attr = (
-        ctx.text("index.attribution_text").ok(),
-        ctx.text("index.attribution_url").ok(),
-    );
-    let source = ctx.text("index.api_url").ok();
-    ctx.index.view(source, ctx.text("index.network").ok(), attr)
+/// Ключ пула в справочнике — как его пишет индексатор: адрес V2/V3 или PoolId V4, 0x и строчные. Ошибок нет.
+pub fn pool_key(r: &PoolRef) -> String {
+    match r {
+        PoolRef::Contract(a) => format!("{a:#x}"),
+        PoolRef::Singleton { id, .. } => format!("{id}"),
+    }
 }
 
 /// Причина для пулов с нативным BNB.

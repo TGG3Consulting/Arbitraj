@@ -18,6 +18,7 @@ use alloy_primitives::{Address, B256};
 use serde_json::{Value, json};
 
 use crate::core::types::PoolRef;
+use crate::settings::live::Watch as Changes;
 use crate::storage::journal::Level;
 
 use super::super::node::ws::Conn;
@@ -39,11 +40,34 @@ pub struct Watch {
     pub late: super::attach::Late,
 }
 
-/// Работает постоянно: подписка на события создания, дочитывание, слушатели новых пулов.
-/// Ошибок не возвращает: всё — в журнал.
+/// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* — фильтры
+/// пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
+/// изменения dex.* (без переподключений впустую). Ошибок не возвращает: всё — в журнал.
 pub async fn run(p: Pools, w: Watch) {
+    let mut changes = Changes::new(p.ctx.settings.subscribe(), vec!["dex.".into()]);
+    let mut told_empty = false;
     loop {
-        let why = session(&p, &w).await;
+        let list = filters(&p, w.usdt).await;
+        if list.is_empty() {
+            if !told_empty {
+                let msg =
+                    "Новые пулы: нет подключённых DEX — подписки нет до изменения настроек dex.*";
+                p.ctx.log(Level::Info, "dex.pool", msg, None).await;
+                told_empty = true;
+            }
+            if changes.next().await.is_none() {
+                return;
+            }
+            continue;
+        }
+        told_empty = false;
+        let why = tokio::select! {
+            why = session(&p, &w, list) => why,
+            c = changes.next() => match c {
+                None => return,
+                Some(_) => continue, // настройки DEX изменились — новые фильтры сразу
+            },
+        };
         p.ctx
             .log(Level::Warn, "venue.ws", format!("Новые пулы: {why}"), None)
             .await;
@@ -54,9 +78,9 @@ pub async fn run(p: Pools, w: Watch) {
     }
 }
 
-/// Одна сессия до обрыва: подписки на события создания своих фабрик и менеджеров, каждое событие с монетой подписки —
-/// пул проверяется на узле и подключается (created_log.rs). Возвращает причину конца.
-async fn session(p: &Pools, w: &Watch) -> String {
+/// Одна сессия до обрыва: подписки по фильтрам, каждое событие с монетой подписки — пул проверяется на узле и
+/// подключается (created_log.rs). Принимает: фильтры. Возвращает причину конца.
+async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
     let conn = match Conn::open(&p.ctx, "created").await {
         Ok(c) => c,
         Err(e) => return e.message,
@@ -68,7 +92,7 @@ async fn session(p: &Pools, w: &Watch) -> String {
             .map(|a| B256::left_padding_from(a.as_slice()))
             .collect(),
     );
-    for filter in filters(p, w.usdt).await {
+    for filter in list {
         match conn.subscribe(json!(["logs", filter])).await {
             Ok(mut sub) => {
                 let tx = tx.clone();

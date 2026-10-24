@@ -13,7 +13,7 @@
     с областью Dex.
 -->
 <script>
-  import { store, setValue } from '../lib/settings.svelte.js';
+  import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { dirStatus } from '../lib/directory.js';
   import SettingEditor from './SettingEditor.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -58,10 +58,30 @@
   function summary(id) {
     const m = new Map();
     for (const p of poolsByDex.get(id) ?? []) {
-      const s = typeof p.status === 'string' ? dirStatus(p.status).text : p.status.NotConnected ? 'не подключена' : 'отклонён';
+      const s = typeof p.status === 'string' ? dirStatus(p.status).text : p.status.NotConnected ? 'не подключена' : p.status.Unsupported ? 'не поддержан' : 'отклонён';
       m.set(s, (m.get(s) ?? 0) + 1);
     }
     return [...m].map(([k, n]) => `${k}: ${n}`).join(', ');
+  }
+
+  /** Устаревшие значения области «DEX»: имени нет в каталоге (настройку удалили из кода). [{name, id, value}]. */
+  const orphans = $derived(
+    Object.entries(store.values)
+      .map(([key, value]) => {
+        const [name, kind, id] = key.split('|');
+        return { name, kind, id, value };
+      })
+      .filter((x) => x.kind === 'Dex' && store.schema && !defOf(x.name)),
+  );
+
+  /** Удаляет устаревшее значение (бэкенд разрешает только очистку имени не из каталога). Ошибка — текстом. */
+  async function dropOrphan(o) {
+    copyError = '';
+    try {
+      await setValue(o.name, { kind: 'Dex', id: o.id }, null);
+    } catch (e) {
+      copyError = e.message;
+    }
   }
 
   /** Копирует незаданные значения dex.* строки `from` в строку `to`. Ошибка — текстом. */
@@ -72,7 +92,8 @@
     try {
       for (const [key, value] of Object.entries(store.values)) {
         const [name, kind, id] = key.split('|');
-        if (kind !== 'Dex' || id !== from || !name.startsWith('dex.')) continue;
+        // Только настройки из каталога: устаревшие (dex.enabled, dex.v3_fee_tiers) не переносятся.
+        if (kind !== 'Dex' || id !== from || !name.startsWith('dex.') || !defOf(name)) continue;
         if (store.values[`${name}|Dex|${to}`] !== undefined) continue;
         await setValue(name, { kind: 'Dex', id: to }, value);
       }
@@ -130,6 +151,17 @@
     {/each}
   </tbody>
 </table>
+
+{#if orphans.length}
+  <h4>Устаревшие настройки DEX (нет в каталоге — код их больше не читает)</h4>
+  {#each orphans as o (o.name + o.id)}
+    <div class="setting-line">
+      <code>{o.name}</code> [<code>{o.id}</code>] = <code>{JSON.stringify(o.value)}</code>
+      <span class="tag">устарела</span>
+      <button class="quiet" onclick={() => dropOrphan(o)}>Удалить</button>
+    </div>
+  {/each}
+{/if}
 
 <style>
   .map td { vertical-align: top; padding: 6px 8px 6px 0; border-top: 1px solid var(--line); }

@@ -30,7 +30,7 @@ use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
 use super::listen::{self, Pools};
-use super::{history_v4, index, market_mids, mids};
+use super::{history_v4, index, index_watch, market_mids, mids};
 
 /// Запускает всё для подписки на рынок.
 /// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
@@ -131,7 +131,7 @@ pub async fn subscribe(
         tasks.push(tokio::spawn(created::run(p.clone(), w.clone())));
     }
     // Справочник обновил монеты — проверка их пулов и подключение новых (решение 58).
-    tasks.push(tokio::spawn(index::watch(
+    tasks.push(tokio::spawn(index_watch::watch(
         p.clone(),
         dir_rx,
         watches.clone(),

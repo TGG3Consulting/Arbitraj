@@ -1,7 +1,8 @@
 //! Файл: core/subscribe.rs
 //! Что делает: подписки площадок на рыночные данные по справочнику (шаг 2 ТЗ). Бирже — все её монеты
 //! с сетью BSC и адресом контракта (стакан придёт, только если пара есть на споте — так ядро и узнаёт
-//! «монета есть на споте»); DEX — все монеты с адресом контракта у бирж (адаптер ищет их пулы с USDT).
+//! «монета есть на споте»); DEX — все монеты с адресом контракта у бирж и сама котируемая монета (USDT,
+//! адрес из справочника бирж): адаптер ищет пулы «монета — USDT» и берёт адрес USDT из этого списка.
 //! Бирже также — стакан BNB (цена газа, convert.rs) и стаканы промежуточных монет (решение 52). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список.
 //! Кто вызывает: core/rebuild.rs после каждой пересборки.
 //! От чего зависит: engine.rs, gateway (subscribe_market).
@@ -32,6 +33,13 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
             .map(|c| c.asset.clone())
             .collect(),
     };
+    if kind == VenueKind::Dex && !out.is_empty() {
+        // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
+        // и берёт адрес USDT из этого списка (venues/bsc_dex/tokens.rs). Адрес — из API бирж (registry::usdt_address).
+        if let Some(q) = dex_quote(core, venue) {
+            out.push(q);
+        }
+    }
     if kind == VenueKind::Cex && !out.is_empty() {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
         out.push(super::convert::gas_asset());
@@ -92,6 +100,26 @@ pub async fn sync(core: &Core, enabled: &[(VenueId, VenueKind)]) {
             }
         }
     }
+}
+
+/// Котируемая монета площадки DEX: тикер — venue.quote_asset этой площадки, адрес — USDT в BSC из справочника бирж.
+/// None — тикер не задан или адрес USDT ещё неизвестен (причина видна на экране «Монеты» и в журнале). Ошибок нет.
+fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
+    let at = crate::settings::read::At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    let ticker = core
+        .inner
+        .deps
+        .settings
+        .text("venue.quote_asset", at)
+        .ok()?;
+    let addr = rd(&core.inner.usdt).clone().ok()?;
+    Some(Asset {
+        ticker,
+        bsc_contract: Some(addr),
+    })
 }
 
 /// Промежуточные монеты всех площадок DEX, которые биржи знают по адресу (тикер для стакана). Ошибок нет.

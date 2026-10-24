@@ -162,7 +162,12 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
     };
     let params = Params::read(&core.inner.deps.settings);
     for dir in dirs {
-        let prices = super::prices::for_direction(&core.inner.deps, &dir, ref_price).await;
+        // Налоги не проверены — цены не считаются (котировки по таким монетам на каждом тике забивали бы очередь
+        // узла): сразу строка с причиной ожидания.
+        let prices = match &waiting {
+            Some(w) => Err(w.clone()),
+            None => super::prices::for_direction(&core.inner.deps, &dir, ref_price).await,
+        };
         if let Ok(p) = &prices {
             // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды.
             let now = Utc::now();

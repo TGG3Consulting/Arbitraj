@@ -3,7 +3,7 @@
 //! разрешения ERC-20 → Permit2 и Permit2 → Universal Router маршрута на сумму сделки; нет — газ, измеренный пробным
 //! обменом в первом пуле маршрута (разрешения одни на токен входа первого шага, от пула не зависят).
 //! Кто вызывает: quote/mod.rs.
-//! От чего зависит: wallet/approve.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
+//! От чего зависит: wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
 //! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), smart.universal_router, smart.permit2
 //! [bsc_dex] (умный); через approve.rs — dex.approve_unlimited, dex.permit2_expiration_s.
 
@@ -64,11 +64,10 @@ pub async fn units(
         )
     };
     let wallet = signer::address(ctx)?;
-    let now = q.heads.timestamp(ctx).await?;
-    if approve::missing(ctx, token, wallet, permit2, ur, amount, now)
-        .await?
-        .is_empty()
-    {
+    let (_, now) = q.heads.at(ctx).await?;
+    // Разрешения — из памяти до транзакции кошелька (wallet/allow_cache.rs, решение 61), не с узла на каждый тик.
+    let r = q.allow.read(ctx, token, wallet, permit2, ur).await?;
+    if approve::lacking(ctx, &r, (token, permit2, ur), amount, now)?.is_empty() {
         return Ok(None);
     }
     let f = q.checks.pool(&e.pool.reference);

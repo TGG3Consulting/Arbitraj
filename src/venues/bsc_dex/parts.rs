@@ -40,6 +40,8 @@ pub struct Parts {
     pub checks: Checks,
     pub gas: GasPrice,
     pub stats: Stats,
+    /// Разрешения кошелька для котировки (wallet/allow_cache.rs).
+    pub allow: super::wallet::allow_cache::Allowances,
     /// Очереди «Перепроверить» и «новые пулы» для циклов проверок (check/recheck.rs).
     pub wake: super::check::recheck::Recheck,
 }
@@ -59,6 +61,7 @@ impl Parts {
             checks: Checks::default(),
             gas: GasPrice::default(),
             stats: Stats::default(),
+            allow: Default::default(),
             wake: Default::default(),
         }
     }
@@ -73,6 +76,7 @@ impl Parts {
             heads: self.heads.clone(),
             gas: self.gas.clone(),
             mids: self.mids.clone(),
+            allow: self.allow.clone(),
         }
     }
 
@@ -84,6 +88,7 @@ impl Parts {
             stats: self.stats.clone(),
             gas: self.gas.clone(),
             inflows: self.inflows.clone(),
+            allow: self.allow.clone(),
         }
     }
 

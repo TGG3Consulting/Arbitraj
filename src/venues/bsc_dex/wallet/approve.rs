@@ -2,7 +2,7 @@
 //! Что делает: разрешения на списание токена для обмена через Universal Router: ERC-20 approve → Permit2 своей
 //! DEX и Permit2.approve(токен, Universal Router, сумма, срок). Читает текущие разрешения и возвращает только те
 //! вызовы, которых не хватает. Сумма — на сделку или «без ограничения» (dex.approve_unlimited).
-//! Кто вызывает: exec/plan.rs.
+//! Кто вызывает: exec/plan.rs; котировка — через wallet/allow_cache.rs (read, lacking).
 //! От чего зависит: node/call.rs, node/abi.rs, ctx.rs.
 //! Настройки: dex.approve_unlimited, dex.permit2_expiration_s [bsc_dex].
 //!
@@ -32,7 +32,53 @@ alloy::sol! {
 /// Вызов, который надо отправить (адрес контракта и данные).
 pub type Approval = (Address, Bytes);
 
-/// Каких разрешений не хватает для списания amount токена Universal Router'ом через Permit2.
+/// Текущие разрешения кошелька: ERC-20 allowance(кошелёк, Permit2), Permit2 allowance(кошелёк, токен, UR) — сумма и срок.
+#[derive(Debug, Clone, Copy)]
+pub struct Read {
+    pub erc20: U256,
+    pub permit2: U256,
+    pub expiration: u64,
+}
+
+/// Читает разрешения с узла. Принимает: токен, кошелёк, Permit2, Universal Router. Ошибки: узел.
+pub async fn read(
+    ctx: &Ctx,
+    token: Address,
+    wallet: Address,
+    permit2: Address,
+    ur: Address,
+) -> GatewayResult<Read> {
+    let spender = permit2;
+    let erc20 = call::view(
+        ctx,
+        token,
+        &IERC20::allowanceCall {
+            owner: wallet,
+            spender,
+        },
+        "latest",
+    )
+    .await?;
+    let user = wallet;
+    let p = call::view(
+        ctx,
+        permit2,
+        &IPermit2::allowanceCall {
+            user,
+            token,
+            spender: ur,
+        },
+        "latest",
+    )
+    .await?;
+    Ok(Read {
+        erc20,
+        permit2: U256::from(p.amount),
+        expiration: p.expiration.to::<u64>(),
+    })
+}
+
+/// Каких разрешений не хватает для списания amount токена Universal Router'ом через Permit2 (читает с узла).
 /// Принимает: токен, кошелёк, Permit2, Universal Router, сумму, время блока (секунды).
 /// Возвращает: вызовы по порядку (пусто — хватает). Ошибки: NotConfigured (настройки), узел.
 pub async fn missing(
@@ -44,38 +90,30 @@ pub async fn missing(
     amount: U256,
     now: u64,
 ) -> GatewayResult<Vec<Approval>> {
+    let r = read(ctx, token, wallet, permit2, ur).await?;
+    lacking(ctx, &r, (token, permit2, ur), amount, now)
+}
+
+/// Каких разрешений не хватает при прочитанных `r`. Принимает: разрешения, (токен, Permit2, UR), сумму, время блока.
+/// Ошибки: NotConfigured (настройки), BadResponse (см. permit2_approve).
+pub fn lacking(
+    ctx: &Ctx,
+    r: &Read,
+    (token, permit2, ur): (Address, Address, Address),
+    amount: U256,
+    now: u64,
+) -> GatewayResult<Vec<Approval>> {
     let unlimited = ctx.flag("dex.approve_unlimited")?;
     let expiration = now + ctx.int("dex.permit2_expiration_s")?;
     let mut out = Vec::new();
-    let erc20 = call::view(
-        ctx,
-        token,
-        &IERC20::allowanceCall {
-            owner: wallet,
-            spender: permit2,
-        },
-        "latest",
-    )
-    .await?;
-    if erc20 < amount {
+    if r.erc20 < amount {
         out.push(erc20_approve(
             token,
             permit2,
             if unlimited { U256::MAX } else { amount },
         ));
     }
-    let p = call::view(
-        ctx,
-        permit2,
-        &IPermit2::allowanceCall {
-            user: wallet,
-            token,
-            spender: ur,
-        },
-        "latest",
-    )
-    .await?;
-    if U256::from(p.amount) < amount || p.expiration.to::<u64>() <= now {
+    if r.permit2 < amount || r.expiration <= now {
         out.push(permit2_approve(
             ctx, token, permit2, ur, amount, unlimited, expiration,
         )?);

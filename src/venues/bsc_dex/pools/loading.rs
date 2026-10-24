@@ -2,7 +2,9 @@
 //! Что делает: какие пулы подписки найдены и проверены, но их состояние ещё не прочитано (решение 61), и сообщение
 //! ядру списка их монет (MarketEvent::PoolsLoading — полный список, только при изменении). Так ядро отличает «пулы
 //! найдены, загружаются» от «пула с USDT нет». Пул уходит из списка, когда прочитан или окончательно не прочитался
-//! (dex.pool_load_retries исчерпаны — дальше он «недостоверен», а не «загружается»).
+//! (dex.pool_load_retries исчерпаны — дальше он «недостоверен», а не «загружается»); исключённый из сделок (ban) не
+//! считается. Новая подписка (пулы сняты с подписки, resubscribe.rs) — новый список (parts.rs: Pools на подписку),
+//! его первая отправка заменяет прежний у ядра.
 //! Кто вызывает: pools/market.rs (стартовые пачки), attach.rs (найденные позже), reload.rs (прочитан / не прочитан).
 //! От чего зависит: listen.rs (Pools: канал событий ядра), gateway/events.rs.
 //! Настройки: нет.
@@ -11,7 +13,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use alloy_primitives::Address;
-use tokio::sync::mpsc::error::TrySendError;
 
 use crate::core::types::PoolRef;
 use crate::gateway::events::MarketEvent;
@@ -51,21 +52,34 @@ impl Loading {
             .remove(r);
     }
 
-    /// Сообщает ядру список монет, если он изменился с прошлого раза. Ошибок нет: канал полон — сообщится в
-    /// следующий раз (список не помечается отправленным); закрыт — слушать некому.
-    pub fn publish(&self, p: &Pools) {
-        let mut s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
-        let now: BTreeSet<Address> = s.pools.values().copied().collect();
-        if s.sent.as_ref() == Some(&now) {
+    /// Сообщает ядру список монет, если он изменился с прошлого раза. Пулы, исключённые из сделок проверкой «кто
+    /// меняет» (directory ban), не считаются: они больше не грузятся для торговли. Канал полон — ждём места
+    /// (send().await), отправка не теряется. Ошибок нет: канал закрыт — слушать некому.
+    pub async fn publish(&self, p: &Pools) {
+        let now: BTreeSet<Address> = {
+            let s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
+            s.pools
+                .iter()
+                .filter(|(r, _)| p.ctx.index.banned(r).is_none())
+                .map(|(_, c)| *c)
+                .collect()
+        };
+        if self
+            .inner
+            .lock()
+            .unwrap_or_else(|x| x.into_inner())
+            .sent
+            .as_ref()
+            == Some(&now)
+        {
             return;
         }
         let ev = MarketEvent::PoolsLoading {
             venue: p.ctx.venue(),
             coins: now.iter().copied().collect(),
         };
-        match p.out.try_send(ev) {
-            Ok(()) | Err(TrySendError::Closed(_)) => s.sent = Some(now),
-            Err(TrySendError::Full(_)) => {}
-        }
+        // Закрытый канал — ядру больше не нужно; список всё равно считается отправленным.
+        let _ = p.out.send(ev).await;
+        self.inner.lock().unwrap_or_else(|x| x.into_inner()).sent = Some(now);
     }
 }

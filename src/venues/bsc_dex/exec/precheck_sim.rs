@@ -20,9 +20,9 @@ use super::super::wallet::balances;
 use super::plan::Plan;
 use super::ur;
 
-/// Проба плана. Принимает: план (разрешения + обмен), пулы маршрута. Ошибки: NoRoute (обмен не в пулах маршрута —
+/// Проба плана. Принимает: план (разрешения + обмен), пулы маршрута, номер блока, по времени которого считан срок. Ошибки: NoRoute (обмен не в пулах маршрута —
 /// пулы исключены; проба откатилась), узел.
-pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry]) -> GatewayResult<()> {
+pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry], at: u64) -> GatewayResult<()> {
     let base = balances::token_units(ctx, p.token_out, p.wallet).await?;
     let mut calls: Vec<Call> = p
         .approvals
@@ -38,7 +38,7 @@ pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry]) -> GatewayResult<
         to: p.router,
         input: p.data(base),
     });
-    let res = simulate::run(ctx, &calls).await?;
+    let res = simulate::run(ctx, &calls, at).await?;
     if let Some((i, r)) = res.iter().enumerate().find(|(_, r)| !r.ok()) {
         let text = r
             .error
@@ -49,7 +49,7 @@ pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry]) -> GatewayResult<
         // не свойство пула или монеты: StaleData (сделки нет, пулы не исключаются, монета не в чёрный список).
         if ur::deadline_passed(&r.return_data, text) {
             let msg = format!(
-                "проба сделки перед отправкой: шаг {i} — срок транзакции вышел до пробы (очередь узла): {}",
+                "проба сделки перед отправкой: шаг {i} — TransactionDeadlinePassed: срок транзакции меньше шага времени симулированного блока (у BSC +12 с к базовому, check/simulate.rs) — увеличьте dex.deadline_s: {}",
                 r.why()
             );
             return Err(ctx.err(ErrorCode::StaleData, msg));

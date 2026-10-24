@@ -6,9 +6,8 @@
 //! не отодвигают его, от него зависит свежесть.
 //! Свежесть: голова «получена» в момент, когда номер блока вырос; номер стоит дольше feed.stale_after_ms (узел
 //! встал или опрос не проходит) — данные устарели, сделок нет. Слушатели получают только новые номера.
-//! Время блока (deadline обменов, проба налогов) — отдельным eth_getBlockByNumber (15 CU) только по запросу и не
-//! чаще раза на блок (кэш по номеру). Хеши заголовков больше не приходят — реорги видны по removed: true в логах
-//! пулов (pools/listen_log.rs) и по квитанциям транзакций (send/track.rs).
+//! Время блока (deadline, проба) — eth_getBlockByNumber (15 CU) по запросу, раз на блок на всех (кэш по номеру,
+//! одновременные промахи ждут один запрос). Реорги — по removed: true в логах пулов и по квитанциям (send/track.rs).
 //! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
 //! pools/http_wait.rs, pools/session.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs, errors.rs.
@@ -54,6 +53,8 @@ pub struct Heads {
     tx: watch::Sender<Option<Head>>,
     /// Время последнего запрошенного блока: (номер, секунды Unix).
     time: Arc<Mutex<Option<(u64, u64)>>>,
+    /// Один eth_getBlockByNumber на блок на всех: одновременные промахи ждут первого (решение 61).
+    flight: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Default for Heads {
@@ -61,6 +62,7 @@ impl Default for Heads {
         Self {
             tx: watch::channel(None).0,
             time: Arc::default(),
+            flight: Arc::default(),
         }
     }
 }
@@ -96,14 +98,21 @@ impl Heads {
         Ok(head)
     }
 
-    /// Время свежего блока (секунды Unix) — для deadline обменов и пробы налогов. Один eth_getBlockByNumber на блок
-    /// (кэш по номеру). Ошибки: как у fresh; узел; BadResponse (узел не знает блок или нет timestamp).
-    pub async fn timestamp(&self, ctx: &Ctx) -> GatewayResult<u64> {
+    /// Свежий блок и его время (секунды Unix): номер — для симуляции на этом же блоке (eth_simulateV1), время — для
+    /// deadline. Один eth_getBlockByNumber на блок на всех (кэш по номеру; одновременные промахи ждут один запрос).
+    /// Ошибки: как у fresh; узел; BadResponse (узел не знает блок или нет timestamp).
+    pub async fn at(&self, ctx: &Ctx) -> GatewayResult<(u64, u64)> {
         let head = self.fresh(ctx)?;
-        if let Some((n, t)) = *self.time.lock().unwrap_or_else(|p| p.into_inner())
-            && n == head.number
-        {
-            return Ok(t);
+        let hit = || match *self.time.lock().unwrap_or_else(|p| p.into_inner()) {
+            Some((n, t)) if n == head.number => Some(t),
+            _ => None,
+        };
+        if let Some(t) = hit() {
+            return Ok((head.number, t));
+        }
+        let _one = self.flight.lock().await;
+        if let Some(t) = hit() {
+            return Ok((head.number, t));
         }
         let b: Option<RawBlock> = rpc::call(
             ctx,
@@ -121,7 +130,7 @@ impl Heads {
             .timestamp
             .to::<u64>();
         *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((head.number, t));
-        Ok(t)
+        Ok((head.number, t))
     }
 
     /// Принимает номер блока из опроса: вырос — новая голова слушателям; не вырос — ничего (свежесть не

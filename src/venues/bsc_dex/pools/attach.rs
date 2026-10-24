@@ -18,10 +18,10 @@ use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::node::subs;
+use super::batches;
 use super::created::Watch;
 use super::discover::Found;
 use super::listen::{self, Pools};
-use super::market;
 
 /// Открытая пачка вида: канал её сессии, сколько в ней пулов, номер пачки вида.
 pub struct Open {
@@ -30,7 +30,7 @@ pub struct Open {
     seq: usize,
 }
 
-/// Открытые пачки по ключу вида (market::by_family). Дешёво клонируется.
+/// Открытые пачки по ключу вида (batches::by_family). Дешёво клонируется.
 pub type Late = Arc<Mutex<HashMap<String, Open>>>;
 
 /// Запускает слушание пулов, которых ещё нет.
@@ -61,8 +61,8 @@ pub async fn attach(p: &Pools, w: &Watch, found: Vec<Found>, each: bool) -> Gate
     }
     let n = fresh.len();
     p.loading.add(&fresh);
-    p.loading.publish(p);
-    for (key, family, list) in market::by_family(&fresh, &w.coins) {
+    p.loading.publish(p).await;
+    for (key, family, list) in batches::by_family(&fresh, &w.coins) {
         place(p, w, &key, family, list, per);
     }
     Ok(n)

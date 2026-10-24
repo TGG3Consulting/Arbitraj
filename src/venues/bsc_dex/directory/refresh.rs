@@ -22,13 +22,13 @@ use alloy_primitives::Address;
 use chrono::Utc;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::settings::live::Watch;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::gt_http;
-use super::{fetch, store};
+use super::{due, fetch, store};
 
 /// Работает, пока жива подписка. Принимает: окружение, монеты (адрес → тикер), встречные токены (USDT и
 /// промежуточные), канал «монета обновлена» (None — никто не слушает). Ошибок не возвращает: всё — в журнал и в
@@ -86,9 +86,11 @@ async fn pass(
     let (_, net) = gt_http::base(ctx)?;
     let every = chrono::Duration::seconds(ctx.int("index.refresh_s")? as i64);
     // Монета с ошибкой (404 и т.п.) — повтор через index.error_retry_s; не задана — через index.refresh_s.
-    let err_every = ctx
-        .int("index.error_retry_s")
-        .map_or(every, |s| chrono::Duration::seconds(s as i64));
+    let err_every = match ctx.int("index.error_retry_s") {
+        Ok(s) => chrono::Duration::seconds(s as i64),
+        Err(e) if e.code == ErrorCode::NotConfigured => every,
+        Err(e) => return Err(e),
+    };
     let gap = |t: &super::TokenEntry| if t.error.is_some() { err_every } else { every };
     let pages = ctx.int("index.pages_per_token")? as u32;
     let size = ctx.int("index.page_size")? as usize;
@@ -136,7 +138,7 @@ async fn pass(
                     let _ = tx.send(token);
                 }
             }
-            Err(e) if stops(&e) => return Err(e),
+            Err(e) if due::stops(&e) => return Err(e),
             Err(e) => {
                 failed += 1;
                 first_err.get_or_insert_with(|| e.message.clone());
@@ -152,33 +154,7 @@ async fn pass(
         let msg = format!("Справочник пулов: спрошено монет {ok}, ошибок {failed}{tail}");
         ctx.log(Level::Info, "dex.index", msg, None).await;
     }
-    Ok(next_due(ctx, every, &gap))
-}
-
-/// Ошибка, при которой проход не продолжается (настройка, секреты): остальные монеты дадут то же. Ошибок нет.
-pub fn stops(e: &GatewayError) -> bool {
-    matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked)
-}
-
-/// Через сколько подойдёт срок ближайшей монеты или списка DEX (не меньше нуля). Ошибок нет.
-fn next_due(
-    ctx: &Ctx,
-    every: chrono::Duration,
-    gap: &dyn Fn(&super::TokenEntry) -> chrono::Duration,
-) -> Duration {
-    let now = Utc::now();
-    let soonest = ctx.index.with(|s| {
-        s.tokens
-            .values()
-            .map(|t| t.tried_at.or(t.fetched_at).map_or(now, |at| at + gap(t)))
-            .chain(std::iter::once(
-                s.dexes_tried.or(s.dexes_at).map_or(now, |at| at + every),
-            ))
-            .min()
-    });
-    soonest
-        .and_then(|t| (t - now).to_std().ok())
-        .unwrap_or(Duration::ZERO)
+    Ok(due::next_due(ctx, every, &gap))
 }
 
 /// Монеты и встречные токены подписки — в состояние справочника (лишние монеты убираются). Ошибок нет.

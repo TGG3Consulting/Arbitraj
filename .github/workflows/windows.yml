@@ -1,0 +1,39 @@
+# Сборка для Windows: arb.exe + собранный интерфейс + start.bat одним архивом «arb-windows».
+# Запускается на каждый пуш в main, вручную (Actions → Windows build → Run workflow) и на PR, меняющий этот файл.
+# Скачать: Actions → последний успешный запуск «Windows build» → Artifacts → arb-windows.
+name: Windows build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: [".github/workflows/windows.yml", "dist-windows/**"]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - run: npm run build
+        working-directory: ui
+      - name: Собрать папку для запуска
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/arb | Out-Null
+          Copy-Item target/release/arb.exe out/arb/
+          Copy-Item -Recurse ui/dist out/arb/ui
+          Copy-Item dist-windows/* out/arb/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arb-windows
+          path: out/arb
+          retention-days: 30

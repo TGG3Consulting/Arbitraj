@@ -5,6 +5,7 @@
 //! (depth.rs) → составы постоянных подписок пачки (group.rs) → отписка от временной (если она не стала постоянной).
 //! Пробуждение мелкого пула: событие добавления ликвидности на блоке N → чтение на N → глубокий — полная подписка
 //! с ним → блок B' → чтение на B' (события после B' придут, до — учтены в чтении) → пул снова котируется.
+//! Новые пулы читаются пачками на одном блоке (reload::load_many → load_batch.rs, решение 61).
 //! Пул, не прочитанный при приёме, слушается полностью и перечитывается на новых блоках (reload.rs).
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: group.rs, depth.rs, reload.rs, http_wait.rs, listen.rs (Pools, End).
@@ -44,9 +45,15 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     let block = g.block().await.map_err(broken)?;
     http_wait::http_reached(p, block).await.map_err(broken)?;
     m.loaded = true;
-    for &i in &new {
+    // Состояние всех новых пулов — пачками на одном блоке (решение 61), а не по одному.
+    let items: Vec<(&super::discover::Found, &str)> = new
+        .iter()
+        .map(|&i| (&m.pools[i].0, m.pools[i].1.as_str()))
+        .collect();
+    let results = reload::load_many(p, &items, block).await?;
+    for (&i, res) in new.iter().zip(results) {
         let (found, ticker) = &m.pools[i];
-        if let Err(why) = reload::load_one(p, found, ticker, block).await? {
+        if let Err(why) = res {
             p.reg.update(&found.reference, |e| e.valid = false);
             let msg = format!(
                 "{} {ticker}: состояние пула не прочитано: {why} — повтор на новых блоках",

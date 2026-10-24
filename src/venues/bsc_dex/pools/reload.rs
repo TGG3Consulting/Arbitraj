@@ -2,6 +2,7 @@
 //! Что делает: чтение состояния пула пачки на блоке с отправкой ядру (load_one) и повтор чтения пулов, которые не
 //! прочитались (сбой узла): на каждом новом блоке (опрос блоков node/heads.rs), не больше dex.pool_load_retries раз. Журнал: одна запись
 //! «не прочитан», одна — «прочитан с попытки N» или «так и не прочитан за N попыток».
+//! Многие пулы сразу (приём пачки, повтор) — load_many: пачками через Multicall3 (load_batch.rs, решение 61).
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
 //! От чего зависит: pools/load.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
 //! Настройки: dex.pool_load_retries [bsc_dex].
@@ -10,6 +11,7 @@ use crate::storage::journal::Level;
 
 use super::discover::Found;
 use super::listen::{End, Pools};
+use super::load_batch::{self, Want};
 use super::{listen_log, load};
 
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
@@ -41,11 +43,17 @@ pub async fn retry(
         }
     };
     let mut keep = Vec::new();
-    for mut m in std::mem::take(missing) {
+    let waiting = std::mem::take(missing);
+    let items: Vec<(&Found, &str)> = waiting
+        .iter()
+        .map(|m| (&pools[m.i].0, pools[m.i].1.as_str()))
+        .collect();
+    let results = load_many(p, &items, at).await?;
+    for (mut m, res) in waiting.into_iter().zip(results) {
         let (found, ticker) = &pools[m.i];
         m.tries += 1;
         let title = found.family.title;
-        match load_one(p, found, ticker, at).await? {
+        match res {
             Ok(()) => {
                 let msg = format!(
                     "{title} {ticker}: состояние пула прочитано с попытки {}",
@@ -99,4 +107,58 @@ pub async fn load_one(
         }
         Err(e) => Ok(Err(e.message)),
     }
+}
+
+/// Чтение многих пулов на одном блоке пачками (load_batch.rs, решение 61) и отправка ядру прочитанных.
+/// Принимает: (пул, тикер) по порядку, блок. Возвращает: по каждому Ok — прочитан, Err(причина) — нет (как load_one).
+/// Ошибки: End — ядро закрыло канал.
+pub async fn load_many(
+    p: &Pools,
+    items: &[(&Found, &str)],
+    block: u64,
+) -> Result<Vec<Result<(), String>>, End> {
+    let known: Vec<_> = items.iter().map(|(f, _)| p.reg.get(&f.reference)).collect();
+    let wants: Vec<Want> = items
+        .iter()
+        .zip(&known)
+        .map(|((f, _), e)| match e {
+            Some(e) => Want {
+                family: e.family,
+                reference: &f.reference,
+                spacing: e.pool.tick_spacing,
+                step: e.pool.bin_step,
+                usdt: e.usdt,
+                token1: e.pool.token1,
+            },
+            None => Want {
+                family: f.family,
+                reference: &f.reference,
+                spacing: f.tick_spacing,
+                step: f.bin_step,
+                usdt: listen_log::found_usdt(f),
+                token1: f.token1,
+            },
+        })
+        .collect();
+    let loaded = load_batch::states(&p.ctx, &p.tokens, &wants, block).await;
+    let mut out = Vec::with_capacity(items.len());
+    for (((f, ticker), e), l) in items.iter().zip(&known).zip(loaded) {
+        let l = match l {
+            Ok(l) => l,
+            Err(why) => {
+                out.push(Err(why));
+                continue;
+            }
+        };
+        let entry = match e {
+            Some(e) => load::renewed(e, block, l),
+            None => load::built(&p.ctx, f, ticker, listen_log::found_usdt(f), block, l),
+        };
+        listen_log::note_refill(p, &entry);
+        let pool = entry.pool.clone();
+        p.reg.put(entry);
+        listen_log::emit(p, pool)?;
+        out.push(Ok(()));
+    }
+    Ok(out)
 }

@@ -117,6 +117,11 @@ pub async fn entry(
         block,
     )
     .await?;
+    Ok(built(ctx, p, ticker, usdt, block, l))
+}
+
+/// Запись реестра из найденного пула и уже прочитанного состояния (и пачечное чтение, load_batch.rs). Ошибок нет.
+pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: Loaded) -> Entry {
     let fee_pips = p.fee_pips.filter(|f| *f != DYNAMIC_FEE_FLAG);
     let pool = Pool {
         venue: ctx.venue(),
@@ -133,7 +138,7 @@ pub async fn entry(
         block,
         received_at: Utc::now(),
     };
-    Ok(Entry {
+    Entry {
         family: p.family,
         pool,
         ticker: ticker.to_string(),
@@ -146,7 +151,7 @@ pub async fn entry(
         synced_log: None,
         valid: true,
         asleep: false,
-    })
+    }
 }
 
 /// Перечитывает состояние записи на блоке. Принимает: запись. Возвращает: обновлённую запись (valid = true).
@@ -165,6 +170,11 @@ pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> Gatew
         block,
     )
     .await?;
+    Ok(renewed(e, block, l))
+}
+
+/// Запись с новым состоянием на блоке (valid = true). Ошибок нет.
+pub fn renewed(e: &Entry, block: u64, l: Loaded) -> Entry {
     let mut out = e.clone();
     out.pool.state = l.state;
     out.pool.block = block;
@@ -174,5 +184,5 @@ pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> Gatew
     out.synced_block = block;
     out.synced_log = None;
     out.valid = true;
-    Ok(out)
+    out
 }

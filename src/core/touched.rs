@@ -38,6 +38,8 @@ pub enum Touched {
         queue: WalletQueue,
         prev: Option<WalletQueueState>,
     },
+    /// Биржа сообщила монеты с торгуемой спот-парой — пересборка справочника и подписок.
+    SpotPairs,
     /// Адаптер DEX закончил полный проход проверки налогов: [прошли, не прошли, ждут пула, не задана настройка].
     CheckPass {
         venue: VenueId,

@@ -1,13 +1,21 @@
 //! Файл: core/subscribe.rs
 //! Что делает: подписки площадок на рыночные данные по справочнику (шаг 2 ТЗ). Бирже — все её монеты
 //! с сетью BSC и адресом контракта (стакан придёт, только если пара есть на споте — так ядро и узнаёт
-//! «монета есть на споте»); DEX — все монеты с адресом контракта у бирж и сама котируемая монета (USDT,
-//! адрес из справочника бирж): адаптер ищет пулы «монета — USDT» и берёт адрес USDT из этого списка.
+//! «монета есть на споте»); DEX — только монеты, которыми можно торговать хотя бы на одной бирже (dex_tradable):
+//! у биржи есть сеть BSC с адресом контракта и торгуемая спот-пара (биржа сообщает их событием SpotPairs из своего
+//! справочника пар), плюс котируемая монета (USDT, адрес из справочника бирж) и промежуточные монеты (решение 52).
+//! Пулы остальных монет не слушаются: каждое уведомление узла BSC платное, а по живому журналу 2026-10-24 половина
+//! уведомлений о пулах приходилась на монеты без пары на BingX (BITLIGHT, IN, POP, ARIA, BTR, AIN, STAR…).
+//! Порядок запуска: до первого SpotPairs список DEX пуст и подписки DEX нет; SpotPairs приходит из подписки биржи
+//! и толкает пересборку — DEX подписывается один раз. Стаканы список DEX не меняют (ни первый стакан, ни
+//! «недостоверно»), поэтому подписка DEX не дёргается при запуске и разрывах связи биржи.
 //! Бирже также — стакан BNB (цена газа, convert.rs) и стаканы промежуточных монет (решение 52). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список.
 //! Кто вызывает: core/rebuild.rs после каждой пересборки.
 //! От чего зависит: engine.rs, gateway (subscribe_market).
 //! Настройки: нет своих.
 
+use super::market_state::MarketState;
+use super::registry::CoinEntry;
 use crate::core::types::{Asset, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::storage::journal::Level;
@@ -27,11 +35,18 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
             })
             .map(|c| c.asset.clone())
             .collect(),
-        VenueKind::Dex => coins
-            .iter()
-            .filter(|c| c.asset.bsc_contract.is_some())
-            .map(|c| c.asset.clone())
-            .collect(),
+        // DEX — только монеты, которыми можно торговать хотя бы на одной бирже (dex_tradable). Флаги ввода и вывода
+        // сюда не входят: биржа меняет их на время работ, а каждая смена списка — полная пересборка подписки DEX
+        // с поиском пулов (тоже расход узла); направления по флагам отсекает справочник (registry.rs).
+        VenueKind::Dex => {
+            let kinds = rd(&core.inner.kinds);
+            let market = rd(&core.inner.market);
+            coins
+                .iter()
+                .filter(|c| dex_tradable(c, &kinds, &market))
+                .map(|c| c.asset.clone())
+                .collect()
+        }
     };
     if kind == VenueKind::Dex && !out.is_empty() {
         // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
@@ -39,6 +54,9 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         if let Some(q) = dex_quote(core, venue) {
             out.push(q);
         }
+        // Промежуточные монеты (решение 52) — их пулы с USDT нужны маршруту «USDT → промежуточная → монета»;
+        // тикер промежуточной адаптер берёт из этого же списка (venues/bsc_dex/pools/mids.rs).
+        out.extend(intermediate_assets(core));
     }
     if kind == VenueKind::Cex && !out.is_empty() {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
@@ -49,6 +67,21 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     out.dedup();
     out
+}
+
+/// Нужна ли монета подписке DEX: есть адрес контракта в BSC, и хотя бы у одной биржи у монеты есть сеть BSC
+/// (данные сети с адресом — Presence::info) и торгуемая спот-пара (MarketEvent::SpotPairs этой биржи).
+/// Монета, известная бирже только по адресу (сеть BSC есть, пары нет — например BITLIGHT), не нужна.
+/// Принимает: монету справочника, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
+pub fn dex_tradable(c: &CoinEntry, kinds: &[(VenueId, VenueKind)], market: &MarketState) -> bool {
+    c.asset.bsc_contract.is_some()
+        && c.presence.iter().any(|p| {
+            kinds
+                .iter()
+                .any(|(v, k)| v == &p.venue && *k == VenueKind::Cex)
+                && p.info.is_some()
+                && market.spot_pair(&p.venue, &c.asset.ticker)
+        })
 }
 
 /// Приводит подписки всех площадок к справочнику.

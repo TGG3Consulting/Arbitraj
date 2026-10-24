@@ -48,6 +48,10 @@ const REGISTRY: [&str; 8] = [
 pub async fn watch_settings(core: Core) {
     let mut w = core.inner.deps.watch(&[]);
     while let Some(c) = w.next().await {
+        // Нативная монета ↔ обёртка (решение 62, native.rs): справочник сетей бирж — перечитать сразу.
+        if super::native::affects(&c.name) {
+            core.inner.kick_networks.notify_waiters();
+        }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {
             core.request_rebuild();
         }

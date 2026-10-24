@@ -67,6 +67,12 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     }
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     out.dedup();
+    if kind == VenueKind::Cex
+        && let Some(n) = super::native::ticker(core)
+    {
+        // Нативная монета (решение 62): монета справочника и монета газа — один стакан, одна подписка.
+        out.dedup_by(|a, b| a.ticker == n && b.ticker == n);
+    }
     out
 }
 

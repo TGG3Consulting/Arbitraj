@@ -34,6 +34,7 @@ pub mod manual;
 pub mod manual_return;
 pub mod market_read;
 pub mod market_state;
+pub mod native;
 pub mod op_error;
 pub mod pairs_fresh;
 pub mod partial;

@@ -107,7 +107,8 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
 }
 
 /// Адреса обёртки нативной монеты: WETH() роутеров включённых видов V2. Сбой вида — в журнал, вид пропускается.
-async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
+/// Нужна и «Проверить подключение» (connection_extra.rs: dex.native_wrapped = WETH() роутеров, решение 62).
+pub async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
     let mut out = Vec::new();
     for f in families::all(ctx)
         .into_iter()

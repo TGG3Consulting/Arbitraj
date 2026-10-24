@@ -4,7 +4,7 @@
 //! (sell.rs). Плюс данные экрана «Ручное управление» для api.
 //! Кто вызывает: core/commands.rs; api (Core::manual).
 //! От чего зависит: manual.rs, deal.rs, ledger.rs, sell.rs, deps.rs (шлюз — балансы).
-//! Настройки: нет.
+//! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
 use rust_decimal::Decimal;
 
@@ -36,6 +36,10 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .filter(|x| x.asset == h.asset.ticker)
         .map(|x| x.free)
         .sum();
+    // BNB на DEX — только сверх резерва на газ и газа самой продажи (решение 62, native.rs): резерв боту не
+    // «возвращается», а газ продажи платится из резерва — иначе продажа упрётся в резерв (exec/native.rs::reserve_ok).
+    let free = super::native::spendable(core, &h.venue, &h.asset.ticker, free)?;
+    let (free, gas_note) = super::native::minus_sell_gas(core, &gw, &h.venue, &h.asset, free).await;
     if free <= Decimal::ZERO {
         return Err(format!("на {} нет свободных {}", h.venue.0, h.asset.ticker));
     }
@@ -60,6 +64,9 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         "«Вернуть боту»: {qty} по реальному балансу (было взято {})",
         h.qty
     ));
+    if let Some(n) = gas_note {
+        deal.note(n);
+    }
     // Решение 53: доля предварительного убытка «Беру на себя» переходит к сделке «Вернуть боту».
     let mut old = old;
     super::daily::transfer(core, &mut old, &mut deal, share).await;

@@ -1,0 +1,133 @@
+{
+ "about": "Записи BNB из ответов BingX GET /openApi/wallets/v1/capital/config/getall (сырой журнал бота 2026-10-24, data/raw/bingx), первая и последняя",
+ "records": [
+  {
+   "c": "rest /openApi/wallets/v1/capital/config/getall",
+   "timestamp": 1792868535547,
+   "BNB": [
+    {
+     "coin": "BNB",
+     "name": "BNB",
+     "networkList": [
+      {
+       "name": "BNB",
+       "network": "BEP20",
+       "isDefault": true,
+       "minConfirm": 10,
+       "withdrawEnable": true,
+       "depositEnable": true,
+       "withdrawFee": "0.0005",
+       "withdrawMax": "6856.55130139",
+       "withdrawMin": "0.005",
+       "depositMin": "0.0006",
+       "withdrawPrecision": 8,
+       "depositPrecision": 8,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBBEP20"
+      },
+      {
+       "name": "BNB",
+       "network": "XTERIOB",
+       "isDefault": true,
+       "minConfirm": 24,
+       "withdrawEnable": false,
+       "depositEnable": false,
+       "withdrawFee": "0.001422",
+       "withdrawMax": "6856.55130139",
+       "withdrawMin": "0.006644",
+       "depositMin": "0.008",
+       "withdrawPrecision": 8,
+       "depositPrecision": 18,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBXTERIOB"
+      },
+      {
+       "name": "BNB",
+       "network": "Opbnb",
+       "isDefault": true,
+       "minConfirm": 30,
+       "withdrawEnable": false,
+       "depositEnable": false,
+       "withdrawFee": "0.000013",
+       "withdrawMax": "6856.55130139",
+       "withdrawMin": "0.006644",
+       "depositMin": "0.008",
+       "withdrawPrecision": 8,
+       "depositPrecision": 18,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBOPBNB"
+      }
+     ]
+    }
+   ],
+   "t": 1792868537710
+  },
+  {
+   "c": "rest /openApi/wallets/v1/capital/config/getall",
+   "timestamp": 1792871487210,
+   "BNB": [
+    {
+     "coin": "BNB",
+     "name": "BNB",
+     "networkList": [
+      {
+       "name": "BNB",
+       "network": "BEP20",
+       "isDefault": true,
+       "minConfirm": 10,
+       "withdrawEnable": true,
+       "depositEnable": true,
+       "withdrawFee": "0.0005",
+       "withdrawMax": "6849.88196128",
+       "withdrawMin": "0.005",
+       "depositMin": "0.0006",
+       "withdrawPrecision": 8,
+       "depositPrecision": 8,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBBEP20"
+      },
+      {
+       "name": "BNB",
+       "network": "XTERIOB",
+       "isDefault": true,
+       "minConfirm": 24,
+       "withdrawEnable": false,
+       "depositEnable": false,
+       "withdrawFee": "0.001422",
+       "withdrawMax": "6849.88196128",
+       "withdrawMin": "0.006644",
+       "depositMin": "0.008",
+       "withdrawPrecision": 8,
+       "depositPrecision": 18,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBXTERIOB"
+      },
+      {
+       "name": "BNB",
+       "network": "Opbnb",
+       "isDefault": true,
+       "minConfirm": 30,
+       "withdrawEnable": false,
+       "depositEnable": false,
+       "withdrawFee": "0.000013",
+       "withdrawMax": "6849.88196128",
+       "withdrawMin": "0.006644",
+       "depositMin": "0.008",
+       "withdrawPrecision": 8,
+       "depositPrecision": 18,
+       "contractAddress": "",
+       "needTagOrMemo": "false",
+       "displayName": "BNBOPBNB"
+      }
+     ]
+    }
+   ],
+   "t": 1792871489446
+  }
+ ]
+}

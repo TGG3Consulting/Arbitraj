@@ -96,7 +96,7 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
     let mut lines: Vec<(Cost, &'static str)> = qa.costs.iter().map(|c| (c.clone(), "A")).collect();
     let coin_fee = |cs: &[Cost]| -> Decimal {
         cs.iter()
-            .filter(|c| !c.in_price && c.asset == coin)
+            .filter(|c| !c.in_price && convert::in_coin(c, &coin))
             .map(|c| c.amount)
             .sum()
     };
@@ -122,10 +122,10 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
             .withdraw_cost(&cx.usdt, &cx.net_b, proceeds)
             .await
             .map_err(|e| format!("{}: стоимость возврата USDT: {}", d.sell_on.0, e.message))?;
-        lines.extend(rc.into_iter().map(|mut c| {
-            c.kind = CostKind::UsdtReturn;
-            (c, "возврат USDT")
-        }));
+        lines.extend(
+            rc.into_iter()
+                .map(|c| (convert::usdt_return(c), "возврат USDT")),
+        );
     }
     // Запас r = k·σ·√T от выручки (ТЗ, шаг 4).
     let sqrt_t = cx.transit_s.sqrt().ok_or("время в пути не вычисляется")?;
@@ -150,7 +150,8 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, St
     let mut costs = vec![];
     let mut costs_usdt = Decimal::ZERO;
     for (c, stage) in lines {
-        let in_qty = c.asset == coin && stage != "B";
+        // Газ в BNB у сделки с BNB — затрата, а не количество (решение 62, convert::in_coin).
+        let in_qty = convert::in_coin(&c, &coin) && stage != "B";
         let usdt = if c.in_price {
             convert::to_usdt(&c, &rates).ok()
         } else {

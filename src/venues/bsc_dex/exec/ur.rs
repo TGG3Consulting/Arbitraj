@@ -3,6 +3,12 @@
 //! V2_SWAP_EXACT_IN (0x08), V3_SWAP_EXACT_IN (0x00), V4_SWAP / INFI_SWAP (0x10) и проверка реально полученного
 //! баланса BALANCE_CHECK_ERC20 (0x0e) в той же транзакции (решение 40: меньше минимума — откат всей транзакции);
 //! execute(commands, inputs, deadline). Формат входов зависит от DEX и версии Universal Router Uniswap.
+//! Нативная монета (решение 62): WRAP_ETH (0x0b) и UNWRAP_WETH (0x0c) — вход abi.encode(recipient, amount) у обоих UR:
+//! PancakeSwap — Commands.sol#L28-L29, Dispatcher.sol#L218-L238, Payments.sol#L76-L104 (wrapETH: CONTRACT_BALANCE или
+//! точная сумма ≤ баланса BNB роутера; unwrapWETH9: весь WBNB роутера, меньше amountMinimum — откат InsufficientETH);
+//! Uniswap — contracts/libraries/Commands.sol#L28-L29, contracts/base/Dispatcher.sol#L237-L256,
+//! contracts/modules/Payments.sol#L91-L119 (то же). WETH9 роутера в BSC = WBNB 0xbb4CdB9C… — параметры развёртывания:
+//! PancakeSwap script/deployParameters/mainnet/DeployBsc.s.sol#L24, Uniswap script/deployParameters/DeployBSC.s.sol#L11.
 //! Кто вызывает: exec/build.rs, check/probe.rs.
 //! От чего зависит: exec/swap_v2v3.rs, exec/swap_v4.rs, pools/registry.rs, ctx.rs.
 //! Настройки: dex.universal_router_version [DEX]: «pancakeswap_infinity», «2.0», «2.1.1», «2.1.2».
@@ -24,6 +30,8 @@ use super::super::pools::registry::Entry;
 /// Команды Universal Router (Commands.sol, одинаковые номера у PancakeSwap и Uniswap).
 pub const V3_SWAP_EXACT_IN: u8 = 0x00;
 pub const V2_SWAP_EXACT_IN: u8 = 0x08;
+pub const WRAP_ETH: u8 = 0x0b;
+pub const UNWRAP_WETH: u8 = 0x0c;
 pub const BALANCE_CHECK_ERC20: u8 = 0x0e;
 pub const V4_SWAP: u8 = 0x10;
 
@@ -79,6 +87,11 @@ pub fn deadline_passed(data: &[u8], message: &str) -> bool {
 /// Вход BALANCE_CHECK_ERC20: abi.encode(owner, token, minBalance). Ошибок нет.
 pub fn balance_check(owner: Address, token: Address, min_balance: U256) -> Bytes {
     Bytes::from((owner, token, min_balance).abi_encode_params())
+}
+
+/// Вход WRAP_ETH / UNWRAP_WETH: abi.encode(recipient, amount) (Dispatcher.sol обоих UR). Ошибок нет.
+pub fn native(recipient: Address, amount: U256) -> Bytes {
+    Bytes::from((recipient, amount).abi_encode_params())
 }
 
 /// Данные execute(commands, inputs, deadline). Принимает: команды с входами, срок. Ошибок нет.

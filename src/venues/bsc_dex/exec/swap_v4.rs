@@ -4,7 +4,8 @@
 //! TAKE_ALL(выход, минимум)] — минимум проверяется и в обмене (amountOutMinimum), и при получении (TAKE_ALL).
 //! Путь через промежуточную монету (решение 52, правила SDK — research/flow/bsc_smart_router.md, раздел 3.1):
 //! первый шаг — выход роутеру TAKE(валюта, ADDRESS_THIS, OPEN_DELTA); второй — SETTLE(валюта, CONTRACT_BALANCE,
-//! payerIsUser = false) из баланса роутера, обмен с amountIn = OPEN_DELTA (весь кредит), TAKE_ALL на кошелёк
+//! payerIsUser = false) из баланса роутера (сумма шага: CONTRACT_BALANCE у второго шага пути; точная сумма доли —
+//! у нативной продажи после WRAP_ETH, решение 62), обмен с amountIn = OPEN_DELTA (весь кредит), TAKE_ALL на кошелёк
 //! (SETTLE 0x0b, TAKE 0x0e — Actions.sol; DeltaResolver._mapSettleAmount/_mapTakeAmount, CLRouterBase.sol#L26-L31;
 //! Uniswap — v4-periphery 0c4e5bd3 V4Router.sol#L67-L74, #L86).
 //! Кто вызывает: exec/plan.rs, exec/universal.rs.
@@ -30,7 +31,7 @@ use super::super::ctx::Ctx;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
 use super::plan::Order;
-use super::ur::{ADDRESS_THIS, CONTRACT_BALANCE, Format, V4_SWAP};
+use super::ur::{ADDRESS_THIS, Format, V4_SWAP};
 
 const SWAP_EXACT_IN_SINGLE: u8 = 0x06;
 const BIN_SWAP_EXACT_IN_SINGLE: u8 = 0x1c;
@@ -148,7 +149,7 @@ pub fn command(
         (false, true) => (
             vec![SETTLE, action, TAKE_ALL],
             vec![
-                Bytes::from((tin, CONTRACT_BALANCE, false).abi_encode_params()),
+                Bytes::from((tin, amount_in, false).abi_encode_params()),
                 Bytes::from(swap),
                 take_all,
             ],

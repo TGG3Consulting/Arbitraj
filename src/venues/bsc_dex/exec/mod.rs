@@ -9,6 +9,7 @@ pub mod chain;
 pub mod chain_tx;
 pub mod fill;
 pub mod live;
+pub mod native;
 pub mod order;
 pub mod plan;
 pub mod precheck;

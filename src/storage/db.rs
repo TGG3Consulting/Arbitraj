@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS journal (
     message TEXT NOT NULL,
     data TEXT
 );
+CREATE TABLE IF NOT EXISTS wallet_queue (
+    venue TEXT PRIMARY KEY,
+    body  TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS core_state (
     kind TEXT NOT NULL,
     id   TEXT NOT NULL,

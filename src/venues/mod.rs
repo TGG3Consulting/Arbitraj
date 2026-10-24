@@ -5,3 +5,4 @@
 //! Настройки: venue.* по каждой площадке.
 
 pub mod bingx;
+pub mod bsc_dex;

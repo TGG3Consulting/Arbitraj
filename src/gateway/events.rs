@@ -9,7 +9,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::{CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId};
+use crate::core::types::{
+    CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId, WalletQueue,
+};
 
 use super::errors::GatewayError;
 
@@ -32,6 +34,14 @@ pub enum MarketEvent {
     PoolCheck(PoolCheck),
     /// DEX: состояние и счётчики канала отправки изменились (решения 41–42).
     SendChannel(SendChannelStats),
+    /// DEX: состояние очереди транзакций кошелька изменилось (остановлена до ручной проверки, снята, занята).
+    WalletQueue(WalletQueue),
+    /// Сообщение адаптера для уведомлений: код события из notify/catalog.rs и текст (ядро шлёт, если событие включено).
+    Notice {
+        venue: VenueId,
+        code: String,
+        text: String,
+    },
 }
 
 /// Состояние подключения площадки.

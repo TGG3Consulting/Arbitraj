@@ -15,10 +15,10 @@ use tokio::sync::mpsc;
 
 use crate::core::types::{
     Asset, Balance, CoinNetworkInfo, Cost, PoolKind, Quote, SendChannelInfo, Side, TradeRequest,
-    TradeResult, Transfer, VenueId, WithdrawRequest,
+    TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 
-use super::errors::GatewayResult;
+use super::errors::{ErrorCode, GatewayError, GatewayResult};
 use super::events::MarketEvent;
 
 /// Вид площадки.
@@ -138,4 +138,34 @@ pub trait Venue: Send + Sync {
     /// «Проверить подключение» одного канала отправки: адрес, ключ, сеть.
     /// Возвращает: ConnectionCheck. Ошибки: NotApplicable (биржа); неизвестный канал — NotConfigured.
     async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck>;
+
+    /// Очередь транзакций кошелька (DEX, решение 45): свободна / ждёт итога / остановлена до ручной проверки.
+    /// Ошибки: NotApplicable — у площадки нет кошелька (биржа).
+    async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет очереди кошелька",
+        ))
+    }
+
+    /// «Снять очередь после ручной проверки»: очередь, остановленная с неизвестным исходом, снова свободна.
+    /// Принимает: кто снимает (для журнала); подтверждено ли снятие при ещё не занятом nonce (висящая транзакция
+    /// может пройти позже). Ошибки: NotApplicable (биржа; очередь не остановлена); NonceConflict — nonce ещё не занят,
+    /// а подтверждения нет.
+    async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
+        let _ = (by, pending_ok);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет очереди кошелька",
+        ))
+    }
+
+    /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
+    /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
+    async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
+        let _ = asset;
+        Ok(())
+    }
 }

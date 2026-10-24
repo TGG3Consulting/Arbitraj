@@ -82,8 +82,10 @@ async fn store(core: &Core, s: CoinGasStats) {
 /// Обмен на DEX отправлен: транзакция в сети (из TradeResult.chain или GatewayError.tx).
 /// Принимает: ядро, монету, транзакцию. Газ отката — впустую, переводится в USDT по живому BNB.
 pub async fn record_tx(core: &Core, asset: &Asset, tx: &ChainTx) {
-    let gas = tx.gas_bnb.unwrap_or_default();
-    let wasted = tx.outcome == TxOutcome::Reverted;
+    // Газ отмены (не попавшая транзакция отменена тем же nonce) потрачен впустую, как газ отката.
+    let cancel = tx.cancel_gas_bnb.unwrap_or_default();
+    let gas = tx.gas_bnb.unwrap_or_default() + cancel;
+    let wasted = tx.outcome == TxOutcome::Reverted || !cancel.is_zero();
     let wasted_usd = if wasted && !gas.is_zero() {
         let cex: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()

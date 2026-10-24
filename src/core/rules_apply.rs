@@ -61,6 +61,29 @@ pub async fn on_error(
         Some(json!({ "deal": deal, "error": err })),
     )
     .await;
+    // Исход неизвестен (транзакция могла исполниться): повтор — риск двойного вывода или обмена. Не повторяем при
+    // любых правилах шлюза, площадка — на паузу до ручной проверки. Уведомление и пауза — один раз на смену
+    // состояния: остановленная очередь кошелька отвечает так на каждую попытку.
+    if err.code == ErrorCode::OutcomeUnknown {
+        let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
+        let fresh = {
+            let mut r = super::engine::lk(&core.inner.risk);
+            if r.venue_paused.contains_key(venue) {
+                false
+            } else {
+                r.venue_paused.insert(venue.clone(), why.clone());
+                true
+            }
+        };
+        if fresh {
+            risk::publish(core);
+            deps.notify("send.outcome_unknown", Some(&venue.0), &text)
+                .await;
+            let t = format!("Площадка {} на паузе: {why}", venue.0);
+            deps.notify("risk.stop", Some(&venue.0), &t).await;
+        }
+        return Next::Stop;
+    }
     if let Some(code) = event_of(err.code) {
         deps.notify(code, Some(&venue.0), &text).await;
     }

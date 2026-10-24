@@ -5,6 +5,8 @@
 //! Покупка исполнилась частично — решение 48 (partial.rs): больший итог из «довезти и продать» и
 //! «продать обратно на A». Вывод не состоялся — монеты на A, режим застрявшей монеты. Продажа: выгодно
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
+//! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
+//! застрявшей монеты, продажи и повторного перевода.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -88,6 +90,7 @@ async fn run(core: &Core, d: Direction) {
     .await;
     let r = match bought {
         Ok(r) => r,
+        Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,
         Err(e) => {
             return super::ledger::finish(
                 core,
@@ -136,6 +139,7 @@ async fn run(core: &Core, d: Direction) {
         Ok((sent, credited)) => {
             super::fills::transfer(core, &mut deal, &sent, &credited, &d.sell_on, r.avg_price).await
         }
+        Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "перевод", &e).await,
         Err(e) => {
             deal.step = Step::Stuck;
             deal.note(format!("Перевод не состоялся: {e}"));
@@ -145,4 +149,12 @@ async fn run(core: &Core, d: Direction) {
     deal.step = Step::Selling;
     super::ledger::save(core, &deal).await;
     super::sell::sell_or_stuck(core, deal).await;
+}
+
+/// Исход шага неизвестен (транзакция могла исполниться): сделка останавливается до ручной проверки — без режима
+/// застрявшей монеты, без продажи и без второго перевода (повтор — риск двойного вывода). Уведомление deal.closed с
+/// причиной (ledger.rs) и send.outcome_unknown (rules_apply.rs). Ошибок нет.
+async fn unknown(core: &Core, deal: &mut Deal, op: &str, e: &super::op_error::OpError) {
+    let why = format!("{op}: исход неизвестен — ручная проверка ({e})");
+    super::ledger::finish(core, deal, Step::Halted, &why).await;
 }

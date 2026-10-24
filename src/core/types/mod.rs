@@ -24,6 +24,9 @@ pub use control::{
 pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{HookGroup, HookInfo, Pool, PoolKind, PoolRef, PoolState};
-pub use send::{ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome};
+pub use send::{
+    ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
+    WalletQueueState,
+};
 pub use trade::{Quote, Side, TradeRequest, TradeResult, TradeStatus};
 pub use transfer::{Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};

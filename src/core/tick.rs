@@ -64,6 +64,12 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 core.request_rebuild();
             }
             Touched::Channel(s) => core.inner.live.send(CoreEvent::SendChannel(s)),
+            Touched::WalletQueue { queue, prev } => {
+                super::queue_notify::wallet_queue(&core, queue, prev).await
+            }
+            Touched::Notice { venue, code, text } => {
+                core.inner.deps.notify(&code, Some(&venue.0), &text).await
+            }
         }
     }
 }

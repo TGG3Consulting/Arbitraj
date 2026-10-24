@@ -67,12 +67,14 @@ impl ApiError {
 
     /// Ошибка шлюза → ответ интерфейсу (src/api/README.md):
     /// NotApplicable — 400 «не применимо» (функция не для этой площадки, например список DEX у биржи);
-    /// VenueNotConnected — 404 (площадки нет в реестре шлюза); остальное — 502 (сбой площадки).
+    /// VenueNotConnected — 404 (площадки нет в реестре шлюза); NonceConflict — 409; остальное — 502 (сбой площадки).
     /// Текст — сообщение шлюза как есть, с площадкой.
     pub fn gateway(e: GatewayError) -> Self {
         let status = match e.code {
             ErrorCode::NotApplicable => StatusCode::BAD_REQUEST,
             ErrorCode::VenueNotConnected => StatusCode::NOT_FOUND,
+            // Nonce ещё не занят — снятие очереди кошелька требует второго подтверждения (api/wallet_queue.rs).
+            ErrorCode::NonceConflict => StatusCode::CONFLICT,
             _ => StatusCode::BAD_GATEWAY,
         };
         let text = match &e.venue {

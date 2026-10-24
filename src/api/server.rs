@@ -19,7 +19,7 @@ use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
     check, coins, control, core_api, dex, journal, rules, rules_meta, secrets, settings, static_ui,
-    venues, ws,
+    venues, wallet_queue, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -37,6 +37,11 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/venues/kinds", get(venues::kinds))
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/channels/{venue}", get(dex::channels))
+        .route("/api/wallet-queue/{venue}", get(wallet_queue::get))
+        .route(
+            "/api/wallet-queue/{venue}/release",
+            post(wallet_queue::release),
+        )
         .route("/api/coins", get(coins::list))
         .route("/api/coins/recheck", post(coins::recheck))
         .route("/api/manual", get(control::manual))

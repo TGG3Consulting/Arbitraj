@@ -141,6 +141,8 @@
 | dex.pool_enabled | Вид пула включён (id — вид пула, например `pancakeswap_v3`) | да/нет | по DEX |
 | dex.intermediate_enabled | Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и в торговлю допускаются монеты с пулом только с промежуточной; нет — только пулы с USDT | да/нет | по площадке DEX |
 | dex.intermediate_tokens | Промежуточные монеты — адреса токенов BSC (адрес — главный идентификатор, не тикер). Включено, а список не задан или пуст — «не задано», монета без пула с USDT не допускается | список адресов | по площадке DEX |
+| dex.native_ticker | Тикер нативной монеты BSC на бирже (например BNB): промежуточная монета с адресом обёртки (WETH() роутера V2 своей DEX, WBNB 1:1) получает этот тикер в затратах; не задан — обёртка как промежуточная не используется | тикер | по площадке DEX |
+| dex.inflow_wait_notify_s | Обмен ждёт ожидаемого поступления того же токена в кошелёк (база проверки баланса) дольше — одно уведомление dex.swap_waits_inflow | секунды | по площадке DEX |
 | dex.min_pool_liquidity_usd | Пулы с ликвидностью ниже не слушаются | USDT | по площадке DEX |
 | dex.multicall | Контракт Multicall для пачек eth_call | адрес | по площадке DEX |
 | dex.pools_per_sub | Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics) | штук | по площадке DEX |
@@ -155,7 +157,6 @@
 | smart.universal_router | Universal Router PancakeSwap Infinity — исполнитель умного маршрута | адрес | по площадке DEX |
 | smart.permit2 | Permit2 PancakeSwap для умного режима | адрес | по площадке DEX |
 | smart.mixed_quoter | MixedQuoter PancakeSwap — сверка умного маршрута | адрес | по площадке DEX |
-| smart.max_hops | Сколько пулов подряд в одной доле | пулов | по площадке DEX |
 | smart.max_splits | На сколько долей можно делить вход | долей | по площадке DEX |
 | smart.split_step_pct | Шаг доли при поиске деления входа | % | по площадке DEX |
 
@@ -172,9 +173,9 @@
 | dex.pool_manager | CLPoolManager / BinPoolManager / PoolManager | адрес | V4 |
 | dex.vault | Vault | адрес | PancakeSwap Infinity |
 | dex.state_view | StateView | адрес | Uniswap V4 |
-| dex.universal_router | Universal Router своей DEX — прямой обмен в пуле V4 | адрес | V4 |
-| dex.universal_router_version | Версия Universal Router (у Uniswap: 2.0 / 2.1.1 / 2.1.2 — разный формат обмена) | версия | V4 |
-| dex.permit2 | Permit2 своей DEX (у PancakeSwap и Uniswap разные) | адрес | V4 |
+| dex.universal_router | Universal Router своей DEX — прямой обмен в пуле любого вида (решение 40: проверка баланса в той же транзакции) | адрес | все |
+| dex.universal_router_version | Версия Universal Router (у Uniswap: 2.0 / 2.1.1 / 2.1.2 — разный формат обмена) | версия | все виды Uniswap |
+| dex.permit2 | Permit2 своей DEX (у PancakeSwap и Uniswap разные) | адрес | все |
 | dex.scan_from_block | С какого блока искать события создания пулов | блок | все |
 | dex.v2_fee_pct | Комиссия пула V2 (из кода пары своей DEX) | % | V2 |
 
@@ -184,8 +185,14 @@
 | --- | --- | --- | --- |
 | send.gas_limit_margin_pct | Запас к оценке газа eth_estimateGas | % | по площадке DEX |
 | send.gas_price_markup_pct | Надбавка к цене газа eth_gasPrice (не ниже минимума канала) | % | по площадке DEX |
-| send.max_wait_blocks | Сколько блоков ждать попадания транзакции; дольше — не попала, без повторов | блоков | по площадке DEX |
-| send.bundle_max_blocks | Бандл: maxBlockNumber = текущий блок + это число | блоков | по площадке DEX |
+| send.max_wait_blocks | Сколько блоков ждать квитанции, прежде чем отменить транзакцию (0 BNB себе с тем же nonce, цена газа выше на send.cancel_gas_bump_pct); снова не занят — следующая отмена через столько же блоков, дороже | блоков | по площадке DEX |
+| send.replaced_confirm_blocks | Nonce кошелька занят, а своей квитанции нет: сколько ещё блоков искать её (квитанция и eth_getTransactionByHash по исходной и отменам), прежде чем «вытеснена» (исход неизвестен — ручная проверка) | блоков | по площадке DEX |
+| send.cancel_max_gas_gwei | Потолок цены газа отмены; следующая отмена дороже — отмен больше нет, очередь кошелька остановлена до ручной проверки (Telegram send.queue_halted) | gwei | по площадке DEX |
+| send.cancel_max_attempts | Сколько отмен одной транзакции; больше — очередь кошелька остановлена до ручной проверки | раз | по площадке DEX |
+| send.queue_max_wait_s | Сколько очередь кошелька ждёт итога одной транзакции (узел недоступен, нет BNB на отмену, nonce не перечитан); дольше — остановка до ручной проверки | секунды | по площадке DEX |
+| send.bundle_max_blocks | Бандл: maxBlockNumber = текущий блок + это число (не больше send.max_wait_blocks, иначе отправка не работает) | блоков | по площадке DEX |
+| send.cancel_gas_bump_pct | Не попала за send.max_wait_blocks — отмена: 0 BNB себе с тем же nonce, цена газа выше прошлой на столько % (очередь кошелька ждёт, пока nonce не занят в блоке) | % | по площадке DEX |
+| send.deposit_confirmations | Зачисление в кошелёк (депозит DEX): «Зачислен» — только при ненулевом Transfer монеты на кошелёк и когда после блока перевода прошло столько блоков | блоков | по площадке DEX |
 
 ### Каналы отправки (область «канал», id — из списка адаптера DEX)
 

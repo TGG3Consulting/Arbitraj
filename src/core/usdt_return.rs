@@ -45,7 +45,7 @@ async fn relay(core: &Core, id: &str, from: &VenueId, to: &VenueId, amount: Deci
     let deps = &core.inner.deps;
     let res = match usdt(core, from) {
         Ok(a) => super::transfers::send(core, id, from, to, &a, amount).await,
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     };
     match res {
         Ok((_, t)) => {

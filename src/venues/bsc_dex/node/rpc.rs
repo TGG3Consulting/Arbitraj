@@ -46,6 +46,21 @@ pub async fn call_raw(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<B
     jsonrpc::parse_text(&text, SOURCE, Op::Read)
 }
 
+/// Один запрос мимо общей очереди темпа (node/pace.rs) — только для опроса номера блока (node/heads.rs, решение 57):
+/// его частоту задаёт bsc.blocks_poll_ms, и проверки не должны отодвигать его в очереди (от него зависит свежесть).
+/// Принимает: метод, параметры. Возвращает: значение result. Ошибки: как у call (429 — сразу ошибкой, без повтора).
+pub async fn call_unpaced<T: DeserializeOwned>(
+    ctx: &Ctx,
+    method: &str,
+    params: Value,
+) -> GatewayResult<T> {
+    let url = ctx.node_url("bsc.node_http_url", SECRET_HTTP_KEY)?;
+    let body = jsonrpc::request(1, method, &params);
+    let text = post(ctx, &url, &body, &[], SOURCE).await?;
+    let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read)?;
+    jsonrpc::decode(&raw, SOURCE)
+}
+
 /// Пачка запросов одним HTTP-запросом (JSON-RPC batch).
 /// Принимает: список (метод, параметры). Возвращает: результаты в том же порядке, у каждого свой Ok/Err.
 /// Ошибки всей пачки: связь, HTTP, ответ не массив, нет ответа на какой-то id (BadResponse).

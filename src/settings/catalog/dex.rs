@@ -15,8 +15,9 @@ use crate::settings::schema::{DexId, Kind as K, Limit as L, SettingDef};
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
-    d("Узел BSC", "bsc.node_ws_url", K::Url, L::None, "URL", G, "WebSocket узла BSC (подписки logs, newHeads); ключ провайдера в адресе — как {key}, сам ключ — секрет bsc.node_ws_key"),
+    d("Узел BSC", "bsc.node_ws_url", K::Url, L::None, "URL", G, "WebSocket узла BSC (подписки logs; номер блока — опросом по HTTP, решение 57); ключ провайдера в адресе — как {key}, сам ключ — секрет bsc.node_ws_key"),
     d("Узел BSC", "bsc.node_http_rps", K::Integer, L::Positive, "вызовов в секунду", G, "Темп узла HTTP: сколько вызовов JSON-RPC в секунду (именно вызовов, не CU провайдера — значение подбирается под тариф); пачка из N вызовов — N; на «превышен лимит» (429) — правило шлюза «Превышен лимит запросов»"),
+    d("Узел BSC", "bsc.blocks_poll_ms", K::Integer, L::Positive, "мс", G, "Опрос номера блока eth_blockNumber по HTTP (решение 57: вместо подписки newHeads): раз в столько мс; меньше feed.stale_after_ms. Идёт мимо очереди bsc.node_http_rps — к узлу добавляется 1000/значение вызовов в секунду (5 CU каждый у NodeReal)"),
     d("Узел BSC", "bsc.node_http_url", K::Url, L::None, "URL", G, "HTTP узла BSC (eth_call, eth_getLogs, eth_estimateGas, квитанции); ключ — как {key}, секрет bsc.node_http_key"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
     d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),

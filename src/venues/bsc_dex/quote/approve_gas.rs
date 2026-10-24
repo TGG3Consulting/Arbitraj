@@ -64,7 +64,7 @@ pub async fn units(
         )
     };
     let wallet = signer::address(ctx)?;
-    let now = q.heads.fresh(ctx)?.timestamp;
+    let now = q.heads.timestamp(ctx).await?;
     if approve::missing(ctx, token, wallet, permit2, ur, amount, now)
         .await?
         .is_empty()

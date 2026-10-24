@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/quote/gas.rs
 //! Что делает: цена газа для расчёта и отправки — eth_gasPrice узла с надбавкой send.gas_price_markup_pct;
-//! запрашивается не чаще одного раза на блок (значение до прихода нового блока — из памяти).
+//! запрашивается не чаще одного раза на блок на всех (значение до прихода нового блока — из памяти; одновременные
+//! промахи ждут один запрос).
 //! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (exec/txs.rs) и в котировке (quote/mod.rs).
 //! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs.
 //! От чего зависит: node/rpc.rs, node/heads.rs, num.rs.
@@ -26,19 +27,31 @@ use super::super::num;
 #[derive(Clone, Default)]
 pub struct GasPrice {
     cache: Arc<Mutex<Option<(u64, U256)>>>,
+    /// Один запрос на блок на всех: одновременные промахи ждут первого (решение 61).
+    flight: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl GasPrice {
     /// Цена газа в wei с надбавкой. Ошибки: StaleData (нет свежего блока), NotConfigured (надбавка), узел.
     pub async fn wei(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<U256> {
         let head = heads.fresh(ctx)?;
-        let cached = *self.cache.lock().unwrap_or_else(|p| p.into_inner());
-        let base = match cached {
-            Some((b, p)) if b == head.number => p,
-            _ => {
-                let p: U256 = rpc::call(ctx, "eth_gasPrice", json!([])).await?;
-                *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((head.number, p));
-                p
+        let hit = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
+            Some((b, p)) if b == head.number => Some(p),
+            _ => None,
+        };
+        let base = match hit() {
+            Some(p) => p,
+            None => {
+                let _one = self.flight.lock().await;
+                match hit() {
+                    Some(p) => p,
+                    None => {
+                        let p: U256 = rpc::call(ctx, "eth_gasPrice", json!([])).await?;
+                        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) =
+                            Some((head.number, p));
+                        p
+                    }
+                }
             }
         };
         let markup = ctx.dec("send.gas_price_markup_pct")?;

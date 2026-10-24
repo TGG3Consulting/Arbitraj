@@ -15,20 +15,17 @@
 //! Infinity — в Vault («Vault … holds all tokens», research/flow/bsc_v4.md, раздел 1), Uniswap V4 — в PoolManager.
 //! Пустой адрес — последние 20 байт keccak256(адрес кошелька) — вычисляется, не зашит.
 //! Ограничение (подтверждено техлидом, Issue #7): налог перевода меряется на пустой адрес, а не на депозит биржи —
-//! монета, у которой налог зависит от получателя (белые/чёрные списки), может взять на депозит другой налог;
-//! факт перевода сверяется по событиям Transfer (exec/fill.rs).
+//! налог может зависеть от получателя (белые/чёрные списки); факт перевода — по событиям Transfer (exec/fill.rs).
 //! Минимум выхода пробы — 1 минимальная единица токена: проба меряет налог и не должна откатываться из-за минимума,
 //! а минимум 0 запрещён (exec/plan.rs). Проба только симулируется (eth_simulateV1), в сеть не уходит.
 
 use alloy_primitives::{Address, U256, keccak256};
 
-use crate::core::types::{PoolKind, PoolRef};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
-use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::balances;
@@ -53,8 +50,8 @@ pub struct Measured {
     pub gas_sell: Option<(u64, u64)>,
 }
 
-/// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, головы сети (свежее время блока для
-/// срока транзакции — перед каждой симуляцией).
+/// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, головы сети (блок, поверх которого
+/// идут обе симуляции, и его время — для срока транзакции).
 /// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
 /// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs).
 pub async fn run(
@@ -66,11 +63,11 @@ pub async fn run(
     heads: &Heads,
 ) -> GatewayResult<Result<Measured, String>> {
     let (usdt, coin) = (e.usdt, e.coin);
-    let holder = holder(ctx, e)?;
+    let holder = pc::holder(ctx, e)?;
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
-    // Срок транзакции (deadline) — от свежего времени блока прямо перед симуляцией: очередь узла могла задержать пробу.
-    let now = heads.timestamp(ctx).await?;
-    let mut buy = plan::build(
+    // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61).
+    let (at, now) = heads.at(ctx).await?;
+    let buy = plan::build(
         ctx,
         &plan::single(
             e,
@@ -99,14 +96,13 @@ pub async fn run(
         to: qto,
         input: qdata,
     });
-    let coin_base = balances::token_units(ctx, coin, wallet).await?;
     list.push(Call {
         from: wallet,
         to: buy.router,
-        input: buy.data(coin_base),
+        input: buy.data(balances::token_units(ctx, coin, wallet).await?),
     });
     list.push(pc::balance(wallet, coin, wallet));
-    let first = simulate::run(ctx, &list).await?;
+    let first = simulate::run(ctx, &list, at).await?;
     let (q, x) = (1 + n_appr, 2 + n_appr);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
         return pc::buy_revert(ctx, i, r, q).map(Err);
@@ -125,10 +121,6 @@ pub async fn run(
     let usdt_base = balances::token_units(ctx, usdt, wallet).await?;
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
-    // Вторая симуляция повторяет покупку: срок покупки и продажи — от свежего времени блока.
-    let now = heads.timestamp(ctx).await?;
-    buy.renew(ctx, now)?;
-    list[x].input = buy.data(coin_base);
     let sell = plan::build(
         ctx,
         &plan::single(
@@ -163,10 +155,10 @@ pub async fn run(
         to: sell.router,
         input: sell.data(usdt_base),
     });
-    let all = simulate::run(ctx, &list).await?;
+    let all = simulate::run(ctx, &list, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
-            "срок транзакции пробы вышел до симуляции (очередь узла): {}",
+            "TransactionDeadlinePassed: срок транзакции меньше шага времени симулированного блока (у BSC +12 с к базовому, check/simulate.rs) — увеличьте dex.deadline_s: {}",
             r.why()
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));
@@ -184,7 +176,7 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ баланса не по ABI".into()));
     };
-    if sell_ok(&all)
+    if pc::sell_ok(&all)
         && let Err(why) = emitter::check(ctx, &[e], &all[all.len() - 1].logs).await
     {
         return Err(ctx.err(ErrorCode::NotConfigured, why));
@@ -205,20 +197,4 @@ pub async fn run(
         gas_sell: (sell_swap.ok() && sell_appr.iter().all(|c| c.ok()))
             .then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
-}
-
-/// Продажа пробы прошла (последний вызов). Ошибок нет.
-fn sell_ok(all: &[simulate::CallResult]) -> bool {
-    all.last().is_some_and(|c| c.ok())
-}
-
-/// Адрес, где лежат токены пула: V2/V3 — сам пул; Infinity — Vault (dex.vault); Uniswap V4 — PoolManager.
-/// Ошибки: NotConfigured (dex.vault).
-fn holder(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
-    Ok(match (&e.pool.reference, e.pool.kind, e.family.proto) {
-        (PoolRef::Contract(a), PoolKind::V2 | PoolKind::V3, _) => *a,
-        (_, _, Proto::InfinityCl | Proto::InfinityBin) => ctx.dex_addr("dex.vault", e.family.id)?,
-        (PoolRef::Singleton { manager, .. }, _, _) => *manager,
-        (PoolRef::Contract(a), _, _) => *a,
-    })
 }

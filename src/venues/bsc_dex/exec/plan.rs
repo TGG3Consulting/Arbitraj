@@ -83,13 +83,6 @@ impl Plan {
         ));
         ur::execute(steps, self.deadline)
     }
-
-    /// Новый срок транзакции от свежего времени блока (пробе, у которой между симуляциями прошла очередь узла).
-    /// Принимает: время блока, с. Ошибки: NotConfigured (dex.deadline_s).
-    pub fn renew(&mut self, ctx: &Ctx, now: u64) -> GatewayResult<()> {
-        self.deadline = U256::from(now + ctx.int("dex.deadline_s")?);
-        Ok(())
-    }
 }
 
 /// Что меняем.

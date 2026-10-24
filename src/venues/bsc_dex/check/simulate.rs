@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/check/simulate.rs
-//! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния последнего блока, без
+//! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния заданного блока, без
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
 //! Кто вызывает: check/probe.rs, exec/precheck_sim.rs.
 //! От чего зависит: node/rpc.rs, ctx.rs.
@@ -17,6 +17,7 @@ use serde_json::json;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::node::call::block_tag;
 use super::super::node::rpc;
 
 /// Один вызов последовательности.
@@ -77,17 +78,20 @@ impl CallResult {
     }
 }
 
-/// Выполняет вызовы по порядку в одном блоке на «latest».
-/// Принимает: вызовы. Возвращает: итог каждого вызова в том же порядке.
+/// Выполняет вызовы по порядку в одном симулированном блоке поверх блока `base` (номер, а не «latest»: срок
+/// транзакции считан по времени этого же блока, решение 61). Время симулированного блока узел ставит сам: у BSC —
+/// время базового + timestampIncrement = 12 с (bsc 947ba1cb internal/ethapi/simulate.go#L56-L57, #L577-L583), поэтому
+/// dex.deadline_s должен быть больше 12 с — иначе откат TransactionDeadlinePassed («не проверено», повтор).
+/// Принимает: вызовы, номер базового блока. Возвращает: итог каждого вызова в том же порядке.
 /// Ошибки: узел (метод не поддерживается — его текст), BadResponse (число итогов не совпало).
-pub async fn run(ctx: &Ctx, calls: &[Call]) -> GatewayResult<Vec<CallResult>> {
+pub async fn run(ctx: &Ctx, calls: &[Call], base: u64) -> GatewayResult<Vec<CallResult>> {
     let list: Vec<_> = calls
         .iter()
         .map(|c| json!({ "from": c.from, "to": c.to, "input": c.input }))
         .collect();
     let payload = json!({ "blockStateCalls": [{ "calls": list }], "validation": false });
     let blocks: Vec<BlockResult> =
-        rpc::call(ctx, "eth_simulateV1", json!([payload, "latest"])).await?;
+        rpc::call(ctx, "eth_simulateV1", json!([payload, block_tag(base)])).await?;
     let out = blocks
         .into_iter()
         .next()

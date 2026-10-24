@@ -63,7 +63,7 @@ pub async fn check(
     let sources = Sources::default();
     for (i, (addr, ticker)) in list.iter().enumerate() {
         // Узел отвечает и время блока есть — иначе проход откладывается (срок пробы берётся свежим в probe.rs).
-        match p.heads.timestamp(&p.ctx).await {
+        match p.heads.at(&p.ctx).await {
             Ok(_) => {}
             Err(e) => {
                 let msg = format!("Проверка налогов отложена: {}", e.message);

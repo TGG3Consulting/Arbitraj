@@ -61,6 +61,8 @@ pub struct Quoting {
     pub gas: GasPrice,
     /// Промежуточные монеты (решение 52).
     pub mids: Mids,
+    /// Разрешения кошелька в памяти до его транзакции (wallet/allow_cache.rs).
+    pub allow: super::wallet::allow_cache::Allowances,
 }
 
 impl Quoting {
@@ -77,6 +79,8 @@ impl Quoting {
             ));
         }
         self.heads.fresh(ctx)?;
+        // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
+        let taxes = direct::taxes(self, asset)?;
         let usdt = self.tokens.usdt(ctx)?;
         let coin = asset.bsc_contract.ok_or_else(|| {
             ctx.err(
@@ -105,7 +109,6 @@ impl Quoting {
             .await?
             .max(super::send::planned_floor(ctx)?);
         let usdt_ticker = ctx.text("venue.quote_asset")?;
-        let taxes = direct::taxes(self, asset)?;
         let v = Via {
             q: self,
             coin,

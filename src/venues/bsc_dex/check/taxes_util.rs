@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/check/taxes_util.rs
-//! Что делает: части проверки налогов: налоги в процентах по замеру пробы и выбор источника встречного токена для пробы.
+//! Что делает: части проверки налогов: пулы монеты для пробы (фильтр ликвидности, порядок V2 → V3 → V4), налоги в
+//! процентах по замеру пробы и выбор источника встречного токена для пробы.
 //! Кто вызывает: check/taxes.rs.
 //! От чего зависит: check/probe.rs (Measured), pools/registry.rs, node/call.rs, num.rs.
-//! Настроек нет.
+//! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6.
 //! balanceOf — EIP-20: https://eips.ethereum.org/EIPS/eip-20#balanceof
@@ -13,14 +14,16 @@ use std::sync::Mutex;
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolRef, TokenTaxes};
-use crate::gateway::errors::GatewayResult;
+use crate::core::types::{PoolKind, PoolRef, TokenTaxes};
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
+use super::super::quote::select;
+use super::super::tokens::Tokens;
 use super::probe::Measured;
 
 /// Налоги в процентах. None — делить не на что (ожидалось 0).
@@ -101,4 +104,34 @@ pub async fn quote_source(
         .into_iter()
         .find(|(a, b)| Some(*a) != exclude && *b >= need)
         .map(|(a, _)| a))
+}
+
+/// Пулы монеты для пробы: достоверные и не мельче dex.min_pool_liquidity_usd (фильтр — первым, quote/select.rs),
+/// V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы, причины ожидания по пулам, где глубина не считается).
+/// Ошибки: NotConfigured (не задана настройка глубины).
+pub fn probe_pools(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    ticker: &str,
+    usdt_dec: u8,
+) -> GatewayResult<(Vec<Entry>, Vec<String>)> {
+    let (mut pools, mut env) = (Vec::new(), Vec::new());
+    for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
+        match select::deep_enough(ctx, reg, tokens, &e, usdt_dec) {
+            Ok(None) => pools.push(e),
+            Ok(Some(_)) => {}
+            Err(why) if why.starts_with("Не задана настройка") => {
+                return Err(ctx.err(ErrorCode::NotConfigured, why));
+            }
+            Err(why) => env.push(format!("{} {}: {why}", e.family.title, e.ticker)),
+        }
+    }
+    // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
+    pools.sort_by_key(|e| match e.pool.kind {
+        PoolKind::V2 => 0,
+        PoolKind::V3 => 1,
+        _ => 2,
+    });
+    Ok((pools, env))
 }

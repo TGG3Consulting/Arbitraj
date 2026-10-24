@@ -99,13 +99,13 @@ pub async fn trade(
     }
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
-    let now = q.heads.timestamp(ctx).await?;
+    let (at, now) = q.heads.at(ctx).await?;
     let plan = universal::build(ctx, &steps, wallet, now).await?;
     let entries: Vec<&Entry> = paths
         .iter()
         .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
         .collect();
-    precheck_sim::emitters(ctx, &plan, &entries).await?;
+    precheck_sim::emitters(ctx, &plan, &entries, at).await?;
     let d = send_plan(env, &slot, plan, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };

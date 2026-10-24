@@ -4,7 +4,7 @@
 //! по флагам считается группа крючка. Читаются все Initialize менеджера одним проходом (фильтр только topic0):
 //! встречный токен (USDT или промежуточная монета) выбирается уже из прочитанного (discover.rs) — так история
 //! не читается заново на каждый встречный токен.
-//! Кто вызывает: pools/discover.rs.
+//! Кто вызывает: pools/discover.rs, pools/history_v4.rs, pools/history_store.rs.
 //! От чего зависит: ctx.rs, pools/scan.rs, abi_v4.rs, key.rs, hooks.rs, discover.rs (Found).
 //! Настройки: через scan.rs — dex.logs_block_batch, dex.scan_progress_s.
 //!
@@ -29,24 +29,31 @@ use super::key::{
 };
 use super::{hooks, scan};
 
-/// Все пулы вида V4 за блоки [from, to] (любые валюты).
-/// Принимает: вид пула, адрес менеджера, блоки. Возвращает: пулы; поле coin задаёт discover.rs по встречному токену.
-/// Ошибки: NotConfigured (dex.logs_block_batch, dex.scan_progress_s), узел, BadResponse (событие не по ABI,
-/// PoolId не сошёлся).
-pub async fn scan(
+/// topic0 события Initialize вида пула (фильтр eth_getLogs и подписки). Ошибок нет.
+pub fn topic(f: &Family) -> B256 {
+    match f.proto {
+        Proto::InfinityCl => IInfinityCl::Initialize::SIGNATURE_HASH,
+        Proto::InfinityBin => IInfinityBin::Initialize::SIGNATURE_HASH,
+        _ => IUniswapV4::Initialize::SIGNATURE_HASH,
+    }
+}
+
+/// Все события Initialize менеджера за блоки [from, to] (любые валюты) — для истории (history_v4.rs, discover.rs).
+/// Принимает: вид пула, адрес менеджера, блоки. Возвращает: логи как есть (их хранит history_store.rs).
+/// Ошибки: NotConfigured (dex.logs_block_batch, dex.scan_progress_s), узел.
+pub async fn logs(
     ctx: &Ctx,
     f: &'static Family,
     manager: Address,
     from: u64,
     to: u64,
-) -> GatewayResult<Vec<Found>> {
-    let t0 = match f.proto {
-        Proto::InfinityCl => IInfinityCl::Initialize::SIGNATURE_HASH,
-        Proto::InfinityBin => IInfinityBin::Initialize::SIGNATURE_HASH,
-        _ => IUniswapV4::Initialize::SIGNATURE_HASH,
-    };
+) -> GatewayResult<Vec<Log>> {
     let what = format!("{}: Initialize", f.title);
-    let logs = scan::logs(ctx, manager, json!([t0]), from, to, &what).await?;
+    scan::logs(ctx, manager, json!([topic(f)]), from, to, &what).await
+}
+
+/// Разбор пачки логов Initialize. Ошибки: как у parse (первый же неверный лог — ошибка целиком).
+pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<Vec<Found>> {
     logs.iter().map(|log| parse(ctx, f, log)).collect()
 }
 

@@ -1,10 +1,10 @@
 //! Файл: venues/bsc_dex/pools/discover.rs
 //! Что делает: поиск пулов «монета — встречный токен» (USDT или промежуточная монета, решение 52) по всем включённым
 //! видам пулов. V2 — getPair фабрики, V3 — getPool фабрики по уровням комиссии (без истории событий);
-//! V4 — история событий Initialize менеджера от блока его развёртывания (deploy_block.rs). Прочитанная история V4
-//! хранится в памяти: следующий поиск читает только новые блоки.
+//! V4 — из истории событий Initialize: её загружает в фоне history_v4.rs (SQLite, затем от сохранённого блока или от
+//! блока развёртывания менеджера), а здесь, когда история догнала сеть, дочитываются только новые блоки.
 //! Кто вызывает: pools/market.rs, market_mids.rs, created.rs.
-//! От чего зависит: ctx.rs, pools/discover_v2.rs, discover_v3.rs, discover_v4.rs, deploy_block.rs, families.rs, key.rs, hooks.rs.
+//! От чего зависит: ctx.rs, pools/discover_v2.rs, discover_v3.rs, discover_v4.rs, history_store.rs, families.rs, key.rs, hooks.rs.
 //! Настройки: dex.enabled [DEX], dex.pool_enabled [вид пула], dex.pool_manager [вид пула V4], адреса dex.* [вид пула].
 //!
 //! V2/V3 — research/flow/bsc_dex.md, раздел 2 и схема п. 2 (getPair, getPool); V4 — research/flow/bsc_v4.md,
@@ -16,13 +16,13 @@ use std::sync::Arc;
 use alloy_primitives::Address;
 
 use crate::core::types::{HookInfo, PoolRef};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::families::{FAMILIES, Family, Proto};
 use super::key::PoolKey;
-use super::{deploy_block, discover_v2, discover_v3, discover_v4};
+use super::{discover_v2, discover_v3, discover_v4, history_store};
 
 /// Найденный пул: всё, что известно до чтения состояния.
 #[derive(Debug, Clone)]
@@ -41,14 +41,20 @@ pub struct Found {
     pub hooks: Option<HookInfo>,
 }
 
-/// История вида пула V4: адрес менеджера, последний прочитанный блок, все найденные пулы (любые валюты).
-type History = (Address, u64, Vec<Found>);
+/// История вида пула V4 в памяти: менеджер, последний прочитанный блок, все найденные пулы (любые валюты),
+/// догнала ли история сеть (до этого её ведёт только фоновая загрузка history_v4.rs).
+pub struct History {
+    pub manager: Address,
+    pub last: u64,
+    pub pools: Vec<Found>,
+    pub caught_up: bool,
+}
 
-/// Прочитанная история событий Initialize по видам пулов V4. Замок держится на время дочитывания:
-/// одновременные поиски (USDT, промежуточные монеты, новые пулы) не читают одни и те же блоки дважды.
+/// Истории видов пулов V4. Замок держится на время дочитывания куска: одновременные поиски (USDT, промежуточные
+/// монеты, новые пулы, фоновая загрузка) не читают одни и те же блоки дважды.
 #[derive(Clone, Default)]
 pub struct Scanned {
-    inner: Arc<tokio::sync::Mutex<HashMap<&'static str, History>>>,
+    pub inner: Arc<tokio::sync::Mutex<HashMap<&'static str, History>>>,
 }
 
 /// Включён ли вид пула: dex.enabled [DEX] и dex.pool_enabled [вид]. Не задано — выключен (с записью в журнал).
@@ -72,7 +78,8 @@ pub async fn enabled(ctx: &Ctx, f: &Family) -> bool {
 }
 
 /// Все пулы монет со встречным токеном по включённым видам.
-/// Принимает: монеты (адрес → тикер), встречный токен (USDT или промежуточная монета), текущий блок, память истории.
+/// Принимает: монеты (адрес → тикер), встречный токен (USDT или промежуточная монета), текущий блок, память истории,
+/// v4 — брать ли пулы V4 из истории (нет — при подписке на рынок: V4 догружается в фоне, history_v4.rs).
 /// Возвращает: найденные пулы. Ошибка вида пула (не задан адрес, узел) пишется в журнал, вид пропускается;
 /// остальные виды ищутся дальше — так видно, что именно не настроено.
 pub async fn find_all(
@@ -81,9 +88,13 @@ pub async fn find_all(
     usdt: Address,
     head: u64,
     scanned: &Scanned,
+    v4: bool,
 ) -> Vec<Found> {
     let mut out = Vec::new();
     for f in FAMILIES {
+        if !v4 && is_v4(f) {
+            continue;
+        }
         if !enabled(ctx, f).await {
             continue;
         }
@@ -114,9 +125,18 @@ pub async fn find_all(
     out
 }
 
-/// Пулы V4 со встречным токеном из истории событий: дочитывает новые блоки до head. Первый раз (или новый адрес
-/// менеджера) — от блока развёртывания менеджера (deploy_block.rs).
-/// Ошибки: NotConfigured (dex.pool_manager, нет контракта), узел (нет истории состояния, лимиты eth_getLogs).
+/// Вид пула V4 (пулы — только из истории Initialize). Ошибок нет.
+pub fn is_v4(f: &Family) -> bool {
+    matches!(
+        f.proto,
+        Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4
+    )
+}
+
+/// Пулы V4 со встречным токеном из памяти истории. Если история уже догнала сеть — сначала дочитывает новые блоки
+/// до head (и сохраняет их в SQLite); пока не догнала — только найденное фоновой загрузкой (она и читает дальше).
+/// Ошибки: NotConfigured (dex.pool_manager; адрес сменился — история читается заново с новой подписки на рынок),
+/// узел (лимиты eth_getLogs).
 async fn from_history(
     ctx: &Ctx,
     f: &'static Family,
@@ -126,24 +146,26 @@ async fn from_history(
 ) -> GatewayResult<Vec<Found>> {
     let manager = ctx.dex_addr("dex.pool_manager", f.id)?;
     let mut m = scanned.inner.lock().await;
-    let from = match m.get(f.id) {
-        Some((addr, to, _)) if *addr == manager => to + 1,
-        _ => {
-            m.remove(f.id);
-            deploy_block::get(ctx, f, manager).await?
-        }
+    let Some(h) = m.get_mut(f.id) else {
+        return Ok(Vec::new());
     };
-    if from <= head {
-        let mut found = discover_v4::scan(ctx, f, manager, from, head).await?;
-        let e = m.entry(f.id).or_insert((manager, 0, Vec::new()));
-        e.1 = head;
-        e.2.append(&mut found);
+    if h.manager != manager {
+        let msg = format!(
+            "адрес dex.pool_manager сменился ({} → {manager}) — история пулов читается заново с новой подписки на рынок",
+            h.manager
+        );
+        return Err(ctx.err(ErrorCode::NotConfigured, msg));
     }
-    let all = m
-        .get(f.id)
-        .map(|(_, _, v)| v.as_slice())
-        .unwrap_or_default();
-    Ok(all.iter().filter_map(|p| against(p, quote)).collect())
+    if h.caught_up && h.last < head {
+        let logs = discover_v4::logs(ctx, f, manager, h.last + 1, head).await?;
+        let mut found = discover_v4::parse_all(ctx, f, &logs)?;
+        if let Err(e) = history_store::save(ctx, f, manager, &logs, head).await {
+            ctx.log(Level::Error, "dex.scan", e.message, None).await;
+        }
+        h.pools.append(&mut found);
+        h.last = head;
+    }
+    Ok(h.pools.iter().filter_map(|p| against(p, quote)).collect())
 }
 
 /// Пул со встречным токеном: coin — другая валюта пула. None — токена в пуле нет. Ошибок нет.

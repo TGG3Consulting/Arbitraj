@@ -7,6 +7,7 @@
 
 pub mod abi_v2v3;
 pub mod abi_v4;
+pub mod attach;
 pub mod bins;
 pub mod created;
 pub mod deploy_block;
@@ -20,6 +21,8 @@ pub mod events_cl;
 pub mod events_v2;
 pub mod events_v3;
 pub mod families;
+pub mod history_store;
+pub mod history_v4;
 pub mod hooks;
 pub mod key;
 pub mod listen;

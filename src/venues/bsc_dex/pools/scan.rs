@@ -2,7 +2,7 @@
 //! Что делает: чтение истории событий (eth_getLogs) кусками по dex.logs_block_batch блоков — для поиска пулов
 //! по событиям Initialize V4. Ход — в журнал не чаще раза в dex.scan_progress_s секунд (прочитано, осталось блоков);
 //! итог — если чтение было долгим (был ход) или нашлись события: короткое дочитывание без событий журнал не засоряет.
-//! Кто вызывает: pools/discover_v4.rs.
+//! Кто вызывает: pools/discover_v4.rs, pools/history_v4.rs (по куску, со своим ходом).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/call.rs (номер блока в hex).
 //! Настройки: dex.logs_block_batch, dex.scan_progress_s [bsc_dex]; узел — bsc.node_http_url (у публичных узлов BNB Chain eth_getLogs
 //! выключен — research/flow/bsc_node.md, раздел 1: нужен сторонний провайдер).
@@ -37,54 +37,108 @@ pub async fn logs(
     to: u64,
     what: &str,
 ) -> GatewayResult<Vec<Log>> {
-    let batch = ctx.int("dex.logs_block_batch")?;
-    if batch == 0 {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
-            "dex.logs_block_batch должен быть больше нуля",
-        ));
-    }
-    let every = Duration::from_secs(ctx.int("dex.scan_progress_s")?);
-    let started = Instant::now();
-    let mut last = started;
-    let mut told = false;
+    let batch = batch_size(ctx)?;
+    let mut prog = Progress::new(ctx, what, from, to)?;
     let mut out = Vec::new();
     let mut start = from;
     while start <= to {
         let end = to.min(start.saturating_add(batch - 1));
-        let filter = json!({
-            "address": address,
-            "topics": topics,
-            "fromBlock": block_tag(start),
-            "toBlock": block_tag(end),
-        });
-        let mut part: Vec<Log> = rpc::call(ctx, "eth_getLogs", json!([filter]))
-            .await
-            .map_err(|mut e| {
-                e.message = format!(
-                    "{what}: блоки {start}–{end}: {} (лимит провайдера на диапазон eth_getLogs — уменьшите dex.logs_block_batch)",
-                    e.message
-                );
-                e
-            })?;
-        out.append(&mut part);
+        out.append(&mut one(ctx, address, &topics, start, end, what).await?);
         start = end + 1;
-        if start <= to && last.elapsed() >= every {
-            last = Instant::now();
-            told = true;
-            let msg = progress(what, from, end, to, out.len());
+        prog.step(ctx, end, out.len()).await;
+    }
+    prog.finish(ctx, out.len()).await;
+    Ok(out)
+}
+
+/// Размер куска: dex.logs_block_batch. Ошибки: NotConfigured (не задан или 0).
+pub fn batch_size(ctx: &Ctx) -> GatewayResult<u64> {
+    match ctx.int("dex.logs_block_batch")? {
+        0 => Err(ctx.err(
+            ErrorCode::NotConfigured,
+            "dex.logs_block_batch должен быть больше нуля",
+        )),
+        n => Ok(n),
+    }
+}
+
+/// Один запрос eth_getLogs за блоки [start, end].
+/// Ошибки: узел (текст как есть, с блоками и подсказкой про dex.logs_block_batch), BadResponse.
+pub async fn one(
+    ctx: &Ctx,
+    address: Address,
+    topics: &Value,
+    start: u64,
+    end: u64,
+    what: &str,
+) -> GatewayResult<Vec<Log>> {
+    let filter = json!({
+        "address": address,
+        "topics": topics,
+        "fromBlock": block_tag(start),
+        "toBlock": block_tag(end),
+    });
+    rpc::call(ctx, "eth_getLogs", json!([filter]))
+        .await
+        .map_err(|mut e| {
+            e.message = format!(
+                "{what}: блоки {start}–{end}: {} (лимит провайдера на диапазон eth_getLogs — уменьшите dex.logs_block_batch)",
+                e.message
+            );
+            e
+        })
+}
+
+/// Ход чтения истории для журнала: не чаще раза в dex.scan_progress_s; итог — только после долгого чтения
+/// (был ход) или если нашлись события.
+pub struct Progress {
+    what: String,
+    from: u64,
+    to: u64,
+    every: Duration,
+    started: Instant,
+    last: Instant,
+    told: bool,
+}
+
+impl Progress {
+    /// Начало чтения [from, to]. Ошибки: NotConfigured (dex.scan_progress_s).
+    pub fn new(ctx: &Ctx, what: &str, from: u64, to: u64) -> GatewayResult<Self> {
+        let now = Instant::now();
+        Ok(Self {
+            what: what.to_string(),
+            from,
+            to,
+            every: Duration::from_secs(ctx.int("dex.scan_progress_s")?),
+            started: now,
+            last: now,
+            told: false,
+        })
+    }
+
+    /// Прочитано до блока done, событий всего events: запись хода, если пора. Ошибок нет.
+    pub async fn step(&mut self, ctx: &Ctx, done: u64, events: usize) {
+        if done < self.to && self.last.elapsed() >= self.every {
+            self.last = Instant::now();
+            self.told = true;
+            let msg = progress(&self.what, self.from, done, self.to, events);
             ctx.log(Level::Info, "dex.scan", msg, None).await;
         }
     }
-    if told || !out.is_empty() {
-        let msg = format!(
-            "{what}: прочитаны блоки {from}–{to} за {} с, событий {}",
-            started.elapsed().as_secs(),
-            out.len()
-        );
-        ctx.log(Level::Info, "dex.scan", msg, None).await;
+
+    /// Итог чтения. Ошибок нет.
+    pub async fn finish(&self, ctx: &Ctx, events: usize) {
+        if self.told || events > 0 {
+            let msg = format!(
+                "{}: прочитаны блоки {}–{} за {} с, событий {events}",
+                self.what,
+                self.from,
+                self.to,
+                self.started.elapsed().as_secs()
+            );
+            ctx.log(Level::Info, "dex.scan", msg, None).await;
+        }
     }
-    Ok(out)
 }
 
 /// Текст хода чтения. Принимает: подпись, первый блок, последний прочитанный, последний нужный, событий.

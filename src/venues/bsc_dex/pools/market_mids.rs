@@ -6,7 +6,7 @@
 //! От чего зависит: discover.rs, created.rs (Watch), mids.rs.
 //! Настройки: через вызываемые — dex.* [вид пула].
 //!
-//! Поиск — тот же, что для USDT (события создания с адресом встречного токена в индексированном поле):
+//! Поиск — тот же, что для USDT (V2/V3 — фабрика; V4 — фоновая загрузка истории, history_v4.rs):
 //! research/flow/bsc_dex.md, раздел 2; research/flow/bsc_v4.md, раздел 3.
 
 use std::collections::HashMap;
@@ -32,7 +32,7 @@ pub async fn find(
     for m in mids {
         let mut list = coins.clone();
         list.remove(&m.address);
-        found.extend(discover::find_all(ctx, &list, m.address, head, scanned).await);
+        found.extend(discover::find_all(ctx, &list, m.address, head, scanned, false).await);
         watches.push((list, m.address));
     }
     (found, watches)

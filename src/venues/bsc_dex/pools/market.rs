@@ -1,11 +1,12 @@
 //! Файл: venues/bsc_dex/pools/market.rs
 //! Что делает: подписка на рынок DEX (контракт subscribe_market): монеты и USDT из списка ядра, промежуточные монеты
 //! (решение 52: пулы «монета — промежуточная» и «промежуточная — USDT»), поиск пулов,
-//! слушатели пачек пулов (dex.pools_per_sub), наблюдатель новых пулов, головы сети. Возвращает задачи — при новой
+//! слушатели пачек пулов (dex.pools_per_sub), наблюдатель новых пулов, головы сети; пулы V4 — фоновая загрузка истории
+//! (history_v4.rs), подписка её не ждёт. Возвращает задачи — при новой
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
 //! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
-//! events.rs, registry.rs, mids.rs, market_mids.rs.
+//! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs.
 //! Настройки: venue.quote_asset [bsc_dex] (тикер USDT в списке ядра), dex.pools_per_sub; через вызываемые — dex.*,
 //! dex.intermediate_enabled, dex.intermediate_tokens.
 //!
@@ -29,7 +30,7 @@ use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
 use super::listen::{self, Pools};
-use super::{events, market_mids, mids};
+use super::{events, history_v4, market_mids, mids};
 
 /// Запускает всё для подписки на рынок.
 /// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
@@ -63,7 +64,7 @@ pub async fn subscribe(
     };
     p.mids.set(mid_list.clone());
     let all = market_mids::with_mids(&coins, &mid_list);
-    let mut found = discover::find_all(&p.ctx, &all, usdt, head.to(), scanned).await;
+    let mut found = discover::find_all(&p.ctx, &all, usdt, head.to(), scanned, false).await;
     let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list, head.to(), scanned).await;
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     found.extend(via.into_iter().filter(|f| seen.insert(f.reference.clone())));
@@ -73,7 +74,7 @@ pub async fn subscribe(
             || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt)
     });
     let msg = format!(
-        "DEX: найдено пулов с {quote} и промежуточными монетами ({}): {} по {} монетам",
+        "DEX: найдено пулов V2/V3 с {quote} и промежуточными монетами ({}): {} по {} монетам; V4 — загружается в фоне",
         mid_list.len(),
         found.len(),
         coins.len()
@@ -96,16 +97,26 @@ pub async fn subscribe(
     let extra = Arc::new(Mutex::new(Vec::new()));
     let known = Arc::new(Mutex::new(known));
     // Новые пулы: с USDT (монеты и промежуточные) и с каждой промежуточной монетой.
-    for (list, quote_token) in std::iter::once((all, usdt)).chain(watches) {
-        let w = Watch {
+    let watches: Vec<Watch> = std::iter::once((all, usdt))
+        .chain(watches)
+        .map(|(list, quote_token)| Watch {
             coins: list,
             usdt: quote_token,
             scanned: scanned.clone(),
             known: known.clone(),
             tasks: extra.clone(),
-        };
-        tasks.push(tokio::spawn(created::run(p.clone(), w)));
+        })
+        .collect();
+    for w in &watches {
+        tasks.push(tokio::spawn(created::run(p.clone(), w.clone())));
     }
+    // Пулы V4 — в фоне: подписка V2/V3 уже работает, пулы V4 подключаются по мере загрузки истории.
+    tasks.push(tokio::spawn(history_v4::run(
+        p.clone(),
+        scanned.clone(),
+        watches,
+        wake.clone(),
+    )));
     // Задачи слушателей новых пулов живут в общем списке created.rs; при новой подписке их останавливает этот
     // сборщик (он прерывается вместе с остальными задачами и при этом гасит своих).
     tasks.push(tokio::spawn(Reaper(extra).wait()));
@@ -113,10 +124,10 @@ pub async fn subscribe(
 }
 
 /// Пачка для подписки: имя, пулы с тикерами, фильтр.
-type Chunk = (String, Vec<(Found, String)>, serde_json::Value);
+pub type Chunk = (String, Vec<(Found, String)>, serde_json::Value);
 
 /// Пачки пулов одного вида для подписки: (имя, пулы с тикерами, фильтр).
-fn chunks(found: &[Found], coins: &HashMap<Address, String>, per: usize) -> Vec<Chunk> {
+pub fn chunks(found: &[Found], coins: &HashMap<Address, String>, per: usize) -> Vec<Chunk> {
     let mut by_family: HashMap<(&str, Option<Address>), Vec<&Found>> = HashMap::new();
     for f in found {
         let manager = match &f.reference {

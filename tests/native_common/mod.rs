@@ -9,7 +9,9 @@
 //! DeployBSC.s.sol#L11); USDT — как у BingX в сети BSC; Universal Router PancakeSwap — tx_to настоящих обменов в
 //! tests/data/indexers_2026-10-24/arb_node_responses_2_2026-10-24.json; фабрики V3 PancakeSwap и Uniswap — ответы
 //! factory() пулов CAKE в tests/data/indexers_2026-10-24/arb_node_responses_2026-10-24.json; Universal Router Uniswap
-//! в BSC — страница развёртываний Uniswap (BNB), подтверждается записью (eth_getCode и симуляция в calls2.rs).
+//! в BSC — официальная страница развёртываний Uniswap для BNB Chain (UniversalRouter, Permit2, UniswapV3Factory):
+//! https://developers.uniswap.org/docs/protocols/v3/deployments/v3-bnb-deployments ; код и симуляция — запись
+//! tests/data/native_2026-10-25/arb_native_responses_2_2026-10-25.json. В коде проекта адресов нет — только настройки.
 #![allow(dead_code, unused_imports)]
 
 pub mod calls1;
@@ -17,9 +19,8 @@ pub mod calls2;
 pub mod record;
 
 pub use calls1::calls;
-pub use record::{answer, receipt};
+pub use record::{answer, decode, receipt, usdt_to};
 
-use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256, address};
 use chrono::Utc;
 use serde_json::{Value, json};
@@ -34,7 +35,6 @@ use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::exec::native;
 use arb::venues::bsc_dex::exec::plan::{self, Order, Plan};
-use arb::venues::bsc_dex::exec::ur::IUniversalRouter;
 use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::registry::Entry;
 
@@ -190,17 +190,4 @@ pub async fn native_plan(c: &Ctx, e: &Entry, side: Side, amount: U256, wallet: A
         .await
         .unwrap()
         .with_native(w)
-}
-
-/// Команды и входы execute. Ошибок нет.
-pub fn decode(data: &Bytes) -> (Vec<u8>, Vec<Bytes>) {
-    let call = IUniversalRouter::executeCall::abi_decode(data).unwrap();
-    (call.commands.to_vec(), call.inputs)
-}
-
-/// Данные transfer ERC-20 (5 USDT на роутер перед покупкой). Ошибок нет.
-pub fn usdt_to(router: Address, value: U256) -> Bytes {
-    Bytes::from(
-        arb::venues::bsc_dex::node::abi::IERC20::transferCall { to: router, value }.abi_encode(),
-    )
 }

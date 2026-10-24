@@ -67,24 +67,31 @@ pub fn is_native(ctx: &Ctx, a: &Asset) -> bool {
     wrapped(ctx).is_some_and(|(t, w)| a.ticker == t && a.bsc_contract == Some(w))
 }
 
+/// Виды пулов, через которые путь BNB проверен живой записью узла (решение 62): V2 и V3 (UR PancakeSwap и Uniswap,
+/// tests/data/native_2026-10-25). V4 (Infinity CL/Bin, Uniswap V4) закрыты: пулов WBNB/USDT Infinity в справочнике
+/// индексатора нет (пулы Infinity с BNB — с нативной валютой 0x0, их Тигран пока не берёт), проверить не на чем.
+pub fn pool_ok(kind: PoolKind) -> bool {
+    matches!(kind, PoolKind::V2 | PoolKind::V3)
+}
+
 /// Переделывает шаги долей под нативную монету. Продажа — первый шаг каждой доли платит роутер своей точной суммой
 /// (после WRAP_ETH на сумму всех долей); покупка — последний шаг отдаёт роутеру (дальше UNWRAP_WETH).
-/// Принимает: сторону, доли. Возвращает: режим плана. Ошибки: NoRoute — шаг V4 оказался бы и «из роутера», и «роутеру»
-/// (путь через промежуточную с пулом V4 на стороне BNB: такого входа у команды нет, exec/swap_v4.rs).
+/// Принимает: сторону, доли. Возвращает: режим плана. Ошибки: NoRoute — пул на стороне BNB не V2/V3 (pool_ok).
 pub fn adapt(ctx: &Ctx, side: Side, legs: &mut [Vec<Step>]) -> GatewayResult<Wrap> {
     let mut total = U256::ZERO;
     for leg in legs.iter_mut() {
-        let n = leg.len();
         let s = match side {
             Side::Sell => leg.first_mut(),
             Side::Buy => leg.last_mut(),
         }
         .ok_or_else(|| ctx.err(ErrorCode::Internal, "доля без шагов"))?;
-        let v4 = matches!(s.entry.pool.kind, PoolKind::Cl | PoolKind::Bin);
-        if v4 && n > 1 {
+        if !pool_ok(s.entry.pool.kind) {
             return Err(ctx.err(
                 ErrorCode::NoRoute,
-                format!("{}: нативная монета через промежуточную в пуле V4 — нет такой команды Universal Router", s.entry.family.title),
+                format!(
+                    "{}: BNB через пул V4 / Infinity не поддержан — нет живой проверки WRAP/UNWRAP (решение 62)",
+                    s.entry.family.title
+                ),
             ));
         }
         match side {

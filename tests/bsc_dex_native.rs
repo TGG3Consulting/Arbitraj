@@ -4,7 +4,7 @@
 //!    транзакции = сумма; покупка — [обмен (выход роутеру), UNWRAP_WETH(кошелёк, минимум)], без BALANCE_CHECK и value;
 //!    входы WRAP/UNWRAP — abi.encode(recipient, amount) (Dispatcher.sol обоих UR, exec/ur.rs); то же для V3 через UR
 //!    PancakeSwap и Uniswap (путь tokenIn | fee | tokenOut);
-//! 2) путь через промежуточную с пулом V4 на стороне BNB — честный отказ NoRoute;
+//! 2) пул V4 / Infinity на стороне BNB (один или через промежуточную) — честный отказ NoRoute (решение 62);
 //! 3) списки ТОЧНЫХ вызовов узла для записи (tests/data/native_calls_2026-10-24.json и native_calls_2_2026-10-25.json)
 //!    собраны этим же кодом — тест сверяет файлы с кодом. Перезаписать: cargo test --test bsc_dex_native -- --ignored
 //!
@@ -78,7 +78,7 @@ async fn sell_wraps_and_buy_unwraps() {
 }
 
 #[tokio::test]
-async fn v4_two_hop_on_native_side_is_refused() {
+async fn v4_and_infinity_on_native_side_are_refused() {
     let c = ctx("v4").await;
     let o = |a, b| Order {
         token_in: a,
@@ -103,6 +103,24 @@ async fn v4_two_hop_on_native_side_is_refused() {
     ]];
     let err = native::adapt(&c, Side::Sell, &mut legs).unwrap_err();
     assert_eq!(err.code, ErrorCode::NoRoute);
+    // Один пул V4 / Infinity на стороне BNB — тоже отказ (решение 62: живой проверки нет), в обе стороны.
+    for kind in [
+        "pancakeswap_infinity_cl",
+        "pancakeswap_infinity_bin",
+        "uniswap_v4",
+    ] {
+        for side in [Side::Sell, Side::Buy] {
+            let (tin, tout) = if side == Side::Sell {
+                (WBNB, USDT)
+            } else {
+                (USDT, WBNB)
+            };
+            let mut legs = vec![vec![step(entry(kind, None), o(tin, tout), true, true)]];
+            let err = native::adapt(&c, side, &mut legs).unwrap_err();
+            assert_eq!(err.code, ErrorCode::NoRoute, "{kind} {side:?}");
+        }
+        assert!(!native::pool_ok(entry(kind, None).pool.kind));
+    }
 }
 
 /// V3: продажа и покупка BNB через UR PancakeSwap и Uniswap — те же команды, путь V3 с комиссией 500.

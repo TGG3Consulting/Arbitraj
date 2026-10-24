@@ -50,7 +50,8 @@ pub async fn after(
         ticker: e.ticker.clone(),
         bsc_contract: Some(e.coin),
     };
-    if !native::is_native(ctx, &asset) {
+    // Только V2/V3 (exec/native.rs::pool_ok): через V4 / Infinity BNB не торгуется — и мерить нечего.
+    if !native::is_native(ctx, &asset) || !native::pool_ok(e.pool.kind) {
         return;
     }
     let res = match run(ctx, e, source, wallet, usdt_amount, heads, m).await {

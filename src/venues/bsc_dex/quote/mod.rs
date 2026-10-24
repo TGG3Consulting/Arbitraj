@@ -90,12 +90,15 @@ impl Quoting {
                 format!("{}: нет адреса контракта в BSC", asset.ticker),
             )
         })?;
+        let native = super::exec::native::is_native(ctx, asset);
         // Пулы монеты с USDT; пулы с промежуточными монетами считает quote/via.rs (решение 52).
         let entries: Vec<_> = self
             .reg
             .by_pair(coin, usdt)
             .into_iter()
             .filter(|e| e.ticker == asset.ticker)
+            // BNB (решение 62) — только пулы V2/V3: путь через V4 / Infinity не проверен живой записью.
+            .filter(|e| !native || super::exec::native::pool_ok(e.pool.kind))
             .collect();
         let coin_dec = self.tokens.decimals(ctx, coin).await?;
         let usdt_dec = self.tokens.decimals(ctx, usdt).await?;

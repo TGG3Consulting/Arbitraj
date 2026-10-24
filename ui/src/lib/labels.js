@@ -47,6 +47,16 @@ const CHOICE = {
   wait: 'ожидание',
   loss_limit: 'порог убытка',
   relay: 'перегон',
+  v2_fork: 'форк V2',
+  v3_fork: 'форк V3 (ABI Uniswap)',
+  v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
+  pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
+  pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
+  uniswap_v4: 'Uniswap V4',
+  unsupported: 'не поддерживается',
+  fixed: 'одна на DEX',
+  pool: 'своя у пары',
+  pancakeswap_infinity: 'Universal Router PancakeSwap Infinity',
 };
 const POOL_KIND = { V2: 'V2', V3: 'V3', Cl: 'V4 CL (концентрированная)', Bin: 'V4 Bin (бины)' };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };

@@ -5,7 +5,7 @@
 //! пробным обменом; ликвидность в USDT не ниже dex.min_pool_liquidity_usd.
 //! Кто вызывает: quote/direct.rs.
 //! От чего зависит: check/state.rs, pools/registry.rs, quote/pool_quote.rs, quote/rate.rs, tokens.rs, num.rs.
-//! Настройки: dex.enabled, dex.pool_enabled [DEX], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
+//! Настройки: dex.pool_enabled [DEX], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! dex.min_pool_liquidity_usd [bsc_dex].
 //!
 //! Динамическая комиссия V4 (fee = DYNAMIC_FEE_FLAG) — группа B: её влияние измеряется квотером
@@ -49,13 +49,9 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     if let Some(why) = deep_enough(ctx, &q.reg, &q.tokens, e, usdt_decimals)? {
         return Err(why);
     }
-    let on = ctx.dex_flag("dex.enabled", e.family.dex).and_then(|a| {
-        ctx.dex_flag("dex.pool_enabled", e.family.id)
-            .map(|b| a && b)
-    });
-    match on {
+    match ctx.dex_flag("dex.pool_enabled", e.family.id) {
         Ok(true) => {}
-        Ok(false) => return Err("DEX или вид пула выключен".into()),
+        Ok(false) => return Err("DEX выключена (dex.pool_enabled)".into()),
         Err(err) => return Err(err.message),
     }
     let facts: PoolFacts = checks.pool(&e.pool.reference);

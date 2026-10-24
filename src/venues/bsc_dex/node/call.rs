@@ -101,6 +101,35 @@ pub async fn view_list<C: SolCall>(
         .collect()
 }
 
+/// Разные вызовы (разные контракты и функции) на одном блоке, каждый со своим итогом: при заданном dex.multicall3 —
+/// одним eth_call через Multicall3.aggregate3 (allowFailure), иначе пачкой JSON-RPC. Нужен проверке пулов справочника:
+/// поддельный «пул» может откатить вызов — это ответ, а не сбой. Принимает: (контракт, данные), блок.
+/// Возвращает: по каждому вызову байты ответа или текст отката. Ошибки: узел, BadResponse (ответ aggregate3).
+pub async fn try_many(
+    ctx: &Ctx,
+    calls: &[(Address, Bytes)],
+    block: &str,
+) -> GatewayResult<Vec<Result<Bytes, String>>> {
+    if calls.is_empty() {
+        return Ok(Vec::new());
+    }
+    if let Some(mc) = super::multicall::address(ctx) {
+        return super::multicall::aggregate(ctx, mc, calls, block).await;
+    }
+    let params: Vec<(&str, serde_json::Value)> = calls
+        .iter()
+        .map(|(to, data)| ("eth_call", json!([{ "to": to, "input": data }, block])))
+        .collect();
+    let mut out = Vec::with_capacity(calls.len());
+    for r in rpc::batch(ctx, &params).await? {
+        out.push(match r {
+            Ok(v) => super::jsonrpc::decode::<Bytes>(&v, SOURCE).map_err(|e| e.message),
+            Err(e) => Err(e.message),
+        });
+    }
+    Ok(out)
+}
+
 /// Разбор ответа функции из байт.
 /// Принимает: байты ответа. Возвращает: значение. Ошибка BadResponse — байты не по ABI функции.
 pub fn decode<C: SolCall>(out: &[u8]) -> GatewayResult<C::Return> {

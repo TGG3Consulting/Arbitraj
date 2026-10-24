@@ -5,12 +5,14 @@
 //! текущего блока сети. После каждого куска найденное сохраняется в SQLite; к подписке (attach.rs) найденное
 //! подключается раз в dex.scan_progress_s (вместе со строкой хода) и в конце чтения — пулы V4 слушаются по мере
 //! нахождения, без перезапуска слушателей V2/V3 и без подписки на каждый кусок.
-//! Догнала сеть — история помечается «догнала»: дальше новые блоки дочитывает обычный поиск (discover.rs).
+//! Догнала сеть — история помечается «догнала»: дальше новые пулы V4 приходят событиями Initialize (created.rs).
 //! Кто вызывает: pools/market.rs (задача подписки на рынок; при новой подписке прерывается — память и SQLite
 //! остаются согласованными: блок сдвигается только после записи куска).
 //! От чего зависит: ctx.rs, node/rpc.rs, discover.rs, discover_v4.rs, deploy_block.rs, history_store.rs, scan.rs,
 //! attach.rs, created.rs (Watch), families.rs.
-//! Настройки: dex.enabled, dex.pool_enabled, dex.pool_manager [вид пула V4]; dex.logs_block_batch,
+//! Необязательна (решение 58): пулы V4 и Infinity приходят из справочника индексатора с проверкой ключа у менеджера
+//! или PositionManager; история нужна только для пулов Uniswap V4 без позиций через PositionManager.
+//! Настройки: dex.pool_enabled, dex.pool_manager [DEX V4]; dex.logs_block_batch,
 //! dex.scan_progress_s, dex.pools_per_sub, dex.history_scan (пауза из интерфейса — history_gate.rs) [bsc_dex].
 //!
 //! eth_blockNumber, eth_getLogs — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
@@ -28,7 +30,7 @@ use super::super::node::rpc;
 use super::attach::attach;
 use super::created::Watch;
 use super::discover::{self, Found, History, Scanned, against, is_v4};
-use super::families::{FAMILIES, Family};
+use super::families::{self, Family};
 use super::listen::Pools;
 use super::{deploy_block, discover_v4, history_gate, history_store, scan};
 
@@ -37,7 +39,7 @@ use super::{deploy_block, discover_v4, history_gate, history_store, scan};
 /// до проверки пул с крючком B/C не торгуется. Ошибок нет.
 pub async fn run(p: Pools, scanned: Scanned, watches: Vec<Watch>, wake: Recheck) {
     let mut jobs = Vec::new();
-    for f in FAMILIES.iter().filter(|f| is_v4(f)) {
+    for f in families::all(&p.ctx).into_iter().filter(|f| is_v4(f)) {
         if discover::enabled(&p.ctx, f).await {
             jobs.push(family(&p, f, &scanned, &watches));
         }

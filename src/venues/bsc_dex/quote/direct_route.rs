@@ -81,12 +81,11 @@ pub async fn quote(
     }
 }
 
-/// Можно ли пару пулов исполнить одной транзакцией: одна DEX, один Universal Router, один Permit2, один формат.
+/// Можно ли пару пулов исполнить одной транзакцией: один Universal Router, один Permit2, один формат.
 /// Возвращает: Ok или причину.
 pub fn one_router(ctx: &Ctx, a: &Entry, b: &Entry) -> Result<(), String> {
     let addr = |name: &str, e: &Entry| ctx.dex_addr(name, e.family.id).map_err(|x| x.message);
-    let same = a.family.dex == b.family.dex
-        && addr("dex.universal_router", a)? == addr("dex.universal_router", b)?
+    let same = addr("dex.universal_router", a)? == addr("dex.universal_router", b)?
         && addr("dex.permit2", a)? == addr("dex.permit2", b)?
         && ur::format(ctx, a).map_err(|x| x.message)?
             == ur::format(ctx, b).map_err(|x| x.message)?;

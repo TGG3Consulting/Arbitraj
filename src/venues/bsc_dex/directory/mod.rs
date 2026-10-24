@@ -14,7 +14,7 @@ pub mod limit;
 pub mod refresh;
 pub mod store;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 use alloy_primitives::Address;
@@ -25,6 +25,7 @@ use crate::core::types::{
 };
 
 use super::node::pace::Pace;
+use super::pools::discover::Found;
 use gt_parse::IndexedPool;
 
 /// Монета справочника.
@@ -51,6 +52,12 @@ pub struct Snap {
     pub quotes: HashSet<Address>,
     /// Итог адаптера по пулу (ключ — адрес пула или PoolId как у индексатора). Нет записи — «не проверен».
     pub status: HashMap<String, DirectoryStatus>,
+    /// Пулы, прошедшие проверку на своём узле (ключ — как в status): их слушает подписка (pools/index.rs).
+    pub taken: HashMap<String, Found>,
+    /// Отказы, уже записанные в журнал (пул и причина) — каждый один раз.
+    pub logged: HashSet<String>,
+    /// DEX индексатора с пулами, но не подключённые — для одной записи журнала на смену списка.
+    pub unconnected: BTreeSet<String>,
     pub error: Option<String>,
 }
 

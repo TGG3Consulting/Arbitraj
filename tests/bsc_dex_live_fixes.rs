@@ -23,7 +23,7 @@ use arb::gateway::errors::{ErrorCode, GatewayError};
 use arb::venues::bsc_dex::check::recheck::Recheck;
 use arb::venues::bsc_dex::math::swap_cl::{self, ClState, Version};
 use arb::venues::bsc_dex::math::tick_math::sqrt_ratio_at_tick;
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 use arb::venues::bsc_dex::quote::{emptiness, quoter_revert};
@@ -88,7 +88,7 @@ fn recheck_button_queues_only_given_coins() {
 
 /// Запись пула для проверки пустоты.
 fn entry(state: PoolState) -> Entry {
-    let family = FAMILIES.iter().find(|f| f.id == "pancakeswap_v3").unwrap();
+    let family = families::make("pancakeswap_v3", "v3_fork_pancake").unwrap();
     Entry {
         family,
         pool: Pool {

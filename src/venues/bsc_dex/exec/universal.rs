@@ -19,7 +19,7 @@ use alloy_primitives::{Address, U256};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::pools::families::PANCAKESWAP;
+use super::super::pools::families::smart_ok;
 use super::super::wallet::approve;
 use super::chain::{self, Step};
 use super::plan::Plan;
@@ -52,10 +52,10 @@ pub async fn build(
             return Err(ctx.err(ErrorCode::Internal, "доля не той пары токенов"));
         }
         for (i, s) in leg.iter().enumerate() {
-            if s.entry.family.dex != PANCAKESWAP || s.order.min_out.is_zero() {
+            if !smart_ok(ctx, s.entry.family) || s.order.min_out.is_zero() {
                 return Err(ctx.err(
                     ErrorCode::Internal,
-                    format!("{}: шаг не PancakeSwap или минимум 0", s.entry.family.title),
+                    format!("{}: шаг не исполняет умный роутер (dex.universal_router ≠ smart.universal_router) или минимум 0", s.entry.family.title),
                 ));
             }
             if i == 0 {

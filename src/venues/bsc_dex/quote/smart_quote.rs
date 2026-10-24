@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/quote/smart_quote.rs
-//! Что делает: котировка режима «smart» (решение 38): умный маршрут по пулам PancakeSwap и путям через промежуточные
-//! монеты (quote/smart.rs, решение 52) против прямой сделки Uniswap — лучший пул или пара пулов через промежуточную
-//! (quote/direct_route.rs) — берётся больший итог (quote/pick.rs). Монета только с пулами Uniswap торгуется напрямую;
-//! только с PancakeSwap — умным маршрутом. Затраты умного маршрута — затраты его долей по шагам (quote/costs.rs).
+//! Что делает: котировка режима «smart» (решение 38): умный маршрут по пулам DEX умного роутера (PancakeSwap —
+//! dex.universal_router = smart.universal_router) и путям через промежуточные монеты (quote/smart.rs, решение 52)
+//! против прямой сделки в пулах остальных DEX (Uniswap и др.) — лучший пул или пара пулов через промежуточную
+//! (quote/direct_route.rs) — берётся больший итог (quote/pick.rs). Монета только с пулами других DEX торгуется
+//! напрямую; только с пулами умного роутера — умным маршрутом. Затраты умного маршрута — затраты его долей по шагам (quote/costs.rs).
 //! Кто вызывает: quote/mod.rs.
 //! От чего зависит: quote/smart.rs, quote/direct_route.rs, quote/costs.rs, quote/pick.rs, quote/via.rs, pools/families.rs.
 //! Настройки: через вызываемые — smart.*, dex.* (см. их шапки).
@@ -13,7 +14,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{Asset, Quote, RouteMode};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::families::PANCAKESWAP;
+use super::super::pools::families::smart_ok;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::steps::Names;
@@ -46,7 +47,7 @@ pub async fn quote(
             names,
         )
     });
-    let uni = |e: &Entry| e.family.dex != PANCAKESWAP;
+    let uni = |e: &Entry| !smart_ok(ctx, e.family);
     let direct = direct_route::quote(v, names, asset, qty, entries, mids, &uni, gas).await;
     match (smart, direct) {
         (Ok(a), Ok(b)) => Ok(pick::pick(v.q, a, b, v.side, v.usdt_dec).await),
@@ -54,7 +55,7 @@ pub async fn quote(
         (Err(a), Err(_)) if a.code != ErrorCode::NoRoute => Err(a),
         (Err(a), Err(b)) => Err(ctx.err(
             ErrorCode::NoRoute,
-            format!("{}; прямая сделка Uniswap: {}", a.message, b.message),
+            format!("{}; прямая сделка (другие DEX): {}", a.message, b.message),
         )),
     }
 }

@@ -38,13 +38,7 @@ pub async fn run(
     quotes: HashSet<Address>,
     tx: Option<UnboundedSender<Address>>,
 ) {
-    ctx.index.with(|s| {
-        s.quotes = quotes;
-        s.tokens.retain(|a, _| coins.contains_key(a));
-        for (a, t) in &coins {
-            s.tokens.entry(*a).or_default().ticker = t.clone();
-        }
-    });
+    prepare(&ctx, &coins, quotes);
     let mut watch = Watch::new(ctx.settings.subscribe(), vec!["index.".into()]);
     let mut loaded: Option<String> = None;
     loop {
@@ -177,8 +171,19 @@ fn next_due(ctx: &Ctx, every: chrono::Duration) -> Duration {
         .unwrap_or(Duration::ZERO)
 }
 
+/// Монеты и встречные токены подписки — в состояние справочника (лишние монеты убираются). Ошибок нет.
+pub fn prepare(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: HashSet<Address>) {
+    ctx.index.with(|s| {
+        s.quotes = quotes;
+        s.tokens.retain(|a, _| coins.contains_key(a));
+        for (a, t) in coins {
+            s.tokens.entry(*a).or_default().ticker = t.clone();
+        }
+    });
+}
+
 /// Сохранённое в SQLite — в память (только монеты подписки). Ошибки: Internal.
-async fn restore(ctx: &Ctx, net: &str, coins: &HashMap<Address, String>) -> GatewayResult<()> {
+pub async fn restore(ctx: &Ctx, net: &str, coins: &HashMap<Address, String>) -> GatewayResult<()> {
     let tokens = store::load_tokens(ctx, net).await?;
     let dexes = store::load_dexes(ctx, net).await?;
     ctx.index.with(|s| {

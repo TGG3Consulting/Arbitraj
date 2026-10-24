@@ -23,7 +23,7 @@ use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::exec::trade;
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::send::{cancel, tx::SendCfg};
 
@@ -89,7 +89,7 @@ async fn max_wait_must_cover_bundle_blocks() {
 
 /// Пара V2 «монета — USDT».
 fn entry() -> Entry {
-    let family = FAMILIES.iter().find(|f| f.id == "pancakeswap_v2").unwrap();
+    let family = families::make("pancakeswap_v2", "v2_fork").unwrap();
     Entry {
         family,
         pool: Pool {

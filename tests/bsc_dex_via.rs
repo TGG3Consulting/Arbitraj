@@ -28,7 +28,7 @@ use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::exec::chain;
 use arb::venues::bsc_dex::exec::ur::CONTRACT_BALANCE;
 use arb::venues::bsc_dex::parts::Parts;
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::mids::Mid;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::quote::steps::{self, Names};
@@ -63,7 +63,11 @@ async fn ctx() -> Ctx {
         ("venue.quote_asset", v.clone(), json!("USDT")),
         ("dex.min_pool_liquidity_usd", v.clone(), json!(1)),
         ("exec.dex_slippage_pct", v.clone(), json!(1)),
-        ("dex.enabled", Scope::Dex("pancakeswap".into()), json!(true)),
+        (
+            "dex.kind",
+            Scope::Dex("pancakeswap_v2".into()),
+            json!("v2_fork"),
+        ),
         (
             "dex.pool_enabled",
             Scope::Dex("pancakeswap_v2".into()),
@@ -92,7 +96,7 @@ fn pair(
     r_coin: u128,
     r_quote: u128,
 ) -> Entry {
-    let f = FAMILIES.iter().find(|f| f.id == "pancakeswap_v2").unwrap();
+    let f = families::make("pancakeswap_v2", "v2_fork").unwrap();
     let (t0, t1, r0, r1) = if coin < quote {
         (coin, quote, r_coin, r_quote)
     } else {

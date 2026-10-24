@@ -69,7 +69,7 @@
 
     {#if d?.directory}<PoolDirectory dir={d.directory} />{/if}
     <ErrorText text={d?.directoryError} />
-    {#if d?.families}<DexFamilies families={d.families} />{/if}
+    {#if d?.families}<DexFamilies families={d.families} dir={d.directory} />{/if}
     <ErrorText text={d?.familiesError} />
     {#if d?.channels}<VenueChannels venue={id} channels={d.channels} />{/if}
     <ErrorText text={d?.channelsError} />

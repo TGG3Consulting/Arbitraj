@@ -8,7 +8,7 @@
 //! (Issue #7), проверка — quote/via_pools.rs.
 //! Список найденных промежуточных монет хранится в памяти (Mids) — котировка и сделка читают его.
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
-//! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs, pools/discover.rs.
+//! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
 //! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker [bsc_dex]; dex.router [вид пула V2] (WETH()).
 //!
 //! WETH() — IUniswapV2Router01.sol#L5 (v2-periphery ed249913), IPancakeRouter01.sol#L5 (pancake-swap-periphery
@@ -25,8 +25,7 @@ use super::super::ctx::Ctx;
 use super::super::node::abi_dex::IV2Router;
 use super::super::node::call;
 use super::super::tokens::Tokens;
-use super::discover;
-use super::families::{FAMILIES, Proto};
+use super::families::{self, Proto};
 
 /// Промежуточная монета: адрес и тикер для затрат.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,8 +109,11 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
 /// Адреса обёртки нативной монеты: WETH() роутеров включённых видов V2. Сбой вида — в журнал, вид пропускается.
 async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
     let mut out = Vec::new();
-    for f in FAMILIES.iter().filter(|f| f.proto == Proto::V2) {
-        if !discover::enabled(ctx, f).await {
+    for f in families::all(ctx)
+        .into_iter()
+        .filter(|f| f.proto == Proto::V2)
+    {
+        if families::classify(ctx, f.id).is_err() {
             continue;
         }
         let res = match ctx.dex_addr("dex.router", f.id) {

@@ -18,7 +18,7 @@ use chrono::Utc;
 use arb::core::types::{Pool, PoolRef, PoolState, VenueId};
 use arb::venues::bsc_dex::pools::abi_v2v3::IV2Pair;
 use arb::venues::bsc_dex::pools::events::{self, Applied};
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::registry::Entry;
 
 const PAIR: Address = address!("0x1000000000000000000000000000000000000001");
@@ -46,7 +46,7 @@ fn sync(block: u64, index: u64, r0: u64, r1: u64) -> Log {
 
 /// Запись пары V2, прочитанная на конце блока `block`.
 fn entry(block: u64) -> Entry {
-    let family = FAMILIES.iter().find(|f| f.id == "pancakeswap_v2").unwrap();
+    let family = families::make("pancakeswap_v2", "v2_fork").unwrap();
     Entry {
         family,
         pool: Pool {

@@ -24,7 +24,7 @@ use arb::storage::venue_state;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::pools::abi_v2v3::IV3Factory;
 use arb::venues::bsc_dex::pools::discover::{Found, against};
-use arb::venues::bsc_dex::pools::families::FAMILIES;
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::{created, deploy_block};
 
 const FACTORY: Address = address!("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865");
@@ -55,7 +55,7 @@ async fn deploy_block_survives_restart_per_manager() {
     let d = std::env::temp_dir().join(format!("arb-dex-deploy-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
-    let f = FAMILIES.iter().find(|f| f.id == "uniswap_v4").unwrap();
+    let f = families::make("uniswap_v4", "uniswap_v4").unwrap();
     {
         let c = ctx(&d).await;
         assert_eq!(deploy_block::stored(&c, f, FACTORY).await, None);
@@ -109,7 +109,7 @@ fn creation_event_matters_only_for_our_coins() {
 
 #[test]
 fn v4_pool_is_taken_against_quote_token() {
-    let f = FAMILIES.iter().find(|f| f.id == "uniswap_v4").unwrap();
+    let f = families::make("uniswap_v4", "uniswap_v4").unwrap();
     let p = Found {
         family: f,
         reference: PoolRef::Contract(FACTORY),
@@ -170,7 +170,7 @@ async fn v4_history_survives_restart_per_manager() {
     let d = std::env::temp_dir().join(format!("arb-dex-history-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
-    let f = FAMILIES.iter().find(|f| f.id == "uniswap_v4").unwrap();
+    let f = families::make("uniswap_v4", "uniswap_v4").unwrap();
     let manager = address!("0x3000000000000000000000000000000000000003");
     {
         let c = ctx(&d).await;

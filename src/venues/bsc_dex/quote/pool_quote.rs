@@ -3,7 +3,7 @@
 //! полная комиссия (V2 — настройка, V3 — fee пула, V4 — протокольная + LP по направлению), точный вход/выход.
 //! Кто вызывает: quote/direct.rs, quote/liquidity.rs, quote/quoter.rs (сверка), check/hooks_probe.rs.
 //! От чего зависит: math/*, pools/registry.rs, ctx.rs.
-//! Настройки: dex.v2_fee_pct [вид пула V2].
+//! Настройки: dex.v2_fee_pct [DEX V2] — если у пары нет своей комиссии (dex.v2_fee_source = pool).
 //!
 //! Комиссия V4: протокольная по направлению — нижние 12 бит (zeroForOne) или верхние 12 (oneForZero);
 //! swapFee = p + lp − p·lp/1e6 (p = 0 → lp) — ProtocolFeeLibrary.calculateSwapFee:
@@ -11,6 +11,7 @@
 //! infinity-core src/libraries/ProtocolFeeLibrary.sol#L51-L59; применение — Pool.sol#L300-L307, BinPool.sol#L124-L129.
 
 use alloy_primitives::{Address, U256};
+use rust_decimal::Decimal;
 
 use crate::core::types::{PoolKind, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -53,8 +54,8 @@ pub fn swap(
     };
     match (&e.pool.state, e.pool.kind) {
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
-            let fee = v2::fee_ratio(ctx.dex_dec("dex.v2_fee_pct", e.family.id)?)
-                .ok_or_else(|| ctx.err(ErrorCode::NotConfigured, "dex.v2_fee_pct вне 0–100%"))?;
+            let fee = v2::fee_ratio(v2_fee_pct(ctx, e)?)
+                .ok_or_else(|| ctx.err(ErrorCode::NotConfigured, "комиссия пары V2 вне 0–100%"))?;
             let (r_in, r_out) = if zero_for_one {
                 (*reserve0, *reserve1)
             } else {
@@ -147,6 +148,15 @@ pub fn swap_fee(protocol_fee: u32, lp_fee: u32, zero_for_one: bool) -> u32 {
         return lp as u32;
     }
     (p + lp - p * lp / PIPS) as u32
+}
+
+/// Комиссия пары V2 в процентах: своя у пары (fee_pips — прочитана с пары при проверке, dex.v2_fee_source = pool)
+/// или общая для DEX (dex.v2_fee_pct). Ошибки: NotConfigured (dex.v2_fee_pct).
+pub fn v2_fee_pct(ctx: &Ctx, e: &Entry) -> GatewayResult<Decimal> {
+    match e.pool.fee_pips {
+        Some(p) => Ok(Decimal::from(p) / Decimal::from(10_000u32)),
+        None => ctx.dex_dec("dex.v2_fee_pct", e.family.id),
+    }
 }
 
 #[cfg(test)]

@@ -6,11 +6,11 @@
 //! Настройки: это и есть их список (зеркало docs/SETTINGS.md, решения 29, 31, 38).
 //!
 //! Адреса контрактов — только из официальной документации DEX (research/flow/bsc_dex.md, bsc_v4.md,
-//! bsc_smart_router.md); вводит Тигран. Область «DEX» (dx): id — DEX («pancakeswap») для dex.enabled
-//! или вид пула («pancakeswap_v3») для остальных dex.* с этой областью.
+//! bsc_smart_router.md); вводит Тигран. Область «DEX» (dx): id — id DEX у индексатора (решение 58, таблица
+//! сопоставления dex.kind), например «pancakeswap-v3-bsc».
 
 use super::{DX, G, V, d};
-use crate::settings::schema::{DexId, Kind as K, Limit as L, SettingDef};
+use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
@@ -24,8 +24,8 @@ pub static DEX: &[SettingDef] = &[
     d("Узел BSC", "bsc.node_http_url", K::Url, L::None, "URL", G, "HTTP узла BSC (eth_call, eth_getLogs, eth_estimateGas, квитанции); ключ — как {key}, секрет bsc.node_http_key"),
     d("DEX", "dex.multicall3", K::Address, L::None, "адрес", V, "Multicall3 (github.com/mds1/multicall3): пачка чтений — один eth_call вместо N (у NodeReal 20 CU за eth_call). Не задан — пачкой JSON-RPC (N вызовов), поиск пулов — по вызову на пару"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
-    d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),
-    d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "Вид пула включён (id области — вид пула, например pancakeswap_v3) (решение 31)"),
+    d("DEX", "dex.kind", K::Choice, L::None, "вид", DX, "Таблица сопоставления (решение 58): вид пулов DEX индексатора (id области — id DEX у индексатора, например pancakeswap-v3-bsc): форк V2, форк V3 с ABI Uniswap или PancakeSwap, PancakeSwap Infinity CL / Bin, Uniswap V4 или «не поддерживается». Не задан — пулы этой DEX не берутся («DEX не подключена»)").choices(&["v2_fork", "v3_fork", "v3_fork_pancake", "pancakeswap_infinity_cl", "pancakeswap_infinity_bin", "uniswap_v4", "unsupported"]),
+    d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — id DEX у индексатора). Нет — её пулы не берутся из справочника и не торгуются"),
     d("DEX", "dex.intermediate_enabled", K::Bool, L::None, "да/нет", V, "Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и монеты с пулом только с промежуточной допускаются; нет — только пулы с USDT"),
     d("DEX", "dex.inflow_wait_notify_s", K::Integer, L::Positive, "секунды", V, "Обмен ждёт ожидаемого поступления того же токена в кошелёк дольше — одно уведомление в Telegram (dex.swap_waits_inflow)"),
     d("DEX", "dex.native_ticker", K::Text, L::None, "тикер", V, "Как биржа называет нативную монету BSC (BNB): этим тикером записываются затраты шага через её обёртку (WETH() роутера V2 своей DEX, WBNB 1:1)"),
@@ -34,7 +34,7 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.pool_load_retries", K::Integer, L::Positive, "попыток", V, "Состояние пула не прочиталось при подключении (сбой узла): сколько раз повторить чтение — по разу на каждый новый блок; дальше пул недостоверен до переподключения подписки"),
     d("DEX", "dex.pools_per_sub", K::Integer, L::Positive, "штук", V, "Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics)"),
     d("DEX", "dex.logs_block_batch", K::Integer, L::Positive, "блоков", V, "Сколько блоков в одном eth_getLogs при чтении истории Initialize пулов V4 (не больше лимита провайдера узла)"),
-    d("DEX", "dex.history_scan", K::Bool, L::None, "да/нет", V, "Читать историю пулов V4 (разовое чтение Initialize, eth_getLogs): нет — пауза перед следующим куском, место сохраняется, найденные пулы слушаются, виды пулов не выключаются"),
+    d("DEX", "dex.history_scan", K::Bool, L::None, "да/нет", V, "Необязательно (решение 58: пулы V4 и Infinity — из справочника, проверка по ключу у менеджера). Читать историю пулов V4 (разовое чтение Initialize, eth_getLogs) — нужна только для пулов Uniswap V4 без позиций через PositionManager: нет или не задана — не читается (место сохраняется, найденное слушается)"),
     d("DEX", "dex.scan_progress_s", K::Integer, L::Positive, "секунды", V, "Чтение истории пулов V4: ход (прочитано, осталось блоков) — в журнал не чаще раза в столько секунд; найденные пулы подключаются к подписке с той же частотой"),
     d("DEX", "dex.tick_words", K::Integer, L::Positive, "слов", V, "V3/CL: сколько слов битмапа тиков читать вокруг текущего тика"),
     d("DEX", "dex.bin_depth_usd", K::Decimal, L::Positive, "USDT", V, "Bin: на какую глубину в USDT читать бины в обе стороны от активного"),
@@ -48,16 +48,19 @@ pub static DEX: &[SettingDef] = &[
     d("Умный режим", "smart.mixed_quoter", K::Address, L::None, "адрес", V, "MixedQuoter PancakeSwap — сверка умного маршрута"),
     d("Умный режим", "smart.max_splits", K::Integer, L::Positive, "долей", V, "На сколько долей можно делить вход"),
     d("Умный режим", "smart.split_step_pct", K::Decimal, L::Percent, "%", V, "Шаг доли при поиске деления входа"),
-    d("Контракты DEX", "dex.factory", K::Address, L::None, "адрес", DX, "V2/V3: фабрика пулов"),
+    d("Контракты DEX", "dex.factory", K::Address, L::None, "адрес", DX, "V2/V3: фабрика пулов этой DEX — проверка каждого пула из справочника (factory() пула и getPair/getPool фабрики) и события создания новых пулов"),
     d("Контракты DEX", "dex.router", K::Address, L::None, "адрес", DX, "V2: Router — сверка расчёта пула (getAmountsOut) и обёртка нативной монеты (WETH()); виды V3 и V4 его не используют (обмен — dex.universal_router)"),
-    d("Контракты DEX", "dex.v3_fee_tiers", K::TextList, L::None, "уровни fee", DX, "V3: уровни комиссии для поиска пулов getPool — целые в миллионных долях (100 = 0,01%), через запятую; фабрика их не перечисляет, каждый сверяется с feeAmountTickSpacing фабрики"),
     d("Контракты DEX", "dex.quoter", K::Address, L::None, "адрес", DX, "Квотер: QuoterV2 (V3), CLQuoter / BinQuoter (Infinity), V4Quoter (Uniswap V4)"),
     d("Контракты DEX", "dex.tick_lens", K::Address, L::None, "адрес", DX, "V3: TickLens (тики пачкой)"),
-    d("Контракты DEX", "dex.pool_manager", K::Address, L::None, "адрес", DX, "V4: CLPoolManager / BinPoolManager / PoolManager"),
+    d("Контракты DEX", "dex.pool_manager", K::Address, L::None, "адрес", DX, "V4: CLPoolManager / BinPoolManager / PoolManager — пул из справочника проверяется по ключу у менеджера (Infinity: poolIdToPoolKey)"),
+    d("Контракты DEX", "dex.position_manager", K::Address, L::None, "адрес", DX, "Uniswap V4: PositionManager — ключ пула из справочника (poolKeys по PoolId) для проверки; пул без позиций через него не находится — тогда только история V4 (dex.history_scan)"),
     d("Контракты DEX", "dex.vault", K::Address, L::None, "адрес", DX, "PancakeSwap Infinity: Vault"),
     d("Контракты DEX", "dex.state_view", K::Address, L::None, "адрес", DX, "Uniswap V4: StateView (чтение состояния пула)"),
-    d("Контракты DEX", "dex.universal_router", K::Address, L::None, "адрес", DX, "V4: Universal Router своей DEX — прямой обмен в пуле V4"),
-    d("Контракты DEX", "dex.universal_router_version", K::Text, L::None, "версия", DX, "Версия Universal Router (от неё зависит формат обмена, у Uniswap: 2.0 / 2.1.1 / 2.1.2)"),
+    d("Контракты DEX", "dex.universal_router", K::Address, L::None, "адрес", DX, "Universal Router этой DEX — прямой обмен в её пуле любого вида (решение 40: проверка баланса в той же транзакции). Universal Router знает только свою фабрику: адрес — с официальной страницы той же DEX. Не задан — пулы DEX не берутся («не подключена»): пул без роутера в сделках не участвует. Совпадает со smart.universal_router — пулы DEX идут и в умный маршрут"),
+    d("Контракты DEX", "dex.universal_router_version", K::Choice, L::None, "версия", DX, "Формат команд Universal Router этой DEX: pancakeswap_infinity — Universal Router PancakeSwap Infinity; 2.0 / 2.1.1 / 2.1.2 — версии Universal Router Uniswap (официальный SDK)").choices(&["pancakeswap_infinity", "2.0", "2.1.1", "2.1.2"]),
     d("Контракты DEX", "dex.permit2", K::Address, L::None, "адрес", DX, "Permit2 своей DEX (у PancakeSwap и Uniswap — разные)"),
-    d("Контракты DEX", "dex.v2_fee_pct", K::Decimal, L::Percent, "%", DX, "V2: комиссия пула (из кода пары своей DEX)"),
+    d("Контракты DEX", "dex.v2_fee_source", K::Choice, L::None, "источник", DX, "V2: откуда комиссия пары — fixed: одна на всю DEX (dex.v2_fee_pct, из кода пары своей DEX); pool: своя у каждой пары, читается с пары методом dex.v2_fee_method при проверке пула (например Biswap: swapFee())").choices(&["fixed", "pool"]),
+    d("Контракты DEX", "dex.v2_fee_pct", K::Decimal, L::Percent, "%", DX, "V2 (dex.v2_fee_source = fixed): комиссия пары (из кода пары своей DEX)"),
+    d("Контракты DEX", "dex.v2_fee_method", K::Text, L::None, "сигнатура", DX, "V2 (dex.v2_fee_source = pool): view-метод пары без аргументов, возвращающий комиссию целым, — сигнатура как в коде пары своей DEX (Biswap: swapFee() — BiswapPair.sol)"),
+    d("Контракты DEX", "dex.v2_fee_denominator", K::Integer, L::Positive, "делитель", DX, "V2 (dex.v2_fee_source = pool): комиссия = значение метода / делитель (Biswap: 1000 — balance·1000 − amountIn·swapFee в BiswapPair.sol)"),
 ];

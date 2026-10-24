@@ -90,7 +90,7 @@ impl Venue for BscDex {
         coins::networks(&self.p.ctx, &self.p.registry)
     }
 
-    /// Подписка на рынок: newHeads, пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
+    /// Подписка на рынок: опрос блоков (решение 57), пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
     /// циклы проверок; события — в `out` (pools/market.rs). Прежние задачи подписки останавливаются.
     /// Ошибки: NotConfigured (venue.quote_asset, dex.*), узел.
     async fn subscribe_market(

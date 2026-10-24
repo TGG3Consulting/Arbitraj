@@ -1,19 +1,27 @@
 //! Файл: venues/bsc_dex/node/heads.rs
-//! Что делает: постоянная подписка newHeads — последний блок сети, его свежесть («не торгуем вслепую»)
-//! и обнаружение реорга (новая голова не продолжает прежнюю). Обрыв — переподключение после паузы.
-//! Кто вызывает: mod.rs (запуск при подписке на рынок), quote/*, exec/*, send/track.rs (номер блока, свежесть).
-//! От чего зависит: ctx.rs, node/ws.rs, errors.rs.
-//! Настройки: feed.stale_after_ms [bsc_dex] (голова старше — данные устарели), venue.ws_reconnect_pause_ms [bsc_dex];
-//! узел — bsc.node_ws_url.
+//! Что делает: последний блок сети BSC и его свежесть («не торгуем вслепую»). Решение 57: номер блока опрашивается
+//! eth_blockNumber по HTTP раз в bsc.blocks_poll_ms, а не подпиской newHeads по WebSocket: у NodeReal WS считается
+//! по байтам (0,04 CU/байт), поток заголовков newHeads ≈ 5,2 КБ/с ≈ до 200 CU/с — больше половины бесплатных
+//! 150 CU/с; eth_blockNumber — 5 CU за вызов. Опрос идёт мимо общей очереди темпа узла (rpc::call_unpaced): проверки
+//! не отодвигают его, от него зависит свежесть.
+//! Свежесть: голова «получена» в момент, когда номер блока вырос; номер стоит дольше feed.stale_after_ms (узел
+//! встал или опрос не проходит) — данные устарели, сделок нет. Слушатели получают только новые номера.
+//! Время блока (deadline обменов, проба налогов) — отдельным eth_getBlockByNumber (15 CU) только по запросу и не
+//! чаще раза на блок (кэш по номеру). Хеши заголовков больше не приходят — реорги видны по removed: true в логах
+//! пулов (pools/listen_log.rs) и по квитанциям транзакций (send/track.rs).
+//! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
+//! pools/http_wait.rs, pools/session.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs, errors.rs.
+//! Настройки: bsc.blocks_poll_ms (вся система), feed.stale_after_ms [bsc_dex]; узел — bsc.node_http_url.
 //!
-//! Источники: eth_subscribe "newHeads" —
-//! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60 ;
-//! при реорге «will emit the last header in the new chain» — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub ;
-//! поля заголовка (number, hash, parentHash, timestamp — hex-числа) — execution-apis, schemas/block.yaml.
+//! Источники: eth_blockNumber, eth_getBlockByNumber (поле timestamp — hex-число) — execution-apis
+//! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth (block.yaml,
+//! schemas/block.yaml); цены методов и WS по байтам — https://docs.nodereal.io/docs/compute-units-cus .
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use alloy_primitives::{B256, U64};
+use alloy_primitives::U64;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::json;
@@ -23,27 +31,20 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::ws::Conn;
+use super::call::block_tag;
+use super::rpc;
 
-/// Голова сети, как её прислал узел.
+/// Голова сети: номер блока и когда мы увидели, что он вырос.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Head {
     pub number: u64,
-    pub hash: B256,
-    pub parent: B256,
-    /// Время блока (секунды Unix) — по нему считаются deadline обменов.
-    pub timestamp: u64,
-    /// Когда получено на нашем сервере.
+    /// Когда номер вырос до этого (на нашем сервере).
     pub received_at: DateTime<Utc>,
 }
 
-/// Заголовок из уведомления newHeads: только нужные поля.
+/// Поле timestamp блока из eth_getBlockByNumber.
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RawHead {
-    number: U64,
-    hash: B256,
-    parent_hash: B256,
+struct RawBlock {
     timestamp: U64,
 }
 
@@ -51,18 +52,21 @@ struct RawHead {
 #[derive(Clone)]
 pub struct Heads {
     tx: watch::Sender<Option<Head>>,
+    /// Время последнего запрошенного блока: (номер, секунды Unix).
+    time: Arc<Mutex<Option<(u64, u64)>>>,
 }
 
 impl Default for Heads {
     fn default() -> Self {
         Self {
             tx: watch::channel(None).0,
+            time: Arc::default(),
         }
     }
 }
 
 impl Heads {
-    /// Приёмник новых голов (для трекера транзакций и пулов). Ошибок нет.
+    /// Приёмник новых номеров блока (трекер транзакций, пулы). Ошибок нет.
     pub fn watch(&self) -> watch::Receiver<Option<Head>> {
         self.tx.subscribe()
     }
@@ -72,14 +76,14 @@ impl Heads {
         self.tx.borrow().clone()
     }
 
-    /// Свежая голова: получена не раньше feed.stale_after_ms назад.
+    /// Свежая голова: номер вырос не раньше feed.stale_after_ms назад.
     /// Ошибки: StaleData (нет головы или устарела), NotConfigured (порог не задан).
     pub fn fresh(&self, ctx: &Ctx) -> GatewayResult<Head> {
         let limit = ctx.int("feed.stale_after_ms")? as i64;
         let head = self.latest().ok_or_else(|| {
             ctx.err(
                 ErrorCode::StaleData,
-                "Нет данных о блоках сети BSC (newHeads)",
+                "Нет данных о блоках сети BSC (опрос eth_blockNumber)",
             )
         })?;
         let age = (Utc::now() - head.received_at).num_milliseconds();
@@ -92,73 +96,94 @@ impl Heads {
         Ok(head)
     }
 
-    /// Работает постоянно: подписка newHeads, при обрыве — пауза venue.ws_reconnect_pause_ms и снова.
-    /// Не задан узел или пауза — запись в журнал и выход (запустится снова при следующей подписке на рынок).
-    /// Принимает: окружение. Ошибок не возвращает.
-    pub async fn run(self, ctx: Ctx) {
-        loop {
-            if let Err(e) = self.session(&ctx).await {
-                ctx.log(
-                    Level::Error,
-                    "venue.ws",
-                    format!("newHeads: {}", e.message),
-                    None,
+    /// Время свежего блока (секунды Unix) — для deadline обменов и пробы налогов. Один eth_getBlockByNumber на блок
+    /// (кэш по номеру). Ошибки: как у fresh; узел; BadResponse (узел не знает блок или нет timestamp).
+    pub async fn timestamp(&self, ctx: &Ctx) -> GatewayResult<u64> {
+        let head = self.fresh(ctx)?;
+        if let Some((n, t)) = *self.time.lock().unwrap_or_else(|p| p.into_inner())
+            && n == head.number
+        {
+            return Ok(t);
+        }
+        let b: Option<RawBlock> = rpc::call(
+            ctx,
+            "eth_getBlockByNumber",
+            json!([block_tag(head.number), false]),
+        )
+        .await?;
+        let t = b
+            .ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    format!("узел BSC (HTTP) не знает блок {}", head.number),
                 )
-                .await;
-            }
-            let pause = match ctx.int("venue.ws_reconnect_pause_ms") {
-                Ok(ms) => Duration::from_millis(ms),
+            })?
+            .timestamp
+            .to::<u64>();
+        *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((head.number, t));
+        Ok(t)
+    }
+
+    /// Принимает номер блока из опроса: вырос — новая голова слушателям; не вырос — ничего (свежесть не
+    /// продлевается). Возвращает: была ли новая голова. Ошибок нет.
+    pub fn observe(&self, number: u64) -> bool {
+        if self.latest().is_some_and(|h| h.number >= number) {
+            return false;
+        }
+        self.tx.send_replace(Some(Head {
+            number,
+            received_at: Utc::now(),
+        }));
+        true
+    }
+
+    /// Работает постоянно: eth_blockNumber раз в bsc.blocks_poll_ms. Сбой опроса — одна запись на причину и одна
+    /// на восстановление; голова при этом стареет (fresh → StaleData). Настройка не задана — запись и выход
+    /// (подписка на рынок без неё не начинается — pools/market.rs). Принимает: окружение. Ошибок не возвращает.
+    pub async fn run(self, ctx: Ctx) {
+        let mut last_err: Option<String> = None;
+        loop {
+            let every = match poll_every(&ctx) {
+                Ok(d) => d,
                 Err(e) => {
-                    ctx.log(
-                        Level::Error,
-                        "venue.ws",
-                        format!("newHeads остановлены: {}", e.message),
-                        None,
-                    )
-                    .await;
+                    let msg = format!("Опрос блоков остановлен: {}", e.message);
+                    ctx.log(Level::Error, "venue.heads", msg, None).await;
                     return;
                 }
             };
-            tokio::time::sleep(pause).await;
-        }
-    }
-
-    /// Одна сессия подписки: до обрыва соединения.
-    /// Ошибки: подключение, отказ подписки, непонятный заголовок.
-    async fn session(&self, ctx: &Ctx) -> GatewayResult<()> {
-        let conn = Conn::open(ctx, "heads").await?;
-        let mut sub = conn.subscribe(json!(["newHeads"])).await?;
-        while let Some(raw) = sub.rx.recv().await {
-            let h: RawHead = serde_json::from_str(raw.get()).map_err(|e| {
-                ctx.err(
-                    ErrorCode::BadResponse,
-                    format!("newHeads: непонятный заголовок: {e}"),
-                )
-                .with_raw(raw.get())
-            })?;
-            let head = Head {
-                number: h.number.to(),
-                hash: h.hash,
-                parent: h.parent_hash,
-                timestamp: h.timestamp.to(),
-                received_at: Utc::now(),
-            };
-            if let Some(prev) = self.latest()
-                && head.parent != prev.hash
-                && head.hash != prev.hash
-            {
-                let msg = format!(
-                    "Реорг сети BSC: блок {} ({}) не продолжает {} ({})",
-                    head.number, head.hash, prev.number, prev.hash
-                );
-                ctx.log(Level::Warn, "dex.reorg", msg, None).await;
+            match rpc::call_unpaced::<U64>(&ctx, "eth_blockNumber", json!([])).await {
+                Ok(n) => {
+                    self.observe(n.to());
+                    if last_err.take().is_some() {
+                        let msg = "Опрос блоков снова работает".to_string();
+                        ctx.log(Level::Info, "venue.heads", msg, None).await;
+                    }
+                }
+                Err(e) if last_err.as_deref() != Some(e.message.as_str()) => {
+                    let msg = format!("Опрос блоков: {}", e.message);
+                    ctx.log(Level::Warn, "venue.heads", msg, None).await;
+                    last_err = Some(e.message);
+                }
+                Err(_) => {}
             }
-            self.tx.send_replace(Some(head));
+            tokio::time::sleep(every).await;
         }
-        Err(ctx.err(
-            ErrorCode::Unreachable,
-            conn.end_reason()
-                .unwrap_or_else(|| "подписка закрыта".into()),
-        ))
     }
+}
+
+/// Интервал опроса блоков: bsc.blocks_poll_ms (вся система), строго меньше feed.stale_after_ms — иначе голова
+/// «устаревала» бы между опросами. Ошибки: NotConfigured (не задана или не меньше порога свежести).
+pub fn poll_every(ctx: &Ctx) -> GatewayResult<Duration> {
+    let ms = ctx
+        .settings
+        .integer("bsc.blocks_poll_ms", crate::settings::read::At::default())
+        .map_err(|e| ctx.tag(e))?;
+    let stale = ctx.int("feed.stale_after_ms")?;
+    if ms >= stale {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            format!("bsc.blocks_poll_ms ({ms}) должен быть меньше feed.stale_after_ms ({stale})"),
+        ));
+    }
+    Ok(Duration::from_millis(ms))
 }

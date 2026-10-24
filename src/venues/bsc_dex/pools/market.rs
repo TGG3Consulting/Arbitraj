@@ -50,6 +50,8 @@ pub async fn subscribe(
         .filter_map(|a| a.bsc_contract.map(|c| (c, a.ticker.clone())))
         .collect();
     let per = subs::per_sub(&p.ctx)?;
+    // Без опроса блоков нет свежести — подписка не начинается, ядро повторит её после задания настройки.
+    super::super::node::heads::poll_every(&p.ctx)?;
     let head: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
     let mut tasks = vec![tokio::spawn(p.heads.clone().run(p.ctx.clone()))];
 

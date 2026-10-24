@@ -61,8 +61,8 @@ pub async fn check(
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
     let sources = Sources::default();
     for (i, (addr, ticker)) in list.iter().enumerate() {
-        let block_time = match p.heads.fresh(&p.ctx) {
-            Ok(h) => h.timestamp,
+        let block_time = match p.heads.timestamp(&p.ctx).await {
+            Ok(t) => t,
             Err(e) => {
                 let msg = format!("Проверка налогов отложена: {}", e.message);
                 p.signals.once(&p.ctx, Level::Warn, "dex.check", msg).await;

@@ -84,7 +84,7 @@ pub async fn trade(
     }
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
-    let now = q.heads.fresh(ctx)?.timestamp;
+    let now = q.heads.timestamp(ctx).await?;
     let p = plan::build(ctx, &steps, wallet, now, false).await?;
     let d = send_plan(env, &slot, p, guard).await?;
     drop(slot);

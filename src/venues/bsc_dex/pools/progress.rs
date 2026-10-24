@@ -48,10 +48,18 @@ impl Signals {
 
     /// Стартовая пачка закончила первую загрузку (успешно или нет). Ошибок нет.
     pub fn loaded(&self) {
-        let before = self
-            .left
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_sub(1))
-            .unwrap_or(0);
+        // Уменьшение без ухода ниже нуля через compare_exchange: fetch_update в новом stable Rust устарел
+        // (переименован в try_update), а try_update нет в старых версиях — так собирается на любой.
+        let mut before = self.left.load(Ordering::SeqCst);
+        while before > 0 {
+            match self
+                .left
+                .compare_exchange(before, before - 1, Ordering::SeqCst, Ordering::SeqCst)
+            {
+                Ok(_) => break,
+                Err(now) => before = now,
+            }
+        }
         if before <= 1 {
             self.started.notify_waiters();
         }

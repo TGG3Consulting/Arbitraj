@@ -2,6 +2,7 @@
 //! Что делает: чтение состояния пула пачки на блоке с отправкой ядру (load_one) и повтор чтения пулов, которые не
 //! прочитались (сбой узла): на каждом новом блоке (опрос блоков node/heads.rs), не больше dex.pool_load_retries раз. Журнал: одна запись
 //! «не прочитан», одна — «прочитан с попытки N» или «так и не прочитан за N попыток».
+//! Многие пулы сразу (приём пачки, повтор) — load_many: пачками через Multicall3 (load_batch.rs, решение 61).
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
 //! От чего зависит: pools/load.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
 //! Настройки: dex.pool_load_retries [bsc_dex].
@@ -41,11 +42,17 @@ pub async fn retry(
         }
     };
     let mut keep = Vec::new();
-    for mut m in std::mem::take(missing) {
+    let waiting = std::mem::take(missing);
+    let items: Vec<(&Found, &str)> = waiting
+        .iter()
+        .map(|m| (&pools[m.i].0, pools[m.i].1.as_str()))
+        .collect();
+    let results = load_many(p, &items, at).await?;
+    for (mut m, res) in waiting.into_iter().zip(results) {
         let (found, ticker) = &pools[m.i];
         m.tries += 1;
         let title = found.family.title;
-        match load_one(p, found, ticker, at).await? {
+        match res {
             Ok(()) => {
                 let msg = format!(
                     "{title} {ticker}: состояние пула прочитано с попытки {}",
@@ -100,3 +107,5 @@ pub async fn load_one(
         Err(e) => Ok(Err(e.message)),
     }
 }
+
+pub use super::reload_many::load_many;

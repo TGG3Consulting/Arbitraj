@@ -27,10 +27,12 @@ use crate::storage::journal::Level;
 use super::super::check::recheck::Recheck;
 use super::super::check::{cycle, quoter_cycle, tax_cycle};
 use super::super::node::{rpc, subs};
+use super::batches::chunks;
 use super::created::{self, Watch};
-use super::discover::{self, Found, Scanned};
+use super::discover::{self, Scanned};
 use super::listen::{self, Pools};
 use super::{history_v4, index, index_watch, market_mids, mids};
+use crate::gateway::urgency::{Urgency as Class, scope};
 
 /// Запускает всё для подписки на рынок.
 /// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
@@ -101,13 +103,11 @@ pub async fn subscribe(
         )));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
-    tasks.push(tokio::spawn(tax_cycle::taxes(
-        p.clone(),
-        all.clone(),
-        usdt,
-        wake.taxes.clone(),
-    )));
-    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.hooks.clone())));
+    // Проверки монет и крючков — класс Check в очереди узла (решение 61): выше загрузки пулов и цикла квотера.
+    let taxes = tax_cycle::taxes(p.clone(), all.clone(), usdt, wake.taxes.clone());
+    tasks.push(tokio::spawn(scope(Class::Check, taxes)));
+    let hooks = cycle::hooks(p.clone(), wake.hooks.clone());
+    tasks.push(tokio::spawn(scope(Class::Check, hooks)));
     tasks.push(tokio::spawn(quoter_cycle::run(
         p.clone(),
         wake.quoter.clone(),
@@ -148,49 +148,6 @@ pub async fn subscribe(
     // сборщик (он прерывается вместе с остальными задачами и при этом гасит своих).
     tasks.push(tokio::spawn(Reaper(extra).wait()));
     Ok(tasks)
-}
-
-/// Пулы пачки с тикерами монет.
-pub type Tickered = Vec<(Found, String)>;
-
-/// Пулы одного вида (и менеджера V4) с тикерами: (ключ вида, пулы). Пулы без тикера монеты не слушаются. Ошибок нет.
-pub fn by_family(
-    found: &[Found],
-    coins: &HashMap<Address, String>,
-) -> Vec<(String, &'static str, Tickered)> {
-    let mut groups: HashMap<(&'static str, Option<Address>), Tickered> = HashMap::new();
-    for f in found {
-        let manager = match &f.reference {
-            PoolRef::Singleton { manager, .. } => Some(*manager),
-            PoolRef::Contract(_) => None,
-        };
-        // Пулы найдены по монетам подписки, у каждой есть тикер; без тикера пул не слушается.
-        if let Some(t) = coins.get(&f.coin) {
-            groups
-                .entry((f.family.id, manager))
-                .or_default()
-                .push((f.clone(), t.clone()));
-        }
-    }
-    groups
-        .into_iter()
-        .map(|((family, manager), list)| (format!("{family}:{manager:?}"), family, list))
-        .collect()
-}
-
-/// Пачки для подписки: (имя, пулы с тикерами), не больше `per` пулов в пачке. Ошибок нет.
-pub fn chunks(
-    found: &[Found],
-    coins: &HashMap<Address, String>,
-    per: usize,
-) -> Vec<(String, Vec<(Found, String)>)> {
-    let mut out = Vec::new();
-    for (_, family, list) in by_family(found, coins) {
-        for (i, part) in list.chunks(per).enumerate() {
-            out.push((format!("{family}-{i}"), part.to_vec()));
-        }
-    }
-    out
 }
 
 /// Сборщик задач слушателей новых пулов: при остановке гасит их.

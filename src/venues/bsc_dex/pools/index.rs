@@ -5,6 +5,7 @@
 //! индексатора ни в каком решении не участвует, мелкие пулы отсекает своя мера dex.min_pool_liquidity_usd в подписке.
 //! Прошедшие — во «взятые» (их слушает подписка); не прошедшие — причина в справочнике и один раз в журнал; сбой узла —
 //! «не проверен» (повтор — index_watch.rs). Пул, исключённый проверкой «кто меняет» (check/emitter.rs), не берётся.
+//! Взятые отдаются подписке в порядке загрузки (order.rs, решение 61: по ликвидности индексатора — только порядок).
 //! Кто вызывает: pools/market.rs (begin), index_watch.rs, created_log.rs (record).
 //! От чего зависит: ctx.rs, directory (состояние, refresh::prepare/restore), families.rs, verify.rs, discover.rs, mids.rs.
 //! Настройки: index.network [bsc_dex]; через вызываемые — dex.verify_batch, dex.* [DEX].
@@ -24,6 +25,7 @@ use super::super::directory::refresh;
 use super::discover::{Found, against};
 use super::families;
 use super::mids::Mid;
+use super::order;
 use super::verify::{self, Candidate, Verdict};
 
 /// Итог проверки: взятые пулы (запрошенных монет) и сколько не проверено из-за узла.
@@ -106,7 +108,10 @@ pub async fn take(ctx: &Ctx, only: Option<&HashSet<Address>>) -> GatewayResult<T
             .cloned()
             .collect()
     });
-    Ok(Took { found, failed })
+    Ok(Took {
+        found: order::order(ctx, found),
+        failed,
+    })
 }
 
 /// Итоги проверки — в справочник: взят / отклонён (в журнал — один раз на пул и причину) / не проверен (узел).
@@ -169,11 +174,14 @@ async fn summary(ctx: &Ctx, now: BTreeSet<String>) {
     }
 }
 
-/// Взятые пулы со встречным токеном (монета — другая валюта пула и есть в списке). Ошибок нет.
+/// Взятые пулы со встречным токеном (монета — другая валюта пула и есть в списке) — в порядке загрузки
+/// (pools/order.rs). Ошибок нет.
 pub fn taken_against(ctx: &Ctx, coins: &HashMap<Address, String>, quote: Address) -> Vec<Found> {
     let all: Vec<Found> = ctx.index.with(|s| s.taken.values().cloned().collect());
-    all.iter()
+    let mine = all
+        .iter()
         .filter_map(|f| against(f, quote))
         .filter(|f| f.coin != quote && coins.contains_key(&f.coin))
-        .collect()
+        .collect();
+    order::order(ctx, mine)
 }

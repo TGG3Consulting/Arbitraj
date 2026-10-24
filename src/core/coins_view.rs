@@ -80,6 +80,7 @@ impl Core {
                     "taxes": first.map(|k| k.taxes.clone()).unwrap_or(CheckState::NotChecked),
                     "tax_source": first.map(|k| k.source.clone()),
                     "checked_at": first.and_then(|k| k.checked_at),
+                    "tax_wait": c.wait,
                     "checks": checks,
                     "block": c.block,
                     "problem": c.problem,

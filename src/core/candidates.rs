@@ -17,6 +17,7 @@ use crate::storage::journal::Level;
 use super::engine::{Core, lk};
 use super::profit::{self, Verdict};
 use super::view::CoreEvent;
+use crate::gateway::urgency::{self, Urgency};
 
 /// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
 /// (следующий тик поставит снова). Ошибок нет.
@@ -36,7 +37,8 @@ pub fn enqueue(core: &Core, d: &Direction) {
 /// Задача очереди: считает кандидатов по одному. Работает, пока жив канал.
 pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
     while let Some(d) = rx.recv().await {
-        let verdict = profit::decide(&core, &d).await;
+        // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
+        let verdict = urgency::scope(Urgency::Trade, profit::decide(&core, &d)).await;
         lk(&core.inner.queued).remove(&d);
         let row = json!({ "direction": d, "verdict": verdict, "at": chrono::Utc::now() });
         lk(&core.inner.candidates).insert(d.clone(), row.clone());

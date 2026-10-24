@@ -12,9 +12,8 @@
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
 use alloy_primitives::{Address, B256, Bytes, U256};
-use rust_decimal::Decimal;
 
-use crate::core::types::{ChainTx, SendMethod, TxOutcome};
+use crate::core::types::{ChainTx, SendMethod};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
@@ -23,12 +22,13 @@ use super::super::num;
 use super::super::quote::gas::GasPrice;
 use super::super::send::settle::{self, After};
 use super::super::send::stats::Stats;
-use super::super::send::track::{self, Receipt, Tracked, Watch};
+use super::super::send::track::{self, Receipt, Watch};
 use super::super::send::tx::{self, SendCfg};
 use super::super::send::{self};
 use super::super::wallet::inflows::{Inflows, SwapGuard};
 use super::super::wallet::nonce::Slot;
 use super::super::wallet::signer;
+use crate::gateway::urgency as priority;
 
 /// Всё для отправки. Дешёво клонируется.
 #[derive(Clone)]
@@ -39,6 +39,8 @@ pub struct Env {
     pub gas: GasPrice,
     /// Ожидаемые поступления в кошелёк и идущие обмены (wallet/inflows.rs).
     pub inflows: Inflows,
+    /// Разрешения кошелька для котировки — очищаются при каждой транзакции кошелька (wallet/allow_cache.rs).
+    pub allow: super::super::wallet::allow_cache::Allowances,
 }
 
 /// Итог транзакции (nonce занят в блоке).
@@ -124,9 +126,13 @@ pub async fn send(
         hash: signed.hash,
     };
     settle::busy(&after, &hold).await;
+    // Транзакция ушла — разрешения кошелька могли измениться (approve, обмен списывает разрешение).
+    env.allow.clear();
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let hash = signed.hash;
-    let job = tokio::spawn(async move {
+    // Слежение за транзакцией — тем же классом срочности, что и отправка (gateway/urgency.rs: задача tokio класс не наследует).
+    let class = priority::current();
+    let job = tokio::spawn(priority::scope(class, async move {
         let t = track::resolve(watch).await;
         drop(keep);
         let a = After {
@@ -140,8 +146,10 @@ pub async fn send(
         };
         settle::settle(&a, &hold, &t).await;
         t
-    });
-    let t = job.await.map_err(|e| {
+    }));
+    let joined = job.await;
+    env.allow.clear();
+    let t = joined.map_err(|e| {
         ctx.err(
             ErrorCode::Internal,
             format!("задача трекера {} упала: {e}", signed.hash),
@@ -149,7 +157,7 @@ pub async fn send(
     })?;
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
     if let Some(why) = &t.unresolved {
-        let chain = chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
+        let chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
         return Err(ctx
             .err(
                 ErrorCode::OutcomeUnknown,
@@ -158,38 +166,8 @@ pub async fn send(
             .with_tx(chain));
     }
     Ok(Done {
-        chain: chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
+        chain: super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
         receipt: t.receipt,
         cancel: t.cancel,
     })
-}
-
-/// ChainTx из итога. Газ — только самой транзакции (её квитанция); отмена, занявшая nonce, — отдельно
-/// (cancel_hash, cancel_gas_bnb). Ошибок нет.
-fn chain_tx(
-    hash: B256,
-    nonce: u64,
-    channels: Vec<String>,
-    method: SendMethod,
-    t: &Tracked,
-    tip_bnb: Option<Decimal>,
-) -> ChainTx {
-    let own = t.receipt.as_ref();
-    ChainTx {
-        hash,
-        nonce,
-        channels,
-        method,
-        outcome: t.outcome,
-        block: own.map(|r| r.block_number.to()),
-        gas_used: own.map(|r| r.gas_used.to()),
-        gas_bnb: own.and_then(|r| r.gas_bnb()),
-        tip_bnb: if t.outcome == TxOutcome::Included || t.outcome == TxOutcome::Reverted {
-            tip_bnb
-        } else {
-            None
-        },
-        cancel_hash: t.cancel.as_ref().map(|c| c.0),
-        cancel_gas_bnb: t.cancel.as_ref().and_then(|c| c.1.gas_bnb()),
-    }
 }

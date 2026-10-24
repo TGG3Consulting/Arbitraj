@@ -38,6 +38,8 @@ export function spreadState(s) {
   if (s?.NoPrice !== undefined) return { text: `нет цены: ${s.NoPrice}`, cls: 'muted' };
   if (s?.NotConfigured !== undefined) return { text: `не задано: ${s.NotConfigured}`, cls: 'unset' };
   if (s?.Cooldown) return { text: `пауза до ${showTime(s.Cooldown.until)}`, cls: 'muted' };
+  // Решение 61: налоги монеты ещё не проверены — строка видна, торговли нет (текст ядра уже с причиной).
+  if (s?.TaxesNotChecked !== undefined) return { text: s.TaxesNotChecked, cls: 'warn-text' };
   return { text: JSON.stringify(s), cls: '' };
 }
 
@@ -53,6 +55,7 @@ export function spreadShort(s) {
   if (s?.NoPrice !== undefined) return { text: 'нет цены', cls: 'muted', icon: '—' };
   if (s?.NotConfigured !== undefined) return { text: 'не задано', cls: 'unset', icon: '?' };
   if (s?.Cooldown) return { text: 'пауза', cls: 'muted', icon: '‖' };
+  if (s?.TaxesNotChecked !== undefined) return { text: 'налоги не проверены', cls: 'warn-text', icon: '…' };
   return { text: JSON.stringify(s), cls: '', icon: '' };
 }
 
@@ -64,6 +67,7 @@ export function spreadReason(s) {
   if (s?.NoPrice !== undefined) return s.NoPrice;
   if (s?.NotConfigured !== undefined) return s.NotConfigured;
   if (s?.Cooldown) return `пауза до ${showTime(s.Cooldown.until)}`;
+  if (s?.TaxesNotChecked !== undefined) return s.TaxesNotChecked;
   return null;
 }
 

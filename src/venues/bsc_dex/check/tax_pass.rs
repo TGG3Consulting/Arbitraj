@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/check/tax_pass.rs
 //! Что делает: проверка налогов списка монет (один проход или его часть). Итог Known / Failed — в состояние и событие
 //! ядру; «ждёт» (нет достоверного пула, сбой узла — 429, нет связи) и «не задана настройка» — прошлый итог не
-//! меняется, монета — в список ждущих (не вердикт, не чёрный список). Журнал по монете — только при смене состояния
+//! меняется (у монеты без итога — NotChecked с причиной ожидания для экранов), монета — в список ждущих (не вердикт,
+//! не чёрный список). Журнал по монете — только при смене состояния
 //! (прошла ↔ не прошла, сменилась причина без учёта цифр) и не в первом проходе (там — одна сводка, tax_cycle.rs).
 //! Ошибка настройки — одна запись в журнал и одно событие dex.check_not_configured на каждую разную причину.
 //! Кто вызывает: check/tax_cycle.rs.
@@ -12,7 +13,7 @@ use std::collections::HashSet;
 
 use alloy_primitives::Address;
 
-use crate::core::types::CheckState;
+use crate::core::types::{CheckState, CoinCheck};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -61,8 +62,9 @@ pub async fn check(
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
     let sources = Sources::default();
     for (i, (addr, ticker)) in list.iter().enumerate() {
-        let block_time = match p.heads.timestamp(&p.ctx).await {
-            Ok(t) => t,
+        // Узел отвечает и время блока есть — иначе проход откладывается (срок пробы берётся свежим в probe.rs).
+        match p.heads.at(&p.ctx).await {
+            Ok(_) => {}
             Err(e) => {
                 let msg = format!("Проверка налогов отложена: {}", e.message);
                 p.signals.once(&p.ctx, Level::Warn, "dex.check", msg).await;
@@ -72,9 +74,9 @@ pub async fn check(
                 pass.no_pool += list.len() - i;
                 return pass;
             }
-        };
+        }
         let (c, out) = taxes::check_coin(
-            &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, block_time,
+            &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
         )
         .await;
         let prev = p.checks.coin(ticker).map(|c| c.taxes);
@@ -96,6 +98,9 @@ pub async fn check(
             }
             Outcome::Wait(_) => {
                 pass.no_pool += 1;
+                // Причину ожидания видно на «Монетах» и «Живом экране»: монета без итога получает NotChecked с причиной;
+                // уже известный итог (прошла / не прошла) из-за помехи не меняется.
+                note_wait(p, &prev, c).await;
                 let why = if has_valid(p, ticker) {
                     Why::Node
                 } else {
@@ -106,6 +111,7 @@ pub async fn check(
             }
             Outcome::Config(why) => {
                 pass.config += 1;
+                note_wait(p, &prev, c.clone()).await;
                 pass.waiting.push((*addr, ticker.clone(), Why::Config));
                 if seen.insert(why.clone()) {
                     let text = format!("Проверка налогов: не задана настройка — {why}");
@@ -126,4 +132,22 @@ pub async fn check(
         }
     }
     pass
+}
+
+/// Причина ожидания — ядру, если у монеты ещё нет итога (прошла / не прошла) и причина сменилась. Принимает: окружение,
+/// прошлое состояние, проверку с NotChecked и причиной. Ошибок нет.
+async fn note_wait(
+    p: &Pools,
+    prev: &Option<CheckState<crate::core::types::TokenTaxes>>,
+    c: CoinCheck,
+) {
+    if matches!(prev, Some(CheckState::Known(_) | CheckState::Failed { .. })) {
+        return;
+    }
+    let old = p.checks.coin(&c.asset.ticker).and_then(|x| x.wait);
+    if old == c.wait {
+        return;
+    }
+    p.checks.set_coin(c.clone());
+    let _ = p.out.send(MarketEvent::CoinCheck(c)).await;
 }

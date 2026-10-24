@@ -93,7 +93,7 @@ pub async fn rebuild(core: &Core) {
     super::rebuild_report::report_pools(core, &coins).await;
     super::rebuild_report::report_check_done(core, &coins).await;
     let live_dirs: std::collections::HashSet<_> =
-        coins.iter().flat_map(|c| c.directions()).collect();
+        coins.iter().flat_map(|c| c.shown_directions()).collect();
     let directions = live_dirs.len();
     let count = coins.len();
     // Направления, которых больше нет, уходят с «Живого экрана».
@@ -170,6 +170,12 @@ fn apply_blacklist(core: &Core, coins: &mut [CoinEntry]) -> Vec<BlockChange> {
                 .collect(),
             None => vec![],
         };
+        // Причина ожидания проверки налогов (CoinCheck.wait) — для «Живого экрана» и «Монет».
+        c.wait = checks
+            .iter()
+            .flatten()
+            .filter(|k| k.taxes == crate::core::types::CheckState::NotChecked)
+            .find_map(|k| k.wait.clone());
         let manual = blacklist::manual(s, &c.asset.ticker);
         match blacklist::reason(manual, &checks, &limits) {
             Ok(r) => {

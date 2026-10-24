@@ -39,12 +39,12 @@
         {@const rs = reasons(c)}
         {@const tx = taxShort(c.taxes)}
         <tr class="click" onclick={() => onopen(c)} title="Подробно: пулы, налоги, причины по площадкам">
-          <td><strong>{c.asset.ticker}</strong>{#if c.block} <span class="err" title="в чёрном списке">⛔</span>{/if}</td>
+          <td><strong>{c.asset.ticker}</strong>{#if c.block && c.block.reason !== 'NotChecked'} <span class="err" title="в чёрном списке">⛔</span>{/if}</td>
           <td><code>{shortAddr(c.asset.bsc_contract) || '—'}</code></td>
           <td class={rs[0] === 'passed' ? 'ok' : 'err'} title={rs.map(resultLabel).join(', ')}>
             {resultLabel(rs[0])}{#if rs.length > 1} <span class="muted">+{rs.length - 1}</span>{/if}
           </td>
-          <td class={tx.cls}>{tx.text}</td>
+          <td class={tx.cls} title={c.taxes === 'NotChecked' && c.tax_wait ? `ждёт: ${c.tax_wait}` : null}>{tx.text}</td>
           <td class="num">{c.pools.filter((p) => p.admission == null).length} / {c.pools.length}</td>
         </tr>
       {:else}

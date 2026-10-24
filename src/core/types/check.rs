@@ -57,6 +57,10 @@ pub struct CoinCheck {
     pub source: String,
     /// Когда проверено; None — ещё не проверялось.
     pub checked_at: Option<DateTime<Utc>>,
+    /// Почему проверка ещё не выполнена (taxes = NotChecked): «нет пула ≥ dex.min_pool_liquidity_usd», «нет пула-источника
+    /// USDT для пробы», «узел: …», «не задана настройка …». None — не ждёт или причина не известна.
+    #[serde(default)]
+    pub wait: Option<String>,
 }
 
 /// Влияние крючка на обмен, измеренное пробным обменом (решение 32), в процентах от суммы.

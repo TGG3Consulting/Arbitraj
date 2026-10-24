@@ -5,57 +5,48 @@
 //! ErrorCode::RateLimited) — по правилу шлюза venue.rate_limited (gateway/rules.rs: сначала правило площадки
 //! bsc_dex, потом общее): Retry { attempts, pause_ms } — вся очередь узла ждёт pause_ms, запрос повторяется, не
 //! больше attempts раз; другого правила или его нет — ошибка уходит вызывающему (проверка «не выполнена», не вердикт).
-//! Кто вызывает: node/rpc.rs (call_raw, batch); очередь и правило — ещё directory/limit.rs (индексатор).
-//! От чего зависит: ctx.rs, gateway/rules.rs, storage/rules.rs (правила из SQLite журнала ctx).
-//! Настройки: bsc.node_http_rps (вся система); правила шлюза для RateLimited.
+//! Срочность (решение 61): очередь со строгим порядком классов и гарантированной долей фона — node/queue.rs,
+//! классы — gateway/urgency.rs.
+//! Кто вызывает: node/rpc.rs (call_raw, batch); правило — ещё directory/limit.rs (индексатор).
+//! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, storage/rules.rs.
+//! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система; не задана — строгий порядок без доли
+//! фона); правила шлюза для RateLimited.
 //!
 //! HTTP 429 Too Many Requests — RFC 6585, раздел 4 (https://www.rfc-editor.org/rfc/rfc6585#section-4).
 
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-use tokio::time::Instant;
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::rules::{RuleAction, pick_rule};
+use crate::gateway::urgency;
 use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
+pub use super::queue::Pace;
 
-/// Общая очередь запросов к узлу HTTP. Дешёво клонируется.
-#[derive(Clone, Default)]
-pub struct Pace {
-    /// Когда может уйти следующий запрос. None — сразу.
-    next: Arc<Mutex<Option<Instant>>>,
-}
-
-impl Pace {
-    /// Занимает место в очереди на время `step`. Возвращает: когда отправлять. Ошибок нет.
-    /// Его же использует очередь индексатора (directory/limit.rs).
-    pub(crate) fn reserve(&self, step: Duration) -> Instant {
-        let mut next = self.next.lock().unwrap_or_else(|p| p.into_inner());
-        let now = Instant::now();
-        let slot = next.map_or(now, |n| n.max(now));
-        *next = Some(slot + step);
-        slot
-    }
-
-    /// Вся очередь ждёт не меньше `pause` от текущего момента. Ошибок нет.
-    pub(crate) fn hold(&self, pause: Duration) {
-        let mut next = self.next.lock().unwrap_or_else(|p| p.into_inner());
-        let until = Instant::now() + pause;
-        *next = Some(next.map_or(until, |n| n.max(until)));
-    }
-}
-
-/// Ждёт своей очереди на `weight` вызовов. Ошибки: NotConfigured (bsc.node_http_rps не задана) — запрос не уходит.
+/// Ждёт своей очереди на `weight` вызовов с классом текущей задачи (gateway/urgency.rs) и долей фона
+/// bsc.node_background_share_pct (не задана — строгий порядок, node/queue.rs).
+/// Ошибки: NotConfigured (bsc.node_http_rps не задана) — запрос не уходит; Internal — доля не читается.
 pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
     let rps = ctx
         .settings
         .integer("bsc.node_http_rps", At::default())
         .map_err(|e| ctx.tag(e))?;
+    if rps == 0 {
+        let m = "bsc.node_http_rps должна быть больше нуля";
+        return Err(ctx.err(ErrorCode::NotConfigured, m));
+    }
     let step = Duration::from_secs_f64(weight.max(1) as f64 / rps as f64);
-    tokio::time::sleep_until(ctx.pace.reserve(step)).await;
+    let share = match ctx
+        .settings
+        .decimal("bsc.node_background_share_pct", At::default())
+        .map_err(|e| ctx.tag(e))
+    {
+        Ok(p) => rust_decimal::prelude::ToPrimitive::to_f64(&p).unwrap_or(0.0),
+        Err(e) if e.code == ErrorCode::NotConfigured => 0.0,
+        Err(e) => return Err(e),
+    };
+    ctx.pace.take(urgency::current(), step, share).await;
     Ok(())
 }
 

@@ -67,6 +67,8 @@
   <p>
     Налоги: <span class={taxes.cls}>{taxes.text}</span>
     <span class="muted">· источник {coin.tax_source ?? '—'} · {coin.checked_at ? showTime(coin.checked_at) : 'ещё не проверялось'}</span>
+    <!-- Решение 61: почему проверка ещё не выполнена (ждёт пула, узла, настройки) — от адаптера. -->
+    {#if coin.taxes === 'NotChecked' && coin.tax_wait}<br /><span class="warn-text">Ждёт: {coin.tax_wait}</span>{/if}
   </p>
   {#if coin.pools.length}
     <table>

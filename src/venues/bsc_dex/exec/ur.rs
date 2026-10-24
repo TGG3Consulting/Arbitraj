@@ -13,7 +13,7 @@
 //! входы по версиям (2.0 — без minHopPriceX36, 2.1.1+ — с ним) — официальный SDK:
 //! https://github.com/Uniswap/sdks/blob/ecffab39cb8eba0ceb1a8c0052fd287f7765fcc8/sdks/universal-router-sdk/src/utils/routerCommands.ts#L135-L297 .
 
-use alloy::sol_types::{SolCall, SolValue};
+use alloy::sol_types::{SolCall, SolError, SolValue};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -36,6 +36,10 @@ pub const ADDRESS_THIS: Address = Address::with_last_byte(2);
 
 alloy::sol! {
     interface IUniversalRouter {
+        /// Срок вышел: `if (block.timestamp > deadline) revert TransactionDeadlinePassed();` —
+        /// Uniswap universal-router edf19bfd contracts/interfaces/IUniversalRouter.sol#L28, contracts/UniversalRouter.sol#L30;
+        /// PancakeSwap pancake-v4-universal-router 1b6d479e src/interfaces/IUniversalRouter.sol#L12, src/UniversalRouter.sol#L23.
+        error TransactionDeadlinePassed();
         function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable;
     }
 }
@@ -62,6 +66,14 @@ pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
             format!("dex.universal_router_version [{}] = «{v}»: известны pancakeswap_infinity, 2.0, 2.1.1, 2.1.2", e.family.id),
         )),
     }
+}
+
+/// Откат «срок транзакции вышел» (TransactionDeadlinePassed) по данным отката или тексту узла. Это не свойство монеты
+/// и не пула: срок считался от времени, которое успело устареть (очередь узла) — проба / сделка повторяется.
+/// Принимает: данные отката, текст ошибки узла. Ошибок нет.
+pub fn deadline_passed(data: &[u8], message: &str) -> bool {
+    let sel = IUniversalRouter::TransactionDeadlinePassed::SELECTOR;
+    data.starts_with(&sel) || message.contains(&alloy_primitives::hex::encode(sel))
 }
 
 /// Вход BALANCE_CHECK_ERC20: abi.encode(owner, token, minBalance). Ошибок нет.

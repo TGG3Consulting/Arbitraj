@@ -173,6 +173,7 @@ fn clean(ticker: &str, a: Address) -> CoinCheck {
         taxes: CheckState::Known(zero),
         source: "тест".into(),
         checked_at: Some(Utc::now()),
+        wait: None,
     }
 }
 

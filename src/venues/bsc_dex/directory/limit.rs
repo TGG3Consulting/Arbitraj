@@ -1,8 +1,10 @@
 //! Файл: venues/bsc_dex/directory/limit.rs
 //! Что делает: темп запросов к индексатору — строго по настройке index.requests_per_min: каждый запрос занимает
 //! 60 / N секунд в своей очереди (отдельной от очереди узла BSC). Ответ «превышен лимит» (HTTP 429,
-//! ErrorCode::RateLimited) — по правилу шлюза «Превышен лимит запросов» площадки bsc_dex или общему (как у узла,
-//! node/pace.rs): Retry { attempts, pause_ms } — очередь ждёт pause_ms, запрос повторяется; иначе — ошибка.
+//! ErrorCode::RateLimited) — по правилу шлюза «Превышен лимит запросов» площадки bsc_dex (то же правило, что у узла
+//! BSC, node/pace.rs; отдельной области правил для индексатора в модели правил нет — gateway/rules.rs: область —
+//! только площадка), нет его — общее: Retry { attempts, pause_ms } — очередь ждёт pause_ms, запрос повторяется;
+//! иначе — ошибка.
 //! Кто вызывает: directory/gt_http.rs.
 //! От чего зависит: ctx.rs, node/pace.rs (Pace, retry_rule).
 //! Настройки: index.requests_per_min [bsc_dex]; правила шлюза для RateLimited.
@@ -18,10 +20,14 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::pace;
 
-/// Шаг очереди: 60 с / index.requests_per_min. Ошибки: NotConfigured.
+/// Шаг очереди: 60 с / index.requests_per_min. Ошибки: NotConfigured (не задана или 0).
 pub fn step(ctx: &Ctx) -> GatewayResult<Duration> {
     let per_min = ctx.int("index.requests_per_min")?;
-    Ok(Duration::from_secs_f64(60.0 / per_min.max(1) as f64))
+    if per_min == 0 {
+        let m = "index.requests_per_min = 0 — запросов нет; задайте число больше нуля";
+        return Err(ctx.err(crate::gateway::errors::ErrorCode::NotConfigured, m));
+    }
+    Ok(Duration::from_secs_f64(60.0 / per_min as f64))
 }
 
 /// Запрос к индексатору в очереди и с правилом шлюза на RateLimited. Принимает: сам запрос.

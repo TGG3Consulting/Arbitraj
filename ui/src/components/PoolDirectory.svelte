@@ -24,7 +24,7 @@
     const m = new Map();
     for (const p of dir.pools) {
       const s = p.status;
-      const key = typeof s === 'string' ? dirStatus(s).text : s.NotConnected ? 'DEX не подключена' : 'отклонён на узле';
+      const key = typeof s === 'string' ? dirStatus(s).text : s.NotConnected ? 'DEX не подключена' : s.Unsupported ? 'не поддержан' : 'отклонён на узле';
       m.set(key, (m.get(key) ?? 0) + 1);
     }
     return [...m];

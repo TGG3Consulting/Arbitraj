@@ -103,12 +103,16 @@ impl Directory {
                 total: t.pools.len(),
                 error: t.error.clone(),
             });
-            for p in t.pools.iter().filter(|p| is_relevant(*addr, p, &s.quotes)) {
-                let status = s
-                    .status
-                    .get(&p.pool)
-                    .cloned()
-                    .unwrap_or(DirectoryStatus::Unchecked);
+            let shown = |p: &&IndexedPool| is_relevant(*addr, p, &s.quotes) || is_native(*addr, p);
+            for p in t.pools.iter().filter(shown) {
+                let status = if is_native(*addr, p) {
+                    DirectoryStatus::Unsupported(NATIVE.into())
+                } else {
+                    s.status
+                        .get(&p.pool)
+                        .cloned()
+                        .unwrap_or(DirectoryStatus::Unchecked)
+                };
                 pools.push(DirectoryPool {
                     token: *addr,
                     dex_id: p.dex_id.clone(),
@@ -145,6 +149,15 @@ pub fn snapshot(ctx: &super::ctx::Ctx) -> PoolDirectory {
     );
     let source = ctx.text("index.api_url").ok();
     ctx.index.view(source, ctx.text("index.network").ok(), attr)
+}
+
+/// Причина для пулов с нативным BNB.
+pub const NATIVE: &str = "валюта пула — нативный BNB (адрес 0x0): такие пулы пока не поддержаны";
+
+/// Пул монеты с нативным BNB (валюта 0x0 — так её отдаёт индексатор у пулов V4/Infinity): показывается со статусом
+/// «не поддержан», не прячется. Ошибок нет.
+pub fn is_native(token: Address, p: &IndexedPool) -> bool {
+    (p.base == token && p.quote == Address::ZERO) || (p.quote == token && p.base == Address::ZERO)
 }
 
 /// Нужен ли пул подписке: один токен пула — монета, по которой спрашивали, другой — USDT или промежуточная

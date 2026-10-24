@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::types::IndexerDex;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::storage::journal::Level;
 use crate::storage::venue_state;
 
 use super::super::ctx::{Ctx, ID};
@@ -69,7 +70,7 @@ pub async fn save_token(ctx: &Ctx, net: &str, token: Address, t: &TokenEntry) ->
     .map_err(|e| internal(ctx, e))
 }
 
-/// Все сохранённые монеты сети: адрес → запись. Повреждённая строка пропускается. Ошибки: Internal.
+/// Все сохранённые монеты сети: адрес → запись. Повреждённая строка пропускается с записью в журнал. Ошибки: Internal.
 pub async fn load_tokens(ctx: &Ctx, net: &str) -> GatewayResult<Vec<(Address, TokenEntry)>> {
     let rows = venue_state::list(ctx.journal.db(), ID, TOKEN, &format!("{net}:"))
         .await
@@ -80,8 +81,14 @@ pub async fn load_tokens(ctx: &Ctx, net: &str) -> GatewayResult<Vec<(Address, To
             .rsplit(':')
             .next()
             .and_then(|a| a.parse::<Address>().ok());
-        let row = serde_json::from_str::<TokenRow>(&body).ok();
-        if let (Some(addr), Some(r)) = (addr, row) {
+        let row = serde_json::from_str::<TokenRow>(&body);
+        if let Err(e) = &row {
+            let msg = format!(
+                "Справочник пулов в SQLite: запись {id} повреждена ({e}) — монета будет спрошена заново"
+            );
+            ctx.log(Level::Warn, "dex.index", msg, None).await;
+        }
+        if let (Some(addr), Ok(r)) = (addr, row) {
             let e = TokenEntry {
                 ticker: r.ticker,
                 fetched_at: Some(r.fetched_at),
@@ -121,7 +128,15 @@ pub async fn load_dexes(
     let body = venue_state::load(ctx.journal.db(), ID, DEXES, net)
         .await
         .map_err(|e| internal(ctx, e))?;
-    Ok(body
-        .and_then(|b| serde_json::from_str::<DexRow>(&b).ok())
-        .map(|r| (r.at, r.dexes)))
+    let Some(b) = body else { return Ok(None) };
+    match serde_json::from_str::<DexRow>(&b) {
+        Ok(r) => Ok(Some((r.at, r.dexes))),
+        Err(e) => {
+            let msg = format!(
+                "Справочник пулов в SQLite: список DEX сети {net} повреждён ({e}) — будет спрошен заново"
+            );
+            ctx.log(Level::Warn, "dex.index", msg, None).await;
+            Ok(None)
+        }
+    }
 }

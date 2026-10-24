@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/directory/fetch.rs
 //! Что делает: запросы справочника к индексатору: пулы одной монеты по страницам (не больше index.pages_per_token;
-//! страница короче index.page_size или «страниц больше нет» — последняя) и список DEX сети по links.next
+//! пустая страница, HTTP 400 на странице > 1 или страница короче index.page_size — конец списка) и список DEX сети по links.next
 //! (сохраняется в SQLite и в состояние справочника).
 //! Кто вызывает: directory/refresh.rs.
 //! От чего зависит: ctx.rs, directory/{gt_http,gt_parse,store,mod}.rs.
@@ -90,6 +90,10 @@ pub async fn token_pools(
                 format!("{}: {path}: {w}", gt_http::SOURCE),
             )
         })?;
+        // Пустая страница — конец списка (как и 400 на странице > 1 и страница короче index.page_size).
+        if list.is_empty() {
+            break;
+        }
         read = page;
         let last = list.len() < size;
         out.extend(list);

@@ -1,7 +1,8 @@
 //! Файл: tests/bsc_dex_directory.rs
 //! Что делает: справочник пулов от индексатора (решение 58) на живых ответах GeckoTerminal 2026-10-24
 //! (tests/data/indexers_2026-10-24): разбор пулов монеты и списка DEX, PoolId у V4/Infinity, страница за пределами
-//! (HTTP 400 на странице 3) — «страниц больше нет», коды ошибок, отбор пар с USDT и промежуточной монетой.
+//! (HTTP 400 на странице 3) — «страниц больше нет», коды ошибок, отбор пар с USDT и промежуточной монетой, пулы с
+//! нативным BNB — видны со статусом «не поддержан».
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::directory.
 //! Настройки: нет.
@@ -91,9 +92,12 @@ fn http_codes() {
         answer(429, 1, "", "/x").unwrap_err().code,
         ErrorCode::RateLimited
     );
-    assert_eq!(
-        answer(401, 1, "", "/x").unwrap_err().code,
-        ErrorCode::InvalidCredentials
+    let e401 = answer(401, 1, "", "/x").unwrap_err();
+    assert_eq!(e401.code, ErrorCode::InvalidCredentials);
+    assert!(
+        e401.message.contains("index.key_header"),
+        "{}",
+        e401.message
     );
     assert_eq!(
         answer(503, 2, "", "/x").unwrap_err().code,
@@ -172,11 +176,20 @@ fn relevant_pairs_only() {
     });
     let v = d.view(None, None, (None, None));
     assert_eq!(v.tokens[0].total, 20);
-    assert_eq!(v.pools.len(), 6);
-    assert!(
-        v.pools
-            .iter()
-            .all(|p| p.status == DirectoryStatus::Unchecked)
-    );
+    // 6 пулов CAKE/USDT («не проверен») и 2 пула Infinity CAKE / нативный BNB — видны со статусом «не поддержан».
+    assert_eq!(v.pools.len(), 8);
+    let unchecked = v
+        .pools
+        .iter()
+        .filter(|p| p.status == DirectoryStatus::Unchecked)
+        .count();
+    let native = v
+        .pools
+        .iter()
+        .filter(
+            |p| matches!(&p.status, DirectoryStatus::Unsupported(w) if w.contains("нативный BNB")),
+        )
+        .count();
+    assert_eq!((unchecked, native), (6, 2));
     assert_eq!(d.relevant().len(), 6);
 }

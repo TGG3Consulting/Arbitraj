@@ -87,6 +87,11 @@ pub fn answer(status: u16, page: u32, text: &str, path: &str) -> GatewayResult<G
         400 if page > 1 => Ok(Got::PageEnd(title.unwrap_or_default())),
         _ => {
             let mut e = errors::from_http(status, SOURCE, text);
+            if matches!(status, 401 | 403) {
+                e.message = format!(
+                    "{SOURCE}: ключ не принят, HTTP {status} — проверьте ключ index.api_key и заголовок index.key_header"
+                );
+            }
             e.message = format!(
                 "{} ({path}){}",
                 e.message,

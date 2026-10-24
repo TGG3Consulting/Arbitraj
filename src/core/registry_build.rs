@@ -25,6 +25,12 @@ pub struct Inputs<'a> {
     pub usdt: Option<Address>,
     /// Котируемая монета каждой биржи (venue.quote_asset) — сама в справочник не входит.
     pub quote: &'a HashMap<VenueId, String>,
+    /// Название сети BSC у каждой биржи (venue.bsc_network): отличает «нет сети BSC» от «сеть BSC есть,
+    /// адреса контракта нет» (presence.rs). Нет биржи в списке — различить нельзя, причина «нет сети BSC».
+    pub bsc_network: &'a HashMap<VenueId, String>,
+    /// Свежесть справочника пар каждой биржи (pairs_fresh::check): Err — текст причины. Нет биржи — не проверено,
+    /// по её парам не торгуем.
+    pub pairs_fresh: &'a HashMap<VenueId, Result<(), String>>,
     pub market: &'a MarketState,
     /// Допуск пула (blacklist::pool_admission с настройками).
     pub pool_ok: &'a dyn Fn(&Pool) -> Result<(), String>,
@@ -72,7 +78,14 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 .push(i);
         }
         for (ticker, nets) in by_ticker {
-            let p = super::presence::cex(venue, ticker, &nets, inp.market);
+            let bsc = inp.bsc_network.get(venue).map(String::as_str);
+            let fresh = inp.pairs_fresh.get(venue).cloned().unwrap_or_else(|| {
+                Err(format!(
+                    "{}: свежесть справочника пар не проверена",
+                    venue.0
+                ))
+            });
+            let p = super::presence::cex(venue, ticker, &nets, bsc, &fresh, inp.market);
             let asset = Asset {
                 ticker: ticker.to_string(),
                 bsc_contract: p.info.as_ref().and_then(|i| i.asset.bsc_contract),

@@ -1,9 +1,9 @@
 //! Файл: venues/bingx/market.rs
 //! Что делает: подписка на стаканы BingX по списку монет: делит монеты на соединения
 //! (venue.ws_symbols_per_conn монет на соединение) и запускает по задаче на соединение.
-//! Монеты с торгуемой парой сообщает ядру событием SpotPairs (по ним ядро подписывает DEX).
-//! Кто вызывает: mod.rs (subscribe_market из контракта).
-//! От чего зависит: ws.rs, symbols.rs, book.rs, ctx.rs.
+//! Состояние пар монет и монеты, которыми можно торговать через API, сообщает ядру событием SpotPairs (pairs.rs).
+//! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
+//! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
 //! Настройки: venue.ws_symbols_per_conn, venue.depth_levels.
 //!
 //! Официально: не больше 200 подписок на соединение, превышение — код 80403 (раздел WebSocket docs-v3;
@@ -21,6 +21,7 @@ use crate::storage::journal::Level;
 use super::book::Books;
 use super::ctx::Ctx;
 use super::fees::Fees;
+use super::pairs::Snapshot;
 use super::symbols::Symbols;
 use super::ws;
 
@@ -31,7 +32,8 @@ const DEPTH_LEVELS: [u64; 5] = [5, 10, 20, 50, 100];
 
 /// Подписывается на стаканы монет. Монеты, которых нет среди торгуемых пар BingX, пропускаются
 /// с записью в журнал. Возвращает: запущенные задачи (соединения и обновление комиссий) —
-/// вызывающий хранит их и останавливает перед новой подпиской.
+/// вызывающий хранит их и останавливает перед новой подпиской, — и снимок пар (pairs.rs), с которым
+/// pairs_watch.rs сравнивает обновлённый справочник пар.
 /// Ошибки: NotConfigured (настройки вне пределов документации или не заданы), справочник пар.
 pub async fn subscribe(
     ctx: &Ctx,
@@ -40,7 +42,7 @@ pub async fn subscribe(
     fees: &Fees,
     assets: Vec<Asset>,
     out: mpsc::Sender<MarketEvent>,
-) -> GatewayResult<Vec<JoinHandle<()>>> {
+) -> GatewayResult<(Vec<JoinHandle<()>>, Snapshot)> {
     let per_conn = ctx.int("venue.ws_symbols_per_conn")?;
     if per_conn > MAX_TOPICS_PER_CONN {
         return Err(bad(
@@ -58,40 +60,17 @@ pub async fn subscribe(
         ));
     }
     symbols.ensure_fresh(ctx).await?;
-    let mut ok = Vec::new();
-    let mut missing = Vec::new();
-    for a in assets {
-        match symbols.get(ctx, &a.ticker) {
-            Ok(r) if r.status == super::symbols::STATUS_ONLINE => ok.push((a, r.symbol)),
-            _ => missing.push(a.ticker),
-        }
-    }
-    if !missing.is_empty() {
-        let m = format!(
-            "BingX: нет торгуемой пары для {} монет: {}",
-            missing.len(),
-            missing.join(", ")
-        );
-        let _ = ctx
-            .journal
-            .write(
-                Level::Warn,
-                "venue.subscribe",
-                Some(super::ctx::ID),
-                m,
-                None,
-            )
-            .await;
-    }
-    // Ядру — монеты с торгуемой парой (status = 1 по «Spot trading symbols», symbols.rs): по ним ядро подписывает
-    // DEX (core/subscribe.rs). Шлётся при каждой подписке, в том числе пустой (площадка выключена — пар нет).
-    let tickers = ok.iter().map(|(a, _)| a.ticker.clone()).collect();
+    let snap = Snapshot::build(symbols, &assets);
+    note(ctx, &snap).await;
+    // Ядру — состояние пар и монеты, которыми можно торговать через API (pairs.rs): по ним ядро ставит причины отсева
+    // и подписывает DEX (core/subscribe.rs). Шлётся при каждой подписке, в том числе пустой (площадка выключена — пар нет).
+    let loaded_at = symbols
+        .loaded_at()
+        .ok_or_else(|| bad(ctx, "справочник пар BingX не получен".to_string()))?;
     let _ = out
-        .send(MarketEvent::SpotPairs {
-            venue: VenueId(super::ctx::ID.to_string()),
-            tickers,
-        })
+        .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
+    let ok = snap.books.clone();
     let chunks: Vec<Vec<(Asset, String)>> =
         ok.chunks(per_conn as usize).map(|c| c.to_vec()).collect();
     let mut tasks = Vec::new();
@@ -108,7 +87,39 @@ pub async fn subscribe(
     // Ставки комиссии подписанных пар обновляются фоном (котировка берёт их из памяти).
     let syms: Vec<String> = ok.iter().map(|(_, s)| s.clone()).collect();
     tasks.push(tokio::spawn(fees.clone().refresh_loop(ctx.clone(), syms)));
-    Ok(tasks)
+    Ok((tasks, snap))
+}
+
+/// Запись в журнал: монеты без торгуемой пары и пары, закрытые для API. Ошибок нет.
+async fn note(ctx: &Ctx, snap: &Snapshot) {
+    let mut lines = vec![];
+    if !snap.missing.is_empty() {
+        lines.push(format!(
+            "BingX: нет торгуемой пары для {} монет: {}",
+            snap.missing.len(),
+            snap.missing.join(", ")
+        ));
+    }
+    let closed = snap.api_closed();
+    if !closed.is_empty() {
+        lines.push(format!(
+            "BingX: пара не торгуется через API (apiStateBuy/Sell) у {} монет: {}",
+            closed.len(),
+            closed.join(", ")
+        ));
+    }
+    for m in lines {
+        let _ = ctx
+            .journal
+            .write(
+                Level::Warn,
+                "venue.subscribe",
+                Some(super::ctx::ID),
+                m,
+                None,
+            )
+            .await;
+    }
 }
 
 /// Ошибка настройки.

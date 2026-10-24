@@ -5,7 +5,8 @@
     ссылка на пул, комиссия, крючок и его группа A/B/C, проверка влияния крючка, причина исключения пула
     (admission), номер блока состояния (block), пара пула (pair: USDT или промежуточная монета) и через какую
     промежуточную монету допущена монета без пула с USDT (via, решение 52).
-    Причины отсева по площадкам и по пулам — каждая с новой строки; проблема оценки (problem).
+    Причины отсева по площадкам и по пулам — каждая с новой строки; что закрыто у площадки, где монета есть (ввод,
+    вывод, покупка или продажа через API — limitsText); проблема оценки (problem).
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
@@ -14,7 +15,7 @@
 -->
 <script>
   import { post } from '../lib/api.js';
-  import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText } from '../lib/coinLabels.js';
+  import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';
 
   /** coin — элемент ответа GET /api/coins. */
@@ -59,6 +60,9 @@
         {:else}<li>{exclusionText(e)}</li>{/if}
       {/each}
     </ul>
+  {/each}
+  {#each (coin.presence ?? []).filter((p) => !p.excluded.length && limitsText(p).length) as p (p.venue)}
+    <div class="muted">На {p.venue} закрыто (направления через эту сторону не считаются): {limitsText(p).join(', ')}</div>
   {/each}
   <p>
     Налоги: <span class={taxes.cls}>{taxes.text}</span>

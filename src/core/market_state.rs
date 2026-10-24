@@ -1,7 +1,8 @@
 //! Файл: core/market_state.rs
 //! Что делает: всё, что ядро знает о рынке прямо сейчас (шаг 2 ТЗ): стаканы бирж, пулы DEX,
 //! проверки налогов монет и крючков пулов, состояние каналов отправки, монеты с торгуемой спот-парой у биржи
-//! (для подписки DEX, core/subscribe.rs) — из событий адаптеров.
+//! (для подписки DEX, core/subscribe.rs) и состояние их пар (статус, покупка и продажа через API — для справочника,
+//! core/presence.rs) — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -12,13 +13,14 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::core::types::{
     CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId,
     WalletQueueState,
 };
-use crate::gateway::events::MarketEvent;
+use crate::gateway::events::{MarketEvent, SpotPairState};
 
 pub use super::touched::Touched;
 
@@ -36,6 +38,10 @@ pub struct MarketState {
     queues: HashMap<VenueId, WalletQueueState>,
     /// Биржа → монеты с торгуемой спот-парой (MarketEvent::SpotPairs).
     spot: HashMap<VenueId, HashSet<String>>,
+    /// Биржа → тикер → состояние пары (статус, покупка и продажа через API) из того же SpotPairs.
+    pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
+    /// Биржа → когда её справочник пар последний раз получен (SpotPairs.loaded_at; свежесть — pairs_fresh.rs).
+    pairs_at: HashMap<VenueId, DateTime<Utc>>,
 }
 
 impl MarketState {
@@ -82,7 +88,15 @@ impl MarketState {
                 Touched::Channel(s)
             }
             MarketEvent::Notice { venue, code, text } => Touched::Notice { venue, code, text },
-            MarketEvent::SpotPairs { venue, tickers } => {
+            MarketEvent::SpotPairs {
+                venue,
+                tickers,
+                pairs,
+                loaded_at,
+            } => {
+                self.pairs_at.insert(venue.clone(), loaded_at);
+                let by_ticker = pairs.into_iter().map(|p| (p.ticker.clone(), p)).collect();
+                self.pairs.insert(venue.clone(), by_ticker);
                 self.spot.insert(venue, tickers.into_iter().collect());
                 Touched::SpotPairs
             }
@@ -116,6 +130,17 @@ impl MarketState {
     /// Не зависит от стаканов: разрыв связи и «недостоверно» список не меняют. Ошибок нет.
     pub fn spot_pair(&self, venue: &VenueId, ticker: &str) -> bool {
         self.spot.get(venue).is_some_and(|s| s.contains(ticker))
+    }
+
+    /// Состояние спот-пары монеты на бирже по последнему SpotPairs (core/presence.rs). None — биржа ещё не прислала
+    /// SpotPairs или пары у монеты в справочнике биржи нет. Ошибок нет.
+    pub fn pair(&self, venue: &VenueId, ticker: &str) -> Option<&SpotPairState> {
+        self.pairs.get(venue).and_then(|m| m.get(ticker))
+    }
+
+    /// Когда справочник пар биржи последний раз получен от неё. None — SpotPairs ещё не было. Ошибок нет.
+    pub fn pairs_loaded_at(&self, venue: &VenueId) -> Option<DateTime<Utc>> {
+        self.pairs_at.get(venue).copied()
     }
 
     /// Стакан монеты на площадке. None — стакана нет (не пришёл или объявлен недостоверным).

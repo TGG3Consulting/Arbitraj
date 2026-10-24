@@ -1,10 +1,11 @@
 //! Файл: core/precheck.rs
 //! Что делает: предпроверка сразу перед покупкой (шаг 5 ТЗ): стоп-условия (risk.rs); статусы вывода на A
-//! и депозита на B — перечитываются напрямую из API бирж; BNB на газ у DEX-сторон не ниже
+//! и депозита на B — перечитываются напрямую из API бирж; покупка через API на A и продажа на B — по свежему справочнику
+//! пар (pairs_fresh.rs); BNB на газ у DEX-сторон не ниже
 //! risk.min_bnb_balance; затем полный расчёт заново (profit.rs) по свежим стаканам и пулам.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
-//! Настройки: risk.min_bnb_balance (+ всё, что читают risk.rs и profit.rs).
+//! Настройки: risk.min_bnb_balance, venue.symbols_stale_s (+ всё, что читают risk.rs и profit.rs).
 
 use rust_decimal::Decimal;
 
@@ -59,6 +60,15 @@ async fn transfer_open(
     }
 }
 
+/// Сторона сделки по справочнику пар биржи (pairs_fresh.rs): на A (buy = true) покупка через API разрешена, на B —
+/// продажа; справочник не старше venue.symbols_stale_s. Направление могло быть поставлено до смены флагов —
+/// здесь оно отсекается до ордера. Ошибка — текст причины.
+fn pair_side(core: &Core, v: &VenueId, d: &Direction, buy: bool) -> Result<(), String> {
+    let limit = super::pairs_fresh::limit(&core.inner.deps.settings, v);
+    let market = super::engine::rd(&core.inner.market);
+    super::pairs_fresh::side(&market, v, &d.asset.ticker, buy, &limit, chrono::Utc::now())
+}
+
 /// BNB на газ у DEX-площадки. Ошибка — текст (мало BNB или баланс не получен).
 pub async fn bnb_ok(core: &Core, v: &VenueId) -> Result<(), String> {
     let min = core
@@ -88,7 +98,10 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
     super::risk::can_open(core, d)?;
     for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
         match super::trade_ops::kind(core, v)? {
-            VenueKind::Cex => transfer_open(core, v, d, withdraw).await?,
+            VenueKind::Cex => {
+                transfer_open(core, v, d, withdraw).await?;
+                pair_side(core, v, d, withdraw)?;
+            }
             VenueKind::Dex => {
                 if let Err(e) = bnb_ok(core, v).await {
                     core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;

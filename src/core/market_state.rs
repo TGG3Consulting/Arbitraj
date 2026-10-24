@@ -14,46 +14,12 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
 use crate::core::types::{
-    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId, WalletQueue,
+    CoinCheck, OrderBook, Pool, PoolCheck, PoolRef, SendChannelStats, Side, VenueId,
     WalletQueueState,
 };
 use crate::gateway::events::MarketEvent;
 
-/// Что изменилось после события — по этому ядро решает, что пересчитать.
-#[derive(Debug, Clone)]
-pub enum Touched {
-    /// Новый стакан монеты. `first` — стакан этой монеты на площадке пришёл впервые (или после сброса).
-    Book {
-        venue: VenueId,
-        ticker: String,
-        first: bool,
-    },
-    /// Новое состояние пула. `first` — пул встречен впервые.
-    Pool {
-        venue: VenueId,
-        tokens: (Address, Address),
-        first: bool,
-    },
-    /// Площадка объявила данные монеты недостоверными — стакан удалён.
-    Invalidated {
-        venue: VenueId,
-        ticker: String,
-    },
-    CoinCheck(CoinCheck),
-    PoolCheck(PoolCheck),
-    Channel(SendChannelStats),
-    /// Очередь кошелька DEX изменилась: новое и прошлое состояние (уведомления — core/tick.rs).
-    WalletQueue {
-        queue: WalletQueue,
-        prev: Option<WalletQueueState>,
-    },
-    /// Сообщение адаптера для уведомлений.
-    Notice {
-        venue: VenueId,
-        code: String,
-        text: String,
-    },
-}
+pub use super::touched::Touched;
 
 /// Рыночное состояние в памяти.
 #[derive(Default)]
@@ -113,6 +79,16 @@ impl MarketState {
                 Touched::Channel(s)
             }
             MarketEvent::Notice { venue, code, text } => Touched::Notice { venue, code, text },
+            MarketEvent::CheckPass {
+                venue,
+                ok,
+                failed,
+                waiting,
+                not_configured: nc,
+            } => Touched::CheckPass {
+                venue,
+                counts: [ok, failed, waiting, nc],
+            },
             MarketEvent::WalletQueue(q) => {
                 let prev = self.queues.insert(q.venue.clone(), q.state.clone());
                 Touched::WalletQueue { queue: q, prev }

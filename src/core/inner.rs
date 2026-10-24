@@ -52,6 +52,9 @@ pub struct Inner {
     pub excluded_pools: Mutex<HashSet<(VenueId, String)>>,
     /// Сколько монет ждали проверки налогов при прошлой пересборке (для coin.check_done).
     pub not_checked: Mutex<usize>,
+    /// Первый проход проверки налогов после запуска: пока он идёт, вход и выход из чёрного списка не уведомляются по
+    /// монетам — копятся причины для одного сводного coin.check_done (core/first_pass.rs).
+    pub first_pass: Mutex<super::first_pass::FirstPass>,
     pub signals: Mutex<Signals>,
     /// Волатильность цен по замерам сигнала (vol.rs).
     pub vol: Mutex<Volatility>,
@@ -116,6 +119,7 @@ impl Inner {
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),
             not_checked: Mutex::default(),
+            first_pass: Mutex::default(),
             signals: Mutex::default(),
             vol: Mutex::default(),
             spreads: RwLock::default(),

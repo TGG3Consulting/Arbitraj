@@ -51,7 +51,13 @@ pub async fn attach(p: &Pools, w: &Watch, found: Vec<Found>, each: bool) -> Gate
     }
     let n = fresh.len();
     for (name, chunk, filter) in market::chunks(&fresh, &w.coins, per) {
-        let h = tokio::spawn(listen::run(p.clone(), format!("{name}-new"), chunk, filter));
+        let h = tokio::spawn(listen::run(
+            p.clone(),
+            format!("{name}-new"),
+            chunk,
+            filter,
+            false,
+        ));
         w.tasks.lock().unwrap_or_else(|x| x.into_inner()).push(h);
     }
     Ok(n)

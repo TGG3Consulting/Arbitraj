@@ -14,7 +14,6 @@
 //! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60 ;
 //! подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
 
-use std::collections::BTreeSet;
 use std::time::Duration;
 
 use alloy::rpc::types::Log;
@@ -33,6 +32,7 @@ use super::super::node::{rpc, ws::Conn};
 use super::super::tokens::Tokens;
 use super::discover::Found;
 use super::mids::Mids;
+use super::progress::Signals;
 use super::registry::Registry;
 use super::{listen_log, load};
 
@@ -49,6 +49,8 @@ pub struct Pools {
     pub heads: Heads,
     /// Промежуточные монеты (решение 52).
     pub mids: Mids,
+    /// Стартовая загрузка, «пул готов», журнал без спама (pools/progress.rs).
+    pub signals: Signals,
 }
 
 /// Чем кончилась сессия.
@@ -59,23 +61,32 @@ pub enum End {
     Broken(String),
 }
 
-/// Слушает пачку пулов постоянно. Принимает: окружение, имя, найденные пулы с тикерами, фильтр подписки.
-/// Ошибок не возвращает: всё — в журнал; не задана пауза переподключения — остановка с записью в журнал.
-pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, filter: Value) {
+/// Слушает пачку пулов постоянно. Принимает: окружение, имя, найденные пулы с тикерами, фильтр подписки, стартовая ли
+/// пачка (её первая загрузка — часть стартовой загрузки, pools/progress.rs).
+/// Обрыв после загрузки — пулы недостоверны (Invalidated) до перечитывания; сбой ещё до загрузки (подписка, узел HTTP
+/// отстал) — пулы не трогаются (они либо ещё не прочитаны, либо уже недостоверны), повтор после паузы. В журнал — одна
+/// запись на вид причины. Ошибок не возвращает; не задана пауза переподключения — остановка с записью в журнал.
+pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, filter: Value, first: bool) {
+    let mut first = first;
     loop {
-        let why = match session(&p, &name, &pools, &filter).await {
+        let (end, loaded) = session(&p, &name, &pools, &filter).await;
+        if std::mem::take(&mut first) {
+            p.signals.loaded();
+        }
+        let why = match end {
             End::Closed => return,
             End::Broken(why) => why,
         };
-        invalidate(&p, &pools);
-        p.ctx
-            .log(
-                Level::Warn,
-                "venue.ws",
-                format!("Пулы {name}: {why} — данные недостоверны"),
-                None,
-            )
-            .await;
+        let family = pools.first().map_or("", |(f, _)| f.family.title);
+        if loaded {
+            listen_log::invalidate(&p, &pools);
+            let msg = format!("Пулы {family}: {why} — данные недостоверны до перечитывания");
+            p.signals.once(&p.ctx, Level::Warn, "venue.ws", msg).await;
+        } else {
+            let msg =
+                format!("Пулы {family}: подписка или первая загрузка не удалась ({why}) — повтор");
+            p.signals.once(&p.ctx, Level::Warn, "venue.ws", msg).await;
+        }
         match p.ctx.int("venue.ws_reconnect_pause_ms") {
             Ok(ms) => tokio::time::sleep(Duration::from_millis(ms)).await,
             Err(e) => {
@@ -93,8 +104,8 @@ pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, filter: Va
     }
 }
 
-/// Одна сессия: подписка, чтение состояния, события до обрыва.
-async fn session(p: &Pools, name: &str, pools: &[(Found, String)], filter: &Value) -> End {
+/// Одна сессия: подписка, чтение состояния, события до обрыва. Возвращает: конец и была ли загрузка состояния.
+async fn session(p: &Pools, name: &str, pools: &[(Found, String)], filter: &Value) -> (End, bool) {
     let start = async {
         let conn = Conn::open(&p.ctx, name).await?;
         let sub = conn.subscribe(json!(["logs", filter])).await?;
@@ -105,57 +116,78 @@ async fn session(p: &Pools, name: &str, pools: &[(Found, String)], filter: &Valu
     };
     let (conn, mut sub, block) = match start.await {
         Ok(x) => x,
-        Err(e) => return End::Broken(e.message),
+        Err(e) => return (End::Broken(e.message), false),
     };
     for (found, ticker) in pools {
         let res = match p.reg.get(&found.reference) {
             Some(e) => load::refresh(&p.ctx, &p.tokens, &e, block).await,
-            None => load::entry(&p.ctx, &p.tokens, found, ticker, found_usdt(found), block).await,
+            None => {
+                load::entry(
+                    &p.ctx,
+                    &p.tokens,
+                    found,
+                    ticker,
+                    listen_log::found_usdt(found),
+                    block,
+                )
+                .await
+            }
         };
         match res {
             Ok(e) => {
                 let pool = e.pool.clone();
                 p.reg.put(e);
                 if let Err(end) = listen_log::emit(p, pool) {
-                    return end;
+                    return (end, true);
                 }
             }
             Err(e) => {
                 let msg = format!(
-                    "{} {}: состояние не прочитано: {}",
-                    found.family.title, ticker, e.message
+                    "{}: состояние пула не прочитано: {}",
+                    found.family.title, e.message
                 );
-                p.ctx.log(Level::Error, "dex.pool", msg, None).await;
+                p.signals.once(&p.ctx, Level::Error, "dex.pool", msg).await;
             }
         }
     }
+    p.signals.pool_ready();
     while let Some(raw) = sub.rx.recv().await {
         let log: Log = match serde_json::from_str(raw.get()) {
             Ok(l) => l,
-            Err(e) => return End::Broken(format!("лог не разобран: {e}")),
+            Err(e) => return (End::Broken(format!("лог не разобран: {e}")), true),
         };
         if let Err(end) = listen_log::on_log(p, &log).await {
-            return end;
+            return (end, true);
         }
     }
-    End::Broken(
-        conn.end_reason()
-            .unwrap_or_else(|| "подписка закрыта".into()),
-    )
+    let why = conn
+        .end_reason()
+        .unwrap_or_else(|| "подписка закрыта".into());
+    (End::Broken(why), true)
 }
 
-/// Ждёт, пока узел HTTP дойдёт до блока узла WS (eth_blockNumber на каждый новый блок newHeads).
-/// Ошибки: StaleData — не дошёл за feed.stale_after_ms; узел; NotConfigured.
+/// Ждёт, пока узел HTTP дойдёт до блока узла WS: проверка на каждый новый блок newHeads, сколько угодно блоков, пока
+/// узел HTTP продвигается (отставание провайдера — не сбой). Ошибки: StaleData — блок узла HTTP не менялся дольше
+/// feed.stale_after_ms или новых блоков нет; узел; NotConfigured.
 async fn http_reached(p: &Pools, block: u64) -> GatewayResult<()> {
     let wait = Duration::from_millis(p.ctx.int("feed.stale_after_ms")?);
     let mut rx = p.heads.watch();
-    let until = tokio::time::Instant::now() + wait;
+    let (mut last, mut moved) = (0u64, tokio::time::Instant::now());
     loop {
         let http: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
-        if http.to::<u64>() >= block {
+        let http = http.to::<u64>();
+        if http >= block {
             return Ok(());
         }
-        match tokio::time::timeout_at(until, rx.changed()).await {
+        if http > last {
+            (last, moved) = (http, tokio::time::Instant::now());
+        } else if moved.elapsed() > wait {
+            return Err(p.ctx.err(
+                ErrorCode::StaleData,
+                format!("узел HTTP стоит на блоке {http} дольше feed.stale_after_ms, узел WebSocket на {block}"),
+            ));
+        }
+        match tokio::time::timeout(wait, rx.changed()).await {
             Ok(Ok(())) => {}
             Ok(Err(_)) => {
                 return Err(p
@@ -165,33 +197,9 @@ async fn http_reached(p: &Pools, block: u64) -> GatewayResult<()> {
             Err(_) => {
                 return Err(p.ctx.err(
                     ErrorCode::StaleData,
-                    format!("узел HTTP на блоке {http}, узел WebSocket на {block}: HTTP не догнал за feed.stale_after_ms"),
+                    "нет новых блоков дольше feed.stale_after_ms — узел HTTP не с чем сравнить",
                 ));
             }
         }
-    }
-}
-
-/// Пулы пачки недостоверны: отметка в реестре и событие Invalidated по каждой монете.
-fn invalidate(p: &Pools, pools: &[(Found, String)]) {
-    let mut tickers = BTreeSet::new();
-    for (f, t) in pools {
-        p.reg.update(&f.reference, |e| e.valid = false);
-        tickers.insert(t.clone());
-    }
-    for t in tickers {
-        let _ = p.out.try_send(MarketEvent::Invalidated {
-            venue: p.ctx.venue(),
-            ticker: t,
-        });
-    }
-}
-
-/// Адрес USDT найденного пула: вторая валюта после монеты.
-fn found_usdt(f: &Found) -> alloy_primitives::Address {
-    if f.token0 == f.coin {
-        f.token1
-    } else {
-        f.token0
     }
 }

@@ -34,6 +34,7 @@ pub mod load_v2v3;
 pub mod market;
 pub mod market_mids;
 pub mod mids;
+pub mod progress;
 pub mod registry;
 pub mod scan;
 pub mod ticks;

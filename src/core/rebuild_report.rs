@@ -10,7 +10,7 @@ use crate::core::types::BlockReason;
 use crate::storage::journal::Level;
 
 use super::blacklist::BlockChange;
-use super::engine::Core;
+use super::engine::{Core, lk};
 use super::rebuild::has_pool;
 use super::registry::{CoinEntry, Exclusion};
 use super::view::CoreEvent;
@@ -44,8 +44,24 @@ pub async fn report_block(core: &Core, ch: BlockChange) {
     };
     deps.log(Level::Info, "core.blacklist", None, &text, None)
         .await;
-    deps.notify(code, None, &text).await;
+    // Первый проход после запуска — без уведомления по монете: одно сводное в конце (core/first_pass.rs).
+    // Ручной чёрный список — всегда по монете (это действие человека, не итог проверки).
+    let manual = matches!(&block, Some(b) if matches!(b.reason, BlockReason::Manual { .. }));
+    let reason = block.as_ref().map(|b| reason_key(&b.reason));
+    if manual || !super::first_pass::absorb(core, reason) {
+        deps.notify(code, None, &text).await;
+    }
     core.inner.live.send(CoreEvent::CoinBlock { asset, block });
+}
+
+/// Причина для сводки: вид и текст без чисел (адреса и суммы не делают причину новой). Ошибок нет.
+fn reason_key(r: &BlockReason) -> String {
+    let s = match r {
+        BlockReason::CheckFailed { reason } => format!("проверка не прошла: {reason}"),
+        other => format!("{other:?}"),
+    };
+    let s: String = s.chars().filter(|c| !c.is_ascii_digit()).collect();
+    s.chars().take(160).collect()
 }
 
 /// Уведомляет о пулах, впервые исключённых по крючку (pool.hook_excluded). Ошибок нет.
@@ -86,7 +102,7 @@ pub async fn report_check_done(core: &Core, coins: &[CoinEntry]) {
         .filter(|c| matches!(&c.block, Some(b) if b.reason == BlockReason::NotChecked))
         .count();
     let before = std::mem::replace(&mut *super::engine::lk(&core.inner.not_checked), waiting);
-    if before == 0 || waiting > 0 {
+    if before == 0 || waiting > 0 || !lk(&core.inner.first_pass).done {
         return;
     }
     let on_dex = |c: &&CoinEntry| {

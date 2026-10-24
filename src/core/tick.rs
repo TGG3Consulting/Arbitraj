@@ -67,6 +67,10 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             Touched::WalletQueue { queue, prev } => {
                 super::queue_notify::wallet_queue(&core, queue, prev).await
             }
+            Touched::CheckPass {
+                venue,
+                counts: [ok, failed, waiting, config],
+            } => super::first_pass::done(&core, &venue.0, ok, failed, waiting, config).await,
             Touched::Notice { venue, code, text } => {
                 core.inner.deps.notify(&code, Some(&venue.0), &text).await
             }

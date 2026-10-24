@@ -20,6 +20,7 @@ use tokio::sync::Notify;
 
 use crate::core::types::{CheckState, HookGroup};
 
+use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
 use super::super::num;
@@ -40,13 +41,28 @@ pub async fn run(p: Pools, wake: Arc<Notify>) {
             let res = match hook {
                 Err(why) => Err(why),
                 Ok(pct) => match probe(&p, &e).await {
-                    Ok(amount) => quoter::compare(&p.ctx, &e, e.usdt, amount, pct)
-                        .await
-                        .unwrap_or_else(|err| Err(err.message)),
+                    Ok(amount) => match quoter::compare(&p.ctx, &e, e.usdt, amount, pct).await {
+                        Ok(r) => r,
+                        // Не задана настройка (например dex.quoter вида пула) — одна запись на причину, не на пул.
+                        Err(err) if err.code == ErrorCode::NotConfigured => {
+                            let msg = format!(
+                                "{}: сверка с квотером невозможна — {}",
+                                e.family.title, err.message
+                            );
+                            p.signals
+                                .once(&p.ctx, Level::Error, "dex.quoter", msg)
+                                .await;
+                            Err(err.message)
+                        }
+                        Err(err) => Err(err.message),
+                    },
                     Err(why) => Err(why),
                 },
             };
-            if let Err(why) = &res {
+            // Не заданная настройка уже записана одной строкой на причину — по пулам не пишем.
+            if let Err(why) = &res
+                && !why.starts_with("Не задана настройка")
+            {
                 p.ctx
                     .log(
                         Level::Warn,

@@ -25,7 +25,7 @@ use crate::core::types::{Asset, PoolRef};
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
-use super::super::check::{cycle, quoter_cycle};
+use super::super::check::{cycle, quoter_cycle, tax_cycle};
 use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
@@ -82,11 +82,20 @@ pub async fn subscribe(
     p.ctx.log(Level::Info, "dex.pool", msg, None).await;
 
     let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
-    for (name, chunk, filter) in chunks(&found, &all, per) {
-        tasks.push(tokio::spawn(listen::run(p.clone(), name, chunk, filter)));
+    // Стартовая загрузка V2/V3: первый проход налогов ждёт, пока каждая пачка закончит первую загрузку (pools/progress.rs).
+    let start = chunks(&found, &all, per);
+    p.signals.expect(start.len());
+    for (name, chunk, filter) in start {
+        tasks.push(tokio::spawn(listen::run(
+            p.clone(),
+            name,
+            chunk,
+            filter,
+            true,
+        )));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
-    tasks.push(tokio::spawn(cycle::taxes(
+    tasks.push(tokio::spawn(tax_cycle::taxes(
         p.clone(),
         all.clone(),
         usdt,

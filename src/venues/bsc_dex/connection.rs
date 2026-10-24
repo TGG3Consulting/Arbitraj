@@ -6,7 +6,8 @@
 //! баланс BNB), резервный узел HTTP и WebSocket и Multicall3 (connection_extra.rs). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
-//! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs,
+//! directory/check.rs (индексатор справочника пулов).
 //! Настройки: bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
 //! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке), dex.enabled, dex.pool_enabled, dex.pool_manager [V4]; секреты bsc.node_*_key, bsc_dex.wallet_key.
 //!
@@ -43,6 +44,10 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
             super::connection_extra::backup_ws(ctx).await,
         ),
         ("Multicall3", super::connection_extra::multicall3(ctx).await),
+        (
+            "Справочник пулов (индексатор)",
+            super::directory::check::check(ctx).await,
+        ),
         ("Симуляция", simulate(ctx).await),
         ("История состояния", history(ctx).await),
         ("Кошелёк", wallet(ctx).await),

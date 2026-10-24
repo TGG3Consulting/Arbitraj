@@ -5,7 +5,7 @@
 //! ErrorCode::RateLimited) — по правилу шлюза venue.rate_limited (gateway/rules.rs: сначала правило площадки
 //! bsc_dex, потом общее): Retry { attempts, pause_ms } — вся очередь узла ждёт pause_ms, запрос повторяется, не
 //! больше attempts раз; другого правила или его нет — ошибка уходит вызывающему (проверка «не выполнена», не вердикт).
-//! Кто вызывает: node/rpc.rs (call_raw, batch).
+//! Кто вызывает: node/rpc.rs (call_raw, batch); очередь и правило — ещё directory/limit.rs (индексатор).
 //! От чего зависит: ctx.rs, gateway/rules.rs, storage/rules.rs (правила из SQLite журнала ctx).
 //! Настройки: bsc.node_http_rps (вся система); правила шлюза для RateLimited.
 //!
@@ -30,8 +30,9 @@ pub struct Pace {
 }
 
 impl Pace {
-    /// Занимает место в очереди на `weight` вызовов. Возвращает: когда отправлять. Ошибок нет.
-    fn reserve(&self, step: Duration) -> Instant {
+    /// Занимает место в очереди на время `step`. Возвращает: когда отправлять. Ошибок нет.
+    /// Его же использует очередь индексатора (directory/limit.rs).
+    pub(crate) fn reserve(&self, step: Duration) -> Instant {
         let mut next = self.next.lock().unwrap_or_else(|p| p.into_inner());
         let now = Instant::now();
         let slot = next.map_or(now, |n| n.max(now));
@@ -40,7 +41,7 @@ impl Pace {
     }
 
     /// Вся очередь ждёт не меньше `pause` от текущего момента. Ошибок нет.
-    fn hold(&self, pause: Duration) {
+    pub(crate) fn hold(&self, pause: Duration) {
         let mut next = self.next.lock().unwrap_or_else(|p| p.into_inner());
         let until = Instant::now() + pause;
         *next = Some(next.map_or(until, |n| n.max(until)));
@@ -84,7 +85,7 @@ where
 
 /// Правило шлюза на RateLimited для bsc_dex: (повторов, пауза мс), если это Retry. None — правила нет, оно другое
 /// или правила не прочитались. Ошибок нет.
-async fn retry_rule(ctx: &Ctx) -> Option<(u32, u64)> {
+pub(crate) async fn retry_rule(ctx: &Ctx) -> Option<(u32, u64)> {
     let rules = crate::storage::rules::list(ctx.journal.db()).await.ok()?;
     match pick_rule(&rules, ErrorCode::RateLimited, Some(&ctx.venue()))?.action {
         RuleAction::Retry { attempts, pause_ms } => Some((attempts, pause_ms)),

@@ -7,6 +7,7 @@
 //! Настройки: нет (настройки областей DEX и канал меняются обычным PUT /api/settings).
 //!
 //! GET /api/venues/{id}/dex-families — [DexFamily]; биржа — 400 «не применимо»
+//! GET /api/venues/{id}/pool-directory — PoolDirectory (справочник пулов от индексатора, решение 58); биржа — 400
 //! GET /api/channels/{venue}         — [{info: SendChannelInfo, stats: SendChannelStats | null}]
 //!
 //! Статистику каналов (решение 42) ведёт ядро по событиям адаптера (Core::channel_stats). Пока событий
@@ -16,7 +17,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use serde::Serialize;
 
-use crate::core::types::{SendChannelInfo, SendChannelStats, VenueId};
+use crate::core::types::{PoolDirectory, SendChannelInfo, SendChannelStats, VenueId};
 use crate::gateway::contract::DexFamily;
 
 use super::state::{ApiError, AppState};
@@ -43,6 +44,25 @@ pub async fn families(
         .map_err(ApiError::gateway)?;
     venue
         .dex_families()
+        .await
+        .map(Json)
+        .map_err(ApiError::gateway)
+}
+
+/// Справочник пулов площадки (шлюз `pool_directory`, решение 58).
+/// Принимает: id площадки. Возвращает: DEX индексатора, монеты, пулы с итогом адаптера.
+/// Ошибки: 400 — не DEX (NotApplicable); 404 — площадка не подключена; 502 — сбой адаптера.
+pub async fn directory(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<PoolDirectory>, ApiError> {
+    let venue = st
+        .registry
+        .get(&VenueId(id))
+        .await
+        .map_err(ApiError::gateway)?;
+    venue
+        .pool_directory()
         .await
         .map(Json)
         .map_err(ApiError::gateway)

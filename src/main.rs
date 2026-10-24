@@ -90,6 +90,7 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        index: Default::default(),
     };
     let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.

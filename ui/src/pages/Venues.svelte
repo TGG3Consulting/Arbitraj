@@ -3,12 +3,12 @@
   Что делает: экран «Площадки» — площадки из реестра шлюза (GET /api/venues); по каждой:
     «Проверить подключение» (POST /api/check/venue/{id}; у DEX — узел BSC и кошелёк), её секреты
     (GET /api/secrets/known, где scope = id; ключи каналов — в блоке каналов), её настройки области «площадка»
-    по группам; у DEX — блоки «DEX и виды пулов» и «Каналы отправки» (lib/dex.svelte.js).
+    по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов» и «Каналы отправки» (lib/dex.svelte.js).
     Секреты площадок, которых ещё нет в шлюзе (например адаптер DEX не зарегистрирован), тоже видны —
     ключ можно ввести заранее. Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
-    SecretRow.svelte, SettingEditor.svelte, DexFamilies.svelte, VenueChannels.svelte, ErrorText.svelte.
+    SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte, ErrorText.svelte.
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -20,6 +20,7 @@
   import SettingEditor from '../components/SettingEditor.svelte';
   import DexFamilies from '../components/DexFamilies.svelte';
   import VenueChannels from '../components/VenueChannels.svelte';
+  import PoolDirectory from '../components/PoolDirectory.svelte';
   import ErrorText from '../components/ErrorText.svelte';
 
   const groups = $derived.by(() => {
@@ -66,6 +67,8 @@
       <p class="muted">У площадки нет секретов в списке бэкенда.</p>
     {/each}
 
+    {#if d?.directory}<PoolDirectory dir={d.directory} />{/if}
+    <ErrorText text={d?.directoryError} />
     {#if d?.families}<DexFamilies families={d.families} />{/if}
     <ErrorText text={d?.familiesError} />
     {#if d?.channels}<VenueChannels venue={id} channels={d.channels} />{/if}

@@ -6,7 +6,7 @@
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
 //! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
-//! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs.
+//! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs, directory/refresh.rs (справочник пулов, решение 58).
 //! Настройки: venue.quote_asset [bsc_dex] (тикер USDT в списке ядра), dex.pools_per_sub; через вызываемые — dex.*,
 //! dex.intermediate_enabled, dex.intermediate_tokens.
 //!
@@ -66,6 +66,16 @@ pub async fn subscribe(
     };
     p.mids.set(mid_list.clone());
     let all = market_mids::with_mids(&coins, &mid_list);
+    // Справочник пулов от индексатора (решение 58): монеты и промежуточные, пары с USDT и промежуточными.
+    let quotes: HashSet<Address> = std::iter::once(usdt)
+        .chain(mid_list.iter().map(|m| m.address))
+        .collect();
+    tasks.push(tokio::spawn(super::super::directory::refresh::run(
+        p.ctx.clone(),
+        all.clone(),
+        quotes,
+        None,
+    )));
     let mut found = discover::find_all(&p.ctx, &all, usdt, head.to(), scanned, false).await;
     let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list, head.to(), scanned).await;
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();

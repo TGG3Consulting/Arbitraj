@@ -10,33 +10,31 @@
 //! От чего зависит: ctx.rs, node/rpc.rs, discover.rs, discover_v4.rs, deploy_block.rs, history_store.rs, scan.rs,
 //! attach.rs, created.rs (Watch), families.rs.
 //! Настройки: dex.enabled, dex.pool_enabled, dex.pool_manager [вид пула V4]; dex.logs_block_batch,
-//! dex.scan_progress_s, dex.pools_per_sub [bsc_dex].
+//! dex.scan_progress_s, dex.pools_per_sub, dex.history_scan (пауза из интерфейса — history_gate.rs) [bsc_dex].
 //!
 //! eth_blockNumber, eth_getLogs — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
 //! Initialize — единственный источник списка пулов V4 (research/flow/bsc_v4.md, раздел 3).
 
-use std::sync::Arc;
-
 use alloy_primitives::{Address, U64};
 use futures_util::future::join_all;
 use serde_json::json;
-use tokio::sync::Notify;
 
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
+use super::super::check::recheck::Recheck;
 use super::super::node::rpc;
 use super::attach::attach;
 use super::created::Watch;
 use super::discover::{self, Found, History, Scanned, against, is_v4};
 use super::families::{FAMILIES, Family};
 use super::listen::Pools;
-use super::{deploy_block, discover_v4, history_store, scan};
+use super::{deploy_block, discover_v4, history_gate, history_store, scan};
 
 /// Загрузка всех включённых видов V4 параллельно. Ошибка вида — в журнал (остальные виды грузятся).
-/// В конце, если подключены новые пулы, будит циклы проверок (крючки, сверка с квотером — check/cycle.rs):
+/// В конце, если подключены новые пулы, — «новые пулы» циклам крючков и сверки (check/recheck.rs):
 /// до проверки пул с крючком B/C не торгуется. Ошибок нет.
-pub async fn run(p: Pools, scanned: Scanned, watches: Vec<Watch>, wake: Arc<Notify>) {
+pub async fn run(p: Pools, scanned: Scanned, watches: Vec<Watch>, wake: Recheck) {
     let mut jobs = Vec::new();
     for f in FAMILIES.iter().filter(|f| is_v4(f)) {
         if discover::enabled(&p.ctx, f).await {
@@ -54,7 +52,7 @@ pub async fn run(p: Pools, scanned: Scanned, watches: Vec<Watch>, wake: Arc<Noti
         }
     }
     if attached > 0 {
-        wake.notify_waiters();
+        wake.new_pools();
     }
 }
 
@@ -95,6 +93,15 @@ async fn load(
         let mut prog = scan::Progress::new(ctx, &what, next, head)?;
         let mut events = 0;
         while next <= head {
+            // Вид выключили на лету — чтение останавливается на следующем куске (место чтения сохранено в SQLite).
+            if !history_gate::allowed(ctx, &what).await {
+                return Ok(attached);
+            }
+            if !discover::enabled(ctx, f).await {
+                let msg = format!("{what}: вид пула выключен — чтение остановлено на блоке {next}");
+                ctx.log(Level::Info, "dex.scan", msg, None).await;
+                return Ok(attached);
+            }
             let end = head.min(next.saturating_add(batch - 1));
             let logs = scan::one(ctx, manager, &topics, next, end, &what).await?;
             let found = discover_v4::parse_all(ctx, f, &logs)?;
@@ -109,7 +116,9 @@ async fn load(
                 h.pools.extend(found.iter().cloned());
                 h.last = end;
             }
-            attached += connect(p, watches, &found).await?;
+            let n = connect(p, watches, &found).await?;
+            attached += n;
+            prog.attached += n;
             events += logs.len();
             next = end + 1;
             prog.step(ctx, end, events).await;

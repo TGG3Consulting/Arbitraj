@@ -88,6 +88,7 @@ async fn run() -> Result<(), String> {
         http: http.clone(),
         journal: journal.clone(),
         raw,
+        pace: Default::default(),
     };
     let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.

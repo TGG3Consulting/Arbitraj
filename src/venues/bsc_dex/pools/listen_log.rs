@@ -3,6 +3,7 @@
 //! (позиция (блок, logIndex) не позже последней учтённой), применить событие, перечитать бины или весь пул (реорг,
 //! расхождение), отправить
 //! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
+//! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs.
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
 //! Настройки: через вызываемые.
@@ -24,8 +25,11 @@ use crate::storage::journal::Level;
 
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
+use super::super::quote::emptiness;
+use super::discover::Found;
 use super::events::{self, Applied};
 use super::listen::{End, Pools};
+use super::registry::Entry;
 use super::{load, load_bin};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру.
@@ -85,9 +89,10 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
                 Ok(block)
             };
             match at {
-                Ok(at) => load::refresh(&p.ctx, &p.tokens, &entry, at)
-                    .await
-                    .map(|e| p.reg.put(e)),
+                Ok(at) => load::refresh(&p.ctx, &p.tokens, &entry, at).await.map(|e| {
+                    p.reg.put(e);
+                    p.signals.pool_ready();
+                }),
                 Err(e) => Err(e),
             }
         }
@@ -101,8 +106,23 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
         return Err(End::Broken(e.message));
     }
     match p.reg.get(&r) {
-        Some(e) => emit(p, e.pool),
+        Some(e) => {
+            note_refill(p, &e);
+            emit(p, e.pool)
+        }
         None => Ok(()),
+    }
+}
+
+/// Пул, исключённый сверкой как пустой, снова не пуст — сигнал сверить его сразу (pools/progress.rs). Ошибок нет.
+pub fn note_refill(p: &Pools, e: &Entry) {
+    if emptiness::empty(e) {
+        return;
+    }
+    if let Some(Err(why)) = p.checks.pool(&e.pool.reference).quoter
+        && why == emptiness::EMPTY
+    {
+        p.signals.refilled(e.pool.reference.clone());
     }
 }
 
@@ -135,5 +155,29 @@ pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
     match p.out.try_send(MarketEvent::Pool(pool)) {
         Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
         Err(TrySendError::Closed(_)) => Err(End::Closed),
+    }
+}
+
+/// Пулы пачки недостоверны: отметка в реестре и событие Invalidated по каждой монете.
+pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {
+    let mut tickers = BTreeSet::new();
+    for (f, t) in pools {
+        p.reg.update(&f.reference, |e| e.valid = false);
+        tickers.insert(t.clone());
+    }
+    for t in tickers {
+        let _ = p.out.try_send(MarketEvent::Invalidated {
+            venue: p.ctx.venue(),
+            ticker: t,
+        });
+    }
+}
+
+/// Адрес USDT найденного пула: вторая валюта после монеты.
+pub fn found_usdt(f: &Found) -> alloy_primitives::Address {
+    if f.token0 == f.coin {
+        f.token1
+    } else {
+        f.token0
     }
 }

@@ -36,6 +36,15 @@ pub enum MarketEvent {
     SendChannel(SendChannelStats),
     /// DEX: состояние очереди транзакций кошелька изменилось (остановлена до ручной проверки, снята, занята).
     WalletQueue(WalletQueue),
+    /// DEX: полный проход проверки налогов закончен (первый после подписки — ядро шлёт одно сводное coin.check_done).
+    CheckPass {
+        venue: VenueId,
+        /// Сколько монет: налоги известны, проверка не прошла, ждут достоверного пула, не задана настройка.
+        ok: usize,
+        failed: usize,
+        waiting: usize,
+        not_configured: usize,
+    },
     /// Сообщение адаптера для уведомлений: код события из notify/catalog.rs и текст (ядро шлёт, если событие включено).
     Notice {
         venue: VenueId,

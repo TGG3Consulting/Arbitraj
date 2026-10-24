@@ -18,14 +18,14 @@ use std::sync::{Arc, Mutex};
 
 use alloy_primitives::{Address, U64};
 use serde_json::json;
-use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::core::types::{Asset, PoolRef};
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
-use super::super::check::{cycle, quoter_cycle};
+use super::super::check::recheck::Recheck;
+use super::super::check::{cycle, quoter_cycle, tax_cycle};
 use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
@@ -38,7 +38,7 @@ use super::{events, history_v4, market_mids, mids};
 pub async fn subscribe(
     p: &Pools,
     scanned: &Scanned,
-    wake: &Arc<Notify>,
+    wake: &Recheck,
     assets: Vec<Asset>,
 ) -> GatewayResult<Vec<JoinHandle<()>>> {
     p.tokens.set(&assets);
@@ -82,18 +82,30 @@ pub async fn subscribe(
     p.ctx.log(Level::Info, "dex.pool", msg, None).await;
 
     let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
-    for (name, chunk, filter) in chunks(&found, &all, per) {
-        tasks.push(tokio::spawn(listen::run(p.clone(), name, chunk, filter)));
+    // Стартовая загрузка V2/V3: первый проход налогов ждёт, пока каждая пачка закончит первую загрузку (pools/progress.rs).
+    let start = chunks(&found, &all, per);
+    p.signals.expect(start.len());
+    for (name, chunk, filter) in start {
+        tasks.push(tokio::spawn(listen::run(
+            p.clone(),
+            name,
+            chunk,
+            filter,
+            true,
+        )));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
-    tasks.push(tokio::spawn(cycle::taxes(
+    tasks.push(tokio::spawn(tax_cycle::taxes(
         p.clone(),
         all.clone(),
         usdt,
-        wake.clone(),
+        wake.taxes.clone(),
     )));
-    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.clone())));
-    tasks.push(tokio::spawn(quoter_cycle::run(p.clone(), wake.clone())));
+    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.hooks.clone())));
+    tasks.push(tokio::spawn(quoter_cycle::run(
+        p.clone(),
+        wake.quoter.clone(),
+    )));
     let extra = Arc::new(Mutex::new(Vec::new()));
     let known = Arc::new(Mutex::new(known));
     // Новые пулы: с USDT (монеты и промежуточные) и с каждой промежуточной монетой.

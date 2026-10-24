@@ -23,7 +23,8 @@ use crate::settings::read::At;
 use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::pools::registry::Entry;
+use super::super::pools::registry::{Entry, Registry};
+use super::super::tokens::Tokens;
 use super::{Quoting, pool_quote, rate};
 
 /// Что известно о допущенном пуле для котировки.
@@ -40,6 +41,13 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     let (ctx, checks) = (&q.ctx, &q.checks);
     if !e.valid {
         return Err("данные пула недостоверны (обрыв или перечитывание)".into());
+    }
+    // Пустой пул — по живому состоянию, не дожидаясь сверки с квотером (quote/emptiness.rs).
+    if super::emptiness::empty(e) {
+        return Err(super::emptiness::EMPTY.into());
+    }
+    if let Some(why) = deep_enough(ctx, &q.reg, &q.tokens, e, usdt_decimals)? {
+        return Err(why);
     }
     let on = ctx.dex_flag("dex.enabled", e.family.dex).and_then(|a| {
         ctx.dex_flag("dex.pool_enabled", e.family.id)
@@ -63,15 +71,6 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
         Side::Sell => facts.gas_sell,
     }
     .ok_or("газ обмена не измерен пробным обменом")?;
-    let min = ctx
-        .dec("dex.min_pool_liquidity_usd")
-        .map_err(|e| e.message)?;
-    let depth = liquidity_usdt(q, e, usdt_decimals).ok_or("ликвидность пула не считается")?;
-    if depth < min {
-        return Err(format!(
-            "ликвидность {depth} USDT ниже dex.min_pool_liquidity_usd ({min})"
-        ));
-    }
     Ok(Usable { gas, hook_pct })
 }
 
@@ -130,10 +129,35 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
 
 /// Ликвидность пула в USDT (см. шапку); у пула с промежуточной монетой (решение 52) выход в ней пересчитывается
 /// в USDT по живому пулу «промежуточная — USDT» (quote/rate.rs). None — расчёт невозможен.
-pub fn liquidity_usdt(q: &Quoting, e: &Entry, usdt_decimals: u8) -> Option<Decimal> {
+pub fn liquidity_usdt(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_decimals: u8,
+) -> Option<Decimal> {
     let all = U256::from(u128::MAX);
-    let r = pool_quote::swap(&q.ctx, e, e.coin, true, all).ok()?;
-    let usdt = q.tokens.usdt(&q.ctx).ok()?;
-    let out = rate::to_usdt(&q.ctx, &q.reg, usdt, e.usdt, r.amount_out).ok()?;
+    let r = pool_quote::swap(ctx, e, e.coin, true, all).ok()?;
+    let usdt = tokens.usdt(ctx).ok()?;
+    let out = rate::to_usdt(ctx, reg, usdt, e.usdt, r.amount_out).ok()?;
     num::to_decimal(out, usdt_decimals)
+}
+
+/// Пул не мельче dex.min_pool_liquidity_usd? Этот фильтр — первым: мелкие пулы не идут ни в котировки, ни в сверку
+/// с квотером, ни в пробу налогов. Возвращает: Ok(None) — достаточно глубок; Ok(Some(причина)) — мельче порога;
+/// Err(причина) — глубину не посчитать (настройка, расчёт). Ошибок нет.
+pub fn deep_enough(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_decimals: u8,
+) -> Result<Option<String>, String> {
+    let min = ctx
+        .dec("dex.min_pool_liquidity_usd")
+        .map_err(|e| e.message)?;
+    let depth = liquidity_usdt(ctx, reg, tokens, e, usdt_decimals)
+        .ok_or("ликвидность пула не считается")?;
+    Ok((depth < min)
+        .then(|| format!("ликвидность {depth} USDT ниже dex.min_pool_liquidity_usd ({min})")))
 }

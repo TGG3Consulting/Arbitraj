@@ -6,8 +6,6 @@
 //! От чего зависит: listen.rs, market.rs (пачки и фильтры подписки), created.rs (Watch), node/subs.rs.
 //! Настройки: dex.pools_per_sub [bsc_dex].
 
-use std::collections::HashMap;
-
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
@@ -19,7 +17,7 @@ use super::market;
 
 /// Запускает слушателей для пулов, которых ещё нет.
 /// Принимает: окружение, наблюдатель (монеты, встречный токен, известные пулы, задачи), найденные пулы,
-/// each — писать ли в журнал каждый пул (новые пулы сети) или одну строку на пачку (история V4).
+/// each — писать ли в журнал каждый пул (новые пулы сети); история V4 — без записей (итог — в ходе чтения).
 /// Возвращает: сколько пулов подключено. Ошибки: NotConfigured (dex.pools_per_sub).
 pub async fn attach(p: &Pools, w: &Watch, found: Vec<Found>, each: bool) -> GatewayResult<usize> {
     let per = subs::per_sub(&p.ctx)?;
@@ -35,23 +33,23 @@ pub async fn attach(p: &Pools, w: &Watch, found: Vec<Found>, each: bool) -> Gate
     if fresh.is_empty() {
         return Ok(0);
     }
+    // История V4 (each = false) — без записи на кусок: число подключённых — в строке хода чтения (scan.rs Progress).
     if each {
         for f in &fresh {
             let ticker = w.coins.get(&f.coin).cloned().unwrap_or_default();
             let msg = format!("Новый пул {} {ticker}: {:?}", f.family.title, f.reference);
             p.ctx.log(Level::Info, "dex.pool", msg, None).await;
         }
-    } else {
-        let mut by: HashMap<&str, usize> = HashMap::new();
-        for f in &fresh {
-            *by.entry(f.family.title).or_default() += 1;
-        }
-        let msg = format!("Подключены пулы из истории V4: {by:?}");
-        p.ctx.log(Level::Info, "dex.pool", msg, None).await;
     }
     let n = fresh.len();
     for (name, chunk, filter) in market::chunks(&fresh, &w.coins, per) {
-        let h = tokio::spawn(listen::run(p.clone(), format!("{name}-new"), chunk, filter));
+        let h = tokio::spawn(listen::run(
+            p.clone(),
+            format!("{name}-new"),
+            chunk,
+            filter,
+            false,
+        ));
         w.tasks.lock().unwrap_or_else(|x| x.into_inner()).push(h);
     }
     Ok(n)

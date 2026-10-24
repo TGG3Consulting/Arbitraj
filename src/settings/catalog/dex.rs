@@ -16,6 +16,7 @@ use crate::settings::schema::{DexId, Kind as K, Limit as L, SettingDef};
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
     d("Узел BSC", "bsc.node_ws_url", K::Url, L::None, "URL", G, "WebSocket узла BSC (подписки logs, newHeads); ключ провайдера в адресе — как {key}, сам ключ — секрет bsc.node_ws_key"),
+    d("Узел BSC", "bsc.node_http_rps", K::Integer, L::Positive, "вызовов в секунду", G, "Темп узла HTTP: сколько вызовов JSON-RPC в секунду (именно вызовов, не CU провайдера — значение подбирается под тариф); пачка из N вызовов — N; на «превышен лимит» (429) — правило шлюза «Превышен лимит запросов»"),
     d("Узел BSC", "bsc.node_http_url", K::Url, L::None, "URL", G, "HTTP узла BSC (eth_call, eth_getLogs, eth_estimateGas, квитанции); ключ — как {key}, секрет bsc.node_http_key"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
     d("DEX", "dex.enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — имя DEX, например pancakeswap)").dex_id(DexId::Dex),
@@ -24,9 +25,11 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.inflow_wait_notify_s", K::Integer, L::Positive, "секунды", V, "Обмен ждёт ожидаемого поступления того же токена в кошелёк дольше — одно уведомление в Telegram (dex.swap_waits_inflow)"),
     d("DEX", "dex.native_ticker", K::Text, L::None, "тикер", V, "Как биржа называет нативную монету BSC (BNB): этим тикером записываются затраты шага через её обёртку (WETH() роутера V2 своей DEX, WBNB 1:1)"),
     d("DEX", "dex.intermediate_tokens", K::AddressList, L::None, "адреса BSC", V, "Промежуточные монеты (решение 52): адреса токенов в BSC (например WBNB). Нужен, если dex.intermediate_enabled = да"),
-    d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не слушаются"),
+    d("DEX", "dex.min_pool_liquidity_usd", K::Decimal, L::NonNegative, "USDT", V, "Пулы с ликвидностью ниже не котируются, не сверяются с квотером и не участвуют в пробе налогов (фильтр — первым)"),
+    d("DEX", "dex.pool_load_retries", K::Integer, L::Positive, "попыток", V, "Состояние пула не прочиталось при подключении (сбой узла): сколько раз повторить чтение — по разу на каждый новый блок; дальше пул недостоверен до переподключения подписки"),
     d("DEX", "dex.pools_per_sub", K::Integer, L::Positive, "штук", V, "Сколько пулов в одной подписке logs (узел BSC: до 1000 вариантов в позиции topics)"),
     d("DEX", "dex.logs_block_batch", K::Integer, L::Positive, "блоков", V, "Сколько блоков в одном eth_getLogs при чтении истории Initialize пулов V4 (не больше лимита провайдера узла)"),
+    d("DEX", "dex.history_scan", K::Bool, L::None, "да/нет", V, "Читать историю пулов V4 (разовое чтение Initialize, eth_getLogs): нет — пауза перед следующим куском, место сохраняется, найденные пулы слушаются, виды пулов не выключаются"),
     d("DEX", "dex.scan_progress_s", K::Integer, L::Positive, "секунды", V, "Чтение истории пулов V4: ход (прочитано, осталось блоков) — в журнал не чаще раза в столько секунд"),
     d("DEX", "dex.tick_words", K::Integer, L::Positive, "слов", V, "V3/CL: сколько слов битмапа тиков читать вокруг текущего тика"),
     d("DEX", "dex.bin_depth_usd", K::Decimal, L::Positive, "USDT", V, "Bin: на какую глубину в USDT читать бины в обе стороны от активного"),

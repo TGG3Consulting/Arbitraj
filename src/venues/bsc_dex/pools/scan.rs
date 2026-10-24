@@ -99,6 +99,8 @@ pub struct Progress {
     started: Instant,
     last: Instant,
     told: bool,
+    /// Сколько пулов подключено по ходу чтения (история V4) — в той же строке хода, без записи на каждый кусок.
+    pub attached: usize,
 }
 
 impl Progress {
@@ -113,6 +115,7 @@ impl Progress {
             started: now,
             last: now,
             told: false,
+            attached: 0,
         })
     }
 
@@ -121,7 +124,7 @@ impl Progress {
         if done < self.to && self.last.elapsed() >= self.every {
             self.last = Instant::now();
             self.told = true;
-            let msg = progress(&self.what, self.from, done, self.to, events);
+            let msg = progress(&self.what, self.from, done, self.to, events) + &self.pools();
             ctx.log(Level::Info, "dex.scan", msg, None).await;
         }
     }
@@ -130,13 +133,25 @@ impl Progress {
     pub async fn finish(&self, ctx: &Ctx, events: usize) {
         if self.told || events > 0 {
             let msg = format!(
-                "{}: прочитаны блоки {}–{} за {} с, событий {events}",
+                "{}: прочитаны блоки {}–{} за {} с, событий {events}{}",
                 self.what,
                 self.from,
                 self.to,
-                self.started.elapsed().as_secs()
+                self.started.elapsed().as_secs(),
+                self.pools()
             );
             ctx.log(Level::Info, "dex.scan", msg, None).await;
+        }
+    }
+}
+
+impl Progress {
+    /// «, подключено пулов M» — если подключались. Ошибок нет.
+    fn pools(&self) -> String {
+        if self.attached > 0 {
+            format!(", подключено пулов {}", self.attached)
+        } else {
+            String::new()
         }
     }
 }

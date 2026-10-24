@@ -25,6 +25,8 @@
 | `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
 | `quoter.rs` | Выход по квотеру DEX (eth_call) и сверка с математикой (`dex.quoter_max_diff_pct`) |
 | `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция) |
+| `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
+| `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 
 Газ разрешений (`ApproveGas`) — если разрешений ещё нет (Universal Router своей DEX или `smart.universal_router`);
 чаевые (`ChannelTip`) — если настроен ровно один канал бандлом с чаевыми.

@@ -99,13 +99,10 @@ pub async fn run(
     });
     list.push(pc::balance(wallet, coin, wallet));
     let first = simulate::run(ctx, &list).await?;
-    if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
-        return Ok(Err(format!(
-            "шаг {i} пробной покупки откатился: {}",
-            r.why()
-        )));
-    }
     let (q, x) = (1 + n_appr, 2 + n_appr);
+    if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
+        return pc::buy_revert(ctx, i, r, q).map(Err);
+    }
     let (Some(buy_expected), Some(bought)) = (
         quoter_calls::decode(e, &first[q].return_data),
         pc::u256(&first[x + 1]),

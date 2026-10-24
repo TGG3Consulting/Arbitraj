@@ -5,8 +5,9 @@
 //! Блок берётся у узла WS, а не HTTP: если HTTP отстаёт, события между его блоком и подпиской потерялись бы.
 //! Реорг (removed: true) или расхождение события с картой — пул перечитывается. Обрыв — пулы пачки недостоверны
 //! (событие Invalidated по монетам), пауза venue.ws_reconnect_pause_ms, всё заново.
+//! Сессия (подписка, чтение, события, повтор чтения неудачных пулов) — pools/session.rs; журнал связи — pools/link.rs.
 //! Кто вызывает: pools/market.rs, pools/created.rs (новые пулы).
-//! От чего зависит: ctx.rs, node/ws.rs, node/rpc.rs, pools/load.rs, listen_log.rs (один лог), registry.rs, discover.rs.
+//! От чего зависит: ctx.rs, node/ws.rs, node/rpc.rs, pools/load.rs, listen_log.rs (один лог), session.rs, link.rs, registry.rs, discover.rs.
 //! Настройки: venue.ws_reconnect_pause_ms, feed.stale_after_ms [bsc_dex] (сколько ждать узел HTTP); через
 //! вызываемые — узел, dex.*.
 //!

@@ -10,3 +10,4 @@
 | `heads.rs` | Постоянная подписка newHeads: последний блок, свежесть (`feed.stale_after_ms`), реорг в журнал |
 | `call.rs` | eth_call к контракту с ABI-кодированием (alloy sol!) |
 | `abi.rs` | Описания ERC-20 для ABI |
+| `pace.rs` | Темп запросов к узлу HTTP (bsc.node_http_rps; пачка из N — N мест) и правило шлюза на «превышен лимит» (429) |

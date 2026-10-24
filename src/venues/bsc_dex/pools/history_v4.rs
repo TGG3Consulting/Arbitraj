@@ -10,7 +10,7 @@
 //! От чего зависит: ctx.rs, node/rpc.rs, discover.rs, discover_v4.rs, deploy_block.rs, history_store.rs, scan.rs,
 //! attach.rs, created.rs (Watch), families.rs.
 //! Настройки: dex.enabled, dex.pool_enabled, dex.pool_manager [вид пула V4]; dex.logs_block_batch,
-//! dex.scan_progress_s, dex.pools_per_sub [bsc_dex].
+//! dex.scan_progress_s, dex.pools_per_sub, dex.history_scan (пауза из интерфейса — history_gate.rs) [bsc_dex].
 //!
 //! eth_blockNumber, eth_getLogs — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
 //! Initialize — единственный источник списка пулов V4 (research/flow/bsc_v4.md, раздел 3).
@@ -29,7 +29,7 @@ use super::created::Watch;
 use super::discover::{self, Found, History, Scanned, against, is_v4};
 use super::families::{FAMILIES, Family};
 use super::listen::Pools;
-use super::{deploy_block, discover_v4, history_store, scan};
+use super::{deploy_block, discover_v4, history_gate, history_store, scan};
 
 /// Загрузка всех включённых видов V4 параллельно. Ошибка вида — в журнал (остальные виды грузятся).
 /// В конце, если подключены новые пулы, — «новые пулы» циклам крючков и сверки (check/recheck.rs):
@@ -94,6 +94,9 @@ async fn load(
         let mut events = 0;
         while next <= head {
             // Вид выключили на лету — чтение останавливается на следующем куске (место чтения сохранено в SQLite).
+            if !history_gate::allowed(ctx, &what).await {
+                return Ok(attached);
+            }
             if !discover::enabled(ctx, f).await {
                 let msg = format!("{what}: вид пула выключен — чтение остановлено на блоке {next}");
                 ctx.log(Level::Info, "dex.scan", msg, None).await;

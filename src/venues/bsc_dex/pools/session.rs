@@ -15,19 +15,17 @@
 //! Подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub ;
 //! eth_blockNumber — execution-apis src/eth (см. listen.rs).
 
-use std::time::Duration;
-
 use alloy::rpc::types::Log;
 use alloy_primitives::U64;
 use serde_json::{Value, json};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
-use super::super::node::{rpc, ws::Conn};
+use super::super::node::ws::Conn;
 use super::discover::Found;
 use super::listen::{End, Pools};
-use super::{link, listen_log, load};
+use super::{http_wait, link, listen_log, load};
 
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
 struct Missing {
@@ -42,7 +40,7 @@ pub async fn run(p: &Pools, name: &str, pools: &[(Found, String)], filter: &Valu
         let sub = conn.subscribe(json!(["logs", filter])).await?;
         let block: U64 = conn.request("eth_blockNumber", json!([])).await?;
         let block = block.to::<u64>();
-        http_reached(p, block).await?;
+        http_wait::http_reached(p, block).await?;
         GatewayResult::Ok((conn, sub, block))
     };
     let (conn, mut sub, block) = match start.await {
@@ -179,43 +177,5 @@ async fn load_one(
             listen_log::emit(p, pool).map(Ok)
         }
         Err(e) => Ok(Err(e.message)),
-    }
-}
-
-/// Ждёт, пока узел HTTP дойдёт до блока узла WS: проверка на каждый новый блок newHeads, сколько угодно блоков, пока
-/// узел HTTP продвигается (отставание провайдера — не сбой). Ошибки: StaleData — блок узла HTTP не менялся дольше
-/// feed.stale_after_ms или новых блоков нет; узел; NotConfigured.
-async fn http_reached(p: &Pools, block: u64) -> GatewayResult<()> {
-    let wait = Duration::from_millis(p.ctx.int("feed.stale_after_ms")?);
-    let mut rx = p.heads.watch();
-    let (mut last, mut moved) = (0u64, tokio::time::Instant::now());
-    loop {
-        let http: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
-        let http = http.to::<u64>();
-        if http >= block {
-            return Ok(());
-        }
-        if http > last {
-            (last, moved) = (http, tokio::time::Instant::now());
-        } else if moved.elapsed() > wait {
-            return Err(p.ctx.err(
-                ErrorCode::StaleData,
-                format!("узел HTTP стоит на блоке {http} дольше feed.stale_after_ms, узел WebSocket на {block}"),
-            ));
-        }
-        match tokio::time::timeout(wait, rx.changed()).await {
-            Ok(Ok(())) => {}
-            Ok(Err(_)) => {
-                return Err(p
-                    .ctx
-                    .err(ErrorCode::Internal, "поток новых блоков остановлен"));
-            }
-            Err(_) => {
-                return Err(p.ctx.err(
-                    ErrorCode::StaleData,
-                    "нет новых блоков дольше feed.stale_after_ms — узел HTTP не с чем сравнить",
-                ));
-            }
-        }
     }
 }

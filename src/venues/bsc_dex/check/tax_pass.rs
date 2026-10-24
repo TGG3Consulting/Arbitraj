@@ -19,6 +19,7 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::taxes::{self, Outcome};
+use super::taxes_util::Sources;
 
 /// Почему монета ждёт.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +58,8 @@ pub async fn check(
     first: bool,
 ) -> Pass {
     let mut pass = Pass::default();
+    // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
+    let sources = Sources::default();
     for (i, (addr, ticker)) in list.iter().enumerate() {
         let block_time = match p.heads.fresh(&p.ctx) {
             Ok(h) => h.timestamp,
@@ -71,7 +74,7 @@ pub async fn check(
             }
         };
         let (c, out) = taxes::check_coin(
-            &p.ctx, &p.reg, &p.checks, &p.tokens, ticker, *addr, usdt, block_time,
+            &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, block_time,
         )
         .await;
         let prev = p.checks.coin(ticker).map(|c| c.taxes);

@@ -22,13 +22,13 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::pools::registry::Registry;
+use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::{rate, select};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
 use super::probe;
 use super::state::Checks;
-use super::taxes_util::{percent, quote_source};
+use super::taxes_util::{Sources, percent, quote_source};
 
 /// Имя источника проверки в CoinCheck.source (решение 30: источники подключаемые).
 pub const SOURCE: &str = "eth_simulateV1";
@@ -55,12 +55,13 @@ pub async fn check_coin(
     reg: &Registry,
     checks: &Checks,
     tokens: &Tokens,
+    sources: &Sources,
     ticker: &str,
     coin: Address,
     usdt: Address,
     block_time: u64,
 ) -> (CoinCheck, Outcome) {
-    let out = match run(ctx, reg, checks, tokens, ticker, usdt, block_time).await {
+    let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, block_time).await {
         Ok(o) => o,
         Err(e) if matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked) => {
             Outcome::Config(e.message)
@@ -92,11 +93,13 @@ pub async fn check_coin(
 
 /// Пробы по пулам монеты. Возвращает: итог (см. Outcome). Ошибки: настройки, ключ, узел — вызывающий делает из них
 /// Config / Wait.
+#[allow(clippy::too_many_arguments)]
 async fn run(
     ctx: &Ctx,
     reg: &Registry,
     checks: &Checks,
     tokens: &Tokens,
+    sources: &Sources,
     ticker: &str,
     usdt: Address,
     block_time: u64,
@@ -150,7 +153,9 @@ async fn run(
                 continue;
             }
         };
-        let source = match quote_source(ctx, reg, e.usdt, exclude, amount).await {
+        let deep =
+            |x: &Entry| matches!(select::deep_enough(ctx, reg, tokens, x, usdt_dec), Ok(None));
+        let source = match quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await {
             Ok(Some(s)) => s,
             Ok(None) => {
                 env.push(format!(

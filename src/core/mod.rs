@@ -19,6 +19,7 @@ pub mod deal;
 pub mod deps;
 pub mod dirctx;
 pub mod engine;
+pub mod evaluate;
 pub mod executor;
 pub mod fills;
 pub mod first_pass;

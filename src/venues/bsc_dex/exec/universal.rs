@@ -58,7 +58,8 @@ pub async fn build(
                     format!("{}: шаг не исполняет умный роутер (dex.universal_router ≠ smart.universal_router) или минимум 0", s.entry.family.title),
                 ));
             }
-            if i == 0 {
+            // Платит кошелёк — сумма в разрешения; нативная продажа (решение 62) — платит роутер из WRAP_ETH.
+            if i == 0 && s.from_wallet {
                 total_in = total_in.saturating_add(s.order.amount_in);
             }
             commands.push(chain::command(ctx, s, Format::Pancake, wallet)?);
@@ -67,7 +68,11 @@ pub async fn build(
             total_min = total_min.saturating_add(last.order.min_out);
         }
     }
-    let approvals = approve::missing(ctx, tin, wallet, permit2, router, total_in, now).await?;
+    let approvals = if total_in.is_zero() {
+        Vec::new()
+    } else {
+        approve::missing(ctx, tin, wallet, permit2, router, total_in, now).await?
+    };
     Plan::new(
         ctx,
         (approvals, router, wallet),

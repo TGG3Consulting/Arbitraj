@@ -67,6 +67,11 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     }
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     out.dedup();
+    if kind == VenueKind::Cex {
+        // Биржа подписывается по тикеру: нативная монета (решение 62, native.rs) — и монета справочника с адресом
+        // обёртки, и монета газа без адреса; стакан у неё один — одна подписка (остаётся монета справочника).
+        out.dedup_by(|a, b| a.ticker == b.ticker);
+    }
     out
 }
 

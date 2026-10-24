@@ -25,6 +25,10 @@ pub async fn units(
     usdt_dec: u8,
 ) -> GatewayResult<Option<u64>> {
     let ctx = &q.ctx;
+    // Продажа нативной BNB (решение 62): платит роутер из WRAP_ETH — разрешений кошелька нет (exec/native.rs).
+    if quote.side == Side::Sell && super::super::exec::native::is_native(ctx, &quote.asset) {
+        return Ok(None);
+    }
     let bad = || {
         ctx.err(
             ErrorCode::BadResponse,

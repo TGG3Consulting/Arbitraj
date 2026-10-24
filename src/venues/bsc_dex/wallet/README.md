@@ -9,7 +9,9 @@
 | `nonce.rs` | Строгая очередь: одна транзакция кошелька за раз, до занятия её nonce в блоке; nonce — `eth_getTransactionCount(адрес, "latest")`, не меньше запомненного |
 | `deposit.rs` | Статус зачисления со снятием ожидания поступления, отказ от депозита, состояние и снятие очереди кошелька |
 | `inflows.rs` | Ожидаемые поступления в кошелёк и идущие обмены: не совпадают по времени (база BALANCE_CHECK_ERC20) |
-| `balances.rs` | Балансы: BNB (`eth_getBalance`) и известные токены (`balanceOf`) |
+| `balances.rs` | Балансы: BNB (`eth_getBalance`) и известные токены (`balanceOf`); WBNB нативной монеты (решение 62) — в locked строки BNB |
 | `approve.rs` | Разрешения ERC-20 → Permit2 и Permit2 → Universal Router: каких не хватает (`dex.approve_unlimited`, `dex.permit2_expiration_s`) |
-| `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу), стоимость перевода |
+| `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу); BNB (решение 62) — нативный перевод value, сверх резерва на газ |
+| `transfer_cost.rs` | Стоимость перевода: газ пробного перевода × цена газа и налог на перевод; BNB — газ пробного нативного перевода, без налога |
+| `native_status.rs` | Статус нативного перевода BNB по самой транзакции (eth_getTransactionByHash: from, to, value) — у него нет события Transfer |
 | `transfer_status.rs` | Статусы вывода и зачисления по квитанции; «Зачислен» — ненулевой Transfer на кошелёк и `send.deposit_confirmations` блоков |

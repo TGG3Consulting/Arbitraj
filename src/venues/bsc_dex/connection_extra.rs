@@ -4,7 +4,8 @@
 //! Multicall3 — есть ли код по адресу dex.multicall3 (eth_getCode). Не задано — «не задан», это не ошибка.
 //! Кто вызывает: connection.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs (post), node/ws.rs (Conn::connect), node/jsonrpc.rs, node/multicall.rs.
-//! Настройки: bsc.node_http_url_backup, bsc.node_ws_url_backup, dex.multicall3; секреты bsc.node_*_key_backup.
+//! Обёртка нативной монеты (решение 62) — код по адресу dex.native_wrapped и совпадение с WETH() роутеров V2.
+//! Настройки: bsc.node_http_url_backup, bsc.node_ws_url_backup, dex.multicall3, dex.native_wrapped; секреты bsc.node_*_key_backup.
 //!
 //! eth_chainId, eth_blockNumber, eth_getCode — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth
 
@@ -84,6 +85,35 @@ pub async fn multicall3(ctx: &Ctx) -> Result<String, String> {
         ));
     }
     Ok(format!("контракт {addr} есть"))
+}
+
+/// Обёртка нативной монеты (решение 62): по адресу dex.native_wrapped есть контракт, и он совпадает с WETH() роутеров
+/// включённых DEX вида V2 (официальный источник обёртки у самой DEX; pools/mids.rs). Не задано — BNB не торгуется,
+/// это не ошибка. Возвращает: описание или текст причины.
+pub async fn native_wrapped(ctx: &Ctx) -> Result<String, String> {
+    let Ok(addr) = ctx.addr("dex.native_wrapped") else {
+        return Ok("не задана (dex.native_wrapped) — нативная монета не торгуется".into());
+    };
+    let code: Bytes = rpc::call(ctx, "eth_getCode", json!([addr, "latest"]))
+        .await
+        .map_err(|e| e.message)?;
+    if code.is_empty() {
+        return Err(format!(
+            "по адресу {addr} нет контракта — проверьте dex.native_wrapped"
+        ));
+    }
+    let weth = super::pools::mids::wrapped_native(ctx).await;
+    match weth.iter().find(|w| **w != addr) {
+        Some(w) => Err(format!(
+            "WETH() роутера V2 = {w}, а dex.native_wrapped = {addr} — проверьте адрес"
+        )),
+        None if weth.is_empty() => Ok(format!(
+            "контракт {addr} есть (сверить с WETH() не с чем: нет включённых DEX вида V2 с dex.router)"
+        )),
+        None => Ok(format!(
+            "контракт {addr} есть, совпадает с WETH() роутеров V2"
+        )),
+    }
 }
 
 /// Сверка сети с BSC mainnet. Ошибка — текст.

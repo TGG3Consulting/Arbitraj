@@ -4,6 +4,7 @@
 //! Кто вызывает: exec/trade.rs.
 //! От чего зависит: exec/fill.rs, exec/txs.rs (Done), num.rs, core/types.
 //! Настройки: нет.
+//! Нативная монета BNB (решение 62): монеты — по событиям WBNB Deposit / Withdrawal роутера (exec/native.rs), USDT — по Transfer.
 //!
 //! «Факт: квитанция → реальные суммы из логов Transfer/Swap → сверка с планом» — research/flow/bsc_dex.md, схема п. 8.
 
@@ -17,12 +18,13 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::num;
 use super::super::wallet::balances::BNB;
-use super::fill;
 use super::txs;
+use super::{fill, native};
 
 /// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded с фактом транзакции; OutcomeUnknown (ядро не
 /// повторяет, площадка на паузу) — «вытеснена» или обмен в блоке, а суммы не считаются (сырые числа и факт «в блоке»).
-/// Принимает: запрос, итог транзакции, кошелёк, (токен входа, токен выхода), (decimals монеты, decimals USDT).
+/// Принимает: запрос, итог транзакции, кошелёк, (токен входа, токен выхода), (decimals монеты, decimals USDT),
+/// роутер — у нативной монеты (монеты считаются по обёртке/развороту WBNB роутером), иначе None.
 pub fn result(
     ctx: &Ctx,
     req: TradeRequest,
@@ -30,6 +32,7 @@ pub fn result(
     wallet: Address,
     (tin, tout): (Address, Address),
     (coin_dec, usdt_dec): (u8, u8),
+    native_router: Option<Address>,
 ) -> GatewayResult<TradeResult> {
     let r = match (d.chain.outcome, &d.receipt) {
         (TxOutcome::Included, Some(r)) => r.clone(),
@@ -70,6 +73,14 @@ pub fn result(
         (got, spent)
     } else {
         (spent, got)
+    };
+    // Нативная BNB: на кошелёк приходит (или уходит с value) нативный BNB — событий Transfer кошелька нет.
+    let coins_u = match native_router {
+        Some(router) => {
+            let wbnb = if req.side == Side::Buy { tout } else { tin };
+            native::moved(&r, wbnb, router, req.side)
+        }
+        None => coins_u,
     };
     // Обмен уже в блоке: факт не теряется — если сумма не помещается в Decimal, ошибка с сырыми числами и фактом
     // транзакции (статус «в блоке» — по квитанции), а не тихий 0 («не исполнена» → риск повтора).

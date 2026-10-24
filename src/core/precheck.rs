@@ -28,6 +28,8 @@ async fn transfer_open(
         .coin_networks()
         .await
         .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
+    // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
+    let list = super::native::map(core, v, list);
     let open = list
         .iter()
         .find(|i| {

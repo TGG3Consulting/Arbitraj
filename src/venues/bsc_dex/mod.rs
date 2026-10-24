@@ -171,7 +171,7 @@ impl Venue for BscDex {
         network: &str,
         amount: Decimal,
     ) -> GatewayResult<Vec<Cost>> {
-        wallet::transfer::cost(&self.p.env(), &self.p.checks, asset, network, amount).await
+        wallet::transfer_cost::cost(&self.p.env(), &self.p.checks, asset, network, amount).await
     }
 
     /// Кнопка «Перепроверить»: налоги, крючки и сверка с квотером — только этих монет (check/recheck.rs; итоги —

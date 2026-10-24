@@ -2,6 +2,7 @@
 //! Что делает: статус перевода из кошелька (вывода) и зачисления в кошелёк (депозита) по квитанции транзакции:
 //! нет квитанции — Pending, откат — Rejected, успех — Sent (вывод) / Credited (депозит: ненулевой Transfer на кошелёк и
 //! send.deposit_confirmations блоков после блока перевода; раньше — Pending), сумма — по событиям Transfer.
+//! Нативная монета BNB (решение 62): сумма и получатель — из самой транзакции (wallet/native_status.rs).
 //! Кто вызывает: mod.rs (контракт withdrawal_status, deposit_status).
 //! От чего зависит: node/rpc.rs, send/track.rs (Receipt), exec/fill.rs, wallet/transfer.rs, tokens.rs, num.rs.
 //! Настройки: venue.bsc_network, send.deposit_confirmations [bsc_dex].
@@ -23,6 +24,7 @@ use super::super::num;
 use super::super::send::track::Receipt;
 use super::super::tokens::Tokens;
 use super::balances::BNB;
+use super::native_status;
 use super::transfer::{token, transfer};
 
 /// Статус перевода из кошелька по хешу: нет квитанции — Pending, откат — Rejected, успех — Sent.
@@ -91,15 +93,23 @@ async fn status(
     if r.status.to::<u64>() != 1 {
         return Ok(state(asset, TransferStatus::Rejected, Decimal::ZERO));
     }
-    let Some(token) = token else {
-        return Err(ctx.err(
-            ErrorCode::BadResponse,
-            format!("Транзакция {h} в блоке, но в ней нет перевода токена из кошелька"),
-        ));
-    };
-    let units = match deposit {
-        Some(_) => fill::moved(&r, token, None, Some(wallet)),
-        None => fill::moved(&r, token, Some(wallet), None),
+    // Нативная BNB (решение 62): сумма — value самой транзакции, событий Transfer нет (wallet/native_status.rs).
+    let native = native_status::check(ctx, h, wallet, deposit, token.is_some()).await?;
+    let (asset, units, dec) = match (native, token) {
+        (Some((a, wei)), _) => (a, wei, num::BNB_DECIMALS),
+        (None, None) => {
+            return Err(ctx.err(
+                ErrorCode::BadResponse,
+                format!("Транзакция {h} в блоке, но в ней нет перевода токена из кошелька"),
+            ));
+        }
+        (None, Some(token)) => {
+            let units = match deposit {
+                Some(_) => fill::moved(&r, token, None, Some(wallet)),
+                None => fill::moved(&r, token, Some(wallet), None),
+            };
+            (asset, units, tokens.decimals(ctx, token).await?)
+        }
     };
     if units.is_zero() {
         return Err(ctx.err(
@@ -110,7 +120,6 @@ async fn status(
             ),
         ));
     }
-    let dec = tokens.decimals(ctx, token).await?;
     let amount = num::to_decimal(units, dec).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,

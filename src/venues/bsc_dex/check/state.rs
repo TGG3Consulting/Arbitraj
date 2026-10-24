@@ -26,6 +26,9 @@ pub struct PoolFacts {
     pub hook: Option<PoolCheck>,
     /// Сверка с квотером: None — ещё не было; Some(Err) — расхождение больше допуска (причина).
     pub quoter: Option<Result<(), String>>,
+    /// Нативная монета (решение 62, check/native_probe.rs): газ обёртки сверх обмена токеном — (покупка с
+    /// UNWRAP_WETH, продажа с WRAP_ETH); None — не мерился; Some(Err) — проба не прошла (причина).
+    pub wrap_gas: Option<Result<(u64, u64), String>>,
 }
 
 /// Хранилище итогов проверок. Дешёво клонируется.
@@ -35,6 +38,8 @@ pub struct Checks {
     pools: Arc<RwLock<HashMap<PoolRef, PoolFacts>>>,
     /// Газ перевода монеты из кошелька (gasUsed пробного перевода) — для стоимости вывода.
     transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
+    /// Газ нативного перевода BNB из кошелька (решение 62) — пробный перевод с value, check/native_probe.rs.
+    native_transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
 }
 
 impl Checks {
@@ -66,6 +71,23 @@ impl Checks {
     /// Газ перевода монеты. None — не измерен.
     pub fn transfer_gas(&self, ticker: &str) -> Option<u64> {
         self.transfer_gas
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(ticker)
+            .copied()
+    }
+
+    /// Записывает газ нативного перевода монеты (решение 62). Ошибок нет.
+    pub fn set_native_transfer_gas(&self, ticker: &str, gas: u64) {
+        self.native_transfer_gas
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(ticker.to_string(), gas);
+    }
+
+    /// Газ нативного перевода монеты. None — не измерен.
+    pub fn native_transfer_gas(&self, ticker: &str) -> Option<u64> {
+        self.native_transfer_gas
             .read()
             .unwrap_or_else(|p| p.into_inner())
             .get(ticker)

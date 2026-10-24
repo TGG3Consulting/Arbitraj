@@ -10,7 +10,7 @@
 //! схемы — src/schemas/execute.yaml (EthSimulatePayload, BlockStateCalls, CallResult: status, returnData, gasUsed, error).
 //! В узле BSC — BlockChainAPI.SimulateV1: https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/internal/ethapi/api.go#L1142 .
 
-use alloy_primitives::{Address, Bytes, U64};
+use alloy_primitives::{Address, Bytes, U64, U256};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -81,9 +81,24 @@ impl CallResult {
 /// Принимает: вызовы. Возвращает: итог каждого вызова в том же порядке.
 /// Ошибки: узел (метод не поддерживается — его текст), BadResponse (число итогов не совпало).
 pub async fn run(ctx: &Ctx, calls: &[Call]) -> GatewayResult<Vec<CallResult>> {
+    run_valued(ctx, calls, &[]).await
+}
+
+/// То же с суммой BNB у вызовов (поле value объекта вызова — GenericTransaction, execution-apis
+/// src/schemas/transaction.yaml): нативная монета (решение 62) — WRAP_ETH с value, перевод BNB.
+/// Принимает: вызовы и суммы по номеру вызова (wei; нет в списке — без value). Ошибки: как у run.
+pub async fn run_valued(
+    ctx: &Ctx,
+    calls: &[Call],
+    values: &[(usize, U256)],
+) -> GatewayResult<Vec<CallResult>> {
     let list: Vec<_> = calls
         .iter()
-        .map(|c| json!({ "from": c.from, "to": c.to, "input": c.input }))
+        .enumerate()
+        .map(|(i, c)| match values.iter().find(|(n, _)| *n == i) {
+            Some((_, v)) => json!({ "from": c.from, "to": c.to, "input": c.input, "value": v }),
+            None => json!({ "from": c.from, "to": c.to, "input": c.input }),
+        })
         .collect();
     let payload = json!({ "blockStateCalls": [{ "calls": list }], "validation": false });
     let blocks: Vec<BlockResult> =

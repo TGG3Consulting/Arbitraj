@@ -32,6 +32,7 @@ pub mod low_usdt;
 pub mod manual;
 pub mod manual_return;
 pub mod market_state;
+pub mod native;
 pub mod op_error;
 pub mod partial;
 pub mod persist;

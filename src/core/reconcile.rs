@@ -100,11 +100,20 @@ async fn once(core: &Core) -> Vec<(&'static str, Option<String>, String)> {
             out.push(("risk.low_bnb", Some(v.0.clone()), e));
         }
         for ((ev, ticker), need) in expected.iter().filter(|((ev, _), _)| ev == &v) {
-            let have: Decimal = b
+            let mut have: Decimal = b
                 .iter()
                 .filter(|x| &x.asset == ticker)
                 .map(|x| x.free + x.locked)
                 .sum();
+            // Монета сделки — нативная BNB на DEX (решение 62): баланс = нативный + обёртка (адаптер DEX отдаёт
+            // WBNB в locked строки BNB), а резерв на газ (risk.min_bnb_balance) монетами сделки не считается.
+            // Резерв не задан — вычитать нечего, а сама причина уже выше: risk.low_bnb (precheck::bnb_ok).
+            if kind == VenueKind::Dex && ticker == super::convert::GAS_TICKER {
+                have -= deps
+                    .settings
+                    .decimal("risk.min_bnb_balance", At::default())
+                    .unwrap_or(Decimal::ZERO);
+            }
             if have < *need {
                 out.push((
                     "risk.reconcile_mismatch",

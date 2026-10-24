@@ -36,7 +36,9 @@ pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry]) -> GatewayResult<
         to: p.router,
         input: p.data(base),
     });
-    let res = simulate::run(ctx, &calls).await?;
+    // Нативная продажа (решение 62): BNB уходит с вызовом роутера (WRAP_ETH) — та же сумма и в пробе.
+    let n = calls.len() - 1;
+    let res = simulate::run_valued(ctx, &calls, &[(n, p.value())]).await?;
     if let Some((i, r)) = res.iter().enumerate().find(|(_, r)| !r.ok()) {
         let msg = format!(
             "проба сделки перед отправкой: шаг {i} откатился — {}",

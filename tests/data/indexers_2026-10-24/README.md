@@ -18,5 +18,9 @@ DOGE `0xbA2a…4C43`. Тесты — tests/bsc_dex_directory.rs.
 (`response.error` как вернул узел); последняя — Multicall3.aggregate3 всех 223 вызовов (вход совпал с нашим байт в байт).
 Внутри: поля пулов CAKE и ETH (factory, token0, token1, fee, tickSpacing, lmPool), getPair PancakeSwap V2,
 poolIdToPoolKey CLPoolManager, poolKeys и poolManager() PositionManager Uniswap V4. Тесты — tests/bsc_dex_node_verify.rs.
-Второй проход (getPool фабрик V3 на том же блоке, eth_getLogs событий обмена) — `tests/data/node_calls_2_2026-10-24.json`,
-ждёт записи.
+`arb_node_responses_2_2026-10-24.json` — второй проход (вызовы `tests/data/node_calls_2_2026-10-24.json`, записал техлид
+2026-10-24 16:29 UTC, тот же публичный узел): узел не архивный («missing trie node» на 0x7b8a659), поэтому 17 вызовов getPool
+фабрик PancakeSwap V3 и Uniswap V3 — на блоке `0x7b8b6cb` (записи реестра фабрик не меняются). eth_getLogs публичные узлы
+BSC не дают («limit exceeded» даже на 12–50 блоков), поэтому `swap_logs.by_pool` — настоящие логи обмена из
+eth_getBlockReceipts последних 1003 блоков до 0x7b8b741: `{имя пула: [{log, tx_to, tx_from, status}]}` — CAKE/WBNB
+PancakeSwap V2 — 3, CAKE/USDT PancakeSwap V3 — 3, CAKE/USDT Uniswap V3 — 3, CAKE/USDT Infinity CL (PoolId 0x4751…) — 2.

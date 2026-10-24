@@ -2,12 +2,10 @@
 //! Что делает: пулы из справочника индексатора → пулы подписки (решение 58) без сети: таблица сопоставления
 //! «DEX индексатора → вид» (не подключена, не поддерживается, выключена, не хватает адреса), итог по пулам CAKE из
 //! живого ответа GeckoTerminal 2026-10-24, сбой узла — «не проверен», своя комиссия пары Biswap (swapFee / 1000),
-//! «кто меняет», очистка устаревших настроек.
+//! очистка устаревших настроек.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools, directory}, arb::settings (настоящая SQLite во временной папке).
-//! Решения проверки пула на живых ответах узла — tests/bsc_dex_node_verify.rs. who_swaps — события обмена заданы
-//! адресами из записи (реальных логов обмена в записи пока нет: eth_getLogs — во втором проходе,
-//! tests/data/node_calls_2_2026-10-24.json).
+//! Решения проверки пула и «кто меняет» — на живых ответах узла: tests/bsc_dex_node_verify.rs.
 
 use std::collections::HashSet;
 
@@ -312,69 +310,4 @@ async fn orphan_setting_stored_is_cleared() {
         .unwrap();
     assert!(change.is_some_and(|c| c.new.is_none()));
     assert!(store.get_exact("dex.enabled", &s).is_none());
-}
-
-/// Запись реестра: пара CAKE/USDT PancakeSwap V2 из записи GeckoTerminal.
-fn v2_entry() -> arb::venues::bsc_dex::pools::registry::Entry {
-    use arb::core::types::{Pool, PoolRef, PoolState, VenueId};
-    let f = families::make("pancakeswap_v2", "pancakeswap_v2").unwrap();
-    let addr = address!("0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b");
-    arb::venues::bsc_dex::pools::registry::Entry {
-        family: f,
-        pool: Pool {
-            venue: VenueId("bsc_dex".into()),
-            family: f.id.into(),
-            kind: f.kind,
-            reference: PoolRef::Contract(addr),
-            token0: CAKE.min(USDT),
-            token1: CAKE.max(USDT),
-            fee_pips: None,
-            tick_spacing: None,
-            bin_step: None,
-            hooks: None,
-            state: PoolState::V2 {
-                reserve0: U256::ZERO,
-                reserve1: U256::ZERO,
-            },
-            block: 1,
-            received_at: chrono::Utc::now(),
-        },
-        ticker: "CAKE".into(),
-        coin: CAKE,
-        usdt: USDT,
-        key: None,
-        ticks: None,
-        bins: None,
-        synced_block: 1,
-        synced_log: None,
-        valid: true,
-        asleep: false,
-    }
-}
-
-#[test]
-fn who_swaps() {
-    use arb::venues::bsc_dex::check::emitter;
-    use arb::venues::bsc_dex::check::simulate::SimLog;
-    let e = v2_entry();
-    let swap = emitter::swap_topics()[0];
-    let ours = SimLog {
-        address: address!("0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"),
-        topics: vec![swap],
-    };
-    // Пара PancakeSwap V1 CAKE/WBNB из той же записи — «другой пул».
-    let other = SimLog {
-        address: address!("0xa527a61703d82139f8a06bc30097cc9caa2df5a6"),
-        topics: vec![swap],
-    };
-    assert!(emitter::missing(&[&e], std::slice::from_ref(&ours)).is_empty());
-    let miss = emitter::missing(&[&e], std::slice::from_ref(&other));
-    assert_eq!(miss.len(), 1);
-    assert!(
-        miss[0]
-            .1
-            .starts_with("Universal Router DEX pancakeswap_v2 меняет в другом пуле"),
-        "{}",
-        miss[0].1
-    );
 }

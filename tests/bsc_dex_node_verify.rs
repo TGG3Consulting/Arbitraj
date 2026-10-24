@@ -3,7 +3,9 @@
 //! bsc-dataseed.bnbchain.org, блок 0x7b8a659, 2026-10-24 (tests/data/indexers_2026-10-24/arb_node_responses_2026-10-24.json,
 //! вызовы — node_calls_2026-10-24.json). Пулы CAKE и ETH из записи GeckoTerminal: поля пулов (factory, token0, token1,
 //! fee, tickSpacing, lmPool), реестр PancakeSwap V2 (getPair), ключи PancakeSwap Infinity (poolIdToPoolKey) и Uniswap V4
-//! (PositionManager poolKeys, poolManager), ответ Multicall3.aggregate3 тех же вызовов.
+//! (PositionManager poolKeys, poolManager), ответ Multicall3.aggregate3 тех же вызовов. Второй проход
+//! (arb_node_responses_2_2026-10-24.json): getPool фабрик V3 (блок 0x7b8b6cb) и настоящие логи обмена из квитанций —
+//! проверка «кто меняет» (check/emitter.rs, решение 59).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{directory::gt_parse, node::multicall, pools::{families, verify, verify_v4}}.
 //! Настройки: нет. Адреса фабрик и менеджеров — официальные страницы адресов (indexer_research.md, 2.1).
@@ -14,9 +16,14 @@ use std::str::FromStr;
 use alloy_primitives::{Address, B256, Bytes, address};
 use serde_json::Value;
 
+use alloy_primitives::U256;
+use arb::core::types::{Pool, PoolRef, PoolState, VenueId};
+use arb::venues::bsc_dex::check::emitter;
+use arb::venues::bsc_dex::check::simulate::SimLog;
 use arb::venues::bsc_dex::directory::gt_parse::{self, IndexedPool};
 use arb::venues::bsc_dex::node::multicall;
 use arb::venues::bsc_dex::pools::families;
+use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::verify::{self, Candidate, Read};
 use arb::venues::bsc_dex::pools::verify_v4;
 
@@ -310,4 +317,147 @@ fn multicall_matches_single_calls() {
             ),
         }
     }
+}
+
+/// Второй проход (tests/data/indexers_2026-10-24/arb_node_responses_2_2026-10-24.json): getPool на блоке 0x7b8b6cb
+/// (узел не архивный — блок первого прохода уже недоступен; записи фабрик неизменны) и логи обмена из квитанций.
+fn second() -> Value {
+    let text =
+        std::fs::read_to_string(format!("{DIR}arb_node_responses_2_2026-10-24.json")).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+#[test]
+fn v3_registry_matches() {
+    let rec = second();
+    let mut n = 0;
+    for r in rec["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["request"]["method"] == "eth_call")
+    {
+        let name = r["name"].as_str().unwrap();
+        let pool: Address = name.split(' ').nth(2).unwrap().parse().unwrap();
+        let got = Bytes::from_str(r["response"]["result"].as_str().unwrap()).unwrap();
+        verify::registered(pool, &got).unwrap_or_else(|w| panic!("{name}: {w}"));
+        n += 1;
+    }
+    // 11 пулов PancakeSwap V3 и 6 Uniswap V3 из записи CAKE и ETH: реестр фабрики даёт тот же адрес.
+    assert_eq!(n, 17);
+}
+
+/// Запись реестра для проверки «кто меняет»: вид, ссылка на пул, токены CAKE/другой.
+fn entry(kind: &str, reference: PoolRef) -> Entry {
+    let f = families::make(kind, kind).unwrap();
+    Entry {
+        family: f,
+        pool: Pool {
+            venue: VenueId("bsc_dex".into()),
+            family: f.id.into(),
+            kind: f.kind,
+            reference,
+            token0: CAKE.min(USDT),
+            token1: CAKE.max(USDT),
+            fee_pips: None,
+            tick_spacing: None,
+            bin_step: None,
+            hooks: None,
+            state: PoolState::V2 {
+                reserve0: U256::ZERO,
+                reserve1: U256::ZERO,
+            },
+            block: 1,
+            received_at: chrono::Utc::now(),
+        },
+        ticker: "CAKE".into(),
+        coin: CAKE,
+        usdt: USDT,
+        key: None,
+        ticks: None,
+        bins: None,
+        synced_block: 1,
+        synced_log: None,
+        valid: true,
+        asleep: false,
+    }
+}
+
+#[test]
+fn who_swaps_on_real_logs() {
+    let rec = second();
+    let by = &rec["swap_logs"]["by_pool"];
+    let logs = |name: &str| -> Vec<SimLog> {
+        by[name]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| serde_json::from_value(x["log"].clone()).unwrap())
+            .collect()
+    };
+    let id = B256::from_str("0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb")
+        .unwrap();
+    let cases = [
+        (
+            "CAKE/WBNB PancakeSwap V2 Swap",
+            entry(
+                "pancakeswap_v2",
+                PoolRef::Contract(address!("0x0ed7e52944161450477ee417de9cd3a859b14fd0")),
+            ),
+        ),
+        (
+            "CAKE/USDT PancakeSwap V3 Swap",
+            entry(
+                "pancakeswap_v3",
+                PoolRef::Contract(address!("0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1")),
+            ),
+        ),
+        (
+            "CAKE/USDT Uniswap V3 Swap",
+            entry(
+                "uniswap_v3",
+                PoolRef::Contract(address!("0xfe4fe5b4575c036ac6d5cccfe13660020270e27a")),
+            ),
+        ),
+        (
+            "CAKE/USDT Infinity CL Swap",
+            entry(
+                "pancakeswap_infinity_cl",
+                PoolRef::Singleton {
+                    manager: CL_MANAGER,
+                    id,
+                },
+            ),
+        ),
+    ];
+    for (name, e) in &cases {
+        let own = logs(name);
+        assert!(!own.is_empty(), "{name}");
+        // Каждое настоящее событие обмена пула признаётся «от этого пула».
+        for l in &own {
+            assert!(emitter::by_pool(e, l), "{name}: {:?}", l.address);
+            assert!(
+                emitter::missing(&[e], std::slice::from_ref(l)).is_empty(),
+                "{name}"
+            );
+        }
+        // Событие обмена другого пула из той же записи — «Universal Router меняет в другом пуле».
+        for (other, _) in cases.iter().filter(|(o, _)| o != name) {
+            let miss = emitter::missing(&[e], &logs(other));
+            assert_eq!(miss.len(), 1, "{name} ← {other}");
+            assert!(miss[0].1.contains("меняет в другом пуле"), "{}", miss[0].1);
+        }
+    }
+    // Infinity: тот же менеджер, но другой PoolId — тоже не этот пул.
+    let other = entry(
+        "pancakeswap_infinity_cl",
+        PoolRef::Singleton {
+            manager: CL_MANAGER,
+            id: B256::repeat_byte(1),
+        },
+    );
+    assert_eq!(
+        emitter::missing(&[&other], &logs("CAKE/USDT Infinity CL Swap")).len(),
+        1
+    );
 }

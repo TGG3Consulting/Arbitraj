@@ -1,7 +1,7 @@
 //! Файл: core/market_state.rs
 //! Что делает: всё, что ядро знает о рынке прямо сейчас (шаг 2 ТЗ): стаканы бирж, пулы DEX,
 //! проверки налогов монет и крючков пулов, состояние каналов отправки, монеты с торгуемой спот-парой у биржи
-//! (для подписки DEX, core/subscribe.rs) — из событий адаптеров.
+//! (для подписки DEX, core/subscribe.rs), монеты с найденными, но ещё не прочитанными пулами DEX — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -36,6 +36,8 @@ pub struct MarketState {
     queues: HashMap<VenueId, WalletQueueState>,
     /// Биржа → монеты с торгуемой спот-парой (MarketEvent::SpotPairs).
     spot: HashMap<VenueId, HashSet<String>>,
+    /// DEX → монеты, чьи пулы найдены, но ещё не прочитаны (MarketEvent::PoolsLoading, решение 61).
+    loading: HashMap<VenueId, HashSet<Address>>,
 }
 
 impl MarketState {
@@ -96,11 +98,22 @@ impl MarketState {
                 venue,
                 counts: [ok, failed, waiting, nc],
             },
+            MarketEvent::PoolsLoading { venue, coins } => {
+                let now: HashSet<Address> = coins.into_iter().collect();
+                let changed = self.loading.get(&venue) != Some(&now);
+                self.loading.insert(venue, now);
+                Touched::PoolsLoading { changed }
+            }
             MarketEvent::WalletQueue(q) => {
                 let prev = self.queues.insert(q.venue.clone(), q.state.clone());
                 Touched::WalletQueue { queue: q, prev }
             }
         }
+    }
+
+    /// Пулы монеты на DEX найдены, но ещё не прочитаны (решение 61). Ошибок нет.
+    pub fn pools_loading(&self, venue: &VenueId, token: Address) -> bool {
+        self.loading.get(venue).is_some_and(|s| s.contains(&token))
     }
 
     /// Удаляет пулы токена на площадке (DEX объявил данные монеты недостоверными).

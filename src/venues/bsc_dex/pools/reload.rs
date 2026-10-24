@@ -4,7 +4,8 @@
 //! «не прочитан», одна — «прочитан с попытки N» или «так и не прочитан за N попыток».
 //! Многие пулы сразу (приём пачки, повтор) — load_many: пачками через Multicall3 (load_batch.rs, решение 61).
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
-//! От чего зависит: pools/load.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
+//! Прочитанный (или окончательно не прочитанный) пул уходит из «загружается» (loading.rs).
+//! От чего зависит: pools/load.rs, loading.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
 //! Настройки: dex.pool_load_retries [bsc_dex].
 
 use crate::storage::journal::Level;
@@ -68,6 +69,9 @@ pub async fn retry(
                     m.tries + 1
                 );
                 p.ctx.log(Level::Error, "dex.pool", msg, None).await;
+                // Дальше пул «недостоверен», а не «загружается» (loading.rs).
+                p.loading.done(&found.reference);
+                p.loading.publish(p);
             }
             Err(_) => keep.push(m),
         }
@@ -103,6 +107,8 @@ pub async fn load_one(
             listen_log::note_refill(p, &e);
             let pool = e.pool.clone();
             p.reg.put(e);
+            p.loading.done(&found.reference);
+            p.loading.publish(p);
             listen_log::emit(p, pool).map(Ok)
         }
         Err(e) => Ok(Err(e.message)),
@@ -157,8 +163,10 @@ pub async fn load_many(
         listen_log::note_refill(p, &entry);
         let pool = entry.pool.clone();
         p.reg.put(entry);
+        p.loading.done(&f.reference);
         listen_log::emit(p, pool)?;
         out.push(Ok(()));
     }
+    p.loading.publish(p);
     Ok(out)
 }

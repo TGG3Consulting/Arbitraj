@@ -92,6 +92,10 @@ pub async fn subscribe(
     // Стартовая загрузка V2/V3: первый проход налогов ждёт, пока каждая пачка закончит первую загрузку (pools/progress.rs).
     let start = chunks(&found, &all, per);
     p.signals.expect(start.len());
+    // Пулы ждут первого чтения — ядро покажет «пулы найдены, загружаются» (решение 61).
+    p.loading
+        .add(start.iter().flat_map(|(_, c)| c.iter().map(|(f, _)| f)));
+    p.loading.publish(p);
     for (name, chunk) in start {
         tasks.push(tokio::spawn(listen::run(
             p.clone(),

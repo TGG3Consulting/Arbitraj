@@ -4,10 +4,11 @@
 //! index.page_size — последняя), не чаще раза в index.refresh_s; список DEX сети — так же раз в index.refresh_s,
 //! по links.next. После перезапуска — из SQLite (store.rs): свежие монеты не спрашиваются. Каждую обновлённую монету
 //! получает слушатель (канал `tx`) — проверка на своём узле и подключение пулов. Ошибка запроса монеты не стирает
-//! прежний ответ (пол-списка — не факт): видна в интерфейсе, монета спрашивается в следующий раз.
+//! прежний ответ (пол-списка — не факт): видна в интерфейсе, монета спрашивается снова через index.error_retry_s
+//! (решение 61; не задана — через index.refresh_s). Сырой ответ любого кода (и 404) — в сыром журнале (gt_http.rs).
 //! Кто вызывает: pools/market.rs (задача подписки; при новой подписке прерывается).
 //! От чего зависит: ctx.rs, directory/{fetch,gt_http,store,mod}.rs, settings/live.rs.
-//! Настройки: index.refresh_s, index.pages_per_token, index.page_size [bsc_dex]; через вызываемые — index.*.
+//! Настройки: index.refresh_s, index.error_retry_s, index.pages_per_token, index.page_size [bsc_dex]; через вызываемые — index.*.
 //!
 //! Эндпоинты: GET /networks/{network}/tokens/{address}/pools?page=N&include=base_token,quote_token,dex
 //! («Returns up to 20 pools per page», сортировка по умолчанию h24_volume_usd_liquidity_desc) и
@@ -84,6 +85,11 @@ async fn pass(
 ) -> GatewayResult<Duration> {
     let (_, net) = gt_http::base(ctx)?;
     let every = chrono::Duration::seconds(ctx.int("index.refresh_s")? as i64);
+    // Монета с ошибкой (404 и т.п.) — повтор через index.error_retry_s; не задана — через index.refresh_s.
+    let err_every = ctx
+        .int("index.error_retry_s")
+        .map_or(every, |s| chrono::Duration::seconds(s as i64));
+    let gap = |t: &super::TokenEntry| if t.error.is_some() { err_every } else { every };
     let pages = ctx.int("index.pages_per_token")? as u32;
     let size = ctx.int("index.page_size")? as usize;
     if loaded.as_deref() != Some(net.as_str()) {
@@ -105,7 +111,7 @@ async fn pass(
             .filter(|(_, t)| {
                 t.tried_at
                     .or(t.fetched_at)
-                    .is_none_or(|at| at + every <= now)
+                    .is_none_or(|at| at + gap(t) <= now)
             })
             .map(|(a, t)| (t.tried_at.or(t.fetched_at), *a))
             .collect()
@@ -146,7 +152,7 @@ async fn pass(
         let msg = format!("Справочник пулов: спрошено монет {ok}, ошибок {failed}{tail}");
         ctx.log(Level::Info, "dex.index", msg, None).await;
     }
-    Ok(next_due(ctx, every))
+    Ok(next_due(ctx, every, &gap))
 }
 
 /// Ошибка, при которой проход не продолжается (настройка, секреты): остальные монеты дадут то же. Ошибок нет.
@@ -155,12 +161,16 @@ pub fn stops(e: &GatewayError) -> bool {
 }
 
 /// Через сколько подойдёт срок ближайшей монеты или списка DEX (не меньше нуля). Ошибок нет.
-fn next_due(ctx: &Ctx, every: chrono::Duration) -> Duration {
+fn next_due(
+    ctx: &Ctx,
+    every: chrono::Duration,
+    gap: &dyn Fn(&super::TokenEntry) -> chrono::Duration,
+) -> Duration {
     let now = Utc::now();
     let soonest = ctx.index.with(|s| {
         s.tokens
             .values()
-            .map(|t| t.tried_at.or(t.fetched_at).map_or(now, |at| at + every))
+            .map(|t| t.tried_at.or(t.fetched_at).map_or(now, |at| at + gap(t)))
             .chain(std::iter::once(
                 s.dexes_tried.or(s.dexes_at).map_or(now, |at| at + every),
             ))

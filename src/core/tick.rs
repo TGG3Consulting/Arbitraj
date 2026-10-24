@@ -68,6 +68,11 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 super::queue_notify::wallet_queue(&core, queue, prev).await
             }
             Touched::SpotPairs => core.request_rebuild(),
+            Touched::PoolsLoading { changed } => {
+                if changed {
+                    core.request_rebuild();
+                }
+            }
             Touched::CheckPass {
                 venue,
                 counts: [ok, failed, waiting, config],

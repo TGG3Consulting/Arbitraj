@@ -170,3 +170,46 @@ fn coin_without_bingx_pair_is_not_in_dex_subscription() {
     });
     assert!(dex_list(&fx, &m, &kinds).is_empty());
 }
+
+/// DEX-присутствие монеты в справочнике ядра. None — DEX монету не искал.
+fn dex_exclusions(cs: &[CoinEntry], ticker: &str) -> Option<Vec<registry::Exclusion>> {
+    let c = cs.iter().find(|c| c.asset.ticker == ticker).unwrap();
+    c.presence
+        .iter()
+        .find(|p| p.venue.0 == "bsc_dex")
+        .map(|p| p.excluded.clone())
+}
+
+#[test]
+fn not_searched_and_loading_are_not_no_usdt_pool() {
+    // Решение 61: монета без пары на бирже (BITLIGHT) DEX не искал — «нет пула с USDT» ей не ставится; монета подписки,
+    // чьи пулы найдены, но ещё не прочитаны (CAKE), — «пулы загружаются», а не «пула нет».
+    let fx = fixture();
+    let dex = VenueId("bsc_dex".into());
+    let kinds = vec![(bingx(), VenueKind::Cex), (dex.clone(), VenueKind::Dex)];
+    let mut m = MarketState::default();
+    m.apply(spot_pairs(&fx));
+    let cake = fx["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["ticker"] == "CAKE")
+        .map(|p| addr(&p["token"]))
+        .unwrap();
+    let cs = coins(&fx, &m, &kinds);
+    assert!(dex_exclusions(&cs, "BITLIGHT").is_none());
+    assert!(matches!(
+        dex_exclusions(&cs, "CAKE").unwrap().as_slice(),
+        [registry::Exclusion::NoUsdtPool]
+    ));
+    m.apply(MarketEvent::PoolsLoading {
+        venue: dex.clone(),
+        coins: vec![cake],
+    });
+    let cs = coins(&fx, &m, &kinds);
+    assert!(matches!(
+        dex_exclusions(&cs, "CAKE").unwrap().as_slice(),
+        [registry::Exclusion::PoolsLoading]
+    ));
+    assert!(dex_exclusions(&cs, "BITLIGHT").is_none());
+}

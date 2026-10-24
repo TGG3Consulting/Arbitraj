@@ -30,6 +30,8 @@ pub enum Exclusion {
     NoUsdtAddress,
     /// Пула с USDT для этого адреса контракта на DEX нет.
     NoUsdtPool,
+    /// Пулы монеты найдены и проверены, но их состояние ещё не прочитано (решение 61) — не «пула нет».
+    PoolsLoading,
     /// Пулы есть, но все исключены (крючки, проверки) — причины по пулам.
     PoolsExcluded(Vec<String>),
     /// Пула с USDT нет, а промежуточные монеты (решение 52) не заданы как надо — причина.
@@ -207,7 +209,12 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
     coins
         .into_values()
         .map(|(asset, mut presence)| {
-            if let Some(token) = asset.bsc_contract {
+            // DEX ищет пулы только монет своей подписки (core/subscribe.rs dex_tradable: у биржи сеть BSC с адресом и
+            // торгуемая спот-пара) — у остальных DEX-присутствия нет: «нет пула с USDT» им не ставится (решение 61).
+            let searched = presence
+                .iter()
+                .any(|p| p.info.is_some() && inp.market.spot_pair(&p.venue, &asset.ticker));
+            if let Some(token) = asset.bsc_contract.filter(|_| searched) {
                 for v in &dex {
                     presence.push(super::presence::dex(v, token, inp));
                 }

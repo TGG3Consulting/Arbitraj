@@ -99,6 +99,7 @@ impl Parts {
             heads: self.heads.clone(),
             mids: self.mids.clone(),
             signals: super::pools::progress::Signals::default(),
+            loading: super::pools::loading::Loading::default(),
         }
     }
 }

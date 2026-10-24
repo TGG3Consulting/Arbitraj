@@ -81,14 +81,17 @@ pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
     }
 }
 
-/// Есть ли допущенный пул пары a–b. Ошибка — причина: пулов нет (NoUsdtPool) или все исключены.
+/// Есть ли допущенный пул пары a–b. Ошибка — причина: пулы найдены, но не прочитаны (PoolsLoading), пулов нет
+/// (NoUsdtPool) или все исключены.
 fn admitted(venue: &VenueId, a: Address, b: Address, inp: &Inputs) -> Result<(), Exclusion> {
     let pools = inp.market.usdt_pools(venue, a, b);
     let bad: Vec<String> = pools
         .iter()
         .filter_map(|p| (inp.pool_ok)(p).err())
         .collect();
-    if pools.is_empty() {
+    if pools.is_empty() && inp.market.pools_loading(venue, a) {
+        Err(Exclusion::PoolsLoading)
+    } else if pools.is_empty() {
         Err(Exclusion::NoUsdtPool)
     } else if bad.len() == pools.len() {
         Err(Exclusion::PoolsExcluded(bad))

@@ -67,6 +67,7 @@ const EXCLUSION = {
   NoSpotBook: 'стакан не пришёл (нет пары на споте?)',
   NoUsdtAddress: 'неизвестен адрес USDT в BSC',
   NoUsdtPool: 'нет пула с USDT',
+  PoolsLoading: 'пулы найдены и проверены, состояние ещё загружается (решение 61)',
 };
 
 /**

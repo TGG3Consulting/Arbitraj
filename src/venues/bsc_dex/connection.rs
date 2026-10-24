@@ -1,14 +1,16 @@
 //! Файл: venues/bsc_dex/connection.rs
 //! Что делает: «Проверить подключение» площадки DEX — узел по HTTP (сеть, номер блока), узел по WebSocket
 //! (сеть, подписка newHeads получает блок), поддержка eth_simulateV1 (без неё налоги монет не проверить — торговли
-//! нет, ответ техлида в Issue #7), кошелёк (ключ → адрес, баланс BNB). Ответ — «Подключено»
+//! нет, ответ техлида в Issue #7), доступ к истории состояния для включённых видов пулов V4 (блок развёртывания
+//! менеджера по eth_getCode — pools/deploy_block.rs; без архивного узла пулы V4 не найти), кошелёк (ключ → адрес,
+//! баланс BNB). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
-//! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs.
 //! Настройки: bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
-//! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке); секреты bsc.node_*_key, bsc_dex.wallet_key.
+//! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке), dex.enabled, dex.pool_enabled, dex.pool_manager [V4]; секреты bsc.node_*_key, bsc_dex.wallet_key.
 //!
-//! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads, eth_simulateV1 —
+//! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads, eth_simulateV1, eth_getCode —
 //! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
 //! так проверку предлагает research/flow/bsc_dex.md, схема адаптера п. 9.
 
@@ -23,6 +25,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::ctx::Ctx;
 use super::node::ws::Conn;
 use super::node::{BSC_CHAIN_ID, rpc};
+use super::pools::deploy_block;
+use super::pools::families::{FAMILIES, Proto};
 use super::wallet::{balances, signer};
 
 /// Полная проверка. Возвращает: ConnectionCheck (ok — только если все части в порядке). Ошибок нет.
@@ -31,6 +35,7 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         ("Узел HTTP", http(ctx).await),
         ("Узел WebSocket", ws(ctx).await),
         ("Симуляция", simulate(ctx).await),
+        ("История состояния", history(ctx).await),
         ("Кошелёк", wallet(ctx).await),
     ];
     let ok = parts.iter().all(|(_, r)| r.is_ok());
@@ -105,6 +110,49 @@ async fn simulate(ctx: &Ctx) -> Result<String, String> {
             e.message
         )),
     }
+}
+
+/// Доступ к истории состояния для каждого включённого вида пула V4: блок развёртывания менеджера уже найден — код
+/// на этом блоке должен читаться; не найден — поиск (и запись в SQLite). Видов V4 нет — проверка не нужна.
+/// Возвращает: описание или текст причины (в том числе «нужен архивный узел»).
+async fn history(ctx: &Ctx) -> Result<String, String> {
+    let mut parts = Vec::new();
+    for f in FAMILIES.iter().filter(|f| {
+        !matches!(f.proto, Proto::V2 | Proto::PancakeV3 | Proto::UniswapV3)
+            && ctx.dex_flag("dex.enabled", f.dex).unwrap_or(false)
+            && ctx.dex_flag("dex.pool_enabled", f.id).unwrap_or(false)
+    }) {
+        let manager = ctx
+            .dex_addr("dex.pool_manager", f.id)
+            .map_err(|e| format!("{}: {}", f.title, e.message))?;
+        let block = match deploy_block::stored(ctx, f, manager).await {
+            Some(b) => {
+                let has = deploy_block::has_code(ctx, manager, b).await;
+                match has.map_err(|e| format!("{}: {}", f.title, e.message))? {
+                    true => b,
+                    false => {
+                        let node = "пустой код на блоке развёртывания";
+                        return Err(format!(
+                            "{}: {}",
+                            f.title,
+                            deploy_block::no_history(b, node)
+                        ));
+                    }
+                }
+            }
+            None => deploy_block::get(ctx, f, manager)
+                .await
+                .map_err(|e| format!("{}: {}", f.title, e.message))?,
+        };
+        parts.push(format!("{} — с блока {block}", f.title));
+    }
+    if parts.is_empty() {
+        return Ok("не нужна: виды пулов V4 выключены".into());
+    }
+    Ok(format!(
+        "узел отдаёт старое состояние; история V4: {}",
+        parts.join(", ")
+    ))
 }
 
 /// Кошелёк: ключ из секретов → адрес, баланс BNB.

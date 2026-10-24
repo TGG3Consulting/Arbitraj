@@ -9,6 +9,8 @@
 //!   https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Factory.sol ,
 //!   https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Pair.sol
 //!   (у PancakeSwap те же: https://github.com/pancakeswap/pancake-swap-core/blob/3b214306770e86bc3a64e67c2b5bdb566b4e94a7/contracts/interfaces/IPancakeFactory.sol#L4-L11 ).
+//! - V3 фабрика getPool, feeAmountTickSpacing — IPancakeV3Factory.sol#L34-L70 (pancake-v3-contracts 98684794),
+//!   https://github.com/Uniswap/v3-core/blob/5ea68a77cb541c6b3812df783be71ba8c081e25f/contracts/interfaces/IUniswapV3Factory.sol#L37-L54 .
 //! - V3 PoolCreated, Mint, Burn — IPancakeV3Factory.sol#L23-L29, IPancakeV3PoolEvents.sol#L21-L62 (pancake-v3-contracts 98684794);
 //!   Swap PancakeSwap (9 полей) — IPancakeV3PoolEvents.sol#L74-L84; Swap Uniswap (7 полей) —
 //!   https://github.com/Uniswap/v3-core/blob/5ea68a77cb541c6b3812df783be71ba8c081e25f/contracts/interfaces/pool/IUniswapV3PoolEvents.sol#L72-L80 .
@@ -32,6 +34,8 @@ alloy::sol! {
     }
 
     interface IV3Factory {
+        function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool);
+        function feeAmountTickSpacing(uint24 fee) external view returns (int24);
         event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool);
     }
 

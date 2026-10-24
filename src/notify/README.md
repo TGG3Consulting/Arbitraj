@@ -2,7 +2,7 @@
 
 | Файл | Что делает |
 | --- | --- |
-| `catalog.rs` | Список событий по ТЗ и решениям 30–45 (сделки, ошибки, риск, площадки, монеты, застрявшие монеты, ручное управление, отправка транзакций, система, сводка); кнопки событий (`buttons`) |
+| `catalog.rs` | Список событий по ТЗ и решениям 30–45 (сделки, ошибки, риск, площадки, монеты, застрявшие монеты, ручное управление, отправка транзакций, система); кнопки событий (`buttons`) |
 | `telegram.rs` | Telegram Bot API: getMe, getChat, sendMessage — по https://core.telegram.org/bots/api |
 | `tg_text.rs` | Подгонка текста под предел длины Telegram (4096) |
 | `tg_buttons.rs` | Bot API для кнопок: sendMessage с InlineKeyboardMarkup, getUpdates (длинный опрос), answerCallbackQuery, editMessageText |

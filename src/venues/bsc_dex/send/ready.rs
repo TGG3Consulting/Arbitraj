@@ -5,7 +5,7 @@
 //! Кто вызывает: send/mod.rs, send/check.rs.
 //! От чего зависит: send/channel.rs, node/rpc.rs (POST), node/jsonrpc.rs, errors.rs, ctx.rs.
 //! Настройки: channel.enabled, channel.url, channel.method, channel.min_gas_price_gwei, channel.tip_enabled,
-//! channel.tip_bnb, channel.tip_address [канал]; секрет channel.<id>.key.
+//! channel.tip_bnb, channel.tip_address [канал]; секрет channel.<id>.key (открытая отправка — bsc.node_http_key).
 //!
 //! «already known» — транзакция уже принята этим узлом/каналом: не ошибка (research/flow/bsc_send.md, раздел 6 п. 5;
 //! текст — core/txpool/errors.go#L26 узла BSC).
@@ -21,6 +21,7 @@ use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
 use super::super::errors::Op;
+use super::super::node::rpc::SECRET_HTTP_KEY;
 use super::super::node::{jsonrpc, rpc};
 use super::super::num;
 use super::bloxroute_cloud::NETWORK;
@@ -55,6 +56,10 @@ pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
         (Auth::UrlKey, Some(k)) => {
             Zeroizing::new(raw_url.replace(super::super::ctx::KEY_MARK, k.as_str()))
         }
+        // Открытая отправка: ключ провайдера узла (секрет bsc.node_http_key) вместо {key}; не введён — NoKey.
+        (Auth::NodeKey, _) => ctx
+            .with_key(&raw_url, SECRET_HTTP_KEY)
+            .map_err(|_| ChannelState::NoKey)?,
         _ => Zeroizing::new(raw_url),
     };
     let method = match st.text_in("channel.method", &s).map_err(nc)?.as_str() {

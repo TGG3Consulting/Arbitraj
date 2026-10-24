@@ -44,7 +44,7 @@ async fn choice_address_and_max_are_checked() {
             .is_err()
     );
     assert!(
-        s.set("dex.multicall", v.clone(), Some(json!("0x12")), "т")
+        s.set("smart.permit2", v.clone(), Some(json!("0x12")), "т")
             .await
             .is_err()
     );

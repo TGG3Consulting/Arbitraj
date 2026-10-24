@@ -37,6 +37,9 @@ pub enum Auth {
     UrlKey,
     /// Заголовок Authorization: <ключ>.
     Header,
+    /// Канал идёт через узел BSC (открытая отправка): {key} в channel.url — ключ провайдера узла, секрет
+    /// bsc.node_http_key (как в bsc.node_http_url); метки нет — адрес как есть. Своего ключа у канала нет.
+    NodeKey,
 }
 
 /// Описание канала по его официальной документации.
@@ -57,7 +60,7 @@ pub struct Channel {
 impl Channel {
     /// Имя секрета ключа канала (secrets::KNOWN: channel.<id>.key); None — ключ не нужен.
     pub fn secret(&self) -> Option<String> {
-        (self.auth != Auth::None).then(|| format!("channel.{}.key", self.id))
+        matches!(self.auth, Auth::UrlKey | Auth::Header).then(|| format!("channel.{}.key", self.id))
     }
 
     /// Описание для ядра и интерфейса. Ошибок нет.

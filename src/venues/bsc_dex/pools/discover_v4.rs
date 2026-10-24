@@ -1,19 +1,21 @@
 //! Файл: venues/bsc_dex/pools/discover_v4.rs
-//! Что делает: поиск пулов V4 с USDT по событиям Initialize менеджера (Infinity CL, Infinity Bin, Uniswap V4):
+//! Что делает: поиск пулов V4 по событиям Initialize менеджера (Infinity CL, Infinity Bin, Uniswap V4):
 //! из лога собирается PoolKey, PoolId считается заново и сверяется с topics[1] (защита от ошибки ABI),
-//! по флагам считается группа крючка.
-//! Кто вызывает: pools/discover.rs.
+//! по флагам считается группа крючка. Читаются все Initialize менеджера одним проходом (фильтр только topic0):
+//! встречный токен (USDT или промежуточная монета) выбирается уже из прочитанного (discover.rs) — так история
+//! не читается заново на каждый встречный токен.
+//! Кто вызывает: pools/discover.rs, pools/history_v4.rs, pools/history_store.rs.
 //! От чего зависит: ctx.rs, pools/scan.rs, abi_v4.rs, key.rs, hooks.rs, discover.rs (Found).
-//! Настройки: dex.pool_manager [вид пула V4], dex.scan_from_block, dex.logs_block_batch.
+//! Настройки: через scan.rs — dex.logs_block_batch, dex.scan_progress_s.
 //!
 //! Initialize и порядок полей — research/flow/bsc_v4.md, раздел 3 (ICLPoolManager.sol#L37-L46,
-//! IBinPoolManager.sol#L52-L60, Uniswap IPoolManager.sol#L60-L69); USDT может быть currency0 или currency1 —
-//! два фильтра: [topic0, null, USDT] и [topic0, null, null, USDT]. Реестра пулов у менеджеров нет — только события.
+//! IBinPoolManager.sol#L52-L60, Uniswap IPoolManager.sol#L60-L69). Реестра пулов у менеджеров нет — только события
+//! («единственный источник списка пулов V4 — логи Initialize»).
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -27,47 +29,37 @@ use super::key::{
 };
 use super::{hooks, scan};
 
-/// Все пулы вида V4 с USDT за блоки [from, to].
-/// Ошибки: NotConfigured (dex.pool_manager, dex.logs_block_batch), узел, BadResponse (событие не по ABI,
-/// PoolId не сошёлся).
-pub async fn scan(
-    ctx: &Ctx,
-    f: &'static Family,
-    usdt: Address,
-    from: u64,
-    to: u64,
-) -> GatewayResult<Vec<Found>> {
-    let manager = ctx.dex_addr("dex.pool_manager", f.id)?;
-    let t0 = match f.proto {
+/// topic0 события Initialize вида пула (фильтр eth_getLogs и подписки). Ошибок нет.
+pub fn topic(f: &Family) -> B256 {
+    match f.proto {
         Proto::InfinityCl => IInfinityCl::Initialize::SIGNATURE_HASH,
         Proto::InfinityBin => IInfinityBin::Initialize::SIGNATURE_HASH,
         _ => IUniswapV4::Initialize::SIGNATURE_HASH,
-    };
-    let u = B256::left_padding_from(usdt.as_slice());
-    let mut out = Vec::new();
-    for topics in [
-        json!([t0, Value::Null, u]),
-        json!([t0, Value::Null, Value::Null, u]),
-    ] {
-        for log in scan::logs(
-            ctx,
-            manager,
-            topics,
-            from,
-            to,
-            &format!("{}: Initialize", f.title),
-        )
-        .await?
-        {
-            out.push(parse(ctx, f, &log, usdt)?);
-        }
     }
-    Ok(out)
 }
 
-/// Разбор одного Initialize в найденный пул.
+/// Все события Initialize менеджера за блоки [from, to] (любые валюты) — для истории (history_v4.rs, discover.rs).
+/// Принимает: вид пула, адрес менеджера, блоки. Возвращает: логи как есть (их хранит history_store.rs).
+/// Ошибки: NotConfigured (dex.logs_block_batch, dex.scan_progress_s), узел.
+pub async fn logs(
+    ctx: &Ctx,
+    f: &'static Family,
+    manager: Address,
+    from: u64,
+    to: u64,
+) -> GatewayResult<Vec<Log>> {
+    let what = format!("{}: Initialize", f.title);
+    scan::logs(ctx, manager, json!([topic(f)]), from, to, &what).await
+}
+
+/// Разбор пачки логов Initialize. Ошибки: как у parse (первый же неверный лог — ошибка целиком).
+pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<Vec<Found>> {
+    logs.iter().map(|log| parse(ctx, f, log)).collect()
+}
+
+/// Разбор одного Initialize в найденный пул. coin = currency0 до выбора встречного токена (discover::against).
 /// Ошибки: BadResponse — событие не по ABI или PoolId из ключа не равен PoolId события.
-pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log, usdt: Address) -> GatewayResult<Found> {
+pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Found> {
     let bad = |e: String| {
         ctx.err(
             ErrorCode::BadResponse,
@@ -138,7 +130,7 @@ pub fn parse(ctx: &Ctx, f: &'static Family, log: &Log, usdt: Address) -> Gateway
         reference: PoolRef::Singleton { manager, id },
         token0,
         token1,
-        coin: if token0 == usdt { token1 } else { token0 },
+        coin: token0,
         fee_pips: Some(key.fee()),
         tick_spacing: spacing,
         bin_step: step,

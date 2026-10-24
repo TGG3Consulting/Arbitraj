@@ -12,6 +12,7 @@ pub mod heads;
 pub mod jsonrpc;
 pub mod multicall;
 pub mod pace;
+pub mod priority;
 pub mod rpc;
 pub mod subs;
 pub mod ws;

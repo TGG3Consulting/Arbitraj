@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/check/probe_calls.rs
 //! Что делает: вызовы пробного обмена для eth_simulateV1 — переводы, разрешения и балансы ERC-20.
 //! Кто вызывает: check/probe.rs.
-//! Там же: откат шага пробной покупки — вердикт по монете или помеха (buy_revert).
+//! Там же: откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха).
 //! От чего зависит: check/simulate.rs (Call), node/abi.rs, quote/quoter_revert.rs.
 //! Настройки: нет.
 //!
@@ -13,6 +13,7 @@ use alloy_primitives::{Address, Bytes, U256};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::exec::ur;
 use super::super::node::abi::IERC20;
 use super::super::quote::quoter_revert;
 use super::simulate::{Call, CallResult};
@@ -56,12 +57,31 @@ pub fn buy_revert(ctx: &Ctx, i: usize, r: &CallResult, quoter: usize) -> Gateway
         .as_ref()
         .map(|e| e.message.as_str())
         .unwrap_or_default();
+    // Срок транзакции вышел (TransactionDeadlinePassed) — время устарело в очереди узла: не проверено, повтор
+    // (не вердикт по монете, не чёрный список).
+    if late(r) {
+        let m = format!(
+            "{why} — срок транзакции пробы вышел до симуляции (TransactionDeadlinePassed, очередь узла)"
+        );
+        return Err(ctx.err(ErrorCode::NoRoute, m));
+    }
     let env =
         i < quoter || (i == quoter && quoter_revert::classify(msg, Some(&r.return_data)).is_some());
     if env {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
     Ok(why)
+}
+
+/// Откат «срок транзакции вышел» (TransactionDeadlinePassed): помеха (очередь узла), не вердикт по монете.
+/// Принимает: результат вызова. Ошибок нет.
+pub fn late(r: &CallResult) -> bool {
+    let msg = r
+        .error
+        .as_ref()
+        .map(|e| e.message.as_str())
+        .unwrap_or_default();
+    !r.ok() && ur::deadline_passed(&r.return_data, msg)
 }
 
 /// uint256 из ответа balanceOf. None — не по ABI.

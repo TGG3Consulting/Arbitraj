@@ -19,6 +19,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
+use super::super::node::priority;
 use super::super::num;
 use super::super::quote::gas::GasPrice;
 use super::super::send::settle::{self, After};
@@ -126,7 +127,9 @@ pub async fn send(
     settle::busy(&after, &hold).await;
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let hash = signed.hash;
-    let job = tokio::spawn(async move {
+    // Слежение за транзакцией — тем же классом срочности, что и отправка (node/priority.rs: задача tokio класс не наследует).
+    let class = priority::current();
+    let job = tokio::spawn(priority::scope(class, async move {
         let t = track::resolve(watch).await;
         drop(keep);
         let a = After {
@@ -140,7 +143,7 @@ pub async fn send(
         };
         settle::settle(&a, &hold, &t).await;
         t
-    });
+    }));
     let t = job.await.map_err(|e| {
         ctx.err(
             ErrorCode::Internal,

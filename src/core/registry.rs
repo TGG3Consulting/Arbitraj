@@ -63,6 +63,8 @@ pub struct CoinEntry {
     pub block: Option<CoinBlock>,
     /// Почему монету нельзя оценить (например, не заданы пороги налогов).
     pub problem: Option<String>,
+    /// Почему налоги ещё не проверены (блок NotChecked): причина ожидания от DEX (CoinCheck.wait). None — не ждёт.
+    pub wait: Option<String>,
 }
 
 impl CoinEntry {
@@ -97,6 +99,26 @@ impl CoinEntry {
             }
         }
         out
+    }
+
+    /// Направления для «Живого экрана»: как directions(), но монета, у которой налоги ещё не проверены, видна (строка
+    /// со статусом «налоги не проверены: причина», торговли нет — решение 30). Пусто — монету показать нельзя.
+    pub fn shown_directions(&self) -> Vec<Direction> {
+        if self.waits_check() {
+            let mut open = self.clone();
+            open.block = None;
+            return open.directions();
+        }
+        self.directions()
+    }
+
+    /// Налоги ещё не проверены (единственная причина блокировки — NotChecked). Ошибок нет.
+    pub fn waits_check(&self) -> bool {
+        self.problem.is_none()
+            && self
+                .block
+                .as_ref()
+                .is_some_and(|b| b.reason == crate::core::types::BlockReason::NotChecked)
     }
 
     /// Данные о монете на площадке (если она там есть).
@@ -195,6 +217,7 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 presence,
                 block: None,
                 problem: None,
+                wait: None,
             }
         })
         .collect()

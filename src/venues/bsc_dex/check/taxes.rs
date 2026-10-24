@@ -21,6 +21,7 @@ use crate::core::types::{Asset, CheckState, CoinCheck, PoolKind, PoolRef, TokenT
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::node::heads::Heads;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::{rate, select};
@@ -47,7 +48,8 @@ pub enum Outcome {
     Config(String),
 }
 
-/// Проверяет монету и пишет газ пулов в checks. Принимает: тикер, адрес монеты, USDT, время блока (секунды).
+/// Проверяет монету и пишет газ пулов в checks. Принимает: тикер, адрес монеты, USDT, головы сети (свежее время блока
+/// для срока транзакции пробы берётся прямо перед каждой симуляцией — probe.rs).
 /// Возвращает: CoinCheck (Known / Failed; ждёт пула или настройки — NotChecked) и итог. Ошибок нет.
 #[allow(clippy::too_many_arguments)]
 pub async fn check_coin(
@@ -59,9 +61,9 @@ pub async fn check_coin(
     ticker: &str,
     coin: Address,
     usdt: Address,
-    block_time: u64,
+    heads: &Heads,
 ) -> (CoinCheck, Outcome) {
-    let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, block_time).await {
+    let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, heads).await {
         Ok(o) => o,
         Err(e) if matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked) => {
             Outcome::Config(e.message)
@@ -87,6 +89,11 @@ pub async fn check_coin(
         taxes,
         source: SOURCE.to_string(),
         checked_at,
+        wait: match &out {
+            Outcome::Wait(w) => Some(w.clone()),
+            Outcome::Config(w) => Some(format!("не задана настройка: {w}")),
+            _ => None,
+        },
     };
     (check, out)
 }
@@ -102,7 +109,7 @@ async fn run(
     sources: &Sources,
     ticker: &str,
     usdt: Address,
-    block_time: u64,
+    heads: &Heads,
 ) -> GatewayResult<Outcome> {
     let wallet = signer::address(ctx)?;
     let usdt_dec = tokens.decimals(ctx, usdt).await?;
@@ -169,7 +176,7 @@ async fn run(
                 continue;
             }
         };
-        match probe::run(ctx, e, source, wallet, amount, block_time).await {
+        match probe::run(ctx, e, source, wallet, amount, heads).await {
             Ok(Ok(m)) => {
                 checks.update_pool(&e.pool.reference, |f| {
                     f.gas_buy = Some(m.gas_buy);

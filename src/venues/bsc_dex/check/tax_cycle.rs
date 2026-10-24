@@ -39,6 +39,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             taxes: CheckState::NotChecked,
             source: taxes::SOURCE.into(),
             checked_at: None,
+            wait: Some("проверка ещё не начиналась: ждёт стартовой загрузки пулов".into()),
         };
         p.checks.set_coin(c.clone());
         let _ = p.out.try_send(MarketEvent::CoinCheck(c));

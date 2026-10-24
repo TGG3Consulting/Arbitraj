@@ -8,7 +8,8 @@
 //! Только по официальной документации и данным самого блокчейна (CLAUDE.md, решение 23). Источники —
 //! README.md этой папки и шапки файлов. Разработка по шагам Issue #7: 1a (узел, кошелёк, проверка подключения),
 //! 1b (пулы), 1c (математика, котировка, проверки), 1d (исполнение, каналы отправки), 1e (умный режим).
-//! Общее состояние — parts.rs; здесь только функции контракта.
+//! Общее состояние — parts.rs; здесь только функции контракта. Срочность запросов к узлу (решение 61, node/priority.rs):
+//! сделка, вывод, сверки перевода и стоимость вывода — Trade; котировка — Check; остальное — фон.
 
 pub mod check;
 pub mod coins;
@@ -41,6 +42,7 @@ use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 
+use node::priority::{Class, scope};
 use parts::Parts;
 
 /// Адаптер DEX.
@@ -106,26 +108,39 @@ impl Venue for BscDex {
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
-        self.p.quoting().quote(asset, side, qty).await
+        // Котировка — на каждый тик монеты и в предпроверке ядра: класс Check (выше фона, наравне с проверками).
+        scope(Class::Check, self.p.quoting().quote(asset, side, qty)).await
     }
 
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
-        exec::trade::trade(&self.p.quoting(), &self.p.env(), &self.p.nonces, req).await
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(
+            Class::Trade,
+            exec::trade::trade(&q, &env, &self.p.nonces, req),
+        )
+        .await
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
     /// Ошибки: InvalidAddress, NotConfigured, каналы, TxNotIncluded / WithdrawRejected (с фактом транзакции).
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
-        wallet::transfer::withdraw(&self.p.env(), &self.p.tokens, &self.p.nonces, req).await
+        let env = self.p.env();
+        scope(
+            Class::Trade,
+            wallet::transfer::withdraw(&env, &self.p.tokens, &self.p.nonces, req),
+        )
+        .await
     }
 
     /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.
     /// Ошибки: узел, хеш не 32 байта, BadResponse.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         let w = wallet::signer::address(&self.p.ctx)?;
-        wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w).await
+        let work =
+            wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w);
+        scope(Class::Trade, work).await
     }
 
     /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —
@@ -139,7 +154,11 @@ impl Venue for BscDex {
 
     /// Статус зачисления; любое завершение снимает ожидаемое поступление — wallet/deposit.rs.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
-        wallet::deposit::status(&self.p, asset, tx_hash).await
+        scope(
+            Class::Trade,
+            wallet::deposit::status(&self.p, asset, tx_hash),
+        )
+        .await
     }
 
     /// Вывод на кошелёк не состоялся — ожидание поступления снято (wallet/deposit.rs). Ошибок нет.
@@ -155,7 +174,11 @@ impl Venue for BscDex {
 
     /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.
     async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
-        wallet::deposit::release(&self.p, by, pending_ok).await
+        scope(
+            Class::Trade,
+            wallet::deposit::release(&self.p, by, pending_ok),
+        )
+        .await
     }
 
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
@@ -171,7 +194,12 @@ impl Venue for BscDex {
         network: &str,
         amount: Decimal,
     ) -> GatewayResult<Vec<Cost>> {
-        wallet::transfer::cost(&self.p.env(), &self.p.checks, asset, network, amount).await
+        let env = self.p.env();
+        scope(
+            Class::Trade,
+            wallet::transfer::cost(&env, &self.p.checks, asset, network, amount),
+        )
+        .await
     }
 
     /// Кнопка «Перепроверить»: налоги, крючки и сверка с квотером — только этих монет (check/recheck.rs; итоги —

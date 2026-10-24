@@ -27,6 +27,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::plan::{self, Order};
+use super::super::node::heads::Heads;
 use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
@@ -52,7 +53,8 @@ pub struct Measured {
     pub gas_sell: Option<(u64, u64)>,
 }
 
-/// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, время блока.
+/// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, головы сети (свежее время блока для
+/// срока транзакции — перед каждой симуляцией).
 /// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
 /// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs).
 pub async fn run(
@@ -61,12 +63,14 @@ pub async fn run(
     source: Address,
     wallet: Address,
     usdt_amount: U256,
-    now: u64,
+    heads: &Heads,
 ) -> GatewayResult<Result<Measured, String>> {
     let (usdt, coin) = (e.usdt, e.coin);
     let holder = holder(ctx, e)?;
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
-    let buy = plan::build(
+    // Срок транзакции (deadline) — от свежего времени блока прямо перед симуляцией: очередь узла могла задержать пробу.
+    let now = heads.timestamp(ctx).await?;
+    let mut buy = plan::build(
         ctx,
         &plan::single(
             e,
@@ -95,10 +99,11 @@ pub async fn run(
         to: qto,
         input: qdata,
     });
+    let coin_base = balances::token_units(ctx, coin, wallet).await?;
     list.push(Call {
         from: wallet,
         to: buy.router,
-        input: buy.data(balances::token_units(ctx, coin, wallet).await?),
+        input: buy.data(coin_base),
     });
     list.push(pc::balance(wallet, coin, wallet));
     let first = simulate::run(ctx, &list).await?;
@@ -120,6 +125,10 @@ pub async fn run(
     let usdt_base = balances::token_units(ctx, usdt, wallet).await?;
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
+    // Вторая симуляция повторяет покупку: срок покупки и продажи — от свежего времени блока.
+    let now = heads.timestamp(ctx).await?;
+    buy.renew(ctx, now)?;
+    list[x].input = buy.data(coin_base);
     let sell = plan::build(
         ctx,
         &plan::single(
@@ -155,6 +164,13 @@ pub async fn run(
         input: sell.data(usdt_base),
     });
     let all = simulate::run(ctx, &list).await?;
+    if let Some(r) = all.iter().find(|r| pc::late(r)) {
+        let m = format!(
+            "срок транзакции пробы вышел до симуляции (очередь узла): {}",
+            r.why()
+        );
+        return Err(ctx.err(ErrorCode::NoRoute, m));
+    }
     if let Some((i, r)) = all.iter().enumerate().take(base + 5).find(|(_, r)| !r.ok()) {
         return Ok(Err(format!(
             "шаг {i} пробы (перевод монеты) откатился: {}",

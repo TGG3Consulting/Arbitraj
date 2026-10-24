@@ -129,7 +129,7 @@ fn schedule(core: &Core, asset: Asset, venue: VenueId) {
 
 /// Пересчёт направлений монеты, где участвует площадка тика. Ошибок нет: причины — в строках экрана.
 async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
-    let (dirs, ref_price) = {
+    let (dirs, ref_price, waiting) = {
         let coins = rd(&core.inner.coins);
         let Some(entry) = coins.iter().find(|c| &c.asset == asset) else {
             return;
@@ -141,11 +141,19 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
             .filter(|p| p.info.is_some())
             .find_map(|p| market.best(&p.venue, &asset.ticker, Side::Buy));
         let dirs: Vec<_> = entry
-            .directions()
+            .shown_directions()
             .into_iter()
             .filter(|d| &d.buy_on == venue || &d.sell_on == venue)
             .collect();
-        (dirs, ref_price)
+        // Налоги не проверены (решение 30): строка видна с причиной ожидания, торговли нет.
+        let waiting = entry.waits_check().then(|| {
+            let why = entry
+                .wait
+                .clone()
+                .unwrap_or_else(|| "проверка ещё не выполнена".into());
+            format!("налоги не проверены: {why}")
+        });
+        (dirs, ref_price, waiting)
     };
     let params = Params::read(&core.inner.deps.settings);
     for dir in dirs {
@@ -158,7 +166,10 @@ async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
             vol.sample(&dir.buy_on, &dir.asset, Side::Buy, p.buy, now, w);
             vol.sample(&dir.sell_on, &dir.asset, Side::Sell, p.sell, now, w);
         }
-        let view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
+        let mut view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
+        if let Some(w) = &waiting {
+            view.state = State::TaxesNotChecked(w.clone());
+        }
         let was_anomaly = rd(&core.inner.spreads)
             .get(&dir)
             .is_some_and(|v| v.state == State::Anomaly);

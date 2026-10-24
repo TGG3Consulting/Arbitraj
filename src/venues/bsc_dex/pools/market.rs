@@ -26,6 +26,7 @@ use crate::storage::journal::Level;
 
 use super::super::check::recheck::Recheck;
 use super::super::check::{cycle, quoter_cycle, tax_cycle};
+use super::super::node::priority::{Class, scope};
 use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
@@ -101,13 +102,11 @@ pub async fn subscribe(
         )));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
-    tasks.push(tokio::spawn(tax_cycle::taxes(
-        p.clone(),
-        all.clone(),
-        usdt,
-        wake.taxes.clone(),
-    )));
-    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.hooks.clone())));
+    // Проверки монет и крючков — класс Check в очереди узла (решение 61): выше загрузки пулов и цикла квотера.
+    let taxes = tax_cycle::taxes(p.clone(), all.clone(), usdt, wake.taxes.clone());
+    tasks.push(tokio::spawn(scope(Class::Check, taxes)));
+    let hooks = cycle::hooks(p.clone(), wake.hooks.clone());
+    tasks.push(tokio::spawn(scope(Class::Check, hooks)));
     tasks.push(tokio::spawn(quoter_cycle::run(
         p.clone(),
         wake.quoter.clone(),

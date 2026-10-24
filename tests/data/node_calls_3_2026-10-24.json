@@ -655,5 +655,252 @@
         "latest"
       ]
     }
+  ],
+  "pools": [
+    {
+      "addr": "0x0ed7e52944161450477ee417de9cd3a859b14fd0",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0x0ed7e52944161450477ee417de9cd3a859b14fd0"
+    },
+    {
+      "addr": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 50,
+      "tag": "CAKE pancakeswap-v3-bsc 0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1"
+    },
+    {
+      "addr": "0x133b3d95bad5405d14d53473671200e9342896bf",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 50,
+      "tag": "CAKE pancakeswap-v3-bsc 0x133b3d95bad5405d14d53473671200e9342896bf"
+    },
+    {
+      "addr": "0xafb2da14056725e3ba3a30dd846b6bbbd7886c56",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "CAKE pancakeswap-v3-bsc 0xafb2da14056725e3ba3a30dd846b6bbbd7886c56"
+    },
+    {
+      "addr": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 60,
+      "tag": "CAKE uniswap-bsc 0xfe4fe5b4575c036ac6d5cccfe13660020270e27a"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0x54c27041dfa246727d9351613eb35da028ddf377225d8db9e68ca3b569b5ba24",
+      "kind": "infinity_cl",
+      "spacing": 50,
+      "tag": "CAKE pancakeswap-infinity-clmm 0x54c27041dfa246727d9351613eb35da028ddf377225d8db9e68ca3b569b5ba24"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb",
+      "kind": "infinity_cl",
+      "spacing": 50,
+      "tag": "CAKE pancakeswap-infinity-clmm 0x47516855520496b84a169f7bb92ace7ffb6e8c535bccb52a308ccff113aeccfb"
+    },
+    {
+      "addr": "0xde52cff316d8a70256bee647073312c1aa7ee2cf",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0xde52cff316d8a70256bee647073312c1aa7ee2cf"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0x4630fb37706efaf996be1ee54b6841f8d9548ac42ae6cebc02511d891726d1e6",
+      "kind": "uni_v4",
+      "spacing": 25,
+      "tag": "CAKE uniswap-v4-bsc 0x4630fb37706efaf996be1ee54b6841f8d9548ac42ae6cebc02511d891726d1e6"
+    },
+    {
+      "addr": "0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b"
+    },
+    {
+      "addr": "0x8ec186cd1ad51c380bd23fde29f852226647616c",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "CAKE pancakeswap-v3-bsc 0x8ec186cd1ad51c380bd23fde29f852226647616c"
+    },
+    {
+      "addr": "0x804678fa97d91b974ec2af3c843270886528a9e6",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0x804678fa97d91b974ec2af3c843270886528a9e6"
+    },
+    {
+      "addr": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 200,
+      "tag": "CAKE uniswap-bsc 0x8e8410f4878079fc03a287a7ded4a65afb87cc06"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0x737a7d974a19bafb34c8d74d898188c9b59689b91f291fa6ade69f71fa0f5afa",
+      "kind": "infinity_cl",
+      "spacing": 10,
+      "tag": "CAKE pancakeswap-infinity-clmm 0x737a7d974a19bafb34c8d74d898188c9b59689b91f291fa6ade69f71fa0f5afa"
+    },
+    {
+      "addr": "0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0x5ffc1857a39a8d63e556e988f8e28ce6cf7d0db9"
+    },
+    {
+      "addr": "0xeb7528398b2725e1e0374734a87320132223a5c6",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "CAKE pancakeswap-v3-bsc 0xeb7528398b2725e1e0374734a87320132223a5c6"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0xaf12088595c0d5615f1e9da6033a435705d60037c2a4230dd5e135aab9dcfeb5",
+      "kind": "infinity_cl",
+      "spacing": 10,
+      "tag": "CAKE pancakeswap-infinity-clmm 0xaf12088595c0d5615f1e9da6033a435705d60037c2a4230dd5e135aab9dcfeb5"
+    },
+    {
+      "addr": "0x570e2162d9ba3000a088ea1680e21616d177b7c0",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0x570e2162d9ba3000a088ea1680e21616d177b7c0"
+    },
+    {
+      "addr": "0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "CAKE pancakeswap_v2 0xa458ed5d77eb13ccae0ac237f7bb7ca3759fa6c3"
+    },
+    {
+      "addr": "0xd0e226f674bbf064f54ab47f42473ff80db98cba",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "ETH pancakeswap-v3-bsc 0xd0e226f674bbf064f54ab47f42473ff80db98cba"
+    },
+    {
+      "addr": "0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 1,
+      "tag": "ETH pancakeswap-v3-bsc 0x62fcb3c1794fb95bd8b1a97f6ad5d8a7e4943a1e"
+    },
+    {
+      "addr": "0xbe141893e4c6ad9272e8c04bab7e6a10604501a5",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "ETH pancakeswap-v3-bsc 0xbe141893e4c6ad9272e8c04bab7e6a10604501a5"
+    },
+    {
+      "addr": "0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 10,
+      "tag": "ETH uniswap-bsc 0x0f338ec12d3f7c3d77a4b9fcc1f95f3fb6ad0ea6"
+    },
+    {
+      "addr": "0x4bba1018b967e59220b22ca03f68821a3276c9a6",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "ETH pancakeswap-v3-bsc 0x4bba1018b967e59220b22ca03f68821a3276c9a6"
+    },
+    {
+      "addr": "0x9f599f3d64a9d99ea21e68127bb6ce99f893da61",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 1,
+      "tag": "ETH pancakeswap-v3-bsc 0x9f599f3d64a9d99ea21e68127bb6ce99f893da61"
+    },
+    {
+      "addr": "0x74e4716e431f45807dcf19f284c7aa99f18a4fbc",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "ETH pancakeswap_v2 0x74e4716e431f45807dcf19f284c7aa99f18a4fbc"
+    },
+    {
+      "addr": "0x0000000000000000000000000000000000000000",
+      "id": "0xd02643e9323895f4b562c92f3e6ced7e77db73cd8ab057ec685d1dc710551a6b",
+      "kind": "uni_v4",
+      "spacing": 25,
+      "tag": "ETH uniswap-v4-bsc 0xd02643e9323895f4b562c92f3e6ced7e77db73cd8ab057ec685d1dc710551a6b"
+    },
+    {
+      "addr": "0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 60,
+      "tag": "ETH uniswap-bsc 0x3fb2623567e21f8c50f0ae86f54ef4849b4eb47b"
+    },
+    {
+      "addr": "0x272c9c291a24349c5cc79ac10d6d4c9fb780b950",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "ETH pancakeswap_v2 0x272c9c291a24349c5cc79ac10d6d4c9fb780b950"
+    },
+    {
+      "addr": "0x0416e8dd7d165f5e5af5065abfe6accc2945d58a",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 60,
+      "tag": "ETH uniswap-bsc 0x0416e8dd7d165f5e5af5065abfe6accc2945d58a"
+    },
+    {
+      "addr": "0x531febfeb9a61d948c384acfbe6dcc51057aea7e",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "ETH pancakeswap_v2 0x531febfeb9a61d948c384acfbe6dcc51057aea7e"
+    },
+    {
+      "addr": "0x7fbef458f5c980a1701716a73c480e9b3e9bef38",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "ETH pancakeswap_v2 0x7fbef458f5c980a1701716a73c480e9b3e9bef38"
+    },
+    {
+      "addr": "0xf9878a5dd55edc120fde01893ea713a4f032229c",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "uni_v3",
+      "spacing": 10,
+      "tag": "ETH uniswap-bsc 0xf9878a5dd55edc120fde01893ea713a4f032229c"
+    },
+    {
+      "addr": "0xa06ba58ce2a79fdd92345fd96050c0ad1a030007",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "v2",
+      "spacing": 0,
+      "tag": "ETH pancakeswap_v2 0xa06ba58ce2a79fdd92345fd96050c0ad1a030007"
+    },
+    {
+      "addr": "0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664",
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "pcs_v3",
+      "spacing": 10,
+      "tag": "ETH pancakeswap-v3-bsc 0x539e0ebfffd39e54a0f7e5f8fec40ade7933a664"
+    }
   ]
 }

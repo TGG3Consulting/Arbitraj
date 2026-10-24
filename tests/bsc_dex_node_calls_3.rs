@@ -329,12 +329,29 @@ fn requests(stage: u8, calls: &[C], batch: usize, block: &str) -> Vec<Value> {
 #[ignore = "вручную: пишет точный список вызовов ступени 1"]
 fn write_node_calls_3() {
     let batch = env_num("ARB_BATCH") as usize;
-    let calls: Vec<C> = pools().iter().flat_map(head).collect();
+    let list = pools();
+    let calls: Vec<C> = list.iter().flat_map(head).collect();
+    // Пулы для записи (вид, адрес / PoolId, tickSpacing) — по ним рекордер на JavaScript
+    // (tests/recorders/record_node_calls_3.js) строит ступени 2–3.
+    let meta: Vec<Value> = list
+        .iter()
+        .map(|p| {
+            let kind = match p.kind {
+                Kind::V2 => "v2",
+                Kind::PcsV3 => "pcs_v3",
+                Kind::UniV3 => "uni_v3",
+                Kind::InfinityCl => "infinity_cl",
+                Kind::UniV4 => "uni_v4",
+            };
+            json!({ "tag": p.tag, "kind": kind, "addr": p.addr, "id": p.id, "spacing": p.spacing })
+        })
+        .collect();
     let mut out = vec![json!({ "name": "block", "method": "eth_blockNumber", "params": [] })];
     out.extend(requests(1, &calls, batch, "latest"));
     let doc = json!({
         "about": format!("Ступень 1 пачечного чтения (#47): каждый вызов отдельно и пачками Multicall3.aggregate3 по dex.verify_batch = {batch}. Ступени 2–3 зависят от ответов (тик, биты) — их пишет record_node_calls_3 за один проход на закреплённом блоке. \"latest\" заменить номером блока из первого ответа."),
         "calls": out,
+        "pools": meta,
     });
     std::fs::write(
         "tests/data/node_calls_3_2026-10-24.json",

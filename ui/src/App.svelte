@@ -1,6 +1,6 @@
 <!--
   Файл: ui/src/App.svelte
-  Что делает: каркас интерфейса — меню экранов, плашки «Система заблокирована», «Нет живой связи»
+  Что делает: каркас интерфейса — меню экранов (NavMenu: «Настройки» по категориям, редкие экраны в «Ещё»), плашки «Система заблокирована», «Нет живой связи»
     и режима системы («Старт/Стоп/Пауза»),
     выбор экрана по адресу (#/экран); «Живой экран» и «Монеты» — во всю ширину окна (Issue #33). Запускает живой поток и общие хранилища один раз.
   Кто вызывает: main.js.
@@ -13,10 +13,11 @@
   import { start as startSecrets } from './lib/secrets.svelte.js';
   import { start as startDex } from './lib/dex.svelte.js';
   import { start as startControl } from './lib/control.svelte.js';
-  import { route, href } from './lib/router.svelte.js';
+  import { route } from './lib/router.svelte.js';
   import LockBanner from './components/LockBanner.svelte';
   import LiveBanner from './components/LiveBanner.svelte';
   import ControlBar from './components/ControlBar.svelte';
+  import NavMenu from './components/NavMenu.svelte';
   import Unlock from './pages/Unlock.svelte';
   import Venues from './pages/Venues.svelte';
   import Settings from './pages/Settings.svelte';
@@ -33,6 +34,7 @@
   /**
    * Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой.
    * wide — экран во всю ширину окна (широкие таблицы, Issue #33); остальные — колонкой по центру.
+   * more — редкий экран: в меню он в выпадающем «Ещё»; menu: 'settings' — пункт с выпадающим списком категорий.
    */
   const PAGES = [
     { id: 'unlock', title: 'Разблокировка', page: Unlock },
@@ -41,11 +43,11 @@
     { id: 'deals', title: 'Сделки', page: Deals },
     { id: 'coins', title: 'Монеты', page: Coins, wide: true },
     { id: 'manual', title: 'Ручное управление', page: Manual },
-    { id: 'channels', title: 'Каналы отправки', page: Channels },
-    { id: 'gas', title: 'Статистика газа', page: GasStats },
-    { id: 'settings', title: 'Настройки', page: Settings },
-    { id: 'rules', title: 'Правила шлюза', page: Rules },
-    { id: 'notify', title: 'Уведомления', page: Notifications },
+    { id: 'channels', title: 'Каналы отправки', page: Channels, more: true },
+    { id: 'gas', title: 'Статистика газа', page: GasStats, more: true },
+    { id: 'settings', title: 'Настройки', page: Settings, menu: 'settings' },
+    { id: 'rules', title: 'Правила шлюза', page: Rules, more: true },
+    { id: 'notify', title: 'Уведомления', page: Notifications, more: true },
     { id: 'journal', title: 'Журнал', page: Journal },
   ];
 
@@ -59,12 +61,7 @@
   const current = $derived(PAGES.find((p) => p.id === route.page) ?? PAGES[0]);
 </script>
 
-<nav>
-  <strong class="brand">ARB</strong>
-  {#each PAGES as p (p.id)}
-    <a href={href(p.id)} class:active={p === current}>{p.title}</a>
-  {/each}
-</nav>
+<NavMenu pages={PAGES} {current} />
 <LockBanner />
 <LiveBanner />
 <ControlBar />

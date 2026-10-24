@@ -153,6 +153,12 @@ pub fn deep_enough(
     e: &Entry,
     usdt_decimals: u8,
 ) -> Result<Option<String>, String> {
+    if e.asleep {
+        return Ok(Some(
+            "пул мельче dex.min_pool_liquidity_usd — слушается только добавление ликвидности"
+                .into(),
+        ));
+    }
     let min = ctx
         .dec("dex.min_pool_liquidity_usd")
         .map_err(|e| e.message)?;

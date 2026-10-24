@@ -3,7 +3,7 @@
 //! читается по HTTP на блоке B узла WS — HTTP должен его знать. Отставание провайдера — не сбой, пока HTTP продвигается.
 //! Номер блока узла HTTP — из опроса node/heads.rs (решение 57).
 //!
-//! Кто вызывает: pools/session.rs.
+//! Кто вызывает: pools/admit.rs.
 //! От чего зависит: node/heads.rs, pools/listen.rs (Pools).
 //! Настройки: feed.stale_after_ms [bsc_dex].
 //!

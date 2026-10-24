@@ -30,7 +30,7 @@ use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
 use super::discover::{self, Found, Scanned};
 use super::listen::{self, Pools};
-use super::{events, history_v4, market_mids, mids};
+use super::{history_v4, market_mids, mids};
 
 /// Запускает всё для подписки на рынок.
 /// Принимает: окружение пулов, память истории, сигнал «перепроверить» для циклов проверок, монеты ядра.
@@ -87,13 +87,13 @@ pub async fn subscribe(
     // Стартовая загрузка V2/V3: первый проход налогов ждёт, пока каждая пачка закончит первую загрузку (pools/progress.rs).
     let start = chunks(&found, &all, per);
     p.signals.expect(start.len());
-    for (name, chunk, filter) in start {
+    for (name, chunk) in start {
         tasks.push(tokio::spawn(listen::run(
             p.clone(),
             name,
             chunk,
-            filter,
             true,
+            None,
         )));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
@@ -110,6 +110,7 @@ pub async fn subscribe(
     )));
     let extra = Arc::new(Mutex::new(Vec::new()));
     let known = Arc::new(Mutex::new(known));
+    let late = Arc::new(Mutex::new(HashMap::new()));
     // Новые пулы: с USDT (монеты и промежуточные) и с каждой промежуточной монетой.
     let watches: Vec<Watch> = std::iter::once((all, usdt))
         .chain(watches)
@@ -119,6 +120,7 @@ pub async fn subscribe(
             scanned: scanned.clone(),
             known: known.clone(),
             tasks: extra.clone(),
+            late: late.clone(),
         })
         .collect();
     for w in &watches {
@@ -137,51 +139,44 @@ pub async fn subscribe(
     Ok(tasks)
 }
 
-/// Пачка для подписки: имя, пулы с тикерами, фильтр.
-pub type Chunk = (String, Vec<(Found, String)>, serde_json::Value);
+/// Пулы пачки с тикерами монет.
+pub type Tickered = Vec<(Found, String)>;
 
-/// Пачки пулов одного вида для подписки: (имя, пулы с тикерами, фильтр).
-pub fn chunks(found: &[Found], coins: &HashMap<Address, String>, per: usize) -> Vec<Chunk> {
-    let mut by_family: HashMap<(&str, Option<Address>), Vec<&Found>> = HashMap::new();
+/// Пулы одного вида (и менеджера V4) с тикерами: (ключ вида, пулы). Пулы без тикера монеты не слушаются. Ошибок нет.
+pub fn by_family(
+    found: &[Found],
+    coins: &HashMap<Address, String>,
+) -> Vec<(String, &'static str, Tickered)> {
+    let mut groups: HashMap<(&'static str, Option<Address>), Tickered> = HashMap::new();
     for f in found {
         let manager = match &f.reference {
             PoolRef::Singleton { manager, .. } => Some(*manager),
             PoolRef::Contract(_) => None,
         };
-        by_family.entry((f.family.id, manager)).or_default().push(f);
+        // Пулы найдены по монетам подписки, у каждой есть тикер; без тикера пул не слушается.
+        if let Some(t) = coins.get(&f.coin) {
+            groups
+                .entry((f.family.id, manager))
+                .or_default()
+                .push((f.clone(), t.clone()));
+        }
     }
+    groups
+        .into_iter()
+        .map(|((family, manager), list)| (format!("{family}:{manager:?}"), family, list))
+        .collect()
+}
+
+/// Пачки для подписки: (имя, пулы с тикерами), не больше `per` пулов в пачке. Ошибок нет.
+pub fn chunks(
+    found: &[Found],
+    coins: &HashMap<Address, String>,
+    per: usize,
+) -> Vec<(String, Vec<(Found, String)>)> {
     let mut out = Vec::new();
-    for ((family, manager), list) in by_family {
+    for (_, family, list) in by_family(found, coins) {
         for (i, part) in list.chunks(per).enumerate() {
-            let topic0 = events::topics(part[0].family);
-            let filter = match manager {
-                None => {
-                    let addrs: Vec<Address> = part
-                        .iter()
-                        .filter_map(|f| match f.reference {
-                            PoolRef::Contract(a) => Some(a),
-                            PoolRef::Singleton { .. } => None,
-                        })
-                        .collect();
-                    subs::by_address(&addrs, &topic0)
-                }
-                Some(m) => {
-                    let ids: Vec<_> = part
-                        .iter()
-                        .filter_map(|f| match f.reference {
-                            PoolRef::Singleton { id, .. } => Some(id),
-                            PoolRef::Contract(_) => None,
-                        })
-                        .collect();
-                    subs::by_pool_id(m, &ids, &topic0)
-                }
-            };
-            // Пулы найдены по монетам подписки, у каждой есть тикер; без тикера пул не слушается.
-            let with_tickers = part
-                .iter()
-                .filter_map(|f| coins.get(&f.coin).map(|t| ((*f).clone(), t.clone())))
-                .collect();
-            out.push((format!("{family}-{i}"), with_tickers, filter));
+            out.push((format!("{family}-{i}"), part.to_vec()));
         }
     }
     out

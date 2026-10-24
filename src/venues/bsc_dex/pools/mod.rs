@@ -7,10 +7,12 @@
 
 pub mod abi_v2v3;
 pub mod abi_v4;
+pub mod admit;
 pub mod attach;
 pub mod bins;
 pub mod created;
 pub mod deploy_block;
+pub mod depth;
 pub mod discover;
 pub mod discover_v2;
 pub mod discover_v3;
@@ -21,6 +23,7 @@ pub mod events_cl;
 pub mod events_v2;
 pub mod events_v3;
 pub mod families;
+pub mod group;
 pub mod history_gate;
 pub mod history_store;
 pub mod history_v4;
@@ -39,6 +42,7 @@ pub mod market_mids;
 pub mod mids;
 pub mod progress;
 pub mod registry;
+pub mod reload;
 pub mod scan;
 pub mod session;
 pub mod ticks;

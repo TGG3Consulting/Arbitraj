@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/pools/events.rs
-//! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки.
+//! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
+//! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
 //! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, families.rs, registry.rs.
 //! Настройки: нет.
@@ -31,6 +32,23 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::PancakeV3 | Proto::UniswapV3 => events_v3::topics(f.proto),
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::topics(f.proto),
         Proto::InfinityBin => events_bin::topics(),
+    }
+}
+
+/// topic0 событий добавления ликвидности — у пулов мельче dex.min_pool_liquidity_usd слушаются только они
+/// (pools/depth.rs): V2 Mint (IUniswapV2Pair.sol, v2-core 6a9e7c97), V3 Mint (IPancakeV3PoolEvents.sol#L21-L62),
+/// CL ModifyLiquidity (ICLPoolManager.sol, Uniswap IPoolManager.sol — bsc_v4.md, раздел 4), Bin Mint
+/// (IBinPoolManager.sol#L88-L104). Ошибок нет.
+pub fn liquidity_topics(f: &Family) -> Vec<B256> {
+    use super::abi_v2v3::{IV2Pair, IV3Pool};
+    use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
+    use alloy::sol_types::SolEvent;
+    match f.proto {
+        Proto::V2 => vec![IV2Pair::Mint::SIGNATURE_HASH],
+        Proto::PancakeV3 | Proto::UniswapV3 => vec![IV3Pool::Mint::SIGNATURE_HASH],
+        Proto::InfinityCl => vec![IInfinityCl::ModifyLiquidity::SIGNATURE_HASH],
+        Proto::UniswapV4 => vec![IUniswapV4::ModifyLiquidity::SIGNATURE_HASH],
+        Proto::InfinityBin => vec![IInfinityBin::Mint::SIGNATURE_HASH],
     }
 }
 

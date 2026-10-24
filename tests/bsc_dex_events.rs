@@ -76,6 +76,7 @@ fn entry(block: u64) -> Entry {
         synced_block: block,
         synced_log: None,
         valid: true,
+        asleep: false,
     }
 }
 

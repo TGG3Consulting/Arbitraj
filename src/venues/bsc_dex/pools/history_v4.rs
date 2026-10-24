@@ -2,8 +2,9 @@
 //! Что делает: фоновая загрузка истории пулов V4 (Infinity CL, Infinity Bin, Uniswap V4) — подписка на рынок V2/V3
 //! её не ждёт. По каждому включённому виду V4: память (если история уже есть) → SQLite (history_store.rs) →
 //! иначе от блока развёртывания менеджера (deploy_block.rs); затем новые блоки кусками dex.logs_block_batch до
-//! текущего блока сети. После каждого куска найденное сохраняется в SQLite и сразу подключается к подписке
-//! (attach.rs) — пулы V4 начинают слушаться по мере нахождения, без перезапуска слушателей V2/V3.
+//! текущего блока сети. После каждого куска найденное сохраняется в SQLite; к подписке (attach.rs) найденное
+//! подключается раз в dex.scan_progress_s (вместе со строкой хода) и в конце чтения — пулы V4 слушаются по мере
+//! нахождения, без перезапуска слушателей V2/V3 и без подписки на каждый кусок.
 //! Догнала сеть — история помечается «догнала»: дальше новые блоки дочитывает обычный поиск (discover.rs).
 //! Кто вызывает: pools/market.rs (задача подписки на рынок; при новой подписке прерывается — память и SQLite
 //! остаются согласованными: блок сдвигается только после записи куска).
@@ -92,15 +93,18 @@ async fn load(
         }
         let mut prog = scan::Progress::new(ctx, &what, next, head)?;
         let mut events = 0;
+        // Найденные пулы копятся и подключаются раз в dex.scan_progress_s (вместе со строкой хода) и в конце чтения:
+        // каждое подключение — подписка на узле (платное сообщение), а история находит пулы почти в каждом куске.
+        let mut pending: Vec<Found> = Vec::new();
         while next <= head {
             // Вид выключили на лету — чтение останавливается на следующем куске (место чтения сохранено в SQLite).
             if !history_gate::allowed(ctx, &what).await {
-                return Ok(attached);
+                return Ok(attached + connect(p, watches, &pending).await?);
             }
             if !discover::enabled(ctx, f).await {
                 let msg = format!("{what}: вид пула выключен — чтение остановлено на блоке {next}");
                 ctx.log(Level::Info, "dex.scan", msg, None).await;
-                return Ok(attached);
+                return Ok(attached + connect(p, watches, &pending).await?);
             }
             let end = head.min(next.saturating_add(batch - 1));
             let logs = scan::one(ctx, manager, &topics, next, end, &what).await?;
@@ -116,13 +120,19 @@ async fn load(
                 h.pools.extend(found.iter().cloned());
                 h.last = end;
             }
-            let n = connect(p, watches, &found).await?;
-            attached += n;
-            prog.attached += n;
+            pending.extend(found);
             events += logs.len();
             next = end + 1;
+            if prog.due(end) {
+                let n = connect(p, watches, &std::mem::take(&mut pending)).await?;
+                attached += n;
+                prog.attached += n;
+            }
             prog.step(ctx, end, events).await;
         }
+        let n = connect(p, watches, &pending).await?;
+        attached += n;
+        prog.attached += n;
         prog.finish(ctx, events).await;
     }
 }

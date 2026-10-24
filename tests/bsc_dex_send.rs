@@ -117,6 +117,7 @@ fn entry() -> Entry {
         synced_block: 1,
         synced_log: None,
         valid: true,
+        asleep: false,
     }
 }
 

@@ -12,3 +12,9 @@
 
 `heads.json` (тот же сырой журнал): канал `heads` (подписка newHeads) за окно `window_s` — число уведомлений и их размер в байтах
 (для цены по таблице NodeReal: WS — 0,04 CU/байт), `first` — первые 30 уведомлений: [мс, номер блока].
+`bsc_dex_subs.json` (тот же запуск):
+- `journal_v4_attach` — все записи журнала «Подключены пулы из истории V4» (время, вид → число пулов): каждая была отдельным соединением с подпиской.
+- `subscribe_results_in_window` — ответы узла на eth_subscribe/eth_blockNumber по каналам `*-new` в сыром журнале за окно `window_ms`.
+- `shallow_pool` — пул PancakeSwap V3 AIN/USDT (адрес — CREATE2, комиссия 100): реальные логи Swap и Mint и их число за окно.
+- `uniswap_v4_modify_liquidity_log`, `infinity_bin_log` — реальные логи V4 из сырого журнала.
+- `settings_bsc_dex` — значения настроек Тиграна из SQLite (dex.pools_per_sub, dex.scan_progress_s, dex.min_pool_liquidity_usd).

@@ -40,6 +40,8 @@ pub struct Watch {
     pub known: Arc<Mutex<HashSet<PoolRef>>>,
     /// Задачи слушателей новых пулов (останавливаются вместе с подпиской на рынок).
     pub tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+    /// Пачки найденных позже пулов по виду (attach.rs): общие для всех наблюдателей.
+    pub late: super::attach::Late,
 }
 
 /// Работает постоянно: подписка на события создания, дочитывание, слушатели новых пулов.

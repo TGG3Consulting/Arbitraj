@@ -71,7 +71,7 @@ async fn value_at(
     Ok(out)
 }
 
-/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок и приём).
+/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API).
 fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     let coins = rd(&core.inner.coins);
     let Some(e) = coins.iter().find(|c| c.asset == deal.direction.asset) else {
@@ -83,7 +83,7 @@ fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     }
     e.presence
         .iter()
-        .filter(|p| p.excluded.is_empty() && p.can_receive && p.venue != deal.at)
+        .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
         .map(|p| p.venue.clone())
         .collect()
 }

@@ -2,8 +2,9 @@
 // Что делает: итог отбора монеты и фильтры экрана «Монеты» (Issue #33) — только по структурированным полям
 //   GET /api/coins (core/coins_view.rs), без разбора русского текста:
 //   directions (прошла), presence[].excluded (Exclusion из core/registry.rs), block.reason (BlockReason из
-//   core/types/check.rs), taxes (CheckState), problem, presence[].can_send / can_receive. «Крючок» — только по
-//   PoolsExcluded (исключены все пулы монеты); исключённые пулы при допущенных — в окне монеты, не в итоге.
+//   core/types/check.rs), taxes (CheckState), problem, presence[].can_send / can_receive (вывод / ввод),
+//   presence[].can_buy / can_sell (покупка / продажа через API — у BingX apiStateBuy / apiStateSell). «Крючок» — только
+//   по PoolsExcluded (исключены все пулы монеты); исключённые пулы при допущенных — в окне монеты, не в итоге.
 // Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte.
 // От чего зависит: ничего (чистые функции над данными ядра).
 // Настройки: нет.
@@ -15,7 +16,10 @@
 export const RESULTS = [
   ['passed', 'прошла'],
   ['no_bsc', 'нет сети BSC'],
-  ['no_contract', 'нет адреса контракта'],
+  ['no_contract', 'сеть BSC есть, адреса контракта нет'],
+  ['pair_off', 'пара не торгуется (status)'],
+  ['no_api', 'пара не торгуется через API (apiStateBuy/Sell)'],
+  ['pairs_stale', 'справочник пар устарел'],
   ['no_book', 'нет стакана'],
   ['no_usdt_pool', 'нет пула с USDT'],
   ['pools_loading', 'пулы найдены, загружаются'],
@@ -25,7 +29,8 @@ export const RESULTS = [
   ['check_failed', 'проверка не прошла'],
   ['not_checked', 'не проверено'],
   ['problem', 'не оценить'],
-  ['closed', 'вывод/депозит закрыт'],
+  ['deposit_closed', 'ввод закрыт'],
+  ['withdraw_closed', 'вывод закрыт'],
   ['other', 'нет направлений'],
 ];
 const LABEL = Object.fromEntries(RESULTS);
@@ -37,6 +42,9 @@ function exclusionCode(e) {
   if (e === 'NoBscNetwork') return 'no_bsc';
   if (e === 'NoContract') return 'no_contract';
   if (e === 'NoSpotBook') return 'no_book';
+  if (e === 'NoApiTrading') return 'no_api';
+  if (e?.PairNotTrading !== undefined) return 'pair_off';
+  if (e?.PairsStale !== undefined) return 'pairs_stale';
   if (e === 'NoUsdtPool' || e === 'NoUsdtAddress' || e?.IntermediateNotConfigured !== undefined) return 'no_usdt_pool';
   if (e === 'PoolsLoading') return 'pools_loading';
   // «Крючок» — только когда исключены ВСЕ пулы монеты (PoolsExcluded); исключённый пул при допущенных — не причина.
@@ -63,7 +71,11 @@ export function reasons(c) {
   const out = new Set();
   for (const p of c.presence ?? []) {
     for (const e of p.excluded) out.add(exclusionCode(e));
-    if (!p.excluded.length && (!p.can_send || !p.can_receive)) out.add('closed');
+    if (p.excluded.length) continue;
+    if (!p.can_receive) out.add('deposit_closed');
+    if (!p.can_send) out.add('withdraw_closed');
+    // Покупка или продажа через API закрыта с одной стороны — закрыто только своё направление.
+    if (p.can_buy === false || p.can_sell === false) out.add('no_api');
   }
   if (c.block) out.add(blockCode(c.block.reason));
   if (c.taxes === 'NotChecked') out.add('not_checked');

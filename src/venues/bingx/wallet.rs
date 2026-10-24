@@ -55,14 +55,8 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
                     bsc_contract: contract,
                 },
                 network,
-                deposit_enabled: n
-                    .get("depositEnable")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-                withdraw_enabled: n
-                    .get("withdrawEnable")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
+                deposit_enabled: flag(n, "depositEnable", &ticker)?,
+                withdraw_enabled: flag(n, "withdrawEnable", &ticker)?,
                 withdraw_fee: num::dec_opt(n, "withdrawFee")?,
                 withdraw_min: num::dec_opt(n, "withdrawMin")?,
                 withdraw_max: num::dec_opt(n, "withdrawMax")?,
@@ -76,6 +70,23 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
         }
     }
     Ok(out)
+}
+
+/// Флаг сети depositEnable / withdrawEnable — boolean по официальной документации (api-ai-skills, skills/spot-wallet/
+/// api-reference.md, раздел config/getall, «depositEnable | bool»). Нет поля или другой тип — ответ не понят:
+/// ошибка BadResponse с куском ответа, справочник целиком не обновляется (core/registry_sync.rs оставляет прежний).
+/// «Закрыт» по догадке не ставится. Принимает: сеть из networkList, имя поля, тикер. Ошибки: BadResponse.
+pub fn flag(n: &Value, field: &str, ticker: &str) -> GatewayResult<bool> {
+    match n.get(field) {
+        Some(Value::Bool(b)) => Ok(*b),
+        other => {
+            let got = other.map_or("нет поля".to_string(), |v| format!("{v}"));
+            Err(errors::bad(
+                &format!("config/getall: {ticker}: {field} не boolean ({got})"),
+                &n.to_string(),
+            ))
+        }
+    }
 }
 
 /// Стоимость вывода: комиссия вывода withdrawFee из config/getall (в монетах) — docs-v3.

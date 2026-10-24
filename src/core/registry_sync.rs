@@ -2,10 +2,11 @@
 //! Что делает: держит справочник сетей биржи свежим (шаг 1 ТЗ): coin_networks через шлюз с частотой
 //! venue.status_poll_ms (у BingX нет WebSocket для статусов ввода и вывода, решение 24), сразу —
 //! по «толчку» (аномальный спред, ошибка вывода или депозита). Замечает, что у монеты открылся
-//! или закрылся ввод или вывод, и уведомляет (событие venue.transfer_status).
+//! или закрылся ввод или вывод, и уведомляет (событие venue.transfer_status): по монете или одной сводкой
+//! при массовой смене (transfer_status.rs).
 //! Кто вызывает: core/engine.rs — одна задача на каждую биржу.
 //! От чего зависит: engine.rs, wait.rs, gateway (coin_networks), settings.
-//! Настройки: venue.enabled, venue.status_poll_ms (по площадке).
+//! Настройки: venue.enabled, venue.status_poll_ms, venue.status_bulk_min (по площадке).
 
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, rd, wr};
+use super::transfer_status;
 use super::wait::{Pacer, Unit};
 
 /// Включена ли площадка (venue.enabled). Не задано — выключена: значений по умолчанию нет.
@@ -68,8 +70,9 @@ pub async fn run(core: Core, venue: VenueId) {
     }
 }
 
-/// Сравнивает статусы ввода и вывода по сети BSC (у записи есть адрес контракта) со старыми
-/// и уведомляет об изменениях. Первая загрузка — без уведомлений. Ошибок нет.
+/// Сравнивает статусы ввода и вывода по сети BSC (у записи есть адрес контракта) со старыми и уведомляет:
+/// по монете или одной сводкой при массовой смене (venue.status_bulk_min, transfer_status.rs).
+/// Первая загрузка — без уведомлений. Ошибок нет.
 async fn report_changes(core: &Core, venue: &VenueId, new: &[CoinNetworkInfo]) {
     let old: HashMap<(String, String), (bool, bool)> = {
         let nets = rd(&core.inner.networks);
@@ -83,24 +86,32 @@ async fn report_changes(core: &Core, venue: &VenueId, new: &[CoinNetworkInfo]) {
             })
             .collect()
     };
-    for i in new.iter().filter(|i| i.asset.bsc_contract.is_some()) {
-        let key = (i.asset.ticker.clone(), i.network.clone());
-        let Some(&(dep, wd)) = old.get(&key) else {
-            continue;
-        };
-        if dep == i.deposit_enabled && wd == i.withdraw_enabled {
-            continue;
-        }
-        let word = |b: bool| if b { "открыт" } else { "закрыт" };
-        let text = format!(
-            "{} {} ({}): ввод {}, вывод {}",
-            venue.0,
-            i.asset.ticker,
-            i.network,
-            word(i.deposit_enabled),
-            word(i.withdraw_enabled)
-        );
-        let deps = &core.inner.deps;
+    let changes = transfer_status::diff(&old, new);
+    if changes.is_empty() {
+        return;
+    }
+    let deps = &core.inner.deps;
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    let min = deps.settings.integer("venue.status_bulk_min", at).ok();
+    if transfer_status::bulk(changes.len(), min) {
+        let (text, data) = transfer_status::summary(&venue.0, &changes);
+        deps.log(
+            Level::Warn,
+            "core.transfer_status",
+            Some(&venue.0),
+            &text,
+            Some(data),
+        )
+        .await;
+        deps.notify("venue.transfer_status", Some(&venue.0), &text)
+            .await;
+        return;
+    }
+    for c in &changes {
+        let text = transfer_status::one(&venue.0, c);
         deps.log(
             Level::Info,
             "core.transfer_status",

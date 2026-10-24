@@ -49,8 +49,13 @@ pub struct Swapped {
 }
 
 /// Обмен. Принимает: состояние, направление (true — токен0 → токен1), точный вход или выход, сумму.
-/// Возвращает: Swapped; None — там, где контракт откатился бы (переполнение, нулевая ликвидность на шаге и т.п.).
-pub fn swap(s: &ClState, zero_for_one: bool, exact_in: bool, amount: U256) -> Option<Swapped> {
+/// Возвращает: Swapped; Err(причина) — там, где контракт откатился бы или карта тиков не сходится (конкретный шаг).
+pub fn swap(
+    s: &ClState,
+    zero_for_one: bool,
+    exact_in: bool,
+    amount: U256,
+) -> Result<Swapped, &'static str> {
     let limit = if zero_for_one {
         min_sqrt_ratio() + U256::from(1u8)
     } else {
@@ -58,57 +63,70 @@ pub fn swap(s: &ClState, zero_for_one: bool, exact_in: bool, amount: U256) -> Op
     };
     let (mut sqrt, mut tick, mut liq) = (s.sqrt_price, s.tick, s.liquidity);
     let (mut remaining, mut total_in, mut total_out) = (amount, U256::ZERO, U256::ZERO);
+    const OVERFLOW: &str = "переполнение суммы";
     while !remaining.is_zero() && sqrt != limit {
         let Some((mut next, initialized)) = next_tick(s.ticks, tick, zero_for_one) else {
-            return Some(Swapped {
+            return Ok(Swapped {
                 amount_in: total_in,
                 amount_out: total_out,
                 complete: false,
             });
         };
         next = next.clamp(MIN_TICK, MAX_TICK);
-        let sqrt_next = sqrt_ratio_at_tick(next)?;
+        let sqrt_next = sqrt_ratio_at_tick(next).ok_or("цена тика вне диапазона TickMath")?;
         let target = if (zero_for_one && sqrt_next < limit) || (!zero_for_one && sqrt_next > limit)
         {
             limit
         } else {
             sqrt_next
         };
-        let signed = I256::try_from(remaining).ok()?;
-        let (new_sqrt, a_in, a_out, fee) = match (s.version, exact_in) {
-            (Version::V3, true) => step_v3(sqrt, target, liq, signed, s.fee)?,
-            (Version::V3, false) => step_v3(sqrt, target, liq, -signed, s.fee)?,
-            (Version::V4, true) => step_v4(sqrt, target, liq, -signed, s.fee)?,
-            (Version::V4, false) => step_v4(sqrt, target, liq, signed, s.fee)?,
+        let signed = I256::try_from(remaining).map_err(|_| OVERFLOW)?;
+        let step = match (s.version, exact_in) {
+            (Version::V3, true) => step_v3(sqrt, target, liq, signed, s.fee),
+            (Version::V3, false) => step_v3(sqrt, target, liq, -signed, s.fee),
+            (Version::V4, true) => step_v4(sqrt, target, liq, -signed, s.fee),
+            (Version::V4, false) => step_v4(sqrt, target, liq, signed, s.fee),
         };
+        let (new_sqrt, a_in, a_out, fee) =
+            step.ok_or("шаг обмена не считается (переполнение или нулевая ликвидность на шаге)")?;
         let start = sqrt;
         sqrt = new_sqrt;
-        let spent = a_in.checked_add(fee)?;
-        remaining = remaining.checked_sub(if exact_in { spent } else { a_out })?;
-        total_in = total_in.checked_add(spent)?;
-        total_out = total_out.checked_add(a_out)?;
+        let spent = a_in.checked_add(fee).ok_or(OVERFLOW)?;
+        remaining = remaining
+            .checked_sub(if exact_in { spent } else { a_out })
+            .ok_or(OVERFLOW)?;
+        total_in = total_in.checked_add(spent).ok_or(OVERFLOW)?;
+        total_out = total_out.checked_add(a_out).ok_or(OVERFLOW)?;
         if sqrt == sqrt_next {
             if initialized {
                 // Инициализированный тик без данных в карте — карта не сходится с битмапом: расчёт невозможен.
-                let net = s.ticks.ticks.get(&next)?.net;
+                let net = s
+                    .ticks
+                    .ticks
+                    .get(&next)
+                    .ok_or("тик отмечен в битмапе, но его нет в карте тиков")?
+                    .net;
                 let net = if zero_for_one {
-                    net.checked_neg()?
+                    net.checked_neg().ok_or(OVERFLOW)?
                 } else {
                     net
                 };
                 liq = if net >= 0 {
-                    liq.checked_add(net.unsigned_abs())?
+                    liq.checked_add(net.unsigned_abs())
                 } else {
-                    liq.checked_sub(net.unsigned_abs())?
-                };
+                    liq.checked_sub(net.unsigned_abs())
+                }
+                .ok_or(
+                    "ликвидность после пересечения тика вне диапазона (карта тиков не сходится)",
+                )?;
             }
             tick = if zero_for_one { next - 1 } else { next };
         } else if sqrt != start && !remaining.is_zero() && sqrt != limit {
             // Шаг не дошёл до тика, но сумма не исчерпана — так в контракте не бывает; не гадаем.
-            return None;
+            return Err("шаг остановился до тика при остатке суммы");
         }
     }
-    Some(Swapped {
+    Ok(Swapped {
         amount_in: total_in,
         amount_out: total_out,
         complete: remaining.is_zero(),

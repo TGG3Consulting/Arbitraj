@@ -22,8 +22,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::rate;
+use super::super::pools::registry::Registry;
+use super::super::quote::{rate, select};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
 use super::probe;
@@ -109,24 +109,34 @@ async fn run(
             "check.probe_usdt не переводится в единицы USDT",
         )
     })?;
-    let mut pools: Vec<Entry> = reg
-        .by_ticker(ticker)
-        .into_iter()
-        .filter(|e| e.valid)
-        .collect();
+    // Сначала фильтр ликвидности: пулы мельче dex.min_pool_liquidity_usd не пробуются (quote/select.rs).
+    let (mut pools, mut env) = (Vec::new(), Vec::new());
+    for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
+        match select::deep_enough(ctx, reg, tokens, &e, usdt_dec) {
+            Ok(None) => pools.push(e),
+            Ok(Some(_)) => {}
+            Err(why) if why.starts_with("Не задана настройка") => {
+                return Err(ctx.err(ErrorCode::NotConfigured, why));
+            }
+            Err(why) => env.push(format!("{} {}: {why}", e.family.title, e.ticker)),
+        }
+    }
     // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
     pools.sort_by_key(|e| match e.pool.kind {
         PoolKind::V2 => 0,
         PoolKind::V3 => 1,
         _ => 2,
     });
+    if pools.is_empty() && !env.is_empty() {
+        return Ok(Outcome::Wait(env.join("; ")));
+    }
     if pools.is_empty() {
         return Ok(Outcome::Wait(
-            "нет достоверного пула для пробного обмена".into(),
+            "нет достоверного пула ликвиднее dex.min_pool_liquidity_usd для пробного обмена".into(),
         ));
     }
     let mut taxes = None;
-    let (mut failed, mut config, mut env) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut failed, mut config) = (Vec::new(), Vec::new());
     for e in &pools {
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
@@ -177,8 +187,9 @@ async fn run(
         Some(None) => {
             Outcome::Failed("пробный обмен: расчётный выход 0 — налог не определить".into())
         }
-        None if !failed.is_empty() => Outcome::Failed(failed.join("; ")),
+        // Вердикт — только если каждый пул дал вердикт: помеха на любом пуле (узел, 429) — проверка не выполнена.
         None if !config.is_empty() => Outcome::Config(config.join("; ")),
-        None => Outcome::Wait(env.join("; ")),
+        None if !env.is_empty() => Outcome::Wait(env.join("; ")),
+        None => Outcome::Failed(failed.join("; ")),
     })
 }

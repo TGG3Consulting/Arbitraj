@@ -25,9 +25,11 @@ use crate::storage::journal::Level;
 
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
+use super::super::quote::emptiness;
 use super::discover::Found;
 use super::events::{self, Applied};
 use super::listen::{End, Pools};
+use super::registry::Entry;
 use super::{load, load_bin};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру.
@@ -104,8 +106,23 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
         return Err(End::Broken(e.message));
     }
     match p.reg.get(&r) {
-        Some(e) => emit(p, e.pool),
+        Some(e) => {
+            note_refill(p, &e);
+            emit(p, e.pool)
+        }
         None => Ok(()),
+    }
+}
+
+/// Пул, исключённый сверкой как пустой, снова не пуст — сигнал сверить его сразу (pools/progress.rs). Ошибок нет.
+pub fn note_refill(p: &Pools, e: &Entry) {
+    if emptiness::empty(e) {
+        return;
+    }
+    if let Some(Err(why)) = p.checks.pool(&e.pool.reference).quoter
+        && why == emptiness::EMPTY
+    {
+        p.signals.refilled(e.pool.reference.clone());
     }
 }
 

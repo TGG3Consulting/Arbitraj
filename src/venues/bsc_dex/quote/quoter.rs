@@ -7,7 +7,7 @@
 //! влияния крючка (check/hooks_probe.rs) — так сверяются и математика пула, и то, что крючок ведёт себя как при пробе.
 //! Кто вызывает: check/quoter_cycle.rs (цикл dex.quoter_check_s), check/hooks_probe.rs, exec/precheck.rs (перед сделкой),
 //! quote/mixed_quoter.rs (less_hook, diff_pct).
-//! От чего зависит: node/rpc.rs, quote/quoter_calls.rs, pools/registry.rs, quote/pool_quote.rs.
+//! От чего зависит: node/rpc.rs, quote/quoter_calls.rs, pools/registry.rs, quote/pool_quote.rs, quote/emptiness.rs.
 //! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула], dex.quoter_max_diff_pct [bsc_dex].
 //!
 //! Источники: шапка node/abi_dex.rs; «When to use quoter: сверка локального расчёта, финальная проверка» —
@@ -22,7 +22,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
 use super::super::pools::registry::Entry;
-use super::{pool_quote, quoter_calls};
+use super::{emptiness, pool_quote, quoter_calls, quoter_revert};
 
 /// Выход по квотеру на точный вход (eth_call). Ошибки: NotConfigured (адрес), узел (откат квотера — его текст),
 /// BadResponse (ответ не по ABI).
@@ -43,6 +43,9 @@ pub async fn out(ctx: &Ctx, e: &Entry, token_in: Address, amount: U256) -> Gatew
 }
 
 /// Сверка пула: локальная математика (за вычетом влияния крючка) против квотера на одной сумме.
+/// Пустой пул и неполный локальный расчёт (сумма не прошла в прочитанной карте тиков) — квотер не вызывается: это не
+/// расхождение, а честная причина исключения (quote/emptiness.rs). Откат квотера «не хватает ликвидности»
+/// (quote/quoter_revert.rs) — та же причина, а не сбой.
 /// Принимает: запись, токен входа, сумму, влияние крючка на эту сторону, % (0 — крючка B/C нет).
 /// Возвращает: Ok(()) — в пределах допуска; Err(причина) — нет. Ошибки: настройки, узел.
 pub async fn compare(
@@ -52,9 +55,23 @@ pub async fn compare(
     amount: U256,
     hook_pct: Decimal,
 ) -> GatewayResult<Result<(), String>> {
-    let local = pool_quote::swap(ctx, e, token_in, true, amount)?.amount_out;
-    let remote = out(ctx, e, token_in, amount).await?;
-    within(ctx, local, remote, hook_pct)
+    if emptiness::empty(e) {
+        return Ok(Err(emptiness::EMPTY.into()));
+    }
+    let local = pool_quote::swap(ctx, e, token_in, true, amount)?;
+    if !local.complete {
+        return Ok(Err(emptiness::short(emptiness::SHORT_LOCAL)));
+    }
+    let remote = match out(ctx, e, token_in, amount).await {
+        Ok(r) => r,
+        Err(err) => {
+            return match quoter_revert::liquidity_short(&err) {
+                Some(why) => Ok(Err(emptiness::short(why))),
+                None => Err(err),
+            };
+        }
+    };
+    within(ctx, local.amount_out, remote, hook_pct)
 }
 
 /// Локальный выход (за вычетом крючка) против выхода квотера: в пределах dex.quoter_max_diff_pct?

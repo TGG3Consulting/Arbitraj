@@ -18,13 +18,13 @@ use std::sync::{Arc, Mutex};
 
 use alloy_primitives::{Address, U64};
 use serde_json::json;
-use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::core::types::{Asset, PoolRef};
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
+use super::super::check::recheck::Recheck;
 use super::super::check::{cycle, quoter_cycle, tax_cycle};
 use super::super::node::{rpc, subs};
 use super::created::{self, Watch};
@@ -38,7 +38,7 @@ use super::{events, history_v4, market_mids, mids};
 pub async fn subscribe(
     p: &Pools,
     scanned: &Scanned,
-    wake: &Arc<Notify>,
+    wake: &Recheck,
     assets: Vec<Asset>,
 ) -> GatewayResult<Vec<JoinHandle<()>>> {
     p.tokens.set(&assets);
@@ -99,10 +99,13 @@ pub async fn subscribe(
         p.clone(),
         all.clone(),
         usdt,
-        wake.clone(),
+        wake.taxes.clone(),
     )));
-    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.clone())));
-    tasks.push(tokio::spawn(quoter_cycle::run(p.clone(), wake.clone())));
+    tasks.push(tokio::spawn(cycle::hooks(p.clone(), wake.hooks.clone())));
+    tasks.push(tokio::spawn(quoter_cycle::run(
+        p.clone(),
+        wake.quoter.clone(),
+    )));
     let extra = Arc::new(Mutex::new(Vec::new()));
     let known = Arc::new(Mutex::new(known));
     // Новые пулы: с USDT (монеты и промежуточные) и с каждой промежуточной монетой.

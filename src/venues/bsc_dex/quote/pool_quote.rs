@@ -33,6 +33,15 @@ pub fn swap(
     amount: U256,
 ) -> GatewayResult<Swapped> {
     let zero_for_one = token_in == e.pool.token0;
+    let why = |w: &str| {
+        ctx.err(
+            ErrorCode::NoRoute,
+            format!(
+                "{} {}: расчёт обмена невозможен: {w}",
+                e.family.title, e.ticker
+            ),
+        )
+    };
     let none = || {
         ctx.err(
             ErrorCode::NoRoute,
@@ -84,7 +93,7 @@ pub fn swap(
                 ticks,
                 version: Version::V3,
             };
-            swap_cl::swap(&s, zero_for_one, exact_in, amount).ok_or_else(none)
+            swap_cl::swap(&s, zero_for_one, exact_in, amount).map_err(why)
         }
         (
             PoolState::Cl {
@@ -106,7 +115,7 @@ pub fn swap(
                 ticks,
                 version: Version::V4,
             };
-            swap_cl::swap(&s, zero_for_one, exact_in, amount).ok_or_else(none)
+            swap_cl::swap(&s, zero_for_one, exact_in, amount).map_err(why)
         }
         (
             PoolState::Bin {

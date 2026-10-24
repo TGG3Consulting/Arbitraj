@@ -80,16 +80,7 @@ pub async fn trade(
     check_price(ctx, &req, path.coins, path.usdt)?;
     let steps = chain::steps(ctx, &req, &path, req.qty, decs)?;
     for h in &path.hops {
-        let (pool_in, pool_out) = (h.swapped.amount_in, h.swapped.amount_out);
-        precheck::quoter_now(
-            ctx,
-            &h.entry,
-            h.token_in,
-            pool_in,
-            pool_out,
-            h.usable.hook_pct,
-        )
-        .await?;
+        precheck::quoter_now(ctx, &h.entry, h.token_in, &h.swapped, h.usable.hook_pct).await?;
     }
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;

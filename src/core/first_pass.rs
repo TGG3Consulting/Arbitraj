@@ -6,10 +6,11 @@
 //! Дальше — посмонетные coin.blacklisted / coin.unblacklisted только на изменения.
 //! Кто вызывает: core/rebuild_report.rs (copy причин), core/tick.rs (CheckPass).
 //! От чего зависит: engine.rs, deps.rs (notify).
-//! Настройки: notify.event.* (coin.check_done).
+//! Настройки: notify.event.* (coin.check_done), notify.summary_reasons (сколько причин в сводке).
 
 use std::collections::HashMap;
 
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
@@ -55,24 +56,42 @@ pub async fn done(
             return;
         }
         f.done = true;
-        let mut v: Vec<(String, usize)> = std::mem::take(&mut f.reasons).into_iter().collect();
-        v.sort_by_key(|x| std::cmp::Reverse(x.1));
-        let top: Vec<String> = v
-            .iter()
-            .take(5)
-            .map(|(r, n)| format!("{n} — {r}"))
-            .collect();
-        (top, f.blocked)
+        (std::mem::take(&mut f.reasons), f.blocked)
     };
+    let top = top_reasons(core, top);
     let mut text = format!(
         "Первая проверка налогов ({venue}): прошли {ok}, не прошли {failed}, ждут достоверного пула {waiting}, \
          не задана настройка {config}; в чёрном списке {blocked}"
     );
     if !top.is_empty() {
-        text.push_str(&format!(". Причины: {}", top.join("; ")));
+        text.push_str(&format!(". Причины: {top}"));
     }
     let deps = &core.inner.deps;
     deps.log(Level::Info, "core.check_done", None, &text, None)
         .await;
     deps.notify("coin.check_done", Some(venue), &text).await;
+}
+
+/// Самые частые причины для сводки: notify.summary_reasons штук, по убыванию числа монет. Не задана настройка —
+/// пометка вместо причин. Пусто — причин нет. Ошибок нет.
+fn top_reasons(core: &Core, reasons: HashMap<String, usize>) -> String {
+    if reasons.is_empty() {
+        return String::new();
+    }
+    let n = match core
+        .inner
+        .deps
+        .settings
+        .integer("notify.summary_reasons", At::default())
+    {
+        Ok(n) => n as usize,
+        Err(e) => return format!("не показаны — {}", e.message),
+    };
+    let mut v: Vec<(String, usize)> = reasons.into_iter().collect();
+    v.sort_by_key(|x| std::cmp::Reverse(x.1));
+    v.iter()
+        .take(n)
+        .map(|(r, n)| format!("{n} — {r}"))
+        .collect::<Vec<_>>()
+        .join("; ")
 }

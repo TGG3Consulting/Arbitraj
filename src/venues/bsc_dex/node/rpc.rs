@@ -3,7 +3,8 @@
 //! eth_getBalance, eth_estimateGas, eth_getTransactionReceipt и т.п. Плюс общий POST JSON для каналов отправки.
 //! Кто вызывает: node/*, wallet/*, pools/*, check/*, exec/*, send/* (через post).
 //! От чего зависит: ctx.rs (адрес bsc.node_http_url с ключом, http.timeout_ms), node/jsonrpc.rs, errors.rs.
-//! Настройки: bsc.node_http_url, http.timeout_ms; секрет bsc.node_http_key (если в адресе есть {key}).
+//! Темп и повтор на «превышен лимит» — node/pace.rs (bsc.node_http_rps, правило шлюза RateLimited).
+//! Настройки: bsc.node_http_url, http.timeout_ms, bsc.node_http_rps; секрет bsc.node_http_key (если в адресе есть {key}).
 //!
 //! Транспорт — HTTP POST с телом JSON-RPC 2.0 (https://www.jsonrpc.org/specification, разделы 4–6);
 //! пачка запросов — массив объектов, ответы сопоставляются по id (раздел 6 «Batch»).
@@ -21,7 +22,7 @@ use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::errors::{self, Op};
-use super::jsonrpc;
+use super::{jsonrpc, pace};
 
 /// Источник ошибок для текста причины.
 pub const SOURCE: &str = "узел BSC (HTTP)";
@@ -41,7 +42,7 @@ pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -
 pub async fn call_raw(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<Box<RawValue>> {
     let url = ctx.node_url("bsc.node_http_url", SECRET_HTTP_KEY)?;
     let body = jsonrpc::request(1, method, &params);
-    let text = post(ctx, &url, &body, &[], SOURCE).await?;
+    let text = pace::run(ctx, 1, || post(ctx, &url, &body, &[], SOURCE)).await?;
     jsonrpc::parse_text(&text, SOURCE, Op::Read)
 }
 
@@ -63,7 +64,7 @@ pub async fn batch(
             .map(|(i, (m, p))| jsonrpc::request(i as u64, m, p))
             .collect(),
     );
-    let text = post(ctx, &url, &body, &[], SOURCE).await?;
+    let text = pace::run(ctx, calls.len(), || post(ctx, &url, &body, &[], SOURCE)).await?;
     let list: Vec<Response> = serde_json::from_str(&text).map_err(|e| {
         // Узел может ответить одним объектом-ошибкой на всю пачку.
         match jsonrpc::parse_text(&text, SOURCE, Op::Read) {

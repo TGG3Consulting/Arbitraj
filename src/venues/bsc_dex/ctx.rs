@@ -37,6 +37,8 @@ pub struct Ctx {
     pub http: reqwest::Client,
     pub journal: Journal,
     pub raw: RawLog,
+    /// Общая очередь запросов к узлу HTTP (node/pace.rs).
+    pub pace: super::node::pace::Pace,
 }
 
 impl Ctx {

@@ -172,10 +172,11 @@ impl Venue for BscDex {
         wallet::transfer::cost(&self.p.env(), &self.p.checks, asset, network, amount).await
     }
 
-    /// Кнопка «Перепроверить»: будит циклы налогов, крючков и сверки с квотером (итоги — события). Ошибок нет.
-    async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {
-        // Циклы проверяют все монеты подписки; кнопка будит их сразу (итоги — событиями CoinCheck / PoolCheck).
-        self.p.wake.notify_waiters();
+    /// Кнопка «Перепроверить»: налоги, крючки и сверка с квотером — только этих монет (check/recheck.rs; итоги —
+    /// события CoinCheck / PoolCheck). Ошибок нет.
+    async fn recheck_coins(&self, assets: Vec<Asset>) -> GatewayResult<()> {
+        let tickers: Vec<String> = assets.into_iter().map(|a| a.ticker).collect();
+        self.p.wake.coins(&tickers);
         Ok(())
     }
 

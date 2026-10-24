@@ -6,9 +6,7 @@
 //! wallet/inflows.rs.
 //! Настройки: нет.
 
-use std::sync::Arc;
-
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 
 use crate::gateway::events::MarketEvent;
 
@@ -42,7 +40,8 @@ pub struct Parts {
     pub checks: Checks,
     pub gas: GasPrice,
     pub stats: Stats,
-    pub wake: Arc<Notify>,
+    /// Очереди «Перепроверить» и «новые пулы» для циклов проверок (check/recheck.rs).
+    pub wake: super::check::recheck::Recheck,
 }
 
 impl Parts {
@@ -60,7 +59,7 @@ impl Parts {
             checks: Checks::default(),
             gas: GasPrice::default(),
             stats: Stats::default(),
-            wake: Arc::new(Notify::new()),
+            wake: Default::default(),
         }
     }
 

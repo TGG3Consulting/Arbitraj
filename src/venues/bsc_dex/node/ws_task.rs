@@ -26,7 +26,6 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::gateway::errors::GatewayResult;
-use crate::storage::journal::Level;
 
 use super::super::ctx::{Ctx, ID};
 use super::super::errors::Op;
@@ -127,14 +126,9 @@ pub async fn run(
             }
         }
     };
-    *end.lock().unwrap_or_else(|p| p.into_inner()) = Some(reason.clone());
-    ctx.log(
-        Level::Warn,
-        "venue.ws",
-        format!("{SOURCE} {name}: соединение закончилось: {reason}"),
-        None,
-    )
-    .await;
+    // Причину пишет в журнал владелец соединения (по end_reason): слушатели пулов — одной записью на площадку
+    // (pools/link.rs), а не по записи на каждое соединение.
+    *end.lock().unwrap_or_else(|p| p.into_inner()) = Some(reason);
     // pending и subs удаляются здесь: ожидающие получают «закрыто», потоки подписок закрываются.
 }
 

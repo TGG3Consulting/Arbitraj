@@ -90,7 +90,7 @@
 | `GET /api/candidates` | — | `[{direction, verdict, at}]`, новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
 | `GET /api/deals` | — | `[Deal]` (core/deal.rs): шаг, где монеты, вложено, выручка, затраты, план, факт покупки/переводов/продаж, хронология, итог |
 | `GET /api/transits` | — | `[{asset, from, to, count, avg_s}]` |
-| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine, day, day_result_usd}` |
+| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine, day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}}}` — итог дня с предварительной частью (решение 53) |
 | `POST /api/control` | `{mode}` | `Risk`; пишется в журнал, уведомления `system.started` / `system.stopped` |
 | `POST /api/control/venue/{id}/resume` | — | `Risk` — пауза площадки снята |
 | `POST /api/control/quarantine/{ticker}/release` | — | `Risk` — карантин монеты снят, `route.quarantine_out` |

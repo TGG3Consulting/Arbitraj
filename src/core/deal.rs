@@ -58,6 +58,10 @@ pub struct Deal {
     pub relays: u64,
     /// Итог сделки, USDT (когда закрыта).
     pub result_usd: Option<Decimal>,
+    /// Предварительный убыток, учтённый в итоге дня (решение 53, daily.rs): Halted или «Беру на себя»;
+    /// None — не учитывался или уже заменён фактом.
+    #[serde(default)]
+    pub provisional_usd: Option<Decimal>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
     pub started_at: DateTime<Utc>,
@@ -84,6 +88,7 @@ impl Deal {
             sells: vec![],
             relays: 0,
             result_usd: None,
+            provisional_usd: None,
             timeline: vec![],
             started_at: now,
             updated_at: now,

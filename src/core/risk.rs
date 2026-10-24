@@ -10,14 +10,13 @@
 
 use std::collections::HashMap;
 
-use chrono::{NaiveDate, Utc};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{Asset, Direction, VenueId};
 use crate::settings::catalog;
 use crate::settings::read::At;
 
+pub use super::day_view::DayView;
 use super::engine::{Core, lk};
 use super::view::CoreEvent;
 
@@ -41,8 +40,8 @@ pub struct Risk {
     pub errors_in_row: HashMap<VenueId, u64>,
     /// Монеты в карантине — все их направления на паузе до ручного снятия.
     pub quarantine: HashMap<String, String>,
-    pub day: NaiveDate,
-    pub day_result_usd: Decimal,
+    /// Итог дня (решение 53, daily.rs): дата, всего, из них фактический и предварительный.
+    pub day: DayView,
 }
 
 impl Default for Risk {
@@ -53,8 +52,7 @@ impl Default for Risk {
             venue_paused: HashMap::new(),
             errors_in_row: HashMap::new(),
             quarantine: HashMap::new(),
-            day: Utc::now().date_naive(),
-            day_result_usd: Decimal::ZERO,
+            day: DayView::default(),
         }
     }
 }
@@ -167,9 +165,9 @@ pub fn quarantine(core: &Core, asset: &Asset, reason: Option<String>) {
     publish(core);
 }
 
-/// Итог закрытой сделки — в убыток или прибыль дня. Убыток дня достиг risk.max_daily_loss_usd —
-/// система останавливается до ручного решения. Возвращает: Some(текст) — остановлена.
-pub fn add_result(core: &Core, result: Decimal) -> Option<String> {
+/// Проверка дневного лимита убытка по итогу дня (risk.max_daily_loss_usd). Достигнут — система
+/// останавливается до ручного решения. Возвращает: Some(текст) — остановлена сейчас.
+pub fn check_daily(core: &Core) -> Option<String> {
     let max = core
         .inner
         .deps
@@ -177,17 +175,12 @@ pub fn add_result(core: &Core, result: Decimal) -> Option<String> {
         .decimal("risk.max_daily_loss_usd", At::default());
     let stop = {
         let mut r = lk(&core.inner.risk);
-        let today = Utc::now().date_naive();
-        if r.day != today {
-            r.day = today;
-            r.day_result_usd = Decimal::ZERO;
-        }
-        r.day_result_usd += result;
+        let loss = -r.day.result_usd;
         match max {
-            Ok(m) if -r.day_result_usd >= m => {
+            Ok(m) if loss >= m && r.mode != Mode::Stopped => {
                 let t = format!(
-                    "убыток за день {} USDT достиг лимита {m}",
-                    -r.day_result_usd
+                    "убыток за день {loss} USDT (из них предварительный {}) достиг лимита {m}",
+                    -r.day.provisional_usd
                 );
                 r.mode = Mode::Stopped;
                 r.reason = Some(t.clone());

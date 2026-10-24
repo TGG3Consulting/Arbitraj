@@ -62,6 +62,7 @@ pub static BASE: &[SettingDef] = &[
     d("Уведомления", "notify.event.condition", K::Text, L::None, "зависит от события", E, "Условие отправки, где оно имеет смысл (формат — этап 5)"),
     d("Уведомления", "notify.updates_timeout_s", K::Integer, L::Positive, "секунды", G, "Кнопки Telegram: таймаут длинного опроса getUpdates (параметр timeout в официальной документации Bot API)"),
     d("Уведомления", "notify.updates_retry_ms", K::Integer, L::Positive, "мс", G, "Кнопки Telegram: пауза перед повтором getUpdates после ошибки сети или Telegram (retry_after из ответа Telegram сильнее)"),
+    d("Уведомления", "alert.min_usdt", K::Decimal, L::NonNegative, "USDT", V, "Алерт «мало USDT» (решение 54): свободных USDT на площадке не больше — сообщение risk.low_usdt, один раз на пересечение порога"),
     d("Безопасность", "security.kdf_memory_kib", K::Integer, L::Positive, "КиБ", G, "Argon2id: память на вывод ключа из пароля (OWASP: не меньше 19456)"),
     d("Безопасность", "security.kdf_iterations", K::Integer, L::Positive, "проходов", G, "Argon2id: число проходов (OWASP: не меньше 2 при 19456 КиБ)"),
     d("Безопасность", "security.kdf_parallelism", K::Integer, L::Positive, "потоков", G, "Argon2id: число потоков"),

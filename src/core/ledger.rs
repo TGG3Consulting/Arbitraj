@@ -1,7 +1,7 @@
 //! Файл: core/ledger.rs
 //! Что делает: учёт сделок (шаг 6 ТЗ): хранение каждой сделки (план и факт по шагам) в SQLite и в памяти,
 //! публикация в интерфейс (экран «Сделки»), деньги в открытых сделках (limits.rs), закрытие сделки —
-//! итог, план против факта, итог дня (risk.rs), статистика монеты (gas_stats.rs), уведомление deal.closed,
+//! итог, план против факта, итог дня (daily.rs: факт или предварительный убыток, решение 53), статистика монеты (gas_stats.rs), уведомление deal.closed,
 //! пауза направления (signal.route_cooldown_s). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске).
@@ -66,6 +66,13 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         deal.result_usd = Some(result);
     }
     deal.note(format!("{step:?}: {why}"));
+    // Итог дня (решение 53): закрыта — факт (снимает предварительный); остановлена или «Беру на себя» —
+    // предварительный убыток по худшему варианту.
+    let stop = match step {
+        Step::Closed => super::daily::settle(core, deal, result).await,
+        Step::Halted | Step::TakenOver => super::daily::provisional(core, deal).await,
+        _ => None,
+    };
     save(core, deal).await;
     let deps = &core.inner.deps;
     let d = &deal.direction;
@@ -93,9 +100,11 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
-        if let Some(stop) = super::risk::add_result(core, r) {
-            deps.notify("risk.daily_loss", None, &stop).await;
-        }
+    }
+    if let Some(stop) = stop {
+        deps.log(Level::Warn, "core.daily_loss", None, &stop, None)
+            .await;
+        deps.notify("risk.daily_loss", None, &stop).await;
     }
     let cooldown = deps
         .settings
@@ -136,6 +145,10 @@ pub async fn load(core: &Core) {
             );
             d.step = Step::Halted;
             d.note(text.clone());
+            // Решение 53: остановленная сделка — предварительный убыток в итог дня.
+            if let Some(stop) = super::daily::provisional(core, &mut d).await {
+                deps.notify("risk.daily_loss", None, &stop).await;
+            }
             deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)
                 .await;
             deps.notify("risk.stop", Some(&d.at.0), &text).await;

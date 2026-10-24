@@ -5,8 +5,10 @@
     ссылка на пул, комиссия, крючок и его группа A/B/C, проверка влияния крючка, причина исключения пула
     (admission), номер блока состояния (block), пара пула (pair: USDT или промежуточная монета) и через какую
     промежуточную монету допущена монета без пула с USDT (via, решение 52).
+    Причины отсева по площадкам и по пулам — каждая с новой строки; проблема оценки (problem).
+    Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
-  Кто вызывает: pages/Coins.svelte.
+  Кто вызывает: components/CoinModal.svelte.
   От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte.
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
@@ -47,8 +49,16 @@
     {#if coin.block}<span class="err">в чёрном списке: {blockReason(coin.block.reason)} (с {showTime(coin.block.since)})</span>
     {:else}<span class="ok">торгуется</span>{/if}
   </header>
+  {#if coin.problem}<p class="err">Не оценить: {coin.problem}</p>{/if}
   {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p (p.venue)}
-    <p class="muted">Не участвует на {p.venue}: {p.excluded.map(exclusionText).join('; ')}</p>
+    <div class="muted">Не участвует на {p.venue}:</div>
+    <ul class="why">
+      {#each p.excluded as e, i (i)}
+        {#if e?.PoolsExcluded}
+          <li>все пулы исключены:<ul>{#each e.PoolsExcluded as r, j (j)}<li>{r}</li>{/each}</ul></li>
+        {:else}<li>{exclusionText(e)}</li>{/if}
+      {/each}
+    </ul>
   {/each}
   <p>
     Налоги: <span class={taxes.cls}>{taxes.text}</span>
@@ -86,3 +96,8 @@
     {#if result}<span class={result.ok ? 'ok' : 'err'} role="status">{result.details}</span>{/if}
   </div>
 </article>
+
+<style>
+  .why { margin: 2px 0 8px; padding-left: 20px; }
+  .why li { margin: 2px 0; }
+</style>

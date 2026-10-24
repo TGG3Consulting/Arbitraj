@@ -17,7 +17,7 @@
 use alloy_primitives::Address;
 use chrono::Utc;
 
-use crate::core::types::{Asset, CheckState, CoinCheck, PoolKind, PoolRef, TokenTaxes};
+use crate::core::types::{Asset, CheckState, CoinCheck, PoolRef, TokenTaxes};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
@@ -119,24 +119,7 @@ async fn run(
             "check.probe_usdt не переводится в единицы USDT",
         )
     })?;
-    // Сначала фильтр ликвидности: пулы мельче dex.min_pool_liquidity_usd не пробуются (quote/select.rs).
-    let (mut pools, mut env) = (Vec::new(), Vec::new());
-    for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
-        match select::deep_enough(ctx, reg, tokens, &e, usdt_dec) {
-            Ok(None) => pools.push(e),
-            Ok(Some(_)) => {}
-            Err(why) if why.starts_with("Не задана настройка") => {
-                return Err(ctx.err(ErrorCode::NotConfigured, why));
-            }
-            Err(why) => env.push(format!("{} {}: {why}", e.family.title, e.ticker)),
-        }
-    }
-    // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
-    pools.sort_by_key(|e| match e.pool.kind {
-        PoolKind::V2 => 0,
-        PoolKind::V3 => 1,
-        _ => 2,
-    });
+    let (pools, mut env) = super::taxes_util::probe_pools(ctx, reg, tokens, ticker, usdt_dec)?;
     if pools.is_empty() && !env.is_empty() {
         return Ok(Outcome::Wait(env.join("; ")));
     }

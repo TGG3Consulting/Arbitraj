@@ -44,6 +44,7 @@ pub mod rebuild;
 pub mod rebuild_report;
 pub mod reconcile;
 pub mod registry;
+pub mod registry_build;
 pub mod registry_sync;
 pub mod relay;
 pub mod risk;

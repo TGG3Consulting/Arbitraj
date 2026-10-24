@@ -11,6 +11,7 @@ pub mod abi_v2v3;
 pub mod abi_v4;
 pub mod admit;
 pub mod attach;
+pub mod batches;
 pub mod bins;
 pub mod created;
 pub mod created_log;

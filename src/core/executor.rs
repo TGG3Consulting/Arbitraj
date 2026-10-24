@@ -14,11 +14,12 @@
 use chrono::Utc;
 
 use crate::core::types::{Direction, Side};
+use crate::gateway::urgency::{self, Urgency};
 use crate::storage::journal::Level;
 
 use super::costs::Calc;
 use super::deal::{Deal, Step};
-use super::engine::{Core, lk};
+use super::engine::{Core, lk, rd};
 
 /// Идентификатор сделки: время до мс + тикер, только буквы и цифры (так его примут ID ордера и вывода).
 fn deal_id(d: &Direction) -> String {
@@ -31,17 +32,26 @@ fn deal_id(d: &Direction) -> String {
     format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"))
 }
 
-/// Кандидат прошёл расчёт — запускает сделку, если по направлению сейчас нет другой. Ошибок нет.
+/// Кандидат прошёл расчёт — запускает сделку, если направление по-прежнему торгуемо (есть в directions() монеты:
+/// за время расчёта монета могла уйти в чёрный список или в «налоги не проверены») и по нему сейчас нет другой.
+/// Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61). Ошибок нет.
 pub async fn accepted(core: &Core, calc: Calc) {
     let d = calc.direction.clone();
+    let tradable = rd(&core.inner.coins)
+        .iter()
+        .find(|c| c.asset == d.asset)
+        .is_some_and(|c| c.directions().contains(&d));
+    if !tradable {
+        return;
+    }
     if !lk(&core.inner.active).insert(d.clone()) {
         return;
     }
     let core = core.clone();
-    tokio::spawn(async move {
+    tokio::spawn(urgency::scope(Urgency::Trade, async move {
         run(&core, d.clone()).await;
         lk(&core.inner.active).remove(&d);
-    });
+    }));
 }
 
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты.

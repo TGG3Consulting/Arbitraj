@@ -1,6 +1,7 @@
 //! Файл: venues/bingx/rest.rs
 //! Что делает: запросы REST к BingX — публичные и подписанные (HMAC SHA256), разбор ответа
 //! {code, msg, data}, перевод ошибок в коды шлюза, переход на резервный адрес только при сбое сети.
+//! Ответы REST пишутся в сырой журнал (raw.*, как сообщения WebSocket), кроме путей listenKey.
 //! Кто вызывает: файлы адаптера BingX (symbols, wallet, transfers, account, trade, order_state, fees).
 //! От чего зависит: ctx.rs, errors.rs, hmac, sha2, reqwest.
 //! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms;
@@ -141,7 +142,7 @@ async fn send(
             }
         }
         match req.send().await {
-            Ok(resp) => return parse(resp, op).await,
+            Ok(resp) => return parse(ctx, path, resp, op).await,
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
             // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
             Err(e) if e.is_connect() || (op == Op::Other && e.is_timeout()) => {
@@ -159,10 +160,15 @@ async fn send(
     }))
 }
 
-/// Разбор ответа: {code, msg, data} или голый массив (истории ввода и вывода).
-async fn parse(resp: reqwest::Response, op: Op) -> GatewayResult<Value> {
+/// Разбор ответа: {code, msg, data} или голый массив (истории ввода и вывода). Текст ответа — в сырой журнал
+/// (data/raw/bingx, соединение «rest <путь>»), кроме путей listenKey (ключ потока аккаунта — секрет сессии).
+async fn parse(ctx: &Ctx, path: &str, resp: reqwest::Response, op: Op) -> GatewayResult<Value> {
     let status = resp.status().as_u16();
     let text = resp.text().await.map_err(errors::from_network)?;
+    if !path.contains("listenKey") {
+        ctx.raw
+            .write(super::ctx::ID, &format!("rest {path}"), &text);
+    }
     let Ok(v) = serde_json::from_str::<Value>(&text) else {
         return Err(errors::from_http(status, &text));
     };

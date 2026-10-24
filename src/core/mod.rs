@@ -56,6 +56,7 @@ pub mod subscribe;
 pub mod tick;
 pub mod touched;
 pub mod trade_ops;
+pub mod transfer_status;
 pub mod transfer_watch;
 pub mod transfers;
 pub mod transit;

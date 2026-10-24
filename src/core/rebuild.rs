@@ -6,7 +6,7 @@
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
 //! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, settings.
-//! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
+//! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network, venue.symbols_stale_s (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
 
@@ -31,13 +31,14 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 7] = [
+const REGISTRY: [&str; 8] = [
     "coin.",
     "tax.",
     "hooks.",
     "venue.enabled",
     "venue.quote_asset",
     "venue.bsc_network",
+    "venue.symbols_stale_s",
     "dex.intermediate_",
 ];
 
@@ -116,6 +117,19 @@ fn build(
 ) -> Vec<CoinEntry> {
     let s = &core.inner.deps.settings;
     let market = rd(&core.inner.market);
+    // Свежесть справочника пар каждой биржи (pairs_fresh.rs): устаревший — по её парам не торгуем.
+    let now = Utc::now();
+    let pairs_fresh: HashMap<VenueId, Result<(), String>> = venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Cex)
+        .map(|(v, _)| {
+            let limit = super::pairs_fresh::limit(s, v);
+            (
+                v.clone(),
+                super::pairs_fresh::check(&market, v, &limit, now),
+            )
+        })
+        .collect();
     let pool_ok =
         |p: &Pool| blacklist::pool_admission(p, market.pool_check(&p.venue, &p.reference), s);
     let nets = rd(&core.inner.networks);
@@ -130,6 +144,7 @@ fn build(
         usdt,
         quote,
         bsc_network,
+        pairs_fresh: &pairs_fresh,
         market: &market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,

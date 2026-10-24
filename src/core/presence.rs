@@ -18,14 +18,17 @@ use super::registry::{Exclusion, Inputs, Presence};
 /// Монета на бирже: сеть BSC и адрес контракта (адаптер ставит адрес только для сети BSC; сеть узнаётся по
 /// названию bsc — venue.bsc_network), статусы ввода и вывода, состояние спот-пары (MarketEvent::SpotPairs) и стакан.
 /// Причины по порядку: нет сети BSC → сеть есть, адреса нет → пары нет (или справочник пар ещё не пришёл) →
-/// пара не торгуется по статусу → через API нельзя ни купить, ни продать → стакан не пришёл.
+/// справочнику пар верить нельзя (fresh: устарел, порог не задан — pairs_fresh.rs) → пара не торгуется по статусу →
+/// через API нельзя ни купить, ни продать → стакан не пришёл.
 /// Покупка и продажа через API по отдельности закрывают свою сторону (can_buy / can_sell), а не всю монету.
-/// Принимает: биржу, тикер, сети монеты, название сети BSC (None — не задано), рынок. Ошибок нет.
+/// Принимает: биржу, тикер, сети монеты, название сети BSC (None — не задано), свежесть справочника пар, рынок.
+/// Ошибок нет.
 pub fn cex(
     venue: &VenueId,
     ticker: &str,
     nets: &[&CoinNetworkInfo],
     bsc: Option<&str>,
+    fresh: &Result<(), String>,
     market: &MarketState,
 ) -> Presence {
     let with_contract = nets.iter().find(|i| i.asset.bsc_contract.is_some());
@@ -35,6 +38,9 @@ pub fn cex(
         (None, _, _) => vec![Exclusion::NoBscNetwork],
         (Some(_), None, _) => vec![Exclusion::NoContract],
         (_, _, None) => vec![Exclusion::NoSpotBook],
+        _ if fresh.is_err() => vec![Exclusion::PairsStale(
+            fresh.clone().err().unwrap_or_default(),
+        )],
         (_, _, Some(p)) if !p.online => vec![Exclusion::PairNotTrading(p.status)],
         (_, _, Some(p)) if !p.api_buy && !p.api_sell => vec![Exclusion::NoApiTrading],
         _ if market.book(venue, ticker).is_none() => vec![Exclusion::NoSpotBook],

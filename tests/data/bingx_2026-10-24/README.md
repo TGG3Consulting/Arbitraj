@@ -14,4 +14,7 @@
 `apiStateBuy` и `apiStateSell` — boolean у всех пар и у всех совпадают (пар «можно только купить» или «только
 продать» нет). Пар status 1 с закрытым API — 36, из них с сетью BEP20 — девять из списка выше.
 
-Кто читает: tests/bingx_pairs_filter.rs.
+Время ответов (поле `t` сырого журнала, мс): symbols — 1792868538956, config/getall — 1792871487210; тесты берут их
+как время получения справочника пар и «сейчас».
+
+Кто читает: tests/bingx_pairs_filter.rs, tests/bingx_pairs_precheck.rs.

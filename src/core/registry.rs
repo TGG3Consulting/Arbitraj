@@ -31,6 +31,9 @@ pub enum Exclusion {
     NoSpotBook,
     /// Пара есть в справочнике биржи, но не торгуется по статусу — код статуса так, как его отдала биржа.
     PairNotTrading(i64),
+    /// Справочнику пар биржи верить нельзя — текст причины: устарел (обновление не проходит дольше
+    /// venue.symbols_stale_s), порог не задан или справочник не получен (pairs_fresh.rs). По паре не торгуем.
+    PairsStale(String),
     /// Пара торгуется, но через API нельзя ни купить, ни продать (у BingX — apiStateBuy и apiStateSell = false):
     /// ордер через API не пройдёт.
     NoApiTrading,
@@ -135,6 +138,9 @@ pub struct Inputs<'a> {
     /// Название сети BSC у каждой биржи (venue.bsc_network): отличает «нет сети BSC» от «сеть BSC есть,
     /// адреса контракта нет» (presence.rs). Нет биржи в списке — различить нельзя, причина «нет сети BSC».
     pub bsc_network: &'a HashMap<VenueId, String>,
+    /// Свежесть справочника пар каждой биржи (pairs_fresh::check): Err — текст причины. Нет биржи — не проверено,
+    /// по её парам не торгуем.
+    pub pairs_fresh: &'a HashMap<VenueId, Result<(), String>>,
     pub market: &'a MarketState,
     /// Допуск пула (blacklist::pool_admission с настройками).
     pub pool_ok: &'a dyn Fn(&Pool) -> Result<(), String>,
@@ -183,7 +189,13 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
         }
         for (ticker, nets) in by_ticker {
             let bsc = inp.bsc_network.get(venue).map(String::as_str);
-            let p = super::presence::cex(venue, ticker, &nets, bsc, inp.market);
+            let fresh = inp.pairs_fresh.get(venue).cloned().unwrap_or_else(|| {
+                Err(format!(
+                    "{}: свежесть справочника пар не проверена",
+                    venue.0
+                ))
+            });
+            let p = super::presence::cex(venue, ticker, &nets, bsc, &fresh, inp.market);
             let asset = Asset {
                 ticker: ticker.to_string(),
                 bsc_contract: p.info.as_ref().and_then(|i| i.asset.bsc_contract),

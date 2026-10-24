@@ -76,6 +76,7 @@ const EXCLUSION = {
  */
 export function exclusionText(e) {
   if (typeof e === 'string') return EXCLUSION[e] ?? e;
+  if (e?.PairsStale !== undefined) return `справочнику пар не верим: ${e.PairsStale}`;
   if (e?.PairNotTrading !== undefined) return `пара не торгуется (status ${e.PairNotTrading})`;
   if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
   if (e?.IntermediateNotConfigured) return `промежуточные монеты (решение 52) не заданы: ${e.IntermediateNotConfigured}`;

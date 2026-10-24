@@ -64,8 +64,11 @@ pub async fn subscribe(
     note(ctx, &snap).await;
     // Ядру — состояние пар и монеты, которыми можно торговать через API (pairs.rs): по ним ядро ставит причины отсева
     // и подписывает DEX (core/subscribe.rs). Шлётся при каждой подписке, в том числе пустой (площадка выключена — пар нет).
+    let loaded_at = symbols
+        .loaded_at()
+        .ok_or_else(|| bad(ctx, "справочник пар BingX не получен".to_string()))?;
     let _ = out
-        .send(snap.event(VenueId(super::ctx::ID.to_string())))
+        .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
     let ok = snap.books.clone();
     let chunks: Vec<Vec<(Asset, String)>> =

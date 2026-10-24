@@ -67,7 +67,9 @@
   API»); одна false — закрыта только своя сторона (ядро: `can_buy` / `can_sell`). Ордер всё равно проверяется (trade.rs).
 - Живой ответ 2026-10-24 (tests/data/bingx_2026-10-24): 9 монет с BEP20 — status 1, но API закрыт (TAG, TA, B, USD1,
   SKYAI, RWA, NIULAI, TUT, XPIN); флаги у всех пар совпадают.
-- Справочник перечитывается раз в `venue.symbols_refresh_s` (pairs_watch.rs) и перед ордером.
+- Справочник перечитывается раз в `venue.symbols_refresh_s` (pairs_watch.rs) и перед ордером. После каждой попытки ядру уходит
+  `SpotPairs` с `loaded_at` — временем последнего успешного получения; старше `venue.symbols_stale_s` — ядро не торгует по парам.
+- Нет `apiStateBuy`/`apiStateSell` или не boolean — BadResponse на весь справочник (прежний остаётся и стареет).
 
 ## Защита денег
 

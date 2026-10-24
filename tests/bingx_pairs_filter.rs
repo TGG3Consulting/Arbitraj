@@ -6,7 +6,8 @@
 //! - пара не status 1 — причина PairNotTrading с кодом как есть (SEA — 10, SOLV — 25);
 //! - сеть BEP20 без адреса контракта (BNB — "", ZBC и RAMP — поля нет) — NoContract, а не NoBscNetwork;
 //! - монета без BEP20 (PONS) — NoBscNetwork; CAKE со стаканом из записи 2026-10-23 — на бирже есть, обе стороны открыты;
-//! - снимок пар сравнивается с прежним (pairs_watch.rs): изменение видно строкой «было → стало».
+//! - снимок пар сравнивается с прежним (pairs_watch.rs): изменение видно строкой «было → стало»;
+//! - справочник пар старше порога (pairs_fresh.rs) — причина PairsStale вместо торговли по старым флагам.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bingx (symbols, wallet, pairs, depth), arb::core (registry, market_state). Моков нет.
@@ -14,9 +15,11 @@
 use std::collections::HashMap;
 
 use alloy_primitives::Address;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use arb::core::market_state::MarketState;
+use arb::core::pairs_fresh;
 use arb::core::registry::{self, CoinEntry, Exclusion, Inputs, Presence};
 use arb::core::types::{Asset, CoinNetworkInfo, Pool, VenueId};
 use arb::gateway::contract::VenueKind;
@@ -39,10 +42,20 @@ fn read(name: &str) -> Value {
     serde_json::from_str(&raw).unwrap()
 }
 
-/// Справочник пар из записанного ответа.
+/// Время ответа symbols в сыром журнале (мс).
+const SYMBOLS_AT_MS: i64 = 1792868538956;
+/// Время ответа config/getall в сыром журнале (мс) — «сейчас» при сборке справочника.
+const GETALL_AT_MS: i64 = 1792871487210;
+
+fn ms(t: i64) -> DateTime<Utc> {
+    DateTime::from_timestamp_millis(t).unwrap()
+}
+
+/// Справочник пар из записанного ответа (время получения — из сырого журнала).
 fn syms() -> symbols::Symbols {
     let s = symbols::Symbols::default();
-    s.load(symbols::parse_list(&read("symbols.json")["data"], "USDT").unwrap());
+    let map = symbols::parse_list(&read("symbols.json")["data"], "USDT").unwrap();
+    s.load(map, ms(SYMBOLS_AT_MS));
     s
 }
 
@@ -88,7 +101,10 @@ fn cake_book(n: &[CoinNetworkInfo]) -> MarketEvent {
 }
 
 /// Справочник ядра (как core/rebuild.rs) — только биржа: причины отсева у биржи от DEX не зависят.
-fn coins(market: &MarketState, n: Vec<CoinNetworkInfo>) -> Vec<CoinEntry> {
+/// limit — порог свежести справочника пар (venue.symbols_stale_s), «сейчас» — время ответа config/getall.
+fn coins(market: &MarketState, n: Vec<CoinNetworkInfo>, limit: u64) -> Vec<CoinEntry> {
+    let fresh = pairs_fresh::check(market, &bingx(), &Ok(limit), ms(GETALL_AT_MS));
+    let pairs_fresh = HashMap::from([(bingx(), fresh)]);
     let kinds = vec![(bingx(), VenueKind::Cex)];
     let networks = HashMap::from([(bingx(), n)]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
@@ -101,6 +117,7 @@ fn coins(market: &MarketState, n: Vec<CoinNetworkInfo>) -> Vec<CoinEntry> {
         usdt: Some(Address::ZERO),
         quote: &quote,
         bsc_network: &bsc,
+        pairs_fresh: &pairs_fresh,
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
@@ -137,9 +154,19 @@ fn api_closed_pairs_are_not_tradable() {
 fn registry_reasons_from_live_responses() {
     let n = nets();
     let mut m = MarketState::default();
-    m.apply(Snapshot::build(&syms(), &assets(&n)).event(bingx()));
+    m.apply(Snapshot::build(&syms(), &assets(&n)).event(bingx(), ms(SYMBOLS_AT_MS)));
     m.apply(cake_book(&n));
-    let c = coins(&m, n);
+    // Справочник пар получен за 2948 с до config/getall: порог 3600 с — верим, 2900 с — устарел.
+    let stale = coins(&m, n.clone(), 2900);
+    assert!(matches!(
+        &at(&stale, "CAKE").excluded[..],
+        [Exclusion::PairsStale(_)]
+    ));
+    assert!(matches!(
+        &at(&stale, "TAG").excluded[..],
+        [Exclusion::PairsStale(_)]
+    ));
+    let c = coins(&m, n, 3600);
     for t in API_CLOSED {
         assert_eq!(at(&c, t).excluded, vec![Exclusion::NoApiTrading], "{t}");
     }
@@ -172,7 +199,10 @@ fn snapshot_change_is_visible() {
         .as_array_mut()
         .unwrap()
         .retain(|s| s["symbol"] != "TAG-USDT");
-    syms.load(symbols::parse_list(&v["data"], "USDT").unwrap());
+    syms.load(
+        symbols::parse_list(&v["data"], "USDT").unwrap(),
+        ms(SYMBOLS_AT_MS),
+    );
     let after = Snapshot::build(&syms, &a);
     assert_ne!(after.books, before.books);
     assert_eq!(

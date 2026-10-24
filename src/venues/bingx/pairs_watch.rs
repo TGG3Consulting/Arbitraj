@@ -3,10 +3,13 @@
 //! перечитывает «Spot trading symbols» и сравнивает снимок пар монет подписки (pairs.rs) с прежним.
 //! Изменился набор стаканов (пара включилась или выключилась по статусу) — пересподписка тем же списком монет
 //! (subs.rs → market.rs; она же шлёт ядру SpotPairs). Изменились только флаги API — ядру новый SpotPairs без
-//! пересподписки стаканов. Каждое изменение — запись в журнал «ТИКЕР: было → стало».
+//! пересподписки стаканов. Каждое изменение — запись в журнал «ТИКЕР: было → стало». После каждой попытки (и при сбое)
+//! ядру уходит SpotPairs со временем последнего успешного получения: обновление не проходит дольше
+//! venue.symbols_stale_s — ядро отсеивает пары этой биржи (core/pairs_fresh.rs) и не торгует по старым флагам.
 //! Кто вызывает: subs.rs (запускает при каждой подписке из ядра, останавливает при следующей).
 //! От чего зависит: symbols.rs, pairs.rs, subs.rs, ctx.rs, storage/journal.
-//! Настройки: venue.symbols_refresh_s (период; читается каждый круг — новое значение действует со следующего).
+//! Настройки: venue.symbols_refresh_s (период; читается каждый круг — новое значение действует со следующего);
+//! порог устаревания venue.symbols_stale_s читает ядро.
 //!
 //! Официальная документация: «Spot trading symbols» GET /openApi/spot/v1/common/symbols
 //! https://bingx-api.github.io/docs-v3/#/en/Spot/Market%20Data/Spot%20trading%20symbols (лимит 1 запрос/с с IP —
@@ -51,14 +54,17 @@ pub async fn run(
         tokio::time::sleep(Duration::from_secs(period)).await;
         if let Err(e) = p.symbols.refresh(&p.ctx).await {
             let m = format!(
-                "Справочник пар BingX не обновлён: {} — действует прежний",
+                "Справочник пар BingX не обновлён: {} — действует прежний; дольше venue.symbols_stale_s — ядро не торгует по нему",
                 e.message
             );
             log(&p.ctx, Level::Warn, m, None).await;
+            // Прежний снимок с прежним временем получения: ядро видит возраст справочника (core/pairs_fresh.rs).
+            send(&p, &out, &last).await;
             continue;
         }
         let now = Snapshot::build(&p.symbols, &assets);
         if now == last {
+            send(&p, &out, &now).await;
             continue;
         }
         let changes = now.changes(&last);
@@ -82,12 +88,21 @@ pub async fn run(
                         e.message
                     );
                     log(&p.ctx, Level::Warn, m, None).await;
+                    send(&p, &out, &now).await;
                 }
             }
         } else {
-            let _ = out.send(now.event(p.ctx.venue())).await;
+            send(&p, &out, &now).await;
             last = now;
         }
+    }
+}
+
+/// Шлёт ядру SpotPairs по снимку со временем последнего успешного получения справочника. Ошибок нет
+/// (справочник ни разу не получен — не шлёт: подписки без него не бывает, market.rs).
+async fn send(p: &Parts, out: &mpsc::Sender<MarketEvent>, snap: &Snapshot) {
+    if let Some(at) = p.symbols.loaded_at() {
+        let _ = out.send(snap.event(p.ctx.venue(), at)).await;
     }
 }
 

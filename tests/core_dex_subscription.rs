@@ -82,6 +82,8 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
     let networks = HashMap::from([(bingx(), nets)]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
     let bsc_network = HashMap::from([(bingx(), "BEP20".to_string())]);
+    // Свежесть справочника пар (pairs_fresh.rs) на подписку DEX не влияет — не проверяется.
+    let pairs_fresh = HashMap::new();
     let intermediate = HashMap::new();
     let pool_ok = |_: &Pool| Ok(());
     registry::build(&Inputs {
@@ -90,6 +92,7 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         usdt: Some(addr(&fx["usdt"])),
         quote: &quote,
         bsc_network: &bsc_network,
+        pairs_fresh: &pairs_fresh,
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
@@ -112,7 +115,9 @@ fn spot_pairs(fx: &Value) -> MarketEvent {
     let raw = std::fs::read_to_string("tests/data/bingx/symbols_spot_2026-10-23.json").unwrap();
     let v: Value = serde_json::from_str(&raw).unwrap();
     let syms = symbols::Symbols::default();
-    syms.load(symbols::parse_list(&v["data"], "USDT").unwrap());
+    // Время получения — время стакана той же записи 2026-10-23 (tests/data/bingx/README.md); подписке DEX оно не важно.
+    let at = chrono::DateTime::from_timestamp_millis(1792770730466).unwrap();
+    syms.load(symbols::parse_list(&v["data"], "USDT").unwrap(), at);
     let assets: Vec<Asset> = fx["pools"]
         .as_array()
         .unwrap()
@@ -122,7 +127,7 @@ fn spot_pairs(fx: &Value) -> MarketEvent {
             bsc_contract: Some(addr(&p["token"])),
         })
         .collect();
-    Snapshot::build(&syms, &assets).event(bingx())
+    Snapshot::build(&syms, &assets).event(bingx(), at)
 }
 
 #[test]
@@ -168,6 +173,7 @@ fn coin_without_bingx_pair_is_not_in_dex_subscription() {
         venue: bingx(),
         tickers: vec![],
         pairs: vec![],
+        loaded_at: Utc::now(),
     });
     assert!(dex_list(&fx, &m, &kinds).is_empty());
 }

@@ -13,6 +13,7 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::core::types::{
@@ -39,6 +40,8 @@ pub struct MarketState {
     spot: HashMap<VenueId, HashSet<String>>,
     /// Биржа → тикер → состояние пары (статус, покупка и продажа через API) из того же SpotPairs.
     pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
+    /// Биржа → когда её справочник пар последний раз получен (SpotPairs.loaded_at; свежесть — pairs_fresh.rs).
+    pairs_at: HashMap<VenueId, DateTime<Utc>>,
 }
 
 impl MarketState {
@@ -89,7 +92,9 @@ impl MarketState {
                 venue,
                 tickers,
                 pairs,
+                loaded_at,
             } => {
+                self.pairs_at.insert(venue.clone(), loaded_at);
                 let by_ticker = pairs.into_iter().map(|p| (p.ticker.clone(), p)).collect();
                 self.pairs.insert(venue.clone(), by_ticker);
                 self.spot.insert(venue, tickers.into_iter().collect());
@@ -131,6 +136,11 @@ impl MarketState {
     /// SpotPairs или пары у монеты в справочнике биржи нет. Ошибок нет.
     pub fn pair(&self, venue: &VenueId, ticker: &str) -> Option<&SpotPairState> {
         self.pairs.get(venue).and_then(|m| m.get(ticker))
+    }
+
+    /// Когда справочник пар биржи последний раз получен от неё. None — SpotPairs ещё не было. Ошибок нет.
+    pub fn pairs_loaded_at(&self, venue: &VenueId) -> Option<DateTime<Utc>> {
+        self.pairs_at.get(venue).copied()
     }
 
     /// Стакан монеты на площадке. None — стакана нет (не пришёл или объявлен недостоверным).

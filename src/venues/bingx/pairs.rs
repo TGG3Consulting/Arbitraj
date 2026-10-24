@@ -10,6 +10,8 @@
 //! https://bingx-api.github.io/docs-v3/#/en/Spot/Market%20Data/Spot%20trading%20symbols —
 //! status (торгуется только 1), apiStateBuy, apiStateSell.
 
+use chrono::{DateTime, Utc};
+
 use crate::core::types::{Asset, VenueId};
 use crate::gateway::events::{MarketEvent, SpotPairState};
 
@@ -59,12 +61,14 @@ impl Snapshot {
         s
     }
 
-    /// Событие ядру. Принимает: площадку. Возвращает: MarketEvent::SpotPairs.
-    pub fn event(&self, venue: VenueId) -> MarketEvent {
+    /// Событие ядру. Принимает: площадку, когда справочник пар последний раз успешно получен (Symbols::loaded_at).
+    /// Возвращает: MarketEvent::SpotPairs.
+    pub fn event(&self, venue: VenueId, loaded_at: DateTime<Utc>) -> MarketEvent {
         MarketEvent::SpotPairs {
             venue,
             tickers: self.tickers.clone(),
             pairs: self.pairs.clone(),
+            loaded_at,
         }
     }
 

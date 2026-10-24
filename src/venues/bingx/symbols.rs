@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
+
 use rust_decimal::Decimal;
 use serde_json::Value;
 
@@ -56,6 +58,8 @@ impl SymbolRules {
 pub struct Symbols {
     map: Arc<RwLock<HashMap<String, SymbolRules>>>,
     loaded: Arc<RwLock<Option<Instant>>>,
+    /// Время успешного получения по часам (для ядра: свежесть справочника, core/pairs_fresh.rs).
+    loaded_at: Arc<RwLock<Option<DateTime<Utc>>>>,
 }
 
 impl Symbols {
@@ -66,15 +70,21 @@ impl Symbols {
         let data = rest::public(ctx, "/openApi/spot/v1/common/symbols", vec![]).await?;
         let map = parse_list(&data, &quote)?;
         let n = map.len();
-        self.load(map);
+        self.load(map, Utc::now());
         Ok(n)
     }
 
-    /// Ставит разобранный справочник (parse_list) и время загрузки. Вызывает refresh; тесты — с записанным ответом.
-    /// Ошибок нет.
-    pub fn load(&self, map: HashMap<String, SymbolRules>) {
+    /// Ставит разобранный справочник (parse_list) и время получения at (ядру — SpotPairs.loaded_at). Вызывает
+    /// refresh (at — сейчас); тесты — с записанным ответом и его временем. Ошибок нет.
+    pub fn load(&self, map: HashMap<String, SymbolRules>, at: DateTime<Utc>) {
         *self.map.write().unwrap_or_else(|p| p.into_inner()) = map;
         *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+        *self.loaded_at.write().unwrap_or_else(|p| p.into_inner()) = Some(at);
+    }
+
+    /// Когда справочник последний раз успешно получен. None — ещё не получен. Ошибок нет.
+    pub fn loaded_at(&self) -> Option<DateTime<Utc>> {
+        *self.loaded_at.read().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Перечитывает справочник, если он не загружен или старше venue.symbols_refresh_s.
@@ -151,14 +161,25 @@ fn parse(s: &Value, symbol: String) -> GatewayResult<SymbolRules> {
         min_notional: num::dec_opt(s, "minNotional")?,
         max_notional: num::dec_opt(s, "maxNotional")?,
         status: num::int(s, "status")?,
-        // Поля apiStateBuy/apiStateSell описаны в документации; если BingX их не прислал — считаем «нельзя».
-        api_buy: s
-            .get("apiStateBuy")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        api_sell: s
-            .get("apiStateSell")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        api_buy: api_flag(s, "apiStateBuy")?,
+        api_sell: api_flag(s, "apiStateSell")?,
     })
+}
+
+/// Флаг apiStateBuy / apiStateSell — boolean (docs-v3 «Spot trading symbols»; в живом ответе 2026-10-24 — boolean у
+/// всех 2293 пар). Нет поля или другой тип — ответ не понят: BadResponse с куском ответа, справочник целиком не
+/// обновляется (действует прежний, ядро видит его возраст — core/pairs_fresh.rs). «Нельзя» по догадке не ставится.
+/// Принимает: пару из ответа, имя поля. Ошибки: BadResponse.
+pub fn api_flag(s: &Value, field: &str) -> GatewayResult<bool> {
+    match s.get(field) {
+        Some(Value::Bool(b)) => Ok(*b),
+        other => {
+            let got = other.map_or("нет поля".to_string(), |v| format!("{v}"));
+            let sym = s.get("symbol").map_or(String::new(), |v| v.to_string());
+            Err(super::errors::bad(
+                &format!("common/symbols: {sym}: {field} не boolean ({got})"),
+                &s.to_string(),
+            ))
+        }
+    }
 }

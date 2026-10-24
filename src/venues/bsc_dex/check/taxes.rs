@@ -27,9 +27,9 @@ use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::{rate, select};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
-use super::{native_probe, probe};
 use super::state::Checks;
 use super::taxes_util::{Sources, percent, quote_source};
+use super::{native_probe, probe};
 
 /// Имя источника проверки в CoinCheck.source (решение 30: источники подключаемые).
 pub const SOURCE: &str = "eth_simulateV1";

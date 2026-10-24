@@ -200,6 +200,7 @@ async fn via_skips_infinity_on_native_side() {
         taxes: CheckState::Known(zero.clone()),
         source: "тест".into(),
         checked_at: None,
+        wait: None,
     });
     // P1 «CAKE — USDT» (V2), P2 «BNB — CAKE» (Infinity CL) — у P2 сторона BNB.
     let mut p1 = entry("pancakeswap_v2", None);

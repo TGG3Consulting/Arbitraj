@@ -145,6 +145,7 @@ pub async fn entry(
         synced_block: block,
         synced_log: None,
         valid: true,
+        asleep: false,
     })
 }
 

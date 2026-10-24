@@ -5,7 +5,7 @@
 //! Настройки: нет.
 //!
 //! Сигнатуры — из официальных исходников (research/flow/bsc_dex.md, разделы 2–4):
-//! - V2 фабрика getPair, PairCreated; пара getReserves, Sync —
+//! - V2 фабрика getPair, PairCreated; пара getReserves, Sync, Mint (добавление ликвидности) —
 //!   https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Factory.sol ,
 //!   https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Pair.sol
 //!   (у PancakeSwap те же: https://github.com/pancakeswap/pancake-swap-core/blob/3b214306770e86bc3a64e67c2b5bdb566b4e94a7/contracts/interfaces/IPancakeFactory.sol#L4-L11 ).
@@ -31,6 +31,7 @@ alloy::sol! {
     interface IV2Pair {
         function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
         event Sync(uint112 reserve0, uint112 reserve1);
+        event Mint(address indexed sender, uint256 amount0, uint256 amount1);
     }
 
     interface IV3Factory {

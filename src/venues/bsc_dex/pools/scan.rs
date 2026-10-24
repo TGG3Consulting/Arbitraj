@@ -119,6 +119,11 @@ impl Progress {
         })
     }
 
+    /// Пора ли писать ход чтения (прошло dex.scan_progress_s с прошлой записи и чтение не кончилось). Ошибок нет.
+    pub fn due(&self, done: u64) -> bool {
+        done < self.to && self.last.elapsed() >= self.every
+    }
+
     /// Прочитано до блока done, событий всего events: запись хода, если пора. Ошибок нет.
     pub async fn step(&mut self, ctx: &Ctx, done: u64, events: usize) {
         if done < self.to && self.last.elapsed() >= self.every {

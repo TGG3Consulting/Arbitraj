@@ -4,7 +4,7 @@
 //! расхождение), отправить
 //! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs.
-//! Кто вызывает: pools/listen.rs.
+//! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
 //! Настройки: через вызываемые.
 //!

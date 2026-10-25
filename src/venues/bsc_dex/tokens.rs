@@ -80,6 +80,15 @@ impl Tokens {
         self.all().into_iter().find(|t| t.ticker == ticker)
     }
 
+    /// decimals токена, если уже известны (из кэша, без узла). Ошибок нет.
+    pub fn decimals_known(&self, token: Address) -> Option<u8> {
+        self.decimals
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&token)
+            .copied()
+    }
+
     /// decimals токена: из кэша или из контракта (decimals()).
     /// Принимает: адрес. Возвращает: число знаков. Ошибки: узел, контракт не ERC-20.
     pub async fn decimals(&self, ctx: &Ctx, token: Address) -> GatewayResult<u8> {

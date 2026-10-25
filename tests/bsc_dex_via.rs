@@ -62,6 +62,10 @@ async fn ctx() -> Ctx {
     for (name, scope, val) in [
         ("venue.quote_asset", v.clone(), json!("USDT")),
         ("dex.min_pool_liquidity_usd", v.clone(), json!(1)),
+        // Решение 73: глубина по направлениям в полосе цены (значения теста, не предложение).
+        ("dex.depth_band_pct", v.clone(), json!(10)),
+        ("dex.depth_hysteresis_pct", v.clone(), json!(0)),
+        ("dex.depth_log_min_s", v.clone(), json!(0)),
         ("exec.dex_slippage_pct", v.clone(), json!(1)),
         (
             "dex.kind",

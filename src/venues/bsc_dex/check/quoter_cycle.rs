@@ -14,7 +14,7 @@
 //! прочитанные сверены (застрявшие из-за незаданной настройки не держат, решение 63); дальше — запись только при смене
 //! состояния пула (прошла ↔ не прошла, сменилась причина; цифры в причине не в счёт — progress::reason_key).
 //! Кто вызывает: pools/market.rs.
-//! От чего зависит: check/quoter_verify.rs (сверка пула), quote/select.rs (deep_enough), check/fresh.rs,
+//! От чего зависит: check/quoter_verify.rs (сверка пула), quote/select.rs (deep_side), check/fresh.rs,
 //! check/state.rs, check/quoter_tally.rs (сводка), pools/listen.rs (Pools), pools/progress.rs.
 //! Настройки: dex.quoter_check_s, dex.quoter_max_diff_pct, dex.min_pool_liquidity_usd, check.probe_usdt [bsc_dex].
 //!
@@ -118,8 +118,10 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
     if !e.valid {
         return false;
     }
+    let buy = select::Need::Side(crate::core::types::Side::Buy);
     let deep = match usdt_decimals(p).await {
-        Ok(dec) => select::deep_enough(&p.ctx, &p.reg, &p.tokens, &e, dec),
+        // Квотер сверяет покупку (USDT → монета, quoter_verify.rs) — пул нужен глубокий по ней (решение 73).
+        Ok(dec) => select::deep_side(&p.ctx, &p.reg, &p.tokens, &e, dec, buy),
         Err(why) => Err(why),
     };
     let res = match deep {

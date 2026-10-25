@@ -26,7 +26,8 @@ use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
 use super::recheck::Queue;
-use super::tax_pass::{self, Pass, Why, has_valid};
+use super::tax_deep::has_deep;
+use super::tax_pass::{self, Pass, Why};
 use super::tax_wait::{self, First};
 use super::taxes;
 
@@ -77,7 +78,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             };
             // Свои пулы дочитались, пока шла прошлая проверка (сигнал мог прийти без ждущего) — сразу.
             let pending = |a: Address| p.loading.pending(&p, a);
-            let now = tax_wait::due(&waiting, false, pending, |t| has_valid(&p, t));
+            let now = tax_wait::due(&waiting, false, pending, |t| has_deep(&p, t));
             let list: Vec<(Address, String)> = if !now.is_empty() {
                 now
             } else {
@@ -88,7 +89,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                         all.iter().filter(|(_, t)| tickers.contains(t)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
-                    _ = p.signals.ready.notified() => tax_wait::due(&waiting, true, pending, |t| has_valid(&p, t)),
+                    _ = p.signals.ready.notified() => tax_wait::due(&waiting, true, pending, |t| has_deep(&p, t)),
                     _ = sleep_opt(retry) => waiting
                         .iter()
                         .filter(|(_, _, w)| *w == Why::Node)

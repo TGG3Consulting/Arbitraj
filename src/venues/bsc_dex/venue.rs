@@ -173,6 +173,12 @@ impl Venue for BscDex {
         Ok(directory::snapshot(&self.p.ctx))
     }
 
+    /// Пулы для экрана «Монеты» (решение 73) — pools/depth_facts.rs. Ошибки: USDT не известен, узел.
+    async fn pool_depths(&self) -> GatewayResult<Vec<crate::core::types::PoolDepth>> {
+        let p = &self.p;
+        pools::depth_facts::all(&p.ctx, &p.registry, &p.tokens, &p.checks).await
+    }
+
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
         Ok(send::channels::ALL.iter().map(|c| c.info()).collect())

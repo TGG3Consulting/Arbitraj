@@ -2,7 +2,7 @@
 //! Что делает: экран «Монеты» — справочник монет с налогами, пулами, крючками и чёрным списком
 //! и кнопка «Перепроверить» (налоги и крючки сейчас, шлюз `recheck_coins`).
 //! Кто вызывает: интерфейс (экран «Монеты»).
-//! От чего зависит: api/state.rs, core (Core::coins_json), gateway/registry.rs, core/types (Asset, VenueId), storage/journal.rs.
+//! От чего зависит: api/state.rs, core (Core::coins_json), gateway/registry.rs (pool_depths — решение 73), core/types (Asset, VenueId), storage/journal.rs.
 //! Настройки: нет; ручной чёрный список — обычный PUT /api/settings (coin.blocked, coin.blocked_note).
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
@@ -22,9 +22,45 @@ use crate::storage::journal::Level;
 
 use super::state::{ApiError, AppState};
 
-/// Список монет из ядра (формат — src/api/README.md, «Экран Монеты»). Ошибок нет.
+/// Список монет из ядра (формат — src/api/README.md, «Экран Монеты»); в каждый пул — `depth`: что о нём знает адаптер
+/// DEX (решение 73: глубина по направлениям в полосе цены, спит ли пул, сверка с квотером, tickSpacing — шлюз
+/// `pool_depths`), или `depth_unavailable` — почему адаптер не ответил. Ошибок нет.
 pub async fn list(State(st): State<AppState>) -> Json<serde_json::Value> {
-    Json(st.core.coins_json())
+    let mut coins = st.core.coins_json();
+    let mut depths = std::collections::HashMap::new();
+    let mut failed = std::collections::HashMap::new();
+    for id in st.registry.ids().await {
+        let Ok(v) = st.registry.get(&id).await else {
+            continue;
+        };
+        match v.pool_depths().await {
+            Ok(list) => {
+                for d in list {
+                    let key = (json_key(&d.venue), json_key(&d.pool));
+                    depths.insert(key, d);
+                }
+            }
+            Err(e) if e.code == crate::gateway::errors::ErrorCode::NotApplicable => {}
+            Err(e) => {
+                failed.insert(json_key(&id), e.message);
+            }
+        }
+    }
+    let pools = coins.as_array_mut().into_iter().flatten();
+    for p in pools.filter_map(|c| c["pools"].as_array_mut()).flatten() {
+        let venue = p["venue"].to_string();
+        let key = (venue.clone(), p["pool"].to_string());
+        p["depth"] = serde_json::to_value(depths.get(&key)).unwrap_or_default();
+        p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
+    }
+    Json(coins)
+}
+
+/// Ключ сопоставления «пул ядра ↔ пул адаптера»: JSON значения (тот же вид, что в ответе ядра). Ошибок нет.
+fn json_key(v: &impl serde::Serialize) -> String {
+    serde_json::to_value(v)
+        .map(|j| j.to_string())
+        .unwrap_or_default()
 }
 
 /// Тело «Перепроверить».

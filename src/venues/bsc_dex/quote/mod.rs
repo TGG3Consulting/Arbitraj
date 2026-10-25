@@ -12,6 +12,7 @@
 
 pub mod approve_gas;
 pub mod costs;
+pub mod depth_band;
 pub mod direct;
 pub mod direct_route;
 pub mod emptiness;

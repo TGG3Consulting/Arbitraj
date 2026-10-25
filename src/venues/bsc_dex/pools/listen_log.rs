@@ -3,7 +3,8 @@
 //! (позиция (блок, logIndex) не позже последней учтённой), применить событие, перечитать бины или весь пул (реорг,
 //! расхождение), отправить
 //! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
-//! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs.
+//! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
+//! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
 //! Настройки: через вызываемые.
@@ -152,6 +153,7 @@ async fn latest(p: &Pools) -> GatewayResult<u64> {
 
 /// Пул — ядру без ожидания: медленное ядро не задерживает чтение событий (свежий пул уже в реестре).
 pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
+    super::depth::touch(p, &pool.reference);
     match p.out.try_send(MarketEvent::Pool(pool)) {
         Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
         Err(TrySendError::Closed(_)) => Err(End::Closed),

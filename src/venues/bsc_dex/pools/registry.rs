@@ -52,6 +52,8 @@ pub struct Entry {
 #[derive(Clone, Default)]
 pub struct Registry {
     inner: Arc<RwLock<HashMap<PoolRef, Entry>>>,
+    /// Глубина пулов по направлениям (решение 73, depth_book.rs).
+    depth: super::depth_book::Book,
 }
 
 impl Entry {
@@ -65,6 +67,11 @@ impl Entry {
 }
 
 impl Registry {
+    /// Глубина пулов по направлениям (решение 73). Ошибок нет.
+    pub fn depth(&self) -> &super::depth_book::Book {
+        &self.depth
+    }
+
     /// Добавляет или заменяет запись. Ошибок нет.
     pub fn put(&self, e: Entry) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());

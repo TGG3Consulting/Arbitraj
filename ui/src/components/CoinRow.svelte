@@ -4,19 +4,22 @@
     и состояние проверки, источник и время проверки, чёрный список с причиной; пулы монеты — площадка, вид,
     ссылка на пул, комиссия, крючок и его группа A/B/C, проверка влияния крючка, причина исключения пула
     (admission), номер блока состояния (block), пара пула (pair: USDT или промежуточная монета) и через какую
-    промежуточную монету допущена монета без пула с USDT (via, решение 52).
+    промежуточную монету допущена монета без пула с USDT (via, решение 52); глубина пула по направлениям, спит ли
+    пул, сверка с квотером и tickSpacing (решение 73 — PoolDepthCell.svelte).
     Причины отсева по площадкам и по пулам — каждая с новой строки; что закрыто у площадки, где монета есть (ввод,
     вывод, покупка или продажа через API — limitsText); проблема оценки (problem).
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
-  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte,
+    components/PoolDepthCell.svelte.
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
 <script>
   import { post } from '../lib/api.js';
   import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';
+  import PoolDepthCell from './PoolDepthCell.svelte';
 
   /** coin — элемент ответа GET /api/coins. */
   let { coin } = $props();
@@ -72,7 +75,7 @@
   </p>
   {#if coin.pools.length}
     <table>
-      <thead><tr><th>Площадка</th><th>Пара</th><th>Вид пула</th><th>Пул</th><th>Комиссия</th><th>Крючок</th><th>Проверка</th><th>Получено</th></tr></thead>
+      <thead><tr><th>Площадка</th><th>Пара</th><th>Вид пула</th><th>Пул</th><th>Комиссия</th><th>Крючок</th><th>Проверка</th><th>Глубина</th><th>Получено</th></tr></thead>
       <tbody>
         {#each coin.pools as p, i (i)}
           {@const chk = p.check ? checkState(p.check.impact, impactText) : null}
@@ -87,6 +90,7 @@
               {#if chk}<span class={chk.cls}>{chk.text}</span>{:else}<span class="muted">не требуется / нет данных</span>{/if}
               {#if p.admission}<div class="err">пул исключён: {p.admission}</div>{/if}
             </td>
+            <td><PoolDepthCell {p} /></td>
             <td>{p.received_at ? showTime(p.received_at) : '—'}{#if p.block != null} <span class="muted">· блок {p.block}</span>{/if}</td>
           </tr>
         {/each}

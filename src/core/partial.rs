@@ -42,7 +42,7 @@ fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
 /// Выбор пути. Принимает: ядро, сделку после частичной покупки. Возвращает: Choice. Ошибок нет.
 pub async fn choose(core: &Core, deal: &Deal) -> Choice {
     let deliver = match super::dirctx::DirCtx::build(core, &deal.direction) {
-        Ok(cx) => super::costs::evaluate(&core.inner.deps, &cx, deal.qty)
+        Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
             .await
             .map(|c| deliver_result(&c, deal))
             .map_err(|e| e.to_string()),

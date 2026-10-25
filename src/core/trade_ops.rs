@@ -6,6 +6,7 @@
 //! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: engine.rs, market_state.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
+//! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset.
 
 use std::time::Duration;
@@ -33,8 +34,9 @@ pub fn kind(core: &Core, v: &VenueId) -> Result<VenueKind, String> {
         .ok_or_else(|| format!("площадки {} нет в реестре", v.0))
 }
 
-/// Худшая допустимая цена ордера. Ошибки: нет стакана или глубины, не задан допуск DEX.
-fn worst_price(
+/// Худшая допустимая цена ордера (у биржи — лимитная цена: ордер замораживает qty × её). Ту же цену берёт расчёт
+/// (costs_quote.rs) для бюджета и пределов ордера (решение 66). Ошибки: нет стакана или глубины, не задан допуск DEX.
+pub fn worst_price(
     core: &Core,
     v: &VenueId,
     a: &Asset,
@@ -70,8 +72,9 @@ fn worst_price(
 }
 
 /// Покупка или продажа. Принимает: ядро, id сделки, площадку, монету, сторону, количество,
-/// маршрут DEX из котировки, среднюю цену котировки. Возвращает: факт (исполнено полностью или частично).
-/// Ошибки: текст причины (не исполнился, отклонён, нет данных) — уже в журнале и уведомлениях.
+/// маршрут DEX из котировки, среднюю цену котировки, бюджет покупки (решение 66: qty × худшая цена не больше его —
+/// иначе ордер не ставится; None — без предела). Возвращает: факт (исполнено полностью или частично).
+/// Ошибки: текст причины (не исполнился, отклонён, нет данных, бюджет) — уже в журнале и уведомлениях.
 #[allow(clippy::too_many_arguments)]
 pub async fn trade(
     core: &Core,
@@ -82,6 +85,7 @@ pub async fn trade(
     qty: Decimal,
     route: Option<DexRoute>,
     avg: Decimal,
+    cap: Option<Decimal>,
 ) -> Result<TradeResult, OpError> {
     let op = if side == Side::Buy {
         "Покупка"
@@ -92,6 +96,17 @@ pub async fn trade(
     loop {
         attempt += 1;
         let worst = worst_price(core, v, a, side, qty, avg)?;
+        // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
+        if let Some(cap) = cap
+            && side == Side::Buy
+            && qty * worst > cap
+        {
+            return Err(OpError::from(format!(
+                "{op} {qty} {}: списание по худшей цене {worst} — {} больше бюджета {cap}, ордер не ставится",
+                a.ticker,
+                qty * worst
+            )));
+        }
         let req = TradeRequest {
             venue: v.clone(),
             asset: a.clone(),

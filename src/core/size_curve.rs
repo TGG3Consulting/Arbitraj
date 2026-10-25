@@ -4,7 +4,8 @@
 //! B), изломы — накопленные объёмы уровней стакана A (asks) и B (bids), настройки size.*.
 //! Кто вызывает: core/profit.rs.
 //! От чего зависит: costs.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
-//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct (общие; значений нет —
+//! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки).
+//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет).
 
 use async_trait::async_trait;
@@ -14,14 +15,13 @@ use crate::core::types::{OrderBook, PriceLevel};
 use crate::settings::read::At;
 
 use super::costs::{self, Calc};
-use super::deps::Deps;
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
 use super::size::{Curve, Fail, Params, Point};
 
 /// Кривая по полному расчёту направления.
 pub struct CoreCurve<'a> {
-    pub deps: &'a Deps,
+    pub core: &'a Core,
     pub cx: &'a DirCtx,
 }
 
@@ -31,10 +31,11 @@ impl Curve for CoreCurve<'_> {
 
     /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
-        let c = costs::evaluate(self.deps, self.cx, qty).await?;
+        let c = costs::evaluate(self.core, self.cx, qty).await?;
         Ok(Point {
             qty,
-            invested: c.invested,
+            // Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
+            invested: c.spend_max,
             arrive: c.arrive,
             profit: c.profit_usd,
             data: c,
@@ -74,6 +75,7 @@ pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Resu
         bisect_steps: int("size.bisect_steps")?,
         grid_points: int("size.grid_points")?,
         refine_steps: int("size.refine_steps")?,
+        max_evals: int("size.max_evals")?,
         tolerance_pct,
     })
 }

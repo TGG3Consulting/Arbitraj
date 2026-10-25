@@ -96,6 +96,7 @@ async fn run(core: &Core, d: Direction) {
         plan.qty,
         plan.buy_quote.route.clone(),
         plan.buy_quote.avg_price,
+        plan.size.as_ref().map(|s| s.budget),
     )
     .await;
     let r = match bought {

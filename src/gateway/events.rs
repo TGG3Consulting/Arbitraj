@@ -88,11 +88,14 @@ pub struct SpotPairState {
     pub api_sell: bool,
     /// Шаг количества монеты (у BingX — stepSize): количество ордера округляется вниз до него (решение 66).
     pub step_size: Decimal,
-    /// Минимальная сумма ордера в котируемой монете (у BingX — minNotional; minQty по документации BingX
-    /// устарел: minQty = minNotional / price). None — биржа не сообщила.
+    /// Минимальная сумма ордера в котируемой монете (у BingX — minNotional). None — биржа не сообщила.
     pub min_notional: Option<Decimal>,
     /// Максимальная сумма ордера (у BingX — maxNotional). None — биржа не сообщила.
     pub max_notional: Option<Decimal>,
+    /// Наименьшее и наибольшее количество ордера (у BingX — minQty, maxQty). Соблюдаются вместе с суммой (решение 66):
+    /// в docs-v3 поля помечены устаревшими, в api-ai-skills — обычные поля, в живом ответе minQty ≠ minNotional / price.
+    pub min_qty: Option<Decimal>,
+    pub max_qty: Option<Decimal>,
 }
 
 /// Состояние подключения площадки.

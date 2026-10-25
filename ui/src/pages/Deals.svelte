@@ -63,6 +63,7 @@
       {#if d.result_usd != null}<span class={String(d.result_usd).startsWith('-') ? 'err' : 'ok'}>итог {d.result_usd} USDT</span>
       {:else}<span class="muted">итога ещё нет</span>{/if}
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
+      {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
     </p>
     <details>
       <summary>Хронология ({d.timeline.length})</summary>

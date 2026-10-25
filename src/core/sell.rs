@@ -4,7 +4,7 @@
 //! продаём; иначе — режим застрявшей монеты (stuck.rs, решение 37).
 //! Продажа по рынку — для режимов «Ожидание», «Порог убытка», «Перегон» и кнопки «Продать сейчас».
 //! Продано всё — сделка закрыта, возврат USDT в каждой сделке (usdt_return.rs); продано не всё —
-//! остаток снова через режим застрявшей монеты; продажа не прошла — сделка остановлена, монеты на месте.
+//! остаток снова через режим застрявшей монеты (меньше шага или минимума ордера биржи — пыль, dust.rs, решение 66); продажа не прошла — сделка остановлена, монеты на месте.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, usdt_return.rs, deal.rs.
 //! Настройки: нет своих.
@@ -62,6 +62,7 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         deal.qty,
         q.route.clone(),
         q.avg_price,
+        None,
     )
     .await
     {
@@ -76,6 +77,17 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 .deps
                 .notify("deal.sell_filled", Some(&v.0), &text)
                 .await;
+            if deal.qty > Decimal::ZERO
+                && super::dust::is_dust(core, &v, &a.ticker, deal.qty, r.avg_price)
+            {
+                // Решение 66: остаток меньше шага или минимума ордера — пыль, а не застрявшая монета.
+                deal.note(format!(
+                    "Остаток {} {} — пыль (меньше шага или минимума ордера {}): остаётся на балансе, стоимость в затратах",
+                    deal.qty, a.ticker, v.0
+                ));
+                deal.dust += deal.qty;
+                deal.qty = Decimal::ZERO;
+            }
             if deal.qty > Decimal::ZERO {
                 deal.note(format!("Продано не всё, остаток {}", deal.qty));
                 super::ledger::save(core, &deal).await;

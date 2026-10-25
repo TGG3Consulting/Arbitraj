@@ -51,6 +51,7 @@ fn net(ticker: &str, open: bool) -> CoinNetworkInfo {
         withdraw_max: None,
         deposit_min: None,
         deposit_confirmations: None,
+        withdraw_precision: None,
         updated_at: Utc::now(),
     }
 }

@@ -7,31 +7,37 @@
 //! Каждая строка несёт шаг маршрута обмена (решение 52) — экран группирует расчёт по шагам.
 //! Решение 66: отказ несёт вид (size.rs Fail: меньше минимума / больше возможного / невозможно) — по нему подбор
 //! объёма двигает границы; продажа на бирже B — количество вниз до шага пары (остаток — строка StepRemainder, в
-//! выручку не входит); сумма ордера каждой биржи — в пределах minNotional / maxNotional пары (costs_quote.rs).
+//! выручку не входит); пределы ордера биржи (minQty/maxQty, minNotional/maxNotional) — по худшей цене ордера
+//! (costs_quote.rs); списание по бюджету spend_max — количество × худшая цена покупки; комиссии вывода и возврата
+//! биржи — из справочника сетей ядра, без запросов к бирже (costs_withdraw.rs).
 //! Типы расчёта (Calc, CostLine) — costs_types.rs.
 //! Кто вызывает: core/size_curve.rs (подбор объёма), core/partial.rs.
-//! От чего зависит: core/types, convert.rs, costs_quote.rs, dirctx.rs, size.rs, deps.rs (шлюз).
+//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_withdraw.rs, dirctx.rs, size.rs, engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
 use chrono::Utc;
 use rust_decimal::{Decimal, MathematicalOps};
 
-use crate::core::types::{Cost, CostKind};
+use crate::core::types::{Cost, CostKind, Side};
 
 use super::convert;
-use super::costs_quote::{floor_step, notional, quote};
+use super::costs_quote::{floor_step, order_limits, quote, worst};
 pub use super::costs_types::{Calc, CostLine};
-use super::deps::Deps;
+use super::costs_withdraw::{floor_precision, return_b, withdraw_a};
 use super::dirctx::DirCtx;
+use super::engine::Core;
 use super::size::Fail;
 
-/// Полный расчёт на объём qty. Ошибки: Fail с видом и текстом причины (виден на «Живом экране» и в журнале).
-pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fail> {
+/// Полный расчёт на объём qty. Принимает: ядро (шлюз, стаканы для худшей цены), контекст направления, объём.
+/// Ошибки: Fail с видом и текстом причины (виден на «Живом экране» и в журнале).
+pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fail> {
+    let deps = &core.inner.deps;
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
-    let qa = quote(deps, d, false, qty).await?;
-    notional(&d.buy_on.0, cx.pair_a.as_ref(), qty * qa.avg_price)?;
-    let a = deps.gw.get(&d.buy_on).await.map_err(|e| e.message)?;
+    let qa = quote(core, d, false, qty).await?;
+    // Списание по бюджету — по худшей цене покупки (лимит биржи, допуск DEX): столько может уйти или замёрзнуть.
+    let worst_a = worst(core, &d.buy_on, &d.asset, Side::Buy, qty, qa.avg_price)?;
+    order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst_a)?;
     // Затраты покупки в монете (комиссия биржи в монете) уменьшают выводимое количество.
     let mut lines: Vec<(Cost, &'static str)> = qa.costs.iter().map(|c| (c.clone(), "A")).collect();
     let coin_fee = |cs: &[Cost]| -> Decimal {
@@ -40,12 +46,9 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
             .map(|c| c.amount)
             .sum()
     };
-    let to_send = qty - coin_fee(&qa.costs);
+    let to_send = floor_precision(qty - coin_fee(&qa.costs), cx.a.info.as_ref());
     cx.check_withdraw(to_send)?;
-    let wc = a
-        .withdraw_cost(&d.asset, &cx.net_a, to_send)
-        .await
-        .map_err(|e| format!("{}: стоимость вывода: {}", d.buy_on.0, e.message))?;
+    let wc = withdraw_a(deps, cx, to_send).await?;
     let arrive = to_send - coin_fee(&wc);
     lines.extend(wc.into_iter().map(|c| (c, "перевод")));
     cx.check_deposit(arrive)?;
@@ -56,17 +59,25 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
         )));
     }
     // Изменение ликвидности к моменту продажи: используем только долю h глубины B.
-    quote(deps, d, true, sell_qty / cx.h)
+    quote(core, d, true, sell_qty / cx.h)
         .await
         .map_err(|e| match e {
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,
         })?;
-    let qb = quote(deps, d, true, sell_qty).await?;
-    notional(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty * qb.avg_price)?;
+    let qb = quote(core, d, true, sell_qty).await?;
+    let worst_b = worst(
+        core,
+        &d.sell_on,
+        &d.asset,
+        Side::Sell,
+        sell_qty,
+        qb.avg_price,
+    )?;
+    order_limits(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty, worst_b)?;
     lines.extend(qb.costs.iter().map(|c| (c.clone(), "B")));
     if sell_qty < arrive {
-        // Остаток меньше шага остаётся на B непроданным — в выручку не входит (показ, решение 66).
+        // Остаток меньше шага остаётся на B непроданным (пыль) — в выручку не входит (показ, решение 66).
         let rest = Cost::new(
             CostKind::StepRemainder,
             arrive - sell_qty,
@@ -77,11 +88,7 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
     }
     let proceeds = sell_qty * qb.avg_price;
     if cx.return_per_trade {
-        let b = deps.gw.get(&d.sell_on).await.map_err(|e| e.message)?;
-        let rc = b
-            .withdraw_cost(&cx.usdt, &cx.net_b, proceeds)
-            .await
-            .map_err(|e| format!("{}: стоимость возврата USDT: {}", d.sell_on.0, e.message))?;
+        let rc = return_b(deps, cx, proceeds).await?;
         lines.extend(
             rc.into_iter()
                 .map(|c| (convert::usdt_return(c), "возврат USDT")),
@@ -161,6 +168,7 @@ pub async fn evaluate(deps: &Deps, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
         buy_quote: qa,
         sell_quote: qb,
         at: Utc::now(),
+        spend_max: qty * worst_a,
         size: None,
     })
 }

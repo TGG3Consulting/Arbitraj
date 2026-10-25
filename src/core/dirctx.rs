@@ -11,7 +11,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Direction, Side, VenueId};
+use crate::core::types::{Asset, CoinNetworkInfo, Direction, Side, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::gateway::events::SpotPairState;
 use crate::settings::read::At;
@@ -42,6 +42,9 @@ pub struct DirCtx {
     /// Правила спот-пары биржи на A и на B (решение 66); у DEX — None.
     pub pair_a: Option<SpotPairState>,
     pub pair_b: Option<SpotPairState>,
+    /// Сеть BSC котируемой монеты B у биржи B (комиссия вывода — для возврата USDT без запроса к бирже, решение 66);
+    /// у DEX — None.
+    pub usdt_b: Option<CoinNetworkInfo>,
 }
 
 impl DirCtx {
@@ -103,6 +106,13 @@ impl DirCtx {
         let transit_s = super::transit::seconds(core, dir)?;
         let pair_a = pair_rules(core, &dir.buy_on, &dir.asset.ticker)?;
         let pair_b = pair_rules(core, &dir.sell_on, &dir.asset.ticker)?;
+        let usdt_b = b.info.as_ref().and_then(|_| {
+            rd(&core.inner.networks).get(&dir.sell_on).and_then(|all| {
+                all.iter()
+                    .find(|n| n.asset.ticker == qb && n.network == net_b)
+                    .cloned()
+            })
+        });
         Ok(DirCtx {
             dir: dir.clone(),
             a,
@@ -123,6 +133,7 @@ impl DirCtx {
             return_per_trade: mode == "per_trade",
             pair_a,
             pair_b,
+            usdt_b,
         })
     }
 

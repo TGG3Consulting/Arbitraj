@@ -76,6 +76,11 @@ pub fn parse_networks(
                 // монете сделку не делает (решение 35: минимальный депозит неизвестен).
                 deposit_min: num::dec_opt(n, "depositMin")?,
                 deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
+                // Поле есть в живом ответе (tests/data/bingx_2026-10-24/config_getall.json), в docs-v3 его нет.
+                withdraw_precision: n
+                    .get("withdrawPrecision")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|p| u32::try_from(p).ok()),
                 updated_at: Utc::now(),
             });
         }

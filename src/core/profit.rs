@@ -60,10 +60,7 @@ pub async fn decide(core: &Core, d: &Direction) -> Verdict {
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
-    let mut curve = CoreCurve {
-        deps: &core.inner.deps,
-        cx: &cx,
-    };
+    let mut curve = CoreCurve { core, cx: &cx };
     let found = match super::size_search::search(&mut curve, &p).await {
         Ok(f) => f,
         Err(e) => return reject(e.to_string(), None),
@@ -116,11 +113,13 @@ pub fn why(c: &SizeChoice, ticker: &str) -> String {
             r(c.at_budget_profit)
         )
     };
-    let exact = if c.max_exact {
-        ""
-    } else {
-        "; граница бюджета не уточнена до шага (мало size.bisect_steps)"
-    };
+    let mut exact = String::new();
+    if !c.max_exact {
+        exact.push_str("; граница бюджета не уточнена до шага (мало size.bisect_steps)");
+    }
+    if c.capped {
+        exact.push_str("; поиск остановлен пределом size.max_evals — лучший из посчитанных");
+    }
     format!(
         "{head}; {budget}; допустимо {}–{} {ticker}, посчитано объёмов {}, пиков {}{exact}",
         c.min_qty.normalize(),

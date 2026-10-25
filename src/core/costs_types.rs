@@ -46,7 +46,7 @@ pub struct Calc {
     pub sell_avg: Decimal,
     /// Вложено: qty × buy_avg.
     pub invested: Decimal,
-    /// Выручка: arrive × sell_avg.
+    /// Выручка: sell_qty × sell_avg (остаток меньше шага B в выручку не входит).
     pub proceeds: Decimal,
     pub costs: Vec<CostLine>,
     /// Затраты, вычитаемые из прибыли (не в цене и не в количестве), USDT.
@@ -59,6 +59,9 @@ pub struct Calc {
     pub buy_quote: Quote,
     pub sell_quote: Quote,
     pub at: DateTime<Utc>,
+    /// Наибольшее списание по бюджету (решение 66): qty × худшая цена покупки — лимитная цена биржи (столько
+    /// замораживает ордер) или средняя DEX с допуском exec.dex_slippage_pct (больше обмен не возьмёт). Не больше бюджета.
+    pub spend_max: Decimal,
     /// Как подобран объём (решение 66): пределы, прибыль на бюджете, почему этот лучший. None — расчёт на заданный
     /// объём без подбора (partial.rs).
     pub size: Option<SizeChoice>,

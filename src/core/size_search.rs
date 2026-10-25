@@ -9,10 +9,15 @@
 //!    не больше size.refine_steps шагов, до ширины size.tolerance_pct от максимума (не точнее шага количества);
 //! 4) итог — лучшая из всех посчитанных точек; при равной прибыли — меньший объём.
 //!
+//! Глобальный максимум — эвристика: изломы, которых ядро не видит, ловит только сетка; у умного маршрута DEX
+//! (quote/pick.rs — больший из двух путей) вложение от объёма может быть немонотонным, тогда бисекция границы бюджета
+//! может найти не самый большой объём — но бюджет проверяется в каждой точке (size_memo.rs), он не нарушается.
+//! Все расчёты — не больше size.max_evals: исчерпан на границах — отказ, дальше — лучший из посчитанных.
+//!
 //! Все объёмы кратны шагу количества (округление вниз). Вложение ≤ бюджета держит size_memo.rs.
 //! Кто вызывает: core/profit.rs, тесты (tests/core_size_optimum.rs — записанные стакан и пул).
 //! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs.
-//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct (через Params).
+//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (через Params).
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -30,7 +35,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
             p.step
         )));
     }
-    let mut m = Memo::new(curve, p.step, p.budget);
+    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
     let guess = m
         .units(p.guess.max(Decimal::ZERO))
         .ok_or_else(|| Fail::Stop(format!("объём {} слишком велик", p.guess)))?;
@@ -68,7 +73,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
     for i in 0..ok.len() {
         let left_ok = i == 0 || ok[i].1 >= ok[i - 1].1;
         let right_ok = i + 1 == ok.len() || ok[i].1 >= ok[i + 1].1;
-        if !(left_ok && right_ok) {
+        if !(left_ok && right_ok) || m.capped() {
             continue;
         }
         peaks += 1;
@@ -83,6 +88,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
     let best = m
         .best()
         .ok_or_else(|| Fail::Stop("ни один объём не посчитан".into()))?;
+    // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
     let top = m.at(hi).await?;
     let choice = SizeChoice {
         qty: best.qty,
@@ -94,6 +100,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
         max_exact,
         evals: m.evals(),
         peaks,
+        capped: m.capped(),
         why: String::new(),
     };
     Ok(Found { best, choice })

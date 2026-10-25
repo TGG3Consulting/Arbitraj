@@ -19,17 +19,27 @@ pub struct Memo<'a, C: Curve> {
     pub step: Decimal,
     pub budget: Decimal,
     pub map: BTreeMap<u64, Result<Point<C::Data>, Fail>>,
+    /// Предел расчётов (size.max_evals) и сколько уже посчитано.
+    max: u32,
+    done: u32,
 }
 
 impl<'a, C: Curve> Memo<'a, C> {
-    /// Принимает: кривую, шаг (> 0), бюджет. Ошибок нет.
-    pub fn new(curve: &'a mut C, step: Decimal, budget: Decimal) -> Self {
+    /// Принимает: кривую, шаг (> 0), бюджет, предел расчётов. Ошибок нет.
+    pub fn new(curve: &'a mut C, step: Decimal, budget: Decimal, max: u32) -> Self {
         Memo {
             curve,
             step,
             budget,
             map: BTreeMap::new(),
+            max,
+            done: 0,
         }
+    }
+
+    /// Предел расчётов исчерпан. Ошибок нет.
+    pub fn capped(&self) -> bool {
+        self.done >= self.max
     }
 
     /// Номер шага объёма с округлением вниз. Принимает: объём ≥ 0. Возвращает: n; None — объём не помещается в u64.
@@ -43,15 +53,23 @@ impl<'a, C: Curve> Memo<'a, C> {
     }
 
     /// Расчёт на n шагов (один раз на n). Принимает: n. Возвращает: точку или Fail; n = 0 — TooSmall;
-    /// вложение больше бюджета — TooLarge (инвариант бюджета).
+    /// списание больше бюджета — TooLarge (инвариант бюджета: проверяется в каждой точке, не только на границе —
+    /// вложение от объёма у умного маршрута DEX может быть немонотонным); предел size.max_evals исчерпан — Stop.
     pub async fn at(&mut self, n: u64) -> Result<Point<C::Data>, Fail> {
         if let Some(r) = self.map.get(&n) {
             return r.clone();
+        }
+        if n > 0 && self.capped() {
+            return Err(Fail::Stop(format!(
+                "исчерпан предел расчётов size.max_evals = {}",
+                self.max
+            )));
         }
         let r = if n == 0 {
             Err(Fail::TooSmall("объём 0".into()))
         } else {
             let q = self.qty(n);
+            self.done += 1;
             match self.curve.at(q).await {
                 Ok(p) if p.invested > self.budget => Err(Fail::TooLarge(format!(
                     "объём {q}: вложение {} больше бюджета {}",
@@ -64,8 +82,12 @@ impl<'a, C: Curve> Memo<'a, C> {
         r
     }
 
-    /// Прибыль на n шагов; объём недопустим — None. Ошибки: Fail::Stop (расчёт невозможен).
+    /// Прибыль на n шагов; объём недопустим или предел расчётов исчерпан — None. Ошибки: Fail::Stop (расчёт
+    /// невозможен).
     pub async fn profit(&mut self, n: u64) -> Result<Option<Decimal>, Fail> {
+        if !self.map.contains_key(&n) && self.capped() {
+            return Ok(None);
+        }
         match self.at(n).await {
             Ok(p) => Ok(Some(p.profit)),
             Err(Fail::Stop(e)) => Err(Fail::Stop(e)),

@@ -40,7 +40,8 @@ pub(super) async fn fetch_block(
     race: bool,
 ) -> Result<(Header, Vec<Value>), Fail> {
     let lim = limits(&ctx)?;
-    // Список задан неверно — повтор с причиной в журнале (не «списка нет»).
+    // Список задан неверно (исправили между проверкой задачи ленты и запросом) — повтор; задача ленты на следующем
+    // шаге оборвёт ленту один раз и будет ждать исправления (receipts_task.rs).
     let spread = receipts_nodes::list(&ctx).map_err(|e| Fail::Retry(e.message))?;
     let tag = format!("0x{n:x}");
     let calls = [
@@ -122,7 +123,7 @@ pub fn nowhere(l: &Lost, n: u64) -> bool {
 pub fn lost(n: u64, l: Lost, lim: &Limits, race: bool) -> Fail {
     if race && nowhere(&l, n) {
         let why: Vec<String> = l.rejected.iter().map(|r| r.why.clone()).collect();
-        return Fail::Missing(why.join("; "));
+        return Fail::Missing(why.join("; "), l.rejected.len());
     }
     if let Some(r) = l.rejected.last() {
         return Fail::Retry(match r.head {

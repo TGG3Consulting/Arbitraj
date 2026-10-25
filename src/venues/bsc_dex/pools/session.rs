@@ -62,6 +62,11 @@ pub async fn run(
         Err(end) => (end, m.loaded),
     };
     *pools = m.pools;
+    // Обрыв после загрузки — пулы недостоверны (Invalidated) ДО закрытия «соединения» `g` (оно закрывается при выходе):
+    // «сброс» ленты квитанций снимается, только когда закрыты все её «соединения» (node/receipts.rs, ревью #62).
+    if let (End::Broken(_), true) = &end {
+        listen_log::invalidate(p, pools);
+    }
     end
 }
 

@@ -109,7 +109,7 @@ fn hook_measured(p: &Pools, r: &PoolRef) -> bool {
 pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
     // Данные пулов отстают (лента догоняет, решение 72) — вердикта нет: пул не отмечен проверенным, сверится после
     // снятия отметки (она будит циклы сигналом «пул готов»).
-    if p.lag.get() > 0 {
+    if p.lag.busy() {
         return false;
     }
     let Some(e) = p.reg.get(r) else {

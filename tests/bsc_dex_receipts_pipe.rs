@@ -177,8 +177,8 @@ fn lag_names_the_block_the_pipe_stands_on() {
     assert_eq!(lag.hot(), None);
     assert!(lag.stuck_text().is_empty());
     let why = "блок 129767716: квитанции больше предела bsc.receipts_total_ms (5000 мс), получено 2073166 байт";
-    lag.failed(129767716, why);
-    lag.failed(129767716, why);
+    lag.failed(129767716, why, false);
+    lag.failed(129767716, why, false);
     assert_eq!(
         lag.hot(),
         Some(129767716),

@@ -6,12 +6,16 @@
 //! (quote/mod.rs) и сделка (exec/trade.rs).
 //! Пока отметка стоит, сверка с квотером, пробы крючков и налогов вердикт не выносят (пропускают пул или монету) и
 //! перепроверяют после её снятия — иначе ложные «расхождение с квотером» по старому состоянию.
+//! Полный сброс ленты (обрыв всех подписок) отметку НЕ снимает, а держит «сброс» (`hold`): пачки делают пулы
+//! недостоверными (Invalidated) асинхронно, и до этого котировки и проверки шли бы по данным, отставшим на всё время
+//! застоя. «Сброс» снимает лента (`release`), когда все «соединения» старой ленты закрыты — пачка закрывает своё только
+//! после Invalidated (pools/session.rs); такое снятие циклы не будит (пулы перечитываются и дают «пул готов» сами).
 //! Кто вызывает: node/receipts_task.rs, quote/mod.rs, exec/trade.rs, check/{quoter_cycle,cycle,taxes}.rs, parts.rs.
 //! От чего зависит: ctx.rs.
 //! Настройки: нет (порог — у ленты, bsc.receipts_max_lag_blocks).
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
@@ -21,15 +25,17 @@ use super::super::ctx::Ctx;
 #[derive(Clone, Default)]
 pub struct EventsLag {
     blocks: Arc<AtomicU64>,
+    /// Стоит «сброс»: лента сброшена, пачки ещё не сделали пулы недостоверными.
+    held: Arc<AtomicBool>,
     wake: Arc<std::sync::Mutex<Vec<std::sync::Weak<tokio::sync::Notify>>>>,
 }
 
 impl EventsLag {
     /// Ставит отставание (0 — отметка снята). Снята после отставания — будит циклы проверок (`on_clear`): во время
-    /// отставания они вердикт не выносили, теперь перепроверяют. Ошибок нет.
+    /// отставания они вердикт не выносили, теперь перепроверяют. Во время «сброса» не будит. Ошибок нет.
     pub fn set(&self, blocks: u64) {
         let was = self.blocks.swap(blocks, Ordering::SeqCst);
-        if was > 0 && blocks == 0 {
+        if was > 0 && blocks == 0 && !self.held() {
             let mut wake = self.wake.lock().unwrap_or_else(|p| p.into_inner());
             // Подписки на рынок, которых уже нет, выпадают из списка.
             wake.retain(|w| w.strong_count() > 0);
@@ -47,13 +53,41 @@ impl EventsLag {
             .push(Arc::downgrade(&n));
     }
 
+    /// Полный сброс ленты: «сброс» стоит, отставание не трогается. Ошибок нет.
+    pub fn hold(&self) {
+        self.held.store(true, Ordering::SeqCst);
+    }
+
+    /// Снимает «сброс» (пулы старой ленты уже недостоверны), циклы не будит. Возвращает: true — стоял. Ошибок нет.
+    pub fn release(&self) -> bool {
+        self.held.swap(false, Ordering::SeqCst)
+    }
+
+    /// Стоит «сброс». Ошибок нет.
+    pub fn held(&self) -> bool {
+        self.held.load(Ordering::SeqCst)
+    }
+
+    /// Проверкам: вердикта нет — данные отстают или стоит «сброс». Ошибок нет.
+    pub fn busy(&self) -> bool {
+        self.get() > 0 || self.held()
+    }
+
     /// Текущее отставание. Ошибок нет.
     pub fn get(&self) -> u64 {
         self.blocks.load(Ordering::SeqCst)
     }
 
-    /// Котировка и сделка: данные не отстают. Ошибки: StaleData «данные пулов отстают на N блоков».
+    /// Котировка и сделка: данные не отстают и «сброса» нет. Ошибки: StaleData «данные пулов отстают на N блоков» или
+    /// «лента сброшена».
     pub fn check(&self, ctx: &Ctx) -> GatewayResult<()> {
+        if self.held() {
+            return Err(ctx.err(
+                ErrorCode::StaleData,
+                "лента квитанций сброшена — пулы ещё не перечитаны, котировки и сделки нет"
+                    .to_string(),
+            ));
+        }
         match self.get() {
             0 => Ok(()),
             n => Err(ctx.err(

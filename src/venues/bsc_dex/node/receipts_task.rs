@@ -11,7 +11,9 @@
 //! bsc.receipts_retry_ms. Отставание больше bsc.receipts_max_lag_blocks или не задана настройка — обрыв ленты: все
 //! подписки закрыты (пулы недостоверны, слушатели подключаются заново), лента — с текущего блока.
 //! bsc.pool_events_source больше не receipts — лента обрывается и останавливается (пачки подключаются через новый
-//! источник). Бюджет узла: когда окно заполнилось и при смене bsc.node_http_rps — в журнал, сколько вызовов в секунду
+//! источник). Ошибка в настройке узлов списка (receipts_nodes.rs) — один обрыв с причиной, лента ждёт её исправления.
+//! Полный сброс держит запрет котировок («сброс», events_lag.rs), пока пачки старой ленты не сделали пулы
+//! недостоверными. Бюджет узла: когда окно заполнилось и при смене bsc.node_http_rps — в журнал, сколько вызовов в секунду
 //! берёт лента (2 × блоков в секунду по факту, receipts_budget.rs).
 //! Кто вызывает: node/receipts.rs (Feed::open запускает).
 //! От чего зависит: receipts.rs (Feed), receipts_chain.rs, receipts_io.rs, receipts_budget.rs, heads.rs, ctx.rs.
@@ -21,6 +23,7 @@
 use std::sync::Weak;
 use std::time::Duration;
 
+use crate::settings::live::Watch;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
@@ -52,6 +55,27 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             feed.cut("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
             return;
         }
+        // Ошибка в настройке узлов (не https, темп 0, список не читается) — один обрыв с причиной, дальше лента ждёт
+        // её исправления: без повторов и сбросов по кругу (ревью #62). Подписка на изменения — до проверки.
+        let mut fix = Watch::new(
+            ctx.settings.subscribe(),
+            vec!["bsc.receipts_node".into(), "bsc.pool_events_source".into()],
+        );
+        if let Err(e) = super::receipts_nodes::list(&ctx) {
+            let why = format!("{} — лента стоит до исправления настройки", e.message);
+            if why != said {
+                ctx.log(Level::Error, "venue.ws", format!("{SOURCE}: {why}"), None)
+                    .await;
+                said = why.clone();
+            }
+            restart(&feed, &mut chain, &mut pipe, &mut lag, why);
+            drop(feed);
+            if fix.next().await.is_none() {
+                return;
+            }
+            continue;
+        }
+        drop(fix);
         budget.start(&ctx).await;
         let target = w.borrow_and_update().as_ref().map(|h| h.number);
         let res = match target {
@@ -60,6 +84,14 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             }
             None => Ok(true),
         };
+        // «Сброс» снимается обычным шагом новой ленты, когда все пачки старой закрыли «соединения» (после Invalidated).
+        if res.is_ok() && feed.release_if_settled() {
+            let msg = format!(
+                "{SOURCE}: пачки сделали пулы недостоверными после сброса — запрет котировок по сбросу снят, пулы перечитываются"
+            );
+            ctx.log(Level::Info, "venue.ws", msg, None).await;
+        }
+        let missing = matches!(res, Err(Fail::Missing(..)));
         let why = match res {
             // Блоков в секунду меряем только догнав голову: во время догона блоки идут быстрее сети.
             Ok(true) => {
@@ -67,9 +99,9 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                 None
             }
             Ok(false) => continue,
-            Err(Fail::Retry(why) | Fail::Missing(why)) => {
+            Err(Fail::Retry(why) | Fail::Missing(why, _)) => {
                 if let Some(top) = chain.top() {
-                    lag.failed(top.number + 1, &why);
+                    lag.failed(top.number + 1, &why, missing);
                 }
                 // Стоит дольше bsc.receipts_stuck_reset_s — полный сброс с причиной (решение 72).
                 match lag.overdue(&ctx, &feed).await {
@@ -119,8 +151,8 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     }
 }
 
-/// Полный сброс ленты: окно, конвейер и отставание — заново, отметка «отстают» снята (пулы недостоверны сами —
-/// Invalidated), все подписки закрыты. Возвращает: причину для журнала. Ошибок нет.
+/// Полный сброс ленты: окно, конвейер и отставание — заново, все подписки закрыты; отметка «отстают» НЕ снимается, а
+/// держит «сброс» (Feed::reset), пока пачки не сделали пулы недостоверными (Invalidated) — снимает его run. Возвращает: причину для журнала. Ошибок нет.
 fn restart(
     feed: &Feed,
     chain: &mut Chain,
@@ -131,7 +163,6 @@ fn restart(
     chain.clear();
     pipe.clear();
     *lag = Lag::default();
-    feed.inner.lag.set(0);
-    feed.cut(&why);
+    feed.reset(&why);
     why
 }

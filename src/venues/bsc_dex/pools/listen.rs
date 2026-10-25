@@ -31,7 +31,7 @@ use super::discover::Found;
 use super::mids::Mids;
 use super::progress::Signals;
 use super::registry::Registry;
-use super::{link, listen_log, session};
+use super::{link, session};
 
 /// Окружение слушателей пулов. Дешёво клонируется.
 #[derive(Clone)]
@@ -78,9 +78,7 @@ pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Opti
             End::Closed => return,
             End::Broken(why) => why,
         };
-        if loaded {
-            listen_log::invalidate(&p, &pools);
-        }
+        // Пулы уже недостоверны, если загрузка была (session.rs — до закрытия «соединения»).
         // Журнал — одна запись на площадку при потере связи и одна при восстановлении (link.rs).
         link::down(&p, &name, &why, loaded).await;
         match p.ctx.int("venue.ws_reconnect_pause_ms") {

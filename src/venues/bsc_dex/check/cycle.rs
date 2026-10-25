@@ -97,7 +97,7 @@ pub async fn hooks(p: Pools, queue: Queue) {
 /// недостоверен — false: пул не отмечается проверенным и проверится, как только станет достоверным). Ошибок нет.
 async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>) -> bool {
     // Данные пулов отстают (решение 72) — вердикта нет, проверка после снятия отметки.
-    if p.lag.get() > 0 {
+    if p.lag.busy() {
         return false;
     }
     let Some(e) = p.reg.get(r) else {

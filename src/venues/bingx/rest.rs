@@ -124,10 +124,7 @@ async fn send(
     op: Op,
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
-    let lim = crate::gateway::http::Limits {
-        head: ctx.http_timeout()?,
-        idle: ctx.body_idle()?,
-    };
+    let lim = ctx.limits()?;
     let mut last = None;
     for base in &urls {
         let url = if query.is_empty() {
@@ -147,12 +144,10 @@ async fn send(
         // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело — пока данные идут чаще
         // http.body_idle_ms (справочник пар и сетей BingX — большой ответ).
         match crate::gateway::http::exchange(req, lim).await {
-            Ok((status, text)) => return parse(ctx, path, status, text, op),
+            Ok((status, text)) => return parse(ctx, path, status.as_u16(), text, op),
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
             // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
-            Err(f) if f.not_sent() || (op == Op::Other && f.is_timeout()) => {
-                last = Some(errors::from_fail(&f, &lim))
-            }
+            Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),
             Err(f) => return Err(errors::from_fail(&f, &lim)),
         }
     }
@@ -188,4 +183,11 @@ fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayRes
         None if status < 400 => Ok(v),
         None => Err(errors::from_http(status, &text)),
     }
+}
+
+/// Можно ли повторить запрос на резервном адресе: только если запрос точно не дошёл до BingX (соединение не
+/// установлено), а срок без ответа — только для справочников и проверок (Op::Other). Ордер или вывод без ответа мог
+/// исполниться — повтор = двойная сделка. Принимает: сбой, операцию. Ошибок нет.
+pub fn may_fallback(f: &crate::gateway::http::Fail, op: Op) -> bool {
+    f.not_sent() || (op == Op::Other && f.is_timeout())
 }

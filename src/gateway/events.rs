@@ -59,6 +59,8 @@ pub enum MarketEvent {
         failed: usize,
         waiting: usize,
         not_configured: usize,
+        /// Сколько монет ещё ждут своих пулов (их первая проверка — позже, сводку не держат; решение 63).
+        loading: usize,
     },
     /// Сообщение адаптера для уведомлений: код события из notify/catalog.rs и текст (ядро шлёт, если событие включено).
     Notice {

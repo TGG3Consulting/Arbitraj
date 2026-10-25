@@ -64,7 +64,7 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
             .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
         ctx.raw
             .write(ID, "index", &format!("GET {url} → {status} {text}"));
-        answer(status, page, &text, path)
+        answer(status.as_u16(), page, &text, path)
     })
     .await
 }

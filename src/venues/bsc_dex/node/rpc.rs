@@ -146,11 +146,9 @@ pub async fn post(
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
-    let (code, text) = http::exchange(req, lim)
+    let (status, text) = http::exchange(req, lim)
         .await
         .map_err(|f| errors::from_fail(&f, &lim, source))?;
-    let status =
-        reqwest::StatusCode::from_u16(code).unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR);
     if !status.is_success() {
         // Тело JSON-RPC с ошибкой при не-2xx (так отвечают некоторые каналы) — разбираем его первым.
         if let Err(e) = jsonrpc::parse_text(&text, source, Op::Read)

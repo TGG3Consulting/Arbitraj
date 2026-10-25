@@ -23,7 +23,8 @@ fn not_set(name: &str, scope: &Scope) -> GatewayError {
         ErrorCode::NotConfigured,
         None,
         format!(
-            "Не задана настройка {name} [{}] — задайте её в интерфейсе",
+            "{}{name} [{}] — задайте её в интерфейсе",
+            super::read::NOT_SET,
             scope.to_key()
         ),
     )

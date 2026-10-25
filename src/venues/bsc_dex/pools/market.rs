@@ -90,21 +90,14 @@ pub async fn subscribe(
     p.ctx.log(Level::Info, "dex.pool", msg, None).await;
 
     let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
-    // Стартовая загрузка V2/V3: первый проход налогов ждёт, пока каждая пачка закончит первую загрузку (pools/progress.rs).
+    // Стартовые пачки; налоги монеты проверяются, как только прочитаны её пулы (pools/loading.rs, решение 63).
     let start = chunks(&found, &all, per);
-    p.signals.expect(start.len());
     // Пулы ждут первого чтения — ядро покажет «пулы найдены, загружаются» (решение 61).
     p.loading
         .add(start.iter().flat_map(|(_, c)| c.iter().map(|(f, _)| f)));
     p.loading.publish(p).await;
     for (name, chunk) in start {
-        tasks.push(tokio::spawn(listen::run(
-            p.clone(),
-            name,
-            chunk,
-            true,
-            None,
-        )));
+        tasks.push(tokio::spawn(listen::run(p.clone(), name, chunk, None)));
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
     // Проверки монет и крючков — класс Check в очереди узла (решение 61): выше загрузки пулов и цикла квотера.

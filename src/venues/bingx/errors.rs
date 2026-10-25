@@ -71,16 +71,19 @@ pub fn from_http(status: u16, raw: &str) -> GatewayError {
 }
 
 /// Сбой HTTP-обмена (gateway/http.rs) с правдивой причиной: нет связи, нет ответа за срок, ответ не дочитан.
-/// Принимает: сбой, сроки. Возвращает: GatewayError (Timeout — срок; Unreachable — связь или обрыв тела).
+/// Принимает: сбой, сроки. Возвращает: GatewayError (Unreachable — соединение не установлено; Timeout — запрос мог
+/// дойти, ответа целиком нет; BadResponse — тело не UTF-8 или больше предела).
 pub fn from_fail(
     f: &crate::gateway::http::Fail,
     lim: &crate::gateway::http::Limits,
 ) -> GatewayError {
     use crate::gateway::http::Fail;
+    // Unreachable — только «соединение не установлено» (запрос точно не дошёл); дошёл, а ответа целиком нет —
+    // Timeout: ордер мог исполниться, итог проверяется (trade.rs, order_state.rs), не «не отправлено».
     let code = match f {
-        Fail::NotText => ErrorCode::BadResponse,
-        f if f.is_timeout() => ErrorCode::Timeout,
-        _ => ErrorCode::Unreachable,
+        Fail::Connect(_) => ErrorCode::Unreachable,
+        Fail::NotText | Fail::TooBig { .. } => ErrorCode::BadResponse,
+        _ => ErrorCode::Timeout,
     };
     GatewayError::new(code, Some(venue()), format!("BingX: {}", f.text(lim)))
 }

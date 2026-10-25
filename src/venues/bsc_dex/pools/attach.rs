@@ -108,7 +108,7 @@ fn place(p: &Pools, w: &Watch, key: &str, family: &str, list: Vec<(Found, String
         let part: Vec<_> = rest.drain(..size).collect();
         let (tx, rx) = mpsc::unbounded_channel();
         let name = format!("{family}-new-{seq}");
-        let h = tokio::spawn(listen::run(p.clone(), name, part.clone(), false, Some(rx)));
+        let h = tokio::spawn(listen::run(p.clone(), name, part.clone(), Some(rx)));
         w.tasks.lock().unwrap_or_else(|x| x.into_inner()).push(h);
         late.insert(
             key.to_string(),

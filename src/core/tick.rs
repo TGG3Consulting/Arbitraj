@@ -73,8 +73,17 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             }
             Touched::CheckPass {
                 venue,
-                counts: [ok, failed, waiting, config],
-            } => super::first_pass::done(&core, &venue.0, ok, failed, waiting, config).await,
+                counts: [ok, failed, waiting, config, loading],
+            } => {
+                let n = super::first_pass::Counts {
+                    ok,
+                    failed,
+                    waiting,
+                    config,
+                    loading,
+                };
+                super::first_pass::done(&core, &venue.0, n).await
+            }
             Touched::Notice { venue, code, text } => {
                 core.inner.deps.notify(&code, Some(&venue.0), &text).await
             }

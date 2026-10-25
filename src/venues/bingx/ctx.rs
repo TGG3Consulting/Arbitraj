@@ -65,13 +65,20 @@ impl Ctx {
         self.settings.flag(name, self.at()).map_err(|e| self.tag(e))
     }
 
-    /// Тишина при чтении тела ответа (http.body_idle_ms, gateway/http.rs). Ошибки: NotConfigured, Internal.
-    pub fn body_idle(&self) -> Result<Duration, GatewayError> {
-        let ms = self
-            .settings
-            .integer("http.body_idle_ms", At::default())
-            .map_err(|e| self.tag(e))?;
-        Ok(Duration::from_millis(ms))
+    /// Сроки и пределы HTTP-обмена (gateway/http.rs): http.timeout_ms, http.body_idle_ms, http.total_ms,
+    /// http.max_body_bytes. Ошибки: NotConfigured (любая не задана), Internal.
+    pub fn limits(&self) -> Result<crate::gateway::http::Limits, GatewayError> {
+        let int = |n: &str| {
+            self.settings
+                .integer(n, At::default())
+                .map_err(|e| self.tag(e))
+        };
+        Ok(crate::gateway::http::Limits {
+            head: Duration::from_millis(int("http.timeout_ms")?),
+            idle: Duration::from_millis(int("http.body_idle_ms")?),
+            total: Duration::from_millis(int("http.total_ms")?),
+            max_bytes: int("http.max_body_bytes")? as usize,
+        })
     }
 
     /// Таймаут HTTP из настроек системы (до заголовков ответа, gateway/http.rs). Ошибка NotConfigured — не задано.

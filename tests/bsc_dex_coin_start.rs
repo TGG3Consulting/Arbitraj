@@ -1,6 +1,7 @@
 //! Файл: tests/bsc_dex_coin_start.rs
 //! Что делает: монета ждёт только СВОИХ пулов (решение 61, pools/loading.rs pending — по нему check/tax_pass.rs не
-//! проверяет монету, пока её пулы загружаются) и брошенные пулы снова читаются при изменении настроек (reload::revive).
+//! проверяет монету, пока её пулы загружаются) и пулы, брошенные из-за незаданной настройки, снова читаются, когда её
+//! задали (reload::revive) — только они и только по своей настройке.
 //! Пулы — CAKE и ETH из записи GeckoTerminal 2026-10-24 (tests/data/indexers_2026-10-24/arb_indexers_2026-10-24.json):
 //! пулы ETH ещё загружаются, а у CAKE свои дочитаны — CAKE проверяется сразу, не дожидаясь ETH (на живом боте
 //! 2026-10-25 четыре монеты с недочитанными пулами держали проверку всех 197).
@@ -78,12 +79,36 @@ async fn coin_waits_only_for_its_own_pools_and_abandoned_come_back() {
     }
     assert_eq!(p.loading.pending(&p, cake_addr), 0);
     assert_eq!(p.loading.pending(&p, eth_addr), eth.len());
-    // Брошенные пулы CAKE (попытки исчерпаны) при изменении настроек снова ждут чтения — с нуля попыток.
-    let mut abandoned: Vec<usize> = (0..cake.len()).collect();
-    let mut missing = Vec::new();
-    reload::revive(&p, &cake, &mut abandoned, &mut missing);
-    assert!(abandoned.is_empty());
-    assert_eq!(missing.len(), cake.len());
-    assert!(missing.iter().all(|m| m.tries == 0));
+    // Брошенные пулы: CAKE — из-за незаданной dex.load_batch (текст — настоящая ошибка чтения настроек бота), ETH — из-за
+    // узла (текст сбоя из журнала живого запуска 2026-10-25). Изменение посторонней настройки и очистка — ничего не
+    // возвращают; задали dex.load_batch — возвращаются только пулы CAKE, с нуля попыток, снова «загружаются».
+    let unset = p.ctx.int("dex.load_batch").unwrap_err().message;
+    let node = "узел BSC (HTTP): нет связи: error sending request".to_string();
+    let mut abandoned: Vec<reload::Abandoned> = cake
+        .iter()
+        .enumerate()
+        .map(|(i, _)| (i, &unset))
+        .chain(eth.iter().enumerate().map(|(i, _)| (i, &node)))
+        .map(|(i, why)| reload::Abandoned {
+            i,
+            setting: arb::settings::read::missing_name(why).map(String::from),
+        })
+        .collect();
+    assert!(
+        abandoned[..cake.len()]
+            .iter()
+            .all(|a| a.setting.as_deref() == Some("dex.load_batch"))
+    );
+    assert!(abandoned[cake.len()..].iter().all(|a| a.setting.is_none()));
+    let back = reload::revive(&p, &cake, &mut abandoned, "notify.telegram_chat_id");
+    assert!(back.is_empty(), "посторонняя настройка не возвращает пулы");
+    let back = reload::revive(&p, &cake, &mut abandoned, "dex.load_batch");
+    assert_eq!(back.len(), cake.len());
+    assert!(back.iter().all(|m| m.tries == 0));
+    assert_eq!(
+        abandoned.len(),
+        eth.len(),
+        "брошенные из-за узла остаются ждать переподключения"
+    );
     assert_eq!(p.loading.pending(&p, cake_addr), cake.len());
 }

@@ -20,13 +20,24 @@ pub struct At<'a> {
     pub coin: Option<&'a str>,
 }
 
+/// Начало текста ошибки «не задана настройка» — один на все ошибки «не задано» (read.rs, read_scope.rs): по нему
+/// missing_name узнаёт имя настройки из текста причины (без списка имён в коде).
+pub const NOT_SET: &str = "Не задана настройка ";
+
 /// Ошибка «не задано» или «неверный тип» с понятным текстом.
 fn not_set(name: &str) -> GatewayError {
     GatewayError::new(
         ErrorCode::NotConfigured,
         None,
-        format!("Не задана настройка {name} — задайте её в интерфейсе"),
+        format!("{NOT_SET}{name} — задайте её в интерфейсе"),
     )
+}
+
+/// Имя незаданной настройки из текста причины («Не задана настройка X …»). None — причина другая. Ошибок нет.
+pub fn missing_name(text: &str) -> Option<&str> {
+    let rest = &text[text.find(NOT_SET)? + NOT_SET.len()..];
+    let end = rest.find([' ', '[']).unwrap_or(rest.len());
+    (end > 0).then(|| &rest[..end])
 }
 
 /// Ошибка «значение хранится в неверном виде» (повреждение базы). Принимает: имя настройки.

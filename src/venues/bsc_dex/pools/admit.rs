@@ -25,8 +25,9 @@ pub struct Members {
     /// По индексу пула: true — все события, false — только добавление ликвидности.
     pub deep: Vec<bool>,
     pub missing: Vec<Missing>,
-    /// Брошенные пулы (попытки исчерпаны) — снова читаются при изменении настроек (reload::revive).
-    pub abandoned: Vec<usize>,
+    /// Брошенные пулы (попытки исчерпаны); брошенные из-за незаданной настройки — снова читаются, когда её зададут
+    /// (reload::on_settings).
+    pub abandoned: Vec<super::reload::Abandoned>,
     /// Чтение состояния уже начиналось (обрыв после него — пулы недостоверны).
     pub loaded: bool,
 }

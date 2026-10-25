@@ -154,12 +154,15 @@ impl Ctx {
         Ok(Duration::from_millis(self.global_int("http.timeout_ms")?))
     }
 
-    /// Сроки HTTP-обмена (gateway/http.rs): до заголовков — http.timeout_ms, тишина при чтении тела —
-    /// http.body_idle_ms. Ошибки: NotConfigured (любая не задана), Internal.
+    /// Сроки и пределы HTTP-обмена (gateway/http.rs): http.timeout_ms, http.body_idle_ms, http.total_ms,
+    /// http.max_body_bytes. Ошибки: NotConfigured (любая не задана), Internal.
     pub fn limits(&self) -> Result<crate::gateway::http::Limits, GatewayError> {
+        let ms = |n: &str| self.global_int(n).map(Duration::from_millis);
         Ok(crate::gateway::http::Limits {
             head: self.timeout()?,
-            idle: Duration::from_millis(self.global_int("http.body_idle_ms")?),
+            idle: ms("http.body_idle_ms")?,
+            total: ms("http.total_ms")?,
+            max_bytes: self.global_int("http.max_body_bytes")? as usize,
         })
     }
 

@@ -14,33 +14,56 @@ use super::discover::Found;
 use super::listen::{End, Pools};
 use super::{listen_log, load};
 
-/// Брошенные пулы снова ждут чтения (изменились настройки: могла появиться недостающая — dex.load_batch и т.п.):
-/// попытки — заново, в «загружаются» — снова. Принимает: пулы пачки, брошенные, ждущие. Ошибок нет.
+/// Брошенный пул: индекс в пачке и незаданная настройка, из-за которой он не прочитался (None — другая причина:
+/// такой пул ждёт переподключения пачки).
+#[derive(Debug, Clone)]
+pub struct Abandoned {
+    pub i: usize,
+    pub setting: Option<String>,
+}
+
+/// Брошенные из-за настройки `name` пулы снова ждут чтения (её задали): попытки — заново, в «загружаются» — снова.
+/// Остальные брошенные и ждущие не трогаются. Принимает: пулы пачки, брошенные, имя заданной настройки.
+/// Возвращает: вернувшиеся. Ошибок нет.
 pub fn revive(
     p: &Pools,
     pools: &[(Found, String)],
-    abandoned: &mut Vec<usize>,
-    missing: &mut Vec<Missing>,
-) {
-    let back: Vec<usize> = std::mem::take(abandoned);
-    p.loading.add(back.iter().map(|&i| &pools[i].0));
-    missing.extend(back.into_iter().map(|i| Missing { i, tries: 0 }));
+    abandoned: &mut Vec<Abandoned>,
+    name: &str,
+) -> Vec<Missing> {
+    let (back, keep): (Vec<Abandoned>, Vec<Abandoned>) = std::mem::take(abandoned)
+        .into_iter()
+        .partition(|a| a.setting.as_deref() == Some(name));
+    *abandoned = keep;
+    p.loading.add(back.iter().map(|a| &pools[a.i].0));
+    back.into_iter()
+        .map(|a| Missing { i: a.i, tries: 0 })
+        .collect()
 }
 
-/// Настройки изменились: брошенные пулы — снова в чтение (revive) и сразу попытка на последнем блоке.
-/// Принимает: окружение, пулы пачки, ждущие, брошенные. Ошибки: End — ядро закрыло канал.
+/// Изменилась настройка: если её задали (новое значение есть), пулы, брошенные из-за неё, — снова в чтение, сразу
+/// попытка на последнем блоке только для них (попытки обычных ждущих не тратятся); не прочитались — к ждущим.
+/// Принимает: окружение, пулы пачки, ждущие, брошенные, изменение. Ошибки: End — ядро закрыло канал.
 pub async fn on_settings(
     p: &Pools,
     pools: &[(Found, String)],
     missing: &mut Vec<Missing>,
-    abandoned: &mut Vec<usize>,
+    abandoned: &mut Vec<Abandoned>,
+    change: &crate::settings::live::Change,
 ) -> Result<(), End> {
-    revive(p, pools, abandoned, missing);
-    p.loading.publish(p).await;
-    match p.heads.latest() {
-        Some(h) if !missing.is_empty() => retry(p, pools, missing, abandoned, h.number).await,
-        _ => Ok(()),
+    if change.new.is_none() {
+        return Ok(());
     }
+    let mut back = revive(p, pools, abandoned, &change.name);
+    if back.is_empty() {
+        return Ok(());
+    }
+    p.loading.publish(p).await;
+    if let Some(h) = p.heads.latest() {
+        retry(p, pools, &mut back, abandoned, h.number).await?;
+    }
+    missing.extend(back);
+    Ok(())
 }
 
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
@@ -56,7 +79,7 @@ pub async fn retry(
     p: &Pools,
     pools: &[(Found, String)],
     missing: &mut Vec<Missing>,
-    abandoned: &mut Vec<usize>,
+    abandoned: &mut Vec<Abandoned>,
     at: u64,
 ) -> Result<(), End> {
     let limit = match p.ctx.int("dex.pool_load_retries") {
@@ -102,7 +125,9 @@ pub async fn retry(
                 // Дальше пул «недостоверен», а не «загружается» (loading.rs).
                 p.loading.done(&found.reference);
                 p.loading.publish(p).await;
-                abandoned.push(m.i);
+                // Брошен из-за незаданной настройки — вернётся, когда её зададут (on_settings).
+                let setting = crate::settings::read::missing_name(&why).map(String::from);
+                abandoned.push(Abandoned { i: m.i, setting });
             }
             Err(_) => keep.push(m),
         }

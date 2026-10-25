@@ -6,7 +6,8 @@
 //! - общий срок reqwest на весь обмен обрывает такой ответ на середине («error decoding response body» в журнале
 //!   было записано как «нет связи»);
 //! - с двумя сроками ответ дочитывается целиком и совпадает с записью байт в байт;
-//! - замолчавшее тело — «ответ не дочитан … получено N байт», а не «нет связи»; закрытый порт — «нет связи».
+//! - замолчавшее тело — «ответ не дочитан … получено N байт», а не «нет связи»; закрытый порт — «нет связи»;
+//! - тело по порциям чаще http.body_idle_ms, но дольше http.total_ms — остановка; больше http.max_body_bytes — остановка.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::gateway::http, reqwest, tokio (локальный TCP-сервер отдаёт записанные байты; данные не
@@ -100,9 +101,11 @@ async fn slow_big_body_is_read_whole_with_two_deadlines() {
     let lim = Limits {
         head: Duration::from_millis(300),
         idle: Duration::from_millis(300),
+        total: Duration::from_secs(10),
+        max_bytes: 4_000_000,
     };
     let (status, text) = exchange(http.post(&url), lim).await.unwrap();
-    assert_eq!(status, 200);
+    assert_eq!(status.as_u16(), 200);
     assert_eq!(text, body);
 }
 
@@ -113,6 +116,8 @@ async fn stalled_body_says_not_read_whole_not_no_link() {
     let lim = Limits {
         head: Duration::from_millis(300),
         idle: Duration::from_millis(200),
+        total: Duration::from_secs(10),
+        max_bytes: 4_000_000,
     };
     let f = exchange(reqwest::Client::new().post(&url), lim)
         .await
@@ -135,10 +140,50 @@ async fn closed_port_is_no_link() {
     let lim = Limits {
         head: Duration::from_millis(500),
         idle: Duration::from_millis(500),
+        total: Duration::from_secs(10),
+        max_bytes: 4_000_000,
     };
     let f = exchange(reqwest::Client::new().post(format!("http://{addr}/")), lim)
         .await
         .unwrap_err();
     assert!(f.not_sent(), "{f:?}");
     assert!(f.text(&lim).starts_with("нет связи"));
+}
+
+#[tokio::test]
+async fn trickling_body_stops_at_total_and_big_body_at_size_limit() {
+    let body = recorded_body();
+    // Порции идут чаще http.body_idle_ms, но весь обмен дольше http.total_ms — остановка с правдивой причиной.
+    let url = serve(body.clone(), PART, GAP, None).await;
+    let ms = Duration::from_millis;
+    let lim = Limits {
+        head: ms(300),
+        idle: ms(300),
+        total: ms(200),
+        max_bytes: 4_000_000,
+    };
+    let f = exchange(reqwest::Client::new().post(&url), lim)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(f, Fail::Total { got } if got > 0 && got < body.len()),
+        "{f:?}"
+    );
+    assert!(f.text(&lim).contains("http.total_ms"));
+    // Тело больше http.max_body_bytes — чтение остановлено, память не растёт.
+    let url = serve(body.clone(), PART, GAP, None).await;
+    let lim = Limits {
+        head: ms(300),
+        idle: ms(300),
+        total: ms(10_000),
+        max_bytes: 3 * PART,
+    };
+    let f = exchange(reqwest::Client::new().post(&url), lim)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(f, Fail::TooBig { got } if got > 3 * PART && got <= 4 * PART),
+        "{f:?}"
+    );
+    assert!(f.text(&lim).contains("http.max_body_bytes"));
 }

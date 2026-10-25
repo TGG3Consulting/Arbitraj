@@ -22,20 +22,18 @@ use super::discover::Found;
 use super::events;
 use super::group::{Group, Msg};
 use super::listen::{End, Pools};
-use super::progress::FirstLoad;
 use super::{link, listen_log, reload};
 
 /// Канал пулов, найденных после старта пачки.
 pub type Adds = mpsc::UnboundedReceiver<Vec<(Found, String)>>;
 
-/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются), канал новых пулов, отметку первой
-/// загрузки стартовой пачки (сразу после приёма пулов). Возвращает: конец и была ли загрузка состояния.
+/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются), канал новых пулов.
+/// Возвращает: конец и была ли загрузка состояния.
 pub async fn run(
     p: &Pools,
     name: &str,
     pools: &mut Vec<(Found, String)>,
     adds: &mut Option<Adds>,
-    first: &mut FirstLoad,
 ) -> (End, bool) {
     if let Some(rx) = adds.as_mut() {
         while let Ok(more) = rx.try_recv() {
@@ -54,10 +52,7 @@ pub async fn run(
         loaded: false,
     };
     let all: Vec<usize> = (0..m.pools.len()).collect();
-    let admitted = admit::admit(p, &mut g, &mut m, all).await;
-    // Первый приём пулов закончен (успешно или нет) — стартовая загрузка этой пачки готова, дальше — события.
-    first.mark();
-    let end = match admitted {
+    let end = match admit::admit(p, &mut g, &mut m, all).await {
         Ok(()) => {
             link::up(p, name).await;
             p.signals.pool_ready();
@@ -112,12 +107,16 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 }
             }
             changed = settings.recv(), if open => {
-                // Рассылка закрыта — настроек больше не будет; отставание (Lagged) — тоже «настройки менялись».
-                if matches!(changed, Err(tokio::sync::broadcast::error::RecvError::Closed)) {
-                    open = false;
-                    continue;
-                }
-                if let Err(end) = reload::on_settings(p, &m.pools, &mut m.missing, &mut m.abandoned).await {
+                // Рассылка закрыта — настроек больше не будет; отставание (Lagged) — изменения пропущены, ждём следующих.
+                let change = match changed {
+                    Ok(c) => c,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        open = false;
+                        continue;
+                    }
+                    Err(_) => continue,
+                };
+                if let Err(end) = reload::on_settings(p, &m.pools, &mut m.missing, &mut m.abandoned, &change).await {
                     return (end, true);
                 }
             }

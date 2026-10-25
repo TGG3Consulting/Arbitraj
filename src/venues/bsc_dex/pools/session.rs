@@ -27,18 +27,21 @@ use super::discover::Found;
 use super::events;
 use super::group::{Group, Msg};
 use super::listen::{End, Pools};
+use super::progress::FirstLoad;
 use super::{link, listen_log, reload};
 
 /// Канал пулов, найденных после старта пачки.
 pub type Adds = mpsc::UnboundedReceiver<Vec<(Found, String)>>;
 
-/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются принятыми), канал новых пулов.
+/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются принятыми), канал новых пулов, отметку
+/// первой загрузки стартовой пачки (ставится сразу после приёма пулов).
 /// Возвращает: конец и была ли загрузка состояния.
 pub async fn run(
     p: &Pools,
     name: &str,
     pools: &mut Vec<(Found, String)>,
     adds: &mut Option<Adds>,
+    first: &mut FirstLoad,
 ) -> (End, bool) {
     if let Some(rx) = adds.as_mut() {
         while let Ok(more) = rx.try_recv() {
@@ -56,7 +59,10 @@ pub async fn run(
         loaded: false,
     };
     let all: Vec<usize> = (0..m.pools.len()).collect();
-    let end = match admit::admit(p, &mut g, &mut m, all).await {
+    let admitted = admit::admit(p, &mut g, &mut m, all).await;
+    // Первый приём пулов закончен (успешно или нет) — стартовая загрузка этой пачки готова, дальше — события.
+    first.mark();
+    let end = match admitted {
         Ok(()) => {
             link::up(p, name).await;
             p.signals.pool_ready();

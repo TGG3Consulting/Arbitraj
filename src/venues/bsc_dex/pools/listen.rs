@@ -73,12 +73,13 @@ pub async fn run(
     first: bool,
     adds: Option<session::Adds>,
 ) {
-    let (mut first, mut pools, mut adds) = (first, pools, adds);
+    let (mut pools, mut adds) = (pools, adds);
+    // Конец первой загрузки стартовой пачки — сразу после её первого приёма пулов (session.rs), а не по концу сессии.
+    let mut first = p.signals.first_load(first);
     loop {
-        let (end, loaded) = session::run(&p, &name, &mut pools, &mut adds).await;
-        if std::mem::take(&mut first) {
-            p.signals.loaded();
-        }
+        let (end, loaded) = session::run(&p, &name, &mut pools, &mut adds, &mut first).await;
+        // Первая сессия оборвалась до приёма пулов — первая загрузка тоже считается законченной (повтор — ниже).
+        first.mark();
         let why = match end {
             End::Closed => return,
             End::Broken(why) => why,

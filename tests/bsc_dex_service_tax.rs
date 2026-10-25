@@ -5,8 +5,9 @@
 //!    (service_tax::calls) — тест сверяет файл с кодом; перезаписать: cargo test --test bsc_dex_service_tax -- --ignored
 //!    write_service_tax_calls. Источник USDT — пара PancakeSwap V2 WBNB/USDT (getPair из
 //!    tests/data/native_2026-10-25/arb_native_responses_2026-10-25.json), кошелёк — тот же, что в той записи.
-//! 2) разбор живого ответа узла (responses.json, tests/recorders/record_service_tax.js) — налоги и газ перевода;
-//!    тест помечен ignore, пока ответ не записан (из песочницы узел BSC недоступен).
+//! 2) разбор ЖИВОГО ответа узла (responses.json: bsc-dataseed.bnbchain.org, блок 0x7bb0bc5, записал техлид рекордером
+//!    tests/recorders/record_service_tax.js по calls.json коммита f16aa9e, sha256 сверен): налоги USDT 0 по всем трём
+//!    переводам, газ перевода 51603, decimals 18.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::check::{service_tax, simulate}.
@@ -69,7 +70,6 @@ fn write_service_tax_calls() {
 }
 
 #[test]
-#[ignore = "ждёт записи живого ответа узла: tests/recorders/record_service_tax.js → responses.json"]
 fn usdt_taxes_from_recorded_simulation() {
     let rec: Value =
         serde_json::from_str(&std::fs::read_to_string(format!("{DIR}responses.json")).unwrap())
@@ -82,9 +82,12 @@ fn usdt_taxes_from_recorded_simulation() {
         .trim_start_matches("0x");
     let dec = u8::from_str_radix(hex.trim_start_matches('0'), 16).unwrap();
     let (t, gas) = service_tax::read(&r, amount(), dec).unwrap();
-    // Налог — как измерен (ничего не предполагается); проценты в пределах 0–100, газ перевода есть.
-    for v in [t.buy_pct, t.sell_pct, t.transfer_pct] {
-        assert!(v >= 0.into() && v <= 100.into(), "{t:?}");
-    }
-    assert!(gas > 0);
+    assert_eq!(dec, 18);
+    // Живой узел (блок 0x7bb0bc5): налога у USDT нет ни на одном из трёх переводов — измерено, а не предположено.
+    assert!(
+        t.buy_pct.is_zero() && t.sell_pct.is_zero() && t.transfer_pct.is_zero(),
+        "{t:?}"
+    );
+    // Газ перевода на пустой адрес — вызов 7 записи.
+    assert_eq!(gas, 51603);
 }

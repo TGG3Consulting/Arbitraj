@@ -7,7 +7,8 @@
 //! - конвейер (node/receipts_pipe.rs) на блоках окна tests/data/receipts_2026-10-25/responses.json: следующие блоки
 //!   запрашиваются вперёд, отдаются строго по порядку; блок, который не пришёл с первого раза, запрашивается снова, а
 //!   пришедшие после него ждут в конвейере и повторно не запрашиваются;
-//! - на каком блоке и почему конвейер стоит (решение 71) — для записи при обрыве и гонки повтора на все узлы.
+//! - на каком блоке и почему конвейер стоит (решение 71) — для записи при обрыве и гонки повтора на все узлы;
+//! - гонка повтора берёт первый ПОЛНЫЙ ответ (null и неполные квитанции не выигрывают).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/receipts_common, arb::venues::bsc_dex::node::{rpc_capped, receipts_io, receipts_chain,
@@ -194,4 +195,55 @@ fn lag_names_the_block_the_pipe_stands_on() {
     // Следующий блок разобран — конвейер больше не стоит.
     lag.passed(129767716);
     assert_eq!(lag.hot(), None);
+}
+
+/// Ревью #61: гонка повтора на все узлы берёт первый ПОЛНЫЙ ответ, а не первый HTTP 200. Отстающий узел быстро
+/// отвечает null (блока ещё нет) или неполными квитанциями — побеждает пришедший позже полный ответ. Ответы — живая
+/// batch-запись блока 129761640 публичного узла; null и неполный — из неё же (убран заголовок, убрана квитанция).
+#[tokio::test]
+async fn race_takes_first_complete_answer_not_first_200() {
+    use arb::venues::bsc_dex::node::rpc_capped::Capped;
+    use arb::venues::bsc_dex::node::rpc_race::first_accepted;
+    use std::time::Duration;
+    let rec = batch_record();
+    let r = &rec["results"][1];
+    let n = u64::from_str_radix(
+        r["request"][0]["params"][0]
+            .as_str()
+            .unwrap()
+            .trim_start_matches("0x"),
+        16,
+    )
+    .unwrap();
+    let full = r["response"].clone();
+    let mut null = full.clone();
+    null[0]["result"] = Value::Null;
+    let mut short = full.clone();
+    short[1]["result"].as_array_mut().unwrap().pop();
+    let accept = |list| {
+        let (h, receipts) = pair(n, list)?;
+        complete(n, h.hash, &h.transactions, &receipts)?;
+        Ok(receipts.len())
+    };
+    let answer = |v: Value, ms: u64| async move {
+        tokio::time::sleep(Duration::from_millis(ms)).await;
+        Ok(Capped::Got(v.to_string()))
+    };
+    let want = full[1]["result"].as_array().unwrap().len();
+    for bad in [null, short] {
+        let runs = vec![
+            Box::pin(answer(bad.clone(), 0)),
+            Box::pin(answer(full.clone(), 30)),
+        ];
+        let got = first_accepted(runs, 2, accept).await;
+        assert!(matches!(got, Ok(k) if k == want), "побеждает полный ответ");
+    }
+    // Оба неполные — гонка проиграна с причиной (повтор ленты), а не «успех».
+    let mut short2 = full.clone();
+    short2[1]["result"].as_array_mut().unwrap().pop();
+    let runs = vec![
+        Box::pin(answer(short2.clone(), 0)),
+        Box::pin(answer(short2, 10)),
+    ];
+    assert!(first_accepted(runs, 2, accept).await.is_err());
 }

@@ -24,6 +24,7 @@ pub mod receipts_pipe;
 pub mod receipts_task;
 pub mod rpc;
 pub mod rpc_capped;
+pub mod rpc_race;
 pub mod source;
 pub mod subs;
 pub mod ws;

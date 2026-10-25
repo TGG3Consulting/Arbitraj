@@ -122,7 +122,10 @@ pub async fn report_pools(core: &Core, coins: &[CoinEntry]) {
             .join("\n"),
         Err(e) => format!("список не показан — {}", e.message),
     };
-    let text = format!("Пулы исключены по крючку: монет {}\n{shown}", fresh.len());
+    let text = format!(
+        "Монеты, у которых исключены пулы по крючку: {}\n{shown}",
+        fresh.len()
+    );
     deps.notify("pool.hook_excluded", None, &text).await;
 }
 

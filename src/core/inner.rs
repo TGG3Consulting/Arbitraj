@@ -54,6 +54,9 @@ pub struct Inner {
     /// «Ещё не проверена» (NotChecked — в том числе временно, пока пулы недостоверны после обрыва ленты) его не меняет:
     /// уведомления — только на настоящую смену (решение 71, rebuild_report.rs).
     pub told_blocks: Mutex<std::collections::HashMap<crate::core::types::Asset, String>>,
+    /// Монеты DEX, чьи пулы сняты до перечитывания (Invalidated): решение по чёрному списку держится, пока пул снова не
+    /// придёт (Touched::Pool). Пула нет по справочнику (NoUsdtPool без этой отметки) — решение снимается (решение 71).
+    pub held: Mutex<HashSet<(VenueId, alloy_primitives::Address)>>,
     /// Сколько монет ждали проверки налогов при прошлой пересборке (для coin.check_done).
     pub not_checked: Mutex<usize>,
     /// Первый проход проверки налогов после запуска: пока он идёт, вход и выход из чёрного списка не уведомляются по
@@ -123,6 +126,7 @@ impl Inner {
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),
             told_blocks: Mutex::default(),
+            held: Mutex::default(),
             not_checked: Mutex::default(),
             first_pass: Mutex::default(),
             signals: Mutex::default(),

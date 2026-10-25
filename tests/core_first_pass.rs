@@ -178,3 +178,30 @@ async fn reset_of_pools_is_not_a_blacklist_event() {
     );
     assert!(!msgs.iter().any(|m| m.contains("CAKE")));
 }
+
+/// Решение 71, путь «держать решение без проверок» (core/rebuild_blacklist.rs keep_verdict): только когда пулы сняты до
+/// перечитывания (Invalidated); пула нет по справочнику — решение снимается; ручная отметка и проверки — как всегда.
+#[test]
+fn verdict_is_held_only_while_pools_are_invalidated() {
+    use arb::core::rebuild_blacklist::keep_verdict;
+    assert!(
+        keep_verdict(true, true, true, true),
+        "пулы сняты до перечитывания — держим"
+    );
+    assert!(
+        !keep_verdict(true, true, true, false),
+        "пула нет по справочнику — снимаем"
+    );
+    assert!(
+        !keep_verdict(true, false, true, true),
+        "проверки есть — пересчёт по ним"
+    );
+    assert!(
+        !keep_verdict(false, true, true, true),
+        "ручная отметка — по ней"
+    );
+    assert!(
+        !keep_verdict(true, true, false, true),
+        "не в списке — держать нечего"
+    );
+}

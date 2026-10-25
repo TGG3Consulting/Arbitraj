@@ -56,6 +56,9 @@ pub(super) struct State {
     pub(super) generation: u64,
     /// Причина последнего обрыва.
     pub(super) broken: Option<String>,
+    /// Живые «соединения» текущего поколения и прошлых (пачка закрывает своё после Invalidated — pools/session.rs).
+    pub(super) live: usize,
+    pub(super) old: usize,
 }
 
 impl Feed {
@@ -134,9 +137,23 @@ impl Feed {
     pub fn cut(&self, why: &str) {
         let mut s = self.lock();
         s.generation += 1;
+        s.old += std::mem::take(&mut s.live);
         s.broken = Some(format!("{SOURCE}: {why}"));
         s.subs.clear();
         self.inner.last.send_replace(None);
+    }
+
+    /// Полный сброс ленты (решение 72, ревью #62): «сброс» на отметке отставания стоит (котировки, сделки и вердикты
+    /// проверок запрещены), отставание не снимается, затем обрыв. Ошибок нет.
+    pub fn reset(&self, why: &str) {
+        self.inner.lag.hold();
+        self.cut(why);
+    }
+
+    /// Снимает «сброс», когда все «соединения» прошлых поколений закрыты (их пачки уже сделали пулы недостоверными).
+    /// Циклы не будит. Возвращает: true — «сброс» снят сейчас. Ошибок нет.
+    pub fn release_if_settled(&self) -> bool {
+        self.inner.lag.held() && self.lock().old == 0 && self.inner.lag.release()
     }
 
     /// Задача ленты кончилась (источник сменён): следующая Feed::open запустит её снова. Ошибок нет.

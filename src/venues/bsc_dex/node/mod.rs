@@ -23,6 +23,7 @@ pub mod receipts_handle;
 pub mod receipts_io;
 pub mod receipts_lag;
 pub mod receipts_nodes;
+pub mod receipts_notice;
 pub mod receipts_pipe;
 pub mod receipts_step;
 pub mod receipts_task;

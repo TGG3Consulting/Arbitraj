@@ -27,6 +27,14 @@ pub struct Handle {
 impl Handle {
     /// Новое «соединение» ленты поколения `generation`. Ошибок нет.
     pub(super) fn new(feed: Feed, generation: u64) -> Handle {
+        {
+            let mut s = feed.lock();
+            if s.generation == generation {
+                s.live += 1;
+            } else {
+                s.old += 1;
+            }
+        }
         Handle {
             feed,
             generation,
@@ -111,12 +119,19 @@ impl Handle {
 }
 
 impl Drop for Handle {
-    /// Подписки пачки снимаются вместе с ней (как подписки соединения WebSocket при его закрытии).
+    /// Подписки пачки снимаются вместе с ней (как подписки соединения WebSocket при его закрытии); счёт живых
+    /// «соединений» поколения уменьшается.
     fn drop(&mut self) {
         let ids = std::mem::take(&mut *self.ids.lock().unwrap_or_else(|p| p.into_inner()));
         let mut s = self.feed.lock();
         for id in ids {
             s.subs.remove(&id);
+        }
+        // Учёт живых «соединений»: прошлого поколения закрыто — «сброс» ленты может сниматься (Feed::release_if_settled).
+        if s.generation == self.generation {
+            s.live = s.live.saturating_sub(1);
+        } else {
+            s.old = s.old.saturating_sub(1);
         }
     }
 }

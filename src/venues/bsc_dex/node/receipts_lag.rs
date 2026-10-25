@@ -22,6 +22,8 @@ struct Stuck {
     since: Instant,
     tries: u32,
     why: String,
+    /// «Блока нет нигде» подряд (Fail::Missing) — для одного узла невосполнимо только со второго.
+    nowhere: u32,
 }
 
 /// Отставание ленты и блок, на котором она стоит.
@@ -37,12 +39,13 @@ pub struct Lag {
 }
 
 impl Lag {
-    /// Блок `n` не пришёл (причина `why`). Ошибок нет.
-    pub fn failed(&mut self, n: u64, why: &str) {
+    /// Блок `n` не пришёл (причина `why`; `missing` — «блока нет нигде», иначе счёт таких подряд обнуляется). Ошибок нет.
+    pub fn failed(&mut self, n: u64, why: &str, missing: bool) {
         match &mut self.stuck {
             Some(s) if s.n == n => {
                 s.tries += 1;
                 s.why = why.to_string();
+                s.nowhere = if missing { s.nowhere + 1 } else { 0 };
             }
             _ => {
                 self.stuck = Some(Stuck {
@@ -50,9 +53,18 @@ impl Lag {
                     since: Instant::now(),
                     tries: 1,
                     why: why.to_string(),
+                    nowhere: missing as u32,
                 })
             }
         }
+    }
+
+    /// Сколько раз подряд перед этим блок `n` «нет нигде». Ошибок нет.
+    pub fn nowhere(&self, n: u64) -> u32 {
+        self.stuck
+            .as_ref()
+            .filter(|s| s.n == n)
+            .map_or(0, |s| s.nowhere)
     }
 
     /// Блок `n` разобран: если конвейер стоял на нём — больше не стоит. Ошибок нет.
@@ -89,20 +101,8 @@ impl Lag {
             "блок стоит дольше bsc.receipts_stuck_reset_s = {limit} с — полный сброс{}",
             self.stuck_text()
         );
-        let out = feed
-            .inner
-            .out
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .clone();
-        if let Some(out) = out {
-            let ev = crate::gateway::events::MarketEvent::Notice {
-                venue: ctx.venue(),
-                code: "dex.receipts_stuck".into(),
-                text: format!("{SOURCE}: {why}"),
-            };
-            let _ = out.try_send(ev);
-        }
+        feed.notice(ctx, "dex.receipts_stuck", format!("{SOURCE}: {why}"))
+            .await;
         Some(why)
     }
 

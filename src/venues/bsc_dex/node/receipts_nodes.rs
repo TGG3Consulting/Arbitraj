@@ -28,12 +28,20 @@ pub struct Nodes {
     free: Mutex<HashMap<String, Instant>>,
 }
 
-/// Список узлов и темп каждого. None — список не задан или пуст (лента идёт через основной узел). Ошибки: список задан,
-/// а темп нет (или 0), адрес не https.
+/// Список узлов и темп каждого. None — список не задан или пуст (лента идёт через основной узел). Ошибки: список не
+/// читается (хранится в неверном виде — не тихий переход на основной узел), список задан, а темп нет (или 0), адрес не
+/// https.
 pub fn list(ctx: &Ctx) -> GatewayResult<Option<(Vec<String>, u64)>> {
     let urls = match ctx.settings.list("bsc.receipts_node_urls", At::default()) {
         Ok(v) if !v.is_empty() => v,
-        _ => return Ok(None),
+        Ok(_) => return Ok(None),
+        Err(e) if e.code == crate::gateway::errors::ErrorCode::NotConfigured => return Ok(None),
+        Err(e) => {
+            return Err(ctx.not_set(
+                "bsc.receipts_node_urls",
+                format!("bsc.receipts_node_urls не читается: {}", e.message),
+            ));
+        }
     };
     if let Some(bad) = urls.iter().find(|u| !u.starts_with("https://")) {
         return Err(ctx.not_set(

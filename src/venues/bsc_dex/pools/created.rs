@@ -21,7 +21,7 @@ use crate::core::types::PoolRef;
 use crate::settings::live::Watch as Changes;
 use crate::storage::journal::Level;
 
-use super::super::node::ws::Conn;
+use super::super::node::source::Link;
 use super::created_log;
 use super::discover::Scanned;
 use super::listen::Pools;
@@ -81,7 +81,8 @@ pub async fn run(p: Pools, w: Watch) {
 /// Одна сессия до обрыва: подписки по фильтрам, каждое событие с монетой подписки — пул проверяется на узле и
 /// подключается (created_log.rs). Принимает: фильтры. Возвращает причину конца.
 async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
-    let conn = match Conn::open(&p.ctx, "created").await {
+    // Источник — как у пулов (bsc.pool_events_source, решение 68): WebSocket или квитанции блоков.
+    let conn = match Link::open(&p.ctx, &p.feed, &p.heads, "created").await {
         Ok(c) => c,
         Err(e) => return e.message,
     };

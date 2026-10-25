@@ -41,7 +41,7 @@ pub async fn run(
             extend(pools, more);
         }
     }
-    let mut g = match Group::open(&p.ctx, name).await {
+    let mut g = match Group::open(p, name).await {
         Ok(g) => g,
         Err(e) => return (End::Broken(e.message), false),
     };

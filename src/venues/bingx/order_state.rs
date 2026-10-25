@@ -133,34 +133,6 @@ async fn query(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> 
     .map_err(|e| unknown(ctx, order_id, &e.message))
 }
 
-/// Ордер по своему ID (newClientOrderId), когда ответ на его постановку не получен (решение 64): сверка факта вместо
-/// повтора. Принимает: пару, свой ID ордера. Возвращает: состояние ордера (ответ Query Order details, в нём orderId).
-/// Ошибки: OutcomeUnknown — BingX не ответил или не нашёл (что именно значит «не нашёл», документация не говорит —
-/// выставлен ордер или нет, остаётся неизвестным; нужна проверка). Документация: GET /openApi/spot/v1/trade/query —
-/// параметр clientOrderID («Customized order ID for users», bingx-api api-ai-skills/skills/spot-trade/api-reference.md,
-/// раздел «Query Single Order»).
-pub async fn find(ctx: &Ctx, symbol: &str, client_id: &str) -> GatewayResult<Value> {
-    let q = vec![
-        ("symbol", symbol.to_string()),
-        ("clientOrderID", client_id.to_string()),
-    ];
-    rest::signed(
-        ctx,
-        Method::GET,
-        "/openApi/spot/v1/trade/query",
-        q,
-        Op::Other,
-    )
-    .await
-    .map_err(|e| {
-        unknown(
-            ctx,
-            client_id,
-            &format!("поиск по своему ID ордера: {}", e.message),
-        )
-    })
-}
-
 /// Состояние окончательное.
 fn is_final(s: &Value) -> bool {
     num::text_opt(s, "status").is_some_and(|st| FINAL.contains(&st.as_str()))

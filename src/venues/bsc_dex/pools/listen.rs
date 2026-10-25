@@ -50,6 +50,8 @@ pub struct Pools {
     pub signals: Signals,
     /// Пулы, ждущие первого чтения — для «пулы найдены, загружаются» в ядре (loading.rs, решение 61).
     pub loading: super::loading::Loading,
+    /// Лента квитанций блоков — источник событий пулов при bsc.pool_events_source = receipts (решение 68).
+    pub feed: super::super::node::receipts::Feed,
 }
 
 /// Чем кончилась сессия.

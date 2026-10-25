@@ -21,7 +21,7 @@ use crate::core::types::PoolRef;
 use crate::settings::live::Watch as Changes;
 use crate::storage::journal::Level;
 
-use super::super::node::ws::Conn;
+use super::super::node::source::Link;
 use super::created_log;
 use super::discover::Scanned;
 use super::listen::Pools;
@@ -40,11 +40,14 @@ pub struct Watch {
     pub late: super::attach::Late,
 }
 
-/// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* — фильтры
-/// пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
+/// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* или источника событий
+/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
 /// изменения dex.* (без переподключений впустую). Ошибок не возвращает: всё — в журнал.
 pub async fn run(p: Pools, w: Watch) {
-    let mut changes = Changes::new(p.ctx.settings.subscribe(), vec!["dex.".into()]);
+    let mut changes = Changes::new(
+        p.ctx.settings.subscribe(),
+        vec!["dex.".into(), "bsc.pool_events_source".into()],
+    );
     let mut told_empty = false;
     loop {
         let list = filters(&p, w.usdt).await;
@@ -81,7 +84,8 @@ pub async fn run(p: Pools, w: Watch) {
 /// Одна сессия до обрыва: подписки по фильтрам, каждое событие с монетой подписки — пул проверяется на узле и
 /// подключается (created_log.rs). Принимает: фильтры. Возвращает причину конца.
 async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
-    let conn = match Conn::open(&p.ctx, "created").await {
+    // Источник — как у пулов (bsc.pool_events_source, решение 68): WebSocket или квитанции блоков.
+    let conn = match Link::open(&p.ctx, &p.feed, &p.heads, "created").await {
         Ok(c) => c,
         Err(e) => return e.message,
     };

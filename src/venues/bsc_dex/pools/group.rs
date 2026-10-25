@@ -21,9 +21,8 @@ use tokio::task::JoinHandle;
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
-use super::super::ctx::Ctx;
+use super::super::node::source::Link;
 use super::super::node::subs;
-use super::super::node::ws::Conn;
 use super::discover::Found;
 use super::events;
 
@@ -52,7 +51,7 @@ pub enum Topics {
 
 /// Соединение пачки и её постоянные подписки.
 pub struct Group {
-    pub conn: Conn,
+    pub conn: Link,
     tx: mpsc::UnboundedSender<Msg>,
     pub rx: mpsc::UnboundedReceiver<Msg>,
     /// Подписка «все события» и её пулы (индексы в пачке).
@@ -62,9 +61,10 @@ pub struct Group {
 }
 
 impl Group {
-    /// Открывает соединение пачки. Ошибки: как у Conn::open.
-    pub async fn open(ctx: &Ctx, name: &str) -> GatewayResult<Group> {
-        let conn = Conn::open(ctx, name).await?;
+    /// Открывает связь пачки с источником событий (bsc.pool_events_source: WebSocket или квитанции блоков, решение 68).
+    /// Ошибки: как у Link::open.
+    pub async fn open(p: &super::listen::Pools, name: &str) -> GatewayResult<Group> {
+        let conn = Link::open(&p.ctx, &p.feed, &p.heads, name).await?;
         let (tx, rx) = mpsc::unbounded_channel();
         Ok(Group {
             conn,
@@ -179,4 +179,13 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
             subs::by_pool_id(manager, &ids, &topic0)
         }
     }
+}
+
+/// Индекс пулов пачки по ссылке (pools/session.rs: лог → пул). Ошибок нет.
+pub fn index(pools: &[(Found, String)]) -> std::collections::HashMap<PoolRef, usize> {
+    pools
+        .iter()
+        .enumerate()
+        .map(|(i, (f, _))| (f.reference.clone(), i))
+        .collect()
 }

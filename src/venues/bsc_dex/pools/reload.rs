@@ -47,7 +47,7 @@ pub async fn retry(
                 .await;
             // Без dex.pool_load_retries ждущие «застряли» — сводку первого прохода не держат (loading.rs).
             for m in missing.iter() {
-                p.loading.stuck(&pools[m.i].0.reference, true);
+                p.loading.stuck(p, &pools[m.i].0.reference, true);
             }
             return Ok(());
         }
@@ -90,7 +90,7 @@ pub async fn retry(
             }
             Err(why) => {
                 // Ждёт незаданную настройку — пул «застрял», сводку первого прохода не держит (loading.rs).
-                p.loading.stuck(&found.reference, why.setting.is_some());
+                p.loading.stuck(p, &found.reference, why.setting.is_some());
                 keep.push(m)
             }
         }

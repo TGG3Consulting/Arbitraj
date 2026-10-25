@@ -40,6 +40,11 @@ pub struct SymbolRules {
     pub step_size: Decimal,
     pub min_notional: Option<Decimal>,
     pub max_notional: Option<Decimal>,
+    /// minQty / maxQty (решение 66): docs-v3 «Spot trading symbols» — «Deprecated; can be calculated using
+    /// minQty=minNotional/price»; api-ai-skills skills/spot-market/api-reference.md — обычные поля «Minimum / Maximum
+    /// order quantity». Живой ответ 2026-10-24: CAKE-USDT minQty 2.672 ≠ minNotional / price. Соблюдаются оба предела.
+    pub min_qty: Option<Decimal>,
+    pub max_qty: Option<Decimal>,
     /// Статус по документации.
     pub status: i64,
     pub api_buy: bool,
@@ -119,6 +124,11 @@ impl Symbols {
             online: r.status == STATUS_ONLINE,
             api_buy: r.api_buy,
             api_sell: r.api_sell,
+            step_size: r.step_size,
+            min_notional: r.min_notional,
+            max_notional: r.max_notional,
+            min_qty: r.min_qty,
+            max_qty: r.max_qty,
         })
     }
 
@@ -160,6 +170,8 @@ fn parse(s: &Value, symbol: String) -> GatewayResult<SymbolRules> {
         step_size: num::dec(s, "stepSize")?,
         min_notional: num::dec_opt(s, "minNotional")?,
         max_notional: num::dec_opt(s, "maxNotional")?,
+        min_qty: num::dec_opt(s, "minQty")?,
+        max_qty: num::dec_opt(s, "maxQty")?,
         status: num::int(s, "status")?,
         api_buy: api_flag(s, "apiStateBuy")?,
         api_sell: api_flag(s, "apiStateSell")?,

@@ -86,6 +86,11 @@ async fn run(core: &Core, d: Direction) {
         plan.profit_usd.round_dp(4)
     ));
     super::ledger::save(core, &deal).await;
+    // Решение 66: покупка только с бюджетом подбора объёма — без него предела списания нет, сделки нет.
+    let Some(budget) = plan.size.as_ref().map(|s| s.budget) else {
+        let why = "в плане нет подбора объёма (бюджета) — покупка без предела списания не ставится";
+        return super::ledger::finish(core, &mut deal, Step::Closed, why).await;
+    };
     // Покупка на A.
     let bought = super::trade_ops::trade(
         core,
@@ -96,6 +101,7 @@ async fn run(core: &Core, d: Direction) {
         plan.qty,
         plan.buy_quote.route.clone(),
         plan.buy_quote.avg_price,
+        Some(budget),
     )
     .await;
     let r = match bought {

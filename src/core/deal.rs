@@ -54,6 +54,10 @@ pub struct Deal {
     pub buy: Option<TradeResult>,
     pub transfers: Vec<Transfer>,
     pub sells: Vec<TradeResult>,
+    /// Пыль (решение 66): остаток после продажи меньше шага количества или минимума ордера биржи — продать нельзя,
+    /// остаётся на балансе площадки; его стоимость уже в затратах расчёта (StepRemainder). Сделку не держит.
+    #[serde(default)]
+    pub dust: Decimal,
     /// Сколько раз монету перегоняли (режим «Перегон»).
     pub relays: u64,
     /// Итог сделки, USDT (когда закрыта).
@@ -86,6 +90,7 @@ impl Deal {
             buy: None,
             transfers: vec![],
             sells: vec![],
+            dust: Decimal::ZERO,
             relays: 0,
             result_usd: None,
             provisional_usd: None,

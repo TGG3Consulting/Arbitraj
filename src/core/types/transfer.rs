@@ -29,6 +29,10 @@ pub struct CoinNetworkInfo {
     pub deposit_min: Option<Decimal>,
     /// Сколько подтверждений сети ждёт площадка для зачисления депозита.
     pub deposit_confirmations: Option<u32>,
+    /// Сколько знаков после запятой принимает вывод (у BingX — withdrawPrecision; в документации поля нет, оно есть в
+    /// живом ответе config/getall 2026-10-24 — вопрос Тиграну, решение 66). Сумма вывода округляется вниз. None — нет.
+    #[serde(default)]
+    pub withdraw_precision: Option<u32>,
     pub updated_at: DateTime<Utc>,
 }
 

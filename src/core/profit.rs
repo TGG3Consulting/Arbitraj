@@ -1,12 +1,12 @@
 //! Файл: core/profit.rs
-//! Что делает: решение по кандидату (шаг 4 ТЗ): подбирает объём и проверяет прибыль после всех затрат.
-//! Объёмы-кандидаты — границы уровней стакана биржи на стороне A (asks) и B (bids) в пределах бюджета
-//! (limits.rs) плюс сам бюджет; объём наращивается, пока прибыль растёт (ТЗ: «пока следующая порция
-//! ещё прибыльна»). Сделка проходит, если прибыль ≥ money.min_profit_usd и ≥ money.min_profit_pct
-//! от вложенного. Иначе — отказ с причиной (для подбора порогов).
-//! Кто вызывает: core/candidates.rs (очередь тяжёлого расчёта), позже executor.rs (предпроверка).
-//! От чего зависит: costs.rs, dirctx.rs, limits.rs, market_state.rs, settings.
-//! Настройки: money.min_profit_usd, money.min_profit_pct (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
+//! Что делает: решение по кандидату (шаг 4 ТЗ, решение 66): сначала подбирает объём с наибольшей прибылью в долларах
+//! после всех затрат при условии «вложение ≤ бюджета» (size_search.rs по кривой size_curve.rs — полный расчёт
+//! costs.rs на каждый объём), и только потом проверяет пороги: прибыль ≥ money.min_profit_usd и ≥ money.min_profit_pct
+//! от вложенного. Иначе — отказ с причиной и лучшим расчётом (для подбора порогов). В расчёт кладётся объяснение
+//! выбора: «оптимум 7.3 WFI: прибыль 0.41; на бюджете 20 (9.75 WFI) — 0.33».
+//! Кто вызывает: core/candidates.rs (очередь тяжёлого расчёта), core/precheck.rs (пересчёт перед покупкой).
+//! От чего зависит: costs.rs, dirctx.rs, limits.rs, size_curve.rs, size_search.rs, market_state.rs, settings.
+//! Настройки: money.min_profit_usd, money.min_profit_pct, size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -14,9 +14,11 @@ use serde::Serialize;
 use crate::core::types::{Direction, Side};
 use crate::settings::read::At;
 
-use super::costs::{self, Calc};
+use super::costs::Calc;
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
+use super::size::SizeChoice;
+use super::size_curve::{CoreCurve, params};
 
 /// Итог расчёта кандидата.
 #[derive(Debug, Clone, Serialize)]
@@ -25,30 +27,6 @@ pub enum Verdict {
     Accept(Calc),
     /// Отказ: причина и лучший найденный расчёт (если был).
     Reject { reason: String, best: Option<Calc> },
-}
-
-/// Объёмы для перебора, по возрастанию: границы уровней стаканов бирж сделки до бюджета + бюджет.
-/// Принимает: ядро, направление, бюджет в USDT, опорную цену покупки. Ошибок нет.
-fn sizes(core: &Core, d: &Direction, budget: Decimal, price: Decimal) -> Vec<Decimal> {
-    let max = budget / price;
-    let market = rd(&core.inner.market);
-    let mut out = vec![max];
-    for (venue, side) in [(&d.buy_on, Side::Buy), (&d.sell_on, Side::Sell)] {
-        if let Some(b) = market.book(venue, &d.asset.ticker) {
-            let levels = if side == Side::Buy { &b.asks } else { &b.bids };
-            let mut cum = Decimal::ZERO;
-            for l in levels {
-                cum += l.qty;
-                if cum >= max {
-                    break;
-                }
-                out.push(cum);
-            }
-        }
-    }
-    out.sort();
-    out.dedup();
-    out
 }
 
 /// Расчёт кандидата. Принимает: ядро, направление. Возвращает: Verdict. Ошибок нет — всё в Reject.
@@ -78,45 +56,75 @@ pub async fn decide(core: &Core, d: &Direction) -> Verdict {
         Some(p) if !p.is_zero() => p,
         _ => return reject("нет цены покупки на A".into(), None),
     };
-    let mut best: Option<Calc> = None;
-    let mut last_err = String::new();
-    for q in sizes(core, d, budget, price) {
-        match costs::evaluate(&core.inner.deps, &cx, q).await {
-            Ok(c) if c.invested > budget => {
-                last_err = format!("объём {q}: вложение {} больше бюджета {budget}", c.invested);
-                break;
-            }
-            Ok(c) => {
-                let better = best.as_ref().is_none_or(|b| c.profit_usd > b.profit_usd);
-                if !better && best.is_some() {
-                    break; // прибыль перестала расти — дальше объём не наращиваем
-                }
-                best = Some(c);
-            }
-            // Мелкий объём может не пройти минимум вывода или депозита — пробуем больше.
-            Err(e) if best.is_none() => last_err = e,
-            Err(e) => {
-                last_err = e;
-                break;
-            }
-        }
-    }
-    match best {
-        None => reject(last_err, None),
-        Some(c) if c.profit_usd < min_usd => reject(
+    let p = match params(core, &cx, budget, price) {
+        Ok(p) => p,
+        Err(e) => return reject(e, None),
+    };
+    let mut curve = CoreCurve { core, cx: &cx };
+    let found = match super::size_search::search(&mut curve, &p).await {
+        Ok(f) => f,
+        Err(e) => return reject(e.to_string(), None),
+    };
+    let mut choice = found.choice;
+    choice.why = why(&choice, &d.asset.ticker);
+    let mut c = found.best.data;
+    c.size = Some(choice.clone());
+    if c.profit_usd < min_usd {
+        return reject(
             format!(
-                "прибыль {} USDT ниже порога {min_usd}",
-                c.profit_usd.round_dp(4)
+                "прибыль {} USDT ниже порога {min_usd} ({})",
+                c.profit_usd.round_dp(4),
+                choice.why
             ),
             Some(c),
-        ),
-        Some(c) if c.profit_pct < min_pct => reject(
+        );
+    }
+    if c.profit_pct < min_pct {
+        return reject(
             format!(
-                "прибыль {}% ниже порога {min_pct}%",
-                c.profit_pct.round_dp(4)
+                "прибыль {}% ниже порога {min_pct}% ({})",
+                c.profit_pct.round_dp(4),
+                choice.why
             ),
             Some(c),
-        ),
-        Some(c) => Verdict::Accept(c),
+        );
     }
+    Verdict::Accept(c)
+}
+
+/// Почему объём лучший — текст для журнала и «Кандидатов». Принимает: итог подбора, тикер. Ошибок нет.
+pub fn why(c: &SizeChoice, ticker: &str) -> String {
+    let r = |v: Decimal| v.round_dp(4).normalize();
+    let head = format!(
+        "оптимум {} {ticker}: прибыль {}",
+        c.qty.normalize(),
+        r(c.profit)
+    );
+    let budget = if c.qty == c.max_qty {
+        format!(
+            "это и есть наибольший объём в пределах бюджета {}",
+            r(c.budget)
+        )
+    } else {
+        format!(
+            "на бюджете {} ({} {ticker}) — {}",
+            r(c.budget),
+            c.max_qty.normalize(),
+            r(c.at_budget_profit)
+        )
+    };
+    let mut exact = String::new();
+    if !c.max_exact {
+        exact.push_str("; граница бюджета не уточнена до шага (мало size.bisect_steps)");
+    }
+    if c.capped {
+        exact.push_str("; поиск остановлен пределом size.max_evals — лучший из посчитанных");
+    }
+    format!(
+        "{head}; {budget}; допустимо {}–{} {ticker}, посчитано объёмов {}, пиков {}{exact}",
+        c.min_qty.normalize(),
+        c.max_qty.normalize(),
+        c.evals,
+        c.peaks
+    )
 }

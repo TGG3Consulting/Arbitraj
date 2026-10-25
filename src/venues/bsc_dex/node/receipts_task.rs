@@ -38,8 +38,9 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
         let Some(inner) = weak.upgrade() else { return };
         let feed = Feed { inner };
         if ctx.text("bsc.pool_events_source").ok().as_deref() != Some("receipts") {
-            feed.cut("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
+            // Сначала «задача кончилась», потом обрыв: «соединение», открытое после обрыва, запустит ленту заново.
             feed.stopped();
+            feed.cut("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
             return;
         }
         let target = w.borrow_and_update().as_ref().map(|h| h.number);
@@ -48,13 +49,12 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             None => Ok(true),
         };
         let why = match res {
-            Ok(done) => {
+            // Блоков в секунду меряем только догнав голову: во время догона блоки идут быстрее сети.
+            Ok(true) => {
                 budget.check(&ctx, &chain).await;
-                if !done {
-                    continue;
-                }
                 None
             }
+            Ok(false) => continue,
             Err(Fail::Retry(why)) => Some((Level::Warn, why)),
             Err(Fail::Break(why)) => {
                 chain.clear();

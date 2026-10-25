@@ -20,7 +20,7 @@ use crate::core::types::PoolRef;
 use super::admit::{self, Members};
 use super::discover::Found;
 use super::events;
-use super::group::{Group, Msg};
+use super::group::{self, Group, Msg};
 use super::listen::{End, Pools};
 use super::revive;
 use super::{link, listen_log, reload};
@@ -67,11 +67,18 @@ pub async fn run(
 
 /// События пачки до обрыва. Возвращает: (конец, true — состояние загружалось).
 async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Adds>) -> (End, bool) {
+    // Источник могли сменить, пока шёл приём пулов (admit) — сразу переподключение через новый (решение 68).
+    if g.conn.stale(&p.ctx) {
+        return (
+            End::Broken("источник событий пулов сменён (bsc.pool_events_source)".into()),
+            true,
+        );
+    }
     let mut heads = p.heads.watch();
     // Изменения настроек: могла появиться недостающая (dex.load_batch и т.п.) — брошенные и ждущие пулы читаются
     // снова без переподключения и перезапуска.
     let (mut settings, mut open) = (p.ctx.settings.subscribe(), true);
-    let mut idx = index(&m.pools);
+    let mut idx = group::index(&m.pools);
     loop {
         tokio::select! {
             msg = g.rx.recv() => {
@@ -94,7 +101,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 if let Err(end) = admit::admit(p, g, m, new).await {
                     return (end, true);
                 }
-                idx = index(&m.pools);
+                idx = group::index(&m.pools);
             }
             changed = heads.changed(), if !m.missing.is_empty() => {
                 if changed.is_err() {
@@ -165,15 +172,6 @@ async fn on_log(
             "лог подписки без blockNumber — блок пробуждения пула неизвестен".into(),
         )),
     }
-}
-
-/// Индекс пулов пачки по ссылке. Ошибок нет.
-fn index(pools: &[(Found, String)]) -> HashMap<PoolRef, usize> {
-    pools
-        .iter()
-        .enumerate()
-        .map(|(i, (f, _))| (f.reference.clone(), i))
-        .collect()
 }
 
 /// Добавляет пулы, которых в пачке ещё нет. Ошибок нет.

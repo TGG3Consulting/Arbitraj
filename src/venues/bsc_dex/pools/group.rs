@@ -180,3 +180,12 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
         }
     }
 }
+
+/// Индекс пулов пачки по ссылке (pools/session.rs: лог → пул). Ошибок нет.
+pub fn index(pools: &[(Found, String)]) -> std::collections::HashMap<PoolRef, usize> {
+    pools
+        .iter()
+        .enumerate()
+        .map(|(i, (f, _))| (f.reference.clone(), i))
+        .collect()
+}

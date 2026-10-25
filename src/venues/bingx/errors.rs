@@ -47,6 +47,26 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
     GatewayError::new(unified, Some(venue()), text).with_raw(raw)
 }
 
+/// Ордер или вывод: запрос мог дойти до BingX, а ясного итога нет (нет ответа, ответ не дочитан или непонятен,
+/// HTTP 504) — «результат неизвестен» (OutcomeUnknown, решение 64): ядро не повторяет такую операцию ни при каких
+/// правилах шлюза (core/rules_apply.rs) — стартовое правило Тиграна «отправлен и не исполнился — больше не пробуем».
+/// Остальные ошибки и операции Op::Other — как есть. Принимает: ошибку, операцию. Возвращает: ошибку. Ошибок нет.
+pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
+    if op == Op::Other || !matches!(e.code, ErrorCode::Timeout | ErrorCode::BadResponse) {
+        return e;
+    }
+    let what = if op == Op::Trade {
+        "ордер"
+    } else {
+        "вывод"
+    };
+    GatewayError {
+        code: ErrorCode::OutcomeUnknown,
+        message: format!("{} — {what} мог быть принят, итог не получен", e.message),
+        ..e
+    }
+}
+
 /// Ошибка по HTTP-статусу (когда тело не в формате BingX).
 /// 418 — IP заблокирован после превышения лимита; 429 — слишком частые запросы.
 pub fn from_http(status: u16, raw: &str) -> GatewayError {

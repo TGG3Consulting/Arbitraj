@@ -9,7 +9,7 @@
 //! Официальная документация:
 //! - POST /openApi/spot/v1/trade/order — symbol, side (BUY/SELL), type (LIMIT), quantity, price,
 //!   timeInForce (PostOnly, GTC, IOC, FOK), newClientOrderId (буквы, цифры, «_», 1–40 символов).
-//! - GET /openApi/spot/v1/trade/query — symbol, orderId; ответ: executedQty, cummulativeQuoteQty,
+//! - GET /openApi/spot/v1/trade/query — symbol, orderId или clientOrderID; ответ: executedQty, cummulativeQuoteQty,
 //!   status, fee, feeAsset, avgPrice.
 //!
 //! Количество округляется вниз до stepSize, цена — до tickSize в безопасную сторону
@@ -30,7 +30,7 @@ use super::{num, order_state, rest};
 /// Ждёт окончательного состояния ордера; не дождался — отменяет остаток (правило Тиграна:
 /// не исполнился — отменяем, больше не пробуем) и возвращает то, что реально исполнилось.
 /// Ошибки: OrderRejected (пара не торгуется, сумма вне пределов, отказ BingX),
-/// Timeout — ордер отправлен, но итог не получен (нужна проверка правилом шлюза).
+/// OutcomeUnknown — ордер мог быть принят, итог не получен даже сверкой по своему ID (ядро не повторяет, решение 64).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let buy = req.side == Side::Buy;
@@ -99,16 +99,33 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ("quantity", qty.normalize().to_string()),
         ("price", price.normalize().to_string()),
         ("timeInForce", tif),
-        ("newClientOrderId", client_id),
+        ("newClientOrderId", client_id.clone()),
     ];
-    let placed = rest::signed(
+    let placed = match rest::signed(
         ctx,
         Method::POST,
         "/openApi/spot/v1/trade/order",
         params,
         Op::Trade,
     )
-    .await?;
+    .await
+    {
+        Ok(v) => v,
+        // Ответ на постановку не получен — ордер мог встать: сверка по своему ID вместо повтора (решение 64).
+        // Не нашли или BingX не ответил — OutcomeUnknown: ядро не повторяет, сделка ждёт проверки.
+        Err(e) if e.code == ErrorCode::OutcomeUnknown => {
+            order_state::find(ctx, &rules.symbol, &client_id)
+                .await
+                .map_err(|f| {
+                    ctx.tag(GatewayError::new(
+                        ErrorCode::OutcomeUnknown,
+                        None,
+                        format!("{}; {}", e.message, f.message),
+                    ))
+                })?
+        }
+        Err(e) => return Err(e),
+    };
     let order_id = num::text(&placed, "orderId")?;
     let state = order_state::settle(ctx, &rules.symbol, &order_id).await?;
     order_state::result(ctx, req, &state, order_id)

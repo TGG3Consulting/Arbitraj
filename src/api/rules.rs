@@ -8,7 +8,8 @@
 //! GET /api/rules        — все правила
 //! POST /api/rules       — создать (id игнорируется)
 //! PUT /api/rules/{id}   — заменить правило
-//! Два включённых правила на одно событие и одну область запрещены.
+//! Два включённых правила на одно событие и одну область запрещены. «Повторить» для «результат неизвестен»
+//! (OutcomeUnknown) запрещено (решение 64).
 //! Правило с условием пока не применяется (формат условия — этап 5); интерфейс должен это показывать.
 
 use axum::Json;
@@ -16,7 +17,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde_json::json;
 
-use crate::gateway::rules::Rule;
+use crate::gateway::rules::{Rule, RuleAction, retry_allowed};
 use crate::storage::journal::Level;
 use crate::storage::rules as store;
 
@@ -35,6 +36,7 @@ pub async fn create(
     State(st): State<AppState>,
     Json(rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
+    no_retry_where_forbidden(&rule)?;
     no_duplicate(&st, &rule).await?;
     let saved = store::create(&st.db, rule)
         .await
@@ -59,6 +61,7 @@ pub async fn update(
     Json(mut rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
     rule.id = id;
+    no_retry_where_forbidden(&rule)?;
     no_duplicate(&st, &rule).await?;
     let old = store::list(&st.db)
         .await
@@ -85,6 +88,21 @@ pub async fn update(
         )
         .await;
     Ok(Json(rule))
+}
+
+/// «Повторить» нельзя для кода, по которому повтор запрещён (gateway/rules.rs retry_allowed: «результат
+/// неизвестен»). Ошибки: 400 — с причиной.
+fn no_retry_where_forbidden(rule: &Rule) -> Result<(), ApiError> {
+    if matches!(rule.action, RuleAction::Retry { .. }) && !retry_allowed(rule.event) {
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Для {:?} повтор запрещён: операция могла исполниться — только сверка и ручная проверка",
+                rule.event
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Не даёт завести второе включённое правило на то же событие и ту же область:

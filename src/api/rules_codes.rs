@@ -14,11 +14,18 @@ use crate::gateway::errors::ErrorCode as C;
 pub struct CodeMeta {
     pub code: C,
     pub title: &'static str,
+    /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs retry_allowed, решение 64).
+    pub no_retry: bool,
 }
 
 /// Короткая запись кода. Принимает: код и смысл. Возвращает: CodeMeta.
 fn c(code: C, title: &'static str) -> CodeMeta {
-    CodeMeta { code, title }
+    let no_retry = !crate::gateway::rules::retry_allowed(code);
+    CodeMeta {
+        code,
+        title,
+        no_retry,
+    }
 }
 
 /// Все коды ошибок — порядок как в gateway/errors.rs.
@@ -72,7 +79,7 @@ pub fn codes() -> Vec<CodeMeta> {
         c(C::NonceConflict, "Nonce неверный или занят"),
         c(
             C::OutcomeUnknown,
-            "Исход транзакции неизвестен — только ручная проверка (не повторяется)",
+            "Результат неизвестен: ордер, вывод или транзакция отправлены, итог не получен — не повторяется никогда, сверка и ручная проверка",
         ),
         c(C::Internal, "Внутренняя ошибка нашего кода"),
     ]

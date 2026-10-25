@@ -144,11 +144,15 @@ async fn send(
         // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело — пока данные идут чаще
         // http.body_idle_ms (справочник пар и сетей BingX — большой ответ).
         match crate::gateway::http::exchange(req, lim).await {
-            Ok((status, text)) => return parse(ctx, path, status.as_u16(), text, op),
+            // Ордер или вывод без ясного итога — «результат неизвестен» (errors::unsure, решение 64).
+            Ok((status, text)) => {
+                return parse(ctx, path, status.as_u16(), text, op)
+                    .map_err(|e| errors::unsure(e, op));
+            }
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
             // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
             Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),
-            Err(f) => return Err(errors::from_fail(&f, &lim)),
+            Err(f) => return Err(errors::unsure(errors::from_fail(&f, &lim), op)),
         }
     }
     Err(last.unwrap_or_else(|| {

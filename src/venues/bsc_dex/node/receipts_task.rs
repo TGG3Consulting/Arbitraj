@@ -2,7 +2,8 @@
 //! Что делает: задача ленты квитанций (решение 68). На каждый новый номер блока (опрос номера, решение 57, node/heads.rs)
 //! разбирает блоки по порядку от последнего разобранного, без пропусков: заголовок eth_getBlockByNumber(n, false) →
 //! parentHash = хеш последнего разобранного (иначе реорг) → eth_getBlockReceipts(n) (полные и этого блока,
-//! receipts_io.rs) → логи подпискам и номер блока — одним действием под блокировкой ленты (Feed::deliver).
+//! receipts_io.rs; заголовок и квитанции — одним JSON-RPC batch, следующие блоки — параллельно конвейером,
+//! решение 69) → логи подпискам и номер блока — одним действием под блокировкой ленты (Feed::deliver).
 //! Запросы — через очередь узла HTTP классом Check (задаёт Feed::open): события не встают за фоном.
 //! Реорг: блок с конца окна снимается, только если его хеш у узла другой по двум запросам заголовка (ложный реорг за
 //! балансировщиком — нет); логи снятого — подпискам с removed: true (пулы перечитываются, как при removed у WebSocket);
@@ -14,7 +15,8 @@
 //! берёт лента (2 × блоков в секунду по факту, receipts_budget.rs).
 //! Кто вызывает: node/receipts.rs (Feed::open запускает).
 //! От чего зависит: receipts.rs (Feed), receipts_chain.rs, receipts_io.rs, receipts_budget.rs, heads.rs, ctx.rs.
-//! Настройки: bsc.pool_events_source, bsc.receipts_max_lag_blocks, bsc.receipts_reorg_depth, bsc.receipts_retry_ms.
+//! Настройки: bsc.pool_events_source, bsc.receipts_max_lag_blocks, bsc.receipts_reorg_depth, bsc.receipts_retry_ms,
+//! bsc.receipts_ahead_blocks (окно конвейера, receipts_pipe.rs).
 
 use std::sync::Weak;
 use std::time::Duration;
@@ -25,14 +27,16 @@ use super::super::ctx::Ctx;
 use super::heads::Heads;
 use super::receipts::{Feed, Inner, SOURCE};
 use super::receipts_budget::Budget;
-use super::receipts_chain::{Block, Chain, gone, logs_of};
-use super::receipts_io::{Fail, header, receipts};
+use super::receipts_chain::{Block, Chain, logs_of};
+use super::receipts_io::{Fail, Header, fetch_block, header, rewind};
+use super::receipts_pipe::Pipe;
 
 /// Задача ленты (см. шапку). Кончается, когда лента никому не нужна (последняя копия Feed удалена) или источник сменён.
 pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     let mut w = heads.watch();
     let mut chain = Chain::default();
     let mut budget = Budget::default();
+    let mut pipe: Pipe<Result<(Header, Vec<serde_json::Value>), Fail>> = Pipe::default();
     let mut said = String::new();
     loop {
         let Some(inner) = weak.upgrade() else { return };
@@ -43,9 +47,10 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             feed.cut("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
             return;
         }
+        budget.start(&ctx).await;
         let target = w.borrow_and_update().as_ref().map(|h| h.number);
         let res = match target {
-            Some(t) => step(&feed, &ctx, &mut chain, t).await,
+            Some(t) => step(&feed, &ctx, &mut chain, &mut pipe, t).await,
             None => Ok(true),
         };
         let why = match res {
@@ -58,6 +63,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             Err(Fail::Retry(why)) => Some((Level::Warn, why)),
             Err(Fail::Break(why)) => {
                 chain.clear();
+                pipe.clear();
                 feed.cut(&why);
                 Some((Level::Error, why))
             }
@@ -79,6 +85,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                         Feed { inner }.cut(&e.message);
                     }
                     chain.clear();
+                    pipe.clear();
                     if w.changed().await.is_err() {
                         return;
                     }
@@ -95,17 +102,27 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     }
 }
 
-/// Один шаг: начало ленты, один следующий блок или откат одного отменённого. Возвращает: true — дошли до `target`.
+/// Один шаг: начало ленты, один следующий блок или откат одного отменённого. Следующие блоки до
+/// bsc.receipts_ahead_blocks вперёд уже запрашиваются параллельно (конвейер, решение 69), забирается и раздаётся строго
+/// следующий по номеру; не пришёл — он же снова, пришедшие после него ждут. Возвращает: true — дошли до `target`.
 /// Ошибки: Fail.
-async fn step(feed: &Feed, ctx: &Ctx, chain: &mut Chain, target: u64) -> Result<bool, Fail> {
+async fn step(
+    feed: &Feed,
+    ctx: &Ctx,
+    chain: &mut Chain,
+    pipe: &mut Pipe<Result<(Header, Vec<serde_json::Value>), Fail>>,
+    target: u64,
+) -> Result<bool, Fail> {
     let set = |name: &str| ctx.int(name).map_err(|e| Fail::Break(e.message));
     let (max_lag, depth) = (
         set("bsc.receipts_max_lag_blocks")?,
         set("bsc.receipts_reorg_depth")?,
     );
+    let ahead = set("bsc.receipts_ahead_blocks")?;
     let depth = usize::try_from(depth).unwrap_or(usize::MAX);
     let Some(top) = chain.top().cloned() else {
         // Начало: подписки, сделанные после этого, получат всё, что позже `target`.
+        pipe.clear();
         let h = header(ctx, target).await?;
         chain.push(
             Block {
@@ -128,11 +145,16 @@ async fn step(feed: &Feed, ctx: &Ctx, chain: &mut Chain, target: u64) -> Result<
         )));
     }
     let n = top.number + 1;
-    let h = header(ctx, n).await?;
+    pipe.fill(n, target, ahead, |k| fetch_block(ctx.clone(), k));
+    let (h, r) = pipe
+        .take(n)
+        .await
+        .ok_or_else(|| Fail::Retry(format!("запрос блока {n} отменён")))??;
     if !chain.continues(h.parent_hash) {
+        // Реорг: запрошенное вперёд могло быть от старой цепочки — всё заново после отката.
+        pipe.clear();
         return rewind(feed, ctx, chain, n).await.map(|_| false);
     }
-    let r = receipts(ctx, n, &h).await?;
     let any = feed.deliver(&logs_of(&r), n);
     chain.push(
         Block {
@@ -143,41 +165,4 @@ async fn step(feed: &Feed, ctx: &Ctx, chain: &mut Chain, target: u64) -> Result<
         depth,
     );
     Ok(n == target)
-}
-
-/// Реорг: снимает последний блок окна, если его хеш у узла другой по двум запросам заголовка; логи — подпискам с
-/// removed: true, номер — на блок раньше (одним действием). Хеш подтвердился прежним — родитель блока `next` у узла
-/// разошёлся с ним (ответ отставшего узла): повтор. Ошибки: Retry — узел или ложный реорг; Break — окно кончилось
-/// (реорг глубже bsc.receipts_reorg_depth).
-async fn rewind(feed: &Feed, ctx: &Ctx, chain: &mut Chain, next: u64) -> Result<(), Fail> {
-    let Some(top) = chain.top().cloned() else {
-        return Err(Fail::Break(
-            "реорг глубже bsc.receipts_reorg_depth — пулы недостоверны, лента заново".into(),
-        ));
-    };
-    let first = header(ctx, top.number).await?.hash;
-    if first == top.hash {
-        return Err(Fail::Retry(format!(
-            "родитель блока {next} не совпал с блоком {}, а сам блок у узла прежний — повтор",
-            top.number
-        )));
-    }
-    let second = header(ctx, top.number).await?.hash;
-    if !gone(top.hash, first, second) {
-        return Err(Fail::Retry(format!(
-            "хеш блока {} у узла расходится между ответами — повтор",
-            top.number
-        )));
-    }
-    if let Some((n, removed)) = chain.pop_removed() {
-        feed.deliver(&removed, n - 1);
-        let msg = format!("{SOURCE}: реорг — блок {n} отменён, его события пулов отменены");
-        ctx.log(Level::Warn, "venue.ws", msg, None).await;
-    }
-    if chain.top().is_none() {
-        return Err(Fail::Break(
-            "реорг глубже bsc.receipts_reorg_depth — пулы недостоверны, лента заново".into(),
-        ));
-    }
-    Ok(())
 }

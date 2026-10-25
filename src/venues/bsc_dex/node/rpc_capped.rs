@@ -3,14 +3,18 @@
 //! тела задаёт вызывающий (квитанции блока — bsc.receipts_total_ms, bsc.receipts_max_body_bytes), а не общие
 //! http.total_ms / http.max_body_bytes. Превышение предела — отдельный итог (не ошибка узла): вызывающий пишет
 //! понятную причину и повторяет. Темп — та же очередь узла (pace.rs), сбой основного узла — резервный (failover.rs).
-//! Кто вызывает: node/receipts_io.rs.
+//! Пачка (batch) — тоже: заголовок и квитанции блока одним HTTP (решение 69; публичный узел BNB Chain batch
+//! принимает — запись tests/data/receipts_batch_2026-10-25).
+//! Кто вызывает: node/receipts_io.rs; tests/bsc_dex_receipts_pipe.rs (split на записанном ответе).
 //! От чего зависит: rpc.rs (status_ok, SOURCE), pace.rs, failover.rs, jsonrpc.rs, gateway/http.rs.
 //! Настройки: bsc.node_http_url (+ резервный), http.timeout_ms, http.body_idle_ms — через ctx; пределы — у вызывающего.
 //!
 //! Транспорт — как у rpc.rs (HTTP POST, JSON-RPC 2.0, https://www.jsonrpc.org/specification, разделы 4–5).
 
+use alloy::rpc::json_rpc::Response;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::gateway::errors::GatewayResult;
 use crate::gateway::http::{self, Fail, Limits};
@@ -43,6 +47,53 @@ pub async fn call<T: DeserializeOwned>(
             Ok(Capped::Got(jsonrpc::decode(&raw, SOURCE)?))
         }
     }
+}
+
+/// Пачка вызовов (JSON-RPC batch) одним HTTP с пределами `lim` (решение 69: заголовок и квитанции блока вместе). В
+/// очереди узла — вес по числу вызовов (bsc.node_http_rps считает вызовы). Принимает: (метод, параметры), пределы.
+/// Возвращает: Got(итоги по порядку вызовов, у каждого свой Ok/Err) или Over. Ошибки: связь, HTTP, ответ не массив.
+pub async fn batch(
+    ctx: &Ctx,
+    calls: &[(&str, Value)],
+    lim: Limits,
+) -> GatewayResult<Capped<Vec<GatewayResult<Box<RawValue>>>>> {
+    let body = Value::Array(
+        calls
+            .iter()
+            .enumerate()
+            .map(|(i, (m, p))| jsonrpc::request(i as u64, m, p))
+            .collect(),
+    );
+    match pace::run(ctx, calls.len(), || to_node(ctx, &body, lim)).await? {
+        Capped::Over(f) => Ok(Capped::Over(f)),
+        Capped::Got(text) => Ok(Capped::Got(split(&text, calls.len())?)),
+    }
+}
+
+/// Ответ на пачку → итоги по id (0 … n−1), как JSON-RPC 2.0 раздел 6 «Batch»: порядок ответов в массиве не важен.
+/// Принимает: текст ответа, число вызовов. Возвращает: итоги по порядку вызовов. Ошибки: ответ не массив (узел
+/// ответил одной ошибкой на всю пачку — её текст), нет ответа на какой-то id (BadResponse).
+pub fn split(text: &str, n: usize) -> GatewayResult<Vec<GatewayResult<Box<RawValue>>>> {
+    let list: Vec<Response> =
+        serde_json::from_str(text).map_err(|e| {
+            match jsonrpc::parse_text(text, SOURCE, Op::Read) {
+                Err(err) => err,
+                Ok(_) => errors::bad(&format!("ответ на пачку не массив: {e}"), SOURCE, text),
+            }
+        })?;
+    let mut out: Vec<Option<GatewayResult<Box<RawValue>>>> = (0..n).map(|_| None).collect();
+    for resp in list {
+        let (id, res) = jsonrpc::parse(resp, SOURCE, Op::Read, text);
+        if let Some(slot) = id.and_then(|i| out.get_mut(i as usize)) {
+            *slot = Some(res);
+        }
+    }
+    out.into_iter()
+        .enumerate()
+        .map(|(i, r)| {
+            r.ok_or_else(|| errors::bad(&format!("нет ответа на запрос {i} пачки"), SOURCE, text))
+        })
+        .collect()
 }
 
 /// Основной узел, при сбое (связь, таймаут, 5xx, 429) — резервный; превышение предела — сразу итогом (размер ответа

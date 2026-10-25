@@ -4,7 +4,8 @@
 //!   состояние пула (блок и logIndex последнего учтённого события) или настройки глубины; иначе — из памяти;
 //! - направление «глубокое», если его глубина не ниже dex.min_pool_liquidity_usd; глубокое становится мелким, только
 //!   когда глубина упала ниже порога × (1 − dex.depth_hysteresis_pct / 100) — пул не мигает на границе;
-//! - смена «глубокий ↔ мелкий» по направлению — запись в журнал, по пулу не чаще dex.depth_log_min_s.
+//! - смена «глубокий ↔ мелкий» по направлению — запись в журнал, по пулу не чаще dex.depth_log_min_s (необязательна:
+//!   не задана — глубина считается, записей о смене нет).
 //!
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
 //! pools/depth_facts.rs (экран «Монеты»).
@@ -90,7 +91,8 @@ impl Book {
                 "dex.depth_hysteresis_pct = {hyst}: нужно от 0 до 100"
             ));
         }
-        let log_min = ctx.int("dex.depth_log_min_s").map_err(|e| e.message)?;
+        // Необязательна (решение 73): не задана — записи о смене выключены.
+        let log_min = ctx.int("dex.depth_log_min_s").ok();
         let key = (e.synced_block, e.synced_log, band_pct, min, hyst);
         let r = &e.pool.reference;
         let prev = match self.lock().get(r) {
@@ -111,7 +113,8 @@ impl Book {
         let changed = prev.is_some_and(|p| (p.0, p.1) != (deep_buy, deep_sell));
         let rose = prev.is_some_and(|p| (!p.0 && deep_buy) || (!p.1 && deep_sell));
         let mut logged = prev.and_then(|p| p.2);
-        if changed && logged.is_none_or(|t| t.elapsed().as_secs() >= log_min) {
+        let due = |min: u64| logged.is_none_or(|t| t.elapsed().as_secs() >= min);
+        if changed && log_min.is_some_and(due) {
             logged = Some(Instant::now());
             journal(ctx, e, &depth, hyst);
         }

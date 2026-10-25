@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/depth_facts.rs
 //! Что делает: пулы площадки для экрана «Монеты» (решение 73, Venue::pool_depths): глубина по направлениям в полосе
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
-//! достоверен ли, итог сверки с квотером (check/state.rs), tickSpacing.
+//! достоверен ли, итог сверки с квотером (check/state.rs — в поле cross_check), tickSpacing — строкой в details.
 //! Кто вызывает: venue.rs (pool_depths).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
@@ -60,9 +60,14 @@ pub async fn all(
             depth_error: error,
             asleep: e.asleep,
             valid: e.valid,
-            quoter: quoter.into(),
-            quoter_reason,
-            tick_spacing: e.pool.tick_spacing,
+            cross_check: quoter.into(),
+            cross_check_reason: quoter_reason,
+            details: e
+                .pool
+                .tick_spacing
+                .map(|s| format!("tickSpacing {s}"))
+                .into_iter()
+                .collect(),
         });
     }
     Ok(out)

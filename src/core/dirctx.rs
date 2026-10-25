@@ -6,6 +6,7 @@
 //! Время в пути — transit.rs (решение 50); σ — по окну profit.sigma_window_min (решение 49, vol.rs).
 //! Кто вызывает: core/profit.rs, позже executor.rs.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, settings.
+//! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
 //! profit.sigma_window_min, usdt_return.mode (+ transit.rs).
 
@@ -16,6 +17,7 @@ use crate::gateway::contract::VenueKind;
 use crate::gateway::events::SpotPairState;
 use crate::settings::read::At;
 
+use super::dirctx_venue as venue;
 use super::engine::{Core, lk, rd};
 use super::registry::Presence;
 use super::size::Fail;
@@ -104,15 +106,28 @@ impl DirCtx {
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
         let transit_s = super::transit::seconds(core, dir)?;
-        let pair_a = pair_rules(core, &dir.buy_on, &dir.asset.ticker)?;
-        let pair_b = pair_rules(core, &dir.sell_on, &dir.asset.ticker)?;
-        let usdt_b = b.info.as_ref().and_then(|_| {
-            rd(&core.inner.networks).get(&dir.sell_on).and_then(|all| {
-                all.iter()
-                    .find(|n| n.asset.ticker == qb && n.network == net_b)
-                    .cloned()
-            })
-        });
+        let pair_a = venue::pair_rules(core, &dir.buy_on, &dir.asset.ticker)?;
+        let pair_b = venue::pair_rules(core, &dir.sell_on, &dir.asset.ticker)?;
+        // Решение 66: комиссии вывода и возврата — из последнего справочника сетей ядра (не из копии в справочнике
+        // монет); справочник старше venue.networks_stale_s — сделки нет.
+        let latest = |p: &Presence, v: &VenueId, t: &str, n: &str| -> Result<Option<_>, String> {
+            match p.info {
+                None => Ok(None),
+                Some(_) => venue::network(core, v, t, n)
+                    .ok_or(format!("{}: сети {n} у {t} нет в справочнике сетей", v.0))
+                    .and_then(|i| venue::fresh(core, &i).map(|_| Some(i))),
+            }
+        };
+        let ticker = &dir.asset.ticker;
+        let mut a = a;
+        a.info = latest(&a, &dir.buy_on, ticker, &net_a)?;
+        let mut b = b;
+        b.info = latest(&b, &dir.sell_on, ticker, &net_b)?;
+        let usdt_b = if cx_return(&mode) {
+            latest(&b, &dir.sell_on, &qb, &net_b)?
+        } else {
+            None
+        };
         Ok(DirCtx {
             dir: dir.clone(),
             a,
@@ -129,8 +144,7 @@ impl DirCtx {
             transit_s,
             k,
             h,
-            // Варианты настройки — per_trade / separate (settings/catalog/trade.rs).
-            return_per_trade: mode == "per_trade",
+            return_per_trade: cx_return(&mode),
             pair_a,
             pair_b,
             usdt_b,
@@ -156,45 +170,11 @@ impl DirCtx {
         }
         Ok(())
     }
-
-    /// Минимальный депозит B (решение 35). У DEX ограничений нет.
-    /// Ошибки: Stop — минимум неизвестен; TooSmall — приход меньше минимума.
-    pub fn check_deposit(&self, qty: Decimal) -> Result<(), Fail> {
-        let Some(i) = &self.b.info else { return Ok(()) };
-        match i.deposit_min {
-            None => Err(Fail::Stop(format!(
-                "{}: минимальный депозит неизвестен — сделки нет",
-                self.dir.sell_on.0
-            ))),
-            Some(min) if qty < min => Err(Fail::TooSmall(format!(
-                "приход {qty} меньше минимального депозита {min}"
-            ))),
-            Some(_) => Ok(()),
-        }
-    }
 }
 
-/// Правила спот-пары монеты на бирже — из последнего справочника пар биржи (MarketEvent::SpotPairs). У DEX — None.
-/// Принимает: ядро, площадку, тикер. Ошибки: у биржи пары в справочнике нет или шаг количества не больше нуля —
-/// количество ордера не округлить, сделки нет («не торгуем вслепую»).
-fn pair_rules(core: &Core, v: &VenueId, ticker: &str) -> Result<Option<SpotPairState>, String> {
-    let cex = rd(&core.inner.kinds)
-        .iter()
-        .any(|(id, k)| id == v && *k == VenueKind::Cex);
-    if !cex {
-        return Ok(None);
-    }
-    match rd(&core.inner.market).pair(v, ticker) {
-        Some(p) if p.step_size > Decimal::ZERO => Ok(Some(p.clone())),
-        Some(p) => Err(format!(
-            "{}: шаг количества пары {} = {}",
-            v.0, ticker, p.step_size
-        )),
-        None => Err(format!(
-            "{}: пары {ticker} нет в справочнике пар — шаг и минимум ордера неизвестны",
-            v.0
-        )),
-    }
+/// Возврат USDT в каждой сделке (варианты usdt_return.mode — per_trade / separate, settings/catalog/trade.rs).
+fn cx_return(mode: &str) -> bool {
+    mode == "per_trade"
 }
 
 /// Область настройки «площадка». Принимает: площадку. Возвращает: At для чтения настроек.

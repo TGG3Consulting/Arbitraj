@@ -21,6 +21,7 @@ pub mod day_view;
 pub mod deal;
 pub mod deps;
 pub mod dirctx;
+pub mod dirctx_venue;
 pub mod dust;
 pub mod engine;
 pub mod evaluate;
@@ -79,5 +80,6 @@ pub mod usdt_return;
 pub mod view;
 pub mod vol;
 pub mod wait;
+pub mod worst;
 
 pub use engine::Core;

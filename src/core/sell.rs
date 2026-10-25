@@ -77,17 +77,8 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 .deps
                 .notify("deal.sell_filled", Some(&v.0), &text)
                 .await;
-            if deal.qty > Decimal::ZERO
-                && super::dust::is_dust(core, &v, &a.ticker, deal.qty, r.avg_price)
-            {
-                // Решение 66: остаток меньше шага или минимума ордера — пыль, а не застрявшая монета.
-                deal.note(format!(
-                    "Остаток {} {} — пыль (меньше шага или минимума ордера {}): остаётся на балансе, стоимость в затратах",
-                    deal.qty, a.ticker, v.0
-                ));
-                deal.dust += deal.qty;
-                deal.qty = Decimal::ZERO;
-            }
+            // Решение 66: остаток меньше шага или минимума ордера — пыль, а не застрявшая монета.
+            super::dust::settle(core, &mut deal, r.avg_price).await;
             if deal.qty > Decimal::ZERO {
                 deal.note(format!("Продано не всё, остаток {}", deal.qty));
                 super::ledger::save(core, &deal).await;

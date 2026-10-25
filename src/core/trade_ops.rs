@@ -5,7 +5,8 @@
 //! Ошибка — по правилу шлюза (rules_apply.rs): повтор, только если так задано правилом; «не исполнился» —
 //! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: engine.rs, market_state.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
+//! Худшая цена — worst.rs (та же у расчёта, решение 66).
+//! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset.
 
@@ -34,42 +35,7 @@ pub fn kind(core: &Core, v: &VenueId) -> Result<VenueKind, String> {
         .ok_or_else(|| format!("площадки {} нет в реестре", v.0))
 }
 
-/// Худшая допустимая цена ордера (у биржи — лимитная цена: ордер замораживает qty × её). Ту же цену берёт расчёт
-/// (costs_quote.rs) для бюджета и пределов ордера (решение 66). Ошибки: нет стакана или глубины, не задан допуск DEX.
-pub fn worst_price(
-    core: &Core,
-    v: &VenueId,
-    a: &Asset,
-    side: Side,
-    qty: Decimal,
-    avg: Decimal,
-) -> Result<Decimal, String> {
-    match kind(core, v)? {
-        VenueKind::Cex => rd(&core.inner.market)
-            .deepest_price(v, &a.ticker, side, qty)
-            .ok_or_else(|| format!("{}: глубины стакана {} не хватает на {qty}", v.0, a.ticker)),
-        VenueKind::Dex => {
-            let slip = core
-                .inner
-                .deps
-                .settings
-                .decimal(
-                    "exec.dex_slippage_pct",
-                    At {
-                        venue: Some(&v.0),
-                        coin: None,
-                    },
-                )
-                .map_err(|e| e.message)?
-                / Decimal::ONE_HUNDRED;
-            Ok(if side == Side::Buy {
-                avg * (Decimal::ONE + slip)
-            } else {
-                avg * (Decimal::ONE - slip)
-            })
-        }
-    }
-}
+pub use super::worst::worst_price;
 
 /// Покупка или продажа. Принимает: ядро, id сделки, площадку, монету, сторону, количество,
 /// маршрут DEX из котировки, среднюю цену котировки, бюджет покупки (решение 66: qty × худшая цена не больше его —

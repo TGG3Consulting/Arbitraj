@@ -20,28 +20,30 @@ use super::super::node::call;
 use super::abi_v4::{IInfinityCl, IStateView};
 use super::families::Proto;
 use super::load_batch::Want;
+use super::load_batch::{Miss, miss};
 use super::load_batch_v2v3::PoolStateTick;
 use super::load_cl;
 
 /// Кто отвечает на геттеры и PoolId. Ошибки: причина (не CL, нет dex.state_view, ссылка не того вида).
-pub fn target(ctx: &Ctx, w: &Want) -> Result<(bool, Address, B256), String> {
+pub fn target(ctx: &Ctx, w: &Want) -> Result<(bool, Address, B256), Miss> {
     let PoolRef::Singleton { manager, id } = w.reference else {
-        return Err(format!("{}: ссылка на пул не того вида", w.family.title));
+        return Err(miss(format!(
+            "{}: ссылка на пул не того вида",
+            w.family.title
+        )));
     };
     match w.family.proto {
         Proto::InfinityCl => Ok((true, *manager, *id)),
         Proto::UniswapV4 => {
-            let sv = ctx
-                .dex_addr("dex.state_view", w.family.id)
-                .map_err(|e| e.message)?;
+            let sv = ctx.dex_addr("dex.state_view", w.family.id)?;
             Ok((false, sv, *id))
         }
-        _ => Err(format!("{}: не CL", w.family.title)),
+        _ => Err(miss(format!("{}: не CL", w.family.title))),
     }
 }
 
 /// Вызовы slot0 и liquidity. Ошибки: как у target.
-pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, String> {
+pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
     let (inf, to, id) = target(ctx, w)?;
     let (a, b) = if inf {
         (
@@ -58,8 +60,8 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, String> {
 }
 
 /// Разбор slot0 и liquidity. Ошибки: причина (ответ не по ABI).
-pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, String> {
-    let m = |e: crate::gateway::errors::GatewayError| e.message;
+pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
+    let m = |e: Miss| e;
     let (sqrt, tick, pf, lf, liquidity) = if w.family.proto == Proto::InfinityCl {
         let s = call::decode::<IInfinityCl::getSlot0Call>(&b[0]).map_err(m)?;
         let l = call::decode::<IInfinityCl::getLiquidityCall>(&b[1]).map_err(m)?;
@@ -85,7 +87,7 @@ pub fn word_calls(
     ctx: &Ctx,
     w: &Want,
     (lo, hi): (i16, i16),
-) -> Result<Vec<(Address, Bytes)>, String> {
+) -> Result<Vec<(Address, Bytes)>, Miss> {
     let (inf, to, id) = target(ctx, w)?;
     Ok((lo..=hi)
         .map(|word| {
@@ -104,8 +106,8 @@ pub fn word_calls(
 }
 
 /// Установленные тики по словам битмапа. Ошибки: причина (ответ не по ABI).
-pub fn set_ticks(w: &Want, first: i16, ans: &[Bytes], spacing: i32) -> Result<Vec<i32>, String> {
-    let m = |e: crate::gateway::errors::GatewayError| e.message;
+pub fn set_ticks(w: &Want, first: i16, ans: &[Bytes], spacing: i32) -> Result<Vec<i32>, Miss> {
+    let m = |e: Miss| e;
     let words = ans
         .iter()
         .map(|b| {
@@ -115,6 +117,6 @@ pub fn set_ticks(w: &Want, first: i16, ans: &[Bytes], spacing: i32) -> Result<Ve
                 call::decode::<IStateView::getTickBitmapCall>(b).map_err(m)
             }
         })
-        .collect::<Result<Vec<U256>, String>>()?;
+        .collect::<Result<Vec<U256>, Miss>>()?;
     Ok(load_cl::set_ticks(first, &words, spacing))
 }

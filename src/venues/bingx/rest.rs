@@ -124,7 +124,7 @@ async fn send(
     op: Op,
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
-    let timeout = ctx.http_timeout()?;
+    let lim = ctx.limits()?;
     let mut last = None;
     for base in &urls {
         let url = if query.is_empty() {
@@ -132,7 +132,7 @@ async fn send(
         } else {
             format!("{base}{path}?{query}")
         };
-        let mut req = ctx.http.request(m.clone(), url).timeout(timeout);
+        let mut req = ctx.http.request(m.clone(), url);
         if let Some((key, body)) = &auth {
             req = req.header("X-BX-APIKEY", *key);
             if !body.is_empty() {
@@ -141,14 +141,18 @@ async fn send(
                     .body(body.clone());
             }
         }
-        match req.send().await {
-            Ok(resp) => return parse(ctx, path, resp, op).await,
-            // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
-            // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
-            Err(e) if e.is_connect() || (op == Op::Other && e.is_timeout()) => {
-                last = Some(errors::from_network(e))
+        // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело — пока данные идут чаще
+        // http.body_idle_ms (справочник пар и сетей BingX — большой ответ).
+        match crate::gateway::http::exchange(req, lim).await {
+            // Ордер или вывод без ясного итога — «результат неизвестен» (errors::unsure, решение 64).
+            Ok((status, text)) => {
+                return parse(ctx, path, status.as_u16(), text, op)
+                    .map_err(|e| errors::unsure(e, op));
             }
-            Err(e) => return Err(errors::from_network(e)),
+            // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
+            // Иной сбой ордера или вывода — «результат неизвестен» (errors::fail_for): мог исполниться, не повторяем.
+            Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),
+            Err(f) => return Err(errors::fail_for(&f, &lim, op)),
         }
     }
     Err(last.unwrap_or_else(|| {
@@ -162,9 +166,7 @@ async fn send(
 
 /// Разбор ответа: {code, msg, data} или голый массив (истории ввода и вывода). Текст ответа — в сырой журнал
 /// (data/raw/bingx, соединение «rest <путь>»), кроме путей listenKey (ключ потока аккаунта — секрет сессии).
-async fn parse(ctx: &Ctx, path: &str, resp: reqwest::Response, op: Op) -> GatewayResult<Value> {
-    let status = resp.status().as_u16();
-    let text = resp.text().await.map_err(errors::from_network)?;
+fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayResult<Value> {
     if !path.contains("listenKey") {
         ctx.raw
             .write(super::ctx::ID, &format!("rest {path}"), &text);
@@ -185,4 +187,11 @@ async fn parse(ctx: &Ctx, path: &str, resp: reqwest::Response, op: Op) -> Gatewa
         None if status < 400 => Ok(v),
         None => Err(errors::from_http(status, &text)),
     }
+}
+
+/// Можно ли повторить запрос на резервном адресе: только если запрос точно не дошёл до BingX (соединение не
+/// установлено), а срок без ответа — только для справочников и проверок (Op::Other). Ордер или вывод без ответа мог
+/// исполниться — повтор = двойная сделка. Принимает: сбой, операцию. Ошибок нет.
+pub fn may_fallback(f: &crate::gateway::http::Fail, op: Op) -> bool {
+    f.not_sent() || (op == Op::Other && f.is_timeout())
 }

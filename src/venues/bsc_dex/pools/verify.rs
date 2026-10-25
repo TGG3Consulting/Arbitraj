@@ -19,7 +19,7 @@ use std::str::FromStr;
 use alloy_primitives::{Address, Bytes};
 
 use crate::core::types::PoolRef;
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::node::call::{self, Piece};
@@ -52,8 +52,8 @@ pub enum Verdict {
 /// Размер части проверки: dex.verify_batch. Ошибки: NotConfigured (не задана или 0).
 pub fn batch(ctx: &Ctx) -> GatewayResult<usize> {
     match ctx.int("dex.verify_batch")? {
-        0 => Err(ctx.err(
-            ErrorCode::NotConfigured,
+        0 => Err(ctx.not_set(
+            "dex.verify_batch",
             "dex.verify_batch = 0 — задайте число больше нуля",
         )),
         n => Ok(n as usize),

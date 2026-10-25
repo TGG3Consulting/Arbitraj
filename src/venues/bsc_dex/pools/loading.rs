@@ -28,8 +28,8 @@ pub struct Loading {
 
 #[derive(Default)]
 struct State {
-    /// Пул → монета.
-    pools: HashMap<PoolRef, Address>,
+    /// Пул → (монета, «застрял»: ждёт незаданную настройку и не читается, пока её не зададут).
+    pools: HashMap<PoolRef, (Address, bool)>,
     /// Последний отправленный ядру список монет.
     sent: Option<BTreeSet<Address>>,
 }
@@ -39,7 +39,42 @@ impl Loading {
     pub fn add<'a>(&self, list: impl IntoIterator<Item = &'a Found>) {
         let mut s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
         for f in list {
-            s.pools.insert(f.reference.clone(), f.coin);
+            s.pools.insert(f.reference.clone(), (f.coin, false));
+        }
+    }
+
+    /// Сколько пулов монеты ещё ждут первого чтения (исключённые из сделок не считаются). Принимает: окружение,
+    /// адрес монеты. Ошибок нет.
+    pub fn pending(&self, p: &Pools, coin: Address) -> usize {
+        let s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
+        s.pools
+            .iter()
+            .filter(|(r, (c, _))| *c == coin && p.ctx.index.banned(r).is_none())
+            .count()
+    }
+
+    /// Все ли ждущие пулы монеты «застряли» (ждут незаданную настройку). Нет ждущих — false. Такая монета сводку
+    /// первого прохода не держит (check/tax_wait.rs), монета с реально читающимися пулами — держит. Ошибок нет.
+    pub fn stuck_only(&self, p: &Pools, coin: Address) -> bool {
+        let s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
+        let mut mine = s
+            .pools
+            .iter()
+            .filter(|(r, (c, _))| *c == coin && p.ctx.index.banned(r).is_none())
+            .peekable();
+        mine.peek().is_some() && mine.all(|(_, (_, stuck))| *stuck)
+    }
+
+    /// Пул «застрял» (ждёт незаданную настройку) или снова читается. Пула нет в списке — ничего. Ошибок нет.
+    pub fn stuck(&self, r: &PoolRef, stuck: bool) {
+        if let Some(e) = self
+            .inner
+            .lock()
+            .unwrap_or_else(|x| x.into_inner())
+            .pools
+            .get_mut(r)
+        {
+            e.1 = stuck;
         }
     }
 
@@ -61,7 +96,7 @@ impl Loading {
             s.pools
                 .iter()
                 .filter(|(r, _)| p.ctx.index.banned(r).is_none())
-                .map(|(_, c)| *c)
+                .map(|(_, (c, _))| *c)
                 .collect()
         };
         if self
@@ -78,6 +113,8 @@ impl Loading {
             venue: p.ctx.venue(),
             coins: now.iter().copied().collect(),
         };
+        // Пулы монет дочитались (или брошены) — монеты, ждущие своих пулов, проверяются сразу (check/tax_cycle.rs).
+        p.signals.pool_ready();
         // Закрытый канал — ядру больше не нужно; список всё равно считается отправленным.
         let _ = p.out.send(ev).await;
         self.inner.lock().unwrap_or_else(|x| x.into_inner()).sent = Some(now);

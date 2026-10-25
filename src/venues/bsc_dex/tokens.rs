@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use alloy_primitives::Address;
 
 use crate::core::types::Asset;
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::ctx::Ctx;
 use super::node::abi::IERC20;
@@ -68,8 +68,8 @@ impl Tokens {
     pub fn usdt(&self, ctx: &Ctx) -> GatewayResult<Address> {
         let quote = ctx.text("venue.quote_asset")?;
         self.by_ticker(&quote).map(|t| t.address).ok_or_else(|| {
-            ctx.err(
-                ErrorCode::NotConfigured,
+            ctx.not_set(
+                "venue.quote_asset",
                 format!("В списке монет ядра нет {quote} (venue.quote_asset) с адресом в BSC"),
             )
         })

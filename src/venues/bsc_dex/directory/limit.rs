@@ -25,7 +25,7 @@ pub fn step(ctx: &Ctx) -> GatewayResult<Duration> {
     let per_min = ctx.int("index.requests_per_min")?;
     if per_min == 0 {
         let m = "index.requests_per_min = 0 — запросов нет; задайте число больше нуля";
-        return Err(ctx.err(crate::gateway::errors::ErrorCode::NotConfigured, m));
+        return Err(ctx.not_set("index.requests_per_min", m));
     }
     Ok(Duration::from_secs_f64(60.0 / per_min as f64))
 }

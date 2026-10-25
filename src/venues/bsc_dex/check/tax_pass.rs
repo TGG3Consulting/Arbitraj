@@ -2,7 +2,7 @@
 //! Что делает: проверка налогов списка монет (один проход или его часть). Итог Known / Failed — в состояние и событие
 //! ядру; «ждёт» (нет достоверного пула, сбой узла — 429, нет связи) и «не задана настройка» — прошлый итог не
 //! меняется (у монеты без итога — NotChecked с причиной ожидания для экранов), монета — в список ждущих (не вердикт,
-//! не чёрный список). Журнал по монете — только при смене состояния
+//! не чёрный список). Монета, чьи пулы ещё загружаются, ждёт только их (Why::Loading). Журнал по монете — только при смене состояния
 //! (прошла ↔ не прошла, сменилась причина без учёта цифр) и не в первом проходе (там — одна сводка, tax_cycle.rs).
 //! Ошибка настройки — одна запись в журнал и одно событие dex.check_not_configured на каждую разную причину.
 //! Кто вызывает: check/tax_cycle.rs.
@@ -31,6 +31,8 @@ pub enum Why {
     Node,
     /// Не задана настройка — до следующего полного прохода.
     Config,
+    /// Пулы монеты ещё загружаются — проверка, как только они прочитаны (сигнал «пул готов»).
+    Loading,
 }
 
 /// Итоги прохода.
@@ -42,6 +44,20 @@ pub struct Pass {
     pub failed: usize,
     pub no_pool: usize,
     pub config: usize,
+    /// Монеты, чьи пулы ещё загружаются (проверки не было).
+    pub loading: usize,
+    /// Монеты, по которым проверка была (итог или причина ожидания — не «пулы загружаются»): адрес и вид итога —
+    /// для сводки первого прохода (tax_cycle.rs).
+    pub done: Vec<(Address, Res)>,
+}
+
+/// Вид итога монеты для сводки первого прохода.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Res {
+    Ok,
+    Failed,
+    Wait,
+    Config,
 }
 
 /// Есть ли у монеты достоверный пул. Ошибок нет.
@@ -49,19 +65,34 @@ pub fn has_valid(p: &Pools, ticker: &str) -> bool {
     p.reg.by_ticker(ticker).iter().any(|e| e.valid)
 }
 
-/// Проверяет монеты списка (см. шапку). Принимает: окружение, монеты, USDT, уже записанные ошибки настроек, первый ли
-/// это проход. Ошибок нет.
+/// Проверяет монеты списка (см. шапку). Монета, чьи пулы ещё загружаются (pools/loading.rs), не проверяется — ждёт
+/// своих пулов, а не пулов всех монет (решение 61). Принимает: окружение, монеты, USDT, уже записанные ошибки
+/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой). Ошибок нет.
 pub async fn check(
     p: &Pools,
     list: &[(Address, String)],
     usdt: Address,
     seen: &mut HashSet<String>,
-    first: bool,
+    firsts: &HashSet<Address>,
 ) -> Pass {
     let mut pass = Pass::default();
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
     let sources = Sources::default();
     for (i, (addr, ticker)) in list.iter().enumerate() {
+        let first = firsts.contains(addr);
+        let left = p.loading.pending(p, *addr);
+        if left > 0 {
+            pass.loading += 1;
+            let why = format!("пулы монеты ещё загружаются ({left})");
+            note_wait(
+                p,
+                &p.checks.coin(ticker).map(|c| c.taxes),
+                super::taxes_util::loading_check(p, ticker, *addr, why),
+            )
+            .await;
+            pass.waiting.push((*addr, ticker.clone(), Why::Loading));
+            continue;
+        }
         // Узел отвечает и время блока есть — иначе проход откладывается (срок пробы берётся свежим в probe.rs).
         match p.heads.at(&p.ctx).await {
             Ok(_) => {}
@@ -83,6 +114,7 @@ pub async fn check(
         match out {
             Outcome::Known(_) => {
                 pass.ok += 1;
+                pass.done.push((*addr, Res::Ok));
                 if !first && matches!(prev, Some(CheckState::Failed { .. })) {
                     let msg = format!("{ticker}: проверка налогов снова прошла");
                     p.ctx.log(Level::Info, "dex.check", msg, None).await;
@@ -90,6 +122,7 @@ pub async fn check(
             }
             Outcome::Failed(reason) => {
                 pass.failed += 1;
+                pass.done.push((*addr, Res::Failed));
                 let same = matches!(&prev, Some(CheckState::Failed { reason: r }) if reason_key(r) == reason_key(&reason));
                 if !first && !same {
                     let msg = format!("{ticker}: проверка налогов не прошла: {reason}");
@@ -98,6 +131,7 @@ pub async fn check(
             }
             Outcome::Wait(_) => {
                 pass.no_pool += 1;
+                pass.done.push((*addr, Res::Wait));
                 // Причину ожидания видно на «Монетах» и «Живом экране»: монета без итога получает NotChecked с причиной;
                 // уже известный итог (прошла / не прошла) из-за помехи не меняется.
                 note_wait(p, &prev, c).await;
@@ -111,6 +145,7 @@ pub async fn check(
             }
             Outcome::Config(why) => {
                 pass.config += 1;
+                pass.done.push((*addr, Res::Config));
                 note_wait(p, &prev, c.clone()).await;
                 pass.waiting.push((*addr, ticker.clone(), Why::Config));
                 if seen.insert(why.clone()) {

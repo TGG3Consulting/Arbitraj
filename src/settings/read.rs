@@ -20,11 +20,11 @@ pub struct At<'a> {
     pub coin: Option<&'a str>,
 }
 
-/// Ошибка «не задано» или «неверный тип» с понятным текстом.
+/// Ошибка «не задано» с понятным текстом и именем настройки в поле setting (GatewayError::not_set).
 fn not_set(name: &str) -> GatewayError {
-    GatewayError::new(
-        ErrorCode::NotConfigured,
+    GatewayError::not_set(
         None,
+        name,
         format!("Не задана настройка {name} — задайте её в интерфейсе"),
     )
 }

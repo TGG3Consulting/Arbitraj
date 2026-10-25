@@ -19,5 +19,6 @@ pub mod simulate;
 pub mod state;
 pub mod tax_cycle;
 pub mod tax_pass;
+pub mod tax_wait;
 pub mod taxes;
 pub mod taxes_util;

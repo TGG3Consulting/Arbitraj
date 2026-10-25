@@ -1,9 +1,8 @@
 //! Файл: venues/bsc_dex/pools/progress.rs
 //! Что делает: сигналы слушателей пулов для проверок и журнала одной подписки на рынок:
-//! - стартовая загрузка: сколько стартовых пачек V2/V3 ещё не закончили первую загрузку состояния (FirstLoad — сразу
-//!   после первого приёма пулов пачки, а не по концу её сессии) — первый проход налогов ждёт её (пулы V4 подгружаются в фоне, их монеты проверяются по мере появления пулов);
 //! - «пул готов»: пул стал достоверным (прочитан, перечитан) — монеты, ждущие пула, проверяются сразу, а не через
-//!   tax.recheck_interval_s;
+//!   tax.recheck_interval_s; ждущие своих пулов (pools/loading.rs) — тоже (решение 63: общей «стартовой загрузки»,
+//!   которую ждал первый проход налогов, больше нет — её заменило ожидание пулов каждой монеты);
 //! - «пул снова не пуст»: пустой пул (quote/emptiness.rs) получил ликвидность — сверка с квотером только его, сразу;
 //! - журнал без спама: одна запись на вид причины (числа в тексте — блоки, адреса — не делают причину новой);
 //!   reason_key — та же «причина без цифр» для записи только при смене состояния (check/quoter_cycle.rs и др.).
@@ -15,7 +14,6 @@
 use std::collections::HashSet;
 
 use crate::core::types::PoolRef;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
@@ -27,9 +25,6 @@ use super::super::ctx::Ctx;
 /// Сигналы одной подписки. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Signals {
-    /// Стартовых пачек V2/V3 без первой загрузки.
-    left: Arc<AtomicUsize>,
-    started: Arc<Notify>,
     /// Пул стал достоверным.
     pub ready: Arc<Notify>,
     seen: Arc<Mutex<HashSet<String>>>,
@@ -41,52 +36,6 @@ pub struct Signals {
 }
 
 impl Signals {
-    /// Добавляет стартовые пачки (до запуска их слушателей). Ошибок нет.
-    pub fn expect(&self, n: usize) {
-        self.left.fetch_add(n, Ordering::SeqCst);
-    }
-
-    /// Стартовая пачка закончила первую загрузку (успешно или нет). Ошибок нет.
-    pub fn loaded(&self) {
-        // Уменьшение без ухода ниже нуля через compare_exchange: fetch_update в новом stable Rust устарел
-        // (переименован в try_update), а try_update нет в старых версиях — так собирается на любой.
-        let mut before = self.left.load(Ordering::SeqCst);
-        while before > 0 {
-            match self
-                .left
-                .compare_exchange(before, before - 1, Ordering::SeqCst, Ordering::SeqCst)
-            {
-                Ok(_) => break,
-                Err(now) => before = now,
-            }
-        }
-        if before <= 1 {
-            self.started.notify_waiters();
-        }
-    }
-
-    /// Отметка стартовой пачки: сигналит «первая загрузка закончена» ровно один раз. Принимает: стартовая ли пачка.
-    /// Ошибок нет.
-    pub fn first_load(&self, start: bool) -> FirstLoad {
-        FirstLoad {
-            signals: self.clone(),
-            pending: start,
-        }
-    }
-
-    /// Ждёт конца стартовой загрузки. Ошибок нет.
-    pub async fn wait_start(&self) {
-        loop {
-            let n = self.started.notified();
-            tokio::pin!(n);
-            n.as_mut().enable();
-            if self.left.load(Ordering::SeqCst) == 0 {
-                return;
-            }
-            n.await;
-        }
-    }
-
     /// Пул стал достоверным. Ошибок нет.
     pub fn pool_ready(&self) {
         self.ready.notify_waiters();
@@ -117,23 +66,6 @@ impl Signals {
             .insert(key);
         if fresh {
             ctx.log(level, kind, msg, None).await;
-        }
-    }
-}
-
-/// «Первая загрузка стартовой пачки закончена» — один раз на пачку: сразу после первого приёма пулов (admit, успешно
-/// или нет — session.rs), а если первая же сессия оборвалась до приёма — после неё (listen.rs). Не по концу сессии:
-/// здоровая пачка после приёма слушает события бесконечно, и стартовая загрузка не кончалась бы никогда.
-pub struct FirstLoad {
-    signals: Signals,
-    pending: bool,
-}
-
-impl FirstLoad {
-    /// Отмечает конец первой загрузки (повторные вызовы ничего не делают). Ошибок нет.
-    pub fn mark(&mut self) {
-        if std::mem::take(&mut self.pending) {
-            self.signals.loaded();
         }
     }
 }

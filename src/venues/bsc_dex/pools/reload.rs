@@ -3,16 +3,20 @@
 //! прочитались (сбой узла): на каждом новом блоке (опрос блоков node/heads.rs), не больше dex.pool_load_retries раз. Журнал: одна запись
 //! «не прочитан», одна — «прочитан с попытки N» или «так и не прочитан за N попыток».
 //! Многие пулы сразу (приём пачки, повтор) — load_many: пачками через Multicall3 (load_batch.rs, решение 61).
-//! Кто вызывает: pools/session.rs, pools/admit.rs.
+//! Кто вызывает: pools/session.rs, pools/admit.rs. Возврат брошенных из-за настройки — revive.rs.
 //! Прочитанный (или окончательно не прочитанный) пул уходит из «загружается» (loading.rs).
 //! От чего зависит: pools/load.rs, loading.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
 //! Настройки: dex.pool_load_retries [bsc_dex].
 
 use crate::storage::journal::Level;
 
+use crate::gateway::errors::GatewayError;
+
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::{listen_log, load};
+
+pub use super::revive::Abandoned;
 
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
 pub struct Missing {
@@ -20,11 +24,14 @@ pub struct Missing {
     pub tries: u64,
 }
 
-/// Повтор чтения ждущих пулов на блоке `at`. Ошибки: End — ядро закрыло канал.
+/// Повтор чтения ждущих пулов на блоке `at`. Исчерпавшие попытки — в `abandoned` (брошены до переподключения или до
+/// изменения настроек — session.rs revive). Не задана dex.pool_load_retries — ждущие остаются ждать (повтор после её
+/// появления). Ошибки: End — ядро закрыло канал.
 pub async fn retry(
     p: &Pools,
     pools: &[(Found, String)],
     missing: &mut Vec<Missing>,
+    abandoned: &mut Vec<Abandoned>,
     at: u64,
 ) -> Result<(), End> {
     let limit = match p.ctx.int("dex.pool_load_retries") {
@@ -38,7 +45,10 @@ pub async fn retry(
                     format!("Повтор чтения пулов невозможен: {}", e.message),
                 )
                 .await;
-            missing.clear();
+            // Без dex.pool_load_retries ждущие «застряли» — сводку первого прохода не держат (loading.rs).
+            for m in missing.iter() {
+                p.loading.stuck(&pools[m.i].0.reference, true);
+            }
             return Ok(());
         }
     };
@@ -64,15 +74,25 @@ pub async fn retry(
             }
             Err(why) if m.tries >= limit => {
                 let msg = format!(
-                    "{title} {ticker}: состояние пула так и не прочитано за {} попыток: {why} — недостоверен до переподключения",
-                    m.tries + 1
+                    "{title} {ticker}: состояние пула так и не прочитано за {} попыток: {} — недостоверен до переподключения или изменения настроек",
+                    m.tries + 1,
+                    why.message
                 );
                 p.ctx.log(Level::Error, "dex.pool", msg, None).await;
                 // Дальше пул «недостоверен», а не «загружается» (loading.rs).
                 p.loading.done(&found.reference);
                 p.loading.publish(p).await;
+                // Брошен из-за незаданной настройки — вернётся, когда её зададут (on_settings).
+                abandoned.push(Abandoned {
+                    i: m.i,
+                    setting: why.setting.clone(),
+                });
             }
-            Err(_) => keep.push(m),
+            Err(why) => {
+                // Ждёт незаданную настройку — пул «застрял», сводку первого прохода не держит (loading.rs).
+                p.loading.stuck(&found.reference, why.setting.is_some());
+                keep.push(m)
+            }
         }
     }
     *missing = keep;
@@ -86,7 +106,7 @@ pub async fn load_one(
     found: &Found,
     ticker: &str,
     block: u64,
-) -> Result<Result<(), String>, End> {
+) -> Result<Result<(), GatewayError>, End> {
     let res = match p.reg.get(&found.reference) {
         Some(e) => load::refresh(&p.ctx, &p.tokens, &e, block).await,
         None => {
@@ -110,7 +130,7 @@ pub async fn load_one(
             p.loading.publish(p).await;
             listen_log::emit(p, pool).map(Ok)
         }
-        Err(e) => Ok(Err(e.message)),
+        Err(e) => Ok(Err(e)),
     }
 }
 

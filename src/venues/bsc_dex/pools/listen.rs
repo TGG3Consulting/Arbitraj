@@ -60,26 +60,16 @@ pub enum End {
     Broken(String),
 }
 
-/// Слушает пачку пулов постоянно. Принимает: окружение, имя, найденные пулы с тикерами, стартовая ли пачка (её первая
-/// загрузка — часть стартовой загрузки, pools/progress.rs), канал пулов, найденных позже (attach.rs; у стартовых — None):
+/// Слушает пачку пулов постоянно. Принимает: окружение, имя, найденные пулы с тикерами, канал пулов, найденных позже
+/// (attach.rs; у стартовых — None):
 /// они принимаются в идущую сессию и остаются в пачке после переподключения.
 /// Обрыв после загрузки — пулы недостоверны (Invalidated) до перечитывания; сбой ещё до загрузки (подписка, узел HTTP
 /// отстал) — пулы не трогаются (они либо ещё не прочитаны, либо уже недостоверны), повтор после паузы. В журнал — одна
 /// запись на вид причины. Ошибок не возвращает; не задана пауза переподключения — остановка с записью в журнал.
-pub async fn run(
-    p: Pools,
-    name: String,
-    pools: Vec<(Found, String)>,
-    first: bool,
-    adds: Option<session::Adds>,
-) {
+pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Option<session::Adds>) {
     let (mut pools, mut adds) = (pools, adds);
-    // Конец первой загрузки стартовой пачки — сразу после её первого приёма пулов (session.rs), а не по концу сессии.
-    let mut first = p.signals.first_load(first);
     loop {
-        let (end, loaded) = session::run(&p, &name, &mut pools, &mut adds, &mut first).await;
-        // Первая сессия оборвалась до приёма пулов — первая загрузка тоже считается законченной (повтор — ниже).
-        first.mark();
+        let (end, loaded) = session::run(&p, &name, &mut pools, &mut adds).await;
         let why = match end {
             End::Closed => return,
             End::Broken(why) => why,

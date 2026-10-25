@@ -65,7 +65,23 @@ impl Ctx {
         self.settings.flag(name, self.at()).map_err(|e| self.tag(e))
     }
 
-    /// Таймаут HTTP из настроек системы. Ошибка NotConfigured — не задано.
+    /// Сроки и пределы HTTP-обмена (gateway/http.rs): http.timeout_ms, http.body_idle_ms, http.total_ms,
+    /// http.max_body_bytes. Ошибки: NotConfigured (любая не задана), Internal.
+    pub fn limits(&self) -> Result<crate::gateway::http::Limits, GatewayError> {
+        let int = |n: &str| {
+            self.settings
+                .integer(n, At::default())
+                .map_err(|e| self.tag(e))
+        };
+        Ok(crate::gateway::http::Limits {
+            head: Duration::from_millis(int("http.timeout_ms")?),
+            idle: Duration::from_millis(int("http.body_idle_ms")?),
+            total: Duration::from_millis(int("http.total_ms")?),
+            max_bytes: int("http.max_body_bytes")? as usize,
+        })
+    }
+
+    /// Таймаут HTTP из настроек системы (до заголовков ответа, gateway/http.rs). Ошибка NotConfigured — не задано.
     pub fn http_timeout(&self) -> Result<Duration, GatewayError> {
         let ms = self
             .settings

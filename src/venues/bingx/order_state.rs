@@ -32,7 +32,7 @@ use super::{num, rest};
 const FINAL: [&str; 3] = ["FILLED", "CANCELED", "FAILED"];
 
 /// Возвращает окончательное состояние ордера (ответ «Query Order details»).
-/// Ошибка Timeout — состояние не удалось получить даже после отмены (нужна проверка).
+/// Ошибка OutcomeUnknown — состояние не удалось получить даже после отмены (нужна проверка).
 pub async fn settle(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> {
     let poll = Duration::from_millis(ctx.int("venue.order_poll_ms")?);
     let wait = Duration::from_millis(ctx.int("venue.order_final_wait_ms")?);
@@ -116,7 +116,7 @@ pub fn result(
     })
 }
 
-/// Запрос состояния. Ошибка → Timeout «ордер отправлен, состояние неизвестно».
+/// Запрос состояния. Ошибка → OutcomeUnknown «ордер отправлен, состояние неизвестно».
 async fn query(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> {
     let q = vec![
         ("symbol", symbol.to_string()),
@@ -138,10 +138,11 @@ fn is_final(s: &Value) -> bool {
     num::text_opt(s, "status").is_some_and(|st| FINAL.contains(&st.as_str()))
 }
 
-/// Ошибка «состояние ордера неизвестно».
+/// Ошибка «состояние ордера неизвестно»: ордер отправлен, итог не получен — OutcomeUnknown (решение 64: ядро не
+/// повторяет, сделка ждёт проверки).
 fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
     ctx.tag(GatewayError::new(
-        ErrorCode::Timeout,
+        ErrorCode::OutcomeUnknown,
         None,
         format!("Ордер {order_id} отправлен, но окончательное состояние не получено: {why}"),
     ))

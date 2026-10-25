@@ -18,7 +18,7 @@
 use alloy_primitives::{Address, Bytes};
 
 use crate::core::types::{PoolKind, PoolRef, PoolState};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
@@ -44,11 +44,18 @@ pub struct Want<'a> {
 /// Вызовы одной ступени по пулам: (контракт, данные).
 pub type Stage = Vec<Vec<(Address, Bytes)>>;
 
+/// Причина, по которой пул не прочитан: ошибка шлюза (у «не задана настройка» — имя в поле setting).
+pub type Miss = crate::gateway::errors::GatewayError;
+/// Причина из текста (ответ не по форме, откат, сбой части пачки) — BadResponse без имени настройки. Ошибок нет.
+pub fn miss(text: impl Into<String>) -> Miss {
+    super::super::errors::err(crate::gateway::errors::ErrorCode::BadResponse, text)
+}
+
 /// Ответы ступени по пулам: байты каждого вызова пула или причина (первый откат / сбой части).
 pub type Answers = Vec<Result<Vec<Bytes>, String>>;
 
 /// Итог по каждому пулу, пока собирается (None — ещё в работе).
-pub type Out = Vec<Option<Result<Loaded, String>>>;
+pub type Out = Vec<Option<Result<Loaded, Miss>>>;
 
 /// Состояния пулов на блоке. Принимает: пулы, блок. Возвращает: по каждому — Loaded или причина. Ошибок нет.
 pub async fn states(
@@ -56,11 +63,11 @@ pub async fn states(
     tokens: &Tokens,
     wants: &[Want<'_>],
     block: u64,
-) -> Vec<Result<Loaded, String>> {
+) -> Vec<Result<Loaded, Miss>> {
     let tag = block_tag(block);
     let size = match batch(ctx) {
         Ok(n) => n,
-        Err(e) => return wants.iter().map(|_| Err(e.message.clone())).collect(),
+        Err(e) => return wants.iter().map(|_| Err(e.clone())).collect(),
     };
     let mut out: Out = wants.iter().map(|_| None).collect();
     // Bin — по одному (см. шапку).
@@ -78,7 +85,7 @@ pub async fn states(
                 block,
             )
             .await;
-            out[i] = Some(r.map_err(|e| e.message));
+            out[i] = Some(r);
         }
     }
     // Ступень 1: головы.
@@ -102,7 +109,7 @@ pub async fn states(
         }
         let head = heads[i]
             .as_ref()
-            .map_err(Clone::clone)
+            .map_err(|t| miss(t.clone()))
             .and_then(|b| parse_head(w, b));
         match head {
             Ok(PoolStateTick::V2(state)) => {
@@ -114,7 +121,12 @@ pub async fn states(
             }
             Ok(PoolStateTick::Ticked(s, tick)) => match w.spacing {
                 Some(sp) => parsed[i] = Some((s, tick, sp)),
-                None => out[i] = Some(Err(format!("{}: у пула нет tickSpacing", w.family.title))),
+                None => {
+                    out[i] = Some(Err(miss(format!(
+                        "{}: у пула нет tickSpacing",
+                        w.family.title
+                    ))))
+                }
             },
             Err(why) => out[i] = Some(Err(why)),
         }
@@ -128,12 +140,10 @@ pub async fn states(
             let Some((_, tick, spacing)) = parsed[i] else {
                 return Vec::new();
             };
-            let calls = word_range(ctx, tick, spacing)
-                .map_err(|e| e.message)
-                .and_then(|r| {
-                    ranges[i] = r;
-                    words(ctx, w, r)
-                });
+            let calls = word_range(ctx, tick, spacing).and_then(|r| {
+                ranges[i] = r;
+                words(ctx, w, r)
+            });
             calls.unwrap_or_else(|why| {
                 parsed[i] = None;
                 out[i] = Some(Err(why));
@@ -150,7 +160,7 @@ pub async fn states(
         let ans = match &words_ans[i] {
             Ok(b) => b,
             Err(why) => {
-                out[i] = Some(Err(why.clone()));
+                out[i] = Some(Err(miss(why.clone())));
                 continue;
             }
         };
@@ -175,15 +185,15 @@ pub async fn states(
     // Ступень 3: данные тиков CL.
     ticks3::finish(ctx, wants, cl_wait, &mut out, &tag, size).await;
     out.into_iter()
-        .map(|o| o.unwrap_or_else(|| Err("состояние пула не собрано (внутренняя ошибка)".into())))
+        .map(|o| o.unwrap_or_else(|| Err(miss("состояние пула не собрано (внутренняя ошибка)"))))
         .collect()
 }
 
 /// Размер части пачки: dex.load_batch (вызовов в одном eth_call Multicall3). Ошибки: NotConfigured (не задана или 0).
 pub fn batch(ctx: &Ctx) -> GatewayResult<usize> {
     match ctx.int("dex.load_batch")? {
-        0 => Err(ctx.err(
-            ErrorCode::NotConfigured,
+        0 => Err(ctx.not_set(
+            "dex.load_batch",
             "dex.load_batch = 0 — задайте число больше нуля",
         )),
         n => Ok(n as usize),

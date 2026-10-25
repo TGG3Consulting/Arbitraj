@@ -40,16 +40,28 @@ pub fn absorb(core: &Core, reason: Option<String>) -> bool {
     true
 }
 
+/// Счётчики первого прохода от адаптера.
+#[derive(Debug, Clone, Copy)]
+pub struct Counts {
+    pub ok: usize,
+    pub failed: usize,
+    pub waiting: usize,
+    pub config: usize,
+    /// Монеты, чьи пулы застряли (ждут незаданную настройку): их первая проверка — позже, сводку они не держат
+    /// (решение 63).
+    pub loading: usize,
+}
+
 /// Конец первого прохода у площадки: одно сводное coin.check_done (с топом причин), дальше — посмонетные уведомления.
 /// Принимает: площадку и счётчики адаптера. Ошибок нет.
-pub async fn done(
-    core: &Core,
-    venue: &str,
-    ok: usize,
-    failed: usize,
-    waiting: usize,
-    config: usize,
-) {
+pub async fn done(core: &Core, venue: &str, n: Counts) {
+    let Counts {
+        ok,
+        failed,
+        waiting,
+        config,
+        loading,
+    } = n;
     let (top, blocked) = {
         let mut f = lk(&core.inner.first_pass);
         if f.done {
@@ -61,7 +73,7 @@ pub async fn done(
     let top = top_reasons(core, top);
     let mut text = format!(
         "Первая проверка налогов ({venue}): прошли {ok}, не прошли {failed}, ждут достоверного пула {waiting}, \
-         не задана настройка {config}; в чёрном списке {blocked}"
+         не задана настройка {config}, пулы не читаются (ждут настройку) {loading}; в чёрном списке {blocked}"
     );
     if !top.is_empty() {
         text.push_str(&format!(". Причины: {top}"));

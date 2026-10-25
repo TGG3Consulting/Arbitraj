@@ -8,6 +8,7 @@
 pub mod contract;
 pub mod errors;
 pub mod events;
+pub mod http;
 pub mod registry;
 pub mod rules;
 pub mod urgency;

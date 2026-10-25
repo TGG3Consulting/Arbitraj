@@ -25,6 +25,7 @@ use super::super::ctx::Ctx;
 use super::super::errors::{self, Op};
 use super::failover::{self, Link, Node};
 use super::{jsonrpc, pace};
+use crate::gateway::http;
 
 /// Источник ошибок для текста причины.
 pub const SOURCE: &str = "узел BSC (HTTP)";
@@ -138,19 +139,16 @@ pub async fn post(
     headers: &[(&str, &str)],
     source: &str,
 ) -> GatewayResult<String> {
-    let mut req = ctx.http.post(url).timeout(ctx.timeout()?).json(body);
+    // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело (пачка Multicall3 — до ~1 МБ) дочитывается,
+    // пока данные идут чаще http.body_idle_ms.
+    let lim = ctx.limits()?;
+    let mut req = ctx.http.post(url).json(body);
     for (k, v) in headers {
         req = req.header(*k, *v);
     }
-    let resp = req
-        .send()
+    let (status, text) = http::exchange(req, lim)
         .await
-        .map_err(|e| errors::from_network(e, source))?;
-    let status = resp.status();
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| errors::from_network(e, source))?;
+        .map_err(|f| errors::from_fail(&f, &lim, source))?;
     if !status.is_success() {
         // Тело JSON-RPC с ошибкой при не-2xx (так отвечают некоторые каналы) — разбираем его первым.
         if let Err(e) = jsonrpc::parse_text(&text, source, Op::Read)

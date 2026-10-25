@@ -19,9 +19,9 @@ use super::store::Store;
 
 /// Ошибка «не задано в области». Принимает: имя, область.
 fn not_set(name: &str, scope: &Scope) -> GatewayError {
-    GatewayError::new(
-        ErrorCode::NotConfigured,
+    GatewayError::not_set(
         None,
+        name,
         format!(
             "Не задана настройка {name} [{}] — задайте её в интерфейсе",
             scope.to_key()

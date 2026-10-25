@@ -20,6 +20,7 @@
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
 use super::ctx::ID;
+use crate::gateway::http::{Fail, Limits};
 
 /// Какой запрос вернул ошибку: от этого зависит единый код у текстов, которые не распознаны.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,19 +78,18 @@ pub fn from_http(status: u16, source: &str, raw: &str) -> GatewayError {
     .with_raw(raw)
 }
 
-/// Сетевая ошибка HTTP (нет связи или таймаут). Адрес из ошибки удаляется: в нём может быть ключ.
-/// Принимает: ошибку reqwest, источник. Возвращает: GatewayError.
-pub fn from_network(e: reqwest::Error, source: &str) -> GatewayError {
-    let code = if e.is_timeout() {
-        ErrorCode::Timeout
-    } else {
-        ErrorCode::Unreachable
+/// Сбой HTTP-обмена (gateway/http.rs) с правдивой причиной: нет связи, нет ответа за срок, ответ не дочитан.
+/// Принимает: сбой, сроки, источник. Возвращает: GatewayError (Unreachable — соединение не установлено; Timeout —
+/// запрос мог дойти, ответа целиком нет; BadResponse — тело не UTF-8 или больше предела).
+pub fn from_fail(f: &Fail, lim: &Limits, source: &str) -> GatewayError {
+    // Unreachable — только «соединение не установлено» (запрос точно не дошёл); дошёл, а ответа целиком нет —
+    // Timeout: результат неизвестен, для отправки транзакции — «неясно» (send/mod.rs), не «не отправлено».
+    let code = match f {
+        Fail::Connect(_) => ErrorCode::Unreachable,
+        Fail::NotText | Fail::TooBig { .. } => ErrorCode::BadResponse,
+        _ => ErrorCode::Timeout,
     };
-    GatewayError::new(
-        code,
-        Some(venue()),
-        format!("{source}: нет связи: {}", e.without_url()),
-    )
+    GatewayError::new(code, Some(venue()), format!("{source}: {}", f.text(lim)))
 }
 
 /// Ответ не удалось разобрать.

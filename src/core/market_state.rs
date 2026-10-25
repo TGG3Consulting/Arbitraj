@@ -106,9 +106,10 @@ impl MarketState {
                 failed,
                 waiting,
                 not_configured: nc,
+                loading,
             } => Touched::CheckPass {
                 venue,
-                counts: [ok, failed, waiting, nc],
+                counts: [ok, failed, waiting, nc, loading],
             },
             MarketEvent::PoolsLoading { venue, coins } => {
                 let now: HashSet<Address> = coins.into_iter().collect();

@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/ctx.rs
 //! Что делает: общее окружение адаптера DEX — настройки (площадка, DEX/вид пула, канал), секреты,
 //! HTTP-клиент, журнал, запись сырых сообщений — и чтение настроек в одном месте.
+//! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs.
 //! Кто вызывает: все файлы адаптера DEX.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
 //! Настройки: venue.* и feed.* с областью «bsc_dex», dex.* (область «DEX»), channel.* (область «канал»),
@@ -11,7 +12,6 @@ use std::time::Duration;
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
-use zeroize::Zeroizing;
 
 use crate::core::types::VenueId;
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -131,7 +131,7 @@ impl Ctx {
         let v = self.settings.get_exact(name, &Scope::Dex(id.to_string()));
         let v = v.ok_or_else(|| {
             let m = format!("Не задана настройка {name} [dex:{id}] — задайте её в интерфейсе");
-            self.err(ErrorCode::NotConfigured, m)
+            self.not_set(name, m)
         })?;
         let list = v.as_array().and_then(|a| {
             a.iter()
@@ -154,25 +154,22 @@ impl Ctx {
         Ok(Duration::from_millis(self.global_int("http.timeout_ms")?))
     }
 
-    /// Адрес узла из настройки с подстановкой ключа провайдера вместо {key} (ключ — секрет).
-    /// Принимает: имя настройки адреса, имя секрета ключа. Возвращает: готовый адрес (в журнал его не писать).
-    /// Ошибки: NotConfigured (адрес или ключ не задан), SecretsLocked.
-    pub fn node_url(&self, setting: &str, secret: &str) -> Result<Zeroizing<String>, GatewayError> {
-        let url = self
-            .settings
-            .text(setting, At::default())
-            .map_err(|e| self.tag(e))?;
-        self.with_key(&url, secret)
+    /// Сроки и пределы HTTP-обмена (gateway/http.rs): http.timeout_ms, http.body_idle_ms, http.total_ms,
+    /// http.max_body_bytes. Ошибки: NotConfigured (любая не задана), Internal.
+    pub fn limits(&self) -> Result<crate::gateway::http::Limits, GatewayError> {
+        let ms = |n: &str| self.global_int(n).map(Duration::from_millis);
+        Ok(crate::gateway::http::Limits {
+            head: self.timeout()?,
+            idle: ms("http.body_idle_ms")?,
+            total: ms("http.total_ms")?,
+            max_bytes: self.global_int("http.max_body_bytes")? as usize,
+        })
     }
 
-    /// Подставляет ключ из секрета вместо {key}; нет метки — адрес как есть, секрет не нужен.
-    /// Ошибки: SecretsLocked, NotConfigured (секрет не введён).
-    pub fn with_key(&self, url: &str, secret: &str) -> Result<Zeroizing<String>, GatewayError> {
-        if !url.contains(KEY_MARK) {
-            return Ok(Zeroizing::new(url.to_string()));
-        }
-        let key = self.vault.get(secret).map_err(|e| self.tag(e))?;
-        Ok(Zeroizing::new(url.replace(KEY_MARK, key.as_str())))
+    /// Ошибка «настройка не задана или задана неверно» с её именем (GatewayError.setting): по имени пул, брошенный
+    /// из-за неё, вернётся в чтение, когда её зададут. Принимает: имя, текст. Ошибок нет.
+    pub fn not_set(&self, name: &str, message: impl Into<String>) -> GatewayError {
+        self.tag(GatewayError::not_set(None, name, message))
     }
 
     /// Проставляет в ошибке площадку bsc_dex. Ошибок нет.

@@ -34,7 +34,7 @@ pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
         .map_err(|e| ctx.tag(e))?;
     if rps == 0 {
         let m = "bsc.node_http_rps должна быть больше нуля";
-        return Err(ctx.err(ErrorCode::NotConfigured, m));
+        return Err(ctx.not_set("bsc.node_http_rps", m));
     }
     let step = Duration::from_secs_f64(weight.max(1) as f64 / rps as f64);
     let share = match ctx

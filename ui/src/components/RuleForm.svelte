@@ -4,6 +4,7 @@
     и его параметры, необязательное условие (JSON), включено ли. Списки — из GET /api/rules/meta
     и GET /api/venues. Значений по умолчанию нет: всё выбирается и вводится вручную.
     Создание — POST /api/rules, изменение — PUT /api/rules/{id}. Ошибка бэкенда (например, дубль) — как есть.
+    Для кода с no_retry («результат неизвестен», решение 64) «Повторить» в списке действий нет.
   Кто вызывает: pages/Rules.svelte.
   От чего зависит: lib/api.js, lib/settings.svelte.js (площадки), components/ErrorText.svelte.
   Настройки: нет (правила — данные из интерфейса, src/gateway/rules.rs).
@@ -34,6 +35,9 @@
   let busy = $state(false);
 
   const actionMeta = $derived(meta.actions.find((a) => a.kind === action));
+  /** Для «результат неизвестен» (no_retry) «Повторить» не предлагается — операция могла исполниться (решение 64). */
+  const noRetry = $derived(meta.codes.find((c) => c.code === event)?.no_retry === true);
+  const actions = $derived(meta.actions.filter((a) => !(noRetry && a.kind === 'Retry')));
 
   /** Собирает правило в формате бэкенда. Ошибки: Error с причиной (не выбрано, не число, не JSON). */
   function build() {
@@ -41,6 +45,7 @@
       throw new Error('Выберите событие, область, действие и состояние');
     }
     if (scopeKind === 'Venue' && !venue) throw new Error('Выберите площадку');
+    if (noRetry && action === 'Retry') throw new Error('Для этого события повтор запрещён: операция могла исполниться');
     let act = action;
     if (actionMeta.params.length) {
       const p = {};
@@ -105,7 +110,7 @@
   <label>Действие
     <select bind:value={action}>
       <option value="">— выберите —</option>
-      {#each meta.actions as a (a.kind)}<option value={a.kind}>{a.title}</option>{/each}
+      {#each actions as a (a.kind)}<option value={a.kind}>{a.title}</option>{/each}
     </select>
   </label>
   {#each actionMeta?.params ?? [] as p (p.name)}

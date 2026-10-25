@@ -66,14 +66,29 @@ async fn first_pass_sends_one_summary_then_per_coin() {
     assert!(first_pass::absorb(&core, Some("откат пробы".into())));
     assert!(first_pass::absorb(&core, Some("откат пробы".into())));
     assert!(first_pass::absorb(&core, Some("налог выше порога".into())));
-    first_pass::done(&core, "bsc_dex", 10, 3, 2, 0).await;
-    first_pass::done(&core, "bsc_dex", 10, 3, 2, 0).await;
+    let n = first_pass::Counts {
+        ok: 10,
+        failed: 3,
+        waiting: 2,
+        config: 0,
+        loading: 4,
+    };
+    first_pass::done(&core, "bsc_dex", n).await;
+    first_pass::done(&core, "bsc_dex", n).await;
     let list = journal.list(500, None).await.unwrap();
     let done: Vec<_> = list
         .iter()
         .filter(|e| e.kind == "core.check_done")
         .collect();
     assert_eq!(done.len(), 1, "сводка одна");
+    // Монеты, чьи пулы застряли (ждут настройку), — отдельным числом (решение 63).
+    assert!(
+        done[0]
+            .message
+            .contains("пулы не читаются (ждут настройку) 4"),
+        "{}",
+        done[0].message
+    );
     assert!(
         done[0].message.contains("в чёрном списке 3"),
         "{}",

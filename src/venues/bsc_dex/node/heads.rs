@@ -189,8 +189,8 @@ pub fn poll_every(ctx: &Ctx) -> GatewayResult<Duration> {
         .map_err(|e| ctx.tag(e))?;
     let stale = ctx.int("feed.stale_after_ms")?;
     if ms >= stale {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
+        return Err(ctx.not_set(
+            "bsc.blocks_poll_ms",
             format!("bsc.blocks_poll_ms ({ms}) должен быть меньше feed.stale_after_ms ({stale})"),
         ));
     }

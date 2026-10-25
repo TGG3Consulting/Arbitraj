@@ -47,6 +47,31 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
     GatewayError::new(unified, Some(venue()), text).with_raw(raw)
 }
 
+/// Ордер или вывод: запрос мог дойти до BingX, а ясного итога нет (нет ответа, ответ не дочитан или непонятен,
+/// HTTP 504) — «результат неизвестен» (OutcomeUnknown, решение 64): ядро не повторяет такую операцию ни при каких
+/// правилах шлюза (core/rules_apply.rs) — стартовое правило Тиграна «отправлен и не исполнился — больше не пробуем».
+/// Остальные ошибки и операции Op::Other — как есть. Принимает: ошибку, операцию. Возвращает: ошибку. Ошибок нет.
+pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
+    if op == Op::Other || !matches!(e.code, ErrorCode::Timeout | ErrorCode::BadResponse) {
+        return e;
+    }
+    unknown(e, op)
+}
+
+/// Ордер или вывод → «результат неизвестен» с пояснением в тексте. Принимает: ошибку, операцию. Ошибок нет.
+fn unknown(e: GatewayError, op: Op) -> GatewayError {
+    let what = if op == Op::Trade {
+        "ордер"
+    } else {
+        "вывод"
+    };
+    GatewayError {
+        code: ErrorCode::OutcomeUnknown,
+        message: format!("{} — {what} мог быть принят, итог не получен", e.message),
+        ..e
+    }
+}
+
 /// Ошибка по HTTP-статусу (когда тело не в формате BingX).
 /// 418 — IP заблокирован после превышения лимита; 429 — слишком частые запросы.
 pub fn from_http(status: u16, raw: &str) -> GatewayError {
@@ -70,18 +95,38 @@ pub fn from_http(status: u16, raw: &str) -> GatewayError {
     GatewayError::new(code, Some(venue()), format!("BingX: {text}, HTTP {status}")).with_raw(raw)
 }
 
-/// Сетевая ошибка (нет связи или таймаут). Адрес из ошибки удаляется.
-pub fn from_network(e: reqwest::Error) -> GatewayError {
-    let code = if e.is_timeout() {
-        ErrorCode::Timeout
-    } else {
-        ErrorCode::Unreachable
+/// Сбой HTTP-обмена (gateway/http.rs) с правдивой причиной: нет связи, нет ответа за срок, ответ не дочитан.
+/// Принимает: сбой, сроки. Возвращает: GatewayError (Unreachable — соединение не установлено; Timeout — запрос мог
+/// дойти, ответа целиком нет; BadResponse — тело не UTF-8 или больше предела).
+pub fn from_fail(
+    f: &crate::gateway::http::Fail,
+    lim: &crate::gateway::http::Limits,
+) -> GatewayError {
+    use crate::gateway::http::Fail;
+    // Unreachable — только «соединение не установлено» (запрос точно не дошёл); дошёл, а ответа целиком нет —
+    // Timeout: ордер мог исполниться, итог проверяется (trade.rs, order_state.rs), не «не отправлено».
+    let code = match f {
+        Fail::Connect(_) => ErrorCode::Unreachable,
+        Fail::NotText | Fail::TooBig { .. } => ErrorCode::BadResponse,
+        _ => ErrorCode::Timeout,
     };
-    GatewayError::new(
-        code,
-        Some(venue()),
-        format!("BingX: нет связи: {}", e.without_url()),
-    )
+    GatewayError::new(code, Some(venue()), format!("BingX: {}", f.text(lim)))
+}
+
+/// Сбой обмена по операции: ордер или вывод (Op::Trade, Op::Withdraw) при любом сбое, кроме «соединение не
+/// установлено» (Fail::Connect — запрос точно не ушёл), — «результат неизвестен» (OutcomeUnknown, решение 64): запрос
+/// мог дойти до BingX и исполниться, в том числе при недочитанном, слишком большом или не UTF-8 ответе. Код задаётся
+/// по виду сбоя, а не по коду from_fail. Принимает: сбой, сроки, операцию. Возвращает: GatewayError. Ошибок нет.
+pub fn fail_for(
+    f: &crate::gateway::http::Fail,
+    lim: &crate::gateway::http::Limits,
+    op: Op,
+) -> GatewayError {
+    let e = from_fail(f, lim);
+    if op == Op::Other || f.not_sent() {
+        return e;
+    }
+    unknown(e, op)
 }
 
 /// Ответ не удалось разобрать.

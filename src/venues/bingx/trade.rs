@@ -10,7 +10,7 @@
 //! - POST /openApi/spot/v1/trade/order — symbol, side (BUY/SELL), type (LIMIT), quantity, price,
 //!   timeInForce (PostOnly, GTC, IOC, FOK), newClientOrderId (буквы, цифры, «_», 1–40 символов).
 //! - GET /openApi/spot/v1/trade/query — symbol, orderId; ответ: executedQty, cummulativeQuoteQty,
-//!   status, fee, feeAsset, avgPrice.
+//!   status, fee, feeAsset, avgPrice (order_state.rs).
 //!
 //! Количество округляется вниз до stepSize, цена — до tickSize в безопасную сторону
 //! (покупка — вниз, продажа — вверх), сумма проверяется по minNotional (Spot trading symbols).
@@ -30,7 +30,7 @@ use super::{num, order_state, rest};
 /// Ждёт окончательного состояния ордера; не дождался — отменяет остаток (правило Тиграна:
 /// не исполнился — отменяем, больше не пробуем) и возвращает то, что реально исполнилось.
 /// Ошибки: OrderRejected (пара не торгуется, сумма вне пределов, отказ BingX),
-/// Timeout — ордер отправлен, но итог не получен (нужна проверка правилом шлюза).
+/// OutcomeUnknown — ордер мог быть принят, итог не получен (ядро не повторяет, сделка ждёт проверки, решение 64).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let buy = req.side == Side::Buy;
@@ -101,6 +101,9 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ("timeInForce", tif),
         ("newClientOrderId", client_id),
     ];
+    // Нет ответа на постановку — OutcomeUnknown (rest.rs, решение 64): ядро не повторяет, сделка стоит до ручной
+    // проверки. Поиск ордера по своему ID не делается: ID одинаков у всех постановок одной сделки (открытый вопрос
+    // решения 63).
     let placed = rest::signed(
         ctx,
         Method::POST,

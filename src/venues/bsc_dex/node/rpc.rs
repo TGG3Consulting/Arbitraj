@@ -149,6 +149,15 @@ pub async fn post(
     let (status, text) = http::exchange(req, lim)
         .await
         .map_err(|f| errors::from_fail(&f, &lim, source))?;
+    status_ok(status, text, source)
+}
+
+/// Ответ узла с HTTP-статусом: 2xx — текст; иначе — ошибка из тела JSON-RPC или по статусу. Ошибок кроме этих нет.
+pub(super) fn status_ok(
+    status: reqwest::StatusCode,
+    text: String,
+    source: &str,
+) -> GatewayResult<String> {
     if !status.is_success() {
         // Тело JSON-RPC с ошибкой при не-2xx (так отвечают некоторые каналы) — разбираем его первым.
         if let Err(e) = jsonrpc::parse_text(&text, source, Op::Read)

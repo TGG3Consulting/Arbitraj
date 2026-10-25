@@ -70,6 +70,40 @@ impl Chain {
     }
 }
 
+/// Блок отменён (реорг подтверждён): хеш блока у узла по ДВУМ запросам заголовка отличается от нашего — за
+/// балансировщиком узлов один ответ может прийти от отставшего узла (ложный реорг). Принимает: наш хеш, хеши двух
+/// ответов. Ошибок нет.
+pub fn gone(ours: B256, first: B256, second: B256) -> bool {
+    first != ours && second != ours
+}
+
+/// Квитанции блока полные и этого блока: столько же, сколько транзакций в заголовке, по порядку тех же хешей
+/// (transactionHash), у каждой blockHash = хеш блока. Принимает: номер, хеш блока, хеши транзакций заголовка,
+/// квитанции. Ошибки (текст для журнала): неполные, другой порядок, другой хеш блока.
+pub fn complete(n: u64, hash: B256, txs: &[B256], receipts: &[Value]) -> Result<(), String> {
+    let field = |r: &Value, k: &str| {
+        r.get(k)
+            .and_then(Value::as_str)
+            .and_then(|s| s.parse::<B256>().ok())
+    };
+    if receipts.iter().any(|r| field(r, "blockHash") != Some(hash)) {
+        return Err(format!("квитанции блока {n} — другого хеша (реорг идёт)"));
+    }
+    let same = receipts.len() == txs.len()
+        && receipts
+            .iter()
+            .zip(txs)
+            .all(|(r, t)| field(r, "transactionHash") == Some(*t));
+    if !same {
+        return Err(format!(
+            "узел отдал неполные квитанции блока {n}: квитанций {}, транзакций в заголовке {}",
+            receipts.len(),
+            txs.len()
+        ));
+    }
+    Ok(())
+}
+
 /// Логи всех квитанций блока по порядку (как в блоке: транзакции, внутри — logIndex). Принимает: ответ
 /// eth_getBlockReceipts. Ошибок нет: квитанция без logs — без логов.
 pub fn logs_of(receipts: &[Value]) -> Vec<Value> {

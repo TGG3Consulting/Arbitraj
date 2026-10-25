@@ -6,11 +6,15 @@
 //! - логи квитанций фильтруются теми же фильтрами, что подписка WebSocket (pools/group.rs filter → node/log_filter.rs):
 //!   подходят ровно логи наших пулов с событиями состояния (V2 Sync/Swap, V3 Swap/Burn …), чужие — нет;
 //! - разобранные логи — тот же формат, что у подписки (alloy Log с blockNumber и logIndex) — разбор событий общий;
-//! - цепочка блоков окна сходится по parentHash; чужой блок — реорг: отменённый блок снимается, его логи — removed: true;
+//! - логи блока и номер блока раздаются одним действием (подписка после раздачи видит номер блока), обрыв ленты
+//!   закрывает подписки;
 //! - событие создания пула (PairCreated фабрики PancakeSwap V2) находится фильтром «новых пулов».
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::{node::{log_filter, receipts_chain}, pools::{group, events, families}}.
+//! Цепочка, реорг, полнота квитанций, Infinity CL и Uniswap V4 — tests/bsc_dex_receipts_chain.rs.
+//! От чего зависит: tests/receipts_common, arb::venues::bsc_dex::{node::{receipts, receipts_chain}, pools::{group, events}}.
+
+mod receipts_common;
 
 use std::collections::HashMap;
 
@@ -20,70 +24,12 @@ use serde_json::{Value, json};
 
 use arb::core::types::PoolRef;
 use arb::venues::bsc_dex::node::log_filter::Filter;
-use arb::venues::bsc_dex::node::receipts_chain::{Block, Chain, logs_of, route};
+use arb::venues::bsc_dex::node::receipts::Feed;
+use arb::venues::bsc_dex::node::receipts_chain::{logs_of, route};
 use arb::venues::bsc_dex::pools::discover::Found;
+use arb::venues::bsc_dex::pools::events;
 use arb::venues::bsc_dex::pools::group::{Topics, filter};
-use arb::venues::bsc_dex::pools::{events, families};
-
-const DIR: &str = "tests/data/receipts_2026-10-25/";
-
-fn load(name: &str) -> Value {
-    serde_json::from_str(&std::fs::read_to_string(format!("{DIR}{name}")).unwrap()).unwrap()
-}
-
-/// Ответ записи по имени («header N», «receipts N …»).
-fn result(rec: &Value, prefix: &str) -> Value {
-    rec["results"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|r| r["name"].as_str().unwrap().starts_with(prefix))
-        .unwrap()["response"]["result"]
-        .clone()
-}
-
-/// Наши пулы V2/V3 из calls.json (вид — по DEX индексатора, как в node_calls_3).
-fn our_pools() -> Vec<Found> {
-    let calls = load("calls.json");
-    calls["pools"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|p| {
-            let dex = p["tag"].as_str().unwrap().split(' ').nth(1).unwrap();
-            let kind = match dex {
-                "pancakeswap_v2" => "pancakeswap_v2",
-                "pancakeswap-v3-bsc" => "pancakeswap_v3",
-                "uniswap-bsc" => "uniswap_v3",
-                other => panic!("{other}"),
-            };
-            let a: Address = p["addr"].as_str().unwrap().parse().unwrap();
-            Found {
-                family: families::make(dex, kind).unwrap(),
-                reference: PoolRef::Contract(a),
-                token0: Address::ZERO,
-                token1: Address::ZERO,
-                coin: Address::ZERO,
-                fee_pips: None,
-                tick_spacing: None,
-                bin_step: None,
-                key: None,
-                hooks: None,
-            }
-        })
-        .collect()
-}
-
-/// Фильтры подписок «все события» — как pools/group.rs: одна подписка на вид пулов.
-fn filters(pools: &[Found]) -> Vec<Filter> {
-    let mut by: HashMap<&str, Vec<&Found>> = HashMap::new();
-    for f in pools {
-        by.entry(f.family.id).or_default().push(f);
-    }
-    by.values()
-        .map(|v| Filter::new(&filter(v, Topics::Full)))
-        .collect()
-}
+use receipts_common::{filters, load, our_pools, result};
 
 #[test]
 fn receipts_logs_route_like_ws_subscription() {
@@ -139,66 +85,51 @@ fn receipts_logs_route_like_ws_subscription() {
     );
 }
 
-#[test]
-fn chain_follows_parent_hash_and_rolls_back_on_reorg() {
+/// Замечание ревью #58: логи блока и номер блока — одним действием. Пачка, подписавшаяся после раздачи блока N,
+/// видит eth_blockNumber = N и читает состояние на N; подписавшаяся до — получает логи N.
+#[tokio::test]
+async fn deliver_sets_block_number_together_with_logs() {
     let rec = load("responses.json");
-    let hdr = |n: u64| {
-        let h = result(&rec, &format!("header {n}"));
-        let p = |k: &str| h[k].as_str().unwrap().parse::<B256>().unwrap();
-        (p("hash"), p("parentHash"))
-    };
-    let window: Vec<u64> = rec["window"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_u64().unwrap())
-        .collect();
-    let mut chain = Chain::default();
-    let start = window[0] - 1;
-    chain.push(
-        Block {
-            number: start,
-            hash: hdr(start).0,
-            logs: vec![],
-        },
-        8,
-    );
-    for &n in &window {
-        let (hash, parent) = hdr(n);
-        assert!(chain.continues(parent), "блок {n} продолжает цепочку");
-        let logs =
-            vec![json!({ "address": "0x0", "topics": [], "blockNumber": format!("0x{n:x}") })];
-        chain.push(
-            Block {
-                number: n,
-                hash,
-                logs,
-            },
-            8,
+    let pools = our_pools();
+    let fs = filters(&pools);
+    let feed = Feed::default();
+    let before = feed.open_idle();
+    let mut by_kind: HashMap<&str, Vec<&Found>> = HashMap::new();
+    for p in &pools {
+        by_kind.entry(p.family.id).or_default().push(p);
+    }
+    let mut subs = Vec::new();
+    for v in by_kind.values() {
+        subs.push(
+            before
+                .subscribe(&json!(["logs", filter(v, Topics::Full)]))
+                .unwrap(),
         );
     }
-    // Блок не из этой цепочки (записанный 129702218) — его parentHash не совпадает: реорг.
-    let other = rec["created"].as_u64().unwrap();
-    assert!(!chain.continues(hdr(other).1));
-    let (n, removed) = chain.pop_removed().unwrap();
-    assert_eq!(n, *window.last().unwrap());
-    assert!(removed.iter().all(|l| l["removed"] == json!(true)));
-    assert_eq!(chain.top().unwrap().number, n - 1);
-    // Окно ограничено глубиной.
-    let mut short = Chain::default();
-    for &x in &window {
-        short.push(
-            Block {
-                number: x,
-                hash: hdr(x).0,
-                logs: vec![],
-            },
-            2,
-        );
+    let n = rec["window"][1].as_u64().unwrap();
+    let logs = logs_of(result(&rec, &format!("receipts {n}")).as_array().unwrap());
+    let refs: Vec<&Filter> = fs.iter().collect();
+    let want = route(&refs, &logs).1.len();
+    let any = feed.deliver(&logs, n);
+    assert_eq!(any.len(), want);
+    let mut got = 0;
+    for s in &mut subs {
+        while let Ok(raw) = s.rx.try_recv() {
+            let log: Log = serde_json::from_str(raw.get()).unwrap();
+            assert_eq!(log.block_number, Some(n));
+            got += 1;
+        }
     }
-    short.pop_removed();
-    short.pop_removed();
-    assert!(short.top().is_none());
+    assert_eq!(got, want);
+    // Подписка после раздачи: номер уже N — логи N учтены в чтении на N, не потеряны.
+    let after = feed.open_idle();
+    let _sub = after.subscribe(&json!(["logs", {"address": []}])).unwrap();
+    let b = after.request("eth_blockNumber", &json!([])).await.unwrap();
+    assert_eq!(b, json!(format!("0x{n:x}")));
+    // Обрыв ленты: подписки закрыты, «соединение» знает причину.
+    feed.cut("проверка");
+    assert!(after.end_reason().unwrap().contains("проверка"));
+    assert!(after.subscribe(&json!(["logs", {}])).is_err());
 }
 
 #[test]

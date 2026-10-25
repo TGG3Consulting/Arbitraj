@@ -19,13 +19,11 @@ use serde_json::Value;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, watch};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
-
 use super::super::ctx::Ctx;
-use super::super::errors;
 use super::heads::Heads;
 use super::log_filter::Filter;
-use super::ws::Sub;
+use super::receipts_chain::route;
+pub use super::receipts_handle::Handle;
 
 /// Источник ошибок для текста причины.
 pub const SOURCE: &str = "квитанции блоков (HTTP)";
@@ -48,17 +46,10 @@ pub(super) struct Inner {
 #[derive(Default)]
 pub(super) struct State {
     pub(super) subs: HashMap<String, (Filter, mpsc::UnboundedSender<Box<RawValue>>)>,
-    next: u64,
+    pub(super) next: u64,
     pub(super) generation: u64,
     /// Причина последнего обрыва.
     pub(super) broken: Option<String>,
-}
-
-/// «Соединение» с лентой одной пачки пулов: свои подписки, поколение ленты на момент открытия.
-pub struct Handle {
-    feed: Feed,
-    generation: u64,
-    ids: Mutex<Vec<String>>,
 }
 
 impl Feed {
@@ -73,103 +64,60 @@ impl Feed {
                 work,
             ));
         }
+        self.open_idle()
+    }
+
+    /// «Соединение» без запуска задачи ленты: блоки раздаёт тот, кто вызывает deliver (задача ленты; тесты порядка
+    /// раздачи и номера блока). Ошибок нет.
+    pub fn open_idle(&self) -> Handle {
         let generation = self.lock().generation;
-        Handle {
-            feed: self.clone(),
-            generation,
-            ids: Mutex::new(Vec::new()),
-        }
+        Handle::new(self.clone(), generation)
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.inner.state.lock().unwrap_or_else(|p| p.into_inner())
-    }
-}
-
-impl Handle {
-    /// Подписка logs. Принимает: ["logs", фильтр]. Возвращает: Sub (поток логов). Ошибки: Unreachable — лента
-    /// оборвалась после открытия; BadResponse — не подписка logs.
-    pub fn subscribe(&self, params: &Value) -> GatewayResult<Sub> {
-        let filter = match params.as_array().map(Vec::as_slice) {
-            Some([kind, f]) if kind == "logs" => Filter::new(f),
-            _ => {
-                return Err(errors::err(
-                    ErrorCode::BadResponse,
-                    format!("{SOURCE}: только подписка logs"),
-                ));
-            }
-        };
-        let mut s = self.feed.lock();
-        if s.generation != self.generation {
-            return Err(errors::err(ErrorCode::Unreachable, self.reason(&s)));
-        }
-        s.next += 1;
-        let id = format!("receipts-{}", s.next);
-        let (tx, rx) = mpsc::unbounded_channel();
-        s.subs.insert(id.clone(), (filter, tx));
-        self.ids
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .push(id.clone());
-        Ok(Sub { id, rx })
-    }
-
-    /// Запрос как к узлу: eth_blockNumber — последний разобранный блок (ждёт начала ленты), eth_unsubscribe — снять
-    /// подписку. Ошибки: Unreachable — лента оборвалась; BadResponse — другой метод.
-    pub async fn request(&self, method: &str, params: &Value) -> GatewayResult<Value> {
-        match method {
-            "eth_unsubscribe" => {
-                let id = params.get(0).and_then(Value::as_str).unwrap_or_default();
-                let had = self.feed.lock().subs.remove(id).is_some();
-                Ok(Value::Bool(had))
-            }
-            "eth_blockNumber" => {
-                let mut rx = self.feed.inner.last.subscribe();
-                loop {
-                    if self.end_reason().is_some() {
-                        return Err(errors::err(
-                            ErrorCode::Unreachable,
-                            self.reason(&self.feed.lock()),
-                        ));
-                    }
-                    if let Some(n) = *rx.borrow_and_update() {
-                        return Ok(Value::String(format!("0x{n:x}")));
-                    }
-                    if rx.changed().await.is_err() {
-                        return Err(errors::err(
-                            ErrorCode::Unreachable,
-                            format!("{SOURCE}: лента остановлена"),
-                        ));
-                    }
+    /// Раздаёт логи блока подпискам по фильтрам и ставит последний разобранный блок `last` ПОД ТОЙ ЖЕ блокировкой, что
+    /// и подписка (Handle::subscribe): подписка, сделанная после раздачи, видит eth_blockNumber ≥ `last` и читает
+    /// состояние не раньше него — логи блока не теряются между раздачей и номером. Закрытые приёмники снимаются.
+    /// Принимает: логи, номер блока для eth_blockNumber. Возвращает: логи, подошедшие хоть одной подписке. Ошибок нет.
+    pub fn deliver(&self, logs: &[Value], last: u64) -> Vec<Value> {
+        let mut s = self.lock();
+        let ids: Vec<String> = s.subs.keys().cloned().collect();
+        let filters: Vec<_> = ids.iter().map(|id| &s.subs[id].0).collect();
+        let (per, any) = route(&filters, logs);
+        let mut gone = Vec::new();
+        for (id, idx) in ids.iter().zip(per) {
+            let tx = &s.subs[id].1;
+            for i in idx {
+                let Ok(raw) = serde_json::value::to_raw_value(&logs[i]) else {
+                    continue;
+                };
+                if tx.send(raw).is_err() {
+                    gone.push(id.clone());
+                    break;
                 }
             }
-            _ => Err(errors::err(
-                ErrorCode::BadResponse,
-                format!("{SOURCE}: метод {method} не поддерживается"),
-            )),
         }
-    }
-
-    /// Причина обрыва ленты после открытия; None — жива. Ошибок нет.
-    pub fn end_reason(&self) -> Option<String> {
-        let s = self.feed.lock();
-        (s.generation != self.generation).then(|| self.reason(&s))
-    }
-
-    fn reason(&self, s: &State) -> String {
-        s.broken
-            .clone()
-            .unwrap_or_else(|| format!("{SOURCE}: лента оборвалась"))
-    }
-}
-
-impl Drop for Handle {
-    /// Подписки пачки снимаются вместе с ней (как подписки соединения WebSocket при его закрытии).
-    fn drop(&mut self) {
-        let ids = std::mem::take(&mut *self.ids.lock().unwrap_or_else(|p| p.into_inner()));
-        let mut s = self.feed.lock();
-        for id in ids {
+        for id in gone {
             s.subs.remove(&id);
         }
+        self.inner.last.send_replace(Some(last));
+        any
+    }
+
+    /// Обрыв ленты: новое поколение, все подписки закрыты (их приёмники видят конец), последнего блока нет. Ошибок нет.
+    pub fn cut(&self, why: &str) {
+        let mut s = self.lock();
+        s.generation += 1;
+        s.broken = Some(format!("{SOURCE}: {why}"));
+        s.subs.clear();
+        self.inner.last.send_replace(None);
+    }
+
+    /// Задача ленты кончилась (источник сменён): следующая Feed::open запустит её снова. Ошибок нет.
+    pub(super) fn stopped(&self) {
+        self.inner.started.store(false, Ordering::SeqCst);
+    }
+
+    pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.inner.state.lock().unwrap_or_else(|p| p.into_inner())
     }
 }

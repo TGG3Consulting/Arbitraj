@@ -108,6 +108,10 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 }
             }
             changed = settings.recv(), if open => {
+                // Сменили источник событий пулов (ws ↔ receipts, решение 68) — переподключение через новый.
+                if g.conn.stale(&p.ctx) {
+                    return (End::Broken("источник событий пулов сменён (bsc.pool_events_source)".into()), true);
+                }
                 // Рассылка закрыта — настроек больше не будет (open = false); брошенные из-за настройки — revive.rs.
                 match revive::on_recv(p, &m.pools, &mut m.missing, &mut m.abandoned, changed).await {
                     Ok(still) => open = still,

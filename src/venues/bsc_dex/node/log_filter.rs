@@ -10,6 +10,10 @@
 //! Правила фильтра — execution-apis filter.yaml: address — адрес или список (любой из); topics — по позициям, у каждой
 //! null (любой), значение или список (любой из); в логе нет позиции, для которой есть условие, — не подходит
 //! (https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/schemas/filter.yaml).
+//! Пустой список (address: [] или позиция topics: []) — как у geth: условия нет, подходит любой (geth
+//! eth/filters/filter.go filterLogs: «if len(addresses) > 0 …», пустая позиция topics пропускается). Спецификация про
+//! пустой список молчит; наши фильтры (node/subs.rs, pools/created.rs) пустых списков не строят — пачка без пулов не
+//! подписывается.
 
 use std::collections::HashSet;
 
@@ -23,15 +27,22 @@ pub struct Filter {
 }
 
 impl Filter {
-    /// Разбирает фильтр logs. Принимает: {address?, topics?}. Ошибок нет: поле не той формы — пустое множество
-    /// (ничего не подходит), как узел не нашёл бы совпадений.
+    /// Разбирает фильтр logs. Принимает: {address?, topics?}. Ошибок нет: null и пустой список — условия нет.
     pub fn new(f: &Value) -> Filter {
         Filter {
-            address: f.get("address").filter(|v| !v.is_null()).map(set),
+            address: f
+                .get("address")
+                .filter(|v| !v.is_null())
+                .map(set)
+                .filter(|s| !s.is_empty()),
             topics: f
                 .get("topics")
                 .and_then(Value::as_array)
-                .map(|a| a.iter().map(|c| (!c.is_null()).then(|| set(c))).collect())
+                .map(|a| {
+                    a.iter()
+                        .map(|c| Some(set(c)).filter(|s| !c.is_null() && !s.is_empty()))
+                        .collect()
+                })
                 .unwrap_or_default(),
         }
     }

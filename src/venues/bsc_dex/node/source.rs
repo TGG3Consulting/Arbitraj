@@ -66,6 +66,16 @@ impl Link {
         }
     }
 
+    /// Связь уже не через выбранный источник: bsc.pool_events_source сменили (или сняли) — пачке пора переподключиться
+    /// через новый источник (решение 68, переключение на лету). Ошибок нет.
+    pub fn stale(&self, ctx: &Ctx) -> bool {
+        let kind = match self {
+            Link::Ws(_) => "ws",
+            Link::Receipts(_) => "receipts",
+        };
+        ctx.text("bsc.pool_events_source").ok().as_deref() != Some(kind)
+    }
+
     /// Причина обрыва; None — связь жива. Ошибок нет.
     pub fn end_reason(&self) -> Option<String> {
         match self {

@@ -1,23 +1,27 @@
 //! Файл: venues/bsc_dex/node/receipts_io.rs
-//! Что делает: запросы ленты квитанций к узлу HTTP (решение 68) и раздача логов подпискам: заголовок блока
-//! (hash, parentHash), квитанции блока, раздача по фильтрам (receipts_chain.rs route), обрыв ленты.
+//! Что делает: запросы ленты квитанций к узлу HTTP (решение 68): заголовок блока (hash, parentHash, хеши транзакций)
+//! и квитанции блока со своими пределами ответа (bsc.receipts_max_body_bytes, bsc.receipts_total_ms — только для
+//! квитанций) и проверкой полноты: квитанций столько же, сколько транзакций в заголовке, по порядку тех же хешей, все —
+//! этого блока. Неполные, чужого хеша, больше предела — повтор того же блока (блоки не пропускаются).
 //! Кто вызывает: node/receipts_task.rs.
-//! От чего зависит: rpc.rs (очередь узла, класс задачи), receipts.rs (Inner), receipts_chain.rs.
-//! Настройки: нет.
+//! От чего зависит: rpc.rs, rpc_capped.rs (очередь узла, класс задачи), receipts_chain.rs (complete), ctx.rs.
+//! Настройки: bsc.receipts_max_body_bytes, bsc.receipts_total_ms [вся система]; http.timeout_ms, http.body_idle_ms.
 //!
-//! eth_getBlockByNumber — execution-apis src/eth/block.yaml; eth_getBlockReceipts —
+//! eth_getBlockByNumber (false — transactions как хеши) — execution-apis src/eth/block.yaml; eth_getBlockReceipts —
 //! https://docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint/ .
 
-use std::sync::Arc;
+use std::time::Duration;
 
 use alloy_primitives::B256;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::gateway::http::{Fail as HttpFail, Limits};
+
 use super::super::ctx::Ctx;
-use super::receipts::{Inner, SOURCE};
-use super::receipts_chain::route;
+use super::receipts_chain::complete;
 use super::rpc;
+use super::rpc_capped::{self, Capped};
 
 /// Заголовок блока: только нужные поля.
 #[derive(Deserialize)]
@@ -25,6 +29,9 @@ use super::rpc;
 pub(super) struct Header {
     pub(super) hash: B256,
     pub(super) parent_hash: B256,
+    /// Хеши транзакций блока (eth_getBlockByNumber с false).
+    #[serde(default)]
+    pub(super) transactions: Vec<B256>,
 }
 
 /// Чем кончился шаг.
@@ -47,57 +54,50 @@ pub(super) async fn header(ctx: &Ctx, n: u64) -> Result<Header, Fail> {
     h.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал блок {n}")))
 }
 
-/// Раздаёт логи подпискам; закрытые приёмники снимаются. Возвращает: логи, подошедшие хоть одной. Ошибок нет.
-pub(super) fn deliver(inner: &Arc<Inner>, logs: &[Value]) -> Vec<Value> {
-    let mut s = inner.state.lock().unwrap_or_else(|p| p.into_inner());
-    let ids: Vec<String> = s.subs.keys().cloned().collect();
-    let filters: Vec<_> = ids.iter().map(|id| &s.subs[id].0).collect();
-    let (per, any) = route(&filters, logs);
-    let mut gone = Vec::new();
-    for (id, idx) in ids.iter().zip(per) {
-        let tx = &s.subs[id].1;
-        for i in idx {
-            let Ok(raw) = serde_json::value::to_raw_value(&logs[i]) else {
-                continue;
-            };
-            if tx.send(raw).is_err() {
-                gone.push(id.clone());
-                break;
-            }
-        }
-    }
-    for id in gone {
-        s.subs.remove(&id);
-    }
-    any
-}
-
-/// Обрыв ленты: новое поколение, все подписки закрыты (их приёмники видят конец), последнего блока нет. Ошибок нет.
-pub(super) fn cut(inner: &Arc<Inner>, why: &str) {
-    let mut s = inner.state.lock().unwrap_or_else(|p| p.into_inner());
-    s.generation += 1;
-    s.broken = Some(format!("{SOURCE}: {why}"));
-    s.subs.clear();
-    inner.last.send_replace(None);
-}
-
-/// Квитанции блока; все — того же хеша, что заголовок. Ошибки: Retry — узел не ответил, блока ещё нет или квитанции
-/// другого хеша (реорг идёт).
-pub(super) async fn receipts(ctx: &Ctx, n: u64, hash: B256) -> Result<Vec<Value>, Fail> {
-    let r: Option<Vec<Value>> = rpc::call(ctx, "eth_getBlockReceipts", json!([format!("0x{n:x}")]))
-        .await
-        .map_err(|e| Fail::Retry(e.message))?;
-    let r = r.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал квитанции блока {n}")))?;
-    let other = |x: &Value| {
-        x.get("blockHash")
-            .and_then(Value::as_str)
-            .and_then(|s| s.parse::<B256>().ok())
-            != Some(hash)
+/// Квитанции блока `h` (номер `n`): полные и этого блока. Ошибки: Break — не заданы пределы; Retry — узел не
+/// ответил, блока ещё нет, квитанции неполные или другого хеша (реорг идёт), ответ больше предела.
+pub(super) async fn receipts(ctx: &Ctx, n: u64, h: &Header) -> Result<Vec<Value>, Fail> {
+    let lim = limits(ctx)?;
+    let got: Capped<Option<Vec<Value>>> = rpc_capped::call(
+        ctx,
+        "eth_getBlockReceipts",
+        json!([format!("0x{n:x}")]),
+        lim,
+    )
+    .await
+    .map_err(|e| Fail::Retry(e.message))?;
+    let r = match got {
+        Capped::Got(r) => r,
+        Capped::Over(f) => return Err(Fail::Retry(over(n, &f, &lim))),
     };
-    if r.iter().any(other) {
-        return Err(Fail::Retry(format!(
-            "квитанции блока {n} — другого хеша (реорг идёт)"
-        )));
-    }
+    let r = r.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал квитанции блока {n}")))?;
+    complete(n, h.hash, &h.transactions, &r).map_err(Fail::Retry)?;
     Ok(r)
+}
+
+/// Пределы запроса квитанций: срок до заголовков и тишина тела — общие (http.timeout_ms, http.body_idle_ms), общий
+/// срок и размер — свои. Ошибки: Break — настройка не задана.
+fn limits(ctx: &Ctx) -> Result<Limits, Fail> {
+    let base = ctx.limits().map_err(|e| Fail::Break(e.message))?;
+    let set = |name: &str| ctx.int(name).map_err(|e| Fail::Break(e.message));
+    Ok(Limits {
+        total: Duration::from_millis(set("bsc.receipts_total_ms")?),
+        max_bytes: usize::try_from(set("bsc.receipts_max_body_bytes")?).unwrap_or(usize::MAX),
+        ..base
+    })
+}
+
+/// Текст «квитанции больше предела». Ошибок нет.
+fn over(n: u64, f: &HttpFail, lim: &Limits) -> String {
+    match f {
+        HttpFail::TooBig { got } => format!(
+            "блок {n}: квитанции больше предела bsc.receipts_max_body_bytes ({} байт), получено {got} байт",
+            lim.max_bytes
+        ),
+        HttpFail::Total { got } => format!(
+            "блок {n}: квитанции больше предела bsc.receipts_total_ms ({} мс), получено {got} байт",
+            lim.total.as_millis()
+        ),
+        other => format!("блок {n}: {}", other.text(lim)),
+    }
 }

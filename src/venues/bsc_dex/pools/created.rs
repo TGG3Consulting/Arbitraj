@@ -40,11 +40,14 @@ pub struct Watch {
     pub late: super::attach::Late,
 }
 
-/// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* — фильтры
-/// пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
+/// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* или источника событий
+/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
 /// изменения dex.* (без переподключений впустую). Ошибок не возвращает: всё — в журнал.
 pub async fn run(p: Pools, w: Watch) {
-    let mut changes = Changes::new(p.ctx.settings.subscribe(), vec!["dex.".into()]);
+    let mut changes = Changes::new(
+        p.ctx.settings.subscribe(),
+        vec!["dex.".into(), "bsc.pool_events_source".into()],
+    );
     let mut told_empty = false;
     loop {
         let list = filters(&p, w.usdt).await;

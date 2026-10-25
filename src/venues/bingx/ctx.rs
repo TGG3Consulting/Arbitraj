@@ -65,7 +65,16 @@ impl Ctx {
         self.settings.flag(name, self.at()).map_err(|e| self.tag(e))
     }
 
-    /// Таймаут HTTP из настроек системы. Ошибка NotConfigured — не задано.
+    /// Тишина при чтении тела ответа (http.body_idle_ms, gateway/http.rs). Ошибки: NotConfigured, Internal.
+    pub fn body_idle(&self) -> Result<Duration, GatewayError> {
+        let ms = self
+            .settings
+            .integer("http.body_idle_ms", At::default())
+            .map_err(|e| self.tag(e))?;
+        Ok(Duration::from_millis(ms))
+    }
+
+    /// Таймаут HTTP из настроек системы (до заголовков ответа, gateway/http.rs). Ошибка NotConfigured — не задано.
     pub fn http_timeout(&self) -> Result<Duration, GatewayError> {
         let ms = self
             .settings

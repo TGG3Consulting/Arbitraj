@@ -124,7 +124,10 @@ async fn send(
     op: Op,
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
-    let timeout = ctx.http_timeout()?;
+    let lim = crate::gateway::http::Limits {
+        head: ctx.http_timeout()?,
+        idle: ctx.body_idle()?,
+    };
     let mut last = None;
     for base in &urls {
         let url = if query.is_empty() {
@@ -132,7 +135,7 @@ async fn send(
         } else {
             format!("{base}{path}?{query}")
         };
-        let mut req = ctx.http.request(m.clone(), url).timeout(timeout);
+        let mut req = ctx.http.request(m.clone(), url);
         if let Some((key, body)) = &auth {
             req = req.header("X-BX-APIKEY", *key);
             if !body.is_empty() {
@@ -141,14 +144,16 @@ async fn send(
                     .body(body.clone());
             }
         }
-        match req.send().await {
-            Ok(resp) => return parse(ctx, path, resp, op).await,
+        // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело — пока данные идут чаще
+        // http.body_idle_ms (справочник пар и сетей BingX — большой ответ).
+        match crate::gateway::http::exchange(req, lim).await {
+            Ok((status, text)) => return parse(ctx, path, status, text, op),
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
             // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
-            Err(e) if e.is_connect() || (op == Op::Other && e.is_timeout()) => {
-                last = Some(errors::from_network(e))
+            Err(f) if f.not_sent() || (op == Op::Other && f.is_timeout()) => {
+                last = Some(errors::from_fail(&f, &lim))
             }
-            Err(e) => return Err(errors::from_network(e)),
+            Err(f) => return Err(errors::from_fail(&f, &lim)),
         }
     }
     Err(last.unwrap_or_else(|| {
@@ -162,9 +167,7 @@ async fn send(
 
 /// Разбор ответа: {code, msg, data} или голый массив (истории ввода и вывода). Текст ответа — в сырой журнал
 /// (data/raw/bingx, соединение «rest <путь>»), кроме путей listenKey (ключ потока аккаунта — секрет сессии).
-async fn parse(ctx: &Ctx, path: &str, resp: reqwest::Response, op: Op) -> GatewayResult<Value> {
-    let status = resp.status().as_u16();
-    let text = resp.text().await.map_err(errors::from_network)?;
+fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayResult<Value> {
     if !path.contains("listenKey") {
         ctx.raw
             .write(super::ctx::ID, &format!("rest {path}"), &text);

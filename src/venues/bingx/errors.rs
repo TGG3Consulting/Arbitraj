@@ -70,18 +70,19 @@ pub fn from_http(status: u16, raw: &str) -> GatewayError {
     GatewayError::new(code, Some(venue()), format!("BingX: {text}, HTTP {status}")).with_raw(raw)
 }
 
-/// Сетевая ошибка (нет связи или таймаут). Адрес из ошибки удаляется.
-pub fn from_network(e: reqwest::Error) -> GatewayError {
-    let code = if e.is_timeout() {
-        ErrorCode::Timeout
-    } else {
-        ErrorCode::Unreachable
+/// Сбой HTTP-обмена (gateway/http.rs) с правдивой причиной: нет связи, нет ответа за срок, ответ не дочитан.
+/// Принимает: сбой, сроки. Возвращает: GatewayError (Timeout — срок; Unreachable — связь или обрыв тела).
+pub fn from_fail(
+    f: &crate::gateway::http::Fail,
+    lim: &crate::gateway::http::Limits,
+) -> GatewayError {
+    use crate::gateway::http::Fail;
+    let code = match f {
+        Fail::NotText => ErrorCode::BadResponse,
+        f if f.is_timeout() => ErrorCode::Timeout,
+        _ => ErrorCode::Unreachable,
     };
-    GatewayError::new(
-        code,
-        Some(venue()),
-        format!("BingX: нет связи: {}", e.without_url()),
-    )
+    GatewayError::new(code, Some(venue()), format!("BingX: {}", f.text(lim)))
 }
 
 /// Ответ не удалось разобрать.

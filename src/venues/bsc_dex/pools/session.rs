@@ -1,19 +1,14 @@
 //! Файл: venues/bsc_dex/pools/session.rs
 //! Что делает: одна сессия слушателя пачки пулов (pools/listen.rs) на одном соединении WebSocket: приём всех пулов
 //! пачки (admit.rs: подписка → блок B того же узла WS → чтение на B → глубокие и мелкие), затем события до обрыва.
-//! Пулы, найденные позже (новые пулы сети, история V4), принимаются в идущую сессию тем же соединением — без нового
-//! соединения и без перечитывания остальных (pools/attach.rs шлёт их в канал пачки). Подписки создаются только при
-//! приёме, пробуждении мелкого пула и после обрыва — не на каждое изменение.
-//! Лог глубокого пула — в состояние (listen_log.rs); лог добавления ликвидности мелкого пула — пробуждение (admit.rs).
-//! Пул, чьё состояние не прочиталось, перечитывается на новых блоках (опрос блоков node/heads.rs, reload.rs).
-//! Связь с узлом WS — одна запись на площадку при потере и одна при восстановлении (pools/link.rs).
-//!
+//! Пулы, найденные позже, принимаются в идущую сессию тем же соединением (attach.rs шлёт их в канал пачки).
+//! Не прочитавшийся пул перечитывается на новых блоках (reload.rs); брошенный (попытки исчерпаны) — снова, когда
+//! меняются настройки (могла появиться недостающая, решение 61). Связь с узлом WS — pools/link.rs.
 //! Кто вызывает: pools/listen.rs.
-//! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs.
+//! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
 //! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd).
 //!
-//! Подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub ;
-//! eth_blockNumber — execution-apis src/eth (см. listen.rs).
+//! Подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
 
 use std::collections::HashMap;
 
@@ -33,9 +28,8 @@ use super::{link, listen_log, reload};
 /// Канал пулов, найденных после старта пачки.
 pub type Adds = mpsc::UnboundedReceiver<Vec<(Found, String)>>;
 
-/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются принятыми), канал новых пулов, отметку
-/// первой загрузки стартовой пачки (ставится сразу после приёма пулов).
-/// Возвращает: конец и была ли загрузка состояния.
+/// Сессия (см. шапку). Принимает: окружение, имя, пулы пачки (пополняются), канал новых пулов, отметку первой
+/// загрузки стартовой пачки (сразу после приёма пулов). Возвращает: конец и была ли загрузка состояния.
 pub async fn run(
     p: &Pools,
     name: &str,
@@ -56,6 +50,7 @@ pub async fn run(
         pools: std::mem::take(pools),
         deep: Vec::new(),
         missing: Vec::new(),
+        abandoned: Vec::new(),
         loaded: false,
     };
     let all: Vec<usize> = (0..m.pools.len()).collect();
@@ -77,6 +72,9 @@ pub async fn run(
 /// События пачки до обрыва. Возвращает: (конец, true — состояние загружалось).
 async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Adds>) -> (End, bool) {
     let mut heads = p.heads.watch();
+    // Изменения настроек: могла появиться недостающая (dex.load_batch и т.п.) — брошенные и ждущие пулы читаются
+    // снова без переподключения и перезапуска.
+    let (mut settings, mut open) = (p.ctx.settings.subscribe(), true);
     let mut idx = index(&m.pools);
     loop {
         tokio::select! {
@@ -108,8 +106,18 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 }
                 let at = heads.borrow_and_update().as_ref().map(|h| h.number);
                 if let Some(at) = at
-                    && let Err(end) = reload::retry(p, &m.pools, &mut m.missing, at).await
+                    && let Err(end) = reload::retry(p, &m.pools, &mut m.missing, &mut m.abandoned, at).await
                 {
+                    return (end, true);
+                }
+            }
+            changed = settings.recv(), if open => {
+                // Рассылка закрыта — настроек больше не будет; отставание (Lagged) — тоже «настройки менялись».
+                if matches!(changed, Err(tokio::sync::broadcast::error::RecvError::Closed)) {
+                    open = false;
+                    continue;
+                }
+                if let Err(end) = reload::on_settings(p, &m.pools, &mut m.missing, &mut m.abandoned).await {
                     return (end, true);
                 }
             }
@@ -122,8 +130,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     (End::Broken(why), true)
 }
 
-/// Один лог: глубокий пул — событие его состояния; мелкий — пробуждение по добавлению ликвидности.
-/// Ошибки: End — как у listen_log::on_log и admit::wake.
+/// Один лог: глубокий пул — событие его состояния; мелкий — пробуждение. Ошибки: End — как у on_log и admit::wake.
 async fn on_log(
     p: &Pools,
     g: &mut Group,

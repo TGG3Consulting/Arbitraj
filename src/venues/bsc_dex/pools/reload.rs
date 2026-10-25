@@ -14,17 +14,49 @@ use super::discover::Found;
 use super::listen::{End, Pools};
 use super::{listen_log, load};
 
+/// Брошенные пулы снова ждут чтения (изменились настройки: могла появиться недостающая — dex.load_batch и т.п.):
+/// попытки — заново, в «загружаются» — снова. Принимает: пулы пачки, брошенные, ждущие. Ошибок нет.
+pub fn revive(
+    p: &Pools,
+    pools: &[(Found, String)],
+    abandoned: &mut Vec<usize>,
+    missing: &mut Vec<Missing>,
+) {
+    let back: Vec<usize> = std::mem::take(abandoned);
+    p.loading.add(back.iter().map(|&i| &pools[i].0));
+    missing.extend(back.into_iter().map(|i| Missing { i, tries: 0 }));
+}
+
+/// Настройки изменились: брошенные пулы — снова в чтение (revive) и сразу попытка на последнем блоке.
+/// Принимает: окружение, пулы пачки, ждущие, брошенные. Ошибки: End — ядро закрыло канал.
+pub async fn on_settings(
+    p: &Pools,
+    pools: &[(Found, String)],
+    missing: &mut Vec<Missing>,
+    abandoned: &mut Vec<usize>,
+) -> Result<(), End> {
+    revive(p, pools, abandoned, missing);
+    p.loading.publish(p).await;
+    match p.heads.latest() {
+        Some(h) if !missing.is_empty() => retry(p, pools, missing, abandoned, h.number).await,
+        _ => Ok(()),
+    }
+}
+
 /// Пул, ждущий повторного чтения: индекс в пачке и сколько повторов уже было.
 pub struct Missing {
     pub i: usize,
     pub tries: u64,
 }
 
-/// Повтор чтения ждущих пулов на блоке `at`. Ошибки: End — ядро закрыло канал.
+/// Повтор чтения ждущих пулов на блоке `at`. Исчерпавшие попытки — в `abandoned` (брошены до переподключения или до
+/// изменения настроек — session.rs revive). Не задана dex.pool_load_retries — ждущие остаются ждать (повтор после её
+/// появления). Ошибки: End — ядро закрыло канал.
 pub async fn retry(
     p: &Pools,
     pools: &[(Found, String)],
     missing: &mut Vec<Missing>,
+    abandoned: &mut Vec<usize>,
     at: u64,
 ) -> Result<(), End> {
     let limit = match p.ctx.int("dex.pool_load_retries") {
@@ -38,7 +70,6 @@ pub async fn retry(
                     format!("Повтор чтения пулов невозможен: {}", e.message),
                 )
                 .await;
-            missing.clear();
             return Ok(());
         }
     };
@@ -64,13 +95,14 @@ pub async fn retry(
             }
             Err(why) if m.tries >= limit => {
                 let msg = format!(
-                    "{title} {ticker}: состояние пула так и не прочитано за {} попыток: {why} — недостоверен до переподключения",
+                    "{title} {ticker}: состояние пула так и не прочитано за {} попыток: {why} — недостоверен до переподключения или изменения настроек",
                     m.tries + 1
                 );
                 p.ctx.log(Level::Error, "dex.pool", msg, None).await;
                 // Дальше пул «недостоверен», а не «загружается» (loading.rs).
                 p.loading.done(&found.reference);
                 p.loading.publish(p).await;
+                abandoned.push(m.i);
             }
             Err(_) => keep.push(m),
         }

@@ -135,3 +135,23 @@ pub fn probe_pools(
     });
     Ok((pools, env))
 }
+
+/// «Не проверено: пулы монеты ещё загружаются» для экранов. Принимает: окружение, тикер, адрес, причину. Ошибок нет.
+pub fn loading_check(
+    p: &super::super::pools::listen::Pools,
+    ticker: &str,
+    addr: Address,
+    why: String,
+) -> crate::core::types::CoinCheck {
+    crate::core::types::CoinCheck {
+        venue: p.ctx.venue(),
+        asset: crate::core::types::Asset {
+            ticker: ticker.to_string(),
+            bsc_contract: Some(addr),
+        },
+        taxes: crate::core::types::CheckState::NotChecked,
+        source: super::taxes::SOURCE.into(),
+        checked_at: None,
+        wait: Some(why),
+    }
+}

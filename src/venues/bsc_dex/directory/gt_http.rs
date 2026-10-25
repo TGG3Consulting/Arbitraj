@@ -52,25 +52,16 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
         Err(e) if e.code == ErrorCode::NotConfigured => None,
         Err(e) => return Err(e),
     };
-    let timeout = ctx.timeout()?;
+    let lim = ctx.limits()?;
     limit::run(ctx, || async {
-        let mut req = ctx
-            .http
-            .get(&url)
-            .timeout(timeout)
-            .header("accept", "application/json");
+        let mut req = ctx.http.get(&url).header("accept", "application/json");
         if let Some((h, k)) = &key {
             req = req.header(h.as_str(), k.as_str());
         }
-        let resp = req
-            .send()
+        // Два срока (gateway/http.rs): до заголовков и тишина при чтении тела.
+        let (status, text) = crate::gateway::http::exchange(req, lim)
             .await
-            .map_err(|e| errors::from_network(e, SOURCE))?;
-        let status = resp.status().as_u16();
-        let text = resp
-            .text()
-            .await
-            .map_err(|e| errors::from_network(e, SOURCE))?;
+            .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
         ctx.raw
             .write(ID, "index", &format!("GET {url} → {status} {text}"));
         answer(status, page, &text, path)

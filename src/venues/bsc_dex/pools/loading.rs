@@ -43,6 +43,16 @@ impl Loading {
         }
     }
 
+    /// Сколько пулов монеты ещё ждут первого чтения (исключённые из сделок не считаются). Принимает: окружение,
+    /// адрес монеты. Ошибок нет.
+    pub fn pending(&self, p: &Pools, coin: Address) -> usize {
+        let s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
+        s.pools
+            .iter()
+            .filter(|(r, c)| **c == coin && p.ctx.index.banned(r).is_none())
+            .count()
+    }
+
     /// Пул прочитан или окончательно не прочитался. Ошибок нет.
     pub fn done(&self, r: &PoolRef) {
         self.inner
@@ -78,6 +88,8 @@ impl Loading {
             venue: p.ctx.venue(),
             coins: now.iter().copied().collect(),
         };
+        // Пулы монет дочитались (или брошены) — монеты, ждущие своих пулов, проверяются сразу (check/tax_cycle.rs).
+        p.signals.pool_ready();
         // Закрытый канал — ядру больше не нужно; список всё равно считается отправленным.
         let _ = p.out.send(ev).await;
         self.inner.lock().unwrap_or_else(|x| x.into_inner()).sent = Some(now);

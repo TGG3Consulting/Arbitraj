@@ -102,6 +102,8 @@ impl Parts {
         let signals = super::pools::progress::Signals::default();
         // Отметка «данные пулов отстают» снята — циклы проверок перепроверяют (решение 72).
         self.lag.on_clear(signals.ready.clone());
+        // Направление пула стало глубоким — «пул готов» (решение 73, pools/depth_book.rs).
+        self.registry.depth().on_rise(signals.ready.clone());
         Pools {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),

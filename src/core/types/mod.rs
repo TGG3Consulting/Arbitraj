@@ -27,7 +27,7 @@ pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteSte
 pub use directory::{DirectoryPool, DirectoryStatus, DirectoryToken, IndexerDex, PoolDirectory};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{HookGroup, HookInfo, Pool, PoolKind, PoolRef, PoolState};
-pub use pool_depth::PoolDepth;
+pub use pool_depth::{CrossCheck, PoolDepth};
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
     WalletQueueState,

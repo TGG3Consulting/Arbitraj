@@ -11,7 +11,9 @@
 //! правилам.
 //! Глубину не посчитать (не задана настройка, нет курса промежуточной монеты, пул не прочитан) — пул глубокий:
 //! слушаем всё, как раньше, причина — одной записью в журнал.
-//! Кто вызывает: pools/admit.rs (deep, mark), pools/listen_log.rs (touch — на каждой отправке пула ядру).
+//! Полоса цены вышла за прочитанные слова битмапа (off_map) — карта перечитывается вокруг нового тика сразу.
+//! Кто вызывает: pools/admit.rs (deep, mark), pools/listen_log.rs (touch — на каждой отправке пула ядру; off_map —
+//! после события).
 //! От чего зависит: quote/select.rs (deep_side), quote/emptiness.rs, registry.rs, depth_book.rs, progress.rs, tokens.rs.
 //! Настройки: bsc.pool_events_source [вся система]; через depth_book.rs — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
@@ -78,7 +80,37 @@ pub fn touch(p: &Pools, r: &PoolRef) {
     else {
         return;
     };
-    if let Ok((_, true)) = p.reg.depth().depth(&p.ctx, &p.reg, &p.tokens, &e, dec) {
-        p.signals.pool_ready();
-    }
+    // Стало глубоким — «пул готов» подаёт сам depth_book.rs (on_rise), кто бы ни посчитал первым.
+    let _ = p.reg.depth().depth(&p.ctx, &p.reg, &p.tokens, &e, dec);
+}
+
+/// Полоса цены вышла за прочитанные слова битмапа (решение 73): цена ушла от тика, вокруг которого карта читалась, и
+/// глубина считалась бы не целиком — карту пора перечитать вокруг нового тика, не дожидаясь переподключения
+/// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Ошибок нет.
+pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool {
+    use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
+    use super::super::quote::depth_band::band_ticks;
+    use crate::core::types::PoolState;
+    use rust_decimal::prelude::ToPrimitive;
+    let Some(map) = e.ticks.as_ref() else {
+        return false;
+    };
+    let tick = match e.pool.state {
+        PoolState::V3 { tick, .. } | PoolState::Cl { tick, .. } => tick,
+        _ => return false,
+    };
+    let Some(b) = ctx
+        .dec("dex.depth_band_pct")
+        .ok()
+        .and_then(|p| (p / rust_decimal::Decimal::ONE_HUNDRED).to_f64())
+    else {
+        return false;
+    };
+    let (Some(up), Some(down)) = (band_ticks(b, true), band_ticks(b, false)) else {
+        return false;
+    };
+    let d = up.max(down);
+    let lo = tick.saturating_sub(d).clamp(MIN_TICK, MAX_TICK);
+    let hi = tick.saturating_add(d).clamp(MIN_TICK, MAX_TICK);
+    !(map.covers(lo) && map.covers(hi))
 }

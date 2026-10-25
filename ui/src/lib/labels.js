@@ -27,6 +27,8 @@ const LIMIT = {
   NonNegative: 'ноль или больше',
   Fraction: 'доля от 0 до 1',
   Percent: 'процент от 0 до 100',
+  PercentOpen: 'процент больше 0 и меньше 100',
+  PercentBelow100: 'процент от 0 и меньше 100',
 };
 const SCOPE = {
   Global: 'вся система',

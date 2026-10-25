@@ -6,7 +6,7 @@
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
 
-use crate::core::types::PoolDepth;
+use crate::core::types::{CrossCheck, PoolDepth};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::check::state::Checks;
@@ -28,7 +28,7 @@ pub async fn all(
         let Some(e) = reg.get(&r) else { continue };
         // Недостоверный пул — последнее посчитанное (состояние может быть старым); спящий — как есть.
         let got = if e.valid && !e.asleep {
-            reg.depth().depth(ctx, reg, tokens, &e, dec).map(|(d, _)| d)
+            reg.depth().depth(ctx, reg, tokens, &e, dec)
         } else {
             reg.depth().last(&r).ok_or_else(|| {
                 if e.asleep {
@@ -43,9 +43,9 @@ pub async fn all(
             Err(why) => (None, Some(why)),
         };
         let (quoter, quoter_reason) = match checks.pool(&r).quoter {
-            None => ("not_checked", None),
-            Some(Ok(())) => ("ok", None),
-            Some(Err(why)) => ("failed", Some(why)),
+            None => (CrossCheck::NotChecked, None),
+            Some(Ok(())) => (CrossCheck::Ok, None),
+            Some(Err(why)) => (CrossCheck::Failed, Some(why)),
         };
         out.push(PoolDepth {
             venue: ctx.venue(),
@@ -60,7 +60,7 @@ pub async fn all(
             depth_error: error,
             asleep: e.asleep,
             valid: e.valid,
-            cross_check: quoter.into(),
+            cross_check: quoter,
             cross_check_reason: quoter_reason,
             details: e
                 .pool

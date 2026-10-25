@@ -14,6 +14,18 @@ use serde::{Deserialize, Serialize};
 use super::market::VenueId;
 use super::pool::PoolRef;
 
+/// Итог независимой сверки расчёта пула площадкой. В JSON — «not_checked» | «ok» | «failed».
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrossCheck {
+    /// Ещё не сверен.
+    NotChecked,
+    /// Сошлось.
+    Ok,
+    /// Расхождение — причина в cross_check_reason.
+    Failed,
+}
+
 /// Пул DEX глазами адаптера (см. шапку).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PoolDepth {
@@ -38,8 +50,8 @@ pub struct PoolDepth {
     pub asleep: bool,
     /// Данные пула достоверны.
     pub valid: bool,
-    /// Независимая сверка расчёта пула площадкой (у DEX — квотер): «not_checked» | «ok» | «failed».
-    pub cross_check: String,
+    /// Независимая сверка расчёта пула площадкой (у DEX — квотер).
+    pub cross_check: CrossCheck,
     /// Причина расхождения (cross_check = failed).
     pub cross_check_reason: Option<String>,
     /// Подробности площадки строками (например «tickSpacing 1») — ядро их не разбирает, только показывает.

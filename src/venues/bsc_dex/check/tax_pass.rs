@@ -19,7 +19,7 @@ use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
-use super::tax_deep::{has_deep, has_valid};
+use super::tax_deep::{Deep, deep, has_valid};
 use super::taxes::{self, Outcome};
 use super::taxes_util::Sources;
 
@@ -156,7 +156,8 @@ pub async fn check(
                 // Нет глубокого пула — своя причина (не сбой узла): повтор по «пул готов», не каждые tax.retry_s.
                 let why = if !has_valid(p, ticker) {
                     Why::NoPool
-                } else if !has_deep(p, ticker) {
+                } else if deep(p, ticker) == Deep::No {
+                    // Глубина не считается (Deep::Unknown) — помеха, а не «мелкий»: повтор через tax.retry_s (Node).
                     Why::Shallow
                 } else {
                     Why::Node

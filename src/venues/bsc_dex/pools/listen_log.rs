@@ -69,7 +69,21 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     };
     let res = match applied {
         Applied::Ignored => return Ok(()),
-        Applied::Updated => Ok(()),
+        // Цена ушла так, что полоса глубины вышла за прочитанные слова (решение 73) — карта вокруг нового тика сразу,
+        // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
+        Applied::Updated => match p.reg.get(&r) {
+            Some(e) if super::depth::off_map(&p.ctx, &e) => {
+                let msg = format!(
+                    "{} {}: полоса цены dex.depth_band_pct вышла за прочитанные слова битмапа — карта тиков перечитывается вокруг нового тика",
+                    e.family.title, e.ticker
+                );
+                p.ctx.log(Level::Info, "dex.pool", msg, None).await;
+                load::refresh(&p.ctx, &p.tokens, &e, block)
+                    .await
+                    .map(|x| p.reg.put(x))
+            }
+            _ => Ok(()),
+        },
         Applied::Bins(ids) => reread_bins(p, &r, &ids, block).await,
         Applied::Refresh(why) => {
             p.ctx

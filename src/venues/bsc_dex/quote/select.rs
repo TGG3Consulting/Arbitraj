@@ -158,7 +158,7 @@ pub fn deep_side(
     if e.asleep {
         return Ok(Some(ASLEEP.into()));
     }
-    let (d, _) = reg.depth().depth(ctx, reg, tokens, e, usdt_decimals)?;
+    let d = reg.depth().depth(ctx, reg, tokens, e, usdt_decimals)?;
     let buy = (d.deep_buy, "покупки", d.band.buy);
     let sell = (d.deep_sell, "продажи", d.band.sell);
     let short: Vec<_> = match need {

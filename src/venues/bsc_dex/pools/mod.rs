@@ -19,6 +19,8 @@ pub mod deploy_block;
 pub mod depth;
 pub mod depth_book;
 pub mod depth_facts;
+pub mod depth_key;
+pub mod depth_log;
 pub mod dex_rules;
 pub mod discover;
 pub mod discover_v4;

@@ -45,6 +45,7 @@ const fn d(
             DexId::None
         },
         venue_role: VenueRole::Venue,
+        optional: false,
     }
 }
 

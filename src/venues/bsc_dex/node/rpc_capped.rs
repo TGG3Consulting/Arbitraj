@@ -4,7 +4,10 @@
 //! http.total_ms / http.max_body_bytes. Превышение предела — отдельный итог (не ошибка узла): вызывающий пишет
 //! понятную причину и повторяет. Темп — та же очередь узла (pace.rs), сбой основного узла — резервный (failover.rs).
 //! Пачка (batch) — тоже: заголовок и квитанции блока одним HTTP (решение 69; публичный узел BNB Chain batch
-//! принимает — запись tests/data/receipts_batch_2026-10-25).
+//! принимает — запись tests/data/receipts_batch_2026-10-25). Ответы — по id, порядок в массиве не важен. Ошибка
+//! отдельного вызова внутри пачки (в том числе «слишком много запросов» от узла с HTTP 200) — итог этого вызова, а не
+//! всей пачки: правило шлюза RateLimited (повтор в pace.rs) срабатывает только на ответ всей пачки 429; лента
+//! квитанций такой итог повторяет через bsc.receipts_retry_ms (receipts_io.rs, Fail::Retry).
 //! Кто вызывает: node/receipts_io.rs; tests/bsc_dex_receipts_pipe.rs (split на записанном ответе).
 //! От чего зависит: rpc.rs (status_ok, SOURCE), pace.rs, failover.rs, jsonrpc.rs, gateway/http.rs.
 //! Настройки: bsc.node_http_url (+ резервный), http.timeout_ms, http.body_idle_ms — через ctx; пределы — у вызывающего.

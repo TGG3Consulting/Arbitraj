@@ -2,7 +2,9 @@
 //! Что делает: влияние крючка пула V4 группы B/C (решение 32) — пробный обмен квотером своей DEX (он исполняет
 //! крючки) против локальной математики пула без крючка, на сумме check.probe_usdt: покупка (USDT → монета)
 //! и продажа (полученные монеты → USDT). Пул с промежуточной монетой (решение 52) — проба в ней (quote/rate.rs). Влияние, % = (математика − квотер) / математика · 100; положительное —
-//! получаем меньше. Ошибка пробы (откат квотера, крючок требует hookData и т.п.) — Failed с причиной.
+//! получаем меньше. Ошибка пробы (откат квотера, крючок требует hookData и т.п.) — Failed с причиной; откат квотера
+//! NotEnoughLiquidity(PoolId) — причина «в пуле не хватает ликвидности для пробы check.probe_usdt (… PoolId …)», не
+//! «проверка крючка не прошла».
 //! Кто вызывает: check/cycle.rs.
 //! От чего зависит: quote/quoter.rs, quote/pool_quote.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs.
 //! Настройки: check.probe_usdt [bsc_dex]; dex.quoter [вид пула V4].
@@ -20,7 +22,7 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::{pool_quote, quoter, rate};
+use super::super::quote::{pool_quote, quoter, quoter_revert, rate};
 use super::super::tokens::Tokens;
 
 /// Проверка пула. Возвращает: PoolCheck (None — у пула нет крючка группы B/C, проверять нечего).
@@ -55,6 +57,33 @@ pub async fn check_pool(
     })
 }
 
+/// Начало причины «в пуле не хватает ликвидности для пробы» — не провал крючка, а свойство пула на сумму пробы:
+/// так причина и показывается (check/quoter_verify.rs, quote/select.rs, check/cycle.rs — без «проверка крючка не
+/// прошла»).
+pub const SHORT: &str = "в пуле не хватает ликвидности для пробы check.probe_usdt";
+
+/// Причина по откату квотера NotEnoughLiquidity(PoolId). Ошибок нет.
+fn short(id: alloy_primitives::B256) -> String {
+    format!("{SHORT} (NotEnoughLiquidity, PoolId {id})")
+}
+
+/// Квотер на пробу; откат «не хватает ликвидности» (UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)),
+/// quote/quoter_revert.rs) — Ok(Err(причина)). Ошибки: как у quoter::out.
+async fn ask(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: alloy_primitives::Address,
+    amount: U256,
+) -> GatewayResult<Result<U256, String>> {
+    match quoter::out(ctx, e, token_in, amount).await {
+        Ok(v) => Ok(Ok(v)),
+        Err(err) => match quoter_revert::short_pool(&err) {
+            Some(id) => Ok(Err(short(id))),
+            None => Err(err),
+        },
+    }
+}
+
 /// Покупка и продажа: математика против квотера. Ok(Err) — посчитать нельзя (причина).
 async fn measure(
     ctx: &Ctx,
@@ -73,10 +102,16 @@ async fn measure(
         Err(err) => return Ok(Err(err.message)),
     };
     let local_buy = pool_quote::swap(ctx, e, e.usdt, true, p)?;
-    let remote_buy = quoter::out(ctx, e, e.usdt, p).await?;
+    let remote_buy = match ask(ctx, e, e.usdt, p).await? {
+        Ok(v) => v,
+        Err(why) => return Ok(Err(why)),
+    };
     let coins = local_buy.amount_out;
     let local_sell = pool_quote::swap(ctx, e, e.coin, true, coins)?;
-    let remote_sell = quoter::out(ctx, e, e.coin, coins).await?;
+    let remote_sell = match ask(ctx, e, e.coin, coins).await? {
+        Ok(v) => v,
+        Err(why) => return Ok(Err(why)),
+    };
     match (
         impact(local_buy.amount_out, remote_buy),
         impact(local_sell.amount_out, remote_sell),

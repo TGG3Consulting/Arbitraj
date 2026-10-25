@@ -6,7 +6,8 @@
 //! - QuoterV2 (V3): «SPL» — цена пула у границы (require в UniswapV3Pool.swap), «Unexpected error» — откат пула без
 //!   причины (QuoterV2.parseRevertReason; так откатывается пул с liquidity() = 0).
 //!
-//! Кто вызывает: quote/quoter.rs (compare), exec/precheck.rs, check/probe_calls.rs (шаг квотера в пробе налогов).
+//! Кто вызывает: quote/quoter.rs (compare), exec/precheck.rs, check/probe_calls.rs (шаг квотера в пробе налогов),
+//! check/hooks_probe.rs (проба крючка: «не хватает ликвидности» с PoolId — short_pool).
 //! От чего зависит: gateway/errors.rs (raw — ответ узла), alloy::sol!.
 //! Настроек нет.
 //!
@@ -67,6 +68,25 @@ pub fn from_data(data: &[u8]) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// PoolId из отката «не хватает ликвидности»: UnexpectedRevertBytes(NotEnoughLiquidity(poolId)) — квотеры V4 и
+/// Infinity CL (v4-periphery src/base/BaseV4Quoter.sol, infinity-periphery src/base/BaseInfinityQuoter.sol;
+/// UnexpectedRevertBytes — src/libraries/QuoterRevert.sol обоих). Принимает: ошибку eth_call квотера. None — откат
+/// другой. Ошибок нет.
+pub fn short_pool(err: &GatewayError) -> Option<alloy_primitives::B256> {
+    if err.code != ErrorCode::SwapReverted {
+        return None;
+    }
+    short_pool_id(revert_data(err)?.as_ref())
+}
+
+/// PoolId из данных отката UnexpectedRevertBytes(NotEnoughLiquidity(poolId)). None — данные другие. Ошибок нет.
+pub fn short_pool_id(data: &[u8]) -> Option<alloy_primitives::B256> {
+    let inner = UnexpectedRevertBytes::abi_decode(data).ok()?.revertData;
+    NotEnoughLiquidity::abi_decode(&inner)
+        .ok()
+        .map(|e| e.poolId)
 }
 
 /// Данные отката из ответа узла: error.data (hex). None — нет. Ошибок нет.

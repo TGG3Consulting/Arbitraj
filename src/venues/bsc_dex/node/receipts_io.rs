@@ -62,18 +62,26 @@ pub(super) async fn header(ctx: &Ctx, n: u64) -> Result<Header, Fail> {
 
 /// Блок для конвейера (решение 69): заголовок и квитанции одним JSON-RPC batch (два вызова в одном HTTP, пределы —
 /// как у квитанций), затем проверка полноты квитанций по заголовку. Принимает: окружение (своё — запрос идёт
-/// отдельной задачей), номер. Возвращает: заголовок и квитанции. Ошибки: Break — не заданы пределы; Retry — узел не
+/// отдельной задачей), номер, гонку (повтор — сразу основной и резервный узел, rpc_capped::batch_race). Возвращает: заголовок и квитанции. Ошибки: Break — не заданы пределы; Retry — узел не
 /// ответил, блока ещё нет, ответ больше предела, неполные или чужие квитанции.
-pub(super) async fn fetch_block(ctx: Ctx, n: u64) -> Result<(Header, Vec<Value>), Fail> {
+pub(super) async fn fetch_block(
+    ctx: Ctx,
+    n: u64,
+    race: bool,
+) -> Result<(Header, Vec<Value>), Fail> {
     let lim = limits(&ctx)?;
     let tag = format!("0x{n:x}");
     let calls = [
         ("eth_getBlockByNumber", json!([tag, false])),
         ("eth_getBlockReceipts", json!([tag])),
     ];
-    let got = rpc_capped::batch(&ctx, &calls, lim)
-        .await
-        .map_err(|e| Fail::Retry(e.message))?;
+    // Повтор блока, на котором стоит конвейер, — сразу на все узлы, первый полный ответ (решение 71).
+    let got = if race {
+        rpc_capped::batch_race(&ctx, &calls, lim).await
+    } else {
+        rpc_capped::batch(&ctx, &calls, lim).await
+    };
+    let got = got.map_err(|e| Fail::Retry(e.message))?;
     let list = match got {
         Capped::Got(l) => l,
         Capped::Over(f) => return Err(Fail::Retry(over(n, &f, &lim))),

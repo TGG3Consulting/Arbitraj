@@ -73,6 +73,57 @@ pub async fn batch(
     }
 }
 
+/// Та же пачка СРАЗУ на все узлы (основной и резервный bsc.node_http_url_backup) — первый полный ответ (решение 71:
+/// повтор тяжёлого блока ленты, на котором стоит конвейер; ускорить надо именно его). Каждый запрос — в очереди узла
+/// со своим весом. Резервного нет — как batch. Принимает: вызовы, пределы. Возвращает: первый Got; ни одного Got —
+/// Over, если он был, иначе последняя ошибка. Ошибки: как у batch.
+pub async fn batch_race(
+    ctx: &Ctx,
+    calls: &[(&str, Value)],
+    lim: Limits,
+) -> GatewayResult<Capped<Vec<GatewayResult<Box<RawValue>>>>> {
+    let urls = ctx.failover.urls(ctx, Link::Http)?;
+    if urls.len() < 2 {
+        return batch(ctx, calls, lim).await;
+    }
+    let body = Value::Array(
+        calls
+            .iter()
+            .enumerate()
+            .map(|(i, (m, p))| jsonrpc::request(i as u64, m, p))
+            .collect(),
+    );
+    let mut runs: futures_util::stream::FuturesUnordered<_> = urls
+        .iter()
+        .map(|(_, url)| {
+            let body = &body;
+            async move { pace::run(ctx, calls.len(), || one(ctx, url.as_str(), body, lim)).await }
+        })
+        .collect();
+    let (mut over, mut last) = (None, None);
+    while let Some(res) = futures_util::StreamExt::next(&mut runs).await {
+        match res {
+            Ok(Capped::Got(text)) => return Ok(Capped::Got(split(&text, calls.len())?)),
+            Ok(Capped::Over(f)) => over = Some(f),
+            Err(e) => last = Some(e),
+        }
+    }
+    match (over, last) {
+        (Some(f), _) => Ok(Capped::Over(f)),
+        (None, Some(e)) => Err(e),
+        (None, None) => Err(errors::bad("нет адреса узла", SOURCE, "")),
+    }
+}
+
+/// Один узел: обмен с пределами. Ошибки: связь, HTTP; превышение предела — Over.
+async fn one(ctx: &Ctx, url: &str, body: &Value, lim: Limits) -> GatewayResult<Capped<String>> {
+    match http::exchange(ctx.http.post(url).json(body), lim).await {
+        Ok((status, text)) => status_ok(status, text, SOURCE).map(Capped::Got),
+        Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
+        Err(f) => Err(errors::from_fail(&f, &lim, SOURCE)),
+    }
+}
+
 /// Ответ на пачку → итоги по id (0 … n−1), как JSON-RPC 2.0 раздел 6 «Batch»: порядок ответов в массиве не важен.
 /// Принимает: текст ответа, число вызовов. Возвращает: итоги по порядку вызовов. Ошибки: ответ не массив (узел
 /// ответил одной ошибкой на всю пачку — её текст), нет ответа на какой-то id (BadResponse).

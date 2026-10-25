@@ -16,7 +16,7 @@ use crate::core::types::{Pool, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
-use super::blacklist::{self, BlockChange, TaxLimits};
+use super::blacklist;
 use super::engine::{Core, lk, rd, wr};
 use super::registry::{self, CoinEntry, Exclusion, Inputs};
 use super::registry_sync::enabled;
@@ -90,7 +90,7 @@ pub async fn rebuild(core: &Core) {
     }
     let usdt = registry::usdt_address(&rd(&inner.networks), &quote);
     let mut coins = build(core, &venues, &quote, &bsc, usdt.as_ref().ok().copied());
-    let changes = apply_blacklist(core, &mut coins);
+    let changes = super::rebuild_blacklist::apply_blacklist(core, &mut coins);
     for ch in changes {
         super::rebuild_report::report_block(core, ch).await;
     }
@@ -153,43 +153,6 @@ fn build(
         pool_ok: &pool_ok,
         intermediate: &intermediate,
     })
-}
-
-/// Чёрный список по справочнику: ручная отметка, проверки налогов со всех DEX, где у монеты есть
-/// пул с USDT. Заполняет block / problem у монет. Возвращает: изменения для уведомлений.
-fn apply_blacklist(core: &Core, coins: &mut [CoinEntry]) -> Vec<BlockChange> {
-    let s = &core.inner.deps.settings;
-    let limits = TaxLimits::read(s);
-    let market = rd(&core.inner.market);
-    let mut bl = wr(&core.inner.blacklist);
-    let now = Utc::now();
-    let mut changes = vec![];
-    for c in coins.iter_mut() {
-        let checks: Vec<_> = match c.asset.bsc_contract {
-            Some(token) => c
-                .presence
-                .iter()
-                .filter(|p| p.info.is_none() && has_pool(&p.excluded))
-                .map(|p| market.coin_check(&p.venue, token))
-                .collect(),
-            None => vec![],
-        };
-        // Причина ожидания проверки налогов (CoinCheck.wait) — для «Живого экрана» и «Монет».
-        c.wait = checks
-            .iter()
-            .flatten()
-            .filter(|k| k.taxes == crate::core::types::CheckState::NotChecked)
-            .find_map(|k| k.wait.clone());
-        let manual = blacklist::manual(s, &c.asset.ticker);
-        match blacklist::reason(manual, &checks, &limits) {
-            Ok(r) => {
-                changes.push(bl.set(&c.asset, r, now));
-                c.block = bl.get(&c.asset).cloned();
-            }
-            Err(e) => c.problem = Some(e),
-        }
-    }
-    changes
 }
 
 /// Есть ли у монеты на DEX пул с USDT (допущенный или нет — проверка налогов нужна в обоих случаях).

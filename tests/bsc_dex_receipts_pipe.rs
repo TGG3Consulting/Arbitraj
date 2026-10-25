@@ -6,7 +6,8 @@
 //!   итог этого вызова, блок не принят;
 //! - конвейер (node/receipts_pipe.rs) на блоках окна tests/data/receipts_2026-10-25/responses.json: следующие блоки
 //!   запрашиваются вперёд, отдаются строго по порядку; блок, который не пришёл с первого раза, запрашивается снова, а
-//!   пришедшие после него ждут в конвейере и повторно не запрашиваются.
+//!   пришедшие после него ждут в конвейере и повторно не запрашиваются;
+//! - на каком блоке и почему конвейер стоит (решение 71) — для записи при обрыве и гонки повтора на все узлы.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/receipts_common, arb::venues::bsc_dex::node::{rpc_capped, receipts_io, receipts_chain,
@@ -164,4 +165,33 @@ async fn pipe_hands_blocks_in_order_and_failed_block_holds_the_rest() {
         );
     }
     assert!(pipe.is_empty());
+}
+
+/// Решение 71: на каком блоке и почему стоит конвейер — для записи при обрыве по отставанию; этот блок повторяется
+/// гонкой на все узлы. Причина — как её пишет лента (блок 129767716 живого бота 25.10: 2 073 166 байт дольше
+/// bsc.receipts_total_ms = 5000).
+#[test]
+fn lag_names_the_block_the_pipe_stands_on() {
+    use arb::venues::bsc_dex::node::receipts_lag::Lag;
+    let mut lag = Lag::default();
+    assert_eq!(lag.hot(), None);
+    assert!(lag.stuck_text().is_empty());
+    let why = "блок 129767716: квитанции больше предела bsc.receipts_total_ms (5000 мс), получено 2073166 байт";
+    lag.failed(129767716, why);
+    lag.failed(129767716, why);
+    assert_eq!(
+        lag.hot(),
+        Some(129767716),
+        "повтор этого блока — гонкой на все узлы"
+    );
+    let text = lag.stuck_text();
+    assert!(
+        text.contains("блоке 129767716")
+            && text.contains("повторов 2")
+            && text.contains("2073166 байт"),
+        "{text}"
+    );
+    // Следующий блок разобран — конвейер больше не стоит.
+    lag.passed(129767716);
+    assert_eq!(lag.hot(), None);
 }

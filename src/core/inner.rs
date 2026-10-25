@@ -50,6 +50,10 @@ pub struct Inner {
     pub blacklist: RwLock<Blacklist>,
     /// Пулы, исключённые по крючку (чтобы уведомлять только о новых).
     pub excluded_pools: Mutex<HashSet<(VenueId, String)>>,
+    /// Последнее сообщённое (журнал, Telegram) состояние чёрного списка монеты: вид причины; нет записи — «не в списке».
+    /// «Ещё не проверена» (NotChecked — в том числе временно, пока пулы недостоверны после обрыва ленты) его не меняет:
+    /// уведомления — только на настоящую смену (решение 71, rebuild_report.rs).
+    pub told_blocks: Mutex<std::collections::HashMap<crate::core::types::Asset, String>>,
     /// Сколько монет ждали проверки налогов при прошлой пересборке (для coin.check_done).
     pub not_checked: Mutex<usize>,
     /// Первый проход проверки налогов после запуска: пока он идёт, вход и выход из чёрного списка не уведомляются по
@@ -118,6 +122,7 @@ impl Inner {
             usdt: RwLock::new(Err("справочник бирж ещё не загружен".into())),
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),
+            told_blocks: Mutex::default(),
             not_checked: Mutex::default(),
             first_pass: Mutex::default(),
             signals: Mutex::default(),

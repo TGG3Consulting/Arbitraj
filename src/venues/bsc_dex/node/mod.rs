@@ -20,6 +20,7 @@ pub mod receipts_budget;
 pub mod receipts_chain;
 pub mod receipts_fetch;
 pub mod receipts_handle;
+pub mod receipts_hold;
 pub mod receipts_io;
 pub mod receipts_lag;
 pub mod receipts_nodes;

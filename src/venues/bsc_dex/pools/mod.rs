@@ -34,6 +34,7 @@ pub mod hooks;
 pub mod http_wait;
 pub mod index;
 pub mod index_watch;
+pub mod invalidated;
 pub mod key;
 pub mod link;
 pub mod listen;

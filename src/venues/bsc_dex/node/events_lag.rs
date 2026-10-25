@@ -27,6 +27,8 @@ pub struct EventsLag {
     blocks: Arc<AtomicU64>,
     /// Стоит «сброс»: лента сброшена, пачки ещё не сделали пулы недостоверными.
     held: Arc<AtomicBool>,
+    /// С какого момента «сброс» стоит (для записи «запрет держится» — receipts_task.rs).
+    held_since: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
     wake: Arc<std::sync::Mutex<Vec<std::sync::Weak<tokio::sync::Notify>>>>,
 }
 
@@ -55,12 +57,27 @@ impl EventsLag {
 
     /// Полный сброс ленты: «сброс» стоит, отставание не трогается. Ошибок нет.
     pub fn hold(&self) {
-        self.held.store(true, Ordering::SeqCst);
+        let mut t = self.held_since.lock().unwrap_or_else(|p| p.into_inner());
+        if !self.held.swap(true, Ordering::SeqCst) || t.is_none() {
+            *t = Some(std::time::Instant::now());
+        }
     }
 
     /// Снимает «сброс» (пулы старой ленты уже недостоверны), циклы не будит. Возвращает: true — стоял. Ошибок нет.
     pub fn release(&self) -> bool {
+        *self.held_since.lock().unwrap_or_else(|p| p.into_inner()) = None;
         self.held.swap(false, Ordering::SeqCst)
+    }
+
+    /// Сколько «сброс» уже стоит. None — не стоит. Ошибок нет.
+    pub fn held_for(&self) -> Option<std::time::Duration> {
+        if !self.held() {
+            return None;
+        }
+        self.held_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|t| t.elapsed())
     }
 
     /// Стоит «сброс». Ошибок нет.

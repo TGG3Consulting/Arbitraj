@@ -40,7 +40,7 @@ impl Link {
         let kind = ctx.text("bsc.pool_events_source")?;
         match kind.as_str() {
             "ws" => Ok(Link::Ws(Conn::open(ctx, name).await?)),
-            "receipts" => Ok(Link::Receipts(feed.open(ctx, heads, out))),
+            "receipts" => Ok(Link::Receipts(feed.open(ctx, heads, out, name))),
             other => Err(ctx.not_set(
                 "bsc.pool_events_source",
                 format!("bsc.pool_events_source = {other}: ожидается ws или receipts"),

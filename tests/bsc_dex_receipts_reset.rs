@@ -4,6 +4,9 @@
 //! - запрет снимается, только когда закрыты все «соединения» пачек старой ленты (пачка закрывает своё после
 //!   Invalidated — pools/session.rs); «соединения» новой ленты не мешают;
 //! - снятие из-за сброса циклы проверок не будит;
+//! - смена источника receipts → ws (Feed::stop_source): отставание обнуляется, запрет держится, пока открыты
+//!   «соединения» пачек старой ленты, и снимается последним из них — при ws котировки снова есть; обратно ws → receipts —
+//!   отметка новой ленты ставится заново, котировок нет до догона;
 //! - один узел (нет ни списка, ни резервного): «блока нет» с головой не ниже блока — невосполнимо только после двух
 //!   таких ответов подряд (живая batch-запись блока 129761640, заголовок убран); сбой между ними обнуляет счёт.
 //!
@@ -108,4 +111,54 @@ async fn single_node_needs_two_nowhere_in_a_row() {
     lag.failed(n, "узел не ответил", false);
     assert_eq!(lag.nowhere(n), 0, "сбой между ними — счёт заново");
     assert_eq!(lag.nowhere(n + 1), 0, "счёт — по своему блоку");
+}
+
+/// Повторное ревью #62: отметка одна на площадку, а снять её может только лента — при переключении на ws она
+/// остановлена. Теперь остановка обнуляет отставание и держит запрет только до закрытия «соединений» пачек (они
+/// закрывают их после Invalidated своих пулов), затем котировки по WS разрешены.
+#[tokio::test]
+async fn switch_to_ws_releases_mark_after_links_closed() {
+    let ctx = native_common::ctx("receipts-switch").await;
+    let lag = EventsLag::default();
+    let feed = Feed::with_lag(lag.clone());
+    let pack = feed.open_named("пачка ZKP");
+    // Лента отстала и была сброшена.
+    lag.set(60);
+    feed.reset("блок стоит дольше bsc.receipts_stuck_reset_s");
+    assert!(lag.check(&ctx).is_err());
+    assert_eq!(
+        feed.holders(),
+        vec!["пачка ZKP".to_string()],
+        "запрет держит эта пачка"
+    );
+    // Источник сменён на ws: отставание обнулено, запрет — до закрытия «соединения» пачки.
+    feed.stop_source("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
+    assert_eq!(lag.get(), 0);
+    assert!(
+        lag.check(&ctx).is_err(),
+        "пачка ещё не сделала пулы недостоверными"
+    );
+    drop(pack);
+    assert!(
+        lag.check(&ctx).is_ok(),
+        "пачки переподключились по ws — котировки есть"
+    );
+    assert!(!lag.busy());
+    // Обратно на receipts: новая лента отстаёт больше предела — отметка заново, котировок нет до догона.
+    let mut mark = Lag::default();
+    mark.mark(&ctx, &lag, 50, 40).await;
+    assert!(lag.check(&ctx).is_err());
+    mark.mark(&ctx, &lag, 3, 40).await;
+    assert!(lag.check(&ctx).is_ok(), "догнала — котировки есть");
+}
+
+/// Остановка ленты без открытых «соединений» — запрет снимается сразу.
+#[tokio::test]
+async fn switch_without_links_releases_at_once() {
+    let ctx = native_common::ctx("receipts-switch-empty").await;
+    let lag = EventsLag::default();
+    let feed = Feed::with_lag(lag.clone());
+    lag.set(45);
+    feed.stop_source("источник сменён");
+    assert!(lag.check(&ctx).is_ok());
 }

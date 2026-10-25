@@ -74,16 +74,25 @@ impl Loading {
             .any(|(r, (_, stuck))| !*stuck && p.ctx.index.banned(r).is_none())
     }
 
-    /// Пул «застрял» (ждёт незаданную настройку) или снова читается. Пула нет в списке — ничего. Ошибок нет.
-    pub fn stuck(&self, r: &PoolRef, stuck: bool) {
-        if let Some(e) = self
+    /// Пул «застрял» (ждёт незаданную настройку) или снова читается. Флаг сменился — сигнал «пул готов»: сводки
+    /// первого прохода (налоги — check/tax_wait.rs, квотер и крючки — check/fresh.rs) пересчитываются сразу, а не по
+    /// таймеру цикла. Пула нет в списке — ничего. Ошибок нет.
+    pub fn stuck(&self, p: &Pools, r: &PoolRef, stuck: bool) {
+        let changed = match self
             .inner
             .lock()
             .unwrap_or_else(|x| x.into_inner())
             .pools
             .get_mut(r)
         {
-            e.1 = stuck;
+            Some(e) if e.1 != stuck => {
+                e.1 = stuck;
+                true
+            }
+            _ => false,
+        };
+        if changed {
+            p.signals.pool_ready();
         }
     }
 

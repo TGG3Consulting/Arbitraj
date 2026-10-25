@@ -50,8 +50,7 @@ pub async fn run(p: Pools, queue: Queue) {
         // Полный проход — раз в dex.quoter_check_s; при старте все пулы и так новые для цикла.
         if full {
             for r in p.reg.refs() {
-                one(&p, &r, &mut first).await;
-                fresh.mark(&r);
+                fresh.check(&r, one(&p, &r, &mut first)).await;
             }
         }
         full = true;
@@ -70,8 +69,7 @@ pub async fn run(p: Pools, queue: Queue) {
             tokio::pin!(ready);
             ready.as_mut().enable();
             for r in fresh.due(&p, |r| hook_measured(&p, r)) {
-                one(&p, &r, &mut first).await;
-                fresh.mark(&r);
+                fresh.check(&r, one(&p, &r, &mut first)).await;
             }
             if first.is_some() && fresh.settled(&p) {
                 first.take().unwrap_or_default().summary(&p).await;
@@ -85,8 +83,7 @@ pub async fn run(p: Pools, queue: Queue) {
                     for r in p.reg.refs() {
                         let Some(e) = p.reg.get(&r) else { continue };
                         if tickers.contains(&e.ticker) || (new_pools && p.checks.pool(&r).quoter.is_none()) {
-                            one(&p, &r, &mut first).await;
-                            fresh.mark(&r);
+                            fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
                     }
                 }
@@ -107,11 +104,14 @@ fn hook_measured(p: &Pools, r: &PoolRef) -> bool {
 }
 
 /// Сверка одного пула и запись итога. Мелкий пул — итога нет (None), без журнала. До сводки первого прохода итог
-/// идёт в неё (`first`), журнал по пулу — только после. Ошибок нет.
-async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) {
-    let Some(e) = p.reg.get(r) else { return };
+/// идёт в неё (`first`), журнал по пулу — только после. Возвращает: была ли проверка (пула нет или он недостоверен —
+/// false: пул не отмечается проверенным и сверится, как только станет достоверным, check/fresh.rs). Ошибок нет.
+pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
+    let Some(e) = p.reg.get(r) else {
+        return false;
+    };
     if !e.valid {
-        return;
+        return false;
     }
     let deep = match usdt_decimals(p).await {
         Ok(dec) => select::deep_enough(&p.ctx, &p.reg, &p.tokens, &e, dec),
@@ -124,7 +124,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) {
                 t.set(r, None);
             }
             p.checks.update_pool(r, |f| f.quoter = None);
-            return;
+            return true;
         }
         Err(why) => Err(why),
     };
@@ -149,6 +149,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) {
         None => {}
     }
     p.checks.update_pool(r, |f| f.quoter = Some(res));
+    true
 }
 
 /// Сменилось ли состояние пула так, что это стоит записать (см. шапку). Ошибок нет.

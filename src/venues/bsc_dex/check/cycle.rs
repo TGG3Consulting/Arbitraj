@@ -34,8 +34,7 @@ pub async fn hooks(p: Pools, queue: Queue) {
         // Полный проход — раз в hooks.recheck_interval_s; при старте все пулы и так новые для цикла.
         if full {
             for r in p.reg.refs() {
-                one(&p, &r, &mut first).await;
-                fresh.mark(&r);
+                fresh.check(&r, one(&p, &r, &mut first)).await;
                 if p.out.is_closed() {
                     return;
                 }
@@ -61,8 +60,7 @@ pub async fn hooks(p: Pools, queue: Queue) {
             tokio::pin!(ready);
             ready.as_mut().enable();
             for r in fresh.due(&p, |_| false) {
-                one(&p, &r, &mut first).await;
-                fresh.mark(&r);
+                fresh.check(&r, one(&p, &r, &mut first)).await;
                 if p.out.is_closed() {
                     return;
                 }
@@ -85,8 +83,7 @@ pub async fn hooks(p: Pools, queue: Queue) {
                         let Some(e) = p.reg.get(&r) else { continue };
                         let fresh_pool = new_pools && p.checks.pool(&r).hook.is_none();
                         if tickers.contains(&e.ticker) || fresh_pool {
-                            one(&p, &r, &mut first).await;
-                            fresh.mark(&r);
+                            fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
                     }
                 }
@@ -95,15 +92,18 @@ pub async fn hooks(p: Pools, queue: Queue) {
     }
 }
 
-/// Проверка крючка одного пула (нет крючка B/C или пул недостоверен — проверять нечего). До сводки первого прохода
-/// итог идёт в неё (`first`), журнал — при смене итога и только после сводки. Ошибок нет.
-async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>) {
-    let Some(e) = p.reg.get(r) else { return };
+/// Проверка крючка одного пула (нет крючка B/C — проверять нечего). До сводки первого прохода итог идёт в неё
+/// (`first`), журнал — при смене итога и только после сводки. Возвращает: была ли проверка (пула нет или он
+/// недостоверен — false: пул не отмечается проверенным и проверится, как только станет достоверным). Ошибок нет.
+async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>) -> bool {
+    let Some(e) = p.reg.get(r) else {
+        return false;
+    };
     if !e.valid {
-        return;
+        return false;
     }
     let Some(pc) = hooks_probe::check_pool(&p.ctx, &p.tokens, &p.reg, &e).await else {
-        return;
+        return true;
     };
     let prev = p.checks.pool(r).hook.map(|c| c.impact);
     let passed = !matches!(pc.impact, CheckState::Failed { .. });
@@ -135,4 +135,5 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if matches!(&p.checks.pool(r).quoter, Some(Err(why)) if why == HOOK_WAIT) {
         p.signals.pool_ready();
     }
+    true
 }

@@ -33,6 +33,15 @@ impl Fresh {
             .collect()
     }
 
+    /// Проверка пула циклом: отмечается проверенным, только если проверка была (`run` вернул true). Пул, недостоверный
+    /// во время полного прохода или «Перепроверить», не отмечается — проверится сразу, как только станет достоверным.
+    /// Принимает: пул, проверку. Ошибок нет.
+    pub async fn check(&mut self, r: &PoolRef, run: impl std::future::Future<Output = bool>) {
+        if run.await {
+            self.mark(r);
+        }
+    }
+
     /// Пул проверен циклом. Ошибок нет.
     pub fn mark(&mut self, r: &PoolRef) {
         self.seen.insert(r.clone());

@@ -64,7 +64,7 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
             );
             p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
             // Ждёт незаданную настройку — «застрял»: сводку первого прохода не держит (loading.rs).
-            p.loading.stuck(&found.reference, why.setting.is_some());
+            p.loading.stuck(p, &found.reference, why.setting.is_some());
             m.missing.push(Missing { i, tries: 0 });
             m.deep[i] = true;
             depth::mark(p, &found.reference, false);

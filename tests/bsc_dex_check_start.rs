@@ -3,7 +3,8 @@
 //! проход сверки с квотером и крючков шёл, пока пулы ещё не прочитаны («прошли 0, исключены 0»), а дочитанные позже
 //! пулы ждали dex.quoter_check_s (900 с) — 15 минут без цен. Теперь пул проверяется, как только он стал достоверным и
 //! циклом ещё не проверен; сводка первого прохода — когда ни один пул не читается (застрявшие из-за незаданной
-//! настройки не держат) и все прочитанные проверены.
+//! настройки не держат) и все прочитанные проверены. Пул, недостоверный во время прохода, не отмечается проверенным
+//! (ревью #55) — проверится, как только прочитан.
 //! Пулы — CAKE и ETH из записи GeckoTerminal 2026-10-24 (tests/data/indexers_2026-10-24/arb_indexers_2026-10-24.json).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{parts, check::fresh, pools::{loading, registry, discover, families}},
@@ -108,7 +109,7 @@ async fn pool_is_checked_as_soon_as_read_and_summary_waits_for_reading_pools() {
     p.reg.put(read(&eth[1].0, "ETH", false));
     p.loading.done(&eth[1].0.reference);
     for (f, _) in &eth[2..] {
-        p.loading.stuck(&f.reference, true);
+        p.loading.stuck(&p, &f.reference, true);
     }
     assert_eq!(fresh.due(&p, |_| false), vec![eth[0].0.reference.clone()]);
     assert!(!fresh.settled(&p), "прочитанный пул ETH ещё не проверен");
@@ -119,7 +120,37 @@ async fn pool_is_checked_as_soon_as_read_and_summary_waits_for_reading_pools() {
     );
     // Застрявший пул снова читается — сводку первого прохода держал бы снова (если она ещё не отправлена).
     if eth.len() > 2 {
-        p.loading.stuck(&eth[2].0.reference, false);
+        p.loading.stuck(&p, &eth[2].0.reference, false);
         assert!(!fresh.settled(&p));
     }
+}
+
+/// Замечание ревью #55: пул, недостоверный во время полного прохода (или «Перепроверить»), не отмечается проверенным —
+/// настоящая сверка check/quoter_cycle.rs one() для него ничего не делает и возвращает false; как только пул прочитан,
+/// он сразу к сверке, а не через dex.quoter_check_s.
+#[tokio::test]
+async fn invalid_during_pass_is_checked_as_soon_as_read() {
+    use arb::venues::bsc_dex::check::quoter_cycle;
+    let parts = Parts::new(native_common::ctx("check-start-invalid").await);
+    let (tx, _rx) = tokio::sync::mpsc::channel(1024);
+    let p = parts.pools(tx);
+    let cake = pools("CAKE");
+    let (f, t) = &cake[0];
+    let mut fresh = Fresh::default();
+    // Полный проход: пул в реестре, но недостоверен (данным верить нельзя).
+    p.reg.put(read(f, t, false));
+    fresh
+        .check(&f.reference, quoter_cycle::one(&p, &f.reference, &mut None))
+        .await;
+    assert!(
+        p.checks.pool(&f.reference).quoter.is_none(),
+        "сверки не было"
+    );
+    assert!(
+        fresh.due(&p, |_| false).is_empty(),
+        "недостоверный — не к проверке"
+    );
+    // Перечитан — сразу к сверке.
+    p.reg.update(&f.reference, |e| e.valid = true);
+    assert_eq!(fresh.due(&p, |_| false), vec![f.reference.clone()]);
 }

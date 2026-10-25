@@ -15,7 +15,7 @@ use std::time::Duration;
 use arb::gateway::errors::ErrorCode;
 use arb::gateway::http::{Fail, Limits};
 use arb::gateway::rules::retry_allowed;
-use arb::venues::bingx::errors::{Op, from_fail, from_http, unsure};
+use arb::venues::bingx::errors::{Op, fail_for, from_fail, from_http, unsure};
 
 fn lim() -> Limits {
     let ms = Duration::from_millis;
@@ -39,12 +39,19 @@ fn order_or_withdraw_without_result_is_outcome_unknown() {
         },
         Fail::Total { got: 100 },
         Fail::NotText,
+        Fail::TooBig { got: 4_000_001 },
     ];
     for f in &sent_no_result {
         for op in [Op::Trade, Op::Withdraw] {
             let e = unsure(from_fail(f, &lim()), op);
             assert_eq!(e.code, ErrorCode::OutcomeUnknown, "{op:?} {f:?}");
             assert!(e.message.contains("итог не получен"), "{}", e.message);
+            // Путь rest.rs: код задаётся видом сбоя (всё, кроме Connect), а не кодом from_fail.
+            assert_eq!(
+                fail_for(f, &lim(), op).code,
+                ErrorCode::OutcomeUnknown,
+                "{op:?} {f:?}"
+            );
         }
         // Справочники и проверки — без изменений (их можно повторять по правилу).
         assert_ne!(
@@ -56,6 +63,10 @@ fn order_or_withdraw_without_result_is_outcome_unknown() {
     let not_sent = Fail::Connect("error sending request".into());
     assert_eq!(
         unsure(from_fail(&not_sent, &lim()), Op::Trade).code,
+        ErrorCode::Unreachable
+    );
+    assert_eq!(
+        fail_for(&not_sent, &lim(), Op::Withdraw).code,
         ErrorCode::Unreachable
     );
     // HTTP 504 на ордер — «шлюз BingX не дождался ответа, результат нужно проверить».

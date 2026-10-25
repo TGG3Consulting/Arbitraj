@@ -131,7 +131,7 @@ impl Ctx {
         let v = self.settings.get_exact(name, &Scope::Dex(id.to_string()));
         let v = v.ok_or_else(|| {
             let m = format!("Не задана настройка {name} [dex:{id}] — задайте её в интерфейсе");
-            self.err(ErrorCode::NotConfigured, m)
+            self.not_set(name, m)
         })?;
         let list = v.as_array().and_then(|a| {
             a.iter()
@@ -164,6 +164,12 @@ impl Ctx {
             total: ms("http.total_ms")?,
             max_bytes: self.global_int("http.max_body_bytes")? as usize,
         })
+    }
+
+    /// Ошибка «настройка не задана или задана неверно» с её именем (GatewayError.setting): по имени пул, брошенный
+    /// из-за неё, вернётся в чтение, когда её зададут. Принимает: имя, текст. Ошибок нет.
+    pub fn not_set(&self, name: &str, message: impl Into<String>) -> GatewayError {
+        self.tag(GatewayError::not_set(None, name, message))
     }
 
     /// Проставляет в ошибке площадку bsc_dex. Ошибок нет.

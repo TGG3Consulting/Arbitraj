@@ -5,6 +5,8 @@
 //! От чего зависит: load_batch.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
 //! Настройки: dex.load_batch [bsc_dex]; через load_batch.rs — dex.multicall3, dex.tick_words, dex.tick_lens, dex.state_view.
 
+use crate::gateway::errors::GatewayError;
+
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load_batch::{self, Want};
@@ -21,10 +23,10 @@ pub async fn load_many(
     p: &Pools,
     items: &[(&Found, &str)],
     min_block: u64,
-) -> Result<Vec<Result<(), String>>, End> {
+) -> Result<Vec<Result<(), GatewayError>>, End> {
     let per = match load_batch::batch(&p.ctx) {
         Ok(n) => (n / 2).max(1),
-        Err(e) => return Ok(items.iter().map(|_| Err(e.message.clone())).collect()),
+        Err(e) => return Ok(items.iter().map(|_| Err(e.clone())).collect()),
     };
     let mut out = Vec::with_capacity(items.len());
     for group in items.chunks(per) {
@@ -34,7 +36,7 @@ pub async fn load_many(
             .map_or(min_block, |h| h.number.max(min_block));
         match http_wait::http_reached(p, block).await {
             Ok(()) => out.extend(load_group(p, group, block).await?),
-            Err(e) => out.extend(group.iter().map(|_| Err(e.message.clone()))),
+            Err(e) => out.extend(group.iter().map(|_| Err(e.clone()))),
         }
     }
     Ok(out)
@@ -45,7 +47,7 @@ async fn load_group(
     p: &Pools,
     items: &[(&Found, &str)],
     block: u64,
-) -> Result<Vec<Result<(), String>>, End> {
+) -> Result<Vec<Result<(), GatewayError>>, End> {
     let known: Vec<_> = items.iter().map(|(f, _)| p.reg.get(&f.reference)).collect();
     let wants: Vec<Want> = items
         .iter()

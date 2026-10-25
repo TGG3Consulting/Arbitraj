@@ -55,6 +55,7 @@ pub mod progress;
 pub mod registry;
 pub mod reload;
 pub mod reload_many;
+pub mod revive;
 pub mod scan;
 pub mod session;
 pub mod ticks;

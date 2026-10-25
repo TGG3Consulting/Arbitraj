@@ -55,6 +55,11 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
     if op == Op::Other || !matches!(e.code, ErrorCode::Timeout | ErrorCode::BadResponse) {
         return e;
     }
+    unknown(e, op)
+}
+
+/// Ордер или вывод → «результат неизвестен» с пояснением в тексте. Принимает: ошибку, операцию. Ошибок нет.
+fn unknown(e: GatewayError, op: Op) -> GatewayError {
     let what = if op == Op::Trade {
         "ордер"
     } else {
@@ -106,6 +111,22 @@ pub fn from_fail(
         _ => ErrorCode::Timeout,
     };
     GatewayError::new(code, Some(venue()), format!("BingX: {}", f.text(lim)))
+}
+
+/// Сбой обмена по операции: ордер или вывод (Op::Trade, Op::Withdraw) при любом сбое, кроме «соединение не
+/// установлено» (Fail::Connect — запрос точно не ушёл), — «результат неизвестен» (OutcomeUnknown, решение 64): запрос
+/// мог дойти до BingX и исполниться, в том числе при недочитанном, слишком большом или не UTF-8 ответе. Код задаётся
+/// по виду сбоя, а не по коду from_fail. Принимает: сбой, сроки, операцию. Возвращает: GatewayError. Ошибок нет.
+pub fn fail_for(
+    f: &crate::gateway::http::Fail,
+    lim: &crate::gateway::http::Limits,
+    op: Op,
+) -> GatewayError {
+    let e = from_fail(f, lim);
+    if op == Op::Other || f.not_sent() {
+        return e;
+    }
+    unknown(e, op)
 }
 
 /// Ответ не удалось разобрать.

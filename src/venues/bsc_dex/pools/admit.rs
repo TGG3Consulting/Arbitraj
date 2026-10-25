@@ -59,10 +59,12 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
         if let Err(why) = res {
             p.reg.update(&found.reference, |e| e.valid = false);
             let msg = format!(
-                "{} {ticker}: состояние пула не прочитано: {why} — повтор на новых блоках",
-                found.family.title
+                "{} {ticker}: состояние пула не прочитано: {} — повтор на новых блоках",
+                found.family.title, why.message
             );
             p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+            // Ждёт незаданную настройку — «застрял»: сводку первого прохода не держит (loading.rs).
+            p.loading.stuck(&found.reference, why.setting.is_some());
             m.missing.push(Missing { i, tries: 0 });
             m.deep[i] = true;
             depth::mark(p, &found.reference, false);
@@ -100,7 +102,10 @@ pub async fn wake(
     let (found, ticker) = m.pools[i].clone();
     let title = found.family.title;
     if let Err(why) = reload::load_one(p, &found, &ticker, block).await? {
-        let msg = format!("{title} {ticker}: добавление ликвидности, пул не прочитан: {why}");
+        let msg = format!(
+            "{title} {ticker}: добавление ликвидности, пул не прочитан: {}",
+            why.message
+        );
         p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
         return Ok(());
     }
@@ -117,7 +122,8 @@ pub async fn wake(
         p.reg.update(&found.reference, |e| e.valid = false);
         m.missing.push(Missing { i, tries: 0 });
         let msg = format!(
-            "{title} {ticker}: состояние пула не прочитано: {why} — повтор на новых блоках"
+            "{title} {ticker}: состояние пула не прочитано: {} — повтор на новых блоках",
+            why.message
         );
         p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
     }

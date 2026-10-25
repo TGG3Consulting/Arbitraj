@@ -150,9 +150,9 @@ async fn send(
                     .map_err(|e| errors::unsure(e, op));
             }
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
-            // Таймаут ордера или вывода не повторяем: он мог исполниться — повтор = двойная сделка.
+            // Иной сбой ордера или вывода — «результат неизвестен» (errors::fail_for): мог исполниться, не повторяем.
             Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),
-            Err(f) => return Err(errors::unsure(errors::from_fail(&f, &lim), op)),
+            Err(f) => return Err(errors::fail_for(&f, &lim, op)),
         }
     }
     Err(last.unwrap_or_else(|| {

@@ -81,9 +81,11 @@ async fn first_pass_sends_one_summary_then_per_coin() {
         .filter(|e| e.kind == "core.check_done")
         .collect();
     assert_eq!(done.len(), 1, "сводка одна");
-    // Монеты, чьи пулы ещё загружаются, — отдельным числом (решение 63).
+    // Монеты, чьи пулы застряли (ждут настройку), — отдельным числом (решение 63).
     assert!(
-        done[0].message.contains("пулы ещё загружаются 4"),
+        done[0]
+            .message
+            .contains("пулы не читаются (ждут настройку) 4"),
         "{}",
         done[0].message
     );

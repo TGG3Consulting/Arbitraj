@@ -22,6 +22,7 @@ use super::super::node::call;
 use super::abi_v4::{IInfinityCl, IStateView};
 use super::families::Proto;
 use super::load::Loaded;
+use super::load_batch::{Miss, miss};
 use super::load_batch::{Out, Stage, Want};
 use super::load_batch_cl::target;
 use super::load_batch_v2v3::run;
@@ -29,12 +30,12 @@ use super::load_cl;
 use super::ticks::{TickData, TickMap};
 
 /// Вызовы данных тиков. Ошибки: как у target; тик вне int24.
-pub fn tick_calls(ctx: &Ctx, w: &Want, ticks: &[i32]) -> Result<Vec<(Address, Bytes)>, String> {
+pub fn tick_calls(ctx: &Ctx, w: &Want, ticks: &[i32]) -> Result<Vec<(Address, Bytes)>, Miss> {
     let (inf, to, id) = target(ctx, w)?;
     ticks
         .iter()
         .map(|t| {
-            let tick = load_cl::i24(ctx, *t).map_err(|e| e.message)?;
+            let tick = load_cl::i24(ctx, *t)?;
             let d = if inf {
                 IInfinityCl::getPoolTickInfoCall { id, tick }.abi_encode()
             } else {
@@ -46,12 +47,8 @@ pub fn tick_calls(ctx: &Ctx, w: &Want, ticks: &[i32]) -> Result<Vec<(Address, By
 }
 
 /// Карта тиков из ответов. Ошибки: причина (ответ не по ABI).
-pub fn tick_data(
-    w: &Want,
-    ticks: &[i32],
-    ans: &[Bytes],
-) -> Result<BTreeMap<i32, TickData>, String> {
-    let m = |e: crate::gateway::errors::GatewayError| e.message;
+pub fn tick_data(w: &Want, ticks: &[i32], ans: &[Bytes]) -> Result<BTreeMap<i32, TickData>, Miss> {
+    let m = |e: Miss| e;
     ticks
         .iter()
         .zip(ans)
@@ -99,7 +96,7 @@ pub async fn finish(
         };
         let ticks = infos[i]
             .as_ref()
-            .map_err(Clone::clone)
+            .map_err(|t| miss(t.clone()))
             .and_then(|b| tick_data(w, &t, b));
         out[i] = Some(ticks.map(|ticks| Loaded {
             state,

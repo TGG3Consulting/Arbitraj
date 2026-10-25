@@ -4,8 +4,8 @@
 //! ключи: адреса CAKE и ETH и двух пулов CAKE из записи GeckoTerminal 2026-10-24.
 //! - внеочередная проверка: ждущая своих пулов монета проверяется, как только её пулы дочитаны, и без сигнала;
 //!   ждущая достоверного пула — только по сигналу и когда пул есть;
-//! - сводка первого прохода: монета с вечно «загружающимися» пулами её не держит, «пулы ещё загружаются» —
-//!   отдельным числом; сводка — один раз.
+//! - сводка первого прохода: монета с реально читающимися пулами её держит; монета, чьи пулы застряли (ждут
+//!   незаданную настройку), — не держит и идёт отдельным числом «пулы не читаются (ждут настройку)»; сводка — один раз.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::check::{tax_wait, tax_pass}.
@@ -42,9 +42,10 @@ fn coin_with_own_pools_read_is_checked_right_away() {
 }
 
 #[test]
-fn stuck_coin_does_not_hold_first_pass_summary() {
+fn reading_coin_holds_first_pass_summary() {
+    // Замечание ревью: все монеты в «загружаются» — сводка не должна уйти сразу. Пулы B и D реально читаются.
     let mut f = First::new([A, B, C, D]);
-    // Проход 1: A прошла, C ждёт пула, B и D — пулы ещё загружаются.
+    let reading = |_: Address| false;
     let p1 = Pass {
         waiting: vec![
             (B, "B".into(), Why::Loading),
@@ -55,16 +56,52 @@ fn stuck_coin_does_not_hold_first_pass_summary() {
         ..Pass::default()
     };
     assert_eq!(
-        f.tally(&p1),
-        Some([1, 0, 1, 0, 2]),
-        "все, кроме ждущих своих пулов, проверены — сводка"
+        f.tally(&p1, reading),
+        None,
+        "B и D читаются — держат сводку"
     );
-    // D дочиталась и не прошла — сводка уже отправлена, второй нет; B так и висит — никого не держит.
     let p2 = Pass {
         done: vec![(D, Res::Failed)],
         ..Pass::default()
     };
-    assert_eq!(f.tally(&p2), None);
+    assert_eq!(f.tally(&p2, reading), None, "B ещё читается");
+    let p3 = Pass {
+        done: vec![(B, Res::Ok)],
+        ..Pass::default()
+    };
+    assert_eq!(f.tally(&p3, reading), Some([2, 1, 1, 0, 0]));
+    assert_eq!(
+        f.tally(&Pass::default(), reading),
+        None,
+        "сводка — один раз"
+    );
+}
+
+#[test]
+fn stuck_coin_does_not_hold_first_pass_summary() {
+    let mut f = First::new([A, B, C, D]);
+    // B застряла (все её пулы ждут незаданную настройку), D читается.
+    let stuck = |a: Address| a == B;
+    let p1 = Pass {
+        waiting: vec![(B, "B".into(), Why::Loading), (D, "D".into(), Why::Loading)],
+        done: vec![(A, Res::Ok), (C, Res::Wait)],
+        ..Pass::default()
+    };
+    assert_eq!(f.tally(&p1, stuck), None, "D читается — держит");
+    let p2 = Pass {
+        done: vec![(D, Res::Failed)],
+        ..Pass::default()
+    };
+    assert_eq!(
+        f.tally(&p2, stuck),
+        Some([1, 1, 1, 0, 1]),
+        "остались только застрявшие — сводка, «пулы не читаются (ждут настройку)» отдельным числом"
+    );
+    let p3 = Pass {
+        done: vec![(B, Res::Ok)],
+        ..Pass::default()
+    };
+    assert_eq!(f.tally(&p3, stuck), None, "второй сводки нет");
 }
 
 #[test]
@@ -75,10 +112,10 @@ fn summary_waits_for_coin_that_was_never_checked() {
         done: vec![(A, Res::Ok)],
         ..Pass::default()
     };
-    assert_eq!(f.tally(&p1), None);
+    assert_eq!(f.tally(&p1, |_| false), None);
     let p2 = Pass {
         done: vec![(B, Res::Config)],
         ..Pass::default()
     };
-    assert_eq!(f.tally(&p2), Some([1, 0, 0, 1, 0]));
+    assert_eq!(f.tally(&p2, |_| false), Some([1, 0, 0, 1, 0]));
 }

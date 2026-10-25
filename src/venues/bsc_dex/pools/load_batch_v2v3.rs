@@ -21,6 +21,7 @@ use super::super::node::call;
 use super::abi_v2v3::{IPancakeV3Pool, ITickLens, IUniswapV3Pool, IV2Pair, IV3Pool};
 use super::families::Proto;
 use super::load_batch::{Answers, Stage, Want};
+use super::load_batch::{Miss, miss};
 use super::load_batch_cl as cl;
 use super::ticks::TickData;
 
@@ -31,7 +32,7 @@ pub enum PoolStateTick {
 }
 
 /// Вызовы ступени 1 одного пула. Ошибки: причина (нет tickSpacing, нет адреса настройки, ссылка не того вида).
-pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, String> {
+pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
     let enc = |to: Address, d: Vec<u8>| (to, Bytes::from(d));
     match (w.family.kind, w.reference) {
         (PoolKind::V2, PoolRef::Contract(a)) => {
@@ -39,11 +40,11 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, String> {
         }
         (PoolKind::V3, PoolRef::Contract(a)) => {
             w.spacing
-                .ok_or_else(|| format!("{}: у пула нет tickSpacing", w.family.title))?;
+                .ok_or_else(|| miss(format!("{}: у пула нет tickSpacing", w.family.title)))?;
             let slot0 = match w.family.proto {
                 Proto::PancakeV3 => IPancakeV3Pool::slot0Call {}.abi_encode(),
                 Proto::UniswapV3 => IUniswapV3Pool::slot0Call {}.abi_encode(),
-                _ => return Err(format!("{}: не V3", w.family.title)),
+                _ => return Err(miss(format!("{}: не V3", w.family.title))),
             };
             Ok(vec![
                 enc(*a, slot0),
@@ -52,16 +53,19 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, String> {
         }
         (PoolKind::Cl, PoolRef::Singleton { .. }) => {
             w.spacing
-                .ok_or_else(|| format!("{}: у пула нет tickSpacing", w.family.title))?;
+                .ok_or_else(|| miss(format!("{}: у пула нет tickSpacing", w.family.title)))?;
             cl::head(ctx, w)
         }
-        _ => Err(format!("{}: ссылка на пул не того вида", w.family.title)),
+        _ => Err(miss(format!(
+            "{}: ссылка на пул не того вида",
+            w.family.title
+        ))),
     }
 }
 
 /// Разбор ступени 1. Ошибки: причина (ответ не по ABI).
-pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, String> {
-    let m = |e: crate::gateway::errors::GatewayError| e.message;
+pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
+    let m = |e: Miss| e;
     match w.family.kind {
         PoolKind::V2 => {
             let r = call::decode::<IV2Pair::getReservesCall>(&b[0]).map_err(m)?;
@@ -93,16 +97,17 @@ pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, String> {
 }
 
 /// Вызовы ступени 2 одного пула (слова [lo, hi]). Ошибки: причина (нет адреса dex.tick_lens / dex.state_view).
-pub fn words(ctx: &Ctx, w: &Want, (lo, hi): (i16, i16)) -> Result<Vec<(Address, Bytes)>, String> {
+pub fn words(ctx: &Ctx, w: &Want, (lo, hi): (i16, i16)) -> Result<Vec<(Address, Bytes)>, Miss> {
     if w.family.kind != PoolKind::V3 {
         return cl::word_calls(ctx, w, (lo, hi));
     }
     let PoolRef::Contract(pool) = w.reference else {
-        return Err(format!("{}: ссылка на пул не того вида", w.family.title));
+        return Err(miss(format!(
+            "{}: ссылка на пул не того вида",
+            w.family.title
+        )));
     };
-    let lens = ctx
-        .dex_addr("dex.tick_lens", w.family.id)
-        .map_err(|e| e.message)?;
+    let lens = ctx.dex_addr("dex.tick_lens", w.family.id)?;
     Ok((lo..=hi)
         .map(|i| {
             let c = ITickLens::getPopulatedTicksInWordCall {
@@ -115,11 +120,10 @@ pub fn words(ctx: &Ctx, w: &Want, (lo, hi): (i16, i16)) -> Result<Vec<(Address, 
 }
 
 /// Тики V3 из ответов TickLens. Ошибки: причина (ответ не по ABI).
-pub fn v3_ticks(ans: &[Bytes]) -> Result<BTreeMap<i32, TickData>, String> {
+pub fn v3_ticks(ans: &[Bytes]) -> Result<BTreeMap<i32, TickData>, Miss> {
     let mut ticks = BTreeMap::new();
     for b in ans {
-        let word =
-            call::decode::<ITickLens::getPopulatedTicksInWordCall>(b).map_err(|e| e.message)?;
+        let word = call::decode::<ITickLens::getPopulatedTicksInWordCall>(b)?;
         for t in word {
             ticks.insert(
                 t.tick.as_i32(),

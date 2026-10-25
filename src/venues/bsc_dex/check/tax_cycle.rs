@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/check/tax_cycle.rs
 //! Что делает: цикл проверки налогов монет (решение 30). До проверки монета «не проверена» (CoinCheck NotChecked —
 //! торговли нет, но и не чёрный список). Монета проверяется, как только прочитаны ЕЁ пулы (pools/loading.rs, решение 61):
-//! чужие недочитанные пулы её не держат. Сводка первого прохода — когда у всех монет, кроме ждущих своих пулов, была
-//! первая проверка (tax_wait.rs; «пулы ещё загружаются: N» — отдельным числом): одна
+//! чужие недочитанные пулы её не держат. Сводка первого прохода — когда у всех монет, кроме тех, чьи пулы застряли (ждут
+//! незаданную настройку), была первая проверка (tax_wait.rs; «пулы не читаются: N» — отдельным числом): одна
 //! запись в журнал и событие CheckPass ядру (одно сводное уведомление, core/first_pass.rs).
 //! Дальше — полный проход раз в tax.recheck_interval_s. Между проходами:
 //! - «Перепроверить» — только переданные монеты (check/recheck.rs);
@@ -130,11 +130,13 @@ async fn sleep_opt(d: Option<Duration>) {
 /// Учитывает проход в сводке первого прохода; пора — одна сводка в журнал и CheckPass ядру (core/first_pass.rs — одно
 /// сводное уведомление). Ошибок нет.
 async fn settle(p: &Pools, pass: &Pass, sum: &mut First) {
-    let Some([ok, failed, waiting, not_configured, loading]) = sum.tally(pass) else {
+    let Some([ok, failed, waiting, not_configured, loading]) =
+        sum.tally(pass, |a| p.loading.stuck_only(p, a))
+    else {
         return;
     };
     let msg = format!(
-        "Проверка налогов (первый проход): прошло {ok}, не прошло {failed}, ждут (нет пула, сбой узла) {waiting}, не задана настройка {not_configured}, пулы ещё загружаются {loading}"
+        "Проверка налогов (первый проход): прошло {ok}, не прошло {failed}, ждут (нет пула, сбой узла) {waiting}, не задана настройка {not_configured}, пулы не читаются (ждут настройку) {loading}"
     );
     p.ctx.log(Level::Info, "dex.check", msg, None).await;
     let venue = p.ctx.venue();

@@ -47,7 +47,8 @@ pub struct Counts {
     pub failed: usize,
     pub waiting: usize,
     pub config: usize,
-    /// Монеты, чьи пулы ещё загружаются: их первая проверка — позже, сводку они не держат (решение 63).
+    /// Монеты, чьи пулы застряли (ждут незаданную настройку): их первая проверка — позже, сводку они не держат
+    /// (решение 63).
     pub loading: usize,
 }
 
@@ -72,7 +73,7 @@ pub async fn done(core: &Core, venue: &str, n: Counts) {
     let top = top_reasons(core, top);
     let mut text = format!(
         "Первая проверка налогов ({venue}): прошли {ok}, не прошли {failed}, ждут достоверного пула {waiting}, \
-         не задана настройка {config}, пулы ещё загружаются {loading}; в чёрном списке {blocked}"
+         не задана настройка {config}, пулы не читаются (ждут настройку) {loading}; в чёрном списке {blocked}"
     );
     if !top.is_empty() {
         text.push_str(&format!(". Причины: {top}"));

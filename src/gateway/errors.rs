@@ -93,6 +93,10 @@ pub struct GatewayError {
     /// Транзакция в сети, если ошибка случилась после отправки (откат, не попала в блок).
     /// В коробке, чтобы ошибка оставалась маленькой (она возвращается из множества функций).
     pub tx: Option<Box<ChainTx>>,
+    /// «Не задана настройка»: её имя (ставится там, где ошибка создаётся, — settings/read.rs, read_scope.rs и места с
+    /// проверкой значения). По нему пул, брошенный из-за настройки, возвращается в чтение, когда её зададут (решение 63).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setting: Option<String>,
 }
 
 impl GatewayError {
@@ -106,7 +110,15 @@ impl GatewayError {
             message: message.into(),
             raw: None,
             tx: None,
+            setting: None,
         }
+    }
+
+    /// Ошибка «не задана настройка» с её именем. Принимает: имя настройки, текст. Возвращает: NotConfigured.
+    pub fn not_set(venue: Option<VenueId>, name: &str, message: impl Into<String>) -> Self {
+        let mut e = Self::new(ErrorCode::NotConfigured, venue, message);
+        e.setting = Some(name.to_string());
+        e
     }
 
     /// Добавляет факт транзакции в сети.

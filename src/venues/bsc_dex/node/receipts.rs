@@ -37,7 +37,10 @@ pub struct Feed {
 #[derive(Default)]
 pub(super) struct Inner {
     pub(super) state: Mutex<State>,
-    started: AtomicBool,
+    pub(super) started: AtomicBool,
+    /// Лента остановлена сменой источника (receipts_hold.rs stop_source): «сброс» снимает последнее старое
+    /// «соединение»; новая лента (Feed::open) снова снимает его сама.
+    pub(super) source_off: AtomicBool,
     /// Последний разобранный блок (None — лента ещё не начала или оборвалась).
     pub(super) last: watch::Sender<Option<u64>>,
     /// «Данные пулов отстают на N блоков» площадки (решение 72): ставит задача ленты.
@@ -56,9 +59,10 @@ pub(super) struct State {
     pub(super) generation: u64,
     /// Причина последнего обрыва.
     pub(super) broken: Option<String>,
-    /// Живые «соединения» текущего поколения и прошлых (пачка закрывает своё после Invalidated — pools/session.rs).
-    pub(super) live: usize,
-    pub(super) old: usize,
+    /// Живые «соединения»: номер → (поколение ленты при открытии, имя пачки). Пачка закрывает своё после Invalidated
+    /// своих пулов (pools/session.rs); соединения прошлых поколений держат «сброс» (release_if_settled).
+    pub(super) links: std::collections::BTreeMap<u64, (u64, String)>,
+    pub(super) next_link: u64,
 }
 
 impl Feed {
@@ -79,6 +83,7 @@ impl Feed {
         ctx: &Ctx,
         heads: &Heads,
         out: &tokio::sync::mpsc::Sender<crate::gateway::events::MarketEvent>,
+        name: &str,
     ) -> Handle {
         {
             let mut o = self.inner.out.lock().unwrap_or_else(|p| p.into_inner());
@@ -87,6 +92,7 @@ impl Feed {
             }
         }
         if !self.inner.started.swap(true, Ordering::SeqCst) {
+            self.inner.source_off.store(false, Ordering::SeqCst);
             let weak = Arc::downgrade(&self.inner);
             let work = super::receipts_task::run(weak, ctx.clone(), heads.clone());
             tokio::spawn(crate::gateway::urgency::scope(
@@ -94,14 +100,19 @@ impl Feed {
                 work,
             ));
         }
-        self.open_idle()
+        self.open_named(name)
     }
 
     /// «Соединение» без запуска задачи ленты: блоки раздаёт тот, кто вызывает deliver (задача ленты; тесты порядка
     /// раздачи и номера блока). Ошибок нет.
     pub fn open_idle(&self) -> Handle {
+        self.open_named("")
+    }
+
+    /// То же с именем пачки (для записи «запрет сброса держит пачка …»). Ошибок нет.
+    pub fn open_named(&self, name: &str) -> Handle {
         let generation = self.lock().generation;
-        Handle::new(self.clone(), generation)
+        Handle::new(self.clone(), generation, name)
     }
 
     /// Раздаёт логи блока подпискам по фильтрам и ставит последний разобранный блок `last` ПОД ТОЙ ЖЕ блокировкой, что
@@ -137,23 +148,9 @@ impl Feed {
     pub fn cut(&self, why: &str) {
         let mut s = self.lock();
         s.generation += 1;
-        s.old += std::mem::take(&mut s.live);
         s.broken = Some(format!("{SOURCE}: {why}"));
         s.subs.clear();
         self.inner.last.send_replace(None);
-    }
-
-    /// Полный сброс ленты (решение 72, ревью #62): «сброс» на отметке отставания стоит (котировки, сделки и вердикты
-    /// проверок запрещены), отставание не снимается, затем обрыв. Ошибок нет.
-    pub fn reset(&self, why: &str) {
-        self.inner.lag.hold();
-        self.cut(why);
-    }
-
-    /// Снимает «сброс», когда все «соединения» прошлых поколений закрыты (их пачки уже сделали пулы недостоверными).
-    /// Циклы не будит. Возвращает: true — «сброс» снят сейчас. Ошибок нет.
-    pub fn release_if_settled(&self) -> bool {
-        self.inner.lag.held() && self.lock().old == 0 && self.inner.lag.release()
     }
 
     /// Задача ленты кончилась (источник сменён): следующая Feed::open запустит её снова. Ошибок нет.

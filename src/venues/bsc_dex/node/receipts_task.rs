@@ -46,13 +46,16 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     let mut pipe: Pipe<Got> = Pipe::default();
     let mut said = String::new();
     let mut lag = Lag::default();
+    // О «запрет держится дольше bsc.receipts_stuck_reset_s» уже записано (до снятия запрета).
+    let mut hold_told = false;
     loop {
         let Some(inner) = weak.upgrade() else { return };
         let feed = Feed { inner };
         if ctx.text("bsc.pool_events_source").ok().as_deref() != Some("receipts") {
-            // Сначала «задача кончилась», потом обрыв: «соединение», открытое после обрыва, запустит ленту заново.
-            feed.stopped();
-            feed.cut("источник событий пулов сменён (bsc.pool_events_source) — лента остановлена");
+            // Отставание и «сброс» снимаются здесь же (ревью #62): иначе при ws котировок не будет никогда.
+            feed.stop_source(
+                "источник событий пулов сменён (bsc.pool_events_source) — лента остановлена",
+            );
             return;
         }
         // Ошибка в настройке узлов (не https, темп 0, список не читается) — один обрыв с причиной, дальше лента ждёт
@@ -91,6 +94,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             );
             ctx.log(Level::Info, "venue.ws", msg, None).await;
         }
+        hold_told = hold_note(&ctx, &feed, hold_told).await;
         let missing = matches!(res, Err(Fail::Missing(..)));
         let why = match res {
             // Блоков в секунду меряем только догнав голову: во время догона блоки идут быстрее сети.
@@ -149,6 +153,28 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             return;
         }
     }
+}
+
+/// «Сброс» держится дольше bsc.receipts_stuck_reset_s (старая пачка не закрывает «соединение») — одна запись в
+/// журнал: сколько держится и какие пачки держат. Не задана настройка — без записи (о ней пишет застревание блока).
+/// Принимает: окружение, ленту, было ли уже записано. Возвращает: записано ли (сбрасывается со снятием). Ошибок нет.
+async fn hold_note(ctx: &Ctx, feed: &Feed, told: bool) -> bool {
+    let Some(t) = feed.inner.lag.held_for() else {
+        return false;
+    };
+    let Ok(limit) = ctx.int("bsc.receipts_stuck_reset_s") else {
+        return told;
+    };
+    if told || t.as_secs() < limit {
+        return told;
+    }
+    let names = feed.holders().join(", ");
+    let msg = format!(
+        "{SOURCE}: запрет котировок после сброса держится {} с (дольше bsc.receipts_stuck_reset_s = {limit}) — не закрыты «соединения» пачек старой ленты: {names}",
+        t.as_secs()
+    );
+    ctx.log(Level::Warn, "venue.ws", msg, None).await;
+    true
 }
 
 /// Полный сброс ленты: окно, конвейер и отставание — заново, все подписки закрыты; отметка «отстают» НЕ снимается, а

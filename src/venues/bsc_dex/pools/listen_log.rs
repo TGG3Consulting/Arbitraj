@@ -100,10 +100,7 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     };
     if let Err(e) = res {
         p.reg.update(&r, |x| x.valid = false);
-        let _ = p.out.try_send(MarketEvent::Invalidated {
-            venue: p.ctx.venue(),
-            ticker: entry.ticker.clone(),
-        });
+        super::invalidated::send(p, entry.ticker.clone());
         return Err(End::Broken(e.message));
     }
     match p.reg.get(&r) {
@@ -168,10 +165,7 @@ pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {
         tickers.insert(t.clone());
     }
     for t in tickers {
-        let _ = p.out.try_send(MarketEvent::Invalidated {
-            venue: p.ctx.venue(),
-            ticker: t,
-        });
+        super::invalidated::send(p, t);
     }
 }
 

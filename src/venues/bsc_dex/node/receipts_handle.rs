@@ -22,23 +22,25 @@ pub struct Handle {
     feed: Feed,
     generation: u64,
     ids: Mutex<Vec<String>>,
+    /// Номер в учёте живых «соединений» ленты (State::links).
+    link: u64,
 }
 
 impl Handle {
-    /// Новое «соединение» ленты поколения `generation`. Ошибок нет.
-    pub(super) fn new(feed: Feed, generation: u64) -> Handle {
-        {
+    /// Новое «соединение» ленты поколения `generation` пачки `name`. Ошибок нет.
+    pub(super) fn new(feed: Feed, generation: u64, name: &str) -> Handle {
+        let link = {
             let mut s = feed.lock();
-            if s.generation == generation {
-                s.live += 1;
-            } else {
-                s.old += 1;
-            }
-        }
+            s.next_link += 1;
+            let n = s.next_link;
+            s.links.insert(n, (generation, name.to_string()));
+            n
+        };
         Handle {
             feed,
             generation,
             ids: Mutex::new(Vec::new()),
+            link,
         }
     }
 
@@ -128,10 +130,12 @@ impl Drop for Handle {
             s.subs.remove(&id);
         }
         // Учёт живых «соединений»: прошлого поколения закрыто — «сброс» ленты может сниматься (Feed::release_if_settled).
-        if s.generation == self.generation {
-            s.live = s.live.saturating_sub(1);
-        } else {
-            s.old = s.old.saturating_sub(1);
+        s.links.remove(&self.link);
+        drop(s);
+        // Лента остановлена (источник сменён на ws): снять «сброс» больше некому — последнее старое «соединение»
+        // снимает его само (его пачка уже сделала пулы недостоверными, pools/session.rs).
+        if self.feed.source_off() {
+            self.feed.release_if_settled();
         }
     }
 }

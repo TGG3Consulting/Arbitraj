@@ -23,12 +23,12 @@ use super::{jsonrpc, pace};
 /// Чем кончилась гонка без принятого ответа: что ответил каждый узел.
 #[derive(Default)]
 pub struct Lost {
-    /// Ответ больше предела (последний такой).
-    pub over: Option<Fail>,
     /// Ответы пришли, но не прошли проверку вызывающего — причины всех узлов (null, неполные квитанции…).
     pub rejected: Vec<String>,
-    /// Ошибка связи или узла (последняя).
-    pub failed: Option<crate::gateway::errors::GatewayError>,
+    /// Ошибка связи или узла (последняя); в коробке — итог гонки остаётся маленьким (clippy result_large_err).
+    pub failed: Option<Box<crate::gateway::errors::GatewayError>>,
+    /// Ответ больше предела (последний такой) — тоже в коробке, по той же причине.
+    pub over: Option<Box<Fail>>,
 }
 
 /// Та же пачка СРАЗУ на все узлы (основной и резервный bsc.node_http_url_backup) — первый ответ, ПРОШЕДШИЙ проверку
@@ -42,7 +42,7 @@ pub async fn batch_race<T>(
     accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, String>,
 ) -> Result<T, Lost> {
     let urls = ctx.failover.urls(ctx, Link::Http).map_err(|e| Lost {
-        failed: Some(e),
+        failed: Some(Box::new(e)),
         ..Lost::default()
     })?;
     let body = Value::Array(
@@ -82,12 +82,12 @@ where
                 Ok(t) => return Ok(t),
                 Err(why) => lost.rejected.push(why),
             },
-            Ok(Capped::Over(f)) => lost.over = Some(f),
-            Err(e) => lost.failed = Some(e),
+            Ok(Capped::Over(f)) => lost.over = Some(Box::new(f)),
+            Err(e) => lost.failed = Some(Box::new(e)),
         }
     }
     if lost.over.is_none() && lost.failed.is_none() && lost.rejected.is_empty() {
-        lost.failed = Some(errors::bad("нет адреса узла", SOURCE, ""));
+        lost.failed = Some(Box::new(errors::bad("нет адреса узла", SOURCE, "")));
     }
     Err(lost)
 }

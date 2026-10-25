@@ -35,3 +35,5 @@ HTTP с двумя сроками (решение 63) — tests/http_body_read.r
 «Результат неизвестен» (решение 64) — tests/outcome_unknown_sources.rs: ордер или вывод BingX без ответа целиком (и HTTP 504) — OutcomeUnknown, не связались — Unreachable, справочники — как было; повтор запрещён только для OutcomeUnknown (retry_allowed, no_retry в справочнике формы правил).
 
 Проверки пулов на старте (решение 65) — tests/bsc_dex_check_start.rs: пул CAKE/ETH из записи GeckoTerminal проверяется, как только прочитан (а не через dex.quoter_check_s); недостоверный и проверенный — не берутся; сводка первого прохода — когда ни один пул не читается (застрявшие не держат) и все прочитанные проверены; пул, недостоверный во время прохода, не отмечается проверенным и проверяется сразу после чтения (invalid_during_pass_is_checked_as_soon_as_read).
+
+Налоги служебной монеты USDT (решение 67) — tests/bsc_dex_service_tax.rs: список вызова eth_simulateV1 для записи (tests/data/service_tax_2026-10-25/calls.json) сверяется с кодом service_tax::calls; разбор живого ответа узла (responses.json, блок 0x7bb0bc5) — налог USDT 0 по всем трём переводам, газ перевода 51603.

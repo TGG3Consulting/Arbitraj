@@ -28,20 +28,24 @@ use super::probe::Measured;
 
 /// Налоги в процентах. None — делить не на что (ожидалось 0).
 pub fn percent(m: &Measured, decimals: u8) -> Option<TokenTaxes> {
-    let pct = |sent: U256, got: U256| -> Option<Decimal> {
-        let s = num::to_decimal(sent, decimals)?;
-        let g = num::to_decimal(got.min(sent), decimals)?;
-        if s.is_zero() {
-            None
-        } else {
-            Some((s - g) / s * Decimal::ONE_HUNDRED)
-        }
-    };
+    let pct = |sent: U256, got: U256| pct(sent, got, decimals);
     Some(TokenTaxes {
         buy_pct: pct(m.buy_expected, m.buy_got)?,
         sell_pct: pct(m.sell_sent, m.sell_got)?,
         transfer_pct: pct(m.transfer_sent, m.transfer_got)?,
     })
+}
+
+/// Налог, %: (отправлено − дошло) / отправлено · 100 (дошло больше — 0). Принимает: суммы в минимальных единицах,
+/// знаки токена. Возвращает: None — отправлено 0 или не переводится. Ошибок нет.
+pub fn pct(sent: U256, got: U256, decimals: u8) -> Option<Decimal> {
+    let s = num::to_decimal(sent, decimals)?;
+    let g = num::to_decimal(got.min(sent), decimals)?;
+    if s.is_zero() {
+        None
+    } else {
+        Some((s - g) / s * Decimal::ONE_HUNDRED)
+    }
 }
 
 /// Балансы встречного токена у пулов реестра — на один проход проверки налогов: пачка balanceOf по всем пулам

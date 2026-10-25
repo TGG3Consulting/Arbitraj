@@ -25,7 +25,7 @@ use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::check::recheck::Recheck;
-use super::super::check::{cycle, quoter_cycle, tax_cycle};
+use super::super::check::{cycle, quoter_cycle, service_tax, tax_cycle};
 use super::super::node::{rpc, subs};
 use super::batches::chunks;
 use super::created::{self, Watch};
@@ -103,6 +103,11 @@ pub async fn subscribe(
     // Проверки монет и крючков — класс Check в очереди узла (решение 61): выше загрузки пулов и цикла квотера.
     let taxes = tax_cycle::taxes(p.clone(), all.clone(), usdt, wake.taxes.clone());
     tasks.push(tokio::spawn(scope(Class::Check, taxes)));
+    // Налоги служебной монеты USDT — для стоимости его возврата на биржу (решение 67, check/service_tax.rs).
+    tasks.push(tokio::spawn(scope(
+        Class::Check,
+        service_tax::run(p.clone()),
+    )));
     let hooks = cycle::hooks(p.clone(), wake.hooks.clone());
     tasks.push(tokio::spawn(scope(Class::Check, hooks)));
     tasks.push(tokio::spawn(quoter_cycle::run(

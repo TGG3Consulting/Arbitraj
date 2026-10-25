@@ -16,6 +16,7 @@ pub mod quoter_cycle;
 pub mod quoter_tally;
 pub mod recheck;
 pub mod service_tax;
+pub mod service_tax_calls;
 pub mod simulate;
 pub mod state;
 pub mod tax_cycle;

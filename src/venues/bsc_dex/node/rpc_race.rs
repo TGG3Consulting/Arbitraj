@@ -23,12 +23,20 @@ use super::{jsonrpc, pace};
 /// Чем кончилась гонка без принятого ответа: что ответил каждый узел.
 #[derive(Default)]
 pub struct Lost {
-    /// Ответы пришли, но не прошли проверку вызывающего — причины всех узлов (null, неполные квитанции…).
-    pub rejected: Vec<String>,
+    /// Ответы пришли, но не прошли проверку вызывающего — причины всех узлов (null, неполные квитанции…) и голова
+    /// каждого такого узла (если вызывающий её узнал).
+    pub rejected: Vec<Reject>,
     /// Ошибка связи или узла (последняя); в коробке — итог гонки остаётся маленьким (clippy result_large_err).
     pub failed: Option<Box<crate::gateway::errors::GatewayError>>,
     /// Ответ больше предела (последний такой) — тоже в коробке, по той же причине.
     pub over: Option<Box<Fail>>,
+}
+
+/// Непринятый ответ узла: причина и голова этого узла (eth_blockNumber в той же пачке; None — не узнали).
+#[derive(Debug, Clone)]
+pub struct Reject {
+    pub why: String,
+    pub head: Option<u64>,
 }
 
 /// Та же пачка СРАЗУ на все узлы (основной и резервный bsc.node_http_url_backup) — первый ответ, ПРОШЕДШИЙ проверку
@@ -39,7 +47,7 @@ pub async fn batch_race<T>(
     ctx: &Ctx,
     calls: &[(&str, Value)],
     lim: Limits,
-    accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, String>,
+    accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, Reject>,
 ) -> Result<T, Lost> {
     let urls = ctx.failover.urls(ctx, Link::Http).map_err(|e| Lost {
         failed: Some(Box::new(e)),
@@ -68,7 +76,7 @@ pub async fn batch_race<T>(
 pub async fn first_accepted<T, F>(
     runs: Vec<F>,
     n: usize,
-    accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, String>,
+    accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, Reject>,
 ) -> Result<T, Lost>
 where
     F: std::future::Future<Output = GatewayResult<Capped<String>>>,
@@ -77,7 +85,12 @@ where
     let mut lost = Lost::default();
     while let Some(res) = futures_util::StreamExt::next(&mut runs).await {
         match res {
-            Ok(Capped::Got(text)) => match split(&text, n).map_err(|e| e.message).and_then(&accept)
+            Ok(Capped::Got(text)) => match split(&text, n)
+                .map_err(|e| Reject {
+                    why: e.message,
+                    head: None,
+                })
+                .and_then(&accept)
             {
                 Ok(t) => return Ok(t),
                 Err(why) => lost.rejected.push(why),

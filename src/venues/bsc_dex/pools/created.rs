@@ -85,7 +85,7 @@ pub async fn run(p: Pools, w: Watch) {
 /// подключается (created_log.rs). Принимает: фильтры. Возвращает причину конца.
 async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
     // Источник — как у пулов (bsc.pool_events_source, решение 68): WebSocket или квитанции блоков.
-    let conn = match Link::open(&p.ctx, &p.feed, &p.heads, "created").await {
+    let conn = match Link::open(&p.ctx, &p.feed, &p.heads, &p.out, "created").await {
         Ok(c) => c,
         Err(e) => return e.message,
     };

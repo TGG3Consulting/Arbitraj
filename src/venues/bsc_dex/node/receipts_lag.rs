@@ -32,6 +32,8 @@ pub struct Lag {
     told: u64,
     /// Стоит отметка «данные пулов отстают» (решение 72).
     marked: bool,
+    /// О незаданной bsc.receipts_stuck_reset_s уже записано в этом застревании.
+    no_reset_told: bool,
 }
 
 impl Lag {
@@ -57,7 +59,51 @@ impl Lag {
     pub fn passed(&mut self, n: u64) {
         if self.stuck.as_ref().is_some_and(|s| s.n <= n) {
             self.stuck = None;
+            self.no_reset_told = false;
         }
+    }
+
+    /// Блок стоит дольше bsc.receipts_stuck_reset_s (решение 72: тяжёлый блок, больше предела на всех узлах, иначе
+    /// держал бы запрет торговли вечно и молча) — причина полного сброса; запись в журнал и событие dex.receipts_stuck
+    /// в Telegram с причиной (предел и размер ответа). Настройка не задана — одна запись за застревание, сброса нет.
+    /// Принимает: окружение, ленту (канал событий ядру). Возвращает: причину сброса или None. Ошибок нет.
+    pub async fn overdue(&mut self, ctx: &Ctx, feed: &super::receipts::Feed) -> Option<String> {
+        let s = self.stuck.as_ref()?;
+        let limit = match ctx.int("bsc.receipts_stuck_reset_s") {
+            Ok(v) => v,
+            Err(e) => {
+                if !std::mem::replace(&mut self.no_reset_told, true) {
+                    let msg = format!(
+                        "{SOURCE}: лента стоит на блоке {} — {}; застрявший блок не сбрасывается",
+                        s.n, e.message
+                    );
+                    ctx.log(Level::Warn, "venue.ws", msg, None).await;
+                }
+                return None;
+            }
+        };
+        if s.since.elapsed().as_secs() < limit {
+            return None;
+        }
+        let why = format!(
+            "блок стоит дольше bsc.receipts_stuck_reset_s = {limit} с — полный сброс{}",
+            self.stuck_text()
+        );
+        let out = feed
+            .inner
+            .out
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        if let Some(out) = out {
+            let ev = crate::gateway::events::MarketEvent::Notice {
+                venue: ctx.venue(),
+                code: "dex.receipts_stuck".into(),
+                text: format!("{SOURCE}: {why}"),
+            };
+            let _ = out.try_send(ev);
+        }
+        Some(why)
     }
 
     /// Блок, на котором стоит конвейер (его повтор — гонкой на все узлы). Ошибок нет.
@@ -100,7 +146,7 @@ impl Lag {
                 )
             } else {
                 format!(
-                    "{SOURCE}: отставание {behind} блоков — не больше bsc.receipts_max_lag_blocks, котировки и сделки снова разрешены"
+                    "{SOURCE}: отставание {behind} блоков ≤ bsc.receipts_max_lag_blocks = {max_lag} — отметка снята, котировки и сделки снова разрешены"
                 )
             };
             let level = if over { Level::Warn } else { Level::Info };

@@ -52,6 +52,8 @@ pub struct Pools {
     pub loading: super::loading::Loading,
     /// Лента квитанций блоков — источник событий пулов при bsc.pool_events_source = receipts (решение 68).
     pub feed: super::super::node::receipts::Feed,
+    /// «Данные пулов отстают» (решение 72): проверки вердикт не выносят, пока отметка стоит.
+    pub lag: super::super::node::events_lag::EventsLag,
 }
 
 /// Чем кончилась сессия.

@@ -1,8 +1,9 @@
 //! Файл: tests/bsc_dex_receipts_catchup.rs
 //! Что делает: догон ленты квитанций без сброса (решение 72):
 //! - отметка «данные пулов отстают на N блоков» запрещает котировку и сделку (StaleData), снятая — разрешает;
-//! - пропуск невосполним, только если ВСЕ узлы ответили «блока нет» (null в живой batch-записи блока 129761640 —
-//!   заголовок убран): тогда Missing, иначе — повтор (один узел отстаёт, другой упал или ответил неполно);
+//! - пропуск невосполним, только если блок не отдал ни один узел, у которого своя голова не ниже блока (null в живой
+//!   batch-записи блока 129761640 — заголовок убран); узлы ещё не дошли или один ответил неполно — повтор;
+//! - снятие отметки будит циклы проверок;
 //! - блоки конвейера распределяются по узлам списка по кругу, у каждого узла — свой темп.
 //!
 //! Кто вызывает: cargo test.
@@ -20,7 +21,7 @@ use arb::venues::bsc_dex::node::events_lag::EventsLag;
 use arb::venues::bsc_dex::node::receipts_fetch::{MISSING, nowhere, pair};
 use arb::venues::bsc_dex::node::receipts_nodes::{Nodes, pick};
 use arb::venues::bsc_dex::node::rpc_capped::Capped;
-use arb::venues::bsc_dex::node::rpc_race::first_accepted;
+use arb::venues::bsc_dex::node::rpc_race::{Reject, first_accepted};
 
 fn batch_block() -> (u64, Value) {
     let rec: Value = serde_json::from_str(
@@ -52,30 +53,81 @@ async fn lag_mark_forbids_quotes_until_caught_up() {
     assert!(lag.check(&ctx).is_ok(), "догнали — котировки снова есть");
 }
 
+/// Ревью #62: публичные узлы за балансировщиком отстают от основного на 1–3 блока — null на блок n ещё не «невосполнимо».
+/// Невосполнимо, только если блок не отдал ни один узел, у которого СВОЯ голова (eth_blockNumber в той же пачке) не
+/// ниже n. Ответы — живая batch-запись блока 129761640; null — из неё же (заголовок убран), головы узлов — как ответ
+/// eth_blockNumber.
 #[tokio::test]
-async fn gap_is_unrecoverable_only_if_every_node_has_no_block() {
+async fn gap_is_unrecoverable_only_if_nodes_reached_the_block() {
     let (n, full) = batch_block();
+    let with_head = |mut v: Value, head: u64| {
+        v.as_array_mut().unwrap().push(
+            serde_json::json!({ "jsonrpc": "2.0", "id": 2, "result": format!("0x{head:x}") }),
+        );
+        v
+    };
     let mut null = full.clone();
     null[0]["result"] = Value::Null;
     let mut short = full.clone();
     short[1]["result"].as_array_mut().unwrap().pop();
-    let accept = |list| pair(n, list).map(|_| ());
-    let answer = |v: Value| async move { Ok(Capped::Got(v.to_string())) };
-    // Оба узла: блока нет — Missing (пропуск невосполним, если блок позади головы).
-    let l = first_accepted(vec![answer(null.clone()), answer(null.clone())], 2, accept)
-        .await
-        .unwrap_err();
-    assert!(l.rejected.iter().all(|r| r.starts_with(MISSING)));
-    assert!(nowhere(&l), "Missing — пропуск невосполним");
-    // Один узел: блока нет, другой ответил неполно (у него блок есть) — повтор, не сброс.
-    let accept2 = |list| {
-        let (h, r) = pair(n, list)?;
+    let accept = |list: Vec<_>| {
+        let head = list
+            .get(2)
+            .and_then(
+                |r: &arb::gateway::errors::GatewayResult<Box<serde_json::value::RawValue>>| {
+                    r.as_ref().ok()
+                },
+            )
+            .and_then(|r| serde_json::from_str::<alloy_primitives::U64>(r.get()).ok())
+            .map(|h| h.to::<u64>());
+        let reject = |why: String| Reject { why, head };
+        let (h, r) = pair(n, list).map_err(reject)?;
         arb::venues::bsc_dex::node::receipts_chain::complete(n, h.hash, &h.transactions, &r)
+            .map_err(reject)?;
+        Ok(())
     };
-    let l = first_accepted(vec![answer(null), answer(short)], 2, accept2)
+    let answer = |v: Value| async move { Ok(Capped::Got(v.to_string())) };
+    // Все null, головы узлов ниже n — узлы ещё не дошли: повтор.
+    let runs = vec![
+        answer(with_head(null.clone(), n - 1)),
+        answer(with_head(null.clone(), n - 3)),
+    ];
+    let l = first_accepted(runs, 3, accept).await.unwrap_err();
+    assert!(l.rejected.iter().all(|r| r.why.starts_with(MISSING)));
+    assert!(!nowhere(&l, n), "узлы не дошли до блока — повтор, не сброс");
+    // Головы узлов не ниже n, а блок null у всех — невосполнимо.
+    let runs = vec![
+        answer(with_head(null.clone(), n)),
+        answer(with_head(null.clone(), n + 2)),
+    ];
+    let l = first_accepted(runs, 3, accept).await.unwrap_err();
+    assert!(nowhere(&l, n), "дошли и не отдают — пропуск невосполним");
+    // Один дошёл и null, другой ответил неполно — повтор.
+    let runs = vec![
+        answer(with_head(null, n + 1)),
+        answer(with_head(short, n + 1)),
+    ];
+    let l = first_accepted(runs, 3, accept).await.unwrap_err();
+    assert!(!nowhere(&l, n));
+    // Полный ответ с головой — принят.
+    let ok = first_accepted(vec![answer(with_head(full, n))], 3, accept).await;
+    assert!(ok.is_ok());
+}
+
+/// Снятие отметки «отстают» будит циклы проверок (они вердикт не выносили — перепроверяют).
+#[tokio::test]
+async fn clearing_lag_wakes_checks() {
+    let lag = EventsLag::default();
+    let ready = std::sync::Arc::new(tokio::sync::Notify::new());
+    lag.on_clear(ready.clone());
+    let waiter = ready.notified();
+    tokio::pin!(waiter);
+    waiter.as_mut().enable();
+    lag.set(45);
+    lag.set(0);
+    tokio::time::timeout(Duration::from_secs(1), waiter)
         .await
-        .unwrap_err();
-    assert!(!nowhere(&l), "повтор, не сброс");
+        .expect("снятие отметки будит");
 }
 
 #[tokio::test]

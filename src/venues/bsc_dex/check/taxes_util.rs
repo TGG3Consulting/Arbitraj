@@ -159,3 +159,25 @@ pub fn loading_check(
         wait: Some(why),
     }
 }
+
+/// Причина ожидания — ядру, если у монеты ещё нет итога (прошла / не прошла) и причина сменилась. Принимает: окружение,
+/// прошлое состояние, проверку с NotChecked и причиной. Ошибок нет.
+pub async fn note_wait(
+    p: &super::super::pools::listen::Pools,
+    prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
+    c: crate::core::types::CoinCheck,
+) {
+    use crate::core::types::CheckState;
+    if matches!(prev, Some(CheckState::Known(_) | CheckState::Failed { .. })) {
+        return;
+    }
+    let old = p.checks.coin(&c.asset.ticker).and_then(|x| x.wait);
+    if old == c.wait {
+        return;
+    }
+    p.checks.set_coin(c.clone());
+    let _ = p
+        .out
+        .send(crate::gateway::events::MarketEvent::CoinCheck(c))
+        .await;
+}

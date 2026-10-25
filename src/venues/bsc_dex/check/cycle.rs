@@ -96,6 +96,10 @@ pub async fn hooks(p: Pools, queue: Queue) {
 /// (`first`), журнал — при смене итога и только после сводки. Возвращает: была ли проверка (пула нет или он
 /// недостоверен — false: пул не отмечается проверенным и проверится, как только станет достоверным). Ошибок нет.
 async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>) -> bool {
+    // Данные пулов отстают (решение 72) — вердикта нет, проверка после снятия отметки.
+    if p.lag.get() > 0 {
+        return false;
+    }
     let Some(e) = p.reg.get(r) else {
         return false;
     };

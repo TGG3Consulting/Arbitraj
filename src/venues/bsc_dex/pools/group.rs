@@ -64,7 +64,7 @@ impl Group {
     /// Открывает связь пачки с источником событий (bsc.pool_events_source: WebSocket или квитанции блоков, решение 68).
     /// Ошибки: как у Link::open.
     pub async fn open(p: &super::listen::Pools, name: &str) -> GatewayResult<Group> {
-        let conn = Link::open(&p.ctx, &p.feed, &p.heads, name).await?;
+        let conn = Link::open(&p.ctx, &p.feed, &p.heads, &p.out, name).await?;
         let (tx, rx) = mpsc::unbounded_channel();
         Ok(Group {
             conn,

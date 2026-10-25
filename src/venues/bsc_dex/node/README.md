@@ -14,3 +14,12 @@
 | `abi.rs` | Описания ERC-20 для ABI |
 | `pace.rs` | Темп запросов к узлу HTTP (bsc.node_http_rps; пачка из N — N мест) через очередь queue.rs и правило шлюза на «превышен лимит» (429) |
 | `queue.rs` | Очередь мест к узлу со срочностью (gateway/urgency.rs): строгий порядок классов и гарантированная доля фона bsc.node_background_share_pct; отменённый уходит из очереди |
+| `source.rs` | Источник событий пулов по bsc.pool_events_source (решение 68): WebSocket или квитанции блоков — одно лицо для слушателей |
+| `receipts.rs` | Лента квитанций блоков: раздача логов вместе с номером блока, обрыв, запуск задачи |
+| `receipts_handle.rs` | «Соединение» пачки с лентой: подписка logs, eth_blockNumber, eth_unsubscribe |
+| `receipts_budget.rs` | Бюджет узла ленты: блоков/с по факту, 2 вызова на блок против bsc.node_http_rps — в журнал |
+| `rpc_capped.rs` | Запрос JSON-RPC со своими пределами ответа (квитанции: bsc.receipts_max_body_bytes, bsc.receipts_total_ms) |
+| `receipts_task.rs` | Задача ленты: блоки по порядку без пропусков, отставание, реорг |
+| `receipts_io.rs` | Запросы ленты: заголовок (хеши транзакций), квитанции со своими пределами и проверкой полноты |
+| `receipts_chain.rs` | Окно разобранных блоков: parentHash, откат с removed: true, раздача по фильтрам |
+| `log_filter.rs` | Фильтр logs ({address, topics}) у нас — для квитанций |

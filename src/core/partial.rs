@@ -44,7 +44,8 @@ pub async fn choose(core: &Core, deal: &Deal) -> Choice {
     let deliver = match super::dirctx::DirCtx::build(core, &deal.direction) {
         Ok(cx) => super::costs::evaluate(&core.inner.deps, &cx, deal.qty)
             .await
-            .map(|c| deliver_result(&c, deal)),
+            .map(|c| deliver_result(&c, deal))
+            .map_err(|e| e.to_string()),
         Err(e) => Err(e),
     };
     let back = super::trade_ops::sell_value(

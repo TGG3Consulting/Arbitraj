@@ -8,6 +8,7 @@
 
 use alloy_primitives::Address;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{
@@ -85,6 +86,13 @@ pub struct SpotPairState {
     pub api_buy: bool,
     /// Через API можно продавать (у BingX — apiStateSell).
     pub api_sell: bool,
+    /// Шаг количества монеты (у BingX — stepSize): количество ордера округляется вниз до него (решение 66).
+    pub step_size: Decimal,
+    /// Минимальная сумма ордера в котируемой монете (у BingX — minNotional; minQty по документации BingX
+    /// устарел: minQty = minNotional / price). None — биржа не сообщила.
+    pub min_notional: Option<Decimal>,
+    /// Максимальная сумма ордера (у BingX — maxNotional). None — биржа не сообщила.
+    pub max_notional: Option<Decimal>,
 }
 
 /// Состояние подключения площадки.

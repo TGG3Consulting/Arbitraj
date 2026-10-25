@@ -9,7 +9,8 @@
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
     components/LiveCoins.svelte, components/CostLines.svelte.
-  Настройки: нет (пороги signal.*, money.*, profit.* — экран «Настройки»).
+  Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
+  Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете.
 -->
 <script>
   import { get } from '../lib/api.js';
@@ -76,6 +77,9 @@
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
     </header>
+    {#if calc?.size}
+      <p class="muted">Объём (решение 66): {calc.size.why}</p>
+    {/if}
     {#if calc}
       <details>
         <summary>Полный расчёт: вложено {calc.invested}, выручка {calc.proceeds}, затраты {calc.costs_usdt} USDT, T = {calc.transit_s} с, σ = {calc.sigma}</summary>

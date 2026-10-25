@@ -48,8 +48,10 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
         match verdict {
             Verdict::Accept(calc) => {
                 lk(&core.inner.last_reject).remove(&d);
+                // Решение 66: почему этот объём — в тексте журнала и Telegram.
+                let why = calc.size.as_ref().map(|s| s.why.as_str()).unwrap_or("");
                 let text = format!(
-                    "{pair}: объём {}, прибыль {} USDT ({}%)",
+                    "{pair}: объём {}, прибыль {} USDT ({}%); {why}",
                     calc.qty.round_dp(8),
                     calc.profit_usd.round_dp(4),
                     calc.profit_pct.round_dp(4)

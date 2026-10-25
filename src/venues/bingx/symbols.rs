@@ -119,6 +119,9 @@ impl Symbols {
             online: r.status == STATUS_ONLINE,
             api_buy: r.api_buy,
             api_sell: r.api_sell,
+            step_size: r.step_size,
+            min_notional: r.min_notional,
+            max_notional: r.max_notional,
         })
     }
 

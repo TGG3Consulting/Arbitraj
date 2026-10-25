@@ -1,7 +1,7 @@
 //! Файл: tests/receipts_common/mod.rs
 //! Что делает: общее для тестов ленты квитанций (решение 68): чтение записей tests/data/receipts_2026-10-25, наши пулы
 //! V2/V3 из calls.json, фильтры подписок как у pools/group.rs, заголовки и логи наших пулов из записи.
-//! Кто вызывает: tests/bsc_dex_receipts.rs, tests/bsc_dex_receipts_chain.rs.
+//! Кто вызывает: tests/bsc_dex_receipts.rs, tests/bsc_dex_receipts_chain.rs, tests/bsc_dex_receipts_pipe.rs.
 //! От чего зависит: arb::venues::bsc_dex::{node::{log_filter, receipts_chain}, pools::{group, families, discover}}.
 #![allow(dead_code)]
 

@@ -3,6 +3,7 @@
 //! и квитанции блока со своими пределами ответа (bsc.receipts_max_body_bytes, bsc.receipts_total_ms — только для
 //! квитанций) и проверкой полноты: квитанций столько же, сколько транзакций в заголовке, по порядку тех же хешей, все —
 //! этого блока. Неполные, чужого хеша, больше предела — повтор того же блока (блоки не пропускаются).
+//! Там же — откат блока при реорге (rewind: снимается, только если хеш у узла другой по двум запросам).
 //! Кто вызывает: node/receipts_task.rs.
 //! От чего зависит: rpc.rs, rpc_capped.rs (очередь узла, класс задачи), receipts_chain.rs (complete), ctx.rs.
 //! Настройки: bsc.receipts_max_body_bytes, bsc.receipts_total_ms [вся система]; http.timeout_ms, http.body_idle_ms.
@@ -18,20 +19,23 @@ use serde_json::{Value, json};
 
 use crate::gateway::http::{Fail as HttpFail, Limits};
 
+use crate::storage::journal::Level;
+
 use super::super::ctx::Ctx;
-use super::receipts_chain::complete;
+use super::receipts::{Feed, SOURCE};
+use super::receipts_chain::{Chain, complete, gone};
 use super::rpc;
 use super::rpc_capped::{self, Capped};
 
 /// Заголовок блока: только нужные поля.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Header {
-    pub(super) hash: B256,
-    pub(super) parent_hash: B256,
+pub struct Header {
+    pub hash: B256,
+    pub parent_hash: B256,
     /// Хеши транзакций блока (eth_getBlockByNumber с false).
     #[serde(default)]
-    pub(super) transactions: Vec<B256>,
+    pub transactions: Vec<B256>,
 }
 
 /// Чем кончился шаг.
@@ -54,25 +58,46 @@ pub(super) async fn header(ctx: &Ctx, n: u64) -> Result<Header, Fail> {
     h.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал блок {n}")))
 }
 
-/// Квитанции блока `h` (номер `n`): полные и этого блока. Ошибки: Break — не заданы пределы; Retry — узел не
-/// ответил, блока ещё нет, квитанции неполные или другого хеша (реорг идёт), ответ больше предела.
-pub(super) async fn receipts(ctx: &Ctx, n: u64, h: &Header) -> Result<Vec<Value>, Fail> {
-    let lim = limits(ctx)?;
-    let got: Capped<Option<Vec<Value>>> = rpc_capped::call(
-        ctx,
-        "eth_getBlockReceipts",
-        json!([format!("0x{n:x}")]),
-        lim,
-    )
-    .await
-    .map_err(|e| Fail::Retry(e.message))?;
-    let r = match got {
-        Capped::Got(r) => r,
+/// Блок для конвейера (решение 69): заголовок и квитанции одним JSON-RPC batch (два вызова в одном HTTP, пределы —
+/// как у квитанций), затем проверка полноты квитанций по заголовку. Принимает: окружение (своё — запрос идёт
+/// отдельной задачей), номер. Возвращает: заголовок и квитанции. Ошибки: Break — не заданы пределы; Retry — узел не
+/// ответил, блока ещё нет, ответ больше предела, неполные или чужие квитанции.
+pub(super) async fn fetch_block(ctx: Ctx, n: u64) -> Result<(Header, Vec<Value>), Fail> {
+    let lim = limits(&ctx)?;
+    let tag = format!("0x{n:x}");
+    let calls = [
+        ("eth_getBlockByNumber", json!([tag, false])),
+        ("eth_getBlockReceipts", json!([tag])),
+    ];
+    let got = rpc_capped::batch(&ctx, &calls, lim)
+        .await
+        .map_err(|e| Fail::Retry(e.message))?;
+    let list = match got {
+        Capped::Got(l) => l,
         Capped::Over(f) => return Err(Fail::Retry(over(n, &f, &lim))),
     };
-    let r = r.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал квитанции блока {n}")))?;
+    let (h, r) = pair(n, list).map_err(Fail::Retry)?;
     complete(n, h.hash, &h.transactions, &r).map_err(Fail::Retry)?;
-    Ok(r)
+    Ok((h, r))
+}
+
+/// Итоги пачки «заголовок, квитанции» → (заголовок, квитанции). Принимает: номер, итоги по порядку вызовов.
+/// Ошибки (текст): ошибка узла по вызову, блока или квитанций ещё нет, ответ не по форме.
+pub fn pair(
+    n: u64,
+    list: Vec<crate::gateway::errors::GatewayResult<Box<serde_json::value::RawValue>>>,
+) -> Result<(Header, Vec<Value>), String> {
+    let mut it = list.into_iter();
+    let (Some(h), Some(r)) = (it.next(), it.next()) else {
+        return Err(format!("блок {n}: в ответе на пачку не два итога"));
+    };
+    let h: Option<Header> = serde_json::from_str(h.map_err(|e| e.message)?.get())
+        .map_err(|e| format!("блок {n}: заголовок не по форме: {e}"))?;
+    let r: Option<Vec<Value>> = serde_json::from_str(r.map_err(|e| e.message)?.get())
+        .map_err(|e| format!("блок {n}: квитанции не по форме: {e}"))?;
+    let h = h.ok_or_else(|| format!("узел ещё не отдал блок {n}"))?;
+    let r = r.ok_or_else(|| format!("узел ещё не отдал квитанции блока {n}"))?;
+    Ok((h, r))
 }
 
 /// Пределы запроса квитанций: срок до заголовков и тишина тела — общие (http.timeout_ms, http.body_idle_ms), общий
@@ -100,4 +125,46 @@ fn over(n: u64, f: &HttpFail, lim: &Limits) -> String {
         ),
         other => format!("блок {n}: {}", other.text(lim)),
     }
+}
+
+/// Реорг: снимает последний блок окна, если его хеш у узла другой по двум запросам заголовка; логи — подпискам с
+/// removed: true, номер — на блок раньше (одним действием). Хеш подтвердился прежним — родитель блока `next` у узла
+/// разошёлся с ним (ответ отставшего узла): повтор. Ошибки: Retry — узел или ложный реорг; Break — окно кончилось
+/// (реорг глубже bsc.receipts_reorg_depth).
+pub(super) async fn rewind(
+    feed: &Feed,
+    ctx: &Ctx,
+    chain: &mut Chain,
+    next: u64,
+) -> Result<(), Fail> {
+    let Some(top) = chain.top().cloned() else {
+        return Err(Fail::Break(
+            "реорг глубже bsc.receipts_reorg_depth — пулы недостоверны, лента заново".into(),
+        ));
+    };
+    let first = header(ctx, top.number).await?.hash;
+    if first == top.hash {
+        return Err(Fail::Retry(format!(
+            "родитель блока {next} не совпал с блоком {}, а сам блок у узла прежний — повтор",
+            top.number
+        )));
+    }
+    let second = header(ctx, top.number).await?.hash;
+    if !gone(top.hash, first, second) {
+        return Err(Fail::Retry(format!(
+            "хеш блока {} у узла расходится между ответами — повтор",
+            top.number
+        )));
+    }
+    if let Some((n, removed)) = chain.pop_removed() {
+        feed.deliver(&removed, n - 1);
+        let msg = format!("{SOURCE}: реорг — блок {n} отменён, его события пулов отменены");
+        ctx.log(Level::Warn, "venue.ws", msg, None).await;
+    }
+    if chain.top().is_none() {
+        return Err(Fail::Break(
+            "реорг глубже bsc.receipts_reorg_depth — пулы недостоверны, лента заново".into(),
+        ));
+    }
+    Ok(())
 }

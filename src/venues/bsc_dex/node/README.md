@@ -18,8 +18,9 @@
 | `receipts.rs` | Лента квитанций блоков: раздача логов вместе с номером блока, обрыв, запуск задачи |
 | `receipts_handle.rs` | «Соединение» пачки с лентой: подписка logs, eth_blockNumber, eth_unsubscribe |
 | `receipts_budget.rs` | Бюджет узла ленты: блоков/с по факту, 2 вызова на блок против bsc.node_http_rps — в журнал |
-| `rpc_capped.rs` | Запрос JSON-RPC со своими пределами ответа (квитанции: bsc.receipts_max_body_bytes, bsc.receipts_total_ms) |
+| `rpc_capped.rs` | Запрос и пачка (batch) JSON-RPC со своими пределами ответа (квитанции: bsc.receipts_max_body_bytes, bsc.receipts_total_ms) |
 | `receipts_task.rs` | Задача ленты: блоки по порядку без пропусков, отставание, реорг |
-| `receipts_io.rs` | Запросы ленты: заголовок (хеши транзакций), квитанции со своими пределами и проверкой полноты |
+| `receipts_io.rs` | Запросы ленты: заголовок и квитанции блока одним batch со своими пределами и проверкой полноты; откат при реорге |
+| `receipts_pipe.rs` | Конвейер ленты (решение 69): следующие блоки параллельно, забираются строго по порядку |
 | `receipts_chain.rs` | Окно разобранных блоков: parentHash, откат с removed: true, раздача по фильтрам |
 | `log_filter.rs` | Фильтр logs ({address, topics}) у нас — для квитанций |

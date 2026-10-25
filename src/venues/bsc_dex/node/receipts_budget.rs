@@ -28,9 +28,34 @@ const CALLS_PER_BLOCK: u64 = 2;
 pub struct Budget {
     seen: VecDeque<(u64, Instant)>,
     told: Option<u64>,
+    /// (окно опережения, bsc.node_http_rps), о которых уже записано при старте.
+    started: Option<(u64, u64)>,
 }
 
 impl Budget {
+    /// При старте ленты и при смене окна опережения или bsc.node_http_rps (решение 69): запись в журнал — сколько
+    /// вызовов может стоять в очереди узла разом (2 × bsc.receipts_ahead_blocks при догоне), что нужно в
+    /// установившемся режиме (2 × блоков/с — замер, когда окно bsc.receipts_reorg_depth заполнится) и сколько задано.
+    /// Все запросы ленты идут через очередь узла: темп bsc.node_http_rps соблюдается и при параллельных запросах.
+    /// Ошибок нет: настройка не задана — записи нет (лента сама оборвётся с причиной).
+    pub async fn start(&mut self, ctx: &Ctx) {
+        let (Ok(ahead), Ok(rps)) = (
+            ctx.int("bsc.receipts_ahead_blocks"),
+            ctx.int("bsc.node_http_rps"),
+        ) else {
+            return;
+        };
+        if self.started == Some((ahead, rps)) {
+            return;
+        }
+        self.started = Some((ahead, rps));
+        let burst = ahead * CALLS_PER_BLOCK;
+        let msg = format!(
+            "квитанции блоков (HTTP): окно опережения {ahead} блоков (bsc.receipts_ahead_blocks) — при догоне до {burst} вызовов в очереди узла разом; нужно {CALLS_PER_BLOCK} вызова × блоков/с (замер — в следующей записи), задано bsc.node_http_rps = {rps}"
+        );
+        ctx.log(Level::Info, "venue.ws", msg, None).await;
+    }
+
     /// Учитывает последний разобранный блок; окно заполнено и темп узла впервые известен или сменился — запись в
     /// журнал. Ошибок нет: настройка не задана — замера нет.
     pub async fn check(&mut self, ctx: &Ctx, chain: &Chain) {
@@ -67,7 +92,7 @@ impl Budget {
         let need = per_s * Decimal::from(CALLS_PER_BLOCK);
         let rest = Decimal::from(rps) - need;
         let msg = format!(
-            "квитанции блоков (HTTP): ≈{per_s} блоков/с по факту → лента берёт {need} вызовов/с узла из bsc.node_http_rps = {rps}, остаётся остальным: {rest} вызовов/с"
+            "квитанции блоков (HTTP): ≈{per_s} блоков/с по факту → нужно {need} вызовов/с, задано bsc.node_http_rps = {rps}, остаётся остальным: {rest} вызовов/с"
         );
         if Decimal::from(rps) <= need {
             let m = format!(

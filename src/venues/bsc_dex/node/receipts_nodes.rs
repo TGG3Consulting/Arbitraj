@@ -61,15 +61,19 @@ pub fn pick(urls: &[String], n: u64) -> &str {
 impl Nodes {
     /// Ждёт своей очереди у узла `url`: `weight` вызовов при темпе `rps` в секунду. Ошибок нет.
     pub async fn wait(&self, url: &str, weight: usize, rps: u64) {
-        let step = Duration::from_secs_f64(weight as f64 / rps as f64);
-        let at = {
-            let mut free = self.free.lock().unwrap_or_else(|p| p.into_inner());
-            let now = Instant::now();
-            let slot = free.entry(url.to_string()).or_insert(now);
-            let at = (*slot).max(now);
-            *slot = at + step;
-            at
-        };
+        let at = self.reserve(url, weight, rps, Instant::now());
         tokio::time::sleep_until(at).await;
+    }
+
+    /// Занимает место у узла `url` на момент `now`: возвращает, когда можно слать (не раньше `now` и не раньше конца
+    /// прошлого занятия этого узла), и сдвигает его занятость на `weight` / `rps` секунд. Другие узлы не трогаются.
+    /// Ошибок нет.
+    pub fn reserve(&self, url: &str, weight: usize, rps: u64, now: Instant) -> Instant {
+        let step = Duration::from_secs_f64(weight as f64 / rps.max(1) as f64);
+        let mut free = self.free.lock().unwrap_or_else(|p| p.into_inner());
+        let slot = free.entry(url.to_string()).or_insert(now);
+        let at = (*slot).max(now);
+        *slot = at + step;
+        at
     }
 }

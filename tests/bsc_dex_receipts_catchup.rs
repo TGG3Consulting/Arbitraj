@@ -89,19 +89,22 @@ async fn blocks_spread_over_nodes_each_with_own_pace() {
     // Соседние блоки — на разные узлы.
     assert_ne!(pick(&urls, 129761640), pick(&urls, 129761641));
     assert_eq!(pick(&urls, 129761640), pick(&urls, 129761642));
-    // Темп каждого узла свой: два вызова подряд на один узел при 20 вызовах/с (batch — вес 2) ждут 0,1 с, на другой —
-    // нет.
+    // Темп каждого узла свой (без часов: моменты считаются от одного «сейчас»): batch — вес 2, 20 вызовов/с → 0,1 с.
     let nodes = Nodes::default();
-    let t = tokio::time::Instant::now();
-    nodes.wait(&urls[0], 2, 20).await;
-    nodes.wait(&urls[1], 2, 20).await;
-    assert!(
-        t.elapsed() < Duration::from_millis(50),
-        "разные узлы не ждут друг друга"
+    let now = tokio::time::Instant::now();
+    assert_eq!(
+        nodes.reserve(&urls[0], 2, 20, now),
+        now,
+        "первый вызов — сразу"
     );
-    nodes.wait(&urls[0], 2, 20).await;
-    assert!(
-        t.elapsed() >= Duration::from_millis(95),
+    assert_eq!(
+        nodes.reserve(&urls[1], 2, 20, now),
+        now,
+        "другой узел не ждёт первого"
+    );
+    assert_eq!(
+        nodes.reserve(&urls[0], 2, 20, now),
+        now + Duration::from_millis(100),
         "тот же узел ждёт своего темпа"
     );
 }

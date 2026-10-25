@@ -111,6 +111,12 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
                 i.sell_pct
             }
         }
+        // Не хватает ликвидности на пробу крючка — свойство пула, причина как есть (check/hooks_probe.rs SHORT).
+        Some(CheckState::Failed { reason })
+            if reason.starts_with(super::super::check::hooks_probe::SHORT) =>
+        {
+            return Err(reason.clone());
+        }
         Some(CheckState::Failed { reason }) => {
             return Err(format!("проверка крючка не прошла: {reason}"));
         }

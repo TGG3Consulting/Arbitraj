@@ -51,7 +51,7 @@ impl Budget {
         self.started = Some((ahead, rps));
         let burst = ahead * CALLS_PER_BLOCK;
         let msg = format!(
-            "квитанции блоков (HTTP): окно опережения {ahead} блоков (bsc.receipts_ahead_blocks) — при догоне до {burst} вызовов в очереди узла разом; нужно {CALLS_PER_BLOCK} вызова × блоков/с (замер — в следующей записи), задано bsc.node_http_rps = {rps}"
+            "квитанции блоков (HTTP): окно опережения {ahead} блоков (bsc.receipts_ahead_blocks) — при догоне до {burst} вызовов в очереди узла разом; нужно {CALLS_PER_BLOCK} вызова × блоков/с (замер — в следующей записи), задано bsc.node_http_rps = {rps}. Окно держите небольшим: оно нужно, чтобы догнать сеть, а большое окно при догоне разом занимает очередь узла и отодвигает проверки и котировки"
         );
         ctx.log(Level::Info, "venue.ws", msg, None).await;
     }

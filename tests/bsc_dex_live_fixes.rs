@@ -164,3 +164,33 @@ fn v3_math_names_the_failing_step() {
     let err = swap_cl::swap(&s, true, true, U256::from(10u8)).unwrap_err();
     assert!(err.contains("карта тиков не сходится"), "{err}");
 }
+
+/// Проба крючка (check/hooks_probe.rs): откат квотера UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)) — «в пуле не
+/// хватает ликвидности для пробы», с PoolId из отката, а не «проверка крючка не прошла». Откат — настоящий ответ узла
+/// из журнала живого запуска 24.10 (Uniswap V4 ETH, 11:10:11); на живом боте 25.10 тот же откат у пула UB.
+#[test]
+fn hook_probe_not_enough_liquidity_names_pool_id() {
+    let v4 = "0x6190b2b0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000247a5ed734577f715881f8da54e2d256f4496138a49ce7294eef19b19121af27925e3da7cd00000000000000000000000000000000000000000000000000000000";
+    let want: alloy_primitives::B256 =
+        "0x577f715881f8da54e2d256f4496138a49ce7294eef19b19121af27925e3da7cd"
+            .parse()
+            .unwrap();
+    assert_eq!(
+        quoter_revert::short_pool_id(&hex::decode(&v4[2..]).unwrap()),
+        Some(want)
+    );
+    // Так же — из ошибки eth_call квотера (данные отката — error.data ответа узла).
+    let raw = json!({ "jsonrpc": "2.0", "id": 1, "error": { "code": 3, "message": "execution reverted", "data": v4 } });
+    let err = GatewayError::new(ErrorCode::SwapReverted, None, "execution reverted")
+        .with_raw(raw.to_string());
+    assert_eq!(quoter_revert::short_pool(&err), Some(want));
+    // Другой откат (BinPool__OutOfLiquidity) — не NotEnoughLiquidity: PoolId нет.
+    let bin = "0x6190b2b00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000496aa65ad00000000000000000000000000000000000000000000000000000000";
+    assert_eq!(
+        quoter_revert::short_pool_id(&hex::decode(&bin[2..]).unwrap()),
+        None
+    );
+    // Не откат (другой код) — не «не хватает ликвидности».
+    let other = GatewayError::new(ErrorCode::Timeout, None, "нет ответа").with_raw(raw.to_string());
+    assert_eq!(quoter_revert::short_pool(&other), None);
+}

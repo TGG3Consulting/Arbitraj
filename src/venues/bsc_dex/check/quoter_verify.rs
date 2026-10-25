@@ -68,6 +68,10 @@ fn hook_buy_pct(checks: &Checks, e: &Entry) -> Result<Decimal, String> {
     }
     match checks.pool(&e.pool.reference).hook.map(|c| c.impact) {
         Some(CheckState::Known(i)) => Ok(i.buy_pct),
+        // Не хватает ликвидности на пробу — свойство пула, не провал крючка: причина как есть.
+        Some(CheckState::Failed { reason }) if reason.starts_with(super::hooks_probe::SHORT) => {
+            Err(reason)
+        }
         Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
         _ => Err(HOOK_WAIT.into()),
     }

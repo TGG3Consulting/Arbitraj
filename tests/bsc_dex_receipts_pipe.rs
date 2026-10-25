@@ -2,7 +2,8 @@
 //! Что делает: конвейер ленты квитанций (решение 69) на ЖИВЫХ записях узла BNB Chain:
 //! - заголовок и квитанции блока одним JSON-RPC batch — разбор настоящего ответа публичного узла
 //!   (tests/data/receipts_batch_2026-10-25/responses.json: блоки 129761639–129761641 по одному и два блока одним
-//!   POST): итоги по id, квитанции полные по заголовку;
+//!   POST): итоги по id (и в обратном порядке), квитанции полные по заголовку; ошибка одного вызова внутри пачки —
+//!   итог этого вызова, блок не принят;
 //! - конвейер (node/receipts_pipe.rs) на блоках окна tests/data/receipts_2026-10-25/responses.json: следующие блоки
 //!   запрашиваются вперёд, отдаются строго по порядку; блок, который не пришёл с первого раза, запрашивается снова, а
 //!   пришедшие после него ждут в конвейере и повторно не запрашиваются.
@@ -61,6 +62,28 @@ fn header_and_receipts_in_one_batch() {
             assert!(!receipts.is_empty());
         }
     }
+    // Ответы в обратном порядке — итоги всё равно по id (JSON-RPC 2.0, раздел 6).
+    let first = &rec["results"][0];
+    let n = u64::from_str_radix(
+        first["request"][0]["params"][0]
+            .as_str()
+            .unwrap()
+            .trim_start_matches("0x"),
+        16,
+    )
+    .unwrap();
+    let mut rev = first["response"].as_array().unwrap().clone();
+    rev.reverse();
+    let (h, receipts) = pair(n, split(&Value::Array(rev).to_string(), 2).unwrap()).unwrap();
+    assert_eq!(complete(n, h.hash, &h.transactions, &receipts), Ok(()));
+    // Ошибка одного вызова внутри пачки (узел ответил HTTP 200, у квитанций — error) — итог этого вызова: блок не
+    // принят, причина с текстом узла (лента повторит через bsc.receipts_retry_ms).
+    let mut bad = first["response"].as_array().unwrap().clone();
+    bad[1] = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "error": { "code": -32005, "message": "limit exceeded" } });
+    let list = split(&Value::Array(bad).to_string(), 2).unwrap();
+    assert!(list[0].is_ok() && list[1].is_err());
+    let why = pair(n, list).unwrap_err();
+    assert!(why.contains("limit exceeded"), "{why}");
     // Ответа на какой-то id нет — ошибка пачки, а не тихий пропуск.
     let one = rec["results"][0]["response"].as_array().unwrap()[..1].to_vec();
     assert!(split(&Value::Array(one).to_string(), 2).is_err());

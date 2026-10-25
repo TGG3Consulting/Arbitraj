@@ -117,7 +117,12 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
                 None
             }
             (_, CheckState::Failed { reason }) => {
-                Some((Level::Warn, format!("крючок не проверен: {reason}")))
+                let text = if reason.starts_with(super::hooks_probe::SHORT) {
+                    reason.clone()
+                } else {
+                    format!("крючок не проверен: {reason}")
+                };
+                Some((Level::Warn, text))
             }
             (Some(CheckState::Failed { .. }), _) => {
                 Some((Level::Info, "крючок снова проверен".to_string()))

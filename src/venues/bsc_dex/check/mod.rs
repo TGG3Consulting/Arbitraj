@@ -8,13 +8,17 @@
 
 pub mod cycle;
 pub mod emitter;
+pub mod fresh;
 pub mod hooks_probe;
 pub mod native_probe;
 pub mod probe;
 pub mod probe_calls;
 pub mod quoter_cycle;
 pub mod quoter_tally;
+pub mod quoter_verify;
 pub mod recheck;
+pub mod service_tax;
+pub mod service_tax_calls;
 pub mod simulate;
 pub mod state;
 pub mod tax_cycle;

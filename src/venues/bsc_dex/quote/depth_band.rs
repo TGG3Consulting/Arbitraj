@@ -66,13 +66,7 @@ pub fn band_depth(
     usdt_dec: u8,
     pct: Decimal,
 ) -> Result<Band, String> {
-    let b = (pct / Decimal::ONE_HUNDRED)
-        .to_f64()
-        .filter(|b| *b > 0.0 && *b < 1.0);
-    let b = b.ok_or_else(|| format!("dex.depth_band_pct = {pct}: нужно больше 0 и меньше 100"))?;
-    let coin0 = e.coin == e.pool.token0;
-    let (sell, s_full) = side(ctx, e, e.coin, coin0, b, false)?;
-    let (buy, b_full) = side(ctx, e, e.usdt, !coin0, b, true)?;
+    let (buy, sell, full) = band_units(ctx, e, pct)?;
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
     let to = |a: U256| -> Result<Decimal, String> {
         let u = rate::to_usdt(ctx, reg, usdt, e.usdt, a).map_err(|e| e.message)?;
@@ -81,8 +75,22 @@ pub fn band_depth(
     Ok(Band {
         buy: to(buy)?,
         sell: to(sell)?,
-        full: s_full && b_full,
+        full,
     })
+}
+
+/// Глубина по направлениям во встречном токене пула (минимальные единицы): (покупка — отдано в пул, продажа —
+/// получено из пула, полоса прочитана целиком). Принимает: окружение, запись, полосу %. Ошибки (текст): полоса вне
+/// 0–100%, расчёт невозможен.
+pub fn band_units(ctx: &Ctx, e: &Entry, pct: Decimal) -> Result<(U256, U256, bool), String> {
+    let b = (pct / Decimal::ONE_HUNDRED)
+        .to_f64()
+        .filter(|b| *b > 0.0 && *b < 1.0);
+    let b = b.ok_or_else(|| format!("dex.depth_band_pct = {pct}: нужно больше 0 и меньше 100"))?;
+    let coin0 = e.coin == e.pool.token0;
+    let (sell, s_full) = side(ctx, e, e.coin, coin0, b, false)?;
+    let (buy, b_full) = side(ctx, e, e.usdt, !coin0, b, true)?;
+    Ok((buy, sell, s_full && b_full))
 }
 
 /// Одно направление: сколько встречного токена (продажа — получено, покупка — отдано) до границы полосы.

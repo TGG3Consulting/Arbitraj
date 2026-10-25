@@ -1,0 +1,14 @@
+{
+  "about": "Решение 69: заголовок и квитанции блока одним JSON-RPC batch (eth_getBlockByNumber(n, false) + eth_getBlockReceipts(n) в одном HTTP-запросе) на публичном узле BNB Chain. Рекордер — tests/recorders/record_receipts_batch.js: 3 подряд последних блока, каждый — одним batch; плюс тот же batch из двух блоков сразу (4 вызова) — проверка, принимает ли узел batch и отвечает ли массивом по id.",
+  "node": "https://bsc-dataseed.bnbchain.org",
+  "blocks": 3,
+  "batch": [
+    { "jsonrpc": "2.0", "id": 0, "method": "eth_getBlockByNumber", "params": ["0x<n>", false] },
+    { "jsonrpc": "2.0", "id": 1, "method": "eth_getBlockReceipts", "params": ["0x<n>"] }
+  ],
+  "calls": [
+    "eth_blockNumber [] — последний блок L",
+    "для n = L−3, L−2, L−1: POST [eth_getBlockByNumber(n,false) id 0, eth_getBlockReceipts(n) id 1] — один HTTP",
+    "POST [заголовок и квитанции L−3 (id 0, 1) и L−2 (id 2, 3)] — один HTTP из 4 вызовов"
+  ]
+}

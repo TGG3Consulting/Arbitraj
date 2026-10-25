@@ -82,13 +82,13 @@ async fn coin_waits_only_for_its_own_pools_and_abandoned_come_back() {
     // Застрявшие пулы (ждут незаданную настройку) отличаются от читающихся: монета «застряла», только когда
     // застряли все её ждущие пулы — тогда она не держит сводку первого прохода.
     assert!(!p.loading.stuck_only(&p, eth_addr), "пулы ETH читаются");
-    p.loading.stuck(&eth[0].0.reference, true);
+    p.loading.stuck(&p, &eth[0].0.reference, true);
     assert_eq!(eth.len() == 1, p.loading.stuck_only(&p, eth_addr));
     for (f, _) in &eth {
-        p.loading.stuck(&f.reference, true);
+        p.loading.stuck(&p, &f.reference, true);
     }
     assert!(p.loading.stuck_only(&p, eth_addr));
-    p.loading.stuck(&eth[0].0.reference, false);
+    p.loading.stuck(&p, &eth[0].0.reference, false);
     assert!(
         !p.loading.stuck_only(&p, eth_addr),
         "снова читается — снова держит"

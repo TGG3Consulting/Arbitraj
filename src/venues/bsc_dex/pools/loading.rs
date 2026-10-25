@@ -65,6 +65,15 @@ impl Loading {
         mine.peek().is_some() && mine.all(|(_, (_, stuck))| *stuck)
     }
 
+    /// Читается ли сейчас хоть один пул (ждёт первого чтения, не застрял, не исключён из сделок). Пока читается —
+    /// сводки первого прохода сверки с квотером и крючков не отправляются (check/fresh.rs). Ошибок нет.
+    pub fn reading(&self, p: &Pools) -> bool {
+        let s = self.inner.lock().unwrap_or_else(|x| x.into_inner());
+        s.pools
+            .iter()
+            .any(|(r, (_, stuck))| !*stuck && p.ctx.index.banned(r).is_none())
+    }
+
     /// Пул «застрял» (ждёт незаданную настройку) или снова читается. Пула нет в списке — ничего. Ошибок нет.
     pub fn stuck(&self, r: &PoolRef, stuck: bool) {
         if let Some(e) = self

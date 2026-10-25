@@ -8,11 +8,14 @@
 //! (pools/progress.rs, refill).
 //! Сверяются все пулы, и с крючком тоже: у пула с крючком B/C локальный выход берётся за вычетом измеренного
 //! влияния крючка на покупку (check/hooks_probe.rs; сверка идёт на check.probe_usdt USDT — это покупка).
-//! Журнал: первый проход — одна сводка (прошли, исключены, частые причины); дальше — запись только при смене
+//! Пул сверяется сразу, как только стал достоверным (прочитан при старте, перечитан, принят новым) и циклом ещё не
+//! сверен (check/fresh.rs, сигнал «пул готов»), — не ждёт dex.quoter_check_s (решение 65).
+//! Журнал: первый проход — одна сводка (прошли, исключены, частые причины), когда ни один пул не читается и все
+//! прочитанные сверены (застрявшие из-за незаданной настройки не держат, решение 63); дальше — запись только при смене
 //! состояния пула (прошла ↔ не прошла, сменилась причина; цифры в причине не в счёт — progress::reason_key).
 //! Кто вызывает: pools/market.rs.
-//! От чего зависит: quote/quoter.rs, quote/select.rs (deep_enough), quote/emptiness.rs, quote/rate.rs,
-//! check/state.rs, check/quoter_tally.rs (сводка), pools/listen.rs (Pools), pools/progress.rs, tokens.rs, num.rs.
+//! От чего зависит: check/quoter_verify.rs (сверка пула), quote/select.rs (deep_enough), check/fresh.rs,
+//! check/state.rs, check/quoter_tally.rs (сводка), pools/listen.rs (Pools), pools/progress.rs.
 //! Настройки: dex.quoter_check_s, dex.quoter_max_diff_pct, dex.min_pool_liquidity_usd, check.probe_usdt [bsc_dex].
 //!
 //! «Сверка: периодически и перед сделкой — квотер; расхождение выше порога → стоп по пулу» —
@@ -20,40 +23,38 @@
 
 use std::time::Duration;
 
-use alloy_primitives::U256;
-use rust_decimal::Decimal;
-
-use crate::core::types::{CheckState, HookGroup, PoolRef};
-use crate::gateway::errors::ErrorCode;
+use crate::core::types::PoolRef;
 use crate::storage::journal::Level;
 
-use super::super::num;
 use super::super::pools::index_watch;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
-use super::super::pools::registry::Entry;
-use super::super::quote::{emptiness, quoter, rate, select};
+use super::super::quote::select;
+use super::fresh::Fresh;
 use super::quoter_tally::Tally;
+use super::quoter_verify::{HOOK_WAIT, usdt_decimals, verify};
 use super::recheck::Queue;
-use super::state::Checks;
 
 /// Начало причины «не задана настройка» — такие причины пишутся одной строкой на причину (Signals::once).
 const NOT_SET: &str = "Не задана настройка";
 
 /// Цикл сверки с квотером (см. шапку). Ошибок нет: сбой — причина в итоге пула.
 pub async fn run(p: Pools, queue: Queue) {
-    let mut first = true;
+    let mut fresh = Fresh::default();
+    // Итоги первого прохода — до сводки (когда ни один пул не читается и все прочитанные сверены, решение 65).
+    let mut first = Some(Tally::default());
+    let mut full = false;
     loop {
         // Своя комиссия пар V2 (dex.v2_fee_source = pool) — заново с пары перед сверкой (pools/index_watch.rs).
         index_watch::refresh_fees(&p).await;
-        let mut tally = Tally::default();
-        for r in p.reg.refs() {
-            one(&p, &r, first, &mut tally).await;
+        // Полный проход — раз в dex.quoter_check_s; при старте все пулы и так новые для цикла.
+        if full {
+            for r in p.reg.refs() {
+                one(&p, &r, &mut first).await;
+                fresh.mark(&r);
+            }
         }
-        if first {
-            tally.summary(&p).await;
-            first = false;
-        }
+        full = true;
         let d = match p.ctx.int("dex.quoter_check_s") {
             Ok(s) => Duration::from_secs(s),
             Err(e) => {
@@ -64,21 +65,34 @@ pub async fn run(p: Pools, queue: Queue) {
         };
         let until = tokio::time::Instant::now() + d;
         loop {
+            // Подписка на «пул готов» — до прохода по новым пулам: сигнал во время прохода не теряется.
+            let ready = p.signals.ready.notified();
+            tokio::pin!(ready);
+            ready.as_mut().enable();
+            for r in fresh.due(&p, |r| hook_measured(&p, r)) {
+                one(&p, &r, &mut first).await;
+                fresh.mark(&r);
+            }
+            if first.is_some() && fresh.settled(&p) {
+                first.take().unwrap_or_default().summary(&p).await;
+            }
             tokio::select! {
                 _ = tokio::time::sleep_until(until) => break,
+                _ = &mut ready => {}
                 _ = queue.notified() => {
                     // «Перепроверить» — только пулы переданных монет; «новые пулы» — пулы без итога (check/recheck.rs).
                     let (tickers, new_pools) = queue.take();
                     for r in p.reg.refs() {
                         let Some(e) = p.reg.get(&r) else { continue };
                         if tickers.contains(&e.ticker) || (new_pools && p.checks.pool(&r).quoter.is_none()) {
-                            one(&p, &r, false, &mut Tally::default()).await;
+                            one(&p, &r, &mut first).await;
+                            fresh.mark(&r);
                         }
                     }
                 }
                 _ = p.signals.refill.notified() => {
                     for r in p.signals.take_refilled() {
-                        one(&p, &r, false, &mut Tally::default()).await;
+                        one(&p, &r, &mut first).await;
                     }
                 }
             }
@@ -86,8 +100,15 @@ pub async fn run(p: Pools, queue: Queue) {
     }
 }
 
-/// Сверка одного пула и запись итога. Мелкий пул — итога нет (None), без журнала. Ошибок нет.
-async fn one(p: &Pools, r: &PoolRef, first: bool, tally: &mut Tally) {
+/// Сверка ждала влияния крючка, а оно уже измерено (успешно или нет). Ошибок нет.
+fn hook_measured(p: &Pools, r: &PoolRef) -> bool {
+    let c = p.checks.pool(r);
+    matches!(&c.quoter, Some(Err(why)) if why == HOOK_WAIT) && c.hook.is_some()
+}
+
+/// Сверка одного пула и запись итога. Мелкий пул — итога нет (None), без журнала. До сводки первого прохода итог
+/// идёт в неё (`first`), журнал по пулу — только после. Ошибок нет.
+async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) {
     let Some(e) = p.reg.get(r) else { return };
     if !e.valid {
         return;
@@ -99,28 +120,33 @@ async fn one(p: &Pools, r: &PoolRef, first: bool, tally: &mut Tally) {
     let res = match deep {
         Ok(None) => verify(p, &e).await,
         Ok(Some(_)) => {
-            tally.dust += 1;
+            if let Some(t) = first {
+                t.set(r, None);
+            }
             p.checks.update_pool(r, |f| f.quoter = None);
             return;
         }
         Err(why) => Err(why),
     };
-    tally.add(&res);
     let prev = p.checks.pool(r).quoter;
-    if !first && changed(prev.as_ref(), &res) {
-        let msg = match &res {
-            Ok(()) => format!(
-                "{} {}: сверка с квотером снова проходит — пул в котировках",
-                e.family.title, e.ticker
-            ),
-            Err(why) => format!("{} {}: {why} — пул исключён", e.family.title, e.ticker),
-        };
-        let level = if res.is_ok() {
-            Level::Info
-        } else {
-            Level::Warn
-        };
-        p.ctx.log(level, "dex.quoter", msg, None).await;
+    match first {
+        Some(t) => t.set(r, Some(res.clone())),
+        None if changed(prev.as_ref(), &res) => {
+            let msg = match &res {
+                Ok(()) => format!(
+                    "{} {}: сверка с квотером снова проходит — пул в котировках",
+                    e.family.title, e.ticker
+                ),
+                Err(why) => format!("{} {}: {why} — пул исключён", e.family.title, e.ticker),
+            };
+            let level = if res.is_ok() {
+                Level::Info
+            } else {
+                Level::Warn
+            };
+            p.ctx.log(level, "dex.quoter", msg, None).await;
+        }
+        None => {}
     }
     p.checks.update_pool(r, |f| f.quoter = Some(res));
 }
@@ -133,64 +159,4 @@ fn changed(prev: Option<&Result<(), String>>, new: &Result<(), String>) -> bool 
         (Some(Err(a)), Err(b)) => reason_key(a) != reason_key(b),
         _ => true,
     }
-}
-
-/// Сверка пула (после фильтра ликвидности). Возвращает: Ok или Err(причина). Ошибок нет.
-async fn verify(p: &Pools, e: &Entry) -> Result<(), String> {
-    if emptiness::empty(e) {
-        return Err(emptiness::EMPTY.into());
-    }
-    let pct = hook_buy_pct(&p.checks, e)?;
-    let (amount, usdt) = probe(p, e).await?;
-    match quoter::compare(&p.ctx, e, e.usdt, amount, pct).await {
-        Ok(Err(why)) if why.starts_with(emptiness::SHORT) => {
-            Err(format!("{why}, check.probe_usdt = {usdt} USDT"))
-        }
-        Ok(r) => r,
-        // Не задана настройка (например dex.quoter вида пула) — одна запись на причину, не на пул.
-        Err(err) if err.code == ErrorCode::NotConfigured => {
-            let msg = format!(
-                "{}: сверка с квотером невозможна — {}",
-                e.family.title, err.message
-            );
-            p.signals
-                .once(&p.ctx, Level::Error, "dex.quoter", msg)
-                .await;
-            Err(err.message)
-        }
-        Err(err) => Err(err.message),
-    }
-}
-
-/// Знаки USDT. Err — причина (не задан тикер, узел). Ошибок нет.
-async fn usdt_decimals(p: &Pools) -> Result<u8, String> {
-    let usdt = p.tokens.usdt(&p.ctx).map_err(|e| e.message)?;
-    p.tokens.decimals(&p.ctx, usdt).await.map_err(|e| e.message)
-}
-
-/// Влияние крючка на покупку, %: 0 — крючка B/C нет. Err — влияние ещё не измерено или проверка крючка не прошла.
-fn hook_buy_pct(checks: &Checks, e: &Entry) -> Result<Decimal, String> {
-    if e.pool
-        .hooks
-        .as_ref()
-        .is_none_or(|h| h.group == HookGroup::A)
-    {
-        return Ok(Decimal::ZERO);
-    }
-    match checks.pool(&e.pool.reference).hook.map(|c| c.impact) {
-        Some(CheckState::Known(i)) => Ok(i.buy_pct),
-        Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
-        _ => Err("влияние крючка ещё не измерено — сверка с квотером невозможна".into()),
-    }
-}
-
-/// Сумма сверки во встречном токене пула: check.probe_usdt USDT, для пула с промежуточной монетой (решение 52) —
-/// пересчёт по живому пулу «промежуточная — USDT» (quote/rate.rs). Возвращает: (сумма, check.probe_usdt). Err — причина.
-async fn probe(p: &Pools, e: &Entry) -> Result<(U256, Decimal), String> {
-    let usdt = p.tokens.usdt(&p.ctx).map_err(|e| e.message)?;
-    let dec = usdt_decimals(p).await?;
-    let v = p.ctx.dec("check.probe_usdt").map_err(|e| e.message)?;
-    let amount = num::to_units(v, dec).ok_or("check.probe_usdt не переводится в единицы USDT")?;
-    let amount = rate::from_usdt(&p.ctx, &p.reg, usdt, e.usdt, amount).map_err(|e| e.message)?;
-    Ok((amount, v))
 }

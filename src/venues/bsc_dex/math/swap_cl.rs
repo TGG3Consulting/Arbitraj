@@ -61,16 +61,34 @@ pub fn swap(
     } else {
         max_sqrt_ratio() - U256::from(1u8)
     };
+    swap_to(s, zero_for_one, exact_in, amount, limit).map(|(r, _)| r)
+}
+
+/// Обмен до предела цены `limit` (sqrtPriceX96), как swap контракта с sqrtPriceLimitX96: цена дальше предела не идёт,
+/// остаток суммы не исполняется (complete = false, если не дошли до предела и карта тиков кончилась). Решение 73:
+/// глубина пула в полосе цены (quote/depth_band.rs). Принимает: состояние, направление, точный вход или выход,
+/// сумму, предел. Возвращает: итог и дошла ли цена до предела (false — сумма кончилась раньше или кончились
+/// прочитанные слова битмапа). Ошибки: как swap.
+pub fn swap_to(
+    s: &ClState,
+    zero_for_one: bool,
+    exact_in: bool,
+    amount: U256,
+    limit: U256,
+) -> Result<(Swapped, bool), &'static str> {
     let (mut sqrt, mut tick, mut liq) = (s.sqrt_price, s.tick, s.liquidity);
     let (mut remaining, mut total_in, mut total_out) = (amount, U256::ZERO, U256::ZERO);
     const OVERFLOW: &str = "переполнение суммы";
     while !remaining.is_zero() && sqrt != limit {
         let Some((mut next, initialized)) = next_tick(s.ticks, tick, zero_for_one) else {
-            return Ok(Swapped {
-                amount_in: total_in,
-                amount_out: total_out,
-                complete: false,
-            });
+            return Ok((
+                Swapped {
+                    amount_in: total_in,
+                    amount_out: total_out,
+                    complete: false,
+                },
+                false,
+            ));
         };
         next = next.clamp(MIN_TICK, MAX_TICK);
         let sqrt_next = sqrt_ratio_at_tick(next).ok_or("цена тика вне диапазона TickMath")?;
@@ -126,11 +144,14 @@ pub fn swap(
             return Err("шаг остановился до тика при остатке суммы");
         }
     }
-    Ok(Swapped {
-        amount_in: total_in,
-        amount_out: total_out,
-        complete: remaining.is_zero(),
-    })
+    Ok((
+        Swapped {
+            amount_in: total_in,
+            amount_out: total_out,
+            complete: remaining.is_zero(),
+        },
+        sqrt == limit,
+    ))
 }
 
 /// Следующий инициализированный тик в пределах слова (как TickBitmap.nextInitializedTickWithinOneWord).

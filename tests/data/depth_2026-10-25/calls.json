@@ -1,8 +1,9 @@
 {
-  "about": "Решение 73: глубина пулов по направлениям в полосе цены. Монеты — адреса из снимка бота 24.10 (/api/coins), пулы — у GeckoTerminal по адресу монеты (страница 1), дальше всё — с публичного узла BNB Chain на одном блоке: tickSpacing (V3 — tickSpacing(), Infinity CL — CLPoolManager.poolIdToPoolKey, Uniswap V4 — PositionManager.poolKeys), состояние (slot0/liquidity, getSlot0/getLiquidity), слова битмапа ±tick_words вокруг текущего тика (с запасом, чтобы полоса цены при tickSpacing 1 была прочитана целиком), данные установленных тиков CL; V2 — getReserves; у пулов AAVE — balanceOf USDT пула (живой замер 25.10: 2044,75 USDT в 0x8e3ecc0b…). Рекордер — tests/recorders/record_depth.js.",
+  "about": "Решение 73: глубина пулов по направлениям в полосе цены. Монеты — адреса из снимка бота 24.10 (/api/coins), пулы — у GeckoTerminal по адресу монеты (страница 1), дальше всё — с публичного узла BNB Chain, на каждый пул свой свежий блок (узел не архивный: состояние блока пропадает примерно через минуту — «missing trie node»), вызовы пула JSON-RPC batch'ами по batch_max: tickSpacing (V3 — tickSpacing(), Infinity CL — CLPoolManager.poolIdToPoolKey, Uniswap V4 — PositionManager.poolKeys), состояние (slot0/liquidity, getSlot0/getLiquidity), слова битмапа ±tick_words вокруг текущего тика (с запасом, чтобы полоса цены при tickSpacing 1 была прочитана целиком), данные установленных тиков CL; V2 — getReserves; у пулов AAVE — balanceOf USDT пула (живой замер 25.10: 2044,75 USDT в 0x8e3ecc0b…). Рекордер — tests/recorders/record_depth.js.",
   "node": "https://bsc-dataseed.bnbchain.org",
   "gecko": "https://api.geckoterminal.com/api/v2/networks/bsc/tokens/{address}/pools?page=1",
   "tick_words": 8,
+  "batch_max": 100,
   "usdt": "0x55d398326f99059ff775485246999027b3197955",
   "coins": {
     "ZKP": "0xd89b7dd376e671c124352267516bef1c2cc231a3",

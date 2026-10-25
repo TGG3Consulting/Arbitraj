@@ -53,3 +53,5 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
 Проба крючка без ликвидности (решение 70) — tests/bsc_dex_live_fixes.rs (hook_probe_not_enough_liquidity_names_pool_id): настоящий откат квотера UnexpectedRevertBytes(NotEnoughLiquidity) из журнала — PoolId извлекается, причина «в пуле не хватает ликвидности для пробы». Batch ленты квитанций: ответы в обратном порядке и ошибка одного вызова внутри пачки — tests/bsc_dex_receipts_pipe.rs.
 
 Тяжёлый блок и отставание ленты, чёрный список при сбросе (решение 71) — tests/bsc_dex_receipts_pipe.rs (lag_names_the_block_the_pipe_stands_on), tests/core_first_pass.rs (reset_of_pools_is_not_a_blacklist_event: временное «ещё не проверена» и возврат к той же причине — без записей, только настоящие вход и выход).
+
+Догон ленты без сброса (решение 72) — tests/bsc_dex_receipts_catchup.rs: отметка отставания запрещает котировку и снимается после догона; пропуск невосполним, только если блока нет ни у одного узла (живая batch-запись, заголовок null); блоки по кругу на узлы списка, у каждого свой темп.

@@ -65,6 +65,8 @@ pub struct Quoting {
     pub mids: Mids,
     /// Разрешения кошелька в памяти до его транзакции (wallet/allow_cache.rs).
     pub allow: super::wallet::allow_cache::Allowances,
+    /// «Данные пулов отстают» (решение 72): котировки нет, пока лента квитанций не догнала.
+    pub lag: super::node::events_lag::EventsLag,
 }
 
 impl Quoting {
@@ -81,6 +83,7 @@ impl Quoting {
             ));
         }
         self.heads.fresh(ctx)?;
+        self.lag.check(ctx)?;
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
         let taxes = direct::taxes(self, asset)?;
         let usdt = self.tokens.usdt(ctx)?;

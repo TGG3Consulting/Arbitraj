@@ -44,6 +44,8 @@ pub struct Parts {
     pub allow: super::wallet::allow_cache::Allowances,
     /// Очереди «Перепроверить» и «новые пулы» для циклов проверок (check/recheck.rs).
     pub wake: super::check::recheck::Recheck,
+    /// «Данные пулов отстают на N блоков» — лента квитанций догоняет без сброса (решение 72).
+    pub lag: super::node::events_lag::EventsLag,
 }
 
 impl Parts {
@@ -63,6 +65,7 @@ impl Parts {
             stats: Stats::default(),
             allow: Default::default(),
             wake: Default::default(),
+            lag: Default::default(),
         }
     }
 
@@ -77,6 +80,7 @@ impl Parts {
             gas: self.gas.clone(),
             mids: self.mids.clone(),
             allow: self.allow.clone(),
+            lag: self.lag.clone(),
         }
     }
 
@@ -105,7 +109,7 @@ impl Parts {
             mids: self.mids.clone(),
             signals: super::pools::progress::Signals::default(),
             loading: super::pools::loading::Loading::default(),
-            feed: super::node::receipts::Feed::default(),
+            feed: super::node::receipts::Feed::with_lag(self.lag.clone()),
         }
     }
 }

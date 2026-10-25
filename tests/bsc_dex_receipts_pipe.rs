@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::Value;
 
 use arb::venues::bsc_dex::node::receipts_chain::complete;
-use arb::venues::bsc_dex::node::receipts_io::pair;
+use arb::venues::bsc_dex::node::receipts_fetch::pair;
 use arb::venues::bsc_dex::node::receipts_pipe::Pipe;
 use arb::venues::bsc_dex::node::rpc_capped::split;
 use receipts_common::{hdr, load, result};

@@ -30,6 +30,8 @@ pub struct Lag {
     stuck: Option<Stuck>,
     /// Отставание, о котором уже записано (0 — не отстаём).
     told: u64,
+    /// Стоит отметка «данные пулов отстают» (решение 72).
+    marked: bool,
 }
 
 impl Lag {
@@ -74,6 +76,35 @@ impl Lag {
                 s.since.elapsed().as_secs(),
                 s.why
             ),
+        }
+    }
+
+    /// Отметка «данные пулов отстают» (решение 72): отставание `behind` больше `max_lag` — котировка и сделка запрещены
+    /// (`flag` — events_lag.rs), лента догоняет без сброса; снова не больше — отметка снята. Запись — при смене. Ошибок
+    /// нет.
+    pub async fn mark(
+        &mut self,
+        ctx: &Ctx,
+        flag: &super::events_lag::EventsLag,
+        behind: u64,
+        max_lag: u64,
+    ) {
+        let over = behind > max_lag;
+        flag.set(if over { behind } else { 0 });
+        if over != self.marked {
+            self.marked = over;
+            let msg = if over {
+                format!(
+                    "{SOURCE}: отставание {behind} блоков больше bsc.receipts_max_lag_blocks = {max_lag} — котировки и сделки запрещены, лента догоняет без сброса (состояние пулов сохранено){}",
+                    self.stuck_text()
+                )
+            } else {
+                format!(
+                    "{SOURCE}: отставание {behind} блоков — не больше bsc.receipts_max_lag_blocks, котировки и сделки снова разрешены"
+                )
+            };
+            let level = if over { Level::Warn } else { Level::Info };
+            ctx.log(level, "venue.ws", msg, None).await;
         }
     }
 

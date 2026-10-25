@@ -44,6 +44,8 @@ pub async fn trade(
     req: TradeRequest,
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
+    // Данные пулов отстают (лента квитанций догоняет, решение 72) — сделки нет.
+    q.lag.check(ctx)?;
     let route = req.route.clone().ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,

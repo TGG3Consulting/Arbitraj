@@ -20,14 +20,15 @@ use super::rpc::{SOURCE, status_ok};
 use super::rpc_capped::{Capped, split};
 use super::{jsonrpc, pace};
 
-/// Чем кончилась гонка без принятого ответа.
-pub enum Lost {
+/// Чем кончилась гонка без принятого ответа: что ответил каждый узел.
+#[derive(Default)]
+pub struct Lost {
     /// Ответ больше предела (последний такой).
-    Over(Fail),
-    /// Ответы пришли, но ни один не прошёл проверку вызывающего (последняя причина: null, неполные квитанции…).
-    Rejected(String),
+    pub over: Option<Fail>,
+    /// Ответы пришли, но не прошли проверку вызывающего — причины всех узлов (null, неполные квитанции…).
+    pub rejected: Vec<String>,
     /// Ошибка связи или узла (последняя).
-    Failed(crate::gateway::errors::GatewayError),
+    pub failed: Option<crate::gateway::errors::GatewayError>,
 }
 
 /// Та же пачка СРАЗУ на все узлы (основной и резервный bsc.node_http_url_backup) — первый ответ, ПРОШЕДШИЙ проверку
@@ -40,7 +41,10 @@ pub async fn batch_race<T>(
     lim: Limits,
     accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, String>,
 ) -> Result<T, Lost> {
-    let urls = ctx.failover.urls(ctx, Link::Http).map_err(Lost::Failed)?;
+    let urls = ctx.failover.urls(ctx, Link::Http).map_err(|e| Lost {
+        failed: Some(e),
+        ..Lost::default()
+    })?;
     let body = Value::Array(
         calls
             .iter()
@@ -60,7 +64,7 @@ pub async fn batch_race<T>(
 
 /// Первый ответ из `runs`, прошедший `accept` (без сети — проверяется на записанных ответах). Не прошёл, больше
 /// предела, ошибка — ждём остальных. Принимает: запросы, число вызовов пачки, проверку. Возвращает: принятое или
-/// Lost (непринятый ответ важнее ошибки связи: в нём причина). Ошибок кроме Lost нет.
+/// Lost (что ответил каждый узел). Ошибок кроме Lost нет.
 pub async fn first_accepted<T, F>(
     runs: Vec<F>,
     n: usize,
@@ -70,28 +74,31 @@ where
     F: std::future::Future<Output = GatewayResult<Capped<String>>>,
 {
     let mut runs: futures_util::stream::FuturesUnordered<F> = runs.into_iter().collect();
-    let (mut over, mut rejected, mut failed) = (None, None, None);
+    let mut lost = Lost::default();
     while let Some(res) = futures_util::StreamExt::next(&mut runs).await {
         match res {
             Ok(Capped::Got(text)) => match split(&text, n).map_err(|e| e.message).and_then(&accept)
             {
                 Ok(t) => return Ok(t),
-                Err(why) => rejected = Some(why),
+                Err(why) => lost.rejected.push(why),
             },
-            Ok(Capped::Over(f)) => over = Some(f),
-            Err(e) => failed = Some(e),
+            Ok(Capped::Over(f)) => lost.over = Some(f),
+            Err(e) => lost.failed = Some(e),
         }
     }
-    Err(match (rejected, over, failed) {
-        (Some(r), _, _) => Lost::Rejected(r),
-        (None, Some(f), _) => Lost::Over(f),
-        (None, None, Some(e)) => Lost::Failed(e),
-        (None, None, None) => Lost::Failed(errors::bad("нет адреса узла", SOURCE, "")),
-    })
+    if lost.over.is_none() && lost.failed.is_none() && lost.rejected.is_empty() {
+        lost.failed = Some(errors::bad("нет адреса узла", SOURCE, ""));
+    }
+    Err(lost)
 }
 
 /// Один узел: обмен с пределами. Ошибки: связь, HTTP; превышение предела — Over.
-async fn one(ctx: &Ctx, url: &str, body: &Value, lim: Limits) -> GatewayResult<Capped<String>> {
+pub(super) async fn one(
+    ctx: &Ctx,
+    url: &str,
+    body: &Value,
+    lim: Limits,
+) -> GatewayResult<Capped<String>> {
     match http::exchange(ctx.http.post(url).json(body), lim).await {
         Ok((status, text)) => status_ok(status, text, SOURCE).map(Capped::Got),
         Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),

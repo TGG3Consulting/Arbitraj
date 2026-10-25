@@ -40,6 +40,10 @@ pub(super) struct Inner {
     started: AtomicBool,
     /// Последний разобранный блок (None — лента ещё не начала или оборвалась).
     pub(super) last: watch::Sender<Option<u64>>,
+    /// «Данные пулов отстают на N блоков» площадки (решение 72): ставит задача ленты.
+    pub(super) lag: super::events_lag::EventsLag,
+    /// Темп по узлам списка bsc.receipts_node_urls (решение 72).
+    pub(super) nodes: Arc<super::receipts_nodes::Nodes>,
 }
 
 /// Подписки и «поколение» ленты: обрыв — новое поколение, подписки старого закрыты.
@@ -53,6 +57,16 @@ pub(super) struct State {
 }
 
 impl Feed {
+    /// Лента, которая ставит отметку отставания `lag` площадки (решение 72). Ошибок нет.
+    pub fn with_lag(lag: super::events_lag::EventsLag) -> Feed {
+        Feed {
+            inner: Arc::new(Inner {
+                lag,
+                ..Inner::default()
+            }),
+        }
+    }
+
     /// Открывает «соединение»; первая — запускает задачу ленты (класс Check очереди узла: события не ждут фона).
     /// Принимает: окружение, головы сети. Ошибок нет.
     pub fn open(&self, ctx: &Ctx, heads: &Heads) -> Handle {

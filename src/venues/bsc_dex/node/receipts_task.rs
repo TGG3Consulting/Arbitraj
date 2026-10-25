@@ -28,7 +28,8 @@ use super::heads::Heads;
 use super::receipts::{Feed, Inner, SOURCE};
 use super::receipts_budget::Budget;
 use super::receipts_chain::{Block, Chain, logs_of};
-use super::receipts_io::{Fail, Header, fetch_block, header, rewind};
+use super::receipts_fetch::fetch_block;
+use super::receipts_io::{Fail, Header, header, rewind};
 use super::receipts_lag::Lag;
 use super::receipts_pipe::Pipe;
 
@@ -62,7 +63,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                 None
             }
             Ok(false) => continue,
-            Err(Fail::Retry(why)) => {
+            Err(Fail::Retry(why) | Fail::Missing(why)) => {
                 if let Some(top) = chain.top() {
                     lag.failed(top.number + 1, &why);
                 }
@@ -72,6 +73,8 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                 chain.clear();
                 pipe.clear();
                 lag = Lag::default();
+                // Сброс: пулы недостоверны сами (Invalidated) — отметка отставания больше не нужна.
+                feed.inner.lag.set(0);
                 feed.cut(&why);
                 Some((Level::Error, why))
             }
@@ -147,24 +150,33 @@ async fn step(
     if target <= top.number {
         return Ok(true);
     }
-    if target - top.number > max_lag {
-        return Err(Fail::Break(format!(
-            "отставание {} блоков больше bsc.receipts_max_lag_blocks = {max_lag} — пулы недостоверны, лента заново{}",
-            target - top.number,
-            lag.stuck_text()
-        )));
-    }
-    lag.report(ctx, target - top.number, ahead).await;
+    // Отстали больше bsc.receipts_max_lag_blocks — не сброс, а догон (решение 72): состояние пулов остаётся,
+    // котировка и сделка запрещены отметкой «данные пулов отстают на N блоков», пока лента не догнала.
+    let behind = target - top.number;
+    lag.mark(ctx, &feed.inner.lag, behind, max_lag).await;
+    lag.report(ctx, behind, ahead).await;
     let n = top.number + 1;
     // Блок, на котором конвейер стоит, — гонкой на все узлы (решение 71).
     let hot = lag.hot();
     pipe.fill(n, target, ahead, |k| {
-        fetch_block(ctx.clone(), k, hot == Some(k))
+        fetch_block(ctx.clone(), feed.inner.nodes.clone(), k, hot == Some(k))
     });
-    let (h, r) = pipe
+    let got = pipe
         .take(n)
         .await
-        .ok_or_else(|| Fail::Retry(format!("запрос блока {n} отменён")))??;
+        .ok_or_else(|| Fail::Retry(format!("запрос блока {n} отменён")))?;
+    let (h, r) = match got {
+        Ok(x) => x,
+        // Пропуск невосполним: блок позади головы не отдаёт ни один узел (гонка на все) — полный сброс.
+        Err(Fail::Missing(why)) if hot == Some(n) && n < target => {
+            return Err(Fail::Break(format!(
+                "пропуск невосполним: блок {n} не отдаёт ни один узел ({why}), голова уже {target} — пулы недостоверны, лента заново{}",
+                lag.stuck_text()
+            )));
+        }
+        Err(Fail::Missing(why)) => return Err(Fail::Retry(why)),
+        Err(e) => return Err(e),
+    };
     if !chain.continues(h.parent_hash) {
         // Реорг: запрошенное вперёд могло быть от старой цепочки — всё заново после отката.
         pipe.clear();

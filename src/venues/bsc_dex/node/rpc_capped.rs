@@ -77,16 +77,25 @@ pub async fn batch(
 /// Принимает: текст ответа, число вызовов. Возвращает: итоги по порядку вызовов. Ошибки: ответ не массив (узел
 /// ответил одной ошибкой на всю пачку — её текст), нет ответа на какой-то id (BadResponse).
 pub fn split(text: &str, n: usize) -> GatewayResult<Vec<GatewayResult<Box<RawValue>>>> {
+    split_from(text, n, SOURCE)
+}
+
+/// То же с источником ошибок `source` (лента квитанций — с хостом узла, rpc_race.rs host_source). Ошибки: как split.
+pub fn split_from(
+    text: &str,
+    n: usize,
+    source: &str,
+) -> GatewayResult<Vec<GatewayResult<Box<RawValue>>>> {
     let list: Vec<Response> =
         serde_json::from_str(text).map_err(|e| {
-            match jsonrpc::parse_text(text, SOURCE, Op::Read) {
+            match jsonrpc::parse_text(text, source, Op::Read) {
                 Err(err) => err,
-                Ok(_) => errors::bad(&format!("ответ на пачку не массив: {e}"), SOURCE, text),
+                Ok(_) => errors::bad(&format!("ответ на пачку не массив: {e}"), source, text),
             }
         })?;
     let mut out: Vec<Option<GatewayResult<Box<RawValue>>>> = (0..n).map(|_| None).collect();
     for resp in list {
-        let (id, res) = jsonrpc::parse(resp, SOURCE, Op::Read, text);
+        let (id, res) = jsonrpc::parse(resp, source, Op::Read, text);
         if let Some(slot) = id.and_then(|i| out.get_mut(i as usize)) {
             *slot = Some(res);
         }
@@ -94,7 +103,7 @@ pub fn split(text: &str, n: usize) -> GatewayResult<Vec<GatewayResult<Box<RawVal
     out.into_iter()
         .enumerate()
         .map(|(i, r)| {
-            r.ok_or_else(|| errors::bad(&format!("нет ответа на запрос {i} пачки"), SOURCE, text))
+            r.ok_or_else(|| errors::bad(&format!("нет ответа на запрос {i} пачки"), source, text))
         })
         .collect()
 }

@@ -3,7 +3,8 @@
 //! пачки (admit.rs: подписка → блок B того же узла WS → чтение на B → глубокие и мелкие), затем события до обрыва.
 //! Пулы, найденные позже, принимаются в идущую сессию тем же соединением (attach.rs шлёт их в канал пачки).
 //! Не прочитавшийся пул перечитывается на новых блоках (reload.rs); брошенный (попытки исчерпаны) — снова, когда
-//! задали настройку, из-за которой он не прочитался (revive.rs, решения 61, 63). Связь с узлом WS — pools/link.rs.
+//! задали настройку, из-за которой он не прочитался (revive.rs, решения 61, 63). Смена порога или полосы глубины —
+//! пересчёт вердикта пулов сразу (depth_sync.rs). Связь с узлом WS — pools/link.rs.
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
 //! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd).
@@ -124,10 +125,15 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 if g.conn.stale(&p.ctx) {
                     return (End::Broken("источник событий пулов сменён (bsc.pool_events_source)".into()), true);
                 }
-                // Рассылка закрыта — настроек больше не будет (open = false); брошенные из-за настройки — revive.rs.
+                // Брошенные из-за настройки — revive.rs (рассылка закрыта — open = false); порог или полоса глубины —
+                // пересчёт вердикта пулов пачки сразу (depth_sync.rs, решение 73).
+                let depth_changed = super::depth_sync::touches(&changed);
                 match revive::on_recv(p, &m.pools, &mut m.missing, &mut m.abandoned, changed).await {
                     Ok(still) => open = still,
                     Err(end) => return (end, true),
+                }
+                if depth_changed && let Err(end) = super::depth_sync::on_change(p, g, m).await {
+                    return (end, true);
                 }
             }
         }

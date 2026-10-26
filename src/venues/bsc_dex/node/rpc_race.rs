@@ -17,7 +17,7 @@ use super::super::ctx::Ctx;
 use super::super::errors;
 use super::failover::Link;
 use super::rpc::{SOURCE, status_ok};
-use super::rpc_capped::{Capped, split};
+use super::rpc_capped::{Capped, split_from};
 use super::{jsonrpc, pace};
 
 /// Чем кончилась гонка без принятого ответа: что ответил каждый узел.
@@ -64,10 +64,14 @@ pub async fn batch_race<T>(
         .iter()
         .map(|(_, url)| {
             let body = &body;
-            async move { pace::run(ctx, calls.len(), || one(ctx, url.as_str(), body, lim)).await }
+            async move {
+                let source = host_source(url.as_str());
+                let res = pace::run(ctx, calls.len(), || one(ctx, url.as_str(), body, lim)).await;
+                (source, res)
+            }
         })
         .collect();
-    first_accepted(runs, calls.len(), accept).await
+    first_accepted_from(runs, calls.len(), accept).await
 }
 
 /// Первый ответ из `runs`, прошедший `accept` (без сети — проверяется на записанных ответах). Не прошёл, больше
@@ -81,11 +85,28 @@ pub async fn first_accepted<T, F>(
 where
     F: std::future::Future<Output = GatewayResult<Capped<String>>>,
 {
+    let runs: Vec<_> = runs
+        .into_iter()
+        .map(|f| async move { (SOURCE.to_string(), f.await) })
+        .collect();
+    first_accepted_from(runs, n, accept).await
+}
+
+/// То же, у каждого запроса — свой источник ошибок (хост узла — host_source): ошибки вызовов внутри пачки называют
+/// узел. Принимает: запросы (источник, итог), число вызовов, проверку. Возвращает: как first_accepted.
+pub async fn first_accepted_from<T, F>(
+    runs: Vec<F>,
+    n: usize,
+    accept: impl Fn(Vec<GatewayResult<Box<RawValue>>>) -> Result<T, Reject>,
+) -> Result<T, Lost>
+where
+    F: std::future::Future<Output = (String, GatewayResult<Capped<String>>)>,
+{
     let mut runs: futures_util::stream::FuturesUnordered<F> = runs.into_iter().collect();
     let mut lost = Lost::default();
-    while let Some(res) = futures_util::StreamExt::next(&mut runs).await {
+    while let Some((source, res)) = futures_util::StreamExt::next(&mut runs).await {
         match res {
-            Ok(Capped::Got(text)) => match split(&text, n)
+            Ok(Capped::Got(text)) => match split_from(&text, n, &source)
                 .map_err(|e| Reject {
                     why: e.message,
                     head: None,
@@ -105,6 +126,18 @@ where
     Err(lost)
 }
 
+/// Источник ошибок узла с его хостом — «узел BSC (HTTP) bsc-dataseed1.bnbchain.org»: только хост, без пути и
+/// параметров (в них может быть ключ провайдера). Адрес не разбирается — без хоста. Ошибок нет.
+pub fn host_source(url: &str) -> String {
+    match reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+    {
+        Some(h) => format!("{SOURCE} {h}"),
+        None => SOURCE.to_string(),
+    }
+}
+
 /// Один узел: обмен с пределами. Ошибки: связь, HTTP; превышение предела — Over.
 pub(super) async fn one(
     ctx: &Ctx,
@@ -112,9 +145,11 @@ pub(super) async fn one(
     body: &Value,
     lim: Limits,
 ) -> GatewayResult<Capped<String>> {
+    // Ошибка называет узел (только хост): 429 одного из публичных узлов ленты — видно, какого.
+    let source = host_source(url);
     match http::exchange(ctx.http.post(url).json(body), lim).await {
-        Ok((status, text)) => status_ok(status, text, SOURCE).map(Capped::Got),
+        Ok((status, text)) => status_ok(status, text, &source).map(Capped::Got),
         Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
-        Err(f) => Err(errors::from_fail(&f, &lim, SOURCE)),
+        Err(f) => Err(errors::from_fail(&f, &lim, &source)),
     }
 }

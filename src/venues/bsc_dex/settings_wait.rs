@@ -5,14 +5,14 @@
 //! настройка» (налоги — Why::Config, сверка с квотером, крючки) перепроверяются при изменении настроек, а не через
 //! полный проход (is_config — по тексту причины, как он приходит из хранилища настроек).
 //! Кто вызывает: check/{tax_cycle, quoter_cycle, cycle}.rs, node/heads.rs, pools/listen.rs.
-//! От чего зависит: settings/live.rs (Watch), ctx.rs.
+//! От чего зависит: settings/wait.rs (until_ok — общий механизм), settings/live.rs (Watch), ctx.rs.
 //! Настройки: нет (ждёт любые).
 
 use crate::gateway::errors::GatewayResult;
 use crate::settings::live::Watch;
-use crate::storage::journal::Level;
+use crate::settings::wait::Note;
 
-use super::ctx::Ctx;
+use super::ctx::{Ctx, ID};
 
 /// Начало причины «не задана настройка» (settings/read.rs not_set: «Не задана настройка {имя} — задайте её в
 /// интерфейсе»).
@@ -28,39 +28,18 @@ pub fn watch(ctx: &Ctx) -> Watch {
     Watch::new(ctx.settings.subscribe(), Vec::new())
 }
 
-/// Значение из `read`, а пока его нет (не задано или задано неверно) — одна запись в журнал «`what` ждёт настройку:
-/// причина» и ожидание изменения настроек, затем снова; дождались после ожидания — запись «`what` снова работает».
-/// Принимает: окружение, что ждёт (для журнала), вид записи журнала, чтение. Возвращает: значение; None — рассылка
-/// настроек закрыта (система останавливается). Ошибок нет.
+/// Значение настройки, а пока её нет — ожидание (settings/wait.rs until_ok; журнал площадки bsc_dex). Принимает:
+/// окружение, что ждёт, вид записи журнала, чтение. Возвращает: значение; None — рассылка настроек закрыта. Ошибок нет.
 pub async fn until_ok<T>(
     ctx: &Ctx,
     what: &str,
     kind: &str,
     read: impl Fn() -> GatewayResult<T>,
 ) -> Option<T> {
-    let mut waited = false;
-    loop {
-        // Подписка — до чтения: изменение между чтением и ожиданием не теряется.
-        let mut w = watch(ctx);
-        match read() {
-            Ok(v) => {
-                if waited {
-                    let msg = format!("{what}: настройку задали — снова работает");
-                    ctx.log(Level::Info, kind, msg, None).await;
-                }
-                return Some(v);
-            }
-            Err(e) => {
-                if !waited {
-                    let msg = format!(
-                        "{what} ждёт настройку: {} — продолжит сам, как только её зададут",
-                        e.message
-                    );
-                    ctx.log(Level::Error, kind, msg, None).await;
-                    waited = true;
-                }
-                w.next().await?;
-            }
-        }
-    }
+    let note = Note {
+        journal: &ctx.journal,
+        kind,
+        venue: Some(ID),
+    };
+    crate::settings::wait::until_ok(&ctx.settings, note, what, read).await
 }

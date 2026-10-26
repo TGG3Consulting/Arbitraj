@@ -1,7 +1,8 @@
 //! Файл: core/transfer_credit.rs
 //! Что делает: шаг «ждём зачисления на получателе» перевода (transfers.rs) — событие или опрос, кто первый (решение 76):
-//! - событие баланса подошло к ожиданию и закрывает его (credit_watch.rs, transfer.credit_by_event) — зачислено сразу,
-//!   время в пути — от момента события; опрос статуса продолжается в фоне как подтверждение;
+//! - событие баланса подошло к ожиданию и закрывает его (credit_watch.rs: хеш события совпал с хешем вывода от
+//!   отправителя или хеша в событии нет; transfer.credit_by_event) — зачислено сразу, время в пути — от момента события;
+//!   опрос статуса продолжается в фоне как подтверждение;
 //! - опрос deposit_status с частотой venue.status_poll_ms (событие будит его раньше) — зачислено по статусу.
 //!
 //! Расхождение события и статуса дольше transfer.credit_mismatch_s — журнал (credit_mismatch.rs).
@@ -48,24 +49,8 @@ pub async fn wait(
     let quiet = Notify::new();
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(leg.to.0.clone()));
     let mut last = String::new();
-    let mut told_hash = false;
     loop {
-        let hit = ticket.as_ref().and_then(|t| t.hit());
-        // Событие с другим хешем, чем у вывода, — не этот перевод: не закрываем, решает опрос (один раз в журнал).
-        let other = hit
-            .as_ref()
-            .and_then(|(h, _)| h.tx_hash.as_ref())
-            .filter(|h| !h.eq_ignore_ascii_case(&leg.tx))
-            .cloned();
-        if let (Some(h), false) = (other.as_ref(), told_hash) {
-            told_hash = true;
-            let text = format!(
-                "{}: событие зачисления {} с хешем {h}, а у вывода хеш {} — по событию не закрываем, ждём опрос",
-                leg.deal, leg.asset.ticker, leg.tx
-            );
-            super::credit_mismatch::report(core, leg.to, text).await;
-        }
-        if let (Some((hit, true)), None) = (hit, &other) {
+        if let Some(hit) = by_event(ticket.as_ref()) {
             let t = Transfer {
                 venue: leg.to.clone(),
                 asset: leg.asset.clone(),
@@ -135,4 +120,10 @@ async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<Utc>, by: &
     .await;
     deps.notify("deal.transfer_credited", Some(&leg.to.0), &text)
         .await;
+}
+
+/// Событие, закрывающее зачисление (credit_watch.rs Ticket::closing: своё — хеш совпал с хешем отправителя или хеша в
+/// событии нет — и закрытие включено). None — ждём опрос (или ожидания нет). Ошибок нет.
+pub fn by_event(ticket: Option<&Ticket>) -> Option<crate::core::types::BalanceChange> {
+    ticket.and_then(Ticket::closing)
 }

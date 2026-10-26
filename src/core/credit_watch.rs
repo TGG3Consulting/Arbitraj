@@ -1,13 +1,13 @@
 //! Файл: core/credit_watch.rs
-//! Что делает: зачисление перевода по событию, а не опросом статуса (решение 76). Перевод (transfers.rs) до вывода
-//! регистрирует ожидаемое зачисление: получатель, монета, ожидаемый приход. Адаптеры шлют каждое изменение баланса
-//! (MarketEvent::Balance); credit_event.rs сравнивает его с ожиданиями:
-//! - поступление (Deposit) не своё, сумма в пределах transfer.credit_amount_tolerance_pct от ожидаемой — ровно одно
-//!   ожидание подходит → оно отмечено; закрывает ожидание, только если у получателя transfer.credit_by_event = да
-//!   (иначе — только запись в журнал, для сверки с опросом); подходят несколько — по событию не закрываем, решает опрос;
-//! - вывод (Withdraw) с площадки, откуда сейчас идёт перевод этой монеты, — свой; иначе — постороннее;
-//! - всё остальное не своё и поступление без ожидания — журнал «внешнее изменение баланса», без привязки к сделке.
-//!   Ручной ввод и вывод, «Вернуть боту», «Беру на себя» ожиданий не создают — зачислением они не считаются.
+//! Что делает: ожидаемые зачисления переводов (решение 76). Перевод (transfers.rs) до вывода регистрирует ожидание:
+//! получатель, монета, ожидаемый приход; хеш вывода — только от отправителя (withdrawal_status), когда он его отдал
+//! (set_tx). События баланса (credit_event.rs) прикрепляются к ожиданию; закрывает ожидание только событие:
+//! - с хешем — когда хеш отправителя уже известен и совпал (пока хеша нет — событие только будит опрос; с другим
+//!   хешем оно снимается при set_tx и уходит во «внешнее изменение баланса»);
+//! - без хеша (поток BingX, баланс BNB) — по сумме, при единственном подходящем ожидании (credit_event.rs);
+//! - и только если у получателя transfer.credit_by_event = да (флаг на момент события).
+//!
+//! Ручной ввод и вывод, «Вернуть боту», «Беру на себя» ожиданий не создают — зачислением они не считаются.
 //!
 //! Кто вызывает: transfers.rs, transfer_credit.rs, credit_mismatch.rs (ожидание), credit_event.rs (сверка).
 //! От чего зависит: engine.rs, core/types/balance.rs.
@@ -44,9 +44,27 @@ pub(super) struct Expect {
     pub(super) to: VenueId,
     pub(super) asset: Asset,
     pub(super) amount: Decimal,
-    /// Событие, подошедшее к ожиданию, и закрывает ли оно (transfer.credit_by_event на момент события).
-    pub(super) hit: Option<(BalanceChange, bool)>,
+    /// Хеш вывода от отправителя (нормализован — norm); None — ещё не известен.
+    pub(super) tx: Option<String>,
+    /// Прикреплённые события и закрывает ли каждое (transfer.credit_by_event на момент события).
+    pub(super) hits: Vec<(BalanceChange, bool)>,
     pub(super) wake: Arc<Notify>,
+}
+
+impl Expect {
+    /// Событие этого перевода: без хеша — да; с хешем — только если хеш отправителя известен и совпал.
+    pub(super) fn ours(&self, b: &BalanceChange) -> bool {
+        match (&b.tx_hash, &self.tx) {
+            (None, _) => true,
+            (Some(h), Some(tx)) => norm(h) == *tx,
+            (Some(_), None) => false,
+        }
+    }
+}
+
+/// Хеш для сравнения: без «0x», в нижнем регистре. Ошибок нет.
+pub fn norm(h: &str) -> String {
+    h.trim_start_matches("0x").to_ascii_lowercase()
 }
 
 /// Ожидание перевода; при удалении снимается.
@@ -57,12 +75,36 @@ pub struct Ticket {
 }
 
 impl Ticket {
-    /// Подошедшее событие и закрывает ли оно ожидание. Ошибок нет.
-    pub fn hit(&self) -> Option<(BalanceChange, bool)> {
-        lock(&self.core)
-            .list
+    /// Хеш вывода от отправителя известен. Возвращает: события с другим хешем — не этого перевода (сняты с
+    /// ожидания; вызывающий пишет их во «внешнее изменение баланса»). Ошибок нет.
+    pub fn set_tx(&self, tx: &str) -> Vec<BalanceChange> {
+        let mut st = lock(&self.core);
+        let Some(e) = st.list.get_mut(&self.id) else {
+            return Vec::new();
+        };
+        e.tx = Some(norm(tx));
+        let hits = std::mem::take(&mut e.hits);
+        let (keep, foreign): (Vec<_>, Vec<_>) = hits.into_iter().partition(|(b, _)| e.ours(b));
+        e.hits = keep;
+        foreign.into_iter().map(|(b, _)| b).collect()
+    }
+
+    /// Событие, закрывающее ожидание (своё — Expect::ours — и закрытие включено). Ошибок нет.
+    pub fn closing(&self) -> Option<BalanceChange> {
+        let st = lock(&self.core);
+        let e = st.list.get(&self.id)?;
+        e.hits
+            .iter()
+            .find(|(b, close)| *close && e.ours(b))
+            .map(|(b, _)| b.clone())
+    }
+
+    /// Пришло ли своё событие (закрывает оно или нет). Ошибок нет.
+    pub fn has_event(&self) -> bool {
+        let st = lock(&self.core);
+        st.list
             .get(&self.id)
-            .and_then(|e| e.hit.clone())
+            .is_some_and(|e| e.hits.iter().any(|(b, _)| e.ours(b)))
     }
 
     /// Присылала ли площадка события баланса с запуска. Ошибок нет.
@@ -106,7 +148,8 @@ pub fn register(
         to: to.clone(),
         asset: asset.clone(),
         amount,
-        hit: None,
+        tx: None,
+        hits: Vec::new(),
         wake: wake.clone(),
     };
     st.list.insert(id, e);

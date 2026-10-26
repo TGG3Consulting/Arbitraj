@@ -5,13 +5,18 @@
 //! ожидается BNB (events_native.rs). Перевод ждёт send.deposit_confirmations блоков (как статус депозита,
 //! wallet/transfer_status.rs) и уходит ядру событием MarketEvent::Balance; отменённый реоргом до этого — снимается.
 //! Своё (транзакция от адреса кошелька: обмен, свой вывод) помечено own — это не зачисление и не «внешнее изменение».
+//! Токены вне справочника монет бота (спам), обёртка BNB и токены с неразобранными decimals не обрабатываются вовсе —
+//! ни запросов к узлу, ни событий ядру (счётчик — Debug в лог процесса).
 //! Выключено (venue.balance_events не «да») — подписки нет, ждём изменения настроек.
 //! Кто вызывает: resubscribe.rs (задача подписки на рынок).
 //! От чего зависит: node/source.rs, events_log.rs, events_tx.rs, events_native.rs, inflows.rs, signer.rs, pools/listen.rs.
 //! Настройки: venue.balance_events, send.deposit_confirmations, venue.ws_reconnect_pause_ms [bsc_dex];
 //! bsc.pool_events_source (через node/source.rs).
 
+use std::collections::HashSet;
 use std::time::Duration;
+
+use alloy_primitives::Address;
 
 use serde_json::json;
 
@@ -81,7 +86,7 @@ pub async fn run(p: Pools, inflows: Inflows) {
 }
 
 /// Одна сессия до обрыва. Принимает: окружение, ожидаемые поступления, кошелёк. Возвращает: причину конца.
-async fn session(p: &Pools, inflows: &Inflows, wallet: alloy_primitives::Address) -> String {
+async fn session(p: &Pools, inflows: &Inflows, wallet: Address) -> String {
     let conn = match Link::open(&p.ctx, &p.feed, &p.heads, &p.out, "wallet").await {
         Ok(c) => c,
         Err(e) => return e.message,
@@ -105,6 +110,8 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: alloy_primitives::Address
     let mut pending: Vec<(Move, bool)> = Vec::new();
     let mut senders = Senders::default();
     let mut native = Native::default();
+    let mut bad: HashSet<Address> = HashSet::new();
+    let mut skipped: u64 = 0;
     loop {
         tokio::select! {
             raw = rx.recv() => {
@@ -120,6 +127,13 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: alloy_primitives::Address
                 };
                 if mv.removed {
                     pending.retain(|(m, _)| m.key != mv.key);
+                    continue;
+                }
+                // Токены вне справочника монет бота (спам, чужие токены), обёртка BNB и токены с неразобранными decimals
+                // — не наши: без запросов к узлу, только счётчик в лог процесса (Debug).
+                if !super::events_tx::known(&p.ctx, &p.tokens, mv.token) || bad.contains(&mv.token) {
+                    skipped += 1;
+                    tracing::debug!(token = %mv.token, skipped, "событие кошелька: токен не из справочника — пропущено");
                     continue;
                 }
                 // Своя ли транзакция — по отправителю (eth_getTransactionByHash.from). Не узнали — гадать нельзя:
@@ -145,7 +159,13 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: alloy_primitives::Address
                 for (mv, own) in ready {
                     match super::events_tx::change(&p.ctx, &p.tokens, &mv, own).await {
                         Ok(b) => { let _ = p.out.send(MarketEvent::Balance(b)).await; }
-                        Err(e) => p.ctx.log(Level::Warn, "dex.balance_event", e.message, None).await,
+                        Err(e) => {
+                            // Один раз на токен за сессию: дальше его события пропускаются, decimals не запрашиваются.
+                            if bad.insert(mv.token) {
+                                let msg = format!("{} — события токена {} дальше пропускаются до переподключения", e.message, mv.token);
+                                p.ctx.log(Level::Warn, "dex.balance_event", msg, None).await;
+                            }
+                        }
                     }
                 }
                 let waiting: Vec<_> = pending.iter().map(|(m, _)| m.tx).collect();

@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/wallet/events_tx.rs
 //! Что делает: для событий кошелька (решение 76) — чья транзакция (отправитель = адрес кошелька — своя: обмен, свой
 //! вывод) и перевод токена в формате ядра (BalanceChange): тикер монеты подписки по адресу, сумма по decimals токена.
-//! Токен обёртки нативной монеты (WBNB) — это не BNB ядра (у нативной BNB событий Transfer нет, её считает
-//! events_native.rs), поэтому у него и у токенов вне подписки тикер — адрес токена: зачислением BNB они не станут.
+//! Обрабатываются только токены справочника монет бота (known): спам-токены и токен обёртки нативной монеты (WBNB — это
+//! не BNB ядра; у нативной BNB событий Transfer нет, её считает events_native.rs) отсеиваются до запросов к узлу.
 //! Кто вызывает: wallet/events.rs.
 //! От чего зависит: node/rpc.rs, wallet/native_status.rs (Tx), exec/native.rs, tokens.rs, num.rs, ctx.rs.
 //! Настройки: dex.native_ticker, dex.native_wrapped (через exec/native.rs).
@@ -57,6 +57,12 @@ impl Senders {
     }
 }
 
+/// Токен из справочника монет бота и не обёртка нативной монеты. Ошибок нет.
+pub fn known(ctx: &Ctx, tokens: &Tokens, token: Address) -> bool {
+    let wrapped = native::wrapped(ctx).is_some_and(|(_, w)| w == token);
+    !wrapped && tokens.ticker_of(token).is_some()
+}
+
 /// Вид изменения: поступление не своей транзакцией — Deposit, остальное — Other. Ошибок нет.
 pub fn kind(inbound: bool, own: bool) -> BalanceKind {
     if inbound && !own {
@@ -67,18 +73,19 @@ pub fn kind(inbound: bool, own: bool) -> BalanceKind {
 }
 
 /// Перевод токена → изменение баланса для ядра. Принимает: окружение, токены подписки, перевод, своя ли транзакция.
-/// Ошибки: decimals токена не прочитаны (узел); BadResponse — сумма не помещается в Decimal.
+/// Ошибки: decimals токена не прочитаны (узел); BadResponse — токен не из справочника, сумма не помещается в Decimal.
 pub async fn change(
     ctx: &Ctx,
     tokens: &Tokens,
     mv: &Move,
     own: bool,
 ) -> GatewayResult<BalanceChange> {
-    let wrapped = native::wrapped(ctx).is_some_and(|(_, w)| w == mv.token);
-    let ticker = tokens
-        .ticker_of(mv.token)
-        .filter(|_| !wrapped)
-        .unwrap_or_else(|| mv.token.to_string());
+    let ticker = tokens.ticker_of(mv.token).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            format!("токен {} не из справочника монет", mv.token),
+        )
+    })?;
     let dec = tokens.decimals(ctx, mv.token).await?;
     let amount = num::to_decimal(mv.units, dec).ok_or_else(|| {
         ctx.err(

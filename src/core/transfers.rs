@@ -78,21 +78,9 @@ pub async fn send(
         .deposit_address(asset, &net_to)
         .await
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
-    // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76). Приход не посчитан — только опрос.
-    let ticket = match super::credit_expect::arrival(core, from, asset, &net_from, qty).await {
-        Ok(a) => Some(super::credit_watch::register(
-            core, deal, from, to, asset, a,
-        )),
-        Err(e) => {
-            let text = format!(
-                "{deal}: зачисление {} только по опросу статуса — {e}",
-                asset.ticker
-            );
-            deps.log(Level::Info, "core.credit_event", Some(&to.0), text, None)
-                .await;
-            None
-        }
-    };
+    // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
+    // приход не посчитан — только опрос).
+    let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
     let req = WithdrawRequest {
         venue: from.clone(),
         asset: asset.clone(),
@@ -129,16 +117,7 @@ pub async fn send(
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
     let mut last = String::new();
     let sent = loop {
-        // Событие зачисления с хешем пришло раньше хеша от отправителя — хеш из события (решение 76).
-        if let Some((hit, true)) = ticket.as_ref().and_then(|t| t.hit())
-            && let Some(h) = hit.tx_hash
-        {
-            break Transfer {
-                tx_hash: Some(h),
-                status: TransferStatus::Sent,
-                ..created.clone()
-            };
-        }
+        // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
         match gw_from.withdrawal_status(&created.venue_ref).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
@@ -165,6 +144,12 @@ pub async fn send(
         pacer.pause(deps, kick).await;
     };
     let tx = sent.tx_hash.clone().unwrap_or_default();
+    // Хеш отправителя известен: события с другим хешем — не этого перевода, это внешние изменения баланса.
+    if let Some(t) = &ticket {
+        for b in t.set_tx(&tx) {
+            super::credit_event::external(core, &b).await;
+        }
+    }
     let text = format!(
         "{} {qty} {}: {} → {}, хеш {tx}",
         deal, asset.ticker, from.0, to.0

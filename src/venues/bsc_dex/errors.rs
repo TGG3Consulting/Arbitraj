@@ -14,6 +14,10 @@
 //!   «insufficient funds for gas * price + value» — https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/core/error.go#L82 ;
 //!   «execution reverted» (откат eth_call / eth_estimateGas) —
 //!   https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/core/vm/errors.go#L32 .
+//! - «missing trie node» (-32000) — узел не архивный и состояние запрошенного блока уже удалил (живая запись
+//!   2026-10-25 с bsc-dataseed.bnbchain.org: все eth_call на одном блоке, ответ {"code":-32000,"message":"missing trie
+//!   node"} начиная примерно через минуту после блока) — своя причина StaleData «чтение на закреплённом блоке опоздало»,
+//!   а не общая ошибка узла.
 //!
 //! Текст причины всегда берётся из ответа узла как есть — его видит Тигран.
 
@@ -43,6 +47,16 @@ pub fn from_rpc(code: i64, message: &str, source: &str, op: Op, raw: &str) -> Ga
         ErrorCode::GasBelowChannelMin
     } else if m.contains("execution reverted") {
         ErrorCode::SwapReverted
+    } else if m.contains("missing trie node") {
+        return GatewayError::new(
+            ErrorCode::StaleData,
+            Some(venue()),
+            format!(
+                "{source}, код {code}: {message} — состояние блока у узла уже удалено (узел не архивный): чтение на \
+                 закреплённом блоке опоздало, нужен более свежий блок"
+            ),
+        )
+        .with_raw(raw);
     } else {
         match op {
             Op::Send => ErrorCode::ChannelRejected,

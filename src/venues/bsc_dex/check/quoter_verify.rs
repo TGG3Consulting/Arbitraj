@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/check/quoter_verify.rs
 //! Что делает: сверка одного пула с квотером своей DEX (после фильтра ликвидности): пустой пул / не хватает
-//! ликвидности на сумму — честная причина; у пула с крючком B/C — за вычетом измеренного влияния крючка на покупку;
+//! ликвидности на сумму — честная причина; у пула с крючком B/C — за вычетом измеренного влияния крючка на сторону;
+//! покупка и продажа — независимо (решение 73);
 //! сумма — check.probe_usdt USDT (для пула с промежуточной монетой — пересчёт по живому пулу, решение 52).
 //! Кто вызывает: check/quoter_cycle.rs.
 //! От чего зависит: quote/quoter.rs, quote/emptiness.rs, quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs,
@@ -10,7 +11,7 @@
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
-use crate::core::types::{CheckState, HookGroup};
+use crate::core::types::{CheckState, HookGroup, Side};
 use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
@@ -24,14 +25,24 @@ use super::state::Checks;
 /// будит цикл сигналом «пул готов», check/quoter_cycle.rs hook_measured).
 pub const HOOK_WAIT: &str = "влияние крючка ещё не измерено — сверка с квотером невозможна";
 
-/// Сверка пула (после фильтра ликвидности). Возвращает: Ok или Err(причина). Ошибок нет.
-pub async fn verify(p: &Pools, e: &Entry) -> Result<(), String> {
+/// Сверка стороны пула (после фильтра глубины этой стороны; решение 73 — стороны независимо): покупка — check.probe_usdt
+/// USDT во встречном токене в пул; продажа — монеты на эту сумму по текущей цене пула (quote/spot.rs, без обмена). Возвращает: Ok или Err(причина). Ошибок нет.
+pub async fn verify(p: &Pools, e: &Entry, side: Side) -> Result<(), String> {
     if emptiness::empty(e) {
         return Err(emptiness::EMPTY.into());
     }
-    let pct = hook_buy_pct(&p.checks, e)?;
+    let pct = hook_pct(&p.checks, e, side)?;
     let (amount, usdt) = probe(p, e).await?;
-    match quoter::compare(&p.ctx, e, e.usdt, amount, pct).await {
+    let (token_in, amount) = match side {
+        Side::Buy => (e.usdt, amount),
+        // Продажа — монеты на ту же сумму по ТЕКУЩЕЙ цене пула, без обмена на стороне покупки (решение 73): у пула с
+        // ликвидностью только с одной стороны цены покупка невозможна, а продажа глубокая — стороны независимы.
+        Side::Sell => match super::super::quote::spot::coins_for(e, amount) {
+            Some(c) if !c.is_zero() => (e.coin, c),
+            _ => return Err("цены пула нет — монет на сумму пробы продажи не посчитать".into()),
+        },
+    };
+    match quoter::compare(&p.ctx, e, token_in, amount, pct).await {
         Ok(Err(why)) if why.starts_with(emptiness::SHORT) => {
             Err(format!("{why}, check.probe_usdt = {usdt} USDT"))
         }
@@ -57,8 +68,8 @@ pub async fn usdt_decimals(p: &Pools) -> Result<u8, String> {
     p.tokens.decimals(&p.ctx, usdt).await.map_err(|e| e.message)
 }
 
-/// Влияние крючка на покупку, %: 0 — крючка B/C нет. Err — влияние ещё не измерено или проверка крючка не прошла.
-fn hook_buy_pct(checks: &Checks, e: &Entry) -> Result<Decimal, String> {
+/// Влияние крючка на сторону, %: 0 — крючка B/C нет. Err — влияние ещё не измерено или проверка крючка не прошла.
+fn hook_pct(checks: &Checks, e: &Entry, side: Side) -> Result<Decimal, String> {
     if e.pool
         .hooks
         .as_ref()
@@ -67,7 +78,11 @@ fn hook_buy_pct(checks: &Checks, e: &Entry) -> Result<Decimal, String> {
         return Ok(Decimal::ZERO);
     }
     match checks.pool(&e.pool.reference).hook.map(|c| c.impact) {
-        Some(CheckState::Known(i)) => Ok(i.buy_pct),
+        Some(CheckState::Known(i)) => Ok(if side == Side::Buy {
+            i.buy_pct
+        } else {
+            i.sell_pct
+        }),
         // Не хватает ликвидности на пробу — свойство пула, не провал крючка: причина как есть.
         Some(CheckState::Failed { reason }) if reason.starts_with(super::hooks_probe::SHORT) => {
             Err(reason)

@@ -173,6 +173,16 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Пулы DEX глазами адаптера (решение 73): глубина по направлениям в полосе цены, спит ли пул, сверка с квотером,
+    /// tickSpacing — для экрана «Монеты». Ошибки: NotApplicable — не DEX.
+    async fn pool_depths(&self) -> GatewayResult<Vec<crate::core::types::PoolDepth>> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет пулов",
+        ))
+    }
+
     /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
     /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {

@@ -3,7 +3,8 @@
 //! (позиция (блок, logIndex) не позже последней учтённой), применить событие, перечитать бины или весь пул (реорг,
 //! расхождение), отправить
 //! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
-//! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs.
+//! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
+//! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
 //! Настройки: через вызываемые.
@@ -68,7 +69,21 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     };
     let res = match applied {
         Applied::Ignored => return Ok(()),
-        Applied::Updated => Ok(()),
+        // Цена ушла так, что полоса глубины вышла за прочитанные слова (решение 73) — карта вокруг нового тика сразу,
+        // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
+        Applied::Updated => match p.reg.get(&r) {
+            Some(e) if super::depth::off_map(&p.ctx, &e) => {
+                let msg = format!(
+                    "{} {}: полоса цены dex.depth_band_pct вышла за прочитанные слова битмапа — карта тиков перечитывается вокруг нового тика",
+                    e.family.title, e.ticker
+                );
+                p.ctx.log(Level::Info, "dex.pool", msg, None).await;
+                load::refresh(&p.ctx, &p.tokens, &e, block)
+                    .await
+                    .map(|x| p.reg.put(x))
+            }
+            _ => Ok(()),
+        },
         Applied::Bins(ids) => reread_bins(p, &r, &ids, block).await,
         Applied::Refresh(why) => {
             p.ctx
@@ -116,8 +131,10 @@ pub fn note_refill(p: &Pools, e: &Entry) {
     if emptiness::empty(e) {
         return;
     }
-    if let Some(Err(why)) = p.checks.pool(&e.pool.reference).quoter
-        && why == emptiness::EMPTY
+    if p.checks
+        .pool(&e.pool.reference)
+        .quoter
+        .any_err(|why| why == emptiness::EMPTY)
     {
         p.signals.refilled(e.pool.reference.clone());
     }
@@ -149,6 +166,7 @@ async fn latest(p: &Pools) -> GatewayResult<u64> {
 
 /// Пул — ядру без ожидания: медленное ядро не задерживает чтение событий (свежий пул уже в реестре).
 pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
+    super::depth::touch(p, &pool.reference);
     match p.out.try_send(MarketEvent::Pool(pool)) {
         Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
         Err(TrySendError::Closed(_)) => Err(End::Closed),

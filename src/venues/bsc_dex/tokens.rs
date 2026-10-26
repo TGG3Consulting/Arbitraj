@@ -80,6 +80,24 @@ impl Tokens {
         self.all().into_iter().find(|t| t.ticker == ticker)
     }
 
+    /// Запоминает decimals токена, уже прочитанные из контракта другим путём (ответ decimals() из записи узла —
+    /// тесты на записанных данных). Ошибок нет.
+    pub fn remember_decimals(&self, token: Address, d: u8) {
+        self.decimals
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(token, d);
+    }
+
+    /// decimals токена, если уже известны (из кэша, без узла). Ошибок нет.
+    pub fn decimals_known(&self, token: Address) -> Option<u8> {
+        self.decimals
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&token)
+            .copied()
+    }
+
     /// decimals токена: из кэша или из контракта (decimals()).
     /// Принимает: адрес. Возвращает: число знаков. Ошибки: узел, контракт не ERC-20.
     pub async fn decimals(&self, ctx: &Ctx, token: Address) -> GatewayResult<u8> {

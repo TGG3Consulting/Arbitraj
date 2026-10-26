@@ -3,7 +3,8 @@
 //! инициализированные тики через TickLens в словах битмапа вокруг текущего тика.
 //! Кто вызывает: pools/load.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v2v3.rs, ticks.rs, discover.rs (Found).
-//! Настройки: dex.tick_words [bsc_dex] (сколько слов в каждую сторону), dex.tick_lens [вид пула V3].
+//! Настройки: dex.tick_words, dex.depth_band_pct [bsc_dex] (сколько слов в каждую сторону — больше из двух, решение 73),
+//! dex.tick_lens [вид пула V3].
 //!
 //! getReserves / slot0 / liquidity / TickLens.getPopulatedTicksInWord — research/flow/bsc_dex.md, раздел 3
 //! (IPancakeV3PoolState.sol#L21-L48, IUniswapV3PoolState.sol#L21-L32, ITickLens.sol#L6-L24).
@@ -98,13 +99,37 @@ async fn v3_ticks(
     })
 }
 
-/// Слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16.
-/// Ошибки: NotConfigured (dex.tick_words), Internal (tickSpacing ≤ 0).
+/// Сколько слов битмапа в каждую сторону покрывают полосу `pct` % при шаге `spacing`: тиков полосы (большая из сторон,
+/// quote/depth_band.rs band_ticks) / (256 · spacing) вверх до целого, плюс слово текущего тика. Полоса вне (0, 100) —
+/// 0. Ошибок нет.
+pub fn band_words(pct: rust_decimal::Decimal, spacing: i32) -> i32 {
+    use super::super::quote::depth_band::band_ticks;
+    use rust_decimal::prelude::ToPrimitive;
+    let b = (pct / rust_decimal::Decimal::ONE_HUNDRED)
+        .to_f64()
+        .unwrap_or(0.0);
+    let (Some(up), Some(down)) = (band_ticks(b, true), band_ticks(b, false)) else {
+        return 0;
+    };
+    let per_word = 256i64 * i64::from(spacing.max(1));
+    let words = (i64::from(up.max(down)) + per_word - 1) / per_word + 1;
+    words.min(i64::from(i16::MAX)) as i32
+}
+
+/// Слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16; n — больше из dex.tick_words и слов,
+/// которые покрывают полосу цены dex.depth_band_pct при tickSpacing пула (решение 73: при tickSpacing 1 одно слово —
+/// 256 тиков ≈ 2,6% цены, и глубина в полосе без них читалась бы не целиком). Полоса не задана — только dex.tick_words
+/// (глубина тогда не считается и сама скажет причину). Ошибки: NotConfigured (dex.tick_words), BadResponse
+/// (tickSpacing ≤ 0).
 pub fn word_range(ctx: &Ctx, tick: i32, spacing: i32) -> GatewayResult<(i16, i16)> {
     if spacing <= 0 {
         return Err(ctx.err(ErrorCode::BadResponse, format!("tickSpacing {spacing} ≤ 0")));
     }
     let n = ctx.int("dex.tick_words")?.min(i16::MAX as u64) as i32;
+    let n = match ctx.dec("dex.depth_band_pct") {
+        Ok(pct) => n.max(band_words(pct, spacing)),
+        Err(_) => n,
+    };
     let w = i32::from(TickMap::word_of(tick, spacing));
     let lo = (w - n).max(i32::from(i16::MIN)) as i16;
     let hi = (w + n).min(i32::from(i16::MAX)) as i16;

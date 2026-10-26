@@ -24,8 +24,9 @@ pub struct PoolFacts {
     pub gas_approve_sell: Option<u64>,
     /// Влияние крючка (только V4 группы B/C).
     pub hook: Option<PoolCheck>,
-    /// Сверка с квотером: None — ещё не было; Some(Err) — расхождение больше допуска (причина).
-    pub quoter: Option<Result<(), String>>,
+    /// Сверка с квотером по сторонам (решение 73, quoter_sides.rs): у каждой — None (ещё не было или сторона мелкая)
+    /// или Some(Err) — расхождение больше допуска (причина).
+    pub quoter: super::quoter_sides::QuoterSides,
     /// Нативная монета (решение 62, check/native_probe.rs): газ обёртки сверх обмена токеном — (покупка с
     /// UNWRAP_WETH, продажа с WRAP_ETH); None — не мерился; Some(Err) — проба не прошла (причина).
     pub wrap_gas: Option<Result<(u64, u64), String>>,

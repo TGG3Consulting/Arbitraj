@@ -62,6 +62,9 @@ async fn ctx() -> Ctx {
     for (name, scope, val) in [
         ("venue.quote_asset", v.clone(), json!("USDT")),
         ("dex.min_pool_liquidity_usd", v.clone(), json!(1)),
+        // Решение 73: глубина по направлениям в полосе цены (значения теста, не предложение); журнал смен не задан.
+        ("dex.depth_band_pct", v.clone(), json!(10)),
+        ("dex.depth_hysteresis_pct", v.clone(), json!(0)),
         ("exec.dex_slippage_pct", v.clone(), json!(1)),
         (
             "dex.kind",
@@ -217,7 +220,8 @@ async fn buy_and_sell_through_wbnb() {
         p.checks.update_pool(&e.pool.reference, |f| {
             f.gas_buy = Some(100_000);
             f.gas_sell = Some(110_000);
-            f.quoter = Some(Ok(()));
+            f.quoter.buy = Some(Ok(()));
+            f.quoter.sell = Some(Ok(()));
         });
     }
     p.checks.set_coin(clean("BNB", WBNB));

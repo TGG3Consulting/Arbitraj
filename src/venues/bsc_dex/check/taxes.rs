@@ -119,14 +119,16 @@ async fn run(
             "check.probe_usdt не переводится в единицы USDT",
         )
     })?;
-    let (pools, mut env) = super::taxes_util::probe_pools(ctx, reg, tokens, ticker, usdt_dec)?;
-    if pools.is_empty() && !env.is_empty() {
-        return Ok(Outcome::Wait(env.join("; ")));
-    }
+    let (pools, mut env, shallow) =
+        super::taxes_util::probe_pools(ctx, reg, tokens, ticker, usdt_dec)?;
     if pools.is_empty() {
-        return Ok(Outcome::Wait(
-            "нет достоверного пула ликвиднее dex.min_pool_liquidity_usd для пробного обмена".into(),
-        ));
+        // Пробовать нечем: причины по каждому пулу — глубина не считается, мелкий (с цифрами), спит (решение 73).
+        let mut why = env;
+        if why.is_empty() {
+            why.push(super::tax_deep::SHALLOW.into());
+        }
+        why.extend(shallow);
+        return Ok(Outcome::Wait(why.join("; ")));
     }
     let mut taxes = None;
     let (mut failed, mut config) = (Vec::new(), Vec::new());
@@ -143,8 +145,13 @@ async fn run(
                 continue;
             }
         };
-        let deep =
-            |x: &Entry| matches!(select::deep_enough(ctx, reg, tokens, x, usdt_dec), Ok(None));
+        let deep = |x: &Entry| {
+            let any = select::Need::Any;
+            matches!(
+                select::deep_side(ctx, reg, tokens, x, usdt_dec, any),
+                Ok(None)
+            )
+        };
         let source = match quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await {
             Ok(Some(s)) => s,
             Ok(None) => {

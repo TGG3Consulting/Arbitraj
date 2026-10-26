@@ -110,8 +110,10 @@ pub async fn quote_source(
         .map(|(a, _)| a))
 }
 
-/// Пулы монеты для пробы: достоверные и не мельче dex.min_pool_liquidity_usd (фильтр — первым, quote/select.rs),
-/// V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы, причины ожидания по пулам, где глубина не считается).
+/// Пулы монеты для пробы: достоверные и глубокие в ОБА направления (проба покупает и продаёт тем же пулом; фильтр —
+/// первым, quote/select.rs deep_side), V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы, причины
+/// ожидания по пулам, где глубина не считается, причины по мелким и спящим пулам — с цифрами глубины: «V4 ZKP 0x…:
+/// глубина покупки 812 USDT …»; они — в текст ожидания, только когда пробовать нечем).
 /// Ошибки: NotConfigured (не задана настройка глубины).
 pub fn probe_pools(
     ctx: &Ctx,
@@ -119,16 +121,19 @@ pub fn probe_pools(
     tokens: &Tokens,
     ticker: &str,
     usdt_dec: u8,
-) -> GatewayResult<(Vec<Entry>, Vec<String>)> {
-    let (mut pools, mut env) = (Vec::new(), Vec::new());
+) -> GatewayResult<(Vec<Entry>, Vec<String>, Vec<String>)> {
+    let (mut pools, mut env, mut shallow) = (Vec::new(), Vec::new(), Vec::new());
     for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
-        match select::deep_enough(ctx, reg, tokens, &e, usdt_dec) {
+        let label = super::super::pools::depth_book::label(&e.pool.reference);
+        match select::deep_side(ctx, reg, tokens, &e, usdt_dec, select::Need::Both) {
             Ok(None) => pools.push(e),
-            Ok(Some(_)) => {}
+            Ok(Some(why)) => {
+                shallow.push(format!("{} {} {label}: {why}", e.family.title, e.ticker))
+            }
             Err(why) if why.starts_with("Не задана настройка") => {
                 return Err(ctx.err(ErrorCode::NotConfigured, why));
             }
-            Err(why) => env.push(format!("{} {}: {why}", e.family.title, e.ticker)),
+            Err(why) => env.push(format!("{} {} {label}: {why}", e.family.title, e.ticker)),
         }
     }
     // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
@@ -137,7 +142,7 @@ pub fn probe_pools(
         PoolKind::V3 => 1,
         _ => 2,
     });
-    Ok((pools, env))
+    Ok((pools, env, shallow))
 }
 
 /// «Не проверено: пулы монеты ещё загружаются» для экранов. Принимает: окружение, тикер, адрес, причину. Ошибок нет.

@@ -87,8 +87,9 @@
 
 <div class="editor">
   {#if label}<span class="scope">{label}</span>{/if}
-  <span class={current === undefined ? 'unset' : 'value'}>
-    {current === undefined ? 'не задано' : def.kind === 'Choice' ? choiceLabel(current) : showValue(current)}
+  <!-- Необязательная (def.optional) не задана — не «пробел», а выключенная часть функции (описание — ниже). -->
+  <span class={current === undefined ? (def.optional ? 'muted' : 'unset') : 'value'}>
+    {current === undefined ? (def.optional ? 'не задано (необязательная)' : 'не задано') : def.kind === 'Choice' ? choiceLabel(current) : showValue(current)}
   </span>
   {#if def.kind === 'Integer' && def.max != null}<span class="muted">не больше {def.max}</span>{/if}
   {#if def.kind === 'Bool'}

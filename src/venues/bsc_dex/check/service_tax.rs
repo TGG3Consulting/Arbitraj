@@ -149,7 +149,7 @@ async fn measure(p: &Pools) -> GatewayResult<Option<TokenTaxes>> {
     })?;
     let deep = |x: &_| {
         matches!(
-            select::deep_enough(ctx, &p.reg, &p.tokens, x, dec),
+            select::deep_side(ctx, &p.reg, &p.tokens, x, dec, select::Need::Any),
             Ok(None)
         )
     };

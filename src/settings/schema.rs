@@ -46,6 +46,10 @@ pub enum Limit {
     Fraction,
     /// Процент от 0 до 100 включительно.
     Percent,
+    /// Процент больше 0 и меньше 100 (полоса цены — решение 73).
+    PercentOpen,
+    /// Процент от 0 включительно и меньше 100 (гистерезис — решение 73).
+    PercentBelow100,
 }
 
 /// Где действует настройка. Значение для более узкой области сильнее общего:
@@ -113,6 +117,9 @@ pub struct SettingDef {
     pub dex_id: DexId,
     /// Смысл области «площадка»: обычная или источник перевода (решение 51).
     pub venue_role: VenueRole,
+    /// Необязательная: не задана — функция работает, отключается только то, что описано (например
+    /// dex.depth_log_min_s — записи о смене глубины, решение 73). Интерфейс не считает её «не задано».
+    pub optional: bool,
 }
 
 impl SettingDef {
@@ -130,6 +137,14 @@ impl SettingDef {
     pub const fn transfer_source(self) -> Self {
         SettingDef {
             venue_role: VenueRole::TransferSource,
+            ..self
+        }
+    }
+
+    /// Помечает настройку необязательной (см. поле optional). Возвращает: описание с пометкой.
+    pub const fn optional(self) -> Self {
+        SettingDef {
+            optional: true,
             ..self
         }
     }

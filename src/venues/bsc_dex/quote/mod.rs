@@ -12,6 +12,7 @@
 
 pub mod approve_gas;
 pub mod costs;
+pub mod depth_band;
 pub mod direct;
 pub mod direct_route;
 pub mod emptiness;
@@ -29,6 +30,7 @@ pub mod select;
 pub mod smart;
 pub mod smart_quote;
 pub mod smart_ways;
+pub mod spot;
 pub mod steps;
 pub mod via;
 pub mod via_pools;

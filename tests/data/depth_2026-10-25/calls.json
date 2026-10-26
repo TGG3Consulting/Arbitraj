@@ -1,0 +1,29 @@
+{
+  "about": "Решение 73: глубина пулов по направлениям в полосе цены. Монеты — адреса из снимка бота 24.10 (/api/coins), пулы — у GeckoTerminal по адресу монеты (страница 1), дальше всё — с публичного узла BNB Chain, на каждый пул свой свежий блок (узел не архивный: состояние блока пропадает примерно через минуту — «missing trie node»), вызовы пула JSON-RPC batch'ами по batch_max: tickSpacing (V3 — tickSpacing(), Infinity CL — CLPoolManager.poolIdToPoolKey, Uniswap V4 — PositionManager.poolKeys), состояние (slot0/liquidity, getSlot0/getLiquidity), слова битмапа ±tick_words вокруг текущего тика (с запасом, чтобы полоса цены при tickSpacing 1 была прочитана целиком), данные установленных тиков CL; V2 — getReserves; у пулов AAVE — balanceOf USDT пула (живой замер 25.10: 2044,75 USDT в 0x8e3ecc0b…). Рекордер — tests/recorders/record_depth.js.",
+  "node": "https://bsc-dataseed.bnbchain.org",
+  "gecko": "https://api.geckoterminal.com/api/v2/networks/bsc/tokens/{address}/pools?page=1",
+  "tick_words": 8,
+  "batch_max": 100,
+  "usdt": "0x55d398326f99059ff775485246999027b3197955",
+  "coins": {
+    "ZKP": "0xd89b7dd376e671c124352267516bef1c2cc231a3",
+    "OPN": "0x7977bf3e7e0c954d12cdca3e013adaf57e0b06e0",
+    "IOST": "0xaf48b7e315a52518cfbf7d96c455d9dfad94cb48",
+    "AAVE": "0xfb6115445bff7b52feb98650c87f44907e58f802"
+  },
+  "balance_of": ["AAVE"],
+  "contracts": {
+    "cl_manager": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b",
+    "state_view": "0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4",
+    "position_manager": "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b",
+    "pcs_tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+    "uni_tick_lens": "0xd9270014d396281579760619ccf4c3af0501a47c"
+  },
+  "kinds": {
+    "pancakeswap_v2": "v2",
+    "pancakeswap-v3-bsc": "pcs_v3",
+    "uniswap-bsc": "uni_v3",
+    "pancakeswap-infinity-clmm": "infinity_cl",
+    "uniswap-v4-bsc": "uni_v4"
+  }
+}

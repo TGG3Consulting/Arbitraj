@@ -142,10 +142,7 @@ async fn invalid_during_pass_is_checked_as_soon_as_read() {
     fresh
         .check(&f.reference, quoter_cycle::one(&p, &f.reference, &mut None))
         .await;
-    assert!(
-        p.checks.pool(&f.reference).quoter.is_none(),
-        "сверки не было"
-    );
+    assert!(p.checks.pool(&f.reference).quoter.none(), "сверки не было");
     assert!(
         fresh.due(&p, |_| false).is_empty(),
         "недостоверный — не к проверке"

@@ -24,7 +24,8 @@ export function groupStats(schema, values) {
     if (!out.has(d.group)) out.set(d.group, { group: d.group, total: 0, unset: 0 });
     const g = out.get(d.group);
     g.total += 1;
-    if (!isSet(d, values)) g.unset += 1;
+    // Необязательная (d.optional) не задана — это не пробел в настройке, в «не задано» не считается.
+    if (!d.optional && !isSet(d, values)) g.unset += 1;
   }
   return [...out.values()];
 }
@@ -44,7 +45,7 @@ export function filterSettings(schema, values, f) {
     if (q) {
       if (!d.name.toLowerCase().includes(q) && !d.description.toLowerCase().includes(q)) continue;
     } else if (f.group && d.group !== f.group) continue;
-    if (f.onlyUnset && isSet(d, values)) continue;
+    if (f.onlyUnset && (d.optional || isSet(d, values))) continue;
     if (!out.has(d.group)) out.set(d.group, []);
     out.get(d.group).push(d);
   }

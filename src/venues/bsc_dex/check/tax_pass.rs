@@ -19,6 +19,7 @@ use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
+use super::tax_deep::{Deep, deep, has_valid};
 use super::taxes::{self, Outcome};
 use super::taxes_util::Sources;
 
@@ -29,6 +30,10 @@ pub enum Why {
     NoPool,
     /// Пул был, помешал узел или окружение (429, нет связи) — повтор через tax.retry_s.
     Node,
+    /// Достоверные пулы есть, но ни одного глубокого в оба направления (решение 73) — повтор не по таймеру, а по
+    /// сигналу «пул готов», когда у монеты появился глубокий пул (пересчёт глубины на смене состояния, пробуждение
+    /// мелкого пула — pools/admit.rs wake).
+    Shallow,
     /// Не задана настройка — до следующего полного прохода.
     Config,
     /// Пулы монеты ещё загружаются — проверка, как только они прочитаны (сигнал «пул готов»).
@@ -58,11 +63,6 @@ pub enum Res {
     Failed,
     Wait,
     Config,
-}
-
-/// Есть ли у монеты достоверный пул. Ошибок нет.
-pub fn has_valid(p: &Pools, ticker: &str) -> bool {
-    p.reg.by_ticker(ticker).iter().any(|e| e.valid)
 }
 
 /// Проверяет монеты списка (см. шапку). Монета, чьи пулы ещё загружаются (pools/loading.rs), не проверяется — ждёт
@@ -153,10 +153,14 @@ pub async fn check(
                 // Причину ожидания видно на «Монетах» и «Живом экране»: монета без итога получает NotChecked с причиной;
                 // уже известный итог (прошла / не прошла) из-за помехи не меняется.
                 super::taxes_util::note_wait(p, &prev, c).await;
-                let why = if has_valid(p, ticker) {
-                    Why::Node
-                } else {
+                // Нет глубокого пула — своя причина (не сбой узла): повтор по «пул готов», не каждые tax.retry_s.
+                let why = if !has_valid(p, ticker) {
                     Why::NoPool
+                } else if deep(p, ticker) == Deep::No {
+                    // Глубина не считается (Deep::Unknown) — помеха, а не «мелкий»: повтор через tax.retry_s (Node).
+                    Why::Shallow
+                } else {
+                    Why::Node
                 };
                 pass.waiting.push((*addr, ticker.clone(), why));
                 continue;

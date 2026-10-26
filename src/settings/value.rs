@@ -149,6 +149,8 @@ fn check_limit(limit: Limit, n: Decimal) -> Result<(), String> {
         Limit::NonNegative => n >= Decimal::ZERO,
         Limit::Fraction => n >= Decimal::ZERO && n <= Decimal::ONE,
         Limit::Percent => n >= Decimal::ZERO && n <= Decimal::ONE_HUNDRED,
+        Limit::PercentOpen => n > Decimal::ZERO && n < Decimal::ONE_HUNDRED,
+        Limit::PercentBelow100 => n >= Decimal::ZERO && n < Decimal::ONE_HUNDRED,
     };
     if ok {
         Ok(())
@@ -159,6 +161,8 @@ fn check_limit(limit: Limit, n: Decimal) -> Result<(), String> {
             Limit::NonNegative => "ноль или больше",
             Limit::Fraction => "доля от 0 до 1",
             Limit::Percent => "процент от 0 до 100",
+            Limit::PercentOpen => "процент больше 0 и меньше 100",
+            Limit::PercentBelow100 => "процент от 0 и меньше 100",
         };
         Err(format!("Значение {n} не подходит: нужно {rule}"))
     }

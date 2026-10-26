@@ -62,12 +62,50 @@
   // Сколько подписок подряд на одно соединение попробовать (счёт успешных до первой ошибки).
   const SUBS_PROBE = 200;
 
+  // ── Режим ───────────────────────────────────────────────────────────────────────────────────────────────
+  // "main"     — поток logs по адресам пулов V2/V3 (как первая запись);
+  // "managers" — решение 79, CL/V4: события шлёт АДРЕС МЕНЕДЖЕРА, PoolId в topics[1]. Проверяем вариант (а):
+  //   (1) сколько PoolId принимает фильтр topics[1] у каждого менеджера (предел дробления CL/V4);
+  //   (2) короткий «файрхоз» менеджера БЕЗ фильтра PoolId (вариант (б)) — померить объём, НЕ грузить (30 с, жёсткий
+  //       лимит кадров MAX_FRAMES, лишние только считаются), заодно собрать реально встреченные topic0;
+  //   (3) сколько соединений на IP держится (CONN_PROBE) — запас под отдельные подписки на каждого менеджера.
+  const MODE = "managers";
+
+  // Менеджеры CL/V4 (адреса-эмитенты событий, используются в by_pool_id; сверено с dex.pool_manager и тестами
+  // bsc_dex_batch_load/bsc_dex_node_calls). CL — PancakeSwap Infinity CLPoolManager; V4 — Uniswap V4 PoolManager.
+  const MANAGERS = [
+    { kind: "infinity_cl", manager: "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b" },
+    { kind: "uniswap_v4", manager: "0x28e2ea090877bf75740558f6bfb36a5ffee9e9df" },
+  ];
+  // Наши PoolId из записи глубины tests/data/depth_2026-10-25 (topics[1]). CL — 13, V4 — 45.
+  const POOL_IDS = {
+    infinity_cl: [
+      "0x841f7ca671b4dd2c3920884cf045e87762ab549506fd2a2ae40f4b26cb81ad6a",
+      "0xae19c3aa5fb0d6f37e01251fb16c05bb2b9b146b8b932d431d5b29bbd6df8f2a",
+      "0x1ee478fa618b152bb09e4c1a805b83c11a2cc328ab35a114a2be7360811fa572",
+    ],
+    uniswap_v4: [
+      "0xbe42d277f1865d14f5787bff0930099d9f4d3748eedaa2e983aa0bae7c36d670",
+      "0x438d67d4899bf77855c9d2f3ab45855fd66b9860b5653fbecfac61b2b707ddc6",
+      "0xa2bf5402ad19bd310136dab3e8d281bd9266d523de48eae727d515ef7dbbf53e",
+    ],
+  };
+  // Размеры фильтра topics[1] для менеджеров (где откажет — предел дробления CL/V4).
+  const ID_SIZES = [1, 50, 200, 1000, 5000];
+  // Короткий файрхоз менеджера без фильтра PoolId — чтобы померить объём варианта (б).
+  const FIREHOSE_SECONDS = 30;
+  // Сколько соединений открыть и подержать (предел на IP; в офдоках publicnode числа может не быть).
+  const CONN_PROBE = 10;
+  const CONN_HOLD_SECONDS = 20;
+
   // ── Запись ──────────────────────────────────────────────────────────────────────────────────────────────
   const rec = {
     about:
-      "Решение 79: реальный WS eth_subscribe(logs) публичного узла BSC. Основной поток — по адресам пулов V2/V3 из " +
-      "tests/data/depth_2026-10-25. Отдельно пробы пределов: число адресов в одном фильтре (SIZES), число подписок на " +
-      "соединение (SUBS_PROBE), и приходит ли removed:true (поле frames[].removed). Разбор — после записи.",
+      "Решение 79: реальный WS eth_subscribe(logs) публичного узла BSC. Режим в поле mode. main — поток по адресам " +
+      "пулов V2/V3. managers — CL/V4: предел PoolId в topics[1] у менеджера (limits.poolids_in_topic1), короткий файрхоз " +
+      "менеджера без фильтра PoolId для объёма варианта (б) (manager_firehose), предел соединений на IP (connections). " +
+      "Селекторы событий берём из пути квитанций (официальные ABI), не из этой записи. Разбор — после записи.",
+    mode: MODE,
     node: NODE,
     startedAt: new Date().toISOString(),
     subs: [],
@@ -187,25 +225,156 @@
     );
   }
 
-  // Основной поток: подписка logs по адресам ADDR, запись всех кадров.
-  async function main() {
-    let url = NODE;
-    let ws = null;
+  // Детерминированный псевдо-PoolId (32 байта) для набивки больших topics[1] — проверяем ТОЛЬКО приём фильтра.
+  function padId(i) {
+    const h = (i >>> 0).toString(16).padStart(64, "0");
+    return "0x" + h;
+  }
+  function idList(ids, size) {
+    const out = [];
+    for (let i = 0; i < size; i++) out.push(i < ids.length ? ids[i] : padId(i));
+    return out;
+  }
+
+  // Открывает первый доступный узел (основной или запасной). Возвращает {ws,url} или null.
+  async function openAny() {
     for (const cand of [NODE].concat(FALLBACKS)) {
       try {
-        ws = await open(cand);
-        url = cand;
-        break;
+        const ws = await open(cand);
+        return { ws, url: cand };
       } catch (e) {
         rec.notes.push("узел " + cand + " не открылся: " + (e && e.message ? e.message : String(e)));
         log("не открылся", cand);
       }
     }
-    if (!ws) {
+    return null;
+  }
+
+  // ── Режим managers (решение 79, CL/V4) ─────────────────────────────────────────────────────────────────
+  // Проба «сколько PoolId принимает topics[1] у менеджера».
+  async function probePoolIds(url, mgr) {
+    const ids = POOL_IDS[mgr.kind] || [];
+    for (const size of ID_SIZES) {
+      const filter = { address: mgr.manager, topics: [null, idList(ids, size)] };
+      const res = await once(url, 30000 + size, "eth_subscribe", ["logs", filter], 20000);
+      rec.limits.push({
+        type: "poolids_in_topic1",
+        kind: mgr.kind,
+        manager: mgr.manager,
+        size: size,
+        ok: res.ok,
+        result: res.result,
+        error: res.error,
+      });
+      log("PoolId в topics[1]", mgr.kind, size, res.ok ? "ok" : "отказ " + JSON.stringify(res.error));
+    }
+  }
+
+  // Короткий файрхоз менеджера БЕЗ фильтра PoolId: объём варианта (б). Жёсткий лимит кадров, лишние считаются;
+  // собираем реально встреченные topic0 (эмпирически, не как источник селекторов — те из ABI квитанций).
+  function probeFirehose(url, mgr) {
+    return open(url).then(
+      (ws) =>
+        new Promise((resolve) => {
+          let frames = 0;
+          let dropped = 0;
+          const topics = {};
+          const start = nowMs();
+          const t = setTimeout(finish, FIREHOSE_SECONDS * 1000 + 3000);
+          function finish() {
+            clearTimeout(t);
+            try { ws.close(); } catch (e) {}
+            rec.limits.push({
+              type: "manager_firehose",
+              kind: mgr.kind,
+              manager: mgr.manager,
+              seconds: Math.round((nowMs() - start) / 1000),
+              frames: frames,
+              dropped: dropped,
+              per_sec: +(frames / FIREHOSE_SECONDS).toFixed(1),
+              topic0_seen: topics,
+            });
+            log("файрхоз менеджера", mgr.kind, "кадров", frames, "(+" + dropped + ")", "~" + (frames / FIREHOSE_SECONDS).toFixed(1) + "/с");
+            resolve();
+          }
+          ws.onmessage = (ev) => {
+            let m;
+            try { m = JSON.parse(ev.data); } catch (e) { return; }
+            if (m.method === "eth_subscription" && m.params && m.params.result) {
+              const r = m.params.result;
+              const t0 = r.topics && r.topics[0];
+              if (t0) topics[t0] = (topics[t0] || 0) + 1;
+              if (frames < MAX_FRAMES) {
+                frames++;
+              } else {
+                dropped++;
+              }
+            }
+          };
+          ws.onclose = finish;
+          // Без topics[1]: ВСЕ события менеджера (все пулы DEX) — верхняя оценка объёма варианта (б).
+          ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_subscribe", params: ["logs", { address: mgr.manager }] }));
+          setTimeout(finish, FIREHOSE_SECONDS * 1000);
+        }),
+      (e) => { rec.limits.push({ type: "manager_firehose", kind: mgr.kind, error: "не подключиться: " + String(e) }); }
+    );
+  }
+
+  // Проба «сколько соединений на IP держится»: открыть CONN_PROBE соединений с 1 подпиской, подержать.
+  async function probeConnections(url) {
+    const conns = [];
+    let ok = 0;
+    const errors = [];
+    for (let i = 0; i < CONN_PROBE; i++) {
+      try {
+        const ws = await open(url);
+        ws.send(JSON.stringify({ jsonrpc: "2.0", id: 40000 + i, method: "eth_subscribe", params: ["logs", { address: ADDR[0] }] }));
+        conns.push(ws);
+        ok++;
+      } catch (e) {
+        errors.push("соединение " + i + ": " + (e && e.message ? e.message : String(e)));
+      }
+    }
+    await new Promise((r) => setTimeout(r, CONN_HOLD_SECONDS * 1000));
+    const alive = conns.filter((w) => w.readyState === 1).length;
+    for (const w of conns) { try { w.close(); } catch (e) {} }
+    rec.limits.push({ type: "connections", opened: ok, alive_after_hold: alive, errors: errors });
+    log("соединений открыто", ok, "из", CONN_PROBE, "живы после паузы", alive);
+  }
+
+  async function managers() {
+    const picked = await openAny();
+    if (!picked) {
+      rec.notes.push("ни один узел не открылся — возможно, нужен другой WSS из офсписка BNB");
+      log("WS-RECORD DONE: ни один узел не открылся");
+      return;
+    }
+    try { picked.ws.close(); } catch (e) {}
+    rec.node = picked.url;
+    // Пределы PoolId в topics[1] — по каждому менеджеру, по очереди (не грузим узел параллелью).
+    for (const mgr of MANAGERS) await probePoolIds(picked.url, mgr);
+    // Файрхоз каждого менеджера — коротко, по очереди.
+    for (const mgr of MANAGERS) await probeFirehose(picked.url, mgr);
+    // Предел соединений на IP.
+    await probeConnections(picked.url);
+    rec.endedAt = new Date().toISOString();
+    console.log(
+      "WS-RECORD DONE (managers): узел " + rec.node +
+        ", проб пределов " + rec.limits.length +
+        ". Теперь: copy(JSON.stringify(window.__rec))"
+    );
+  }
+
+  // Основной поток: подписка logs по адресам ADDR, запись всех кадров.
+  async function main() {
+    const picked = await openAny();
+    if (!picked) {
       rec.notes.push("ни один узел не открылся из браузера — возможно, нужен другой WSS из офсписка BNB");
       log("WS-RECORD DONE: ни один узел не открылся");
       return;
     }
+    const ws = picked.ws;
+    const url = picked.url;
     rec.node = url;
     const subId = new Map(); // result → наш id
     ws.onmessage = (ev) => {
@@ -259,5 +428,6 @@
     }, RUN_SECONDS * 1000);
   }
 
-  main();
+  if (MODE === "managers") managers();
+  else main();
 })();

@@ -79,7 +79,9 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
 /// Замок перед покупкой (решение 74): сухой режим включён — покупки нет. Ошибки: текст причины.
 pub fn buy_gate(core: &Core) -> Result<(), String> {
     match super::dry::blocks(&core.inner.deps.settings) {
-        Some(why) => Err(format!("покупки нет: перед покупкой включён {why}")),
+        Some(why) => Err(format!(
+            "остановлена: включён сухой режим до покупки — ордер не ставился ({why})"
+        )),
         None => Ok(()),
     }
 }

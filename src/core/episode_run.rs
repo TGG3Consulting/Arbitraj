@@ -127,9 +127,29 @@ pub fn is_open(core: &Core, d: &Direction) -> bool {
     lk(&core.inner.episodes).is_open(d)
 }
 
-/// Сообщение задаче эпизодов. Задача остановилась — сообщение теряется (процесс завершается). Ошибок нет.
+/// Сообщение задаче эпизодов без ожидания (try_send). Канал полон — сообщение теряется: счётчик и запись в журнал на
+/// 1-ю, 2-ю, 4-ю, 8-ю… потерю (не чаще); потерянное закрытие уборка задачи доводит сама (episode_cfg.rs). Ошибок нет.
 pub fn send(core: &Core, m: EpMsg) {
-    let _ = core.inner.episode_tx.send(m);
+    use std::sync::atomic::Ordering;
+    use tokio::sync::mpsc::error::TrySendError;
+    let kind = match &m {
+        EpMsg::Open { .. } => "открытие",
+        EpMsg::Record { .. } => "запись",
+        EpMsg::Close { .. } => "закрытие",
+        EpMsg::Off(_) => "смена «ведутся / нет»",
+    };
+    if let Err(TrySendError::Full(_)) = core.inner.episode_tx.try_send(m) {
+        let n = core.inner.episode_lost.fetch_add(1, Ordering::Relaxed) + 1;
+        if n.is_power_of_two() {
+            let c = core.clone();
+            tokio::spawn(async move {
+                let text = format!(
+                    "очередь эпизодов полна: потеряно сообщений — {n} (последнее: {kind}); записи эпизодов неполные"
+                );
+                super::episode_cfg::warn(&c, text).await;
+            });
+        }
+    }
 }
 
 /// Настройки эпизодов; смена «ведутся / нет» — сообщение Off (журнал пишет задача). Ошибок нет.

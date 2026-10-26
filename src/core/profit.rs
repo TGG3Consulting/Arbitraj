@@ -33,6 +33,10 @@ pub enum Verdict {
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
+    // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
+    if let super::dry::Mode::Dry(Err(e)) = mode {
+        return reject(e.clone(), None);
+    }
     let cx = match DirCtx::build(core, d) {
         Ok(c) => c,
         Err(e) => return reject(e, None),

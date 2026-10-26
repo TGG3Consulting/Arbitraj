@@ -15,8 +15,9 @@ use arb::core::Core;
 use arb::core::deps::Deps;
 use arb::core::dry::{self, Mode};
 use arb::core::executor::{self, Start};
+use arb::core::profit::{self, Verdict};
 use arb::core::types::VenueId;
-use arb::core::{candidates, limits};
+use arb::core::{candidates, limits, precheck};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -180,7 +181,7 @@ async fn live_deal_never_gets_virtual_budget() {
     assert!(
         executor::buy_gate(&core)
             .unwrap_err()
-            .contains("сухой режим")
+            .contains("остановлена: включён сухой режим до покупки")
     );
 }
 
@@ -210,4 +211,25 @@ async fn candidates_accepted_in_dry_mode() {
     let row = &rows.as_array().unwrap()[0];
     assert_eq!(row["dry"], true);
     assert!(row["verdict"].get("Accept").is_some());
+}
+
+/// Пересчёт живой сделки перед покупкой (precheck::replan) — всегда режим Live: при сухом режиме без бюджета расчёт в
+/// сухом режиме отказывает причиной dry.budget_usdt, а пересчёт сделки — нет (идёт дальше и упирается в справочник).
+/// Если пересчёт сделки начнёт брать режим из настроек, причина станет «dry.budget_usdt» и тест упадёт.
+#[tokio::test]
+async fn precheck_replans_live() {
+    let (core, s) = start("replan").await;
+    set(&s, "dry.enabled", Some(json!(true))).await;
+    let dir = size_common::calc::direction();
+    let reason = |v: Verdict| match v {
+        Verdict::Reject { reason, .. } => reason,
+        Verdict::Accept(_) => panic!("справочник пуст — прохода быть не может"),
+    };
+    let dry_reason = reason(profit::decide(&core, &dir, &dry::mode(&s)).await);
+    assert!(dry_reason.contains("dry.budget_usdt"), "{dry_reason}");
+    let live_reason = reason(precheck::replan(&core, &dir).await);
+    assert!(
+        !live_reason.contains("dry"),
+        "пересчёт сделки — режим Live: {live_reason}"
+    );
 }

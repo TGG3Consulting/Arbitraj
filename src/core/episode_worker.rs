@@ -13,7 +13,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde_json::json;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::{Duration, Instant, sleep_until};
 
 use crate::storage::episodes_db;
@@ -27,7 +27,7 @@ use super::episode_run::{EpMsg, sweep};
 use super::view::CoreEvent;
 
 /// Задача эпизодов. Работает, пока жив канал.
-pub async fn run(core: Core, mut rx: UnboundedReceiver<EpMsg>) {
+pub async fn run(core: Core, mut rx: Receiver<EpMsg>) {
     load(&core).await;
     let mut st: HashMap<String, Open> = HashMap::new();
     let mut next_clean = Instant::now();
@@ -84,18 +84,20 @@ async fn handle(core: &Core, st: &mut HashMap<String, Open>, cfg: Option<&Cfg>, 
                 &info.id,
                 json!({ "type": "open", "info": info, "calc": calc }).to_string(),
             );
-            let mut o = Open::new(info, calc);
-            if !room(core, cfg, st).await && o.info.stopped.is_none() {
-                stop(core, &mut o).await;
+            // Сначала зарегистрировать (память задачи и база): уборка ниже видит эпизод открытым и его файл не
+            // считает сиротой (ревью #64).
+            let id = info.id.clone();
+            save(core, &info).await;
+            st.insert(id.clone(), Open::new(info, calc));
+            let fits = room(core, cfg, st).await;
+            let Some(o) = st.get_mut(&id) else { return };
+            if !fits && o.info.stopped.is_none() {
+                stop(core, o).await;
+                save(core, &o.info).await;
             }
-            save(core, &o.info).await;
-            log(
-                core,
-                format!("{}Эпизод открыт: {}", mark(&o.info), o.pair()),
-                Some(&o.info),
-            )
-            .await;
-            st.insert(o.info.id.clone(), o);
+            let text = format!("{}Эпизод открыт: {}", mark(&o.info), o.pair());
+            let info = o.info.clone();
+            log(core, text, Some(&info)).await;
         }
         EpMsg::Record {
             info,

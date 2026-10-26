@@ -196,3 +196,86 @@ async fn sweep_closes_untracked_direction() {
         Some("направление больше не отслеживается")
     );
 }
+
+/// Место кончилось (ревью #64): открытие нового эпизода убирает самые старые закрытые, а его собственный файл — цел
+/// (он зарегистрирован до уборки и не считается сиротой). Старый эпизод — закрытый, файл больше episode.max_mb = 1 МБ
+/// (несжимаемая строка, записанная через тот же поток записи эпизодов).
+#[tokio::test]
+async fn full_disk_keeps_new_episode() {
+    let (core, s, db, dir) = start("full").await;
+    episode_settings(&s).await;
+    s.set("episode.max_mb", Scope::Global, Some(json!(1)), "тест")
+        .await
+        .unwrap();
+    let rec = Rec::load("episode-full").await;
+    let calc = size_common::calc::calc(&rec, d("10"));
+    // Старый закрытый эпизод с большим файлом.
+    let files = &core.inner.episode_files;
+    let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+    let big: String = (0..3_000_000)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            char::from(b"0123456789abcdef"[(x & 15) as usize])
+        })
+        .collect();
+    files.open("old-1", 3);
+    files.line("old-1", json!({ "type": "calc", "pad": big }).to_string());
+    files.close("old-1");
+    let old = EpisodeInfo {
+        id: "old-1".into(),
+        direction: calc.direction.clone(),
+        dry: true,
+        started_at: Utc::now() - Duration::hours(1),
+        ended_at: Some(Utc::now() - Duration::minutes(59)),
+        max_profit: d("0"),
+        max_profit_unbounded: None,
+        records: 1,
+        close_reason: Some("тест".into()),
+        stopped: None,
+    };
+    let body = serde_json::to_string(&old).unwrap();
+    episodes_db::save(&db, "old-1", old.started_at.to_rfc3339(), body)
+        .await
+        .unwrap();
+    let old_path = dir.join("episodes").join("old-1.jsonl.zst");
+    for _ in 0..50 {
+        if files.used() > 1024 * 1024 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(
+        files.used() > 1024 * 1024,
+        "старый файл больше лимита: {}",
+        files.used()
+    );
+    // Новый эпизод через очередь кандидатов.
+    candidates::accepted(
+        &core,
+        &calc.direction,
+        calc.clone(),
+        &arb::core::dry::mode(&s),
+    )
+    .await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    episode_run::failed(&core, &calc.direction, "конец теста");
+    let (info, lines) = closed_episode(&db, &dir).await;
+    assert_ne!(info.id, "old-1");
+    assert!(
+        info.stopped.is_none(),
+        "место освободилось — запись не остановлена: {:?}",
+        info.stopped
+    );
+    assert!(
+        lines.first().is_some_and(|l| l.contains("\"open\"")),
+        "файл нового эпизода цел"
+    );
+    assert!(
+        lines.iter().any(|l| l.contains("\"calc\"")),
+        "запись дошла в файл"
+    );
+    assert!(!old_path.exists(), "самый старый закрытый удалён");
+    assert!(episodes_db::get(&db, "old-1").await.unwrap().is_none());
+}

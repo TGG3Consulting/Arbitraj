@@ -127,8 +127,7 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
             }
         }
     }
-    // Живая сделка: режим Live явно — виртуального бюджета у неё не бывает, даже если сухой режим включили сейчас.
-    let c = match profit::decide(core, d, &super::dry::Mode::Live).await {
+    let c = match replan(core, d).await {
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
     };
@@ -147,4 +146,10 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
         }
     }
     Ok(c)
+}
+
+/// Что делает: пересчёт живой сделки перед покупкой — всегда в режиме Live (решение 74): виртуального бюджета у сделки не
+/// бывает, даже если сухой режим включили сейчас. Принимает: ядро, направление. Возвращает: Verdict. Ошибок нет.
+pub async fn replan(core: &Core, d: &Direction) -> Verdict {
+    profit::decide(core, d, &super::dry::Mode::Live).await
 }

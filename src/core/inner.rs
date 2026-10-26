@@ -114,9 +114,11 @@ pub struct Inner {
     /// повтор не пишется, пока направление не перестанет проходить.
     pub dry_told: Mutex<HashSet<Direction>>,
     /// Канал задачи эпизодов (episode_worker.rs): тик и очередь кандидатов только отправляют.
-    pub episode_tx: mpsc::UnboundedSender<super::episode_run::EpMsg>,
+    pub episode_tx: mpsc::Sender<super::episode_run::EpMsg>,
+    /// Сколько сообщений задаче эпизодов потеряно (канал полон — тик не ждёт).
+    pub episode_lost: std::sync::atomic::AtomicU64,
     /// Приёмник канала — забирает задача эпизодов при запуске ядра (engine.rs).
-    pub episode_rx: Mutex<Option<mpsc::UnboundedReceiver<super::episode_run::EpMsg>>>,
+    pub episode_rx: Mutex<Option<mpsc::Receiver<super::episode_run::EpMsg>>>,
     /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
     pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
 }
@@ -130,7 +132,8 @@ impl Inner {
         cand_tx: mpsc::Sender<Direction>,
     ) -> Self {
         let (coin_ticks, _) = broadcast::channel(deps.buffer);
-        let (episode_tx, episode_rx) = mpsc::unbounded_channel();
+        // Канал ограничен (--live-buffer): тик и очередь кандидатов не ждут и не копят память без предела.
+        let (episode_tx, episode_rx) = mpsc::channel(deps.buffer);
         let episode_files =
             crate::storage::episode_files::EpisodeFiles::start(deps.data_dir.join("episodes"));
         Inner {
@@ -175,6 +178,7 @@ impl Inner {
             episode_off: Mutex::default(),
             dry_told: Mutex::default(),
             episode_tx,
+            episode_lost: Default::default(),
             episode_rx: Mutex::new(Some(episode_rx)),
             card_jobs: Mutex::default(),
         }

@@ -3,7 +3,8 @@
 //! эпизоды не ведутся (причина видна на экране «Эпизоды» и одной записью в журнале на смену); episode.min_notify_ms
 //! необязательна. Уборка (cleanup) — из задачи эпизодов при запуске и раз в episode.cleanup_s: закрытые эпизоды старше
 //! episode.keep_days; затем, пока файлы занимают больше episode.max_mb, — самые старые закрытые; файлы без строки в базе
-//! (сироты) — всегда. Открытый эпизод не удаляется. Файловые операции — в spawn_blocking. При запуске эпизоды, открытые
+//! (сироты) — всегда; эпизоды, открытые в базе, но закрытые в памяти (сообщение о закрытии потеряно), — закрываются.
+//! Открытый эпизод не удаляется. Файловые операции — в spawn_blocking. При запуске эпизоды, открытые
 //! до перезапуска, закрываются с причиной «перезапуск» (load).
 //! Кто вызывает: core/episode_run.rs (Cfg::read), core/episode_worker.rs (cleanup, load).
 //! От чего зависит: episode.rs, storage/episodes_db.rs, storage/episode_files.rs, settings.
@@ -20,7 +21,7 @@ use crate::settings::store::Store;
 use crate::storage::episodes_db;
 use crate::storage::journal::Level;
 
-use super::engine::Core;
+use super::engine::{Core, lk};
 use super::episode::EpisodeInfo;
 
 /// Настройки эпизодов.
@@ -88,6 +89,23 @@ pub async fn cleanup(core: &Core, cfg: &Cfg, open: &HashSet<String>) {
         .unwrap_or_default();
     for id in orphans {
         remove(core, &id, false).await;
+    }
+    // Открыт в базе, но не открыт ни в задаче, ни в памяти ядра — сообщение о закрытии потеряно (канал был полон).
+    let mem: HashSet<String> = lk(&core.inner.episodes)
+        .list()
+        .into_iter()
+        .map(|e| e.id)
+        .collect();
+    for e in list
+        .iter()
+        .filter(|e| e.ended_at.is_none() && !open.contains(&e.id) && !mem.contains(&e.id))
+    {
+        let mut e = e.clone();
+        e.ended_at = Some(Utc::now());
+        e.close_reason = Some("закрытие потеряно: очередь эпизодов была полна".into());
+        if let Ok(b) = serde_json::to_string(&e) {
+            let _ = episodes_db::save(db, &e.id, e.started_at.to_rfc3339(), b).await;
+        }
     }
     let old = Utc::now() - Duration::days(cfg.keep_days as i64);
     for e in list {

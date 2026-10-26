@@ -55,11 +55,12 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     }
     let facts: PoolFacts = checks.pool(&e.pool.reference);
     let hook_pct = hook(ctx, e, &facts, side)?;
-    // Сверка с квотером обязательна для всех пулов, с крючком тоже (check/quoter_cycle.rs).
-    match &facts.quoter {
+    // Сверка с квотером обязательна для всех пулов, с крючком тоже (check/quoter_cycle.rs), — своей стороны
+    // (решение 73: стороны сверяются независимо).
+    match facts.quoter.side(side) {
         Some(Ok(())) => {}
         Some(Err(why)) => return Err(why.clone()),
-        None => return Err("пул ещё не сверен с квотером".into()),
+        None => return Err("сторона пула ещё не сверена с квотером".into()),
     }
     let gas = match side {
         Side::Buy => facts.gas_buy,

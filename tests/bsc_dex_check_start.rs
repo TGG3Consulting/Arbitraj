@@ -143,7 +143,7 @@ async fn invalid_during_pass_is_checked_as_soon_as_read() {
         .check(&f.reference, quoter_cycle::one(&p, &f.reference, &mut None))
         .await;
     assert!(
-        p.checks.pool(&f.reference).quoter.is_none(),
+        p.checks.pool(&f.reference).quoter.none(),
         "сверки не было"
     );
     assert!(

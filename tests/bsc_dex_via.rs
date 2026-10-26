@@ -220,7 +220,8 @@ async fn buy_and_sell_through_wbnb() {
         p.checks.update_pool(&e.pool.reference, |f| {
             f.gas_buy = Some(100_000);
             f.gas_sell = Some(110_000);
-            f.quoter = Some(Ok(()));
+            f.quoter.buy = Some(Ok(()));
+            f.quoter.sell = Some(Ok(()));
         });
     }
     p.checks.set_coin(clean("BNB", WBNB));

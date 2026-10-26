@@ -5,7 +5,7 @@
 //!   за прочитанными словами и невыплаченные комиссии позиций; внутри ±2% тиков нет — глубина в полосе совпадает с
 //!   формулой одного диапазона;
 //! - пара V2 (IOST 0x5fef5bcc…): глубина в полосе ±b совпадает с формулой пары x·y = k — продажа y·(1 − √(1 − b)),
-//!   покупка y·(√(1 + b) − 1) / (1 − комиссия); монета — токен0 и токен1 (та же пара в зеркальном порядке).
+//!   покупка y·(√(1 + b) − 1) — без комиссии пары (чистый объём); монета — токен0 и токен1 (та же пара в зеркальном порядке).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/native_common, tests/depth_common, arb::venues::bsc_dex::quote::{depth_band, pool_quote}.
@@ -29,7 +29,7 @@ async fn aave_v3_sell_depth_matches_pool_usdt_balance() {
     let (e, p, bal) = aave_v3(&r);
     let aave = e.coin;
     let all = pool_quote::swap(&ctx, &e, aave, true, U256::from(u128::MAX)).unwrap();
-    let (band_buy, band_sell, _) = band_units(&ctx, &e, Decimal::from(2)).unwrap();
+    let (band_buy, band_sell, _) = band_units(&e, Decimal::from(2)).unwrap();
     eprintln!(
         "AAVE 0x8e3ecc0b… блок {}: USDT пула {} — продажа по всей карте {} USDT; ±2%: покупка {} / продажа {}",
         p["block"],
@@ -58,7 +58,7 @@ async fn aave_v3_sell_depth_matches_pool_usdt_balance() {
     };
     let ticks = &e.ticks.as_ref().unwrap().ticks;
     assert!(ticks.range(tick - 210..=tick + 210).next().is_none());
-    let (b, s) = closed_form(&e, 2.0, 3000);
+    let (b, s) = closed_form(&e, 2.0);
     let rel = |x: f64, y: f64| ((x - y) / y).abs();
     assert!(
         rel(f(band_buy), b) < 1e-6,
@@ -72,9 +72,8 @@ async fn aave_v3_sell_depth_matches_pool_usdt_balance() {
     );
 }
 
-#[tokio::test]
-async fn v2_band_depth_matches_pair_formula_both_orders() {
-    let ctx = native_common::ctx("depth-v2").await;
+#[test]
+fn v2_band_depth_matches_pair_formula_both_orders() {
     let r = rec();
     for coin0 in [true, false] {
         let e = v2(&r, "0x5fef5bcc62164f8fb0d53d58733cc3940ddfc46c", coin0);
@@ -84,10 +83,11 @@ async fn v2_band_depth_matches_pair_formula_both_orders() {
         let y = f(if coin0 { reserve1 } else { reserve0 });
         for pct in [1u32, 2, 10] {
             let b = pct as f64 / 100.0;
-            let (buy, sell, full) = band_units(&ctx, &e, Decimal::from(pct)).unwrap();
+            let (buy, sell, full) = band_units(&e, Decimal::from(pct)).unwrap();
             assert!(full);
             let want_sell = y * (1.0 - (1.0 - b).sqrt());
-            let want_buy = y * ((1.0 + b).sqrt() - 1.0) / 0.9975;
+            // Без комиссии пары: чистый объём (решение Тиграна к решению 73).
+            let want_buy = y * ((1.0 + b).sqrt() - 1.0);
             let rel = |x: f64, w: f64| ((x - w) / w).abs();
             assert!(
                 rel(f(sell), want_sell) < 1e-6,

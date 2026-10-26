@@ -68,8 +68,8 @@ pub fn f(u: U256) -> f64 {
 }
 
 /// Глубина одного диапазона (внутри полосы нет установленных тиков): (покупка — USDT в пул, продажа — USDT из пула)
-/// по формулам Δx, Δy шапки; вход — с комиссией `fee` пипсов. Ошибок нет.
-pub fn closed_form(e: &Entry, pct: f64, fee_buy: u32) -> (f64, f64) {
+/// по формулам Δx, Δy, без комиссии пула (глубина — чистый объём пула, решение Тиграна к решению 73). Ошибок нет.
+pub fn closed_form(e: &Entry, pct: f64) -> (f64, f64) {
     let (sqrt_price_x96, liquidity, t) = match e.pool.state {
         PoolState::Cl {
             sqrt_price_x96,
@@ -94,16 +94,15 @@ pub fn closed_form(e: &Entry, pct: f64, fee_buy: u32) -> (f64, f64) {
         (r / 1.0001f64.ln()).floor() as i32
     };
     let at = |k: i32| 1.0001f64.powf(k as f64 / 2.0);
-    let gross = |x: f64| x / (1.0 - fee_buy as f64 / 1e6);
     if coin0 {
-        // Монета — токен0: продажа — цена (токен1/токен0) вниз, из пула Δy; покупка — вверх, в пул Δy с комиссией.
+        // Монета — токен0: продажа — цена (токен1/токен0) вниз, из пула Δy; покупка — вверх, в пул Δy.
         let down = at(t - tick(false));
         let up = at(t + tick(true));
-        (gross(l * (up - s)), l * (s - down))
+        (l * (up - s), l * (s - down))
     } else {
         // Монета — токен1: продажа — цена вверх (монеты в пул), из пула Δx USDT; покупка — вниз, в пул Δx.
         let up = at(t + tick(false));
         let down = at(t - tick(true));
-        (gross(l * (s - down) / (s * down)), l * (up - s) / (s * up))
+        (l * (s - down) / (s * down), l * (up - s) / (s * up))
     }
 }

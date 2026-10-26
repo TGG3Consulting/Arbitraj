@@ -141,7 +141,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     p.checks.update_pool(r, |f| f.hook = Some(pc.clone()));
     let _ = p.out.send(MarketEvent::PoolCheck(pc)).await;
     // Сверка с квотером ждала влияния этого крючка — разбудить её (check/quoter_cycle.rs hook_measured).
-    if matches!(&p.checks.pool(r).quoter, Some(Err(why)) if why == HOOK_WAIT) {
+    if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {
         p.signals.pool_ready();
     }
     true

@@ -5,7 +5,7 @@
 | `mod.rs` | Модуль и chainId BSC mainnet (56, значение протокола со ссылкой) |
 | `jsonrpc.rs` | Запрос JSON-RPC 2.0 и разбор ответа/ошибки в единые коды |
 | `rpc.rs` | HTTP: одиночный запрос, пачка (batch), общий POST JSON (для каналов отправки) |
-| `ws.rs` | Соединение WebSocket: открыть, запрос с ответом, eth_subscribe |
+| `ws.rs` | Соединение WebSocket: открыть, запрос с ответом, eth_subscribe (источник событий пулов при bsc.pool_events_source=ws, решения 68, 79) |
 | `ws_task.rs` | Задача соединения: раздача ответов и уведомлений, тишина = обрыв, сырые сообщения на диск, отписка ушедших |
 | `heads.rs` | Опрос eth_blockNumber по HTTP раз в `bsc.blocks_poll_ms` (решение 57): последний блок, свежесть (`feed.stale_after_ms`), блок и его время по запросу (eth_getBlockByNumber, раз на блок на всех) |
 | `call.rs` | eth_call к контракту с ABI-кодированием (alloy sol!); пачки — через Multicall3 или пачкой JSON-RPC |

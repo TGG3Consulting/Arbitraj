@@ -39,6 +39,12 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 tokens,
                 first,
             } => {
+                // Пул пришёл — снятые до перечитывания пулы этой монеты вернулись (решение 71).
+                {
+                    let mut held = super::engine::lk(&core.inner.held);
+                    held.remove(&(venue.clone(), tokens.0));
+                    held.remove(&(venue.clone(), tokens.1));
+                }
                 if first {
                     core.request_rebuild();
                 }
@@ -50,6 +56,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 // У DEX данные монеты — её пулы: удаляем их по адресу контракта.
                 if let Some(token) = asset_by_ticker(&core, &ticker).and_then(|a| a.bsc_contract) {
                     wr(&core.inner.market).drop_pools_of(&venue, token);
+                    // Пулы сняты до перечитывания, а не исчезли: решение по чёрному списку держится (решение 71).
+                    super::engine::lk(&core.inner.held).insert((venue.clone(), token));
                 }
                 core.request_rebuild();
             }

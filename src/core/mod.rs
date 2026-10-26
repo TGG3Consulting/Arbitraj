@@ -50,6 +50,7 @@ pub mod prices;
 pub mod profit;
 pub mod queue_notify;
 pub mod rebuild;
+pub mod rebuild_blacklist;
 pub mod rebuild_report;
 pub mod reconcile;
 pub mod registry;

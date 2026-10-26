@@ -29,6 +29,7 @@ use super::receipts::{Feed, Inner, SOURCE};
 use super::receipts_budget::Budget;
 use super::receipts_chain::{Block, Chain, logs_of};
 use super::receipts_io::{Fail, Header, fetch_block, header, rewind};
+use super::receipts_lag::Lag;
 use super::receipts_pipe::Pipe;
 
 /// Задача ленты (см. шапку). Кончается, когда лента никому не нужна (последняя копия Feed удалена) или источник сменён.
@@ -38,6 +39,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     let mut budget = Budget::default();
     let mut pipe: Pipe<Result<(Header, Vec<serde_json::Value>), Fail>> = Pipe::default();
     let mut said = String::new();
+    let mut lag = Lag::default();
     loop {
         let Some(inner) = weak.upgrade() else { return };
         let feed = Feed { inner };
@@ -50,7 +52,7 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
         budget.start(&ctx).await;
         let target = w.borrow_and_update().as_ref().map(|h| h.number);
         let res = match target {
-            Some(t) => step(&feed, &ctx, &mut chain, &mut pipe, t).await,
+            Some(t) => step(&feed, &ctx, &mut chain, &mut pipe, &mut lag, t).await,
             None => Ok(true),
         };
         let why = match res {
@@ -60,10 +62,16 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                 None
             }
             Ok(false) => continue,
-            Err(Fail::Retry(why)) => Some((Level::Warn, why)),
+            Err(Fail::Retry(why)) => {
+                if let Some(top) = chain.top() {
+                    lag.failed(top.number + 1, &why);
+                }
+                Some((Level::Warn, why))
+            }
             Err(Fail::Break(why)) => {
                 chain.clear();
                 pipe.clear();
+                lag = Lag::default();
                 feed.cut(&why);
                 Some((Level::Error, why))
             }
@@ -111,6 +119,7 @@ async fn step(
     ctx: &Ctx,
     chain: &mut Chain,
     pipe: &mut Pipe<Result<(Header, Vec<serde_json::Value>), Fail>>,
+    lag: &mut Lag,
     target: u64,
 ) -> Result<bool, Fail> {
     let set = |name: &str| ctx.int(name).map_err(|e| Fail::Break(e.message));
@@ -140,12 +149,18 @@ async fn step(
     }
     if target - top.number > max_lag {
         return Err(Fail::Break(format!(
-            "отставание {} блоков больше bsc.receipts_max_lag_blocks = {max_lag} — пулы недостоверны, лента заново",
-            target - top.number
+            "отставание {} блоков больше bsc.receipts_max_lag_blocks = {max_lag} — пулы недостоверны, лента заново{}",
+            target - top.number,
+            lag.stuck_text()
         )));
     }
+    lag.report(ctx, target - top.number, ahead).await;
     let n = top.number + 1;
-    pipe.fill(n, target, ahead, |k| fetch_block(ctx.clone(), k));
+    // Блок, на котором конвейер стоит, — гонкой на все узлы (решение 71).
+    let hot = lag.hot();
+    pipe.fill(n, target, ahead, |k| {
+        fetch_block(ctx.clone(), k, hot == Some(k))
+    });
     let (h, r) = pipe
         .take(n)
         .await
@@ -155,6 +170,7 @@ async fn step(
         pipe.clear();
         return rewind(feed, ctx, chain, n).await.map(|_| false);
     }
+    lag.passed(n);
     let any = feed.deliver(&logs_of(&r), n);
     chain.push(
         Block {

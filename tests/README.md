@@ -51,3 +51,5 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
 Конвейер ленты квитанций (решение 69) — tests/bsc_dex_receipts_pipe.rs: заголовок и квитанции блока одним JSON-RPC batch — разбор живого ответа публичного узла (tests/data/receipts_batch_2026-10-25/, рекордер tests/recorders/record_receipts_batch.js); конвейер на блоках записи отдаёт их строго по порядку, не пришедший блок запрашивается снова, следующие ждут и повторно не запрашиваются.
 
 Проба крючка без ликвидности (решение 70) — tests/bsc_dex_live_fixes.rs (hook_probe_not_enough_liquidity_names_pool_id): настоящий откат квотера UnexpectedRevertBytes(NotEnoughLiquidity) из журнала — PoolId извлекается, причина «в пуле не хватает ликвидности для пробы». Batch ленты квитанций: ответы в обратном порядке и ошибка одного вызова внутри пачки — tests/bsc_dex_receipts_pipe.rs.
+
+Тяжёлый блок и отставание ленты, чёрный список при сбросе (решение 71) — tests/bsc_dex_receipts_pipe.rs (lag_names_the_block_the_pipe_stands_on), tests/core_first_pass.rs (reset_of_pools_is_not_a_blacklist_event: временное «ещё не проверена» и возврат к той же причине — без записей, только настоящие вход и выход).

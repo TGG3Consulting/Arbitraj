@@ -33,7 +33,17 @@ impl Handle {
             let mut s = feed.lock();
             s.next_link += 1;
             let n = s.next_link;
-            s.links.insert(n, (generation, name.to_string()));
+            // Открывается уже на текущей эпохе пересинхрона: новая пачка читает состояние пулов при приёме (admit),
+            // поэтому не держит снятие «сброса» (решение 77).
+            let resynced = s.resync_epoch;
+            s.links.insert(
+                n,
+                super::receipts::Link {
+                    generation,
+                    name: name.to_string(),
+                    resynced,
+                },
+            );
             n
         };
         Handle {
@@ -105,6 +115,23 @@ impl Handle {
                 format!("{SOURCE}: метод {method} не поддерживается"),
             )),
         }
+    }
+
+    /// Пачка перечитала свои пулы до эпохи пересинхрона `epoch` (решение 77): отмечает «соединение» и, если все
+    /// «соединения» догнали текущую эпоху, снимает «сброс» (release_if_resynced). Ошибок нет.
+    pub fn resynced(&self, epoch: u64) {
+        {
+            let mut s = self.feed.lock();
+            if let Some(l) = s.links.get_mut(&self.link) {
+                l.resynced = l.resynced.max(epoch);
+            }
+        }
+        self.feed.release_if_resynced();
+    }
+
+    /// Текущая эпоха пересинхрона ленты (решение 77). Ошибок нет.
+    pub fn resync_epoch(&self) -> u64 {
+        self.feed.lock().resync_epoch
     }
 
     /// Причина обрыва ленты после открытия; None — жива. Ошибок нет.

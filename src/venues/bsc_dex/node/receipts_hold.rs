@@ -18,12 +18,28 @@ impl State {
         let g = self.generation;
         self.links
             .values()
-            .filter(|(lg, _)| *lg < g)
-            .map(|(_, n)| {
-                if n.is_empty() {
+            .filter(|l| l.generation < g)
+            .map(|l| {
+                if l.name.is_empty() {
                     "без имени".to_string()
                 } else {
-                    n.clone()
+                    l.name.clone()
+                }
+            })
+            .collect()
+    }
+
+    /// Пачки, чьи «соединения» ещё не перечитали пулы до текущей эпохи пересинхрона (решение 77). Ошибок нет.
+    pub(super) fn unsynced(&self) -> Vec<String> {
+        let e = self.resync_epoch;
+        self.links
+            .values()
+            .filter(|l| l.resynced < e)
+            .map(|l| {
+                if l.name.is_empty() {
+                    "без имени".to_string()
+                } else {
+                    l.name.clone()
                 }
             })
             .collect()
@@ -59,9 +75,39 @@ impl Feed {
         self.release_if_settled();
     }
 
+    /// Пропуск с пересинхроном (решение 77, вариант B): «сброс» на отметке отставания стоит (котировки, сделки и
+    /// вердикты запрещены — не торгуем вслепую), подписки НЕ рвутся, поколение НЕ меняется; эпоха пересинхрона растёт
+    /// и будит пачки перечитать состояние пулов (pools/session.rs). Снимается, когда все «соединения» перечитали
+    /// (release_if_resynced). Ошибок нет.
+    pub fn request_resync(&self) {
+        self.inner.lag.hold();
+        let epoch = {
+            let mut s = self.lock();
+            s.resync_epoch += 1;
+            s.resync_epoch
+        };
+        let _ = self.inner.resync.send(epoch);
+    }
+
+    /// Снимает «сброс» пересинхрона, когда все живые «соединения» перечитали пулы до текущей эпохи. Циклы не будит.
+    /// Возвращает: true — снят сейчас. Ошибок нет.
+    pub fn release_if_resynced(&self) -> bool {
+        self.inner.lag.held() && self.lock().unsynced().is_empty() && self.inner.lag.release()
+    }
+
+    /// Приёмник эпохи пересинхрона для пачки (pools/session.rs). Ошибок нет.
+    pub fn resync_watch(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.inner.resync.subscribe()
+    }
+
     /// Пачки, чьи «соединения» старой ленты ещё открыты и держат «сброс» (для журнала). Ошибок нет.
     pub fn holders(&self) -> Vec<String> {
-        self.lock().old_links()
+        let s = self.lock();
+        let mut v = s.old_links();
+        v.extend(s.unsynced());
+        v.sort_unstable();
+        v.dedup();
+        v
     }
 
     /// Лента остановлена сменой источника и новой не запущено. Ошибок нет.

@@ -34,7 +34,6 @@ pub struct Feed {
     pub(super) inner: Arc<Inner>,
 }
 
-#[derive(Default)]
 pub(super) struct Inner {
     pub(super) state: Mutex<State>,
     pub(super) started: AtomicBool,
@@ -49,6 +48,23 @@ pub(super) struct Inner {
     pub(super) out: Mutex<Option<tokio::sync::mpsc::Sender<crate::gateway::events::MarketEvent>>>,
     /// Темп по узлам списка bsc.receipts_node_urls (решение 72).
     pub(super) nodes: Arc<super::receipts_nodes::Nodes>,
+    /// Эпоха пересинхрона (решение 77): пропуск блоков будит пачки перечитать состояние пулов без разрыва подписок.
+    pub(super) resync: watch::Sender<u64>,
+}
+
+impl Default for Inner {
+    fn default() -> Self {
+        Inner {
+            state: Mutex::default(),
+            started: AtomicBool::new(false),
+            source_off: AtomicBool::new(false),
+            last: watch::channel(None).0,
+            lag: super::events_lag::EventsLag::default(),
+            out: Mutex::default(),
+            nodes: Arc::default(),
+            resync: watch::channel(0).0,
+        }
+    }
 }
 
 /// Подписки и «поколение» ленты: обрыв — новое поколение, подписки старого закрыты.
@@ -59,10 +75,24 @@ pub(super) struct State {
     pub(super) generation: u64,
     /// Причина последнего обрыва.
     pub(super) broken: Option<String>,
-    /// Живые «соединения»: номер → (поколение ленты при открытии, имя пачки). Пачка закрывает своё после Invalidated
-    /// своих пулов (pools/session.rs); соединения прошлых поколений держат «сброс» (release_if_settled).
-    pub(super) links: std::collections::BTreeMap<u64, (u64, String)>,
+    /// Живые «соединения»: номер → данные пачки. Пачка закрывает своё после Invalidated своих пулов
+    /// (pools/session.rs); соединения прошлых поколений держат «сброс» (release_if_settled).
+    pub(super) links: std::collections::BTreeMap<u64, Link>,
     pub(super) next_link: u64,
+    /// Эпоха пересинхрона на последний запрос (решение 77): «сброс» снимается, когда каждое «соединение» перечитало
+    /// пулы до этой эпохи (release_if_resynced).
+    pub(super) resync_epoch: u64,
+}
+
+/// Живое «соединение» пачки с лентой.
+pub(super) struct Link {
+    /// Поколение ленты на момент открытия.
+    pub(super) generation: u64,
+    /// Имя пачки (для записи «запрет держит пачка …»).
+    pub(super) name: String,
+    /// До какой эпохи пересинхрона пачка перечитала пулы (решение 77). Новое соединение читает текущее состояние при
+    /// приёме пулов, поэтому открывается уже на текущей эпохе — не держит снятие «сброса».
+    pub(super) resynced: u64,
 }
 
 impl Feed {

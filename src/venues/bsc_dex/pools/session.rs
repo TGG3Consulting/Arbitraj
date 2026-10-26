@@ -84,6 +84,8 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     // Изменения настроек: могла появиться недостающая (dex.load_batch и т.п.) — брошенные и ждущие пулы читаются
     // снова без переподключения и перезапуска.
     let (mut settings, mut open) = (p.ctx.settings.subscribe(), true);
+    // Пропуск блока лентой (решение 77): перечитать состояние своих пулов на голове без разрыва подписки.
+    let mut resync = p.feed.resync_watch();
     let mut idx = group::index(&m.pools);
     loop {
         tokio::select! {
@@ -108,6 +110,19 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     return (end, true);
                 }
                 idx = group::index(&m.pools);
+            }
+            changed = resync.changed() => {
+                if changed.is_err() {
+                    return (End::Broken("лента остановлена".into()), true);
+                }
+                let epoch = *resync.borrow_and_update();
+                if epoch > 0 {
+                    if let Err(end) = super::depth_sync::resync(p, m).await {
+                        return (end, true);
+                    }
+                    // Пачка перечитала пулы — отметить «соединение» ленты (снимет запрет котировок, когда все догнали).
+                    g.conn.resynced(epoch);
+                }
             }
             changed = heads.changed(), if !m.missing.is_empty() => {
                 if changed.is_err() {

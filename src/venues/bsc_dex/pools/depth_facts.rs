@@ -1,12 +1,12 @@
 //! Файл: venues/bsc_dex/pools/depth_facts.rs
 //! Что делает: пулы площадки для экрана «Монеты» (решение 73, Venue::pool_depths): глубина по направлениям в полосе
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
-//! достоверен ли, итог сверки с квотером (check/state.rs — в поле cross_check), tickSpacing — строкой в details.
+//! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing — строкой в details.
 //! Кто вызывает: venue.rs (pool_depths).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
 
-use crate::core::types::{CrossCheck, PoolDepth};
+use crate::core::types::{CrossCheck, PoolDepth, SideCheck};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::check::state::Checks;
@@ -42,10 +42,20 @@ pub async fn all(
             Ok(d) => (Some(d), None),
             Err(why) => (None, Some(why)),
         };
-        let (quoter, quoter_reason) = match checks.pool(&r).quoter {
-            None => (CrossCheck::NotChecked, None),
-            Some(Ok(())) => (CrossCheck::Ok, None),
-            Some(Err(why)) => (CrossCheck::Failed, Some(why)),
+        let q = checks.pool(&r).quoter;
+        let side = |x: &super::super::check::quoter_sides::SideCheck| match x {
+            None => SideCheck {
+                state: CrossCheck::NotChecked,
+                reason: None,
+            },
+            Some(Ok(())) => SideCheck {
+                state: CrossCheck::Ok,
+                reason: None,
+            },
+            Some(Err(why)) => SideCheck {
+                state: CrossCheck::Failed,
+                reason: Some(why.clone()),
+            },
         };
         out.push(PoolDepth {
             venue: ctx.venue(),
@@ -60,8 +70,8 @@ pub async fn all(
             depth_error: error,
             asleep: e.asleep,
             valid: e.valid,
-            cross_check: quoter,
-            cross_check_reason: quoter_reason,
+            cross_check_buy: side(&q.buy),
+            cross_check_sell: side(&q.sell),
             details: e
                 .pool
                 .tick_spacing

@@ -85,7 +85,8 @@ pub fn aave_v3(r: &Rec) -> (Entry, Value, U256) {
 
 /// Пара V2 из записи (getReserves) как запись реестра бота, монета — токен0 (`coin0`) или токен1; встречный — другой
 /// токен пары. Какой это токен на самом деле, запись не говорит (USDT у пар AAVE нет — balanceOf 0) — глубина
-/// проверяется в единицах встречного токена по формуле пары; комиссия 0,25% (PancakeLibrary: 9975/10000).
+/// проверяется в единицах встречного токена по формуле пары; комиссия пары 0,25% (PancakeLibrary: 9975/10000) — для
+/// котировки, в глубину не входит.
 pub fn v2(r: &Rec, addr: &str, coin0: bool) -> Entry {
     let p = r.pools.iter().find(|p| p["addr"] == addr).unwrap();
     let out = &r.got[&format!("{} getReserves", p["tag"].as_str().unwrap())];

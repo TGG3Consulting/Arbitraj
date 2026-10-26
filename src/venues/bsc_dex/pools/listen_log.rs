@@ -131,8 +131,10 @@ pub fn note_refill(p: &Pools, e: &Entry) {
     if emptiness::empty(e) {
         return;
     }
-    if let Some(Err(why)) = p.checks.pool(&e.pool.reference).quoter
-        && why == emptiness::EMPTY
+    if p.checks
+        .pool(&e.pool.reference)
+        .quoter
+        .any_err(|why| why == emptiness::EMPTY)
     {
         p.signals.refilled(e.pool.reference.clone());
     }

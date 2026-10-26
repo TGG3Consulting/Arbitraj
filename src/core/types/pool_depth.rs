@@ -26,6 +26,14 @@ pub enum CrossCheck {
     Failed,
 }
 
+/// Итог сверки одной стороны.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SideCheck {
+    pub state: CrossCheck,
+    /// Причина расхождения (state = failed).
+    pub reason: Option<String>,
+}
+
 /// Пул DEX глазами адаптера (см. шапку).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PoolDepth {
@@ -50,10 +58,10 @@ pub struct PoolDepth {
     pub asleep: bool,
     /// Данные пула достоверны.
     pub valid: bool,
-    /// Независимая сверка расчёта пула площадкой (у DEX — квотер).
-    pub cross_check: CrossCheck,
-    /// Причина расхождения (cross_check = failed).
-    pub cross_check_reason: Option<String>,
+    /// Независимая сверка расчёта пула площадкой (у DEX — квотер) по каждой стороне: покупка и продажа сверяются
+    /// независимо, сторона годна для сделки только со своей прошедшей сверкой (решение 73).
+    pub cross_check_buy: SideCheck,
+    pub cross_check_sell: SideCheck,
     /// Подробности площадки строками (например «tickSpacing 1») — ядро их не разбирает, только показывает.
     pub details: Vec<String>,
 }

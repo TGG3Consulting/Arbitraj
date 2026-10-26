@@ -1,11 +1,8 @@
 //! Файл: venues/bsc_dex/node/receipts_io.rs
-//! Что делает: запросы ленты квитанций к узлу HTTP (решение 68): заголовок блока (hash, parentHash, хеши транзакций)
-//! и квитанции блока со своими пределами ответа (bsc.receipts_max_body_bytes, bsc.receipts_total_ms — только для
-//! квитанций) и проверкой полноты: квитанций столько же, сколько транзакций в заголовке, по порядку тех же хешей, все —
-//! этого блока. Неполные, чужого хеша, больше предела — повтор того же блока (блоки не пропускаются). Ошибка одного
-//! вызова внутри пачки (например, «слишком много запросов» с HTTP 200) — тоже повтор через bsc.receipts_retry_ms, не
-//! правило RateLimited (оно — только на 429 всей пачки, pace.rs).
-//! Там же — откат блока при реорге (rewind: снимается, только если хеш у узла другой по двум запросам).
+//! Что делает: общее ленты квитанций (решение 68): заголовок блока (hash, parentHash, хеши транзакций), итог шага
+//! (Fail: повтор, обрыв, блока нет), пределы ответа квитанций (bsc.receipts_max_body_bytes, bsc.receipts_total_ms —
+//! только для квитанций) и текст превышения; откат блока при реорге (rewind: снимается, только если хеш у узла другой
+//! по двум запросам). Запрос блока для конвейера — receipts_fetch.rs.
 //! Кто вызывает: node/receipts_task.rs.
 //! От чего зависит: rpc.rs, rpc_capped.rs (очередь узла, класс задачи), receipts_chain.rs (complete), ctx.rs.
 //! Настройки: bsc.receipts_max_body_bytes, bsc.receipts_total_ms [вся система]; http.timeout_ms, http.body_idle_ms.
@@ -17,7 +14,7 @@ use std::time::Duration;
 
 use alloy_primitives::B256;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::gateway::http::{Fail as HttpFail, Limits};
 
@@ -25,10 +22,8 @@ use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::receipts::{Feed, SOURCE};
-use super::receipts_chain::{Chain, complete, gone};
+use super::receipts_chain::{Chain, gone};
 use super::rpc;
-use super::rpc_capped::{self, Capped};
-use super::rpc_race::{self, Lost};
 
 /// Заголовок блока: только нужные поля.
 #[derive(Debug, Deserialize)]
@@ -42,11 +37,16 @@ pub struct Header {
 }
 
 /// Чем кончился шаг.
-pub(super) enum Fail {
+#[derive(Debug)]
+pub enum Fail {
     /// Повторить тот же блок через bsc.receipts_retry_ms.
     Retry(String),
     /// Обрыв ленты.
     Break(String),
+    /// Блока (или его квитанций) у узла нет (ответ null). Для блока позади головы, которого нет ни у одного узла
+    /// (гонка), — пропуск невосполним (receipts_step.rs); иначе — повтор. Второе — сколько узлов ответили «блока нет»
+    /// (один узел — невосполнимо только после двух «нет» подряд).
+    Missing(String, usize),
 }
 
 /// Заголовок блока. Ошибки: Retry — узел не ответил или блока ещё нет.
@@ -61,68 +61,9 @@ pub(super) async fn header(ctx: &Ctx, n: u64) -> Result<Header, Fail> {
     h.ok_or_else(|| Fail::Retry(format!("узел ещё не отдал блок {n}")))
 }
 
-/// Блок для конвейера (решение 69): заголовок и квитанции одним JSON-RPC batch (два вызова в одном HTTP, пределы —
-/// как у квитанций), затем проверка полноты квитанций по заголовку. Принимает: окружение (своё — запрос идёт
-/// отдельной задачей), номер, гонку (повтор — сразу основной и резервный узел, rpc_capped::batch_race: побеждает
-/// первый ПОЛНЫЙ ответ). Возвращает: заголовок и квитанции. Ошибки: Break — не заданы пределы; Retry — узел не
-/// ответил, блока ещё нет, ответ больше предела, неполные или чужие квитанции.
-pub(super) async fn fetch_block(
-    ctx: Ctx,
-    n: u64,
-    race: bool,
-) -> Result<(Header, Vec<Value>), Fail> {
-    let lim = limits(&ctx)?;
-    let tag = format!("0x{n:x}");
-    let calls = [
-        ("eth_getBlockByNumber", json!([tag, false])),
-        ("eth_getBlockReceipts", json!([tag])),
-    ];
-    let check = |list| {
-        let (h, r) = pair(n, list)?;
-        complete(n, h.hash, &h.transactions, &r)?;
-        Ok((h, r))
-    };
-    // Повтор блока, на котором стоит конвейер, — сразу на все узлы; побеждает первый ПОЛНЫЙ ответ (решение 71).
-    if race {
-        return rpc_race::batch_race(&ctx, &calls, lim, check)
-            .await
-            .map_err(|l| match l {
-                Lost::Over(f) => Fail::Retry(over(n, &f, &lim)),
-                Lost::Rejected(why) => Fail::Retry(why),
-                Lost::Failed(e) => Fail::Retry(e.message),
-            });
-    }
-    let got = rpc_capped::batch(&ctx, &calls, lim)
-        .await
-        .map_err(|e| Fail::Retry(e.message))?;
-    match got {
-        Capped::Got(list) => check(list).map_err(Fail::Retry),
-        Capped::Over(f) => Err(Fail::Retry(over(n, &f, &lim))),
-    }
-}
-
-/// Итоги пачки «заголовок, квитанции» → (заголовок, квитанции). Принимает: номер, итоги по порядку вызовов.
-/// Ошибки (текст): ошибка узла по вызову, блока или квитанций ещё нет, ответ не по форме.
-pub fn pair(
-    n: u64,
-    list: Vec<crate::gateway::errors::GatewayResult<Box<serde_json::value::RawValue>>>,
-) -> Result<(Header, Vec<Value>), String> {
-    let mut it = list.into_iter();
-    let (Some(h), Some(r)) = (it.next(), it.next()) else {
-        return Err(format!("блок {n}: в ответе на пачку не два итога"));
-    };
-    let h: Option<Header> = serde_json::from_str(h.map_err(|e| e.message)?.get())
-        .map_err(|e| format!("блок {n}: заголовок не по форме: {e}"))?;
-    let r: Option<Vec<Value>> = serde_json::from_str(r.map_err(|e| e.message)?.get())
-        .map_err(|e| format!("блок {n}: квитанции не по форме: {e}"))?;
-    let h = h.ok_or_else(|| format!("узел ещё не отдал блок {n}"))?;
-    let r = r.ok_or_else(|| format!("узел ещё не отдал квитанции блока {n}"))?;
-    Ok((h, r))
-}
-
 /// Пределы запроса квитанций: срок до заголовков и тишина тела — общие (http.timeout_ms, http.body_idle_ms), общий
 /// срок и размер — свои. Ошибки: Break — настройка не задана.
-fn limits(ctx: &Ctx) -> Result<Limits, Fail> {
+pub(super) fn limits(ctx: &Ctx) -> Result<Limits, Fail> {
     let base = ctx.limits().map_err(|e| Fail::Break(e.message))?;
     let set = |name: &str| ctx.int(name).map_err(|e| Fail::Break(e.message));
     Ok(Limits {
@@ -133,7 +74,7 @@ fn limits(ctx: &Ctx) -> Result<Limits, Fail> {
 }
 
 /// Текст «квитанции больше предела». Ошибок нет.
-fn over(n: u64, f: &HttpFail, lim: &Limits) -> String {
+pub(super) fn over(n: u64, f: &HttpFail, lim: &Limits) -> String {
     match f {
         HttpFail::TooBig { got } => format!(
             "блок {n}: квитанции больше предела bsc.receipts_max_body_bytes ({} байт), получено {got} байт",

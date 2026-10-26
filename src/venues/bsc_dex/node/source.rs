@@ -28,13 +28,19 @@ pub enum Link {
 
 impl Link {
     /// Открывает связь по bsc.pool_events_source. Принимает: окружение, ленту квитанций подписки на рынок, головы
-    /// сети, имя (журнал, сырые сообщения WS). Ошибки: NotConfigured (настройка не задана или неизвестное значение),
+    /// сети, канал событий ядру (уведомления ленты), имя (журнал, сырые сообщения WS). Ошибки: NotConfigured (настройка не задана или неизвестное значение),
     /// как у Conn::open.
-    pub async fn open(ctx: &Ctx, feed: &Feed, heads: &Heads, name: &str) -> GatewayResult<Link> {
+    pub async fn open(
+        ctx: &Ctx,
+        feed: &Feed,
+        heads: &Heads,
+        out: &tokio::sync::mpsc::Sender<crate::gateway::events::MarketEvent>,
+        name: &str,
+    ) -> GatewayResult<Link> {
         let kind = ctx.text("bsc.pool_events_source")?;
         match kind.as_str() {
             "ws" => Ok(Link::Ws(Conn::open(ctx, name).await?)),
-            "receipts" => Ok(Link::Receipts(feed.open(ctx, heads))),
+            "receipts" => Ok(Link::Receipts(feed.open(ctx, heads, out, name))),
             other => Err(ctx.not_set(
                 "bsc.pool_events_source",
                 format!("bsc.pool_events_source = {other}: ожидается ws или receipts"),

@@ -37,9 +37,18 @@ pub struct Feed {
 #[derive(Default)]
 pub(super) struct Inner {
     pub(super) state: Mutex<State>,
-    started: AtomicBool,
+    pub(super) started: AtomicBool,
+    /// Лента остановлена сменой источника (receipts_hold.rs stop_source): «сброс» снимает последнее старое
+    /// «соединение»; новая лента (Feed::open) снова снимает его сама.
+    pub(super) source_off: AtomicBool,
     /// Последний разобранный блок (None — лента ещё не начала или оборвалась).
     pub(super) last: watch::Sender<Option<u64>>,
+    /// «Данные пулов отстают на N блоков» площадки (решение 72): ставит задача ленты.
+    pub(super) lag: super::events_lag::EventsLag,
+    /// Канал событий ядру (уведомление «лента стоит — сброс», решение 72); ставит первое Feed::open.
+    pub(super) out: Mutex<Option<tokio::sync::mpsc::Sender<crate::gateway::events::MarketEvent>>>,
+    /// Темп по узлам списка bsc.receipts_node_urls (решение 72).
+    pub(super) nodes: Arc<super::receipts_nodes::Nodes>,
 }
 
 /// Подписки и «поколение» ленты: обрыв — новое поколение, подписки старого закрыты.
@@ -50,13 +59,40 @@ pub(super) struct State {
     pub(super) generation: u64,
     /// Причина последнего обрыва.
     pub(super) broken: Option<String>,
+    /// Живые «соединения»: номер → (поколение ленты при открытии, имя пачки). Пачка закрывает своё после Invalidated
+    /// своих пулов (pools/session.rs); соединения прошлых поколений держат «сброс» (release_if_settled).
+    pub(super) links: std::collections::BTreeMap<u64, (u64, String)>,
+    pub(super) next_link: u64,
 }
 
 impl Feed {
+    /// Лента, которая ставит отметку отставания `lag` площадки (решение 72). Ошибок нет.
+    pub fn with_lag(lag: super::events_lag::EventsLag) -> Feed {
+        Feed {
+            inner: Arc::new(Inner {
+                lag,
+                ..Inner::default()
+            }),
+        }
+    }
+
     /// Открывает «соединение»; первая — запускает задачу ленты (класс Check очереди узла: события не ждут фона).
-    /// Принимает: окружение, головы сети. Ошибок нет.
-    pub fn open(&self, ctx: &Ctx, heads: &Heads) -> Handle {
+    /// Принимает: окружение, головы сети, канал событий ядру. Ошибок нет.
+    pub fn open(
+        &self,
+        ctx: &Ctx,
+        heads: &Heads,
+        out: &tokio::sync::mpsc::Sender<crate::gateway::events::MarketEvent>,
+        name: &str,
+    ) -> Handle {
+        {
+            let mut o = self.inner.out.lock().unwrap_or_else(|p| p.into_inner());
+            if o.is_none() {
+                *o = Some(out.clone());
+            }
+        }
         if !self.inner.started.swap(true, Ordering::SeqCst) {
+            self.inner.source_off.store(false, Ordering::SeqCst);
             let weak = Arc::downgrade(&self.inner);
             let work = super::receipts_task::run(weak, ctx.clone(), heads.clone());
             tokio::spawn(crate::gateway::urgency::scope(
@@ -64,14 +100,19 @@ impl Feed {
                 work,
             ));
         }
-        self.open_idle()
+        self.open_named(name)
     }
 
     /// «Соединение» без запуска задачи ленты: блоки раздаёт тот, кто вызывает deliver (задача ленты; тесты порядка
     /// раздачи и номера блока). Ошибок нет.
     pub fn open_idle(&self) -> Handle {
+        self.open_named("")
+    }
+
+    /// То же с именем пачки (для записи «запрет сброса держит пачка …»). Ошибок нет.
+    pub fn open_named(&self, name: &str) -> Handle {
         let generation = self.lock().generation;
-        Handle::new(self.clone(), generation)
+        Handle::new(self.clone(), generation, name)
     }
 
     /// Раздаёт логи блока подпискам по фильтрам и ставит последний разобранный блок `last` ПОД ТОЙ ЖЕ блокировкой, что

@@ -44,6 +44,8 @@ pub struct Parts {
     pub allow: super::wallet::allow_cache::Allowances,
     /// Очереди «Перепроверить» и «новые пулы» для циклов проверок (check/recheck.rs).
     pub wake: super::check::recheck::Recheck,
+    /// «Данные пулов отстают на N блоков» — лента квитанций догоняет без сброса (решение 72).
+    pub lag: super::node::events_lag::EventsLag,
 }
 
 impl Parts {
@@ -63,6 +65,7 @@ impl Parts {
             stats: Stats::default(),
             allow: Default::default(),
             wake: Default::default(),
+            lag: Default::default(),
         }
     }
 
@@ -77,6 +80,7 @@ impl Parts {
             gas: self.gas.clone(),
             mids: self.mids.clone(),
             allow: self.allow.clone(),
+            lag: self.lag.clone(),
         }
     }
 
@@ -95,6 +99,9 @@ impl Parts {
     /// Окружение слушателей пулов и проверок; канал событий ядра — и для счётчиков каналов. Ошибок нет.
     pub fn pools(&self, out: mpsc::Sender<MarketEvent>) -> Pools {
         self.stats.set_out(out.clone());
+        let signals = super::pools::progress::Signals::default();
+        // Отметка «данные пулов отстают» снята — циклы проверок перепроверяют (решение 72).
+        self.lag.on_clear(signals.ready.clone());
         Pools {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),
@@ -103,9 +110,10 @@ impl Parts {
             checks: self.checks.clone(),
             heads: self.heads.clone(),
             mids: self.mids.clone(),
-            signals: super::pools::progress::Signals::default(),
+            signals,
             loading: super::pools::loading::Loading::default(),
-            feed: super::node::receipts::Feed::default(),
+            feed: super::node::receipts::Feed::with_lag(self.lag.clone()),
+            lag: self.lag.clone(),
         }
     }
 }

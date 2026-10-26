@@ -27,11 +27,11 @@
 use std::time::Duration;
 
 use crate::core::types::{PoolRef, Side};
-use crate::storage::journal::Level;
 
 use super::super::pools::index_watch;
 use super::super::pools::listen::Pools;
 use super::super::quote::select;
+use super::super::settings_wait;
 use super::fresh::Fresh;
 use super::quoter_tally::Tally;
 use super::quoter_verify::{HOOK_WAIT, usdt_decimals, verify};
@@ -43,6 +43,8 @@ pub async fn run(p: Pools, queue: Queue) {
     // Итоги первого прохода — до сводки (когда ни один пул не читается и все прочитанные сверены, решение 65).
     let mut first = Some(Tally::default());
     let mut full = false;
+    // Изменение настроек — повтор сверки сторон с причиной «не задана настройка» (settings_wait.rs).
+    let mut changes = settings_wait::watch(&p.ctx);
     loop {
         // Своя комиссия пар V2 (dex.v2_fee_source = pool) — заново с пары перед сверкой (pools/index_watch.rs).
         index_watch::refresh_fees(&p).await;
@@ -53,13 +55,12 @@ pub async fn run(p: Pools, queue: Queue) {
             }
         }
         full = true;
-        let d = match p.ctx.int("dex.quoter_check_s") {
-            Ok(s) => Duration::from_secs(s),
-            Err(e) => {
-                let msg = format!("Сверка с квотером остановлена: {}", e.message);
-                p.ctx.log(Level::Error, "dex.quoter", msg, None).await;
-                return;
-            }
+        // Не задана — сверка ждёт настройку и продолжает сама (settings_wait.rs), а не останавливается навсегда.
+        let read = || p.ctx.int("dex.quoter_check_s").map(Duration::from_secs);
+        let Some(d) =
+            settings_wait::until_ok(&p.ctx, "Сверка с квотером", "dex.quoter", read).await
+        else {
+            return;
         };
         let until = tokio::time::Instant::now() + d;
         loop {
@@ -93,6 +94,14 @@ pub async fn run(p: Pools, queue: Queue) {
                 _ = p.signals.refill.notified() => {
                     for r in p.signals.take_refilled() {
                         one(&p, &r, &mut first).await;
+                    }
+                }
+                // Настройку задали на лету — стороны, ждавшие её, сверяются сразу, а не через dex.quoter_check_s.
+                Some(_) = changes.next() => {
+                    for r in p.reg.refs() {
+                        if p.checks.pool(&r).quoter.any_err(settings_wait::is_config) {
+                            fresh.check(&r, one(&p, &r, &mut first)).await;
+                        }
                     }
                 }
             }

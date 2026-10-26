@@ -44,8 +44,9 @@ pub enum Outcome {
     /// Проверить пока нельзя: нет достоверного пула, нет источника пробы, узел не ответил — «не проверено»,
     /// повтор, как только у монеты появится достоверный пул (pools/progress.rs).
     Wait(String),
-    /// Не задана настройка (dex.quoter, check.probe_usdt, ключ кошелька…) — «не проверено», ошибка настройки.
-    Config(String),
+    /// Не задана настройка (dex.quoter, ключ кошелька…) — «не проверено»; второе — имена этих настроек (GatewayError.setting):
+    /// перепроверка при задании именно их (решение 75).
+    Config(String, Vec<String>),
 }
 
 /// Проверяет монету и пишет газ пулов в checks. Принимает: тикер, адрес монеты, USDT, головы сети (свежее время блока
@@ -66,7 +67,7 @@ pub async fn check_coin(
     let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, heads).await {
         Ok(o) => o,
         Err(e) if matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked) => {
-            Outcome::Config(e.message)
+            Outcome::Config(e.message, e.setting.into_iter().collect())
         }
         Err(e) => Outcome::Wait(e.message),
     };
@@ -78,7 +79,7 @@ pub async fn check_coin(
             },
             Some(Utc::now()),
         ),
-        Outcome::Wait(_) | Outcome::Config(_) => (CheckState::NotChecked, None),
+        Outcome::Wait(_) | Outcome::Config(..) => (CheckState::NotChecked, None),
     };
     let check = CoinCheck {
         venue: ctx.venue(),
@@ -91,7 +92,7 @@ pub async fn check_coin(
         checked_at,
         wait: match &out {
             Outcome::Wait(w) => Some(w.clone()),
-            Outcome::Config(w) => Some(format!("не задана настройка: {w}")),
+            Outcome::Config(w, _) => Some(format!("не задана настройка: {w}")),
             _ => None,
         },
     };
@@ -182,7 +183,9 @@ async fn run(
                 }
             }
             Ok(Err(why)) => failed.push(format!("{}: {why}", e.family.title)),
-            Err(err) if err.code == ErrorCode::NotConfigured => config.push(err.message),
+            Err(err) if err.code == ErrorCode::NotConfigured => {
+                config.push((err.message, err.setting))
+            }
             Err(err) => env.push(format!("{}: {}", e.family.title, err.message)),
         }
     }
@@ -192,7 +195,13 @@ async fn run(
             Outcome::Failed("пробный обмен: расчётный выход 0 — налог не определить".into())
         }
         // Вердикт — только если каждый пул дал вердикт: помеха на любом пуле (узел, 429) — проверка не выполнена.
-        None if !config.is_empty() => Outcome::Config(config.join("; ")),
+        None if !config.is_empty() => {
+            let why: Vec<String> = config.iter().map(|c| c.0.clone()).collect();
+            Outcome::Config(
+                why.join("; "),
+                config.into_iter().filter_map(|c| c.1).collect(),
+            )
+        }
         None if !env.is_empty() => Outcome::Wait(env.join("; ")),
         None => Outcome::Failed(failed.join("; ")),
     })

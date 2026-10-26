@@ -81,6 +81,8 @@ pub async fn quoter_now(
     if let Some(why) = short {
         return Err(no_route(why));
     }
+    // Настройки — до обращения к узлу (ревью #65).
+    ctx.dec("dex.quoter_max_diff_pct")?;
     let remote = match quoter::out(ctx, e, token_in, local.amount_in).await {
         Ok(r) => r,
         Err(err) => {

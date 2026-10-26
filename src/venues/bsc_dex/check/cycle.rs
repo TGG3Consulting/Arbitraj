@@ -81,12 +81,11 @@ pub async fn hooks(p: Pools, queue: Queue) {
                 _ = tokio::time::sleep_until(until) => break,
                 _ = &mut ready => {}
                 // Настройку задали на лету — крючки, не проверенные из-за неё, проверяются сразу.
-                Some(_) = changes.next() => {
+                Some(c) = changes.next() => {
+                    // Пачка изменений — один проход; только крючки, ждущие именно изменённой настройки.
+                    let changed = settings_wait::drain(c, &mut changes);
                     for r in p.reg.refs() {
-                        let waits = matches!(
-                            p.checks.pool(&r).hook.map(|c| c.impact),
-                            Some(CheckState::Failed { reason }) if settings_wait::is_config(&reason)
-                        );
+                        let waits = p.checks.pool(&r).hook_wait.is_some_and(|n| changed.contains(&n));
                         if waits {
                             fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
@@ -153,7 +152,16 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
             p.ctx.log(level, "dex.check", msg, None).await;
         }
     }
-    p.checks.update_pool(r, |f| f.hook = Some(pc.clone()));
+    // Не прошла из-за незаданной настройки — её имя, чтобы повторить при её задании (решение 75).
+    let wait = if passed {
+        None
+    } else {
+        super::quoter_verify::missing_setting(p, &e)
+    };
+    p.checks.update_pool(r, |f| {
+        f.hook = Some(pc.clone());
+        f.hook_wait = wait;
+    });
     let _ = p.out.send(MarketEvent::PoolCheck(pc)).await;
     // Сверка с квотером ждала влияния этого крючка — разбудить её (check/quoter_cycle.rs hook_measured).
     if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {

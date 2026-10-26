@@ -97,9 +97,11 @@ pub async fn run(p: Pools, queue: Queue) {
                     }
                 }
                 // Настройку задали на лету — стороны, ждавшие её, сверяются сразу, а не через dex.quoter_check_s.
-                Some(_) = changes.next() => {
+                Some(c) = changes.next() => {
+                    // Пачка изменений — один проход; только стороны, ждущие именно изменённой настройки.
+                    let changed = settings_wait::drain(c, &mut changes);
                     for r in p.reg.refs() {
-                        if p.checks.pool(&r).quoter.any_err(settings_wait::is_config) {
+                        if p.checks.pool(&r).quoter.waits_for(&changed) {
                             fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
                     }
@@ -157,6 +159,12 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         {
             super::quoter_side::log_change(p, &e, side, res).await;
         }
+        // Итог — «не задана настройка»: имя настройки — для перепроверки при её задании (решение 75).
+        let wait = match &res {
+            Some(Err(_)) => super::quoter_verify::missing_setting(p, &e),
+            _ => None,
+        };
+        now.set_wait(side, wait);
         now.set(side, res);
     }
     if let Some(t) = first {

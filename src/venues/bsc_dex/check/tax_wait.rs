@@ -12,7 +12,7 @@
 //! От чего зависит: check/tax_pass.rs (Pass, Res, Why).
 //! Настройки: нет.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 
@@ -41,12 +41,38 @@ pub fn due(
         .collect()
 }
 
-/// Кого проверить при изменении настроек: ждущих «не задана настройка» (Why::Config) — сразу, а не через полный
-/// проход tax.recheck_interval_s (CLAUDE.md: настройка меняется на лету без перезапуска). Ошибок нет.
-pub fn due_config(waiting: &[Waiting]) -> Vec<(Address, String)> {
+/// Кого проверить, когда отметка «данные пулов отстают» (решение 72) снята (`busy` — стоит ли она сейчас): всех
+/// ждущих Why::Lag. Проверяется на каждом шаге цикла, а не только по сигналу — снятие до постановки в ожидание не
+/// теряется. Ошибок нет.
+pub fn due_lag(waiting: &[Waiting], busy: bool) -> Vec<(Address, String)> {
+    if busy {
+        return Vec::new();
+    }
     waiting
         .iter()
-        .filter(|(_, _, w)| *w == Why::Config)
+        .filter(|(_, _, w)| *w == Why::Lag)
+        .map(|(a, t, _)| (*a, t.clone()))
+        .collect()
+}
+
+/// Кого проверить при изменении настроек `changed` (имена, пачка схлопнута — settings_wait::drain): ждущих «не задана
+/// настройка» (Why::Config), чья незаданная настройка (`names` — по монете, имена из ошибки хранилища) среди изменённых
+/// — сразу, а не через полный проход tax.recheck_interval_s. Посторонние изменения перепроверок не вызывают (ревью #65:
+/// иначе 30 изменений подряд — 30 проходов по всем ждущим). Монета без имени настройки (ключ кошелька) — не по
+/// изменениям настроек. Ошибок нет.
+pub fn due_config(
+    waiting: &[Waiting],
+    names: &HashMap<Address, Vec<String>>,
+    changed: &HashSet<String>,
+) -> Vec<(Address, String)> {
+    waiting
+        .iter()
+        .filter(|(a, _, w)| {
+            *w == Why::Config
+                && names
+                    .get(a)
+                    .is_some_and(|n| n.iter().any(|x| changed.contains(x)))
+        })
         .map(|(a, t, _)| (*a, t.clone()))
         .collect()
 }

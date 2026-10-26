@@ -15,6 +15,7 @@
 mod depth_common;
 mod native_common;
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use serde_json::json;
@@ -59,13 +60,32 @@ async fn config_wait_rechecks_on_settings_change() {
         "{}",
         err.message
     );
-    assert!(settings_wait::is_config(&err.message));
+    // Имя настройки — в ошибке структурно (GatewayError.setting), по нему монета ждёт именно её.
+    assert_eq!(err.setting.as_deref(), Some("dex.depth_band_pct"));
+    let names = HashMap::from([(e.coin, vec!["dex.depth_band_pct".to_string()])]);
     let waiting = vec![
         (e.coin, "AAVE".to_string(), Why::Config),
         (usdt, "X".into(), Why::Node),
     ];
     // Подписка — как у цикла налогов, до изменения.
     let mut changes = settings_wait::watch(&ctx);
+    // Ревью #65: 30 изменений посторонних настроек подряд — один проход и ни одной перепроверки.
+    for k in 0..30u64 {
+        ctx.settings
+            .set("dex.load_batch", v.clone(), Some(json!(100 + k)), "Тигран")
+            .await
+            .unwrap();
+    }
+    let first = tokio::time::timeout(Duration::from_secs(2), changes.next())
+        .await
+        .unwrap()
+        .unwrap();
+    let changed = settings_wait::drain(first, &mut changes);
+    assert_eq!(changed.len(), 1, "пачка схлопнута: {changed:?}");
+    assert!(
+        due_config(&waiting, &names, &changed).is_empty(),
+        "посторонние — без перепроверки"
+    );
     let c2 = ctx.clone();
     let v2 = v.clone();
     tokio::spawn(async move {
@@ -76,14 +96,14 @@ async fn config_wait_rechecks_on_settings_change() {
             .unwrap();
     });
     let got = tokio::time::timeout(Duration::from_secs(2), changes.next()).await;
-    assert!(
-        matches!(got, Ok(Some(_))),
-        "изменение настроек пришло сразу, без полного прохода"
-    );
+    let Ok(Some(c)) = got else {
+        panic!("изменение настроек пришло сразу, без полного прохода");
+    };
+    let changed = settings_wait::drain(c, &mut changes);
     assert_eq!(
-        due_config(&waiting),
+        due_config(&waiting, &names, &changed),
         vec![(e.coin, "AAVE".to_string())],
-        "только ждущие настройку"
+        "нужная — одна перепроверка, только ждущей её монеты"
     );
     // Повтор: отбор пулов пробы проходит.
     let (pools, _, _) = probe_pools(&ctx, &p.registry, &p.tokens, "AAVE", 18).unwrap();

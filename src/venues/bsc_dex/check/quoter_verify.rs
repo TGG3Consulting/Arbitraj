@@ -102,3 +102,28 @@ async fn probe(p: &Pools, e: &Entry) -> Result<(U256, Decimal), String> {
     let amount = rate::from_usdt(&p.ctx, &p.reg, usdt, e.usdt, amount).map_err(|e| e.message)?;
     Ok((amount, v))
 }
+
+/// Какая настройка нужна сверке (и пробе крючка) пула и не задана: глубина (pools/depth_book.rs), тикер USDT,
+/// check.probe_usdt, dex.quoter_max_diff_pct, адрес квотера или роутера (V2) вида пула. Имя — из ошибки хранилища
+/// (GatewayError.setting), не из текста: по нему итог перепроверяется при задании именно этой настройки (решение 75).
+/// None — всё задано (итог — не «не задана настройка»). Ошибок нет.
+pub fn missing_setting(p: &Pools, e: &Entry) -> Option<String> {
+    let ctx = &p.ctx;
+    if let Some(n) = super::super::pools::depth_book::missing_setting(ctx) {
+        return Some(n);
+    }
+    let addr = if e.pool.kind == crate::core::types::PoolKind::V2 {
+        "dex.router"
+    } else {
+        "dex.quoter"
+    };
+    [
+        p.tokens.usdt(ctx).err(),
+        ctx.dec("check.probe_usdt").err(),
+        ctx.dec("dex.quoter_max_diff_pct").err(),
+        ctx.dex_addr(addr, e.family.id).err(),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(|err| err.setting)
+}

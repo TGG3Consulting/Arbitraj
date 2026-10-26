@@ -15,7 +15,7 @@ use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{PoolKind, PoolRef, TokenTaxes};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
@@ -130,10 +130,11 @@ pub fn probe_pools(
             Ok(Some(why)) => {
                 shallow.push(format!("{} {} {label}: {why}", e.family.title, e.ticker))
             }
-            Err(why) if why.starts_with("Не задана настройка") => {
-                return Err(ctx.err(ErrorCode::NotConfigured, why));
-            }
-            Err(why) => env.push(format!("{} {} {label}: {why}", e.family.title, e.ticker)),
+            // Не задана настройка глубины — ошибка с её именем (по нему ждущие перепроверяются при её задании).
+            Err(why) => match super::super::pools::depth_book::missing_setting(ctx) {
+                Some(name) => return Err(ctx.not_set(&name, why)),
+                None => env.push(format!("{} {} {label}: {why}", e.family.title, e.ticker)),
+            },
         }
     }
     // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.

@@ -18,6 +18,10 @@ pub type SideCheck = Option<Result<(), String>>;
 pub struct QuoterSides {
     pub buy: SideCheck,
     pub sell: SideCheck,
+    /// Итог стороны — «не задана настройка»: её имя (из ошибки хранилища, quoter_verify.rs missing_setting) —
+    /// сторона перепроверяется при задании именно её (решение 75).
+    pub buy_wait: Option<String>,
+    pub sell_wait: Option<String>,
 }
 
 impl QuoterSides {
@@ -35,6 +39,22 @@ impl QuoterSides {
             Side::Buy => self.buy = v,
             Side::Sell => self.sell = v,
         }
+    }
+
+    /// Записывает, какую настройку ждёт сторона (None — не ждёт). Ошибок нет.
+    pub fn set_wait(&mut self, s: Side, v: Option<String>) {
+        match s {
+            Side::Buy => self.buy_wait = v,
+            Side::Sell => self.sell_wait = v,
+        }
+    }
+
+    /// Какая-то сторона ждёт одну из настроек `changed`. Ошибок нет.
+    pub fn waits_for(&self, changed: &std::collections::HashSet<String>) -> bool {
+        [&self.buy_wait, &self.sell_wait]
+            .into_iter()
+            .flatten()
+            .any(|n| changed.contains(n))
     }
 
     /// Ни одна сторона ещё не сверялась. Ошибок нет.

@@ -15,7 +15,8 @@
 //! сверяется по событиям Transfer квитанции (exec/result.rs), а у V2 минимум выхода проверяет сам роутер по балансу
 //! получателя до и после обмена внутри транзакции.
 //!
-//! Кто вызывает: mod.rs (deposit_address, deposit_status, deposit_abandoned), exec/trade.rs, exec/trade_smart.rs.
+//! Кто вызывает: mod.rs (deposit_address, deposit_status, deposit_abandoned), exec/trade.rs, exec/trade_smart.rs,
+//! wallet/events_native.rs (ожидается ли BNB, решение 76).
 //! От чего зависит: ctx.rs.
 //! Настройки: transfer.max_time_s, dex.inflow_wait_notify_s [bsc_dex].
 
@@ -137,6 +138,13 @@ impl Inflows {
             }
             wake.await;
         }
+    }
+
+    /// Ожидается ли сейчас поступление токена (решение 76: баланс BNB по блокам читается только тогда —
+    /// wallet/events_native.rs). Ошибок нет.
+    pub fn waiting(&self, token: Address) -> bool {
+        let m = self.m.lock().unwrap_or_else(|p| p.into_inner());
+        m.get(&token).is_some_and(|t| !t.expected.is_empty())
     }
 
     /// Поступление с ключом `key` (хеш вывода) закончилось — зачислено, отклонено или не разбирается: снимает самое

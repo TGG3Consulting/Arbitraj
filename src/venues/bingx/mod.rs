@@ -9,6 +9,7 @@
 //! и в README.md этой папки.
 
 pub mod account;
+pub mod account_update;
 pub mod book;
 pub mod ctx;
 pub mod depth;
@@ -24,6 +25,9 @@ pub mod subs;
 pub mod symbols;
 pub mod trade;
 pub mod transfers;
+pub mod user_key;
+pub mod user_stream;
+pub mod user_stream_conn;
 pub mod wallet;
 pub mod ws;
 pub mod ws_conn;

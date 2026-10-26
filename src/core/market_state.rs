@@ -121,6 +121,7 @@ impl MarketState {
                 let prev = self.queues.insert(q.venue.clone(), q.state.clone());
                 Touched::WalletQueue { queue: q, prev }
             }
+            MarketEvent::Balance(b) => Touched::Balance(b),
         }
     }
 }

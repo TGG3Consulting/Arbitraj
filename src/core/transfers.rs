@@ -1,11 +1,13 @@
 //! Файл: core/transfers.rs
 //! Что делает: перевод монеты или USDT между площадками по сети BSC (шаг 5 ТЗ): адрес депозита на
 //! получателе → вывод с отправителя → хеш транзакции → зачисление. Статусы — через шлюз с частотой
-//! venue.status_poll_ms (у BingX нет WebSocket для них, решение 24). Перевод дольше transfer.max_time_s —
+//! venue.status_poll_ms; зачисление — по событию баланса или опросу, кто первый (решение 76: до вывода регистрируется
+//! ожидаемое зачисление — credit_expect.rs, credit_watch.rs; шаг зачисления — transfer_credit.rs). Перевод дольше transfer.max_time_s —
 //! уведомление и карантин монеты, ждём дальше (монеты в пути). Фактическое время в пути пишется в историю
 //! (для T в расчёте, dirctx.rs).
 //! Кто вызывает: executor.rs (перевод сделки), stuck.rs (перегон), usdt_return.rs (USDT).
-//! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок).
+//! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
+//! credit_watch.rs, transfer_credit.rs.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете).
 
 use std::time::Duration;
@@ -76,6 +78,9 @@ pub async fn send(
         .deposit_address(asset, &net_to)
         .await
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
+    // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
+    // приход не посчитан — только опрос).
+    let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
     let req = WithdrawRequest {
         venue: from.clone(),
         asset: asset.clone(),
@@ -112,6 +117,7 @@ pub async fn send(
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
     let mut last = String::new();
     let sent = loop {
+        // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
         match gw_from.withdrawal_status(&created.venue_ref).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
@@ -134,9 +140,16 @@ pub async fn send(
             Err(_) => {}
         }
         super::transfer_watch::slow(core, deal, to, asset, started).await;
-        pacer.pause(deps, &quiet).await;
+        let kick = ticket.as_ref().map(|t| t.wake.as_ref()).unwrap_or(&quiet);
+        pacer.pause(deps, kick).await;
     };
     let tx = sent.tx_hash.clone().unwrap_or_default();
+    // Хеш отправителя известен: события с другим хешем — не этого перевода, это внешние изменения баланса.
+    if let Some(t) = &ticket {
+        for b in t.set_tx(&tx) {
+            super::credit_event::external(core, &b).await;
+        }
+    }
     let text = format!(
         "{} {qty} {}: {} → {}, хеш {tx}",
         deal, asset.ticker, from.0, to.0
@@ -151,46 +164,16 @@ pub async fn send(
     .await;
     deps.notify("deal.transfer_sent", Some(&from.0), &text)
         .await;
-    // 2. Ждём зачисления на получателе.
-    let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(to.0.clone()));
-    loop {
-        match gw_to.deposit_status(asset, &tx).await {
-            Ok(t) if t.status == TransferStatus::Credited => {
-                let secs = Decimal::from((Utc::now() - started).num_milliseconds())
-                    / Decimal::ONE_THOUSAND;
-                super::transit::record(core, asset, from, to, secs).await;
-                super::transfer_watch::release(core, asset, to).await;
-                let text = format!(
-                    "{deal} {} {}: зачислено на {} за {secs} с",
-                    t.amount, asset.ticker, to.0
-                );
-                deps.log(
-                    Level::Info,
-                    "core.transfer_credited",
-                    Some(&to.0),
-                    &text,
-                    None,
-                )
-                .await;
-                deps.notify("deal.transfer_credited", Some(&to.0), &text)
-                    .await;
-                return Ok((sent, t));
-            }
-            Ok(_) => {}
-            Err(e) if e.message != last => {
-                deps.log(
-                    Level::Info,
-                    "core.transfer",
-                    Some(&to.0),
-                    format!("Депозит {tx}: {}", e.message),
-                    None,
-                )
-                .await;
-                last = e.message;
-            }
-            Err(_) => {}
-        }
-        super::transfer_watch::slow(core, deal, to, asset, started).await;
-        pacer.pause(deps, &quiet).await;
-    }
+    // 2. Ждём зачисления на получателе: событие или опрос (transfer_credit.rs).
+    let leg = super::transfer_credit::Leg {
+        deal,
+        from,
+        to,
+        asset,
+        network: net_to,
+        tx,
+        started,
+    };
+    let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
+    Ok((sent, credited))
 }

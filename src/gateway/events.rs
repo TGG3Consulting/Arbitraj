@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{
-    CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId, WalletQueue,
+    BalanceChange, CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId, WalletQueue,
 };
 
 use super::errors::GatewayError;
@@ -72,6 +72,11 @@ pub enum MarketEvent {
     /// DEX: монеты, у которых пулы найдены и проверены, но состояние ещё не прочитано (решение 61) — полный список,
     /// заменяет прежний. Ядро показывает «пулы найдены, загружаются», а не «нет пула с USDT».
     PoolsLoading { venue: VenueId, coins: Vec<Address> },
+    /// Изменение баланса площадки или кошелька по событию (решение 76): поступление перевода, свой обмен или вывод,
+    /// постороннее изменение. Ядро закрывает им ожидаемое зачисление перевода (core/credit_watch.rs). Адаптер шлёт
+    /// каждое изменение, которое видит, — только окончательное по правилам площадки (у кошелька — после
+    /// send.deposit_confirmations блоков); снимок балансов (не изменение) не шлёт.
+    Balance(BalanceChange),
 }
 
 /// Состояние спот-пары монеты на бирже (из справочника пар биржи) — для справочника ядра (core/presence.rs).

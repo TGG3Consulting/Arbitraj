@@ -50,6 +50,8 @@ pub enum Touched {
         venue: VenueId,
         counts: [usize; 5],
     },
+    /// Изменение баланса по событию — сверка с ожидаемыми зачислениями (credit_watch.rs, решение 76).
+    Balance(crate::core::types::BalanceChange),
     /// Сообщение адаптера для уведомлений.
     Notice {
         venue: VenueId,

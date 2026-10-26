@@ -6,6 +6,7 @@
 //! Кто вызывает: mod.rs (subscribe_market, watch_settings).
 //! От чего зависит: parts.rs, pools/market.rs, settings/live.rs (Watch).
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
+//! С подпиской живёт и задача событий баланса кошелька (wallet/events.rs, решение 76).
 //! Настройки: dex.intermediate_*, dex.native_ticker (следит за изменениями).
 
 use std::sync::{Arc, Mutex};
@@ -51,7 +52,12 @@ impl Subs {
             };
             let _ = out.try_send(MarketEvent::WalletQueue(q));
         }
-        let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        let mut new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        // Изменения баланса кошелька событиями — для зачисления переводов без опроса (решение 76).
+        new.push(tokio::spawn(super::wallet::events::run(
+            pools.clone(),
+            p.inflows.clone(),
+        )));
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());
         for old in tasks.drain(..) {
             old.abort();

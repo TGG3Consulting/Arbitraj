@@ -92,6 +92,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 };
                 super::first_pass::done(&core, &venue.0, n).await
             }
+            Touched::Balance(b) => super::credit_event::on_change(&core, b).await,
             Touched::Notice { venue, code, text } => {
                 core.inner.deps.notify(&code, Some(&venue.0), &text).await
             }

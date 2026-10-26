@@ -1,7 +1,7 @@
 //! Файл: venues/bingx/rest.rs
 //! Что делает: запросы REST к BingX — публичные и подписанные (HMAC SHA256), разбор ответа
 //! {code, msg, data}, перевод ошибок в коды шлюза, переход на резервный адрес только при сбое сети.
-//! Ответы REST пишутся в сырой журнал (raw.*, как сообщения WebSocket), кроме путей listenKey.
+//! Ответы REST пишутся в сырой журнал (raw.*, как сообщения WebSocket), кроме пути listenKey (user_key.rs).
 //! Кто вызывает: файлы адаптера BingX (symbols, wallet, transfers, account, trade, order_state, fees).
 //! От чего зависит: ctx.rs, errors.rs, hmac, sha2, reqwest.
 //! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms;
@@ -165,9 +165,10 @@ async fn send(
 }
 
 /// Разбор ответа: {code, msg, data} или голый массив (истории ввода и вывода). Текст ответа — в сырой журнал
-/// (data/raw/bingx, соединение «rest <путь>»), кроме путей listenKey (ключ потока аккаунта — секрет сессии).
+/// (data/raw/bingx, соединение «rest <путь>»), кроме пути listenKey (user_key::PATH: ключ потока аккаунта — секрет сессии).
 fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayResult<Value> {
-    if !path.contains("listenKey") {
+    // Ответы пути ключа потока аккаунта (user_key.rs) содержат сам ключ — не пишутся.
+    if !path.contains(super::user_key::PATH) {
         ctx.raw
             .write(super::ctx::ID, &format!("rest {path}"), &text);
     }

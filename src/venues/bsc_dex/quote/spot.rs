@@ -1,0 +1,66 @@
+//! Файл: venues/bsc_dex/quote/spot.rs
+//! Что делает: сколько монет стоит сумма во встречном токене по ТЕКУЩЕЙ цене пула — без обмена (решение 73, техлид:
+//! проба продажи для сверки с квотером не должна зависеть от того, можно ли купить на эту сумму: у CL-пула с
+//! ликвидностью только с одной стороны цены продажа глубокая, а покупка невозможна).
+//! Цена: V2 — резервы (y/x); V3, Infinity CL, Uniswap V4 — sqrtPriceX96 (цена токена0 в токене1 = (sqrtPriceX96 / 2^96)²);
+//! Infinity Bin — цена активного бина (128.128, сколько Y за 1 X).
+//! Кто вызывает: check/quoter_verify.rs (проба продажи).
+//! От чего зависит: math/full_math.rs (mul_div), math/bin_price.rs, pools/registry.rs.
+//! Настройки: нет.
+//!
+//! sqrtPriceX96 = √(token1/token0)·2^96 — Uniswap v3-core contracts/libraries/TickMath.sol; цена бина —
+//! infinity-core src/pool-bin/libraries/PriceHelper.sol (math/bin_price.rs).
+
+use alloy_primitives::U256;
+
+use crate::core::types::PoolState;
+
+use super::super::math::bin_price::{self, SCALE_OFFSET};
+use super::super::math::full_math::mul_div;
+use super::super::pools::registry::Entry;
+
+/// 2^96 — масштаб sqrtPriceX96 (протокол, не настройка).
+fn q96() -> U256 {
+    U256::from(1u8) << 96
+}
+
+/// Монеты на сумму `amount` встречного токена по текущей цене пула (минимальные единицы). None — цены нет (нулевые
+/// резервы или цена, бин без binStep) или переполнение. Ошибок нет.
+pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
+    let coin0 = e.coin == e.pool.token0;
+    match &e.pool.state {
+        PoolState::V2 { reserve0, reserve1 } => {
+            let (rc, ru) = if coin0 {
+                (*reserve0, *reserve1)
+            } else {
+                (*reserve1, *reserve0)
+            };
+            (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
+        }
+        PoolState::V3 { sqrt_price_x96, .. } | PoolState::Cl { sqrt_price_x96, .. } => {
+            let s = *sqrt_price_x96;
+            if s.is_zero() {
+                return None;
+            }
+            // Цена токена0 в токене1 = (s/2^96)². Монета — токен0: монет = сумма / цена; токен1: сумма · цена.
+            // Двумя делениями (по одному множителю s/2^96) — без переполнения 256 бит.
+            if coin0 {
+                mul_div(mul_div(amount, q96(), s)?, q96(), s)
+            } else {
+                mul_div(mul_div(amount, s, q96())?, s, q96())
+            }
+        }
+        PoolState::Bin { active_id, .. } => {
+            let price = bin_price::price_from_id(*active_id, e.pool.bin_step?)?;
+            let one = U256::from(1u8) << SCALE_OFFSET;
+            // price — сколько Y (токен1) за 1 X (токен0), ·2^128.
+            if coin0 {
+                (!price.is_zero())
+                    .then(|| mul_div(amount, one, price))
+                    .flatten()
+            } else {
+                mul_div(amount, price, one)
+            }
+        }
+    }
+}

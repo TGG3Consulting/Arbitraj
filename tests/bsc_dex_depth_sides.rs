@@ -5,7 +5,9 @@
 //!   на покупку (quote/select.rs usable);
 //! - падение глубины покупки (порог 700 → 799) не убирает продажу: её сверка не сбрасывается (check/quoter_sides.rs —
 //!   мелкая сторона без итога, другая не меняется), продажа котируется, покупка — нет;
-//! - сторона без своей сверки не котируется, даже если другая сверена.
+//! - сторона без своей сверки не котируется до сверки, даже если другая сверена; стала глубокой — «пул готов», цикл
+//!   (check/quoter_cycle.rs one, отбор по check/quoter_side.rs side_ready) сверяет её одним проходом, не дожидаясь
+//!   dex.quoter_check_s.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/native_common, tests/depth_common, arb::venues::bsc_dex::{parts, quote::select,
@@ -18,6 +20,9 @@ use serde_json::json;
 
 use arb::core::types::{Asset, Side};
 use arb::settings::scope::Scope;
+use arb::venues::bsc_dex::check::fresh::Fresh;
+use arb::venues::bsc_dex::check::quoter_cycle;
+use arb::venues::bsc_dex::check::quoter_side::side_ready;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::quote::select::usable;
@@ -52,12 +57,13 @@ async fn sides_are_independent() {
         set(&ctx, n, u3.clone(), a).await;
     }
     let p = Parts::new(ctx.clone());
+    let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
         ticker: "USDT".into(),
-        bsc_contract: Some(alloy_primitives::address!(
-            "0x55d398326f99059ff775485246999027b3197955"
-        )),
+        bsc_contract: Some(usdt),
     }]);
+    // decimals() USDT в BSC — 18 (в записи глубины балансы и глубины USDT сходятся с замером только при 18).
+    p.tokens.remember_decimals(usdt, 18);
     let (e, _, _) = aave_v3(&rec());
     p.registry.put(e.clone());
     let r = e.pool.reference.clone();
@@ -84,8 +90,40 @@ async fn sides_are_independent() {
     assert_eq!(p.checks.pool(&r).quoter.sell, Some(Ok(())));
     assert!(usable(&q, &e, Side::Sell, 18).is_ok(), "продажа не убрана");
     assert!(usable(&q, &e, Side::Buy, 18).is_err());
-    // Покупка снова глубокая, но своей сверки ещё нет — не котируется, хотя продажа сверена.
+    // Покупка снова глубокая, но своей сверки ещё нет — не котируется до сверки, хотя продажа сверена; сверка — по
+    // сигналу «пул готов», а не через полный проход dex.quoter_check_s (ревью #63).
+    let (tx, _rx) = tokio::sync::mpsc::channel(16);
+    let pools = p.pools(tx);
+    let mut fresh = Fresh::default();
+    fresh.mark(&r);
+    assert!(!side_ready(&pools, &r), "покупка мелкая — сверять нечего");
+    assert!(fresh.due(&pools, |x| side_ready(&pools, x)).is_empty());
     set(&ctx, "dex.min_pool_liquidity_usd", v, json!(700)).await;
+    let w = pools.signals.ready.notified();
+    tokio::pin!(w);
+    w.as_mut().enable();
     let why = usable(&q, &e, Side::Buy, 18).unwrap_err();
     assert!(why.contains("не сверена"), "{why}");
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(200), w)
+            .await
+            .is_ok(),
+        "глубина выросла — «пул готов»"
+    );
+    assert!(side_ready(&pools, &r), "сторона без итога стала глубокой");
+    assert_eq!(
+        fresh.due(&pools, |x| side_ready(&pools, x)),
+        vec![r.clone()]
+    );
+    // Один проход цикла: сторона покупки сверена (квотера в тесте нет — итог «не задана настройка узла», но он есть,
+    // а не «ещё не сверена»; ответ квотера на записи — отдельной записью, см. tests/README.md).
+    assert!(quoter_cycle::one(&pools, &r, &mut None).await);
+    let buy = p.checks.pool(&r).quoter.buy;
+    assert!(buy.is_some(), "сторона покупки сверена одним проходом");
+    let why = usable(&q, &e, Side::Buy, 18).unwrap_err();
+    assert!(!why.contains("не сверена"), "{why}");
+    assert!(
+        !side_ready(&pools, &r),
+        "итог есть — повторять по сигналу нечего"
+    );
 }

@@ -26,8 +26,7 @@ use super::state::Checks;
 pub const HOOK_WAIT: &str = "влияние крючка ещё не измерено — сверка с квотером невозможна";
 
 /// Сверка стороны пула (после фильтра глубины этой стороны; решение 73 — стороны независимо): покупка — check.probe_usdt
-/// USDT во встречном токене в пул; продажа — столько монет, сколько локальная математика пула даёт на эту сумму (та же
-/// стоимость с другой стороны). Возвращает: Ok или Err(причина). Ошибок нет.
+/// USDT во встречном токене в пул; продажа — монеты на эту сумму по текущей цене пула (quote/spot.rs, без обмена). Возвращает: Ok или Err(причина). Ошибок нет.
 pub async fn verify(p: &Pools, e: &Entry, side: Side) -> Result<(), String> {
     if emptiness::empty(e) {
         return Err(emptiness::EMPTY.into());
@@ -36,14 +35,12 @@ pub async fn verify(p: &Pools, e: &Entry, side: Side) -> Result<(), String> {
     let (amount, usdt) = probe(p, e).await?;
     let (token_in, amount) = match side {
         Side::Buy => (e.usdt, amount),
-        Side::Sell => {
-            let coins = super::super::quote::pool_quote::swap(&p.ctx, e, e.usdt, true, amount)
-                .map_err(|e| e.message)?;
-            if !coins.complete || coins.amount_out.is_zero() {
-                return Err(emptiness::short(emptiness::SHORT_LOCAL));
-            }
-            (e.coin, coins.amount_out)
-        }
+        // Продажа — монеты на ту же сумму по ТЕКУЩЕЙ цене пула, без обмена на стороне покупки (решение 73): у пула с
+        // ликвидностью только с одной стороны цены покупка невозможна, а продажа глубокая — стороны независимы.
+        Side::Sell => match super::super::quote::spot::coins_for(e, amount) {
+            Some(c) if !c.is_zero() => (e.coin, c),
+            _ => return Err("цены пула нет — монет на сумму пробы продажи не посчитать".into()),
+        },
     };
     match quoter::compare(&p.ctx, e, token_in, amount, pct).await {
         Ok(Err(why)) if why.starts_with(emptiness::SHORT) => {

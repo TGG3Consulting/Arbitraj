@@ -14,6 +14,7 @@ pub mod native_probe;
 pub mod probe;
 pub mod probe_calls;
 pub mod quoter_cycle;
+pub mod quoter_side;
 pub mod quoter_sides;
 pub mod quoter_tally;
 pub mod quoter_verify;

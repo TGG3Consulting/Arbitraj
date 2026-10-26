@@ -30,6 +30,7 @@ pub mod select;
 pub mod smart;
 pub mod smart_quote;
 pub mod smart_ways;
+pub mod spot;
 pub mod steps;
 pub mod via;
 pub mod via_pools;

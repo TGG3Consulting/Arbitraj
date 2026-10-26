@@ -31,16 +31,11 @@ use crate::storage::journal::Level;
 
 use super::super::pools::index_watch;
 use super::super::pools::listen::Pools;
-use super::super::pools::progress::reason_key;
-use super::super::pools::registry::Entry;
 use super::super::quote::select;
 use super::fresh::Fresh;
 use super::quoter_tally::Tally;
 use super::quoter_verify::{HOOK_WAIT, usdt_decimals, verify};
 use super::recheck::Queue;
-
-/// Начало причины «не задана настройка» — такие причины пишутся одной строкой на причину (Signals::once).
-const NOT_SET: &str = "Не задана настройка";
 
 /// Цикл сверки с квотером (см. шапку). Ошибок нет: сбой — причина в итоге пула.
 pub async fn run(p: Pools, queue: Queue) {
@@ -72,7 +67,11 @@ pub async fn run(p: Pools, queue: Queue) {
             let ready = p.signals.ready.notified();
             tokio::pin!(ready);
             ready.as_mut().enable();
-            for r in fresh.due(&p, |r| hook_measured(&p, r)) {
+            // Повтор по сигналу: ждали крючка — он измерен; сторона без итога стала глубокой (решение 73: иначе она ждала
+            // бы полного прохода dex.quoter_check_s).
+            for r in fresh.due(&p, |r| {
+                hook_measured(&p, r) || super::quoter_side::side_ready(&p, r)
+            }) {
                 fresh.check(&r, one(&p, &r, &mut first)).await;
             }
             if first.is_some() && fresh.settled(&p) {
@@ -145,9 +144,9 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         let prev = now.side(side).clone();
         if first.is_none()
             && let Some(res) = &res
-            && changed(prev.as_ref(), res)
+            && super::quoter_side::changed(prev.as_ref(), res)
         {
-            log_change(p, &e, side, res).await;
+            super::quoter_side::log_change(p, &e, side, res).await;
         }
         now.set(side, res);
     }
@@ -156,39 +155,4 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
     }
     p.checks.update_pool(r, |f| f.quoter = now);
     true
-}
-
-/// Запись о смене итога стороны пула. Ошибок нет.
-async fn log_change(p: &Pools, e: &Entry, side: Side, res: &Result<(), String>) {
-    let what = if side == Side::Buy {
-        "покупка"
-    } else {
-        "продажа"
-    };
-    let msg = match res {
-        Ok(()) => format!(
-            "{} {}: сверка с квотером ({what}) снова проходит — сторона в котировках",
-            e.family.title, e.ticker
-        ),
-        Err(why) => format!(
-            "{} {} ({what}): {why} — сторона исключена",
-            e.family.title, e.ticker
-        ),
-    };
-    let level = if res.is_ok() {
-        Level::Info
-    } else {
-        Level::Warn
-    };
-    p.ctx.log(level, "dex.quoter", msg, None).await;
-}
-
-/// Сменилось ли состояние пула так, что это стоит записать (см. шапку). Ошибок нет.
-fn changed(prev: Option<&Result<(), String>>, new: &Result<(), String>) -> bool {
-    match (prev, new) {
-        (_, Err(why)) if why.starts_with(NOT_SET) => false,
-        (None, Ok(())) | (Some(Ok(())), Ok(())) => false,
-        (Some(Err(a)), Err(b)) => reason_key(a) != reason_key(b),
-        _ => true,
-    }
 }

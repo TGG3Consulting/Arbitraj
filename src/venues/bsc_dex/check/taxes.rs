@@ -115,8 +115,8 @@ async fn run(
     let wallet = signer::address(ctx)?;
     let usdt_dec = tokens.decimals(ctx, usdt).await?;
     let probe = num::to_units(ctx.dec("check.probe_usdt")?, usdt_dec).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::NotConfigured,
+        ctx.not_set(
+            "check.probe_usdt",
             "check.probe_usdt не переводится в единицы USDT",
         )
     })?;

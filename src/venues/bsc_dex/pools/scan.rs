@@ -18,7 +18,7 @@ use alloy::rpc::types::Log;
 use alloy_primitives::Address;
 use serde_json::{Value, json};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
@@ -54,8 +54,8 @@ pub async fn logs(
 /// Размер куска: dex.logs_block_batch. Ошибки: NotConfigured (не задан или 0).
 pub fn batch_size(ctx: &Ctx) -> GatewayResult<u64> {
     match ctx.int("dex.logs_block_batch")? {
-        0 => Err(ctx.err(
-            ErrorCode::NotConfigured,
+        0 => Err(ctx.not_set(
+            "dex.logs_block_batch",
             "dex.logs_block_batch должен быть больше нуля",
         )),
         n => Ok(n),

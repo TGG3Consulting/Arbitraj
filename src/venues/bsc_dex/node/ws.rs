@@ -73,7 +73,7 @@ impl Conn {
                 Err(e) => return Err(e),
             }
         }
-        Err(last.unwrap_or_else(|| ctx.err(ErrorCode::NotConfigured, "нет адреса узла WebSocket")))
+        Err(last.unwrap_or_else(|| ctx.not_set("bsc.node_ws_url", "нет адреса узла WebSocket")))
     }
 
     /// Соединение по заданному адресу (основной или резервный — решает open, проверка подключения — сама).

@@ -60,6 +60,13 @@ pub fn thaw(p: &Pools, frozen: &[PoolRef], failed: &[PoolRef]) {
     }
 }
 
+/// Пулы `refs` не прочитались — недостоверны (котировка их не берёт), пока reload.rs не перечитает. Ошибок нет.
+pub fn fail(p: &Pools, refs: &[PoolRef]) {
+    for r in refs {
+        p.reg.update(r, |e| e.valid = false);
+    }
+}
+
 /// Пересчёт глубины пулов пачки (см. шапку). Ошибки: End — обрыв подписки, ядро закрыло канал.
 pub async fn on_change(p: &Pools, g: &mut Group, m: &mut Members) -> Result<(), End> {
     let mut need: Vec<usize> = Vec::new();
@@ -117,6 +124,9 @@ pub async fn on_change(p: &Pools, g: &mut Group, m: &mut Members) -> Result<(), 
             m.missing.push(Missing { i, tries: 0 });
         }
     }
+    // Не прочитался в любом из чтений — недостоверен (первое чтение спящего уже поставило valid на своём блоке:
+    // обмены между ним и блоком переподписки потеряны), как admit::wake; перечитывается на новых блоках.
+    fail(p, &failed_refs);
     thaw(p, &frozen, &failed_refs);
     Ok(())
 }

@@ -147,10 +147,18 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
             ),
             Err(why) => Err(why.clone()),
         };
-        let res = match deep {
-            Ok(None) => Some(verify(p, &e, side).await),
-            Ok(Some(_)) => None,
-            Err(why) => Some(Err(why)),
+        // Итог и имя незаданной настройки — из ошибки там, где она возникла (решение 75): по нему сторона
+        // перепроверяется при задании именно этой настройки. Глубина — её настройки (pools/depth_book.rs).
+        let (res, wait) = match deep {
+            Ok(None) => match verify(p, &e, side).await {
+                Ok(()) => (Some(Ok(())), None),
+                Err((why, name)) => (Some(Err(why)), name),
+            },
+            Ok(Some(_)) => (None, None),
+            Err(why) => (
+                Some(Err(why)),
+                super::super::pools::depth_book::missing_setting(&p.ctx),
+            ),
         };
         let prev = now.side(side).clone();
         if first.is_none()
@@ -159,11 +167,6 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         {
             super::quoter_side::log_change(p, &e, side, res).await;
         }
-        // Итог — «не задана настройка»: имя настройки — для перепроверки при её задании (решение 75).
-        let wait = match &res {
-            Some(Err(_)) => super::quoter_verify::missing_setting(p, &e),
-            _ => None,
-        };
         now.set_wait(side, wait);
         now.set(side, res);
     }

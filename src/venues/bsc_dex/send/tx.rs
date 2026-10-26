@@ -61,8 +61,8 @@ impl SendCfg {
                 0,
             )
             .ok_or_else(|| {
-                ctx.err(
-                    ErrorCode::NotConfigured,
+                ctx.not_set(
+                    "send.cancel_max_gas_gwei",
                     "send.cancel_max_gas_gwei не переводится в wei",
                 )
             })?,
@@ -70,8 +70,8 @@ impl SendCfg {
             queue_max_wait: Duration::from_secs(ctx.int("send.queue_max_wait_s")?),
         };
         if cfg.max_wait < cfg.bundle_max {
-            return Err(ctx.err(
-                ErrorCode::NotConfigured,
+            return Err(ctx.not_set(
+                "send.max_wait_blocks",
                 format!(
                     "send.max_wait_blocks ({}) меньше send.bundle_max_blocks ({}): бандл может попасть в блок, когда трекер уже отменяет транзакцию — отправка не работает",
                     cfg.max_wait, cfg.bundle_max

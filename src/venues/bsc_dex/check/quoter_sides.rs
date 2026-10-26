@@ -18,7 +18,7 @@ pub type SideCheck = Option<Result<(), String>>;
 pub struct QuoterSides {
     pub buy: SideCheck,
     pub sell: SideCheck,
-    /// Итог стороны — «не задана настройка»: её имя (из ошибки хранилища, quoter_verify.rs missing_setting) —
+    /// Итог стороны — «не задана настройка»: её имя (GatewayError.setting там, где ошибка возникла — quoter_verify.rs verify) —
     /// сторона перепроверяется при задании именно её (решение 75).
     pub buy_wait: Option<String>,
     pub sell_wait: Option<String>,

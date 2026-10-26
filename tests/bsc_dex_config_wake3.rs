@@ -1,7 +1,7 @@
 //! Файл: tests/bsc_dex_config_wake3.rs
 //! Что делает: решение 75, ревью #65 (живой пул AAVE Uniswap V3 0x8e3ecc0b…, запись 2026-10-25):
-//! - имя незаданной настройки у итога сверки с квотером — структурно (quoter_verify::missing_setting, из
-//!   GatewayError.setting): сторона ждёт её и перепроверяется только при её изменении (QuoterSides::waits_for);
+//! - имя незаданной настройки у итога сверки с квотером — из ошибки там, где она возникла (GatewayError.setting;
+//!   глубина — pools/depth_book.rs missing_setting): сторона ждёт её и перепроверяется только при её изменении;
 //! - монета, ждущая из-за отставания ленты (Why::Lag): отметка стоит — не выдаётся; сняли — выдаётся на проверку на
 //!   ближайшем шаге цикла (due_lag), сигнал до постановки в ожидание не теряется; снятие будит «пул готов»;
 //! - пересчёт глубины, которому нужен узел (pools/depth_sync.rs), «замораживает» пачку: пока чтение идёт, её пулы
@@ -22,11 +22,12 @@ use serde_json::json;
 use arb::core::types::{Asset, Side};
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::quoter_sides::QuoterSides;
-use arb::venues::bsc_dex::check::quoter_verify::missing_setting;
+use arb::venues::bsc_dex::check::quoter_verify::verify;
 use arb::venues::bsc_dex::check::tax_pass::Why;
 use arb::venues::bsc_dex::check::tax_wait::due_lag;
 use arb::venues::bsc_dex::parts::Parts;
-use arb::venues::bsc_dex::pools::depth_sync::{freeze, thaw};
+use arb::venues::bsc_dex::pools::depth_book::missing_setting;
+use arb::venues::bsc_dex::pools::depth_sync::{fail, freeze, thaw};
 use arb::venues::bsc_dex::quote::select::usable;
 
 use depth_common::{aave_v3, rec};
@@ -45,12 +46,31 @@ async fn quoter_side_waits_for_named_setting() {
         ticker: "USDT".into(),
         bsc_contract: Some(usdt),
     }]);
+    p.tokens.remember_decimals(usdt, 18);
     let (e, _, _) = aave_v3(&rec());
+    p.registry.put(e.clone());
     let (tx, _rx) = tokio::sync::mpsc::channel(16);
     let pools = p.pools(tx);
-    // Глубина не задана — первым ждётся порог.
-    let name = missing_setting(&pools, &e).unwrap();
-    assert_eq!(name, "dex.min_pool_liquidity_usd");
+    // Глубина не задана — её имя (настройки глубины, pools/depth_book.rs).
+    assert_eq!(
+        missing_setting(&ctx).as_deref(),
+        Some("dex.min_pool_liquidity_usd")
+    );
+    // Сверка: имя — из ошибки там, где она возникла; допуск квотера читается ДО обращения к узлу (узла в тесте нет —
+    // без этого была бы ошибка связи без имени).
+    let Err((_, name)) = verify(&pools, &e, Side::Buy).await else {
+        panic!("без check.probe_usdt сверки нет");
+    };
+    assert_eq!(name.as_deref(), Some("check.probe_usdt"));
+    ctx.settings
+        .set("check.probe_usdt", v.clone(), Some(json!(1)), "тест")
+        .await
+        .unwrap();
+    let Err((_, name)) = verify(&pools, &e, Side::Buy).await else {
+        panic!("без допуска сверки нет");
+    };
+    assert_eq!(name.as_deref(), Some("dex.quoter_max_diff_pct"));
+    let name = name.unwrap();
     let mut q = QuoterSides::default();
     q.set(Side::Buy, Some(Err("не задана".into())));
     q.set_wait(Side::Buy, Some(name.clone()));
@@ -124,4 +144,10 @@ async fn depth_sync_freezes_pack_while_reading() {
     let frozen = freeze(&pools, [&r].into_iter());
     thaw(&pools, &frozen, std::slice::from_ref(&r));
     assert!(!p.registry.get(&r).unwrap().valid);
+    // Ревью #65: первое чтение спящего поставило valid на своём блоке, второе (после переподписки) не прошло —
+    // пул недостоверен, котировка отказывает.
+    p.registry.update(&r, |x| x.valid = true);
+    fail(&pools, std::slice::from_ref(&r));
+    let why = usable(&q, &p.registry.get(&r).unwrap(), Side::Sell, 18).unwrap_err();
+    assert!(why.contains("недостоверны"), "{why}");
 }

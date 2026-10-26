@@ -22,7 +22,7 @@
 use alloy::sol_types::{SolCall, SolError, SolValue};
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::pools::registry::Entry;
@@ -69,8 +69,8 @@ pub fn format(ctx: &Ctx, e: &Entry) -> GatewayResult<Format> {
         "pancakeswap_infinity" => Ok(Format::Pancake),
         "2.0" => Ok(Format::Uniswap20),
         "2.1.1" | "2.1.2" => Ok(Format::Uniswap211),
-        v => Err(ctx.err(
-            ErrorCode::NotConfigured,
+        v => Err(ctx.not_set(
+            "dex.universal_router_version",
             format!("dex.universal_router_version [{}] = «{v}»: известны pancakeswap_infinity, 2.0, 2.1.1, 2.1.2", e.family.id),
         )),
     }

@@ -120,7 +120,8 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if !e.valid {
         return false;
     }
-    let Some(pc) = hooks_probe::check_pool(&p.ctx, &p.tokens, &p.reg, &e).await else {
+    let Some((pc, wait)) = hooks_probe::check_pool_named(&p.ctx, &p.tokens, &p.reg, &e).await
+    else {
         return true;
     };
     let prev = p.checks.pool(r).hook.map(|c| c.impact);
@@ -152,12 +153,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
             p.ctx.log(level, "dex.check", msg, None).await;
         }
     }
-    // Не прошла из-за незаданной настройки — её имя, чтобы повторить при её задании (решение 75).
-    let wait = if passed {
-        None
-    } else {
-        super::quoter_verify::missing_setting(p, &e)
-    };
+    // Не прошла из-за незаданной настройки — её имя (из ошибки), чтобы повторить при её задании (решение 75).
     p.checks.update_pool(r, |f| {
         f.hook = Some(pc.clone());
         f.hook_wait = wait;

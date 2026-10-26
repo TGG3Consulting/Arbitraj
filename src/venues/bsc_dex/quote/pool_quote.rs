@@ -55,7 +55,7 @@ pub fn swap(
     match (&e.pool.state, e.pool.kind) {
         (PoolState::V2 { reserve0, reserve1 }, PoolKind::V2) => {
             let fee = v2::fee_ratio(v2_fee_pct(ctx, e)?)
-                .ok_or_else(|| ctx.err(ErrorCode::NotConfigured, "комиссия пары V2 вне 0–100%"))?;
+                .ok_or_else(|| ctx.not_set("dex.v2_fee_pct", "комиссия пары V2 вне 0–100%"))?;
             let (r_in, r_out) = if zero_for_one {
                 (*reserve0, *reserve1)
             } else {

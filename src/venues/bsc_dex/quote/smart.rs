@@ -41,8 +41,8 @@ pub fn best(
     let max_splits = usize::try_from(ctx.int("smart.max_splits")?).unwrap_or(usize::MAX);
     let step_pct = ctx.dec("smart.split_step_pct")?;
     if step_pct <= Decimal::ZERO || step_pct > Decimal::ONE_HUNDRED || max_splits == 0 {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
+        return Err(ctx.not_set(
+            "smart.split_step_pct",
             "smart.split_step_pct должен быть в (0; 100], smart.max_splits — больше нуля",
         ));
     }

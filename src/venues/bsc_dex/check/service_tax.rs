@@ -142,8 +142,8 @@ async fn measure(p: &Pools) -> GatewayResult<Option<TokenTaxes>> {
     let wallet = signer::address(ctx)?;
     let dec = p.tokens.decimals(ctx, usdt).await?;
     let amount = num::to_units(ctx.dec("check.probe_usdt")?, dec).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::NotConfigured,
+        ctx.not_set(
+            "check.probe_usdt",
             "check.probe_usdt не переводится в единицы USDT",
         )
     })?;

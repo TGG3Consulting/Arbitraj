@@ -13,7 +13,7 @@
 use alloy_primitives::{Address, B256};
 use serde_json::{Value, json};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 
@@ -21,8 +21,8 @@ use super::super::ctx::Ctx;
 pub fn per_sub(ctx: &Ctx) -> GatewayResult<usize> {
     let n = ctx.int("dex.pools_per_sub")?;
     if n == 0 {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
+        return Err(ctx.not_set(
+            "dex.pools_per_sub",
             "dex.pools_per_sub должен быть больше нуля",
         ));
     }

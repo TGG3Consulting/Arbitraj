@@ -169,8 +169,8 @@ fn permit2_approve(
         })?
     };
     let exp = U48::try_from(expiration).map_err(|_| {
-        ctx.err(
-            ErrorCode::NotConfigured,
+        ctx.not_set(
+            "dex.permit2_expiration_s",
             format!("Срок Permit2 {expiration} больше uint48 — проверьте dex.permit2_expiration_s"),
         )
     })?;

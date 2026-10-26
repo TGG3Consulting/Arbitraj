@@ -106,9 +106,9 @@ async fn single_node_needs_two_nowhere_in_a_row() {
     assert_eq!(nodes, 1);
     let mut lag = Lag::default();
     assert_eq!(lag.nowhere(n), 0, "первое «нет» — ещё повтор");
-    lag.failed(n, &why, true);
+    lag.failed(n, &why, true, false);
     assert_eq!(lag.nowhere(n), 1, "второе подряд — невосполнимо");
-    lag.failed(n, "узел не ответил", false);
+    lag.failed(n, "узел не ответил", false, false);
     assert_eq!(lag.nowhere(n), 0, "сбой между ними — счёт заново");
     assert_eq!(lag.nowhere(n + 1), 0, "счёт — по своему блоку");
 }

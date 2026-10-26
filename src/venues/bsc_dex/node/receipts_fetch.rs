@@ -95,7 +95,7 @@ pub(super) async fn fetch_block(
         .map_err(|e| Fail::Retry(e.message))?;
     match got {
         Capped::Got(list) => check(list).map_err(|r| Fail::Retry(r.why)),
-        Capped::Over(f) => Err(Fail::Retry(over(n, &f, &lim))),
+        Capped::Over(f) => Err(Fail::Over(over(n, &f, &lim))),
     }
 }
 
@@ -134,7 +134,7 @@ pub fn lost(n: u64, l: Lost, lim: &Limits, race: bool) -> Fail {
         });
     }
     match (l.over, l.failed) {
-        (Some(f), _) => Fail::Retry(over(n, &f, lim)),
+        (Some(f), _) => Fail::Over(over(n, &f, lim)),
         (None, Some(e)) => Fail::Retry(e.message),
         (None, None) => Fail::Retry(format!("блок {n}: узлов нет")),
     }

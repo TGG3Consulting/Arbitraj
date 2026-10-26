@@ -89,4 +89,20 @@ impl Link {
             Link::Receipts(h) => h.end_reason(),
         }
     }
+
+    /// Текущая эпоха пересинхрона ленты (решение 77); у WebSocket пересинхрона нет — 0. Ошибок нет.
+    pub fn resync_epoch(&self) -> u64 {
+        match self {
+            Link::Ws(_) => 0,
+            Link::Receipts(h) => h.resync_epoch(),
+        }
+    }
+
+    /// Пачка перечитала свои пулы до эпохи `epoch` (решение 77): отметить «соединение» ленты; у WebSocket — ничего.
+    /// Ошибок нет.
+    pub fn resynced(&self, epoch: u64) {
+        if let Link::Receipts(h) = self {
+            h.resynced(epoch);
+        }
+    }
 }

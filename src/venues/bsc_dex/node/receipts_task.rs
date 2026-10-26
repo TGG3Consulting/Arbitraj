@@ -48,6 +48,8 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
     let mut lag = Lag::default();
     // О «запрет держится дольше bsc.receipts_stuck_reset_s» уже записано (до снятия запрета).
     let mut hold_told = false;
+    // О незаданной bsc.receipts_stuck_reset_s уже записано в этом застревании (решение 77).
+    let mut no_reset_told = false;
     loop {
         let Some(inner) = weak.upgrade() else { return };
         let feed = Feed { inner };
@@ -87,15 +89,17 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
             }
             None => Ok(true),
         };
-        // «Сброс» снимается обычным шагом новой ленты, когда все пачки старой закрыли «соединения» (после Invalidated).
-        if res.is_ok() && feed.release_if_settled() {
+        // «Сброс» снимается обычным шагом новой ленты, когда все пачки старой закрыли «соединения» (после Invalidated),
+        // а пропуск-пересинхрон (решение 77) — когда все «соединения» перечитали пулы.
+        if res.is_ok() && (feed.release_if_settled() || feed.release_if_resynced()) {
             let msg = format!(
-                "{SOURCE}: пачки сделали пулы недостоверными после сброса — запрет котировок по сбросу снят, пулы перечитываются"
+                "{SOURCE}: пачки перечитали пулы — запрет котировок снят, торговля снова разрешена"
             );
             ctx.log(Level::Info, "venue.ws", msg, None).await;
         }
         hold_told = hold_note(&ctx, &feed, hold_told).await;
         let missing = matches!(res, Err(Fail::Missing(..)));
+        let hard = matches!(res, Err(Fail::Over(..)));
         let why = match res {
             // Блоков в секунду меряем только догнав голову: во время догона блоки идут быстрее сети.
             Ok(true) => {
@@ -103,16 +107,30 @@ pub(super) async fn run(weak: Weak<Inner>, ctx: Ctx, heads: Heads) {
                 None
             }
             Ok(false) => continue,
-            Err(Fail::Retry(why) | Fail::Missing(why, _)) => {
+            Err(Fail::Retry(why) | Fail::Over(why) | Fail::Missing(why, _)) => {
                 if let Some(top) = chain.top() {
-                    lag.failed(top.number + 1, &why, missing);
+                    lag.failed(top.number + 1, &why, missing, hard);
                 }
-                // Стоит дольше bsc.receipts_stuck_reset_s — полный сброс с причиной (решение 72).
-                match lag.overdue(&ctx, &feed).await {
-                    Some(reset) => Some((
-                        Level::Error,
-                        restart(&feed, &mut chain, &mut pipe, &mut lag, reset),
-                    )),
+                log_hosts(&ctx, &mut lag).await;
+                // Восстановление «пропуск + пересинхрон» (решение 77): блок дал bsc.receipts_block_max_tries «жёстких»
+                // отказов подряд ИЛИ отставание держится дольше bsc.receipts_stuck_reset_s. Иначе — обычный повтор.
+                let k = ctx
+                    .int("bsc.receipts_block_max_tries")
+                    .ok()
+                    .and_then(|v| u32::try_from(v).ok())
+                    .unwrap_or(0);
+                let skip = match lag.overdue_block(k) {
+                    Some(w) => Some(w),
+                    None => lag.overdue_behind(&ctx, &feed, &mut no_reset_told).await,
+                };
+                match skip {
+                    Some(reset) => {
+                        no_reset_told = false;
+                        Some((
+                            Level::Warn,
+                            skip_to_head(&feed, &mut chain, &mut pipe, &mut lag, reset),
+                        ))
+                    }
                     None => Some((Level::Warn, why)),
                 }
             }
@@ -175,6 +193,56 @@ async fn hold_note(ctx: &Ctx, feed: &Feed, told: bool) -> bool {
     );
     ctx.log(Level::Warn, "venue.ws", msg, None).await;
     true
+}
+
+/// Пропуск застрявшего участка на текущую голову с пересинхроном (решение 77, вариант B): окно, конвейер и местное
+/// отставание — заново (следующий шаг начнёт ленту с головы), подписки НЕ рвутся и поколение НЕ меняется; «сброс»
+/// держит запрет котировок, пока пачки не перечитали пулы (Feed::request_resync) — снимает его run. Возвращает:
+/// причину для журнала. Ошибок нет.
+fn skip_to_head(
+    feed: &Feed,
+    chain: &mut Chain,
+    pipe: &mut Pipe<Got>,
+    lag: &mut Lag,
+    why: String,
+) -> String {
+    chain.clear();
+    pipe.clear();
+    *lag = Lag::default();
+    feed.request_resync();
+    why
+}
+
+/// Один раз на застревание пишет в журнал узлы, на которые уходит повтор блока гонкой (решение 77: hot-swap
+/// bsc.receipts_node_urls и 429 видны поимённо, но не на каждый ретрай). Ошибок нет.
+async fn log_hosts(ctx: &Ctx, lag: &mut Lag) {
+    if lag.hot().is_none() || !lag.take_hosts_told() {
+        return;
+    }
+    let hosts = match super::receipts_nodes::list(ctx) {
+        Ok(Some((urls, _))) => urls
+            .iter()
+            .map(|u| super::rpc_race::host_source(u))
+            .collect::<Vec<_>>()
+            .join(", "),
+        _ => ctx
+            .failover
+            .urls(ctx, super::failover::Link::Http)
+            .map(|v| {
+                v.iter()
+                    .map(|(_, u)| super::rpc_race::host_source(u))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_else(|_| "узлы не заданы".into()),
+    };
+    ctx.log(
+        Level::Info,
+        "venue.ws",
+        format!("{SOURCE}: повтор застрявшего блока — гонка на узлы: {hosts}"),
+        None,
+    )
+    .await;
 }
 
 /// Полный сброс ленты: окно, конвейер и отставание — заново, все подписки закрыты; отметка «отстают» НЕ снимается, а

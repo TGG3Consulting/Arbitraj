@@ -67,6 +67,39 @@ pub fn fail(p: &Pools, refs: &[PoolRef]) {
     }
 }
 
+/// Пересинхрон пачки после пропуска блока лентой (решение 77, вариант B): лента пропустила блок(и) — события его пулов
+/// потеряны, поэтому пачка перечитывает ТЕКУЩЕЕ состояние своих глубоких пулов на голове сети, без разрыва подписки и
+/// переподписки (конвейер уже идёт с головы). На время чтения вся пачка недостоверна (freeze: котировок по застывшим
+/// ценам нет — «не торгуем вслепую»), затем снова достоверна (thaw); не прочитавшиеся — недостоверны и перечитываются
+/// на новых блоках (reload.rs). Ошибки: End — ядро закрыло канал.
+pub async fn resync(p: &Pools, m: &mut Members) -> Result<(), End> {
+    let need: Vec<usize> = (0..m.pools.len())
+        .filter(|&i| m.deep.get(i).copied().unwrap_or(false))
+        .filter(|&i| {
+            let r = &m.pools[i].0.reference;
+            p.reg.get(r).is_some()
+        })
+        .collect();
+    if need.is_empty() {
+        return Ok(());
+    }
+    let frozen = freeze(p, need.iter().map(|&i| &m.pools[i].0.reference));
+    let min = p.heads.latest().map_or(0, |h| h.number);
+    let (failed, _deep) = read(p, m, &need, min).await?;
+    let failed_refs: Vec<PoolRef> = failed
+        .iter()
+        .map(|&i| m.pools[i].0.reference.clone())
+        .collect();
+    for &i in &failed {
+        if !m.missing.iter().any(|x| x.i == i) {
+            m.missing.push(Missing { i, tries: 0 });
+        }
+    }
+    fail(p, &failed_refs);
+    thaw(p, &frozen, &failed_refs);
+    Ok(())
+}
+
 /// Пересчёт глубины пулов пачки (см. шапку). Ошибки: End — обрыв подписки, ядро закрыло канал.
 pub async fn on_change(p: &Pools, g: &mut Group, m: &mut Members) -> Result<(), End> {
     let mut need: Vec<usize> = Vec::new();

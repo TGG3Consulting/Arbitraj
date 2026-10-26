@@ -59,6 +59,12 @@ pub(super) async fn step(
     lag.mark(ctx, &feed.inner.lag, behind, max_lag).await;
     lag.report(ctx, behind, ahead).await;
     let n = top.number + 1;
+    // Окно догона (решение 77): отстаём больше окна — открываем шире, до bsc.receipts_ahead_max (не задана — обычное
+    // окно), чтобы конвейер реально закрывал большой разрыв, а не полз фиксированным окном, не успевая за сетью.
+    let ahead = match ctx.int("bsc.receipts_ahead_max") {
+        Ok(max) if behind > ahead => ahead.max(behind.min(max)),
+        _ => ahead,
+    };
     // Блок, на котором конвейер стоит, — гонкой на все узлы (решение 71).
     let hot = lag.hot();
     pipe.fill(n, target, ahead, |k| {

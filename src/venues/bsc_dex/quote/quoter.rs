@@ -58,6 +58,8 @@ pub async fn compare(
     if emptiness::empty(e) {
         return Ok(Err(emptiness::EMPTY.into()));
     }
+    // Настройки — до обращения к узлу (ревью #65): без допуска вызов квотера бесполезен.
+    ctx.dec("dex.quoter_max_diff_pct")?;
     let local = pool_quote::swap(ctx, e, token_in, true, amount)?;
     if !local.complete {
         return Ok(Err(emptiness::short(emptiness::SHORT_LOCAL)));

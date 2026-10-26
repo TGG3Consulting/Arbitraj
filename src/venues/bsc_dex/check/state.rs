@@ -24,6 +24,9 @@ pub struct PoolFacts {
     pub gas_approve_sell: Option<u64>,
     /// Влияние крючка (только V4 группы B/C).
     pub hook: Option<PoolCheck>,
+    /// Проверка крючка не прошла из-за незаданной настройки — её имя (из ошибки хранилища): проверка повторяется при
+    /// задании именно её (решение 75).
+    pub hook_wait: Option<String>,
     /// Сверка с квотером по сторонам (решение 73, quoter_sides.rs): у каждой — None (ещё не было или сторона мелкая)
     /// или Some(Err) — расхождение больше допуска (причина).
     pub quoter: super::quoter_sides::QuoterSides,

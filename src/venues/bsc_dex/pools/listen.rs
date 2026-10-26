@@ -21,7 +21,6 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::gateway::events::MarketEvent;
-use crate::storage::journal::Level;
 
 use super::super::check::state::Checks;
 use super::super::ctx::Ctx;
@@ -69,7 +68,7 @@ pub enum End {
 /// они принимаются в идущую сессию и остаются в пачке после переподключения.
 /// Обрыв после загрузки — пулы недостоверны (Invalidated) до перечитывания; сбой ещё до загрузки (подписка, узел HTTP
 /// отстал) — пулы не трогаются (они либо ещё не прочитаны, либо уже недостоверны), повтор после паузы. В журнал — одна
-/// запись на вид причины. Ошибок не возвращает; не задана пауза переподключения — остановка с записью в журнал.
+/// запись на вид причины. Ошибок не возвращает; не задана пауза переподключения — ждёт её задания (settings_wait.rs).
 pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Option<session::Adds>) {
     let (mut pools, mut adds) = (pools, adds);
     loop {
@@ -81,19 +80,13 @@ pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Opti
         // Пулы уже недостоверны, если загрузка была (session.rs — до закрытия «соединения»).
         // Журнал — одна запись на площадку при потере связи и одна при восстановлении (link.rs).
         link::down(&p, &name, &why, loaded).await;
-        match p.ctx.int("venue.ws_reconnect_pause_ms") {
-            Ok(ms) => tokio::time::sleep(Duration::from_millis(ms)).await,
-            Err(e) => {
-                p.ctx
-                    .log(
-                        Level::Error,
-                        "venue.ws",
-                        format!("Пулы {name} остановлены: {}", e.message),
-                        None,
-                    )
-                    .await;
-                return;
-            }
-        }
+        // Не задана — пачка ждёт настройку и переподключается сама (settings_wait.rs), а не останавливается навсегда.
+        let what = format!("Пулы {name}");
+        let read = || p.ctx.int("venue.ws_reconnect_pause_ms");
+        let Some(ms) = super::super::settings_wait::until_ok(&p.ctx, &what, "venue.ws", read).await
+        else {
+            return;
+        };
+        tokio::time::sleep(Duration::from_millis(ms)).await;
     }
 }

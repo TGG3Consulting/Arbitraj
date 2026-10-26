@@ -130,7 +130,7 @@ pub async fn wake(
     m.deep[i] = true;
     depth::mark(p, &found.reference, false);
     let msg = format!(
-        "{title} {ticker}: ликвидность выросла до dex.min_pool_liquidity_usd — пул снова слушается полностью"
+        "{title} {ticker}: пул стал глубоким (ликвидность выросла или порог глубины снижен) — снова слушается полностью"
     );
     p.ctx.log(Level::Info, "dex.pool", msg, None).await;
     Ok(())

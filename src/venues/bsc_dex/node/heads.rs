@@ -147,18 +147,18 @@ impl Heads {
     }
 
     /// Работает постоянно: eth_blockNumber раз в bsc.blocks_poll_ms. Сбой опроса — одна запись на причину и одна
-    /// на восстановление; голова при этом стареет (fresh → StaleData). Настройка не задана — запись и выход
-    /// (подписка на рынок без неё не начинается — pools/market.rs). Принимает: окружение. Ошибок не возвращает.
+    /// на восстановление; голова при этом стареет (fresh → StaleData). Настройка не задана — запись и ожидание её
+    /// задания (settings_wait.rs). Принимает: окружение. Ошибок не возвращает.
     pub async fn run(self, ctx: Ctx) {
         let mut last_err: Option<String> = None;
         loop {
-            let every = match poll_every(&ctx) {
-                Ok(d) => d,
-                Err(e) => {
-                    let msg = format!("Опрос блоков остановлен: {}", e.message);
-                    ctx.log(Level::Error, "venue.heads", msg, None).await;
-                    return;
-                }
+            // Не задана (или неверна) — опрос ждёт настройку и продолжает сам (settings_wait.rs), без перезапуска.
+            let read = || poll_every(&ctx);
+            let Some(every) =
+                super::super::settings_wait::until_ok(&ctx, "Опрос блоков", "venue.heads", read)
+                    .await
+            else {
+                return;
             };
             match rpc::call_unpaced::<U64>(&ctx, "eth_blockNumber", json!([])).await {
                 Ok(n) => {

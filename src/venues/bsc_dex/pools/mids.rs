@@ -18,7 +18,7 @@ use std::sync::{Arc, RwLock};
 
 use alloy_primitives::Address;
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
@@ -76,8 +76,8 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
         .addresses("dex.intermediate_tokens", ctx.at())
         .map_err(|e| ctx.tag(e))?;
     if list.is_empty() {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
+        return Err(ctx.not_set(
+            "dex.intermediate_tokens",
             "dex.intermediate_enabled = да, а список dex.intermediate_tokens пуст",
         ));
     }

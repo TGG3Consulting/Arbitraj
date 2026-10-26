@@ -27,6 +27,7 @@ pub mod pools;
 pub mod quote;
 pub mod resubscribe;
 pub mod send;
+pub mod settings_wait;
 pub mod tokens;
 pub mod venue;
 pub mod wallet;

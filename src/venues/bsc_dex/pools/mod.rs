@@ -21,6 +21,7 @@ pub mod depth_book;
 pub mod depth_facts;
 pub mod depth_key;
 pub mod depth_log;
+pub mod depth_sync;
 pub mod dex_rules;
 pub mod discover;
 pub mod discover_v4;

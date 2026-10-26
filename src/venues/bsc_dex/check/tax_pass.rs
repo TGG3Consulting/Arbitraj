@@ -34,10 +34,14 @@ pub enum Why {
     /// сигналу «пул готов», когда у монеты появился глубокий пул (пересчёт глубины на смене состояния, пробуждение
     /// мелкого пула — pools/admit.rs wake).
     Shallow,
-    /// Не задана настройка — до следующего полного прохода.
+    /// Не задана настройка — проверка при изменении настроек (tax_cycle.rs, tax_wait::due_config), не ждёт полного прохода.
     Config,
     /// Пулы монеты ещё загружаются — проверка, как только они прочитаны (сигнал «пул готов»).
     Loading,
+    /// Данные пулов отстают или лента сброшена (решение 72) — проверка, как только отметка снята (tax_wait::due_lag:
+    /// проверяется и на каждом шаге цикла, сигнал до постановки в ожидание не теряется). Живой бот 26.10: 82 монеты
+    /// висели «данные пулов отстают» после снятия отметки, пока были в Why::NoPool.
+    Lag,
 }
 
 /// Итоги прохода.
@@ -51,6 +55,8 @@ pub struct Pass {
     pub config: usize,
     /// Монеты, чьи пулы ещё загружаются (проверки не было).
     pub loading: usize,
+    /// Ждущие «не задана настройка»: адрес и имена этих настроек — перепроверка при их задании (tax_wait::due_config).
+    pub config_names: Vec<(Address, Vec<String>)>,
     /// Монеты, по которым проверка была (итог или причина ожидания — не «пулы загружаются»): адрес и вид итога —
     /// для сводки первого прохода (tax_cycle.rs).
     pub done: Vec<(Address, Res)>,
@@ -108,7 +114,7 @@ pub async fn check(
             )
             .await;
             pass.no_pool += 1;
-            pass.waiting.push((*addr, ticker.clone(), Why::NoPool));
+            pass.waiting.push((*addr, ticker.clone(), Why::Lag));
             continue;
         }
         // Узел отвечает и время блока есть — иначе проход откладывается (срок пробы берётся свежим в probe.rs).
@@ -165,8 +171,9 @@ pub async fn check(
                 pass.waiting.push((*addr, ticker.clone(), why));
                 continue;
             }
-            Outcome::Config(why) => {
+            Outcome::Config(why, names) => {
                 pass.config += 1;
+                pass.config_names.push((*addr, names));
                 pass.done.push((*addr, Res::Config));
                 super::taxes_util::note_wait(p, &prev, c.clone()).await;
                 pass.waiting.push((*addr, ticker.clone(), Why::Config));

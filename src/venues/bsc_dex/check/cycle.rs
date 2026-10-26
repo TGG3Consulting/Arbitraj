@@ -19,6 +19,7 @@ use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
+use super::super::settings_wait;
 use super::fresh::Fresh;
 use super::hooks_probe;
 use super::quoter_verify::HOOK_WAIT;
@@ -30,6 +31,7 @@ pub async fn hooks(p: Pools, queue: Queue) {
     // Итоги первого прохода по пулам (Some(прошла)) — до сводки: ни один пул не читается и все прочитанные проверены.
     let mut first: Option<HashMap<PoolRef, bool>> = Some(HashMap::new());
     let mut full = false;
+    let mut changes = settings_wait::watch(&p.ctx);
     loop {
         // Полный проход — раз в hooks.recheck_interval_s; при старте все пулы и так новые для цикла.
         if full {
@@ -41,17 +43,18 @@ pub async fn hooks(p: Pools, queue: Queue) {
             }
         }
         full = true;
-        let d = match p
-            .ctx
-            .settings
-            .integer("hooks.recheck_interval_s", At::default())
-        {
-            Ok(s) => Duration::from_secs(s),
-            Err(e) => {
-                let msg = format!("Цикл проверок крючков остановлен: {}", e.message);
-                p.ctx.log(Level::Error, "dex.check", msg, None).await;
-                return;
-            }
+        // Не задана — цикл ждёт настройку и продолжает сам (settings_wait.rs), а не останавливается навсегда.
+        let read = || {
+            let s = p
+                .ctx
+                .settings
+                .integer("hooks.recheck_interval_s", At::default());
+            s.map(Duration::from_secs)
+        };
+        let Some(d) =
+            settings_wait::until_ok(&p.ctx, "Цикл проверок крючков", "dex.check", read).await
+        else {
+            return;
         };
         let until = tokio::time::Instant::now() + d;
         loop {
@@ -77,6 +80,17 @@ pub async fn hooks(p: Pools, queue: Queue) {
             tokio::select! {
                 _ = tokio::time::sleep_until(until) => break,
                 _ = &mut ready => {}
+                // Настройку задали на лету — крючки, не проверенные из-за неё, проверяются сразу.
+                Some(c) = changes.next() => {
+                    // Пачка изменений — один проход; только крючки, ждущие именно изменённой настройки.
+                    let changed = settings_wait::drain(c, &mut changes);
+                    for r in p.reg.refs() {
+                        let waits = p.checks.pool(&r).hook_wait.is_some_and(|n| changed.contains(&n));
+                        if waits {
+                            fresh.check(&r, one(&p, &r, &mut first)).await;
+                        }
+                    }
+                }
                 _ = queue.notified() => {
                     let (tickers, new_pools) = queue.take();
                     for r in p.reg.refs() {
@@ -106,7 +120,8 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if !e.valid {
         return false;
     }
-    let Some(pc) = hooks_probe::check_pool(&p.ctx, &p.tokens, &p.reg, &e).await else {
+    let Some((pc, wait)) = hooks_probe::check_pool_named(&p.ctx, &p.tokens, &p.reg, &e).await
+    else {
         return true;
     };
     let prev = p.checks.pool(r).hook.map(|c| c.impact);
@@ -138,7 +153,11 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
             p.ctx.log(level, "dex.check", msg, None).await;
         }
     }
-    p.checks.update_pool(r, |f| f.hook = Some(pc.clone()));
+    // Не прошла из-за незаданной настройки — её имя (из ошибки), чтобы повторить при её задании (решение 75).
+    p.checks.update_pool(r, |f| {
+        f.hook = Some(pc.clone());
+        f.hook_wait = wait;
+    });
     let _ = p.out.send(MarketEvent::PoolCheck(pc)).await;
     // Сверка с квотером ждала влияния этого крючка — разбудить её (check/quoter_cycle.rs hook_measured).
     if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {

@@ -7,7 +7,7 @@
 //! ядру уходит SpotPairs со временем последнего успешного получения: обновление не проходит дольше
 //! venue.symbols_stale_s — ядро отсеивает пары этой биржи (core/pairs_fresh.rs) и не торгует по старым флагам.
 //! Кто вызывает: subs.rs (запускает при каждой подписке из ядра, останавливает при следующей).
-//! От чего зависит: symbols.rs, pairs.rs, subs.rs, ctx.rs, storage/journal.
+//! От чего зависит: symbols.rs, pairs.rs, subs.rs, ctx.rs, storage/journal, settings/wait.rs.
 //! Настройки: venue.symbols_refresh_s (период; читается каждый круг — новое значение действует со следующего);
 //! порог устаревания venue.symbols_stale_s читает ядро.
 //!
@@ -22,6 +22,7 @@ use tokio::sync::mpsc;
 
 use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
+use crate::settings::wait::{Note, until_ok};
 use crate::storage::journal::Level;
 
 use super::ctx::{Ctx, ID};
@@ -43,13 +44,22 @@ pub async fn run(
     mut last: Snapshot,
 ) {
     loop {
-        let period = match p.ctx.int("venue.symbols_refresh_s") {
-            Ok(v) => v,
-            Err(e) => {
-                let m = format!("Справочник пар BingX не обновляется: {}", e.message);
-                log(&p.ctx, Level::Error, m, None).await;
-                return;
-            }
+        // Не задана — обновление ждёт настройку и продолжает само (settings/wait.rs, решение 75).
+        let read = || p.ctx.int("venue.symbols_refresh_s");
+        let note = Note {
+            journal: &p.ctx.journal,
+            kind: CODE,
+            venue: Some(ID),
+        };
+        let Some(period) = until_ok(
+            &p.ctx.settings,
+            note,
+            "Обновление справочника пар BingX",
+            read,
+        )
+        .await
+        else {
+            return;
         };
         tokio::time::sleep(Duration::from_secs(period)).await;
         if let Err(e) = p.symbols.refresh(&p.ctx).await {

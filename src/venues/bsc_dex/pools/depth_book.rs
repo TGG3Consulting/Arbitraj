@@ -61,6 +61,18 @@ pub struct Book {
     wake: Arc<Mutex<Vec<Weak<Notify>>>>,
 }
 
+/// Какая настройка глубины не задана (её имя из ошибки хранилища — GatewayError.setting, не текст): для перепроверки
+/// ждущих итогов именно при её задании (settings_wait.rs). None — все заданы. Ошибок нет.
+pub fn missing_setting(ctx: &Ctx) -> Option<String> {
+    [
+        "dex.min_pool_liquidity_usd",
+        "dex.depth_band_pct",
+        "dex.depth_hysteresis_pct",
+    ]
+    .into_iter()
+    .find_map(|n| ctx.dec(n).err().and_then(|e| e.setting))
+}
+
 /// Гистерезис (см. шапку): `prev` — прошлый вердикт (None — первого не было). Возвращает: глубокое ли направление.
 /// Ошибок нет.
 pub fn next_deep(prev: Option<bool>, depth: Decimal, min: Decimal, hyst_pct: Decimal) -> bool {

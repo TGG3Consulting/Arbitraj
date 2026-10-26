@@ -32,18 +32,35 @@ pub async fn check_pool(
     reg: &Registry,
     e: &Entry,
 ) -> Option<PoolCheck> {
+    check_pool_named(ctx, tokens, reg, e)
+        .await
+        .map(|(pc, _)| pc)
+}
+
+/// То же и имя незаданной настройки, если проверка не прошла из-за неё (GatewayError.setting — там, где ошибка
+/// возникла): по нему проверка повторяется при задании именно этой настройки (решение 75). Ошибок нет.
+pub async fn check_pool_named(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    reg: &Registry,
+    e: &Entry,
+) -> Option<(PoolCheck, Option<String>)> {
     let hooks = e.pool.hooks.as_ref()?;
     if hooks.group == HookGroup::A {
         return None;
     }
+    let mut setting = None;
     let impact = match measure(ctx, tokens, reg, e).await {
         Ok(Ok(i)) => CheckState::Known(i),
         Ok(Err(reason)) => CheckState::Failed { reason },
-        Err(err) => CheckState::Failed {
-            reason: err.message,
-        },
+        Err(err) => {
+            setting = err.setting;
+            CheckState::Failed {
+                reason: err.message,
+            }
+        }
     };
-    Some(PoolCheck {
+    let pc = PoolCheck {
         venue: ctx.venue(),
         family: e.family.id.to_string(),
         pool: e.pool.reference.clone(),
@@ -54,7 +71,8 @@ pub async fn check_pool(
         group: hooks.group,
         impact,
         checked_at: Some(Utc::now()),
-    })
+    };
+    Some((pc, setting))
 }
 
 /// Начало причины «в пуле не хватает ликвидности для пробы» — не провал крючка, а свойство пула на сумму пробы:

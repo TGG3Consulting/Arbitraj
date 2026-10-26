@@ -171,7 +171,10 @@ impl Lag {
             ctx.log(Level::Warn, "venue.ws", msg, None).await;
         } else if lag <= step && self.told > 0 {
             self.told = 0;
-            let msg = format!("{SOURCE}: лента догнала сеть, отставание {lag} блоков");
+            // Число в момент записи — порог окна, а не фактическое отставание (ревью #65: «отставание 6» при окне 6).
+            let msg = format!(
+                "{SOURCE}: лента догнала сеть: отставание ≤ окна bsc.receipts_ahead_blocks ({step})"
+            );
             ctx.log(Level::Info, "venue.ws", msg, None).await;
         }
     }

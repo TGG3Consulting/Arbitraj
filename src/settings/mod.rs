@@ -13,3 +13,4 @@ pub mod schema;
 pub mod scope;
 pub mod store;
 pub mod value;
+pub mod wait;

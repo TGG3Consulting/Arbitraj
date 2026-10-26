@@ -3,7 +3,7 @@
 //! Ставки обновляются фоновой задачей (не в момент котировки — чтобы не упираться в лимит
 //! запросов и не задерживать расчёт); котировка берёт ставку только из памяти.
 //! Кто вызывает: market.rs (запускает фоновое обновление для подписанных пар), book.rs (читает ставку).
-//! От чего зависит: rest.rs, num.rs, ctx.rs.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, settings/wait.rs.
 //! Настройки: venue.fee_cache_s (как часто обновлять), venue.fee_requests_per_sec (частота запросов).
 //!
 //! Официальная документация: «Query Trading Commission Rate» GET /openApi/spot/v1/user/commissionRate
@@ -17,6 +17,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::settings::wait::{Note, until_ok};
 use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
@@ -51,18 +52,25 @@ impl Fees {
 
     /// Фоновое обновление ставок по списку символов: по кругу, не чаще venue.fee_requests_per_sec,
     /// круг — раз в venue.fee_cache_s. Работает, пока задачу не остановят (новая подписка).
-    /// Ошибки пишутся в журнал; при незаданных настройках — запись в журнал и пауза до следующего круга.
+    /// Ошибки пишутся в журнал; при незаданных настройках — одна запись и ожидание их задания (settings/wait.rs).
     pub async fn refresh_loop(self, ctx: Ctx, symbols: Vec<String>) {
         loop {
-            let (Ok(period), Ok(rate)) = (
-                ctx.int("venue.fee_cache_s"),
-                ctx.int("venue.fee_requests_per_sec"),
-            ) else {
-                let m = "Ставки комиссии не обновляются: не заданы venue.fee_cache_s или venue.fee_requests_per_sec";
-                let _ = ctx
-                    .journal
-                    .write(Level::Error, "venue.fees", Some(super::ctx::ID), m, None)
-                    .await;
+            // Не заданы — обновление ждёт настройку и продолжает само (settings/wait.rs, решение 75), а не
+            // останавливается до пересборки подписки.
+            let read = || {
+                Ok((
+                    ctx.int("venue.fee_cache_s")?,
+                    ctx.int("venue.fee_requests_per_sec")?,
+                ))
+            };
+            let note = Note {
+                journal: &ctx.journal,
+                kind: "venue.fees",
+                venue: Some(super::ctx::ID),
+            };
+            let Some((period, rate)) =
+                until_ok(&ctx.settings, note, "Обновление ставок комиссии", read).await
+            else {
                 return;
             };
             let gap = Duration::from_secs_f64(1.0 / rate.max(1) as f64);

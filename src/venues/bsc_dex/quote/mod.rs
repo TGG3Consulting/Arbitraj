@@ -79,8 +79,8 @@ impl Quoting {
         let ctx = &self.ctx;
         let mode = ctx.text("dex.swap_mode")?;
         if mode != "direct" && mode != "smart" {
-            return Err(ctx.err(
-                ErrorCode::NotConfigured,
+            return Err(ctx.not_set(
+                "dex.swap_mode",
                 format!("dex.swap_mode = «{mode}»: известны «direct» и «smart»"),
             ));
         }

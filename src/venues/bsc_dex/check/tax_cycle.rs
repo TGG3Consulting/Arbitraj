@@ -7,7 +7,8 @@
 //! Дальше — полный проход раз в tax.recheck_interval_s. Между проходами:
 //! - «Перепроверить» — только переданные монеты (check/recheck.rs);
 //! - «пул готов» — ждущие монеты, у которых появился достоверный пул или дочитались свои пулы;
-//! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s.
+//! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s;
+//! - ждущие «не задана настройка» — сразу при изменении настроек (settings_wait.rs), без перезапуска и без часа ожидания.
 //!
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
@@ -25,6 +26,7 @@ use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::super::pools::listen::Pools;
+use super::super::settings_wait;
 use super::recheck::Queue;
 use super::tax_deep::has_deep;
 use super::tax_pass::{self, Pass, Why};
@@ -52,10 +54,15 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
     let mut seen = HashSet::new();
     // Сводка первого прохода — когда у всех монет, кроме ждущих своих пулов, была первая проверка (tax_wait.rs).
     let mut sum = First::new(all.iter().map(|(a, _)| *a));
+    // Изменение настроек — ждущие «не задана настройка» проверяются сразу (tax_wait::due_config).
+    let mut changes = settings_wait::watch(&p.ctx);
+    // Имена незаданных настроек ждущих монет (из ошибки хранилища) — по ним due_config.
+    let mut cfg: HashMap<Address, Vec<String>> = HashMap::new();
     loop {
         let was_sent = sum.sent;
         let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left).await;
         settle(&p, &pass, &mut sum).await;
+        cfg.extend(pass.config_names.iter().cloned());
         // Полный проход после первого — своя строка журнала (первый — сводкой в settle).
         if was_sent {
             let msg = format!(
@@ -64,7 +71,17 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             );
             p.ctx.log(Level::Info, "dex.check", msg, None).await;
         }
-        let Some(interval) = secs(&p, "tax.recheck_interval_s").await else {
+        // Не задана — цикл ждёт настройку и продолжает сам (settings_wait.rs), а не останавливается навсегда.
+        let read = || {
+            let s = p
+                .ctx
+                .settings
+                .integer("tax.recheck_interval_s", At::default());
+            s.map(Duration::from_secs)
+        };
+        let Some(interval) =
+            settings_wait::until_ok(&p.ctx, "Цикл налогов", "dex.check", read).await
+        else {
             return;
         };
         let next = tokio::time::Instant::now() + interval;
@@ -78,7 +95,9 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             };
             // Свои пулы дочитались, пока шла прошлая проверка (сигнал мог прийти без ждущего) — сразу.
             let pending = |a: Address| p.loading.pending(&p, a);
-            let now = tax_wait::due(&waiting, false, pending, |t| has_deep(&p, t));
+            let mut now = tax_wait::due(&waiting, false, pending, |t| has_deep(&p, t));
+            // Отметка «отстают» уже снята — ждавшие её сразу (сигнал мог прийти до постановки в ожидание).
+            now.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
             let list: Vec<(Address, String)> = if !now.is_empty() {
                 now
             } else {
@@ -89,7 +108,17 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                         all.iter().filter(|(_, t)| tickers.contains(t)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
-                    _ = p.signals.ready.notified() => tax_wait::due(&waiting, true, pending, |t| has_deep(&p, t)),
+                    _ = p.signals.ready.notified() => {
+                        let mut list = tax_wait::due(&waiting, true, pending, |t| has_deep(&p, t));
+                        list.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
+                        list
+                    }
+                    // Настройку задали на лету — ждавшие её монеты проверяются сразу, а не через час (живой бот 26.10:
+                    // 313 монет висели «не задана dex.depth_band_pct» после того, как её задали).
+                    Some(c) = changes.next() => {
+                        let changed = settings_wait::drain(c, &mut changes);
+                        tax_wait::due_config(&waiting, &cfg, &changed)
+                    }
                     _ = sleep_opt(retry) => waiting
                         .iter()
                         .filter(|(_, _, w)| *w == Why::Node)
@@ -102,6 +131,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             }
             let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left).await;
             settle(&p, &again, &mut sum).await;
+            cfg.extend(again.config_names.iter().cloned());
             waiting.retain(|(a, _, _)| !list.iter().any(|(r, _)| r == a));
             waiting.extend(again.waiting);
         }

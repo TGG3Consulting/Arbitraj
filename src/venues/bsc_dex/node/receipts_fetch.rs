@@ -70,7 +70,9 @@ pub(super) async fn fetch_block(
             let (ctx, nodes, body) = (ctx.clone(), nodes.clone(), body.clone());
             async move {
                 nodes.wait(&url, weight, rps).await;
-                rpc_race::one(&ctx, &url, &body, lim).await
+                let res = rpc_race::one(&ctx, &url, &body, lim).await;
+                // Ошибки вызовов внутри пачки тоже называют узел (только хост).
+                (rpc_race::host_source(&url), res)
             }
         };
         let runs: Vec<_> = if race {
@@ -78,7 +80,7 @@ pub(super) async fn fetch_block(
         } else {
             vec![run(receipts_nodes::pick(&urls, n).to_string())]
         };
-        return rpc_race::first_accepted(runs, calls.len(), check)
+        return rpc_race::first_accepted_from(runs, calls.len(), check)
             .await
             .map_err(|l| lost(n, l, &lim, race));
     }

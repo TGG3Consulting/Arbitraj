@@ -7,7 +7,7 @@
     ссылки на пару и пул или «шаблон ссылки не задан». Метка «СУХОЙ» у сухого сигнала.
   Кто вызывает: pages/Live.svelte (раскрытие прошедшего кандидата), pages/Episodes.svelte (карточка в записи).
   От чего зависит: components/CopyAddr.svelte, lib/labels.js (вид пула).
-  Настройки: нет (card.max_search_usdt, venue.pair_url_template, venue.pool_url_template — экран «Настройки»).
+  Настройки: нет (card.max_search_usdt, venue.pair_url_template, dex.pool_url_template — экран «Настройки»).
 -->
 <script>
   import CopyAddr from './CopyAddr.svelte';

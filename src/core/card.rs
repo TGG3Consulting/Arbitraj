@@ -8,7 +8,7 @@
 //! От чего зависит: card_book.rs, card_links.rs, card_max.rs, size_max.rs, costs.rs, engine.rs, trade_ops.rs (вид площадки),
 //! шлюз (pool_depths), settings.
 //! Настройки: dex.depth_band_pct (полоса стакана — площадки-DEX направления), card.max_search_usdt (через card_max.rs),
-//! venue.pair_url_template, venue.pool_url_template, venue.quote_asset (через card_links.rs).
+//! venue.pair_url_template, dex.pool_url_template (область «DEX»), venue.quote_asset (через card_links.rs).
 
 use std::collections::BTreeMap;
 
@@ -111,7 +111,7 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
                 let got = route_pools(core, v, side, route.as_ref()).await;
                 for p in &got {
                     if let Some(r) = pool_ref(route.as_ref(), &p.pool) {
-                        links.push(card_links::pool(s, &v.0, r));
+                        links.push(card_links::pool(s, &v.0, &p.family, r));
                     }
                 }
                 pools.extend(got);

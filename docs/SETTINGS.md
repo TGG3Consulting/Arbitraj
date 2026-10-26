@@ -132,7 +132,7 @@ episode.* — эпизоды не ведутся (причина — на экр
 | dry.budget_usdt | Виртуальный бюджет сухого режима (заменяет свободный баланс площадки покупки). Не задан при включённом режиме — сигналов нет | USDT | вся система |
 | card.max_search_usdt | Верхний предел поиска «максимального объёма» карточки (без бюджета, но списание не больше этого). Точная граница — за size.bisect_steps шагов: log2(предел / цена / stepSize) | USDT | вся система |
 | venue.pair_url_template | Ссылка на пару на бирже: {base} — тикер, {quote} — venue.quote_asset, {symbol} — они подряд. BingX: `https://bingx.com/en/spot/{symbol}` (проверено в браузере 2026-10-26: BTCUSDT и BTC_USDT ведут на /en/spot/BTCUSDT) | шаблон https | по площадке |
-| venue.pool_url_template | Ссылка на пул DEX: {pool} — адрес пула (V2/V3) или PoolId (V4) | шаблон https | по площадке |
+| dex.pool_url_template | Ссылка на пул: {pool} — адрес пула (V2/V3) или PoolId (V4); своя у каждой DEX (страницы пулов разные). PancakeSwap (V2, V3, Infinity): `https://www.geckoterminal.com/bsc/pools/{pool}`; Uniswap (V3, V4): `https://app.uniswap.org/explore/pools/bnb/{pool}` (проверено в браузере 2026-10-26: GeckoTerminal не открывает пулы Uniswap V4). Страницы может не быть у отдельного пула (404) — это видно только при открытии | шаблон https | DEX |
 | episode.book_levels | Сколько верхних уровней стакана (каждой стороны) писать в запись эпизода | уровней | вся система |
 | episode.min_interval_ms | Записи (пересчёты) открытого эпизода — не чаще | мс | вся система |
 | episode.max_mb | Лимит места файлов эпизодов: больше — удаляются самые старые закрытые, не помогло — запись открытого останавливается | МБ | вся система |

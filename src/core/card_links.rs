@@ -2,14 +2,16 @@
 //! Что делает: ссылки карточки сигнала (решение 74) — на пару на бирже и на пул DEX — по шаблонам из настроек.
 //! Готовых адресов в коде нет. Шаблон пары — venue.pair_url_template площадки-биржи: {base} — тикер монеты, {quote} —
 //! котируемая монета этой площадки (venue.quote_asset), {symbol} — они же подряд (BTCUSDT; символа API ядро не знает);
-//! шаблон пула — venue.pool_url_template площадки-DEX: {pool} — адрес пула (V2/V3) или PoolId (V4). Как биржа пишет пару
+//! шаблон пула — dex.pool_url_template, область «DEX» (своя строка у каждой DEX индексатора — страницы пулов у DEX разные:
+//! GeckoTerminal открывает пулы PancakeSwap V2 и Infinity CL, но не Uniswap V4 — проверено в браузере 2026-10-26):
+//! {pool} — адрес пула (V2/V3) или PoolId (V4). Как биржа пишет пару
 //! в адресе, решает сам шаблон: у BingX страница https://bingx.com/en/spot/BTCUSDT (проверено в браузере 2026-10-26;
 //! BTC_USDT ведёт туда же) — шаблон «https://bingx.com/en/spot/{symbol}». Не задан шаблон — ссылки нет, рядом
 //! «шаблон ссылки не задан».
 //! Шаблон — только https; подстановка, которой нет в списке, — ошибка с её именем (не догадка).
 //! Кто вызывает: core/card.rs, тесты (tests/core_signal_card.rs).
 //! От чего зависит: settings, core/types (PoolRef).
-//! Настройки: venue.pair_url_template, venue.pool_url_template, venue.quote_asset.
+//! Настройки: venue.pair_url_template, dex.pool_url_template, venue.quote_asset.
 
 use serde::Serialize;
 
@@ -17,6 +19,7 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::ErrorCode;
 use crate::settings::read::At;
 use crate::settings::store::Store;
+use crate::settings::value::Scope;
 
 /// Ссылка карточки: адрес или почему его нет.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -93,10 +96,15 @@ pub fn pair(s: &Store, venue: &str, ticker: &str) -> Link {
     link(venue, "pair", label, r)
 }
 
-/// Что делает: ссылка на пул DEX. Принимает: настройки, площадку, пул. Возвращает: Link.
-pub fn pool(s: &Store, venue: &str, p: &PoolRef) -> Link {
+/// Что делает: ссылка на пул DEX. Принимает: настройки, площадку, id области «DEX» пула (вид пула у адаптера), пул.
+/// Возвращает: Link.
+pub fn pool(s: &Store, venue: &str, dex: &str, p: &PoolRef) -> Link {
     let id = pool_id(p);
-    let r = template(s, "venue.pool_url_template", venue).and_then(|t| fill(&t, &[("pool", &id)]));
+    let name = "dex.pool_url_template";
+    let r = s
+        .text_in(name, &Scope::Dex(dex.to_string()))
+        .map_err(|e| unset(e, &format!("{name}, DEX {dex}")))
+        .and_then(|t| fill(&t, &[("pool", &id)]));
     link(venue, "pool", id, r)
 }
 
@@ -114,13 +122,16 @@ fn template(s: &Store, name: &str, venue: &str) -> Result<String, String> {
         venue: Some(venue),
         coin: None,
     };
-    s.text(name, at).map_err(|e| {
-        if e.code == ErrorCode::NotConfigured {
-            format!("шаблон ссылки не задан ({name})")
-        } else {
-            e.message
-        }
-    })
+    s.text(name, at).map_err(|e| unset(e, name))
+}
+
+/// Ошибка чтения шаблона текстом: «шаблон ссылки не задан (где)» или как есть. Ошибок нет.
+fn unset(e: crate::gateway::errors::GatewayError, place: &str) -> String {
+    if e.code == ErrorCode::NotConfigured {
+        format!("шаблон ссылки не задан ({place})")
+    } else {
+        e.message
+    }
 }
 
 /// Собирает Link из итога. Ошибок нет.

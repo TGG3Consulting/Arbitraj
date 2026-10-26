@@ -3,7 +3,8 @@
 //! исполнителя (executor::accepted) отказывает первым же шагом, ничего не запускает и не пишет сделок (расчёт —
 //! записанные CAKE: asks BingX, пул V2); тот же расчёт без сухого режима проходит этот замок и останавливается дальше
 //! («направление не торгуемо» — площадок в реестре нет), то есть отказ в сухом режиме дал именно он; режим читается на
-//! лету; dry.enabled не задана — обычный режим; включён без dry.budget_usdt — бюджета нет, причина названа.
+//! лету; dry.enabled не задана — обычный режим; включён без dry.budget_usdt — бюджета нет, причина названа; ссылки
+//! карточки по шаблонам из настроек (пара — по площадке, пул — по DEX).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, tests/size_common. Моков нет: площадок в
 //! реестре нет, проверяется решение ядра.
@@ -92,4 +93,47 @@ async fn dry_without_budget_has_reason() {
     }
     // Без бюджета ничего не исполняется.
     assert!(dry::blocks(&s).is_some());
+}
+
+/// Ссылки карточки по настройкам (решение 74): не задан шаблон — причина; пара — по площадке, пул — по DEX.
+#[tokio::test]
+async fn link_templates_from_settings() {
+    use arb::core::card_links::{pair, pool};
+    use arb::core::types::PoolRef;
+    let (_core, s) = start("links").await;
+    let p = PoolRef::Contract(size_common::PAIR);
+    let l = pair(&s, "bingx", "CAKE");
+    assert!(l.url.is_none() && l.why.unwrap().contains("venue.pair_url_template"));
+    let bx = Scope::Venue("bingx".into());
+    s.set("venue.quote_asset", bx.clone(), Some(json!("USDT")), "тест")
+        .await
+        .unwrap();
+    s.set(
+        "venue.pair_url_template",
+        bx,
+        Some(json!("https://bingx.com/en/spot/{symbol}")),
+        "тест",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        pair(&s, "bingx", "CAKE").url.as_deref(),
+        Some("https://bingx.com/en/spot/CAKEUSDT")
+    );
+    let dex = "pancakeswap-v2-bsc";
+    assert!(pool(&s, "bsc_dex", dex, &p).why.unwrap().contains(dex));
+    s.set(
+        "dex.pool_url_template",
+        Scope::Dex(dex.into()),
+        Some(json!("https://www.geckoterminal.com/bsc/pools/{pool}")),
+        "тест",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        pool(&s, "bsc_dex", dex, &p).url.as_deref(),
+        Some("https://www.geckoterminal.com/bsc/pools/0xa39af17ce4a8eb807e076805da1e2b8ea7d0755b")
+    );
+    // Другая DEX — свой шаблон, этот не подставляется.
+    assert!(pool(&s, "bsc_dex", "uniswap-v4-bsc", &p).url.is_none());
 }

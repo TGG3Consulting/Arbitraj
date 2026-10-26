@@ -63,6 +63,8 @@ impl Core {
         super::manual::load(&core).await;
         super::transit::load(&core).await;
         super::low_usdt::load(&core).await;
+        // Эпизоды, открытые до перезапуска, закрываются с причиной (решение 74).
+        super::episode_cfg::load(&core).await;
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

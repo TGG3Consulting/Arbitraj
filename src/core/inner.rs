@@ -104,6 +104,15 @@ pub struct Inner {
     pub usdt_alert_unset: Mutex<HashSet<VenueId>>,
     /// Монеты человека («Беру на себя») и сделки, из которых они взяты (manual.rs).
     pub holdings: Mutex<HashMap<String, (ManualHolding, Deal)>>,
+    /// Открытые эпизоды арбитражной ситуации (решение 74, episode.rs).
+    pub episodes: Mutex<super::episode::Episodes>,
+    /// Файлы эпизодов (storage/episode_files.rs): <data-dir>/episodes.
+    pub episode_files: crate::storage::episode_files::EpisodeFiles,
+    /// Почему эпизоды не ведутся (не заданы episode.*); None — ведутся или ещё не проверялось.
+    pub episode_off: Mutex<Option<String>>,
+    /// Сухой режим без эпизодов (решение 74): по каким направлениям прошедший уже сообщён в журнал и Telegram —
+    /// повтор не пишется, пока направление не перестанет проходить.
+    pub dry_told: Mutex<HashSet<Direction>>,
 }
 
 impl Inner {
@@ -115,6 +124,8 @@ impl Inner {
         cand_tx: mpsc::Sender<Direction>,
     ) -> Self {
         let (coin_ticks, _) = broadcast::channel(deps.buffer);
+        let episode_files =
+            crate::storage::episode_files::EpisodeFiles::start(deps.data_dir.join("episodes"));
         Inner {
             live: Live::new(deps.buffer),
             deps,
@@ -152,6 +163,10 @@ impl Inner {
             holdings: Mutex::default(),
             usdt_below: Mutex::default(),
             usdt_alert_unset: Mutex::default(),
+            episodes: Mutex::default(),
+            episode_files,
+            episode_off: Mutex::default(),
+            dry_told: Mutex::default(),
         }
     }
 }

@@ -47,6 +47,7 @@ async fn start(name: &str) -> (Core, Db) {
         db: db.clone(),
         changes,
         buffer: 64,
+        data_dir: d.to_path_buf(),
     })
     .await;
     (core, db)

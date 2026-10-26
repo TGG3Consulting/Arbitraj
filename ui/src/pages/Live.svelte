@@ -8,9 +8,11 @@
     Данные — GET /api/spreads, /api/candidates; живые сообщения spread и candidate обновляют строки на месте.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
-    components/LiveCoins.svelte, components/CostLines.svelte.
+    components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte.
   Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
   Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете.
+  Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
+    раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
 -->
 <script>
   import { get } from '../lib/api.js';
@@ -20,6 +22,8 @@
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
   import LiveCoins from '../components/LiveCoins.svelte';
+  import DryBanner from '../components/DryBanner.svelte';
+  import SignalCard from '../components/SignalCard.svelte';
 
   let spreads = $state({});
   let cands = $state({});
@@ -56,6 +60,7 @@
 </script>
 
 <h1>Живой экран</h1>
+<DryBanner always />
 <ErrorText text={error} />
 <div class="row">
   <input placeholder="монета" bind:value={filter} />
@@ -73,10 +78,17 @@
   <article class="card">
     <header>
       <strong>{dirText(c.direction)}</strong>
+      {#if c.dry}<span class="tag dry">СУХОЙ</span>{/if}
       {#if acc}<span class="ok">прошёл: прибыль {acc.profit_usd} USDT ({acc.profit_pct}%), объём {acc.qty}</span>
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
     </header>
+    {#if c.card}
+      <details open>
+        <summary>Карточка сигнала</summary>
+        <SignalCard card={c.card} />
+      </details>
+    {/if}
     {#if calc?.size}
       <p class="muted">Объём (решение 66): {calc.size.why}</p>
     {/if}
@@ -90,3 +102,7 @@
 {:else}
   <p class="muted">Кандидатов ещё не было.</p>
 {/each}
+
+<style>
+  .tag.dry { background: #b45309; color: #fff; border-color: #b45309; font-weight: 700; }
+</style>

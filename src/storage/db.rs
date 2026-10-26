@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS core_state (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (kind, id)
 );
+CREATE TABLE IF NOT EXISTS episodes (
+    id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS venue_state (
     venue TEXT NOT NULL,
     kind  TEXT NOT NULL,

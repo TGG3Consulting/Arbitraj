@@ -7,6 +7,8 @@
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
+//! Сухой режим (решение 74, dry.rs) — второй замок на входе: сделка не начинается, даже если кандидата передали сюда
+//! (первый замок — candidates.rs). Начатая до включения сделка доводится как обычно (run не проверяет режим).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -32,26 +34,45 @@ fn deal_id(d: &Direction) -> String {
     format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"))
 }
 
-/// Кандидат прошёл расчёт — запускает сделку, если направление по-прежнему торгуемо (есть в directions() монеты:
-/// за время расчёта монета могла уйти в чёрный список или в «налоги не проверены») и по нему сейчас нет другой.
-/// Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61). Ошибок нет.
-pub async fn accepted(core: &Core, calc: Calc) {
+/// Что вышло на входе исполнителя.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Start {
+    /// Сделка запущена.
+    Started,
+    /// Сухой режим (решение 74): ничего не делается — причина.
+    Dry(String),
+    /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике).
+    NotTradable,
+    /// По направлению уже идёт сделка.
+    Busy,
+}
+
+/// Кандидат прошёл расчёт — запускает сделку, если режим не сухой (решение 74), направление по-прежнему торгуемо
+/// (есть в directions() монеты: за время расчёта монета могла уйти в чёрный список или в «налоги не проверены») и
+/// по нему сейчас нет другой. Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61).
+/// Возвращает: Start — что вышло. Ошибок нет.
+pub async fn accepted(core: &Core, calc: Calc) -> Start {
+    // Сухой режим проверяется первым: до справочника, учёта и шлюза — ни одного действия.
+    if let Some(why) = super::dry::blocks(&core.inner.deps.settings) {
+        return Start::Dry(why);
+    }
     let d = calc.direction.clone();
     let tradable = rd(&core.inner.coins)
         .iter()
         .find(|c| c.asset == d.asset)
         .is_some_and(|c| c.directions().contains(&d));
     if !tradable {
-        return;
+        return Start::NotTradable;
     }
     if !lk(&core.inner.active).insert(d.clone()) {
-        return;
+        return Start::Busy;
     }
     let core = core.clone();
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
         run(&core, d.clone()).await;
         lk(&core.inner.active).remove(&d);
     }));
+    Start::Started
 }
 
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты.

@@ -2,7 +2,7 @@
 //! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
 //! Список разбит по файлам: base.rs (базовые), trade.rs (налоги, крючки, возврат USDT, застрявшие монеты,
 //! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), index.rs (справочник пулов от индексатора, решение 58),
-//! send.rs (отправка и каналы).
+//! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -13,6 +13,7 @@ mod base;
 pub mod dex;
 mod index;
 mod send;
+mod signals;
 mod trade;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
@@ -72,7 +73,14 @@ const DX: &[S] = &[S::Dex];
 const CH: &[S] = &[S::Channel];
 
 /// Все части каталога. Порядок — как в docs/SETTINGS.md.
-static PARTS: &[&[SettingDef]] = &[base::BASE, trade::TRADE, dex::DEX, index::INDEX, send::SEND];
+static PARTS: &[&[SettingDef]] = &[
+    base::BASE,
+    trade::TRADE,
+    signals::SIGNALS,
+    dex::DEX,
+    index::INDEX,
+    send::SEND,
+];
 
 /// Все настройки системы по порядку docs/SETTINGS.md. Ошибок нет.
 pub fn all() -> impl Iterator<Item = &'static SettingDef> {

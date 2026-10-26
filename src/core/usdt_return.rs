@@ -3,9 +3,10 @@
 //! «в каждой сделке» (per_trade) — после закрытия сделки выручка переводится с B обратно на A
 //! (стоимость перегона уже была в расчёте сделки, costs.rs); «отдельно» (separate) — при сверке
 //! балансов: на площадке USDT меньше usdt_return.low_balance_usd — перегнать usdt_return.amount_usd
-//! с площадки, где USDT хватает. Каждый перегон — уведомление usdt.relayed.
+//! с площадки, где USDT хватает. Каждый перегон — уведомление usdt.relayed. Сухой режим (решение 74, dry.rs) — «отдельно»
+//! не перегоняет; «в каждой сделке» — часть начатой сделки, она доводится как обычно.
 //! Кто вызывает: sell.rs (after_deal), reconcile.rs (separate).
-//! От чего зависит: transfers.rs, engine.rs (адрес USDT), settings.
+//! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, settings.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
 
 use std::collections::HashMap;
@@ -92,10 +93,15 @@ pub async fn after_deal(core: &Core, deal: &Deal) {
 }
 
 /// Режим «отдельно»: по свободным USDT площадок (из сверки). Принимает: площадка → свободно USDT.
-/// Ошибок нет: не заданы пороги площадки — она пропускается (журнал пишет reconcile.rs).
+/// Ошибок нет: не заданы пороги площадки — она пропускается (журнал пишет reconcile.rs); сухой режим — ничего.
 pub async fn separate(core: &Core, free: &HashMap<VenueId, Decimal>) {
     let s = &core.inner.deps.settings;
     if s.text("usdt_return.mode", At::default()).ok().as_deref() != Some("separate") {
+        return;
+    }
+    // Сухой режим (решение 74): перегон без сделки — тоже перевод денег, не выполняется.
+    if let Some(why) = super::dry::blocks(s) {
+        tracing::info!("перегон USDT «отдельно» пропущен: {why}");
         return;
     }
     for (low_v, have) in free {

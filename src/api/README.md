@@ -20,6 +20,7 @@
 | `GET /api/manual`, `POST /api/manual/command` | Экран «Ручное управление»: алерты и монеты человека, команды ядру |
 | `GET /api/gas-stats` | Экран «Статистика газа» |
 | `GET /api/spreads`, `GET /api/candidates` | «Живой экран»: спреды направлений и последние расчёты кандидатов с причиной отказа |
+| `GET /api/episodes`, `GET /api/episodes/{id}`, `GET /api/episodes/{id}/file` | «Эпизоды» (решение 74): список, записи эпизода, файл .jsonl.zst |
 | `GET /api/deals` | Экран «Сделки»: план и факт по шагам |
 | `GET /api/transits` | История времени в пути (решение 50) |
 | `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{ticker}/release` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты |
@@ -88,7 +89,10 @@
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
 | `GET /api/spreads` | — | `[SpreadView]`: `{direction, prices, spread_pct, state, above_since, updates, at}`; `state` — `"Below"`, `"Holding"`, `"Candidate"`, `"Anomaly"`, `{"NoPrice": причина}`, `{"NotConfigured": причина}`, `{"Cooldown": {until}}` |
-| `GET /api/candidates` | — | `[{direction, verdict, at}]`, новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
+| `GET /api/episodes?limit=N` | — | `{episodes: [EpisodeInfo], off: причина \| null, used_bytes}`; `EpisodeInfo` — `{id, direction, dry, started_at, ended_at \| null, max_profit, max_profit_unbounded \| null, records, close_reason \| null, stopped \| null}` (решение 74, core/episode.rs); живое сообщение `episode` — та же сводка |
+| `GET /api/episodes/{id}?limit=N` | — | `{info, records: [JSON], truncated}`: записи файла — `{"type": "open", info, card}`, `{"type": "calc", t, qty, profit_usd, profit_pct, buy_avg, sell_avg, books: [{venue, exchange_time, received_at, bids, asks}], pools: [Pool], card}`, `{"type": "close", info}`; 404 — нет эпизода |
+| `GET /api/episodes/{id}/file` | — | файл `<id>.jsonl.zst` (application/zstd, attachment); 400 — неверный id, 404 — файл удалён |
+| `GET /api/candidates` | — | `[{direction, verdict, at, dry?, card?}]` (у прошедшего — `dry` и карточка сигнала `card` решения 74, core/card.rs: `{dry, ticker, contract, buy_on, sell_on, qty, buy_avg, sell_qty, sell_avg, budget, profit_usd, profit_pct, books: [BookSide], pools: [PoolSide], max: {"Ok": MaxVolume} \| {"Err": причина}, links: [{venue, kind: "pair" \| "pool", label, url \| null, why \| null}]}`), новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
 | `GET /api/deals` | — | `[Deal]` (core/deal.rs): шаг, где монеты, вложено, выручка, затраты, план, факт покупки/переводов/продаж, хронология, итог |
 | `GET /api/transits` | — | `[{asset, from, to, count, avg_s}]` |
 | `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine, day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}}}` — итог дня с предварительной частью (решение 53) |

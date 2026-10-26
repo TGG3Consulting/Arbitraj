@@ -90,30 +90,31 @@ async fn cap_limits_search() {
     );
 }
 
+/// Ликвидность в полосе ±0,5 % на записанном стакане CAKE-USDT@depth20 (последнее сообщение файла), сверка с ручным
+/// подсчётом по уровням записи: asks от 2.189 до края 2.199945 — 10 уровней (2.189 … 2.198), 12102.078 CAKE на
+/// 26551.233774 USDT; bids от 2.188 до края 2.17706 — 11 уровней, 17886.343 CAKE на 39016.840788 USDT. Полоса ±2 %
+/// шире всех 20 загруженных уровней — отметка beyond.
 #[tokio::test]
 async fn book_liquidity_in_band() {
     let rec = Rec::load("signal-book").await;
-    let band = d("2");
-    let (usd, qty, beyond) = in_band(&rec.asks, Side::Buy, band).unwrap();
-    let edge = rec.asks[0].price * d("1.02");
-    let want: Decimal = rec
-        .asks
-        .iter()
-        .filter(|l| l.price <= edge)
-        .map(|l| l.price * l.qty)
-        .sum();
-    assert_eq!(usd, want);
-    assert!(qty > Decimal::ZERO);
-    assert_eq!(beyond, rec.asks.last().unwrap().price <= edge);
-    let (bid_usd, _, _) = in_band(&rec.bids, Side::Sell, band).unwrap();
-    let low = rec.bids[0].price * d("0.98");
-    let want: Decimal = rec
-        .bids
-        .iter()
-        .filter(|l| l.price >= low)
-        .map(|l| l.price * l.qty)
-        .sum();
-    assert_eq!(bid_usd, want);
+    assert_eq!(
+        (rec.asks[0].price, rec.bids[0].price),
+        (d("2.189"), d("2.188"))
+    );
+    let (usd, qty, beyond) = in_band(&rec.asks, Side::Buy, d("0.5")).unwrap();
+    assert_eq!(
+        (usd, qty, beyond),
+        (d("26551.233774"), d("12102.078"), false)
+    );
+    let (usd, qty, beyond) = in_band(&rec.bids, Side::Sell, d("0.5")).unwrap();
+    assert_eq!(
+        (usd, qty, beyond),
+        (d("39016.840788"), d("17886.343"), false)
+    );
+    assert!(
+        in_band(&rec.asks, Side::Buy, d("2")).unwrap().2,
+        "все 20 уровней в полосе ±2 %"
+    );
     // Не задана полоса — причина, а не ноль.
     let s = side(
         "bingx",
@@ -122,7 +123,6 @@ async fn book_liquidity_in_band() {
         Err("не задана dex.depth_band_pct".into()),
     );
     assert!(s.usd_in_band.is_none() && s.error.is_some());
-    println!("CAKE asks в полосе ±2%: {usd} USDT, {qty} CAKE, за уровнями: {beyond}");
 }
 
 #[test]

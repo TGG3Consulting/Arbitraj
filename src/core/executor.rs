@@ -8,7 +8,8 @@
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
 //! Сухой режим (решение 74, dry.rs) — второй замок на входе: сделка не начинается, даже если кандидата передали сюда
-//! (первый замок — candidates.rs). Начатая до включения сделка доводится как обычно (run не проверяет режим).
+//! (первый замок — candidates.rs); предпроверка считает план в режиме Live (виртуального бюджета у сделки нет); перед
+//! покупкой — третий замок (buy_gate). После покупки сделка доводится как обычно.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -75,6 +76,14 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     Start::Started
 }
 
+/// Замок перед покупкой (решение 74): сухой режим включён — покупки нет. Ошибки: текст причины.
+pub fn buy_gate(core: &Core) -> Result<(), String> {
+    match super::dry::blocks(&core.inner.deps.settings) {
+        Some(why) => Err(format!("покупки нет: перед покупкой включён {why}")),
+        None => Ok(()),
+    }
+}
+
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты.
 async fn run(core: &Core, d: Direction) {
     let deps = &core.inner.deps;
@@ -112,6 +121,10 @@ async fn run(core: &Core, d: Direction) {
         let why = "в плане нет подбора объёма (бюджета) — покупка без предела списания не ставится";
         return super::ledger::finish(core, &mut deal, Step::Closed, why).await;
     };
+    // Решение 74: сухой режим могли включить во время предпроверки — перед первым торговым вызовом ещё раз.
+    if let Err(why) = buy_gate(core) {
+        return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+    }
     // Покупка на A.
     let bought = super::trade_ops::trade(
         core,

@@ -46,7 +46,11 @@ impl Core {
         };
         let info: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
         let path = self.inner.episode_files.path(id);
-        let (lines, truncated) = episode_files::read(&path, max)
+        // Чтение и распаковка — блокирующие, вне потоков async.
+        let p = path.clone();
+        let (lines, truncated) = tokio::task::spawn_blocking(move || episode_files::read(&p, max))
+            .await
+            .map_err(|e| e.to_string())?
             .map_err(|e| format!("файл эпизода {}: {e}", path.display()))?;
         let records: Vec<Value> = lines
             .iter()

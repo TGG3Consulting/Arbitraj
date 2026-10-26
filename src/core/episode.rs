@@ -141,6 +141,14 @@ impl Episodes {
         }
     }
 
+    /// Наибольшая прибыль без бюджета из карточки (строится после записи). Принимает: направление, прибыль.
+    /// Возвращает: сводку открытого эпизода; None — эпизод закрыт. Ошибок нет.
+    pub fn note_unbounded(&mut self, d: &Direction, v: Option<Decimal>) -> Option<EpisodeInfo> {
+        let o = self.open.get_mut(d)?;
+        o.info.max_profit_unbounded = max_opt(o.info.max_profit_unbounded, v);
+        Some(o.info.clone())
+    }
+
     /// Открытые эпизоды (для экрана). Ошибок нет.
     pub fn list(&self) -> Vec<EpisodeInfo> {
         self.open.values().map(|o| o.info.clone()).collect()

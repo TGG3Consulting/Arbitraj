@@ -72,10 +72,11 @@ pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         }
         if view.state == State::Candidate {
             super::candidates::enqueue(core, &dir);
-        } else if lk(&core.inner.dry_told).remove(&dir) | super::episode_run::is_open(core, &dir) {
-            // Сигнал вышел из «кандидата» — эпизод закрывается с причиной (решение 74).
-            super::episode_run::failed(core, &dir, &format!("сигнал: {}", state_text(&view.state)))
-                .await;
+        } else if lk(&core.inner.dry_told).contains(&dir) || super::episode_run::is_open(core, &dir)
+        {
+            // Сигнал вышел из «кандидата» — эпизод закрывается с причиной (решение 74); только память и сообщение
+            // задаче эпизодов, тик ничего не ждёт.
+            super::episode_run::failed(core, &dir, &format!("сигнал: {}", state_text(&view.state)));
         }
         wr(&core.inner.spreads).insert(dir.clone(), view.clone());
         core.inner.live.send(CoreEvent::Spread(view));

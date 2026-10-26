@@ -2,9 +2,10 @@
 //! Что делает: эпизоды арбитражной ситуации (решение 74): (1) логика episode.rs по последовательности вердиктов —
 //! открытие по первому прошедшему, пропуск чаще episode.min_interval_ms, запись пересчёта, закрытие с причиной по
 //! отказу, повторное открытие — новый эпизод; отказ без открытого эпизода ничего не делает; (2) на настоящем ядре и
-//! SQLite: сухой прошедший кандидат (записанные CAKE — size_common/calc.rs) открывает эпизод, файл zstd получает
-//! заголовок, записи и закрытие, сводка в таблице episodes — с причиной закрытия и наибольшей прибылью; не заданы
-//! episode.* — эпизоды не ведутся.
+//! SQLite: сухой прошедший кандидат (записанные CAKE — size_common/calc.rs) через очередь кандидатов открывает эпизод,
+//! карточка строится отдельной задачей, файл zstd получает заголовок, запись и закрытие, сводка в таблице episodes — с
+//! причиной закрытия и наибольшей прибылью; не заданы episode.* — эпизоды не ведутся; (3) направления нет в справочнике
+//! — уборка закрывает эпизод «направление больше не отслеживается».
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{episode, episode_run, card}, arb::storage::{episode_files, episodes_db}, tests/size_common.
 
@@ -13,7 +14,8 @@ mod size_common;
 use arb::core::Core;
 use arb::core::deps::Deps;
 use arb::core::episode::{EpisodeInfo, Episodes, Step};
-use arb::core::{card, episode_run};
+use arb::core::episode_run::Accepted;
+use arb::core::{candidates, episode_run};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -92,55 +94,72 @@ async fn start(name: &str) -> (Core, Store, Db, std::path::PathBuf) {
     (core, settings, db, d)
 }
 
-#[tokio::test]
-async fn episode_file_and_summary() {
-    let (core, s, db, dir) = start("file").await;
-    let rec = Rec::load("episode-file").await;
-    let calc = size_common::calc::calc(&rec, d("10"));
-    let card = card::build(&core, &calc, true).await;
-    assert!(card.max.is_err(), "card.max_search_usdt не задан — причина");
-    // Не заданы episode.* — эпизоды не ведутся.
-    assert_eq!(episode_run::accepted(&core, &calc, &card, true).await, None);
+/// Задаёт настройки эпизодов.
+async fn episode_settings(s: &Store) {
     for (n, v) in [
         ("episode.book_levels", 5),
         ("episode.min_interval_ms", 0),
         ("episode.max_mb", 10),
         ("episode.keep_days", 7),
         ("episode.zstd_level", 3),
+        ("episode.cleanup_s", 3600),
+        ("dry.budget_usdt", 1000),
     ] {
         s.set(n, Scope::Global, Some(json!(v)), "тест")
             .await
             .unwrap();
     }
-    assert_eq!(
-        episode_run::accepted(&core, &calc, &card, true).await,
-        Some(true)
-    );
-    assert_eq!(
-        episode_run::accepted(&core, &calc, &card, true).await,
-        Some(false)
-    );
-    assert!(episode_run::is_open(&core, &calc.direction));
-    episode_run::failed(&core, &calc.direction, "прибыль ниже порога").await;
-    assert!(!episode_run::is_open(&core, &calc.direction));
-    let rows = episodes_db::list(&db, 10).await.unwrap();
-    assert_eq!(rows.len(), 1);
-    let info: EpisodeInfo = serde_json::from_str(&rows[0]).unwrap();
-    assert_eq!(info.close_reason.as_deref(), Some("прибыль ниже порога"));
-    assert_eq!((info.records, info.dry), (2, true));
-    assert_eq!(info.max_profit, calc.profit_usd);
-    // Поток записи пишет асинхронно — ждём строку закрытия (не дольше 5 с).
-    let path = dir.join("episodes").join(format!("{}.jsonl.zst", info.id));
-    let mut lines = vec![];
+    s.set("dry.enabled", Scope::Global, Some(json!(true)), "тест")
+        .await
+        .unwrap();
+}
+
+/// Ждёт (не дольше 5 с), пока в базе у эпизода появится конец, и читает его файл до строки закрытия.
+async fn closed_episode(db: &Db, dir: &std::path::Path) -> (EpisodeInfo, Vec<String>) {
     for _ in 0..50 {
-        if let Ok((l, _)) = episode_files::read(&path, 100)
-            && l.last().is_some_and(|x| x.contains("\"close\""))
+        let rows = episodes_db::list(db, 10).await.unwrap();
+        if let Some(info) = rows
+            .iter()
+            .map(|r| serde_json::from_str::<EpisodeInfo>(r).unwrap())
+            .find(|e| e.ended_at.is_some())
         {
-            lines = l;
-            break;
+            let path = dir.join("episodes").join(format!("{}.jsonl.zst", info.id));
+            if let Ok((l, _)) = episode_files::read(&path, 100)
+                && l.last().is_some_and(|x| x.contains("\"close\""))
+            {
+                return (info, l);
+            }
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+    panic!("эпизод не закрылся в базе и файле за 5 с");
+}
+
+/// Путь очереди кандидатов (сухой режим): открытие, запись с карточкой (отдельная задача), закрытие отказом — файл
+/// zstd и сводка в SQLite пишет задача эпизодов, вызывающие её не ждут.
+#[tokio::test]
+async fn episode_file_and_summary() {
+    let (core, s, db, dir) = start("file").await;
+    let rec = Rec::load("episode-file").await;
+    let calc = size_common::calc::calc(&rec, d("10"));
+    let d = calc.direction.clone();
+    // Не заданы episode.* — эпизоды не ведутся.
+    assert!(matches!(
+        episode_run::on_accept(&core, &calc, true),
+        Accepted::Off
+    ));
+    episode_settings(&s).await;
+    let mode = arb::core::dry::mode(&s);
+    candidates::accepted(&core, &d, calc.clone(), &mode).await;
+    assert!(episode_run::is_open(&core, &d));
+    // Карточка строится отдельной задачей — даём ей отдать запись, затем закрываем.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    episode_run::failed(&core, &d, "прибыль ниже порога");
+    assert!(!episode_run::is_open(&core, &d));
+    let (info, lines) = closed_episode(&db, &dir).await;
+    assert_eq!(info.close_reason.as_deref(), Some("прибыль ниже порога"));
+    assert!(info.dry);
+    assert_eq!(info.max_profit, calc.profit_usd);
     let kinds: Vec<String> = lines
         .iter()
         .map(|l| {
@@ -150,8 +169,30 @@ async fn episode_file_and_summary() {
                 .to_string()
         })
         .collect();
-    assert_eq!(kinds, ["open", "calc", "calc", "close"]);
-    let calc_line: Value = serde_json::from_str(&lines[1]).unwrap();
-    assert_eq!(calc_line["card"]["ticker"], "CAKE");
-    assert_eq!(calc_line["card"]["dry"], true);
+    assert_eq!(kinds, ["open", "calc", "close"]);
+    let rec_line: Value = serde_json::from_str(&lines[1]).unwrap();
+    assert_eq!(rec_line["card"]["ticker"], "CAKE");
+    assert_eq!(rec_line["card"]["dry"], true);
+}
+
+/// Направления нет в справочнике (монета ушла) — эпизод закрывается уборкой с причиной, отметка сухого сигнала чистится.
+#[tokio::test]
+async fn sweep_closes_untracked_direction() {
+    let (core, s, db, dir) = start("sweep").await;
+    episode_settings(&s).await;
+    let rec = Rec::load("episode-sweep").await;
+    let calc = size_common::calc::calc(&rec, d("10"));
+    let d = calc.direction.clone();
+    assert!(matches!(
+        episode_run::on_accept(&core, &calc, true),
+        Accepted::Ep { first: true, .. }
+    ));
+    // Справочник ядра пуст (площадок нет) — направления CAKE в нём нет.
+    episode_run::sweep(&core);
+    assert!(!episode_run::is_open(&core, &d));
+    let (info, _) = closed_episode(&db, &dir).await;
+    assert_eq!(
+        info.close_reason.as_deref(),
+        Some("направление больше не отслеживается")
+    );
 }

@@ -113,6 +113,12 @@ pub struct Inner {
     /// Сухой режим без эпизодов (решение 74): по каким направлениям прошедший уже сообщён в журнал и Telegram —
     /// повтор не пишется, пока направление не перестанет проходить.
     pub dry_told: Mutex<HashSet<Direction>>,
+    /// Канал задачи эпизодов (episode_worker.rs): тик и очередь кандидатов только отправляют.
+    pub episode_tx: mpsc::UnboundedSender<super::episode_run::EpMsg>,
+    /// Приёмник канала — забирает задача эпизодов при запуске ядра (engine.rs).
+    pub episode_rx: Mutex<Option<mpsc::UnboundedReceiver<super::episode_run::EpMsg>>>,
+    /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
+    pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
 }
 
 impl Inner {
@@ -124,6 +130,7 @@ impl Inner {
         cand_tx: mpsc::Sender<Direction>,
     ) -> Self {
         let (coin_ticks, _) = broadcast::channel(deps.buffer);
+        let (episode_tx, episode_rx) = mpsc::unbounded_channel();
         let episode_files =
             crate::storage::episode_files::EpisodeFiles::start(deps.data_dir.join("episodes"));
         Inner {
@@ -167,6 +174,9 @@ impl Inner {
             episode_files,
             episode_off: Mutex::default(),
             dry_told: Mutex::default(),
+            episode_tx,
+            episode_rx: Mutex::new(Some(episode_rx)),
+            card_jobs: Mutex::default(),
         }
     }
 }

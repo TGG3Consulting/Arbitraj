@@ -2,7 +2,8 @@
 //! Что делает: файлы эпизодов арбитражной ситуации (решение 74) — один файл на эпизод, сжатие zstd, как
 //! storage/raw_log.rs: <data-dir>/episodes/<id>.jsonl.zst, одна строка — одна запись JSON (заголовок, пересчёты,
 //! закрытие). Запись — в отдельном потоке, ядро не ждёт диск. После каждой записи сжатые данные сбрасываются на диск
-//! (открытый эпизод читается до последней записи). Сколько места занято — счётчик (для лимита episode.max_mb).
+//! (открытый эпизод читается до последней записи). Сколько места занято — счётчик (для лимита episode.max_mb), с концом
+//! кадра при закрытии. remove и orphans — блокирующие: ядро зовёт их в spawn_blocking.
 //! Кто вызывает: core/episode_run.rs (open, line, close, remove, used), core/engine.rs (start), api/episodes.rs (read,
 //! path — через ядро).
 //! От чего зависит: zstd.
@@ -78,6 +79,23 @@ impl EpisodeFiles {
         self.used.load(Ordering::Relaxed)
     }
 
+    /// id файлов папки, которых нет в known (сироты — строки в базе нет). Блокирующее: вызывать в spawn_blocking.
+    /// Принимает: известные id. Возвращает: id сирот. Ошибок нет (нет папки — пусто).
+    pub fn orphans(&self, known: &std::collections::HashSet<String>) -> Vec<String> {
+        let Ok(it) = std::fs::read_dir(&self.dir) else {
+            return vec![];
+        };
+        it.flatten()
+            .filter_map(|e| {
+                e.file_name()
+                    .to_str()?
+                    .strip_suffix(".jsonl.zst")
+                    .map(String::from)
+            })
+            .filter(|id| !known.contains(id))
+            .collect()
+    }
+
     /// Удалить файл закрытого эпизода. Принимает: id. Ошибки: нет доступа (файла нет — не ошибка).
     pub fn remove(&self, id: &str) -> std::io::Result<()> {
         let p = self.path(id);
@@ -149,10 +167,16 @@ fn writer(mut rx: mpsc::UnboundedReceiver<Cmd>, dir: PathBuf, used: Arc<AtomicU6
                 *size = now;
             }
             Cmd::Close { id } => {
-                if let Some((enc, _)) = files.remove(&id)
-                    && let Err(e) = enc.finish()
-                {
-                    tracing::error!(%e, %id, "ошибка закрытия файла эпизода");
+                let Some((enc, size)) = files.remove(&id) else {
+                    continue;
+                };
+                match enc.finish() {
+                    // Конец кадра zstd дописан — его байты тоже в занятом месте.
+                    Ok(f) => {
+                        let now = f.metadata().map(|m| m.len()).unwrap_or(size);
+                        used.fetch_add(now.saturating_sub(size), Ordering::Relaxed);
+                    }
+                    Err(e) => tracing::error!(%e, %id, "ошибка закрытия файла эпизода"),
                 }
             }
         }

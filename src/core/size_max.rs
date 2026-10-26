@@ -2,10 +2,10 @@
 //! Что делает: «максимальный объём» и «максимальная прибыль» карточки сигнала (решение 74) — БЕЗ ограничения бюджетом:
 //! 1) оптимум прибыли — тем же поиском, что и сделка (size_search.rs, решение 66), но вместо бюджета — верхний предел
 //!    поиска card.max_search_usdt (списание по худшей цене не больше него);
-//! 2) наибольший объём, при котором прибыль ещё проходит пороги money.min_profit_usd и money.min_profit_pct, —
-//!    бисекцией по целым шагам между заведомо проходящим объёмом и наибольшим возможным (size.bisect_steps шагов).
-//!    Бисекция считает, что проходящие объёмы идут подряд от оптимума вверх (прибыль после пика убывает: проскальзывание
-//!    растёт); если кривая не такая, найденный объём проходит пороги, но может быть не самым большим;
+//! 2) наибольший НАЙДЕННЫЙ объём, при котором прибыль ещё проходит пороги money.min_profit_usd и money.min_profit_pct, —
+//!    бисекцией по целым шагам между заведомо проходящим объёмом и наибольшим возможным (size.bisect_steps шагов), на тех
+//!    же расчётах, что и оптимум (Memo). Бисекция считает, что проходящие объёмы идут подряд от оптимума вверх; при
+//!    нескольких участках прибыльности дальний может быть пропущен — так и написано в карточке;
 //! 3) чем ограничен поиск сверху: пределом card.max_search_usdt или площадками — глубиной загруженных уровней стакана,
 //!    прочитанной картой пула, максимумами вывода и суммы ордера (текст отказа точки сразу за наибольшим объёмом).
 //!
@@ -18,7 +18,7 @@ use serde::Serialize;
 
 use super::size::{Curve, Fail, Params, Point};
 use super::size_memo::Memo;
-use super::size_search::search;
+use super::size_search::search_in;
 
 /// Итог поиска без бюджета.
 #[derive(Debug, Clone, Serialize)]
@@ -57,16 +57,22 @@ where
     C: Curve,
     F: Fn(&Point<C::Data>) -> bool,
 {
-    let f = search(curve, p).await?;
-    let upper = f.choice.max_qty;
-    let (cap_reached, limit) = edge(curve, p, upper, f.choice.max_exact).await;
-    let mut evals = f.choice.evals;
+    if p.step <= Decimal::ZERO {
+        return Err(Fail::Stop(format!(
+            "шаг количества {} не больше нуля",
+            p.step
+        )));
+    }
+    // Одни расчёты на поиск оптимума и бисекцию наибольшего объёма — точки не считаются дважды.
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
+    let f = search_in(&mut m, p).await?;
+    let upper = f.choice.max_qty;
     let hi = m
         .units(upper)
         .ok_or_else(|| Fail::Stop(format!("объём {upper} слишком велик")))?;
+    let (cap_reached, limit) = edge(&mut m, p, hi, f.choice.max_exact).await;
     let found = biggest(&mut m, hi, known_ok, &f.best, p.bisect_steps, &pass).await?;
-    evals += m.evals();
+    let evals = m.evals();
     let (max_qty, max_profit, max_spend) = match found {
         Some(pt) => (Some(pt.qty), Some(pt.profit), Some(pt.invested)),
         None => (None, None, None),
@@ -135,11 +141,11 @@ where
     Ok(m.at(lo).await.ok())
 }
 
-/// Чем ограничен поиск сверху: точка на шаг выше наибольшего объёма. Принимает: кривую, параметры, наибольший объём,
-/// найден ли он точно. Возвращает: (упёрлись в предел поиска, текст). Ошибок нет.
-async fn edge<C: Curve>(curve: &mut C, p: &Params, upper: Decimal, exact: bool) -> (bool, String) {
-    let next = upper + p.step;
-    match curve.at(next).await {
+/// Чем ограничен поиск сверху: точка на шаг выше наибольшего объёма. Принимает: расчёты, параметры, наибольший объём
+/// в шагах, найден ли он точно. Возвращает: (упёрлись в предел поиска, текст). Ошибок нет.
+async fn edge<C: Curve>(m: &mut Memo<'_, C>, p: &Params, hi: u64, exact: bool) -> (bool, String) {
+    let next = m.qty(hi + 1);
+    match m.beyond(hi + 1).await {
         Ok(pt) if pt.invested > p.budget => (
             true,
             format!(

@@ -29,8 +29,9 @@ pub enum Verdict {
     Reject { reason: String, best: Option<Calc> },
 }
 
-/// Расчёт кандидата. Принимает: ядро, направление. Возвращает: Verdict. Ошибок нет — всё в Reject.
-pub async fn decide(core: &Core, d: &Direction) -> Verdict {
+/// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
+/// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
+pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
     let cx = match DirCtx::build(core, d) {
         Ok(c) => c,
@@ -44,7 +45,7 @@ pub async fn decide(core: &Core, d: &Direction) -> Verdict {
         (Ok(a), Ok(b)) => (a, b),
         (Err(e), _) | (_, Err(e)) => return reject(e.message, None),
     };
-    let budget = match super::limits::budget(core, &cx).await {
+    let budget = match super::limits::budget(core, &cx, mode).await {
         Ok(b) => b,
         Err(e) => return reject(e, None),
     };

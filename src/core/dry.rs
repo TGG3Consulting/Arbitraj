@@ -6,8 +6,10 @@
 //! Переключение — на лету: настройка читается на каждом кандидате и на каждом входе исполнителя.
 //! dry.enabled не задана — обычный режим, как до решения 74 (на плашке — «сухой режим не задан»). Значение не
 //! читается (повреждение) — считаем режим сухим: при сомнении денег не трогаем.
-//! Кто вызывает: core/limits.rs (бюджет), core/candidates.rs (пометка, что делать с прошедшим), core/executor.rs
-//! (вход исполнителя — второй замок), core/usdt_return.rs (перегон «отдельно»), тесты.
+//! Режим фиксируется один раз на расчёт кандидата и передаётся явно (limits.rs, profit.rs): у живой сделки (executor.rs,
+//! precheck.rs) режим всегда Live — виртуального бюджета у неё не бывает; перед покупкой — ещё раз blocks().
+//! Кто вызывает: core/candidates.rs (режим расчёта), core/executor.rs (вход исполнителя и перед покупкой),
+//! core/usdt_return.rs (перегон «отдельно»), api (status — плашка интерфейса), тесты.
 //! От чего зависит: settings.
 //! Настройки: dry.enabled, dry.budget_usdt.
 
@@ -57,4 +59,37 @@ pub fn blocks(s: &Store) -> Option<String> {
     mode(s)
         .is_dry()
         .then(|| "сухой режим (dry.enabled): ордера и переводы не выполняются".to_string())
+}
+
+/// Режим для плашки интерфейса (GET /api/dry): ядро решает, интерфейс только показывает.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Status {
+    /// «on» — сухой с бюджетом; «nobudget» — сухой без dry.budget_usdt; «broken» — сухой: dry.enabled не читается;
+    /// «off» — обычный (dry.enabled = нет); «unset» — dry.enabled не задана, обычный.
+    pub state: &'static str,
+    pub budget: Option<Decimal>,
+    /// Причина для «nobudget» и «broken».
+    pub reason: Option<String>,
+}
+
+/// Что делает: режим для плашки. Принимает: хранилище настроек. Возвращает: Status. Ошибок нет.
+pub fn status(s: &Store) -> Status {
+    let st = |state, budget, reason| Status {
+        state,
+        budget,
+        reason,
+    };
+    match s.flag("dry.enabled", At::default()) {
+        Ok(false) => st("off", None, None),
+        Err(e) if e.code == ErrorCode::NotConfigured => st("unset", None, None),
+        Err(e) => st(
+            "broken",
+            None,
+            Some(format!("значение dry.enabled не читается: {}", e.message)),
+        ),
+        Ok(true) => match s.decimal("dry.budget_usdt", At::default()) {
+            Ok(b) => st("on", Some(b), None),
+            Err(e) => st("nobudget", None, Some(e.message)),
+        },
+    }
 }

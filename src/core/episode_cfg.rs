@@ -1,21 +1,26 @@
 //! Файл: core/episode_cfg.rs
-//! Что делает: настройки эпизодов (решение 74) и их хранение во времени: срок и лимит места. Не задана любая из
-//! настроек episode.* — эпизоды не ведутся (причина видна на экране «Эпизоды» и одной записью в журнале на смену).
-//! Удаление: закрытые эпизоды старше episode.keep_days; затем, пока файлы занимают больше episode.max_mb, — самые
-//! старые закрытые. Открытый эпизод не удаляется; не помещается сам — его запись останавливается (episode_run.rs).
-//! При запуске эпизоды, открытые до перезапуска, закрываются с причиной «перезапуск».
-//! Кто вызывает: core/episode_run.rs (read, cleanup), core/engine.rs (load).
+//! Что делает: настройки эпизодов (решение 74) и их хранение во времени. Не задана любая из обязательных episode.* —
+//! эпизоды не ведутся (причина видна на экране «Эпизоды» и одной записью в журнале на смену); episode.min_notify_ms
+//! необязательна. Уборка (cleanup) — из задачи эпизодов при запуске и раз в episode.cleanup_s: закрытые эпизоды старше
+//! episode.keep_days; затем, пока файлы занимают больше episode.max_mb, — самые старые закрытые; файлы без строки в базе
+//! (сироты) — всегда. Открытый эпизод не удаляется. Файловые операции — в spawn_blocking. При запуске эпизоды, открытые
+//! до перезапуска, закрываются с причиной «перезапуск» (load).
+//! Кто вызывает: core/episode_run.rs (Cfg::read), core/episode_worker.rs (cleanup, load).
 //! От чего зависит: episode.rs, storage/episodes_db.rs, storage/episode_files.rs, settings.
-//! Настройки: episode.book_levels, episode.min_interval_ms, episode.max_mb, episode.keep_days, episode.zstd_level.
+//! Настройки: episode.book_levels, episode.min_interval_ms, episode.max_mb, episode.keep_days, episode.zstd_level,
+//! episode.cleanup_s, episode.min_notify_ms (необязательна).
+
+use std::collections::HashSet;
 
 use chrono::{Duration, Utc};
 
+use crate::gateway::errors::ErrorCode;
 use crate::settings::read::At;
 use crate::settings::store::Store;
 use crate::storage::episodes_db;
 use crate::storage::journal::Level;
 
-use super::engine::{Core, lk};
+use super::engine::Core;
 use super::episode::EpisodeInfo;
 
 /// Настройки эпизодов.
@@ -31,12 +36,21 @@ pub struct Cfg {
     pub keep_days: u64,
     /// Уровень сжатия zstd.
     pub zstd_level: i32,
+    /// Как часто уборка (срок, место, сироты, пропавшие направления), секунды.
+    pub cleanup_s: u64,
+    /// Эпизод короче — в Telegram ни открытия, ни закрытия, ни deal.candidate; None — уведомления сразу.
+    pub min_notify_ms: Option<u64>,
 }
 
 impl Cfg {
     /// Что делает: читает настройки. Принимает: хранилище. Возвращает: Cfg. Ошибки: текст «не задана настройка …».
     pub fn read(s: &Store) -> Result<Cfg, String> {
         let int = |n: &str| s.integer(n, At::default()).map_err(|e| e.message);
+        let min_notify_ms = match s.integer("episode.min_notify_ms", At::default()) {
+            Ok(v) => Some(v),
+            Err(e) if e.code == ErrorCode::NotConfigured => None,
+            Err(e) => return Err(e.message),
+        };
         Ok(Cfg {
             book_levels: int("episode.book_levels")? as usize,
             min_interval_ms: int("episode.min_interval_ms")?,
@@ -44,60 +58,58 @@ impl Cfg {
             keep_days: int("episode.keep_days")?,
             zstd_level: i32::try_from(int("episode.zstd_level")?)
                 .map_err(|_| "episode.zstd_level вне пределов".to_string())?,
+            cleanup_s: int("episode.cleanup_s")?,
+            min_notify_ms,
         })
     }
 }
 
-/// Что делает: настройки для работы; не заданы — запись в журнал один раз на смену причины, причина — для экрана.
-/// Принимает: ядро. Возвращает: Some(Cfg) — эпизоды ведутся. Ошибок нет.
-pub async fn current(core: &Core) -> Option<Cfg> {
-    let r = Cfg::read(&core.inner.deps.settings);
-    let why = r.as_ref().err().cloned();
-    let changed = {
-        let mut off = lk(&core.inner.episode_off);
-        let c = *off != why;
-        *off = why.clone();
-        c
-    };
-    if changed && let Some(w) = &why {
-        core.inner
-            .deps
-            .log(
-                Level::Warn,
-                "core.episode",
-                None,
-                format!("эпизоды не ведутся: {w}"),
-                None,
-            )
-            .await;
-    }
-    r.ok()
-}
-
-/// Что делает: удаляет закрытые эпизоды по сроку и месту (см. шапку). Принимает: ядро, настройки. Ошибок нет —
-/// сбой базы или диска пишется в журнал.
-pub async fn cleanup(core: &Core, cfg: &Cfg) {
-    let (db, files) = (&core.inner.deps.db, &core.inner.episode_files);
+/// Что делает: уборка по сроку, месту и сиротам (см. шапку). Принимает: ядро, настройки, id открытых эпизодов.
+/// Ошибок нет — сбой базы или диска пишется в журнал.
+pub async fn cleanup(core: &Core, cfg: &Cfg, open: &HashSet<String>) {
+    let (db, files) = (&core.inner.deps.db, core.inner.episode_files.clone());
     let rows = match episodes_db::oldest_first(db).await {
         Ok(r) => r,
         Err(e) => return warn(core, format!("список эпизодов: {e}")).await,
     };
+    let list: Vec<EpisodeInfo> = rows
+        .iter()
+        .filter_map(|b| serde_json::from_str(b).ok())
+        .collect();
+    // Сироты: файл есть, строки в базе нет, эпизод не открыт.
+    let known: HashSet<String> = list
+        .iter()
+        .map(|e| e.id.clone())
+        .chain(open.iter().cloned())
+        .collect();
+    let f = files.clone();
+    let orphans = tokio::task::spawn_blocking(move || f.orphans(&known))
+        .await
+        .unwrap_or_default();
+    for id in orphans {
+        remove(core, &id, false).await;
+    }
     let old = Utc::now() - Duration::days(cfg.keep_days as i64);
-    for body in rows {
-        let Ok(e) = serde_json::from_str::<EpisodeInfo>(&body) else {
-            continue;
-        };
+    for e in list {
         let Some(end) = e.ended_at else { continue };
-        if end >= old && files.used() <= cfg.max_bytes {
+        if open.contains(&e.id) || (end >= old && files.used() <= cfg.max_bytes) {
             continue;
         }
-        if let Err(err) = files.remove(&e.id) {
-            warn(core, format!("эпизод {}: файл не удалён: {err}", e.id)).await;
-            continue;
-        }
-        if let Err(err) = episodes_db::delete(db, &e.id).await {
-            warn(core, format!("эпизод {}: {err}", e.id)).await;
-        }
+        remove(core, &e.id, true).await;
+    }
+}
+
+/// Удаляет файл (в spawn_blocking) и, если надо, строку базы. Ошибок нет — в журнал.
+async fn remove(core: &Core, id: &str, row: bool) {
+    let f = core.inner.episode_files.clone();
+    let i = id.to_string();
+    match tokio::task::spawn_blocking(move || f.remove(&i)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => return warn(core, format!("эпизод {id}: файл не удалён: {e}")).await,
+        Err(e) => return warn(core, format!("эпизод {id}: {e}")).await,
+    }
+    if row && let Err(e) = episodes_db::delete(&core.inner.deps.db, id).await {
+        warn(core, format!("эпизод {id}: {e}")).await;
     }
 }
 
@@ -124,7 +136,7 @@ pub async fn load(core: &Core) {
 }
 
 /// Запись в журнал о сбое хранения эпизодов. Ошибок нет.
-async fn warn(core: &Core, text: String) {
+pub async fn warn(core: &Core, text: String) {
     core.inner
         .deps
         .log(Level::Warn, "core.episode", None, text, None)

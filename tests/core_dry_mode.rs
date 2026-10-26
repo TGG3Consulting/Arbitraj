@@ -15,6 +15,8 @@ use arb::core::Core;
 use arb::core::deps::Deps;
 use arb::core::dry::{self, Mode};
 use arb::core::executor::{self, Start};
+use arb::core::types::VenueId;
+use arb::core::{candidates, limits};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -27,10 +29,26 @@ use tokio::sync::broadcast;
 
 /// Ядро на базе во временной папке.
 async fn start(name: &str) -> (Core, Store) {
+    start_with(name, None).await
+}
+
+/// Ядро; raw — значение, записанное в базу мимо проверки (повреждение): (имя, JSON-текст).
+async fn start_with(name: &str, raw: Option<(&str, &str)>) -> (Core, Store) {
     let d = std::env::temp_dir().join(format!("arb-dry-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let db = Db::open(&d.join("t.sqlite")).unwrap();
+    if let Some((n, v)) = raw {
+        let (n, v) = (n.to_string(), v.to_string());
+        db.call(move |c| {
+            c.execute(
+                "INSERT INTO settings (name, scope, value, updated_at) VALUES (?1, 'global', ?2, '2026-10-26T00:00:00Z')",
+                rusqlite::params![n, v],
+            )
+        })
+        .await
+        .unwrap();
+    }
     let (changes, _) = broadcast::channel(64);
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
@@ -136,4 +154,60 @@ async fn link_templates_from_settings() {
     );
     // Другая DEX — свой шаблон, этот не подставляется.
     assert!(pool(&s, "bsc_dex", "uniswap-v4-bsc", &p).url.is_none());
+}
+
+/// Гонка (ревью #64): режим зафиксирован при входе в сделку (обычный), сухой включили во время предпроверки — бюджет
+/// живой сделки виртуальным не становится (limits::available в зафиксированном режиме настройку не читает), а замок
+/// перед покупкой (executor::buy_gate) покупку не пускает.
+#[tokio::test]
+async fn live_deal_never_gets_virtual_budget() {
+    let (core, s) = start("race").await;
+    let bingx = VenueId("bingx".into());
+    let fixed = dry::mode(&s);
+    assert_eq!(fixed, Mode::Live);
+    assert!(executor::buy_gate(&core).is_ok());
+    set(&s, "dry.enabled", Some(json!(true))).await;
+    set(&s, "dry.budget_usdt", Some(json!("1000"))).await;
+    // Живая сделка: баланс — только через шлюз (площадки в реестре нет — ошибка, а не 1000 виртуальных).
+    let live = limits::available(&core, &bingx, "USDT", &fixed).await;
+    assert!(live.is_err(), "{live:?}");
+    // Сухой расчёт кандидата — виртуальный бюджет, к площадке не ходит.
+    let (v, from) = limits::available(&core, &bingx, "USDT", &dry::mode(&s))
+        .await
+        .unwrap();
+    assert_eq!(v, d("1000"));
+    assert!(from.contains("dry.budget_usdt"));
+    assert!(
+        executor::buy_gate(&core)
+            .unwrap_err()
+            .contains("сухой режим")
+    );
+}
+
+/// Повреждённое значение dry.enabled — режим сухой, причина видна (плашка и замки).
+#[tokio::test]
+async fn unreadable_flag_is_dry() {
+    let (_core, s) = start_with("broken", Some(("dry.enabled", "\"да\""))).await;
+    assert!(dry::mode(&s).is_dry());
+    assert!(dry::blocks(&s).is_some());
+    let st = dry::status(&s);
+    assert_eq!(st.state, "broken");
+    assert!(st.reason.unwrap().contains("dry.enabled"));
+}
+
+/// Путь очереди кандидатов в сухом режиме: прошедший помечен «сухой», исполнитель не вызывается, сделок нет.
+#[tokio::test]
+async fn candidates_accepted_in_dry_mode() {
+    let (core, s) = start("cand").await;
+    set(&s, "dry.enabled", Some(json!(true))).await;
+    set(&s, "dry.budget_usdt", Some(json!("1000"))).await;
+    let rec = Rec::load("dry-cand").await;
+    let calc = size_common::calc::calc(&rec, d("10"));
+    let dir = calc.direction.clone();
+    candidates::accepted(&core, &dir, calc, &dry::mode(&s)).await;
+    assert!(core.deals().is_empty(), "сделки нет");
+    let rows = core.candidates();
+    let row = &rows.as_array().unwrap()[0];
+    assert_eq!(row["dry"], true);
+    assert!(row["verdict"].get("Accept").is_some());
 }

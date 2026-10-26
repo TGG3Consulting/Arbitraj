@@ -36,14 +36,20 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
         )));
     }
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
+    search_in(&mut m, p).await
+}
+
+/// Тот же поиск на готовых расчётах (решение 74: поиск без бюджета продолжает на них бисекцию, не считая точки
+/// заново). Принимает: расчёты (шаг и бюджет — из p), параметры. Возвращает и ошибки: как search.
+pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Found<C::Data>, Fail> {
     let guess = m
         .units(p.guess.max(Decimal::ZERO))
         .ok_or_else(|| Fail::Stop(format!("объём {} слишком велик", p.guess)))?;
-    let (hi, max_exact) = upper(&mut m, guess, p.bisect_steps).await?;
-    let lo = lower(&mut m, hi, p.bisect_steps).await?;
+    let (hi, max_exact) = upper(m, guess, p.bisect_steps).await?;
+    let lo = lower(m, hi, p.bisect_steps).await?;
     let mut pts = vec![lo, hi];
     for b in &p.buy_breaks {
-        around(&m, *b, lo, hi, &mut pts);
+        around(m, *b, lo, hi, &mut pts);
     }
     // Изломы B — по приходу; приход от объёма линейный (затраты в монете: постоянные и в долях), пересчёт — по
     // двум границам. Неточность пересчёта закрывают равномерные точки и уточнение.
@@ -52,7 +58,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
     {
         for s in &p.sell_breaks {
             let q = a.qty + (*s - a.arrive) * (b.qty - a.qty) / (b.arrive - a.arrive);
-            around(&m, q, lo, hi, &mut pts);
+            around(m, q, lo, hi, &mut pts);
         }
     }
     let span = hi - lo;
@@ -83,7 +89,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
         } else {
             ok[i + 1].0
         };
-        refine(&mut m, a, b, p.refine_steps, tol).await?;
+        refine(m, a, b, p.refine_steps, tol).await?;
     }
     let best = m
         .best()

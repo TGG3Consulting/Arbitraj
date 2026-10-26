@@ -8,6 +8,9 @@
 use super::{DX, G, V, d};
 use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 
+/// Наибольший уровень сжатия zstd — ZSTD_maxCLevel() из документации zstd (https://facebook.github.io/zstd/zstd_manual.html).
+const ZSTD_MAX_LEVEL: u64 = 22;
+
 /// Настройки решения 74. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static SIGNALS: &[SettingDef] = &[
@@ -20,5 +23,7 @@ pub static SIGNALS: &[SettingDef] = &[
     d("Сигналы и эпизоды", "episode.min_interval_ms", K::Integer, L::NonNegative, "мс", G, "Решение 74: записи (пересчёты) открытого эпизода — не чаще, чем раз в столько мс; чаще изменения стакана и пулов пропускаются"),
     d("Сигналы и эпизоды", "episode.max_mb", K::Integer, L::Positive, "МБ", G, "Решение 74: лимит места всех файлов эпизодов; больше — удаляются самые старые закрытые, не помогло — запись открытого эпизода останавливается (причина в списке)"),
     d("Сигналы и эпизоды", "episode.keep_days", K::Integer, L::Positive, "дней", G, "Решение 74: срок хранения закрытых эпизодов (файл и строка списка)"),
-    d("Сигналы и эпизоды", "episode.zstd_level", K::Integer, L::Positive, "уровень", G, "Решение 74: уровень сжатия zstd файлов эпизодов"),
+    d("Сигналы и эпизоды", "episode.zstd_level", K::Integer, L::Positive, "уровень", G, "Решение 74: уровень сжатия zstd файлов эпизодов, 1–22 (документация zstd: уровни от 1 до ZSTD_maxCLevel() = 22)").max(ZSTD_MAX_LEVEL),
+    d("Сигналы и эпизоды", "episode.cleanup_s", K::Integer, L::Positive, "секунды", G, "Решение 74: как часто уборка эпизодов — удалить закрытые старше episode.keep_days, лишнее сверх episode.max_mb, файлы без строки в базе; закрыть эпизоды направлений, которых больше нет в справочнике. Ещё — при запуске"),
+    d("Сигналы и эпизоды", "episode.min_notify_ms", K::Integer, L::NonNegative, "мс", G, "Решение 74: защита от дребезга — эпизод короче этого в Telegram не сообщается (ни открытие, ни закрытие, ни deal.candidate); в файл, базу и журнал пишется. Необязательна: не задана — сообщения сразу").optional(),
 ];

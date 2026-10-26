@@ -9,7 +9,7 @@
 //! BTC_USDT ведёт туда же) — шаблон «https://bingx.com/en/spot/{symbol}». Не задан шаблон — ссылки нет, рядом
 //! «шаблон ссылки не задан».
 //! Шаблон — только https; подстановка, которой нет в списке, — ошибка с её именем (не догадка).
-//! Кто вызывает: core/card.rs, тесты (tests/core_signal_card.rs).
+//! Кто вызывает: core/card.rs, тесты (tests/core_signal_max.rs).
 //! От чего зависит: settings, core/types (PoolRef).
 //! Настройки: venue.pair_url_template, dex.pool_url_template, venue.quote_asset.
 

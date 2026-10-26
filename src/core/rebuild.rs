@@ -5,7 +5,7 @@
 //! любой настройки. Толчки подряд сливаются.
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
-//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, settings.
+//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, episode_run.rs (закрыть эпизоды пропавших направлений), settings.
 //! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network, venue.symbols_stale_s (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
@@ -104,6 +104,8 @@ pub async fn rebuild(core: &Core) {
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
     *wr(&inner.coins) = coins;
+    // Эпизоды направлений, которых больше нет, закрываются (решение 74) — только память и сообщения.
+    super::episode_run::sweep(core);
     inner.live.send(CoreEvent::Coins {
         coins: count,
         directions,

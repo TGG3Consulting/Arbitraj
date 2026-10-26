@@ -1,10 +1,10 @@
 //! Файл: core/card.rs
 //! Что делает: полная карточка сигнала (решение 74) для «Живого экрана» и Telegram: монета (тикер и контракт BSC),
 //! где покупать и где продавать, количество и средние цены, стакан биржи (лучшая цена и USDT в полосе — card_book.rs),
-//! пулы маршрута DEX (средняя цена обмена и глубина по стороне сделки — из Venue::pool_depths, решение 73, заново не
-//! считается), максимальный объём и прибыль без бюджета (card_max.rs) и прибыль на бюджете, ссылки (card_links.rs).
+//! пулы маршрута DEX (средняя цена обмена и глубина по стороне сделки — из Venue::pool_depths_of — только пулы маршрута, решение 73, заново
+//! не считается), максимальный объём и прибыль без бюджета (card_max.rs) и прибыль на бюджете, ссылки (card_links.rs).
 //! Ни одна часть карточки не мешает решению по кандидату: чего нет — причина в своём поле.
-//! Кто вызывает: core/candidates.rs (прошедший кандидат), core/episode_run.rs (пересчёт в эпизоде).
+//! Кто вызывает: core/card_job.rs (отдельная задача класса Quote — очередь кандидатов её не ждёт).
 //! От чего зависит: card_book.rs, card_links.rs, card_max.rs, size_max.rs, costs.rs, engine.rs, trade_ops.rs (вид площадки),
 //! шлюз (pool_depths), settings.
 //! Настройки: dex.depth_band_pct (полоса стакана — площадки-DEX направления), card.max_search_usdt (через card_max.rs),
@@ -152,8 +152,10 @@ async fn route_pools(
     for hop in route.legs.iter().flat_map(|l| &l.hops) {
         uniq.entry(card_links::pool_id(&hop.pool)).or_insert(hop);
     }
+    // Только пулы маршрута (Venue::pool_depths_of), не весь реестр.
+    let refs: Vec<_> = uniq.values().map(|h| h.pool.clone()).collect();
     let depths = match core.inner.deps.gw.get(v).await {
-        Ok(a) => a.pool_depths().await.map_err(|e| e.message),
+        Ok(a) => a.pool_depths_of(&refs).await.map_err(|e| e.message),
         Err(e) => Err(e.message),
     };
     uniq.into_iter()

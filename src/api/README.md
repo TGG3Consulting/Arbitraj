@@ -89,6 +89,7 @@
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
 | `GET /api/spreads` | — | `[SpreadView]`: `{direction, prices, spread_pct, state, above_since, updates, at}`; `state` — `"Below"`, `"Holding"`, `"Candidate"`, `"Anomaly"`, `{"NoPrice": причина}`, `{"NotConfigured": причина}`, `{"Cooldown": {until}}` |
+| `GET /api/dry` | — | Сухой режим для плашки (решение 74, core/dry.rs): `{state, budget \| null, reason \| null}`; `state` — `on` (сухой, бюджет), `nobudget` (сухой без dry.budget_usdt), `broken` (сухой: значение dry.enabled не читается), `off`, `unset` (обычный); перечитывать по сообщению `settings` с именем `dry.*` |
 | `GET /api/episodes?limit=N` | — | `{episodes: [EpisodeInfo], off: причина \| null, used_bytes}`; `EpisodeInfo` — `{id, direction, dry, started_at, ended_at \| null, max_profit, max_profit_unbounded \| null, records, close_reason \| null, stopped \| null}` (решение 74, core/episode.rs); живое сообщение `episode` — та же сводка |
 | `GET /api/episodes/{id}?limit=N` | — | `{info, records: [JSON], truncated}`: записи файла — `{"type": "open", info, card}`, `{"type": "calc", t, qty, profit_usd, profit_pct, buy_avg, sell_avg, books: [{venue, exchange_time, received_at, bids, asks}], pools: [Pool], card}`, `{"type": "close", info}`; 404 — нет эпизода |
 | `GET /api/episodes/{id}/file` | — | файл `<id>.jsonl.zst` (application/zstd, attachment); 400 — неверный id, 404 — файл удалён |

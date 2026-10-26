@@ -13,6 +13,7 @@
   import { start as startSecrets } from './lib/secrets.svelte.js';
   import { start as startDex } from './lib/dex.svelte.js';
   import { start as startControl } from './lib/control.svelte.js';
+  import { start as startDry } from './lib/dry.svelte.js';
   import { route } from './lib/router.svelte.js';
   import LockBanner from './components/LockBanner.svelte';
   import LiveBanner from './components/LiveBanner.svelte';
@@ -58,6 +59,7 @@
   startSecrets();
   startDex();
   startControl();
+  startDry();
   connect();
   reconnectOnEvents();
 

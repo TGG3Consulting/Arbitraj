@@ -127,7 +127,8 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
             }
         }
     }
-    let c = match profit::decide(core, d).await {
+    // Живая сделка: режим Live явно — виртуального бюджета у неё не бывает, даже если сухой режим включили сейчас.
+    let c = match profit::decide(core, d, &super::dry::Mode::Live).await {
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
     };

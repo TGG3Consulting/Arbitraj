@@ -47,9 +47,10 @@
   <p>Прибыль на бюджете {card.budget ?? '—'} USDT: <strong>{card.profit_usd} USDT</strong> ({card.profit_pct}%)</p>
   {#if max}
     <p>
-      Без бюджета: максимальный объём <strong>{max.max_qty ?? '—'}</strong> (прибыль {max.max_profit ?? '—'}, списание {max.max_spend ?? '—'} USDT);
+      Без бюджета: наибольший найденный объём <strong>{max.max_qty ?? '—'}</strong> (прибыль {max.max_profit ?? '—'}, списание {max.max_spend ?? '—'} USDT);
       максимальная прибыль <strong>{max.opt_profit} USDT</strong> на {max.opt_qty}
     </p>
+    <p class="muted">Наибольший объём ищется бисекцией: при нескольких участках прибыльности дальний может быть пропущен.</p>
     <p class="muted">Край поиска: {max.limit} (предел card.max_search_usdt = {max.cap}, наибольший возможный объём {max.upper_qty}, расчётов {max.evals})</p>
   {:else}
     <p class="muted">Без бюджета: не посчитано — {maxErr}</p>

@@ -183,6 +183,19 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Только перечисленные пулы (решение 74: пулы маршрута в карточке сигнала — без расчёта всего реестра).
+    /// По умолчанию — pool_depths с фильтром. Ошибки: как pool_depths.
+    async fn pool_depths_of(
+        &self,
+        pools: &[crate::core::types::PoolRef],
+    ) -> GatewayResult<Vec<crate::core::types::PoolDepth>> {
+        let all = self.pool_depths().await?;
+        Ok(all
+            .into_iter()
+            .filter(|d| pools.contains(&d.pool))
+            .collect())
+    }
+
     /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
     /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {

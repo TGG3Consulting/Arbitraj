@@ -79,6 +79,8 @@ pub struct Inner {
     pub last_reject: Mutex<HashMap<Direction, String>>,
     /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
     pub transits: Mutex<HashMap<TransitKey, Vec<Decimal>>>,
+    /// Ожидаемые зачисления переводов и площадки, приславшие события баланса (credit_watch.rs, решение 76).
+    pub credits: super::credit_watch::Credits,
     /// Деньги в открытых сделках (limits.rs). Ведёт executor.rs.
     pub exposure: Mutex<Exposure>,
     /// Канал событий адаптеров (передаётся в subscribe_market).
@@ -160,6 +162,7 @@ impl Inner {
             candidates: Mutex::default(),
             last_reject: Mutex::default(),
             transits: Mutex::default(),
+            credits: Default::default(),
             exposure: Mutex::default(),
             market_tx,
             kick_networks: Notify::new(),

@@ -1,11 +1,12 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs.
+//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs.
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
+pub mod balance;
 pub mod check;
 pub mod control;
 pub mod cost;
@@ -17,6 +18,7 @@ pub mod send;
 pub mod trade;
 pub mod transfer;
 
+pub use balance::{BalanceChange, BalanceKind};
 pub use check::{
     BlockReason, CheckState, CoinBlock, CoinCheck, HookImpact, PoolCheck, TaxKind, TokenTaxes,
 };

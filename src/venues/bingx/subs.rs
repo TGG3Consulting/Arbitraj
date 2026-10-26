@@ -2,9 +2,10 @@
 //! Что делает: текущая подписка адаптера BingX на рынок — задачи соединений стаканов и обновления комиссий
 //! плюс фоновое обновление справочника пар (pairs_watch.rs). Новая подписка останавливает старые задачи (без
 //! дублей соединений); подписка из ядра и пересподписка из pairs_watch.rs идут строго по одной (замок gate),
-//! поэтому задачи не теряются и не запускаются дважды.
+//! поэтому задачи не теряются и не запускаются дважды. С первой подпиской запускается поток аккаунта (user_stream.rs,
+//! решение 76) — один на адаптер.
 //! Кто вызывает: mod.rs (subscribe_market из контракта), pairs_watch.rs (resubscribe при смене пар).
-//! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs.
+//! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs, user_stream.rs.
 //! Настройки: нет своих (venue.symbols_refresh_s читает pairs_watch.rs).
 
 use std::sync::{Arc, Mutex};
@@ -45,6 +46,8 @@ struct Inner {
     tasks: Mutex<Vec<JoinHandle<()>>>,
     /// Фоновое обновление справочника пар текущей подписки.
     watch: Mutex<Option<JoinHandle<()>>>,
+    /// Поток аккаунта (решение 76): запускается с первой подпиской и живёт, пока жив канал ядра.
+    account: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Subs {
@@ -59,6 +62,15 @@ impl Subs {
     ) -> GatewayResult<()> {
         let _g = self.inner.gate.lock().await;
         let snap = self.start(p, assets.clone(), out.clone()).await?;
+        {
+            let mut acc = self.inner.account.lock().unwrap_or_else(|e| e.into_inner());
+            if acc.as_ref().is_none_or(|h| h.is_finished()) {
+                *acc = Some(tokio::spawn(super::user_stream::run(
+                    p.ctx.clone(),
+                    out.clone(),
+                )));
+            }
+        }
         let mut watch = self.inner.watch.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = watch.take() {
             old.abort();

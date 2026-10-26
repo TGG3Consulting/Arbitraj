@@ -82,6 +82,13 @@ impl<'a, C: Curve> Memo<'a, C> {
         r
     }
 
+    /// Расчёт на n шагов без проверки бюджета и без памяти — чем ограничен поиск сверху (решение 74, size_max.rs).
+    /// Принимает: n. Возвращает: точку или Fail кривой. Ошибок сверх кривой нет.
+    pub async fn beyond(&mut self, n: u64) -> Result<Point<C::Data>, Fail> {
+        let q = self.qty(n);
+        self.curve.at(q).await
+    }
+
     /// Прибыль на n шагов; объём недопустим или предел расчётов исчерпан — None. Ошибки: Fail::Stop (расчёт
     /// невозможен).
     pub async fn profit(&mut self, n: u64) -> Result<Option<Decimal>, Fail> {

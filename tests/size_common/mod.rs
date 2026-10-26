@@ -12,8 +12,9 @@
 //! (costs::evaluate) на записях не собирается; кривая (curve.rs) — из тех же функций ядра и адаптеров.
 //! Кто вызывает: tests/core_size_optimum.rs, tests/core_size_limits.rs.
 //! От чего зависит: arb::core, arb::venues::{bingx, bsc_dex}, arb::settings, arb::storage.
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
+pub mod calc;
 pub mod curve;
 mod dex;
 

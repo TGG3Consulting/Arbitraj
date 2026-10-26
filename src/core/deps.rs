@@ -30,6 +30,8 @@ pub struct Deps {
     pub changes: broadcast::Sender<Change>,
     /// Размер очередей ядра (аргумент запуска --live-buffer, cli.rs).
     pub buffer: usize,
+    /// Папка данных (аргумент запуска --data-dir): файлы эпизодов — <data_dir>/episodes (решение 74).
+    pub data_dir: std::path::PathBuf,
 }
 
 impl Deps {

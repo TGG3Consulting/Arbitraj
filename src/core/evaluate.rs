@@ -2,8 +2,9 @@
 //! Что делает: пересчёт направлений одной монеты на тике (поток тика — tick.rs): цены направления (prices.rs) →
 //! замеры волатильности (vol.rs) → сигнал (signal.rs) → строка «Живого экрана»; кандидат — в очередь расчёта.
 //! Монета с непроверенными налогами (решения 30, 61) — строка «налоги не проверены: причина» без котировок.
+//! Сигнал вышел из «кандидата» при открытом эпизоде — эпизод закрывается с причиной (решение 74, episode_run.rs).
 //! Кто вызывает: core/tick.rs.
-//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, vol.rs, candidates.rs, view.rs.
+//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, vol.rs, candidates.rs, episode_run.rs, view.rs.
 //! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min.
 
 use chrono::Utc;
@@ -71,6 +72,11 @@ pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         }
         if view.state == State::Candidate {
             super::candidates::enqueue(core, &dir);
+        } else if lk(&core.inner.dry_told).contains(&dir) || super::episode_run::is_open(core, &dir)
+        {
+            // Сигнал вышел из «кандидата» — эпизод закрывается с причиной (решение 74); только память и сообщение
+            // задаче эпизодов, тик ничего не ждёт.
+            super::episode_run::failed(core, &dir, &format!("сигнал: {}", state_text(&view.state)));
         }
         wr(&core.inner.spreads).insert(dir.clone(), view.clone());
         core.inner.live.send(CoreEvent::Spread(view));
@@ -84,4 +90,18 @@ pub fn window_min(core: &Core) -> Option<u64> {
         .settings
         .integer("profit.sigma_window_min", Default::default())
         .ok()
+}
+
+/// Состояние сигнала человеческим текстом — причина закрытия эпизода (решение 74). Ошибок нет.
+pub fn state_text(s: &State) -> String {
+    match s {
+        State::NoPrice(e) => format!("нет цены — {e}"),
+        State::NotConfigured(e) => format!("не заданы пороги — {e}"),
+        State::Below => "спред не покрывает комиссии".into(),
+        State::Holding => "спред держится меньше signal.min_hold_*".into(),
+        State::Anomaly => "аномальный спред (signal.anomaly_spread_pct)".into(),
+        State::Cooldown { until } => format!("пауза направления до {until}"),
+        State::Candidate => "кандидат".into(),
+        State::TaxesNotChecked(e) => e.clone(),
+    }
 }

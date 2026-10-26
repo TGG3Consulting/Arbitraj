@@ -9,6 +9,7 @@
 //! GET  /api/candidates                            — последние расчёты кандидатов: [{direction, verdict, at}]
 //! GET  /api/deals                                 — [Deal]: идущие и закрытые сделки, план и факт
 //! GET  /api/transits                              — история времени в пути по монете и направлению
+//! GET  /api/dry                                   — сухой режим: {state: on|nobudget|broken|off|unset, budget, reason}
 //! GET  /api/control                               — Risk: режим системы, паузы площадок, карантины, итог дня
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
@@ -43,6 +44,11 @@ pub async fn deals(State(st): State<AppState>) -> Json<Vec<Deal>> {
 /// История времени в пути. Ошибок нет.
 pub async fn transits(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(st.core.transits())
+}
+
+/// Сухой режим для плашки (решение 74): решает ядро (core/dry.rs status). Ошибок нет.
+pub async fn dry(State(st): State<AppState>) -> Json<crate::core::dry::Status> {
+    Json(crate::core::dry::status(&st.settings))
 }
 
 /// Состояние управления. Ошибок нет.

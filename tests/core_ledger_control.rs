@@ -55,6 +55,7 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
         db,
         changes,
         buffer: 64,
+        data_dir: d.to_path_buf(),
     })
     .await;
     (core, settings)

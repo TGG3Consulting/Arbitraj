@@ -104,6 +104,23 @@ pub struct Inner {
     pub usdt_alert_unset: Mutex<HashSet<VenueId>>,
     /// Монеты человека («Беру на себя») и сделки, из которых они взяты (manual.rs).
     pub holdings: Mutex<HashMap<String, (ManualHolding, Deal)>>,
+    /// Открытые эпизоды арбитражной ситуации (решение 74, episode.rs).
+    pub episodes: Mutex<super::episode::Episodes>,
+    /// Файлы эпизодов (storage/episode_files.rs): <data-dir>/episodes.
+    pub episode_files: crate::storage::episode_files::EpisodeFiles,
+    /// Почему эпизоды не ведутся (не заданы episode.*); None — ведутся или ещё не проверялось.
+    pub episode_off: Mutex<Option<String>>,
+    /// Сухой режим без эпизодов (решение 74): по каким направлениям прошедший уже сообщён в журнал и Telegram —
+    /// повтор не пишется, пока направление не перестанет проходить.
+    pub dry_told: Mutex<HashSet<Direction>>,
+    /// Канал задачи эпизодов (episode_worker.rs): тик и очередь кандидатов только отправляют.
+    pub episode_tx: mpsc::Sender<super::episode_run::EpMsg>,
+    /// Сколько сообщений задаче эпизодов потеряно (канал полон — тик не ждёт).
+    pub episode_lost: std::sync::atomic::AtomicU64,
+    /// Приёмник канала — забирает задача эпизодов при запуске ядра (engine.rs).
+    pub episode_rx: Mutex<Option<mpsc::Receiver<super::episode_run::EpMsg>>>,
+    /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
+    pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
 }
 
 impl Inner {
@@ -115,6 +132,10 @@ impl Inner {
         cand_tx: mpsc::Sender<Direction>,
     ) -> Self {
         let (coin_ticks, _) = broadcast::channel(deps.buffer);
+        // Канал ограничен (--live-buffer): тик и очередь кандидатов не ждут и не копят память без предела.
+        let (episode_tx, episode_rx) = mpsc::channel(deps.buffer);
+        let episode_files =
+            crate::storage::episode_files::EpisodeFiles::start(deps.data_dir.join("episodes"));
         Inner {
             live: Live::new(deps.buffer),
             deps,
@@ -152,6 +173,14 @@ impl Inner {
             holdings: Mutex::default(),
             usdt_below: Mutex::default(),
             usdt_alert_unset: Mutex::default(),
+            episodes: Mutex::default(),
+            episode_files,
+            episode_off: Mutex::default(),
+            dry_told: Mutex::default(),
+            episode_tx,
+            episode_lost: Default::default(),
+            episode_rx: Mutex::new(Some(episode_rx)),
+            card_jobs: Mutex::default(),
         }
     }
 }

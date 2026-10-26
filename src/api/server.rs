@@ -18,8 +18,8 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    check, coins, control, core_api, dex, journal, rules, rules_meta, secrets, settings, static_ui,
-    venues, wallet_queue, ws,
+    check, coins, control, core_api, dex, episodes, journal, rules, rules_meta, secrets, settings,
+    static_ui, venues, wallet_queue, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -51,6 +51,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/spreads", get(core_api::spreads))
         .route("/api/candidates", get(core_api::candidates))
         .route("/api/deals", get(core_api::deals))
+        .route("/api/dry", get(core_api::dry))
         .route("/api/transits", get(core_api::transits))
         .route(
             "/api/control",
@@ -64,6 +65,9 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/control/quarantine/{ticker}/release",
             post(core_api::release),
         )
+        .route("/api/episodes", get(episodes::list))
+        .route("/api/episodes/{id}", get(episodes::get))
+        .route("/api/episodes/{id}/file", get(episodes::file))
         .route("/api/journal", get(journal::list))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))

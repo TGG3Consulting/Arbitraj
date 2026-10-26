@@ -106,6 +106,7 @@ async fn run() -> Result<(), String> {
         db: db.clone(),
         changes: changes.clone(),
         buffer: args.live_buffer,
+        data_dir: args.data_dir.clone(),
     })
     .await;
 

@@ -63,6 +63,10 @@ impl Core {
         super::manual::load(&core).await;
         super::transit::load(&core).await;
         super::low_usdt::load(&core).await;
+        // Задача эпизодов (решение 74): при запуске закрывает прерванные перезапуском, дальше — запись и уборка.
+        if let Some(rx) = lk(&core.inner.episode_rx).take() {
+            tokio::spawn(super::episode_worker::run(core.clone(), rx));
+        }
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

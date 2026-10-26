@@ -2,11 +2,11 @@
 //! Что делает: пулы площадки для экрана «Монеты» (решение 73, Venue::pool_depths): глубина по направлениям в полосе
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
 //! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing — строкой в details.
-//! Кто вызывает: venue.rs (pool_depths).
+//! Кто вызывает: venue.rs (pool_depths; pool_depths_of — только пулы маршрута, карточка сигнала решения 74).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
 
-use crate::core::types::{CrossCheck, PoolDepth, SideCheck};
+use crate::core::types::{CrossCheck, PoolDepth, PoolRef, SideCheck};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::check::state::Checks;
@@ -14,17 +14,22 @@ use super::super::ctx::Ctx;
 use super::super::tokens::Tokens;
 use super::registry::Registry;
 
-/// Все пулы реестра (см. шапку). Ошибки: USDT не известен (venue.quote_asset), узел (decimals USDT).
+/// Пулы реестра (см. шапку): все или только перечисленные (only — пулы маршрута для карточки сигнала, решение 74).
+/// Ошибки: USDT не известен (venue.quote_asset), узел (decimals USDT).
 pub async fn all(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
     checks: &Checks,
+    only: Option<&[PoolRef]>,
 ) -> GatewayResult<Vec<PoolDepth>> {
     let usdt = tokens.usdt(ctx)?;
     let dec = tokens.decimals(ctx, usdt).await?;
     let mut out = Vec::new();
     for r in reg.refs() {
+        if only.is_some_and(|o| !o.contains(&r)) {
+            continue;
+        }
         let Some(e) = reg.get(&r) else { continue };
         // Недостоверный пул — последнее посчитанное (состояние может быть старым); спящий — как есть.
         let got = if e.valid && !e.asleep {

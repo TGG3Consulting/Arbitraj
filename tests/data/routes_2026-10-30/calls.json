@@ -1,0 +1,23 @@
+{
+  "about": "маршрут CAKE: прямой (Pancake V3 + Uniswap V3) + 2-хоп (через WBNB) + 3-хоп (через BTCB и WBNB), один блок",
+  "node": "https://bsc-dataseed.defibit.io",
+  "usdt": "0x55d398326f99059ff775485246999027b3197955",
+  "contracts": {
+    "cl_manager": "0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b",
+    "position_manager": "0x7a4a5c919ae2541aed11041a1aeee68f1287f95b",
+    "state_view": "0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4",
+    "pcs_tick_lens": "0x9a489505a00ce272eaa5e07dba6491314cae3796",
+    "uni_tick_lens": "0xd9270014d396281579760619ccf4c3af0501a47c"
+  },
+  "tick_words": 3,
+  "batch_max": 50,
+  "balance_of": [],
+  "pools": [
+    { "tag": "CAKE-USDT pcs_v3", "kind": "pcs_v3", "addr": "0x7f51c8aaa6b0599abd16674e2b17fec7a9f674a1" },
+    { "tag": "CAKE-USDT uni_v3", "kind": "uni_v3", "addr": "0xfe4fe5b4575c036ac6d5cccfe13660020270e27a" },
+    { "tag": "CAKE-WBNB pcs_v3", "kind": "pcs_v3", "addr": "0x133b3d95bad5405d14d53473671200e9342896bf" },
+    { "tag": "WBNB-USDT v2", "kind": "v2", "addr": "0x16b9a82891338f9ba80e2d6970fdda79d1eb0dae" },
+    { "tag": "CAKE-BTCB uni_v3", "kind": "uni_v3", "addr": "0x8e8410f4878079fc03a287a7ded4a65afb87cc06" },
+    { "tag": "BTCB-WBNB pcs_v3", "kind": "pcs_v3", "addr": "0x6bbc40579ad1bbd243895ca0acb086bb6300d636" }
+  ]
+}

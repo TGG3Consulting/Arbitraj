@@ -36,6 +36,8 @@ pub mod smart_quote;
 pub mod smart_ways;
 pub mod spot;
 pub mod steps;
+pub mod verify;
+pub mod verify_decide;
 pub mod via;
 pub mod via_pools;
 

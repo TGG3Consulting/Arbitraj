@@ -52,9 +52,24 @@ pub async fn trade(
             "В запросе нет маршрута DEX из котировки",
         )
     })?;
+    // Графовый маршрут (решение 80): неисполнимый как есть (мульти-роутер, решение 84) — отказ до сделки (деньги не
+    // рискуют); исполнимый — прямой формы (одна доля, один хоп) идёт прямым путём ниже, остальной (всё через один
+    // Universal Router PancakeSwap) — умным, тем же кодом, что RouteMode::Smart.
+    if route.mode == RouteMode::Graph {
+        if !route.executable {
+            let why = route
+                .exec_note
+                .clone()
+                .unwrap_or_else(|| "граф-маршрут не исполним как есть (решение 84)".to_string());
+            return Err(ctx.err(ErrorCode::NoRoute, why));
+        }
+        if !(route.legs.len() == 1 && route.legs[0].hops.len() == 1) {
+            return trade_smart::trade(q, env, nonces, req, &route).await;
+        }
+    }
     let leg = match (route.mode, route.legs.as_slice()) {
         (RouteMode::Smart, _) => return trade_smart::trade(q, env, nonces, req, &route).await,
-        (RouteMode::Direct, [leg]) => leg.clone(),
+        (RouteMode::Direct | RouteMode::Graph, [leg]) => leg.clone(),
         _ => {
             return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
         }

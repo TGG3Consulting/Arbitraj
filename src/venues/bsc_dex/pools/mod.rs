@@ -31,6 +31,7 @@ pub mod events_cl;
 pub mod events_v2;
 pub mod events_v3;
 pub mod families;
+pub mod graph;
 pub mod group;
 pub mod history_gate;
 pub mod history_store;

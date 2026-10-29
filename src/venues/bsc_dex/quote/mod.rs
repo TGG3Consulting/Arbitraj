@@ -27,6 +27,7 @@ pub mod quoter_calls;
 pub mod quoter_revert;
 pub mod rate;
 pub mod route_calc;
+pub mod route_paths;
 pub mod select;
 pub mod smart;
 pub mod smart_quote;

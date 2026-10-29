@@ -1,12 +1,14 @@
 //! Файл: tests/route_common/mod.rs
-//! Что делает: общее для тестов графа-маршрутизатора (решение 80) на записи маршрута CAKE 2026-10-29
-//! (tests/data/routes_2026-10-29, рекордер record_route.js): разбор состояния шести пулов (V2 + Pancake/Uniswap V3)
-//! в записи реестра бота и окружение на настоящей SQLite со всеми настройками и проверками, при которых пул допущен
-//! к котировке (quote/select.rs): строки DEX, глубина (решение 73), сверка с квотером и газ пробы, сплит, граф.
-//! Состояния пулов настоящие, на одном блоке 130521896; адреса токенов записью не захвачены, поэтому узлы графа —
-//! условные адреса в том же порядке сортировки, что реальные (CAKE < USDT < BTCB < WBNB), чтобы ориентация
-//! token0/token1 у V3 совпадала с записанным sqrtPriceX96. Пары пулов — по тегам записи (авторитетная топология).
-//! Кто вызывает: tests/bsc_dex_split.rs.
+//! Что делает: общее для тестов графа-маршрутизатора (решение 80) на записях маршрута CAKE (рекордер record_route.js):
+//! routes_2026-10-29 (блок 130521896) и routes_2026-10-30 (блок 130556914) по тем же шести пулам — разбор состояния
+//! шести пулов (V2 + Pancake/Uniswap V3) в записи реестра бота и окружение на настоящей SQLite со всеми настройками и
+//! проверками, при которых пул допущен к котировке (quote/select.rs): строки DEX, глубина (решение 73), сверка с
+//! квотером и газ пробы, сплит, граф. Состояния пулов настоящие, каждая запись — на одном блоке; две записи дают
+//! проверку дрейфа цены для предторговой верификации (quote/verify.rs, решение 83). Адреса токенов записью не
+//! захвачены, поэтому узлы графа — условные адреса в том же порядке сортировки, что реальные
+//! (CAKE < USDT < BTCB < WBNB), чтобы ориентация token0/token1 у V3 совпадала с записанным sqrtPriceX96.
+//! Пары пулов — по тегам записи (авторитетная топология).
+//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs.
 //! От чего зависит: arb::venues::bsc_dex::{pools, parts, ctx}, abi_v2v3; arb::settings; arb::storage.
 #![allow(dead_code)]
 
@@ -49,11 +51,10 @@ pub const WBNB_USDT_V2: Address = address!("0x16b9a82891338f9ba80e2d6970fdda79d1
 pub const CAKE_BTCB_UNI: Address = address!("0x8e8410f4878079fc03a287a7ded4a65afb87cc06");
 pub const BTCB_WBNB_PCS: Address = address!("0x6bbc40579ad1bbd243895ca0acb086bb6300d636");
 
-fn load() -> HashMap<String, Vec<u8>> {
-    let v: Value = serde_json::from_str(
-        &std::fs::read_to_string("tests/data/routes_2026-10-29/responses.json").unwrap(),
-    )
-    .unwrap();
+fn load(dir: &str) -> HashMap<String, Vec<u8>> {
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/responses.json")).unwrap())
+            .unwrap();
     let mut got = HashMap::new();
     for r in v["results"].as_array().unwrap() {
         if let Some(s) = r["response"]["result"].as_str() {
@@ -265,10 +266,16 @@ async fn ctx() -> Ctx {
     c
 }
 
-/// Окружение с шестью пулами записи, заданными decimals, промежуточными (WBNB, BTCB) и проверками (газ + сверка с
-/// квотером по обеим сторонам), при которых пулы допущены к котировке.
+/// Окружение по записи маршрута routes_2026-10-29 (блок 130521896) — удобный частный случай parts_from.
 pub async fn parts() -> Parts {
-    let got = load();
+    parts_from("tests/data/routes_2026-10-29").await
+}
+
+/// Окружение с шестью пулами записи из каталога `dir` (responses.json рекордера record_route.js), заданными decimals,
+/// промежуточными (WBNB, BTCB) и проверками (газ + сверка с квотером по обеим сторонам), при которых пулы допущены к
+/// котировке. Разные каталоги = разные блоки по тем же пулам (проверка дрейфа для verify.rs).
+pub async fn parts_from(dir: &str) -> Parts {
+    let got = load(dir);
     let p = Parts::new(ctx().await);
     p.tokens.set(&[
         Asset {

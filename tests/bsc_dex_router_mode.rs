@@ -10,16 +10,21 @@
 
 mod route_common;
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256, address};
+use chrono::Utc;
 use rust_decimal::Decimal;
 
-use arb::core::types::{Asset, RouteMode, Side, TokenTaxes};
+use arb::core::types::{Asset, Pool, PoolRef, PoolState, RouteMode, Side, TokenTaxes, VenueId};
+use arb::gateway::errors::ErrorCode;
+use arb::venues::bsc_dex::pools::families;
+use arb::venues::bsc_dex::pools::graph::Edge;
 use arb::venues::bsc_dex::pools::registry::Entry;
+use arb::venues::bsc_dex::quote::route_paths::{RoutePath, Step};
 use arb::venues::bsc_dex::quote::steps::Names;
 use arb::venues::bsc_dex::quote::via::Via;
-use arb::venues::bsc_dex::quote::{Quoting, direct_route, graph_route, pick};
+use arb::venues::bsc_dex::quote::{Quoting, direct_route, graph_route};
 
-use route_common::{CAKE, USDT};
+use route_common::{CAKE, USDT, WBNB};
 
 const GAS: u64 = 1_000_000_000;
 
@@ -105,24 +110,21 @@ async fn graph_route_marks_mode_and_executability() {
     );
 }
 
-#[tokio::test]
-async fn switch_picks_best_graph_not_worse_than_classic() {
-    // Как врезка в quote/mod.rs: классика (прямой лучший пул) против графа через pick — лучший выигрывает.
-    let p = route_common::parts().await;
-    let q = p.quoting();
-    let t = zero();
-    let qty = Decimal::from(50_000u32);
-    let side = Side::Buy;
+async fn classic_direct(
+    q: &Quoting,
+    t: &TokenTaxes,
+    side: Side,
+    qty: Decimal,
+) -> arb::core::types::Quote {
     let entries: Vec<Entry> = q
         .reg
         .by_pair(CAKE, USDT)
         .into_iter()
         .filter(|e| e.ticker == "CAKE")
         .collect();
-
-    let classic = direct_route::quote(
-        &via(&q, &t, side),
-        &names(&q),
+    direct_route::quote(
+        &via(q, t, side),
+        &names(q),
         &cake(),
         qty,
         entries,
@@ -131,7 +133,18 @@ async fn switch_picks_best_graph_not_worse_than_classic() {
         U256::from(GAS),
     )
     .await
-    .expect("классика считает");
+    .expect("классика считает")
+}
+
+#[tokio::test]
+async fn merge_trades_best_executable_never_worse_than_classic() {
+    // Решение 84 вариант Б: на сделку идёт лучший ИСПОЛНИМЫЙ маршрут. Лучший по графу (кросс-DEX сплит) неисполним
+    // как есть — на сделку не берётся, котировкой остаётся исполнимая классика; graph-режим не хуже классики.
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let t = zero();
+    let (side, qty) = (Side::Buy, Decimal::from(50_000u32));
+    let classic = classic_direct(&q, &t, side, qty).await;
     let graph = graph_route::quote(
         &via(&q, &t, side),
         &names(&q),
@@ -141,18 +154,132 @@ async fn switch_picks_best_graph_not_worse_than_classic() {
     )
     .await
     .expect("граф считает");
+    assert!(
+        !graph.route.as_ref().unwrap().executable,
+        "кросс-DEX сплит неисполним как есть"
+    );
 
-    let best = pick::pick(&q, classic.clone(), graph.clone(), side, 18).await;
-    // Покупка: лучший — дешевле за монету; граф видит оба прямых пула (+ мост), поэтому не дороже классики.
-    let price = |x: &arb::core::types::Quote| x.avg_price;
-    let eps = Decimal::new(1, 6);
-    assert!(
-        price(&best) <= price(&classic) + eps,
-        "лучший не дороже классики"
+    let merged = graph_route::merge(&q, classic.clone(), Ok(graph), side, 18).await;
+    assert_eq!(
+        merged.route.as_ref().unwrap().mode,
+        RouteMode::Direct,
+        "на сделку — исполнимая классика"
     );
-    assert!(
-        price(&best) <= price(&graph) + eps,
-        "pick выбрал не худшее из двух"
+    assert_eq!(
+        merged.avg_price, classic.avg_price,
+        "не хуже классики (ровно классика)"
     );
-    assert_eq!(best.fillable_qty, qty);
+
+    // Сбой графа — откат к классике (merge логирует и возвращает классику).
+    let err = q.ctx.err(ErrorCode::NoRoute, "тест: граф без маршрута");
+    let fallback = graph_route::merge(&q, classic.clone(), Err(err), side, 18).await;
+    assert_eq!(fallback.avg_price, classic.avg_price);
+    assert_eq!(fallback.route.as_ref().unwrap().mode, RouteMode::Direct);
+}
+
+#[tokio::test]
+async fn merge_keeps_executable_graph() {
+    // Исполнимый графовый маршрут (крошечный объём — один пул) участвует в выборе: итог исполним.
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let t = zero();
+    let (side, qty) = (Side::Buy, Decimal::ONE);
+    let classic = classic_direct(&q, &t, side, qty).await;
+    let graph = graph_route::quote(
+        &via(&q, &t, side),
+        &names(&q),
+        &cake(),
+        qty,
+        U256::from(GAS),
+    )
+    .await
+    .expect("граф считает");
+    assert!(
+        graph.route.as_ref().unwrap().executable,
+        "один пул исполним как есть"
+    );
+    let merged = graph_route::merge(&q, classic, Ok(graph), side, 18).await;
+    assert!(
+        merged.route.as_ref().unwrap().executable,
+        "итог сделки исполним"
+    );
+}
+
+/// Ребро заданного вида между токенами (для проверки фильтра решения 62; важен только pool.kind).
+fn edge(kind: &str, x: Address, y: Address) -> Edge {
+    let f = families::make(kind, kind).unwrap();
+    let (t0, t1) = if x < y { (x, y) } else { (y, x) };
+    let entry = Entry {
+        family: f,
+        pool: Pool {
+            venue: VenueId("bsc_dex".into()),
+            family: f.id.into(),
+            kind: f.kind,
+            reference: PoolRef::Contract(address!("0x00000000000000000000000000000000000000ff")),
+            token0: t0,
+            token1: t1,
+            fee_pips: Some(2500),
+            tick_spacing: None,
+            bin_step: None,
+            hooks: None,
+            state: PoolState::V2 {
+                reserve0: U256::ZERO,
+                reserve1: U256::ZERO,
+            },
+            block: 1,
+            received_at: Utc::now(),
+        },
+        ticker: "X".into(),
+        coin: x,
+        usdt: y,
+        key: None,
+        ticks: None,
+        bins: None,
+        synced_block: 1,
+        synced_log: None,
+        valid: true,
+        asleep: false,
+    };
+    Edge { entry, a: x, b: y }
+}
+
+#[tokio::test]
+async fn native_route_excludes_v4_infinity() {
+    // Решение 62: нативную монету (WBNB) граф не маршрутизирует через V4 / Infinity (CL, Bin) — только V2/V3.
+    let p1 = RoutePath {
+        steps: vec![Step {
+            edge: edge("pancakeswap_v2", WBNB, USDT),
+            token_in: WBNB,
+            token_out: USDT,
+        }],
+    };
+    assert!(
+        graph_route::native_ok(WBNB, &p1),
+        "V2-пул на нативной монете — ок"
+    );
+
+    let p2 = RoutePath {
+        steps: vec![Step {
+            edge: edge("pancakeswap_infinity_cl", WBNB, USDT),
+            token_in: WBNB,
+            token_out: USDT,
+        }],
+    };
+    assert!(
+        !graph_route::native_ok(WBNB, &p2),
+        "Infinity CL на нативной монете — отсечь (решение 62)"
+    );
+
+    // CL-пул, не касающийся нативной монеты, ограничение не затрагивает.
+    let p3 = RoutePath {
+        steps: vec![Step {
+            edge: edge("pancakeswap_infinity_cl", CAKE, USDT),
+            token_in: CAKE,
+            token_out: USDT,
+        }],
+    };
+    assert!(
+        graph_route::native_ok(WBNB, &p3),
+        "CL не на нативной монете — ок"
+    );
 }

@@ -144,13 +144,12 @@ impl Quoting {
             direct_route::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
         };
         // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
-        // неизменно; «graph» — считаем маршрут по графу и сравниваем с классикой (quote/pick.rs), лучший выигрывает.
-        // Неисполнимый как есть графовый маршрут (мульти-роутер, решение 84) остаётся сигналом — авто-сделку
-        // exec/trade.rs по нему отклоняет, деньги не рискуют (решение 40).
-        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph")
-            && let Ok(g) = graph_route::quote(&v, &names, asset, qty, gas).await
-        {
-            q = pick::pick(self, q, g, side, usdt_dec).await;
+        // неизменно; «graph» — считаем маршрут по графу и выбираем котировку-на-сделку среди ИСПОЛНИМЫХ маршрутов
+        // (graph_route::merge, решение 84 вариант Б): неисполнимый граф-маршрут на сделку не идёт (остаётся лучшим
+        // сигналом для карточки, PR 80.5b), поэтому graph-режим не исполняет хуже классики. Деньги не рискуют.
+        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph") {
+            let g = graph_route::quote(&v, &names, asset, qty, gas).await;
+            q = graph_route::merge(self, q, g, side, usdt_dec).await;
         }
         // Газ разрешений и чаевые — к первому шагу маршрута (разрешения — на токен входа первого шага).
         let first = q.costs.iter().find_map(|c| c.step.clone());

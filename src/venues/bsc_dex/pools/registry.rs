@@ -116,6 +116,16 @@ impl Registry {
             .contains_key(r)
     }
 
+    /// Копии всех записей пулов (граф маршрутов, решение 80). Ошибок нет.
+    pub fn all(&self) -> Vec<Entry> {
+        self.inner
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .cloned()
+            .collect()
+    }
+
     /// Ссылки на все пулы. Ошибок нет.
     pub fn refs(&self) -> Vec<PoolRef> {
         self.inner

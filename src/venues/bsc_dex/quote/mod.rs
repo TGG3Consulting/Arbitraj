@@ -137,11 +137,21 @@ impl Quoting {
             coin: (coin, &asset.ticker),
             mids: &self.mids,
         };
+        // Классика (решения 29, 38): прямой или умный режим. При dex.router_mode = graph ниже сравним с графом.
         let mut q = if mode == "smart" {
             smart_quote::quote(&v, &names, asset, qty, entries, &mids, gas).await?
         } else {
             direct_route::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
         };
+        // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
+        // неизменно; «graph» — считаем маршрут по графу и сравниваем с классикой (quote/pick.rs), лучший выигрывает.
+        // Неисполнимый как есть графовый маршрут (мульти-роутер, решение 84) остаётся сигналом — авто-сделку
+        // exec/trade.rs по нему отклоняет, деньги не рискуют (решение 40).
+        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph")
+            && let Ok(g) = graph_route::quote(&v, &names, asset, qty, gas).await
+        {
+            q = pick::pick(self, q, g, side, usdt_dec).await;
+        }
         // Газ разрешений и чаевые — к первому шагу маршрута (разрешения — на токен входа первого шага).
         let first = q.costs.iter().find_map(|c| c.step.clone());
         let with_step = |c: Cost| match &first {

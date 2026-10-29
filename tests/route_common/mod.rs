@@ -15,10 +15,13 @@ use std::collections::{BTreeMap, HashMap};
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, U256, address};
 use chrono::Utc;
+use rust_decimal::Decimal;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
-use arb::core::types::{Asset, Pool, PoolRef, PoolState, VenueId};
+use arb::core::types::{
+    Asset, CheckState, CoinCheck, Pool, PoolRef, PoolState, TokenTaxes, VenueId,
+};
 use arb::settings::scope::Scope;
 use arb::settings::store::Store;
 use arb::storage::db::Db;
@@ -280,6 +283,22 @@ pub async fn parts() -> Parts {
     for t in [CAKE, USDT, BTCB, WBNB] {
         p.tokens.remember_decimals(t, 18);
     }
+    // Налоги CAKE проверены и нулевые — нужно классике (direct_route → direct::taxes); граф берёт налоги из Via.
+    p.checks.set_coin(CoinCheck {
+        venue: VenueId("bsc_dex".into()),
+        asset: Asset {
+            ticker: "CAKE".into(),
+            bsc_contract: Some(CAKE),
+        },
+        taxes: CheckState::Known(TokenTaxes {
+            buy_pct: Decimal::ZERO,
+            sell_pct: Decimal::ZERO,
+            transfer_pct: Decimal::ZERO,
+        }),
+        source: "тест".into(),
+        checked_at: Some(Utc::now()),
+        wait: None,
+    });
     p.mids.set(vec![
         Mid {
             address: WBNB,

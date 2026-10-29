@@ -50,6 +50,9 @@ pub fn quote(
         legs: Vec::new(),
         block: u64::MAX,
         gas_units: 0,
+        // Прямой и умный маршруты исполнимы одной транзакцией; графовый — выставляет исполнимость quote/graph_route.rs.
+        executable: true,
+        exec_note: None,
     };
     for p in paths {
         for c in steps::path_costs(ctx, p, side, t, gas_wei, names)? {

@@ -2,11 +2,11 @@
 //! Что делает: котировка маршрута по локальному графу токенов (решение 80). Строит граф (pools/graph.rs), перечисляет
 //! пути USDT ↔ монета (quote/route_paths.rs), оценивает каждый путь нашей математикой (quote/route_calc.rs),
 //! делит объём между путями/пулами (сплит, как умный режим — решения 38, 80) и собирает котировку ядру через
-//! quote/costs.rs с маршрутом по долям. Фаза 80, PR 80.4 — оценка пути и сплит (бэклог §7.3).
-//! Пока НЕ подключён к quote/mod.rs — врезка за переключателем dex.router_mode и выбор против классика будут на 80.5;
-//! метка маршрута временно RouteMode::Smart (RouteMode::Graph и флаг исполнимости — правка стыка на 80.5).
-//! Исполнимость мульти-роутерного маршрута одной транзакцией здесь не проверяется — это веха исполнения (решение 84).
-//! Кто вызывает: тесты 80.4; позже — quote/mod.rs за dex.router_mode (80.5).
+//! quote/costs.rs с маршрутом по долям (RouteMode::Graph). Фаза 80, PR 80.4 — оценка и сплит; PR 80.5a — врезка.
+//! Выставляет исполнимость маршрута как есть (DexRoute.executable, решение 84): прямая форма (один пул, один хоп)
+//! или всё через один Universal Router PancakeSwap (умный путь) — исполнимо; иначе false с причиной (нужен бандл
+//! свопов, фаза исполнения) — это сигнал/карточка, авто-сделкой пока не исполняется (exec/trade.rs отказывает).
+//! Кто вызывает: quote/mod.rs за переключателем dex.router_mode (80.5a); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs, quote/costs.rs,
 //! quote/select.rs, quote/via.rs (Via), quote/steps.rs (Names), tokens.rs.
 //! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_max_pools_per_edge, smart.split_step_pct,
@@ -83,17 +83,49 @@ pub async fn quote(
         ));
     }
     let legs = split(ctx, &mut cands, v.side, qty, tax_keep)?;
-    costs::quote(
+    let exec = executable(ctx, &legs);
+    let mut quote = costs::quote(
         ctx,
         asset,
         v.side,
         qty,
         &legs,
-        RouteMode::Smart,
+        RouteMode::Graph,
         v.taxes,
         gas,
         names,
-    )
+    )?;
+    if let Some(r) = quote.route.as_mut() {
+        r.executable = exec.is_ok();
+        r.exec_note = exec.err();
+    }
+    Ok(quote)
+}
+
+/// Исполним ли маршрут одной транзакцией как есть (решение 84): прямая форма (одна доля, один хоп, любой свой роутер)
+/// или всё через один Universal Router PancakeSwap (все хопы всех долей — smart_ok). Иначе — причина (нужен бандл).
+fn executable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String> {
+    use super::super::pools::families::smart_ok;
+    // Нога глубже 2 хопов существующим исполнением (exec/live.rs — 1–2 хопа) пока не исполняется.
+    if legs.iter().any(|p| p.hops.len() > 2) {
+        return Err(
+            "маршрут содержит ногу глубиной больше 2 хопов — исполнение таких ног ещё не реализовано \
+             (решение 84 / exec/live): это сигнал, авто-сделкой не исполняется"
+                .to_string(),
+        );
+    }
+    if legs.len() == 1 && legs[0].hops.len() == 1 {
+        return Ok(());
+    }
+    if legs
+        .iter()
+        .all(|p| p.hops.iter().all(|h| smart_ok(ctx, h.entry.family)))
+    {
+        return Ok(());
+    }
+    Err("маршрут выходит за один Universal Router — атомарное мульти-роутерное исполнение бандлом свопов \
+         (решение 84) ещё не реализовано: это сигнал, авто-сделкой не исполняется"
+        .to_string())
 }
 
 /// decimals всех токенов путей — из кэша или узла один раз. Ошибки: узел (decimals).

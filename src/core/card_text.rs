@@ -10,11 +10,44 @@ use rust_decimal::Decimal;
 
 use crate::core::types::Side;
 
-use super::card::Card;
+use super::card::{Card, RouteView};
 
 /// Число для текста: 6 знаков после точки без хвостовых нулей. Ошибок нет.
 fn n(v: Decimal) -> String {
     v.round_dp(6).normalize().to_string()
+}
+
+/// Строка маршрута DEX (решения 80, 84): режим, исполнимость как есть, доли сплита с ожидаемым выходом и amountOutMin.
+/// Ошибок нет.
+fn route_line(title: &str, r: &RouteView) -> String {
+    let exec = if r.executable {
+        "исполним как есть".to_string()
+    } else {
+        format!(
+            "НЕ исполним как есть: {}",
+            r.exec_note.as_deref().unwrap_or("нужен бандл свопов")
+        )
+    };
+    let legs = r
+        .legs
+        .iter()
+        .map(|lg| {
+            let hops = lg
+                .hops
+                .iter()
+                .map(|h| format!("{:?} {}", h.kind, h.pool))
+                .collect::<Vec<_>>()
+                .join(" → ");
+            format!(
+                "доля {}% [{hops}] выход {} (amountOutMin {})",
+                (lg.share * Decimal::from(100)).round_dp(2).normalize(),
+                n(lg.expected_out),
+                n(lg.amount_out_min)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!("{title} ({:?}, {exec}): {legs}", r.mode)
 }
 
 /// Что делает: текст карточки. Принимает: карточку. Возвращает: многострочный текст. Ошибок нет.
@@ -79,6 +112,15 @@ pub fn text(c: &Card) -> String {
         l.push(format!(
             "Пул {} {:?} {}: {body}, блок {}",
             p.venue, p.kind, p.pool, p.block
+        ));
+    }
+    if let Some(r) = &c.route {
+        l.push(route_line("Маршрут на сделку", r));
+    }
+    if let Some(r) = &c.signal_route {
+        l.push(route_line(
+            "Лучший найденный маршрут (сигнал, на сделку НЕ идёт)",
+            r,
         ));
     }
     let budget = c.budget.map(n).unwrap_or_else(|| "—".into());

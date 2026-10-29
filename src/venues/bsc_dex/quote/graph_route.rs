@@ -128,8 +128,16 @@ pub async fn merge(
         Ok(g) if g.route.as_ref().is_some_and(|r| r.executable) => {
             pick::pick(q, classic, g, side, usdt_dec).await
         }
-        // Неисполнимый как есть граф-маршрут: на сделку не берём; лучший сигнал покажет карточка (PR 80.5b).
-        Ok(_) => classic,
+        // Неисполнимый как есть граф-маршрут: на сделку не берём. Если он ЛУЧШЕ классики — доносим его как signal_route
+        // (лучший найденный сигнал для карточки, решение 84 вариант Б); на сделку остаётся классика.
+        Ok(g) => {
+            let mut out = classic;
+            let best = pick::pick(q, out.clone(), g.clone(), side, usdt_dec).await;
+            if best.route.as_ref().map(|r| r.mode) == Some(RouteMode::Graph) {
+                out.signal_route = g.route;
+            }
+            out
+        }
         Err(e) => {
             q.ctx
                 .log(

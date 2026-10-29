@@ -3,6 +3,8 @@
   Что делает: полная карточка сигнала (решение 74, core/card.rs): монета и контракт («Копировать»), где купить и где
     продать, количество и средние цены, стакан биржи (лучшая цена, USDT в полосе ±dex.depth_band_pct, сколько уровней,
     «полоса шире загруженных уровней»), пулы маршрута DEX (глубина по стороне сделки, полоса, мелкий/глубокий, блок),
+    маршрут DEX на сделку (режим, доли сплита, выход и amountOutMin на ногу, «исполним как есть: да/нет» + причина —
+    решения 80, 84) и, в граф-режиме, «лучший найденный маршрут» (сигнал, если он лучше, но неисполним как есть),
     прибыль на бюджете, без бюджета — максимальный объём и его прибыль, максимальная прибыль и чем ограничен поиск,
     ссылки на пару и пул или «шаблон ссылки не задан». Метка «СУХОЙ» у сухого сигнала.
   Кто вызывает: pages/Live.svelte (раскрытие прошедшего кандидата), pages/Episodes.svelte (карточка в записи).
@@ -17,6 +19,9 @@
   const max = $derived(card.max?.Ok);
   const maxErr = $derived(card.max?.Err);
   const sideText = (s) => (s === 'Buy' ? 'покупка' : 'продажа');
+  const routeMode = (m) => (m === 'Graph' ? 'граф' : m === 'Smart' ? 'умный' : 'прямой');
+  const pct = (s) => (Number(s) * 100).toFixed(2).replace(/\.?0+$/, '');
+  const legHops = (lg) => lg.hops.map((h) => `${poolKindLabel(h.kind)} ${h.pool}`).join(' → ');
 </script>
 
 <div class="signal">
@@ -44,6 +49,23 @@
       <span class="muted">· блок {p.block}</span>
     </p>
   {/each}
+  {#if card.route}
+    <p>
+      Маршрут на сделку (<strong>{routeMode(card.route.mode)}</strong>, {sideText(card.route.side)}): исполним как есть —
+      {#if card.route.executable}<strong>да</strong>{:else}<span class="err">нет</span> <span class="warn-text">({card.route.exec_note})</span>{/if}
+    </p>
+    {#each card.route.legs as lg, i (i)}
+      <p class="leg">доля {pct(lg.share)}%: {legHops(lg)} — выход {lg.expected_out}, amountOutMin <strong>{lg.amount_out_min}</strong></p>
+    {/each}
+  {/if}
+  {#if card.signal_route}
+    <p class="warn-text">
+      Лучший найденный маршрут (сигнал, на сделку НЕ идёт — {card.signal_route.exec_note ?? 'неисполним как есть'}; на сделку — исполнимый выше):
+    </p>
+    {#each card.signal_route.legs as lg, i (i)}
+      <p class="leg muted">доля {pct(lg.share)}%: {legHops(lg)} — выход {lg.expected_out}</p>
+    {/each}
+  {/if}
   <p>Прибыль на бюджете {card.budget ?? '—'} USDT: <strong>{card.profit_usd} USDT</strong> ({card.profit_pct}%)</p>
   {#if max}
     <p>
@@ -66,5 +88,6 @@
 
 <style>
   .signal p { margin: 4px 0; }
+  .signal p.leg { margin: 2px 0 2px 16px; font-size: 0.95em; }
   .tag.dry { background: #b45309; color: #fff; border-color: #b45309; font-weight: 700; }
 </style>

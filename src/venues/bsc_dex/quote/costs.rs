@@ -81,6 +81,7 @@ pub fn quote(
         avg_price: usdt / coins,
         costs,
         route: Some(route),
+        signal_route: None,
         at: Utc::now(),
     })
 }

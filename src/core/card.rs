@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use rust_decimal::Decimal;
 use serde::Serialize;
 
-use crate::core::types::{DexRoute, PoolKind, Side, VenueId};
+use crate::core::types::{DexRoute, PoolKind, RouteMode, Side, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
@@ -46,6 +46,40 @@ pub struct PoolSide {
     pub error: Option<String>,
 }
 
+/// Один пул доли маршрута в карточке.
+#[derive(Debug, Clone, Serialize)]
+pub struct HopView {
+    pub family: String,
+    pub kind: PoolKind,
+    /// Адрес пула (V2/V3) или PoolId (V4).
+    pub pool: String,
+}
+
+/// Доля маршрута (сплит): часть объёма по цепочке пулов, с ожидаемым выходом и amountOutMin.
+#[derive(Debug, Clone, Serialize)]
+pub struct LegView {
+    /// Доля входа, 0–1.
+    pub share: Decimal,
+    /// Ожидаемый выход доли (решение 80).
+    pub expected_out: Decimal,
+    /// amountOutMin доли: ожидаемый выход за вычетом exec.dex_slippage_pct (решение 40); без настройки — выход как есть.
+    pub amount_out_min: Decimal,
+    pub hops: Vec<HopView>,
+}
+
+/// Маршрут DEX для карточки (решения 80, 84): режим, исполнимость как есть, доли сплита.
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteView {
+    pub mode: RouteMode,
+    /// Сторона сделки на DEX (Buy — покупка монеты, Sell — продажа).
+    pub side: Side,
+    /// Исполним ли одной транзакцией как есть (решение 84). false — нужен бандл свопов (на сделку не идёт).
+    pub executable: bool,
+    /// Причина неисполнимости как есть (None — исполним).
+    pub exec_note: Option<String>,
+    pub legs: Vec<LegView>,
+}
+
 /// Карточка сигнала.
 #[derive(Debug, Clone, Serialize)]
 pub struct Card {
@@ -67,6 +101,11 @@ pub struct Card {
     pub profit_pct: Decimal,
     pub books: Vec<BookSide>,
     pub pools: Vec<PoolSide>,
+    /// Маршрут DEX, идущий НА СДЕЛКУ (доли сплита, исполнимость). None — у направления нет DEX.
+    pub route: Option<RouteView>,
+    /// Граф-режим (решения 80, 84): лучший НАЙДЕННЫЙ маршрут, если он лучше того, что на сделку, но неисполним как
+    /// есть — его показываем как «лучший сигнал» (на сделку идёт `route`). None — лучший найденный и есть в `route`.
+    pub signal_route: Option<RouteView>,
     /// Без бюджета; Err — почему не посчитано.
     pub max: Result<MaxVolume, String>,
     pub links: Vec<Link>,
@@ -119,6 +158,31 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
             None => {}
         }
     }
+    // Маршрут DEX на сделку и «лучший сигнал» (граф-режим, решения 80, 84): со стороны направления, где DEX.
+    let slip = dex.as_ref().and_then(|v| {
+        s.decimal(
+            "exec.dex_slippage_pct",
+            At {
+                venue: Some(&v.0),
+                coin: None,
+            },
+        )
+        .ok()
+    });
+    let (route, signal) = match dex.as_ref() {
+        Some(v) => {
+            let (side, quote) = if *v == d.buy_on {
+                (Side::Buy, &calc.buy_quote)
+            } else {
+                (Side::Sell, &calc.sell_quote)
+            };
+            (
+                route_view(quote.route.as_ref(), side, slip),
+                route_view(quote.signal_route.as_ref(), side, slip),
+            )
+        }
+        None => (None, None),
+    };
     Card {
         dry,
         ticker: d.asset.ticker.clone(),
@@ -134,9 +198,45 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
         profit_pct: calc.profit_pct,
         books,
         pools,
+        route,
+        signal_route: signal,
         max: super::card_max::compute(core, calc).await,
         links,
     }
+}
+
+/// Вид маршрута для карточки: доли сплита с ожидаемым выходом и amountOutMin (выход − exec.dex_slippage_pct, решение 40;
+/// без настройки — выход как есть), исполнимость как есть (решение 84). None — маршрута нет. Ошибок нет.
+fn route_view(route: Option<&DexRoute>, side: Side, slip: Option<Decimal>) -> Option<RouteView> {
+    let r = route?;
+    let legs = r
+        .legs
+        .iter()
+        .map(|l| LegView {
+            share: l.share,
+            expected_out: l.expected_out,
+            amount_out_min: match slip {
+                Some(s) => l.expected_out * (Decimal::ONE - s / Decimal::ONE_HUNDRED),
+                None => l.expected_out,
+            },
+            hops: l
+                .hops
+                .iter()
+                .map(|h| HopView {
+                    family: h.family.clone(),
+                    kind: h.kind,
+                    pool: card_links::pool_id(&h.pool),
+                })
+                .collect(),
+        })
+        .collect();
+    Some(RouteView {
+        mode: r.mode,
+        side,
+        executable: r.executable,
+        exec_note: r.exec_note.clone(),
+        legs,
+    })
 }
 
 /// Пулы маршрута с глубиной по стороне из адаптера (pool_depths). Принимает: ядро, площадку, сторону, маршрут.

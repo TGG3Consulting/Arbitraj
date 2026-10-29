@@ -169,6 +169,16 @@ async fn merge_trades_best_executable_never_worse_than_classic() {
         merged.avg_price, classic.avg_price,
         "не хуже классики (ровно классика)"
     );
+    // Лучший найденный (неисполнимый) граф-маршрут донесён как сигнал — для карточки (решение 84 вариант Б).
+    let sig = merged
+        .signal_route
+        .as_ref()
+        .expect("лучший граф-маршрут донесён как signal_route");
+    assert_eq!(sig.mode, RouteMode::Graph);
+    assert!(
+        !sig.executable && sig.legs.len() >= 2,
+        "сигнал — неисполнимый кросс-DEX сплит"
+    );
 
     // Сбой графа — откат к классике (merge логирует и возвращает классику).
     let err = q.ctx.err(ErrorCode::NoRoute, "тест: граф без маршрута");

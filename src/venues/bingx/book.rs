@@ -101,6 +101,7 @@ impl Books {
                 false,
             )],
             route: None,
+            signal_route: None,
             at: book.received_at,
         })
     }

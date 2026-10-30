@@ -18,5 +18,6 @@ pub mod swap_dodo;
 pub mod swap_elastic;
 pub mod swap_elastic_step;
 pub mod swap_step;
+pub mod swap_woofi;
 pub mod tick_math;
 pub mod v2;

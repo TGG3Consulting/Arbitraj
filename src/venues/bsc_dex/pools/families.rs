@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/pools/families.rs
 //! Что делает: DEX и виды пулов из настроек (решение 58). Строка таблицы сопоставления — id DEX у индексатора
 //! (id области настроек «DEX»), её вид — настройка dex.kind: PancakeSwap V2 / V3 / Infinity CL / Infinity Bin,
-//! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики), форки V2/V3 (пока только справочник:
-//! своего пути исполнения нет, решение 59) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
+//! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики — graphable и tradable), V2-форк (Biswap и
+//! прочие — graphable для графа/сигналов, но tradable=false: исполнения через роутер форка ещё нет, решения 59, 82),
+//! V3-форки (пока только справочник) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
 //! адаптера, а какие DEX каким видом считать и их адреса — вводит Тигран. Подключена ли DEX (classify): вид с путём
 //! исполнения, dex.pool_enabled = да и заданы все адреса, без которых пул нельзя проверить, слушать, сверить с
 //! квотером и исполнить; иначе — «DEX X не подключена: причина».
@@ -44,39 +45,46 @@ pub struct Family {
     pub proto: Proto,
     /// Название в журнале и интерфейсе — тот же id.
     pub title: &'static str,
-    /// Есть путь исполнения (Universal Router своей фабрики); false — форк, только в справочнике (решение 59).
+    /// Пул отслеживается и входит в граф маршрутов для поиска/сигналов (решение 80): true у поддержанных DEX и у
+    /// V2-форков (общая V2-математика, своя комиссия пары). false — вид только в справочнике (например V3-форки
+    /// пока без котировки). Отделено от tradable: форк обогащает сигналы ещё до готовности исполнения (решение 82).
+    pub graphable: bool,
+    /// Есть собственный путь исполнения — Universal Router своей фабрики (решения 31, 38, 59). false — форк: в графе
+    /// как сигнал, но авто-сделкой не исполняется, пока нет обмена через роутер форка (отдельная задача, решение 59).
     pub tradable: bool,
 }
 
-/// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол и
-/// есть ли путь исполнения: Universal Router своей фабрики есть только у PancakeSwap и Uniswap (решения 31, 38, 59);
-/// форки пока только в справочнике. None — вариант неизвестен или «не поддерживается». Ошибок нет.
-pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool)> {
+/// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,
+/// graphable (в графе для поиска/сигналов) и tradable (есть путь исполнения — Universal Router своей фабрики, только
+/// у PancakeSwap и Uniswap; решения 31, 38, 59). V2-форк: graphable, но не tradable (сигнал до готовности исполнения,
+/// решение 82). V3-форки пока только справочник (graphable=false). None — неизвестен или «не поддерживается». Ошибок нет.
+pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool)> {
+    //                                    graphable, tradable
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" => (PoolKind::V2, Proto::V2, true),
-        "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true),
-        "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true),
-        "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true),
-        "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true),
-        "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true),
-        "v2_fork" => (PoolKind::V2, Proto::V2, false),
-        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false),
-        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false),
+        "pancakeswap_v2" | "uniswap_v2" => (PoolKind::V2, Proto::V2, true, true),
+        "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true, true),
+        "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true),
+        "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true),
+        "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true),
+        "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true),
+        "v2_fork" => (PoolKind::V2, Proto::V2, true, false),
+        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false),
+        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false),
         _ => return None,
     })
 }
 
-/// Записи видов: (id, протокол, путь исполнения) → вид. Новая запись — только при новом сочетании.
-type Interned = HashMap<(String, Proto, bool), &'static Family>;
+/// Записи видов: (id, протокол, graphable, tradable) → вид. Новая запись — только при новом сочетании.
+type Interned = HashMap<(String, Proto, bool, bool), &'static Family>;
 static INTERNED: Mutex<Option<Interned>> = Mutex::new(None);
 
 /// Вид пула DEX по id и варианту dex.kind. None — вариант неизвестен или «не поддерживается». Ошибок нет.
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
-    let (pk, proto, tradable) = spec(kind)?;
+    let (pk, proto, graphable, tradable) = spec(kind)?;
     let mut m = INTERNED.lock().unwrap_or_else(|p| p.into_inner());
     let map = m.get_or_insert_with(HashMap::new);
     let f = map
-        .entry((id.to_string(), proto, tradable))
+        .entry((id.to_string(), proto, graphable, tradable))
         .or_insert_with(|| {
             let id: &'static str = Box::leak(id.to_string().into_boxed_str());
             Box::leak(Box::new(Family {
@@ -84,6 +92,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
                 kind: pk,
                 proto,
                 title: id,
+                graphable,
                 tradable,
             }))
         });
@@ -114,10 +123,12 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
         .dex_text("dex.kind", id)
         .map_err(|_| no("нет в таблице сопоставления (dex.kind)".into()))?;
     let f = make(id, &kind).ok_or_else(|| no(format!("вид «{kind}» — не поддерживается")))?;
-    if !f.tradable {
+    // graphable=false — вид только в справочнике (например V3-форк): не отслеживается и не в графе. tradable отдельно
+    // (решение 82): V2-форк graphable, но не исполняется — это не повод не подключать его к графу/сигналам; допуск к
+    // сделке проверяет quote/graph_route::executable (маршрут через форк → сигнал, авто-сделкой не исполняется).
+    if !f.graphable {
         return Err(format!(
-            "DEX {id} не подключена к сделкам: вид «{kind}» — нет своего пути исполнения (у форка нет Universal Router \
-             своей фабрики; обмен через роутер форка — отдельная задача, решение 59)"
+            "DEX {id} не подключена: вид «{kind}» — только справочник, в граф маршрутов пока не берётся (решение 59)"
         ));
     }
     match ctx.dex_flag("dex.pool_enabled", id) {
@@ -137,13 +148,18 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
     Ok(f)
 }
 
-/// Настройки DEX, без которых её пул нельзя проверить, слушать или исполнить (по виду). Ошибок нет.
+/// Настройки DEX, без которых её пул нельзя проверить, слушать или исполнить (по виду). Universal Router и Permit2
+/// нужны только для исполнения (tradable): у форка (tradable=false) их нет — ему достаточно фабрики, роутера и
+/// источника комиссии, чтобы проверить пул, слушать и сверить с его собственным роутером (getAmountsOut). Ошибок нет.
 pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
-    let mut list = vec![
-        "dex.universal_router",
-        "dex.universal_router_version",
-        "dex.permit2",
-    ];
+    let mut list = Vec::new();
+    if f.tradable {
+        list.extend([
+            "dex.universal_router",
+            "dex.universal_router_version",
+            "dex.permit2",
+        ]);
+    }
     match f.proto {
         Proto::V2 => {
             list.extend(["dex.factory", "dex.router"]);

@@ -199,12 +199,8 @@ fn executable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String>
 /// проверяет exec/bundle::single_router) и всего роутеров не больше dex.bundle_max_routers. Ошибка — причина
 /// несобираемости (пул пересекает роутеры / роутеров больше предела / настройка не задана).
 fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String> {
+    // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
-    if max == 0 {
-        return Err(
-            "dex.bundle_max_routers не задан — мульти-роутерный бандл не исполняется".into(),
-        );
-    }
     let mut routers: Vec<Address> = Vec::new();
     for p in legs {
         let mut leg_router: Option<Address> = None;

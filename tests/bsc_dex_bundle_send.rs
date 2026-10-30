@@ -7,7 +7,7 @@
 //! промежуточного шага → отказ) и L3 (разный входной токен ног группы → отказ). Сетью НЕ покрыто (отмечено):
 //! реальная симуляция на узле, dispatch_slice в каналы, confirm попадания в блок, оркестрация send().
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::exec::{bundle, bundle_send, chain, plan}, check::simulate, tests/route_common.
+//! От чего зависит: arb::venues::bsc_dex::exec::{bundle, bundle_sim, chain, plan}, check::simulate, tests/route_common.
 
 mod route_common;
 
@@ -23,7 +23,7 @@ use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::simulate::{CallError, CallResult};
 use arb::venues::bsc_dex::exec::bundle::{self, Bundle};
-use arb::venues::bsc_dex::exec::bundle_send::{build_sim, collect, sign_txs};
+use arb::venues::bsc_dex::exec::bundle_sim::{build_sim, collect, sign_txs};
 use arb::venues::bsc_dex::exec::chain::Step;
 use arb::venues::bsc_dex::exec::plan::Order;
 use arb::venues::bsc_dex::pools::registry::Entry;

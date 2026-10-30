@@ -11,9 +11,11 @@
 //! Приватный all-or-nothing бандл истекает по maxBlockNumber (газ не тратится, решение 40): «не попал в блок» —
 //! УСТАНОВЛЕННЫЙ исход с НЕзанятым nonce → очередь свободна сразу (settle::settle_bundle), следующая транзакция берёт
 //! тот же первый nonce; очередь НЕ останавливается по таймауту (ревью #82). Отмен у бандла нет.
+//! Этапы шлют уведомления жизненного цикла (exec/bundle_notify.rs, 80.8c-iii, только отображение): симуляция прошла/
+//! откатилась, отправлен (каналы + maxBlockNumber), включён (блок + хеши) / не попал в блок (истёк — очередь свободна).
 //! Классику/одиночную отправку не трогает.
 //! Кто вызывает: exec/bundle_trade.rs; тесты.
-//! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
+//! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/bundle_notify.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
 //! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
 //! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks, send.queue_max_wait_s, feed.stale_after_ms [bsc_dex]
 //! (через SendCfg); цена газа — через quote/gas.rs; каналы — channel.* (bundle).
@@ -39,6 +41,7 @@ use super::super::send::{self};
 use super::super::wallet::nonce::Slot;
 use super::super::wallet::signer;
 use super::bundle::Bundle;
+use super::bundle_notify;
 use super::bundle_sim::{build_sim, collect, sign_txs};
 use super::txs::Env;
 
@@ -78,20 +81,36 @@ pub async fn send(
     let (at, _now) = env.heads.at(ctx).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;
     // Одна симуляция всего упорядоченного бандла: газ, кумулятивные базы BALANCE_CHECK и события обмена.
+    // Уведомления (bundle.simulated / bundle.sim_reverted) — только отображение, тот же исход/ошибка пробрасывается.
     let plan = build_sim(bundle, wallet);
-    let res = simulate::run_valued(ctx, &plan.calls, &plan.values, at).await?;
-    let (limits, bases) = collect(ctx, &res, &plan, margin)?;
+    let res = match simulate::run_valued(ctx, &plan.calls, &plan.values, at).await {
+        Ok(r) => r,
+        Err(e) => {
+            bundle_notify::sim_reverted(&env.stats, ctx, &e.message);
+            return Err(e);
+        }
+    };
+    let (limits, bases) = match collect(ctx, &res, &plan, margin) {
+        Ok(v) => v,
+        Err(e) => {
+            bundle_notify::sim_reverted(&env.stats, ctx, &e.message);
+            return Err(e);
+        }
+    };
     // Решение 59 («кто меняет»): событие обмена — только от пулов маршрута; чужой пул исключается, сделки нет.
     let logs: Vec<SimLog> = res.iter().flat_map(|r| r.logs.clone()).collect();
-    emitter::check(ctx, entries, &logs)
-        .await
-        .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if let Err(w) = emitter::check(ctx, entries, &logs).await {
+        bundle_notify::sim_reverted(&env.stats, ctx, &w);
+        return Err(ctx.err(ErrorCode::NoRoute, w));
+    }
+    bundle_notify::simulated(&env.stats, ctx, bundle.swaps);
     let s = signer::signer(ctx)?;
     let signed = sign_txs(ctx, &s, bundle, price, &limits, &bases)?;
     let head = env.heads.fresh(ctx)?;
     let max_block = head.number + cfg.bundle_max;
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
     let dispatched = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block).await?;
+    bundle_notify::sent(&env.stats, ctx, &dispatched.all(), max_block);
     let hashes: Vec<B256> = signed.iter().map(|t| t.hash).collect();
     // Очередь кошелька: ждёт итога по последнему nonce бандла (решение 45). Отмен нет — приватный бандл истекает.
     let last_nonce = bundle.first_nonce + (signed.len() as u64) - 1;
@@ -114,6 +133,17 @@ pub async fn send(
     let class = priority::current();
     let job = tokio::spawn(priority::scope(class, async move {
         let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
+        // Уведомления жизненного цикла (только отображение, итог/очередь не меняем): включён / не попал в блок.
+        match tracked.outcome {
+            TxOutcome::Included => {
+                let block = tracked.receipt.as_ref().map(|r| r.block_number.to::<u64>());
+                bundle_notify::included(&task_stats, &task_ctx, &task_hashes, block);
+            }
+            TxOutcome::NotIncluded => {
+                bundle_notify::not_included(&task_stats, &task_ctx, max_block);
+            }
+            _ => {}
+        }
         let receipts = if tracked.outcome == TxOutcome::Included {
             all_receipts(&task_ctx, &task_hashes).await
         } else {

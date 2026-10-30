@@ -7,9 +7,10 @@
 //! отправляет бандл (exec/bundle_send.rs — симуляция/газ/подпись/отправка/ожидание/settle), по итогу строит факт из
 //! квитанций всех транзакций бандла (reuse exec/result.rs по объединённым логам). Повторов нет (стартовое правило
 //! Тиграна): бандл истекает по maxBlockNumber, nonce свободны. Нативная монета в бандле v1 не поддерживается.
+//! После сборки шлёт уведомление bundle.assembled (exec/bundle_notify.rs, 80.8c-iii): роутеров/ног/транзакций/первый nonce.
 //! Классику/прямой/умный путь не трогает.
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
-//! От чего зависит: exec/{bundle,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
+//! От чего зависит: exec/{bundle,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
 //! Настройки: dex.bundle_max_routers (исполнимость — quote/graph_route.rs); через вызываемые — send.*, dex.*, channel.*.
 
@@ -29,7 +30,7 @@ use super::chain::Step;
 use super::trade::{check_price, sides, worst_positive};
 use super::txs::{self, Env};
 use super::verify_gate::Verified;
-use super::{bundle, bundle_send, chain, live, native, result, verify_gate};
+use super::{bundle, bundle_notify, bundle_send, chain, live, native, result, verify_gate};
 
 /// Сделка мульти-роутерным бандлом. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса,
 /// итог верификации (свежие amountOutMin по ногам). Ошибки: NoRoute (нативная/пустой/доля не годится), QuoteMismatch
@@ -112,6 +113,14 @@ pub async fn trade(
     let first_nonce = slot.nonce(ctx).await?;
     let (_at, now) = q.heads.at(ctx).await?;
     let b = bundle::build(ctx, &legs, out_token, wallet, first_nonce, now, false).await?;
+    bundle_notify::assembled(
+        &env.stats,
+        ctx,
+        b.swaps,
+        legs.len(),
+        b.txs.len(),
+        first_nonce,
+    );
     let entries: Vec<&Entry> = legs.iter().flatten().map(|s| &s.entry).collect();
     let sent = bundle_send::send(env, &slot, &b, &entries).await?;
     drop(slot);

@@ -6,6 +6,7 @@
 //! Настройки: dex.router, dex.deadline_s.
 
 pub mod bundle;
+pub mod bundle_notify;
 pub mod bundle_send;
 pub mod bundle_sim;
 pub mod bundle_trade;

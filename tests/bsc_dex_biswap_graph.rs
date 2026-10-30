@@ -1,10 +1,10 @@
 //! Файл: tests/bsc_dex_biswap_graph.rs
-//! Что делает: проверяет разделение graphable/tradable для V2-форков (решение 82, фаза 80.9a) на РЕАЛЬНЫХ резервах
-//! записи routes_2026-10-29 (единственный V2-пул записи — WBNB-USDT v2): меняется только МЕТКА семейства пула
+//! Что делает: проверяет разделение graphable/tradable/fork для V2-форков (решения 82, 59, фазы 80.9a/9b) на РЕАЛЬНЫХ
+//! резервах записи routes_2026-10-29 (единственный V2-пул записи — WBNB-USDT v2): меняется только МЕТКА семейства пула
 //! (v2_fork вместо pancakeswap_v2), резервы реальные, к сети тест не ходит. Утверждает: (1) форк-пул входит в граф
-//! (family.graphable=true), (2) маршрут через форк неисполним (DexRoute.executable=false) с причиной «через форк …»,
-//! (3) тот же пул как не-форк исполним как прежде; плюс флаги make() и classify() форка (фабрика/роутер/комиссия нужны,
-//! Universal Router и Permit2 — нет). Исполнения форка в 80.9a нет — деньгам риска нет.
+//! (family.graphable); (2) после флипа 80.9b форк-маршрут ИСПОЛНИМ (DexRoute.executable) и ведётся бандлом
+//! (GraphForm::Bundle), а без dex.bundle_max_routers — несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
+//! плюс флаги make()/classify() форка (graphable+tradable+fork; фабрика/роутер/комиссия нужны, UR/Permit2 — нет).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools::{families,graph,registry}, quote::{graph_route,steps,via}, parts},
 //! tests/route_common (реальная запись и окружение).
@@ -17,13 +17,13 @@ use rust_decimal::Decimal;
 use serde_json::json;
 
 use arb::core::types::{
-    Asset, CheckState, CoinCheck, Pool, PoolRef, PoolState, Side, TokenTaxes, VenueId,
+    Asset, CheckState, CoinCheck, DexRoute, Pool, PoolRef, PoolState, Side, TokenTaxes, VenueId,
 };
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::{families, graph};
-use arb::venues::bsc_dex::quote::graph_route;
+use arb::venues::bsc_dex::quote::graph_route::{self, GraphForm};
 use arb::venues::bsc_dex::quote::steps::Names;
 use arb::venues::bsc_dex::quote::via::Via;
 use route_common::USDT;
@@ -117,6 +117,17 @@ async fn scene(id: &str, kind: &str) -> Parts {
             .await
             .unwrap();
     }
+    // Лимит роутеров бандла — чтобы форк-маршрут собирался (collectable): 1 роутер форка ≤ 3.
+    p.ctx
+        .settings
+        .set(
+            "dex.bundle_max_routers",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!(3)),
+            "тест",
+        )
+        .await
+        .unwrap();
     p.tokens.set(&[
         Asset {
             ticker: "USDT".into(),
@@ -150,8 +161,8 @@ async fn scene(id: &str, kind: &str) -> Parts {
     p
 }
 
-/// Котирует покупку COIN графом и возвращает (исполним, причина-если-нет). Ошибок нет (котировка обязана выйти).
-async fn quote_exec(p: &Parts) -> (bool, Option<String>) {
+/// Котирует покупку COIN графом и возвращает маршрут (с флагом executable и exec_note). Ошибок нет.
+async fn quote_route(p: &Parts) -> DexRoute {
     let q = p.quoting();
     let taxes = zero();
     let v = Via {
@@ -181,20 +192,22 @@ async fn quote_exec(p: &Parts) -> (bool, Option<String>) {
     )
     .await
     .expect("котировка графа");
-    let r = quote.route.expect("маршрут графа");
-    (r.executable, r.exec_note)
+    quote.route.expect("маршрут графа")
 }
 
-/// make(): v2_fork — graphable, НЕ tradable; поддержанный V2 — и то и другое; v3_fork — пока только справочник.
+/// make(): v2_fork — graphable, tradable и fork (исполним своим роутером, 80.9b); поддержанный V2 — graphable+tradable,
+/// НЕ форк; v3_fork — пока только справочник (ни graphable, ни tradable).
 #[test]
 fn family_flags_split() {
     let fork = families::make("biswap", "v2_fork").unwrap();
-    assert!(fork.graphable, "v2_fork должен быть graphable");
-    assert!(!fork.tradable, "v2_fork не tradable (исполнения нет)");
+    assert!(
+        fork.graphable && fork.tradable && fork.fork,
+        "v2_fork — в графе, исполним и форк"
+    );
     let classic = families::make("pancakeswap_v2", "pancakeswap_v2").unwrap();
     assert!(
-        classic.graphable && classic.tradable,
-        "поддержанный V2 — и graphable, и tradable"
+        classic.graphable && classic.tradable && !classic.fork,
+        "поддержанный V2 — graphable+tradable, не форк"
     );
     let v3f = families::make("some-v3-fork", "v3_fork").unwrap();
     assert!(
@@ -229,8 +242,11 @@ async fn classify_fork_router_not_ur() {
             .await
             .unwrap();
     }
-    let f = families::classify(&p.ctx, "biswap").expect("форк подключается в граф без UR/Permit2");
-    assert!(f.graphable && !f.tradable);
+    let f = families::classify(&p.ctx, "biswap").expect("форк подключается без UR/Permit2");
+    assert!(
+        f.graphable && f.tradable && f.fork,
+        "форк: в графе, исполним своим роутером"
+    );
     // Без dex.router — форк не подключается (роутер нужен для сверки/исполнения позже).
     for (n, v) in row(false) {
         p.ctx
@@ -260,7 +276,7 @@ async fn classify_fork_router_not_ur() {
     );
 }
 
-/// Форк-пул входит в граф (graphable), хотя tradable=false.
+/// Форк-пул входит в граф (graphable+fork).
 #[tokio::test]
 async fn fork_pool_enters_graph() {
     let p = scene("biswap", "v2_fork").await;
@@ -271,33 +287,74 @@ async fn fork_pool_enters_graph() {
         .find(|e| e.entry.pool.reference == PoolRef::Contract(POOL))
         .expect("форк-ребро COIN-USDT должно быть в графе (graphable)");
     assert!(
-        edge.entry.family.graphable && !edge.entry.family.tradable,
-        "ребро — форк: graphable, не tradable"
+        edge.entry.family.graphable && edge.entry.family.fork,
+        "ребро — форк в графе"
     );
 }
 
-/// Маршрут через форк неисполним (сигнал): executable=false, причина называет форк.
+/// Флип 80.9b-ii: форк-маршрут теперь ИСПОЛНИМ (executable=true, причины нет) и ведётся бандлом (GraphForm::Bundle),
+/// а не прямым/умным путём UR — collectable пускает его (1 роутер форка ≤ dex.bundle_max_routers).
 #[tokio::test]
-async fn route_through_fork_not_executable() {
+async fn fork_route_executable_as_bundle() {
     let p = scene("biswap", "v2_fork").await;
-    let (exec, note) = quote_exec(&p).await;
-    assert!(!exec, "маршрут через форк не должен быть исполнимым");
-    let note = note.expect("у неисполнимого маршрута есть причина");
-    assert!(note.contains("форк"), "причина не называет форк: {note}");
+    let r = quote_route(&p).await;
+    assert!(r.executable, "форк-маршрут теперь исполним (флип 80.9b-ii)");
     assert!(
-        note.contains("biswap"),
-        "причина не называет DEX форка: {note}"
+        r.exec_note.is_none(),
+        "у исполнимого нет причины: {:?}",
+        r.exec_note
+    );
+    assert_eq!(
+        graph_route::graph_form(&p.ctx, &r),
+        GraphForm::Bundle,
+        "форк-маршрут идёт бандлом (свой роутер), не прямым/умным путём UR"
     );
 }
 
-/// Тот же пул как поддержанный V2 (не форк) исполним как прежде: executable=true, без причины.
+/// Без dex.bundle_max_routers форк-маршрут несобираем → сигнал (executable=false): collectable требует настройку.
 #[tokio::test]
-async fn route_through_classic_executable() {
-    let p = scene("pancakeswap_v2", "pancakeswap_v2").await;
-    let (exec, note) = quote_exec(&p).await;
-    assert!(exec, "не-форк одно-пуловый маршрут исполним как прежде");
+async fn fork_route_not_executable_without_bundle_limit() {
+    let p = scene("biswap", "v2_fork").await;
+    // Снимаем лимит роутеров бандла — collectable больше не пускает.
+    p.ctx
+        .settings
+        .set(
+            "dex.bundle_max_routers",
+            Scope::Venue("bsc_dex".into()),
+            None,
+            "тест",
+        )
+        .await
+        .unwrap();
+    let r = quote_route(&p).await;
     assert!(
-        note.is_none(),
-        "у исполнимого маршрута причины нет: {note:?}"
+        !r.executable,
+        "без dex.bundle_max_routers форк не собирается в бандл"
+    );
+    assert!(
+        r.exec_note
+            .is_some_and(|n| n.contains("dex.bundle_max_routers")),
+        "причина — не задана настройка лимита"
+    );
+}
+
+/// Тот же пул как поддержанный V2 (не форк) исполним как прежде прямой формой (GraphForm::Direct).
+#[tokio::test]
+async fn classic_route_executable_direct() {
+    let p = scene("pancakeswap_v2", "pancakeswap_v2").await;
+    let r = quote_route(&p).await;
+    assert!(
+        r.executable,
+        "не-форк одно-пуловый маршрут исполним как прежде"
+    );
+    assert!(
+        r.exec_note.is_none(),
+        "у исполнимого причины нет: {:?}",
+        r.exec_note
+    );
+    assert_eq!(
+        graph_route::graph_form(&p.ctx, &r),
+        GraphForm::Direct,
+        "классический одно-пуловый маршрут — прямая форма (UR)"
     );
 }

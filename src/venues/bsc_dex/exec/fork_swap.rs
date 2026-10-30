@@ -22,6 +22,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::IV2Router;
+use super::super::pools::registry::Entry;
+use super::super::wallet::approve::{self, Approval};
 use super::chain::Step;
 
 /// Calldata swapExactTokensForTokensSupportingFeeOnTransferTokens. Чистая. Ошибок нет (кодирование).
@@ -71,6 +73,32 @@ pub fn amount_in(ctx: &Ctx, steps: &[Step]) -> GatewayResult<U256> {
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "нога форка без шагов"))?
         .order
         .amount_in)
+}
+
+/// Пробный своп форка для измерения налога (check/probe.rs): ERC-20 approve роутеру форка (без Permit2) + calldata
+/// свопа token_in→token_out с минимумом 1 (проба меряет налог и не должна откатиться из-за минимума; 0 запрещён,
+/// exec/plan.rs). Получатель — кошелёк (роутер FeeOnTransfer меряет его дельту). Чистая (без сети). Возвращает:
+/// (разрешения, роутер форка, calldata свопа). Ошибки: NotConfigured (dex.router, dex.deadline_s, dex.approve_unlimited).
+pub fn probe_swap(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    token_out: Address,
+    amount_in: U256,
+    wallet: Address,
+    now: u64,
+) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
+    let router = ctx.dex_addr("dex.router", e.family.id)?;
+    let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
+    let approvals = approve::fork_all(ctx, token_in, router, amount_in)?;
+    let data = swap_data(
+        amount_in,
+        U256::from(1u8),
+        &[token_in, token_out],
+        wallet,
+        deadline,
+    );
+    Ok((approvals, router, data))
 }
 
 /// Минимум выхода ноги форка (units) — min_out последнего шага (проставлен верификацией, решения 83/84). Ошибки:

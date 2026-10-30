@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/pools/families.rs
 //! Что делает: DEX и виды пулов из настроек (решение 58). Строка таблицы сопоставления — id DEX у индексатора
 //! (id области настроек «DEX»), её вид — настройка dex.kind: PancakeSwap V2 / V3 / Infinity CL / Infinity Bin,
-//! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики — graphable и tradable), V2-форк (Biswap и
-//! прочие — graphable для графа/сигналов, но tradable=false: исполнения через роутер форка ещё нет, решения 59, 82),
+//! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики — graphable и tradable, не форк), V2-форк
+//! (Biswap и прочие — graphable, tradable и fork: исполняется СВОИМ роутером бандлом, решения 59, 82, фаза 80.9b),
 //! V3-форки (пока только справочник) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
 //! адаптера, а какие DEX каким видом считать и их адреса — вводит Тигран. Подключена ли DEX (classify): вид с путём
 //! исполнения, dex.pool_enabled = да и заданы все адреса, без которых пул нельзя проверить, слушать, сверить с
@@ -49,8 +49,8 @@ pub struct Family {
     /// V2-форков (общая V2-математика, своя комиссия пары). false — вид только в справочнике (например V3-форки
     /// пока без котировки). Отделено от tradable: форк обогащает сигналы ещё до готовности исполнения (решение 82).
     pub graphable: bool,
-    /// Есть собственный путь исполнения (решения 31, 38, 59). false — форк: в графе как сигнал, но авто-сделкой не
-    /// исполняется, пока tradable=false (флип — фаза 80.9b, когда готов обмен через роутер форка).
+    /// Есть путь исполнения: Universal Router своей фабрики (не форк) ИЛИ собственный роутер форка (fork=true, бандлом,
+    /// фаза 80.9b). false — вид только в справочнике/сигнале (например V3-форк): авто-сделкой не исполняется.
     pub tradable: bool,
     /// Исполняется через СОБСТВЕННЫЙ роутер форка (classic V2 Router, swapExactTokens…SupportingFeeOnTransferTokens,
     /// ERC-20 approve без Permit2), а НЕ через Universal Router своей фабрики (решения 59, 82, фаза 80.9b). У
@@ -62,7 +62,7 @@ pub struct Family {
 /// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,
 /// graphable (в графе для поиска/сигналов), tradable (есть путь исполнения) и fork (исполняется своим роутером форка,
 /// а не Universal Router). Поддержанные DEX (PancakeSwap/Uniswap): graphable+tradable, не форк (Universal Router своей
-/// фабрики; решения 31, 38, 59). V2-форк: graphable+fork; tradable станет true с фазой 80.9b (обмен через роутер форка).
+/// фабрики; решения 31, 38, 59). V2-форк: graphable+tradable+fork (исполняется своим роутером бандлом, фаза 80.9b).
 /// V3-форки пока только справочник (graphable=false). None — неизвестен или «не поддерживается». Ошибок нет.
 pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
     //                                    graphable, tradable, fork
@@ -73,8 +73,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
-        // V2-форк (Biswap и пр.): в графе и исполним СВОИМ роутером (fork=true); tradable пока false — флип в 80.9b.
-        "v2_fork" => (PoolKind::V2, Proto::V2, true, false, true),
+        // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
+        "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
         "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false, true),
         _ => return None,
@@ -161,7 +161,9 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
 /// источника комиссии, чтобы проверить пул, слушать и сверить с его собственным роутером (getAmountsOut). Ошибок нет.
 pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     let mut list = Vec::new();
-    if f.tradable {
+    // Universal Router и Permit2 — только у НЕ-форка (поддержанного DEX): форк исполняется своим роутером (dex.router)
+    // с прямым ERC-20 approve, UR/Permit2 ему не нужны (решения 59, 82).
+    if f.tradable && !f.fork {
         list.extend([
             "dex.universal_router",
             "dex.universal_router_version",

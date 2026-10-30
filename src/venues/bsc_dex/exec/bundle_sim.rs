@@ -26,6 +26,7 @@ use super::super::node::abi::IERC20;
 use super::super::send::tx;
 use super::super::wallet::signer::{self, SignedTx};
 use super::bundle::{Bundle, BundleTx};
+use super::fork_swap;
 use super::ur;
 
 /// Разметка симуляции бандла: вызовы, суммы BNB и где итог каждой транзакции и где balanceOf перед свопом.
@@ -73,6 +74,26 @@ pub fn build_sim(bundle: &Bundle, wallet: Address) -> SimPlan {
                 if !plan.value().is_zero() {
                     values.push((sidx, plan.value()));
                 }
+                main.push(sidx);
+            }
+            // Своп форка: без balanceOf-базы — защита встроена в amountOutMin самого роутера (FeeOnTransfer меряет
+            // дельту баланса получателя-кошелька ≥ min, решение 40, кумулятивно поверх прошлых групп). Вход — ERC-20
+            // (value 0). Выход лёг на кошелёк до следующих групп, поэтому их база BALANCE_CHECK его учтёт.
+            BundleTx::ForkSwap {
+                router,
+                path,
+                amount_in,
+                min_out,
+                to,
+                deadline,
+                ..
+            } => {
+                let sidx = calls.len();
+                calls.push(Call {
+                    from: wallet,
+                    to: *router,
+                    input: fork_swap::swap_data(*amount_in, *min_out, path, *to, *deadline),
+                });
                 main.push(sidx);
             }
         }
@@ -167,6 +188,20 @@ pub fn sign_txs(
                 })?;
                 (plan.router, plan.data(base), plan.value())
             }
+            // Форк: calldata фиксирована (amountOutMin встроен), базы BALANCE_CHECK нет; вход ERC-20 (value 0).
+            BundleTx::ForkSwap {
+                router,
+                path,
+                amount_in,
+                min_out,
+                to,
+                deadline,
+                ..
+            } => (
+                *router,
+                fork_swap::swap_data(*amount_in, *min_out, path, *to, *deadline),
+                U256::ZERO,
+            ),
         };
         let legacy = tx::legacy(ctx, t.nonce(), price, gas, to, value, input)?;
         let signed = signer::sign_with(signer, legacy).map_err(|e| {

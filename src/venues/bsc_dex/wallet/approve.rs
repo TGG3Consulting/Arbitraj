@@ -2,6 +2,8 @@
 //! Что делает: разрешения на списание токена для обмена через Universal Router: ERC-20 approve → Permit2 своей
 //! DEX и Permit2.approve(токен, Universal Router, сумма, срок). Читает текущие разрешения и возвращает только те
 //! вызовы, которых не хватает. Сумма — на сделку или «без ограничения» (dex.approve_unlimited).
+//! Форк (решения 59, 82, фаза 80.9b): classic V2 Router списывает по ОБЫЧНОМУ ERC-20 allowance — fork_all/fork_missing
+//! дают прямой approve(router, сумма) БЕЗ Permit2.
 //! Кто вызывает: exec/plan.rs; котировка — через wallet/allow_cache.rs (read, lacking).
 //! От чего зависит: node/call.rs, node/abi.rs, ctx.rs.
 //! Настройки: dex.approve_unlimited, dex.permit2_expiration_s [bsc_dex].
@@ -136,6 +138,47 @@ pub fn all(
         erc20_approve(token, permit2, if unlimited { U256::MAX } else { amount }),
         permit2_approve(ctx, token, permit2, ur, amount, unlimited, expiration)?,
     ])
+}
+
+/// Все разрешения форка сразу (для сборки/симуляции, без узла): прямой ERC-20 approve(router, сумма/∞) — БЕЗ Permit2
+/// (classic V2 Router списывает по ERC-20 allowance, решения 59, 82). Ошибки: NotConfigured (dex.approve_unlimited).
+pub fn fork_all(
+    ctx: &Ctx,
+    token: Address,
+    router: Address,
+    amount: U256,
+) -> GatewayResult<Vec<Approval>> {
+    let unlimited = ctx.flag("dex.approve_unlimited")?;
+    Ok(vec![erc20_approve(
+        token,
+        router,
+        if unlimited { U256::MAX } else { amount },
+    )])
+}
+
+/// Каких разрешений форка не хватает для списания `amount` токена роутером форка (читает ERC-20 allowance(кошелёк,
+/// роутер) с узла). Пусто — хватает. Принимает: токен, кошелёк, роутер форка, сумму. Ошибки: NotConfigured, узел.
+pub async fn fork_missing(
+    ctx: &Ctx,
+    token: Address,
+    wallet: Address,
+    router: Address,
+    amount: U256,
+) -> GatewayResult<Vec<Approval>> {
+    let have: U256 = call::view(
+        ctx,
+        token,
+        &IERC20::allowanceCall {
+            owner: wallet,
+            spender: router,
+        },
+        "latest",
+    )
+    .await?;
+    if have >= amount {
+        return Ok(Vec::new());
+    }
+    fork_all(ctx, token, router, amount)
 }
 
 /// ERC-20 approve. Ошибок нет.

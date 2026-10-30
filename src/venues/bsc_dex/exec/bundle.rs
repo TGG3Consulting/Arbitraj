@@ -12,6 +12,9 @@
 //! ЭТОТ модуль только СОБИРАЕТ бандл (без сети): цена и лимит газа, база баланса для BALANCE_CHECK и подпись —
 //! при отправке (80.8b, переиспользуя send/tx.rs, wallet/signer.rs). Нога, пересекающая роутеры (нужна межроутерная
 //! передача промежуточного токена), в v1 не собирается — отказ (позже).
+//! Нога ФОРКА (решения 59, 82, фаза 80.9b) исполняется своим classic V2 Router, а не Universal Router: отдельной
+//! транзакцией BundleTx::ForkSwap (exec/fork_swap.rs) с ERC-20 approve роутеру (wallet/approve::fork_*). В одном
+//! атомарном бандле можно смешивать ноги UR (Pancake) и форка (Biswap) — цель решения 80.
 //! Кто вызывает: exec/trade.rs (80.8b, для исполнимого бандлом графа); тесты.
 //! От чего зависит: exec/chain.rs (Step, command), exec/plan.rs (Plan), exec/ur.rs (Format), wallet/approve.rs,
 //! pools/families.rs (Family), pools/registry.rs.
@@ -26,6 +29,7 @@ use super::super::ctx::Ctx;
 use super::super::pools::families::Family;
 use super::super::wallet::approve;
 use super::chain::{self, Step};
+use super::fork_swap;
 use super::plan::Plan;
 use super::ur;
 
@@ -45,19 +49,34 @@ pub enum BundleTx {
         nonce: u64,
         legs_min: Vec<U256>,
     },
+    /// Своп через собственный роутер форка (classic V2 Router, решения 59, 82, фаза 80.9b):
+    /// swapExactTokensForTokensSupportingFeeOnTransferTokens(amount_in, min_out, path, to, deadline). Данные собираются
+    /// при симуляции/подписи (exec/fork_swap::swap_data) — без базы BALANCE_CHECK: защита — amountOutMin самого роутера
+    /// (решение 40, дельта баланса получателя). Разрешение — отдельной BundleTx::Approve (ERC-20 approve роутеру).
+    ForkSwap {
+        router: Address,
+        path: Vec<Address>,
+        amount_in: U256,
+        min_out: U256,
+        to: Address,
+        deadline: U256,
+        nonce: u64,
+    },
 }
 
 impl BundleTx {
     /// Nonce транзакции. Ошибок нет.
     pub fn nonce(&self) -> u64 {
         match self {
-            BundleTx::Approve { nonce, .. } | BundleTx::Swap { nonce, .. } => *nonce,
+            BundleTx::Approve { nonce, .. }
+            | BundleTx::Swap { nonce, .. }
+            | BundleTx::ForkSwap { nonce, .. } => *nonce,
         }
     }
 
     /// Это своп (true) или разрешение (false). Ошибок нет.
     pub fn is_swap(&self) -> bool {
-        matches!(self, BundleTx::Swap { .. })
+        matches!(self, BundleTx::Swap { .. } | BundleTx::ForkSwap { .. })
     }
 }
 
@@ -96,20 +115,27 @@ pub async fn build(
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "бандл без ног"));
     }
+    // Ноги форка (исполняются своим роутером) — отдельно от ног Universal Router (group по UR). Нога форка = все её
+    // шаги у форка; смешанную (форк + не-форк в одной ноге) один вызов не исполнит — fork_router это отвергает.
+    let (fork_legs, ur_legs): (Vec<&[Step]>, Vec<&[Step]>) = legs
+        .iter()
+        .map(|l| l.as_slice())
+        .partition(|l| l.first().is_some_and(|s| s.entry.family.fork));
     // Группы по адресу Universal Router, в порядке первого появления.
     let mut groups: Vec<Group<'_>> = Vec::new();
-    for leg in legs {
+    for &leg in &ur_legs {
         let (router, family) = single_router(ctx, leg)?;
         match groups.iter_mut().find(|g| g.router == router) {
-            Some(g) => g.legs.push(leg.as_slice()),
+            Some(g) => g.legs.push(leg),
             None => groups.push(Group {
                 router,
                 family,
-                legs: vec![leg.as_slice()],
+                legs: vec![leg],
             }),
         }
     }
-    let swaps = groups.len();
+    // Своп на группу UR + своп на ногу форка (у форка на ногу — один вызов роутера, execute-склейки нет).
+    let swaps = groups.len() + fork_legs.len();
     let mut txs = Vec::new();
     let mut nonce = first_nonce;
     for g in &groups {
@@ -127,11 +153,67 @@ pub async fn build(
         });
         nonce += 1;
     }
+    // Ноги форка: ERC-20 approve роутеру форка (без Permit2) + своп его роутером. Кумулятивная база — через to=кошелёк
+    // (роутер FeeOnTransfer меряет дельту поверх прошлых групп); выход форка попадает в базу последующих UR-групп, т.к.
+    // их balanceOf в симуляции читается после этой транзакции (exec/bundle_sim.rs).
+    let deadline = U256::from(now + ctx.int("dex.deadline_s")?);
+    for &leg in &fork_legs {
+        let (router, _family) = fork_router(ctx, leg)?;
+        let path = fork_swap::token_path(ctx, leg)?;
+        let amount = fork_swap::amount_in(ctx, leg)?;
+        let min = fork_swap::min_out(ctx, leg)?;
+        let token_in = path[0];
+        let approvals = if all_approvals {
+            approve::fork_all(ctx, token_in, router, amount)?
+        } else {
+            approve::fork_missing(ctx, token_in, wallet, router, amount).await?
+        };
+        for (to, data) in approvals {
+            txs.push(BundleTx::Approve { to, data, nonce });
+            nonce += 1;
+        }
+        txs.push(BundleTx::ForkSwap {
+            router,
+            path,
+            amount_in: amount,
+            min_out: min,
+            to: wallet,
+            deadline,
+            nonce,
+        });
+        nonce += 1;
+    }
     Ok(Bundle {
         txs,
         first_nonce,
         swaps,
     })
+}
+
+/// Адрес роутера форка ноги и её семейство. Все шаги — один форк и один его роутер (dex.router): межроутерную ногу
+/// (форк + не-форк или два форка) один вызов не исполнит. Ошибки: NoRoute (нет шагов, смешанная/межроутерная нога),
+/// NotConfigured (dex.router форка не задан).
+fn fork_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Family)> {
+    let first = leg
+        .first()
+        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "нога форка без шагов"))?;
+    let family = first.entry.family;
+    let router = ctx.dex_addr("dex.router", family.id)?;
+    for s in leg {
+        if !s.entry.family.fork {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "нога смешивает форк и не-форк — бандл такую ногу одним вызовом не собирает",
+            ));
+        }
+        if ctx.dex_addr("dex.router", s.entry.family.id)? != router {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                "нога форка пересекает роутеры — один вызов swapExactTokens… её не исполнит",
+            ));
+        }
+    }
+    Ok((router, family))
 }
 
 /// Адрес Universal Router ноги и её представительное семейство. Все шаги ноги должны идти через один роутер.

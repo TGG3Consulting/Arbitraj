@@ -143,7 +143,22 @@ impl Quoting {
         let mut q = if mode == "smart" {
             smart_quote::quote(&v, &names, asset, qty, entries, &mids, gas).await?
         } else {
-            direct_route::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
+            // Форки из классического ПРЯМОГО пути исключаем (ревью #86): форк исполним ТОЛЬКО через graph→bundle
+            // (свой роутер), а прямой путь строит план Universal Router (plan::build, нужны UR/Permit2, которых у
+            // форка нет). Проба налога форка (probe.rs::part) теперь безусловна и делает форк-пул usable, поэтому без
+            // этого фильтра форк мог бы выиграть классическую котировку как RouteMode::Direct и упасть на plan::build.
+            // Умный путь уже отсекает форк (smart_ok); граф ведёт форк своим путём (не через этот keep). Не-форки — как прежде.
+            direct_route::quote(
+                &v,
+                &names,
+                asset,
+                qty,
+                entries,
+                &mids,
+                &|e| !e.family.fork,
+                gas,
+            )
+            .await?
         };
         // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
         // неизменно; «graph» — считаем маршрут по графу и выбираем котировку-на-сделку среди ИСПОЛНИМЫХ маршрутов

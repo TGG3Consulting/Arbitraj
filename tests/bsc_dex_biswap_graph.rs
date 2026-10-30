@@ -23,6 +23,7 @@ use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::{families, graph};
+use arb::venues::bsc_dex::quote::direct_route;
 use arb::venues::bsc_dex::quote::graph_route::{self, GraphForm};
 use arb::venues::bsc_dex::quote::steps::Names;
 use arb::venues::bsc_dex::quote::via::Via;
@@ -335,6 +336,94 @@ async fn fork_route_not_executable_without_bundle_limit() {
         r.exec_note
             .is_some_and(|n| n.contains("dex.bundle_max_routers")),
         "причина — не задана настройка лимита"
+    );
+}
+
+/// Ревью #86: форк НЕ становится кандидатом классического ПРЯМОГО пути, хотя проба форка сделала его usable. Без
+/// фильтра (как до фикса) форк прошёл бы в direct_route и упал бы на plan::build (нет UR/Permit2); продакшн-фильтр
+/// (keep |e| !e.family.fork) его исключает. Не-форк тем же путём проходит как прежде.
+#[tokio::test]
+async fn fork_excluded_from_classic_direct() {
+    let p = scene("biswap", "v2_fork").await;
+    let q = p.quoting();
+    let taxes = zero();
+    let v = Via {
+        q: &q,
+        coin: COIN,
+        usdt: USDT,
+        side: Side::Buy,
+        taxes: &taxes,
+        coin_dec: 18,
+        usdt_dec: 18,
+    };
+    let names = Names {
+        usdt: (USDT, "USDT"),
+        coin: (COIN, "COIN"),
+        mids: &p.mids,
+    };
+    let asset = Asset {
+        ticker: "COIN".into(),
+        bsc_contract: Some(COIN),
+    };
+    let fork = q
+        .reg
+        .get(&PoolRef::Contract(POOL))
+        .expect("форк-пул в реестре");
+    let qty = Decimal::from(1000u32);
+    let gas = U256::from(2_000_000u64);
+    // Демонстрация утечки: без фильтра проба сделала форк usable — он кандидат прямого пути.
+    let leak = direct_route::quote(
+        &v,
+        &names,
+        &asset,
+        qty,
+        vec![fork.clone()],
+        &[],
+        &|_| true,
+        gas,
+    )
+    .await;
+    assert!(
+        leak.is_ok(),
+        "без фильтра форк-пул прошёл бы в классический прямой путь (проба сделала его usable)"
+    );
+    // Фикс: продакшн-фильтр исключает форк — кандидатов нет, прямого маршрута через форк не возникает.
+    let filtered = direct_route::quote(
+        &v,
+        &names,
+        &asset,
+        qty,
+        vec![fork],
+        &[],
+        &|e| !e.family.fork,
+        gas,
+    )
+    .await;
+    assert!(
+        filtered.is_err(),
+        "форк исключён из классического прямого пути (исполним только graph→bundle)"
+    );
+    // Не-форк пул тем же путём с тем же фильтром — проходит (классика по не-форкам не сломана).
+    let classic = coin_usdt(
+        "pancakeswap_v2",
+        "pancakeswap_v2",
+        real_v2_reserves(&p).0,
+        real_v2_reserves(&p).1,
+    );
+    let ok = direct_route::quote(
+        &v,
+        &names,
+        &asset,
+        qty,
+        vec![classic],
+        &[],
+        &|e| !e.family.fork,
+        gas,
+    )
+    .await;
+    assert!(
+        ok.is_ok(),
+        "не-форк пул проходит классический прямой путь как прежде"
     );
 }
 

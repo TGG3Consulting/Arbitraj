@@ -18,6 +18,7 @@ use alloy_primitives::{Address, B256};
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
+use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
@@ -74,6 +75,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::DodoDvm => ("dex.factory", IDodoFactory::NewDVM::SIGNATURE_HASH, false),
             Proto::DodoDpp => ("dex.factory", IDodoFactory::NewDPP::SIGNATURE_HASH, false),
             Proto::DodoDsp => ("dex.factory", IDodoFactory::NewDSP::SIGNATURE_HASH, false),
+            // Algebra (THENA Fusion, решения 80, 81): фабрика эмитит Pool(token0, token1, pool) при создании пула.
+            Proto::Algebra => ("dex.factory", IAlgebraFactory::Pool::SIGNATURE_HASH, false),
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
@@ -189,6 +192,12 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = IDodoFactory::NewDSP::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("NewDSP не по ABI: {e}"))?;
             (e.baseToken, e.quoteToken, e.DSP)
+        }
+        // Algebra (THENA Fusion, решения 80, 81): событие Pool(token0, token1, pool) — IAlgebraFactory.sol.
+        Proto::Algebra => {
+            let e = IAlgebraFactory::Pool::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("Pool (Algebra) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pool)
         }
         _ => {
             let e = IV3Factory::PoolCreated::decode_log_data(&log.inner.data)

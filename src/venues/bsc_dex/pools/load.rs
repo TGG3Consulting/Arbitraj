@@ -21,7 +21,7 @@ use super::families::Proto;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
-use super::{load_bin, load_cl, load_dodo, load_elastic, load_v2v3};
+use super::{load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_v2v3};
 
 /// Прочитанное состояние.
 pub struct Loaded {
@@ -81,6 +81,22 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул Elastic не того вида", f.title),
+        ));
+    }
+    // Algebra (THENA Fusion, решения 80, 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_algebra.rs):
+    // globalState + liquidity + сырой битмап tickTable. tickSpacing пулу не нужен (битмап индексирует сырой тик).
+    if f.proto == Proto::Algebra {
+        if let PoolRef::Contract(a) = reference {
+            let (state, t) = load_algebra::load(ctx, *a, &tag).await?;
+            return Ok(Loaded {
+                state,
+                ticks: Some(t),
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Algebra не того вида", f.title),
         ));
     }
     match (f.kind, reference) {

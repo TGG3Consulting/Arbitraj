@@ -34,7 +34,10 @@ pub fn short(detail: &str) -> String {
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
         PoolState::V2 { reserve0, reserve1 } => reserve0.is_zero() || reserve1.is_zero(),
-        PoolState::V3 { liquidity, .. } | PoolState::Cl { liquidity, .. } => *liquidity == 0,
+        PoolState::V3 { liquidity, .. }
+        | PoolState::Cl { liquidity, .. }
+        // Algebra (THENA Fusion, решения 80, 81): одна ликвидность (reinvestL нет) — пуст при liquidity == 0.
+        | PoolState::Algebra { liquidity, .. } => *liquidity == 0,
         // Elastic: ликвидность обмена L = base_l + reinvest_l — пуст, когда оба нуля (решение 81).
         PoolState::Elastic {
             base_l, reinvest_l, ..

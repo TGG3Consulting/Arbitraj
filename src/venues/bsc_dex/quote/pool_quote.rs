@@ -17,6 +17,7 @@ use crate::core::types::{PoolKind, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::math::swap_algebra::{self, AlgebraState};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
@@ -143,6 +144,33 @@ pub fn swap(
             };
             // is_token0 = направление задано в token0 (= zero_for_one).
             swap_elastic::swap(&s, zero_for_one, exact_in, amount)
+                .map(|r| Swapped {
+                    amount_in: r.amount_in,
+                    amount_out: r.amount_out,
+                    complete: r.complete,
+                })
+                .map_err(why)
+        }
+        // Algebra (THENA Fusion, решения 80, 81): одна ликвидность, динамическая комиссия (globalState.fee, постоянна
+        // на весь своп), СЫРОЙ битмап тиков — своя математика (math/swap_algebra, фаза A). Вид ядра Cl.
+        (
+            PoolState::Algebra {
+                sqrt_price_x96,
+                tick,
+                liquidity,
+                fee,
+            },
+            _,
+        ) => {
+            let ticks = e.ticks.as_ref().ok_or_else(none)?;
+            let s = AlgebraState {
+                sqrt_price: *sqrt_price_x96,
+                tick: *tick,
+                liquidity: *liquidity,
+                fee: *fee,
+                ticks,
+            };
+            swap_algebra::swap(&s, zero_for_one, exact_in, amount)
                 .map(|r| Swapped {
                     amount_in: r.amount_in,
                     amount_out: r.amount_out,

@@ -20,6 +20,9 @@
 //! - CLQuoter/BinQuoter (Infinity) и V4Quoter (Uniswap): quoteExactInputSingle((PoolKey, bool, uint128, bytes)) →
 //!   (amountOut, gasEstimate) — infinity-periphery src/interfaces/IQuoter.sol#L18-L23, src/pool-cl/interfaces/ICLQuoter.sol#L20-L22;
 //!   v4-periphery src/interfaces/IV4Quoter.sol#L13-L36.
+//! - KyberSwap Elastic QuoterV2.quoteExactInputSingle((tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP)) → QuoteOutput
+//!   (usedAmount, returnedAmount, afterSqrtP, initializedTicksCrossed, gasEstimate) — ks-elastic-sc
+//!   contracts/interfaces/periphery/IQuoterV2.sol#L34-L52 (решение 81; своя структура, не V3 QuoterV2).
 
 // Код функций генерирует alloy::sol! — число аргументов задаёт ABI контракта.
 #![allow(clippy::too_many_arguments)]
@@ -59,6 +62,12 @@ alloy::sol! {
         struct QuoteExactSingleParams { PoolKey poolKey; bool zeroForOne; uint128 exactAmount; bytes hookData; }
         function quoteExactInputSingle(QuoteExactSingleParams memory params) external returns (uint256 amountOut, uint256 gasEstimate);
     }
+
+    interface IElasticQuoterV2 {
+        struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 feeUnits; uint160 limitSqrtP; }
+        struct QuoteOutput { uint256 usedAmount; uint256 returnedAmount; uint160 afterSqrtP; uint32 initializedTicksCrossed; uint256 gasEstimate; }
+        function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (QuoteOutput memory);
+    }
 }
 
 #[cfg(test)]
@@ -97,6 +106,15 @@ mod tests {
         assert_eq!(
             h(IV4Quoter::quoteExactInputSingleCall::SELECTOR),
             "aa9d21cb"
+        );
+        // keccak256("quoteExactInputSingle((address,address,uint256,uint24,uint160))")[..4] — ks-elastic-sc QuoterV2.
+        assert_eq!(
+            h(IElasticQuoterV2::quoteExactInputSingleCall::SELECTOR),
+            alloy_primitives::hex::encode(
+                &alloy_primitives::keccak256(
+                    "quoteExactInputSingle((address,address,uint256,uint24,uint160))".as_bytes()
+                )[..4]
+            )
         );
     }
 }

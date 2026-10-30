@@ -13,6 +13,7 @@ use alloy_primitives::{Bytes, keccak256};
 
 use super::super::ctx::Ctx;
 use super::abi_check::IPoolImmutables as P;
+use super::abi_elastic::{IElasticFactory, IElasticPool};
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::families::{Family, Proto};
 use super::verify_rules::Read;
@@ -29,6 +30,11 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
             if let Some(sig) = fee_method(ctx, f)? {
                 l.push(Bytes::copy_from_slice(&keccak256(sig.as_bytes())[..4]));
             }
+        }
+        // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
+        Proto::KyberElastic => {
+            l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
+            l.push(Bytes::from(IElasticPool::tickDistanceCall {}.abi_encode()));
         }
         _ => {
             l.push(Bytes::from(P::feeCall {}.abi_encode()));
@@ -62,6 +68,15 @@ pub fn registry_call(f: &Family, r: &Read) -> Bytes {
             IV2Factory::getPairCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
+            }
+            .abi_encode(),
+        ),
+        // KyberSwap Elastic (решение 81): getPool(tokenA, tokenB, swapFeeUnits) — IFactory.sol.
+        Proto::KyberElastic => Bytes::from(
+            IElasticFactory::getPoolCall {
+                tokenA: r.token0,
+                tokenB: r.token1,
+                swapFeeUnits: U24::from(r.fee.unwrap_or_default()),
             }
             .abi_encode(),
         ),

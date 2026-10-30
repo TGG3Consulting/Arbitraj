@@ -5,7 +5,9 @@
 //! TickLens по словам, CL — слова битмапа); 3) данные установленных тиков CL. Те же функции и тот же разбор по ABI,
 //! что у чтения по одному (load_v2v3.rs, load_cl.rs) — правила те же: любой вызов пула откатился, не по ABI или часть
 //! пачки не дошла (узел) — пул не прочитан с причиной (повтор — reload.rs). Bin читается по одному (load.rs):
-//! поиск непустых бинов последовательный — следующий вызов зависит от ответа предыдущего.
+//! поиск непустых бинов последовательный — следующий вызов зависит от ответа предыдущего. KyberSwap Elastic
+//! (решение 81) тоже по одному (load_elastic.rs): обход связного списка тиков — не битмап, под ступени по словам
+//! не ложится.
 //! Кто вызывает: pools/reload.rs (load_many).
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
 //! load_v2v3.rs (word_range), ticks.rs.
@@ -23,7 +25,7 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::tokens::Tokens;
-use super::families::Family;
+use super::families::{Family, Proto};
 use super::load::{self, Loaded};
 use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
@@ -70,9 +72,9 @@ pub async fn states(
         Err(e) => return wants.iter().map(|_| Err(e.clone())).collect(),
     };
     let mut out: Out = wants.iter().map(|_| None).collect();
-    // Bin — по одному (см. шапку).
+    // Bin и KyberSwap Elastic — по одному (см. шапку; у Elastic обход списка тиков не ложится на ступени по словам).
     for (i, w) in wants.iter().enumerate() {
-        if w.family.kind == PoolKind::Bin {
+        if w.family.kind == PoolKind::Bin || w.family.proto == Proto::KyberElastic {
             let r = load::state(
                 ctx,
                 tokens,

@@ -25,6 +25,7 @@ use crate::core::types::{PoolKind, PoolState};
 
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::{self, ClState, Version};
+use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK, sqrt_ratio_at_tick};
 use super::super::math::{bin_swap, v2};
 use super::super::num;
@@ -168,6 +169,28 @@ fn side(
             };
             cl(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
         }
+        // KyberSwap Elastic (решение 81): обмен до границы полосы своей математикой; без комиссии пула (fee_units = 0).
+        (
+            PoolState::Elastic {
+                sqrt_price_x96,
+                tick,
+                base_l,
+                reinvest_l,
+                ..
+            },
+            _,
+        ) => {
+            let ticks = e.ticks.as_ref().ok_or("карта тиков не прочитана")?;
+            let s = ElasticState {
+                sqrt_p: *sqrt_price_x96,
+                current_tick: *tick,
+                base_l: *base_l,
+                reinvest_l: *reinvest_l,
+                fee_units: NO_FEE,
+                ticks,
+            };
+            elastic(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;
@@ -192,5 +215,24 @@ fn cl(s: &ClState, zfo: bool, b: f64, buy: bool) -> Result<(U256, U256, bool), S
     let limit = sqrt_ratio_at_tick(edge).ok_or("цена границы полосы вне диапазона TickMath")?;
     let (r, reached) =
         swap_cl::swap_to(s, zfo, true, U256::from(u128::MAX), limit).map_err(str::to_string)?;
+    Ok((r.amount_in, r.amount_out, reached))
+}
+
+/// Elastic: обмен до цены на границе полосы (как cl, но math/swap_elastic). Возвращает: (отдано, получено, дошли
+/// до границы). Ошибки (текст): расчёт.
+fn elastic(s: &ElasticState, zfo: bool, b: f64, buy: bool) -> Result<(U256, U256, bool), String> {
+    let d = band_ticks(b, buy).ok_or("полоса вне 0–100%")?;
+    if d == 0 {
+        return Ok((U256::ZERO, U256::ZERO, true));
+    }
+    let edge = if zfo {
+        s.current_tick - d
+    } else {
+        s.current_tick + d
+    }
+    .clamp(MIN_TICK + 1, MAX_TICK - 1);
+    let limit = sqrt_ratio_at_tick(edge).ok_or("цена границы полосы вне диапазона TickMath")?;
+    let (r, reached) = swap_elastic::swap_to(s, zfo, true, U256::from(u128::MAX), limit)
+        .map_err(str::to_string)?;
     Ok((r.amount_in, r.amount_out, reached))
 }

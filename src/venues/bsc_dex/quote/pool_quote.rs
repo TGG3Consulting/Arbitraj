@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/quote/pool_quote.rs
-//! Что делает: обмен в одном пуле по его локальному состоянию — выбор математики по виду пула (V2, V3, CL, Bin),
+//! Что делает: обмен в одном пуле по его локальному состоянию — выбор математики по виду пула (V2, V3, CL, Elastic, Bin),
 //! полная комиссия (V2 — настройка, V3 — fee пула, V4 — протокольная + LP по направлению), точный вход/выход.
 //! Кто вызывает: quote/direct.rs, quote/liquidity.rs, quote/quoter.rs (сверка), check/hooks_probe.rs.
 //! От чего зависит: math/*, pools/registry.rs, ctx.rs.
@@ -18,6 +18,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
+use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{bin_swap, v2};
 use super::super::pools::registry::Entry;
 
@@ -117,6 +118,35 @@ pub fn swap(
                 version: Version::V4,
             };
             swap_cl::swap(&s, zero_for_one, exact_in, amount).map_err(why)
+        }
+        // KyberSwap Elastic (решение 81): L = baseL + reinvestL, своя математика (math/swap_elastic, 81a).
+        (
+            PoolState::Elastic {
+                sqrt_price_x96,
+                tick,
+                base_l,
+                reinvest_l,
+                fee_units,
+            },
+            _,
+        ) => {
+            let ticks = e.ticks.as_ref().ok_or_else(none)?;
+            let s = ElasticState {
+                sqrt_p: *sqrt_price_x96,
+                current_tick: *tick,
+                base_l: *base_l,
+                reinvest_l: *reinvest_l,
+                fee_units: *fee_units,
+                ticks,
+            };
+            // is_token0 = направление задано в token0 (= zero_for_one).
+            swap_elastic::swap(&s, zero_for_one, exact_in, amount)
+                .map(|r| Swapped {
+                    amount_in: r.amount_in,
+                    amount_out: r.amount_out,
+                    complete: r.complete,
+                })
+                .map_err(why)
         }
         (
             PoolState::Bin {

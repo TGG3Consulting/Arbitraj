@@ -25,6 +25,7 @@ pub const DEX_KINDS: &[&str] = &[
     "v2_fork",
     "v3_fork",
     "v3_fork_pancake",
+    "kyber_elastic",
     "unsupported",
 ];
 
@@ -57,7 +58,7 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.multicall3", K::Address, L::None, "адрес", V, "Multicall3 (github.com/mds1/multicall3): пачка чтений — один eth_call вместо N (у NodeReal 20 CU за eth_call). Не задан — пачкой JSON-RPC (N вызовов), поиск пулов — по вызову на пару"),
     d("DEX", "dex.swap_mode", K::Choice, L::None, "режим", V, "Режим обмена: прямой (лучший пул) / умный (маршрут через Universal Router) (решение 29)").choices(&["direct", "smart"]),
     d("DEX", "dex.router_mode", K::Choice, L::None, "режим", V, "Маршрутизатор (решение 80): classic — прежнее поведение (прямой/умный по dex.swap_mode); graph — дополнительно считается маршрут по локальному графу всех пулов (сплит, промежуточные) и сравнивается с классикой, лучший выигрывает. Не задано = classic. Мульти-роутерный графовый маршрут (решение 84) исполняется атомарным бандлом свопов, если укладывается в dex.bundle_max_routers; не укладывается (или нога пересекает роутеры) — сигнал/карточка, авто-сделкой не исполняется").choices(&["classic", "graph"]),
-    d("DEX", "dex.kind", K::Choice, L::None, "вид", DX, "Таблица сопоставления (решения 58, 59): вид пулов DEX индексатора (id области — id DEX у индексатора, например pancakeswap-v3-bsc). В сделки идут только виды с исполнением через Universal Router своей фабрики: pancakeswap_v2, pancakeswap_v3, pancakeswap_infinity_cl, pancakeswap_infinity_bin, uniswap_v2, uniswap_v3, uniswap_v4. Форки (v2_fork, v3_fork, v3_fork_pancake) — пока «не подключена к сделкам: нет своего пути исполнения»; unsupported — не поддерживается. Не задан — пулы DEX не берутся").choices(DEX_KINDS),
+    d("DEX", "dex.kind", K::Choice, L::None, "вид", DX, "Таблица сопоставления (решения 58, 59): вид пулов DEX индексатора (id области — id DEX у индексатора, например pancakeswap-v3-bsc). В сделки идут только виды с исполнением через Universal Router своей фабрики: pancakeswap_v2, pancakeswap_v3, pancakeswap_infinity_cl, pancakeswap_infinity_bin, uniswap_v2, uniswap_v3, uniswap_v4. Форк V2 (v2_fork, например Biswap) — в графе и исполняется своим роутером (решения 59, 82). KyberSwap Elastic (kyber_elastic, решение 81) — в графе, котируется своей математикой, исполняется своим роутером. Форки V3 (v3_fork, v3_fork_pancake) — пока только справочник; unsupported — не поддерживается. Не задан — пулы DEX не берутся").choices(DEX_KINDS),
     d("DEX", "dex.pool_enabled", K::Bool, L::None, "да/нет", DX, "DEX включена (id области — id DEX у индексатора). Нет — её пулы не берутся из справочника и не торгуются"),
     d("DEX", "dex.intermediate_enabled", K::Bool, L::None, "да/нет", V, "Промежуточные монеты (решение 52): да — маршрут «USDT → промежуточная → монета» в одной транзакции и монеты с пулом только с промежуточной допускаются; нет — только пулы с USDT"),
     d("DEX", "dex.inflow_wait_notify_s", K::Integer, L::Positive, "секунды", V, "Обмен ждёт ожидаемого поступления того же токена в кошелёк дольше — одно уведомление в Telegram (dex.swap_waits_inflow)"),
@@ -99,6 +100,7 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.router", K::Address, L::None, "адрес", DX, "V2: Router — сверка расчёта пула (getAmountsOut) и обёртка нативной монеты (WETH()); виды V3 и V4 его не используют (обмен — dex.universal_router)"),
     d("Контракты DEX", "dex.quoter", K::Address, L::None, "адрес", DX, "Квотер: QuoterV2 (V3), CLQuoter / BinQuoter (Infinity), V4Quoter (Uniswap V4)"),
     d("Контракты DEX", "dex.tick_lens", K::Address, L::None, "адрес", DX, "V3: TickLens (тики пачкой)"),
+    d("Контракты DEX", "dex.tick_reader", K::Address, L::None, "адрес", DX, "KyberSwap Elastic (решение 81): TicksFeesReader — все инициализированные тики пула связным списком (getTicksInRange)"),
     d("Контракты DEX", "dex.pool_manager", K::Address, L::None, "адрес", DX, "V4: CLPoolManager / BinPoolManager / PoolManager — пул из справочника проверяется по ключу у менеджера (Infinity: poolIdToPoolKey)"),
     d("Контракты DEX", "dex.position_manager", K::Address, L::None, "адрес", DX, "Uniswap V4: PositionManager — ключ пула из справочника (poolKeys по PoolId) для проверки; пул без позиций через него не находится — тогда только история V4 (dex.history_scan)"),
     d("Контракты DEX", "dex.vault", K::Address, L::None, "адрес", DX, "PancakeSwap Infinity: Vault"),

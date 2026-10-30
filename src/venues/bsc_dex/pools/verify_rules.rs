@@ -11,6 +11,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use super::abi_check::IPoolImmutables as P;
+use super::abi_elastic::IElasticPool;
 use super::abi_v2v3::IV2Factory;
 use super::discover::sorted;
 use super::families::{Family, Proto};
@@ -49,6 +50,17 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
             r.v2_fee = Some(U256::from_be_slice(&b[..32]));
         }
         Proto::V2 => {}
+        // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
+        Proto::KyberElastic => {
+            r.fee = Some(
+                IElasticPool::swapFeeUnitsCall::abi_decode_returns(bytes(3, "swapFeeUnits()")?)
+                    .map_err(dec)?
+                    .to(),
+            );
+            let d = IElasticPool::tickDistanceCall::abi_decode_returns(bytes(4, "tickDistance()")?)
+                .map_err(dec)?;
+            r.spacing = Some(d.as_i32());
+        }
         _ => {
             r.fee = Some(
                 P::feeCall::abi_decode_returns(bytes(3, "fee()")?)

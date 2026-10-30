@@ -18,6 +18,7 @@ use alloy_primitives::{Address, B256};
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
+use super::abi_elastic::IElasticFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
 use super::attach;
@@ -61,6 +62,12 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 "dex.pool_manager",
                 IUniswapV4::Initialize::SIGNATURE_HASH,
                 true,
+            ),
+            // KyberSwap Elastic (решение 81): PoolCreated своей фабрики — пул отдельным контрактом (как V3).
+            Proto::KyberElastic => (
+                "dex.factory",
+                IElasticFactory::PoolCreated::SIGNATURE_HASH,
+                false,
             ),
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
@@ -155,6 +162,12 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = IV2Factory::PairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PairCreated не по ABI: {e}"))?;
             (e.token0, e.token1, e.pair)
+        }
+        // KyberSwap Elastic (решение 81): своё событие PoolCreated (swapFeeUnits/tickDistance вместо fee).
+        Proto::KyberElastic => {
+            let e = IElasticFactory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (Elastic) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pool)
         }
         _ => {
             let e = IV3Factory::PoolCreated::decode_log_data(&log.inner.data)

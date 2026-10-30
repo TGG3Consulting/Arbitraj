@@ -37,7 +37,9 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             };
             (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
         }
-        PoolState::V3 { sqrt_price_x96, .. } | PoolState::Cl { sqrt_price_x96, .. } => {
+        PoolState::V3 { sqrt_price_x96, .. }
+        | PoolState::Cl { sqrt_price_x96, .. }
+        | PoolState::Elastic { sqrt_price_x96, .. } => {
             let s = *sqrt_price_x96;
             if s.is_zero() {
                 return None;

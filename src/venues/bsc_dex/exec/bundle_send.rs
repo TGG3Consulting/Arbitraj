@@ -1,45 +1,46 @@
 //! Файл: venues/bsc_dex/exec/bundle_send.rs
-//! Что делает: отправка собранного бандла свопов (exec/bundle.rs, решение 84, фаза 80.8b) — самостоятельная функция;
-//! врезку в боевой путь (exec/trade.rs) и флип executable делает 80.8c. Шаги: (1) симуляция всего упорядоченного
-//! бандла eth_simulateV1 на своём узле (check/simulate.rs) — видит эффект ноги N на ногу N+1 (межтранзакционная
-//! передача) и валидирует порядок; откат любого шага → не отправляем; попутно считает газ каждой транзакции и
-//! КУМУЛЯТИВНУЮ базу BALANCE_CHECK каждого свопа (ревью #80 MEDIUM): перед свопом вставляется balanceOf выходного
-//! токена, его значение в симуляции = баланс кошелька ПОСЛЕ предыдущих групп, поэтому порог «реально получено ≥ min»
-//! у каждой группы отдельный (защита от fee-on-transfer не ослабляется выходом прошлых групп того же токена);
-//! (2) цена газа — как у одиночной (eth_gasPrice с надбавкой, не ниже минимума каналов); (3) подпись по очереди
-//! (nonce проставлены на 80.8a) ключом кошелька (wallet/signer); (4) отправка одним бандлом через бандл-каналы
-//! (send/mod.rs dispatch_slice → eth_sendBundle, revertingTxHashes пуст = всё-или-ничего, maxBlockNumber = голова +
-//! send.bundle_max_blocks); (5) ожидание блока своим узлом (решение 42) без отмен — приватный бандл истекает по
-//! maxBlockNumber (газ не тратится, решение 40). Очередь кошелька (Hold/Slot) и settle — в боевой врезке 80.8c.
+//! Что делает: отправка собранного бандла свопов (exec/bundle.rs, решение 84). Вызывается боевым путём графа
+//! (exec/bundle_trade.rs) с местом в очереди кошелька Slot. Шаги: (1) симуляция всего упорядоченного бандла
+//! eth_simulateV1 на своём узле (check/simulate.rs) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
+//! валидирует порядок; откат любого шага → не отправляем; попутно газ и кумулятивные базы BALANCE_CHECK (exec/bundle_sim.rs);
+//! (2) проверка «кто меняет» (решение 59) по событиям симуляции — чужой пул исключается; (3) цена газа — как у одиночной;
+//! (4) подпись по очереди (exec/bundle_sim.rs); (5) отправка одним бандлом через бандл-каналы (send/mod.rs dispatch_slice →
+//! eth_sendBundle, revertingTxHashes пуст = всё-или-ничего, maxBlockNumber = голова + send.bundle_max_blocks);
+//! (6) ожидание блока и settle очереди — в ОТДЕЛЬНОЙ задаче, держащей место в очереди (Hold), как у одиночной
+//! (exec/txs.rs, решение 45): даже если вызывающий прерван в середине ожидания, место держится до установленного итога.
+//! Приватный all-or-nothing бандл истекает по maxBlockNumber (газ не тратится, решение 40): «не попал в блок» —
+//! УСТАНОВЛЕННЫЙ исход с НЕзанятым nonce → очередь свободна сразу (settle::settle_bundle), следующая транзакция берёт
+//! тот же первый nonce; очередь НЕ останавливается по таймауту (ревью #82). Отмен у бандла нет.
 //! Классику/одиночную отправку не трогает.
-//! Кто вызывает: exec/trade.rs (80.8c); тесты.
-//! От чего зависит: exec/bundle.rs, exec/plan.rs, exec/txs.rs (Env), check/simulate.rs, node/abi.rs (IERC20),
-//! send/{mod,tx,receipt,track_util}.rs, wallet/signer.rs, node/heads.rs, exec/ur.rs.
-//! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks, send.max_wait_blocks, send.queue_max_wait_s,
-//! feed.stale_after_ms [bsc_dex] (через SendCfg); цена газа — через quote/gas.rs; каналы — channel.* (bundle).
+//! Кто вызывает: exec/bundle_trade.rs; тесты.
+//! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
+//! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
+//! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks, send.queue_max_wait_s, feed.stale_after_ms [bsc_dex]
+//! (через SendCfg); цена газа — через quote/gas.rs; каналы — channel.* (bundle).
 
-use std::collections::HashMap;
 use std::time::Instant;
 
-use alloy::signers::local::PrivateKeySigner;
-use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, B256, Bytes, U256};
-use rust_decimal::Decimal;
+use alloy_primitives::{B256, Bytes};
 
 use crate::core::types::TxOutcome;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::urgency as priority;
 
-use super::super::check::simulate::{self, Call, CallResult};
+use super::super::check::emitter;
+use super::super::check::simulate::{self, SimLog};
 use super::super::ctx::Ctx;
-use super::super::node::abi::IERC20;
 use super::super::node::heads::Heads;
+use super::super::pools::registry::Entry;
+use super::super::send::receipt::{self, Receipt};
+use super::super::send::settle::{self, After};
 use super::super::send::track_util::{self, Quiet, Tracked};
 use super::super::send::tx::SendCfg;
-use super::super::send::{self, receipt, tx};
-use super::super::wallet::signer::{self, SignedTx};
-use super::bundle::{Bundle, BundleTx};
+use super::super::send::{self};
+use super::super::wallet::nonce::Slot;
+use super::super::wallet::signer;
+use super::bundle::Bundle;
+use super::bundle_sim::{build_sim, collect, sign_txs};
 use super::txs::Env;
-use super::ur;
 
 /// Итог отправки бандла.
 pub struct Sent {
@@ -49,26 +50,26 @@ pub struct Sent {
     pub channels: Vec<String>,
     /// Попадание в блок по своему узлу.
     pub tracked: Tracked,
+    /// Квитанции всех транзакций бандла (только если попал в блок) — для факта сделки (exec/bundle_trade.rs).
+    pub receipts: Vec<Receipt>,
 }
 
-/// Разметка симуляции бандла: вызовы, суммы BNB и где итог каждой транзакции и где balanceOf перед свопом.
-pub struct SimPlan {
-    pub calls: Vec<Call>,
-    values: Vec<(usize, U256)>,
-    /// Индекс основного вызова каждой транзакции бандла (по её порядку).
-    pub main: Vec<usize>,
-    /// (индекс транзакции-свопа в бандле, индекс её balanceOf в симуляции).
-    pub bal: Vec<(usize, usize)>,
-}
-
-/// Отправляет собранный бандл. Принимает: окружение отправки, бандл (nonce уже проставлены на 80.8a). Возвращает: итог.
-/// Ошибки: NotConfigured (настройки, каналы, нет бандл-канала), NoRoute/StaleData (симуляция откатилась), ChannelRejected,
-/// узел, Internal (пустой бандл, подпись).
-pub async fn send(env: &Env, bundle: &Bundle) -> GatewayResult<Sent> {
+/// Отправляет собранный бандл, занимая очередь кошелька местом `slot` (nonce в бандле уже проставлены от slot.nonce).
+/// Шаги: симуляция всего бандла (газ + кумулятивные базы BALANCE_CHECK + проверка «кто меняет», решение 59) → подпись
+/// по очереди → очередь «ждёт итога» (settle::busy) → отправка одним eth_sendBundle через бандл-каналы → ожидание блока
+/// и settle очереди в отдельной задаче-трекере (держит Hold). Принимает: окружение, место в очереди, бандл, пулы
+/// маршрута (для решения 59). Возвращает: итог с квитанциями. Ошибки: NotConfigured (настройки/каналы), NoRoute/StaleData
+/// (симуляция откатилась / чужой пул), ChannelRejected, узел, Internal (подпись / задача трекера упала).
+pub async fn send(
+    env: &Env,
+    slot: &Slot,
+    bundle: &Bundle,
+    entries: &[&Entry],
+) -> GatewayResult<Sent> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
     let ready = send::select(ctx, &env.stats)?;
-    let wallet = wallet_of(ctx, bundle)?;
+    let wallet = slot.from;
     let price = env
         .gas
         .wei(ctx, &env.heads)
@@ -76,7 +77,15 @@ pub async fn send(env: &Env, bundle: &Bundle) -> GatewayResult<Sent> {
         .max(send::gas_floor(&ready));
     let (at, _now) = env.heads.at(ctx).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;
-    let (limits, bases) = prepare(ctx, bundle, wallet, at, margin).await?;
+    // Одна симуляция всего упорядоченного бандла: газ, кумулятивные базы BALANCE_CHECK и события обмена.
+    let plan = build_sim(bundle, wallet);
+    let res = simulate::run_valued(ctx, &plan.calls, &plan.values, at).await?;
+    let (limits, bases) = collect(ctx, &res, &plan, margin)?;
+    // Решение 59 («кто меняет»): событие обмена — только от пулов маршрута; чужой пул исключается, сделки нет.
+    let logs: Vec<SimLog> = res.iter().flat_map(|r| r.logs.clone()).collect();
+    emitter::check(ctx, entries, &logs)
+        .await
+        .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
     let s = signer::signer(ctx)?;
     let signed = sign_txs(ctx, &s, bundle, price, &limits, &bases)?;
     let head = env.heads.fresh(ctx)?;
@@ -84,181 +93,68 @@ pub async fn send(env: &Env, bundle: &Bundle) -> GatewayResult<Sent> {
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
     let dispatched = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block).await?;
     let hashes: Vec<B256> = signed.iter().map(|t| t.hash).collect();
-    let tracked = confirm(ctx, &env.heads, &cfg, &hashes, max_block).await;
+    // Очередь кошелька: ждёт итога по последнему nonce бандла (решение 45). Отмен нет — приватный бандл истекает.
+    let last_nonce = bundle.first_nonce + (signed.len() as u64) - 1;
+    let repr = *hashes.last().unwrap_or(&B256::ZERO);
+    let hold = slot.hold();
+    let after = After {
+        ctx,
+        heads: &env.heads,
+        stats: &env.stats,
+        cfg: &cfg,
+        from: wallet,
+        nonce: last_nonce,
+        hash: repr,
+    };
+    settle::busy(&after, &hold).await;
+    // Ожидание итога и settle — в отдельной задаче, держащей Hold (как у одиночной, exec/txs.rs, решение 45): место в
+    // очереди не освобождается, пока итог не установлен, даже если вызывающий прерван.
+    let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
+    let task_hashes = hashes.clone();
+    let class = priority::current();
+    let job = tokio::spawn(priority::scope(class, async move {
+        let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
+        let receipts = if tracked.outcome == TxOutcome::Included {
+            all_receipts(&task_ctx, &task_hashes).await
+        } else {
+            Vec::new()
+        };
+        let a = After {
+            ctx: &task_ctx,
+            heads: &task_heads,
+            stats: &task_stats,
+            cfg: &cfg,
+            from: wallet,
+            nonce: last_nonce,
+            hash: repr,
+        };
+        settle::settle_bundle(&a, &hold, &tracked).await;
+        (tracked, receipts)
+    }));
+    let (tracked, receipts) = job.await.map_err(|e| {
+        ctx.err(
+            ErrorCode::Internal,
+            format!("задача трекера бандла {repr} упала: {e}"),
+        )
+    })?;
     Ok(Sent {
         hashes,
         channels: dispatched.all(),
         tracked,
+        receipts,
     })
 }
 
-/// Кошелёк бандла (отправитель всех транзакций) — из первого свопа. Ошибки: Internal — в бандле нет свопа.
-fn wallet_of(ctx: &Ctx, bundle: &Bundle) -> GatewayResult<Address> {
-    bundle
-        .txs
-        .iter()
-        .find_map(|t| match t {
-            BundleTx::Swap { plan, .. } => Some(plan.wallet),
-            _ => None,
-        })
-        .ok_or_else(|| ctx.err(ErrorCode::Internal, "бандл без свопа — нечего отправлять"))
-}
-
-/// Газ каждой транзакции и база BALANCE_CHECK каждого свопа — одной симуляцией всего бандла. Принимает: бандл,
-/// кошелёк, базовый блок, надбавку газа (%). Возвращает: лимиты газа по транзакциям и базы по индексам транзакций-свопов.
-/// Ошибки: NoRoute/StaleData (шаг откатился), BadResponse (база/число), узел.
-async fn prepare(
-    ctx: &Ctx,
-    bundle: &Bundle,
-    wallet: Address,
-    at: u64,
-    margin: Decimal,
-) -> GatewayResult<(Vec<u64>, HashMap<usize, U256>)> {
-    let plan = build_sim(bundle, wallet);
-    let res = simulate::run_valued(ctx, &plan.calls, &plan.values, at).await?;
-    collect(ctx, &res, &plan, margin)
-}
-
-/// Строит симуляцию бандла: перед каждым свопом — balanceOf выходного токена (его значение = база BALANCE_CHECK той
-/// группы по состоянию ПОСЛЕ предыдущих, ревью #80), сам своп — с базой 0 (порог проходит: кошелёк уже получил ≥ min);
-/// разрешения — как есть. Чистая. Ошибок нет.
-pub fn build_sim(bundle: &Bundle, wallet: Address) -> SimPlan {
-    let bal_input = Bytes::from(IERC20::balanceOfCall { owner: wallet }.abi_encode());
-    let mut calls = Vec::new();
-    let mut values = Vec::new();
-    let mut main = Vec::with_capacity(bundle.txs.len());
-    let mut bal = Vec::new();
-    for (i, t) in bundle.txs.iter().enumerate() {
-        match t {
-            BundleTx::Approve { to, data, .. } => {
-                calls.push(Call {
-                    from: wallet,
-                    to: *to,
-                    input: data.clone(),
-                });
-                main.push(calls.len() - 1);
-            }
-            BundleTx::Swap { plan, .. } => {
-                calls.push(Call {
-                    from: wallet,
-                    to: plan.token_out,
-                    input: bal_input.clone(),
-                });
-                bal.push((i, calls.len() - 1));
-                let sidx = calls.len();
-                calls.push(Call {
-                    from: wallet,
-                    to: plan.router,
-                    input: plan.data(U256::ZERO),
-                });
-                if !plan.value().is_zero() {
-                    values.push((sidx, plan.value()));
-                }
-                main.push(sidx);
-            }
+/// Квитанции всех транзакций бандла (бандл атомарен — при попадании в блок есть все). Пропавшие пропускаются (решает
+/// вызывающий по числу). Ошибок нет — сбой узла по хешу = нет квитанции.
+async fn all_receipts(ctx: &Ctx, hashes: &[B256]) -> Vec<Receipt> {
+    let mut out = Vec::with_capacity(hashes.len());
+    for h in hashes {
+        if let Ok(Some((_, r))) = receipt::find(ctx, std::slice::from_ref(h)).await {
+            out.push(r);
         }
     }
-    SimPlan {
-        calls,
-        values,
-        main,
-        bal,
-    }
-}
-
-/// Лимиты газа по транзакциям и базы BALANCE_CHECK по свопам из итогов симуляции. Чистая (тестируется на крафт-итогах).
-/// Ошибки: NoRoute/StaleData (шаг откатился), BadResponse (база не читается / газ не помещается).
-pub fn collect(
-    ctx: &Ctx,
-    res: &[CallResult],
-    plan: &SimPlan,
-    margin: Decimal,
-) -> GatewayResult<(Vec<u64>, HashMap<usize, U256>)> {
-    let mut limits = Vec::with_capacity(plan.main.len());
-    for (i, &ci) in plan.main.iter().enumerate() {
-        let r = &res[ci];
-        if !r.ok() {
-            let text = r.error.as_ref().map(|e| e.message.as_str()).unwrap_or("");
-            let code = if ur::deadline_passed(&r.return_data, text) {
-                ErrorCode::StaleData
-            } else {
-                ErrorCode::NoRoute
-            };
-            return Err(ctx.err(
-                code,
-                format!("симуляция бандла: транзакция {i} откатилась — {}", r.why()),
-            ));
-        }
-        let g =
-            Decimal::from(r.gas_used.to::<u64>()) * (Decimal::ONE + margin / Decimal::ONE_HUNDRED);
-        limits.push(u64::try_from(g.ceil()).map_err(|_| {
-            ctx.err(
-                ErrorCode::BadResponse,
-                format!("лимит газа {g} не помещается"),
-            )
-        })?);
-    }
-    let mut bases = HashMap::new();
-    for &(tx_i, bi) in &plan.bal {
-        let r = &res[bi];
-        if !r.ok() {
-            return Err(ctx.err(
-                ErrorCode::NoRoute,
-                format!(
-                    "симуляция бандла: balanceOf перед свопом {tx_i} откатился — {}",
-                    r.why()
-                ),
-            ));
-        }
-        let base = U256::try_from_be_slice(&r.return_data).ok_or_else(|| {
-            ctx.err(
-                ErrorCode::BadResponse,
-                "симуляция бандла: balanceOf вернул не 32 байта — база BALANCE_CHECK не прочитана",
-            )
-        })?;
-        bases.insert(tx_i, base);
-    }
-    Ok((limits, bases))
-}
-
-/// Подписывает транзакции бандла по очереди (nonce из бандла, цена и лимит газа — на транзакцию, база BALANCE_CHECK —
-/// на своп по индексу). Чистая: без узла, подписант передан. Ошибки: Internal (число лимитов ≠ транзакциям, нет базы
-/// свопа, подпись), BadResponse (цена газа).
-pub fn sign_txs(
-    ctx: &Ctx,
-    signer: &PrivateKeySigner,
-    bundle: &Bundle,
-    price: U256,
-    limits: &[u64],
-    bases: &HashMap<usize, U256>,
-) -> GatewayResult<Vec<SignedTx>> {
-    if limits.len() != bundle.txs.len() {
-        return Err(ctx.err(
-            ErrorCode::Internal,
-            "число лимитов газа не равно числу транзакций бандла",
-        ));
-    }
-    let mut out = Vec::with_capacity(bundle.txs.len());
-    for (i, (t, &gas)) in bundle.txs.iter().zip(limits).enumerate() {
-        let (to, input, value) = match t {
-            BundleTx::Approve { to, data, .. } => (*to, data.clone(), U256::ZERO),
-            BundleTx::Swap { plan, .. } => {
-                let base = *bases.get(&i).ok_or_else(|| {
-                    ctx.err(ErrorCode::Internal, "нет базы BALANCE_CHECK свопа бандла")
-                })?;
-                (plan.router, plan.data(base), plan.value())
-            }
-        };
-        let legacy = tx::legacy(ctx, t.nonce(), price, gas, to, value, input)?;
-        let signed = signer::sign_with(signer, legacy).map_err(|e| {
-            ctx.err(
-                ErrorCode::Internal,
-                format!("подпись транзакции бандла: {e}"),
-            )
-        })?;
-        out.push(signed);
-    }
-    Ok(out)
+    out
 }
 
 /// Ждёт попадания бандла в блок своим узлом (решение 42) без отмен: приватный бандл с maxBlockNumber истекает сам —

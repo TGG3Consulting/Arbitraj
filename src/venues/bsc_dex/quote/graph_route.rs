@@ -19,11 +19,12 @@ use std::collections::{HashMap, HashSet};
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Quote, RouteMode, Side};
+use crate::core::types::{Asset, DexRoute, Quote, RouteMode, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::exec::native;
+use super::super::pools::families;
 use super::super::pools::graph;
 use super::path::Path;
 use super::route_paths::RoutePath;
@@ -189,9 +190,76 @@ fn executable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String>
     {
         return Ok(());
     }
-    Err("маршрут выходит за один Universal Router — атомарное мульти-роутерное исполнение бандлом свопов \
-         (решение 84) ещё не реализовано: это сигнал, авто-сделкой не исполняется"
-        .to_string())
+    // Мульти-роутер: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs) — каждая нога в
+    // пределах одного Universal Router и всего роутеров ≤ dex.bundle_max_routers. Иначе — сигнал (не исполняется).
+    collectable(ctx, legs)
+}
+
+/// Собирается ли мульти-роутерный маршрут в бандл (решение 84): ни одна нога не пересекает Universal Router'ы (как
+/// проверяет exec/bundle::single_router) и всего роутеров не больше dex.bundle_max_routers. Ошибка — причина
+/// несобираемости (пул пересекает роутеры / роутеров больше предела / настройка не задана).
+fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String> {
+    // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
+    let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
+    let mut routers: Vec<Address> = Vec::new();
+    for p in legs {
+        let mut leg_router: Option<Address> = None;
+        for h in &p.hops {
+            let r = ctx
+                .dex_addr("dex.universal_router", h.entry.family.id)
+                .map_err(|e| e.message)?;
+            match leg_router {
+                None => leg_router = Some(r),
+                Some(x) if x != r => {
+                    return Err("нога маршрута пересекает Universal Router'ы — бандл такую ногу не собирает (сигнал)".into());
+                }
+                _ => {}
+            }
+        }
+        if let Some(r) = leg_router
+            && !routers.contains(&r)
+        {
+            routers.push(r);
+        }
+    }
+    if routers.len() as u64 > max {
+        return Err(format!(
+            "маршрут задействует {} Universal Router'ов — больше dex.bundle_max_routers ({max}): бандлом не исполняется (сигнал)",
+            routers.len()
+        ));
+    }
+    Ok(())
+}
+
+/// Форма исполнимого графового маршрута для боевого пути (exec/trade.rs). Классификация по тем же правилам, что
+/// executable: прямая (одна доля, один хоп), один Universal Router PancakeSwap (умный путь), иначе — мульти-роутерный
+/// бандл (решение 84).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphForm {
+    /// Прямая форма: один пул, один хоп — идёт прямым путём (exec/trade.rs).
+    Direct,
+    /// Всё через один Universal Router PancakeSwap — идёт умным путём (exec/trade_smart.rs).
+    OneUr,
+    /// Мульти-роутер — идёт бандлом свопов (exec/bundle_trade.rs).
+    Bundle,
+}
+
+/// Форма исполнимого графового маршрута. Принимает: маршрут из котировки. Возвращает: форму. Ошибок нет
+/// (вызывается только для уже исполнимого маршрута, DexRoute.executable = true).
+pub fn graph_form(ctx: &super::super::ctx::Ctx, route: &DexRoute) -> GraphForm {
+    if route.legs.len() == 1 && route.legs.first().is_some_and(|l| l.hops.len() == 1) {
+        return GraphForm::Direct;
+    }
+    let one_ur = route.legs.iter().all(|l| {
+        l.hops
+            .iter()
+            .all(|h| families::classify(ctx, &h.family).is_ok_and(|f| families::smart_ok(ctx, f)))
+    });
+    if one_ur {
+        GraphForm::OneUr
+    } else {
+        GraphForm::Bundle
+    }
 }
 
 /// decimals всех токенов путей — из кэша или узла один раз. Ошибки: узел (decimals).

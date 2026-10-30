@@ -3,7 +3,7 @@
 //! ручной проверки (событие WalletQueue → Telegram send.queue_halted у ядра, журнал); иначе следующий nonce
 //! перечитывается у узла с повтором на каждом блоке (не «nonce + 1» вслепую: бандл с чаевыми занимает и nonce + 1,
 //! узел HTTP может отставать) — не перечитан за send.queue_max_wait_s — тоже остановка. Затем очередь свободна.
-//! Кто вызывает: exec/txs.rs (задача трекера).
+//! Кто вызывает: exec/txs.rs (задача трекера одиночной), exec/bundle_send.rs (задача трекера бандла — settle_bundle).
 //! От чего зависит: wallet/nonce.rs (Hold), send/track_util.rs (Tracked, Quiet), send/stats.rs, send/tx.rs, node/rpc.rs.
 //! Настройки: send.queue_max_wait_s, feed.stale_after_ms (SendCfg).
 //!
@@ -14,7 +14,7 @@ use std::time::Instant;
 use alloy_primitives::{Address, B256, U64};
 use serde_json::json;
 
-use crate::core::types::{WalletQueue, WalletQueueState};
+use crate::core::types::{TxOutcome, WalletQueue, WalletQueueState};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -87,6 +87,21 @@ pub async fn settle(a: &After<'_>, hold: &Hold, t: &Tracked) {
         }
         let _ = next_head(&mut rx, a.cfg, &mut quiet).await;
     }
+}
+
+/// Очередь после итога бандла (решение 84, приватный all-or-nothing). Отличие от settle(): «не попал в блок»
+/// (NotIncluded, исход УСТАНОВЛЕН) для бандла — это НЕзанятый nonce (газ не потрачен, решения 40/45): очередь свободна
+/// сразу, следующая транзакция берёт тот же первый nonce — БЕЗ ожидания роста eth_getTransactionCount (он не вырастет)
+/// и БЕЗ остановки по таймауту (ревью #82: иначе любое штатное истечение бандла халтило бы всю торговлю кошелька,
+/// включая классику). Исход неизвестен (узел молчал) → halt, как обычно. Остальное (в блоке / откат в блоке, nonce
+/// занят) — через settle(). Ошибок нет.
+pub async fn settle_bundle(a: &After<'_>, hold: &Hold, t: &Tracked) {
+    if t.unresolved.is_none() && t.outcome == TxOutcome::NotIncluded {
+        // nonce не заняты — ничего не «consumed», очередь просто свободна.
+        emit(a, hold.free()).await;
+        return;
+    }
+    settle(a, hold, t).await;
 }
 
 /// Останавливает очередь до ручной проверки: журнал (ошибка) и событие ядру. Ошибок нет.

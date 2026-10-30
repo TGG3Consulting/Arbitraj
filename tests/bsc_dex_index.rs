@@ -131,9 +131,9 @@ async fn mapping_table_reasons() {
     .await;
     let f = families::classify(&c, "biswap").unwrap();
     assert_eq!(
-        (f.graphable, f.tradable),
-        (true, false),
-        "V2-форк: в графе (graphable), но не исполняется (tradable=false)"
+        (f.graphable, f.tradable, f.fork),
+        (true, true, true),
+        "V2-форк: в графе, исполним своим роутером (бандлом), форк (80.9b)"
     );
     set(&c, &v3_row("pancakeswap-v3-bsc", "dex.quoter")).await;
     let e = families::classify(&c, "pancakeswap-v3-bsc").unwrap_err();

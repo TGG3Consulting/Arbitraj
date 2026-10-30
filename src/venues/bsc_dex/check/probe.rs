@@ -1,14 +1,17 @@
 //! Файл: venues/bsc_dex/check/probe.rs
 //! Что делает: пробный обмен в любом пуле (V2, V3, V4) через eth_simulateV1 (решение 30) — налог на покупку,
-//! продажу и перевод, газ обмена и газ разрешений в обе стороны. Тот же путь, что у настоящей сделки:
-//! Permit2 + Universal Router своей DEX с проверкой баланса (exec/plan.rs). В одном симулированном блоке,
+//! продажу и перевод, газ обмена и газ разрешений в обе стороны. Тот же путь, что у настоящей сделки: у поддержанной
+//! DEX — Permit2 + Universal Router с проверкой баланса (exec/plan.rs); у ФОРКА (family.fork, решения 59, 82) — его
+//! собственный classic V2 Router + прямой ERC-20 approve (exec/fork_swap::probe_swap), иначе UR чужой пул не найдёт и
+//! форк-монета с налогом не проверится. Выбор — part(). В одном симулированном блоке,
 //! от имени кошелька бота (без подписи): USDT на кошелёк из другого пула → разрешения → расчёт без налога
 //! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод половины на адрес, где лежат токены
 //! пула (налог продажи: насколько вырос его баланс) → перевод четверти на пустой адрес (налог перевода) →
 //! разрешения и продажа остатка (газ продажи). В покупке и продаже проверяется, что обмен сделал сам этот пул
 //! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике.
 //! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/plan.rs, quote/quoter_calls.rs, pools/registry.rs.
+//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/plan.rs, exec/fork_swap.rs,
+//! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
 //! Настройки: через вызываемые; dex.vault [Infinity] — где лежат токены пулов Infinity.
 //!
 //! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Токены V2/V3 лежат в самом пуле,
@@ -19,15 +22,17 @@
 //! Минимум выхода пробы — 1 минимальная единица токена: проба меряет налог и не должна откатываться из-за минимума,
 //! а минимум 0 запрещён (exec/plan.rs). Проба только симулируется (eth_simulateV1), в сеть не уходит.
 
-use alloy_primitives::{Address, U256, keccak256};
+use alloy_primitives::{Address, Bytes, U256, keccak256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
+use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
 use super::emitter;
 use super::probe_calls as pc;
@@ -67,30 +72,27 @@ pub async fn run(
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61).
     let (at, now) = heads.at(ctx).await?;
-    let buy = plan::build(
+    let (buy_aps, buy_router, buy_data) = part(
         ctx,
-        &plan::single(
-            e,
-            Order {
-                token_in: usdt,
-                token_out: coin,
-                amount_in: usdt_amount,
-                min_out: U256::from(1u8),
-            },
-        ),
+        e,
+        Order {
+            token_in: usdt,
+            token_out: coin,
+            amount_in: usdt_amount,
+            min_out: U256::from(1u8),
+        },
         wallet,
         now,
-        true,
     )
     .await?;
     let (qto, qdata) = quoter_calls::request(ctx, e, usdt, usdt_amount)?;
     let mut list = vec![pc::transfer(source, usdt, wallet, usdt_amount)];
-    list.extend(buy.approvals.iter().map(|(to, d)| Call {
+    list.extend(buy_aps.iter().map(|(to, d)| Call {
         from: wallet,
         to: *to,
         input: d.clone(),
     }));
-    let n_appr = buy.approvals.len();
+    let n_appr = buy_aps.len();
     list.push(Call {
         from: wallet,
         to: qto,
@@ -98,8 +100,8 @@ pub async fn run(
     });
     list.push(Call {
         from: wallet,
-        to: buy.router,
-        input: buy.data(balances::token_units(ctx, coin, wallet).await?),
+        to: buy_router,
+        input: buy_data,
     });
     list.push(pc::balance(wallet, coin, wallet));
     let first = simulate::run(ctx, &list, at).await?;
@@ -117,24 +119,19 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };
-    // База USDT для проверки продажи: в симуляции USDT источника уже потрачен на покупку — остаётся реальный баланс.
-    let usdt_base = balances::token_units(ctx, usdt, wallet).await?;
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
-    let sell = plan::build(
+    let (sell_aps, sell_router, sell_data) = part(
         ctx,
-        &plan::single(
-            e,
-            Order {
-                token_in: coin,
-                token_out: usdt,
-                amount_in: rest,
-                min_out: U256::from(1u8),
-            },
-        ),
+        e,
+        Order {
+            token_in: coin,
+            token_out: usdt,
+            amount_in: rest,
+            min_out: U256::from(1u8),
+        },
         wallet,
         now,
-        true,
     )
     .await?;
     let base = list.len();
@@ -145,15 +142,15 @@ pub async fn run(
         pc::transfer(wallet, coin, empty, quarter),
         pc::balance(wallet, coin, empty),
     ]);
-    list.extend(sell.approvals.iter().map(|(to, d)| Call {
+    list.extend(sell_aps.iter().map(|(to, d)| Call {
         from: wallet,
         to: *to,
         input: d.clone(),
     }));
     list.push(Call {
         from: wallet,
-        to: sell.router,
-        input: sell.data(usdt_base),
+        to: sell_router,
+        input: sell_data,
     });
     let all = simulate::run(ctx, &list, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
@@ -197,4 +194,34 @@ pub async fn run(
         gas_sell: (sell_swap.ok() && sell_appr.iter().all(|c| c.ok()))
             .then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
+}
+
+/// Части свопа пробы (разрешения, роутер, calldata) по виду пула. Форк (family.fork, решения 59, 82) — свой classic
+/// V2 Router и прямой ERC-20 approve (fork_swap::probe_swap), без Universal Router/Permit2: иначе проба форк-пула шла бы
+/// через UR, который чужой пул не находит, и форк-монета с налогом не проверялась бы. Иначе — Universal Router своей
+/// фабрики (exec/plan.rs), база BALANCE_CHECK = баланс выходного токена кошелька (решение 40). Принимает: пул, ордер
+/// пробы (минимум 1), кошелёк, время блока. Ошибки: NotConfigured (настройки/адреса), узел (баланс для UR-базы).
+async fn part(
+    ctx: &Ctx,
+    e: &Entry,
+    order: Order,
+    wallet: Address,
+    now: u64,
+) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
+    if e.family.fork {
+        fork_swap::probe_swap(
+            ctx,
+            e,
+            order.token_in,
+            order.token_out,
+            order.amount_in,
+            wallet,
+            now,
+        )
+    } else {
+        let base = balances::token_units(ctx, order.token_out, wallet).await?;
+        let plan = plan::build(ctx, &plan::single(e, order), wallet, now, true).await?;
+        let data = plan.data(base);
+        Ok((plan.approvals, plan.router, data))
+    }
 }

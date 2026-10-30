@@ -14,6 +14,7 @@ mod route_common;
 use std::collections::HashMap;
 
 use alloy::signers::local::PrivateKeySigner;
+use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U64, U256, address};
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -26,7 +27,9 @@ use arb::venues::bsc_dex::check::simulate::CallResult;
 use arb::venues::bsc_dex::exec::bundle::{self, BundleTx};
 use arb::venues::bsc_dex::exec::bundle_sim::{build_sim, collect, sign_txs};
 use arb::venues::bsc_dex::exec::chain::Step;
+use arb::venues::bsc_dex::exec::fork_swap;
 use arb::venues::bsc_dex::exec::plan::Order;
+use arb::venues::bsc_dex::node::abi_dex::IV2Router;
 use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::quote::Quoting;
@@ -321,6 +324,28 @@ async fn fork_bundle_simulated_and_signed_without_base() {
     )
     .expect("подпись форк-бандла без баз");
     assert_eq!(signed.len(), b.txs.len());
+}
+
+/// Проба налога форк-пула строится через ЕГО роутер (dex.router) прямым ERC-20 approve (без Permit2/UR): свап
+/// swapExactTokensForTokensSupportingFeeOnTransferTokens с путём, минимумом 1 и получателем-кошельком.
+#[tokio::test]
+async fn probe_swap_uses_fork_router_no_permit2() {
+    let p = route_common::parts().await;
+    prepare(&p).await;
+    let q = p.quoting();
+    let e = fork_entry(&q);
+    let (approvals, router, data) =
+        fork_swap::probe_swap(&q.ctx, &e, USDT, CAKE, e18(1000), WALLET, NOW).expect("проба форка");
+    assert_eq!(router, FORK_ROUTER, "проба идёт через роутер форка");
+    assert_eq!(approvals.len(), 1, "один ERC-20 approve, без Permit2");
+    assert_eq!(approvals[0].0, USDT, "approve входного токена");
+    let call =
+        IV2Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall::abi_decode(&data)
+            .expect("calldata свопа форка");
+    assert_eq!(call.path, [USDT, CAKE], "путь входного→выходного токена");
+    assert_eq!(call.amountOutMin, U256::from(1u8), "минимум пробы 1");
+    assert_eq!(call.to, WALLET, "получатель — кошелёк");
+    assert_eq!(call.amountIn, e18(1000));
 }
 
 /// Нулевой минимум ноги форка — отказ (обмен без минимума не отправляется, решение 40).

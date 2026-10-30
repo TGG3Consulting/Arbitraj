@@ -153,7 +153,13 @@ async fn router_count_capped_by_bundle_max_routers() {
         n - 1,
         route.exec_note
     );
-    assert!(route.exec_note.as_deref().unwrap_or("").contains("Router"));
+    assert!(
+        route
+            .exec_note
+            .as_deref()
+            .unwrap_or("")
+            .contains("dex.bundle_max_routers")
+    );
 
     // Предел ровно по маршруту — собирается в бандл, исполним; форма — Bundle.
     set(&p, v, "dex.bundle_max_routers", json!(n as u64)).await;

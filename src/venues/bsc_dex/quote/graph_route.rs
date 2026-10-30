@@ -173,17 +173,15 @@ fn executable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String>
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
     }
-    // Форк в маршруте (family.tradable=false, решение 82): граф берёт такое ребро для поиска/сигнала (graphable), но
-    // своего пути исполнения у форка пока нет (нет Universal Router своей фабрики — решение 59). Любой хоп-форк делает
-    // маршрут неисполнимым: это сигнал, авто-сделкой не исполняется (до фазы исполнения форк-свопа). Проверяем до
-    // прямой формы ниже — иначе одно-пуловый форк-маршрут ошибочно считался бы исполнимым.
+    // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется (например
+    // V3-форк, если он когда-нибудь попадёт в граф). V2-форк теперь tradable — идёт бандлом через свой роутер (ниже).
     if let Some(h) = legs
         .iter()
         .flat_map(|p| p.hops.iter())
         .find(|h| !h.entry.family.tradable)
     {
         return Err(format!(
-            "маршрут проходит через форк {} без своего пути исполнения (решение 59) — это сигнал, авто-сделкой не исполняется",
+            "маршрут проходит через {} без своего пути исполнения — это сигнал, авто-сделкой не исполняется",
             h.entry.family.id
         ));
     }
@@ -195,23 +193,45 @@ fn executable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String>
                 .to_string(),
         );
     }
-    if legs.len() == 1 && legs[0].hops.len() == 1 {
-        return Ok(());
-    }
-    if legs
+    // Форк исполняется ТОЛЬКО своим роутером бандлом (решения 59, 82) — не прямым/умным путём Universal Router. Любой
+    // хоп-форк → только через collectable (считает роутеры форков и UR в лимит dex.bundle_max_routers).
+    let has_fork = legs
         .iter()
-        .all(|p| p.hops.iter().all(|h| smart_ok(ctx, h.entry.family)))
-    {
-        return Ok(());
+        .flat_map(|p| p.hops.iter())
+        .any(|h| h.entry.family.fork);
+    if !has_fork {
+        if legs.len() == 1 && legs[0].hops.len() == 1 {
+            return Ok(());
+        }
+        if legs
+            .iter()
+            .all(|p| p.hops.iter().all(|h| smart_ok(ctx, h.entry.family)))
+        {
+            return Ok(());
+        }
     }
-    // Мульти-роутер: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs) — каждая нога в
-    // пределах одного Universal Router и всего роутеров ≤ dex.bundle_max_routers. Иначе — сигнал (не исполняется).
+    // Мульти-роутер или форк: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs) — каждая
+    // нога в пределах одного роутера (UR или форка) и всего роутеров ≤ dex.bundle_max_routers. Иначе — сигнал.
     collectable(ctx, legs)
 }
 
-/// Собирается ли мульти-роутерный маршрут в бандл (решение 84): ни одна нога не пересекает Universal Router'ы (как
-/// проверяет exec/bundle::single_router) и всего роутеров не больше dex.bundle_max_routers. Ошибка — причина
-/// несобираемости (пул пересекает роутеры / роутеров больше предела / настройка не задана).
+/// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей
+/// фабрики (dex.universal_router). Так collectable и exec/bundle.rs считают роутеры одинаково. Ошибки: NotConfigured.
+fn exec_router(
+    ctx: &super::super::ctx::Ctx,
+    f: &super::super::pools::families::Family,
+) -> GatewayResult<Address> {
+    if f.fork {
+        ctx.dex_addr("dex.router", f.id)
+    } else {
+        ctx.dex_addr("dex.universal_router", f.id)
+    }
+}
+
+/// Собирается ли маршрут в бандл (решение 84): ни одна нога не пересекает роутеры (как проверяет exec/bundle::
+/// single_router/fork_router — у форка свой роутер, dex.router) и всего роутеров (UR и форков) не больше
+/// dex.bundle_max_routers. Ошибка — причина несобираемости (нога пересекает роутеры / роутеров больше предела /
+/// настройка не задана).
 fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String> {
     // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
@@ -219,13 +239,11 @@ fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String
     for p in legs {
         let mut leg_router: Option<Address> = None;
         for h in &p.hops {
-            let r = ctx
-                .dex_addr("dex.universal_router", h.entry.family.id)
-                .map_err(|e| e.message)?;
+            let r = exec_router(ctx, h.entry.family).map_err(|e| e.message)?;
             match leg_router {
                 None => leg_router = Some(r),
                 Some(x) if x != r => {
-                    return Err("нога маршрута пересекает Universal Router'ы — бандл такую ногу не собирает (сигнал)".into());
+                    return Err("нога маршрута пересекает роутеры (UR/форк) — бандл такую ногу не собирает (сигнал)".into());
                 }
                 _ => {}
             }
@@ -238,7 +256,7 @@ fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String
     }
     if routers.len() as u64 > max {
         return Err(format!(
-            "маршрут задействует {} Universal Router'ов — больше dex.bundle_max_routers ({max}): бандлом не исполняется (сигнал)",
+            "маршрут задействует {} роутеров — больше dex.bundle_max_routers ({max}): бандлом не исполняется (сигнал)",
             routers.len()
         ));
     }
@@ -261,6 +279,16 @@ pub enum GraphForm {
 /// Форма исполнимого графового маршрута. Принимает: маршрут из котировки. Возвращает: форму. Ошибок нет
 /// (вызывается только для уже исполнимого маршрута, DexRoute.executable = true).
 pub fn graph_form(ctx: &super::super::ctx::Ctx, route: &DexRoute) -> GraphForm {
+    // Форк исполняется только своим роутером бандлом (решения 59, 82) — не прямой/умный путь UR. Проверяем до прямой
+    // формы: одно-пуловый форк-маршрут тоже идёт бандлом (exec/bundle_trade.rs), а не прямым путём (exec/trade.rs).
+    let has_fork = route
+        .legs
+        .iter()
+        .flat_map(|l| l.hops.iter())
+        .any(|h| families::classify(ctx, &h.family).is_ok_and(|f| f.fork));
+    if has_fork {
+        return GraphForm::Bundle;
+    }
     if route.legs.len() == 1 && route.legs.first().is_some_and(|l| l.hops.len() == 1) {
         return GraphForm::Direct;
     }

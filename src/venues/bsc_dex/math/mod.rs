@@ -11,6 +11,7 @@ pub mod full_math;
 pub mod sqrt_price_math;
 pub mod swap_cl;
 pub mod swap_elastic;
+pub mod swap_elastic_step;
 pub mod swap_step;
 pub mod tick_math;
 pub mod v2;

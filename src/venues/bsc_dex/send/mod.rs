@@ -130,9 +130,46 @@ pub async fn dispatch(
         }
         async move { (r.ch.id, r.send(ctx, &txs, max_block).await) }
     });
+    classify(ctx, stats, join_all(jobs).await).await
+}
+
+/// Отправляет весь бандл из нескольких транзакций (решение 84) во все выбранные каналы параллельно. Все каналы должны
+/// быть способны на бандл (channel.method = bundle): одиночный канал взял бы только первую транзакцию и потерял
+/// остальные. Транзакции идут как есть, по порядку (nonce уже проставлен), revertingTxHashes пуст (всё-или-ничего —
+/// eth_sendBundle без разрешения на откат). Принимает: каналы, подписанные транзакции бандла по порядку, предел блока.
+/// Возвращает: кто принял и кто не ответил ясно. Ошибки: NotConfigured (есть не-бандл канал), ChannelRejected (никто).
+pub async fn dispatch_slice(
+    ctx: &Ctx,
+    stats: &Stats,
+    ready: &[Ready],
+    txs: &[Bytes],
+    max_block: u64,
+) -> GatewayResult<Dispatched> {
+    if let Some(r) = ready.iter().find(|r| r.method != SendMethod::Bundle) {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            format!(
+                "Канал {} не в режиме бандла (channel.method): мульти-tx бандл через него не отправить",
+                r.ch.title
+            ),
+        ));
+    }
+    let jobs = ready
+        .iter()
+        .map(|r| async move { (r.ch.id, r.send(ctx, txs, max_block).await) });
+    classify(ctx, stats, join_all(jobs).await).await
+}
+
+/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Ошибки: ChannelRejected —
+/// ни один канал не принял (транзакции точно нигде нет; причины всех каналов в тексте).
+async fn classify(
+    ctx: &Ctx,
+    stats: &Stats,
+    results: Vec<(&'static str, GatewayResult<()>)>,
+) -> GatewayResult<Dispatched> {
     let mut out = Dispatched::default();
     let mut why = Vec::new();
-    for (id, res) in join_all(jobs).await {
+    for (id, res) in results {
         match res {
             Ok(()) => {
                 stats.update(id, |s| s.sent += 1);

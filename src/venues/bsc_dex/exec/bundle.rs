@@ -1,4 +1,6 @@
 //! Файл: venues/bsc_dex/exec/bundle.rs
+//! Хардинг ревью #79: минимум не 0 у КАЖДОГО шага ноги (L2, как exec/plan.rs), и явная проверка, что ноги одной
+//! роутер-группы имеют один входной токен и одну экосистему (L3).
 //! Что делает: сборка бандла свопов для мульти-роутерного графового маршрута (решение 84, фаза 80.8a). Маршрут,
 //! выходящий за один Universal Router, исполняется НЕ одной транзакцией, а набором: по одному execute на роутер
 //! (DEX-группу), атомарно в одном блоке через приватный релей (отправка — 80.8b). Ноги группируются по адресу
@@ -176,16 +178,32 @@ async fn router_execute(
         let (Some(first), Some(last)) = (leg.first(), leg.last()) else {
             return Err(ctx.err(ErrorCode::NoRoute, "нога бандла без шагов"));
         };
-        if last.order.min_out.is_zero() {
+        // L3 (ревью #79): все ноги группы — один входной токен и одна экосистема (формат входов). Группировка по
+        // адресу роутера это обычно обеспечивает, но берём fmt/разрешения по первой ноге — проверяем явно.
+        if first.order.token_in != tin {
             return Err(ctx.err(
-                ErrorCode::QuoteMismatch,
-                "минимум выхода ноги 0 — бандл без минимума не отправляется",
+                ErrorCode::Internal,
+                "ноги одной роутер-группы с разным входным токеном — разрешения и вход бандла не свести",
+            ));
+        }
+        if ur::format(ctx, &first.entry)? != fmt {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "ноги одной роутер-группы из разных экосистем (формат Universal Router не совпал)",
             ));
         }
         if first.from_wallet {
             total_in = total_in.saturating_add(first.order.amount_in);
         }
         for s in *leg {
+            // L2 (ревью #79): минимум не 0 у КАЖДОГО шага (как exec/plan.rs::build), не только у последнего —
+            // промежуточный хоп не должен уйти с amountOutMinimum = 0.
+            if s.order.min_out.is_zero() {
+                return Err(ctx.err(
+                    ErrorCode::QuoteMismatch,
+                    "минимум выхода шага 0 — обмен без минимума в бандл не ставится",
+                ));
+            }
             commands.push(chain::command(ctx, s, fmt, wallet)?);
         }
         total_min = total_min.saturating_add(last.order.min_out);

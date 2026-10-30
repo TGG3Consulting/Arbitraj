@@ -105,14 +105,36 @@ async fn mapping_table_reasons() {
             .unwrap_err()
             .contains("не поддерживается")
     );
-    // Форк (Biswap — V2 со своей фабрикой, без Universal Router своей фабрики): в сделки не идёт (решение 59).
+    // V2-форк (Biswap, решения 59, 82): с 80.9a — в графе для поиска/сигналов (graphable), но tradable=false (авто-
+    // сделкой не исполняется, нет Universal Router своей фабрики). Форку нужны фабрика/роутер/комиссия, НЕ UR/Permit2.
+    let bis = Scope::Dex("biswap".into());
+    let a = json!("0x1111111111111111111111111111111111111111");
+    set(&c, &[("dex.kind", bis.clone(), json!("v2_fork"))]).await;
+    // Только вид — ещё не подключён (нужны остальные настройки), но причина уже не «нет пути исполнения».
+    assert!(
+        families::classify(&c, "biswap")
+            .unwrap_err()
+            .contains("не задана dex.pool_enabled"),
+        "{}",
+        families::classify(&c, "biswap").unwrap_err()
+    );
     set(
         &c,
-        &[("dex.kind", Scope::Dex("biswap".into()), json!("v2_fork"))],
+        &[
+            ("dex.pool_enabled", bis.clone(), json!(true)),
+            ("dex.factory", bis.clone(), a.clone()),
+            ("dex.router", bis.clone(), a.clone()),
+            ("dex.v2_fee_source", bis.clone(), json!("fixed")),
+            ("dex.v2_fee_pct", bis.clone(), json!("0.25")),
+        ],
     )
     .await;
-    let e = families::classify(&c, "biswap").unwrap_err();
-    assert!(e.starts_with("DEX biswap не подключена к сделкам"), "{e}");
+    let f = families::classify(&c, "biswap").unwrap();
+    assert_eq!(
+        (f.graphable, f.tradable),
+        (true, false),
+        "V2-форк: в графе (graphable), но не исполняется (tradable=false)"
+    );
     set(&c, &v3_row("pancakeswap-v3-bsc", "dex.quoter")).await;
     let e = families::classify(&c, "pancakeswap-v3-bsc").unwrap_err();
     assert!(e.ends_with("не задана dex.quoter"), "{e}");

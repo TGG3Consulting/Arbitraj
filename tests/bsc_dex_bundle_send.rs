@@ -1,11 +1,11 @@
 //! Файл: tests/bsc_dex_bundle_send.rs
-//! Что делает: отправка бандла (exec/bundle_send.rs, решение 84, фаза 80.8b) и хардинг сборки (exec/bundle.rs, ревью
-//! #79) на пулах реальной записи CAKE (tests/route_common), без реальной сети. Offline покрыто: gas_from (лимиты газа
-//! из итогов симуляции eth_simulateV1 — gasUsed × надбавка; откат шага → NoRoute); sign_txs (подпись всех транзакций
-//! бандла по очереди тестовым ключом — число, различимость, проверки входа); хардинг L2 (нулевой минимум
+//! Что делает: отправка бандла (exec/bundle_send.rs, решение 84, фаза 80.8b/8c) и хардинг сборки (exec/bundle.rs,
+//! ревью #79) на пулах реальной записи CAKE (tests/route_common), без реальной сети. Offline покрыто: collect (лимиты
+//! газа из итогов симуляции eth_simulateV1 — gasUsed × надбавка — и КУМУЛЯТИВНАЯ база BALANCE_CHECK каждого свопа из
+//! balanceOf по состоянию после предыдущих групп, ревью #80 MEDIUM); откат шага → NoRoute; sign_txs (подпись всех
+//! транзакций бандла по очереди тестовым ключом — число, различимость, база по свопу); хардинг L2 (нулевой минимум
 //! промежуточного шага → отказ) и L3 (разный входной токен ног группы → отказ). Сетью НЕ покрыто (отмечено):
-//! реальная симуляция на узле, dispatch_slice в каналы, confirm попадания в блок, оркестрация send() — требуют
-//! узла/релея; держатся на типах и переиспользовании проверенных send/*.
+//! реальная симуляция на узле, dispatch_slice в каналы, confirm попадания в блок, оркестрация send().
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::exec::{bundle, bundle_send, chain, plan}, check::simulate, tests/route_common.
 
@@ -23,7 +23,7 @@ use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::simulate::{CallError, CallResult};
 use arb::venues::bsc_dex::exec::bundle::{self, Bundle};
-use arb::venues::bsc_dex::exec::bundle_send::{gas_from, sign_txs};
+use arb::venues::bsc_dex::exec::bundle_send::{build_sim, collect, sign_txs};
 use arb::venues::bsc_dex::exec::chain::Step;
 use arb::venues::bsc_dex::exec::plan::Order;
 use arb::venues::bsc_dex::pools::registry::Entry;
@@ -93,7 +93,7 @@ async fn prepare(p: &arb::venues::bsc_dex::parts::Parts, split_routers: bool) {
     }
 }
 
-/// Бандл из двух долей на разных роутерах (Pancake + Uniswap), покупка CAKE.
+/// Бандл из двух долей покупки CAKE на разных роутерах (Pancake + Uniswap) — обе выдают CAKE в кошелёк.
 async fn two_router_bundle(p: &arb::venues::bsc_dex::parts::Parts) -> Bundle {
     let q = p.quoting();
     let leg_pcs = vec![step(
@@ -137,19 +137,63 @@ fn ok_result(gas: u64) -> CallResult {
     }
 }
 
-#[tokio::test]
-async fn gas_from_applies_margin_per_tx() {
-    let p = route_common::parts().await;
-    let res = [ok_result(100_000), ok_result(250_000)];
-    // Надбавка 10% → 110000 и 275000.
-    let g = gas_from(&p.ctx, &res, Decimal::from(10u32)).expect("лимиты газа");
-    assert_eq!(g, vec![110_000, 275_000]);
+/// Итог balanceOf: 32 байта big-endian баланса.
+fn bal_result(v: U256) -> CallResult {
+    CallResult {
+        status: U64::from(1u8),
+        return_data: Bytes::from(v.to_be_bytes::<32>().to_vec()),
+        gas_used: U64::from(2_300u64),
+        error: None,
+        logs: Vec::new(),
+    }
 }
 
 #[tokio::test]
-async fn gas_from_rejects_reverted_step() {
+async fn collect_gas_and_cumulative_base_per_group() {
+    // Ревью #80 MEDIUM: сплит одной монеты через два роутера — база BALANCE_CHECK второй группы учитывает выход первой
+    // (кумулятивно), а не берётся тем же до-бандл балансом. Итоги симуляции: перед свопом 1 кошелёк имел `pre`, перед
+    // свопом 2 (после группы 1) — `pre + out1`.
     let p = route_common::parts().await;
-    let reverted = CallResult {
+    prepare(&p, true).await;
+    let b = two_router_bundle(&p).await;
+    let plan = build_sim(&b, WALLET);
+    assert_eq!(plan.bal.len(), 2, "balanceOf перед каждым свопом");
+    let pre = e18(5);
+    let out1 = e18(490);
+    // Крафт итогов: все вызовы успешны, лимит газа 100000; два balanceOf дают pre и pre+out1.
+    let mut res: Vec<CallResult> = plan.calls.iter().map(|_| ok_result(100_000)).collect();
+    res[plan.bal[0].1] = bal_result(pre);
+    res[plan.bal[1].1] = bal_result(pre + out1);
+    let (limits, bases) =
+        collect(&p.ctx, &res, &plan, Decimal::from(10u32)).expect("сбор газа и баз");
+    assert_eq!(limits.len(), b.txs.len());
+    assert!(limits.iter().all(|&g| g == 110_000), "gasUsed 100000 × 1.1");
+    let swap1 = plan.bal[0].0;
+    let swap2 = plan.bal[1].0;
+    assert_eq!(bases[&swap1], pre, "база первой группы — до-бандл баланс");
+    assert_eq!(
+        bases[&swap2],
+        pre + out1,
+        "база второй группы — после выхода первой"
+    );
+    assert!(
+        bases[&swap2] > bases[&swap1],
+        "база второй группы учитывает выход первой (кумулятивно)"
+    );
+}
+
+#[tokio::test]
+async fn collect_rejects_reverted_step() {
+    let p = route_common::parts().await;
+    prepare(&p, true).await;
+    let b = two_router_bundle(&p).await;
+    let plan = build_sim(&b, WALLET);
+    let mut res: Vec<CallResult> = plan.calls.iter().map(|_| ok_result(100_000)).collect();
+    res[plan.bal[0].1] = bal_result(e18(5));
+    res[plan.bal[1].1] = bal_result(e18(5));
+    // Второй своп откатился в симуляции.
+    let swap2_call = plan.main[plan.bal[1].0];
+    res[swap2_call] = CallResult {
         status: U64::from(0u8),
         return_data: Bytes::new(),
         gas_used: U64::from(21_000u64),
@@ -159,14 +203,9 @@ async fn gas_from_rejects_reverted_step() {
         }),
         logs: Vec::new(),
     };
-    let err = gas_from(
-        &p.ctx,
-        &[ok_result(100_000), reverted],
-        Decimal::from(10u32),
-    )
-    .expect_err("откат шага бандла — ошибка");
+    let err =
+        collect(&p.ctx, &res, &plan, Decimal::from(10u32)).expect_err("откат шага бандла — ошибка");
     assert_eq!(err.code, ErrorCode::NoRoute);
-    assert!(err.message.contains("шаг 1"), "{}", err.message);
 }
 
 #[tokio::test]
@@ -177,10 +216,16 @@ async fn sign_txs_signs_every_bundle_tx_in_order() {
     let key: PrivateKeySigner = KEY.parse().unwrap();
     let price = U256::from(1_000_000_000u64);
     let limits: Vec<u64> = b.txs.iter().map(|_| 300_000u64).collect();
-    let bases: HashMap<Address, U256> = [(CAKE, e18(5))].into_iter().collect();
+    // Базы BALANCE_CHECK по индексам транзакций-свопов.
+    let bases: HashMap<usize, U256> = b
+        .txs
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.is_swap())
+        .map(|(i, _)| (i, e18(5)))
+        .collect();
     let signed = sign_txs(&p.ctx, &key, &b, price, &limits, &bases).expect("подпись бандла");
     assert_eq!(signed.len(), b.txs.len(), "подписана каждая транзакция");
-    // Хеши различны, байты непусты.
     let mut hashes: Vec<_> = signed.iter().map(|s| s.hash).collect();
     hashes.sort();
     hashes.dedup();
@@ -195,11 +240,11 @@ async fn sign_txs_needs_limit_per_tx_and_base() {
     let b = two_router_bundle(&p).await;
     let key: PrivateKeySigner = KEY.parse().unwrap();
     let price = U256::from(1_000_000_000u64);
-    let bases: HashMap<Address, U256> = [(CAKE, e18(5))].into_iter().collect();
     // Лимитов меньше, чем транзакций — отказ.
-    let err = sign_txs(&p.ctx, &key, &b, price, &[300_000], &bases).expect_err("мало лимитов");
+    let err =
+        sign_txs(&p.ctx, &key, &b, price, &[300_000], &HashMap::new()).expect_err("мало лимитов");
     assert_eq!(err.code, ErrorCode::Internal);
-    // Нет базы выходного токена для BALANCE_CHECK свопа — отказ.
+    // Нет базы свопа для BALANCE_CHECK — отказ.
     let limits: Vec<u64> = b.txs.iter().map(|_| 300_000u64).collect();
     let err = sign_txs(&p.ctx, &key, &b, price, &limits, &HashMap::new()).expect_err("нет базы");
     assert_eq!(err.code, ErrorCode::Internal);
@@ -207,7 +252,7 @@ async fn sign_txs_needs_limit_per_tx_and_base() {
 
 #[tokio::test]
 async fn hardening_rejects_zero_intermediate_min() {
-    // L2: нулевой минимум промежуточного шага двуххоповой ноги — отказ (как exec/plan.rs::build).
+    // L2 (ревью #79): нулевой минимум промежуточного шага двуххоповой ноги — отказ (как exec/plan.rs::build).
     let p = route_common::parts().await;
     prepare(&p, false).await;
     let q = p.quoting();
@@ -239,7 +284,7 @@ async fn hardening_rejects_zero_intermediate_min() {
 
 #[tokio::test]
 async fn hardening_rejects_mixed_input_token_in_group() {
-    // L3: две ноги одного роутера с разным входным токеном — отказ (разрешения и вход бандла не свести).
+    // L3 (ревью #79): две ноги одного роутера с разным входным токеном — отказ.
     let p = route_common::parts().await;
     prepare(&p, false).await;
     let q = p.quoting();
@@ -252,7 +297,6 @@ async fn hardening_rejects_mixed_input_token_in_group() {
         true,
         true,
     )];
-    // Вторая нога того же Pancake-роутера, но вход WBNB (искусственно) — должна быть отвергнута.
     let leg_wbnb = vec![step(
         entry(&q, CAKE_WBNB_PCS),
         WBNB,

@@ -19,7 +19,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
-    IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
+    IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
 };
 use super::super::pools::abi_dodo::IDodoPool;
 use super::super::pools::families::Proto;
@@ -90,6 +90,21 @@ pub fn request(
         return Ok((
             ctx.dex_addr("dex.quoter", e.family.id)?,
             Bytes::from(IElasticQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()),
+        ));
+    }
+    // Algebra (THENA Fusion, решения 80, 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn,
+    // limitSqrtPrice) БЕЗ параметра fee — комиссия у Algebra динамическая (globalState.fee). Вид ядра Cl без ключа,
+    // отдельная ветка по протоколу (@cryptoalgebra/v1.9-periphery, решение 23).
+    if e.family.proto == Proto::Algebra {
+        let p = IAlgebraQuoterV2::QuoteExactInputSingleParams {
+            tokenIn: token_in,
+            tokenOut: token_out,
+            amountIn: amount,
+            limitSqrtPrice: U160::ZERO,
+        };
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            Bytes::from(IAlgebraQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()),
         ));
     }
     let data = match (e.pool.kind, &e.key) {
@@ -173,6 +188,12 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         return IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
             .ok()
             .map(|r| r.returnedAmount);
+    }
+    // Algebra (THENA Fusion): первое возвращаемое значение — amountOut.
+    if e.family.proto == Proto::Algebra {
+        return IAlgebraQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.amountOut);
     }
     match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => IV2Router::getAmountsOutCall::abi_decode_returns(out)

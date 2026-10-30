@@ -6,6 +6,7 @@
 //! От чего зависит: ctx.rs, node/*, tokens.rs, math/bin_price.rs.
 //! Настройки: dex.* (docs/SETTINGS.md, раздел «DEX» и «Контракты вида пула»), venue.quote_asset [bsc_dex].
 
+pub mod abi_algebra;
 pub mod abi_check;
 pub mod abi_dodo;
 pub mod abi_elastic;
@@ -28,6 +29,7 @@ pub mod dex_rules;
 pub mod discover;
 pub mod discover_v4;
 pub mod events;
+pub mod events_algebra;
 pub mod events_bin;
 pub mod events_cl;
 pub mod events_dodo;
@@ -50,6 +52,7 @@ pub mod link;
 pub mod listen;
 pub mod listen_log;
 pub mod load;
+pub mod load_algebra;
 pub mod load_batch;
 pub mod load_batch_cl;
 pub mod load_batch_ticks;
@@ -73,6 +76,7 @@ pub mod scan;
 pub mod session;
 pub mod ticks;
 pub mod verify;
+pub mod verify_algebra;
 pub mod verify_calls;
 pub mod verify_dodo;
 pub mod verify_rules;

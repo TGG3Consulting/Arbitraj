@@ -84,6 +84,20 @@ pub enum PoolState {
         /// Комиссия пула в feeUnits (FEE_UNITS = 100000 = 100%).
         fee_units: u32,
     },
+    /// Algebra (THENA Fusion и другие форки Algebra V1/V1.9, решения 80, 81): отдельный контракт на пул (как V3),
+    /// концентрированная ликвидность с ОДНОЙ ликвидностью (reinvestL у Algebra нет — это Elastic). Комиссия пула
+    /// динамическая (плагин волатильности), но внутри одного свопа постоянна — её текущее значение берётся из
+    /// `globalState()` (fee, единицы 1e-6). `globalState() → (price, tick, fee, timepointIndex, communityFeeToken0,
+    /// communityFeeToken1, unlocked)`, `liquidity() → uint128` — IAlgebraPoolState.sol (@cryptoalgebra/v1.9-core).
+    /// Карта тиков читается по СЫРОМУ битмапу `tickTable(int16)` (TickTable индексирует сырой тик, без деления на
+    /// tickSpacing) — math/swap_algebra.rs. Математика — math/swap_algebra.rs.
+    Algebra {
+        sqrt_price_x96: U256,
+        tick: i32,
+        liquidity: u128,
+        /// Текущая комиссия пула в пипсах (единицы 1e-6), из globalState.fee — постоянна на весь своп.
+        fee: u32,
+    },
     /// PMM DODO (DVM/DPP/DSP, решения 80, 86): состояние кривой с контракта пула (getPMMStateForCall + getUserFeeRate).
     /// Боксируется (`PmmData` много полей U256): без бокса варианта PoolState раздул бы Pool и, через него, горячий
     /// MarketEvent::Pool. Поля — в PmmData. Математика — math/swap_dodo.rs.

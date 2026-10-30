@@ -41,7 +41,9 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         }
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
-        | PoolState::Elastic { sqrt_price_x96, .. } => {
+        | PoolState::Elastic { sqrt_price_x96, .. }
+        // Algebra (THENA Fusion, решения 80, 81): цена из sqrtPriceX96, как у V3/CL.
+        | PoolState::Algebra { sqrt_price_x96, .. } => {
             let s = *sqrt_price_x96;
             if s.is_zero() {
                 return None;

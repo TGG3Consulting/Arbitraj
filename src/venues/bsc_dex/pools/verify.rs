@@ -27,7 +27,7 @@ use super::discover::Found;
 use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
-use super::{verify_dodo, verify_v4};
+use super::{verify_algebra, verify_dodo, verify_v4};
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
 #[derive(Debug, Clone)]
@@ -64,14 +64,17 @@ pub fn batch(ctx: &Ctx) -> GatewayResult<usize> {
 pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict>> {
     let size = batch(ctx)?;
     let mut out: Vec<Option<Verdict>> = vec![None; cands.len()];
-    // Три пути проверки: V4/Infinity (ключ у менеджера), DODO PMM (реестр фабрики), остальные V2/V3 (поля + реестр).
+    // Пути проверки: V4/Infinity (ключ у менеджера), DODO PMM (реестр фабрики), Algebra (фабрика poolByPair),
+    // остальные V2/V3 и KyberSwap Elastic (поля пула + реестр фабрики).
     let mut v4 = Vec::new();
     let mut dodo = Vec::new();
+    let mut algebra = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
+            Proto::Algebra => algebra.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -86,6 +89,13 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in dodo
         .into_iter()
         .zip(verify_dodo::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    let list: Vec<Candidate> = algebra.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in algebra
+        .into_iter()
+        .zip(verify_algebra::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

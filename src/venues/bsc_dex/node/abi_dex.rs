@@ -23,6 +23,9 @@
 //! - KyberSwap Elastic QuoterV2.quoteExactInputSingle((tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP)) → QuoteOutput
 //!   (usedAmount, returnedAmount, afterSqrtP, initializedTicksCrossed, gasEstimate) — ks-elastic-sc
 //!   contracts/interfaces/periphery/IQuoterV2.sol#L34-L52 (решение 81; своя структура, не V3 QuoterV2).
+//! - Algebra (THENA Fusion) QuoterV2.quoteExactInputSingle((tokenIn, tokenOut, amountIn, limitSqrtPrice)) →
+//!   (amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate) — @cryptoalgebra/v1.9-periphery
+//!   contracts/interfaces/IQuoterV2.sol (решение 81/80, фаза B): БЕЗ параметра fee — комиссия у Algebra динамическая.
 
 // Код функций генерирует alloy::sol! — число аргументов задаёт ABI контракта.
 #![allow(clippy::too_many_arguments)]
@@ -67,6 +70,11 @@ alloy::sol! {
         struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 feeUnits; uint160 limitSqrtP; }
         struct QuoteOutput { uint256 usedAmount; uint256 returnedAmount; uint160 afterSqrtP; uint32 initializedTicksCrossed; uint256 gasEstimate; }
         function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (QuoteOutput memory);
+    }
+
+    interface IAlgebraQuoterV2 {
+        struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; uint160 limitSqrtPrice; }
+        function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
     }
 }
 
@@ -113,6 +121,16 @@ mod tests {
             alloy_primitives::hex::encode(
                 &alloy_primitives::keccak256(
                     "quoteExactInputSingle((address,address,uint256,uint24,uint160))".as_bytes()
+                )[..4]
+            )
+        );
+        // keccak256("quoteExactInputSingle((address,address,uint256,uint160))")[..4] — @cryptoalgebra/v1.9-periphery
+        // QuoterV2 (без параметра fee: комиссия динамическая).
+        assert_eq!(
+            h(IAlgebraQuoterV2::quoteExactInputSingleCall::SELECTOR),
+            alloy_primitives::hex::encode(
+                &alloy_primitives::keccak256(
+                    "quoteExactInputSingle((address,address,uint256,uint160))".as_bytes()
                 )[..4]
             )
         );

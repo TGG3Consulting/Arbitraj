@@ -7,6 +7,7 @@
 
 pub mod bundle;
 pub mod bundle_send;
+pub mod bundle_trade;
 pub mod chain;
 pub mod chain_tx;
 pub mod fill;

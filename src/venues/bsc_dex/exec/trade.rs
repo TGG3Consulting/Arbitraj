@@ -8,11 +8,12 @@
 //! Не исполнилось — ошибка с фактом транзакции (газ мог сгореть), повторов нет (стартовое правило Тиграна).
 //! Умный маршрут (RouteMode::Smart) — exec/trade_smart.rs; общие шаги (минимум доли, проверка цены, отправка
 //! разрешений и обмена) — здесь.
-//! Графовый маршрут (RouteMode::Graph, решение 83): перед формированием ордера — предторговая верификация точечным
+//! Графовый маршрут (RouteMode::Graph, решения 83, 84): перед формированием ордера — предторговая верификация точечным
 //! Multicall3 (exec/verify_gate.rs) за правилом шлюза: Reject → ошибка, ордер не формируем; Ok → свежие amountOutMin
-//! по ногам ставятся последнему шагу каждой доли.
+//! по ногам. Дальше по форме (quote/graph_route::graph_form): прямая (одна доля, один хоп) — прямым путём здесь;
+//! один Universal Router PancakeSwap — умным (exec/trade_smart.rs); мульти-роутер — атомарным бандлом (exec/bundle_trade.rs).
 //! Кто вызывает: mod.rs (контракт trade), exec/trade_smart.rs (общие шаги).
-//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/precheck_sim.rs (кто меняет), exec/trade_smart.rs, exec/verify_gate.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
+//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/precheck_sim.rs (кто меняет), exec/trade_smart.rs, exec/bundle_trade.rs, exec/verify_gate.rs, exec/txs.rs, exec/result.rs, quote/direct.rs, quote/graph_route.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs, pools/registry.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
 //!
@@ -27,6 +28,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
 use super::super::pools::registry::Entry;
+use super::super::quote::graph_route::{self, GraphForm};
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::balances;
@@ -37,7 +39,7 @@ pub use super::order::{check_price, order, worst_positive};
 use super::plan::{self, Plan};
 use super::trade_smart;
 use super::txs::{self, Env};
-use super::{chain, live, precheck, precheck_sim, result, verify_gate};
+use super::{bundle_trade, chain, live, precheck, precheck_sim, result, verify_gate};
 
 /// Сделка. Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой), CoinNotChecked, настройки, каналы,
 /// SwapReverted / TxNotIncluded / NonceConflict (с фактом транзакции).
@@ -56,11 +58,10 @@ pub async fn trade(
             "В запросе нет маршрута DEX из котировки",
         )
     })?;
-    // Графовый маршрут (решение 80): неисполнимый как есть (мульти-роутер, решение 84) — отказ до сделки (деньги не
-    // рискуют); исполнимый — прямой формы (одна доля, один хоп) идёт прямым путём ниже, остальной (всё через один
-    // Universal Router PancakeSwap) — умным, тем же кодом, что RouteMode::Smart.
-    // Свежие минимумы выхода по ногам из предторговой верификации графового маршрута (решение 83, 80.6b); для
-    // одиночной прямой доли графа ставятся ниже, для умной формы — передаются в trade_smart.
+    // Графовый маршрут (решения 80, 84): неисполнимый как есть — отказ до сделки (деньги не рискуют). Исполнимый —
+    // по форме (quote/graph_route::graph_form): прямая (одна доля, один хоп) идёт прямым путём ниже; один Universal
+    // Router PancakeSwap — умным путём (как RouteMode::Smart); мульти-роутер — атомарным бандлом свопов (exec/bundle_trade).
+    // Предторговая верификация (решение 83) — для всех форм; её свежие amountOutMin по ногам идут в исполнение.
     let mut graph_mins: Option<Vec<Decimal>> = None;
     if route.mode == RouteMode::Graph {
         if !route.executable {
@@ -73,11 +74,23 @@ pub async fn trade(
         // Предторговая верификация за правилом шлюза (решение 83): Reject → ошибка, ордер не формируем;
         // Ok → свежие amountOutMin по ногам.
         let verified = verify_gate::gate(q, env, &req, &route).await?;
-        if !(route.legs.len() == 1 && route.legs[0].hops.len() == 1) {
-            return trade_smart::trade(q, env, nonces, req, &route, Some(verified.amount_out_min))
+        match graph_route::graph_form(ctx, &route) {
+            GraphForm::Direct => graph_mins = Some(verified.amount_out_min),
+            GraphForm::OneUr => {
+                return trade_smart::trade(
+                    q,
+                    env,
+                    nonces,
+                    req,
+                    &route,
+                    Some(verified.amount_out_min),
+                )
                 .await;
+            }
+            GraphForm::Bundle => {
+                return bundle_trade::trade(q, env, nonces, req, &route, verified).await;
+            }
         }
-        graph_mins = Some(verified.amount_out_min);
     }
     let leg = match (route.mode, route.legs.as_slice()) {
         (RouteMode::Smart, _) => {

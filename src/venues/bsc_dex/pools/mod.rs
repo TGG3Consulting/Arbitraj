@@ -7,6 +7,7 @@
 //! Настройки: dex.* (docs/SETTINGS.md, раздел «DEX» и «Контракты вида пула»), venue.quote_asset [bsc_dex].
 
 pub mod abi_check;
+pub mod abi_dodo;
 pub mod abi_elastic;
 pub mod abi_v2v3;
 pub mod abi_v4;
@@ -29,6 +30,7 @@ pub mod discover_v4;
 pub mod events;
 pub mod events_bin;
 pub mod events_cl;
+pub mod events_dodo;
 pub mod events_elastic;
 pub mod events_v2;
 pub mod events_v3;
@@ -54,6 +56,7 @@ pub mod load_batch_ticks;
 pub mod load_batch_v2v3;
 pub mod load_bin;
 pub mod load_cl;
+pub mod load_dodo;
 pub mod load_elastic;
 pub mod load_v2v3;
 pub mod loading;
@@ -71,5 +74,6 @@ pub mod session;
 pub mod ticks;
 pub mod verify;
 pub mod verify_calls;
+pub mod verify_dodo;
 pub mod verify_rules;
 pub mod verify_v4;

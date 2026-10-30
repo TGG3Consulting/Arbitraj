@@ -191,6 +191,26 @@ fn side(
             };
             elastic(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
         }
+        // DODO PMM (решение 86b): глубина по средней цене исполнения в полосе (quote/pmm_depth.rs), без комиссии.
+        (PoolState::Pmm(d), PoolKind::Pmm) => {
+            let state = super::super::math::swap_dodo::PmmState {
+                i: d.i,
+                k: d.k,
+                b: d.b,
+                q: d.q,
+                b0: d.b0,
+                q0: d.q0,
+                r: super::super::pools::load_dodo::rstate(d.r).ok_or("R вне 0..=2")?,
+            };
+            let base = if d.base_is_token0 {
+                e.pool.token0
+            } else {
+                e.pool.token1
+            };
+            let coin_is_base = e.coin == base;
+            super::pmm_depth::side(&state, coin_is_base, b, buy)
+                .ok_or_else(|| "расчёт глубины PMM невозможен".to_string())
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;

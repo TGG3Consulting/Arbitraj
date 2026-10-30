@@ -150,5 +150,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
             };
             (action, Bytes::from(p.abi_encode()))
         }
+        // DODO PMM (решение 86b): не входит в умный маршрут Universal Router (не tradable, исполнение — 86c).
+        PoolKind::Pmm => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "DODO PMM не исполняется умным маршрутом (фаза 86c)",
+            ));
+        }
     })
 }

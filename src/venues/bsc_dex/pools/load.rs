@@ -21,7 +21,7 @@ use super::families::Proto;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
-use super::{load_bin, load_cl, load_elastic, load_v2v3};
+use super::{load_bin, load_cl, load_dodo, load_elastic, load_v2v3};
 
 /// Прочитанное состояние.
 pub struct Loaded {
@@ -52,6 +52,21 @@ pub async fn state(
             format!("{}: у пула нет {what}", f.title),
         )
     };
+    // DODO PMM (решение 86b): вид ядра Pmm, пул — отдельный контракт, чтение своё (load_dodo.rs): кривая
+    // getPMMStateForCall + комиссии getUserFeeRate + ориентация base/quote. Карт тиков/бинов нет.
+    if f.proto.is_dodo() {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_dodo::load(ctx, *a, &tag).await?,
+                ticks: None,
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул DODO не того вида", f.title),
+        ));
+    }
     // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
     if f.proto == Proto::KyberElastic {
         if let PoolRef::Contract(a) = reference {

@@ -17,6 +17,8 @@ use crate::core::types::PoolState;
 
 use super::super::math::bin_price::{self, SCALE_OFFSET};
 use super::super::math::full_math::mul_div;
+use super::super::math::swap_dodo::{self, PmmState};
+use super::super::pools::load_dodo::rstate;
 use super::super::pools::registry::Entry;
 
 /// 2^96 — масштаб sqrtPriceX96 (протокол, не настройка).
@@ -62,6 +64,35 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
                     .flatten()
             } else {
                 mul_div(amount, price, one)
+            }
+        }
+        // DODO PMM (решение 86b): средняя цена кривой getMidPrice (quote за base, 18 знаков). Монета — база:
+        // монет = сумма(quote) · 1e18 / mid; монета — котируемая: монет = сумма(base) · mid / 1e18.
+        PoolState::Pmm(d) => {
+            let state = PmmState {
+                i: d.i,
+                k: d.k,
+                b: d.b,
+                q: d.q,
+                b0: d.b0,
+                q0: d.q0,
+                r: rstate(d.r)?,
+            };
+            let mid = swap_dodo::get_mid_price(&state)?;
+            if mid.is_zero() {
+                return None;
+            }
+            let one = super::super::math::dodo_math::one();
+            let base = if d.base_is_token0 {
+                e.pool.token0
+            } else {
+                e.pool.token1
+            };
+            // coin — база: встречный токен котируемый, монет(base) = сумма(quote)·1e18/mid; иначе наоборот.
+            if e.coin == base {
+                mul_div(amount, one, mid)
+            } else {
+                mul_div(amount, mid, one)
             }
         }
     }

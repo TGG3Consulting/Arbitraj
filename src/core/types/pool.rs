@@ -27,6 +27,9 @@ pub enum PoolKind {
     Cl,
     /// Пул из бинов (Liquidity Book), внутри менеджера-синглтона (PancakeSwap Infinity Bin).
     Bin,
+    /// PMM (Proactive Market Maker) DODO: цена по кривой PMM из резервов и целей, свой контракт на пул
+    /// (DVM/DPP/DSP, решения 80, 86). Отдельная математика (math/swap_dodo.rs) — не тики и не бины.
+    Pmm,
 }
 
 /// Как найти пул в сети.
@@ -81,6 +84,39 @@ pub enum PoolState {
         /// Комиссия пула в feeUnits (FEE_UNITS = 100000 = 100%).
         fee_units: u32,
     },
+    /// PMM DODO (DVM/DPP/DSP, решения 80, 86): состояние кривой с контракта пула (getPMMStateForCall + getUserFeeRate).
+    /// Боксируется (`PmmData` много полей U256): без бокса варианта PoolState раздул бы Pool и, через него, горячий
+    /// MarketEvent::Pool. Поля — в PmmData. Математика — math/swap_dodo.rs.
+    Pmm(Box<PmmData>),
+}
+
+/// Состояние кривой PMM DODO (DVM/DPP/DSP, решения 80, 86) — боксируется в `PoolState::Pmm`.
+/// `getPMMStateForCall()` (i, K, B, Q, B0, Q0, R; adjustedTarget уже применён на контракте) и комиссии
+/// `getUserFeeRate(user)` (lpFeeRate, mtFeeRate — фикс-точка 18 знаков). Чистый выход = валовой по кривой минус
+/// mulFloor(вых, lp) и mulFloor(вых, mt) — как querySellBase/querySellQuote (DVMTrader.sol). IDODOV2 (DODOEX/contractV2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PmmData {
+    /// Референсная цена i (quote за base, 18 знаков).
+    pub i: U256,
+    /// Наклон кривой K (0..=1e18).
+    pub k: U256,
+    /// Резерв базовой монеты.
+    pub b: U256,
+    /// Резерв котируемой монеты.
+    pub q: U256,
+    /// Цель по базовой (после adjustedTarget контракта).
+    pub b0: U256,
+    /// Цель по котируемой (после adjustedTarget контракта).
+    pub q0: U256,
+    /// R-состояние: 0 = ONE, 1 = ABOVE_ONE, 2 = BELOW_ONE (PMMPricing.RState).
+    pub r: u8,
+    /// Комиссия LP (фикс-точка 18 знаков), `_LP_FEE_RATE_`.
+    pub lp_fee_rate: U256,
+    /// Комиссия мейнтейнера (фикс-точка 18 знаков), `_MT_FEE_RATE_MODEL_.getFeeRate(user)`.
+    pub mt_fee_rate: U256,
+    /// Базовая монета пула (`_BASE_TOKEN_`) — это token0 (currency0 < currency1). false — базовая = token1.
+    /// PMM различает сторону base/quote, а token0/token1 упорядочены по адресу, поэтому ориентация хранится.
+    pub base_is_token0: bool,
 }
 
 /// Группа крючка V4 (решение 32).

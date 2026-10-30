@@ -10,7 +10,7 @@ use alloy_primitives::B256;
 
 use super::families::{Family, Proto};
 use super::registry::Entry;
-use super::{events_bin, events_cl, events_elastic, events_v2, events_v3};
+use super::{events_bin, events_cl, events_dodo, events_elastic, events_v2, events_v3};
 
 /// Что произошло с записью после события.
 #[derive(Debug, PartialEq, Eq)]
@@ -33,6 +33,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::topics(f.proto),
         Proto::InfinityBin => events_bin::topics(),
         Proto::KyberElastic => events_elastic::topics(),
+        Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::topics(),
     }
 }
 
@@ -51,6 +52,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::UniswapV4 => vec![IUniswapV4::ModifyLiquidity::SIGNATURE_HASH],
         Proto::InfinityBin => vec![IInfinityBin::Mint::SIGNATURE_HASH],
         Proto::KyberElastic => events_elastic::liquidity_topics(),
+        Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::liquidity_topics(),
     }
 }
 
@@ -62,6 +64,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::apply(e, log),
         Proto::InfinityBin => events_bin::apply(e, log),
         Proto::KyberElastic => events_elastic::apply(e, log),
+        Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

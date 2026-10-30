@@ -18,8 +18,10 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
+use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{bin_swap, v2};
+use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
 
 /// PIPS_DENOMINATOR = 1e6.
@@ -161,6 +163,42 @@ pub fn swap(
             let amount: u128 = amount.try_into().map_err(|_| none())?;
             // Bin: X = currency0; swapForY = отдаём X (токен0).
             bin_swap::swap(bins, *active_id, fee, zero_for_one, exact_in, amount).ok_or_else(none)
+        }
+        // DODO PMM (решения 80, 86b): своя кривая (math/swap_dodo, 86a) + комиссии lp/mt (как querySellBase/Quote,
+        // DVMTrader.sol). Только точный вход: обратной формулы PMM под точный выход нет.
+        (PoolState::Pmm(d), PoolKind::Pmm) => {
+            if !exact_in {
+                return Err(why(
+                    "DODO: точный выход не поддерживается (нет обратной формулы PMM)",
+                ));
+            }
+            let state = PmmState {
+                i: d.i,
+                k: d.k,
+                b: d.b,
+                q: d.q,
+                b0: d.b0,
+                q0: d.q0,
+                r: rstate(d.r).ok_or_else(|| why("R вне 0..=2"))?,
+            };
+            // Отдаём базовую монету → sellBase (получаем quote), иначе sellQuote. База — token0/token1 по ориентации.
+            let base = if d.base_is_token0 {
+                e.pool.token0
+            } else {
+                e.pool.token1
+            };
+            let gross = if token_in == base {
+                swap_dodo::sell_base_token(&state, amount)
+            } else {
+                swap_dodo::sell_quote_token(&state, amount)
+            };
+            let (gross, _new_r) = gross.ok_or_else(none)?;
+            let out = net_after_fees(gross, d.lp_fee_rate, d.mt_fee_rate).ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
         }
         _ => Err(none()),
     }

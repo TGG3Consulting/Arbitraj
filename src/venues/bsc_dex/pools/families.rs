@@ -37,6 +37,22 @@ pub enum Proto {
     /// KyberSwap Elastic (решение 81): отдельный контракт на пул (как V3), ликвидность L = baseL + reinvestL,
     /// свои геттеры/события/квотер, свой роутер (форк).
     KyberElastic,
+    /// DODO PMM — DODOVendingMachine (DVM): односторонний пул, Q0=0, цели решаются adjustedTarget по резервам
+    /// (решения 80, 86). Свои геттеры/события/квотер (сам пул — querySellBase/Quote). Чтение — load_dodo.rs.
+    DodoDvm,
+    /// DODO PMM — DODOPrivatePool (DPP): двусторонний пул, хранит цели/RState; querySellBase/Quote возвращают
+    /// 4 значения (receive, mtFee, RState, newTarget) — иной разбор квотера, чем у DVM/DSP.
+    DodoDpp,
+    /// DODO PMM — DODOStablePool (DSP): двусторонний пул, хранит цели/RState; querySellBase/Quote возвращают
+    /// 4 значения, как DPP.
+    DodoDsp,
+}
+
+impl Proto {
+    /// Семейство DODO (DVM/DPP/DSP) — PMM-пул. Ошибок нет.
+    pub fn is_dodo(self) -> bool {
+        matches!(self, Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp)
+    }
 }
 
 /// Вид пула одной DEX. Живёт всю работу процесса (одна запись на пару «id, протокол»).
@@ -84,6 +100,13 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // своим роутером (fork=true). Чтение состояния/события/квотер — свои (не как Infinity/V4). Вид ядра — Cl
         // (концентрированная ликвидность), но ссылка на пул — отдельный контракт (как V3).
         "kyber_elastic" => (PoolKind::Cl, Proto::KyberElastic, true, true, true),
+        // DODO PMM (решения 80, 86b): в графе (своя математика math/swap_dodo), НО tradable=false — исполнения
+        // пока нет (роутер DODO — фаза 86c). graphable=true, tradable=false, fork=false (ни UR, ни свой
+        // роутер-форк): как v3_fork до появления пути исполнения, но в графе (экзотическая математика берётся).
+        // Квотер — сам пул (querySellBase/Quote), отдельного контракта-квотера нет.
+        "dodo_dvm" => (PoolKind::Pmm, Proto::DodoDvm, true, false, false),
+        "dodo_dpp" => (PoolKind::Pmm, Proto::DodoDpp, true, false, false),
+        "dodo_dsp" => (PoolKind::Pmm, Proto::DodoDsp, true, false, false),
         _ => return None,
     })
 }
@@ -204,6 +227,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::KyberElastic => {
             list.extend(["dex.factory", "dex.router", "dex.quoter", "dex.tick_reader"])
         }
+        // DODO PMM (решение 86b): только фабрика DVM/DPP/DSP — ею проверяется пул (getDODOPoolBidirection,
+        // решение 59) и слушаются события создания (NewDVM/NewDPP/NewDSP). Квотер — сам пул (адрес из справочника),
+        // отдельной настройки dex.quoter не нужно. Роутера нет (tradable=false, исполнение — 86c).
+        Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => list.push("dex.factory"),
     }
     list
 }

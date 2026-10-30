@@ -27,7 +27,7 @@ use super::discover::Found;
 use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
-use super::verify_v4;
+use super::{verify_dodo, verify_v4};
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
 #[derive(Debug, Clone)]
@@ -64,16 +64,28 @@ pub fn batch(ctx: &Ctx) -> GatewayResult<usize> {
 pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict>> {
     let size = batch(ctx)?;
     let mut out: Vec<Option<Verdict>> = vec![None; cands.len()];
-    let (v4, v2v3): (Vec<usize>, Vec<usize>) = (0..cands.len()).partition(|i| {
-        matches!(
-            cands[*i].family.proto,
-            Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4
-        )
-    });
+    // Три пути проверки: V4/Infinity (ключ у менеджера), DODO PMM (реестр фабрики), остальные V2/V3 (поля + реестр).
+    let mut v4 = Vec::new();
+    let mut dodo = Vec::new();
+    let mut v2v3 = Vec::new();
+    for (i, c) in cands.iter().enumerate() {
+        match c.family.proto {
+            Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
+            p if p.is_dodo() => dodo.push(i),
+            _ => v2v3.push(i),
+        }
+    }
     let list: Vec<Candidate> = v4.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in v4
         .into_iter()
         .zip(verify_v4::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    let list: Vec<Candidate> = dodo.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in dodo
+        .into_iter()
+        .zip(verify_dodo::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

@@ -6,7 +6,9 @@
 //! и один execute Universal Router PancakeSwap со всеми долями и итоговой проверкой баланса (exec/universal.rs),
 //! ожидание итога своим узлом, факт по логам Transfer. Повторов нет (стартовое правило Тиграна).
 //! Кто вызывает: exec/trade.rs.
-//! От чего зависит: exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/result.rs,
+//! Графовый маршрут (решение 83): вызывающий (exec/trade.rs) передаёт свежие amountOutMin по ногам из предторговой
+//! верификации (exec/verify_gate.rs) — они ставятся последнему шагу каждой доли; умный путь без графа передаёт None.
+//! От чего зависит: exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
 //! quote/direct.rs, quote/via.rs, quote/mixed_quoter.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, send.*, channel.*.
 //!
@@ -29,17 +31,19 @@ use super::super::wallet::nonce::Nonces;
 use super::native::{self, Wrap};
 use super::trade::{check_price, send_plan, sides, worst_positive};
 use super::txs::Env;
-use super::{chain, live, precheck_sim, result, universal};
+use super::{chain, live, precheck_sim, result, universal, verify_gate};
 
-/// Сделка по умному маршруту. Ошибки: NoRoute (доля не годится, пул пропал или не допущен), QuoteMismatch
-/// (цена хуже допустимой, расхождение с MixedQuoter), CoinNotChecked, настройки, каналы,
-/// SwapReverted / TxNotIncluded / NonceConflict (с фактом транзакции).
+/// Сделка по умному маршруту. verify_mins — свежие amountOutMin по ногам графовой верификации (решение 83): Some —
+/// ставятся последнему шагу каждой доли; None — умный путь без графа, минимумы считает exec/chain.rs. Ошибки: NoRoute
+/// (доля не годится, пул пропал или не допущен), QuoteMismatch (цена хуже допустимой, расхождение с MixedQuoter или
+/// число ног верификации не совпало), CoinNotChecked, настройки, каналы, SwapReverted / TxNotIncluded / NonceConflict.
 pub async fn trade(
     q: &Quoting,
     env: &Env,
     nonces: &Nonces,
     req: TradeRequest,
     route: &DexRoute,
+    verify_mins: Option<Vec<Decimal>>,
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
     worst_positive(ctx, &req)?;
@@ -98,6 +102,24 @@ pub async fn trade(
     let mut steps = Vec::with_capacity(paths.len());
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, &req, p, *qty, decs)?);
+    }
+    // Графовый маршрут (решение 83): свежие минимумы выхода по ногам из верификации — последнему шагу каждой доли
+    // (он отдаёт выход доли). Умный путь без графа передаёт None и ничего не меняет.
+    if let Some(mins) = &verify_mins {
+        if mins.len() != steps.len() {
+            return Err(ctx.err(
+                ErrorCode::QuoteMismatch,
+                "верификация вернула число ног, не равное маршруту",
+            ));
+        }
+        let out_dec = if req.side == Side::Buy {
+            decs.0
+        } else {
+            decs.1
+        };
+        for (leg, min) in steps.iter_mut().zip(mins) {
+            verify_gate::apply_leg_min(ctx, leg, *min, out_dec)?;
+        }
     }
     let is_native = native::is_native(ctx, &req.asset);
     let wrap = if is_native {

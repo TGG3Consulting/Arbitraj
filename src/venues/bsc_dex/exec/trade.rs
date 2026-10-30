@@ -8,8 +8,11 @@
 //! Не исполнилось — ошибка с фактом транзакции (газ мог сгореть), повторов нет (стартовое правило Тиграна).
 //! Умный маршрут (RouteMode::Smart) — exec/trade_smart.rs; общие шаги (минимум доли, проверка цены, отправка
 //! разрешений и обмена) — здесь.
+//! Графовый маршрут (RouteMode::Graph, решение 83): перед формированием ордера — предторговая верификация точечным
+//! Multicall3 (exec/verify_gate.rs) за правилом шлюза: Reject → ошибка, ордер не формируем; Ok → свежие amountOutMin
+//! по ногам ставятся последнему шагу каждой доли.
 //! Кто вызывает: mod.rs (контракт trade), exec/trade_smart.rs (общие шаги).
-//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/precheck_sim.rs (кто меняет), exec/trade_smart.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
+//! От чего зависит: exec/plan.rs, exec/chain.rs, exec/live.rs, exec/order.rs, exec/precheck.rs, exec/precheck_sim.rs (кто меняет), exec/trade_smart.rs, exec/verify_gate.rs, exec/txs.rs, exec/result.rs, quote/direct.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs, pools/registry.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
 //!
@@ -17,6 +20,7 @@
 //! Нативная монета BNB (решение 62) — exec/native.rs: WRAP_ETH / UNWRAP_WETH в той же транзакции, резерв на газ не трогается.
 
 use alloy_primitives::{Address, U256};
+use rust_decimal::Decimal;
 
 use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -33,7 +37,7 @@ pub use super::order::{check_price, order, worst_positive};
 use super::plan::{self, Plan};
 use super::trade_smart;
 use super::txs::{self, Env};
-use super::{chain, live, precheck, precheck_sim, result};
+use super::{chain, live, precheck, precheck_sim, result, verify_gate};
 
 /// Сделка. Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой), CoinNotChecked, настройки, каналы,
 /// SwapReverted / TxNotIncluded / NonceConflict (с фактом транзакции).
@@ -55,6 +59,9 @@ pub async fn trade(
     // Графовый маршрут (решение 80): неисполнимый как есть (мульти-роутер, решение 84) — отказ до сделки (деньги не
     // рискуют); исполнимый — прямой формы (одна доля, один хоп) идёт прямым путём ниже, остальной (всё через один
     // Universal Router PancakeSwap) — умным, тем же кодом, что RouteMode::Smart.
+    // Свежие минимумы выхода по ногам из предторговой верификации графового маршрута (решение 83, 80.6b); для
+    // одиночной прямой доли графа ставятся ниже, для умной формы — передаются в trade_smart.
+    let mut graph_mins: Option<Vec<Decimal>> = None;
     if route.mode == RouteMode::Graph {
         if !route.executable {
             let why = route
@@ -63,12 +70,19 @@ pub async fn trade(
                 .unwrap_or_else(|| "граф-маршрут не исполним как есть (решение 84)".to_string());
             return Err(ctx.err(ErrorCode::NoRoute, why));
         }
+        // Предторговая верификация за правилом шлюза (решение 83): Reject → ошибка, ордер не формируем;
+        // Ok → свежие amountOutMin по ногам.
+        let verified = verify_gate::gate(q, env, &req, &route).await?;
         if !(route.legs.len() == 1 && route.legs[0].hops.len() == 1) {
-            return trade_smart::trade(q, env, nonces, req, &route).await;
+            return trade_smart::trade(q, env, nonces, req, &route, Some(verified.amount_out_min))
+                .await;
         }
+        graph_mins = Some(verified.amount_out_min);
     }
     let leg = match (route.mode, route.legs.as_slice()) {
-        (RouteMode::Smart, _) => return trade_smart::trade(q, env, nonces, req, &route).await,
+        (RouteMode::Smart, _) => {
+            return trade_smart::trade(q, env, nonces, req, &route, None).await;
+        }
         (RouteMode::Direct | RouteMode::Graph, [leg]) => leg.clone(),
         _ => {
             return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
@@ -99,6 +113,18 @@ pub async fn trade(
     let path = live::path(&v, &leg.hops, req.qty, true).await?;
     check_price(ctx, &req, path.coins, path.usdt)?;
     let mut legs = vec![chain::steps(ctx, &req, &path, req.qty, decs)?];
+    // Графовый маршрут (решение 83): свежий минимум выхода доли из верификации — последнему шагу (он отдаёт выход).
+    if let Some(mins) = &graph_mins {
+        let out_dec = if req.side == Side::Buy {
+            decs.0
+        } else {
+            decs.1
+        };
+        let min = *mins
+            .first()
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "верификация не вернула минимум выхода"))?;
+        verify_gate::apply_leg_min(ctx, &mut legs[0], min, out_dec)?;
+    }
     let is_native = native::is_native(ctx, &req.asset);
     let wrap = if is_native {
         native::adapt(ctx, req.side, &mut legs)?

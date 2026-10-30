@@ -22,3 +22,4 @@ pub mod trade_smart;
 pub mod txs;
 pub mod universal;
 pub mod ur;
+pub mod verify_gate;

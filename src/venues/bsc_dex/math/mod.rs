@@ -9,6 +9,8 @@ pub mod bin_price;
 pub mod bin_swap;
 pub mod dodo_math;
 pub mod full_math;
+pub mod maverick_math;
+pub mod maverick_tick_math;
 pub mod sqrt_price_math;
 pub mod swap_algebra;
 pub mod swap_cl;

@@ -6,11 +6,11 @@
 //! блок} — данные свежие и цена не уехала; Reject{причина, дрейф} — узел отдал устаревшее состояние (блок отстал от
 //! головы больше verify.max_staleness_blocks), чтение/таймаут (verify.timeout_ms), или цена уехала больше
 //! verify.max_price_drift_pct. Verify проверяет ТОЛЬКО валидность данных; порог прибыли — ядро (precheck/profit).
-//! Reject → ордер не формируем (стартовое правило Тиграна) — врезку делает шлюз (фаза 80.6b).
-//! Кто вызывает: предторговый путь DEX (80.6b); тесты.
+//! Reject → ордер не формируем (стартовое правило Тиграна) — врезку за правилом шлюза делает exec/verify_gate.rs (80.6b).
+//! Кто вызывает: exec/verify_gate.rs (предторговый путь DEX, графовый маршрут); тесты.
 //! От чего зависит: pools/load_batch.rs, pools/load.rs, pools/registry.rs, quote/verify_decide.rs, quote/via.rs,
 //! quote/steps.rs, node/heads.rs, tokens.rs.
-//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms [bsc_dex].
+//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct [bsc_dex].
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -60,7 +60,8 @@ pub fn limits(ctx: &super::super::ctx::Ctx) -> GatewayResult<(u64, Decimal, u64)
 }
 
 /// Верификация маршрута котировки `plan`. Принимает: расчёт путей (сторона, монета, налоги, decimals), тикеры, план,
-/// цену газа. Возвращает: вердикт. Ошибки: NotConfigured (verify.*), NoRoute (нет маршрута), узел/настройки чтения.
+/// цену газа. Возвращает: вердикт. Ошибки: NotConfigured (verify.*, exec.dex_slippage_pct), NoRoute (нет маршрута),
+/// узел/настройки чтения.
 pub async fn run(
     v: &Via<'_>,
     names: &Names<'_>,
@@ -69,6 +70,9 @@ pub async fn run(
 ) -> GatewayResult<Verdict> {
     let ctx = &v.q.ctx;
     let (max_stale, max_drift, timeout_ms) = limits(ctx)?;
+    // Допуск проскальзывания для amountOutMin (решение 84) — через ?, как боевой путь (order.rs): не задан → NotConfigured,
+    // верификация не работает (не «тихий ноль»).
+    let slip_pct = ctx.dec("exec.dex_slippage_pct")?;
     let route = plan
         .route
         .as_ref()
@@ -144,5 +148,7 @@ pub async fn run(
             drift: None,
         });
     }
-    Ok(decide(v, names, plan, &fresh, gas, block, max_drift))
+    Ok(decide(
+        v, names, plan, &fresh, gas, block, max_drift, slip_pct,
+    ))
 }

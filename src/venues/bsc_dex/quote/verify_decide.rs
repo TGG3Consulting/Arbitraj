@@ -7,7 +7,9 @@
 //! Кто вызывает: quote/verify.rs (run); тесты.
 //! От чего зависит: quote/verify.rs (Verdict), quote/route_calc.rs, quote/graph_legs.rs, quote/select.rs,
 //! quote/costs.rs, quote/steps.rs, quote/via.rs, pools/registry.rs.
-//! Настройки: exec.dex_slippage_pct [bsc_dex]; допуск дрейфа передаёт вызывающий.
+//! Настройки: своих не читает — допуск дрейфа (verify.max_price_drift_pct) и допуск проскальзывания
+//! (exec.dex_slippage_pct) передаёт вызывающий (quote/verify.rs run читает их через ?: не задано — верификация
+//! не работает, как в боевом пути exec/order.rs, exec/chain.rs).
 
 use std::collections::HashMap;
 
@@ -24,8 +26,10 @@ use super::via::Via;
 use super::{costs, graph_legs, select};
 
 /// Пересчёт маршрута на свежих состояниях и вердикт по дрейфу. Принимает: расчёт путей, тикеры, план, свежие записи
-/// пулов маршрута, цену газа, блок перечтения, допуск дрейфа (%). Возвращает: вердикт. Ошибок нет — неудача пересчёта
-/// это Reject.
+/// пулов маршрута, цену газа, блок перечтения, допуск дрейфа (%), допуск проскальзывания exec.dex_slippage_pct (%)
+/// для amountOutMin (решение 84) — вызывающий читает его через ? (не задан → верификация не работает). Возвращает:
+/// вердикт. Ошибок нет — неудача пересчёта это Reject.
+#[allow(clippy::too_many_arguments)]
 pub fn decide(
     v: &Via<'_>,
     names: &Names<'_>,
@@ -34,6 +38,7 @@ pub fn decide(
     gas: U256,
     block: u64,
     max_drift: Decimal,
+    slip_pct: Decimal,
 ) -> Verdict {
     let ctx = &v.q.ctx;
     let Some(route) = plan.route.as_ref() else {
@@ -88,19 +93,13 @@ pub fn decide(
             drift: Some(drift),
         };
     }
-    let slip = ctx.dec("exec.dex_slippage_pct").ok();
+    // amountOutMin по ноге (решение 84) = ожидаемый выход × (1 − exec.dex_slippage_pct). Допуск передан вызывающим
+    // через ? (не задан → до сюда не доходим), а не читается здесь с «тихим нулём» — конвенция боевого пути (order.rs).
+    let keep = Decimal::ONE - slip_pct / Decimal::ONE_HUNDRED;
     let amount_out_min = fresh_quote
         .route
         .as_ref()
-        .map(|r| {
-            r.legs
-                .iter()
-                .map(|l| match slip {
-                    Some(s) => l.expected_out * (Decimal::ONE - s / Decimal::ONE_HUNDRED),
-                    None => l.expected_out,
-                })
-                .collect()
-        })
+        .map(|r| r.legs.iter().map(|l| l.expected_out * keep).collect())
         .unwrap_or_default();
     Verdict::Ok {
         fresh_quote: Box::new(fresh_quote),

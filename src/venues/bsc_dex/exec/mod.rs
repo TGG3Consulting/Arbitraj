@@ -5,6 +5,7 @@
 //! От чего зависит: node/abi_dex.rs, pools/*.
 //! Настройки: dex.router, dex.deadline_s.
 
+pub mod bundle;
 pub mod chain;
 pub mod chain_tx;
 pub mod fill;

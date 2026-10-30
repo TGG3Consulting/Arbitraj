@@ -18,6 +18,7 @@ use alloy_primitives::{Address, B256};
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
+use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
@@ -69,6 +70,10 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 IElasticFactory::PoolCreated::SIGNATURE_HASH,
                 false,
             ),
+            // DODO PMM (решение 86b): своё событие создания у фабрики DVM/DPP/DSP (пул — отдельный контракт).
+            Proto::DodoDvm => ("dex.factory", IDodoFactory::NewDVM::SIGNATURE_HASH, false),
+            Proto::DodoDpp => ("dex.factory", IDodoFactory::NewDPP::SIGNATURE_HASH, false),
+            Proto::DodoDsp => ("dex.factory", IDodoFactory::NewDSP::SIGNATURE_HASH, false),
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
@@ -168,6 +173,22 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = IElasticFactory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Elastic) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
+        }
+        // DODO PMM (решение 86b): NewDVM/NewDPP/NewDSP(baseToken, quoteToken, creator, pool) — поля одинаковы.
+        Proto::DodoDvm => {
+            let e = IDodoFactory::NewDVM::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("NewDVM не по ABI: {e}"))?;
+            (e.baseToken, e.quoteToken, e.dvm)
+        }
+        Proto::DodoDpp => {
+            let e = IDodoFactory::NewDPP::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("NewDPP не по ABI: {e}"))?;
+            (e.baseToken, e.quoteToken, e.dpp)
+        }
+        Proto::DodoDsp => {
+            let e = IDodoFactory::NewDSP::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("NewDSP не по ABI: {e}"))?;
+            (e.baseToken, e.quoteToken, e.DSP)
         }
         _ => {
             let e = IV3Factory::PoolCreated::decode_log_data(&log.inner.data)

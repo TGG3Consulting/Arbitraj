@@ -173,6 +173,18 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         (PoolState::Elastic { fee_units, .. }, _) => {
             Ok(Decimal::from(*fee_units) / Decimal::from(1000u32))
         }
+        // DODO PMM (решение 86b): комиссия пула = lpFeeRate + mtFeeRate (фикс-точка 18 знаков) — как querySell*
+        // (DVMTrader.sol). Проценты = (lp + mt) / 1e18 · 100.
+        (PoolState::Pmm(d), _) => {
+            let rate =
+                num::to_decimal(d.lp_fee_rate.saturating_add(d.mt_fee_rate), 18).ok_or_else(|| {
+                    ctx.err(
+                        ErrorCode::BadResponse,
+                        "комиссия DODO не помещается в Decimal",
+                    )
+                })?;
+            Ok(rate * Decimal::ONE_HUNDRED)
+        }
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

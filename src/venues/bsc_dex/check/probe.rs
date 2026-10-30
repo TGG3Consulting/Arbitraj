@@ -208,6 +208,18 @@ async fn part(
     wallet: Address,
     now: u64,
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
+    // DODO PMM (решение 86b): исполнения свопа пока нет (роутер DODO — фаза 86c), поэтому пробу налога через его
+    // пул собрать нечем (ни Universal Router, ни свой роутер-форк). Чёткая причина, не молчаливый сбой: налог монеты
+    // проверяется по её другим пулам (Pancake и т. п.), если они есть.
+    if e.family.proto.is_dodo() {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            format!(
+                "{}: проба налога через пул DODO невозможна — исполнение свопа ещё не реализовано (фаза 86c)",
+                e.family.title
+            ),
+        ));
+    }
     if e.family.fork {
         fork_swap::probe_swap(
             ctx,

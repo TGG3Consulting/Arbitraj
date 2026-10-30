@@ -40,5 +40,8 @@ pub fn empty(e: &Entry) -> bool {
             base_l, reinvest_l, ..
         } => *base_l == 0 && *reinvest_l == 0,
         PoolState::Bin { .. } => e.bins.as_ref().is_some_and(|b| b.reserves.is_empty()),
+        // DODO PMM (решение 86b): пуст, когда оба резерва нули (одной стороны достаточно для своей стороны обмена —
+        // односторонний DVM с Q=0 продаёт котируемую за базовую; стороны фильтрует глубина, решение 73).
+        PoolState::Pmm(d) => d.b.is_zero() && d.q.is_zero(),
     }
 }

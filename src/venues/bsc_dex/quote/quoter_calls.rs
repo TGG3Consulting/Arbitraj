@@ -14,15 +14,17 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::{U24, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::PoolKind;
+use crate::core::types::{PoolKind, PoolRef, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
     IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
 };
+use super::super::pools::abi_dodo::IDodoPool;
 use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
+use super::super::pools::load_dodo::FEE_TRADER;
 use super::super::pools::registry::Entry;
 
 /// Адрес и данные вызова квотера. Ошибки: NotConfigured (адрес), NoRoute (сумма больше uint128 у V4), Internal (нет ключа).
@@ -39,6 +41,37 @@ pub fn request(
     };
     let zero_for_one = token_in == e.pool.token0;
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
+    // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
+    // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
+    // те же lp/mt комиссии, что и наш локальный net_after_fees. Направление: отдаём базовую монету →
+    // querySellBase, иначе querySellQuote. DVMTrader/DPPTrader/DSPTrader (DODOEX/contractV2, решение 23).
+    if e.family.proto.is_dodo() {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул DODO не того вида"));
+        };
+        let PoolState::Pmm(d) = &e.pool.state else {
+            return Err(ctx.err(ErrorCode::Internal, "состояние пула DODO не Pmm"));
+        };
+        let base = if d.base_is_token0 {
+            e.pool.token0
+        } else {
+            e.pool.token1
+        };
+        let data = if token_in == base {
+            IDodoPool::querySellBaseCall {
+                trader: FEE_TRADER,
+                payBaseAmount: amount,
+            }
+            .abi_encode()
+        } else {
+            IDodoPool::querySellQuoteCall {
+                trader: FEE_TRADER,
+                payQuoteAmount: amount,
+            }
+            .abi_encode()
+        };
+        return Ok((pool, Bytes::from(data)));
+    }
     // KyberSwap Elastic (решение 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn, feeUnits,
     // limitSqrtP) — вид ядра Cl без ключа, отдельная ветка по протоколу.
     if e.family.proto == Proto::KyberElastic {
@@ -131,6 +164,11 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    // DODO PMM (решение 86b): querySellBase/querySellQuote возвращают первым словом выход после комиссий
+    // (DVM — 2 значения, DPP/DSP — 4; первое всегда receive*Amount). Читаем первое слово, число значений не важно.
+    if e.family.proto.is_dodo() {
+        return (out.len() >= 32).then(|| U256::from_be_slice(&out[..32]));
+    }
     if e.family.proto == Proto::KyberElastic {
         return IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
             .ok()

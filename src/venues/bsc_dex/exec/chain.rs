@@ -111,5 +111,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
         PoolKind::Cl | PoolKind::Bin => {
             swap_v4::command(ctx, &s.entry, f, &s.order, (s.from_wallet, s.to_wallet))
         }
+        // DODO PMM (решение 86b): не исполняется Universal Router — своп DODO будет в фазе 86c.
+        PoolKind::Pmm => Err(ctx.err(
+            ErrorCode::Internal,
+            "DODO PMM не исполняется Universal Router (фаза 86c)",
+        )),
     }
 }

@@ -72,9 +72,13 @@ pub async fn states(
         Err(e) => return wants.iter().map(|_| Err(e.clone())).collect(),
     };
     let mut out: Out = wants.iter().map(|_| None).collect();
-    // Bin и KyberSwap Elastic — по одному (см. шапку; у Elastic обход списка тиков не ложится на ступени по словам).
+    // Bin, KyberSwap Elastic и DODO PMM — по одному (см. шапку; у Elastic обход списка тиков не ложится на ступени
+    // по словам, у DODO чтение кривой getPMMStateForCall+getUserFeeRate — свой набор вызовов, не пачка слотов).
     for (i, w) in wants.iter().enumerate() {
-        if w.family.kind == PoolKind::Bin || w.family.proto == Proto::KyberElastic {
+        if w.family.kind == PoolKind::Bin
+            || w.family.proto == Proto::KyberElastic
+            || w.family.proto.is_dodo()
+        {
             let r = load::state(
                 ctx,
                 tokens,

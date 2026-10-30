@@ -49,42 +49,49 @@ pub struct Family {
     /// V2-форков (общая V2-математика, своя комиссия пары). false — вид только в справочнике (например V3-форки
     /// пока без котировки). Отделено от tradable: форк обогащает сигналы ещё до готовности исполнения (решение 82).
     pub graphable: bool,
-    /// Есть собственный путь исполнения — Universal Router своей фабрики (решения 31, 38, 59). false — форк: в графе
-    /// как сигнал, но авто-сделкой не исполняется, пока нет обмена через роутер форка (отдельная задача, решение 59).
+    /// Есть собственный путь исполнения (решения 31, 38, 59). false — форк: в графе как сигнал, но авто-сделкой не
+    /// исполняется, пока tradable=false (флип — фаза 80.9b, когда готов обмен через роутер форка).
     pub tradable: bool,
+    /// Исполняется через СОБСТВЕННЫЙ роутер форка (classic V2 Router, swapExactTokens…SupportingFeeOnTransferTokens,
+    /// ERC-20 approve без Permit2), а НЕ через Universal Router своей фабрики (решения 59, 82, фаза 80.9b). У
+    /// поддержанных DEX (PancakeSwap/Uniswap) false — у них Universal Router. Используется сборкой бандла
+    /// (exec/bundle.rs, exec/fork_swap.rs) и классификацией формы исполнения (quote/graph_route.rs).
+    pub fork: bool,
 }
 
 /// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,
-/// graphable (в графе для поиска/сигналов) и tradable (есть путь исполнения — Universal Router своей фабрики, только
-/// у PancakeSwap и Uniswap; решения 31, 38, 59). V2-форк: graphable, но не tradable (сигнал до готовности исполнения,
-/// решение 82). V3-форки пока только справочник (graphable=false). None — неизвестен или «не поддерживается». Ошибок нет.
-pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool)> {
-    //                                    graphable, tradable
+/// graphable (в графе для поиска/сигналов), tradable (есть путь исполнения) и fork (исполняется своим роутером форка,
+/// а не Universal Router). Поддержанные DEX (PancakeSwap/Uniswap): graphable+tradable, не форк (Universal Router своей
+/// фабрики; решения 31, 38, 59). V2-форк: graphable+fork; tradable станет true с фазой 80.9b (обмен через роутер форка).
+/// V3-форки пока только справочник (graphable=false). None — неизвестен или «не поддерживается». Ошибок нет.
+pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
+    //                                    graphable, tradable, fork
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" => (PoolKind::V2, Proto::V2, true, true),
-        "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true, true),
-        "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true),
-        "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true),
-        "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true),
-        "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true),
-        "v2_fork" => (PoolKind::V2, Proto::V2, true, false),
-        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false),
-        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false),
+        "pancakeswap_v2" | "uniswap_v2" => (PoolKind::V2, Proto::V2, true, true, false),
+        "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true, true, false),
+        "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
+        "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
+        "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
+        "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        // V2-форк (Biswap и пр.): в графе и исполним СВОИМ роутером (fork=true); tradable пока false — флип в 80.9b.
+        "v2_fork" => (PoolKind::V2, Proto::V2, true, false, true),
+        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false, true),
+        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false, true),
         _ => return None,
     })
 }
 
-/// Записи видов: (id, протокол, graphable, tradable) → вид. Новая запись — только при новом сочетании.
-type Interned = HashMap<(String, Proto, bool, bool), &'static Family>;
+/// Записи видов: (id, протокол, graphable, tradable, fork) → вид. Новая запись — только при новом сочетании.
+type Interned = HashMap<(String, Proto, bool, bool, bool), &'static Family>;
 static INTERNED: Mutex<Option<Interned>> = Mutex::new(None);
 
 /// Вид пула DEX по id и варианту dex.kind. None — вариант неизвестен или «не поддерживается». Ошибок нет.
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
-    let (pk, proto, graphable, tradable) = spec(kind)?;
+    let (pk, proto, graphable, tradable, fork) = spec(kind)?;
     let mut m = INTERNED.lock().unwrap_or_else(|p| p.into_inner());
     let map = m.get_or_insert_with(HashMap::new);
     let f = map
-        .entry((id.to_string(), proto, graphable, tradable))
+        .entry((id.to_string(), proto, graphable, tradable, fork))
         .or_insert_with(|| {
             let id: &'static str = Box::leak(id.to_string().into_boxed_str());
             Box::leak(Box::new(Family {
@@ -94,6 +101,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
                 title: id,
                 graphable,
                 tradable,
+                fork,
             }))
         });
     Some(*f)

@@ -35,6 +35,10 @@ pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
         PoolState::V2 { reserve0, reserve1 } => reserve0.is_zero() || reserve1.is_zero(),
         PoolState::V3 { liquidity, .. } | PoolState::Cl { liquidity, .. } => *liquidity == 0,
+        // Elastic: ликвидность обмена L = base_l + reinvest_l — пуст, когда оба нуля (решение 81).
+        PoolState::Elastic {
+            base_l, reinvest_l, ..
+        } => *base_l == 0 && *reinvest_l == 0,
         PoolState::Bin { .. } => e.bins.as_ref().is_some_and(|b| b.reserves.is_empty()),
     }
 }

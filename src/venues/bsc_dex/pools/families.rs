@@ -34,6 +34,9 @@ pub enum Proto {
     InfinityBin,
     /// Uniswap V4: состояние через StateView.
     UniswapV4,
+    /// KyberSwap Elastic (решение 81): отдельный контракт на пул (как V3), ликвидность L = baseL + reinvestL,
+    /// свои геттеры/события/квотер, свой роутер (форк).
+    KyberElastic,
 }
 
 /// Вид пула одной DEX. Живёт всю работу процесса (одна запись на пару «id, протокол»).
@@ -77,6 +80,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
         "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false, true),
+        // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic), исполняется
+        // своим роутером (fork=true). Чтение состояния/события/квотер — свои (не как Infinity/V4). Вид ядра — Cl
+        // (концентрированная ликвидность), но ссылка на пул — отдельный контракт (как V3).
+        "kyber_elastic" => (PoolKind::Cl, Proto::KyberElastic, true, true, true),
         _ => return None,
     })
 }
@@ -191,6 +198,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.state_view",
             "dex.quoter",
         ]),
+        // KyberSwap Elastic (решение 81): фабрика (проверка пула getPool(t0,t1,swapFeeUnits)), свой роутер (форк
+        // исполняется им, UR/Permit2 не нужны — отсечены выше), квотер (сверка QuoterV2.quoteExactInputSingle),
+        // читатель тиков (TicksFeesReader.getTicksInRange — связный список тиков).
+        Proto::KyberElastic => {
+            list.extend(["dex.factory", "dex.router", "dex.quoter", "dex.tick_reader"])
+        }
     }
     list
 }

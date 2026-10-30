@@ -2,7 +2,8 @@
 //! Что делает: данные вызова квотера своей DEX на точный вход и разбор ответа — одна точка для eth_call
 //! (quote/quoter.rs) и для пробного обмена в симуляции (check/probe.rs).
 //! V2 — Router.getAmountsOut; V3 — QuoterV2.quoteExactInputSingle; Infinity CL/Bin — CLQuoter/BinQuoter;
-//! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые).
+//! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые); KyberSwap Elastic — свой QuoterV2
+//! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81).
 //! Кто вызывает: quote/quoter.rs, check/probe.rs.
 //! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, ctx.rs.
 //! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула].
@@ -17,7 +18,10 @@ use crate::core::types::PoolKind;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::node::abi_dex::{IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter};
+use super::super::node::abi_dex::{
+    IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
+};
+use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
 
@@ -35,6 +39,26 @@ pub fn request(
     };
     let zero_for_one = token_in == e.pool.token0;
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
+    // KyberSwap Elastic (решение 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn, feeUnits,
+    // limitSqrtP) — вид ядра Cl без ключа, отдельная ветка по протоколу.
+    if e.family.proto == Proto::KyberElastic {
+        let fee = U24::from(
+            e.pool
+                .fee_pips
+                .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула Elastic нет feeUnits"))?,
+        );
+        let p = IElasticQuoterV2::QuoteExactInputSingleParams {
+            tokenIn: token_in,
+            tokenOut: token_out,
+            amountIn: amount,
+            feeUnits: fee,
+            limitSqrtP: U160::ZERO,
+        };
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            Bytes::from(IElasticQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()),
+        ));
+    }
     let data = match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => {
             let c = IV2Router::getAmountsOutCall {
@@ -107,6 +131,11 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.proto == Proto::KyberElastic {
+        return IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.returnedAmount);
+    }
     match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => IV2Router::getAmountsOutCall::abi_decode_returns(out)
             .ok()?

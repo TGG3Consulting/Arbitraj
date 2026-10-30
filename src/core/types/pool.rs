@@ -68,6 +68,19 @@ pub enum PoolState {
         protocol_fee: u32,
         lp_fee: u32,
     },
+    /// KyberSwap Elastic (решение 81): отдельный контракт на пул (как V3), но ликвидность обмена
+    /// L = base_l + reinvest_l (reinvest_l — ликвидность из реинвестированных комиссий, прирастает каждым обменом).
+    /// `getPoolState() → (sqrtP, currentTick, nearestCurrentTick, locked)`, `getLiquidityState() → (baseL, reinvestL,
+    /// reinvestLLast)`, `swapFeeUnits()` (единицы 1e-5, FEE_UNITS=100000) — IPoolStorage.sol (ks-elastic-sc).
+    /// Событие Swap несёт baseL (не reinvestL): reinvest_l обновляется при перечитывании и событиях ликвидности.
+    Elastic {
+        sqrt_price_x96: U256,
+        tick: i32,
+        base_l: u128,
+        reinvest_l: u128,
+        /// Комиссия пула в feeUnits (FEE_UNITS = 100000 = 100%).
+        fee_units: u32,
+    },
 }
 
 /// Группа крючка V4 (решение 32).

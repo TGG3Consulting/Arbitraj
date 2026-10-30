@@ -169,6 +169,10 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
             },
             _,
         ) => Ok(pips(swap_fee(*protocol_fee, *lp_fee, zero_for_one))),
+        // KyberSwap Elastic (решение 81): комиссия в feeUnits (FEE_UNITS = 100000 = 100%) → проценты = feeUnits / 1000.
+        (PoolState::Elastic { fee_units, .. }, _) => {
+            Ok(Decimal::from(*fee_units) / Decimal::from(1000u32))
+        }
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

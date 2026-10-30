@@ -57,6 +57,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify.rs`, `verify_calls.rs`, `verify_rules.rs`, `verify_v4.rs` | Проверка пула на своём узле (V2/V3 — поля и реестр фабрики, своя комиссия V2; V4 — ключ) |
 | `created_log.rs` | Событие создания → проверенный пул → подписка |
 | `abi_v2v3.rs`, `abi_v4.rs` | ABI фабрик, пулов, менеджеров V4, StateView, TickLens (+ сверка topic0 с исследованием) |
+| `abi_elastic.rs` | ABI пула/фабрики/читателя тиков KyberSwap Elastic (решение 81): getPoolState/getLiquidityState/swapFeeUnits/tickDistance/ticks, Swap/Mint/Burn/BurnRTokens, getPool, getTicksInRange |
 | `key.rs` | PoolKey V4 (Infinity, Uniswap), PoolId, разбор parameters (тест — реальный пул из документации PancakeSwap) |
 | `hooks.rs` | Флаги крючка и группа A/B/C (решение 32) |
 | `scan.rs` | eth_getLogs кусками, ход чтения в журнал без спама |
@@ -82,8 +83,10 @@ DEX — строки таблицы сопоставления (решение 5
 | `deploy_block.rs` | Блок развёртывания менеджера V4: бинарный поиск eth_getCode, хранение в SQLite; доступ узла к истории состояния |
 | `discover.rs`, `discover_v4.rs` | Найденный пул, встречный токен, пулы подписки из справочника; разбор Initialize и пул по ключу V4 |
 | `load.rs`, `load_v2v3.rs`, `load_cl.rs`, `load_bin.rs` | Состояние на блоке: резервы, slot0, ликвидность, тики, бины |
+| `load_elastic.rs` | Состояние пула KyberSwap Elastic на блоке (решение 81): getPoolState/getLiquidityState/swapFeeUnits + все тики списка через читатель (getTicksInRange) и ticks() — по одному пулу |
 | `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах) |
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |
+| `events_elastic.rs` | События KyberSwap Elastic (решение 81): Swap → цена/тик/baseL; Mint/Burn/BurnRTokens → перечитывание (reinvestL/карта тиков) |
 | `listen.rs` | Слушатель пачки пулов |
 | `listen_log.rs` | Один лог: применить, перечитать, отправить ядру |
 | `created.rs` | Новые пулы в реальном времени |

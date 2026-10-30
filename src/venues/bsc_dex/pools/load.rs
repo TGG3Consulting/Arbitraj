@@ -17,10 +17,11 @@ use super::super::tokens::Tokens;
 use super::bins::BinMap;
 use super::discover::Found;
 use super::families::Family;
+use super::families::Proto;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
-use super::{load_bin, load_cl, load_v2v3};
+use super::{load_bin, load_cl, load_elastic, load_v2v3};
 
 /// Прочитанное состояние.
 pub struct Loaded {
@@ -51,6 +52,22 @@ pub async fn state(
             format!("{}: у пула нет {what}", f.title),
         )
     };
+    // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
+    if f.proto == Proto::KyberElastic {
+        if let PoolRef::Contract(a) = reference {
+            let sp = spacing.ok_or_else(|| missing("tickDistance"))?;
+            let (state, t) = load_elastic::load(ctx, f, *a, sp, &tag).await?;
+            return Ok(Loaded {
+                state,
+                ticks: Some(t),
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Elastic не того вида", f.title),
+        ));
+    }
     match (f.kind, reference) {
         (PoolKind::V2, PoolRef::Contract(a)) => Ok(Loaded {
             state: load_v2v3::v2(ctx, *a, &tag).await?,

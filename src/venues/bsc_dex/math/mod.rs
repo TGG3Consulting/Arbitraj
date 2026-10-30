@@ -7,9 +7,11 @@
 
 pub mod bin_price;
 pub mod bin_swap;
+pub mod dodo_math;
 pub mod full_math;
 pub mod sqrt_price_math;
 pub mod swap_cl;
+pub mod swap_dodo;
 pub mod swap_elastic;
 pub mod swap_elastic_step;
 pub mod swap_step;

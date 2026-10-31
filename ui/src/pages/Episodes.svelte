@@ -4,10 +4,11 @@
     длительность (у открытого — идёт), наибольшая прибыль на бюджете и без бюджета, записей, причина закрытия или
     «открыт», остановлена ли запись (лимит места); «Просмотр» — записи эпизода в окне (EpisodeView), «Скачать» — файл
     .jsonl.zst как есть. Почему эпизоды не ведутся (не заданы episode.*) и сколько места занято — над списком.
+    «Реплей» — плеер офлайн-реплея записанного эпизода (EpisodeReplay).
     Данные — GET /api/episodes?limit=N; живое сообщение episode обновляет строку на месте.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/PageSize.svelte,
-    components/ErrorText.svelte, components/EpisodeView.svelte.
+    components/ErrorText.svelte, components/EpisodeView.svelte, components/EpisodeReplay.svelte.
   Настройки: нет (episode.* — экран «Настройки», категория «Сигналы и эпизоды»). Сколько строк — задаёт зритель.
 -->
 <script>
@@ -18,6 +19,7 @@
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import EpisodeView from '../components/EpisodeView.svelte';
+  import EpisodeReplay from '../components/EpisodeReplay.svelte';
 
   let limit = $state(null);
   let rows = $state([]);
@@ -25,6 +27,7 @@
   let used = $state(0);
   let error = $state('');
   let open = $state(null);
+  let replay = $state(null);
   let now = $state(Date.now());
 
   /** Перечитывает список. Ошибка — в error. */
@@ -94,6 +97,7 @@
           </td>
           <td>
             <button class="quiet" onclick={() => (open = e)}>Просмотр</button>
+            <button class="quiet" onclick={() => (replay = e)}>Реплей</button>
             <a href={`/api/episodes/${seg(e.id)}/file`} download>Скачать</a>
           </td>
         </tr>
@@ -105,3 +109,4 @@
 </div>
 
 {#if open}<EpisodeView episode={open} onclose={() => (open = null)} />{/if}
+{#if replay}<EpisodeReplay episode={replay} onclose={() => (replay = null)} />{/if}

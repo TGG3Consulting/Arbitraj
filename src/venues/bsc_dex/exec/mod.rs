@@ -12,6 +12,7 @@ pub mod bundle_sim;
 pub mod bundle_trade;
 pub mod chain;
 pub mod chain_tx;
+pub mod cycle_bundle;
 pub mod fill;
 pub mod fork_swap;
 pub mod live;

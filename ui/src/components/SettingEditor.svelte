@@ -14,6 +14,7 @@
 -->
 <script>
   import { store, valueKey, setValue } from '../lib/settings.svelte.js';
+  import { takePrefill } from '../lib/firstRun.svelte.js';
   import { showValue, choiceLabel } from '../lib/labels.js';
   import ErrorText from './ErrorText.svelte';
 
@@ -24,7 +25,19 @@
   let { def, scope, label = '', options = null, only = null } = $props();
 
   const current = $derived(store.values[valueKey(def.name, scope)]);
-  let draft = $state(null);
+
+  /**
+   * Советуемое значение из «Первого запуска» — один раз при создании поля (как «не сохранено»), только если
+   * настройка ещё не задана. Ничего не сохраняет: Тигран жмёт «Сохранить» обычным путём. Для Bool/TextList
+   * ввод идёт не через draft — там совета нет, строки-переключатели в таблице первого запуска не предзаполняются.
+   */
+  function seedDraft() {
+    const suggested = takePrefill(def.name, scope);
+    const set = store.values[valueKey(def.name, scope)] !== undefined;
+    return suggested !== undefined && !set ? suggested : null;
+  }
+
+  let draft = $state(seedDraft());
   let picked = $state(null);
   let error = $state('');
   let busy = $state(false);

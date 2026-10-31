@@ -6,6 +6,7 @@
 | `GET /api/settings` | Все заданные значения |
 | `PUT /api/settings` | `{name, scope, value}`; `value: null` — очистить |
 | `GET /api/settings/history?limit=N[&name=]` | История изменений |
+| `GET /api/first-run` | Таблица первого запуска — советуемые стартовые значения (справочные данные, не автозапись; api/first_run.rs) |
 | `GET /api/rules`, `POST /api/rules`, `PUT /api/rules/{id}` | Правила шлюза |
 | `GET /api/rules/meta` | Справочник для формы правил: коды ошибок, действия с параметрами, виды области |
 | `GET /api/venues` | Площадки, зарегистрированные в шлюзе (id по алфавиту) |

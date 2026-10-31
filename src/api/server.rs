@@ -18,8 +18,8 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    check, coins, control, core_api, dex, episodes, journal, rules, rules_meta, secrets, settings,
-    static_ui, venues, wallet_queue, ws,
+    check, coins, control, core_api, dex, episodes, first_run, journal, rules, rules_meta, secrets,
+    settings, static_ui, venues, wallet_queue, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -30,6 +30,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/settings/schema", get(settings::schema))
         .route("/api/settings", get(settings::values).put(settings::set))
         .route("/api/settings/history", get(settings::history))
+        .route("/api/first-run", get(first_run::table))
         .route("/api/rules", get(rules::list).post(rules::create))
         .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))

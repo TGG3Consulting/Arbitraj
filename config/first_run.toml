@@ -1,0 +1,297 @@
+# Файл: config/first_run.toml
+# Что это: СПРАВОЧНАЯ таблица рекомендованных стартовых значений настроек («Таблица первого запуска»).
+#   Это ДАННЫЕ, а не код и НЕ значения по умолчанию движка. Движок по-прежнему без стартовых значений:
+#   не задана настройка — функция не работает (CLAUDE.md, docs/SETTINGS.md). Эти рекомендации СОВЕТУЕМЫЕ:
+#   Тигран смотрит, подтверждает и сохраняет их сам обычным путём (экран «Настройки», с журналом изменений).
+#   Автоматической записи настроек по этому файлу НЕТ.
+# Кто читает: src/api/first_run.rs (эндпоинт GET /api/first-run) — отдаёт таблицу интерфейсу как есть.
+# Откуда значения (правило «только факты», решение 23):
+#   - лимиты площадок/протоколов и документированные адреса — задокументированное значение со ссылкой на источник;
+#   - параметры поиска/алгоритма — ориентиры из docs/SETTINGS.md;
+#   - капитал-зависимые money.* / risk.* — только МЕТОД (без готового числа): точное значение подбирает Тигран.
+# Человекочитаемая копия таблицы — docs/FIRST_RUN.md.
+
+advisory = true
+note = "Советуемые стартовые значения. Ничего не сохраняется автоматически — Тигран подтверждает и сохраняет каждое сам на экране «Настройки» (с журналом изменений). Значения по умолчанию у движка отсутствуют."
+source_note = "Лимиты площадок и адреса — из официальной документации и принятых решений (ссылка в строке «Источник»). Деньги и риск зависят от капитала — даётся метод, а не число."
+
+# --- Связь: узел BSC и справочник пулов (с чего начинается работа DEX) ---
+[[section]]
+title = "Связь: узел BSC и справочник пулов"
+intro = "С этого начинается первый запуск: бесплатный публичный узел и бесплатный индексатор — чтобы DEX заработал без регистраций. Свой платный узел и ключ индексатора подставляются позже."
+
+[[section.rec]]
+name = "bsc.node_ws_url"
+area = "вся система"
+unit = "URL"
+value = "wss://bsc-rpc.publicnode.com"
+source = "Официальный список BNB Chain; решение 79"
+rationale = "Бесплатный публичный узел без ключа, принимает большие фильтры logs — проще всего для старта. Резервный и платный узлы задаются отдельно."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "bsc.pool_events_source"
+area = "вся система"
+unit = "источник"
+value = "ws"
+source = "Решение 79 (запись ws_logs_2026-10-26)"
+rationale = "На публичном узле подписка logs (ws) заметно легче, чем тянуть квитанции каждого блока (receipts)."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "index.api_url"
+area = "по площадке DEX"
+unit = "URL"
+value = "https://api.geckoterminal.com/api/v2"
+source = "Документация CoinGecko/GeckoTerminal"
+rationale = "GeckoTerminal без ключа — справочник пулов работает сразу, без регистрации. Ключ CoinGecko Demo/Pro подставляется позже (другой адрес)."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "index.network"
+area = "по площадке DEX"
+unit = "id сети"
+value = "bsc"
+source = "Индексатор, GET /networks"
+rationale = "id сети BSC у индексатора."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "index.requests_per_min"
+area = "по площадке DEX"
+unit = "запросов в минуту"
+value = "10"
+source = "Документация CoinGecko: GeckoTerminal без ключа ≈10/мин"
+rationale = "Лимит бесплатного GeckoTerminal. С ключом Demo поднять до 100 (и следить за 10 000/мес)."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "index.page_size"
+area = "по площадке DEX"
+unit = "пулов"
+value = "20"
+source = "Документация: «up to 20 pools per page»"
+rationale = "Максимум пулов на странице у индексатора."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "index.pages_per_token"
+area = "по площадке DEX"
+unit = "страниц"
+value = "2"
+source = "Запись 2026-10-24; больше 10 страниц — только тариф Analyst"
+rationale = "На первой странице у части монет (CAKE, ETH, DOGE) не все пулы с USDT — нужно 2 и больше."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "index.key_header"
+area = "по площадке DEX"
+unit = "выбор"
+method = "Не задавать (GeckoTerminal без ключа). С ключом CoinGecko: Demo — x-cg-demo-api-key, Pro — x-cg-pro-api-key; сам ключ — секрет index.api_key."
+rationale = "Первый запуск — без ключа индексатора."
+
+# --- Нативная монета BNB ---
+[[section]]
+title = "Нативная монета BNB"
+intro = "Чтобы торговать BNB на DEX: у BNB нет адреса контракта, поэтому он сопоставляется с обёрткой WBNB."
+
+[[section.rec]]
+name = "dex.native_wrapped"
+area = "по площадке DEX"
+unit = "адрес"
+value = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+source = "weth9 в параметрах развёртывания Universal Router PancakeSwap и Uniswap для BSC"
+rationale = "WBNB — обёртка BNB. Без неё нативная монета не торгуется (нет адреса контракта)."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.native_ticker"
+area = "по площадке DEX"
+unit = "тикер"
+value = "BNB"
+source = "Тикер нативной монеты BSC на бирже"
+rationale = "Вместе с dex.native_wrapped говорит системе, какая монета биржи нативная."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+# --- Направление DEX <-> DEX (замкнутые циклы) ---
+[[section]]
+title = "Направление DEX ↔ DEX (замкнутые циклы) — фаза сигнала"
+intro = "Второе направление (решение 85). На старте — только сигнал, без авто-исполнения. Включатели оставляем выключенными: их включает Тигран сам (ценность «всё под контролем человека»)."
+
+[[section.rec]]
+name = "dex_dex.enabled"
+area = "по площадке DEX"
+unit = "да/нет"
+method = "Оставить выключенным на старте. Включает Тигран, когда готов смотреть сигнал циклов."
+rationale = "Фаза сигнала без авто-исполнения — под контролем человека."
+
+[[section.rec]]
+name = "dex_dex.base_tokens"
+area = "по площадке DEX"
+unit = "адреса BSC"
+value = "0x55d398326f99059fF775485246999027B3197955,0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+source = "USDT и WBNB в сети BSC"
+rationale = "USDT и WBNB: у обеих курс BNB → базовая берётся из графа, поэтому чистая прибыль считается."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex_dex.max_cycle_len"
+area = "по площадке DEX"
+unit = "хопов"
+value = "3"
+source = "Ориентир 2–4 (docs/SETTINGS.md)"
+rationale = "3 хопа — разумный баланс покрытия и скорости перебора; больше — дольше поиск."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex_dex.max_cycles"
+area = "по площадке DEX"
+unit = "циклов"
+value = "20"
+source = "Ориентир (docs/SETTINGS.md)"
+rationale = "Предел числа циклов на одну базовую монету — держит скорость перебора."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex_dex.probe_input_base"
+area = "по площадке DEX"
+unit = "базовой монеты"
+method = "Небольшой объём под капитал. Ориентир: 100 для базовой USDT, 0,2 для базовой WBNB. Точное число подбирает Тигран."
+rationale = "Объём, на котором показывается сигнал: прибыль и проскальзывание зависят от объёма."
+
+[[section.rec]]
+name = "dex_dex.min_profit_base"
+area = "по площадке DEX"
+unit = "базовой монеты"
+method = "Не задавать (порог 0) — в сигнале видно всё."
+rationale = "На фазе сигнала смотрим все найденные циклы."
+
+[[section.rec]]
+name = "dex_dex.execute"
+area = "по площадке DEX"
+unit = "да/нет"
+method = "Оставить выключенным. Включает Тигран после того, как сигнал подтверждён на сухом режиме."
+rationale = "Авто-исполнение отдельно от сигнала — под контролем человека."
+
+# --- Лимиты биржи BingX ---
+[[section]]
+title = "Лимиты биржи BingX"
+intro = "Значения из официальной документации BingX — это потолки площадки, безопасные для старта."
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка BingX"
+unit = "мс"
+value = "5000"
+source = "Документация BingX: не больше 5000"
+rationale = "Максимальное окно действия подписанного запроса у BingX."
+prefill = { kind = "Venue", id = "bingx" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка BingX"
+unit = "в секунду"
+value = "10"
+source = "Документация BingX: не больше 10"
+rationale = "Предел темпа подписок WebSocket у BingX."
+prefill = { kind = "Venue", id = "bingx" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка BingX"
+unit = "в секунду"
+value = "2"
+source = "Документация BingX: не больше 2"
+rationale = "Предел запросов ставок комиссии у BingX."
+prefill = { kind = "Venue", id = "bingx" }
+
+# --- Безопасность (вывод ключа из пароля) ---
+[[section]]
+title = "Безопасность: вывод ключа из пароля (Argon2id)"
+intro = "Минимумы OWASP для Argon2id — безопасный старт; можно поднять под мощность ПК."
+
+[[section.rec]]
+name = "security.kdf_memory_kib"
+area = "вся система"
+unit = "КиБ"
+value = "19456"
+source = "OWASP: не меньше 19456"
+rationale = "Минимум памяти OWASP для Argon2id."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "security.kdf_iterations"
+area = "вся система"
+unit = "проходов"
+value = "2"
+source = "OWASP: не меньше 2 при 19456 КиБ"
+rationale = "Минимум проходов OWASP при этой памяти."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "security.kdf_parallelism"
+area = "вся система"
+unit = "потоков"
+method = "Старт 1 поток (OWASP допускает 1). Больше — если нужен более быстрый вход на многоядерном ПК. Задаёт Тигран."
+rationale = "Документированного минимума нет — без ложной точности даём метод."
+
+[[section.rec]]
+name = "security.password_min_len"
+area = "вся система"
+unit = "символов"
+method = "Минимальная длина пароля секретов: старт не меньше 12 символов (общая практика). Задаёт Тигран."
+rationale = "Документированного минимума в проекте нет — даём метод, не число."
+
+# --- Деньги и риск (вводит Тигран под капитал) ---
+[[section]]
+title = "Деньги и риск — вводит Тигран под капитал"
+intro = "Торговля не включается, пока не заданы ВСЕ money.* и risk.* (docs/SETTINGS.md). Готовых чисел здесь нет (правило «только факты»): даётся метод — точное значение зависит от капитала и подбирает Тигран."
+
+[[section.rec]]
+name = "money.min_profit_usd"
+area = "вся система"
+unit = "USDT"
+method = "Порог чистой прибыли сделки после всех затрат. Старт — заметно выше типичной стоимости сделки (газ + комиссии), чтобы не торговать в ноль. Точное число под капитал подбирает Тигран."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "money.min_profit_pct"
+area = "вся система"
+unit = "%"
+method = "Порог прибыли в % от вложенного — страхует мелкие сделки. Подбирает Тигран."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "money.max_per_trade_usd"
+area = "вся система (можно по площадке)"
+unit = "USDT"
+method = "Потолок вложения в одну сделку — небольшая доля капитала, чтобы ограничить риск одной сделки. Подбирает Тигран под капитал."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "money.max_per_coin_usd"
+area = "вся система"
+unit = "USDT"
+method = "Потолок вложения в одну монету одновременно. Подбирает Тигран под капитал."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "money.max_in_transit_usd"
+area = "вся система"
+unit = "USDT"
+method = "Потолок суммы во всех переводах одновременно (ограничивает риск времени в пути). Подбирает Тигран под капитал."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "risk.max_daily_loss_usd"
+area = "вся система"
+unit = "USDT"
+method = "Дневной стоп: суммарный убыток за день, после которого система останавливается. Старт — небольшая доля капитала. Подбирает Тигран."
+rationale = "Капитал-зависимо."
+
+[[section.rec]]
+name = "risk.min_bnb_balance"
+area = "кошелёк"
+unit = "BNB"
+method = "Запас BNB на газ: хватить на несколько сделок и отмен. Старт — исходя из типичного газа BSC. Подбирает Тигран."
+rationale = "Капитал/газ-зависимо."

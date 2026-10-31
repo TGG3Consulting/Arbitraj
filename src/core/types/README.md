@@ -11,6 +11,7 @@
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
 | `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken, PoolDirectory — справочник пулов от индексатора (решение 58) |
 | `pool_depth.rs` | PoolDepth, CrossCheck — пул DEX глазами адаптера для экрана «Монеты»: глубина по направлениям, вердикт, спит ли, независимая сверка расчёта (перечисление), подробности площадки строками (решение 73) |
+| `dex_cycle.rs` | DexCycle, DexCycleHop — сигнал замкнутого цикла DEX ↔ DEX для «Живого экрана» (решение 85, фаза сигнала): базовая монета, вложено/получено, валовая и чистая прибыль, газ/чаевые (BNB) и их перевод в базовую, маршрут по хопам, флаг исполнимости и причина, блок |
 | `control.rs` | CoinGasStats, StuckAlert, ManualHolding, ManualAction, ManualCommand, CommandSource |
 
 Деньги — `rust_decimal::Decimal`, значения блокчейна — `alloy_primitives::U256`/`Address`/`B256`.

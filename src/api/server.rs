@@ -37,6 +37,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/venues/kinds", get(venues::kinds))
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
+        .route("/api/venues/{id}/dex-cycles", get(dex::cycles))
         .route("/api/channels/{venue}", get(dex::channels))
         .route("/api/wallet-queue/{venue}", get(wallet_queue::get))
         .route(

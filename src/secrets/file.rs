@@ -50,10 +50,28 @@ pub fn save(path: &Path, password: &[u8], plain: &Plain, p: KdfParams) -> Result
         .collect();
     let json = Zeroizing::new(serde_json::to_vec(&as_map).map_err(|e| e.to_string())?);
     let bytes = crypto::seal(password, &json, p).map_err(|e| e.to_string())?;
+    write_blob(path, &bytes)
+}
+
+/// Читает файл секретов как есть, БЕЗ расшифровки (зашифрованный блоб для экспорта/бэкапа).
+/// Принимает: путь. Возвращает: байты файла или None, если файла нет.
+/// Ошибки: сбой чтения (нет доступа и т. п.).
+pub fn read_blob(path: &Path) -> Result<Option<Vec<u8>>, FileError> {
+    match std::fs::read(path) {
+        Ok(b) => Ok(Some(b)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Не удалось прочитать файл секретов: {e}")),
+    }
+}
+
+/// Атомарно записывает уже готовые байты файла секретов (временный файл → сброс → переименование).
+/// Принимает: путь, байты зашифрованного файла. Шифрованием не занимается — кладёт блоб как есть.
+/// Ошибки: нет места или доступа к папке.
+pub fn write_blob(path: &Path, bytes: &[u8]) -> Result<(), FileError> {
     let tmp = path.with_extension("enc.tmp");
     let write = || -> std::io::Result<()> {
         let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(&bytes)?;
+        f.write_all(bytes)?;
         f.sync_all()?;
         std::fs::rename(&tmp, path)
     };

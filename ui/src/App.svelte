@@ -34,6 +34,7 @@
   import Journal from './pages/Journal.svelte';
   import Episodes from './pages/Episodes.svelte';
   import FirstRun from './pages/FirstRun.svelte';
+  import SettingsIO from './pages/SettingsIO.svelte';
 
   /**
    * Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой.
@@ -51,6 +52,7 @@
     { id: 'channels', title: 'Каналы отправки', page: Channels, more: true },
     { id: 'gas', title: 'Статистика газа', page: GasStats, more: true },
     { id: 'settings', title: 'Настройки', page: Settings, menu: 'settings' },
+    { id: 'settings-io', title: 'Импорт/экспорт настроек', page: SettingsIO, more: true },
     { id: 'first-run', title: 'Первый запуск', page: FirstRun, more: true },
     { id: 'rules', title: 'Правила шлюза', page: Rules, more: true },
     { id: 'notify', title: 'Уведомления', page: Notifications, more: true },

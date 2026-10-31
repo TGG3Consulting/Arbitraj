@@ -19,6 +19,8 @@ pub mod rules_meta;
 pub mod secrets;
 pub mod server;
 pub mod settings;
+pub mod settings_io;
+pub mod settings_io_fmt;
 pub mod state;
 pub mod static_ui;
 pub mod venues;

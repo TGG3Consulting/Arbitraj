@@ -8,6 +8,7 @@
 //!
 //! GET /api/venues/{id}/dex-families — [DexFamily]; биржа — 400 «не применимо»
 //! GET /api/venues/{id}/pool-directory — PoolDirectory (справочник пулов от индексатора, решение 58); биржа — 400
+//! GET /api/venues/{id}/dex-cycles   — [DexCycle] (сигналы циклов DEX ↔ DEX, решение 85; за dex_dex.enabled); биржа — 400
 //! GET /api/channels/{venue}         — [{info: SendChannelInfo, stats: SendChannelStats | null}]
 //!
 //! Статистику каналов (решение 42) ведёт ядро по событиям адаптера (Core::channel_stats). Пока событий
@@ -17,7 +18,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use serde::Serialize;
 
-use crate::core::types::{PoolDirectory, SendChannelInfo, SendChannelStats, VenueId};
+use crate::core::types::{DexCycle, PoolDirectory, SendChannelInfo, SendChannelStats, VenueId};
 use crate::gateway::contract::DexFamily;
 
 use super::state::{ApiError, AppState};
@@ -63,6 +64,26 @@ pub async fn directory(
         .map_err(ApiError::gateway)?;
     venue
         .pool_directory()
+        .await
+        .map(Json)
+        .map_err(ApiError::gateway)
+}
+
+/// Сигналы циклов DEX ↔ DEX площадки (шлюз `dex_cycles`, решение 85).
+/// Принимает: id площадки. Возвращает: сигналы циклов (прибыльные впереди); пусто — направление выключено
+/// (dex_dex.enabled) или циклов нет.
+/// Ошибки: 400 — не DEX (NotApplicable); 404 — площадка не подключена; 502 — сбой адаптера (узел, настройки).
+pub async fn cycles(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<DexCycle>>, ApiError> {
+    let venue = st
+        .registry
+        .get(&VenueId(id))
+        .await
+        .map_err(ApiError::gateway)?;
+    venue
+        .dex_cycles()
         .await
         .map(Json)
         .map_err(ApiError::gateway)

@@ -12,9 +12,12 @@
 //! проскальзывание уже внутри), валовая прибыль = выход − вход; газ (BNB) → базовую монету по курсу, чистая прибыль =
 //! валовая − затраты. Для замкнутого round-trip по двум пулам одной пары прибыль ожидаемо отрицательна (комиссии двух
 //! свопов) — это валидная проверка МЕХАНИКИ (решение 85: прибыль может быть отрицательной). (3) Исполнимость: все хопы
-//! через tradable-пулы → исполним; хоп через не-tradable семейство → сигнал, но не исполним.
+//! через tradable-пулы → исполним; хоп через не-tradable семейство → сигнал, но не исполним. (4) Маппинг сигнала в
+//! read-тип ядра DexCycle (стык образца решения 74, quote/cycle_view.rs): поля переносятся один-в-один, добавляется
+//! площадка; JSON-поверхность эндпоинта GET /api/venues/{id}/dex-cycles — та, что ждёт интерфейс (VenueId строкой,
+//! адреса «0x…», Decimal строками, PoolRef::Contract как {Contract: «0x…»}).
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::{pools, quote}, abi_v2v3; настоящая SQLite во временной папке.
+//! От чего зависит: arb::venues::bsc_dex::{pools, quote}, core::types (DexCycle), abi_v2v3; настоящая SQLite во временной папке.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -514,5 +517,86 @@ async fn executability_requires_tradable_hops() {
     assert!(
         sig.exec_note.is_some(),
         "есть причина неисполнимости для карточки"
+    );
+}
+
+/// Маппинг сигнала цикла (адаптер) в read-тип ядра DexCycle (стык образца решения 74, quote/cycle_view.rs): все поля
+/// переносятся один-в-один, добавляется площадка; JSON-поверхность эндпоинта GET /api/venues/{id}/dex-cycles — та, что
+/// ждёт интерфейс (VenueId строкой, адреса «0x…», Decimal строками, PoolRef как {Contract: «0x…»}). Данные — реальная
+/// запись routes_2026-10-29, как в остальных тестах файла (без моков).
+#[tokio::test]
+async fn maps_cycle_signal_to_core_dex_cycle_74() {
+    use arb::core::types::DexCycle;
+    use arb::venues::bsc_dex::quote::cycle_view;
+
+    let (g, p) = graph_and_ctx().await;
+    let cycles = route_paths::enumerate_cycles(&g, USDT, 2, 100);
+    let cyc = cycles.first().expect("есть двухшаговый цикл");
+    let legs: Vec<Leg> = cyc.steps.iter().map(|s| leg_of(s, 150_000)).collect();
+    let input = Decimal::new(100, 0);
+    let path = cycle::eval(&p.ctx, &legs, input).unwrap();
+    let gas_wei = U256::from(1_000_000_000u64);
+    let rate = Decimal::new(600, 0);
+    let sig = cycle::build_signal(
+        &p.ctx,
+        USDT,
+        "USDT",
+        &path,
+        &legs,
+        gas_wei,
+        Decimal::ZERO,
+        Some(rate),
+    )
+    .expect("сигнал собирается");
+
+    let venue = VenueId("bsc_dex".into());
+    let dc: DexCycle = cycle_view::to_dex_cycle(&venue, &sig);
+
+    // Площадка подставлена; остальные поля — один-в-один из сигнала.
+    assert_eq!(dc.venue, venue);
+    assert_eq!(dc.base, sig.base);
+    assert_eq!(dc.base_ticker, sig.base_ticker);
+    assert_eq!(dc.input, sig.input);
+    assert_eq!(dc.output, sig.output);
+    assert_eq!(dc.gross_profit, sig.gross_profit);
+    assert_eq!(dc.gas_units, sig.gas_units);
+    assert_eq!(dc.gas_bnb, sig.gas_bnb);
+    assert_eq!(dc.tip_bnb, sig.tip_bnb);
+    assert_eq!(dc.bnb_cost, sig.bnb_cost);
+    assert_eq!(dc.bnb_cost_in_base, sig.bnb_cost_in_base);
+    assert_eq!(dc.net_profit, sig.net_profit);
+    assert_eq!(dc.executable, sig.executable);
+    assert_eq!(dc.exec_note, sig.exec_note);
+    assert_eq!(dc.block, sig.block);
+    assert_eq!(dc.hops.len(), sig.hops.len());
+    for (a, b) in dc.hops.iter().zip(&sig.hops) {
+        assert_eq!(a.index, b.index);
+        assert_eq!(a.family, b.family);
+        assert_eq!(a.kind, b.kind);
+        assert_eq!(a.pool, b.pool);
+        assert_eq!(a.token_in, b.token_in);
+        assert_eq!(a.token_out, b.token_out);
+        assert_eq!(a.fee_pct, b.fee_pct);
+        assert_eq!(a.hook_pct, b.hook_pct);
+        assert_eq!(a.gas_units, b.gas_units);
+    }
+
+    // JSON-поверхность эндпоинта (что получает интерфейс) — ровно те формы, на которые рассчитан DexCycles.svelte.
+    let j = serde_json::to_value(&dc).unwrap();
+    assert_eq!(j["venue"], json!("bsc_dex"), "VenueId — простая строка");
+    assert_eq!(j["base_ticker"], json!("USDT"));
+    assert!(
+        j["base"].as_str().unwrap().starts_with("0x"),
+        "адрес базовой монеты — строка 0x…"
+    );
+    assert!(j["net_profit"].is_string(), "Decimal в JSON — строкой");
+    assert_eq!(j["hops"].as_array().unwrap().len(), 2);
+    assert!(
+        j["hops"][0]["pool"]["Contract"].is_string(),
+        "PoolRef::Contract → {{\"Contract\": \"0x…\"}}"
+    );
+    assert!(
+        j["executable"].as_bool().unwrap(),
+        "оба хопа tradable → исполним"
     );
 }

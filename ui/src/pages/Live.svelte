@@ -8,7 +8,8 @@
     Данные — GET /api/spreads, /api/candidates; живые сообщения spread и candidate обновляют строки на месте.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
-    components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte.
+    components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte,
+    components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85).
   Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
   Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете.
   Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
@@ -24,6 +25,7 @@
   import LiveCoins from '../components/LiveCoins.svelte';
   import DryBanner from '../components/DryBanner.svelte';
   import SignalCard from '../components/SignalCard.svelte';
+  import DexCycles from '../components/DexCycles.svelte';
 
   let spreads = $state({});
   let cands = $state({});
@@ -102,6 +104,9 @@
 {:else}
   <p class="muted">Кандидатов ещё не было.</p>
 {/each}
+
+<h2>Циклы DEX ↔ DEX: сигнал (решение 85)</h2>
+<DexCycles />
 
 <style>
   .tag.dry { background: #b45309; color: #fff; border-color: #b45309; font-weight: 700; }

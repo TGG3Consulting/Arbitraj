@@ -19,7 +19,7 @@ use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 
 use super::BscDex;
-use super::{coins, connection, directory, exec, pools, send, wallet};
+use super::{coins, connection, directory, exec, pools, quote, send, wallet};
 use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
@@ -187,6 +187,28 @@ impl Venue for BscDex {
     ) -> GatewayResult<Vec<crate::core::types::PoolDepth>> {
         let p = &self.p;
         pools::depth_facts::all(&p.ctx, &p.registry, &p.tokens, &p.checks, Some(pools)).await
+    }
+
+    /// Сигналы циклов DEX ↔ DEX (решение 85, фаза сигнала): поиск циклов (quote/cycle_scan.rs) и перевод в read-тип ядра
+    /// (quote/cycle_view.rs). Направление за dex_dex.enabled; выключено — пусто (газ не трогаем). Только read-поверхность:
+    /// авто-сделки НЕ запускает. Ошибки: StaleData (нет свежего блока), NotConfigured (настройки цикла), узел.
+    async fn dex_cycles(&self) -> GatewayResult<Vec<crate::core::types::DexCycle>> {
+        let q = self.p.quoting();
+        if !quote::cycle_scan::enabled(&q.ctx) {
+            return Ok(Vec::new());
+        }
+        // Цена газа — как при котировке и отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов.
+        let gas = q
+            .gas
+            .wei(&q.ctx, &q.heads)
+            .await?
+            .max(send::planned_floor(&q.ctx)?);
+        let signals = quote::cycle_scan::scan(&q, gas).await?;
+        let venue = self.id();
+        Ok(signals
+            .iter()
+            .map(|s| quote::cycle_view::to_dex_cycle(&venue, s))
+            .collect())
     }
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.

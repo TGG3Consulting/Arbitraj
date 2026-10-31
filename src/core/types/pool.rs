@@ -30,6 +30,11 @@ pub enum PoolKind {
     /// PMM (Proactive Market Maker) DODO: цена по кривой PMM из резервов и целей, свой контракт на пул
     /// (DVM/DPP/DSP, решения 80, 86). Отдельная математика (math/swap_dodo.rs) — не тики и не бины.
     Pmm,
+    /// Solidly (ve(3,3)-форки: Topaz v2, THENA V1; решения 80, 85): пул с резервами и флагом `stable`. Свой контракт
+    /// на пул (как V2), но свой Pair-интерфейс (событие Sync с резервами uint256, getAmountOut в самом пуле) — поэтому
+    /// не обычный V2. Волатильный пул (stable=false) считается по `x·y=k` (math/v2.rs), стабильный (stable=true) — по
+    /// инварианту `x³y+xy³=k` (math/swap_solidly.rs). Какая ветка — по флагу `stable` из состояния.
+    Solidly,
 }
 
 /// Как найти пул в сети.
@@ -102,6 +107,23 @@ pub enum PoolState {
     /// Боксируется (`PmmData` много полей U256): без бокса варианта PoolState раздул бы Pool и, через него, горячий
     /// MarketEvent::Pool. Поля — в PmmData. Математика — math/swap_dodo.rs.
     Pmm(Box<PmmData>),
+    /// Solidly (Topaz v2, THENA V1; решения 80, 85): резервы и флаг `stable`, плюс масштабы decimals токенов и
+    /// комиссия пула — всё, что нужно обеим ветвям математики. `metadata()`/`getReserves()` пула + `getFee(pool, stable)`
+    /// фабрики (Pool.sol, PoolFactory.sol, velodrome-finance). `decimals0`/`decimals1` — это 10^decimals токена (как в
+    /// контракте: dec0 = 10**decimals0), нужны стабильному инварианту math/swap_solidly.rs для нормализации к 1e18.
+    /// `fee` — числитель комиссии над 10000 (как возвращает getFee контракта). stable=false → math/v2.rs,
+    /// stable=true → math/swap_solidly.rs.
+    Solidly {
+        reserve0: U256,
+        reserve1: U256,
+        stable: bool,
+        /// 10^decimals токена0 (контракт: `decimals0 = 10 ** ERC20(token0).decimals()`).
+        decimals0: U256,
+        /// 10^decimals токена1.
+        decimals1: U256,
+        /// Комиссия пула — числитель над 10000 (getFee(pool, stable)).
+        fee: u32,
+    },
 }
 
 /// Состояние кривой PMM DODO (DVM/DPP/DSP, решения 80, 86) — боксируется в `PoolState::Pmm`.

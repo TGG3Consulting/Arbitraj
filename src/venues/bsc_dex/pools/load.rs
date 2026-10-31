@@ -21,7 +21,7 @@ use super::families::Proto;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
-use super::{load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_v2v3};
+use super::{load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_solidly, load_v2v3};
 
 /// Прочитанное состояние.
 pub struct Loaded {
@@ -97,6 +97,22 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул Algebra не того вида", f.title),
+        ));
+    }
+    // Solidly (Topaz v2, THENA V1; решения 80, 85): вид ядра Solidly, пул — отдельный контракт, чтение своё
+    // (load_solidly.rs): metadata() пула (резервы, decimals, stable) + getFee(pool, stable) фабрики. Карт тиков/бинов
+    // нет. Нужен id DEX (адрес фабрики для getFee).
+    if f.proto.is_solidly() {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_solidly::load(ctx, f.id, *a, &tag).await?,
+                ticks: None,
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Solidly не того вида", f.title),
         ));
     }
     match (f.kind, reference) {

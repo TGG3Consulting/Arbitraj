@@ -21,6 +21,7 @@ use super::super::directory::pool_key;
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
+use super::abi_solidly::ISolidlyFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
 use super::attach;
@@ -77,6 +78,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::DodoDsp => ("dex.factory", IDodoFactory::NewDSP::SIGNATURE_HASH, false),
             // Algebra (THENA Fusion, решения 80, 81): фабрика эмитит Pool(token0, token1, pool) при создании пула.
             Proto::Algebra => ("dex.factory", IAlgebraFactory::Pool::SIGNATURE_HASH, false),
+            // Solidly (Topaz v2, THENA V1; решения 80, 85): фабрика эмитит PoolCreated(token0, token1, stable, pool, n)
+            // при создании пула (velodrome-finance PoolFactory.sol).
+            Proto::Solidly => (
+                "dex.factory",
+                ISolidlyFactory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
@@ -197,6 +205,13 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
         Proto::Algebra => {
             let e = IAlgebraFactory::Pool::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("Pool (Algebra) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pool)
+        }
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): PoolCreated(token0, token1, stable, pool, n) — реальная пара
+        // и адрес пула из события (velodrome-finance IPoolFactory.sol). Флаг stable читает позже load_solidly.rs.
+        Proto::Solidly => {
+            let e = ISolidlyFactory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (Solidly) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
         }
         _ => {

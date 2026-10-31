@@ -185,6 +185,9 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
                 })?;
             Ok(rate * Decimal::ONE_HUNDRED)
         }
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): комиссия пула — числитель над 10000 (getFee) → проценты = fee/100
+        // (одна комиссия на обе ветви stable/volatile; направление цены комиссию не меняет).
+        (PoolState::Solidly { fee, .. }, _) => Ok(Decimal::from(*fee) / Decimal::from(100u32)),
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

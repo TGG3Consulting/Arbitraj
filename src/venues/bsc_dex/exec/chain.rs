@@ -116,5 +116,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "DODO PMM не исполняется Universal Router (фаза 86c)",
         )),
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): tradable=false — своп Solidly будет в следующей фазе (свой
+        // роутер форка). В граф/сигналы берётся, в авто-сделку — нет (guard executable здесь не пускает).
+        PoolKind::Solidly => Err(ctx.err(
+            ErrorCode::Internal,
+            "Solidly не исполняется (нет пути исполнения — tradable=false, следующая фаза)",
+        )),
     }
 }

@@ -157,5 +157,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "DODO PMM не исполняется умным маршрутом (фаза 86c)",
             ));
         }
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): не входит в умный маршрут Universal Router (не tradable,
+        // исполнение — следующая фаза).
+        PoolKind::Solidly => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Solidly не исполняется умным маршрутом (tradable=false, следующая фаза)",
+            ));
+        }
     })
 }

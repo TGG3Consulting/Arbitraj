@@ -88,7 +88,9 @@ mod tests {
     /// (строка без готового значения обязана объяснять метод). Проверка на реальном файле, без моков.
     #[test]
     fn embedded_table_parses_and_is_advisory() {
-        let fr = parsed().as_ref().expect("config/first_run.toml разбирается");
+        let fr = parsed()
+            .as_ref()
+            .expect("config/first_run.toml разбирается");
         assert!(fr.advisory, "таблица помечена советуемой");
         assert!(!fr.section.is_empty(), "в таблице есть разделы");
         for s in &fr.section {

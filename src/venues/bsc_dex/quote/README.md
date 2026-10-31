@@ -38,7 +38,7 @@
 | `costs.rs` | Котировка ядру: средняя цена, маршрут, затраты (комиссия пула, налоги, крючок — в цене; газ — отдельно, BNB) |
 | `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
 | `quoter.rs` | Выход по квотеру DEX (eth_call) и сверка с математикой (`dex.quoter_max_diff_pct`) |
-| `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85) |
+| `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 

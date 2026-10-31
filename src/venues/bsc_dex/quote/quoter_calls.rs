@@ -11,7 +11,7 @@
 //! Сигнатуры — шапка node/abi_dex.rs (официальные интерфейсы Uniswap v2/v3, pancake-v3, infinity-periphery, v4-periphery).
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::aliases::{U24, U160};
+use alloy_primitives::aliases::{I24, U24, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolKind, PoolRef, PoolState};
@@ -19,7 +19,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
-    IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
+    IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, ISlipstreamQuoterV2, IV2Router,
+    IV4Quoter,
 };
 use super::super::pools::abi_dodo::IDodoPool;
 use super::super::pools::abi_solidly::ISolidlyPool;
@@ -122,6 +123,27 @@ pub fn request(
         .abi_encode();
         return Ok((pool, Bytes::from(data)));
     }
+    // Slipstream (Topaz v3; решения 80, 85): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn,
+    // int24 tickSpacing, sqrtPriceLimitX96) — ключ пула tickSpacing (а не uint24 fee как у Uniswap V3 QuoterV2); сам
+    // квотер читает комиссию fee() пула (решение 73; velodrome-finance/slipstream). Вид ядра — V3, ветка по протоколу.
+    if e.family.proto == Proto::Slipstream {
+        let spacing = e
+            .pool
+            .tick_spacing
+            .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула Slipstream нет tickSpacing"))?;
+        let p = ISlipstreamQuoterV2::QuoteExactInputSingleParams {
+            tokenIn: token_in,
+            tokenOut: token_out,
+            amountIn: amount,
+            tickSpacing: I24::try_from(spacing)
+                .map_err(|_| ctx.err(ErrorCode::Internal, "tickSpacing вне int24"))?,
+            sqrtPriceLimitX96: U160::ZERO,
+        };
+        return Ok((
+            ctx.dex_addr("dex.quoter", e.family.id)?,
+            Bytes::from(ISlipstreamQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()),
+        ));
+    }
     let data = match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => {
             let c = IV2Router::getAmountsOutCall {
@@ -213,6 +235,12 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
     if e.family.proto == Proto::Solidly {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
+    }
+    // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).
+    if e.family.proto == Proto::Slipstream {
+        return ISlipstreamQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.amountOut);
     }
     match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => IV2Router::getAmountsOutCall::abi_decode_returns(out)

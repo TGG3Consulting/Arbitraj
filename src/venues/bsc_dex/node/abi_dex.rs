@@ -26,6 +26,10 @@
 //! - Algebra (THENA Fusion) QuoterV2.quoteExactInputSingle((tokenIn, tokenOut, amountIn, limitSqrtPrice)) →
 //!   (amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate) — @cryptoalgebra/v1.9-periphery
 //!   contracts/interfaces/IQuoterV2.sol (решение 81/80, фаза B): БЕЗ параметра fee — комиссия у Algebra динамическая.
+//! - Slipstream (Topaz v3) QuoterV2.quoteExactInputSingle((tokenIn, tokenOut, amountIn, int24 tickSpacing,
+//!   sqrtPriceLimitX96)) → (amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate) — velodrome-finance/
+//!   slipstream HEAD 193a6b8 contracts/periphery/interfaces/IQuoterV2.sol#L27-L48 (решения 80, 85): ключ пула —
+//!   int24 tickSpacing (а НЕ uint24 fee как у Uniswap V3 QuoterV2); сам квотер читает комиссию fee() пула.
 
 // Код функций генерирует alloy::sol! — число аргументов задаёт ABI контракта.
 #![allow(clippy::too_many_arguments)]
@@ -74,6 +78,11 @@ alloy::sol! {
 
     interface IAlgebraQuoterV2 {
         struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; uint160 limitSqrtPrice; }
+        function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
+    }
+
+    interface ISlipstreamQuoterV2 {
+        struct QuoteExactInputSingleParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteExactInputSingleParams memory params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate);
     }
 }
@@ -131,6 +140,16 @@ mod tests {
             alloy_primitives::hex::encode(
                 &alloy_primitives::keccak256(
                     "quoteExactInputSingle((address,address,uint256,uint160))".as_bytes()
+                )[..4]
+            )
+        );
+        // keccak256("quoteExactInputSingle((address,address,uint256,int24,uint160))")[..4] — velodrome-finance/
+        // slipstream QuoterV2 (ключ пула int24 tickSpacing вместо uint24 fee).
+        assert_eq!(
+            h(ISlipstreamQuoterV2::quoteExactInputSingleCall::SELECTOR),
+            alloy_primitives::hex::encode(
+                &alloy_primitives::keccak256(
+                    "quoteExactInputSingle((address,address,uint256,int24,uint160))".as_bytes()
                 )[..4]
             )
         );

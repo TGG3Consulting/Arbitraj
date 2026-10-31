@@ -140,8 +140,12 @@ async fn history(ctx: &Ctx) -> Result<String, String> {
         return Ok("не нужна: история V4 не читается (dex.history_scan)".into());
     }
     for f in families::all(ctx).into_iter().filter(|f| {
-        !matches!(f.proto, Proto::V2 | Proto::PancakeV3 | Proto::UniswapV3)
-            && ctx.dex_flag("dex.pool_enabled", f.id).unwrap_or(false)
+        // Slipstream (Topaz v3) — пул отдельным контрактом (как V3), без менеджера и истории V4: исключается наравне
+        // с V2/V3 (его пулы — из справочника, dex.pool_manager ему не нужен).
+        !matches!(
+            f.proto,
+            Proto::V2 | Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream
+        ) && ctx.dex_flag("dex.pool_enabled", f.id).unwrap_or(false)
     }) {
         let manager = ctx
             .dex_addr("dex.pool_manager", f.id)

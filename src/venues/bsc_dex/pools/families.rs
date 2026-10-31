@@ -55,6 +55,14 @@ pub enum Proto {
     /// getAmountOut и metadata в самом пуле) — не обычный V2-форк. Чтение — load_solidly.rs, события — events_solidly.rs,
     /// проверка — verify_solidly.rs (фабрика getPool), квотер — сам пул (getAmountOut). Вид ядра — Solidly.
     Solidly,
+    /// Slipstream (Topaz v3 на BSC; решения 80, 85): построчный форк Uniswap V3 core (концентрированная ликвидность),
+    /// интерфейс пула = Uni V3 (slot0 БЕЗ feeProtocol, liquidity, ticks, tickBitmap, fee, tickSpacing). Математика свопа
+    /// и карта тиков — те же, что у V3 (PoolState::V3, math/swap_cl.rs). Отличия от нашего V3: ключ пула фабрики — int24
+    /// tickSpacing (getPool(a, b, int24), PoolCreated(…, int24 tickSpacing, pool)); тики — прямыми геттерами пула
+    /// (load_slipstream.rs, НЕ TickLens); квотер QuoterV2 — по tickSpacing. Комиссия — с fee() каждого пула (не из
+    /// таблицы дефолтов). Вид ядра — V3. Чтение — load_slipstream.rs, события — events_v3.rs (Swap/Mint/Burn как у Uni
+    /// V3), проверка — verify.rs (фабрика getPool по int24), квотер — quoter_calls.rs (ISlipstreamQuoterV2).
+    Slipstream,
 }
 
 impl Proto {
@@ -131,6 +139,12 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
         // DODO 86b / THENA Algebra — в графе и для сигналов, но guard executable (exec/chain.rs) в авто-сделку не пускает.
         "solidly_v2" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
+        // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
+        // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
+        // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
+        // Solidly — в графе и для сигналов, но guard executable (quote/graph_route.rs, cycle.rs) по family.tradable в
+        // авто-сделку не пускает. Вид ядра — V3 (PoolState::V3), чтение/дискавери/квотер — свои (два отличия от Uni V3).
+        "slipstream" => (PoolKind::V3, Proto::Slipstream, true, false, false),
         _ => return None,
     })
 }
@@ -265,6 +279,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.
         // Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Solidly => list.push("dex.factory"),
+        // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
+        // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
+        // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
+        // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
+        Proto::Slipstream => list.extend(["dex.factory", "dex.quoter"]),
     }
     list
 }

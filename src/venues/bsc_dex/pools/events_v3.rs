@@ -54,7 +54,10 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
             Err(err) => Applied::Refresh(format!("Swap не по ABI: {err}")),
         };
     }
-    if t0 == IUniswapV3Pool::Swap::SIGNATURE_HASH && e.family.proto == Proto::UniswapV3 {
+    // Slipstream (Topaz v3) — форк Uni V3: тот же topic0 и 7 полей Swap, что у Uniswap V3.
+    if t0 == IUniswapV3Pool::Swap::SIGNATURE_HASH
+        && matches!(e.family.proto, Proto::UniswapV3 | Proto::Slipstream)
+    {
         return match IUniswapV3Pool::Swap::decode_log_data(d) {
             Ok(s) => swap(U256::from(s.sqrtPriceX96), s.liquidity, s.tick.as_i32(), e),
             Err(err) => Applied::Refresh(format!("Swap не по ABI: {err}")),

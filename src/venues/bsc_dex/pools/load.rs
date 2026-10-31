@@ -21,7 +21,10 @@ use super::families::Proto;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
-use super::{load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_solidly, load_v2v3};
+use super::{
+    load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_slipstream, load_solidly,
+    load_v2v3,
+};
 
 /// Прочитанное состояние.
 pub struct Loaded {
@@ -113,6 +116,25 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул Solidly не того вида", f.title),
+        ));
+    }
+    // Slipstream (Topaz v3; решения 80, 85): вид ядра V3, пул — отдельный контракт, НО чтение своё (load_slipstream.rs):
+    // slot0 форка (без feeProtocol) + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens). Комиссия
+    // (fee_pips) уже прочитана с fee() пула при проверке (verify.rs) и хранится в записи. Отсекается до общего пути V3
+    // (который читал бы через TickLens и чужой slot0).
+    if f.proto == Proto::Slipstream {
+        if let PoolRef::Contract(a) = reference {
+            let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
+            let (state, t) = load_slipstream::load(ctx, *a, sp, &tag).await?;
+            return Ok(Loaded {
+                state,
+                ticks: Some(t),
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Slipstream не того вида", f.title),
         ));
     }
     match (f.kind, reference) {

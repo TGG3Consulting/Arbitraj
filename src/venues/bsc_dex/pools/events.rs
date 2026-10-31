@@ -32,7 +32,8 @@ pub enum Applied {
 pub fn topics(f: &Family) -> Vec<B256> {
     match f.proto {
         Proto::V2 => events_v2::topics(),
-        Proto::PancakeV3 | Proto::UniswapV3 => events_v3::topics(f.proto),
+        // Slipstream (Topaz v3) — форк Uni V3, события пула идентичны (events_v3; topics(Slipstream) даёт Swap Uni V3).
+        Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => events_v3::topics(f.proto),
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::topics(f.proto),
         Proto::InfinityBin => events_bin::topics(),
         Proto::KyberElastic => events_elastic::topics(),
@@ -52,7 +53,9 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         Proto::V2 => vec![IV2Pair::Mint::SIGNATURE_HASH],
-        Proto::PancakeV3 | Proto::UniswapV3 => vec![IV3Pool::Mint::SIGNATURE_HASH],
+        Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => {
+            vec![IV3Pool::Mint::SIGNATURE_HASH]
+        }
         Proto::InfinityCl => vec![IInfinityCl::ModifyLiquidity::SIGNATURE_HASH],
         Proto::UniswapV4 => vec![IUniswapV4::ModifyLiquidity::SIGNATURE_HASH],
         Proto::InfinityBin => vec![IInfinityBin::Mint::SIGNATURE_HASH],
@@ -67,7 +70,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     let r = match e.family.proto {
         Proto::V2 => events_v2::apply(e, log),
-        Proto::PancakeV3 | Proto::UniswapV3 => events_v3::apply(e, log),
+        Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => events_v3::apply(e, log),
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::apply(e, log),
         Proto::InfinityBin => events_bin::apply(e, log),
         Proto::KyberElastic => events_elastic::apply(e, log),

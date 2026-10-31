@@ -57,11 +57,12 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify.rs`, `verify_calls.rs`, `verify_rules.rs`, `verify_v4.rs` | Проверка пула на своём узле (V2/V3 — поля и реестр фабрики, своя комиссия V2; V4 — ключ) |
 | `verify_dodo.rs` | Проверка пула DODO PMM (решение 86b): реестр фабрики DVM/DPP/DSP (getDODOPoolBidirection) содержит пул |
 | `verify_solidly.rs` | Проверка пула Solidly (Topaz v2, THENA V1; решения 80, 85): реестр фабрики getPool(coin,quote,stable) для обоих stable содержит пул |
-| `created_log.rs` | Событие создания → проверенный пул → подписка (V2/V3 PairCreated/PoolCreated, V4 Initialize, Elastic PoolCreated, DODO NewDVM/NewDPP/NewDSP, Solidly PoolCreated) |
+| `created_log.rs` | Событие создания → проверенный пул → подписка (V2/V3 PairCreated/PoolCreated, V4 Initialize, Elastic PoolCreated, DODO NewDVM/NewDPP/NewDSP, Solidly PoolCreated, Slipstream PoolCreated по int24 tickSpacing) |
 | `abi_v2v3.rs`, `abi_v4.rs` | ABI фабрик, пулов, менеджеров V4, StateView, TickLens (+ сверка topic0 с исследованием) |
 | `abi_elastic.rs` | ABI пула/фабрики/читателя тиков KyberSwap Elastic (решение 81): getPoolState/getLiquidityState/swapFeeUnits/tickDistance/ticks, Swap/Mint/Burn/BurnRTokens, getPool, getTicksInRange |
 | `abi_dodo.rs` | ABI пула/фабрики DODO PMM (решение 86b): getPMMStateForCall/getUserFeeRate/_BASE_TOKEN_/_QUOTE_TOKEN_/querySellBase/querySellQuote, DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan, getDODOPoolBidirection, NewDVM/NewDPP/NewDSP |
 | `abi_solidly.rs` | ABI пула/фабрики Solidly (Topaz v2, THENA V1; решения 80, 85): metadata/getReserves/stable/getAmountOut, Sync(uint256,uint256), getPool/isPool/getFee, PoolCreated (velodrome-finance HEAD b3065d8) |
+| `abi_slipstream.rs` | ABI пула/фабрики Slipstream (Topaz v3; решения 80, 85): slot0 форка (6 полей, без feeProtocol)/liquidity/fee/tickSpacing/tickBitmap/ticks (10 полей), CLFactory getPool(a,b,int24)/PoolCreated(…,int24 tickSpacing,pool) (velodrome-finance/slipstream HEAD 193a6b8); Swap/Mint/Burn берутся из abi_v2v3 (идентичны Uni V3) |
 | `key.rs` | PoolKey V4 (Infinity, Uniswap), PoolId, разбор parameters (тест — реальный пул из документации PancakeSwap) |
 | `hooks.rs` | Флаги крючка и группа A/B/C (решение 32) |
 | `scan.rs` | eth_getLogs кусками, ход чтения в журнал без спама |
@@ -90,6 +91,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_elastic.rs` | Состояние пула KyberSwap Elastic на блоке (решение 81): getPoolState/getLiquidityState/swapFeeUnits + все тики списка через читатель (getTicksInRange) и ticks() — по одному пулу |
 | `load_dodo.rs` | Состояние пула DODO PMM на блоке (решение 86b): getPMMStateForCall + getUserFeeRate(0) + _BASE_TOKEN_/_QUOTE_TOKEN_ → PoolState::Pmm; net_after_fees, rstate — по одному пулу |
 | `load_solidly.rs` | Состояние пула Solidly на блоке (решения 80, 85): metadata() пула + getFee(pool,stable) фабрики → PoolState::Solidly (резервы, stable, decimals, комиссия) — по одному пулу |
+| `load_slipstream.rs` | Состояние пула Slipstream (Topaz v3; решения 80, 85): slot0 форка + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens) → PoolState::V3 + карта тиков — по одному пулу |
 | `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах) |
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |
 | `events_elastic.rs` | События KyberSwap Elastic (решение 81): Swap → цена/тик/baseL; Mint/Burn/BurnRTokens → перечитывание (reinvestL/карта тиков) |

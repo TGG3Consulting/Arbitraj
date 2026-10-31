@@ -1,0 +1,46 @@
+# Сборка для Linux: статический бинарь arb (musl) + собранный интерфейс + start.sh одним архивом «arb-linux».
+# Статический musl — чтобы бинарь запускался на любой версии Ubuntu/Linux независимо от glibc сервера.
+# Запускается на каждый пуш в main, вручную (Actions → Linux build → Run workflow) и на PR, меняющий этот файл или dist-linux.
+# Скачать: Actions → последний успешный запуск «Linux build» → Artifacts → arb-linux.
+name: Linux build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: [".github/workflows/linux.yml", "dist-linux/**"]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Установить musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked --target "$TARGET"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - run: npm run build
+        working-directory: ui
+      - name: Собрать папку для запуска
+        run: |
+          mkdir -p out/arb
+          cp "target/$TARGET/release/arb" out/arb/
+          cp -r ui/dist out/arb/ui
+          cp dist-linux/* out/arb/
+          chmod +x out/arb/arb out/arb/start.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arb-linux
+          path: out/arb
+          retention-days: 30

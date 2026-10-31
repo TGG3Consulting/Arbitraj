@@ -50,12 +50,22 @@ pub enum Proto {
     /// динамическая комиссия (globalState.fee), СЫРОЙ битмап тиков (tickTable). Свои геттеры/события/квотер (QuoterV2
     /// без параметра fee), своя фабрика (poolByPair — один пул на пару). Математика — math/swap_algebra.rs.
     Algebra,
+    /// Solidly (ve(3,3)-форки: Topaz v2, THENA V1; решения 80, 85): пул с резервами и флагом `stable` (volatile `x·y=k`
+    /// → math/v2.rs; stable `x³y+xy³=k` → math/swap_solidly.rs). Свой Pair-интерфейс (Sync с резервами uint256,
+    /// getAmountOut и metadata в самом пуле) — не обычный V2-форк. Чтение — load_solidly.rs, события — events_solidly.rs,
+    /// проверка — verify_solidly.rs (фабрика getPool), квотер — сам пул (getAmountOut). Вид ядра — Solidly.
+    Solidly,
 }
 
 impl Proto {
     /// Семейство DODO (DVM/DPP/DSP) — PMM-пул. Ошибок нет.
     pub fn is_dodo(self) -> bool {
         matches!(self, Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp)
+    }
+
+    /// Семейство Solidly (ve(3,3)-форки: Topaz v2, THENA V1). Ошибок нет.
+    pub fn is_solidly(self) -> bool {
+        matches!(self, Proto::Solidly)
     }
 }
 
@@ -116,6 +126,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как DODO 86b — в графе и для
         // сигналов, но guard executable (quote/graph_route.rs) в авто-сделку не пускает. Вид ядра — Cl.
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
+        // Solidly ve(3,3)-форки (Topaz v2, THENA V1; решения 80, 85): в графе (своя математика — volatile math/v2,
+        // stable math/swap_solidly), НО tradable=false — исполнения пока нет (роутер Solidly — следующая фаза).
+        // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
+        // DODO 86b / THENA Algebra — в графе и для сигналов, но guard executable (exec/chain.rs) в авто-сделку не пускает.
+        "solidly_v2" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
         _ => return None,
     })
 }
@@ -245,6 +260,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // читателя тиков нет — сырой битмап tickTable читается прямо у пула (load_algebra.rs). Роутера нет
         // (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Algebra => list.extend(["dex.factory", "dex.quoter"]),
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): только фабрика — ею проверяется пул (getPool(coin, quote,
+        // stable), решение 59), читается комиссия (getFee(pool, stable), load_solidly.rs) и слушается событие создания
+        // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.
+        // Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
+        Proto::Solidly => list.push("dex.factory"),
     }
     list
 }

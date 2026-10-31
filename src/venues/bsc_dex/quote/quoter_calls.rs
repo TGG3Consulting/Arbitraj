@@ -22,6 +22,7 @@ use super::super::node::abi_dex::{
     IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, IV2Router, IV4Quoter,
 };
 use super::super::pools::abi_dodo::IDodoPool;
+use super::super::pools::abi_solidly::ISolidlyPool;
 use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::load_dodo::FEE_TRADER;
@@ -106,6 +107,20 @@ pub fn request(
             ctx.dex_addr("dex.quoter", e.family.id)?,
             Bytes::from(IAlgebraQuoterV2::quoteExactInputSingleCall { params: p }.abi_encode()),
         ));
+    }
+    // Solidly (Topaz v2, THENA V1; решения 80, 85): квотер — сам пул (getAmountOut(amountIn, tokenIn); отдельного
+    // квотера нет). Пул применяет комиссию getFee(pool, stable) внутри — тот же fee, что наш локальный расчёт берёт из
+    // состояния. Pool.getAmountOut (velodrome-finance Pool.sol, решение 23).
+    if e.family.proto == Proto::Solidly {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул Solidly не того вида"));
+        };
+        let data = ISolidlyPool::getAmountOutCall {
+            amountIn: amount,
+            tokenIn: token_in,
+        }
+        .abi_encode();
+        return Ok((pool, Bytes::from(data)));
     }
     let data = match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => {
@@ -194,6 +209,10 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         return IAlgebraQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out)
             .ok()
             .map(|r| r.amountOut);
+    }
+    // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
+    if e.family.proto == Proto::Solidly {
+        return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
     }
     match (e.pool.kind, &e.key) {
         (PoolKind::V2, _) => IV2Router::getAmountsOutCall::abi_decode_returns(out)

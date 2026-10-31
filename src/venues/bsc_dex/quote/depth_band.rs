@@ -211,6 +211,52 @@ fn side(
             super::pmm_depth::side(&state, coin_is_base, b, buy)
                 .ok_or_else(|| "расчёт глубины PMM невозможен".to_string())
         }
+        // Solidly (Topaz v2, THENA V1; решения 80, 85), без комиссии (чистый объём, решение 73): volatile — та же
+        // формула пары, что V2 (x·y=k); stable — средняя цена исполнения в полосе (quote/solidly_depth.rs).
+        (
+            PoolState::Solidly {
+                reserve0,
+                reserve1,
+                stable,
+                decimals0,
+                decimals1,
+                ..
+            },
+            _,
+        ) => {
+            if *stable {
+                // Монета — token0? (solidly_depth сам раскладывает монету/встречный по направлению buy/sell).
+                let coin_is_token0 = e.coin == e.pool.token0;
+                super::solidly_depth::side(
+                    *reserve0,
+                    *reserve1,
+                    *decimals0,
+                    *decimals1,
+                    coin_is_token0,
+                    b,
+                    buy,
+                )
+                .ok_or_else(|| "расчёт глубины стабильного пула Solidly невозможен".to_string())
+            } else {
+                let (r_in, r_out) = if zfo {
+                    (*reserve0, *reserve1)
+                } else {
+                    (*reserve1, *reserve0)
+                };
+                let grow = if buy {
+                    (1.0 + b).sqrt() - 1.0
+                } else {
+                    1.0 / (1.0 - b).sqrt() - 1.0
+                };
+                let f = U256::from((grow * SCALE) as u128);
+                let eff =
+                    r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+                let none = (U256::from(1u8), U256::from(1u8));
+                let out = v2::amount_out(eff, r_in, r_out, none)
+                    .ok_or("расчёт пары Solidly невозможен")?;
+                Ok((pick(eff, out), true))
+            }
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;

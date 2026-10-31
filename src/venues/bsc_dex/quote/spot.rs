@@ -39,6 +39,20 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             };
             (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
         }
+        // Solidly (Topaz v2, THENA V1; решения 80, 85): цена для СИЗИНГА пробы продажи (решение 73.19) — отношение
+        // резервов (как V2). Для волатильного пула это точная спот-цена; для стабильного — оценка по резервам (у
+        // стабильной кривой маржинальная цена иная, но здесь нужен лишь размер пробы, а не сверяемая величина — её
+        // считают локальная математика и квотер на одной и той же сумме). decimals в отношении резервов сокращаются.
+        PoolState::Solidly {
+            reserve0, reserve1, ..
+        } => {
+            let (rc, ru) = if coin0 {
+                (*reserve0, *reserve1)
+            } else {
+                (*reserve1, *reserve0)
+            };
+            (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
+        }
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

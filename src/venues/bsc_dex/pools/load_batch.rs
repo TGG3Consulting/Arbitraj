@@ -72,14 +72,16 @@ pub async fn states(
         Err(e) => return wants.iter().map(|_| Err(e.clone())).collect(),
     };
     let mut out: Out = wants.iter().map(|_| None).collect();
-    // Bin, KyberSwap Elastic, DODO PMM и Algebra — по одному (см. шапку; у Elastic обход списка тиков не ложится на
-    // ступени по словам, у DODO чтение кривой — свой набор вызовов, у Algebra сырой битмап tickTable индексирует сам
-    // тик — не компрессированные слова V3/CL, под общие ступени не ложится; load_algebra.rs).
+    // Bin, KyberSwap Elastic, DODO PMM, Algebra и Solidly — по одному (см. шапку; у Elastic обход списка тиков не
+    // ложится на ступени по словам, у DODO чтение кривой — свой набор вызовов, у Algebra сырой битмап tickTable
+    // индексирует сам тик — не компрессированные слова V3/CL; у Solidly свой Pair-интерфейс (metadata + getFee фабрики),
+    // под общие ступени V2/V3 не ложится; load_solidly.rs).
     for (i, w) in wants.iter().enumerate() {
         if w.family.kind == PoolKind::Bin
             || w.family.proto == Proto::KyberElastic
             || w.family.proto.is_dodo()
             || w.family.proto == Proto::Algebra
+            || w.family.proto.is_solidly()
         {
             let r = load::state(
                 ctx,

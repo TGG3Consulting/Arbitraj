@@ -15,7 +15,7 @@ use zeroize::Zeroizing;
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
-use super::crypto::KdfParams;
+use super::crypto::{self, KdfParams};
 use super::file::{self, Plain};
 
 /// Состояние для интерфейса (без значений секретов).
@@ -143,6 +143,29 @@ impl Vault {
         let _turn = self.writer.lock().await;
         let plain = self.read_file(old).await?;
         self.write(new, plain, p).await
+    }
+
+    /// Отдаёт зашифрованный файл секретов КАК ЕСТЬ для экспорта/бэкапа — БЕЗ расшифровки.
+    /// Пароль не нужен и хранилище можно не разблокировать: это просто байты файла.
+    /// Возвращает: байты зашифрованного файла или None, если файла ещё нет.
+    /// Ошибки: сбой чтения файла.
+    pub async fn export_blob(&self) -> Result<Option<Vec<u8>>, String> {
+        let path = self.path.clone();
+        blocking(move || file::read_blob(&path)).await
+    }
+
+    /// Ставит зашифрованный файл секретов из бэкапа КАК ЕСТЬ (при импорте полного бэкапа) и блокирует
+    /// хранилище: старые секреты в памяти (если были) больше не соответствуют новому файлу — их надо
+    /// заново разблокировать паролем с исходной машины. Расшифровки нет: проверяется только формат
+    /// конверта (crypto::check_format), затем атомарная запись поверх файла.
+    /// Принимает: байты зашифрованного файла. Ошибки: не наш формат, сбой записи.
+    pub async fn install_blob(&self, bytes: Vec<u8>) -> Result<(), String> {
+        crypto::check_format(&bytes).map_err(|e| e.to_string())?;
+        let _turn = self.writer.lock().await;
+        let path = self.path.clone();
+        blocking(move || file::write_blob(&path, &bytes)).await?;
+        self.lock();
+        Ok(())
     }
 
     /// Расшифровывает файл паролем (проверка пароля перед изменением).

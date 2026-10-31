@@ -6,6 +6,8 @@
 | `GET /api/settings` | Все заданные значения |
 | `PUT /api/settings` | `{name, scope, value}`; `value: null` — очистить |
 | `GET /api/settings/history?limit=N[&name=]` | История изменений |
+| `GET /api/settings/export[?secrets=true]` | Экспорт всех заданных настроек одним файлом TOML (имя+область+значение, в шапке версия формата); `secrets=true` — полный бэкап: секция `[secrets]` с ЗАШИФРОВАННЫМ хранилищем секретов как есть (base64, без расшифровки), имя файла `arb-backup.toml`; `secrets=true` без файла секретов — 400 (api/settings_io.rs) |
+| `POST /api/settings/import` | Импорт настроек из TOML (чистые настройки или полный бэкап): проверка по схеме и применение поштучно через `Store::set` (автор «import» — журнал и обновление на лету); секция `[secrets]` ставит зашифрованное хранилище и блокирует его. Тело — текст TOML. Ответ `{applied:[{name,scope}], failed:[{name,scope,reason}], secrets_installed, secrets_error?}`; 400 — тело не TOML; 500 — сбой базы |
 | `GET /api/first-run` | Таблица первого запуска — советуемые стартовые значения (справочные данные, не автозапись; api/first_run.rs) |
 | `GET /api/rules`, `POST /api/rules`, `PUT /api/rules/{id}` | Правила шлюза |
 | `GET /api/rules/meta` | Справочник для формы правил: коды ошибок, действия с параметрами, виды области |

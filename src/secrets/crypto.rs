@@ -137,6 +137,23 @@ pub fn open(password: &[u8], file: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoEr
         .map_err(|_| CryptoError::WrongPasswordOrCorrupted)
 }
 
+/// Проверяет, что блоб — файл секретов известного формата, НЕ расшифровывая его (пароль не нужен).
+/// Принимает: байты файла. Возвращает: Ok(()) — конверт и заголовок узнаны; Err — не наш файл.
+/// Для импорта бэкапа: ставим только настоящий зашифрованный контейнер, мусор отвергаем до записи.
+/// Расшифровку и формат шифрования не трогает — читает лишь открытый заголовок (как open до derive).
+pub fn check_format(file: &[u8]) -> Result<(), CryptoError> {
+    let env: Envelope =
+        serde_json::from_slice(file).map_err(|e| CryptoError::BadFormat(e.to_string()))?;
+    let h = &env.header;
+    if h.version != FORMAT_VERSION || h.kdf != "argon2id-v19" || h.cipher != "xchacha20poly1305" {
+        return Err(CryptoError::BadFormat(format!(
+            "версия {} / {} / {}",
+            h.version, h.kdf, h.cipher
+        )));
+    }
+    Ok(())
+}
+
 /// Выводит ключ из пароля (Argon2id, версия 0x13). Ключ затирается в памяти при удалении.
 fn derive(
     password: &[u8],

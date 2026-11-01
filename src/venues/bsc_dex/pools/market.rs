@@ -57,6 +57,12 @@ pub async fn subscribe(
     // Узел отвечает — иначе подписка не начинается (ядро повторит).
     let _: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
     let mut tasks = vec![tokio::spawn(p.heads.clone().run(p.ctx.clone()))];
+    // Фоновый прогрев цены газа и времени блока (решение 89): расчёт читает тёплый кэш, а не тянет узел сам.
+    tasks.push(tokio::spawn(super::super::quote::warm::run(
+        p.ctx.clone(),
+        p.heads.clone(),
+        p.gas.clone(),
+    )));
 
     // Промежуточные монеты (решение 52): выключено — пусто; не задано — в журнал, только USDT.
     let mid_list = match mids::read(&p.ctx, &p.tokens).await {

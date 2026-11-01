@@ -45,6 +45,7 @@ pub mod verify;
 pub mod verify_decide;
 pub mod via;
 pub mod via_pools;
+pub mod warm;
 
 use rust_decimal::Decimal;
 

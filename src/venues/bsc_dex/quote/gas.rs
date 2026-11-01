@@ -1,7 +1,9 @@
 //! Файл: venues/bsc_dex/quote/gas.rs
 //! Что делает: цена газа для расчёта и отправки — eth_gasPrice узла с надбавкой send.gas_price_markup_pct;
-//! запрашивается не чаще одного раза на блок на всех (значение до прихода нового блока — из памяти; одновременные
-//! промахи ждут один запрос).
+//! запрашивается не чаще одного раза на блок на всех (значение до прихода нового блока — из памяти). Решение 89: чтобы
+//! расчёт НЕ ждал узел — если запрос уже в полёте (single-flight занят), возвращаем ПОСЛЕДНЮЮ известную цену любого
+//! блока, не блокируясь; сам запрос обычно делает фоновый прогрев (quote/warm.rs) на каждый новый блок, а не расчёт.
+//! Единственное исключение — холодный старт (кэш пуст): один раз дожидаемся первого запроса.
 //! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (exec/txs.rs) и в котировке (quote/mod.rs).
 //! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs.
 //! От чего зависит: node/rpc.rs, node/heads.rs, num.rs.
@@ -39,20 +41,34 @@ impl GasPrice {
             Some((b, p)) if b == head.number => Some(p),
             _ => None,
         };
+        // Последняя известная цена любого блока — чтобы расчёт не ждал узел (решение 89).
+        let last = || {
+            self.cache
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .map(|(_, p)| p)
+        };
         let base = match hit() {
             Some(p) => p,
-            None => {
-                let _one = self.flight.lock().await;
-                match hit() {
+            None => match self.flight.try_lock() {
+                // Ведущий: на этом блоке кэша нет и никто не тянет — обновляем с узла.
+                Ok(_one) => match hit() {
                     Some(p) => p,
+                    None => self.fetch(ctx, head.number).await?,
+                },
+                // Кто-то уже тянет (обычно фоновый прогрев): берём последнюю известную цену, не блокируемся на узле.
+                Err(_) => match last() {
+                    Some(p) => p,
+                    // Холодный старт: ничего нет — один раз дожидаемся того запроса.
                     None => {
-                        let p: U256 = rpc::call(ctx, "eth_gasPrice", json!([])).await?;
-                        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) =
-                            Some((head.number, p));
-                        p
+                        let _one = self.flight.lock().await;
+                        match hit() {
+                            Some(p) => p,
+                            None => self.fetch(ctx, head.number).await?,
+                        }
                     }
-                }
-            }
+                },
+            },
         };
         let markup = ctx.dec("send.gas_price_markup_pct")?;
         let bad = || {
@@ -64,5 +80,13 @@ impl GasPrice {
         let v = num::to_decimal(base, 0).ok_or_else(bad)?
             * (Decimal::ONE + markup / Decimal::ONE_HUNDRED);
         num::to_units(v, 0).ok_or_else(bad)
+    }
+
+    /// Обновляет кэш цены газа с узла (eth_gasPrice). Держится под flight — один запрос на всех.
+    /// Принимает: окружение, номер блока. Возвращает: цену в wei. Ошибки: узел.
+    async fn fetch(&self, ctx: &Ctx, block: u64) -> GatewayResult<U256> {
+        let p: U256 = rpc::call(ctx, "eth_gasPrice", json!([])).await?;
+        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((block, p));
+        Ok(p)
     }
 }

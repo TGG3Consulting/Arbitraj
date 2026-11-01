@@ -53,6 +53,8 @@ pub struct Pools {
     pub feed: super::super::node::receipts::Feed,
     /// «Данные пулов отстают» (решение 72): проверки вердикт не выносят, пока отметка стоит.
     pub lag: super::super::node::events_lag::EventsLag,
+    /// Цена газа (кэш на блок) — для фонового прогрева quote/warm.rs (решение 89).
+    pub gas: super::super::quote::gas::GasPrice,
 }
 
 /// Чем кончилась сессия.

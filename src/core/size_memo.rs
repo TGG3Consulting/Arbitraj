@@ -70,6 +70,10 @@ impl<'a, C: Curve> Memo<'a, C> {
         } else {
             let q = self.qty(n);
             self.done += 1;
+            // Уступаем рабочий поток tokio перед тяжёлым вычислением точки (решение 90): параллельные расчёты
+            // (решение 88) после ухода ожидания узла (решение 89) идут сплошным CPU и без этого монополизируют
+            // потоки рантайма — голодали бы веб-сервер, обработка событий пулов и опрос блока.
+            tokio::task::yield_now().await;
             match self.curve.at(q).await {
                 Ok(p) if p.invested > self.budget => Err(Fail::TooLarge(format!(
                     "объём {q}: вложение {} больше бюджета {}",
@@ -86,6 +90,8 @@ impl<'a, C: Curve> Memo<'a, C> {
     /// Принимает: n. Возвращает: точку или Fail кривой. Ошибок сверх кривой нет.
     pub async fn beyond(&mut self, n: u64) -> Result<Point<C::Data>, Fail> {
         let q = self.qty(n);
+        // Уступаем поток перед тяжёлым вычислением точки (решение 90) — см. at().
+        tokio::task::yield_now().await;
         self.curve.at(q).await
     }
 

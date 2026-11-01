@@ -59,6 +59,7 @@ pub static BASE: &[SettingDef] = &[
     d("Площадки", "venue.recv_window_ms", K::Integer, L::Positive, "мс", V, "Окно действия подписанного запроса (у BingX не больше 5000)"),
     d("Площадки", "venue.ws_subs_per_sec", K::Integer, L::Positive, "в секунду", V, "Сколько подписок WebSocket отправлять в секунду (у BingX не больше 10)"),
     d("Площадки", "venue.ws_silence_ms", K::Integer, L::Positive, "мс", V, "Нет сообщений дольше — соединение считается оборванным и переподключается"),
+    d("Площадки", "venue.ws_ping_ms", K::Integer, L::Positive, "мс", V, "Решение 98: как часто бот сам шлёт WebSocket Ping узлу (только DEX — bsc_dex). Узел обязан ответить Pong (RFC 6455) — так соединение пачки редко торгуемых пулов или «новых пулов» без событий не считается оборванным. Должно быть меньше venue.ws_silence_ms (тишина считается от последнего кадра от узла, Pong — тоже кадр). Не задано — Ping не шлётся, тихое соединение рвётся по venue.ws_silence_ms").optional(),
     d("Площадки", "venue.ws_reconnect_pause_ms", K::Integer, L::NonNegative, "мс", V, "Пауза перед переподключением WebSocket"),
     d("Площадки", "venue.depth_levels", K::Integer, L::Positive, "уровней", V, "Сколько уровней стакана получать (у BingX: 5, 10, 20, 50, 100)"),
     d("Площадки", "venue.order_time_in_force", K::Text, L::None, "тип", V, "Срок действия ордера (у BingX: IOC, FOK, GTC, PostOnly)"),

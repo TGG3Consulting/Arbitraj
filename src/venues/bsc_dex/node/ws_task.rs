@@ -1,6 +1,8 @@
 //! Файл: venues/bsc_dex/node/ws_task.rs
 //! Что делает: задача одного соединения WebSocket с узлом BSC — пишет запросы, читает ответы и уведомления,
 //! раздаёт ответы по id и уведомления eth_subscription по id подписки, пишет сырые сообщения на диск.
+//! Решение 98: тишина считается от последнего кадра от узла; для тихих соединений бот шлёт Ping раз в
+//! venue.ws_ping_ms (узел отвечает Pong — RFC 6455), так живое соединение без событий не рвётся.
 //! Тишина дольше venue.ws_silence_ms, ошибка чтения или закрытие сервером — конец соединения:
 //! все ожидающие запросы получают ошибку, все потоки подписок закрываются (владельцы переподключаются).
 //! Кто вызывает: node/ws.rs (Conn::open).
@@ -78,14 +80,34 @@ pub async fn run(
     ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
     mut cmds: mpsc::UnboundedReceiver<Cmd>,
     silence: Duration,
+    ping: Option<Duration>,
     end: Arc<Mutex<Option<String>>>,
 ) {
     let (mut sink, mut stream) = ws.split();
     let mut pending: HashMap<u64, Pending> = HashMap::new();
     let mut subs: HashMap<String, mpsc::UnboundedSender<Box<RawValue>>> = HashMap::new();
     let mut next_id: u64 = 1;
+    // Решение 98: тишина отсчитывается от ПОСЛЕДНЕГО КАДРА ОТ УЗЛА (любого, вкл. Pong), а не от прохода цикла: раньше
+    // таймер создавался заново на каждой итерации и сбрасывался нашими же запросами. Живость тихого соединения
+    // (пачка редко торгуемых пулов, «новые пулы») подтверждается нашим Ping (venue.ws_ping_ms): узел обязан ответить
+    // Pong (RFC 6455, 5.5.2–5.5.3). Нет ответа дольше venue.ws_silence_ms — соединение мёртвое, как и раньше.
+    let mut last_rx = tokio::time::Instant::now();
+    let mut pinger = ping.map(|d| tokio::time::interval_at(tokio::time::Instant::now() + d, d));
     let reason = loop {
         tokio::select! {
+            _ = tokio::time::sleep_until(last_rx + silence) => {
+                break format!("нет сообщений дольше {} мс", silence.as_millis());
+            }
+            _ = async {
+                match pinger.as_mut() {
+                    Some(i) => { i.tick().await; }
+                    None => std::future::pending::<()>().await,
+                }
+            } => {
+                if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
+                    break format!("отправка ping: {e}");
+                }
+            }
             cmd = cmds.recv() => {
                 // Владелец удалил соединение — тихо заканчиваем.
                 let Some(cmd) = cmd else { break "закрыто владельцем".to_string() };
@@ -101,13 +123,14 @@ pub async fn run(
                     break format!("отправка запроса: {e}");
                 }
             }
-            next = tokio::time::timeout(silence, stream.next()) => {
+            next = stream.next() => {
                 let frame = match next {
-                    Err(_) => break format!("нет сообщений дольше {} мс", silence.as_millis()),
-                    Ok(None) => break "соединение закрыто сервером".to_string(),
-                    Ok(Some(Err(e))) => break format!("ошибка чтения: {e}"),
-                    Ok(Some(Ok(f))) => f,
+                    None => break "соединение закрыто сервером".to_string(),
+                    Some(Err(e)) => break format!("ошибка чтения: {e}"),
+                    Some(Ok(f)) => f,
                 };
+                // Любой кадр от узла (текст, Pong, Ping) — узел жив.
+                last_rx = tokio::time::Instant::now();
                 let text = match frame {
                     Message::Text(t) => t.to_string(),
                     Message::Close(c) => break format!("сервер закрыл соединение: {c:?}"),

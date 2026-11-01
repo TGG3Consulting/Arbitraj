@@ -1,6 +1,11 @@
 //! Файл: core/candidates.rs
 //! Что делает: отдельная очередь тяжёлого расчёта (ТЗ: «шаг 4 идёт отдельной очередью и только по
-//! прошедшим фильтр»). Кандидат от signal.rs попадает в очередь один раз, пока не посчитан; расчёт —
+//! прошедшим фильтр»). Расчёты идут ПАРАЛЛЕЛЬНО — на каждый кандидат свой (решение 88): тяжёлый счёт в памяти не
+//! нагружает узел (цена газа — общий кэш на блок gas.rs, пулы из стрима), поэтому ни один расчёт не ждёт другого;
+//! предел одновременных — profit.calc_concurrency (0 / не задана — без предела, достигнут — направление снимается из
+//! очереди и встанет снова на следующем тике), общий срок одного расчёта — profit.calc_timeout_ms (не даёт зависнуть на
+//! медленном узле, отмена decide безопасна — блокировки через await не держатся; не задан — без срока).
+//! Кандидат от signal.rs попадает в очередь один раз, пока не посчитан; расчёт —
 //! profit.rs, класс Trade, как всегда (эпизоды на торговый путь не влияют, решение 74). Режим (сухой / обычный)
 //! фиксируется один раз на расчёт и передаётся явно (dry.rs). Итог — на «Живой экран» (событие candidate, у прошедшего —
 //! метка «сухой»); прошедший — на исполнение (executor.rs; в сухом режиме — нет), в эпизод (episode_run.rs — только
@@ -12,10 +17,16 @@
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs.
 //! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+
 use serde_json::json;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 
 use crate::core::types::Direction;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::card_job::{Job, submit};
@@ -43,36 +54,84 @@ pub fn enqueue(core: &Core, d: &Direction) {
     }
 }
 
-/// Задача очереди: считает кандидатов по одному. Работает, пока жив канал.
+/// Задача очереди: раздаёт расчёты параллельно — на каждый кандидат свой расчёт (решение 88), ни один не ждёт другого.
+/// Предел одновременных расчётов — profit.calc_concurrency (0 или не задана — без предела); достигнут — направление
+/// снимается из очереди, следующий тик поставит снова (как при полном канале). Работает, пока жив канал.
 pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
+    let inflight = Arc::new(AtomicUsize::new(0));
     while let Some(d) = rx.recv().await {
-        // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
-        let mode = super::dry::mode(&core.inner.deps.settings);
-        // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
-        let verdict = urgency::scope(Urgency::Trade, profit::decide(&core, &d, &mode)).await;
-        lk(&core.inner.queued).remove(&d);
-        match verdict {
-            Verdict::Accept(calc) => accepted(&core, &d, calc, &mode).await,
-            Verdict::Reject { reason, best } => {
-                let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now() });
-                publish(&core, &d, row);
-                // Направление перестало проходить — эпизод закрывается с этой причиной (решение 74).
-                super::episode_run::failed(&core, &d, &reason);
-                let same = lk(&core.inner.last_reject).insert(d.clone(), reason.clone())
-                    == Some(reason.clone());
-                if !same {
-                    let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
-                    core.inner
-                        .deps
-                        .log(
-                            Level::Info,
-                            "core.candidate_rejected",
-                            Some(&d.buy_on.0),
-                            format!("{pair}: отказ — {reason}"),
-                            best.and_then(|b| serde_json::to_value(b).ok()),
-                        )
-                        .await;
-                }
+        let cap = core
+            .inner
+            .deps
+            .settings
+            .integer("profit.calc_concurrency", At::default())
+            .ok()
+            .filter(|n| *n > 0)
+            .map(|n| n as usize);
+        if cap.is_some_and(|c| inflight.load(Ordering::Acquire) >= c) {
+            // Предел одновременных расчётов достигнут — не ждём: снять из очереди, следующий тик поставит снова.
+            lk(&core.inner.queued).remove(&d);
+            continue;
+        }
+        inflight.fetch_add(1, Ordering::AcqRel);
+        let core = core.clone();
+        let inflight = inflight.clone();
+        // Свой расчёт на каждый кандидат: тяжёлый счёт (в памяти) идёт параллельно, узел не нагружается
+        // (цена газа — общий кэш на блок, пулы из стрима). Класс Trade ставится внутри задачи (task_local не наследуется).
+        tokio::spawn(async move {
+            calc_one(&core, &d).await;
+            lk(&core.inner.queued).remove(&d);
+            inflight.fetch_sub(1, Ordering::AcqRel);
+        });
+    }
+}
+
+/// Один расчёт кандидата. Режим и общий срок фиксируются на расчёт. Срок profit.calc_timeout_ms не даёт расчёту
+/// зависнуть, когда узел медлит (отмена decide безопасна — блокировки через await не держатся); не задан — без срока.
+/// Принимает: ядро, направление. Ошибок нет — итог в строку «Кандидатов» и журнал.
+async fn calc_one(core: &Core, d: &Direction) {
+    // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
+    let mode = super::dry::mode(&core.inner.deps.settings);
+    // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
+    let work = urgency::scope(Urgency::Trade, profit::decide(core, d, &mode));
+    let verdict = match core
+        .inner
+        .deps
+        .settings
+        .integer("profit.calc_timeout_ms", At::default())
+        .ok()
+        .filter(|ms| *ms > 0)
+    {
+        Some(ms) => match timeout(Duration::from_millis(ms), work).await {
+            Ok(v) => v,
+            Err(_) => Verdict::Reject {
+                reason: format!("расчёт не уложился в срок {ms} мс — узел медлит или перегружен"),
+                best: None,
+            },
+        },
+        None => work.await,
+    };
+    match verdict {
+        Verdict::Accept(calc) => accepted(core, d, calc, &mode).await,
+        Verdict::Reject { reason, best } => {
+            let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now() });
+            publish(core, d, row);
+            // Направление перестало проходить — эпизод закрывается с этой причиной (решение 74).
+            super::episode_run::failed(core, d, &reason);
+            let same = lk(&core.inner.last_reject).insert(d.clone(), reason.clone())
+                == Some(reason.clone());
+            if !same {
+                let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
+                core.inner
+                    .deps
+                    .log(
+                        Level::Info,
+                        "core.candidate_rejected",
+                        Some(&d.buy_on.0),
+                        format!("{pair}: отказ — {reason}"),
+                        best.and_then(|b| serde_json::to_value(b).ok()),
+                    )
+                    .await;
             }
         }
     }

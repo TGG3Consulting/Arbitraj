@@ -4,7 +4,7 @@
 //! Разбор ответа {code, message, data}, перевод ошибок в коды шлюза, запись сырого ответа в журнал.
 //! Кто вызывает: quote.rs, trade.rs, market.rs, connection.rs.
 //! От чего зависит: ctx.rs, errors.rs, gateway/http.rs, alloy-primitives, reqwest, serde_json.
-//! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.http_timeout_ms, http.*; темп — kyber.rps,
+//! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.user_agent, kyber.http_timeout_ms, http.*; темп — kyber.rps,
 //! kyber.max_wait_ms (ctx.rs pace_slot, решение 95).
 //!
 //! Эндпоинты, поля и заголовок X-Client-Id — строго по официальной спецификации:
@@ -159,6 +159,14 @@ async fn send(
         && !client_id.is_empty()
     {
         req = req.header("X-Client-Id", client_id);
+    }
+    // Решение 96: User-Agent — честное имя нашего приложения (RFC 9110 §10.1.5: клиент SHOULD слать User-Agent).
+    // HTTP-клиент бота сам заголовок не ставит; запросы совсем без него сервер агрегатора отвергал HTTP 403, а тот же
+    // запрос от curl (с заголовком) проходил. Не браузер и не маскировка — идентификатор приложения из настроек.
+    if let Ok(ua) = ctx.text("kyber.user_agent")
+        && !ua.is_empty()
+    {
+        req = req.header(reqwest::header::USER_AGENT, ua);
     }
     if let Some(b) = &body {
         req = req.json(b);

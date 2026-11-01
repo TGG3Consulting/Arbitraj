@@ -17,7 +17,6 @@ use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 /// Настройки адаптера KyberSwap (агрегатор). Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static KYBER: &[SettingDef] = &[
-    d("KyberSwap (агрегатор)", "kyber.use_instead_of_bsc_dex", K::Bool, L::None, "да/нет", G, "Решение 91: какой адаптер DEX регистрируется при запуске. Да — вместо bsc_dex подключается агрегатор KyberSwap (площадка kyberswap). Нет или не задана — как раньше, bsc_dex. Площадки — единственный DEX за раз (одна котируемая сторона DEX); читается один раз при запуске (main.rs)").optional(),
     d("KyberSwap (агрегатор)", "kyber.base_url", K::Url, L::None, "URL", G, "База API агрегатора (без сети и пути): прямые эндпоинты https://aggregator-api.kyberswap.com или шлюз https://api.kyberswap.com/swap (выше лимиты, нужен X-Api-Key от Business Development). Путь /{chain}/api/v1/... добавляется адаптером"),
     d("KyberSwap (агрегатор)", "kyber.chain", K::Text, L::None, "сеть", G, "Сегмент сети в пути запроса (документация: имя сети, не chainId). BSC — bsc"),
     d("KyberSwap (агрегатор)", "kyber.client_id", K::Text, L::None, "идентификатор", G, "Заголовок X-Client-Id — свой идентификатор приложения (без него лимиты строже; регистрация и платный ключ не нужны). Не задан — запросы без заголовка").optional(),

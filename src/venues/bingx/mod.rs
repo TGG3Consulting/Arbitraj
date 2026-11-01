@@ -15,6 +15,7 @@ pub mod ctx;
 pub mod depth;
 pub mod errors;
 pub mod fees;
+pub mod fund_move;
 pub mod market;
 pub mod num;
 pub mod order_state;
@@ -144,6 +145,14 @@ impl Venue for Bingx {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    async fn deposit_to_trading(
+        &self,
+        asset: &Asset,
+        amount: rust_decimal::Decimal,
+    ) -> GatewayResult<Option<String>> {
+        fund_move::to_spot(&self.ctx, asset, amount).await
     }
 
     async fn withdraw_cost(

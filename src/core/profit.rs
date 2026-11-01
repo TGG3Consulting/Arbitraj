@@ -35,6 +35,17 @@ pub enum Verdict {
 /// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
+    decide_capped(core, d, mode, None).await
+}
+
+/// То же, но бюджет не больше `cap` (решение 103: свободный баланс A прямо перед ордером меньше бюджета — объём
+/// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел. Ошибок нет.
+pub async fn decide_capped(
+    core: &Core,
+    d: &Direction,
+    mode: &super::dry::Mode,
+    cap: Option<Decimal>,
+) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
     // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
     if let super::dry::Mode::Dry(Err(e)) = mode {
@@ -53,7 +64,7 @@ pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verd
         (Err(e), _) | (_, Err(e)) => return reject(e.message, None),
     };
     let budget = match super::limits::budget(core, &cx, mode).await {
-        Ok(b) => b,
+        Ok(b) => cap.map_or(b, |c| b.min(c)),
         Err(e) => return reject(e, None),
     };
     let price = rd(&core.inner.market).best(&d.buy_on, &d.asset.ticker, Side::Buy);

@@ -73,6 +73,7 @@ pub mod rebuild;
 pub mod rebuild_blacklist;
 pub mod rebuild_report;
 pub mod reconcile;
+pub mod refit;
 pub mod registry;
 pub mod registry_build;
 pub mod registry_sync;

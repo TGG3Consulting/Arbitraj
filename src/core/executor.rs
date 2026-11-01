@@ -7,6 +7,7 @@
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
+//! Решение 103: свободный баланс A перед ордером меньше списания плана — объём подбирается заново под остаток (refit.rs).
 //! Сухой режим (решение 74, dry.rs) — второй замок на входе: сделка не начинается, даже если кандидата передали сюда
 //! (первый замок — candidates.rs); предпроверка считает план в режиме Live (виртуального бюджета у сделки нет); перед
 //! покупкой — третий замок (buy_gate). После покупки сделка доводится как обычно.
@@ -130,7 +131,7 @@ async fn run(core: &Core, d: Direction) {
         return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
     }
     // Решение 94: свободный баланс A — один запрос прямо перед ордером (не на каждый расчёт); предел списания —
-    // меньшее из бюджета плана и свободного. Не хватает на объём плана — trade_ops откажет до ордера.
+    // меньшее из бюджета плана и свободного. Не хватает на объём плана — объём заново под остаток (решение 103).
     let cap = match super::limits::buy_cap(core, &d, budget).await {
         Ok((cap, free, q)) => {
             deal.note(format!(
@@ -143,6 +144,33 @@ async fn run(core: &Core, d: Direction) {
             let why = format!("перед покупкой: {why} — ордер не ставился");
             return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
         }
+    };
+    // Решение 103: свободного меньше списания плана — объём подбирается заново под свободный остаток (все затраты,
+    // финальная котировка, пороги). Не выгодно — отказ до ордера.
+    let plan = if super::refit::needed(&plan, cap) {
+        match super::refit::plan(core, &d, cap).await {
+            Ok(p) => {
+                deal.note(format!(
+                    "Объём под свободный остаток {cap}: {} вместо {}, прибыль {} USDT (было {})",
+                    p.qty,
+                    plan.qty,
+                    p.profit_usd.round_dp(4),
+                    plan.profit_usd.round_dp(4)
+                ));
+                deal.plan = serde_json::to_value(&p).unwrap_or_default();
+                deal.plan_profit_usd = p.profit_usd;
+                super::ledger::save(core, &deal).await;
+                p
+            }
+            Err(why) => {
+                let why = format!(
+                    "на свободный остаток {cap} сделка невыгодна: {why} — ордер не ставился"
+                );
+                return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+            }
+        }
+    } else {
+        plan
     };
     // Покупка на A.
     let bought = super::trade_ops::trade(

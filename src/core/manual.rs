@@ -82,9 +82,10 @@ pub async fn load(core: &Core) {
     publish(core);
 }
 
-/// Алерт «убыток выше порога»: сделка ждёт решения человека. Уведомление stuck.loss_alert несёт id алерта
-/// (кнопки Telegram — по notify/catalog.rs). Ошибок нет.
-pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Decimal) {
+/// Алерт: сделка ждёт решения человека — «убыток выше порога» (stuck.rs) или «продажа не прошла» (sell.rs,
+/// решение 100). Уведомление stuck.loss_alert несёт id алерта (кнопки Telegram — по notify/catalog.rs).
+/// Принимает: сделку, убыток % (None — котировки нет), причину. Ошибок нет.
+pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>, reason: String) {
     let id = match super::ids::uuid_v4() {
         Ok(id) => id,
         Err(e) => {
@@ -99,23 +100,21 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Decimal) {
         asset: deal.direction.asset.clone(),
         qty: deal.qty,
         loss_pct,
+        reason: Some(reason.clone()),
         at: Utc::now(),
     };
+    let loss = loss_pct
+        .map(|l| format!("{}%", l.round_dp(4)))
+        .unwrap_or_else(|| "не известен (нет котировки)".into());
     deal.step = Step::WaitingHuman;
     deal.note(format!(
-        "Убыток {}% выше порога — ждём решения человека (алерт {})",
-        loss_pct.round_dp(4),
+        "{reason} — ждём решения человека (алерт {})",
         alert.id
     ));
     super::ledger::save(core, &deal).await;
     let text = format!(
-        "{}: {} {} на {}, убыток при продаже сейчас {}%. Алерт {}",
-        deal.id,
-        deal.qty,
-        alert.asset.ticker,
-        alert.venue.0,
-        loss_pct.round_dp(4),
-        alert.id
+        "{}: {} {} на {} — {reason}. Убыток при продаже сейчас {loss}. Алерт {}",
+        deal.id, deal.qty, alert.asset.ticker, alert.venue.0, alert.id
     );
     lk(&core.inner.alerts).insert(alert.id.clone(), (alert.clone(), deal));
     persist(core).await;
@@ -128,11 +127,29 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Decimal) {
         .await;
 }
 
-/// «Продать сейчас» по алерту. Возвращает: текст для ответа. Ошибка: алерта нет.
-pub async fn sell_now(core: &Core, alert_id: &str) -> Result<String, String> {
-    let (_, deal) = lk(&core.inner.alerts)
+/// «Продать сейчас» по алерту: количество — по реальному балансу площадки (решение 100: после неудачной продажи
+/// монет может быть меньше или уже нет). ret — «Продать и перегнать» (решение 101). Возвращает: текст для ответа. Ошибки: алерта нет, монет нет (алерт остаётся).
+pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, String> {
+    let (mut alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
+    match super::manual_halted::on_hand(core, &deal.at, &deal.direction.asset, deal.qty).await {
+        Ok((qty, note)) => super::manual_halted::set_qty(&mut deal, qty, note),
+        Err(e) => {
+            // Алерт остаётся — человек решит иначе («Продано вручную», «Беру на себя»).
+            alert.reason = Some(e.clone());
+            lk(&core.inner.alerts).insert(alert_id.to_string(), (alert, deal));
+            persist(core).await;
+            return Err(e);
+        }
+    }
+    deal.step = Step::Selling;
+    // Решение 101: «Продать и перегнать» — после продажи выручка на площадку покупки.
+    if ret {
+        deal.return_usdt = true;
+        deal.note("«Продать и перегнать»: после продажи выручка USDT — на площадку покупки");
+    }
+    super::ledger::save(core, &deal).await;
     persist(core).await;
     let id = deal.id.clone();
     let c = core.clone();
@@ -154,9 +171,12 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
         asset: alert.asset.clone(),
         qty: deal.qty,
         reason: format!(
-            "алерт {}: убыток {}% ({who})",
+            "алерт {}: {} ({who})",
             alert.id,
-            alert.loss_pct.round_dp(4)
+            alert.reason.clone().unwrap_or_else(|| alert
+                .loss_pct
+                .map(|l| format!("убыток {}%", l.round_dp(4)))
+                .unwrap_or_default())
         ),
         taken_at: Utc::now(),
     };

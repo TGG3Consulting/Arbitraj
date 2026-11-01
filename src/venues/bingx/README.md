@@ -109,3 +109,7 @@
   BingX зачисление не закрывает (`transfer.credit_by_event` [bingx] не включать); статусы — по REST, как раньше.
 
 Сырой журнал: сообщения WebSocket и ответы REST (соединение «rest <путь>», в том числе config/getall) — в data/raw/bingx (raw.*); ответы пути listenKey (`/openApi/user/auth/userDataStream`) не пишутся (ключ потока аккаунта); кадры потока аккаунта — соединение «account», ключ в них заменён на ***. Флаги сети depositEnable/withdrawEnable — только boolean по официальной таблице полей; иначе ответ не понят (BadResponse), справочник сетей остаётся прежним.
+
+## Перевод депозита на спот (решение 102)
+
+`fund_move.rs`: после зачисления перевода бота — `POST /openApi/api/asset/v1/transfer` (fromAccount=fund, toAccount=spot, asset, amount), ответ `data.tranId`; лимит 2/с на UID. Включается `venue.deposit_to_spot` [bingx]. Право ключа — «универсальный перевод» (код 4). Документация: https://github.com/BingX-API/api-ai-skills/blob/main/skills/fund-account/api-reference.md

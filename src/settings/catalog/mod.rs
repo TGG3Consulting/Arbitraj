@@ -12,6 +12,7 @@
 mod base;
 pub mod dex;
 mod index;
+mod kyber;
 mod send;
 mod signals;
 mod trade;
@@ -79,6 +80,7 @@ static PARTS: &[&[SettingDef]] = &[
     signals::SIGNALS,
     dex::DEX,
     index::INDEX,
+    kyber::KYBER,
     send::SEND,
 ];
 

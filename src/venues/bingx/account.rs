@@ -71,6 +71,12 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         .filter(|(p, _)| !perms.contains(p))
         .map(|(_, n)| *n)
         .collect();
+    // Решение 102: перевод депозита с фондового счёта на спот — нужно право «универсальный перевод» (код 4).
+    let to_spot = ctx.flag("venue.deposit_to_spot").unwrap_or(false);
+    let mut missing = missing;
+    if to_spot && !perms.contains(&4) {
+        missing.push("универсальный перевод (нужно для venue.deposit_to_spot)");
+    }
     if !missing.is_empty() {
         return fail(format!(
             "У ключа нет прав: {} — включите их в BingX → API Management",
@@ -107,7 +113,14 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     };
     ConnectionCheck {
         ok: true,
-        details: format!("Подключено: права есть (спот-торговля, чтение, вывод), {ip_note}"),
+        details: format!(
+            "Подключено: права есть (спот-торговля, чтение, вывод{}), {ip_note}",
+            if to_spot {
+                ", универсальный перевод"
+            } else {
+                ""
+            }
+        ),
     }
 }
 

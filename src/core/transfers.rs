@@ -4,7 +4,7 @@
 //! venue.status_poll_ms; зачисление — по событию баланса или опросу, кто первый (решение 76: до вывода регистрируется
 //! ожидаемое зачисление — credit_expect.rs, credit_watch.rs; шаг зачисления — transfer_credit.rs). Перевод дольше transfer.max_time_s —
 //! уведомление и карантин монеты, ждём дальше (монеты в пути). Фактическое время в пути пишется в историю
-//! (для T в расчёте, dirctx.rs).
+//! (для T в расчёте, dirctx.rs). Сумма вывода — вниз до точности вывода биржи (решение 104).
 //! Кто вызывает: executor.rs (перевод сделки), stuck.rs (перегон), usdt_return.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! credit_watch.rs, transfer_credit.rs.
@@ -80,6 +80,23 @@ pub async fn send(
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
     // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
     // приход не посчитан — только опрос).
+    // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает
+    // расчёт, costs_withdraw::floor_precision). Без этого хвост вида 14.425559999999999999 (комиссия покупки в монете
+    // пришла числом с плавающей точкой) — отказ BingX 100400 «decimal precision … Precision: 8».
+    let qty = {
+        let nets = rd(&core.inner.networks);
+        let info = nets.get(from).and_then(|l| {
+            l.iter()
+                .find(|i| i.asset.ticker == asset.ticker && i.network == net_from)
+        });
+        super::costs_withdraw::floor_precision(qty, info)
+    };
+    if qty <= Decimal::ZERO {
+        return Err(OpError::from(format!(
+            "{}: сумма вывода {} после округления до точности вывода — ноль",
+            from.0, asset.ticker
+        )));
+    }
     let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
     let req = WithdrawRequest {
         venue: from.clone(),

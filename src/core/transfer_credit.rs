@@ -9,7 +9,8 @@
 //!
 //! Кто вызывает: core/transfers.rs.
 //! От чего зависит: credit_watch.rs, credit_mismatch.rs, transit.rs, transfer_watch.rs, wait.rs, deps.rs (шлюз).
-//! Настройки: venue.status_poll_ms (по площадке получателя).
+//! После зачисления — перевод на торговый счёт площадки (решение 102, Venue::deposit_to_trading; у BingX — фондовый → спот).
+//! Настройки: venue.status_poll_ms (по площадке получателя); venue.deposit_to_spot — у адаптера BingX.
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use tokio::sync::Notify;
 
 use crate::core::types::{Asset, Transfer, TransferStatus, VenueId};
 use crate::gateway::contract::Venue;
+use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
 use super::credit_watch::Ticket;
@@ -63,6 +65,7 @@ pub async fn wait(
                 updated_at: hit.at,
             };
             done(core, leg, &t, hit.at, &hit.source).await;
+            to_trading(core, leg, &gw, &t).await;
             tokio::spawn(super::credit_mismatch::confirm(
                 core.clone(),
                 super::credit_mismatch::owned(leg),
@@ -74,6 +77,7 @@ pub async fn wait(
         match gw.deposit_status(leg.asset, &leg.tx).await {
             Ok(t) if t.status == TransferStatus::Credited => {
                 done(core, leg, &t, Utc::now(), "статус депозита").await;
+                to_trading(core, leg, &gw, &t).await;
                 if let Some(tk) = ticket {
                     tokio::spawn(super::credit_mismatch::no_event(
                         core.clone(),
@@ -120,6 +124,68 @@ async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<Utc>, by: &
     .await;
     deps.notify("deal.transfer_credited", Some(&leg.to.0), &text)
         .await;
+}
+
+/// Решение 102: зачисленное — на счёт, где площадка торгует (у BingX — с фондового на спот, venue.deposit_to_spot).
+/// Сбой — по правилам шлюза (повтор или стоп, core/rules_apply.rs; «итог неизвестен» не повторяется), журнал и
+/// уведомление transfer.to_trading_failed: монеты или USDT остаются на фондовом счёте — продажа сделки там не пройдёт и
+/// уйдёт в «Ручное управление» (решение 100). Принимает: перевод, шлюз получателя, зачисление. Ошибок нет.
+async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, t: &Transfer) {
+    let deps = &core.inner.deps;
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        match gw.deposit_to_trading(leg.asset, t.amount).await {
+            Ok(None) => return,
+            Ok(Some(text)) => {
+                let text = format!("{}: {text}", leg.deal);
+                deps.log(
+                    Level::Info,
+                    "core.transfer_to_trading",
+                    Some(&leg.to.0),
+                    &text,
+                    None,
+                )
+                .await;
+                return;
+            }
+            Err(e) => {
+                let next = super::rules_apply::on_error(
+                    core,
+                    "Перевод зачисленного на торговый счёт",
+                    leg.to,
+                    Some(leg.deal),
+                    &e,
+                    attempt,
+                )
+                .await;
+                match next {
+                    super::rules_apply::Next::Retry { pause_ms }
+                        if e.code != ErrorCode::OutcomeUnknown =>
+                    {
+                        tokio::time::sleep(std::time::Duration::from_millis(pause_ms)).await
+                    }
+                    _ => {
+                        let text = format!(
+                            "{} {} {}: зачислено на {}, но не переведено на торговый счёт: {} — переведите вручную",
+                            leg.deal, t.amount, leg.asset.ticker, leg.to.0, e.message
+                        );
+                        deps.log(
+                            Level::Error,
+                            "core.transfer_to_trading",
+                            Some(&leg.to.0),
+                            &text,
+                            None,
+                        )
+                        .await;
+                        deps.notify("transfer.to_trading_failed", Some(&leg.to.0), &text)
+                            .await;
+                        return;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Событие, закрывающее зачисление (credit_watch.rs Ticket::closing: своё — хеш совпал с хешем отправителя или хеша в

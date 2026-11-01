@@ -82,6 +82,9 @@ async fn run() -> Result<(), String> {
             bingx_ctx,
         )))
         .await;
+    // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
+    // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
+    // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
         settings: settings.clone(),
         vault: vault.clone(),

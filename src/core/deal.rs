@@ -60,6 +60,10 @@ pub struct Deal {
     pub dust: Decimal,
     /// Сколько раз монету перегоняли (режим «Перегон»).
     pub relays: u64,
+    /// Решение 101: после продажи выручку USDT перегнать на площадку покупки (кнопка «Продать и перегнать»),
+    /// независимо от usdt_return.mode.
+    #[serde(default)]
+    pub return_usdt: bool,
     /// Итог сделки, USDT (когда закрыта).
     pub result_usd: Option<Decimal>,
     /// Предварительный убыток, учтённый в итоге дня (решение 53, daily.rs): Halted или «Беру на себя»;
@@ -92,6 +96,7 @@ impl Deal {
             sells: vec![],
             dust: Decimal::ZERO,
             relays: 0,
+            return_usdt: false,
             result_usd: None,
             provisional_usd: None,
             timeline: vec![],

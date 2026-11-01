@@ -27,3 +27,6 @@ Thumbs.db
 
 *.sqlite-wal
 *.sqlite-shm
+
+# Служебные данные Claude Code (worktrees, кэш сессий) — не артефакт проекта
+.claude/

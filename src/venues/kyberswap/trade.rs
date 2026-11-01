@@ -50,13 +50,28 @@ pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
     let route = fresh_route(p, coin, usdt, (coin_dec, usdt_dec), req.side, req.qty).await?;
     let slippage = ctx.int("kyber.slippage_bps")?;
     let deadline = deadline_unix(ctx).await?;
-    let built = rest::build(ctx, &route, wallet, wallet, slippage, deadline).await?;
+    let mut built = rest::build(ctx, &route, wallet, wallet, slippage, deadline).await?;
     check_price(ctx, &req, &built, (coin_dec, usdt_dec))?;
 
     // Разрешение на списание входного токена роутером (ERC-20 approve), если его не хватает; у свопа с нативной
     // монетой на входе (value > 0) approve не нужен.
-    if built.value.is_zero() {
-        ensure_allowance(ctx, token_in, wallet, built.router, built.amount_in).await?;
+    if built.value.is_zero()
+        && ensure_allowance(ctx, token_in, wallet, built.router, built.amount_in).await?
+    {
+        // Решение 99: approve — отдельная транзакция, ждём её блока (секунды). Маршрут и транзакция свопа, собранные
+        // ДО него, к этому моменту устарели — симуляция свопа откатывалась «Return amount is not enough» (сделка
+        // 20261101182135312CAKE). Собираем заново на свежем маршруте и снова сверяем худшую цену.
+        let route = fresh_route(p, coin, usdt, (coin_dec, usdt_dec), req.side, req.qty).await?;
+        let deadline = deadline_unix(ctx).await?;
+        built = rest::build(ctx, &route, wallet, wallet, slippage, deadline).await?;
+        check_price(ctx, &req, &built, (coin_dec, usdt_dec))?;
+        // Новая сборка могла потребовать больше входа (покупка) — второй approve не делаем (снова устареет маршрут).
+        if allowance(ctx, token_in, wallet, built.router).await? < built.amount_in {
+            return Err(ctx.err(
+                ErrorCode::QuoteMismatch,
+                "после approve свежий маршрут требует больше входа, чем разрешено — своп не отправлен",
+            ));
+        }
     }
 
     let d = tx::send(ctx, wallet, built.router, built.data.clone(), built.value).await?;
@@ -144,16 +159,14 @@ fn check_price(
     Ok(())
 }
 
-/// Разрешение на списание токена роутером: читает allowance, при нехватке — approve(router, amount) и ждёт блока.
-/// Ошибки: узел, SwapReverted (approve не прошёл — с фактом транзакции), OutcomeUnknown.
-async fn ensure_allowance(
+/// Текущее разрешение роутеру на списание токена (ERC-20 allowance). Ошибки: узел.
+async fn allowance(
     ctx: &Ctx,
     token: Address,
     wallet: Address,
     router: Address,
-    amount: U256,
-) -> GatewayResult<()> {
-    let have: U256 = node::view(
+) -> GatewayResult<U256> {
+    node::view(
         ctx,
         token,
         &IERC20::allowanceCall {
@@ -161,9 +174,21 @@ async fn ensure_allowance(
             spender: router,
         },
     )
-    .await?;
-    if have >= amount {
-        return Ok(());
+    .await
+}
+
+/// Разрешение на списание токена роутером: читает allowance, при нехватке — approve(router, amount) и ждёт блока.
+/// Возвращает: true — approve отправлялся (прошло время, маршрут свопа надо собрать заново).
+/// Ошибки: узел, SwapReverted (approve не прошёл — с фактом транзакции), OutcomeUnknown.
+async fn ensure_allowance(
+    ctx: &Ctx,
+    token: Address,
+    wallet: Address,
+    router: Address,
+    amount: U256,
+) -> GatewayResult<bool> {
+    if allowance(ctx, token, wallet, router).await? >= amount {
+        return Ok(false);
     }
     let data = Bytes::from(
         IERC20::approveCall {
@@ -174,7 +199,7 @@ async fn ensure_allowance(
     );
     let d = tx::send(ctx, wallet, token, data, U256::ZERO).await?;
     match d.chain.outcome {
-        TxOutcome::Included => Ok(()),
+        TxOutcome::Included => Ok(true),
         TxOutcome::NotIncluded => Err(ctx
             .err(ErrorCode::TxNotIncluded, "approve не попал в блок")
             .with_tx(d.chain)),

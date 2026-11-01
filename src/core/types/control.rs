@@ -83,6 +83,10 @@ pub enum ManualAction {
     ReturnToBot { holding_id: String },
     /// «Продать сейчас» для остановленной сделки (Halted) — по реальному балансу площадки (решение 100).
     SellHalted { deal_id: String },
+    /// «Продать и перегнать» по алерту: продажа по рынку, затем выручка USDT — на площадку покупки (решение 101).
+    SellNowReturn { alert_id: String },
+    /// «Продать и перегнать» для остановленной сделки (решение 101).
+    SellHaltedReturn { deal_id: String },
     /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
     SoldManually { deal_id: String, usdt: String },
 }

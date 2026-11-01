@@ -8,6 +8,8 @@
     Решение 100: остановленные сделки (продажа не прошла, исход неизвестен, прервана перезапуском) — «Продать сейчас»
     (бот продаёт по рынку то, что реально на площадке) и «Продано вручную» (человек продал сам и вводит выручку
     USDT — сделка закрывается фактом вместо предварительного убытка). «Продано вручную» есть и у алертов, и у «Беру на себя».
+    Решение 101: «Продать и перегнать» (у алерта и остановленной сделки) — продажа по рынку, затем выручка USDT
+    переводится на площадку покупки (откуда пришли деньги), независимо от режима возврата USDT.
     Живые сообщения stuck_alert, manual, deal — перечитать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/remote.svelte.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte.
@@ -77,6 +79,7 @@
           <td>{a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
           <td class="row">
             <button disabled={busy} onclick={() => command({ SellNow: { alert_id: a.id } }, `Продать ${a.qty} ${a.asset.ticker} на ${a.venue} по рынку сейчас?`)}>Продать сейчас</button>
+            <button disabled={busy} onclick={() => command({ SellNowReturn: { alert_id: a.id } }, `Продать ${a.qty} ${a.asset.ticker} на ${a.venue} по рынку и перегнать выручку USDT на площадку покупки?`)}>Продать и перегнать</button>
             <button class="quiet" disabled={busy} onclick={() => command({ TakeOver: { alert_id: a.id } }, `Забрать ${a.qty} ${a.asset.ticker} на себя? Бот спишет их из учёта.`)}>Беру на себя</button>
             <button class="quiet" disabled={busy} onclick={() => soldManually(a.deal_id, a.asset.ticker, a.qty)}>Продано вручную</button>
           </td>
@@ -117,6 +120,7 @@
           <td class="num err">{d.provisional_usd ?? '—'}</td><td>{lastNote(d)}</td><td><code>{d.id}</code></td>
           <td class="row">
             <button disabled={busy || !(Number(d.qty) > 0)} onclick={() => command({ SellHalted: { deal_id: d.id } }, `Продать ${d.direction.asset.ticker} сделки ${d.id} на ${d.at} по рынку сейчас? Количество — по реальному балансу.`)}>Продать сейчас</button>
+            <button disabled={busy || !(Number(d.qty) > 0) || d.at === d.direction.buy_on} onclick={() => command({ SellHaltedReturn: { deal_id: d.id } }, `Продать ${d.direction.asset.ticker} сделки ${d.id} на ${d.at} и перегнать выручку USDT на ${d.direction.buy_on}?`)}>Продать и перегнать</button>
             <button class="quiet" disabled={busy} onclick={() => soldManually(d.id, d.direction.asset.ticker, d.qty)}>Продано вручную</button>
           </td>
         </tr>

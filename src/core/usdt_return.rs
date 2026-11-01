@@ -5,6 +5,7 @@
 //! балансов: на площадке USDT меньше usdt_return.low_balance_usd — перегнать usdt_return.amount_usd
 //! с площадки, где USDT хватает. Каждый перегон — уведомление usdt.relayed. Сухой режим (решение 74, dry.rs) — «отдельно»
 //! не перегоняет; «в каждой сделке» — часть начатой сделки, она доводится как обычно.
+//! Кнопка «Продать и перегнать» (решение 101, deal.return_usdt) — перегон выручки этой сделки при любом режиме.
 //! Кто вызывает: sell.rs (after_deal), reconcile.rs (separate).
 //! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, settings.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
@@ -71,15 +72,18 @@ async fn relay(core: &Core, id: &str, from: &VenueId, to: &VenueId, amount: Deci
     }
 }
 
-/// Режим «в каждой сделке»: выручка закрытой сделки — обратно на площадку покупки. Ошибок нет.
+/// Режим «в каждой сделке» или кнопка «Продать и перегнать» (решение 101): выручка закрытой сделки — обратно на
+/// площадку покупки. Ошибок нет.
 pub async fn after_deal(core: &Core, deal: &Deal) {
     let mode = core
         .inner
         .deps
         .settings
         .text("usdt_return.mode", At::default());
-    // Варианты настройки — per_trade / separate (settings/catalog/trade.rs).
-    if mode.ok().as_deref() != Some("per_trade") || deal.at == deal.direction.buy_on {
+    // Варианты настройки — per_trade / separate (settings/catalog/trade.rs). Решение 101: кнопка «Продать и
+    // перегнать» (deal.return_usdt) — перегон выручки при любом режиме.
+    let wanted = deal.return_usdt || mode.ok().as_deref() == Some("per_trade");
+    if !wanted || deal.at == deal.direction.buy_on {
         return;
     }
     let amount = deal.proceeds;

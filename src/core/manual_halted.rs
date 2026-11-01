@@ -4,7 +4,8 @@
 //! (не больше количества сделки); «Продано вручную» — человек продал сам и вводит полученные USDT: сделка
 //! закрывается этим фактом (вместо предварительного убытка, решение 53). Плюс «сколько монет реально на площадке»
 //! (on_hand) — общий для «Продать сейчас» по алерту, по остановленной сделке и «Вернуть боту».
-//! Кто вызывает: core/commands.rs (команды SellHalted, SoldManually), manual.rs (sell_now), manual_return.rs.
+//! «Продать и перегнать» (решение 101) — то же, плюс выручка USDT на площадку покупки (deal.return_usdt).
+//! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
 //! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, deps.rs (шлюз — балансы).
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
@@ -60,8 +61,8 @@ pub fn set_qty(deal: &mut Deal, qty: Decimal, note: Option<String>) {
     }
 }
 
-/// «Продать сейчас» для остановленной сделки. Возвращает: текст. Ошибки: сделки нет, не остановлена, монет нет.
-pub async fn sell_halted(core: &Core, deal_id: &str) -> Result<String, String> {
+/// «Продать сейчас» для остановленной сделки; ret — «Продать и перегнать» (решение 101). Возвращает: текст. Ошибки: сделки нет, не остановлена, монет нет.
+pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String, String> {
     // Проверка и смена шага под одним замком — двойное нажатие не запустит две продажи.
     let mut deal = {
         let mut deals = lk(&core.inner.deals);
@@ -91,7 +92,13 @@ pub async fn sell_halted(core: &Core, deal_id: &str) -> Result<String, String> {
             return Err(e);
         }
     }
-    deal.note("«Продать сейчас» (интерфейс): продажа по рынку");
+    if ret {
+        // Решение 101: после продажи выручка USDT — на площадку покупки (usdt_return.rs).
+        deal.return_usdt = true;
+        deal.note("«Продать и перегнать» (интерфейс): продажа по рынку, затем выручка на площадку покупки");
+    } else {
+        deal.note("«Продать сейчас» (интерфейс): продажа по рынку");
+    }
     lk(&core.inner.active).insert(deal.direction.clone());
     super::ledger::save(core, &deal).await;
     let text = format!(

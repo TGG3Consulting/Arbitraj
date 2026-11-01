@@ -1,7 +1,7 @@
 //! Файл: core/commands.rs
 //! Что делает: команды человека ядру — из интерфейса и кнопок Telegram (ManualCommand, core/types/control.rs):
 //! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
-//! (manual_halted.rs, решение 100). Кнопка Telegram принимается только из настроенного
+//! (manual_halted.rs, решение 100); «Продать и перегнать» — у алерта и остановленной сделки (решение 101). Кнопка Telegram принимается только из настроенного
 //! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
@@ -56,15 +56,18 @@ impl Core {
         }
         // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).
         let gone = match &cmd.action {
-            ManualAction::SellNow { alert_id } | ManualAction::TakeOver { alert_id } => {
-                (!lk(&self.inner.alerts).contains_key(alert_id))
-                    .then(|| format!("алерт {alert_id}"))
-            }
+            ManualAction::SellNow { alert_id }
+            | ManualAction::SellNowReturn { alert_id }
+            | ManualAction::TakeOver { alert_id } => (!lk(&self.inner.alerts)
+                .contains_key(alert_id))
+            .then(|| format!("алерт {alert_id}")),
             ManualAction::ReturnToBot { holding_id } => (!lk(&self.inner.holdings)
                 .contains_key(holding_id))
             .then(|| format!("запись {holding_id}")),
             // Шаг сделки проверяют сами команды (manual_halted.rs) — отказ с причиной.
-            ManualAction::SellHalted { .. } | ManualAction::SoldManually { .. } => None,
+            ManualAction::SellHalted { .. }
+            | ManualAction::SellHaltedReturn { .. }
+            | ManualAction::SoldManually { .. } => None,
         };
         if let Some(what) = gone {
             return Ok(format!(
@@ -77,7 +80,12 @@ impl Core {
             (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
         };
         match &cmd.action {
-            ManualAction::SellNow { alert_id } => super::manual::sell_now(self, alert_id).await,
+            ManualAction::SellNow { alert_id } => {
+                super::manual::sell_now(self, alert_id, false).await
+            }
+            ManualAction::SellNowReturn { alert_id } => {
+                super::manual::sell_now(self, alert_id, true).await
+            }
             ManualAction::TakeOver { alert_id } => {
                 super::manual::take_over(self, alert_id, &who).await
             }
@@ -85,7 +93,10 @@ impl Core {
                 super::manual_return::return_to_bot(self, holding_id).await
             }
             ManualAction::SellHalted { deal_id } => {
-                super::manual_halted::sell_halted(self, deal_id).await
+                super::manual_halted::sell_halted(self, deal_id, false).await
+            }
+            ManualAction::SellHaltedReturn { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id, true).await
             }
             ManualAction::SoldManually { deal_id, usdt } => {
                 super::manual_halted::sold_manually(self, deal_id, usdt, &who).await

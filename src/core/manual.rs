@@ -128,8 +128,8 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>,
 }
 
 /// «Продать сейчас» по алерту: количество — по реальному балансу площадки (решение 100: после неудачной продажи
-/// монет может быть меньше или уже нет). Возвращает: текст для ответа. Ошибки: алерта нет, монет нет (алерт остаётся).
-pub async fn sell_now(core: &Core, alert_id: &str) -> Result<String, String> {
+/// монет может быть меньше или уже нет). ret — «Продать и перегнать» (решение 101). Возвращает: текст для ответа. Ошибки: алерта нет, монет нет (алерт остаётся).
+pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, String> {
     let (mut alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
@@ -144,6 +144,11 @@ pub async fn sell_now(core: &Core, alert_id: &str) -> Result<String, String> {
         }
     }
     deal.step = Step::Selling;
+    // Решение 101: «Продать и перегнать» — после продажи выручка на площадку покупки.
+    if ret {
+        deal.return_usdt = true;
+        deal.note("«Продать и перегнать»: после продажи выручка USDT — на площадку покупки");
+    }
     super::ledger::save(core, &deal).await;
     persist(core).await;
     let id = deal.id.clone();

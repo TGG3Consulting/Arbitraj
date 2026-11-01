@@ -110,27 +110,49 @@ impl Heads {
         if let Some(t) = hit() {
             return Ok((head.number, t));
         }
-        let _one = self.flight.lock().await;
-        if let Some(t) = hit() {
-            return Ok((head.number, t));
+        // Последнее известное (номер, время) любого блока — чтобы расчёт не ждал узел (решение 89).
+        let last = || *self.time.lock().unwrap_or_else(|p| p.into_inner());
+        match self.flight.try_lock() {
+            // Ведущий: на этом блоке кэша нет и никто не тянет — обновляем с узла.
+            Ok(_one) => match hit() {
+                Some(t) => Ok((head.number, t)),
+                None => self.fetch_time(ctx, head.number).await,
+            },
+            // Кто-то уже тянет (обычно фоновый прогрев): берём последнее известное, не блокируемся на узле.
+            Err(_) => match last() {
+                Some((n, t)) => Ok((n, t)),
+                // Холодный старт: ничего нет — один раз дожидаемся того запроса.
+                None => {
+                    let _one = self.flight.lock().await;
+                    match hit() {
+                        Some(t) => Ok((head.number, t)),
+                        None => self.fetch_time(ctx, head.number).await,
+                    }
+                }
+            },
         }
+    }
+
+    /// Обновляет кэш времени блока с узла (eth_getBlockByNumber). Держится под flight — один запрос на всех.
+    /// Принимает: окружение, номер блока. Возвращает: (номер, время Unix). Ошибки: узел; BadResponse (нет блока/timestamp).
+    async fn fetch_time(&self, ctx: &Ctx, number: u64) -> GatewayResult<(u64, u64)> {
         let b: Option<RawBlock> = rpc::call(
             ctx,
             "eth_getBlockByNumber",
-            json!([block_tag(head.number), false]),
+            json!([block_tag(number), false]),
         )
         .await?;
         let t = b
             .ok_or_else(|| {
                 ctx.err(
                     ErrorCode::BadResponse,
-                    format!("узел BSC (HTTP) не знает блок {}", head.number),
+                    format!("узел BSC (HTTP) не знает блок {number}"),
                 )
             })?
             .timestamp
             .to::<u64>();
-        *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((head.number, t));
-        Ok((head.number, t))
+        *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((number, t));
+        Ok((number, t))
     }
 
     /// Принимает номер блока из опроса: вырос — новая голова слушателям; не вырос — ничего (свежесть не

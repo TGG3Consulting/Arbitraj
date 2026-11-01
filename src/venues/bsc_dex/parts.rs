@@ -116,6 +116,7 @@ impl Parts {
             loading: super::pools::loading::Loading::default(),
             feed: super::node::receipts::Feed::with_lag(self.lag.clone()),
             lag: self.lag.clone(),
+            gas: self.gas.clone(),
         }
     }
 }

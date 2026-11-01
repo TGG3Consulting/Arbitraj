@@ -41,8 +41,11 @@ pub struct StuckAlert {
     pub venue: VenueId,
     pub asset: Asset,
     pub qty: Decimal,
-    /// Убыток при продаже по рынку сейчас, %.
-    pub loss_pct: Decimal,
+    /// Убыток при продаже по рынку сейчас, %; None — котировки продажи нет (решение 100: продажа не прошла).
+    pub loss_pct: Option<Decimal>,
+    /// Почему ждём человека: «убыток выше порога» или «продажа не прошла: …» (решение 100).
+    #[serde(default)]
+    pub reason: Option<String>,
     pub at: DateTime<Utc>,
 }
 
@@ -78,6 +81,10 @@ pub enum ManualAction {
     TakeOver { alert_id: String },
     /// «Вернуть боту» — возврат по реальному балансу площадки.
     ReturnToBot { holding_id: String },
+    /// «Продать сейчас» для остановленной сделки (Halted) — по реальному балансу площадки (решение 100).
+    SellHalted { deal_id: String },
+    /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
+    SoldManually { deal_id: String, usdt: String },
 }
 
 /// Команда с источником — для журнала.

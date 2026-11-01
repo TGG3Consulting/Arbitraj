@@ -1,6 +1,7 @@
 //! Файл: core/commands.rs
 //! Что делает: команды человека ядру — из интерфейса и кнопок Telegram (ManualCommand, core/types/control.rs):
-//! «Продать сейчас», «Беру на себя», «Вернуть боту». Кнопка Telegram принимается только из настроенного
+//! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
+//! (manual_halted.rs, решение 100). Кнопка Telegram принимается только из настроенного
 //! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
@@ -62,6 +63,8 @@ impl Core {
             ManualAction::ReturnToBot { holding_id } => (!lk(&self.inner.holdings)
                 .contains_key(holding_id))
             .then(|| format!("запись {holding_id}")),
+            // Шаг сделки проверяют сами команды (manual_halted.rs) — отказ с причиной.
+            ManualAction::SellHalted { .. } | ManualAction::SoldManually { .. } => None,
         };
         if let Some(what) = gone {
             return Ok(format!(
@@ -80,6 +83,12 @@ impl Core {
             }
             ManualAction::ReturnToBot { holding_id } => {
                 super::manual_return::return_to_bot(self, holding_id).await
+            }
+            ManualAction::SellHalted { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id).await
+            }
+            ManualAction::SoldManually { deal_id, usdt } => {
+                super::manual_halted::sold_manually(self, deal_id, usdt, &who).await
             }
         }
     }

@@ -55,6 +55,7 @@ pub mod ledger;
 pub mod limits;
 pub mod low_usdt;
 pub mod manual;
+pub mod manual_halted;
 pub mod manual_return;
 pub mod market_read;
 pub mod market_state;

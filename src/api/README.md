@@ -66,8 +66,8 @@
 
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
-| `GET /api/manual` | — | `{alerts: [StuckAlert], holdings: [ManualHolding]}` |
-| `POST /api/manual/command` | `{action: ManualAction}` — `{"SellNow":{"alert_id":…}}`, `{"TakeOver":{"alert_id":…}}`, `{"ReturnToBot":{"holding_id":…}}` | `{ok, details}`; источник — `CommandSource::Ui`, пишется в журнал; id алерта — UUID; по закрытому алерту — ok и «проигнорирована» |
+| `GET /api/manual` | — | `{alerts: [StuckAlert], holdings: [ManualHolding], halted: [Deal]}` (halted — остановленные сделки, решение 100) |
+| `POST /api/manual/command` | `{action: ManualAction}` — `{"SellNow":{"alert_id":…}}`, `{"TakeOver":{"alert_id":…}}`, `{"ReturnToBot":{"holding_id":…}}`, `{"SellHalted":{"deal_id":…}}`, `{"SoldManually":{"deal_id":…,"usdt":"24.44"}}` | `{ok, details}`; источник — `CommandSource::Ui`, пишется в журнал; id алерта — UUID; по закрытому алерту — ok и «проигнорирована» |
 | WS `/api/ws` | — | `{"type":"stuck_alert","data":StuckAlert}`, `{"type":"manual","data":{alerts, holdings}}` |
 
 ### Экран «Каналы отправки» (решения 33, 41–44)

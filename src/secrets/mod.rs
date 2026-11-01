@@ -88,4 +88,11 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bsc_dex",
         "Flashblock: заголовок Authorization (регистрация flashblock.trade)",
     ),
+    // DEX через агрегатор KyberSwap (адаптер kyberswap, решение 91). Кошелёк — тот же секрет bsc_dex.wallet_key
+    // (один кошелёк, решение 45), отдельного ключа кошелька у площадки нет. Узел BSC для исполнения — свой адрес.
+    (
+        "kyber.node_http_key",
+        "kyberswap",
+        "Ключ провайдера узла BSC для адреса HTTP агрегатора KyberSwap ({key} в kyber.node_http_url)",
+    ),
 ];

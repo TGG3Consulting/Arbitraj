@@ -82,20 +82,40 @@ async fn run() -> Result<(), String> {
             bingx_ctx,
         )))
         .await;
-    let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
-        settings: settings.clone(),
-        vault: vault.clone(),
-        http: http.clone(),
-        journal: journal.clone(),
-        raw,
-        pace: Default::default(),
-        failover: Default::default(),
-        index: Default::default(),
-    };
-    let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
-    // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
-    dex.watch_settings(changes.subscribe());
-    registry.register(std::sync::Arc::new(dex)).await;
+    // Выбор адаптера DEX при запуске (решение 91): kyber.use_instead_of_bsc_dex = да — агрегатор KyberSwap
+    // (площадка kyberswap) вместо bsc_dex; иначе — bsc_dex. Площадки — один DEX за раз (одна котируемая сторона DEX).
+    let use_kyber = settings
+        .flag(
+            "kyber.use_instead_of_bsc_dex",
+            arb::settings::read::At::default(),
+        )
+        .unwrap_or(false);
+    if use_kyber {
+        let kyber_ctx = arb::venues::kyberswap::ctx::Ctx {
+            settings: settings.clone(),
+            vault: vault.clone(),
+            http: http.clone(),
+            journal: journal.clone(),
+            raw,
+        };
+        let kyber = arb::venues::kyberswap::Kyberswap::new(kyber_ctx);
+        registry.register(std::sync::Arc::new(kyber)).await;
+    } else {
+        let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
+            settings: settings.clone(),
+            vault: vault.clone(),
+            http: http.clone(),
+            journal: journal.clone(),
+            raw,
+            pace: Default::default(),
+            failover: Default::default(),
+            index: Default::default(),
+        };
+        let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
+        // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
+        dex.watch_settings(changes.subscribe());
+        registry.register(std::sync::Arc::new(dex)).await;
+    }
 
     // Ядро: работает с площадками только через шлюз; интерфейс читает его состояние через AppState.core.
     let core = arb::core::Core::start(arb::core::deps::Deps {

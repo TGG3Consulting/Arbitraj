@@ -6,6 +6,9 @@
 //! выбора: «оптимум 7.3 WFI: прибыль 0.41; на бюджете 20 (9.75 WFI) — 0.33».
 //! Кто вызывает: core/candidates.rs (очередь тяжёлого расчёта), core/precheck.rs (пересчёт перед покупкой).
 //! От чего зависит: costs.rs, dirctx.rs, limits.rs, size_curve.rs, size_search.rs, market_state.rs, settings.
+//! Решение 95: найденный оптимум пересчитывается ФИНАЛЬНОЙ котировкой (gateway/quote_stage.rs) — у DEX при
+//! exec.via_kyber это цена KyberSwap (тот, кто исполнит); пороги проверяются по ней. Отказ финальной котировки —
+//! отказ кандидата с причиной.
 //! Настройки: money.min_profit_usd, money.min_profit_pct, size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
@@ -72,7 +75,17 @@ pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verd
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
-    let mut c = found.best.data;
+    // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
+    // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
+    let mut c = match final_calc(core, &cx, choice.qty, budget).await {
+        Ok(f) => f,
+        Err(e) => {
+            return reject(
+                format!("финальная котировка: {e} ({})", choice.why),
+                Some(found.best.data),
+            );
+        }
+    };
     c.size = Some(choice.clone());
     if c.profit_usd < min_usd {
         return reject(
@@ -95,6 +108,28 @@ pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verd
         );
     }
     Verdict::Accept(c)
+}
+
+/// Финальный расчёт на найденном объёме (решение 95): тот же полный расчёт costs.rs, но внутри
+/// gateway::quote_stage::final_scope — адаптер отдаёт котировку исполнителя. Списание по худшей цене не должно выйти за
+/// бюджет. Принимает: ядро, контекст, объём, бюджет. Возвращает: Calc. Ошибки: текст (отказ расчёта, бюджет).
+async fn final_calc(
+    core: &Core,
+    cx: &DirCtx,
+    qty: Decimal,
+    budget: Decimal,
+) -> Result<Calc, String> {
+    let fut = super::costs::evaluate(core, cx, qty);
+    let c = crate::gateway::quote_stage::final_scope(fut)
+        .await
+        .map_err(|f| f.to_string())?;
+    if c.spend_max > budget {
+        return Err(format!(
+            "списание по худшей цене {} больше бюджета {budget}",
+            c.spend_max.round_dp(4)
+        ));
+    }
+    Ok(c)
 }
 
 /// Почему объём лучший — текст для журнала и «Кандидатов». Принимает: итог подбора, тикер. Ошибок нет.

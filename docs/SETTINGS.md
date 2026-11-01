@@ -337,6 +337,9 @@ https://www.geckoterminal.com — гайд https://brand.coingecko.com/resources
 | kyber.slippage_bps | Допуск проскальзывания при сборке транзакции (POST /route/build, slippageTolerance). 0–2000 | bps | вся система |
 | kyber.deadline_s | Срок жизни транзакции обмена (POST /route/build, deadline = сейчас + это) | секунды | вся система |
 | kyber.http_timeout_ms | Сколько ждать заголовков ответа API агрегатора и узла BSC по HTTP (тело — по http.body_idle_ms / http.total_ms / http.max_body_bytes) | мс | вся система |
+| kyber.rps | Решение 95: темп запросов к API агрегатора (/routes, /route/build) — не чаще стольких в секунду на весь бот. Лимит бесплатного прямого эндпоинта по офдоку — 3 rps (превышение — HTTP 403). Финальные котировки кандидатов и сделки делят этот темп | запросов в секунду | вся система |
+| kyber.max_wait_ms | Решение 95: сколько запрос к агрегатору ждёт своего места в темпе kyber.rps; дольше — не отправляется (отказ кандидата «очередь KyberSwap» на этом тике). Меньше profit.calc_timeout_ms | мс | вся система |
+| kyber.buy_fill_tolerance_pct | Решение 95: допуск недобора монет при покупке через агрегатор (маршрут считается по входу, точного выхода нет): недобор в пределах — объём полный; больше — вход уточняется, остаток — «глубины не хватает» | % | вся система |
 | kyber.node_http_url | HTTP узла BSC для исполнения (eth_call, eth_estimateGas, eth_gasPrice, eth_sendRawTransaction, eth_getTransactionReceipt); ключ провайдера — как {key}, секрет kyber.node_http_key | URL | вся система |
 | kyber.gas_price_markup_pct | Надбавка к eth_gasPrice при отправке свопа и перевода | % | вся система |
 | kyber.gas_limit_margin_pct | Запас к оценке eth_estimateGas для лимита газа | % | вся система |

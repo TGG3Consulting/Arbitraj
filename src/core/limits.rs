@@ -1,11 +1,12 @@
 //! Файл: core/limits.rs
-//! Что делает: сколько денег можно вложить в сделку прямо сейчас (шаг 4 ТЗ, «режем объём по ограничениям»):
-//! лимит на сделку (money.max_per_trade_usd, можно по площадке A), на монету с учётом уже открытых
-//! сделок (money.max_per_coin_usd), на все переводы в пути (money.max_in_transit_usd) и свободный
-//! баланс котируемой монеты на A (балансы — через шлюз). Сухой режим (решение 74, dry.rs): вместо свободного баланса A —
-//! виртуальный бюджет dry.budget_usdt, к площадке за балансом не ходим; лимиты money.* — как обычно. Режим не читается
-//! здесь, а передаётся вызывающим (зафиксирован на расчёт; у живой сделки — всегда Live).
-//! Кто вызывает: core/profit.rs; executor.rs ведёт учёт Exposure.
+//! Что делает: сколько денег можно вложить в сделку (шаг 4 ТЗ, «режем объём по ограничениям»): лимит на сделку
+//! (money.max_per_trade_usd, можно по площадке A), на монету с учётом уже открытых сделок (money.max_per_coin_usd),
+//! на все переводы в пути (money.max_in_transit_usd). Сухой режим (решение 74, dry.rs) — дополнительно виртуальный
+//! бюджет dry.budget_usdt.
+//! Решение 94: свободный баланс площадки A в РАСЧЁТЕ кандидата больше не читается — расчёт идёт на каждом тике по
+//! многим кандидатам, и биржа блокирует частые запросы баланса (BingX, код 100410). Реальный свободный баланс
+//! читается ОДИН раз — прямо перед отправкой ордера покупки (free_now, вызывает executor.rs) и ограничивает списание.
+//! Кто вызывает: core/profit.rs (budget), core/executor.rs (free_now); executor.rs ведёт учёт Exposure.
 //! От чего зависит: engine.rs, deps.rs (шлюз), dry.rs, settings.
 //! Настройки: money.max_per_trade_usd, money.max_per_coin_usd, money.max_in_transit_usd, dry.enabled, dry.budget_usdt.
 
@@ -26,9 +27,9 @@ pub struct Exposure {
     pub in_transit: Decimal,
 }
 
-/// Сколько USDT можно вложить в сделку направления сейчас.
-/// Возвращает: сумму USDT (> 0). Ошибки: не задан лимит, лимит исчерпан, нет баланса на A; в сухом режиме — не задан
-/// dry.budget_usdt.
+/// Сколько USDT можно вложить в сделку направления по лимитам (без запроса баланса площадки — решение 94).
+/// Принимает: ядро, контекст направления, режим (зафиксирован вызывающим). Возвращает: сумму USDT (> 0).
+/// Ошибки: не задан лимит, лимит исчерпан; в сухом режиме — не задан dry.budget_usdt.
 pub async fn budget(core: &Core, cx: &DirCtx, mode: &super::dry::Mode) -> Result<Decimal, String> {
     let s = &core.inner.deps.settings;
     let d = &cx.dir;
@@ -42,40 +43,61 @@ pub async fn budget(core: &Core, cx: &DirCtx, mode: &super::dry::Mode) -> Result
     let ex = lk(&core.inner.exposure).clone();
     let coin_left = per_coin - ex.per_coin.get(&d.asset).copied().unwrap_or_default();
     let transit_left = transit - ex.in_transit;
-    let (free, source) = available(core, &d.buy_on, &cx.quote[0], mode).await?;
-    let cap = per_trade.min(coin_left).min(transit_left).min(free);
+    let mut cap = per_trade.min(coin_left).min(transit_left);
+    let mut virt = String::new();
+    // Сухой режим: виртуальный бюджет вместо денег площадки (решение 74).
+    if let super::dry::Mode::Dry(b) = mode {
+        let b = b.clone()?;
+        cap = cap.min(b);
+        virt = format!(", виртуальный бюджет dry.budget_usdt {b}");
+    }
     if cap <= Decimal::ZERO {
         return Err(format!(
             "нет бюджета: на сделку {per_trade}, остаток на монету {coin_left}, \
-             остаток лимита в пути {transit_left}, {source} {} на {}: {free}",
-            cx.quote[0], d.buy_on.0
+             остаток лимита в пути {transit_left}{virt}"
         ));
     }
     Ok(cap)
 }
 
-/// Что делает: сколько денег на площадке A для бюджета — в режиме, ЗАФИКСИРОВАННОМ вызывающим (решение 74): Live —
-/// свободный баланс котируемой монеты через шлюз (настройка dry.* здесь не читается: у живой сделки виртуального
-/// бюджета не бывает); Dry — виртуальный бюджет. Принимает: ядро, площадку A, котируемую монету, режим.
-/// Возвращает: (сумма, откуда). Ошибки: площадка не подключена, сбой балансов, сухой режим без бюджета.
-pub async fn available(
+/// Предел списания покупки прямо перед ордером (решение 94): меньшее из бюджета плана и свободного баланса котируемой
+/// монеты на A, прочитанного сейчас одним запросом. Принимает: ядро, направление, бюджет плана.
+/// Возвращает: (предел, свободно, тикер котируемой монеты). Ошибки: не задан venue.quote_asset у A, сбой балансов,
+/// свободно 0.
+pub async fn buy_cap(
     core: &Core,
-    venue: &VenueId,
-    quote: &str,
-    mode: &super::dry::Mode,
-) -> Result<(Decimal, &'static str), String> {
-    if let super::dry::Mode::Dry(b) = mode {
-        return Ok((b.clone()?, "виртуальный бюджет dry.budget_usdt"));
+    d: &crate::core::types::Direction,
+    budget: Decimal,
+) -> Result<(Decimal, Decimal, String), String> {
+    let at = At {
+        venue: Some(&d.buy_on.0),
+        coin: None,
+    };
+    let quote = core
+        .inner
+        .deps
+        .settings
+        .text("venue.quote_asset", at)
+        .map_err(|e| e.message)?;
+    let free = free_now(core, &d.buy_on, &quote).await?;
+    if free <= Decimal::ZERO {
+        return Err(format!("на {} свободно 0 {quote}", d.buy_on.0));
     }
+    Ok((budget.min(free), free, quote))
+}
+
+/// Свободный баланс котируемой монеты на площадке — ОДИН запрос прямо перед ордером покупки (решение 94).
+/// Принимает: ядро, площадку, тикер котируемой монеты. Возвращает: свободную сумму (0, если монеты нет).
+/// Ошибки: площадка не подключена, сбой запроса балансов (текст площадки, например лимит частоты).
+pub async fn free_now(core: &Core, venue: &VenueId, quote: &str) -> Result<Decimal, String> {
     let a = core.inner.deps.gw.get(venue).await.map_err(|e| e.message)?;
     let balances = a
         .balances()
         .await
         .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?;
-    let free = balances
+    Ok(balances
         .iter()
         .find(|b| b.asset == quote)
         .map(|b| b.free)
-        .unwrap_or_default();
-    Ok((free, "свободно"))
+        .unwrap_or_default())
 }

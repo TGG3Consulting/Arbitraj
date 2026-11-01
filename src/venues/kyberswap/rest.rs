@@ -4,7 +4,8 @@
 //! Разбор ответа {code, message, data}, перевод ошибок в коды шлюза, запись сырого ответа в журнал.
 //! Кто вызывает: quote.rs, trade.rs, market.rs, connection.rs.
 //! От чего зависит: ctx.rs, errors.rs, gateway/http.rs, alloy-primitives, reqwest, serde_json.
-//! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.http_timeout_ms, http.*.
+//! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.http_timeout_ms, http.*; темп — kyber.rps,
+//! kyber.max_wait_ms (ctx.rs pace_slot, решение 95).
 //!
 //! Эндпоинты, поля и заголовок X-Client-Id — строго по официальной спецификации:
 //! https://docs.kyberswap.com/kyberswap-solutions/kyberswap-aggregator/aggregator-api-specification/evm-swaps
@@ -144,6 +145,8 @@ async fn send(
     query: &str,
     body: Option<Value>,
 ) -> GatewayResult<Value> {
+    // Темп запросов (kyber.rps / kyber.max_wait_ms) — до запроса, чтобы не превышать лимит агрегатора.
+    ctx.pace_slot().await?;
     let base = ctx.api_base()?;
     let lim = ctx.limits()?;
     let url = if query.is_empty() {

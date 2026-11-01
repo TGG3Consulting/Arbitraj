@@ -4,7 +4,8 @@
 //! amountOut (средней цены, пометка in_price). Газ — отдельной затратой из оценки агрегатора.
 //! Кто вызывает: venue.rs (quote), market.rs (цена для «Живого экрана»).
 //! От чего зависит: ctx.rs, rest.rs, state.rs, balances.rs (decimals), num.rs, core/types.
-//! Настройки: venue.quote_asset [kyberswap] (тикер USDT).
+//! Настройки: venue.quote_asset [kyberswap] (тикер USDT), kyber.buy_fill_tolerance_pct (допуск недобора при покупке).
+//! Решение 95: вызывается и из bsc_dex — финальная котировка расчёта кандидата при exec.via_kyber.
 //!
 //! Агрегатор отдаёт amountOut для amountIn (входной токен). Продажа монеты (вход — монета) ложится прямо; покупка
 //! монеты (вход — USDT, нужен ТОЧНЫЙ выход монет) подбирается: оценка входа обратной котировкой и одно уточнение
@@ -23,8 +24,13 @@ use super::num;
 use super::rest::{self, Route};
 use super::state::Parts;
 
-/// Доля недобора монет при покупке, при которой вход уточняется ещё раз (0,999 = допускаем 0,1% недобора).
-const BUY_FILL_TOLERANCE: &str = "0.999";
+/// Доля, ниже которой выход монет при покупке считается недобором (kyber.buy_fill_tolerance_pct: 0,1 → 0,999).
+/// Агрегатор маршрутизирует по входу, точного выхода у API нет — недобор в пределах допуска считается полным.
+/// Ошибки: NotConfigured.
+fn fill_tol(ctx: &Ctx) -> GatewayResult<Decimal> {
+    let pct = ctx.dec("kyber.buy_fill_tolerance_pct")?;
+    Ok(Decimal::ONE - pct / Decimal::ONE_HUNDRED)
+}
 
 /// Адрес USDT площадки: монета с тикером venue.quote_asset [kyberswap] в списке подписки (адрес — из API биржи).
 /// Ошибки: NotConfigured — тикер не задан или такой монеты с адресом в подписке нет.
@@ -62,9 +68,11 @@ pub async fn quote(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Gatewa
     } else {
         usdt_amount / coin_amount
     };
-    // Исполнимый объём: продажа — весь запрошенный вход; покупка — сколько монет реально берётся (но не больше qty).
+    // Исполнимый объём: продажа — весь запрошенный вход; покупка — сколько монет реально берётся (но не больше qty);
+    // недобор в пределах kyber.buy_fill_tolerance_pct — полный объём (точного выхода у API агрегатора нет).
     let fillable_qty = match side {
         Side::Sell => qty,
+        Side::Buy if coin_amount >= qty * fill_tol(ctx)? => qty,
         Side::Buy => coin_amount.min(qty),
     };
     Ok(Quote {
@@ -119,7 +127,7 @@ pub async fn buy_route(
     let mut usdt_in = rev.amount_out;
     let mut r = rest::routes(ctx, usdt, coin, usdt_in).await?;
     let mut coins = dec(ctx, r.amount_out, coin_dec)?;
-    let tol: Decimal = BUY_FILL_TOLERANCE.parse().unwrap_or(Decimal::ONE);
+    let tol = fill_tol(ctx)?;
     if !coins.is_zero() && coins < qty * tol {
         // Недобор монет — поднять вход пропорционально (вход_нов = вход · qty / полученные монеты).
         let scaled = dec(ctx, usdt_in, usdt_dec)? * qty / coins;

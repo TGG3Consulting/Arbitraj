@@ -62,6 +62,22 @@ impl Venue for BscDex {
     /// Котировка на объём по пулам (локальная математика по официальным библиотекам — quote/, math/).
     /// Ошибки: StaleData, CoinNotChecked / CoinCheckFailed, NoRoute, NotConfigured, узел.
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
+        // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
+        // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
+        if crate::gateway::quote_stage::is_final()
+            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+        {
+            match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
+                Err(e) if e.code == ErrorCode::NoRoute => {}
+                Err(e) => return Err(e),
+                Ok(mut q) => {
+                    // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
+                    q.venue = self.p.ctx.venue();
+                    return Ok(q);
+                }
+            }
+        }
         // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
         // ниже проб налогов, выше фона).
         let class = urgency::is_set().unwrap_or(Class::Quote);

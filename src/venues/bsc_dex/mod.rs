@@ -55,6 +55,7 @@ impl BscDex {
                 http: ctx.http.clone(),
                 journal: ctx.journal.clone(),
                 raw: ctx.raw.clone(),
+                pace: Default::default(),
             });
         Self {
             p: Parts::new(ctx),

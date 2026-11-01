@@ -39,6 +39,8 @@ pub struct Ctx {
     pub http: reqwest::Client,
     pub journal: Journal,
     pub raw: RawLog,
+    /// Темп запросов к API агрегатора (kyber.rps): время следующего свободного слота. Общий на все клоны.
+    pub pace: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>>,
 }
 
 impl Ctx {
@@ -133,6 +135,36 @@ impl Ctx {
             base.trim_end_matches('/'),
             chain.trim_matches('/')
         ))
+    }
+
+    /// Слот в темпе запросов к API агрегатора (лимит у KyberSwap — запросы в секунду, офдок «Rate Limits & Client
+    /// ID»): не чаще kyber.rps в секунду; если своего слота ждать дольше kyber.max_wait_ms — запрос не шлём (RateLimited),
+    /// чтобы не ловить HTTP 403 и не держать расчёт. Ошибки: NotConfigured, RateLimited.
+    pub async fn pace_slot(&self) -> Result<(), GatewayError> {
+        let rps = self.int("kyber.rps")?.max(1);
+        let max_wait = Duration::from_millis(self.int("kyber.max_wait_ms")?);
+        let step = Duration::from_nanos(1_000_000_000 / rps);
+        let now = std::time::Instant::now();
+        let wait = {
+            let mut next = self.pace.lock().unwrap_or_else(|p| p.into_inner());
+            let at = next.map_or(now, |n| n.max(now));
+            let wait = at.duration_since(now);
+            if wait > max_wait {
+                return Err(self.err(
+                    ErrorCode::RateLimited,
+                    format!(
+                        "KyberSwap: очередь запросов длиннее kyber.max_wait_ms ({} мс) при kyber.rps {rps} — запрос не отправлен",
+                        max_wait.as_millis()
+                    ),
+                ));
+            }
+            *next = Some(at + step);
+            wait
+        };
+        if !wait.is_zero() {
+            tokio::time::sleep(wait).await;
+        }
+        Ok(())
     }
 
     /// Ошибка «настройка не задана» с её именем (GatewayError.setting). Ошибок нет.

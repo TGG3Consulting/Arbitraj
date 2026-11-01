@@ -48,13 +48,14 @@ impl BscDex {
     /// Создаёт адаптер. Ничего не подключает: соединения открываются по запросу ядра.
     pub fn new(ctx: ctx::Ctx) -> Self {
         // Контекст KyberSwap-исполнения из общих зависимостей (настройки, секреты, HTTP, журнал, сырые логи).
-        let kyber = crate::venues::kyberswap::state::Parts::new(crate::venues::kyberswap::ctx::Ctx {
-            settings: ctx.settings.clone(),
-            vault: ctx.vault.clone(),
-            http: ctx.http.clone(),
-            journal: ctx.journal.clone(),
-            raw: ctx.raw.clone(),
-        });
+        let kyber =
+            crate::venues::kyberswap::state::Parts::new(crate::venues::kyberswap::ctx::Ctx {
+                settings: ctx.settings.clone(),
+                vault: ctx.vault.clone(),
+                http: ctx.http.clone(),
+                journal: ctx.journal.clone(),
+                raw: ctx.raw.clone(),
+            });
         Self {
             p: Parts::new(ctx),
             subs: resubscribe::Subs::default(),

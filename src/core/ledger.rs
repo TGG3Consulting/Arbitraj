@@ -2,7 +2,7 @@
 //! Что делает: учёт сделок (шаг 6 ТЗ): хранение каждой сделки (план и факт по шагам) в SQLite и в памяти,
 //! публикация в интерфейс (экран «Сделки»), деньги в открытых сделках (limits.rs), закрытие сделки —
 //! итог, план против факта, итог дня (daily.rs: факт или предварительный убыток, решение 53), статистика монеты (gas_stats.rs), уведомление deal.closed,
-//! пауза направления (signal.route_cooldown_s). После перезапуска незакрытые сделки помечаются
+//! пауза направления (signal.route_cooldown_s). Уведомление deal.closed — только если покупка была (решение 105). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске).
 //! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs.
@@ -97,7 +97,11 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         serde_json::to_value(&*deal).ok(),
     )
     .await;
-    deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+    // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
+    // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
+    if deal.buy.is_some() || !deal.invested.is_zero() {
+        deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+    }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
     }

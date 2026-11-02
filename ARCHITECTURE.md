@@ -22,7 +22,8 @@
 │ gateway/   — единый вход для ядра: контракт адаптера,     │
 │              маршрутизация, правила, единые ошибки/события│
 ├───────────────┬──────────────────────────────────────────┤
-│ venues/bingx  │ venues/bsc_dex  │ (дальше: gate, mexc …)  │
+│ venues/bingx, │ venues/bsc_dex  │ (дальше: gate …)        │
+│ venues/mexc   │                 │                         │
 │ REST + WS     │ узел BSC, пулы, свопы, кошелёк            │
 └───────────────┴──────────────────────────────────────────┘
 storage/ — запись сырых сообщений (zstd), сделки и переводы (SQLite)
@@ -113,11 +114,11 @@ secrets/ — ключи и токены только в памяти; разбл
 
 | Шаг ТЗ | Файлы |
 | --- | --- |
-| 1. Справочник монет и направлений | core/registry.rs, core/presence.rs, core/blacklist.rs, venues/bingx/wallet.rs, venues/bingx/pairs*.rs, venues/bsc_dex/pools/*, venues/bsc_dex/check/* |
-| 2. Прослушка цен | venues/bingx/ws*.rs, venues/bsc_dex/node/*, venues/bsc_dex/pools/events_*.rs, core/market_state.rs |
+| 1. Справочник монет и направлений | core/registry.rs, core/presence.rs, core/blacklist.rs, venues/bingx/wallet.rs, venues/bingx/pairs*.rs, venues/mexc/wallet.rs, venues/mexc/pairs*.rs, venues/bsc_dex/pools/*, venues/bsc_dex/check/* |
+| 2. Прослушка цен | venues/bingx/ws*.rs, venues/mexc/ws*.rs, venues/bsc_dex/node/*, venues/bsc_dex/pools/events_*.rs, core/market_state.rs |
 | 3. Сигнал и фильтр шума | core/signal.rs |
 | 4. Расчёт выгодности | core/profit.rs, core/costs.rs, core/convert.rs, venues/bsc_dex/math/*, venues/bsc_dex/quote/* |
-| 5. Исполнение | core/executor.rs, core/transfers.rs, core/usdt_return.rs, core/stuck.rs, venues/bingx/trade.rs, venues/bsc_dex/exec/*, venues/bsc_dex/send/* |
+| 5. Исполнение | core/executor.rs, core/transfers.rs, core/usdt_return.rs, core/stuck.rs, venues/bingx/trade.rs, venues/mexc/trade.rs, venues/bsc_dex/exec/*, venues/bsc_dex/send/* |
 | 6. Контроль и учёт | core/ledger.rs, core/gas_stats.rs, core/manual.rs, core/risk.rs |
 | Правила шлюза | gateway/rules.rs |
 | Команды человека (интерфейс, кнопки Telegram) | core/commands.rs, notify/updates.rs, api/* |
@@ -316,3 +317,4 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 | Формат условия правила и условия события уведомлений | Этап 5 |
 | Вопросы по стыкам DEX (минимальный депозит BingX, источник цены BNB, длинный опрос Telegram и др.) | Тигран, отчёт PR «Стыки DEX и ядра» |
 | Что значит status 10 («accessed» в docs-v3) у пары BingX: сейчас считается «не торгуется» (торгуется только 1); на 2026-10-24 таких USDT-пар 42, с BEP20 — 8 (SEA, TITA, ETERNAL, RISE, ANY, EGSM, FOLKS, RAMP) | Тигран, PR bingx/symbols-filter |
+| 2026-11-02 | Адаптер MEXC (спот, API v3, решение 107): справочник пар (exchangeInfo + selfSymbols), монеты и сети (config/getall), стаканы WebSocket protobuf (частичный стакан), котировка, ордер с пробным ордером, вывод, депозит, балансы, поток баланса по listenKey, «Проверить подключение» (apiKeyInfo: права, IP, срок ключа). Направления BingX ↔ MEXC торгуются | src/venues/mexc/*, src/main.rs, src/secrets/mod.rs | venue.* [mexc], venue.order_type, venue.order_test_first, venue.deposit_min_absent_ok; секреты mexc.api_key, mexc.api_secret | экран «Площадки» (mexc), «Настройки», «Живой экран» |

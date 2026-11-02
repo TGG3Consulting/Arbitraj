@@ -7,3 +7,4 @@
 pub mod bingx;
 pub mod bsc_dex;
 pub mod kyberswap;
+pub mod mexc;

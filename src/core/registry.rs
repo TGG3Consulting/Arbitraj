@@ -78,6 +78,9 @@ pub struct CoinEntry {
     pub problem: Option<String>,
     /// Почему налоги ещё не проверены (блок NotChecked): причина ожидания от DEX (CoinCheck.wait). None — не ждёт.
     pub wait: Option<String>,
+    /// Почему нет направлений биржа ↔ биржа (решение 118, Я-3): налог перевода не измерен, а cex_cex.untaxed_ok не
+    /// «да» (заполняет rebuild_blacklist.rs). None — направления биржа ↔ биржа строятся.
+    pub cex_cex: Option<String>,
 }
 
 impl CoinEntry {
@@ -91,7 +94,8 @@ impl CoinEntry {
     }
 
     /// Рабочие направления: на A можно купить и вывести, на B — принять и продать, монета не в чёрном списке. Оба направления
-    /// каждой пары считаются независимо (решение 5). Пусто — у монеты нет направлений.
+    /// каждой пары считаются независимо (решение 5). Биржа ↔ биржа — только если налог перевода измерен или разрешено
+    /// без него (поле cex_cex, решение 118). Пусто — у монеты нет направлений.
     pub fn directions(&self) -> Vec<Direction> {
         if self.block.is_some() || self.problem.is_some() {
             return vec![];
@@ -107,6 +111,10 @@ impl CoinEntry {
                 .iter()
                 .filter(|p| p.can_receive && p.can_sell && p.venue != a.venue)
             {
+                // Решение 118 (Я-3): обе стороны — биржи (у DEX нет данных сети биржи), налог перевода не измерен.
+                if a.info.is_some() && b.info.is_some() && self.cex_cex.is_some() {
+                    continue;
+                }
                 out.push(Direction {
                     asset: self.asset.clone(),
                     buy_on: a.venue.clone(),

@@ -3,7 +3,8 @@
 //! вывода из справочника сетей ядра (core.inner.networks — его держит свежим registry_sync.rs; Presence.info у A,
 //! DirCtx.usdt_b у B): в расчёте нет ни одного запроса к бирже (решение 66 — подбор объёма считает десятки объёмов,
 //! а config/getall BingX подписанный и с лимитом). У DEX — через шлюз (газ перевода из кошелька, налог перевода).
-//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision).
+//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision). Вывод биржи — ещё и налог перевода токена
+//! (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
 //! Кто вызывает: core/costs.rs.
 //! От чего зависит: dirctx.rs, deps.rs (шлюз), size.rs (Fail), core/types.
 //! Настройки: нет.
@@ -40,11 +41,22 @@ fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
     ))
 }
 
-/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты.
+/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты (у биржи — комиссия
+/// вывода и налог перевода DirCtx.transfer_tax, решение 118).
 /// Ошибки: Stop — комиссия неизвестна, сбой шлюза DEX.
 pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     if let Some(info) = &cx.a.info {
-        return Ok(vec![fee_line(info)?]);
+        let fee = fee_line(info)?;
+        // Решение 118 (Я-3): вывод биржи — перевод токена в сети, налог перевода снимается с того, что ушло в сеть
+        // (вывод минус комиссия) — так же считает ожидание зачисления (credit_expect.rs).
+        let pct = cx.transfer_tax.unwrap_or_default();
+        let tax = Cost::new(
+            CostKind::TransferTax,
+            (amount - fee.amount).max(Decimal::ZERO) * pct / Decimal::ONE_HUNDRED,
+            info.asset.ticker.clone(),
+            false,
+        );
+        return Ok(vec![fee, tax]);
     }
     let d = &cx.dir;
     let a = deps.gw.get(&d.buy_on).await.map_err(|e| e.message)?;

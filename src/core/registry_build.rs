@@ -121,6 +121,7 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 block: None,
                 problem: None,
                 wait: None,
+                cex_cex: None,
             }
         })
         .collect()

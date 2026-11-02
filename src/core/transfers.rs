@@ -8,7 +8,8 @@
 //! Кто вызывает: executor.rs (перевод сделки), stuck.rs (перегон), usdt_return.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! credit_watch.rs, transfer_credit.rs.
-//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете).
+//! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
+//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network.
 
 use std::time::Duration;
 
@@ -52,15 +53,14 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
     own.or(any)
         .or_else(|| own_bsc_name(core, venue))
         .or(other)
-        .or_else(|| {
-            // USDT и другие монеты вне справочника: сеть BSC биржи — у любой её монеты с адресом контракта.
-            rd(&core.inner.networks)
-                .values()
-                .flatten()
-                .find(|i| i.asset.bsc_contract.is_some())
-                .map(|i| i.network.clone())
+        // Решение 118 (Я-19): запасного «любое название сети любой биржи» нет — перебор HashMap давал BEP20 или BSC
+        // случайно. Нет своего названия — ошибка: задайте venue.bsc_network площадки.
+        .ok_or_else(|| {
+            format!(
+                "{}: нет сети BSC для {} — задайте venue.bsc_network площадки",
+                venue.0, asset.ticker
+            )
         })
-        .ok_or_else(|| format!("{}: нет сети BSC для {}", venue.0, asset.ticker))
 }
 
 /// Название сети BSC самой площадки — настройка venue.bsc_network (решение 108). None — не задана. Ошибок нет.
@@ -120,7 +120,7 @@ pub async fn send(
     let req = WithdrawRequest {
         venue: from.clone(),
         asset: asset.clone(),
-        network: net_from,
+        network: net_from.clone(),
         address,
         amount: qty,
         deal_id: deal.to_string(),
@@ -211,5 +211,8 @@ pub async fn send(
         started,
     };
     let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
+    // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
+    let (f, a) = (&net_from, credited.amount);
+    super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a).await;
     Ok((sent, credited))
 }

@@ -84,6 +84,7 @@ impl Core {
                     "checks": checks,
                     "block": c.block,
                     "problem": c.problem,
+                    "cex_cex": c.cex_cex,
                     "presence": c.presence,
                     "directions": c.directions(),
                     "pools": pools,

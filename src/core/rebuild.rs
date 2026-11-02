@@ -31,8 +31,9 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 8] = [
+const REGISTRY: [&str; 9] = [
     "coin.",
+    "cex_cex.",
     "tax.",
     "hooks.",
     "venue.enabled",

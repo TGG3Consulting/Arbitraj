@@ -69,6 +69,7 @@ pub mod presence;
 pub mod prices;
 pub mod profit;
 pub mod queue_notify;
+pub mod quote_cache;
 pub mod rebuild;
 pub mod rebuild_blacklist;
 pub mod rebuild_report;

@@ -17,7 +17,7 @@
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { dirText, dirKey } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
@@ -50,7 +50,7 @@
     return onLive((msg) => {
       if (msg.type === 'spread') spreads[dirKey(msg.data.direction)] = msg.data;
       else if (msg.type === 'candidate') cands[dirKey(msg.data.direction)] = msg.data;
-      else if (msg.type === 'lagged' || msg.type === 'coins') reload();
+      else if (lagFor(msg, 'core') || msg.type === 'coins') reload();
     });
   });
 

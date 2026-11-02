@@ -11,7 +11,7 @@
 -->
 <script>
   import { get, post, seg } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { showTime } from '../lib/labels.js';
 
   /** venue — id площадки DEX. */
@@ -57,7 +57,7 @@
       if (msg.type === 'wallet_queue' && msg.data?.venue === venue) {
         queue = { ...msg.data, nonce_taken: null };
         if (msg.data.state?.Halted) load();
-      } else if (msg.type === 'lagged') {
+      } else if (lagFor(msg, 'core')) {
         load();
       }
     });

@@ -10,7 +10,7 @@
 -->
 <script>
   import { get, put } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import RuleForm from '../components/RuleForm.svelte';
   import ErrorText from '../components/ErrorText.svelte';
 
@@ -33,7 +33,7 @@
   $effect(() => {
     load();
     return onLive((m) => {
-      if (m.type === 'lagged' || (m.type === 'journal' && m.data.kind.startsWith('rules.'))) load();
+      if (lagFor(m, 'journal') || (m.type === 'journal' && m.data.kind.startsWith('rules.'))) load();
     });
   });
 

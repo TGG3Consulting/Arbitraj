@@ -8,7 +8,7 @@
 // Настройки: нет.
 
 import { get } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /**
  * Что делает: создаёт состояние данных и подписку (живёт, пока жив компонент).
@@ -35,7 +35,7 @@ export function remote(path, liveTypes) {
   $effect(() => {
     reload();
     return onLive((msg) => {
-      if (msg.type === 'lagged' || liveTypes.includes(msg.type)) reload();
+      if (lagFor(msg, 'core') || liveTypes.includes(msg.type)) reload();
     });
   });
   return st;

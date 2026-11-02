@@ -68,8 +68,13 @@ pub struct Inner {
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// Подписки площадок: на что подписана, идёт ли подписка, причина сбоя (sub_state.rs).
     pub subs: Mutex<super::sub_state::SubState>,
-    /// Монеты, по которым идёт пересчёт тика: значение true — пришёл ещё тик, пересчитать снова.
-    pub ticking: Mutex<HashMap<Asset, bool>>,
+    /// Монеты, по которым идёт пересчёт тика: значение — площадки, приславшие тик во время пересчёта (пусто — нового
+    /// тика не было). Решение 109: повтор пересчитывает направления всех этих площадок, а не только первой.
+    pub ticking: Mutex<HashMap<Asset, HashSet<VenueId>>>,
+    /// Память котировок DEX для тика (решение 109, quote_cache.rs).
+    pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
+    /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
+    pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
     /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
     pub cand_tx: mpsc::Sender<Direction>,
     pub queued: Mutex<HashSet<Direction>>,
@@ -157,6 +162,8 @@ impl Inner {
             spreads: RwLock::default(),
             subs: Mutex::default(),
             ticking: Mutex::default(),
+            quote_cache: Mutex::default(),
+            spread_sent: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),
             candidates: Mutex::default(),

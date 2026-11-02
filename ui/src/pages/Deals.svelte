@@ -10,7 +10,7 @@
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { stepLabel, dirText } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
@@ -35,7 +35,7 @@
     reload();
     return onLive((msg) => {
       if (msg.type === 'deal') deals[msg.data.id] = msg.data;
-      else if (msg.type === 'lagged') reload();
+      else if (lagFor(msg, 'core')) reload();
     });
   });
 

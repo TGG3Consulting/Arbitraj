@@ -8,7 +8,7 @@
 // Настройки: читает и показывает любые.
 
 import { get, put } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /** schema: {settings, events} или null; values: ключ области → значение; venues: id площадок;
  *  venueKinds: [{id, kind: 'Cex' | 'Dex'}]. */
@@ -45,7 +45,7 @@ export async function reload() {
 export function start() {
   reload();
   onLive((msg) => {
-    if (msg.type === 'lagged') reload();
+    if (lagFor(msg, 'settings')) reload();
     if (msg.type === 'settings') {
       const c = msg.data;
       const key = valueKey(c.name, c.scope);

@@ -39,6 +39,12 @@ export async function reloadDex() {
   const out = {};
   await Promise.all(
     ids.map(async (id) => {
+      // Решение 109: биржу (вид Cex из GET /api/venues/kinds) не спрашиваем — у неё этих списков нет (ответ 400 в
+      // консоли). Вид ещё не известен — спрашиваем, как раньше.
+      if (store.venueKinds.find((x) => x.id === id)?.kind === 'Cex') {
+        out[id] = emptyNotDex();
+        return;
+      }
       const [f, c, d] = await Promise.all([
         fetchList(`/api/venues/${seg(id)}/dex-families`),
         fetchList(`/api/channels/${seg(id)}`),
@@ -59,12 +65,30 @@ export async function reloadDex() {
   dex.loaded = true;
 }
 
+/** Запись «не DEX» без запросов. */
+function emptyNotDex() {
+  return {
+    families: null,
+    familiesError: '',
+    channels: null,
+    channelsError: '',
+    directory: null,
+    directoryError: '',
+    notDex: true,
+  };
+}
+
 /** Что делает: первая загрузка и подписка на живой поток. Вызывается один раз из App.svelte. */
 export function start() {
-  // Список площадок приходит из settings.svelte.js; как только он изменился — перечитать.
+  // Список площадок и их вид приходят из settings.svelte.js. Решение 109: перечитывать, только когда список или вид
+  // площадок действительно изменился — settings.svelte.js переприсваивает их на каждом перечитывании настроек, и
+  // справочник пулов (тысячи записей) грузился заново каждый раз.
+  let seen = '';
   $effect.root(() => {
     $effect(() => {
-      store.venues.length;
+      const key = JSON.stringify([store.venues, store.venueKinds]);
+      if (key === seen) return;
+      seen = key;
       reloadDex();
     });
   });

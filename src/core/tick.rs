@@ -6,7 +6,11 @@
 //! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор.
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
-//! Настройки: через evaluate.rs — signal.*, money.max_per_trade_usd, profit.sigma_window_min.
+//! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
+//! profit.sigma_window_min.
+
+use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 
@@ -39,6 +43,12 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 tokens,
                 first,
             } => {
+                // Решение 109: пулы токенов изменились — котировки DEX с ними в памяти больше не годятся.
+                {
+                    let mut c = lk(&core.inner.quote_cache);
+                    c.bump(&venue, tokens.0);
+                    c.bump(&venue, tokens.1);
+                }
                 // Пул пришёл — снятые до перечитывания пулы этой монеты вернулись (решение 71).
                 {
                     let mut held = super::engine::lk(&core.inner.held);
@@ -55,6 +65,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             Touched::Invalidated { venue, ticker } => {
                 // У DEX данные монеты — её пулы: удаляем их по адресу контракта.
                 if let Some(token) = asset_by_ticker(&core, &ticker).and_then(|a| a.bsc_contract) {
+                    lk(&core.inner.quote_cache).bump(&venue, token);
                     wr(&core.inner.market).drop_pools_of(&venue, token);
                     // Пулы сняты до перечитывания, а не исчезли: решение по чёрному списку держится (решение 71).
                     super::engine::lk(&core.inner.held).insert((venue.clone(), token));
@@ -120,25 +131,36 @@ fn assets_by_tokens(
         .collect()
 }
 
-/// Ставит пересчёт монеты: если он уже идёт — отмечает повтор, иначе запускает задачу.
+/// Ставит пересчёт монеты: если он уже идёт — запоминает площадку для повтора, иначе запускает задачу.
+/// Решение 109: пересчёт одной монеты — не чаще signal.eval_min_interval_ms (не задано — без предела): тики, пришедшие
+/// между пересчётами, сливаются в один повтор по всем приславшим площадкам. Так нагрузка зависит от числа монет и
+/// этого интервала, а не от того, как часто биржи шлют стаканы (MEXC — снимками потоком).
 fn schedule(core: &Core, asset: Asset, venue: VenueId) {
     // Тик монеты — тем, кто ждёт её цены (режим «Ожидание», stuck.rs).
     let _ = core.inner.coin_ticks.send(asset.clone());
     {
         let mut t = lk(&core.inner.ticking);
-        if let Some(again) = t.get_mut(&asset) {
-            *again = true;
+        if let Some(pending) = t.get_mut(&asset) {
+            pending.insert(venue);
             return;
         }
-        t.insert(asset.clone(), false);
+        t.insert(asset.clone(), HashSet::new());
     }
     let core = core.clone();
     tokio::spawn(async move {
+        let mut venues: HashSet<VenueId> = [venue].into();
         loop {
-            super::evaluate::evaluate(&core, &asset, &venue).await;
+            let started = Instant::now();
+            super::evaluate::evaluate(&core, &asset, &venues).await;
+            if let Some(min) = min_interval(&core) {
+                let spent = started.elapsed();
+                if spent < min {
+                    tokio::time::sleep(min - spent).await;
+                }
+            }
             let mut t = lk(&core.inner.ticking);
             match t.get_mut(&asset) {
-                Some(again) if *again => *again = false,
+                Some(pending) if !pending.is_empty() => venues = std::mem::take(pending),
                 _ => {
                     t.remove(&asset);
                     return;
@@ -146,4 +168,15 @@ fn schedule(core: &Core, asset: Asset, venue: VenueId) {
             }
         }
     });
+}
+
+/// Наименьший промежуток между пересчётами одной монеты (signal.eval_min_interval_ms). None — не задан или 0.
+fn min_interval(core: &Core) -> Option<Duration> {
+    core.inner
+        .deps
+        .settings
+        .integer("signal.eval_min_interval_ms", Default::default())
+        .ok()
+        .filter(|ms| *ms > 0)
+        .map(Duration::from_millis)
 }

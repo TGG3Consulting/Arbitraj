@@ -5,7 +5,8 @@
 //! Сигнал вышел из «кандидата» при открытом эпизоде — эпизод закрывается с причиной (решение 74, episode_run.rs).
 //! Кто вызывает: core/tick.rs.
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, vol.rs, candidates.rs, episode_run.rs, view.rs.
-//! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min.
+//! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min,
+//! live.spread_min_interval_ms (решение 109).
 
 use chrono::Utc;
 
@@ -15,8 +16,9 @@ use super::engine::{Core, lk, rd, wr};
 use super::signal::{Params, State};
 use super::view::CoreEvent;
 
-/// Пересчёт направлений монеты, где участвует площадка тика. Ошибок нет: причины — в строках экрана.
-pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
+/// Пересчёт направлений монеты, где участвует любая из площадок тика (решение 109: тики нескольких площадок сливаются
+/// в один пересчёт). Ошибок нет: причины — в строках экрана.
+pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::HashSet<VenueId>) {
     let (dirs, ref_price, waiting) = {
         let coins = rd(&core.inner.coins);
         let Some(entry) = coins.iter().find(|c| &c.asset == asset) else {
@@ -31,7 +33,7 @@ pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         let dirs: Vec<_> = entry
             .shown_directions()
             .into_iter()
-            .filter(|d| &d.buy_on == venue || &d.sell_on == venue)
+            .filter(|d| venues.contains(&d.buy_on) || venues.contains(&d.sell_on))
             .collect();
         // Налоги не проверены (решение 30): строка видна с причиной ожидания, торговли нет.
         let waiting = entry.waits_check().then(|| {
@@ -49,7 +51,7 @@ pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
         // узла): сразу строка с причиной ожидания.
         let prices = match &waiting {
             Some(w) => Err(w.clone()),
-            None => super::prices::for_direction(&core.inner.deps, &dir, ref_price).await,
+            None => super::prices::for_direction(core, &dir, ref_price).await,
         };
         if let Ok(p) = &prices {
             // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды.
@@ -79,8 +81,34 @@ pub async fn evaluate(core: &Core, asset: &Asset, venue: &VenueId) {
             super::episode_run::failed(core, &dir, &format!("сигнал: {}", state_text(&view.state)));
         }
         wr(&core.inner.spreads).insert(dir.clone(), view.clone());
-        core.inner.live.send(CoreEvent::Spread(view));
+        if live_due(core, &dir, &view.state) {
+            core.inner.live.send(CoreEvent::Spread(view));
+        }
     }
+}
+
+/// Пора ли слать строку «Живого экрана» (решение 109): состояние сменилось или с прошлой отправки по направлению
+/// прошло live.spread_min_interval_ms (не задано — всегда). Строка в памяти (spreads) обновляется всегда — REST
+/// «Живого экрана» отдаёт свежую. Ошибок нет.
+fn live_due(core: &Core, dir: &crate::core::types::Direction, state: &State) -> bool {
+    let min = core
+        .inner
+        .deps
+        .settings
+        .integer("live.spread_min_interval_ms", Default::default())
+        .ok()
+        .filter(|ms| *ms > 0)
+        .map(std::time::Duration::from_millis);
+    let mut sent = lk(&core.inner.spread_sent);
+    let now = std::time::Instant::now();
+    let due = match (sent.get(dir), min) {
+        (Some((at, st)), Some(min)) => st != state || now.duration_since(*at) >= min,
+        _ => true,
+    };
+    if due {
+        sent.insert(dir.clone(), (now, state.clone()));
+    }
+    due
 }
 
 /// Окно волатильности, минуты (profit.sigma_window_min, решение 49). None — не задано.

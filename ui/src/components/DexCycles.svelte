@@ -12,7 +12,7 @@
 -->
 <script>
   import { get, seg } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { fmtPrice } from '../lib/fmt.js';
   import { poolRefText } from '../lib/coinLabels.js';
   import { poolKindLabel } from '../lib/labels.js';
@@ -50,7 +50,7 @@
   $effect(() => {
     reload();
     return onLive((msg) => {
-      if (msg.type === 'lagged') reload();
+      if (lagFor(msg, 'core')) reload();
     });
   });
 

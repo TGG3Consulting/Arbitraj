@@ -8,7 +8,10 @@
 //! Настройки: приходят из ws.rs (Cfg).
 //!
 //! Тишина считается от последнего кадра (как решение 98 у bsc_dex): любой кадр, включая PONG, — соединение живо.
-//! Сырой журнал: текстовые кадры — как есть, двоичные — hex (protobuf; разбор — depth.rs).
+//! Сырой журнал: текстовые кадры — как есть; двоичные (стаканы protobuf) — hex, только если raw.book_frames [mexc] = да
+//! (решение 109: снимки стаканов MEXC идут потоком — запись каждого кадра нагружала диск и процессор).
+//! Решение 109: снимок стакана, не отличающийся от прежнего (те же уровни), ядру не отдаётся — частичный стакан MEXC
+//! присылается снимками и без изменений; свежесть стакана считается по соединению (alive), не по кадру стакана.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
@@ -23,6 +26,8 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
+
+use crate::core::types::PriceLevel;
 
 use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
@@ -66,6 +71,8 @@ pub async fn session(
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
     let mut dropped = 0u64;
+    // Последний отданный ядру снимок по символу (решение 109).
+    let mut last: HashMap<String, (Vec<PriceLevel>, Vec<PriceLevel>)> = HashMap::new();
     loop {
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
@@ -94,7 +101,9 @@ pub async fn session(
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
                 let msg = match frame {
                     Message::Binary(b) => {
-                        ctx.raw.write(ID, name, &hex::encode(&b));
+                        if matches!(ctx.flag("raw.book_frames"), Ok(true)) {
+                            ctx.raw.write(ID, name, &hex::encode(&b));
+                        }
                         depth::parse_binary(&b)
                     }
                     Message::Text(t) => {
@@ -113,6 +122,11 @@ pub async fn session(
                 match msg {
                     Msg::Depth { symbol, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        // Решение 109: тот же снимок — ядру не отдаём (стакан в памяти уже такой).
+                        if last.get(&symbol).is_some_and(|(b, a)| *b == bids && *a == asks) {
+                            continue;
+                        }
+                        last.insert(symbol.clone(), (bids.clone(), asks.clone()));
                         let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
                         books.put(book.clone(), alive.clone());
                         match out.try_send(MarketEvent::Book(book)) {
@@ -124,6 +138,8 @@ pub async fn session(
                     Msg::Bad { symbol, reason } => {
                         if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
                             invalidate(ctx, books, out, &a.ticker);
+                            // Стакан снят — следующий снимок обязательно отдать ядру, даже если он такой же.
+                            last.clear();
                         }
                         log(ctx, Level::Error, format!("WebSocket {name}: кадр не разобран: {reason}")).await;
                     }
@@ -132,6 +148,7 @@ pub async fn session(
                         for (ch, ticker) in &by_channel {
                             if msg.contains(ch.as_str()) {
                                 invalidate(ctx, books, out, ticker);
+                                last.clear();
                             }
                         }
                         log(ctx, Level::Error, format!("WebSocket {name}: отказ, код {code}: {msg}")).await;

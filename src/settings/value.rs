@@ -3,6 +3,7 @@
 //! Область значения (Scope) — в settings/scope.rs, здесь переэкспортируется для старых путей.
 //! Кто вызывает: settings/store.rs при каждой записи; api/settings.rs (разбор области из запроса).
 //! От чего зависит: settings/schema.rs, settings/scope.rs, rust_decimal, reqwest::Url, alloy-primitives.
+//! Адреса (Kind::Url): https/wss — любой хост; http/ws — только адрес-петля (решение 121, часть A1).
 //! Настройки: нет.
 
 use std::str::FromStr;
@@ -57,14 +58,7 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
         },
         Kind::Url => {
             let s = value.as_str().ok_or("Ожидается адрес")?.trim();
-            let url = reqwest::Url::parse(s).map_err(|e| format!("Неверный адрес: {e}"))?;
-            match url.scheme() {
-                // Только защищённые соединения: в адресе может быть ключ или токен.
-                "https" | "wss" => Ok(Value::String(s.to_string())),
-                other => Err(format!(
-                    "Схема «{other}» не подходит: нужно защищённое соединение https или wss"
-                )),
-            }
+            check_url(s).map(|()| Value::String(s.to_string()))
         }
         Kind::Ip => {
             let s = value.as_str().ok_or("Ожидается IP-адрес")?.trim();
@@ -138,6 +132,40 @@ fn check_scope_id(scope: &Scope) -> Result<(), String> {
             Err(format!("События «{code}» нет в каталоге уведомлений"))
         }
         _ => Ok(()),
+    }
+}
+
+/// Что делает: проверка адреса (решение 121, часть A1). Защищённые https/wss — для любого хоста; открытые http/ws —
+/// только для адреса-петли (127.0.0.0/8, ::1, localhost): свой узел BSC на том же сервере слушает
+/// http://127.0.0.1:8545 и ws://127.0.0.1:8546, трафик не выходит с сервера, ключ в адресе не утекает.
+/// Принимает: адрес строкой. Возвращает: Ok(()) или Err(понятная причина по-русски).
+/// Ошибки: неверный адрес; схема не https/wss/http/ws; http/ws для хоста не петли.
+fn check_url(s: &str) -> Result<(), String> {
+    let url = reqwest::Url::parse(s).map_err(|e| format!("Неверный адрес: {e}"))?;
+    match url.scheme() {
+        "https" | "wss" => Ok(()),
+        "http" | "ws" if is_loopback(&url) => Ok(()),
+        scheme @ ("http" | "ws") => Err(format!(
+            "Схема «{scheme}» разрешена только для адреса на этом же сервере (127.0.0.1, ::1, localhost); \
+             для другого хоста нужно защищённое соединение https или wss"
+        )),
+        other => Err(format!(
+            "Схема «{other}» не подходит: нужно https или wss (http или ws — только для 127.0.0.1, ::1, localhost)"
+        )),
+    }
+}
+
+/// Что делает: хост адреса — петля (127.0.0.0/8, ::1 или имя localhost)?
+/// Принимает: разобранный адрес. Возвращает: да/нет. Ошибки: нет.
+fn is_loopback(url: &reqwest::Url) -> bool {
+    // host_str даёт IPv6 в квадратных скобках («[::1]») — снимаем их перед разбором IP.
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    match bare.parse::<std::net::IpAddr>() {
+        Ok(ip) => ip.is_loopback(),
+        Err(_) => bare.eq_ignore_ascii_case("localhost"),
     }
 }
 

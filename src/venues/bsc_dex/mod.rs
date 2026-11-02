@@ -14,6 +14,7 @@ pub mod check;
 pub mod coins;
 pub mod connection;
 pub mod connection_extra;
+pub mod connection_sync;
 pub mod ctx;
 pub mod ctx_url;
 pub mod directory;

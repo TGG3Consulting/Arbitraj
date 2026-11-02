@@ -1,13 +1,15 @@
 //! Файл: venues/bsc_dex/connection_extra.rs
 //! Что делает: части «Проверить подключение» DEX для резервного узла и Multicall3: резервный узел HTTP (сеть, блок)
 //! и WebSocket (сеть по eth_chainId на соединении) — по своим адресам, мимо переключения (node/failover.rs);
-//! Multicall3 — есть ли код по адресу dex.multicall3 (eth_getCode). Не задано — «не задан», это не ошибка.
+//! Multicall3 — есть ли код по адресу dex.multicall3 (eth_getCode) и отвечает ли он на eth_call (getBlockNumber(),
+//! решение 121, A3). Не задано — «не задан», это не ошибка.
 //! Кто вызывает: connection.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs (post), node/ws.rs (Conn::connect), node/jsonrpc.rs, node/multicall.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs (post), node/ws.rs (Conn::connect), node/jsonrpc.rs, node/multicall.rs, node/call.rs.
 //! Обёртка нативной монеты (решение 62) — код по адресу dex.native_wrapped и совпадение с WETH() роутеров V2.
 //! Настройки: bsc.node_http_url_backup, bsc.node_ws_url_backup, dex.multicall3, dex.native_wrapped; секреты bsc.node_*_key_backup.
 //!
 //! eth_chainId, eth_blockNumber, eth_getCode — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth
+//! Multicall3.getBlockNumber() — https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L170 .
 
 use alloy_primitives::{Bytes, U64};
 use serde_json::json;
@@ -84,7 +86,17 @@ pub async fn multicall3(ctx: &Ctx) -> Result<String, String> {
             "по адресу {addr} нет контракта — проверьте dex.multicall3"
         ));
     }
-    Ok(format!("контракт {addr} есть"))
+    // Решение 121 (A3): контракт не только есть, но и отвечает на eth_call (getBlockNumber() — номер блока узла).
+    let call = multicall::IMulticall3::getBlockNumberCall {};
+    let n = super::node::call::view(ctx, addr, &call, "latest")
+        .await
+        .map_err(|e| {
+            format!(
+                "контракт {addr} есть, но eth_call getBlockNumber() не прошёл: {}",
+                e.message
+            )
+        })?;
+    Ok(format!("контракт {addr} есть, отвечает: блок {n}"))
 }
 
 /// Обёртка нативной монеты (решение 62): по адресу dex.native_wrapped есть контракт, и он совпадает с WETH() роутеров

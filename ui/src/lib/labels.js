@@ -14,7 +14,7 @@ const KIND = {
   Integer: 'целое число',
   Bool: 'да/нет',
   Text: 'текст',
-  Url: 'адрес https/wss',
+  Url: 'адрес https/wss (http/ws — только 127.0.0.1, ::1, localhost)',
   TextList: 'список',
   Ip: 'IP-адрес',
   Choice: 'выбор из списка',

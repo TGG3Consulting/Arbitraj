@@ -2,12 +2,12 @@
 //! Что делает: несколько view-вызовов одним eth_call через Multicall3.aggregate3 (allowFailure = true — ответ
 //! каждого вызова отдельно). У NodeReal eth_call — 20 CU за вызов, а пачка JSON-RPC из N eth_call — N вызовов
 //! (node/pace.rs считает так же); через Multicall3 — один eth_call на всю пачку.
-//! Кто вызывает: node/call.rs (view_many).
+//! Кто вызывает: node/call.rs (view_many), wallet/balances_mc.rs, connection_extra.rs (getBlockNumber).
 //! От чего зависит: node/rpc.rs, errors.rs, alloy::sol!.
 //! Настройки: dex.multicall3 [bsc_dex] — адрес Multicall3. Не задан — view_many идёт пачкой JSON-RPC, как раньше.
 //!
 //! Multicall3, aggregate3, структуры Call3 и Result — https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L19-L35
-//! (aggregate3 — #L98); адрес развёртывания в сетях (в том числе BSC) — README того же репозитория
+//! (aggregate3 — #L98; getBlockNumber — #L170); адрес развёртывания в сетях (в том числе BSC) — README того же репозитория
 //! («deployed on over 250 chains at 0xcA11bde05977b3631167028862bE2a173976CA11») — задаётся настройкой.
 //! eth_call — execution-apis src/eth/execute.yaml; цены методов — https://docs.nodereal.io/docs/compute-units-cus .
 
@@ -36,6 +36,8 @@ alloy::sol! {
             bytes returnData;
         }
         function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData);
+        // Multicall3.sol, getBlockNumber() — «Проверить подключение» (connection_extra.rs): контракт отвечает на eth_call.
+        function getBlockNumber() external view returns (uint256 blockNumber);
     }
 }
 

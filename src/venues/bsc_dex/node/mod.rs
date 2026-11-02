@@ -9,6 +9,7 @@ pub mod abi_dex;
 pub mod call;
 pub mod events_lag;
 pub mod failover;
+pub mod head_age;
 pub mod heads;
 pub mod jsonrpc;
 pub mod log_filter;

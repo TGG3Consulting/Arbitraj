@@ -72,12 +72,12 @@ async fn side_quote(
         .map(std::time::Duration::from_millis);
     let cached = match (dex, ttl, dir.asset.bsc_contract) {
         (true, Some(ttl), Some(token)) => {
-            let key = (venue.clone(), dir.asset.ticker.clone(), side == Side::Buy);
+            let key = (venue.clone(), token, side == Side::Buy);
             let cache = lk(&core.inner.quote_cache);
             let generation = cache.generation(venue, token);
             match cache.get(&key, qty, generation, ttl) {
                 Some(q) => return Ok(q),
-                None => Some((key, generation)),
+                None => Some((key, generation, ttl)),
             }
         }
         _ => None,
@@ -87,8 +87,8 @@ async fn side_quote(
         .quote(&dir.asset, side, qty)
         .await
         .map_err(|e| format!("{}: {}", venue.0, e.message))?;
-    if let Some((key, generation)) = cached {
-        lk(&core.inner.quote_cache).put(key, qty, q.clone(), generation);
+    if let Some((key, generation, ttl)) = cached {
+        lk(&core.inner.quote_cache).put(key, qty, q.clone(), generation, ttl);
     }
     Ok(q)
 }

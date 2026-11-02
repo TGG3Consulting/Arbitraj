@@ -96,10 +96,12 @@ impl DirCtx {
         let window = s
             .integer("profit.sigma_window_min", At::default())
             .map_err(|e| e.message)?;
+        // σ продажи на B — ряд этого направления (напарник A, решение 118).
         let sigma = lk(&core.inner.vol).sigma(
             &dir.sell_on,
             &dir.asset,
             Side::Sell,
+            &dir.buy_on,
             window,
             chrono::Utc::now(),
         )?;

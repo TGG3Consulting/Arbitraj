@@ -21,6 +21,19 @@ impl Core {
     /// Выполняет команду человека. Возвращает: Ok(текст) — выполнено; Err(причина) — отклонено.
     /// Обе ветки пишутся в журнал с источником команды.
     pub async fn command(&self, cmd: ManualCommand) -> Result<String, String> {
+        // Решение 110: команда выполняется отдельной задачей и доходит до конца, даже если интерфейс отключился.
+        // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
+        // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
+        // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
+        let core = self.clone();
+        let c = cmd.clone();
+        tokio::spawn(async move { core.command_inner(c).await })
+            .await
+            .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
+    }
+
+    /// Выполнение команды и запись в журнал (см. command).
+    async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
         let res = self.run_command(&cmd).await;
         let (level, text) = match &res {
             Ok(t) => (

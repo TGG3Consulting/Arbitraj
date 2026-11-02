@@ -1,7 +1,7 @@
 //! Файл: venues/bingx/transfers.rs
 //! Что делает: вывод с BingX, статус вывода и статус депозита.
 //! Кто вызывает: mod.rs (функции контракта).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, core/types.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, core/types, gateway/tx_hash.rs.
 //! Настройки: venue.withdraw_wallet_type.
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet):
@@ -17,6 +17,7 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::tx_hash::same;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -120,7 +121,8 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     transfer(ctx, rec, id, status)
 }
 
-/// Статус депозита по хешу транзакции. По docs-v3: 0 → Sent, 6 → Sent (в сети), 1 → Credited.
+/// Статус депозита по хешу транзакции (сравнение — gateway::tx_hash::same: регистр, «0x», «:индекс» не важны;
+/// решение 118, Я-16). По docs-v3: 0 → Sent, 6 → Sent (в сети), 1 → Credited.
 /// Ошибки: депозит не найден (ещё не виден бирже), неизвестный статус, связь.
 pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
     let data = rest::signed(
@@ -133,7 +135,7 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
     .await?;
     let rec = data.as_array().and_then(|a| {
         a.iter()
-            .find(|r| num::text_opt(r, "txId").is_some_and(|t| t.eq_ignore_ascii_case(tx_hash)))
+            .find(|r| num::text_opt(r, "txId").is_some_and(|t| same(&t, tx_hash)))
     });
     let rec = rec.ok_or_else(|| {
         ctx.tag(GatewayError::new(

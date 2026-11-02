@@ -8,7 +8,8 @@
 //! Официально (https://www.mexc.com/api-docs/spot-v3/websocket-user-data-streams/listen-key):
 //! - POST /api/v3/userDataStream (SPOT_ACCOUNT_R) — новый ключ {"listenKey"}, живёт 60 минут;
 //! - PUT …?listenKey= — продлить на 60 минут от вызова, MEXC советует раз в 30 минут;
-//! - DELETE …?listenKey= — закрыть. Не больше 60 ключей на UID.
+//! - DELETE …?listenKey= — закрыть. «Each UID can apply for a maximum of 60 listen keys (excluding invalid listen
+//!   keys)», «Each listen key maximum support 5 websocket connection».
 
 use reqwest::Method;
 use serde_json::Value;
@@ -16,7 +17,9 @@ use zeroize::Zeroizing;
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
-use super::ctx::Ctx;
+use crate::storage::journal::Level;
+
+use super::ctx::{Ctx, ID};
 use super::errors::Op;
 use super::rest;
 
@@ -48,8 +51,18 @@ pub async fn extend(ctx: &Ctx, key: &str) -> GatewayResult<()> {
     Ok(())
 }
 
-/// Закрывает ключ. Ошибок не возвращает: ключ всё равно истечёт через час.
+/// Закрывает ключ. Ошибок не возвращает: сбой закрытия — запись в журнал (решение 118, А-🟠10: незакрытые ключи
+/// копятся до предела 60 на UID), ключ всё равно истечёт через час. Сам ключ в текст не попадает.
 pub async fn close(ctx: &Ctx, key: &str) {
     let params = vec![("listenKey", key.to_string())];
-    let _ = rest::signed(ctx, Method::DELETE, PATH, params, Op::Other).await;
+    if let Err(e) = rest::signed(ctx, Method::DELETE, PATH, params, Op::Other).await {
+        let msg = format!(
+            "Поток аккаунта: listenKey не закрыт: {} — истечёт сам через час (не больше 60 ключей на UID)",
+            e.message.replace(key, "***")
+        );
+        let _ = ctx
+            .journal
+            .write(Level::Warn, "venue.user_stream", Some(ID), msg, None)
+            .await;
+    }
 }

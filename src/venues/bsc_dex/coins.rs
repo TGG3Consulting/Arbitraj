@@ -47,6 +47,7 @@ pub fn networks(ctx: &Ctx, reg: &Registry) -> GatewayResult<Vec<CoinNetworkInfo>
             deposit_min: None,
             deposit_confirmations: None,
             withdraw_precision: None,
+            withdraw_step: None,
             updated_at: Utc::now(),
         })
         .collect())

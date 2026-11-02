@@ -57,3 +57,86 @@ fn withdraw_max_beyond_decimal() {
     let bad: Value = serde_json::json!({ "withdrawMax": "abc" });
     assert!(wallet::max_limit(&bad, "withdrawMax").is_err());
 }
+
+/// Решение 118, А-🟡7: orderTypes пары читаются из живого exchangeInfo — LIMIT, MARKET, LIMIT_MAKER
+/// (IMMEDIATE_OR_CANCEL нет: с venue.order_type = IMMEDIATE_OR_CANCEL ордер не ставится).
+#[test]
+fn order_types_from_exchange_info() {
+    let allowed: HashSet<String> = ["CAKEUSDT".to_string()].into();
+    let map = symbols::parse_list(&info(), "USDT", &allowed).expect("разбор");
+    let types = map["CAKE"].order_types.clone().expect("orderTypes есть");
+    assert_eq!(types, ["LIMIT", "MARKET", "LIMIT_MAKER"]);
+    assert!(!types.contains(&"IMMEDIATE_OR_CANCEL".to_string()));
+}
+
+/// Решение 118, А-🟡15: точность котируемой монеты — только точное совпадение (символ = база + тикер). У USDT —
+/// наименьшая quoteAssetPrecision пар (CAKE 3, ATOM 3, UAI 4 → 3); у «T» и «DT» (хвост «USDT») — неизвестно,
+/// раньше ends_with брал чужую точность. У монеты пары — baseAssetPrecision (CAKE — 2).
+#[test]
+fn precision_exact_quote() {
+    let allowed: HashSet<String> = HashSet::new();
+    let map = symbols::parse_list(&info(), "USDT", &allowed).expect("разбор");
+    let s = symbols::Symbols::default();
+    s.load(map, chrono::Utc::now());
+    assert_eq!(s.precision_of("USDT"), Some(3));
+    assert_eq!(s.precision_of("CAKE"), Some(2));
+    assert_eq!(s.precision_of("T"), None);
+    assert_eq!(s.precision_of("DT"), None);
+}
+
+/// Решение 118, А-🟠7: withdrawIntegerMultiple из примера официальной документации config/getall — "18" (целое: смысл
+/// «шаг» не подтверждён) — шаг вывода не ставится, значение отдаётся как неясное (в журнал).
+#[test]
+fn withdraw_step_doc_example() {
+    use arb::venues::mexc::networks_parse::withdraw_step;
+    let n: Value = serde_json::json!({
+        "withdrawFee": "0", "withdrawIntegerMultiple": "18", "withdrawMin": "1"
+    });
+    assert_eq!(withdraw_step(&n), (None, Some(Decimal::from(18))));
+    let none: Value = serde_json::json!({ "withdrawFee": "0" });
+    assert_eq!(withdraw_step(&none), (None, None));
+}
+
+/// Решение 118, А-🔴3, А-🟠9, А-🟡2, А-🟡3: коды ошибок из официальной таблицы Error Code.
+#[test]
+fn error_codes_by_doc() {
+    use arb::gateway::errors::ErrorCode as C;
+    use arb::venues::mexc::errors::{Op, from_code, from_http};
+    assert_eq!(
+        from_code(429, "Too Many Requests", Op::Trade, "").code,
+        C::RateLimited
+    );
+    let clock = from_code(700003, "Timestamp outside of the recvWindow", Op::Trade, "");
+    assert_eq!(clock.code, C::OrderRejected);
+    assert!(clock.message.contains("часы"));
+    assert_eq!(
+        from_code(10073, "invalid Request-Time", Op::Other, "").code,
+        C::BadResponse
+    );
+    let limit = from_code(30035, "You have triggered the order limit", Op::Trade, "");
+    assert_eq!(limit.code, C::InsufficientPermissions);
+    let abnormal = from_code(60005, "your account is abnormal", Op::Withdraw, "");
+    assert_eq!(abnormal.code, C::InsufficientPermissions);
+    let off = "This feature is temporarily unavailable";
+    assert_eq!(from_code(11444, off, Op::Trade, "").code, C::OrderRejected);
+    assert_eq!(
+        from_code(11444, off, Op::Withdraw, "").code,
+        C::WithdrawRejected
+    );
+    let e = from_http(429, "", Some(120));
+    assert_eq!(e.code, C::RateLimited);
+    assert!(e.message.contains("Retry-After 120"));
+    assert_eq!(from_http(418, "", None).code, C::RateLimited);
+}
+
+/// Решение 118, Я-16 / А-🟠6: хеш депозита из примера официальной документации deposit/hisrec (без «0x») находится
+/// по хешу транзакции в любом виде: с «0x», в верхнем регистре, с суффиксом «:индекс».
+#[test]
+fn tx_hash_same_doc_example() {
+    use arb::gateway::tx_hash::same;
+    let mexc = "01391d1c1397ef0a3cbb3c7f99a90846f7c8c2a8dddcdcf84f46b530dede203e1bc804";
+    assert!(same(mexc, &format!("0x{}", mexc.to_uppercase())));
+    assert!(same(&format!("{mexc}:0"), mexc));
+    assert!(!same(mexc, &mexc[1..]));
+    assert!(!same("", "0x"));
+}

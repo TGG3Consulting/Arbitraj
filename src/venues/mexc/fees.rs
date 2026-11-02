@@ -8,7 +8,9 @@
 //!
 //! Официальная документация: «Query Symbol Commission» GET /api/v3/tradeFee?symbol=
 //! https://www.mexc.com/api-docs/spot-v3/spot-account-trade/query-symbol-commission (подписанный, SPOT_ACCOUNT_READ,
-//! вес 20 из 500 на UID за 10 с — поэтому venue.fee_requests_per_sec держать низким). Ответ: data.makerCommission,
+//! «Weight: 20 (IP)» из корзины IP 300 за 10 с — решение 118, А-🟠1: 1 запрос/с — уже 200 из 300, а в той же корзине
+//! опрос ордера, истории переводов, getall, exchangeInfo; поэтому venue.fee_requests_per_sec держать низким, а
+//! venue.fee_cache_s — большим). Ответ: data.makerCommission,
 //! data.takerCommission (числа: «0E-18», «0.000500000000000000» — читаются через текст JSON, без f64).
 
 use std::collections::HashMap;

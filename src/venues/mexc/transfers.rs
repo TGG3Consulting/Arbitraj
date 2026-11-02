@@ -1,6 +1,7 @@
 //! Файл: venues/mexc/transfers.rs
-//! Что делает: вывод с MEXC (новый эндпоинт) и его статус, статус депозита по хешу транзакции.
-//! Кто вызывает: mod.rs (функции контракта).
+//! Что делает: вывод с MEXC (новый эндпоинт) и его статус; поиск вывода по своему withdrawOrderId при неизвестном
+//! итоге (решение 118, А-🟠5). Статус депозита — deposits.rs.
+//! Кто вызывает: mod.rs (функции контракта), deposits.rs (hash, transfer).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: нет своих.
 //!
@@ -11,11 +12,7 @@
 //! - GET /api/v3/capital/withdraw/history (вес 1) …/withdraw-history-supporting-network — status: 1 APPLY,
 //!   2 AUDITING, 3 WAIT, 4 PROCESSING, 5 WAIT_PACKAGING, 6 WAIT_CONFIRM, 7 SUCCESS, 8 FAILED, 9 CANCEL, 10 MANUAL;
 //!   txId и transHash (в примере txId: null, transHash заполнен — берём любой непустой), transactionFee.
-//! - GET /api/v3/capital/deposit/hisrec (вес 10) …/deposit-historysupporting-network — status: 1 SMALL, 2 TIME_DELAY,
-//!   3 LARGE_DELAY, 4 PENDING, 5 SUCCESS, 6 AUDITING, 7 REJECTED, 8 REFUND, 9 PRE_SUCCESS, 10 INVALID, 11 RESTRICTED,
-//!   12 COMPLETED; txId, confirmTimes, unlockConfirm.
-//!   Решение 107: «зачислено» = 5 SUCCESS или 12 COMPLETED; 9 PRE_SUCCESS — ещё нет (документация не говорит, когда
-//!   монеты доступны для продажи; проверить на первом депозите). 1, 2, 3, 6, 11 — ждём; 7, 8, 10 — депозит не зачислен.
+//! - Ответ withdraw/history содержит withdrawOrderId — по нему ищется вывод, если ответ на вывод не получен.
 
 use chrono::Utc;
 use reqwest::Method;
@@ -30,18 +27,22 @@ use super::{num, rest};
 
 /// Длина withdrawOrderId — документация предела не задаёт; берём как у BingX (буквы и цифры, до 32).
 const MAX_WITHDRAW_ORDER_ID: usize = 32;
+/// Сколько записей истории выводов просить: limit — «default 1000, max 1000» (документация withdraw/history).
+const HISTORY_LIMIT: &str = "1000";
 
 /// Вывод (новый эндпоинт). Принимает: запрос ядра (сеть — код netWork). Возвращает: перевод Pending с ID MEXC.
 /// Ошибки: ключи, отказ MEXC (WithdrawRejected с текстом, например 10212 — адреса нет в списке разрешённых),
-/// «итог неизвестен» (нет ответа).
+/// «итог неизвестен» (нет ответа или ответ без id, и вывод не найден в истории по withdrawOrderId).
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
-    let order_id: String = req
-        .deal_id
+    // Решение 118, А-🟠5 (как решение 114 у ордеров): метка попытки — миллисекунды (9 цифр) в начале, чтобы обрезка
+    // по длине её не съела; номер сделки — для поиска. Правил уникальности withdrawOrderId в документации нет.
+    let attempt = Utc::now().timestamp_millis().rem_euclid(1_000_000_000);
+    let order_id: String = format!("w{attempt:09}{}", req.deal_id)
         .chars()
         .filter(char::is_ascii_alphanumeric)
         .take(MAX_WITHDRAW_ORDER_ID)
         .collect();
-    if order_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
+    if req.deal_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
         return Err(ctx.tag(GatewayError::new(
             ErrorCode::WithdrawRejected,
             None,
@@ -53,47 +54,80 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     }
     let params = vec![
         ("coin", req.asset.ticker.clone()),
-        ("withdrawOrderId", order_id),
+        ("withdrawOrderId", order_id.clone()),
         ("netWork", req.network.clone()),
         ("address", req.address.clone()),
         ("amount", req.amount.normalize().to_string()),
     ];
-    let data = rest::signed(
+    let sent = rest::signed(
         ctx,
         Method::POST,
         "/api/v3/capital/withdraw",
         params,
         Op::Withdraw,
     )
-    .await?;
+    .await;
+    // А-🟠3: HTTP успешен, а id нет — итог неизвестен (повтор дал бы второй вывод).
+    let sent = sent.and_then(|d| {
+        num::text_opt(&d, "id").ok_or_else(|| {
+            let msg = format!("Вывод {order_id}: ответ без id — итог неизвестен");
+            ctx.tag(GatewayError::new(ErrorCode::OutcomeUnknown, None, msg))
+                .with_raw(d.to_string())
+        })
+    });
+    let venue_ref = match sent {
+        Ok(id) => id,
+        // А-🟠5: итог неизвестен — поиск в истории по своему withdrawOrderId.
+        Err(e) if e.code == ErrorCode::OutcomeUnknown => match find(ctx, &order_id).await {
+            Some(id) => id,
+            None => return Err(e),
+        },
+        Err(e) => return Err(e),
+    };
     Ok(Transfer {
         venue: ctx.venue(),
         asset: req.asset,
         network: req.network,
         amount: req.amount,
         status: TransferStatus::Pending,
-        venue_ref: num::text(&data, "id")?,
+        venue_ref,
         tx_hash: None,
         fee: None,
         updated_at: Utc::now(),
     })
 }
 
-/// Статус вывода по ID MEXC. 1–6, 10 → Pending (ждём); 7 → Sent (есть хеш); 8, 9 → отказ с причиной.
-/// Ошибки: вывод не найден, неизвестный статус, связь.
-pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
+/// История выводов (последние 7 дней по умолчанию документации). Ошибки: связь, коды MEXC, ответ не массив.
+async fn history(ctx: &Ctx) -> GatewayResult<Vec<Value>> {
+    let p = vec![("limit", HISTORY_LIMIT.to_string())];
     let data = rest::signed(
         ctx,
         Method::GET,
         "/api/v3/capital/withdraw/history",
-        vec![("limit", "1000".to_string())],
+        p,
         Op::Other,
     )
     .await?;
-    let rec = data.as_array().and_then(|a| {
-        a.iter()
-            .find(|r| num::text_opt(r, "id").as_deref() == Some(id))
-    });
+    data.as_array()
+        .cloned()
+        .ok_or_else(|| errors::bad("withdraw/history не массив", &data.to_string()))
+}
+
+/// ID вывода MEXC по своему withdrawOrderId (поле есть в ответе withdraw/history). None — не найден или сбой.
+async fn find(ctx: &Ctx, order_id: &str) -> Option<String> {
+    let list = history(ctx).await.ok()?;
+    list.iter()
+        .find(|r| num::text_opt(r, "withdrawOrderId").as_deref() == Some(order_id))
+        .and_then(|r| num::text_opt(r, "id"))
+}
+
+/// Статус вывода по ID MEXC. 1–6, 10 → Pending (ждём); 7 → Sent (есть хеш); 8, 9 → отказ с причиной.
+/// Ошибки: вывод не найден, неизвестный статус, связь.
+pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
+    let list = history(ctx).await?;
+    let rec = list
+        .iter()
+        .find(|r| num::text_opt(r, "id").as_deref() == Some(id));
     let rec = rec.ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
@@ -126,62 +160,13 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     transfer(ctx, rec, id, status)
 }
 
-/// Статус депозита по хешу транзакции. Ошибки: депозит не найден (ещё не виден MEXC), отклонён, неизвестный статус.
-pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
-    let data = rest::signed(
-        ctx,
-        Method::GET,
-        "/api/v3/capital/deposit/hisrec",
-        vec![("coin", asset.ticker.clone())],
-        Op::Other,
-    )
-    .await?;
-    let rec = data.as_array().and_then(|a| {
-        a.iter()
-            .find(|r| hash(r).is_some_and(|t| same_hash(&t, tx_hash)))
-    });
-    let rec = rec.ok_or_else(|| {
-        ctx.tag(GatewayError::new(
-            ErrorCode::DepositNotCredited,
-            None,
-            format!("Депозит {tx_hash} пока не виден MEXC"),
-        ))
-    })?;
-    let status = match num::int(rec, "status")? {
-        5 | 12 => TransferStatus::Credited,
-        1..=4 | 6 | 9 | 11 => TransferStatus::Sent,
-        s @ (7 | 8 | 10) => {
-            return Err(ctx.tag(
-                GatewayError::new(
-                    ErrorCode::DepositNotCredited,
-                    None,
-                    format!("MEXC: депозит {tx_hash} не зачислен, статус {s} (7 REJECTED, 8 REFUND, 10 INVALID)"),
-                )
-                .with_raw(rec.to_string()),
-            ));
-        }
-        other => {
-            return Err(errors::bad(
-                &format!("неизвестный статус депозита {other}"),
-                &rec.to_string(),
-            ));
-        }
-    };
-    transfer(ctx, rec, tx_hash, status)
-}
-
 /// Хеш транзакции записи: txId или transHash (что непустое). Ошибок нет.
-fn hash(rec: &Value) -> Option<String> {
+pub(super) fn hash(rec: &Value) -> Option<String> {
     num::text_opt(rec, "txId").or_else(|| num::text_opt(rec, "transHash"))
 }
 
-/// Тот же хеш (без учёта регистра). Ошибок нет.
-fn same_hash(a: &str, b: &str) -> bool {
-    a.eq_ignore_ascii_case(b)
-}
-
 /// Перевод формата ядра из записи истории.
-fn transfer(
+pub(super) fn transfer(
     ctx: &Ctx,
     rec: &Value,
     venue_ref: &str,

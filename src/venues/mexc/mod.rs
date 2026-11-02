@@ -12,11 +12,14 @@ pub mod account;
 pub mod account_update;
 pub mod book;
 pub mod ctx;
+pub mod deposit_addr;
+pub mod deposits;
 pub mod depth;
 pub mod errors;
 pub mod fees;
 pub mod fills;
 pub mod market;
+pub mod networks_parse;
 pub mod num;
 pub mod order_state;
 pub mod pairs;
@@ -50,6 +53,7 @@ use crate::gateway::events::MarketEvent;
 
 use book::Books;
 use ctx::Ctx;
+use deposit_addr::DepositAddrs;
 use fees::Fees;
 use subs::{Parts, Subs};
 use symbols::Symbols;
@@ -63,8 +67,10 @@ pub struct Mexc {
     symbols: Symbols,
     books: Books,
     fees: Fees,
-    /// Коды сетей (netWork) → отображаемые имена (wallet.rs).
+    /// Коды сетей (netWork) → отображаемые имена и кэш справочника (wallet.rs).
     nets: Networks,
+    /// Адреса депозита в памяти (deposit_addr.rs, решение 118 Я-5).
+    addrs: DepositAddrs,
 }
 
 impl Mexc {
@@ -77,6 +83,7 @@ impl Mexc {
             books: Books::default(),
             fees: Fees::default(),
             nets: Networks::default(),
+            addrs: DepositAddrs::default(),
         }
     }
 
@@ -143,11 +150,12 @@ impl Venue for Mexc {
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
-        wallet::deposit_address(&self.ctx, &self.nets, &self.symbols, asset, network).await
+        let (ctx, addrs, nets) = (&self.ctx, &self.addrs, &self.nets);
+        deposit_addr::deposit_address(ctx, addrs, nets, &self.symbols, asset, network).await
     }
 
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
-        transfers::deposit_status(&self.ctx, asset, tx_hash).await
+        deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

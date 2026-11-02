@@ -133,6 +133,7 @@ impl Rec {
             deposit_min: num(&n["depositMin"]),
             deposit_confirmations: None,
             withdraw_precision: n["withdrawPrecision"].as_u64().map(|p| p as u32),
+            withdraw_step: None,
             updated_at: Utc::now(),
         };
         Rec {

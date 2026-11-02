@@ -1,8 +1,10 @@
 //! Файл: venues/mexc/user_stream.rs
 //! Что делает: поток аккаунта MEXC — изменения баланса (канал spot@private.account.v3.api.pb) для зачисления переводов
 //! без опроса статуса. Жизненный цикл: включено venue.balance_events [mexc] → новый listenKey (user_key.rs) → сессия
-//! (user_stream_conn.rs) → при обрыве ключ закрывается, пауза venue.ws_reconnect_pause_ms, новый ключ. Выключено или
-//! настройка не задана — потока нет, одна запись в журнал, ждём изменения настроек.
+//! (user_stream_conn.rs) → при обрыве пауза venue.ws_reconnect_pause_ms и переподключение с тем же ключом, если его
+//! продление проходит; новый ключ — только при отказе продления (старый закрывается) — решение 118, А-🟠10: не больше
+//! 60 ключей на UID. Изменение настроек и конец работы — ключ закрывается. Выключено или настройка не задана — потока
+//! нет, одна запись в журнал, ждём изменения настроек.
 //! Хеша транзакции в событии MEXC нет: закрывать им зачисление или нет — настройка ядра transfer.credit_by_event [mexc]
 //! (DECISIONS 76, 107: до проверки на живой записи не включать).
 //! Кто вызывает: subs.rs (запускается один раз с первой подпиской на рынок, живёт, пока жив канал ядра).
@@ -16,7 +18,9 @@
 use std::time::Duration;
 
 use tokio::sync::mpsc;
+use zeroize::Zeroizing;
 
+use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 use crate::settings::live::Watch;
 use crate::storage::journal::Level;
@@ -35,6 +39,16 @@ pub struct Cfg {
     pub ping: Duration,
 }
 
+/// Чем кончилась сессия.
+enum End {
+    /// Обрыв соединения (причина) — ключ можно переиспользовать.
+    Broken(String),
+    /// Изменилась настройка — ключ закрывается.
+    Changed(String),
+    /// Канал ядра закрыт — конец работы.
+    Closed,
+}
+
 /// Работает, пока жив канал ядра. Ошибок не возвращает: всё — в журнал.
 pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
     let names = [
@@ -50,22 +64,37 @@ pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
         names.iter().map(|n| n.to_string()).collect(),
     );
     let mut told = String::new();
+    // Ключ, переживший обрыв сессии: переиспользуется, пока продление проходит.
+    let mut kept: Option<Zeroizing<String>> = None;
     while !out.is_closed() {
         let (why, retry) = match ctx.flag("venue.balance_events") {
             Ok(true) => match config(&ctx) {
-                Ok(cfg) => match user_key::create(&ctx).await {
+                Ok(cfg) => match key(&ctx, kept.take()).await {
                     Ok(key) => {
-                        let why = tokio::select! {
-                            why = super::user_stream_conn::session(&ctx, &out, &cfg, &key) => why,
+                        let end = tokio::select! {
+                            why = super::user_stream_conn::session(&ctx, &out, &cfg, &key) => match why {
+                                Some(w) => End::Broken(w),
+                                None => End::Closed,
+                            },
                             c = changes.next() => match c {
-                                None => return,
-                                Some(c) => Some(format!("{} изменена — поток аккаунта заново", c.name)),
+                                None => End::Closed,
+                                Some(c) => End::Changed(format!("{} изменена — поток аккаунта заново", c.name)),
                             },
                         };
-                        user_key::close(&ctx, &key).await;
-                        match why {
-                            None => return,
-                            Some(w) => (w, true),
+                        match end {
+                            // Обрыв соединения: ключ остаётся (его проверит продление в начале круга).
+                            End::Broken(w) => {
+                                kept = Some(key);
+                                (w, true)
+                            }
+                            End::Changed(w) => {
+                                user_key::close(&ctx, &key).await;
+                                (w, true)
+                            }
+                            End::Closed => {
+                                user_key::close(&ctx, &key).await;
+                                return;
+                            }
                         }
                     }
                     Err(e) => (format!("listenKey не получен: {}", e.message), true),
@@ -78,6 +107,9 @@ pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
             ),
             Err(e) => (e.message, false),
         };
+        if !retry && let Some(k) = kept.take() {
+            user_key::close(&ctx, &k).await;
+        }
         if why != told {
             let level = if retry { Level::Warn } else { Level::Info };
             let _ = ctx
@@ -107,6 +139,18 @@ pub async fn run(ctx: Ctx, out: mpsc::Sender<MarketEvent>) {
             c = changes.next() => if c.is_none() { return },
         }
     }
+}
+
+/// Что делает: ключ для сессии — прежний, если продление прошло; иначе прежний закрывается и берётся новый.
+/// Принимает: окружение, прежний ключ. Возвращает: ключ. Ошибки: новый ключ не получен.
+async fn key(ctx: &Ctx, kept: Option<Zeroizing<String>>) -> GatewayResult<Zeroizing<String>> {
+    if let Some(k) = kept {
+        if user_key::extend(ctx, &k).await.is_ok() {
+            return Ok(k);
+        }
+        user_key::close(ctx, &k).await;
+    }
+    user_key::create(ctx).await
 }
 
 /// Настройки сессии. Ошибка — текст: не задана или продление реже срока жизни ключа (1 час по документации).

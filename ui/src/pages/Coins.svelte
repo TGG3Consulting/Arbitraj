@@ -14,7 +14,7 @@
 -->
 <script>
   import { remote } from '../lib/remote.svelte.js';
-  import { matches, options } from '../lib/coinFilter.js';
+  import { coinRowKey, matches, options } from '../lib/coinFilter.js';
   import CoinFilters from '../components/CoinFilters.svelte';
   import CoinTable from '../components/CoinTable.svelte';
   import CoinModal from '../components/CoinModal.svelte';
@@ -27,7 +27,7 @@
   /** Ключ монеты в окне (тикер|адрес); null — окно закрыто. */
   let openKey = $state(null);
 
-  const key = (c) => `${c.asset.ticker}|${c.asset.bsc_contract}`;
+  const key = coinRowKey;
   const all = $derived(coins.data ?? []);
   const shown = $derived(all.filter((c) => matches(c, f)));
   const opts = $derived(options(all));

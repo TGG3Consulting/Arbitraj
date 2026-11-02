@@ -7,7 +7,10 @@
 //! не используется. История переводов хранится в учёте ядра (SQLite) и переживает перезапуск.
 //! Кто вызывает: core/dirctx.rs (T), core/transfer_watch.rs (запись перевода), core/engine.rs (загрузка).
 //! От чего зависит: engine.rs, persist.rs, settings.
-//! Настройки: profit.transit_mode, profit.transit_manual_s, profit.transit_auto_after (по площадке-источнику).
+//! Решение 118 (Я-4): «вручную» = отправка с источника (profit.transit_manual_s[A]) + зачисление на получателе
+//! (profit.transit_credit_s[B], не задано — 0); история пары — не длиннее profit.transit_auto_after.
+//! Настройки: profit.transit_mode, profit.transit_manual_s, profit.transit_auto_after (по площадке-источнику),
+//! profit.transit_credit_s (по площадке-получателю, необязательная).
 
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -67,6 +70,19 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
             .entry((asset.clone(), from.clone(), to.clone()))
             .or_default();
         v.push(secs);
+        // Решение 118 (Я-4): ряд — не длиннее profit.transit_auto_after пары (больше «авто» не берёт); не задана —
+        // ряд не обрезается.
+        let keep = core
+            .inner
+            .deps
+            .settings
+            .integer_in("profit.transit_auto_after", &Scope::Venue(from.0.clone()));
+        if let Ok(n) = keep.map(|n| n as usize)
+            && n > 0
+            && v.len() > n
+        {
+            v.drain(..v.len() - n);
+        }
         Record {
             asset: asset.clone(),
             from: from.clone(),
@@ -84,8 +100,9 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
     }
 }
 
-/// Время в пути направления, секунды. Все три настройки — ровно в области площадки-источника перевода
-/// (A, откуда выводим; решение 51): bingx — BingX → кошелёк, bsc_dex — кошелёк → биржа.
+/// Время в пути направления, секунды. Режим, «отправка» и порог «авто» — ровно в области площадки-источника перевода
+/// (A, откуда выводим; решение 51); «вручную» = profit.transit_manual_s[A] + profit.transit_credit_s[B] (зачисление
+/// у получателя, решение 118; не задано — 0).
 /// Статистика — по монете и направлению (откуда, куда).
 /// Ошибки: текст «не задана настройка … [venue:…]» или неизвестный режим.
 pub fn seconds(core: &Core, d: &Direction) -> Result<Decimal, String> {
@@ -94,10 +111,19 @@ pub fn seconds(core: &Core, d: &Direction) -> Result<Decimal, String> {
     let mode = s
         .text_in("profit.transit_mode", &from)
         .map_err(|e| e.message)?;
-    let manual = s
+    // Решение 118 (Я-4): «вручную» = отправка у источника + зачисление у получателя (не задано — 0, как раньше).
+    let send = s
         .integer_in("profit.transit_manual_s", &from)
         .map(Decimal::from)
         .map_err(|e| e.message)?;
+    let credit = s
+        .integer_in(
+            "profit.transit_credit_s",
+            &Scope::Venue(d.sell_on.0.clone()),
+        )
+        .map(Decimal::from)
+        .unwrap_or_default();
+    let manual = send + credit;
     // Варианты настройки — manual / manual_auto (settings/catalog/base.rs).
     match mode.as_str() {
         "manual" => Ok(manual),

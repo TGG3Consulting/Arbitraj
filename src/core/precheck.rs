@@ -1,7 +1,7 @@
 //! Файл: core/precheck.rs
 //! Что делает: предпроверка сразу перед покупкой (шаг 5 ТЗ): стоп-условия (risk.rs); статусы вывода на A
 //! и депозита на B — перечитываются напрямую из API бирж; покупка через API на A и продажа на B — по свежему справочнику
-//! пар (pairs_fresh.rs); BNB на газ у DEX-сторон не ниже
+//! пар (pairs_fresh.rs); у биржи B — адрес депозита монеты (решение 118, precheck_deposit.rs); BNB на газ у DEX-сторон не ниже
 //! risk.min_bnb_balance; затем полный расчёт заново (profit.rs) по свежим стаканам и пулам.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
@@ -185,6 +185,13 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
                 t.mark(format!("справочник сетей {}", v.0), at);
                 r?;
                 pair_side(core, v, d, withdraw)?;
+                // Решение 118 (Я-5): у биржи-получателя адрес депозита — до покупки, а не после.
+                if !withdraw {
+                    let at = Instant::now();
+                    let r = super::precheck_deposit::ready(core, d).await;
+                    t.mark(format!("адрес депозита {}", v.0), at);
+                    r?;
+                }
             }
             VenueKind::Dex => {
                 let at = Instant::now();

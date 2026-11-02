@@ -67,6 +67,7 @@ pub mod pairs_fresh;
 pub mod partial;
 pub mod persist;
 pub mod precheck;
+pub mod precheck_deposit;
 pub mod presence;
 pub mod prices;
 pub mod profit;

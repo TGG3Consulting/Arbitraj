@@ -7,9 +7,12 @@
     причины по площадкам, «Перепроверить»). Окно обновляется вместе с живыми данными.
     Пока ядро не отдаёт справочник — честное «нет данных» с причиной бэкенда (503); ручной список работает всегда.
     Живые сообщения coin_check, pool_check, coin_block — перечитать.
+    Решение 116: таблица — по страницам (поле «Монет на странице», запоминается в браузере; без значения таблица
+    не рисуется и просит его задать). С MEXC в справочнике >11 тыс. монет — все строки разом тормозили экран.
+    Смена фильтров — снова первая страница.
   Кто вызывает: App.svelte.
   От чего зависит: lib/remote.svelte.js, lib/coinFilter.js, components/CoinFilters.svelte, CoinTable.svelte,
-    CoinModal.svelte, ManualBlacklist.svelte, NoData.svelte, ErrorText.svelte.
+    CoinModal.svelte, ManualBlacklist.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
   Настройки: coin.blocked, coin.blocked_note (через ManualBlacklist); пороги tax.*, hooks.* — экран «Настройки».
 -->
 <script>
@@ -21,6 +24,7 @@
   import ManualBlacklist from '../components/ManualBlacklist.svelte';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
+  import PageSize from '../components/PageSize.svelte';
 
   const coins = remote('/api/coins', ['coin_check', 'pool_check', 'coin_block']);
   let f = $state({ text: '', result: '', venue: '', pools: '', kind: '', tax: '', onlyBlocked: false });
@@ -34,6 +38,20 @@
   const blockedCount = $derived(all.filter((c) => c.block).length);
   const passedCount = $derived(all.filter((c) => (c.directions ?? []).length).length);
   const opened = $derived(openKey ? all.find((c) => key(c) === openKey) : null);
+
+  /** Монет на странице (null — не задано) и номер страницы с 1. */
+  let size = $state(null);
+  let page = $state(1);
+  const pages = $derived(size ? Math.max(1, Math.ceil(shown.length / size)) : 1);
+  const pageRows = $derived(size ? shown.slice((page - 1) * size, page * size) : []);
+  // Смена фильтров — с первой страницы; страница за пределами (список сократился) — последняя.
+  $effect(() => {
+    JSON.stringify(f);
+    page = 1;
+  });
+  $effect(() => {
+    if (page > pages) page = pages;
+  });
 </script>
 
 <h1>Монеты</h1>
@@ -49,7 +67,19 @@
     Монет: {all.length}, прошли отбор: {passedCount}, в чёрном списке: {blockedCount}; показано: {shown.length}.
   </p>
   <CoinFilters bind:f {opts} />
-  <CoinTable coins={shown} onopen={(c) => (openKey = key(c))} />
+  <div class="row">
+    <PageSize key="coins.page" bind:value={size} label="Монет на странице:" />
+    {#if size}
+      <button disabled={page <= 1} onclick={() => (page -= 1)}>‹</button>
+      <span>страница {page} из {pages}</span>
+      <button disabled={page >= pages} onclick={() => (page += 1)}>›</button>
+    {/if}
+  </div>
+  {#if size}
+    <CoinTable coins={pageRows} onopen={(c) => (openKey = key(c))} />
+  {:else}
+    <p class="muted">Задайте «Монет на странице», чтобы показать таблицу.</p>
+  {/if}
 {/if}
 
 {#if opened}

@@ -3,7 +3,8 @@
 //! резервах записи routes_2026-10-29 (единственный V2-пул записи — WBNB-USDT v2): меняется только МЕТКА семейства пула
 //! (v2_fork вместо pancakeswap_v2), резервы реальные, к сети тест не ходит. Утверждает: (1) форк-пул входит в граф
 //! (family.graphable); (2) после флипа 80.9b форк-маршрут ИСПОЛНИМ (DexRoute.executable) и ведётся бандлом
-//! (GraphForm::Bundle), а без dex.bundle_max_routers — несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
+//! (GraphForm::Bundle), а без dex.bundle_max_routers или при включённом не-бандловом канале (решение 121 B3) —
+//! несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
 //! плюс флаги make()/classify() форка (graphable+tradable+fork; фабрика/роутер/комиссия нужны, UR/Permit2 — нет).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools::{families,graph,registry}, quote::{graph_route,steps,via}, parts},
@@ -118,6 +119,8 @@ async fn scene(id: &str, kind: &str) -> Parts {
             .await
             .unwrap();
     }
+    // Решение 121 B3: бандл-маршрут исполним, только если все включённые каналы бандловые — один такой канал.
+    route_common::channel(&p, "club48", "bundle").await;
     // Лимит роутеров бандла — чтобы форк-маршрут собирался (collectable): 1 роутер форка ≤ 3.
     p.ctx
         .settings
@@ -309,6 +312,35 @@ async fn fork_route_executable_as_bundle() {
         graph_route::graph_form(&p.ctx, &r),
         GraphForm::Bundle,
         "форк-маршрут идёт бандлом (свой роутер), не прямым/умным путём UR"
+    );
+}
+
+/// Решение 121 B3: включён ещё и не-бандловый канал — форк-маршрут (только бандлом) неисполним уже на котировке, с
+/// понятной причиной (сигнал есть, сделки нет); выключили его — снова исполним.
+#[tokio::test]
+async fn fork_route_not_executable_with_single_channel() {
+    let p = scene("biswap", "v2_fork").await;
+    route_common::channel(&p, "jetbuilder", "single").await;
+    let r = quote_route(&p).await;
+    assert!(!r.executable, "не-бандловый канал — бандл не отправить");
+    let note = r.exec_note.unwrap_or_default();
+    assert!(
+        note.contains("не в режиме бандла") && note.contains("JetBuilder"),
+        "причина называет канал: {note}"
+    );
+    p.ctx
+        .settings
+        .set(
+            "channel.enabled",
+            Scope::Channel("jetbuilder".into()),
+            Some(json!(false)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    assert!(
+        quote_route(&p).await.executable,
+        "только бандловые каналы — исполним"
     );
 }
 

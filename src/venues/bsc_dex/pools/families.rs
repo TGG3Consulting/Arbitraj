@@ -35,7 +35,7 @@ pub enum Proto {
     /// Uniswap V4: состояние через StateView.
     UniswapV4,
     /// KyberSwap Elastic (решение 81): отдельный контракт на пул (как V3), ликвидность L = baseL + reinvestL,
-    /// свои геттеры/события/квотер, свой роутер (форк).
+    /// свои геттеры/события/квотер, свой роутер (форк). Исполнения пока нет — только сигнал (решение 121 B2).
     KyberElastic,
     /// DODO PMM — DODOVendingMachine (DVM): односторонний пул, Q0=0, цели решаются adjustedTarget по резервам
     /// (решения 80, 86). Свои геттеры/события/квотер (сам пул — querySellBase/Quote). Чтение — load_dodo.rs.
@@ -118,10 +118,14 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
         "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false, true),
-        // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic), исполняется
-        // своим роутером (fork=true). Чтение состояния/события/квотер — свои (не как Infinity/V4). Вид ядра — Cl
-        // (концентрированная ликвидность), но ссылка на пул — отдельный контракт (как V3).
-        "kyber_elastic" => (PoolKind::Cl, Proto::KyberElastic, true, true, true),
+        // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic). Решение 121 B2:
+        // tradable=false — своего пути исполнения нет: в exec/ нет ветки Proto::KyberElastic, а нога форка собиралась
+        // вызовом classic V2 Router (exec/fork_swap.rs), которого у роутера Elastic (свой контракт со своим
+        // интерфейсом) нет — своп откатился бы. Пока нет своего пути через роутер Elastic — только сигнал (guard
+        // executable в quote/graph_route.rs). fork=true оставлен: так пул не попадает в классический прямой путь
+        // (quote/mod.rs, фильтр !fork) и не требует Universal Router/Permit2 (required). Чтение состояния/события/
+        // квотер — свои (не как Infinity/V4). Вид ядра — Cl, ссылка на пул — отдельный контракт (как V3).
+        "kyber_elastic" => (PoolKind::Cl, Proto::KyberElastic, true, false, true),
         // DODO PMM (решения 80, 86b): в графе (своя математика math/swap_dodo), НО tradable=false — исполнения
         // пока нет (роутер DODO — фаза 86c). graphable=true, tradable=false, fork=false (ни UR, ни свой
         // роутер-форк): как v3_fork до появления пути исполнения, но в графе (экзотическая математика берётся).

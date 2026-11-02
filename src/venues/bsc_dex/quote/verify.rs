@@ -3,9 +3,10 @@
 //! отправкой перечитывает ТОЛЬКО пулы маршрута одним батчем на свежем блоке (pools/load_batch.rs states), применяет
 //! свежее состояние к клонам записей реестра (pools/load.rs renewed — реестр не трогаем) и пересчитывает маршрут нашей
 //! математикой (quote/verify_decide.rs: route_calc + costs). Вердикт: Ok{свежая котировка, amountOutMin по ногам,
-//! блок} — данные свежие и цена не уехала; Reject{причина, дрейф} — узел отдал устаревшее состояние (блок отстал от
-//! головы больше verify.max_staleness_blocks), чтение/таймаут (verify.timeout_ms), или цена уехала больше
-//! verify.max_price_drift_pct. Verify проверяет ТОЛЬКО валидность данных; порог прибыли — ядро (precheck/profit).
+//! блок} — данные свежие и цена не хуже границы сделки; Reject{причина, дрейф} — узел отдал устаревшее состояние (блок
+//! отстал от головы больше verify.max_staleness_blocks), чтение/таймаут (verify.timeout_ms), свежая средняя цена хуже
+//! границы сделки ядра (req.worst_price, решение 121 B4) или скачок цены больше грубого предохранителя
+//! verify.max_price_drift_pct (в любую сторону). Порог прибыли — ядро (precheck/profit).
 //! Reject → ордер не формируем (стартовое правило Тиграна) — врезку за правилом шлюза делает exec/verify_gate.rs (80.6b).
 //! Кто вызывает: exec/verify_gate.rs (предторговый путь DEX, графовый маршрут); тесты.
 //! От чего зависит: pools/load_batch.rs, pools/load.rs, pools/registry.rs, quote/verify_decide.rs, quote/via.rs,
@@ -28,7 +29,7 @@ use super::steps::Names;
 use super::via::Via;
 
 // Пересчёт и вердикт по дрейфу (чистая часть) — отдельный файл, та же фича verify (решение 83).
-pub use super::verify_decide::decide;
+pub use super::verify_decide::{Bounds, decide};
 
 /// Итог верификации маршрута перед сделкой.
 pub enum Verdict {
@@ -60,13 +61,14 @@ pub fn limits(ctx: &super::super::ctx::Ctx) -> GatewayResult<(u64, Decimal, u64)
 }
 
 /// Верификация маршрута котировки `plan`. Принимает: расчёт путей (сторона, монета, налоги, decimals), тикеры, план,
-/// цену газа. Возвращает: вердикт. Ошибки: NotConfigured (verify.*, exec.dex_slippage_pct), NoRoute (нет маршрута),
+/// цену газа, границу сделки ядра (req.worst_price — решение 121 B4). Возвращает: вердикт. Ошибки: NotConfigured (verify.*, exec.dex_slippage_pct), NoRoute (нет маршрута),
 /// узел/настройки чтения.
 pub async fn run(
     v: &Via<'_>,
     names: &Names<'_>,
     plan: &Quote,
     gas: U256,
+    worst: Decimal,
 ) -> GatewayResult<Verdict> {
     let ctx = &v.q.ctx;
     let (max_stale, max_drift, timeout_ms) = limits(ctx)?;
@@ -148,7 +150,10 @@ pub async fn run(
             drift: None,
         });
     }
-    Ok(decide(
-        v, names, plan, &fresh, gas, block, max_drift, slip_pct,
-    ))
+    let bounds = Bounds {
+        max_drift,
+        slip_pct,
+        worst,
+    };
+    Ok(decide(v, names, plan, &fresh, gas, block, bounds))
 }

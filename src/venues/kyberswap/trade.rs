@@ -299,6 +299,8 @@ fn result(
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),
+        // Решение 121 B7: кто исполнил своп — для журнала и хронологии сделки.
+        executor: Some("KyberSwap".to_string()),
         request: req,
     })
 }

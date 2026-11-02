@@ -30,6 +30,7 @@ use super::super::ctx::Ctx;
 use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
+use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::approve::Approval;
@@ -216,6 +217,17 @@ async fn part(
             ErrorCode::NotConfigured,
             format!(
                 "{}: проба налога через пул DODO невозможна — исполнение свопа ещё не реализовано (фаза 86c)",
+                e.family.title
+            ),
+        ));
+    }
+    // KyberSwap Elastic (решение 121 B2): своего пути исполнения нет — роутер Elastic не classic V2 Router, проба
+    // вызовом fork_swap откатилась бы и выглядела как сбой монеты. Чёткая причина; налог — по другим пулам монеты.
+    if e.family.proto == Proto::KyberElastic {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            format!(
+                "{}: проба налога через пул KyberSwap Elastic невозможна — своего пути исполнения ещё нет (решение 121)",
                 e.family.title
             ),
         ));

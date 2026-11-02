@@ -12,7 +12,8 @@
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs, quote/costs.rs,
 //! quote/select.rs, quote/via.rs (Via), quote/steps.rs (Names), tokens.rs.
 //! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_max_pools_per_edge, smart.split_step_pct,
-//! smart.max_splits, dex.intermediate_* [bsc_dex]; через вызываемые — глубина (решение 73), допуск пула.
+//! smart.max_splits, dex.intermediate_* [bsc_dex]; через вызываемые — глубина (решение 73), допуск пула, channel.*
+//! (бандл-маршрут исполним, только если все включённые каналы бандловые — send::planned_bundle_ok, решение 121 B3).
 
 use std::collections::{HashMap, HashSet};
 
@@ -228,11 +229,14 @@ fn exec_router(
     }
 }
 
-/// Собирается ли маршрут в бандл (решение 84): ни одна нога не пересекает роутеры (как проверяет exec/bundle::
-/// single_router/fork_router — у форка свой роутер, dex.router) и всего роутеров (UR и форков) не больше
-/// dex.bundle_max_routers. Ошибка — причина несобираемости (нога пересекает роутеры / роутеров больше предела /
-/// настройка не задана).
+/// Собирается ли маршрут в бандл (решение 84): все включённые каналы отправки умеют бандл (решение 121 B3), ни одна
+/// нога не пересекает роутеры (как проверяет exec/bundle::single_router/fork_router — у форка свой роутер, dex.router)
+/// и всего роутеров (UR и форков) не больше dex.bundle_max_routers. Ошибка — причина несобираемости (каналы не
+/// бандловые / нога пересекает роутеры / роутеров больше предела / настройка не задана).
 fn collectable(ctx: &super::super::ctx::Ctx, legs: &[Path]) -> Result<(), String> {
+    // Решение 121 B3: бандл уйдёт, только если ВСЕ включённые каналы отправки умеют бандл (send::dispatch_slice) —
+    // иначе маршрут неисполним уже здесь, на котировке, с понятной причиной (сигнал есть, сделки нет).
+    super::super::send::planned_bundle_ok(ctx)?;
     // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
     let mut routers: Vec<Address> = Vec::new();

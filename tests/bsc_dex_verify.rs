@@ -3,7 +3,9 @@
 //! CAKE. Ok: свежее состояние = тот же блок плана (routes_2026-10-29) → пересчёт совпадает → drift 0 → Ok, с
 //! amountOutMin по каждой ноге (решение 84). Reject: план на routes_2026-10-29, свежее состояние на routes_2026-10-30
 //! (более поздний блок 130556914, цена CAKE уехала ~5.9%) → drift > verify.max_price_drift_pct (в тесте 1%) → Reject с
-//! дрейфом. Плюс чтение пределов verify.* из настроек, перевод вердикта в решение шлюза (exec/verify_gate.rs outcome:
+//! дрейфом. Решение 121 B4: CAKE между записями подешевел — покупка (цена лучше плана) проходит при грубом
+//! предохранителе 20%, продажа (дешевле границы сделки req.worst_price) отклоняется; предохранитель 5% режет скачок
+//! в любую сторону. Плюс чтение пределов verify.* из настроек, перевод вердикта в решение шлюза (exec/verify_gate.rs outcome:
 //! Ok → свежие минимумы, Reject → ошибка, ордер не формируется) и восстановление цены плана из худшей допустимой.
 //! Без синтетики — оба состояния из записанных ответов RPC.
 //! Кто вызывает: cargo test.
@@ -33,6 +35,22 @@ use route_common::{CAKE, USDT};
 /// Допуск проскальзывания для amountOutMin в тестах (exec.dex_slippage_pct = 0.5%).
 fn slip() -> Decimal {
     Decimal::new(5, 1)
+}
+
+/// Пределы вердикта: грубый предохранитель `max_drift` (%), допуск slip() и граница сделки — худшая цена плана, как её
+/// ставит ядро (core/worst.rs: покупка — avg × (1 + slip), продажа — avg × (1 − slip)).
+fn bounds(plan: &arb::core::types::Quote, max_drift: Decimal) -> verify::Bounds {
+    let k = slip() / Decimal::ONE_HUNDRED;
+    let worst = if plan.side == Side::Buy {
+        plan.avg_price * (Decimal::ONE + k)
+    } else {
+        plan.avg_price * (Decimal::ONE - k)
+    };
+    verify::Bounds {
+        max_drift,
+        slip_pct: slip(),
+        worst,
+    }
 }
 
 const GAS: u64 = 1_000_000_000;
@@ -105,8 +123,7 @@ async fn decide_ok_when_state_unchanged() {
         &fresh,
         U256::from(GAS),
         BLOCK,
-        Decimal::ONE,       // допуск дрейфа 1%
-        Decimal::new(5, 1), // exec.dex_slippage_pct = 0.5% для amountOutMin (решение 84)
+        bounds(&plan, Decimal::ONE), // грубый предохранитель 1%, граница — худшая цена плана
     );
     match verdict {
         Verdict::Ok {
@@ -194,8 +211,7 @@ async fn reject_on_price_drift() {
         &fresh,
         U256::from(GAS),
         BLOCK_30,
-        Decimal::ONE,       // допуск verify.max_price_drift_pct = 1%
-        Decimal::new(5, 1), // exec.dex_slippage_pct = 0.5%
+        bounds(&plan, Decimal::ONE), // грубый предохранитель verify.max_price_drift_pct = 1%
     );
     match verdict {
         Verdict::Reject { reason, drift } => {
@@ -240,8 +256,7 @@ async fn gate_outcome_passes_fresh_blocks_drift() {
         &fresh_ok,
         U256::from(GAS),
         BLOCK,
-        Decimal::ONE,
-        slip(),
+        bounds(&plan, Decimal::ONE),
     );
     let verified = verify_gate::outcome(&p.ctx, ok).expect("Ok пропускает сделку");
     assert_eq!(verified.block, BLOCK);
@@ -269,8 +284,7 @@ async fn gate_outcome_passes_fresh_blocks_drift() {
         &fresh_drift,
         U256::from(GAS),
         BLOCK_30,
-        Decimal::ONE,
-        slip(),
+        bounds(&plan, Decimal::ONE),
     );
     let err = verify_gate::outcome(&fp.ctx, rej).expect_err("Reject блокирует сделку");
     assert_eq!(err.code, ErrorCode::QuoteMismatch);
@@ -317,4 +331,83 @@ async fn plan_price_reconstructed_from_worst() {
         "avg_price = {} (ожидалось 2.0)",
         plan.avg_price
     );
+}
+
+/// Котировка-план на записи 2026-10-29 и вердикт на свежем состоянии записи 2026-10-30 (цена CAKE уехала ~5.9%) для
+/// стороны `side` с грубым предохранителем `max_drift` (%). Граница сделки — худшая цена плана (как у ядра).
+async fn moved_verdict(side: Side, max_drift: Decimal) -> Verdict {
+    let plan_p = route_common::parts().await;
+    let plan_q = plan_p.quoting();
+    let t = zero();
+    let mut v = via(&plan_q, &t);
+    v.side = side;
+    let plan = graph_route::quote(
+        &v,
+        &names(&plan_q),
+        &cake(),
+        Decimal::from(1000u32),
+        U256::from(GAS),
+    )
+    .await
+    .expect("план-котировка графа (2026-10-29)");
+    let route = plan.route.as_ref().unwrap();
+    let fresh_p = route_common::parts_from("tests/data/routes_2026-10-30").await;
+    let fresh_q = fresh_p.quoting();
+    let fresh: HashMap<PoolRef, Entry> = route
+        .legs
+        .iter()
+        .flat_map(|l| &l.hops)
+        .map(|h| {
+            (
+                h.pool.clone(),
+                fresh_q
+                    .reg
+                    .get(&h.pool)
+                    .expect("пул маршрута в свежей записи"),
+            )
+        })
+        .collect();
+    let mut fv = via(&fresh_q, &t);
+    fv.side = side;
+    verify::decide(
+        &fv,
+        &names(&fresh_q),
+        &plan,
+        &fresh,
+        U256::from(GAS),
+        BLOCK_30,
+        bounds(&plan, max_drift),
+    )
+}
+
+#[tokio::test]
+async fn better_price_passes_worse_price_rejects() {
+    // Решение 121 B4: между записями 29.10 и 30.10 CAKE подешевел (~5.9%). Покупке это ЛУЧШЕ плана — при грубом
+    // предохранителе 20% сделка идёт (раньше отказ по |дрейфу|); продаже это ХУЖЕ границы сделки — отказ с дрейфом.
+    match moved_verdict(Side::Buy, Decimal::from(20u32)).await {
+        Verdict::Ok { amount_out_min, .. } => {
+            assert!(amount_out_min.iter().all(|m| *m > Decimal::ZERO))
+        }
+        Verdict::Reject { reason, .. } => panic!("покупка дешевле плана должна пройти: {reason}"),
+    }
+    match moved_verdict(Side::Sell, Decimal::from(20u32)).await {
+        Verdict::Reject { reason, drift } => {
+            assert!(drift.is_some(), "отказ по цене несёт дрейф");
+            assert!(reason.contains("дешевле границы сделки"), "{reason}");
+        }
+        Verdict::Ok { .. } => panic!("продажа дешевле границы сделки должна быть отклонена"),
+    }
+}
+
+#[tokio::test]
+async fn rough_guard_rejects_any_direction() {
+    // Грубый предохранитель (verify.max_price_drift_pct) — в обе стороны: скачок 5.9% при допуске 5% — отказ даже
+    // для покупки, которой цена стала лучше (данные под сомнением).
+    match moved_verdict(Side::Buy, Decimal::from(5u32)).await {
+        Verdict::Reject { reason, drift } => {
+            assert!(drift.is_some_and(|d| d > Decimal::from(5u32)));
+            assert!(reason.contains("грубого предохранителя"), "{reason}");
+        }
+        Verdict::Ok { .. } => panic!("скачок больше предохранителя должен быть отклонён"),
+    }
 }

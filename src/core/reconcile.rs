@@ -27,14 +27,16 @@ use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk, rd};
-use super::reconcile_confirm::{Streak, expected, stable};
+use super::reconcile_confirm::{
+    Streak, UNAVAILABLE, expected, is_unavailable, pause_venue, stable,
+};
 use super::risk::{self, Mode};
 use super::view::CoreEvent;
 use super::wait::{Pacer, Unit};
 
 /// Проблема круга: код события, площадка, текст; ключ «площадка/монета» — у расхождения по монете (оно ждёт
 /// подтверждения кругами подряд), None — у остальных (сразу).
-type Found = (&'static str, Option<String>, String, Option<String>);
+pub type Found = (&'static str, Option<String>, String, Option<String>);
 
 /// Задача сверки. Работает, пока жива система. Уведомление о каждой проблеме — один раз, пока она есть.
 pub async fn run(core: Core) {
@@ -92,28 +94,6 @@ pub async fn run(core: Core) {
             }
         }
         active.retain(|k| found.iter().any(|(c, _, t, _)| &format!("{c}{t}") == k));
-    }
-}
-
-/// Окончание ключа проблемы «балансы площадки не получены» (решение 118, Я-11).
-const UNAVAILABLE: &str = "/балансы";
-
-/// Проблема — «балансы площадки не получены» (пауза площадки, не системы). Ошибок нет.
-fn is_unavailable(f: &Found) -> bool {
-    f.3.as_deref().is_some_and(|k| k.ends_with(UNAVAILABLE))
-}
-
-/// Ставит площадку на паузу (risk.venue_paused), если она ещё не на паузе; снятие — кнопкой «Снять паузу», как у
-/// паузы после ошибок подряд. Принимает: площадку, причину. Ошибок нет.
-fn pause_venue(core: &Core, v: VenueId, why: &str) {
-    let fresh = {
-        let mut r = lk(&core.inner.risk);
-        let fresh = !r.venue_paused.contains_key(&v);
-        r.venue_paused.entry(v).or_insert_with(|| why.to_string());
-        fresh
-    };
-    if fresh {
-        risk::publish(core);
     }
 }
 

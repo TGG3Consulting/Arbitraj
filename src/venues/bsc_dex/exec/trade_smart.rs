@@ -8,7 +8,7 @@
 //! Решение 121 B1 (как решение 99): если разрешения отправлялись (каждое ждёт блока), доли, минимумы и calldata
 //! собираются ЗАНОВО на живом состоянии и снова сверяются с req.worst_price и MixedQuoter (у графа — повторная
 //! верификация); свежей сборке нужно новое разрешение — своп не отправляется (QuoteMismatch).
-//! Итог подписан исполнителем «свой сборщик: умный» (решение 121 B7).
+//! Итог и ошибку подписывает исполнителем «свой сборщик: умный» вызывающий (exec/trade.rs, решение 121 B7).
 //! Кто вызывает: exec/trade.rs.
 //! Графовый маршрут (решение 83): вызывающий (exec/trade.rs) передаёт свежие amountOutMin по ногам из предторговой
 //! верификации (exec/verify_gate.rs) — они ставятся последнему шагу каждой доли; умный путь без графа передаёт None.
@@ -110,8 +110,7 @@ pub async fn trade(
     let d = send_swap(env, &slot, plan, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    let r = result::result(ctx, req, d, wallet, (tin, out_token), decs, router);
-    result::by(r, result::BY_SMART)
+    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
 }
 
 /// Доли по живому состоянию: количество каждой доли, путь (exec/live.rs), проверка средней цены против худшей, сверка

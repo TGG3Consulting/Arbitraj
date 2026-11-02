@@ -10,7 +10,7 @@
 //! После сборки шлёт уведомление bundle.assembled (exec/bundle_notify.rs, 80.8c-iii): роутеров/ног/транзакций/первый nonce.
 //! Решение 121 B1: разрешения здесь — транзакции того же атомарного бандла, что и свопы (exec/bundle.rs), в одном блоке;
 //! между ними нет ожидания блока, поэтому пересборка после approve (как в прямом и умном пути) не нужна.
-//! Итог подписан исполнителем «свой сборщик: бандл» (решение 121 B7). Классику/прямой/умный путь не трогает.
+//! Итог и ошибку подписывает исполнителем «свой сборщик: бандл» вызывающий (exec/trade.rs, решение 121 B7). Классику/прямой/умный путь не трогает.
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
 //! От чего зависит: exec/{bundle,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
@@ -127,8 +127,7 @@ pub async fn trade(
     let sent = bundle_send::send(env, &slot, &b, &entries).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    let r = bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, first_nonce);
-    result::by(r, result::BY_BUNDLE)
+    bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, first_nonce)
 }
 
 /// Факт сделки бандла: один синтетический итог транзакции по ОБЪЕДИНЁННЫМ логам всех квитанций бандла и суммарному

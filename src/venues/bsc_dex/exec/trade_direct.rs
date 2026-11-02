@@ -8,7 +8,7 @@
 //! calldata обмена собираются ЗАНОВО на живом состоянии и снова сверяются с req.worst_price (у графа — повторная
 //! верификация); свежей сборке нужно новое разрешение — своп не отправляется (QuoteMismatch), второго approve нет.
 //! Выходной токен не должен ждать поступлений во время обмена (wallet/inflows.rs); чаевые — только к обмену.
-//! Итог подписан исполнителем «свой сборщик: прямой» (решение 121 B7). Повторов нет (стартовое правило Тиграна).
+//! Итог и ошибку подписывает исполнителем «свой сборщик: прямой» вызывающий (exec/trade.rs, решение 121 B7). Повторов нет (стартовое правило Тиграна).
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
 //! exec/precheck.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
@@ -100,8 +100,7 @@ pub async fn trade(
     let d = send_swap(env, &slot, p, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    let r = result::result(ctx, req, d, wallet, (tin, out_token), decs, router);
-    result::by(r, result::BY_DIRECT)
+    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
 }
 
 /// Доля по живому состоянию: путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs), свежий

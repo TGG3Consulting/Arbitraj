@@ -411,3 +411,28 @@ async fn rough_guard_rejects_any_direction() {
         Verdict::Ok { .. } => panic!("скачок больше предохранителя должен быть отклонён"),
     }
 }
+
+#[tokio::test]
+async fn executor_label_on_error() {
+    // Решение 121 B7: ошибка сделки (здесь — отказ верификации на записанной цене) подписана исполнителем в начале
+    // текста; код ошибки не меняется.
+    let err = match moved_verdict(Side::Sell, Decimal::from(20u32)).await {
+        v @ Verdict::Reject { .. } => {
+            let p = route_common::parts().await;
+            verify_gate::outcome(&p.ctx, v).expect_err("отказ")
+        }
+        Verdict::Ok { .. } => panic!("продажа дешевле границы должна быть отклонена"),
+    };
+    let code = err.code;
+    let labelled = arb::venues::bsc_dex::exec::result::by(
+        Err(err),
+        arb::venues::bsc_dex::exec::result::BY_SMART,
+    )
+    .expect_err("ошибка остаётся ошибкой");
+    assert_eq!(labelled.code, code);
+    assert!(
+        labelled.message.starts_with("[свой сборщик: умный] "),
+        "{}",
+        labelled.message
+    );
+}

@@ -29,6 +29,16 @@
   CRTAI, DEOD, GBCK, HGPT, LIME, OBI, OFT, OHO, PROM, TLF — добавить в пары ключа на MEXC, если нужны; (5) записать кадр потока баланса и стакана protobuf — тесты на них
   (сейчас тест только на живом exchangeInfo, tests/mexc_real_data.rs); (6) смысл withdrawIntegerMultiple.
 
+- **MEXC после решения 119 (адаптер по разборам) — задать и проверить вживую:** задать `venue.my_trades_limit [mexc]`
+  = 1000 (без неё ордер не ставится), `venue.book_stale_ms [mexc]` (без неё котировок MEXC нет), по желанию
+  `venue.networks_fresh_ms [mexc]` = 5000. Вопросы: (1) **withdrawIntegerMultiple** — в таблице доки «Withdraw amount
+  increment» (шаг), в примере той же страницы `"18"` (похоже на знаки): сейчас шагом считается только дробное значение
+  0 < v < 1, целые — в журнал «venue.networks» и не применяются; по живому getall решить смысл; (2) уникальность
+  `withdrawOrderId` (в доке правил нет; теперь с меткой попытки `w<9 цифр><сделка>`); (3) тело ответа MEXC на 429 и
+  заголовок Retry-After (адаптер сам не шлёт запросов до его истечения); (4) имена прав в apiKeyInfo — проверка теперь
+  требует и SPOT_DEAL_READ; (5) формат `txId` в deposit/hisrec (сравнение уже без регистра, «0x» и «:индекс»);
+  (6) пауза правила шлюза по RateLimited не берёт Retry-After (ядро) — сейчас пауза держится в самом адаптере MEXC.
+
 - **Свой узел BSC вместо bsc-rpc.publicnode.com (решение 108):** публичный узел — балансировщик над серверами разной
   высоты: nonce too low, TRANSFER_FROM_FAILED, exceeds balance, block not found (02.11). Проверить синхронизацию
   своей ноды на сервере (127.0.0.1:8545/8546) и переключить bsc.node_http_url / bsc.node_ws_url.

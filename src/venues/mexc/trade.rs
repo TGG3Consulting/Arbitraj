@@ -101,11 +101,22 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ));
     }
     let order_type = ctx.text("venue.order_type")?;
-    let client_id: String = format!("{}_{}", req.deal_id, if buy { "b" } else { "s" })
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .take(MAX_CLIENT_ID)
-        .collect();
+    // Решение 114: свой ID ордера — свой у каждой попытки. Раньше был «<сделка>_s» — повторная продажа той же сделки
+    // («Продать сейчас», «Продать и перегнать», повтор режима застрявшей монеты) уходила с тем же ID и MEXC отвечал
+    // «duplicate client order id» (сделка 20261102213149681XPL, 02.11). Метка попытки — миллисекунды (9 цифр) в начале,
+    // чтобы обрезка по длине не съела её; номер сделки остаётся для поиска в истории ордеров.
+    let attempt = chrono::Utc::now()
+        .timestamp_millis()
+        .rem_euclid(1_000_000_000);
+    let client_id: String = format!(
+        "{}{attempt:09}_{}",
+        if buy { "b" } else { "s" },
+        req.deal_id
+    )
+    .chars()
+    .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+    .take(MAX_CLIENT_ID)
+    .collect();
     let params = vec![
         ("symbol", rules.symbol.clone()),
         ("side", (if buy { "BUY" } else { "SELL" }).to_string()),

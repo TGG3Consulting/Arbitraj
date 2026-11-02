@@ -5,10 +5,11 @@
 //! Продажа по рынку — для режимов «Ожидание», «Порог убытка», «Перегон» и кнопки «Продать сейчас».
 //! Продано всё — сделка закрыта, возврат USDT в каждой сделке (usdt_return.rs); продано не всё —
 //! остаток снова через режим застрявшей монеты (меньше шага или минимума ордера биржи — пыль, dust.rs, решение 66); продажа не прошла — алерт человеку
-//! (manual.rs, решение 100), монеты на месте; исход продажи неизвестен — сделка остановлена до ручной проверки.
+//! (manual.rs, решение 100), монеты на месте; продажа не ушла в сеть — режим застрявшей монеты, не больше
+//! stuck.unsent_retries_max раз (решение 110); исход продажи неизвестен — сделка остановлена до ручной проверки.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, usdt_return.rs, deal.rs.
-//! Настройки: нет своих.
+//! Настройки: stuck.unsent_retries_max (решение 110).
 
 use rust_decimal::Decimal;
 
@@ -18,6 +19,10 @@ use crate::core::types::{Quote, Side};
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+
+/// Причина продажи кнопкой «Продать сейчас» (manual.rs, manual_halted.rs). Решение 110: продажу, которую нажал
+/// человек, бот не уводит в режим застрявшей монеты — сбой сразу алертом.
+pub const BUTTON: &str = "кнопка «Продать сейчас»";
 
 /// Выгодно ли продать за value (USDT чистыми): итог сделки не ниже нуля (решение 47).
 pub fn profitable(deal: &Deal, value: Decimal) -> bool {
@@ -111,6 +116,20 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         // Решение 100: продажа не прошла (откат, не попала в блок, цена хуже допустимой, отказ площадки) — монеты на
         // месте; бот сам не повторяет (стартовое правило), а ставит алерт человеку: «Продать сейчас» (по реальному
         // балансу), «Беру на себя», «Продано вручную» — в интерфейсе и кнопками Telegram.
+        // Решение 110: продажа не ушла в сеть (цена сборки хуже допустимой, лимит или очередь запросов, нет маршрута,
+        // налоги перепроверяются, откат при пробном вызове) — денег и газа не стоила, стартовое правило («ордер
+        // отправлен и не исполнился») не про неё. Не кнопка человека и предел не исчерпан — в режим застрявшей
+        // монеты: на следующем тике заново со свежим маршрутом.
+        Err(e) if e.retry_safe() && why != BUTTON && deal.unsent_retries < unsent_max(core) => {
+            deal.unsent_retries += 1;
+            deal.note(format!(
+                "продажа не ушла в сеть: {e} — повтор через режим застрявшей монеты ({}/{})",
+                deal.unsent_retries,
+                unsent_max(core)
+            ));
+            super::ledger::save(core, &deal).await;
+            Box::pin(super::stuck::handle(core, deal)).await
+        }
         Err(e) => {
             let why = format!("продажа не прошла: {e}");
             deal.note(why.clone());
@@ -119,4 +138,15 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             super::manual::raise_alert(core, deal, loss, why).await;
         }
     }
+}
+
+/// Предел повторов продажи, не ушедшей в сеть (stuck.unsent_retries_max). Не задано — 0: без повторов, сразу алерт.
+fn unsent_max(core: &Core) -> u32 {
+    core.inner
+        .deps
+        .settings
+        .integer("stuck.unsent_retries_max", Default::default())
+        .ok()
+        .map(|n| n.min(u32::MAX as u64) as u32)
+        .unwrap_or(0)
 }

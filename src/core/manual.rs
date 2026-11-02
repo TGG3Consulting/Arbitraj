@@ -153,9 +153,7 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     persist(core).await;
     let id = deal.id.clone();
     let c = core.clone();
-    tokio::spawn(async move {
-        super::sell::market(&c, deal, "кнопка «Продать сейчас»").await
-    });
+    tokio::spawn(async move { super::sell::market(&c, deal, super::sell::BUTTON).await });
     Ok(format!("Сделка {id}: продажа по рынку запущена"))
 }
 

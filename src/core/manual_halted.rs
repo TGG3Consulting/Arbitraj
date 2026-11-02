@@ -106,9 +106,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
         deal.qty, deal.direction.asset.ticker, deal.at.0
     );
     let c = core.clone();
-    tokio::spawn(async move {
-        super::sell::market(&c, deal, "кнопка «Продать сейчас»").await
-    });
+    tokio::spawn(async move { super::sell::market(&c, deal, super::sell::BUTTON).await });
     Ok(text)
 }
 

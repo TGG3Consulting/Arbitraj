@@ -61,8 +61,19 @@ impl DirCtx {
             .ok_or("монеты нет в справочнике")?;
         let a = entry.at(&dir.buy_on).ok_or("A нет у монеты")?.clone();
         let b = entry.at(&dir.sell_on).ok_or("B нет у монеты")?.clone();
-        let net_a = a.network.clone().or(b.network.clone());
-        let net_b = b.network.clone().or(a.network.clone());
+        // Решение 108: у каждой площадки своё название сети BSC; у DEX (нет сети в справочнике) — своя
+        // venue.bsc_network, и только потом название другой стороны.
+        let own = |v: &VenueId| super::transfers::own_bsc_name(core, v);
+        let net_a = a
+            .network
+            .clone()
+            .or_else(|| own(&dir.buy_on))
+            .or(b.network.clone());
+        let net_b = b
+            .network
+            .clone()
+            .or_else(|| own(&dir.sell_on))
+            .or(a.network.clone());
         let (Some(net_a), Some(net_b)) = (net_a, net_b) else {
             return Err("ни у одной стороны нет сети BSC биржи".into());
         };

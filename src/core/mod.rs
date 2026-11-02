@@ -100,6 +100,7 @@ pub mod transfer_watch;
 pub mod transfers;
 pub mod transit;
 pub mod types;
+pub mod usdt_relay_retry;
 pub mod usdt_return;
 pub mod view;
 pub mod vol;

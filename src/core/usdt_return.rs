@@ -46,7 +46,8 @@ fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
 async fn relay(core: &Core, id: &str, from: &VenueId, to: &VenueId, amount: Decimal) {
     let deps = &core.inner.deps;
     let res = match usdt(core, from) {
-        Ok(a) => super::transfers::send(core, id, from, to, &a, amount).await,
+        // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
+        Ok(a) => super::usdt_relay_retry::send(core, id, from, to, &a, amount).await,
         Err(e) => Err(e.into()),
     };
     match res {
@@ -60,14 +61,14 @@ async fn relay(core: &Core, id: &str, from: &VenueId, to: &VenueId, amount: Deci
             deps.notify("usdt.relayed", Some(&from.0), &text).await;
         }
         Err(e) => {
-            deps.log(
-                Level::Error,
-                "core.usdt_return",
-                Some(&from.0),
-                format!("Перегон USDT {} → {} не состоялся: {e}", from.0, to.0),
-                None,
-            )
-            .await;
+            let text = format!(
+                "Перегон USDT {amount}: {} → {} не состоялся: {e}. Деньги остались на {} — перегнать вручную",
+                from.0, to.0, from.0
+            );
+            deps.log(Level::Error, "core.usdt_return", Some(&from.0), &text, None)
+                .await;
+            // Решение 108: раньше — только журнал; деньги молча оставались не на той площадке.
+            deps.notify("usdt.relay_failed", Some(&from.0), &text).await;
         }
     }
 }
@@ -83,7 +84,26 @@ pub async fn after_deal(core: &Core, deal: &Deal) {
     // Варианты настройки — per_trade / separate (settings/catalog/trade.rs). Решение 101: кнопка «Продать и
     // перегнать» (deal.return_usdt) — перегон выручки при любом режиме.
     let wanted = deal.return_usdt || mode.ok().as_deref() == Some("per_trade");
-    if !wanted || deal.at == deal.direction.buy_on {
+    if !wanted {
+        return;
+    }
+    if deal.at == deal.direction.buy_on {
+        // Решение 108: продано там же, где куплено (монета не уезжала) — выручка уже на площадке покупки.
+        if deal.return_usdt {
+            core.inner
+                .deps
+                .log(
+                    Level::Info,
+                    "core.usdt_return",
+                    Some(&deal.at.0),
+                    format!(
+                        "Сделка {}: перегон не нужен — продано на {}, выручка уже на площадке покупки",
+                        deal.id, deal.at.0
+                    ),
+                    None,
+                )
+                .await;
+        }
         return;
     }
     let amount = deal.proceeds;

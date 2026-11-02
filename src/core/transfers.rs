@@ -25,7 +25,8 @@ use super::op_error::OpError;
 use super::rules_apply::{self, Next};
 use super::wait::{Pacer, Unit};
 
-/// Название сети BSC площадки для монеты (у биржи — из её справочника; у DEX — сеть любой биржи монеты).
+/// Название сети BSC площадки для монеты (у биржи — из её справочника; у DEX — своя venue.bsc_network, затем сеть
+/// любой биржи монеты).
 /// Ошибка: ни у одной биржи монеты нет сети BSC.
 pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, String> {
     let coins = rd(&core.inner.coins);
@@ -46,7 +47,10 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
             .and_then(|p| p.network.clone())
     });
     let other = entry.and_then(|e| e.presence.iter().find_map(|p| p.network.clone()));
+    // Решение 108: у каждой площадки своё название сети BSC (BingX и DEX — BEP20, MEXC — BSC). Своё — раньше
+    // чужого: иначе DEX получал от MEXC «BSC» и отказывал («Кошелёк DEX работает только в сети BEP20»).
     own.or(any)
+        .or_else(|| own_bsc_name(core, venue))
         .or(other)
         .or_else(|| {
             // USDT и другие монеты вне справочника: сеть BSC биржи — у любой её монеты с адресом контракта.
@@ -57,6 +61,21 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
                 .map(|i| i.network.clone())
         })
         .ok_or_else(|| format!("{}: нет сети BSC для {}", venue.0, asset.ticker))
+}
+
+/// Название сети BSC самой площадки — настройка venue.bsc_network (решение 108). None — не задана. Ошибок нет.
+pub fn own_bsc_name(core: &Core, venue: &VenueId) -> Option<String> {
+    core.inner
+        .deps
+        .settings
+        .text(
+            "venue.bsc_network",
+            crate::settings::read::At {
+                venue: Some(&venue.0),
+                coin: None,
+            },
+        )
+        .ok()
 }
 
 /// Переводит qty монеты с from на to. Возвращает: (вывод с хешем и комиссией, зачисление — сколько дошло).

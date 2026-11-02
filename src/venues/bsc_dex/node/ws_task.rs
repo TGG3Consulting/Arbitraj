@@ -176,9 +176,14 @@ fn dispatch(
             _ => None,
         };
     }
-    let Ok(resp) = serde_json::from_str::<Response>(text) else {
-        tracing::warn!(venue = ID, "узел прислал непонятное сообщение");
-        return None;
+    let resp = match serde_json::from_str::<Response>(text) {
+        Ok(r) => r,
+        Err(e) => {
+            // Решение 108: в лог — само сообщение (первые 500 символов) и причина, чтобы было видно, что это.
+            let short: String = text.chars().take(500).collect();
+            tracing::warn!(venue = ID, why = %e, text = %short, "узел прислал непонятное сообщение");
+            return None;
+        }
     };
     let (id, res) = jsonrpc::parse(resp, SOURCE, Op::Read, text);
     match id.and_then(|i| pending.remove(&i)) {

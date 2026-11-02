@@ -47,7 +47,16 @@ async fn transfer_open(
                 i.deposit_enabled
             }
         });
-    wr(&core.inner.networks).insert(v.clone(), list);
+    // Свежие записи этой монеты — в справочник ядра вместо её старых; остальные монеты биржи не трогаются (решение 117:
+    // после решения 113 здесь приходит справочник ОДНОЙ монеты, а он целиком заменял справочник биржи — остальные
+    // монеты теряли сеть BSC до следующего опроса). Справочника биржи ещё нет — не пишем (его соберёт registry_sync).
+    {
+        let mut nets = wr(&core.inner.networks);
+        if let Some(all) = nets.get_mut(v) {
+            all.retain(|i| i.asset.ticker != d.asset.ticker);
+            all.extend(list);
+        }
+    }
     core.request_rebuild();
     match open {
         Some(true) => Ok(()),

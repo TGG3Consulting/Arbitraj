@@ -3,7 +3,9 @@
 //! по окну последних N минут (решение 49, настройка profit.sigma_window_min):
 //! σ² = Σ(ln pᵢ/pᵢ₋₁)² / Σ Δt по замерам внутри окна. Замеры старше окна удаляются — память ограничена окном.
 //! Окно не задано — замеры не копятся (хранится только последняя цена), σ нет — сделки нет.
-//! Кто вызывает: core/tick.rs (замеры цен сигнала), core/dirctx.rs (σ на B).
+//! Решение 118 (Я-6): ряд — по направлению: (площадка, монета, сторона, площадка-напарник). Объём сравнения у каждого
+//! направления свой, и замеры продажи на MEXC от BingX → MEXC и от DEX → MEXC в одном ряду выглядели бы движением цены.
+//! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B).
 //! От чего зависит: rust_decimal (ln, sqrt), chrono.
 //! Настройки: profit.sigma_window_min (окно передаёт вызывающий).
 
@@ -30,21 +32,26 @@ impl Series {
     }
 }
 
-/// Волатильность по площадке, монете и стороне (цена покупки и продажи — разные ряды).
+/// Ключ ряда: площадка, монета, продажа (true) или покупка (false) — у Side нет Hash в стыке, площадка-напарник
+/// направления (решение 118).
+type Key = (VenueId, Asset, bool, VenueId);
+
+/// Волатильность по площадке, монете, стороне и напарнику (цена покупки и продажи — разные ряды).
 #[derive(Default)]
 pub struct Volatility {
-    /// Ключ: площадка, монета, продажа (true) или покупка (false) — у Side нет Hash в стыке.
-    map: HashMap<(VenueId, Asset, bool), Series>,
+    map: HashMap<Key, Series>,
 }
 
 impl Volatility {
-    /// Добавляет замер цены. Принимает: площадку, монету, сторону, цену, время, окно в минутах
-    /// (None — не задано: шаги не копятся). Ошибок нет: неположительная цена или время не вперёд — пропуск.
+    /// Добавляет замер цены. Принимает: площадку, монету, сторону, площадку-напарника направления, цену, время, окно в
+    /// минутах (None — не задано: шаги не копятся). Ошибок нет: неположительная цена или время не вперёд — пропуск.
+    #[allow(clippy::too_many_arguments)]
     pub fn sample(
         &mut self,
         venue: &VenueId,
         asset: &Asset,
         side: Side,
+        partner: &VenueId,
         p: Decimal,
         at: DateTime<Utc>,
         window_min: Option<u64>,
@@ -54,7 +61,12 @@ impl Volatility {
         }
         let s = self
             .map
-            .entry((venue.clone(), asset.clone(), side == Side::Sell))
+            .entry((
+                venue.clone(),
+                asset.clone(),
+                side == Side::Sell,
+                partner.clone(),
+            ))
             .or_default();
         match (s.last, window_min) {
             (Some((_, t)), _) if at <= t => return,
@@ -70,25 +82,32 @@ impl Volatility {
         s.last = Some((p, at));
     }
 
-    /// σ за секунду (доля, не %) по окну последних window_min минут.
+    /// σ за секунду (доля, не %) по окну последних window_min минут. Принимает: площадку, монету, сторону,
+    /// площадку-напарника направления, окно, сейчас.
     /// Ошибка — текст: замеров в окне нет (меньше двух цен с разным временем).
     pub fn sigma(
         &mut self,
         venue: &VenueId,
         asset: &Asset,
         side: Side,
+        partner: &VenueId,
         window_min: u64,
         now: DateTime<Utc>,
     ) -> Result<Decimal, String> {
         let none = || {
             format!(
-                "волатильность {} на {} за последние {window_min} мин ещё не измерена",
-                asset.ticker, venue.0
+                "волатильность {} на {} (направление с {}) за последние {window_min} мин ещё не измерена",
+                asset.ticker, venue.0, partner.0
             )
         };
         let s = self
             .map
-            .get_mut(&(venue.clone(), asset.clone(), side == Side::Sell))
+            .get_mut(&(
+                venue.clone(),
+                asset.clone(),
+                side == Side::Sell,
+                partner.clone(),
+            ))
             .ok_or_else(none)?;
         s.prune(now - Duration::minutes(window_min as i64));
         let (sq, dt) = s

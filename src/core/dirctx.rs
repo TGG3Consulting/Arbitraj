@@ -1,7 +1,7 @@
 //! Файл: core/dirctx.rs
 //! Что делает: всё, что нужно расчёту направления и не зависит от объёма: площадки и их данные о сети
 //! BSC, сеть для вывода и депозита, котируемые монеты, адрес USDT, σ на B, время в пути T, k, h,
-//! режим возврата USDT, минимумы вывода и минимальный депозит, правила пар бирж (шаг количества, минимальная и
+//! режим возврата USDT, налог перевода при выводе с биржи (решение 118), минимумы вывода и минимальный депозит, правила пар бирж (шаг количества, минимальная и
 //! максимальная сумма ордера — решение 66). Собирается один раз на кандидата.
 //! Время в пути — transit.rs (решение 50); σ — по окну profit.sigma_window_min (решение 49, vol.rs).
 //! Кто вызывает: core/profit.rs, позже executor.rs.
@@ -47,6 +47,9 @@ pub struct DirCtx {
     /// Сеть BSC котируемой монеты B у биржи B (комиссия вывода — для возврата USDT без запроса к бирже, решение 66);
     /// у DEX — None.
     pub usdt_b: Option<CoinNetworkInfo>,
+    /// Налог перевода монеты при выводе с биржи A, % (решение 118, Я-3, transfer_tax.rs); у DEX на A — None (налог
+    /// даёт шлюз DEX в стоимости перевода).
+    pub transfer_tax: Option<Decimal>,
 }
 
 impl DirCtx {
@@ -93,10 +96,12 @@ impl DirCtx {
         let window = s
             .integer("profit.sigma_window_min", At::default())
             .map_err(|e| e.message)?;
+        // σ продажи на B — ряд этого направления (напарник A, решение 118).
         let sigma = lk(&core.inner.vol).sigma(
             &dir.sell_on,
             &dir.asset,
             Side::Sell,
+            &dir.buy_on,
             window,
             chrono::Utc::now(),
         )?;
@@ -134,6 +139,11 @@ impl DirCtx {
         a.info = latest(&a, &dir.buy_on, ticker, &net_a)?;
         let mut b = b;
         b.info = latest(&b, &dir.sell_on, ticker, &net_b)?;
+        // Решение 118 (Я-3): налог перевода при выводе с биржи; не измерен — расчёта нет (причина в тексте).
+        let transfer_tax = match a.info {
+            Some(_) => Some(super::transfer_tax::pct(core, &dir.sell_on, &dir.asset)?),
+            None => None,
+        };
         let usdt_b = if cx_return(&mode) {
             latest(&b, &dir.sell_on, &qb, &net_b)?
         } else {
@@ -159,6 +169,7 @@ impl DirCtx {
             pair_a,
             pair_b,
             usdt_b,
+            transfer_tax,
         })
     }
 

@@ -7,6 +7,7 @@
 //!     площадку, объём или записала событие, в этом круге не сверяется (сравнивать не с чем);
 //! (2) расхождение по (площадке, монете) ставит паузу и уходит в уведомление, только если держится
 //!     ledger.reconcile_confirm_rounds кругов подряд (не задано или 0 — с первого круга, как раньше).
+//! Решение 118 (Я-11): «балансы площадки не получены» — пауза этой площадки (pause_venue), а не системы.
 //! Кто вызывает: core/reconcile.rs.
 //! От чего зависит: engine.rs (сделки), deal.rs.
 //! Настройки: ledger.reconcile_confirm_rounds.
@@ -92,5 +93,27 @@ impl Streak {
             }
         }
         (ok, wait)
+    }
+}
+
+/// Окончание ключа проблемы «балансы площадки не получены» (решение 118, Я-11).
+pub const UNAVAILABLE: &str = "/балансы";
+
+/// Проблема — «балансы площадки не получены» (пауза площадки, не системы). Ошибок нет.
+pub fn is_unavailable(f: &super::reconcile::Found) -> bool {
+    f.3.as_deref().is_some_and(|k| k.ends_with(UNAVAILABLE))
+}
+
+/// Ставит площадку на паузу (risk.venue_paused), если она ещё не на паузе; снятие — кнопкой «Снять паузу», как у
+/// паузы после ошибок подряд. Принимает: площадку, причину. Ошибок нет.
+pub fn pause_venue(core: &Core, v: VenueId, why: &str) {
+    let fresh = {
+        let mut r = lk(&core.inner.risk);
+        let fresh = !r.venue_paused.contains_key(&v);
+        r.venue_paused.entry(v).or_insert_with(|| why.to_string());
+        fresh
+    };
+    if fresh {
+        super::risk::publish(core);
     }
 }

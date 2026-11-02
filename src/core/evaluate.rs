@@ -54,12 +54,14 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             None => super::prices::for_direction(core, &dir, ref_price).await,
         };
         if let Ok(p) = &prices {
-            // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды.
+            // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды, у каждого направления свои
+            // (решение 118: ключ — со площадкой-напарником).
             let now = Utc::now();
             let w = window_min(core);
+            let (a, b) = (&dir.buy_on, &dir.sell_on);
             let mut vol = lk(&core.inner.vol);
-            vol.sample(&dir.buy_on, &dir.asset, Side::Buy, p.buy, now, w);
-            vol.sample(&dir.sell_on, &dir.asset, Side::Sell, p.sell, now, w);
+            vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
+            vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
         }
         let mut view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
         if let Some(w) = &waiting {

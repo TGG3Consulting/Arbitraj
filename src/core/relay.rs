@@ -1,6 +1,7 @@
 //! Файл: core/relay.rs
 //! Что делает: режим «Перегон» застрявшей монеты (решение 37): ищет площадку, где продажа выгоднее
-//! с учётом всех затрат перевода (стоимость вывода через шлюз, в USDT по живым ценам); лучше, чем здесь, —
+//! с учётом всех затрат перевода (relay_value.rs: у биржи — справочник сетей ядра, минимумы вывода и депозита, налог
+//! перевода; в USDT по живым ценам); площадки на паузе — не цели (решение 118, Я-14); лучше, чем здесь, —
 //! переводит туда и пробует продать (sell.rs); перегонов больше stuck.max_relays или перегон не лучше —
 //! продажа по рынку здесь.
 //! Кто вызывает: stuck.rs.
@@ -9,69 +10,14 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, VenueId};
-use crate::gateway::contract::VenueKind;
+use crate::core::types::VenueId;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::convert;
 use super::deal::{Deal, Step};
-use super::engine::{Core, rd};
+use super::engine::{Core, lk, rd};
 
-/// Чистая выручка (USDT) при перегоне qty на площадку `to` и продаже там. Ошибка — текст причины.
-async fn value_at(
-    core: &Core,
-    from: &VenueId,
-    to: &VenueId,
-    a: &Asset,
-    qty: Decimal,
-) -> Result<Decimal, String> {
-    let gw = core.inner.deps.gw.get(from).await.map_err(|e| e.message)?;
-    let net = super::transfers::network(core, a, from)?;
-    let costs = gw
-        .withdraw_cost(a, &net, qty)
-        .await
-        .map_err(|e| e.message)?;
-    let coin: Decimal = costs
-        .iter()
-        .filter(|c| c.asset == a.ticker)
-        .map(|c| c.amount)
-        .sum();
-    let (v, q) = super::trade_ops::sell_value(core, to, a, qty - coin).await?;
-    let quote = core
-        .inner
-        .deps
-        .settings
-        .text(
-            "venue.quote_asset",
-            At {
-                venue: Some(&from.0),
-                coin: None,
-            },
-        )
-        .map_err(|e| e.message)?;
-    let cex: Vec<VenueId> = rd(&core.inner.kinds)
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Cex)
-        .map(|(v, _)| v.clone())
-        .collect();
-    let rates = convert::rates(
-        &core.inner.deps,
-        &cex,
-        vec![quote],
-        &a.ticker,
-        q.avg_price,
-        &costs,
-    )
-    .await?;
-    let mut out = v;
-    for c in costs.iter().filter(|c| c.asset != a.ticker) {
-        out -= convert::to_usdt(c, &rates)?;
-    }
-    Ok(out)
-}
-
-/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API).
+/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API; не на паузе).
 fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     let coins = rd(&core.inner.coins);
     let Some(e) = coins.iter().find(|c| c.asset == deal.direction.asset) else {
@@ -81,9 +27,12 @@ fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     if !can_send {
         return vec![];
     }
+    // Решение 118 (Я-14): площадка на паузе (ошибки подряд, балансы не получены) — не цель перегона.
+    let paused = lk(&core.inner.risk).venue_paused.clone();
     e.presence
         .iter()
         .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
+        .filter(|p| !paused.contains_key(&p.venue))
         .map(|p| p.venue.clone())
         .collect()
 }
@@ -110,7 +59,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
         .ok();
     let mut best: Option<(VenueId, Decimal)> = None;
     for to in targets(core, &deal) {
-        match value_at(core, &deal.at, &to, &a, deal.qty).await {
+        match super::relay_value::value_at(core, &deal.at, &to, &a, deal.qty).await {
             Ok(v) if best.as_ref().is_none_or(|(_, b)| v > *b) => best = Some((to, v)),
             Ok(_) => {}
             Err(e) => {

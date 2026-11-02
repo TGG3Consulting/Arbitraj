@@ -120,7 +120,37 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
                 .await
         }
     }
-    lk(&core.inner.active).remove(d);
+    // Замок монеты (решение 118, Я-2) снимает тот, кто его взял (executor.rs, manual_halted.rs): закрытие другой
+    // сделки той же монеты (например «Продано вручную» у остановленной) не должно снимать замок идущей.
+}
+
+/// Новая сделка с уникальным ID (решение 118, Я-17): ID = время до мс + тикер (только буквы и цифры — так его примут
+/// ID ордера и вывода); занят в учёте — к нему добавляется счётчик. Выдача и запись в память — под одним замком учёта,
+/// поэтому два параллельных расчёта не получат один ID. Принимает: направление, план, прибыль плана.
+/// Возвращает: сделку (уже в памяти учёта; в базу и интерфейс — ledger::save). Ошибок нет.
+pub fn open(
+    core: &Core,
+    d: &crate::core::types::Direction,
+    plan: serde_json::Value,
+    plan_profit: Decimal,
+) -> Deal {
+    let t: String = d
+        .asset
+        .ticker
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    let base = format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"));
+    let mut deals = lk(&core.inner.deals);
+    let mut id = base.clone();
+    let mut n = 1u32;
+    while deals.contains_key(&id) {
+        id = format!("{base}{n}");
+        n += 1;
+    }
+    let deal = Deal::new(id.clone(), d.clone(), plan, plan_profit);
+    deals.insert(id, deal.clone());
+    deal
 }
 
 /// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.

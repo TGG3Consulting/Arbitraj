@@ -12,7 +12,7 @@ use crate::core::types::{Asset, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::engine::{Core, lk};
+use super::engine::Core;
 
 /// Перевод идёт дольше transfer.max_time_s — один раз: уведомление и карантин монеты (ТЗ, шаг 6).
 pub async fn slow(
@@ -30,14 +30,14 @@ pub async fn slow(
         return;
     };
     let secs = (Utc::now() - started).num_seconds().max(0) as u64;
-    if secs <= max || lk(&core.inner.risk).quarantine.contains_key(&asset.ticker) {
+    if secs <= max || super::quarantine::reason(core, asset).is_some() {
         return;
     }
     let text = format!(
         "{deal}: перевод {} на {} идёт {secs} с (норма {max} с) — монета в карантине",
         asset.ticker, to.0
     );
-    super::risk::quarantine(core, asset, Some(text.clone()));
+    super::quarantine::set(core, asset, Some(text.clone()));
     let deps = &core.inner.deps;
     deps.log(Level::Warn, "core.transfer_slow", Some(&to.0), &text, None)
         .await;
@@ -47,10 +47,9 @@ pub async fn slow(
 
 /// Перевод дошёл: если монета была в карантине из-за медленного перевода — снять и уведомить.
 pub async fn release(core: &Core, asset: &Asset, to: &VenueId) {
-    if !lk(&core.inner.risk).quarantine.contains_key(&asset.ticker) {
+    if super::quarantine::set(core, asset, None).is_none() {
         return;
     }
-    super::risk::quarantine(core, asset, None);
     let text = format!(
         "{}: перевод на {} дошёл — карантин снят",
         asset.ticker, to.0

@@ -54,6 +54,7 @@
     {:else}<span class="ok">торгуется</span>{/if}
   </header>
   {#if coin.problem}<p class="err">Не оценить: {coin.problem}</p>{/if}
+  {#if coin.cex_cex}<p class="warn-text">Биржа ↔ биржа: {coin.cex_cex}</p>{/if}
   {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p (p.venue)}
     <div class="muted">Не участвует на {p.venue}:</div>
     <ul class="why">

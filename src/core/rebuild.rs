@@ -31,8 +31,9 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 8] = [
+const REGISTRY: [&str; 9] = [
     "coin.",
+    "cex_cex.",
     "tax.",
     "hooks.",
     "venue.enabled",
@@ -103,6 +104,8 @@ pub async fn rebuild(core: &Core) {
     // Направления, которых больше нет, уходят с «Живого экрана».
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
+    // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
+    super::ticker_index::rebuild(core, &coins).await;
     *wr(&inner.coins) = coins;
     // Эпизоды направлений, которых больше нет, закрываются (решение 74) — только память и сообщения.
     super::episode_run::sweep(core);

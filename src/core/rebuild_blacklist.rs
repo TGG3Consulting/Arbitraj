@@ -3,9 +3,11 @@
 //! DEX, где у монеты есть пул с USDT; заполняет block / problem / wait у монет. Нет проверок, потому что пулов монеты
 //! сейчас нет, потому что сняты до перечитывания (Invalidated — обрыв ленты квитанций, решение 71; отметка inner.held),
 //! — вердикт не меняется. Пула нет по справочнику (NoUsdtPool без отметки) — вердикт снимается, как раньше.
+//! Биржа ↔ биржа (решение 118, Я-3): налог перевода не измерен ни одной DEX и cex_cex.untaxed_ok не «да» — поле
+//! CoinEntry.cex_cex с причиной, таких направлений нет.
 //! Кто вызывает: core/rebuild.rs.
 //! От чего зависит: blacklist.rs, registry.rs, market_state.rs, engine.rs, settings.
-//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs.
+//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs.
 
 use chrono::Utc;
 
@@ -22,8 +24,18 @@ pub fn apply_blacklist(core: &Core, coins: &mut [CoinEntry]) -> Vec<BlockChange>
     let market = rd(&core.inner.market);
     let mut bl = wr(&core.inner.blacklist);
     let now = Utc::now();
+    let kinds = rd(&core.inner.kinds).clone();
+    let untaxed_ok = super::transfer_tax::untaxed_ok(s);
     let mut changes = vec![];
     for c in coins.iter_mut() {
+        // Решение 118 (Я-3): биржа ↔ биржа без измеренного налога перевода — только при cex_cex.untaxed_ok = да.
+        let cexes = c.presence.iter().filter(|p| p.info.is_some()).count();
+        let measured = c
+            .asset
+            .bsc_contract
+            .and_then(|t| super::transfer_tax::measured(&market, &kinds, t));
+        c.cex_cex = (cexes >= 2 && measured.is_none() && !untaxed_ok)
+            .then(|| super::transfer_tax::UNMEASURED.to_string());
         let checks: Vec<_> = match c.asset.bsc_contract {
             Some(token) => c
                 .presence

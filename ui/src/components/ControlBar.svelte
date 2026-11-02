@@ -33,8 +33,8 @@
     {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
       <div class="muted">Предварительный убыток сделки <code>{deal}</code>: {usd} USDT (учтён {day}) — ждёт разбора</div>
     {/each}
-    {#each Object.entries(r.quarantine) as [t, why] (t)}
-      <div>Монета <code>{t}</code> в карантине: {why} <button class="quiet" onclick={() => releaseCoin(t)}>Снять карантин</button></div>
+    {#each r.quarantine as q (q.id)}
+      <div>Монета <code title={q.id}>{q.label}</code> в карантине: {q.reason} <button class="quiet" onclick={() => releaseCoin(q.id)}>Снять карантин</button></div>
     {/each}
   {:else}
     <span class="muted">Режим системы неизвестен{control.error ? `: ${control.error}` : ' — загружаю…'}</span>

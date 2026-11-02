@@ -91,6 +91,9 @@ pub enum VenueRole {
     /// Площадка — источник перевода монеты: значение относится к направлению перевода «с этой площадки»
     /// (bingx — вывод BingX → кошелёк; bsc_dex — кошелёк → биржа). Интерфейс подписывает его направлением.
     TransferSource,
+    /// Площадка — получатель перевода (решение 118): значение относится к зачислению «на эту площадку».
+    /// Интерфейс подписывает его как зачисление.
+    TransferTarget,
 }
 
 /// Описание одной настройки.
@@ -137,6 +140,14 @@ impl SettingDef {
     pub const fn transfer_source(self) -> Self {
         SettingDef {
             venue_role: VenueRole::TransferSource,
+            ..self
+        }
+    }
+
+    /// Помечает область «площадка» как получателя перевода (решение 118). Возвращает: описание с пометкой.
+    pub const fn transfer_target(self) -> Self {
+        SettingDef {
+            venue_role: VenueRole::TransferTarget,
             ..self
         }
     }

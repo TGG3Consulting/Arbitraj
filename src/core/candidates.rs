@@ -42,8 +42,8 @@ use crate::gateway::urgency::{self, Urgency};
 /// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
 /// (следующий тик поставит снова). Ошибок нет.
 pub fn enqueue(core: &Core, d: &Direction) {
-    // По направлению уже идёт сделка — новый расчёт не нужен (одна сделка на направление).
-    if lk(&core.inner.active).contains(d) {
+    // По монете уже идёт сделка — новый расчёт не нужен (решение 118, Я-2: одна сделка на монету).
+    if lk(&core.inner.active).contains(&super::coin_key::CoinKey::of(&d.asset)) {
         return;
     }
     if !lk(&core.inner.queued).insert(d.clone()) {

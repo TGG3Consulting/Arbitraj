@@ -80,12 +80,24 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
         d.step = Step::Selling;
         d.clone()
     };
+    // Решение 118 (Я-2): одна сделка на монету — пока по монете идёт другая, продажа не запускается.
+    let key = super::coin_key::CoinKey::of(&deal.direction.asset);
+    if !lk(&core.inner.active).insert(key.clone()) {
+        if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
+            d.step = Step::Halted;
+        }
+        return Err(format!(
+            "по монете {} идёт другая сделка — продайте после её окончания",
+            deal.direction.asset.ticker
+        ));
+    }
     match on_hand(core, &deal.at, &deal.direction.asset, deal.qty).await {
         Ok((qty, note)) => set_qty(&mut deal, qty, note),
         Err(e) => {
             deal.step = Step::Halted;
             deal.note(format!("«Продать сейчас»: {e}"));
             super::ledger::save(core, &deal).await;
+            lk(&core.inner.active).remove(&key);
             return Err(e);
         }
     }
@@ -96,14 +108,16 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
     } else {
         deal.note("«Продать сейчас» (интерфейс): продажа по рынку");
     }
-    lk(&core.inner.active).insert(deal.direction.clone());
     super::ledger::save(core, &deal).await;
     let text = format!(
         "Сделка {deal_id}: продажа {} {} на {} по рынку запущена",
         deal.qty, deal.direction.asset.ticker, deal.at.0
     );
     let c = core.clone();
-    tokio::spawn(async move { super::sell::market(&c, deal, super::sell::BUTTON).await });
+    tokio::spawn(async move {
+        super::sell::market(&c, deal, super::sell::BUTTON).await;
+        lk(&c.inner.active).remove(&key);
+    });
     Ok(text)
 }
 
@@ -136,6 +150,17 @@ pub async fn sold_manually(
         d.step = Step::Selling;
         d.clone()
     };
+    // Решение 118 (Я-2): одна сделка на монету — пока по монете идёт другая, продажа не запускается.
+    let key = super::coin_key::CoinKey::of(&deal.direction.asset);
+    if !lk(&core.inner.active).insert(key.clone()) {
+        if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
+            d.step = Step::Halted;
+        }
+        return Err(format!(
+            "по монете {} идёт другая сделка — продайте после её окончания",
+            deal.direction.asset.ticker
+        ));
+    }
     lk(&core.inner.alerts).retain(|_, (_, d)| d.id != deal_id);
     lk(&core.inner.holdings).retain(|_, (_, d)| d.id != deal_id);
     super::manual::persist(core).await;

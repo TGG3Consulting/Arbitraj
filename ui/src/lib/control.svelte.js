@@ -49,5 +49,5 @@ export const setMode = (mode) => command('/api/control', { mode });
 /** Снять паузу площадки. Принимает: id площадки. */
 export const resumeVenue = (id) => command(`/api/control/venue/${seg(id)}/resume`);
 
-/** Снять карантин монеты. Принимает: тикер. */
+/** Снять карантин монеты. Принимает: id — адрес контракта (решение 118) или тикер монеты без адреса. */
 export const releaseCoin = (t) => command(`/api/control/quarantine/${seg(t)}/release`);

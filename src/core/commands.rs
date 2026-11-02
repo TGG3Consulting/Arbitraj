@@ -10,7 +10,7 @@
 
 use serde_json::json;
 
-use crate::core::types::{Asset, CommandSource, ManualAction, ManualCommand, VenueId};
+use crate::core::types::{CommandSource, ManualAction, ManualCommand, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -149,10 +149,13 @@ impl Core {
             .await;
     }
 
-    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода).
-    pub async fn release_quarantine(&self, asset: &Asset) {
-        risk::quarantine(self, asset, None);
-        let t = format!("{}: карантин снят вручную", asset.ticker);
+    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода). Принимает: id из
+    /// интерфейса — адрес контракта (0x…) или тикер монеты без адреса (решение 118, quarantine.rs). Ошибок нет.
+    pub async fn release_quarantine(&self, id: &str) {
+        let label = super::quarantine::release_id(self, id)
+            .map(|q| q.label)
+            .unwrap_or_else(|| id.to_string());
+        let t = format!("{label}: карантин снят вручную");
         self.inner
             .deps
             .log(Level::Info, "core.control", None, &t, None)

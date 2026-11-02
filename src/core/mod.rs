@@ -71,6 +71,7 @@ pub mod precheck_deposit;
 pub mod presence;
 pub mod prices;
 pub mod profit;
+pub mod quarantine;
 pub mod queue_notify;
 pub mod quote_cache;
 pub mod rebuild;

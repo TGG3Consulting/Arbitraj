@@ -66,7 +66,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             post(core_api::resume_venue),
         )
         .route(
-            "/api/control/quarantine/{ticker}/release",
+            "/api/control/quarantine/{id}/release",
             post(core_api::release),
         )
         .route("/api/episodes", get(episodes::list))

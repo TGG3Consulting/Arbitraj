@@ -13,7 +13,7 @@
 //! GET  /api/control                               — Risk: режим системы, паузы площадок, карантины, итог дня
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
-//! POST /api/control/quarantine/{ticker}/release   — снять карантин монеты → Risk
+//! POST /api/control/quarantine/{id}/release   — снять карантин монеты (id — адрес контракта или тикер) → Risk
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -22,7 +22,7 @@ use serde::Deserialize;
 use crate::core::deal::Deal;
 use crate::core::risk::{Mode, Risk};
 use crate::core::signal::SpreadView;
-use crate::core::types::{Asset, VenueId};
+use crate::core::types::VenueId;
 
 use super::state::AppState;
 
@@ -75,12 +75,9 @@ pub async fn resume_venue(State(st): State<AppState>, Path(id): Path<String>) ->
     Json(st.core.control())
 }
 
-/// Снять карантин монеты (карантин ведётся по тикеру). Ошибок нет.
-pub async fn release(State(st): State<AppState>, Path(ticker): Path<String>) -> Json<Risk> {
-    let asset = Asset {
-        ticker,
-        bsc_contract: None,
-    };
-    st.core.release_quarantine(&asset).await;
+/// Снять карантин монеты: id — адрес контракта (0x…) или тикер монеты без адреса (решение 118: карантин по адресу).
+/// Ошибок нет.
+pub async fn release(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
+    st.core.release_quarantine(&id).await;
     Json(st.core.control())
 }

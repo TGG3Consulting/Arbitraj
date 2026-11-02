@@ -2,7 +2,8 @@
 //! Что делает: стоп-условия и управление (шаг 6 ТЗ, экран «Управление»): режим системы (старт, стоп,
 //! пауза), пауза площадки после N ошибок подряд, карантин монеты, остановка по убытку за день,
 //! остановка новых сделок при расхождении сверки. Торговля не включается, пока не заданы все настройки
-//! групп money.* и risk.* (решение 15).
+//! групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
+//! Карантин — по адресу контракта (quarantine.rs, решение 118).
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), ledger.rs (итог дня, сверка), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs.
@@ -12,7 +13,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::{Asset, Direction, VenueId};
+use crate::core::types::{Direction, VenueId};
 use crate::settings::catalog;
 use crate::settings::read::At;
 
@@ -38,8 +39,10 @@ pub struct Risk {
     pub reason: Option<String>,
     pub venue_paused: HashMap<VenueId, String>,
     pub errors_in_row: HashMap<VenueId, u64>,
-    /// Монеты в карантине — все их направления на паузе до ручного снятия.
-    pub quarantine: HashMap<String, String>,
+    /// Монеты в карантине — все их направления на паузе до ручного снятия. Ключ — адрес контракта (решение 118,
+    /// quarantine.rs); в интерфейс — списком.
+    #[serde(serialize_with = "super::quarantine::serialize")]
+    pub quarantine: super::quarantine::Map,
     /// Итог дня (решение 53, daily.rs): дата, всего, из них фактический и предварительный.
     pub day: DayView,
 }
@@ -78,6 +81,15 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
             ));
         }
     }
+    // Решение 118 (Я-10): у биржи продажи — своя пауза после ошибок подряд; без неё B на сбое не встанет на паузу.
+    if s.resolve("risk.max_errors_in_row", Some(&d.sell_on.0), None)
+        .is_none()
+    {
+        return Err(format!(
+            "торговля не включается: не задана настройка risk.max_errors_in_row [venue:{}]",
+            d.sell_on.0
+        ));
+    }
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
         return Err(format!(
@@ -91,8 +103,8 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
             return Err(format!("площадка {} на паузе: {why}", v.0));
         }
     }
-    if let Some(why) = r.quarantine.get(&d.asset.ticker) {
-        return Err(format!("{} в карантине: {why}", d.asset.ticker));
+    if let Some(q) = r.quarantine.get(&super::coin_key::CoinKey::of(&d.asset)) {
+        return Err(format!("{} в карантине: {}", q.label, q.reason));
     }
     Ok(())
 }
@@ -150,18 +162,6 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     r.venue_paused.remove(venue);
     r.errors_in_row.remove(venue);
     drop(r);
-    publish(core);
-}
-
-/// Карантин монеты (Some — поставить с причиной, None — снять). Ошибок нет.
-pub fn quarantine(core: &Core, asset: &Asset, reason: Option<String>) {
-    {
-        let mut r = lk(&core.inner.risk);
-        match reason {
-            Some(t) => r.quarantine.insert(asset.ticker.clone(), t),
-            None => r.quarantine.remove(&asset.ticker),
-        };
-    }
     publish(core);
 }
 

@@ -65,8 +65,10 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
 }
 
-/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму. Возвращает: затраты (как их отдаёт площадка).
-/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX.
+/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму (выручка минус комиссия продажи в котируемой монете —
+/// столько уйдёт, решение 118). Возвращает: затраты (как их отдаёт площадка).
+/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX;
+/// TooSmall / TooLarge — сумма вне минимума / максимума вывода USDT у биржи B (решение 118, Я-12).
 pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     let d = &cx.dir;
     if cx.b.info.is_some() {
@@ -76,6 +78,24 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 d.sell_on.0, cx.net_b, cx.usdt.ticker
             ))
         })?;
+        // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
+        if let Some(min) = info.withdraw_min
+            && amount < min
+        {
+            return Err(Fail::TooSmall(format!(
+                "возврат {amount} {} с {} меньше минимума вывода {min}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
+        if let Some(max) = info.withdraw_max
+            && !max.is_zero()
+            && amount > max
+        {
+            return Err(Fail::TooLarge(format!(
+                "возврат {amount} {} с {} больше максимума вывода {max}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
         return Ok(vec![fee_line(info)?]);
     }
     let b = deps.gw.get(&d.sell_on).await.map_err(|e| e.message)?;

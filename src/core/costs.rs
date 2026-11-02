@@ -88,7 +88,14 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
     }
     let proceeds = sell_qty * qb.avg_price;
     if cx.return_per_trade {
-        let rc = return_b(deps, cx, proceeds).await?;
+        // Решение 118 (Я-22): перегоняется выручка минус комиссия продажи в котируемой монете B — то, что пришло.
+        let sell_fee: Decimal = qb
+            .costs
+            .iter()
+            .filter(|c| !c.in_price && c.asset == cx.quote[1])
+            .map(|c| c.amount)
+            .sum();
+        let rc = return_b(deps, cx, proceeds - sell_fee).await?;
         lines.extend(
             rc.into_iter()
                 .map(|c| (convert::usdt_return(c), "возврат USDT")),

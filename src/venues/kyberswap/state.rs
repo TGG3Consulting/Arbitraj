@@ -26,8 +26,11 @@ pub struct Parts {
     /// Кэш decimals токенов (читается с контракта один раз).
     decimals: Arc<RwLock<HashMap<Address, u8>>>,
     /// Строгая очередь кошелька: в работе одна транзакция за раз (решение 45) — approve и своп одной сделки,
-    /// перевод. nonce читается у узла на «latest», предыдущая транзакция к этому моменту уже в блоке (ждём квитанцию).
+    /// перевод. nonce — большее из ответа узла на «latest» и запомненного nonce_next (решение 112).
     pub wallet_lock: Arc<Mutex<()>>,
+    /// Наименьший nonce следующей транзакции кошелька (прошлые заняты в блоке); None — не запомнен, берётся у узла.
+    /// Решение 112: при исполнении из bsc_dex — общий с очередью bsc_dex (wallet/nonce.rs), как и wallet_lock.
+    pub nonce_next: Arc<StdMutex<Option<u64>>>,
     /// Задача поллинга квот и множество монет с текущим маршрутом (для события Invalidated при пропаже маршрута).
     poll: Arc<StdMutex<Poll>>,
 }
@@ -42,11 +45,22 @@ pub struct Poll {
 impl Parts {
     /// Пустое состояние. Ошибок нет.
     pub fn new(ctx: Ctx) -> Self {
+        Self::with_wallet(ctx, Arc::default(), Arc::default())
+    }
+
+    /// Состояние с чужой очередью кошелька (замок и запомненный nonce) — исполнение из bsc_dex (решение 112).
+    /// Ошибок нет.
+    pub fn with_wallet(
+        ctx: Ctx,
+        wallet_lock: Arc<Mutex<()>>,
+        nonce_next: Arc<StdMutex<Option<u64>>>,
+    ) -> Self {
         Self {
             ctx,
             assets: Arc::default(),
             decimals: Arc::default(),
-            wallet_lock: Arc::default(),
+            wallet_lock,
+            nonce_next,
             poll: Arc::new(StdMutex::new(Poll::default())),
         }
     }

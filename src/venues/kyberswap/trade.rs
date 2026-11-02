@@ -56,7 +56,15 @@ pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
     // Разрешение на списание входного токена роутером (ERC-20 approve), если его не хватает; у свопа с нативной
     // монетой на входе (value > 0) approve не нужен.
     if built.value.is_zero()
-        && ensure_allowance(ctx, token_in, wallet, built.router, built.amount_in).await?
+        && ensure_allowance(
+            ctx,
+            &p.nonce_next,
+            token_in,
+            wallet,
+            built.router,
+            built.amount_in,
+        )
+        .await?
     {
         // Решение 99: approve — отдельная транзакция, ждём её блока (секунды). Маршрут и транзакция свопа, собранные
         // ДО него, к этому моменту устарели — симуляция свопа откатывалась «Return amount is not enough» (сделка
@@ -74,7 +82,15 @@ pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
         }
     }
 
-    let d = tx::send(ctx, wallet, built.router, built.data.clone(), built.value).await?;
+    let d = tx::send(
+        ctx,
+        &p.nonce_next,
+        wallet,
+        built.router,
+        built.data.clone(),
+        built.value,
+    )
+    .await?;
     outcome_ok(ctx, &d)?;
     let r = d.receipt.clone().ok_or_else(|| {
         ctx.err(ErrorCode::OutcomeUnknown, "своп в блоке, но нет квитанции")
@@ -178,10 +194,12 @@ async fn allowance(
 }
 
 /// Разрешение на списание токена роутером: читает allowance, при нехватке — approve(router, amount) и ждёт блока.
+/// Принимает: окружение, запомненный nonce (tx.rs), токен, кошелёк, роутер, сумму.
 /// Возвращает: true — approve отправлялся (прошло время, маршрут свопа надо собрать заново).
 /// Ошибки: узел, SwapReverted (approve не прошёл — с фактом транзакции), OutcomeUnknown.
 async fn ensure_allowance(
     ctx: &Ctx,
+    next: &std::sync::Mutex<Option<u64>>,
     token: Address,
     wallet: Address,
     router: Address,
@@ -197,7 +215,7 @@ async fn ensure_allowance(
         }
         .abi_encode(),
     );
-    let d = tx::send(ctx, wallet, token, data, U256::ZERO).await?;
+    let d = tx::send(ctx, next, wallet, token, data, U256::ZERO).await?;
     match d.chain.outcome {
         TxOutcome::Included => Ok(true),
         TxOutcome::NotIncluded => Err(ctx

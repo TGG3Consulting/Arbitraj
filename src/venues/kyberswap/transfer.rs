@@ -46,7 +46,7 @@ pub async fn withdraw(p: &Parts, req: WithdrawRequest) -> GatewayResult<Transfer
     let _guard = p.wallet_lock.lock().await;
     let wallet = signer::address(ctx)?;
     let data = Bytes::from(IERC20::transferCall { to, value: units }.abi_encode());
-    let d = tx::send(ctx, wallet, token, data, U256::ZERO).await?;
+    let d = tx::send(ctx, &p.nonce_next, wallet, token, data, U256::ZERO).await?;
     match d.chain.outcome {
         TxOutcome::Included => {}
         TxOutcome::Reverted => {

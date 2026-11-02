@@ -3,10 +3,15 @@
 //! цена газа (eth_gasPrice + надбавка), лимит газа (eth_estimateGas + запас, заодно проверка, что вызов не откатится),
 //! подпись legacy EIP-155, отправка (eth_sendRawTransaction), ожидание квитанции своим узлом до срока. Повторов и
 //! отмен нет (стартовое правило Тиграна: отправлено и не исполнилось — больше не пробуем).
+//! Nonce (решение 112): большее из ответа узла (eth_getTransactionCount «latest») и запомненного «следующего». Узел за
+//! балансировщиком (публичный) отвечает с разных серверов, отстающий ещё не видит прошлую транзакцию в блоке и даёт
+//! уже занятый номер — «nonce too low» (сделка FLOKI 02.11). Квитанция есть (в блоке или откат — номер занят) —
+//! запоминаем nonce + 1. Квитанции нет — не запоминаем: следующий номер снова решает узел (транзакция могла выпасть).
 //! Кто вызывает: trade.rs, transfer.rs.
 //! От чего зависит: ctx.rs, node.rs (вызовы узла, Receipt), signer.rs.
 //! Настройки: kyber.gas_*_pct, kyber.receipt_poll_ms, kyber.receipt_timeout_ms; узел — kyber.node_http_url.
 
+use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -25,10 +30,12 @@ pub struct Done {
 }
 
 /// Подписывает и отправляет вызов, ждёт квитанции до kyber.receipt_timeout_ms. Принимает: окружение, отправителя,
-/// адрес, данные, сумму BNB (wei). Возвращает: Done (исход — в блоке / откат / не попала).
+/// адрес, данные, сумму BNB (wei), запомненный «следующий» nonce (state::Parts::nonce_next).
+/// Возвращает: Done (исход — в блоке / откат / не попала).
 /// Ошибки (транзакция не ушла): узел (nonce, газ, откат estimate), NotConfigured.
 pub async fn send(
     ctx: &Ctx,
+    next: &StdMutex<Option<u64>>,
     from: Address,
     to: Address,
     data: Bytes,
@@ -36,13 +43,38 @@ pub async fn send(
 ) -> GatewayResult<Done> {
     let price = node::gas_price(ctx).await?;
     let gas = node::estimate_gas(ctx, from, to, &data, value).await?;
-    let nonce = node::tx_count(ctx, from).await?;
+    let nonce = pick_nonce(ctx, next, node::tx_count(ctx, from).await?).await;
     let signed = signer::sign(
         ctx,
         signer::legacy(ctx, nonce, price, gas, to, value, data)?,
     )?;
     let hash = node::send_raw(ctx, &signed.raw).await?;
-    track(ctx, hash, nonce).await
+    let d = track(ctx, hash, nonce).await?;
+    if d.receipt.is_some() {
+        let mut n = next.lock().unwrap_or_else(|p| p.into_inner());
+        *n = Some(n.map_or(nonce + 1, |k| k.max(nonce + 1)));
+    }
+    Ok(d)
+}
+
+/// Nonce транзакции: большее из ответа узла и запомненного. Узел отстал (ответ меньше) — запись в журнал.
+/// Принимает: окружение, запомненный, ответ узла. Возвращает: nonce. Ошибок нет.
+async fn pick_nonce(ctx: &Ctx, next: &StdMutex<Option<u64>>, node_says: u64) -> u64 {
+    let known = *next.lock().unwrap_or_else(|p| p.into_inner());
+    match known {
+        Some(k) if k > node_says => {
+            ctx.log(
+                crate::storage::journal::Level::Info,
+                "kyber.nonce",
+                format!(
+                    "Узел BSC отстаёт: ответил nonce {node_says}, свой следующий — {k}; берём {k}"
+                ),
+            )
+            .await;
+            k
+        }
+        _ => node_says,
+    }
 }
 
 /// Ждёт квитанцию по хешу до срока. Принимает: окружение, хеш, nonce. Возвращает: Done.

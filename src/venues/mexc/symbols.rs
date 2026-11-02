@@ -2,7 +2,7 @@
 //! Что делает: правила торговли пар MEXC (шаг цены, шаг количества, минимальное количество и сумма, статус, разрешены
 //! ли покупка и продажа через API нашему ключу) — справочник в памяти с обновлением по запросу.
 //! Кто вызывает: trade.rs (округление и проверки перед ордером), pairs.rs (состояние пар для ядра), pairs_watch.rs.
-//! От чего зависит: rest.rs, num.rs, ctx.rs.
+//! От чего зависит: rest.rs, symbols_parse.rs (разбор ответов), ctx.rs.
 //! Настройки: venue.quote_asset, venue.symbols_refresh_s.
 //!
 //! Официальная документация:
@@ -19,21 +19,21 @@
 //! после запятой. Ошибка толкования ловится до денег: перед каждым ордером — пробный ордер POST /api/v3/order/test
 //! (trade.rs, настройка venue.order_test_first [mexc]); отказ — ордер не ставится.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use reqwest::Method;
 use rust_decimal::Decimal;
-use serde_json::Value;
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::SpotPairState;
 
 use super::ctx::Ctx;
 use super::errors::Op;
-use super::{num, rest};
+use super::rest;
+pub use super::symbols_parse::{parse_list, self_symbols};
 
 /// Статус «пара торгуется» — по официальной документации («1 - online»).
 pub const STATUS_ONLINE: i64 = 1;
@@ -56,6 +56,8 @@ pub struct SymbolRules {
     /// Знаков после запятой у количества монеты (baseAssetPrecision) и у суммы котируемой монеты (quoteAssetPrecision).
     pub base_precision: u32,
     pub quote_asset_precision: u32,
+    /// Допустимые типы ордера пары (orderTypes); None — поля нет в ответе (тогда проверяет только пробный ордер).
+    pub order_types: Option<Vec<String>>,
 }
 
 impl SymbolRules {
@@ -139,15 +141,17 @@ impl Symbols {
     }
 
     /// Точность вывода монеты (решение 107): у монеты пары — baseAssetPrecision; у котируемой монеты (USDT) —
-    /// quoteAssetPrecision любой её пары (наименьшая — безопасно). None — неизвестно. Ошибок нет.
+    /// quoteAssetPrecision её пар (наименьшая — безопасно). Котируемая — только точное совпадение: символ пары равен
+    /// «база + тикер» (решение 118, А-🟡15; раньше ends_with — у T, DT, SDT бралась чужая точность). None — неизвестно.
+    /// Ошибок нет.
     pub fn precision_of(&self, ticker: &str) -> Option<u32> {
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
         if let Some(r) = map.get(ticker) {
             return Some(r.base_precision);
         }
-        map.values()
-            .filter(|r| r.symbol.ends_with(ticker))
-            .map(|r| r.quote_asset_precision)
+        map.iter()
+            .filter(|(base, r)| r.symbol == format!("{base}{ticker}"))
+            .map(|(_, r)| r.quote_asset_precision)
             .min()
     }
 
@@ -156,77 +160,4 @@ impl Symbols {
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
         map.get(ticker).map(|r| r.symbol.clone())
     }
-}
-
-/// Список пар, разрешённых ключу (selfSymbols): массив символов в data (ответ в обёртке {code: 200, data}).
-/// Ошибка BadResponse — не массив строк.
-pub fn self_symbols(data: &Value) -> GatewayResult<HashSet<String>> {
-    let arr = data
-        .as_array()
-        .ok_or_else(|| super::errors::bad("selfSymbols: data не массив", &data.to_string()))?;
-    arr.iter()
-        .map(|v| {
-            v.as_str()
-                .map(str::to_string)
-                .ok_or_else(|| super::errors::bad("selfSymbols: не строка", &v.to_string()))
-        })
-        .collect()
-}
-
-/// Разбор exchangeInfo: пары с котируемой монетой quote (ключ — тикер монеты). allowed — selfSymbols ключа.
-/// Ошибка BadResponse — неверный формат.
-pub fn parse_list(
-    data: &Value,
-    quote: &str,
-    allowed: &HashSet<String>,
-) -> GatewayResult<HashMap<String, SymbolRules>> {
-    let mut map = HashMap::new();
-    for s in num::arr(data, "symbols")? {
-        if num::text_opt(s, "quoteAsset").as_deref() != Some(quote) {
-            continue;
-        }
-        let ticker = num::text(s, "baseAsset")?;
-        map.insert(ticker, parse(s, allowed)?);
-    }
-    Ok(map)
-}
-
-/// Разбор одной пары. Ошибка BadResponse — нет обязательных полей.
-fn parse(s: &Value, allowed: &HashSet<String>) -> GatewayResult<SymbolRules> {
-    let symbol = num::text(s, "symbol")?;
-    let status = match num::text(s, "status")?.as_str() {
-        "1" | "ENABLED" => STATUS_ONLINE,
-        "2" => 2,
-        "3" => 3,
-        _ => -1,
-    };
-    let spot_ok = matches!(s.get("isSpotTradingAllowed"), Some(Value::Bool(true)));
-    let own = allowed.contains(&symbol);
-    // tradeSideType: 1 все, 2 только покупка, 3 только продажа, 4 закрытие (нет поля — без ограничения стороны).
-    let side = num::text_opt(s, "tradeSideType").unwrap_or_else(|| "1".into());
-    let (buy_side, sell_side) = match side.as_str() {
-        "2" => (true, false),
-        "3" => (false, true),
-        "4" => (false, false),
-        _ => (true, true),
-    };
-    Ok(SymbolRules {
-        tick_size: pow10_neg(num::int(s, "quotePrecision")?),
-        step_size: pow10_neg(num::int(s, "baseAssetPrecision")?),
-        base_precision: num::int(s, "baseAssetPrecision")?.clamp(0, 28) as u32,
-        quote_asset_precision: num::int(s, "quoteAssetPrecision")?.clamp(0, 28) as u32,
-        min_notional: num::dec_opt(s, "quoteAmountPrecision")?,
-        max_notional: num::dec_opt(s, "maxQuoteAmount")?,
-        min_qty: num::dec_opt(s, "baseSizePrecision")?,
-        status,
-        api_buy: spot_ok && own && buy_side,
-        api_sell: spot_ok && own && sell_side,
-        symbol,
-    })
-}
-
-/// 10^−n (n знаков после запятой): 2 → 0.01, 0 → 1. Отрицательное n — 1. Ошибок нет.
-fn pow10_neg(n: i64) -> Decimal {
-    let n = n.clamp(0, 28) as u32;
-    Decimal::new(1, n)
 }

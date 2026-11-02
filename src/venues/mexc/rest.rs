@@ -2,7 +2,7 @@
 //! Что делает: запросы REST к MEXC — публичные и подписанные (HMAC SHA256), разбор ответа, перевод ошибок в коды
 //! шлюза, переход на резервный адрес только при сбое сети. Ответы пишутся в сырой журнал (raw.*), кроме пути listenKey.
 //! Кто вызывает: файлы адаптера MEXC.
-//! От чего зависит: ctx.rs, errors.rs, hmac, sha2, reqwest.
+//! От чего зависит: ctx.rs, errors.rs, reply.rs, gateway/http.rs, hmac, sha2, reqwest.
 //! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.*; секреты mexc.api_key, mexc.api_secret.
 //!
 //! Подпись — по официальному разделу «Signature» https://www.mexc.com/api-docs/spot-v3/introduction:
@@ -10,7 +10,8 @@
 //! when generating the signature must match the sequence actually sent», «lowercase hexadecimal only», заголовок ключа
 //! `X-MEXC-APIKEY`. Все параметры (в том числе у POST/PUT/DELETE) отправляются в строке запроса — это разрешено
 //! («parameters may be sent entirely in the Query String») и снимает вопрос Content-Type (application/x-www-form-urlencoded
-//! даёт 700013). recvWindow — до 60000 («The maximum is 60 seconds»).
+//! даёт 700013). recvWindow — меньше 60000 (700005 «recvWindow must less than 60000»; решение 118, А-🟡1).
+//! Разбор ответа и пауза по Retry-After — reply.rs.
 
 use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Method;
@@ -21,8 +22,10 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
+use super::reply;
 
-/// Предел recvWindow — из официальной документации («The maximum is 60 seconds»).
+/// Предел recvWindow — из официальной документации (код 700005 «recvWindow must less than 60000»): значение должно
+/// быть строго меньше.
 const MAX_RECV_WINDOW_MS: u64 = 60_000;
 
 /// Параметры запроса: пары ключ — значение (порядок сохраняется — он же порядок подписи).
@@ -45,11 +48,11 @@ pub async fn signed(
 ) -> GatewayResult<Value> {
     let (key, secret) = ctx.keys()?;
     let recv = ctx.int("venue.recv_window_ms")?;
-    if recv > MAX_RECV_WINDOW_MS {
+    if recv >= MAX_RECV_WINDOW_MS {
         return Err(ctx.tag(GatewayError::new(
             ErrorCode::NotConfigured,
             None,
-            format!("venue.recv_window_ms = {recv}: у MEXC не больше {MAX_RECV_WINDOW_MS}"),
+            format!("venue.recv_window_ms = {recv}: у MEXC строго меньше {MAX_RECV_WINDOW_MS}"),
         )));
     }
     params.push(("recvWindow", recv.to_string()));
@@ -113,6 +116,8 @@ async fn send(
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
+    // Пауза по Retry-After после 418/429: запрос не отправляется вовсе (решение 118, А-🔴3).
+    reply::gate()?;
     let mut last = None;
     for base in &urls {
         let url = if query.is_empty() {
@@ -124,10 +129,9 @@ async fn send(
         if let Some(key) = key {
             req = req.header("X-MEXC-APIKEY", key);
         }
-        match crate::gateway::http::exchange(req, lim).await {
-            Ok((status, text)) => {
-                return parse(ctx, path, status.as_u16(), text, op)
-                    .map_err(|e| errors::unsure(e, op));
+        match crate::gateway::http::exchange_full(req, lim).await {
+            Ok(r) => {
+                return reply::parse(ctx, path, &r, op).map_err(|e| errors::unsure(e, op));
             }
             // Резерв — только если запрос точно не дошёл; иначе ордер или вывод мог исполниться — не повторяем.
             Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),
@@ -141,29 +145,6 @@ async fn send(
             "Не задан адрес REST",
         )
     }))
-}
-
-/// Разбор ответа. Общей схемы у MEXC нет (документация): успех — объект или массив без поля code (account, order,
-/// depth, getall) либо обёртка {code: 0|200, data, msg} (tradeFee, selfSymbols, defaultSymbols); ошибка — {code, msg}
-/// с HTTP 4XX или кодом не 0/200. Текст ответа — в сырой журнал (кроме пути listenKey: ключ — секрет сессии).
-fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayResult<Value> {
-    if !path.contains(super::user_key::PATH) {
-        ctx.raw
-            .write(super::ctx::ID, &format!("rest {path}"), &text);
-    }
-    let Ok(v) = serde_json::from_str::<Value>(&text) else {
-        return Err(errors::from_http(status, &text));
-    };
-    let code = v.get("code").and_then(Value::as_i64);
-    match code {
-        Some(0) | Some(200) if status < 400 => Ok(v.get("data").cloned().unwrap_or(v)),
-        Some(c) if v.get("msg").is_some() => {
-            let msg = v.get("msg").and_then(Value::as_str).unwrap_or_default();
-            Err(errors::from_code(c, msg, op, &text))
-        }
-        _ if status < 400 => Ok(v),
-        _ => Err(errors::from_http(status, &text)),
-    }
 }
 
 /// Можно ли повторить запрос на резервном адресе: только если запрос точно не дошёл (соединение не установлено), а

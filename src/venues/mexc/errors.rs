@@ -29,26 +29,52 @@ pub enum Op {
 /// Ошибка по полю code ответа MEXC. Принимает: код, текст msg, операцию, сырой ответ. Возвращает: GatewayError.
 pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
     let unified = match code {
-        // Ключ, подпись, время, права, IP (Error Code: 10072, 700001, 700002, 602, 700003, 700006, 700007, 401).
+        // Ключ, подпись (Error Code: 10072, 700001, 700002, 602).
         10072 | 700001 | 700002 | 602 => ErrorCode::InvalidCredentials,
-        700003 => ErrorCode::InvalidCredentials,
-        700007 | 401 | 30020 | 70011 => ErrorCode::InsufficientPermissions,
+        // Время запроса (700003 «Timestamp for this request is outside of the recvWindow», 10073 «invalid
+        // Request-Time»): ключ ни при чём — свой текст про часы (решение 118, А-🟠9). Запрос отклонён: у ордера и
+        // вывода — отказ (не «итог неизвестен»), у остального — BadResponse.
+        700003 | 10073 => return clock(code, msg, op, raw),
+        // Права и блок аккаунта (700007, 401, 30020, 70011; 30035 «You have triggered the order limit, please contact
+        // us by submitting a ticket», 60005 «your account is abnormal» — решение 118, А-🟡2).
+        700007 | 401 | 30020 | 70011 | 30035 | 60005 => ErrorCode::InsufficientPermissions,
         700006 => ErrorCode::IpNotAllowed,
+        // 429 «Too Many Requests» в теле — лимит, как HTTP 429 (решение 118, А-🔴3).
+        429 => ErrorCode::RateLimited,
         // Баланс (10101 «does not have enough available balance», 30004 «Insufficient position», 30005 «Oversold»).
         10101 | 30004 | 30005 => ErrorCode::InsufficientBalance,
+        // 11444 «This feature is temporarily unavailable…» — однозначный отказ (решение 118, А-🟡3): у ордера и вывода
+        // — отказ, а не «итог неизвестен».
+        11444 if op == Op::Trade => ErrorCode::OrderRejected,
+        11444 if op == Op::Withdraw => ErrorCode::WithdrawRejected,
         // Сервер занят: для ордера и вывода итог неизвестен (Timeout — нужна проверка), для остального — недоступно.
         500 | 503 | 504 | 20002 | 11444 if op != Op::Other => ErrorCode::Timeout,
         500 | 503 | 504 | 20002 | 11444 => ErrorCode::Unreachable,
         // Ордер не найден (-2011 «Unknown order sent»).
         -2011 => ErrorCode::BadResponse,
-        _ => match op {
-            Op::Trade => ErrorCode::OrderRejected,
-            Op::Withdraw => ErrorCode::WithdrawRejected,
-            Op::Move | Op::Other => ErrorCode::BadResponse,
-        },
+        _ => rejected(op),
     };
+    let msg = if msg.is_empty() { "(без msg)" } else { msg };
     let text = format!("MEXC, код {code}: {msg}");
     GatewayError::new(unified, Some(venue()), text).with_raw(raw)
+}
+
+/// Код отказа по операции: ордер — OrderRejected, вывод — WithdrawRejected, остальное — BadResponse. Ошибок нет.
+fn rejected(op: Op) -> ErrorCode {
+    match op {
+        Op::Trade => ErrorCode::OrderRejected,
+        Op::Withdraw => ErrorCode::WithdrawRejected,
+        Op::Move | Op::Other => ErrorCode::BadResponse,
+    }
+}
+
+/// Время запроса вне recvWindow (700003, 10073): правило из введения документации — «if (timestamp < (serverTime +
+/// 1000) && (serverTime - timestamp) <= recvWindow)». Принимает: код, msg, операцию, сырой ответ. Ошибок нет.
+fn clock(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
+    let text = format!(
+        "MEXC, код {code}: время запроса вне recvWindow — проверьте часы сервера (синхронизация времени) ({msg})"
+    );
+    GatewayError::new(rejected(op), Some(venue()), text).with_raw(raw)
 }
 
 /// Ордер, вывод или перевод: запрос мог дойти, а ясного итога нет — «результат неизвестен» (OutcomeUnknown,
@@ -74,9 +100,10 @@ fn unknown(e: GatewayError, op: Op) -> GatewayError {
     }
 }
 
-/// Ошибка по HTTP-статусу (когда тело не в формате MEXC). 403 — WAF; 418/429 — лимит (дальше — бан IP от 2 минут
-/// до 3 суток: «Continuing to exceed limits after receiving 429 will result in an IP ban»); 5XX — сторона MEXC.
-pub fn from_http(status: u16, raw: &str) -> GatewayError {
+/// Ошибка по HTTP-статусу. 403 — WAF; 418/429 — лимит (дальше — бан IP от 2 минут до 3 суток: «Continuing to exceed
+/// limits after receiving 429 will result in an IP ban»), с Retry-After в тексте, если он пришёл; 5XX — сторона MEXC.
+/// Принимает: статус, сырой ответ, Retry-After в секундах. Возвращает: GatewayError.
+pub fn from_http(status: u16, raw: &str, retry_after_s: Option<u64>) -> GatewayError {
     let (code, text) = match status {
         401 => (ErrorCode::InvalidCredentials, "неверный ключ (HTTP 401)"),
         403 => (
@@ -97,7 +124,15 @@ pub fn from_http(status: u16, raw: &str) -> GatewayError {
         ),
         _ => (ErrorCode::BadResponse, "непонятный ответ"),
     };
-    GatewayError::new(code, Some(venue()), format!("MEXC: {text}, HTTP {status}")).with_raw(raw)
+    let wait = retry_after_s
+        .map(|s| format!(", Retry-After {s} с — запросы к MEXC не отправляются до его истечения"))
+        .unwrap_or_default();
+    GatewayError::new(
+        code,
+        Some(venue()),
+        format!("MEXC: {text}, HTTP {status}{wait}"),
+    )
+    .with_raw(raw)
 }
 
 /// Сбой HTTP-обмена: нет связи (Unreachable), запрос мог дойти, а ответа нет (Timeout), тело не текст или больше

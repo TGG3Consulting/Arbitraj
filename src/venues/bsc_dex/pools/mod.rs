@@ -43,6 +43,7 @@ pub mod families;
 pub mod graph;
 pub mod group;
 pub mod history_gate;
+pub mod history_start;
 pub mod history_store;
 pub mod history_v4;
 pub mod hooks;

@@ -102,6 +102,11 @@ impl Venue for Bingx {
         wallet::coin_networks(&self.ctx).await
     }
 
+    /// Одна монета — config/getall?coin= (решение 113, wallet.rs).
+    async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        wallet::coin_networks_of(&self.ctx, ticker).await
+    }
+
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,

@@ -167,6 +167,12 @@ impl Venue for BscDex {
         wallet::balances::all(&self.p.ctx, &self.p.tokens).await
     }
 
+    /// Баланс одного актива: 1–2 запроса к узлу вместо запроса по каждому токену (решение 113) — wallet/balances.rs.
+    /// Ошибки: ключ кошелька, узел.
+    async fn balance(&self, asset: &str) -> GatewayResult<Option<Balance>> {
+        wallet::balances::single(&self.p.ctx, &self.p.tokens, asset).await
+    }
+
     /// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод — wallet/transfer.rs.
     /// Ошибки: CoinNotChecked / CoinCheckFailed, узел.
     async fn withdraw_cost(

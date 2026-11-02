@@ -127,10 +127,22 @@ async fn once(core: &Core) -> Vec<Found> {
             // Решение 54: свой порог алерта по площадке, один раз на пересечение (low_usdt.rs).
             super::low_usdt::check(core, &v, f, &q).await;
         }
-        if kind == VenueKind::Dex
-            && let Err(e) = super::precheck::bnb_ok(core, &v, Decimal::ZERO).await
-        {
-            out.push(("risk.low_bnb", Some(v.0.clone()), e, None));
+        // Мало BNB на газ — по уже полученным балансам (решение 113: раньше bnb_ok запрашивал балансы кошелька второй
+        // раз за круг). Резерв не задан — та же причина, что у bnb_ok.
+        if kind == VenueKind::Dex {
+            let have: Decimal = b
+                .iter()
+                .filter(|x| x.asset == super::convert::GAS_TICKER)
+                .map(|x| x.free)
+                .sum();
+            let r = deps
+                .settings
+                .decimal("risk.min_bnb_balance", At::default())
+                .map_err(|e| e.message)
+                .and_then(|min| super::precheck::bnb_enough(&v, have, min, Decimal::ZERO));
+            if let Err(e) = r {
+                out.push(("risk.low_bnb", Some(v.0.clone()), e, None));
+            }
         }
         for (ticker, need) in &held {
             let ev = &v;

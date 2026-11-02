@@ -91,13 +91,11 @@ pub async fn buy_cap(
 /// Ошибки: площадка не подключена, сбой запроса балансов (текст площадки, например лимит частоты).
 pub async fn free_now(core: &Core, venue: &VenueId, quote: &str) -> Result<Decimal, String> {
     let a = core.inner.deps.gw.get(venue).await.map_err(|e| e.message)?;
-    let balances = a
-        .balances()
+    // Решение 113: баланс одной монеты — у DEX один balanceOf, а не запрос по каждому токену кошелька (~11 с);
+    // у биржи — тот же один REST балансов (по умолчанию контракта).
+    Ok(a.balance(quote)
         .await
-        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?;
-    Ok(balances
-        .iter()
-        .find(|b| b.asset == quote)
+        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
         .map(|b| b.free)
         .unwrap_or_default())
 }

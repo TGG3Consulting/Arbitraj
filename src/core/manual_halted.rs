@@ -27,15 +27,12 @@ pub async fn on_hand(
     cap: Decimal,
 ) -> Result<(Decimal, Option<String>), String> {
     let gw = core.inner.deps.gw.get(venue).await.map_err(|e| e.message)?;
-    let b = gw
-        .balances()
+    // Решение 113: баланс одной монеты (у DEX — 1–2 запроса к узлу, а не по каждому токену кошелька).
+    let free = gw
+        .balance(&asset.ticker)
         .await
-        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?;
-    let free: Decimal = b
-        .iter()
-        .filter(|x| x.asset == asset.ticker)
-        .map(|x| x.free)
-        .sum();
+        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
+        .map_or(Decimal::ZERO, |x| x.free);
     let free = super::native::spendable(core, venue, &asset.ticker, free)?;
     let (free, note) = super::native::minus_sell_gas(core, &gw, venue, asset, free).await;
     if free <= Decimal::ZERO {

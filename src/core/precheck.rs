@@ -25,8 +25,10 @@ async fn transfer_open(
     withdraw: bool,
 ) -> Result<(), String> {
     let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    // Решение 113: справочник одной монеты (BingX — config/getall?coin=; у кого запроса одной монеты нет — весь
+    // справочник с фильтром, как раньше).
     let list = gw
-        .coin_networks()
+        .coin_networks_of(&d.asset.ticker)
         .await
         .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
     // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
@@ -81,15 +83,19 @@ pub async fn bnb_ok(core: &Core, v: &VenueId, need: Decimal) -> Result<(), Strin
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| e.message)?;
     let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
-    let b = gw
-        .balances()
+    // Решение 113: только BNB (у DEX — eth_getBalance), а не балансы всех токенов кошелька (~11 с на вызов).
+    let have = gw
+        .balance(super::convert::GAS_TICKER)
         .await
-        .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?;
-    let have: Decimal = b
-        .iter()
-        .filter(|x| x.asset == super::convert::GAS_TICKER)
-        .map(|x| x.free)
-        .sum();
+        .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?
+        .map_or(Decimal::ZERO, |x| x.free);
+    bnb_enough(v, have, min, need)
+}
+
+/// Хватает ли BNB на газ: свободный BNB не меньше минимума risk.min_bnb_balance плюс газ сделки. Принимает: площадку,
+/// свободный BNB, минимум, газ сделки. Ошибка — текст причины. Вызывают bnb_ok и сверка (reconcile.rs — по уже
+/// полученным балансам, без второго запроса).
+pub fn bnb_enough(v: &VenueId, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
     if have < min + need {
         return Err(format!(
             "{}: BNB на газ {have} меньше минимума {min} + газ сделки {need}",

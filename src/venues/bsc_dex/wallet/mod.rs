@@ -8,6 +8,7 @@
 pub mod allow_cache;
 pub mod approve;
 pub mod balances;
+pub mod balances_mc;
 pub mod deposit;
 pub mod events;
 pub mod events_log;

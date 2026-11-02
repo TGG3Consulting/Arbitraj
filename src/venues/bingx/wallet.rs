@@ -38,6 +38,26 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
     parse_networks(&data, &bsc, &ctx.venue())
 }
 
+/// Справочник одной монеты (решение 113): config/getall с параметром coin («Coin identification», необязательный —
+/// docs-v3 «Query currency deposit and withdrawal data», api-ai-skills/spot-wallet). Ответ — тот же массив монет, что
+/// без параметра; на всякий случай берутся только записи этой монеты (если биржа вернёт больше).
+/// Принимает: тикер монеты BingX. Возвращает: её сети. Ошибки: как coin_networks.
+pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+    let bsc = ctx.text("venue.bsc_network")?;
+    let data = rest::signed(
+        ctx,
+        Method::GET,
+        "/openApi/wallets/v1/capital/config/getall",
+        vec![("coin", ticker.to_string())],
+        Op::Other,
+    )
+    .await?;
+    Ok(parse_networks(&data, &bsc, &ctx.venue())?
+        .into_iter()
+        .filter(|i| i.asset.ticker == ticker)
+        .collect())
+}
+
 /// Разбор ответа config/getall (data — массив монет с networkList). Адрес контракта ставится только сети с названием
 /// bsc (venue.bsc_network); пустой или неразборчивый адрес (у BNB в BEP20 — "") — None: ядро покажет «сеть BSC есть,
 /// адреса контракта нет». Принимает: data ответа, название сети BSC, площадку. Ошибки: BadResponse — формат.

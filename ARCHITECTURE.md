@@ -57,6 +57,8 @@ secrets/ — ключи и токены только в памяти; разбл
 | Вывести, статус вывода | ID вывода, хеш транзакции, статус |
 | Адрес депозита, статус депозита | Адрес в BSC, статус зачисления |
 | Балансы | USDT, монеты, BNB на газ |
+| Баланс одного актива `balance(asset)` | Решение 113: строка баланса одной монеты для пути сделки (BNB на газ, USDT перед покупкой, перегон, «Продать сейчас»). По умолчанию — `balances()` с фильтром (биржа: один REST); DEX — 1–2 запроса к узлу |
+| Справочник одной монеты `coin_networks_of(ticker)` | Решение 113: свежий статус ввода/вывода одной монеты для предпроверки. По умолчанию — `coin_networks()` с фильтром (MEXC: в документации нет запроса одной монеты); BingX — `config/getall?coin=` |
 | Ошибки | Единый код ошибки + исходный ответ площадки (+ факт транзакции в сети, если она уже ушла) |
 | Проверить подключение | «Подключено» или точная причина сбоя (неверный ключ, нет прав, IP не разрешён, таймаут и т.д.) |
 | Стоимость вывода `withdraw_cost` | Биржа — комиссия вывода из API; DEX — газ перевода (BNB) и налог на перевод |
@@ -326,3 +328,4 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 | 2026-11-02 | Nonce кошелька не меньше своего запомненного; свопы KyberSwap в общей очереди кошелька с переводами bsc_dex (решение 112, п. 1) | src/venues/kyberswap/tx.rs, src/venues/kyberswap/state.rs, src/venues/bsc_dex/mod.rs, src/venues/bsc_dex/wallet/nonce.rs | — (без настроек) | «Журнал» (kyber.nonce: «узел отстаёт») |
 | 2026-11-02 | Сверка балансов без ложной паузы: учёт до и после запроса балансов, подтверждение кругами подряд (решение 112, п. 2) | src/core/reconcile.rs, src/core/reconcile_confirm.rs | ledger.reconcile_confirm_rounds | «Настройки» → «Переводы и контроль» |
 | 2026-11-02 | Сглаживание мигания статусов ввода/вывода биржи (решение 112, п. 3) | src/core/status_debounce.rs, src/core/registry_sync.rs | venue.status_confirm_polls | «Настройки» → «Площадки» |
+| 2026-11-03 | Без лишних запросов на пути сделки (решение 113): баланс одной монеты (`Venue::balance`), справочник одной монеты (`Venue::coin_networks_of`, BingX `config/getall?coin=`), все балансы кошелька одним eth_call Multicall3, сверка без второго запроса балансов | src/gateway/contract.rs, src/venues/bsc_dex/wallet/balances.rs, src/venues/bsc_dex/wallet/balances_mc.rs, src/venues/bsc_dex/venue.rs, src/venues/bingx/wallet.rs, src/venues/bingx/mod.rs, src/core/precheck.rs, src/core/limits.rs, src/core/manual_halted.rs, src/core/reconcile.rs | dex.multicall3, dex.load_batch [bsc_dex] (уже есть) | «Журнал» (время шагов предпроверки) |

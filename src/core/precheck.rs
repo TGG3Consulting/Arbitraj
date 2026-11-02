@@ -111,23 +111,81 @@ pub fn gas_need(costs: &[CostLine], stages: &[&str]) -> Decimal {
 }
 
 /// Предпроверка. Возвращает: свежий расчёт для сделки. Ошибки: текст причины отказа.
+/// Решение 111: время каждого шага (справочник сетей биржи, баланс BNB, пересчёт с финальной котировкой) — в текст
+/// отказа и в журнал при успехе: 02.11 у RVV между кандидатом и отказом прошло 16 с, а на что — по журналу не видно.
 pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
+    let mut t = Timing::default();
+    let res = steps(core, d, &mut t).await;
+    if res.is_ok() {
+        core.inner
+            .deps
+            .log(
+                crate::storage::journal::Level::Info,
+                "core.precheck",
+                Some(&d.buy_on.0),
+                format!(
+                    "{} {} → {}: предпроверка пройдена ({})",
+                    d.asset.ticker,
+                    d.buy_on.0,
+                    d.sell_on.0,
+                    t.text()
+                ),
+                None,
+            )
+            .await
+    }
+    res.map_err(|e| format!("{e} ({})", t.text()))
+}
+
+/// Время шагов предпроверки: (что, мс).
+#[derive(Default)]
+struct Timing(Vec<(String, u128)>);
+
+impl Timing {
+    /// Запоминает шаг. Принимает: название, момент начала. Ошибок нет.
+    fn mark(&mut self, what: String, from: std::time::Instant) {
+        self.0.push((what, from.elapsed().as_millis()));
+    }
+
+    /// «время: справочник сетей bingx 820 мс, пересчёт 14100 мс». Ошибок нет.
+    fn text(&self) -> String {
+        let parts: Vec<String> = self
+            .0
+            .iter()
+            .map(|(w, ms)| format!("{w} {ms} мс"))
+            .collect();
+        format!("время: {}", parts.join(", "))
+    }
+}
+
+/// Шаги предпроверки с замером времени. Ошибки: текст причины отказа.
+async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, String> {
+    use std::time::Instant;
     super::risk::can_open(core, d)?;
     for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
         match super::trade_ops::kind(core, v)? {
             VenueKind::Cex => {
-                transfer_open(core, v, d, withdraw).await?;
+                let at = Instant::now();
+                let r = transfer_open(core, v, d, withdraw).await;
+                t.mark(format!("справочник сетей {}", v.0), at);
+                r?;
                 pair_side(core, v, d, withdraw)?;
             }
             VenueKind::Dex => {
-                if let Err(e) = bnb_ok(core, v, Decimal::ZERO).await {
+                let at = Instant::now();
+                let r = bnb_ok(core, v, Decimal::ZERO).await;
+                t.mark(format!("баланс BNB {}", v.0), at);
+                if let Err(e) = r {
                     core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
                     return Err(e);
                 }
             }
         }
     }
-    let c = match replan(core, d).await {
+    let at = Instant::now();
+    let verdict = replan(core, d).await;
+    t.mark("пересчёт с финальной котировкой".into(), at);
+    let c = match verdict {
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
     };
@@ -140,7 +198,10 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
         if super::trade_ops::kind(core, v)? != VenueKind::Dex {
             continue;
         }
-        if let Err(e) = bnb_ok(core, v, gas_need(&c.costs, &stages)).await {
+        let at = Instant::now();
+        let r = bnb_ok(core, v, gas_need(&c.costs, &stages)).await;
+        t.mark(format!("газ BNB {}", v.0), at);
+        if let Err(e) = r {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
             return Err(e);
         }

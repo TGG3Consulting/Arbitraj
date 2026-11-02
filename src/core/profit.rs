@@ -8,8 +8,8 @@
 //! От чего зависит: costs.rs, dirctx.rs, limits.rs, size_curve.rs, size_search.rs, market_state.rs, settings.
 //! Решение 95: найденный оптимум пересчитывается ФИНАЛЬНОЙ котировкой (gateway/quote_stage.rs) — у DEX при
 //! exec.via_kyber это цена KyberSwap (тот, кто исполнит); пороги проверяются по ней. Отказ финальной котировки —
-//! отказ кандидата с причиной.
-//! Настройки: money.min_profit_usd, money.min_profit_pct, size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
+//! отказ кандидата с причиной. Решение 111: исполнитель даёт маршрут не на весь объём — пересчёт на исполнимый объём.
+//! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -86,6 +86,21 @@ pub async fn decide_capped(
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
+    // Решение 111: фильтр финальной котировки (kyber.final_gate_usd). У направления с DEX финальная котировка — запрос
+    // к KyberSwap (лимит запросов); своя математика заведомо минусовая — не тратим запрос. 0 или не задано — без
+    // фильтра, финальная котировка у каждого кандидата, как раньше (решение 95).
+    if let Some(gate) = final_gate(core, d)
+        && choice.profit < gate
+    {
+        return reject(
+            format!(
+                "своя математика {} USDT ниже фильтра финальной котировки kyber.final_gate_usd {gate} ({})",
+                choice.profit.round_dp(4),
+                choice.why
+            ),
+            Some(found.best.data),
+        );
+    }
     // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
     // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
     let mut c = match final_calc(core, &cx, choice.qty, budget, p.step).await {
@@ -100,7 +115,7 @@ pub async fn decide_capped(
     // Финальная цена хуже — объём мог быть ужат до бюджета (final_calc): объём сделки — фактический.
     if c.qty != choice.qty {
         choice.why = format!(
-            "{}; по финальной котировке объём ужат до бюджета: {} {}",
+            "{}; по финальной котировке объём ужат (бюджет или глубина исполнителя): {} {}",
             choice.why,
             c.qty.normalize(),
             d.asset.ticker
@@ -145,7 +160,27 @@ async fn final_calc(
 ) -> Result<Calc, String> {
     let eval =
         |q: Decimal| crate::gateway::quote_stage::final_scope(super::costs::evaluate(core, cx, q));
-    let c = eval(qty).await.map_err(|f| f.to_string())?;
+    // Решение 111: исполнитель (KyberSwap) даёт маршрут не на весь объём — пересчёт на то, что он реально исполнит
+    // (вниз до шага), а не отказ. Живой случай 02.11: RVV — 359317.97 из 360732.6 (99.6%), прибыль почти та же,
+    // а кандидат отброшен. Пороги прибыли проверяются как обычно — уже на меньшем объёме.
+    let (c, qty) = match eval(qty).await {
+        Ok(c) => (c, qty),
+        Err(super::size::Fail::TooLarge(t)) => {
+            let fill = final_fillable(core, cx, qty)
+                .await
+                .map_err(|e| format!("{t}; {e}"))?;
+            let q = if step > Decimal::ZERO {
+                (fill / step).floor() * step
+            } else {
+                fill
+            };
+            if q <= Decimal::ZERO || q >= qty {
+                return Err(t);
+            }
+            (eval(q).await.map_err(|f| f.to_string())?, q)
+        }
+        Err(f) => return Err(f.to_string()),
+    };
     if c.spend_max <= budget {
         return Ok(c);
     }
@@ -167,6 +202,42 @@ async fn final_calc(
         return Err(over(&c2));
     }
     Ok(c2)
+}
+
+/// Порог фильтра финальной котировки (kyber.final_gate_usd), если в направлении есть DEX. None — 0, не задан или DEX
+/// нет. Ошибок нет.
+fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
+    let dex = rd(&core.inner.kinds).iter().any(|(v, k)| {
+        (v == &d.buy_on || v == &d.sell_on) && *k == crate::gateway::contract::VenueKind::Dex
+    });
+    if !dex {
+        return None;
+    }
+    core.inner
+        .deps
+        .settings
+        .decimal("kyber.final_gate_usd", At::default())
+        .ok()
+        .filter(|g| !g.is_zero())
+}
+
+/// Сколько исполнитель реально исполнит на обеих сторонах (финальная котировка; меньшее из двух). Решение 111.
+/// Ошибки: текст — площадка не подключена, котировка не получена.
+async fn final_fillable(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Decimal, String> {
+    let d = &cx.dir;
+    let gw = &core.inner.deps.gw;
+    let a = gw.get(&d.buy_on).await.map_err(|e| e.message)?;
+    let b = gw.get(&d.sell_on).await.map_err(|e| e.message)?;
+    let (qa, qb) = crate::gateway::quote_stage::final_scope(async {
+        tokio::join!(
+            a.quote(&d.asset, Side::Buy, qty),
+            b.quote(&d.asset, Side::Sell, qty)
+        )
+    })
+    .await;
+    let qa = qa.map_err(|e| format!("{}: {}", d.buy_on.0, e.message))?;
+    let qb = qb.map_err(|e| format!("{}: {}", d.sell_on.0, e.message))?;
+    Ok(qa.fillable_qty.min(qb.fillable_qty))
 }
 
 /// Почему объём лучший — текст для журнала и «Кандидатов». Принимает: итог подбора, тикер. Ошибок нет.

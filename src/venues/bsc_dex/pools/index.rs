@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/index.rs
 //! Что делает: пулы из справочника индексатора → пулы подписки (решение 58). По каждому пулу с USDT или промежуточной
-//! монетой (и пулу из события создания): DEX индексатора — по таблице сопоставления (families::classify: не подключена —
+//! монетой (и пулу из события создания, и пулу, найденному фабрикой на своём узле — factory_scan.rs, решение 121): DEX индексатора — по таблице сопоставления (families::classify: не подключена —
 //! причина на экране), затем проверка на своём узле (verify.rs) — всех пулов с прочитанных страниц: ликвидность
 //! индексатора ни в каком решении не участвует, мелкие пулы отсекает своя мера dex.min_pool_liquidity_usd в подписке.
 //! Прошедшие — во «взятые» (их слушает подписка); не прошедшие — причина в справочнике и один раз в журнал; сбой узла —
@@ -23,10 +23,10 @@ use crate::storage::journal::Level;
 use super::super::ctx::Ctx;
 use super::super::directory::refresh;
 use super::discover::{Found, against};
-use super::families;
 use super::mids::Mid;
 use super::order;
 use super::verify::{self, Candidate, Verdict};
+use super::{factory_scan, families};
 
 /// Итог проверки: взятые пулы (запрошенных монет) и сколько не проверено из-за узла.
 pub struct Took {
@@ -34,14 +34,15 @@ pub struct Took {
     pub failed: usize,
 }
 
-/// Справочник для подписки: встречные токены (USDT и промежуточные), старт и задача обновления
-/// (directory/refresh.rs). Возвращает: (задача обновления, приёмник «монета обновлена» для index_watch). Ошибок нет.
+/// Справочник для подписки: встречные токены (USDT и промежуточные), старт, задача обновления от индексатора
+/// (directory/refresh.rs) и задача поиска по фабрикам на своём узле (factory_scan.rs, решение 121, C3) — обе шлют
+/// в один канал «монета обновлена». Возвращает: (задачи, приёмник «монета обновлена» для index_watch). Ошибок нет.
 pub async fn begin(
     ctx: &Ctx,
     all: &HashMap<Address, String>,
     usdt: Address,
     mids: &[Mid],
-) -> (JoinHandle<()>, UnboundedReceiver<Address>) {
+) -> (Vec<JoinHandle<()>>, UnboundedReceiver<Address>) {
     let quotes: HashSet<Address> = std::iter::once(usdt)
         .chain(mids.iter().map(|m| m.address))
         .collect();
@@ -61,8 +62,9 @@ pub async fn begin(
         ctx.log(Level::Warn, "dex.index", msg, None).await;
     }
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let scan = factory_scan::run(ctx.clone(), all.clone(), quotes.clone(), tx.clone());
     let task = tokio::spawn(refresh::run(ctx.clone(), all.clone(), quotes, Some(tx)));
-    (task, rx)
+    (vec![task, tokio::spawn(scan)], rx)
 }
 
 /// Проверяет пулы справочника (монеты `only` или все) и обновляет итог по каждому.

@@ -28,7 +28,9 @@ pub use control::{
 };
 pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
 pub use dex_cycle::{DexCycle, DexCycleHop};
-pub use directory::{DirectoryPool, DirectoryStatus, DirectoryToken, IndexerDex, PoolDirectory};
+pub use directory::{
+    DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, IndexerDex, PoolDirectory,
+};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState};
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};

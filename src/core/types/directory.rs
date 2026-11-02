@@ -68,6 +68,31 @@ pub struct DirectoryToken {
     pub total: usize,
     /// Последняя ошибка запроса; None — последний запрос удался.
     pub error: Option<String>,
+    /// Не ошибка, а сведение (решение 121, C2): индексатор ответил 404 по монете — «индексатор не знает пулов
+    /// монеты», пулы — из других источников (события создания, поиск по фабрикам). None — сведения нет.
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Поиск пулов по фабрикам на своём узле (решение 121, C3) — итог последнего прохода для интерфейса.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FactoryScan {
+    /// Включён ли поиск (index.factory_scan [bsc_dex]; не задана — выключен).
+    pub enabled: bool,
+    /// Когда закончен последний проход. None — ещё не было.
+    pub at: Option<DateTime<Utc>>,
+    /// Сколько вызовов getPair / getPool отправлено (пачками Multicall3 по dex.load_batch).
+    pub calls: usize,
+    /// Сколько пулов нашли фабрики (ненулевой адрес) — все, до проверки на своём узле.
+    pub found: usize,
+    /// Из найденных — взяты после проверки на своём узле (как пулы индексатора).
+    pub taken: usize,
+    /// Вызовов без ответа узла (сбой части пачки) — эти пары в проходе не проверены.
+    pub failed: usize,
+    /// По DEX: что искалось и почему что-то не искалось («не задана dex.v3_fee_tiers — V3 по фабрике не ищется»).
+    pub notes: Vec<String>,
+    /// Почему проход не выполнен (не задана настройка, узел); None — выполнен или выключен.
+    pub error: Option<String>,
 }
 
 /// Справочник пулов целиком — для интерфейса.
@@ -88,4 +113,7 @@ pub struct PoolDirectory {
     pub pools: Vec<DirectoryPool>,
     /// Почему справочник не обновляется (не задана настройка, нет связи); None — обновляется.
     pub error: Option<String>,
+    /// Поиск пулов по фабрикам на своём узле (решение 121, C3) — второй источник справочника рядом с индексатором.
+    #[serde(default)]
+    pub factory: FactoryScan,
 }

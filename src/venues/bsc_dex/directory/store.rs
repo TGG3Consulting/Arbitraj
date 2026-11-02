@@ -31,6 +31,9 @@ struct TokenRow {
     fetched_at: DateTime<Utc>,
     pages: u32,
     pools: Vec<IndexedPool>,
+    /// «Индексатор не знает пулов монеты» (404, решение 121, C2); старые записи — без поля.
+    #[serde(default)]
+    note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +60,7 @@ pub async fn save_token(ctx: &Ctx, net: &str, token: Address, t: &TokenEntry) ->
         fetched_at: at,
         pages: t.pages,
         pools: t.pools.clone(),
+        note: t.note.clone(),
     };
     let body = serde_json::to_string(&row).map_err(|e| internal(ctx, e))?;
     venue_state::save(
@@ -96,6 +100,7 @@ pub async fn load_tokens(ctx: &Ctx, net: &str) -> GatewayResult<Vec<(Address, To
                 pages: r.pages,
                 pools: r.pools,
                 error: None,
+                note: r.note,
             };
             out.push((addr, e));
         }

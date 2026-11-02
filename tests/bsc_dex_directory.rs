@@ -74,7 +74,7 @@ fn dexes_two_pages_and_page_end() {
     assert_eq!(s3, 400);
     match answer(s3, 3, &b3, "/networks/bsc/dexes?page=3").unwrap() {
         Got::PageEnd(t) => assert_eq!(t, "expected :page in 1..2; got 3"),
-        Got::Body(_) => panic!("400 — не тело"),
+        Got::Body(_) | Got::NotFound(_) => panic!("400 — не тело и не 404"),
     }
     // На первой странице 400 — ошибка с текстом индексатора.
     let e = answer(400, 1, &b3, "/x").unwrap_err();
@@ -104,6 +104,8 @@ fn http_codes() {
         ErrorCode::Unreachable
     );
     assert!(matches!(answer(200, 1, "{}", "/x").unwrap(), Got::Body(_)));
+    // Решение 121 (C2): 404 — отдельный исход «не знает», не ошибка (смысл решает вызывающий по пути).
+    assert!(matches!(answer(404, 1, "", "/x").unwrap(), Got::NotFound(t) if t.is_empty()));
 }
 
 #[test]

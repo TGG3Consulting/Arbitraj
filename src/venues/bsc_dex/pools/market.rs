@@ -76,8 +76,9 @@ pub async fn subscribe(
     p.mids.set(mid_list.clone());
     let all = market_mids::with_mids(&coins, &mid_list);
     // Справочник пулов от индексатора (решение 58): сохранённый — проверка на узле до первого поиска, обновления — задачей.
+    // Поиск по фабрикам на своём узле (решение 121, C3) — вторая задача справочника, тот же канал «монета обновлена».
     let (refresh, dir_rx) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
-    tasks.push(refresh);
+    tasks.extend(refresh);
     let mut found = discover::find_all(&p.ctx, &all, usdt);
     let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list);
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();

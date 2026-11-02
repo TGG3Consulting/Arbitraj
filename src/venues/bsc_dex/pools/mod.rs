@@ -39,6 +39,8 @@ pub mod events_elastic;
 pub mod events_solidly;
 pub mod events_v2;
 pub mod events_v3;
+pub mod factory_calls;
+pub mod factory_scan;
 pub mod families;
 pub mod graph;
 pub mod group;

@@ -1,12 +1,13 @@
 //! Файл: core/registry_sync.rs
 //! Что делает: держит справочник сетей биржи свежим (шаг 1 ТЗ): coin_networks через шлюз с частотой
-//! venue.status_poll_ms (у BingX нет WebSocket для статусов ввода и вывода, решение 24), сразу —
+//! venue.networks_poll_ms (решение 109; не задана — venue.status_poll_ms, как раньше; у BingX нет WebSocket для
+//! статусов ввода и вывода, решение 24), сразу —
 //! по «толчку» (аномальный спред, ошибка вывода или депозита). Замечает, что у монеты открылся
 //! или закрылся ввод или вывод, и уведомляет (событие venue.transfer_status): по монете или одной сводкой
 //! при массовой смене (transfer_status.rs).
 //! Кто вызывает: core/engine.rs — одна задача на каждую биржу.
 //! От чего зависит: engine.rs, wait.rs, gateway (coin_networks), settings.
-//! Настройки: venue.enabled, venue.status_poll_ms, venue.status_bulk_min (по площадке); сопоставление нативной
+//! Настройки: venue.enabled, venue.networks_poll_ms, venue.status_poll_ms, venue.status_bulk_min (по площадке); сопоставление нативной
 //! монеты с обёрткой (решение 62) — native.rs.
 
 use std::collections::HashMap;
@@ -38,6 +39,9 @@ pub fn enabled(core: &Core, venue: &VenueId) -> bool {
 /// сбой пишется в журнал (повтор той же ошибки — один раз), старый справочник остаётся.
 pub async fn run(core: Core, venue: VenueId) {
     let deps = core.inner.deps.clone();
+    // Решение 109: справочник сетей MEXC (config/getall) — ~5.6 МБ на ответ; опрос с частотой опроса статусов переводов
+    // (2 с) качал и разбирал его 30 раз в минуту и каждый раз пересобирал справочник монет. Своя частота — отдельно.
+    let mut own = Pacer::new("venue.networks_poll_ms", Unit::Ms, Some(venue.0.clone()));
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(venue.0.clone()));
     let mut last_err: Option<String> = None;
     loop {
@@ -69,7 +73,15 @@ pub async fn run(core: Core, venue: VenueId) {
                 Err(_) => {}
             }
         }
-        pacer.pause(&deps, &core.inner.kick_networks).await;
+        let at = At {
+            venue: Some(&venue.0),
+            coin: None,
+        };
+        if deps.settings.integer("venue.networks_poll_ms", at).is_ok() {
+            own.pause(&deps, &core.inner.kick_networks).await;
+        } else {
+            pacer.pause(&deps, &core.inner.kick_networks).await;
+        }
     }
 }
 

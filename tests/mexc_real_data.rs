@@ -41,3 +41,19 @@ fn exchange_info_parse() {
     // ATOM нет в selfSymbols ключа — через API не торгуется.
     assert!(!map["ATOM"].tradable(true) && !map["ATOM"].tradable(false));
 }
+
+/// Живой config/getall 2026-11-02 (журнал venue.networks): MEME20/BSC — withdrawFee "0", withdrawMin "1",
+/// withdrawMax "99999999999999999999999999999999". Сеть не пропускается, предел вывода — Decimal::MAX.
+#[test]
+fn withdraw_max_beyond_decimal() {
+    use arb::venues::mexc::wallet;
+    let n: Value = serde_json::json!({
+        "withdrawFee": "0", "withdrawMin": "1", "withdrawMax": "99999999999999999999999999999999"
+    });
+    assert_eq!(
+        wallet::max_limit(&n, "withdrawMax").unwrap(),
+        Some(Decimal::MAX)
+    );
+    let bad: Value = serde_json::json!({ "withdrawMax": "abc" });
+    assert!(wallet::max_limit(&bad, "withdrawMax").is_err());
+}

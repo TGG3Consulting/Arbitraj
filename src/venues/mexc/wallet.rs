@@ -37,6 +37,9 @@ use super::{num, rest};
 #[derive(Clone, Default)]
 pub struct Networks {
     names: Arc<RwLock<HashMap<(String, String), String>>>,
+    /// Последний записанный в журнал список пропущенных сетей — пишем только при изменении (иначе запись на каждом
+    /// обновлении справочника).
+    skipped: Arc<RwLock<String>>,
 }
 
 impl Networks {
@@ -68,7 +71,14 @@ pub async fn coin_networks(
     .await?;
     let (list, names, skipped) = parse_networks(&data, &bsc, &ctx.venue(), min_ok, symbols)?;
     *nets.names.write().unwrap_or_else(|p| p.into_inner()) = names;
-    if !skipped.is_empty() {
+    let joined = skipped.join("; ");
+    let changed = {
+        let mut last = nets.skipped.write().unwrap_or_else(|p| p.into_inner());
+        let c = *last != joined;
+        *last = joined;
+        c
+    };
+    if changed && !skipped.is_empty() {
         // Сеть с неразборчивым полем не попадает в справочник (по ней нет сделок), остальные — работают.
         let msg = format!(
             "config/getall: пропущено сетей с неразборчивыми полями: {} — {}",
@@ -141,7 +151,7 @@ pub fn parse_networks(
                     withdraw_enabled: flag(n, "withdrawEnable", &ticker)?,
                     withdraw_fee: num::dec_opt(n, "withdrawFee")?,
                     withdraw_min: num::dec_opt(n, "withdrawMin")?,
-                    withdraw_max: num::dec_opt(n, "withdrawMax")?,
+                    withdraw_max: max_limit(n, "withdrawMax")?,
                     // Решение 107: в API MEXC минимального депозита нет. Пока Тигран не включил
                     // venue.deposit_min_absent_ok [mexc] — None, и ядро сделку на MEXC не делает (решение 35).
                     deposit_min: min_ok.then_some(Decimal::ZERO),
@@ -167,6 +177,25 @@ pub fn parse_networks(
         }
     }
     Ok((out, names, skipped))
+}
+
+/// Наибольшая сумма вывода. Живой ответ 2026-11-02: у 128 сетей withdrawMax = "99999999999999999999999999999999"
+/// (32 девятки — больше предела Decimal ≈ 7.9e28): целое длиннее предела читается как Decimal::MAX — сумма заведомо
+/// больше любой нашей. Иное нечисловое — ошибка (сеть пропускается). Ошибка BadResponse.
+pub fn max_limit(n: &Value, field: &str) -> GatewayResult<Option<Decimal>> {
+    match num::dec_opt(n, field) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            let raw = n.get(field).and_then(Value::as_str).unwrap_or_default();
+            let digits = raw.split('.').next().unwrap_or_default();
+            if !digits.is_empty() && digits.len() > 28 && digits.bytes().all(|b| b.is_ascii_digit())
+            {
+                Ok(Some(Decimal::MAX))
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 
 /// Флаг сети depositEnable / withdrawEnable — boolean. Иное — BadResponse (справочник целиком не обновляется).

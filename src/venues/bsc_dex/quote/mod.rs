@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/quote/mod.rs
 //! Что делает: котировка на объём для контракта quote — режим dex.swap_mode: «direct» (лучший одиночный пул или пара
-//! пулов через промежуточную монету, решения 29, 52 — quote/direct_route.rs) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
+//! пулов через промежуточную монету, решения 29, 52 — quote/classic_direct.rs → direct_route.rs; неисполнимые пулы —
+//! только сигнал, решение 121) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
 //! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
 //! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
 //! Нативная монета BNB (решение 62): газ обёртки — quote/native_gas.rs; у продажи BNB разрешений нет (approve_gas.rs).
@@ -11,6 +12,7 @@
 //! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
 
 pub mod approve_gas;
+pub mod classic_direct;
 pub mod costs;
 pub mod cycle;
 pub mod cycle_scan;
@@ -150,21 +152,9 @@ impl Quoting {
             smart_quote::quote(&v, &names, asset, qty, entries, &mids, gas).await?
         } else {
             // Форки из классического ПРЯМОГО пути исключаем (ревью #86): форк исполним ТОЛЬКО через graph→bundle
-            // (свой роутер), а прямой путь строит план Universal Router (plan::build, нужны UR/Permit2, которых у
-            // форка нет). Проба налога форка (probe.rs::part) теперь безусловна и делает форк-пул usable, поэтому без
-            // этого фильтра форк мог бы выиграть классическую котировку как RouteMode::Direct и упасть на plan::build.
-            // Умный путь уже отсекает форк (smart_ok); граф ведёт форк своим путём (не через этот keep). Не-форки — как прежде.
-            direct_route::quote(
-                &v,
-                &names,
-                asset,
-                qty,
-                entries,
-                &mids,
-                &|e| !e.family.fork,
-                gas,
-            )
-            .await?
+            // (свой роутер). Решение 121: так же — неисполнимые семейства (tradable = нет): они не выигрывают
+            // котировку как Direct, а видны только как signal_route (quote/classic_direct.rs).
+            classic_direct::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
         };
         // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
         // неизменно; «graph» — считаем маршрут по графу и выбираем котировку-на-сделку среди ИСПОЛНИМЫХ маршрутов

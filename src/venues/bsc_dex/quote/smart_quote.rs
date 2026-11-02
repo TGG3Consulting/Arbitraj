@@ -5,7 +5,7 @@
 //! (quote/direct_route.rs) — берётся больший итог (quote/pick.rs). Монета только с пулами других DEX торгуется
 //! напрямую; только с пулами умного роутера — умным маршрутом. Затраты умного маршрута — затраты его долей по шагам (quote/costs.rs).
 //! Кто вызывает: quote/mod.rs.
-//! От чего зависит: quote/smart.rs, quote/direct_route.rs, quote/costs.rs, quote/pick.rs, quote/via.rs, pools/families.rs.
+//! От чего зависит: quote/smart.rs, quote/classic_direct.rs (→ direct_route.rs), quote/costs.rs, quote/pick.rs, quote/via.rs, pools/families.rs.
 //! Настройки: через вызываемые — smart.*, dex.* (см. их шапки).
 
 use alloy_primitives::U256;
@@ -19,7 +19,7 @@ use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::steps::Names;
 use super::via::Via;
-use super::{costs, direct_route, pick, smart};
+use super::{classic_direct, costs, pick, smart};
 
 /// Котировка режима «smart». Принимает: расчёт путей, тикеры, монету, количество, пулы монеты с USDT, промежуточные
 /// с decimals, цену газа (wei). Ошибки: NotConfigured, CoinNotChecked, NoRoute (причины обоих путей), BadResponse.
@@ -48,7 +48,8 @@ pub async fn quote(
         )
     });
     let uni = |e: &Entry| !smart_ok(ctx, e.family);
-    let direct = direct_route::quote(v, names, asset, qty, entries, mids, &uni, gas).await;
+    // Решение 121: неисполнимые пулы (tradable = нет) на сделку не идут, только в signal_route (quote/classic_direct.rs).
+    let direct = classic_direct::quote(v, names, asset, qty, entries, mids, &uni, gas).await;
     match (smart, direct) {
         (Ok(a), Ok(b)) => Ok(pick::pick(v.q, a, b, v.side, v.usdt_dec).await),
         (Ok(a), Err(_)) | (Err(_), Ok(a)) => Ok(a),

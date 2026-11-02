@@ -5,6 +5,8 @@
 //! (family.graphable); (2) после флипа 80.9b форк-маршрут ИСПОЛНИМ (DexRoute.executable) и ведётся бандлом
 //! (GraphForm::Bundle), а без dex.bundle_max_routers или при включённом не-бандловом канале (решение 121 B3) —
 //! несобираем (сигнал); (3) не-форк исполним прямой формой (Direct);
+//! (4) решение 121: неисполнимый пул (Solidly, tradable = нет) не выигрывает классическую котировку как Direct, а
+//! виден как signal_route; только неисполнимый — NoRoute «только сигнал» (quote/classic_direct.rs);
 //! плюс флаги make()/classify() форка (graphable+tradable+fork; фабрика/роутер/комиссия нужны, UR/Permit2 — нет).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools::{families,graph,registry}, quote::{graph_route,steps,via}, parts},
@@ -478,4 +480,133 @@ async fn classic_route_executable_direct() {
         GraphForm::Direct,
         "классический одно-пуловый маршрут — прямая форма (UR)"
     );
+}
+
+/// Второй пул теста — неисполнимое семейство (Solidly, tradable = нет) рядом с исполнимым.
+const POOL2: Address = address!("0x00000000000000000000000000000000000000c3");
+
+/// Решение 121: окружение с исполнимым пулом PancakeSwap V2 (POOL) и неисполнимым Solidly-волатильным (POOL2) на тех
+/// же реальных резервах записи; у Solidly комиссия ниже (1/10000 против 0.25%) — его цена лучше. Ошибок нет.
+async fn scene_with_signal_only() -> Parts {
+    let p = scene("pancakeswap_v2", "pancakeswap_v2").await;
+    let (r0, r1) = real_v2_reserves(&p);
+    let s = Scope::Dex("topaz_v2".into());
+    for (n, v) in [
+        ("dex.kind", json!("solidly_v2")),
+        ("dex.pool_enabled", json!(true)),
+        (
+            "dex.factory",
+            json!("0x0000000000000000000000000000000000000098"),
+        ),
+    ] {
+        p.ctx
+            .settings
+            .set(n, s.clone(), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+    let mut e = coin_usdt("topaz_v2", "solidly_v2", r0, r1);
+    e.pool.reference = PoolRef::Contract(POOL2);
+    let unit = U256::from(10u64).pow(U256::from(18u64));
+    e.pool.state = PoolState::Solidly {
+        reserve0: r0,
+        reserve1: r1,
+        stable: false,
+        decimals0: unit,
+        decimals1: unit,
+        fee: 1,
+    };
+    p.registry.put(e);
+    p.checks.update_pool(&PoolRef::Contract(POOL2), |f| {
+        f.gas_buy = Some(120_000);
+        f.gas_sell = Some(120_000);
+        f.quoter.buy = Some(Ok(()));
+        f.quoter.sell = Some(Ok(()));
+    });
+    p
+}
+
+/// Классическая прямая котировка покупки COIN по пулам `entries` (quote/classic_direct.rs). Ошибок нет — итог как есть.
+async fn classic(
+    p: &Parts,
+    entries: Vec<Entry>,
+) -> arb::gateway::errors::GatewayResult<arb::core::types::Quote> {
+    let q = p.quoting();
+    let taxes = zero();
+    let v = Via {
+        q: &q,
+        coin: COIN,
+        usdt: USDT,
+        side: Side::Buy,
+        taxes: &taxes,
+        coin_dec: 18,
+        usdt_dec: 18,
+    };
+    let names = Names {
+        usdt: (USDT, "USDT"),
+        coin: (COIN, "COIN"),
+        mids: &p.mids,
+    };
+    let asset = Asset {
+        ticker: "COIN".into(),
+        bsc_contract: Some(COIN),
+    };
+    let gas = U256::from(2_000_000u64);
+    arb::venues::bsc_dex::quote::classic_direct::quote(
+        &v,
+        &names,
+        &asset,
+        Decimal::from(1000u32),
+        entries,
+        &[],
+        &|_| true,
+        gas,
+    )
+    .await
+}
+
+/// Решение 121: неисполнимый пул (tradable = нет) не выигрывает классическую котировку как Direct, даже если его цена
+/// лучше: маршрут сделки — исполнимый Pancake, а неисполнимый виден сигналу как signal_route (executable = нет).
+#[tokio::test]
+async fn signal_only_pool_not_direct_but_signal() {
+    let p = scene_with_signal_only().await;
+    let all = p.registry.by_pair(COIN, USDT);
+    assert_eq!(all.len(), 2, "оба пула в реестре");
+    let q = classic(&p, all).await.expect("исполнимая котировка есть");
+    let r = q.route.as_ref().expect("маршрут");
+    assert!(r.executable);
+    assert!(
+        r.legs[0]
+            .hops
+            .iter()
+            .all(|h| h.pool == PoolRef::Contract(POOL)),
+        "сделка — только по исполнимому пулу"
+    );
+    let sig = q
+        .signal_route
+        .as_ref()
+        .expect("неисполнимый лучший пул — сигнал");
+    assert!(!sig.executable);
+    assert!(
+        sig.legs[0]
+            .hops
+            .iter()
+            .any(|h| h.pool == PoolRef::Contract(POOL2))
+    );
+    assert!(sig.exec_note.as_deref().unwrap_or("").contains("topaz_v2"));
+}
+
+/// Решение 121: у монеты только неисполнимый пул — котировки на сделку нет (NoRoute), причина «только сигнал».
+#[tokio::test]
+async fn only_signal_pool_is_no_route() {
+    let p = scene_with_signal_only().await;
+    let only: Vec<Entry> = p
+        .registry
+        .by_pair(COIN, USDT)
+        .into_iter()
+        .filter(|e| e.pool.reference == PoolRef::Contract(POOL2))
+        .collect();
+    let err = classic(&p, only).await.expect_err("исполнимого пула нет");
+    assert_eq!(err.code, arb::gateway::errors::ErrorCode::NoRoute);
+    assert!(err.message.contains("только сигнал"), "{}", err.message);
 }

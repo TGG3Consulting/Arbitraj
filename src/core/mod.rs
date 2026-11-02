@@ -84,6 +84,7 @@ pub mod registry;
 pub mod registry_build;
 pub mod registry_sync;
 pub mod relay;
+pub mod relay_value;
 pub mod risk;
 pub mod rules_apply;
 pub mod sell;

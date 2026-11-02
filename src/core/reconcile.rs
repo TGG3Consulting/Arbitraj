@@ -7,6 +7,9 @@
 //! Решение 112 (reconcile_confirm.rs): учёт площадки снимается до и после запроса её балансов — монета, по которой
 //! сделка за это время сдвинулась, в круге не сверяется; расхождение по монете ставит паузу и уведомляет, только если
 //! держится ledger.reconcile_confirm_rounds кругов подряд.
+//! Решение 118 (Я-11): балансы одной площадки не получены (подтверждено теми же кругами) — пауза этой площадки
+//! (venue_paused), а не системы; системная пауза — только при расхождении монет по учёту. Я-21: «вложено по монетам»
+//! на «Балансах» — по «тикер (адрес коротко)».
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs, reconcile_confirm.rs.
 //! Настройки: ledger.reconcile_interval_s, ledger.reconcile_confirm_rounds, alert.min_usdt (через low_usdt.rs),
@@ -62,7 +65,15 @@ pub async fn run(core: Core) {
             .into_iter()
             .filter(|f| f.3.as_ref().is_none_or(|k| confirmed.contains(k)))
             .collect();
-        if found.iter().any(|f| f.0 == "risk.reconcile_mismatch")
+        // Решение 118 (Я-11): балансы площадки не получены — пауза этой площадки, а не всей системы.
+        for (_, venue, text, _) in found.iter().filter(|f| is_unavailable(f)) {
+            if let Some(v) = venue {
+                pause_venue(&core, VenueId(v.clone()), text);
+            }
+        }
+        if found
+            .iter()
+            .any(|f| f.0 == "risk.reconcile_mismatch" && !is_unavailable(f))
             && risk::snapshot(&core).mode == Mode::Running
         {
             risk::set_mode(
@@ -81,6 +92,28 @@ pub async fn run(core: Core) {
             }
         }
         active.retain(|k| found.iter().any(|(c, _, t, _)| &format!("{c}{t}") == k));
+    }
+}
+
+/// Окончание ключа проблемы «балансы площадки не получены» (решение 118, Я-11).
+const UNAVAILABLE: &str = "/балансы";
+
+/// Проблема — «балансы площадки не получены» (пауза площадки, не системы). Ошибок нет.
+fn is_unavailable(f: &Found) -> bool {
+    f.3.as_deref().is_some_and(|k| k.ends_with(UNAVAILABLE))
+}
+
+/// Ставит площадку на паузу (risk.venue_paused), если она ещё не на паузе; снятие — кнопкой «Снять паузу», как у
+/// паузы после ошибок подряд. Принимает: площадку, причину. Ошибок нет.
+fn pause_venue(core: &Core, v: VenueId, why: &str) {
+    let fresh = {
+        let mut r = lk(&core.inner.risk);
+        let fresh = !r.venue_paused.contains_key(&v);
+        r.venue_paused.entry(v).or_insert_with(|| why.to_string());
+        fresh
+    };
+    if fresh {
+        risk::publish(core);
     }
 }
 
@@ -115,7 +148,7 @@ async fn once(core: &Core) -> Vec<Found> {
                     "risk.reconcile_mismatch",
                     Some(v.0.clone()),
                     format!("{}: балансы не получены — {}", v.0, e.message),
-                    Some(format!("{}/балансы", v.0)),
+                    Some(format!("{}{UNAVAILABLE}", v.0)),
                 ));
                 continue;
             }
@@ -171,7 +204,15 @@ async fn once(core: &Core) -> Vec<Found> {
         }
     }
     let ex = lk(&core.inner.exposure).clone();
-    core.inner.live.send(CoreEvent::Balances(json!({ "venues": all, "in_transit_usd": ex.in_transit, "per_coin_usd": ex.per_coin.iter().map(|(a, v)| (a.ticker.clone(), *v)).collect::<HashMap<_, _>>() })));
+    // Решение 118 (Я-21): вложено по монетам — ключ «тикер (адрес коротко)»: монеты с одним тикером не склеиваются.
+    let per_coin: HashMap<String, Decimal> = ex
+        .per_coin
+        .iter()
+        .map(|(a, v)| (super::coin_key::label(a), *v))
+        .collect();
+    core.inner.live.send(CoreEvent::Balances(
+        json!({ "venues": all, "in_transit_usd": ex.in_transit, "per_coin_usd": per_coin }),
+    ));
     super::usdt_return::separate(core, &free_usdt).await;
     out
 }

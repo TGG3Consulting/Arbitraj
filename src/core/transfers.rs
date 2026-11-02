@@ -47,14 +47,12 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
             .find(|p| &p.venue == venue)
             .and_then(|p| p.network.clone())
     });
-    let other = entry.and_then(|e| e.presence.iter().find_map(|p| p.network.clone()));
     // Решение 108: у каждой площадки своё название сети BSC (BingX и DEX — BEP20, MEXC — BSC). Своё — раньше
     // чужого: иначе DEX получал от MEXC «BSC» и отказывал («Кошелёк DEX работает только в сети BEP20»).
+    // Решение 118 (Я-19): только своё название площадки — название сети другой площадки не годится (BingX «BEP20»,
+    // MEXC «BSC»). Нет своего — ошибка: задайте venue.bsc_network площадки.
     own.or(any)
         .or_else(|| own_bsc_name(core, venue))
-        .or(other)
-        // Решение 118 (Я-19): запасного «любое название сети любой биржи» нет — перебор HashMap давал BEP20 или BSC
-        // случайно. Нет своего названия — ошибка: задайте venue.bsc_network площадки.
         .ok_or_else(|| {
             format!(
                 "{}: нет сети BSC для {} — задайте venue.bsc_network площадки",

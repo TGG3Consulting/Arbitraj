@@ -33,6 +33,10 @@ pub struct CoinNetworkInfo {
     /// живом ответе config/getall 2026-10-24 — вопрос Тиграну, решение 66). Сумма вывода округляется вниз. None — нет.
     #[serde(default)]
     pub withdraw_precision: Option<u32>,
+    /// Шаг суммы вывода (у MEXC — withdrawIntegerMultiple, решение 118, А-🟠7): сумма вывода — вниз до кратного.
+    /// None — площадка шага не сообщает (или его смысл не подтверждён).
+    #[serde(default)]
+    pub withdraw_step: Option<Decimal>,
     pub updated_at: DateTime<Utc>,
 }
 

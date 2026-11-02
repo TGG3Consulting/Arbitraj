@@ -20,6 +20,29 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .get(holding_id)
         .cloned()
         .ok_or(format!("записи {holding_id} нет"))?;
+    // Решение 118 (Я-2): по монете одна сделка — идёт другая, возврат подождёт (монеты остаются у человека).
+    let key = super::coin_key::CoinKey::of(&h.asset);
+    if !lk(&core.inner.active).insert(key.clone()) {
+        return Err(format!(
+            "по {} сейчас идёт другая сделка — «Вернуть боту» после её окончания",
+            h.asset.ticker
+        ));
+    }
+    let r = return_locked(core, holding_id, h, old).await;
+    if r.is_err() {
+        lk(&core.inner.active).remove(&key);
+    }
+    r
+}
+
+/// «Вернуть боту» под замком монеты: замок снимается, когда продажа закончится (или при ошибке — вызывающим).
+async fn return_locked(
+    core: &Core,
+    holding_id: &str,
+    h: ManualHolding,
+    old: Deal,
+) -> Result<String, String> {
+    let key = super::coin_key::CoinKey::of(&h.asset);
     // Реальный свободный баланс (BNB на DEX — сверх резерва и газа продажи, решение 62) — manual_halted::on_hand.
     let (qty, gas_note) = super::manual_halted::on_hand(core, &h.venue, &h.asset, h.qty).await?;
     let share = if h.qty.is_zero() {
@@ -58,7 +81,10 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .notify("manual.returned", Some(&h.venue.0), &text)
         .await;
     let c = core.clone();
-    tokio::spawn(async move { super::sell::sell_or_stuck(&c, deal).await });
+    tokio::spawn(async move {
+        super::sell::sell_or_stuck(&c, deal).await;
+        lk(&c.inner.active).remove(&key);
+    });
     Ok(text)
 }
 

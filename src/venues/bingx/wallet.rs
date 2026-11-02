@@ -1,5 +1,5 @@
 //! Файл: venues/bingx/wallet.rs
-//! Что делает: справочник монет и сетей BingX и адрес депозита.
+//! Что делает: справочник монет и сетей BingX и стоимость вывода (адрес депозита — deposit_addr.rs).
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, core/types.
 //! Настройки: venue.bsc_network.
@@ -9,7 +9,6 @@
 //!   withdrawFee, withdrawMin, withdrawMax, minConfirm, depositMin (только в официальном примере ответа,
 //!   в таблице полей его нет), contractAddress (поле есть в api-ai-skills от
 //!   2026-10-22; в примере docs-v3 его нет — проверяется на реальном ответе).
-//! - GET /openApi/wallets/v1/capital/deposit/address — data.data[]: coin, network, address, tag, status.
 
 use chrono::Utc;
 use reqwest::Method;
@@ -101,6 +100,8 @@ pub fn parse_networks(
                     .get("withdrawPrecision")
                     .and_then(serde_json::Value::as_u64)
                     .and_then(|p| u32::try_from(p).ok()),
+                // Шага суммы вывода в docs-v3 BingX нет (решение 118, А-🟠7 — только MEXC).
+                withdraw_step: None,
                 updated_at: Utc::now(),
             });
         }
@@ -163,32 +164,4 @@ pub async fn withdraw_cost(
         asset.ticker.clone(),
         false,
     )])
-}
-
-/// Адрес депозита монеты в сети. Ошибки: сети нет у монеты, связь.
-pub async fn deposit_address(ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<String> {
-    let data = rest::signed(
-        ctx,
-        Method::GET,
-        "/openApi/wallets/v1/capital/deposit/address",
-        vec![("coin", asset.ticker.clone())],
-        Op::Other,
-    )
-    .await?;
-    let list = num::arr(&data, "data")?;
-    let found = list
-        .iter()
-        // status по docs-v3: 0 — адрес активирован, 1 — запрошен, 2 — не запрошен. Нет поля — как в примере docs-v3.
-        .find(|a| {
-            num::text_opt(a, "network").as_deref() == Some(network)
-                && num::text_opt(a, "status").is_none_or(|s| s == "0")
-        });
-    let found = found.ok_or_else(|| {
-        ctx.tag(GatewayError::new(
-            ErrorCode::InvalidAddress,
-            None,
-            format!("У {} нет адреса депозита в сети {network}", asset.ticker),
-        ))
-    })?;
-    num::text(found, "address")
 }

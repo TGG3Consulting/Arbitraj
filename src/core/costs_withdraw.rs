@@ -3,8 +3,8 @@
 //! вывода из справочника сетей ядра (core.inner.networks — его держит свежим registry_sync.rs; Presence.info у A,
 //! DirCtx.usdt_b у B): в расчёте нет ни одного запроса к бирже (решение 66 — подбор объёма считает десятки объёмов,
 //! а config/getall BingX подписанный и с лимитом). У DEX — через шлюз (газ перевода из кошелька, налог перевода).
-//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision). Вывод биржи — ещё и налог перевода токена
-//! (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
+//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision) и до кратного шагу вывода (withdraw_step, решение
+//! 119). Вывод биржи — ещё и налог перевода токена (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
 //! Кто вызывает: core/costs.rs.
 //! От чего зависит: dirctx.rs, deps.rs (шлюз), size.rs (Fail), core/types.
 //! Настройки: нет.
@@ -17,11 +17,16 @@ use super::deps::Deps;
 use super::dirctx::DirCtx;
 use super::size::Fail;
 
-/// Сумма вывода с A вниз до точности вывода биржи (у DEX и без точности — без изменений). Ошибок нет.
+/// Сумма вывода с A вниз до точности вывода биржи и до кратного шагу вывода (withdraw_step, решение 118, А-🟠7;
+/// у DEX и без точности и шага — без изменений). Ошибок нет.
 pub fn floor_precision(qty: Decimal, info: Option<&CoinNetworkInfo>) -> Decimal {
-    match info.and_then(|i| i.withdraw_precision) {
+    let qty = match info.and_then(|i| i.withdraw_precision) {
         Some(p) => qty.trunc_with_scale(p),
         None => qty,
+    };
+    match info.and_then(|i| i.withdraw_step) {
+        Some(step) if step > Decimal::ZERO => ((qty / step).trunc() * step).normalize(),
+        _ => qty,
     }
 }
 

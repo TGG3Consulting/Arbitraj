@@ -4,9 +4,9 @@
 //! Перед ордером — пробный ордер (POST /api/v3/order/test), если включено venue.order_test_first [mexc]: отказ пробного —
 //! настоящий не ставится (решение 107: шаги цены и количества MEXC — толкование целых precision).
 //! Кто вызывает: mod.rs (trade из контракта).
-//! От чего зависит: rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs.
-//! Настройки: venue.order_type [mexc] (тип ордера: IMMEDIATE_OR_CANCEL по документации), venue.order_test_first [mexc];
-//! ожидание итога — order_state.rs.
+//! От чего зависит: rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs, fills.rs.
+//! Настройки: venue.order_type [mexc] (должен быть в orderTypes пары), venue.order_test_first [mexc];
+//! ожидание итога — order_state.rs, venue.my_trades_limit — fills.rs (проверяются до отправки).
 //!
 //! Официальная документация:
 //! - POST /api/v3/order https://www.mexc.com/api-docs/spot-v3/spot-account-trade/new-order — symbol, side, type,
@@ -101,6 +101,22 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ));
     }
     let order_type = ctx.text("venue.order_type")?;
+    // Решение 118, А-🟡7: тип ордера — из orderTypes пары (exchangeInfo); нет в списке — ордер не ставится.
+    if let Some(types) = &rules.order_types
+        && !types.contains(&order_type)
+    {
+        return Err(reject(
+            ctx,
+            format!(
+                "{}: тип ордера {order_type} (venue.order_type) не в orderTypes пары ({})",
+                rules.symbol,
+                types.join(", ")
+            ),
+        ));
+    }
+    // Всё, что нужно после постановки (сроки ожидания, limit сделок), — проверяется до неё: после — поздно.
+    order_state::times(ctx)?;
+    super::fills::limit(ctx)?;
     // Решение 114: свой ID ордера — свой у каждой попытки. Раньше был «<сделка>_s» — повторная продажа той же сделки
     // («Продать сейчас», «Продать и перегнать», повтор режима застрявшей монеты) уходила с тем же ID и MEXC отвечал
     // «duplicate client order id» (сделка 20261102213149681XPL, 02.11). Метка попытки — миллисекунды (9 цифр) в начале,
@@ -125,7 +141,8 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ("price", price.normalize().to_string()),
         ("newClientOrderId", client_id.clone()),
     ];
-    // Пробный ордер: проверка параметров без исполнения. Отказ — OrderRejected, настоящий не ставится.
+    // Пробный ордер: проверка параметров без исполнения. Отказ — настоящий не ставится. Код ошибки сохраняется
+    // (RateLimited, Unreachable и др. — решение 118, А-🟡8); непонятный ответ MEXC на пробный — OrderRejected.
     if ctx.flag("venue.order_test_first")? {
         rest::signed(
             ctx,
@@ -136,18 +153,38 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         )
         .await
         .map_err(|e| {
-            reject(
-                ctx,
-                format!("{}: пробный ордер отклонён — {}", rules.symbol, e.message),
-            )
+            let code = match e.code {
+                ErrorCode::BadResponse => ErrorCode::OrderRejected,
+                c => c,
+            };
+            let msg = format!("{}: пробный ордер отклонён — {}", rules.symbol, e.message);
+            ctx.tag(GatewayError {
+                code,
+                message: msg,
+                ..e
+            })
         })?;
     }
     let placed = rest::signed(ctx, Method::POST, "/api/v3/order", params, Op::Trade).await;
+    // Решение 118, А-🟠3: HTTP успешен, а orderId нет — итог неизвестен (не обычный сбой: повтор дал бы второй ордер).
+    let placed = placed.and_then(|p| {
+        num::text_opt(&p, "orderId").ok_or_else(|| {
+            ctx.tag(GatewayError::new(
+                ErrorCode::OutcomeUnknown,
+                None,
+                format!(
+                    "{}: ордер принят без orderId в ответе — итог неизвестен",
+                    rules.symbol
+                ),
+            ))
+            .with_raw(p.to_string())
+        })
+    });
     let order_id = match placed {
-        Ok(p) => num::text(&p, "orderId")?,
-        // Итог неизвестен — поиск ордера по своему ID (origClientOrderId): нашли — доводим как обычно.
+        Ok(id) => id,
+        // Итог неизвестен — поиск по своему ID; не найден — отмена по нему и снова поиск (А-🟠4).
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
-            match order_state::find_by_client(ctx, &rules.symbol, &client_id).await {
+            match order_state::recover(ctx, &rules.symbol, &client_id).await {
                 Some(id) => id,
                 None => return Err(e),
             }
@@ -155,7 +192,7 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         Err(e) => return Err(e),
     };
     let state = order_state::settle(ctx, &rules.symbol, &order_id).await?;
-    order_state::result(ctx, &rules.symbol, req, &state, order_id).await
+    order_state::result(ctx, &rules.symbol, req, &state, order_id, qty).await
 }
 
 /// Округление до шага (шаг 0 — без округления).

@@ -23,9 +23,11 @@ use super::ctx::Ctx;
 use super::errors::Op;
 use super::{num, rest};
 
-/// Права, без которых бот не работает (имена из документации MEXC).
-const REQUIRED: [&str; 4] = [
+/// Права, без которых бот не работает (имена из документации MEXC). SPOT_DEAL_READ — запрос ордера GET /api/v3/order
+/// («Required permission: SPOT_DEAL_READ»): без него ордер ставится, а итог не читается (решение 118, А-🟠2).
+const REQUIRED: [&str; 5] = [
     "SPOT_ACCOUNT_READ",
+    "SPOT_DEAL_READ",
     "SPOT_DEAL_WRITE",
     "SPOT_WITHDRAW_READ",
     "SPOT_WITHDRAW_WRITE",

@@ -26,6 +26,7 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -65,13 +66,33 @@ pub async fn coin_networks(
         Op::Other,
     )
     .await?;
-    let (list, names) = parse_networks(&data, &bsc, &ctx.venue(), min_ok, symbols)?;
+    let (list, names, skipped) = parse_networks(&data, &bsc, &ctx.venue(), min_ok, symbols)?;
     *nets.names.write().unwrap_or_else(|p| p.into_inner()) = names;
+    if !skipped.is_empty() {
+        // Сеть с неразборчивым полем не попадает в справочник (по ней нет сделок), остальные — работают.
+        let msg = format!(
+            "config/getall: пропущено сетей с неразборчивыми полями: {} — {}",
+            skipped.len(),
+            skipped.join("; ")
+        );
+        let _ = ctx
+            .journal
+            .write(
+                Level::Warn,
+                "venue.networks",
+                Some(super::ctx::ID),
+                msg,
+                None,
+            )
+            .await;
+    }
     Ok(list)
 }
 
 /// Разбор getall. Принимает: ответ (массив монет), название сети BSC, площадку, «минимум депозита неизвестен — 0»,
-/// справочник пар (точность). Возвращает: сети формата ядра и соответствие кодов именам. Ошибки: BadResponse.
+/// справочник пар (точность). Возвращает: сети формата ядра, соответствие кодов именам и пропущенные сети («монета/сеть:
+/// причина, сырое значение») — сеть с неразборчивым полем (живой ответ 2026-11-02: withdrawMax не число) не валит весь
+/// справочник, а только исключается. Ошибки: BadResponse — ответ не массив или у монеты нет поля coin.
 #[allow(clippy::type_complexity)]
 pub fn parse_networks(
     data: &Value,
@@ -79,12 +100,17 @@ pub fn parse_networks(
     venue: &VenueId,
     min_ok: bool,
     symbols: &Symbols,
-) -> GatewayResult<(Vec<CoinNetworkInfo>, HashMap<(String, String), String>)> {
+) -> GatewayResult<(
+    Vec<CoinNetworkInfo>,
+    HashMap<(String, String), String>,
+    Vec<String>,
+)> {
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("config/getall не массив", &data.to_string()))?;
     let mut out = Vec::new();
     let mut names = HashMap::new();
+    let mut skipped = Vec::new();
     for c in coins {
         let ticker = num::text(c, "coin")?;
         let Some(list) = c.get("networkList").and_then(Value::as_array) else {
@@ -103,28 +129,44 @@ pub fn parse_networks(
             } else {
                 None
             };
-            out.push(CoinNetworkInfo {
-                venue: venue.clone(),
-                asset: Asset {
-                    ticker: ticker.clone(),
-                    bsc_contract: contract,
-                },
-                network: code,
-                deposit_enabled: flag(n, "depositEnable", &ticker)?,
-                withdraw_enabled: flag(n, "withdrawEnable", &ticker)?,
-                withdraw_fee: num::dec_opt(n, "withdrawFee")?,
-                withdraw_min: num::dec_opt(n, "withdrawMin")?,
-                withdraw_max: num::dec_opt(n, "withdrawMax")?,
-                // Решение 107: в API MEXC минимального депозита нет. Пока Тигран не включил
-                // venue.deposit_min_absent_ok [mexc] — None, и ядро сделку на MEXC не делает (решение 35).
-                deposit_min: min_ok.then_some(Decimal::ZERO),
-                deposit_confirmations: num::text_opt(n, "minConfirm").and_then(|s| s.parse().ok()),
-                withdraw_precision: symbols.precision_of(&ticker),
-                updated_at: Utc::now(),
-            });
+            let info = || -> GatewayResult<CoinNetworkInfo> {
+                Ok(CoinNetworkInfo {
+                    venue: venue.clone(),
+                    asset: Asset {
+                        ticker: ticker.clone(),
+                        bsc_contract: contract,
+                    },
+                    network: code.clone(),
+                    deposit_enabled: flag(n, "depositEnable", &ticker)?,
+                    withdraw_enabled: flag(n, "withdrawEnable", &ticker)?,
+                    withdraw_fee: num::dec_opt(n, "withdrawFee")?,
+                    withdraw_min: num::dec_opt(n, "withdrawMin")?,
+                    withdraw_max: num::dec_opt(n, "withdrawMax")?,
+                    // Решение 107: в API MEXC минимального депозита нет. Пока Тигран не включил
+                    // venue.deposit_min_absent_ok [mexc] — None, и ядро сделку на MEXC не делает (решение 35).
+                    deposit_min: min_ok.then_some(Decimal::ZERO),
+                    deposit_confirmations: num::text_opt(n, "minConfirm")
+                        .and_then(|s| s.parse().ok()),
+                    withdraw_precision: symbols.precision_of(&ticker),
+                    updated_at: Utc::now(),
+                })
+            };
+            match info() {
+                Ok(i) => out.push(i),
+                Err(e) => {
+                    let raw = ["withdrawFee", "withdrawMin", "withdrawMax"]
+                        .iter()
+                        .map(|f| {
+                            format!("{f}={}", n.get(*f).map_or("нет".into(), Value::to_string))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    skipped.push(format!("{ticker}/{code}: {} ({raw})", e.message));
+                }
+            }
         }
     }
-    Ok((out, names))
+    Ok((out, names, skipped))
 }
 
 /// Флаг сети depositEnable / withdrawEnable — boolean. Иное — BadResponse (справочник целиком не обновляется).

@@ -1,8 +1,8 @@
 <!--
   Файл: ui/src/pages/Live.svelte
-  Что делает: «Живой экран» во всю ширину окна — компактная строка на монету (решение 55, Issue #33): спред в %
-    в обе стороны рядом («купить на A → продать на B» и обратно) по каждой паре площадок из данных — спред,
-    порог комиссий, короткое состояние, время; щелчок по строке — окно с адресом, ценами и полными причинами;
+  Что делает: «Живой экран» во всю ширину окна — компактная строка на монету (решение 55, вид «Б» — решение 106):
+    лучшее направление монеты (спред, порог комиссий, состояние), сколько направлений и сколько выше порога, время;
+    щелчок по строке раскрывает все направления, «подробно» — окно с адресом, ценами и полными причинами;
     сортировка по наибольшему спреду; и последние расчёты кандидатов:
     прошёл (прибыль, объём) или отказ с причиной; по кандидату раскрывается полный список затрат.
     Данные — GET /api/spreads, /api/candidates; живые сообщения spread и candidate обновляют строки на месте.
@@ -17,7 +17,7 @@
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { dirText, dirKey } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
@@ -50,7 +50,7 @@
     return onLive((msg) => {
       if (msg.type === 'spread') spreads[dirKey(msg.data.direction)] = msg.data;
       else if (msg.type === 'candidate') cands[dirKey(msg.data.direction)] = msg.data;
-      else if (msg.type === 'lagged' || msg.type === 'coins') reload();
+      else if (lagFor(msg, 'core') || msg.type === 'coins') reload();
     });
   });
 
@@ -69,7 +69,7 @@
   <label class="inline"><input type="checkbox" bind:checked={onlyActive} /> только выше порога</label>
 </div>
 
-<h2>Спреды по монетам: обе стороны</h2>
+<h2>Спреды по монетам: лучшее направление (щелчок — все направления)</h2>
 <LiveCoins {views} match={matchAsset} {onlyActive} />
 
 <h2>Кандидаты: расчёт и причины отказа</h2>

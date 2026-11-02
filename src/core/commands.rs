@@ -1,6 +1,7 @@
 //! Файл: core/commands.rs
 //! Что делает: команды человека ядру — из интерфейса и кнопок Telegram (ManualCommand, core/types/control.rs):
-//! «Продать сейчас», «Беру на себя», «Вернуть боту». Кнопка Telegram принимается только из настроенного
+//! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
+//! (manual_halted.rs, решение 100); «Продать и перегнать» — у алерта и остановленной сделки (решение 101). Кнопка Telegram принимается только из настроенного
 //! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
@@ -9,7 +10,7 @@
 
 use serde_json::json;
 
-use crate::core::types::{Asset, CommandSource, ManualAction, ManualCommand, VenueId};
+use crate::core::types::{CommandSource, ManualAction, ManualCommand, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -20,6 +21,19 @@ impl Core {
     /// Выполняет команду человека. Возвращает: Ok(текст) — выполнено; Err(причина) — отклонено.
     /// Обе ветки пишутся в журнал с источником команды.
     pub async fn command(&self, cmd: ManualCommand) -> Result<String, String> {
+        // Решение 110: команда выполняется отдельной задачей и доходит до конца, даже если интерфейс отключился.
+        // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
+        // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
+        // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
+        let core = self.clone();
+        let c = cmd.clone();
+        tokio::spawn(async move { core.command_inner(c).await })
+            .await
+            .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
+    }
+
+    /// Выполнение команды и запись в журнал (см. command).
+    async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
         let res = self.run_command(&cmd).await;
         let (level, text) = match &res {
             Ok(t) => (
@@ -55,13 +69,18 @@ impl Core {
         }
         // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).
         let gone = match &cmd.action {
-            ManualAction::SellNow { alert_id } | ManualAction::TakeOver { alert_id } => {
-                (!lk(&self.inner.alerts).contains_key(alert_id))
-                    .then(|| format!("алерт {alert_id}"))
-            }
+            ManualAction::SellNow { alert_id }
+            | ManualAction::SellNowReturn { alert_id }
+            | ManualAction::TakeOver { alert_id } => (!lk(&self.inner.alerts)
+                .contains_key(alert_id))
+            .then(|| format!("алерт {alert_id}")),
             ManualAction::ReturnToBot { holding_id } => (!lk(&self.inner.holdings)
                 .contains_key(holding_id))
             .then(|| format!("запись {holding_id}")),
+            // Шаг сделки проверяют сами команды (manual_halted.rs) — отказ с причиной.
+            ManualAction::SellHalted { .. }
+            | ManualAction::SellHaltedReturn { .. }
+            | ManualAction::SoldManually { .. } => None,
         };
         if let Some(what) = gone {
             return Ok(format!(
@@ -74,12 +93,26 @@ impl Core {
             (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
         };
         match &cmd.action {
-            ManualAction::SellNow { alert_id } => super::manual::sell_now(self, alert_id).await,
+            ManualAction::SellNow { alert_id } => {
+                super::manual::sell_now(self, alert_id, false).await
+            }
+            ManualAction::SellNowReturn { alert_id } => {
+                super::manual::sell_now(self, alert_id, true).await
+            }
             ManualAction::TakeOver { alert_id } => {
                 super::manual::take_over(self, alert_id, &who).await
             }
             ManualAction::ReturnToBot { holding_id } => {
                 super::manual_return::return_to_bot(self, holding_id).await
+            }
+            ManualAction::SellHalted { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id, false).await
+            }
+            ManualAction::SellHaltedReturn { deal_id } => {
+                super::manual_halted::sell_halted(self, deal_id, true).await
+            }
+            ManualAction::SoldManually { deal_id, usdt } => {
+                super::manual_halted::sold_manually(self, deal_id, usdt, &who).await
             }
         }
     }
@@ -116,10 +149,13 @@ impl Core {
             .await;
     }
 
-    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода).
-    pub async fn release_quarantine(&self, asset: &Asset) {
-        risk::quarantine(self, asset, None);
-        let t = format!("{}: карантин снят вручную", asset.ticker);
+    /// Снять карантин монеты (ручная проверка после «депозит не зачислен» или медленного перевода). Принимает: id из
+    /// интерфейса — адрес контракта (0x…) или тикер монеты без адреса (решение 118, quarantine.rs). Ошибок нет.
+    pub async fn release_quarantine(&self, id: &str) {
+        let label = super::quarantine::release_id(self, id)
+            .map(|q| q.label)
+            .unwrap_or_else(|| id.to_string());
+        let t = format!("{label}: карантин снят вручную");
         self.inner
             .deps
             .log(Level::Info, "core.control", None, &t, None)

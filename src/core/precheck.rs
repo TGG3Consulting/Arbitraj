@@ -1,7 +1,7 @@
 //! Файл: core/precheck.rs
 //! Что делает: предпроверка сразу перед покупкой (шаг 5 ТЗ): стоп-условия (risk.rs); статусы вывода на A
 //! и депозита на B — перечитываются напрямую из API бирж; покупка через API на A и продажа на B — по свежему справочнику
-//! пар (pairs_fresh.rs); BNB на газ у DEX-сторон не ниже
+//! пар (pairs_fresh.rs); у биржи B — адрес депозита монеты (решение 118, precheck_deposit.rs); BNB на газ у DEX-сторон не ниже
 //! risk.min_bnb_balance; затем полный расчёт заново (profit.rs) по свежим стаканам и пулам.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
@@ -25,8 +25,10 @@ async fn transfer_open(
     withdraw: bool,
 ) -> Result<(), String> {
     let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    // Решение 113: справочник одной монеты (BingX — config/getall?coin=; у кого запроса одной монеты нет — весь
+    // справочник с фильтром, как раньше).
     let list = gw
-        .coin_networks()
+        .coin_networks_of(&d.asset.ticker)
         .await
         .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
     // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
@@ -45,7 +47,16 @@ async fn transfer_open(
                 i.deposit_enabled
             }
         });
-    wr(&core.inner.networks).insert(v.clone(), list);
+    // Свежие записи этой монеты — в справочник ядра вместо её старых; остальные монеты биржи не трогаются (решение 117:
+    // после решения 113 здесь приходит справочник ОДНОЙ монеты, а он целиком заменял справочник биржи — остальные
+    // монеты теряли сеть BSC до следующего опроса). Справочника биржи ещё нет — не пишем (его соберёт registry_sync).
+    {
+        let mut nets = wr(&core.inner.networks);
+        if let Some(all) = nets.get_mut(v) {
+            all.retain(|i| i.asset.ticker != d.asset.ticker);
+            all.extend(list);
+        }
+    }
     core.request_rebuild();
     match open {
         Some(true) => Ok(()),
@@ -81,15 +92,19 @@ pub async fn bnb_ok(core: &Core, v: &VenueId, need: Decimal) -> Result<(), Strin
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| e.message)?;
     let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
-    let b = gw
-        .balances()
+    // Решение 113: только BNB (у DEX — eth_getBalance), а не балансы всех токенов кошелька (~11 с на вызов).
+    let have = gw
+        .balance(super::convert::GAS_TICKER)
         .await
-        .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?;
-    let have: Decimal = b
-        .iter()
-        .filter(|x| x.asset == super::convert::GAS_TICKER)
-        .map(|x| x.free)
-        .sum();
+        .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?
+        .map_or(Decimal::ZERO, |x| x.free);
+    bnb_enough(v, have, min, need)
+}
+
+/// Хватает ли BNB на газ: свободный BNB не меньше минимума risk.min_bnb_balance плюс газ сделки. Принимает: площадку,
+/// свободный BNB, минимум, газ сделки. Ошибка — текст причины. Вызывают bnb_ok и сверка (reconcile.rs — по уже
+/// полученным балансам, без второго запроса).
+pub fn bnb_enough(v: &VenueId, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
     if have < min + need {
         return Err(format!(
             "{}: BNB на газ {have} меньше минимума {min} + газ сделки {need}",
@@ -111,23 +126,88 @@ pub fn gas_need(costs: &[CostLine], stages: &[&str]) -> Decimal {
 }
 
 /// Предпроверка. Возвращает: свежий расчёт для сделки. Ошибки: текст причины отказа.
+/// Решение 111: время каждого шага (справочник сетей биржи, баланс BNB, пересчёт с финальной котировкой) — в текст
+/// отказа и в журнал при успехе: 02.11 у RVV между кандидатом и отказом прошло 16 с, а на что — по журналу не видно.
 pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
+    let mut t = Timing::default();
+    let res = steps(core, d, &mut t).await;
+    if res.is_ok() {
+        core.inner
+            .deps
+            .log(
+                crate::storage::journal::Level::Info,
+                "core.precheck",
+                Some(&d.buy_on.0),
+                format!(
+                    "{} {} → {}: предпроверка пройдена ({})",
+                    d.asset.ticker,
+                    d.buy_on.0,
+                    d.sell_on.0,
+                    t.text()
+                ),
+                None,
+            )
+            .await
+    }
+    res.map_err(|e| format!("{e} ({})", t.text()))
+}
+
+/// Время шагов предпроверки: (что, мс).
+#[derive(Default)]
+struct Timing(Vec<(String, u128)>);
+
+impl Timing {
+    /// Запоминает шаг. Принимает: название, момент начала. Ошибок нет.
+    fn mark(&mut self, what: String, from: std::time::Instant) {
+        self.0.push((what, from.elapsed().as_millis()));
+    }
+
+    /// «время: справочник сетей bingx 820 мс, пересчёт 14100 мс». Ошибок нет.
+    fn text(&self) -> String {
+        let parts: Vec<String> = self
+            .0
+            .iter()
+            .map(|(w, ms)| format!("{w} {ms} мс"))
+            .collect();
+        format!("время: {}", parts.join(", "))
+    }
+}
+
+/// Шаги предпроверки с замером времени. Ошибки: текст причины отказа.
+async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, String> {
+    use std::time::Instant;
     super::risk::can_open(core, d)?;
     for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
         match super::trade_ops::kind(core, v)? {
             VenueKind::Cex => {
-                transfer_open(core, v, d, withdraw).await?;
+                let at = Instant::now();
+                let r = transfer_open(core, v, d, withdraw).await;
+                t.mark(format!("справочник сетей {}", v.0), at);
+                r?;
                 pair_side(core, v, d, withdraw)?;
+                // Решение 118 (Я-5): у биржи-получателя адрес депозита — до покупки, а не после.
+                if !withdraw {
+                    let at = Instant::now();
+                    let r = super::precheck_deposit::ready(core, d).await;
+                    t.mark(format!("адрес депозита {}", v.0), at);
+                    r?;
+                }
             }
             VenueKind::Dex => {
-                if let Err(e) = bnb_ok(core, v, Decimal::ZERO).await {
+                let at = Instant::now();
+                let r = bnb_ok(core, v, Decimal::ZERO).await;
+                t.mark(format!("баланс BNB {}", v.0), at);
+                if let Err(e) = r {
                     core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
                     return Err(e);
                 }
             }
         }
     }
-    let c = match replan(core, d).await {
+    let at = Instant::now();
+    let verdict = replan(core, d).await;
+    t.mark("пересчёт с финальной котировкой".into(), at);
+    let c = match verdict {
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
     };
@@ -140,7 +220,10 @@ pub async fn run(core: &Core, d: &Direction) -> Result<Calc, String> {
         if super::trade_ops::kind(core, v)? != VenueKind::Dex {
             continue;
         }
-        if let Err(e) = bnb_ok(core, v, gas_need(&c.costs, &stages)).await {
+        let at = Instant::now();
+        let r = bnb_ok(core, v, gas_need(&c.costs, &stages)).await;
+        t.mark(format!("газ BNB {}", v.0), at);
+        if let Err(e) = r {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
             return Err(e);
         }

@@ -27,7 +27,7 @@
 | `GET /api/episodes`, `GET /api/episodes/{id}`, `GET /api/episodes/{id}/file` | «Эпизоды» (решение 74): список, записи эпизода, файл .jsonl.zst |
 | `GET /api/deals` | Экран «Сделки»: план и факт по шагам |
 | `GET /api/transits` | История времени в пути (решение 50) |
-| `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{ticker}/release` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты |
+| `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{id}/release` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты |
 | `POST /api/check/telegram` | «Проверить подключение» Telegram |
 | `POST /api/check/venue/{id}` | «Проверить подключение» площадки |
 | `POST /api/check/channel/{venue}/{id}` | «Проверить подключение» канала отправки (шлюз `check_send_channel`) |
@@ -66,8 +66,8 @@
 
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
-| `GET /api/manual` | — | `{alerts: [StuckAlert], holdings: [ManualHolding]}` |
-| `POST /api/manual/command` | `{action: ManualAction}` — `{"SellNow":{"alert_id":…}}`, `{"TakeOver":{"alert_id":…}}`, `{"ReturnToBot":{"holding_id":…}}` | `{ok, details}`; источник — `CommandSource::Ui`, пишется в журнал; id алерта — UUID; по закрытому алерту — ok и «проигнорирована» |
+| `GET /api/manual` | — | `{alerts: [StuckAlert], holdings: [ManualHolding], halted: [Deal]}` (halted — остановленные сделки, решение 100) |
+| `POST /api/manual/command` | `{action: ManualAction}` — `{"SellNow":{"alert_id":…}}`, `{"TakeOver":{"alert_id":…}}`, `{"ReturnToBot":{"holding_id":…}}`, `{"SellHalted":{"deal_id":…}}`, `{"SellNowReturn":{"alert_id":…}}`, `{"SellHaltedReturn":{"deal_id":…}}` (решение 101), `{"SoldManually":{"deal_id":…,"usdt":"24.44"}}` | `{ok, details}`; источник — `CommandSource::Ui`, пишется в журнал; id алерта — UUID; по закрытому алерту — ok и «проигнорирована» |
 | WS `/api/ws` | — | `{"type":"stuck_alert","data":StuckAlert}`, `{"type":"manual","data":{alerts, holdings}}` |
 
 ### Экран «Каналы отправки» (решения 33, 41–44)
@@ -100,10 +100,10 @@
 | `GET /api/candidates` | — | `[{direction, verdict, at, dry?, card?}]` (у прошедшего — `dry` и карточка сигнала `card` решения 74, core/card.rs: `{dry, ticker, contract, buy_on, sell_on, qty, buy_avg, sell_qty, sell_avg, budget, profit_usd, profit_pct, books: [BookSide], pools: [PoolSide], max: {"Ok": MaxVolume} \| {"Err": причина}, links: [{venue, kind: "pair" \| "pool", label, url \| null, why \| null}]}`), новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
 | `GET /api/deals` | — | `[Deal]` (core/deal.rs): шаг, где монеты, вложено, выручка, затраты, план, факт покупки/переводов/продаж, хронология, итог |
 | `GET /api/transits` | — | `[{asset, from, to, count, avg_s}]` |
-| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine, day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}}}` — итог дня с предварительной частью (решение 53) |
+| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine: [{id, ticker, label, reason}], day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}}}` — итог дня с предварительной частью (решение 53) |
 | `POST /api/control` | `{mode}` | `Risk`; пишется в журнал, уведомления `system.started` / `system.stopped` |
 | `POST /api/control/venue/{id}/resume` | — | `Risk` — пауза площадки снята |
-| `POST /api/control/quarantine/{ticker}/release` | — | `Risk` — карантин монеты снят, `route.quarantine_out` |
+| `POST /api/control/quarantine/{id}/release` | — | `Risk` — карантин монеты снят (id — адрес контракта или тикер монеты без адреса, решение 118), `route.quarantine_out` |
 | WS `/api/ws` | — | `spread` (SpreadView), `candidate`, `deal` (Deal), `balances` (`{venues, in_transit_usd, per_coin_usd}`), `control` (Risk), `coins` (`{coins, directions}` — перечитать GET /api/coins) |
 
 ### DEX и виды пулов (экран «Площадки», настройки области «DEX»)

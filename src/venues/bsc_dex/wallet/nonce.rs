@@ -139,6 +139,12 @@ impl Nonces {
     pub fn busy(&self) -> bool {
         self.lock.try_lock().is_err()
     }
+
+    /// Замок очереди и запомненный «следующий» nonce — для исполнения через KyberSwap (решение 112): свопы агрегатора
+    /// идут тем же кошельком, поэтому стоят в той же очереди и берут nonce не меньше запомненного. Ошибок нет.
+    pub fn shared(&self) -> (Arc<Mutex<()>>, Arc<StdMutex<Option<u64>>>) {
+        (self.lock.clone(), self.next.clone())
+    }
 }
 
 impl Slot {

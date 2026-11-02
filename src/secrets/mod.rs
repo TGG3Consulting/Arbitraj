@@ -29,6 +29,12 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bingx",
         "Секретный ключ BingX (Secret Key)",
     ),
+    ("mexc.api_key", "mexc", "API-ключ MEXC (Access Key)"),
+    (
+        "mexc.api_secret",
+        "mexc",
+        "Секретный ключ MEXC (Secret Key)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.
@@ -87,5 +93,12 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "channel.flashblock.key",
         "bsc_dex",
         "Flashblock: заголовок Authorization (регистрация flashblock.trade)",
+    ),
+    // DEX через агрегатор KyberSwap (адаптер kyberswap, решение 91). Кошелёк — тот же секрет bsc_dex.wallet_key
+    // (один кошелёк, решение 45), отдельного ключа кошелька у площадки нет. Узел BSC для исполнения — свой адрес.
+    (
+        "kyber.node_http_key",
+        "kyberswap",
+        "Ключ провайдера узла BSC для адреса HTTP агрегатора KyberSwap ({key} в kyber.node_http_url)",
     ),
 ];

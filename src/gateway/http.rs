@@ -15,7 +15,7 @@
 //! большой ответ на середине. Тело читается порциями — Response::chunk:
 //! https://docs.rs/reqwest/0.13.5/reqwest/struct.Response.html#method.chunk .
 //! Кто вызывает: venues/bsc_dex/node/rpc.rs (узел BSC), venues/bsc_dex/directory/gt_http.rs (индексатор),
-//! venues/bingx/rest.rs (REST BingX).
+//! venues/bingx/rest.rs (REST BingX), venues/mexc/rest.rs (REST MEXC — exchange_full с Retry-After).
 //! От чего зависит: reqwest, tokio.
 //! Настройки: нет своих (сроки передаёт вызывающий из http.timeout_ms и http.body_idle_ms).
 
@@ -107,9 +107,25 @@ impl Fail {
     }
 }
 
+/// Ответ целиком: код, тело и заголовок Retry-After.
+#[derive(Debug, Clone)]
+pub struct Reply {
+    pub status: StatusCode,
+    pub text: String,
+    /// Retry-After в секундах (RFC 9110, раздел 10.2.3: delay-seconds). Заголовка нет или он в виде даты — None.
+    pub retry_after_s: Option<u64>,
+}
+
 /// Отправляет запрос и дочитывает ответ. Принимает: запрос (без общего срока reqwest), сроки и пределы.
 /// Возвращает: (HTTP-код, текст тела). Ошибки: Fail.
 pub async fn exchange(req: RequestBuilder, lim: Limits) -> Result<(StatusCode, String), Fail> {
+    exchange_full(req, lim).await.map(|r| (r.status, r.text))
+}
+
+/// То же, что exchange, но отдаёт и заголовок Retry-After (MEXC: «Responses with 418 or 429 include a Retry-After
+/// header indicating the wait time in seconds», https://www.mexc.com/api-docs/spot-v3/introduction).
+/// Принимает: запрос, сроки и пределы. Возвращает: Reply. Ошибки: Fail.
+pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
     let got = AtomicUsize::new(0);
     match tokio::time::timeout(lim.total, read(req, lim, &got)).await {
         Ok(r) => r,
@@ -120,11 +136,7 @@ pub async fn exchange(req: RequestBuilder, lim: Limits) -> Result<(StatusCode, S
 }
 
 /// Сам обмен без общего предела; `got` — сколько байт тела уже получено (для текста при общем сроке).
-async fn read(
-    req: RequestBuilder,
-    lim: Limits,
-    got: &AtomicUsize,
-) -> Result<(StatusCode, String), Fail> {
+async fn read(req: RequestBuilder, lim: Limits, got: &AtomicUsize) -> Result<Reply, Fail> {
     let mut resp = match tokio::time::timeout(lim.head, req.send()).await {
         Err(_) => return Err(Fail::NoHead),
         Ok(Err(e)) if e.is_connect() => return Err(Fail::Connect(e.without_url().to_string())),
@@ -133,6 +145,11 @@ async fn read(
         Ok(Ok(r)) => r,
     };
     let status = resp.status();
+    let retry_after_s = resp
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u64>().ok());
     let mut body = Vec::new();
     loop {
         match tokio::time::timeout(lim.idle, resp.chunk()).await {
@@ -155,6 +172,10 @@ async fn read(
         }
     }
     String::from_utf8(body)
-        .map(|t| (status, t))
+        .map(|text| Reply {
+            status,
+            text,
+            retry_after_s,
+        })
         .map_err(|_| Fail::NotText)
 }

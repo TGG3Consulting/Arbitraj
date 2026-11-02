@@ -5,7 +5,7 @@
 //   core/types/check.rs), taxes (CheckState), problem, presence[].can_send / can_receive (вывод / ввод),
 //   presence[].can_buy / can_sell (покупка / продажа через API — у BingX apiStateBuy / apiStateSell). «Крючок» — только
 //   по PoolsExcluded (исключены все пулы монеты); исключённые пулы при допущенных — в окне монеты, не в итоге.
-// Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte.
+// Кто вызывает: pages/Coins.svelte, components/CoinTable.svelte, components/CoinFilters.svelte (coinRowKey — ключ строки).
 // От чего зависит: ничего (чистые функции над данными ядра).
 // Настройки: нет.
 
@@ -120,3 +120,15 @@ export function matches(c, f) {
   if (f.onlyBlocked && !c.block) return false;
   return true;
 }
+
+/**
+ * Ключ строки экрана «Монеты» — как группирует ядро (core/registry_build.rs): монета с адресом в BSC — тикер + адрес;
+ * без адреса — тикер + биржа (одинаковый тикер без адреса на разных биржах — разные строки: не известно, тот же ли
+ * это токен). Решение 115: с двумя биржами ключ «тикер|null» повторялся (1067 строк, BingX и MEXC) — Svelte падал
+ * с each_key_duplicate, экран «Монеты» не открывался.
+ * Принимает: монету из GET /api/coins. Возвращает: строку.
+ */
+export const coinRowKey = (c) =>
+  c.asset.bsc_contract
+    ? `${c.asset.ticker}|${c.asset.bsc_contract}`
+    : `${c.asset.ticker}@${(c.presence ?? []).map((p) => p.venue).join(',')}`;

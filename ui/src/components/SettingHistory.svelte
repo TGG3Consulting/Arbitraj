@@ -9,7 +9,7 @@
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { showValue, showTime } from '../lib/labels.js';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -34,7 +34,7 @@
   $effect(() => {
     load();
     return onLive((m) => {
-      if (m.type === 'lagged' || (m.type === 'settings' && m.data.name === name)) load();
+      if (lagFor(m, 'settings') || (m.type === 'settings' && m.data.name === name)) load();
     });
   });
 </script>

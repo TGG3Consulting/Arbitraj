@@ -6,7 +6,7 @@
 // Настройки: dry.enabled, dry.budget_usdt (только показ).
 
 import { get } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /** data — {state: 'on'|'nobudget'|'broken'|'off'|'unset', budget, reason} или null; error — сбой запроса. */
 export const dry = $state({ data: null, error: '' });
@@ -25,6 +25,6 @@ async function reload() {
 export function start() {
   reload();
   onLive((msg) => {
-    if (msg.type === 'lagged' || (msg.type === 'settings' && msg.data?.name?.startsWith('dry.'))) reload();
+    if (lagFor(msg, 'settings') || (msg.type === 'settings' && msg.data?.name?.startsWith('dry.'))) reload();
   });
 }

@@ -11,7 +11,7 @@
 -->
 <script>
   import { get } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { levelLabel, showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -44,7 +44,7 @@
   $effect(() => {
     load(null);
     return onLive((m) => {
-      if (m.type === 'lagged') load(null);
+      if (lagFor(m, 'journal')) load(null);
       if (m.type === 'journal' && !entries.some((e) => e.id === m.data.id)) entries = [m.data, ...entries];
     });
   });

@@ -3,7 +3,7 @@
 //! балансу площадки (не больше взятого), вложенное — пропорционально; дальше — продажа по общим правилам
 //! (sell.rs). Плюс данные экрана «Ручное управление» для api.
 //! Кто вызывает: core/commands.rs; api (Core::manual).
-//! От чего зависит: manual.rs, deal.rs, ledger.rs, sell.rs, deps.rs (шлюз — балансы).
+//! От чего зависит: manual.rs, manual_halted.rs (on_hand — реальный баланс), deal.rs, ledger.rs, sell.rs.
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
 use rust_decimal::Decimal;
@@ -20,30 +20,31 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .get(holding_id)
         .cloned()
         .ok_or(format!("записи {holding_id} нет"))?;
-    let gw = core
-        .inner
-        .deps
-        .gw
-        .get(&h.venue)
-        .await
-        .map_err(|e| e.message)?;
-    let b = gw
-        .balances()
-        .await
-        .map_err(|e| format!("{}: балансы: {}", h.venue.0, e.message))?;
-    let free: Decimal = b
-        .iter()
-        .filter(|x| x.asset == h.asset.ticker)
-        .map(|x| x.free)
-        .sum();
-    // BNB на DEX — только сверх резерва на газ и газа самой продажи (решение 62, native.rs): резерв боту не
-    // «возвращается», а газ продажи платится из резерва — иначе продажа упрётся в резерв (exec/native.rs::reserve_ok).
-    let free = super::native::spendable(core, &h.venue, &h.asset.ticker, free)?;
-    let (free, gas_note) = super::native::minus_sell_gas(core, &gw, &h.venue, &h.asset, free).await;
-    if free <= Decimal::ZERO {
-        return Err(format!("на {} нет свободных {}", h.venue.0, h.asset.ticker));
+    // Решение 118 (Я-2): по монете одна сделка — идёт другая, возврат подождёт (монеты остаются у человека).
+    let key = super::coin_key::CoinKey::of(&h.asset);
+    if !lk(&core.inner.active).insert(key.clone()) {
+        return Err(format!(
+            "по {} сейчас идёт другая сделка — «Вернуть боту» после её окончания",
+            h.asset.ticker
+        ));
     }
-    let qty = free.min(h.qty);
+    let r = return_locked(core, holding_id, h, old).await;
+    if r.is_err() {
+        lk(&core.inner.active).remove(&key);
+    }
+    r
+}
+
+/// «Вернуть боту» под замком монеты: замок снимается, когда продажа закончится (или при ошибке — вызывающим).
+async fn return_locked(
+    core: &Core,
+    holding_id: &str,
+    h: ManualHolding,
+    old: Deal,
+) -> Result<String, String> {
+    let key = super::coin_key::CoinKey::of(&h.asset);
+    // Реальный свободный баланс (BNB на DEX — сверх резерва и газа продажи, решение 62) — manual_halted::on_hand.
+    let (qty, gas_note) = super::manual_halted::on_hand(core, &h.venue, &h.asset, h.qty).await?;
     let share = if h.qty.is_zero() {
         Decimal::ZERO
     } else {
@@ -80,12 +81,15 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .notify("manual.returned", Some(&h.venue.0), &text)
         .await;
     let c = core.clone();
-    tokio::spawn(async move { super::sell::sell_or_stuck(&c, deal).await });
+    tokio::spawn(async move {
+        super::sell::sell_or_stuck(&c, deal).await;
+        lk(&c.inner.active).remove(&key);
+    });
     Ok(text)
 }
 
 impl Core {
-    /// Экран «Ручное управление» (GET /api/manual): алерты и монеты человека.
+    /// Экран «Ручное управление» (GET /api/manual): алерты, монеты человека, остановленные сделки.
     pub fn manual(&self) -> serde_json::Value {
         let alerts: Vec<StuckAlert> = lk(&self.inner.alerts)
             .values()
@@ -95,6 +99,8 @@ impl Core {
             .values()
             .map(|(h, _)| h.clone())
             .collect();
-        serde_json::json!({ "alerts": alerts, "holdings": holdings })
+        // Решение 100: остановленные сделки, ждущие разбора («Продать сейчас», «Продано вручную»).
+        let halted = self.halted();
+        serde_json::json!({ "alerts": alerts, "holdings": holdings, "halted": halted })
     }
 }

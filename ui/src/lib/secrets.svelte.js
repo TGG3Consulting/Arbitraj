@@ -9,7 +9,7 @@
 // Настройки: нет.
 
 import { get } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /** Имя секрета токена Telegram (src/secrets/mod.rs, TELEGRAM_BOT_TOKEN) — экраны «Уведомления» и «Площадки». */
 export const TELEGRAM_TOKEN = 'telegram.bot_token';
@@ -33,6 +33,6 @@ export async function refresh() {
 export function start() {
   refresh();
   onLive((msg) => {
-    if (msg.type === 'lagged' || (msg.type === 'journal' && msg.data.kind === 'secrets')) refresh();
+    if (lagFor(msg, 'journal') || (msg.type === 'journal' && msg.data.kind === 'secrets')) refresh();
   });
 }

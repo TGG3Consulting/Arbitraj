@@ -158,8 +158,8 @@ async fn link_templates_from_settings() {
 }
 
 /// Гонка (ревью #64): режим зафиксирован при входе в сделку (обычный), сухой включили во время предпроверки — бюджет
-/// живой сделки виртуальным не становится (limits::available в зафиксированном режиме настройку не читает), а замок
-/// перед покупкой (executor::buy_gate) покупку не пускает.
+/// живой сделки виртуальным не становится (решение 94: деньги живой сделки — только limits::free_now / buy_cap через
+/// шлюз прямо перед ордером, настройку dry.* не читают), а замок перед покупкой (executor::buy_gate) покупку не пускает.
 #[tokio::test]
 async fn live_deal_never_gets_virtual_budget() {
     let (core, s) = start("race").await;
@@ -170,14 +170,13 @@ async fn live_deal_never_gets_virtual_budget() {
     set(&s, "dry.enabled", Some(json!(true))).await;
     set(&s, "dry.budget_usdt", Some(json!("1000"))).await;
     // Живая сделка: баланс — только через шлюз (площадки в реестре нет — ошибка, а не 1000 виртуальных).
-    let live = limits::available(&core, &bingx, "USDT", &fixed).await;
+    let live = limits::free_now(&core, &bingx, "USDT").await;
     assert!(live.is_err(), "{live:?}");
-    // Сухой расчёт кандидата — виртуальный бюджет, к площадке не ходит.
-    let (v, from) = limits::available(&core, &bingx, "USDT", &dry::mode(&s))
-        .await
-        .unwrap();
-    assert_eq!(v, d("1000"));
-    assert!(from.contains("dry.budget_usdt"));
+    // Сухой расчёт кандидата — виртуальный бюджет из настроек, к площадке не ходит.
+    match dry::mode(&s) {
+        Mode::Dry(Ok(v)) => assert_eq!(v, d("1000")),
+        other => panic!("ожидался сухой режим с бюджетом: {other:?}"),
+    }
     assert!(
         executor::buy_gate(&core)
             .unwrap_err()

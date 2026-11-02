@@ -8,7 +8,7 @@
 // Настройки: читает и показывает любые.
 
 import { get, put } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /** schema: {settings, events} или null; values: ключ области → значение; venues: id площадок;
  *  venueKinds: [{id, kind: 'Cex' | 'Dex'}]. */
@@ -45,7 +45,7 @@ export async function reload() {
 export function start() {
   reload();
   onLive((msg) => {
-    if (msg.type === 'lagged') reload();
+    if (lagFor(msg, 'settings')) reload();
     if (msg.type === 'settings') {
       const c = msg.data;
       const key = valueKey(c.name, c.scope);
@@ -75,15 +75,18 @@ export async function setValue(name, scope, value) {
 export const defOf = (name) => store.schema?.settings.find((d) => d.name === name);
 
 /**
- * Подпись области «площадка» у настройки. У настроек с venue_role «TransferSource» (решение 51) площадка —
- * источник перевода: биржа → «bingx → кошелёк», DEX (кошелёк) → «кошелёк → <биржи>».
+ * Подпись области «площадка» у настройки. Решение 118 (Я-4, Я-23): время в пути = отправка у источника + зачисление у
+ * получателя, поэтому подпись — без пары «откуда → куда» (с двумя биржами у источника несколько получателей):
+ * venue_role «TransferSource» (решение 51) — «отправка с площадки (до появления в сети)»; «TransferTarget» —
+ * «зачисление на площадке после появления в сети». У DEX площадка — свой кошелёк.
  * Принимает: описание настройки, id площадки. Возвращает: строку.
  */
 export function venueScopeLabel(def, v) {
-  if (def.venue_role !== 'TransferSource') return `площадка ${v}`;
   const kind = store.venueKinds.find((x) => x.id === v)?.kind;
-  const cex = store.venueKinds.filter((x) => x.kind === 'Cex').map((x) => x.id);
-  if (kind === 'Cex') return `перевод ${v} → кошелёк`;
-  if (kind === 'Dex') return `перевод кошелёк (${v}) → ${cex.length ? cex.join(', ') : 'биржа'}`;
-  return `перевод с площадки ${v}`;
+  const name = kind === 'Dex' ? `кошелька (${v})` : v;
+  if (def.venue_role === 'TransferSource') return `отправка с ${name} (до появления в сети)`;
+  if (def.venue_role === 'TransferTarget') {
+    return `зачисление на ${kind === 'Dex' ? `кошелёк (${v})` : v} после появления в сети`;
+  }
+  return `площадка ${v}`;
 }

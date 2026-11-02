@@ -2,7 +2,7 @@
 //! Что делает: учёт сделок (шаг 6 ТЗ): хранение каждой сделки (план и факт по шагам) в SQLite и в памяти,
 //! публикация в интерфейс (экран «Сделки»), деньги в открытых сделках (limits.rs), закрытие сделки —
 //! итог, план против факта, итог дня (daily.rs: факт или предварительный убыток, решение 53), статистика монеты (gas_stats.rs), уведомление deal.closed,
-//! пауза направления (signal.route_cooldown_s). После перезапуска незакрытые сделки помечаются
+//! пауза направления (signal.route_cooldown_s). Уведомление deal.closed — только если покупка была (решение 105). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске).
 //! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs.
@@ -97,7 +97,11 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         serde_json::to_value(&*deal).ok(),
     )
     .await;
-    deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+    // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
+    // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
+    if deal.buy.is_some() || !deal.invested.is_zero() {
+        deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+    }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
     }
@@ -116,7 +120,37 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
                 .await
         }
     }
-    lk(&core.inner.active).remove(d);
+    // Замок монеты (решение 118, Я-2) снимает тот, кто его взял (executor.rs, manual_halted.rs): закрытие другой
+    // сделки той же монеты (например «Продано вручную» у остановленной) не должно снимать замок идущей.
+}
+
+/// Новая сделка с уникальным ID (решение 118, Я-17): ID = время до мс + тикер (только буквы и цифры — так его примут
+/// ID ордера и вывода); занят в учёте — к нему добавляется счётчик. Выдача и запись в память — под одним замком учёта,
+/// поэтому два параллельных расчёта не получат один ID. Принимает: направление, план, прибыль плана.
+/// Возвращает: сделку (уже в памяти учёта; в базу и интерфейс — ledger::save). Ошибок нет.
+pub fn open(
+    core: &Core,
+    d: &crate::core::types::Direction,
+    plan: serde_json::Value,
+    plan_profit: Decimal,
+) -> Deal {
+    let t: String = d
+        .asset
+        .ticker
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    let base = format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"));
+    let mut deals = lk(&core.inner.deals);
+    let mut id = base.clone();
+    let mut n = 1u32;
+    while deals.contains_key(&id) {
+        id = format!("{base}{n}");
+        n += 1;
+    }
+    let deal = Deal::new(id.clone(), d.clone(), plan, plan_profit);
+    deals.insert(id, deal.clone());
+    deal
 }
 
 /// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.

@@ -14,12 +14,33 @@ use crate::gateway::errors::{ErrorCode, GatewayError};
 pub struct OpError {
     pub code: Option<ErrorCode>,
     pub message: String,
+    /// Транзакция или ордер уже ушли на площадку (у ошибки шлюза есть факт транзакции в сети). Решение 110.
+    pub sent: bool,
 }
 
 impl OpError {
     /// Исход операции неизвестен (транзакция могла исполниться). Ошибок нет.
     pub fn outcome_unknown(&self) -> bool {
         self.code == Some(ErrorCode::OutcomeUnknown)
+    }
+
+    /// Решение 110: продажа DEX не ушла в сеть, и повтор со свежим маршрутом безопасен — денег и газа не стоил.
+    /// Коды — только те, что возникают ДО отправки: цена сборки хуже допустимой, лимит или очередь запросов,
+    /// нет маршрута, данные устарели, налоги не проверены, откат при пробном вызове (у отката в сети есть факт
+    /// транзакции — sent). Nonce, отказ канала, нет связи, исход неизвестен — не сюда: транзакция могла уйти.
+    pub fn retry_safe(&self) -> bool {
+        !self.sent
+            && matches!(
+                self.code,
+                Some(
+                    ErrorCode::QuoteMismatch
+                        | ErrorCode::RateLimited
+                        | ErrorCode::NoRoute
+                        | ErrorCode::StaleData
+                        | ErrorCode::CoinNotChecked
+                        | ErrorCode::SwapReverted
+                )
+            )
     }
 }
 
@@ -34,6 +55,7 @@ impl From<String> for OpError {
         Self {
             code: None,
             message,
+            sent: false,
         }
     }
 }
@@ -43,6 +65,7 @@ impl From<&GatewayError> for OpError {
         Self {
             code: Some(e.code),
             message: e.message.clone(),
+            sent: e.tx.is_some(),
         }
     }
 }

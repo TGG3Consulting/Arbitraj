@@ -3,7 +3,8 @@
 //! вывода из справочника сетей ядра (core.inner.networks — его держит свежим registry_sync.rs; Presence.info у A,
 //! DirCtx.usdt_b у B): в расчёте нет ни одного запроса к бирже (решение 66 — подбор объёма считает десятки объёмов,
 //! а config/getall BingX подписанный и с лимитом). У DEX — через шлюз (газ перевода из кошелька, налог перевода).
-//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision).
+//! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision) и до кратного шагу вывода (withdraw_step, решение
+//! 119). Вывод биржи — ещё и налог перевода токена (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
 //! Кто вызывает: core/costs.rs.
 //! От чего зависит: dirctx.rs, deps.rs (шлюз), size.rs (Fail), core/types.
 //! Настройки: нет.
@@ -16,11 +17,16 @@ use super::deps::Deps;
 use super::dirctx::DirCtx;
 use super::size::Fail;
 
-/// Сумма вывода с A вниз до точности вывода биржи (у DEX и без точности — без изменений). Ошибок нет.
+/// Сумма вывода с A вниз до точности вывода биржи и до кратного шагу вывода (withdraw_step, решение 118, А-🟠7;
+/// у DEX и без точности и шага — без изменений). Ошибок нет.
 pub fn floor_precision(qty: Decimal, info: Option<&CoinNetworkInfo>) -> Decimal {
-    match info.and_then(|i| i.withdraw_precision) {
+    let qty = match info.and_then(|i| i.withdraw_precision) {
         Some(p) => qty.trunc_with_scale(p),
         None => qty,
+    };
+    match info.and_then(|i| i.withdraw_step) {
+        Some(step) if step > Decimal::ZERO => ((qty / step).trunc() * step).normalize(),
+        _ => qty,
     }
 }
 
@@ -40,11 +46,22 @@ fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
     ))
 }
 
-/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты.
+/// Стоимость вывода монеты с A. Принимает: шлюз, контекст, сумму вывода. Возвращает: затраты (у биржи — комиссия
+/// вывода и налог перевода DirCtx.transfer_tax, решение 118).
 /// Ошибки: Stop — комиссия неизвестна, сбой шлюза DEX.
 pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     if let Some(info) = &cx.a.info {
-        return Ok(vec![fee_line(info)?]);
+        let fee = fee_line(info)?;
+        // Решение 118 (Я-3): вывод биржи — перевод токена в сети, налог перевода снимается с того, что ушло в сеть
+        // (вывод минус комиссия) — так же считает ожидание зачисления (credit_expect.rs).
+        let pct = cx.transfer_tax.unwrap_or_default();
+        let tax = Cost::new(
+            CostKind::TransferTax,
+            (amount - fee.amount).max(Decimal::ZERO) * pct / Decimal::ONE_HUNDRED,
+            info.asset.ticker.clone(),
+            false,
+        );
+        return Ok(vec![fee, tax]);
     }
     let d = &cx.dir;
     let a = deps.gw.get(&d.buy_on).await.map_err(|e| e.message)?;
@@ -53,8 +70,10 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
 }
 
-/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму. Возвращает: затраты (как их отдаёт площадка).
-/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX.
+/// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму (выручка минус комиссия продажи в котируемой монете —
+/// столько уйдёт, решение 118). Возвращает: затраты (как их отдаёт площадка).
+/// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX;
+/// TooSmall / TooLarge — сумма вне минимума / максимума вывода USDT у биржи B (решение 118, Я-12).
 pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     let d = &cx.dir;
     if cx.b.info.is_some() {
@@ -64,6 +83,24 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 d.sell_on.0, cx.net_b, cx.usdt.ticker
             ))
         })?;
+        // Решение 118 (Я-12): минимум и максимум вывода USDT у B — иначе перегон отклоняется биржей уже после сделки.
+        if let Some(min) = info.withdraw_min
+            && amount < min
+        {
+            return Err(Fail::TooSmall(format!(
+                "возврат {amount} {} с {} меньше минимума вывода {min}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
+        if let Some(max) = info.withdraw_max
+            && !max.is_zero()
+            && amount > max
+        {
+            return Err(Fail::TooLarge(format!(
+                "возврат {amount} {} с {} больше максимума вывода {max}",
+                cx.usdt.ticker, d.sell_on.0
+            )));
+        }
         return Ok(vec![fee_line(info)?]);
     }
     let b = deps.gw.get(&d.sell_on).await.map_err(|e| e.message)?;

@@ -9,7 +9,7 @@
   Настройки: нет.
 -->
 <script>
-  import { reasons, resultLabel, taxState } from '../lib/coinFilter.js';
+  import { coinRowKey, reasons, resultLabel, taxState } from '../lib/coinFilter.js';
   import { shortAddr } from '../lib/fmt.js';
 
   /** coins — монеты после фильтров; onopen(coin) — открыть окно монеты. */
@@ -23,7 +23,7 @@
     return { text: 'не проверено', cls: 'unset' };
   }
   /** Ключ монеты: тикер + адрес (одинаковый тикер бывает разными токенами). */
-  const key = (c) => `${c.asset.ticker}|${c.asset.bsc_contract}`;
+  const key = coinRowKey;
 </script>
 
 <div class="tscroll">

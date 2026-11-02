@@ -7,7 +7,7 @@
 // Настройки: нет.
 
 import { get, post, seg } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 
 /** Состояние: data — Risk от ядра (null — ещё не получено), error — причина сбоя. */
 export const control = $state({ data: null, error: '', busy: false });
@@ -27,7 +27,7 @@ export function start() {
   reload();
   onLive((msg) => {
     if (msg.type === 'control') control.data = msg.data;
-    else if (msg.type === 'lagged') reload();
+    else if (lagFor(msg, 'core')) reload();
   });
 }
 
@@ -49,5 +49,5 @@ export const setMode = (mode) => command('/api/control', { mode });
 /** Снять паузу площадки. Принимает: id площадки. */
 export const resumeVenue = (id) => command(`/api/control/venue/${seg(id)}/resume`);
 
-/** Снять карантин монеты. Принимает: тикер. */
+/** Снять карантин монеты. Принимает: id — адрес контракта (решение 118) или тикер монеты без адреса. */
 export const releaseCoin = (t) => command(`/api/control/quarantine/${seg(t)}/release`);

@@ -121,15 +121,18 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
         .into_iter()
         .find(|v| kind(v) == Some(VenueKind::Dex))
         .cloned();
-    let band = || -> Result<Decimal, String> {
-        let v = dex
-            .as_ref()
-            .ok_or("у направления нет DEX — полоса dex.depth_band_pct не задаётся")?;
+    // Решение 118 (Я-20): у биржа ↔ биржа DEX нет — полоса не задаётся, стаканы показываются без неё (не ошибка).
+    let band = || -> Result<Option<Decimal>, String> {
+        let Some(v) = dex.as_ref() else {
+            return Ok(None);
+        };
         let at = At {
             venue: Some(&v.0),
             coin: None,
         };
-        s.decimal("dex.depth_band_pct", at).map_err(|e| e.message)
+        s.decimal("dex.depth_band_pct", at)
+            .map(Some)
+            .map_err(|e| e.message)
     };
     let (mut books, mut pools, mut links) = (vec![], vec![], vec![]);
     for (v, side, route) in [

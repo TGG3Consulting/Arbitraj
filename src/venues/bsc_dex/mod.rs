@@ -39,14 +39,32 @@ pub struct BscDex {
     p: Parts,
     /// Подписка на рынок: задачи, последний список, пересборка при изменении настроек промежуточных монет.
     subs: resubscribe::Subs,
+    /// Исполнение свопа через агрегатор KyberSwap (решение 91, настройка exec.via_kyber): свой контекст из тех же
+    /// зависимостей. Сигналы, цены и подбор размера остаются на bsc_dex; KyberSwap — только маршрут и своп на сделке.
+    kyber: crate::venues::kyberswap::state::Parts,
 }
 
 impl BscDex {
     /// Создаёт адаптер. Ничего не подключает: соединения открываются по запросу ядра.
     pub fn new(ctx: ctx::Ctx) -> Self {
+        // Контекст KyberSwap-исполнения из общих зависимостей (настройки, секреты, HTTP, журнал, сырые логи).
+        let kctx = crate::venues::kyberswap::ctx::Ctx {
+            settings: ctx.settings.clone(),
+            vault: ctx.vault.clone(),
+            http: ctx.http.clone(),
+            journal: ctx.journal.clone(),
+            raw: ctx.raw.clone(),
+            pace: Default::default(),
+        };
+        let p = Parts::new(ctx);
+        // Решение 112: свопы KyberSwap идут тем же кошельком — одна очередь и один запомненный nonce с переводами
+        // и свопами bsc_dex (раньше у KyberSwap был свой замок и nonce только от узла).
+        let (lock, next) = p.nonces.shared();
+        let kyber = crate::venues::kyberswap::state::Parts::with_wallet(kctx, lock, next);
         Self {
-            p: Parts::new(ctx),
+            p,
             subs: resubscribe::Subs::default(),
+            kyber,
         }
     }
 

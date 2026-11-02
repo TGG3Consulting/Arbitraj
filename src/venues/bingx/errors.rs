@@ -20,6 +20,9 @@ pub enum Op {
     Trade,
     /// Вывод.
     Withdraw,
+    /// Перевод между своими счетами BingX (фондовый → спот, решение 102): деньги двигаются — как вывод, итог
+    /// без ответа неизвестен, повтора и резервного адреса нет.
+    Move,
     /// Всё остальное (справочники, балансы, проверки).
     Other,
 }
@@ -40,7 +43,7 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         _ => match op {
             Op::Trade => ErrorCode::OrderRejected,
             Op::Withdraw => ErrorCode::WithdrawRejected,
-            Op::Other => ErrorCode::BadResponse,
+            Op::Move | Op::Other => ErrorCode::BadResponse,
         },
     };
     let text = format!("BingX, код {code}: {msg}");
@@ -60,10 +63,10 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
 
 /// Ордер или вывод → «результат неизвестен» с пояснением в тексте. Принимает: ошибку, операцию. Ошибок нет.
 fn unknown(e: GatewayError, op: Op) -> GatewayError {
-    let what = if op == Op::Trade {
-        "ордер"
-    } else {
-        "вывод"
+    let what = match op {
+        Op::Trade => "ордер",
+        Op::Move => "перевод между счетами",
+        _ => "вывод",
     };
     GatewayError {
         code: ErrorCode::OutcomeUnknown,

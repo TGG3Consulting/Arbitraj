@@ -45,6 +45,8 @@ pub struct Inner {
     pub kinds: RwLock<Vec<(VenueId, VenueKind)>>,
     /// Справочник монет и направлений.
     pub coins: RwLock<Vec<CoinEntry>>,
+    /// (площадка, тикер) → монета для тика стакана (решение 118, Я-9, ticker_index.rs).
+    pub tickers: RwLock<super::ticker_index::TickerIndex>,
     /// Адрес USDT в BSC или причина, почему его нет.
     pub usdt: RwLock<Result<Address, String>>,
     pub blacklist: RwLock<Blacklist>,
@@ -68,8 +70,13 @@ pub struct Inner {
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// Подписки площадок: на что подписана, идёт ли подписка, причина сбоя (sub_state.rs).
     pub subs: Mutex<super::sub_state::SubState>,
-    /// Монеты, по которым идёт пересчёт тика: значение true — пришёл ещё тик, пересчитать снова.
-    pub ticking: Mutex<HashMap<Asset, bool>>,
+    /// Монеты, по которым идёт пересчёт тика: значение — площадки, приславшие тик во время пересчёта (пусто — нового
+    /// тика не было). Решение 109: повтор пересчитывает направления всех этих площадок, а не только первой.
+    pub ticking: Mutex<HashMap<Asset, HashSet<VenueId>>>,
+    /// Память котировок DEX для тика (решение 109, quote_cache.rs).
+    pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
+    /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
+    pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
     /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
     pub cand_tx: mpsc::Sender<Direction>,
     pub queued: Mutex<HashSet<Direction>>,
@@ -95,8 +102,8 @@ pub struct Inner {
     pub risk: Mutex<Risk>,
     /// Сделки по id (ledger.rs).
     pub deals: Mutex<HashMap<String, Deal>>,
-    /// Направления, по которым сейчас идёт сделка (одна на направление).
-    pub active: Mutex<HashSet<Direction>>,
+    /// Монеты, по которым сейчас идёт сделка (решение 118, Я-2: одна сделка на монету — ключ по адресу контракта).
+    pub active: Mutex<HashSet<super::coin_key::CoinKey>>,
     /// Статистика газа по монете (gas_stats.rs).
     pub gas: Mutex<HashMap<Asset, CoinGasStats>>,
     /// Алерты «убыток выше порога» и их сделки (manual.rs).
@@ -145,6 +152,7 @@ impl Inner {
             networks: RwLock::default(),
             kinds: RwLock::new(kinds),
             coins: RwLock::default(),
+            tickers: RwLock::default(),
             usdt: RwLock::new(Err("справочник бирж ещё не загружен".into())),
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),
@@ -157,6 +165,8 @@ impl Inner {
             spreads: RwLock::default(),
             subs: Mutex::default(),
             ticking: Mutex::default(),
+            quote_cache: Mutex::default(),
+            spread_sent: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),
             candidates: Mutex::default(),

@@ -8,6 +8,7 @@
 - Токен Telegram-бота для уведомлений.
 - Ключ CoinGecko для справочника пулов (`index.api_key`, решение 58) — только при заданном заголовке `index.key_header`; идёт в заголовке запроса, в журнал и сырые сообщения не попадает.
 - Ключи провайдера узла BSC (`bsc.node_ws_key`, `bsc.node_http_key`) и резервного провайдера (`bsc.node_ws_key_backup`, `bsc.node_http_key_backup`) — если провайдер ставит ключ в адрес; в настройке адреса пишется `{key}`.
+- Ключ провайдера узла BSC для агрегатора KyberSwap (`kyber.node_http_key`, решение 91) — если провайдер ставит ключ в адрес `kyber.node_http_url`; пишется как `{key}`, в журнал и ошибки не попадает. Кошелёк у площадки `kyberswap` — тот же `bsc_dex.wallet_key` (один кошелёк, решение 45), отдельного ключа кошелька у неё нет. Идентификатор `kyber.client_id` (заголовок X-Client-Id) — не секрет, это обычная настройка.
 - Ключи платных каналов отправки `channel.<id>.key` (Blink, bloXroute Cloud API, NodeReal Bundle API, BlockRazor Builder, Flashblock).
 - Полный список с описаниями — `KNOWN` в `src/secrets/mod.rs`.
 

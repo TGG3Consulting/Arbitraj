@@ -4,11 +4,12 @@
 //! venue.status_poll_ms; зачисление — по событию баланса или опросу, кто первый (решение 76: до вывода регистрируется
 //! ожидаемое зачисление — credit_expect.rs, credit_watch.rs; шаг зачисления — transfer_credit.rs). Перевод дольше transfer.max_time_s —
 //! уведомление и карантин монеты, ждём дальше (монеты в пути). Фактическое время в пути пишется в историю
-//! (для T в расчёте, dirctx.rs).
+//! (для T в расчёте, dirctx.rs). Сумма вывода — вниз до точности вывода биржи (решение 104).
 //! Кто вызывает: executor.rs (перевод сделки), stuck.rs (перегон), usdt_return.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! credit_watch.rs, transfer_credit.rs.
-//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете).
+//! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
+//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network.
 
 use std::time::Duration;
 
@@ -25,7 +26,8 @@ use super::op_error::OpError;
 use super::rules_apply::{self, Next};
 use super::wait::{Pacer, Unit};
 
-/// Название сети BSC площадки для монеты (у биржи — из её справочника; у DEX — сеть любой биржи монеты).
+/// Название сети BSC площадки для монеты (у биржи — из её справочника; у DEX — своя venue.bsc_network, затем сеть
+/// любой биржи монеты).
 /// Ошибка: ни у одной биржи монеты нет сети BSC.
 pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, String> {
     let coins = rd(&core.inner.coins);
@@ -45,18 +47,33 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
             .find(|p| &p.venue == venue)
             .and_then(|p| p.network.clone())
     });
-    let other = entry.and_then(|e| e.presence.iter().find_map(|p| p.network.clone()));
+    // Решение 108: у каждой площадки своё название сети BSC (BingX и DEX — BEP20, MEXC — BSC). Своё — раньше
+    // чужого: иначе DEX получал от MEXC «BSC» и отказывал («Кошелёк DEX работает только в сети BEP20»).
+    // Решение 118 (Я-19): только своё название площадки — название сети другой площадки не годится (BingX «BEP20»,
+    // MEXC «BSC»). Нет своего — ошибка: задайте venue.bsc_network площадки.
     own.or(any)
-        .or(other)
-        .or_else(|| {
-            // USDT и другие монеты вне справочника: сеть BSC биржи — у любой её монеты с адресом контракта.
-            rd(&core.inner.networks)
-                .values()
-                .flatten()
-                .find(|i| i.asset.bsc_contract.is_some())
-                .map(|i| i.network.clone())
+        .or_else(|| own_bsc_name(core, venue))
+        .ok_or_else(|| {
+            format!(
+                "{}: нет сети BSC для {} — задайте venue.bsc_network площадки",
+                venue.0, asset.ticker
+            )
         })
-        .ok_or_else(|| format!("{}: нет сети BSC для {}", venue.0, asset.ticker))
+}
+
+/// Название сети BSC самой площадки — настройка venue.bsc_network (решение 108). None — не задана. Ошибок нет.
+pub fn own_bsc_name(core: &Core, venue: &VenueId) -> Option<String> {
+    core.inner
+        .deps
+        .settings
+        .text(
+            "venue.bsc_network",
+            crate::settings::read::At {
+                venue: Some(&venue.0),
+                coin: None,
+            },
+        )
+        .ok()
 }
 
 /// Переводит qty монеты с from на to. Возвращает: (вывод с хешем и комиссией, зачисление — сколько дошло).
@@ -80,11 +97,28 @@ pub async fn send(
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
     // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
     // приход не посчитан — только опрос).
+    // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает
+    // расчёт, costs_withdraw::floor_precision). Без этого хвост вида 14.425559999999999999 (комиссия покупки в монете
+    // пришла числом с плавающей точкой) — отказ BingX 100400 «decimal precision … Precision: 8».
+    let qty = {
+        let nets = rd(&core.inner.networks);
+        let info = nets.get(from).and_then(|l| {
+            l.iter()
+                .find(|i| i.asset.ticker == asset.ticker && i.network == net_from)
+        });
+        super::costs_withdraw::floor_precision(qty, info)
+    };
+    if qty <= Decimal::ZERO {
+        return Err(OpError::from(format!(
+            "{}: сумма вывода {} после округления до точности вывода — ноль",
+            from.0, asset.ticker
+        )));
+    }
     let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
     let req = WithdrawRequest {
         venue: from.clone(),
         asset: asset.clone(),
-        network: net_from,
+        network: net_from.clone(),
         address,
         amount: qty,
         deal_id: deal.to_string(),
@@ -175,5 +209,8 @@ pub async fn send(
         started,
     };
     let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
+    // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
+    let (f, a) = (&net_from, credited.amount);
+    super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a).await;
     Ok((sent, credited))
 }

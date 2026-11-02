@@ -60,7 +60,7 @@ pub fn usdt_address(
     }
 }
 
-/// Собирает справочник. Монеты бирж группируются по адресу контракта в BSC; монеты без адреса
+/// Собирает справочник. Монеты бирж группируются по адресу контракта в BSC и тикеру (решение 118); монеты без адреса
 /// остаются в справочнике с причиной (их видно на экране «Монеты»). Ошибок нет.
 pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
     // ключ: адрес контракта или тикер (у монеты без адреса) → (монета, площадка → данные сети)
@@ -90,9 +90,12 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 ticker: ticker.to_string(),
                 bsc_contract: p.info.as_ref().and_then(|i| i.asset.bsc_contract),
             };
+            // Решение 118 (Я-8): ключ — адрес и тикер. У одного адреса на разных биржах разные тикеры — отдельные
+            // записи (направлений между ними нет: бот не торгует то, что не может сопоставить; журнал —
+            // ticker_index.rs). Одинаковый тикер — одна запись, как раньше.
             let key = asset
                 .bsc_contract
-                .map(|a| a.to_string())
+                .map(|a| format!("{a}|{ticker}"))
                 .unwrap_or_else(|| format!("{}@{}", ticker, venue.0));
             coins.entry(key).or_insert((asset, vec![])).1.push(p);
         }
@@ -121,6 +124,7 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 block: None,
                 problem: None,
                 wait: None,
+                cex_cex: None,
             }
         })
         .collect()

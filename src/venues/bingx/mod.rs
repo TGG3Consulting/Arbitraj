@@ -12,9 +12,11 @@ pub mod account;
 pub mod account_update;
 pub mod book;
 pub mod ctx;
+pub mod deposit_addr;
 pub mod depth;
 pub mod errors;
 pub mod fees;
+pub mod fund_move;
 pub mod market;
 pub mod num;
 pub mod order_state;
@@ -46,6 +48,7 @@ use crate::gateway::events::MarketEvent;
 
 use book::Books;
 use ctx::Ctx;
+use deposit_addr::DepositAddrs;
 use fees::Fees;
 use subs::{Parts, Subs};
 use symbols::Symbols;
@@ -58,6 +61,8 @@ pub struct Bingx {
     symbols: Symbols,
     books: Books,
     fees: Fees,
+    /// Адреса депозита в памяти (deposit_addr.rs, решение 118 Я-5).
+    addrs: DepositAddrs,
 }
 
 impl Bingx {
@@ -69,6 +74,7 @@ impl Bingx {
             symbols: Symbols::default(),
             books: Books::default(),
             fees: Fees::default(),
+            addrs: DepositAddrs::default(),
         }
     }
 
@@ -99,6 +105,11 @@ impl Venue for Bingx {
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
         wallet::coin_networks(&self.ctx).await
+    }
+
+    /// Одна монета — config/getall?coin= (решение 113, wallet.rs).
+    async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        wallet::coin_networks_of(&self.ctx, ticker).await
     }
 
     async fn subscribe_market(
@@ -135,7 +146,7 @@ impl Venue for Bingx {
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
-        wallet::deposit_address(&self.ctx, asset, network).await
+        deposit_addr::deposit_address(&self.ctx, &self.addrs, asset, network).await
     }
 
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
@@ -144,6 +155,14 @@ impl Venue for Bingx {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    async fn deposit_to_trading(
+        &self,
+        asset: &Asset,
+        amount: rust_decimal::Decimal,
+    ) -> GatewayResult<Option<String>> {
+        fund_move::to_spot(&self.ctx, asset, amount).await
     }
 
     async fn withdraw_cost(

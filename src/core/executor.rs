@@ -4,17 +4,20 @@
 //! без монет (стартовое правило шлюза: отменить, больше не пробовать — повтор только по правилу).
 //! Покупка исполнилась частично — решение 48 (partial.rs): больший итог из «довезти и продать» и
 //! «продать обратно на A». Вывод не состоялся — монеты на A, режим застрявшей монеты. Продажа: выгодно
-//! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37). По одному направлению — одна сделка.
+//! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37).
+//! Решение 118 (Я-2): по одной монете — одна сделка (замок по адресу контракта, coin_key.rs): направления одной монеты
+//! через разные площадки не покупают её параллельно сверх money.max_per_coin_usd.
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
+//! Решение 103: свободный баланс A перед ордером меньше списания плана — объём подбирается заново под остаток (refit.rs).
 //! Сухой режим (решение 74, dry.rs) — второй замок на входе: сделка не начинается, даже если кандидата передали сюда
 //! (первый замок — candidates.rs); предпроверка считает план в режиме Live (виртуального бюджета у сделки нет); перед
 //! покупкой — третий замок (buy_gate). После покупки сделка доводится как обычно.
+//! Решение 94: свободный баланс площадки A читается один раз — сразу после третьего замка, прямо перед ордером
+//! покупки (limits::buy_cap); предел списания — меньшее из бюджета плана и свободного.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
-
-use chrono::Utc;
 
 use crate::core::types::{Direction, Side};
 use crate::gateway::urgency::{self, Urgency};
@@ -23,17 +26,6 @@ use crate::storage::journal::Level;
 use super::costs::Calc;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk, rd};
-
-/// Идентификатор сделки: время до мс + тикер, только буквы и цифры (так его примут ID ордера и вывода).
-fn deal_id(d: &Direction) -> String {
-    let t: String = d
-        .asset
-        .ticker
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .collect();
-    format!("{}{t}", Utc::now().format("%Y%m%d%H%M%S%3f"))
-}
 
 /// Что вышло на входе исполнителя.
 #[derive(Debug, Clone, PartialEq)]
@@ -44,13 +36,13 @@ pub enum Start {
     Dry(String),
     /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике).
     NotTradable,
-    /// По направлению уже идёт сделка.
+    /// По монете уже идёт сделка (решение 118: одна сделка на монету).
     Busy,
 }
 
 /// Кандидат прошёл расчёт — запускает сделку, если режим не сухой (решение 74), направление по-прежнему торгуемо
 /// (есть в directions() монеты: за время расчёта монета могла уйти в чёрный список или в «налоги не проверены») и
-/// по нему сейчас нет другой. Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61).
+/// по этой монете сейчас нет другой сделки (решение 118, Я-2: замок по монете, а не по направлению). Вся сделка — класс срочности Trade (gateway/urgency.rs, решение 61).
 /// Возвращает: Start — что вышло. Ошибок нет.
 pub async fn accepted(core: &Core, calc: Calc) -> Start {
     // Сухой режим проверяется первым: до справочника, учёта и шлюза — ни одного действия.
@@ -65,13 +57,14 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     if !tradable {
         return Start::NotTradable;
     }
-    if !lk(&core.inner.active).insert(d.clone()) {
+    let key = super::coin_key::CoinKey::of(&d.asset);
+    if !lk(&core.inner.active).insert(key.clone()) {
         return Start::Busy;
     }
     let core = core.clone();
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
         run(&core, d.clone()).await;
-        lk(&core.inner.active).remove(&d);
+        lk(&core.inner.active).remove(&key);
     }));
     Start::Started
 }
@@ -106,9 +99,10 @@ async fn run(core: &Core, d: Direction) {
             return;
         }
     };
-    let mut deal = Deal::new(
-        deal_id(&d),
-        d.clone(),
+    // Решение 118 (Я-17): ID сделки выдаётся и занимается в учёте под одним замком — повтор невозможен.
+    let mut deal = super::ledger::open(
+        core,
+        &d,
         serde_json::to_value(&plan).unwrap_or_default(),
         plan.profit_usd,
     );
@@ -127,6 +121,48 @@ async fn run(core: &Core, d: Direction) {
     if let Err(why) = buy_gate(core) {
         return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
     }
+    // Решение 94: свободный баланс A — один запрос прямо перед ордером (не на каждый расчёт); предел списания —
+    // меньшее из бюджета плана и свободного. Не хватает на объём плана — объём заново под остаток (решение 103).
+    let cap = match super::limits::buy_cap(core, &d, budget).await {
+        Ok((cap, free, q)) => {
+            deal.note(format!(
+                "Перед покупкой свободно на {}: {free} {q}; предел списания {cap}",
+                d.buy_on.0
+            ));
+            cap
+        }
+        Err(why) => {
+            let why = format!("перед покупкой: {why} — ордер не ставился");
+            return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+        }
+    };
+    // Решение 103: свободного меньше списания плана — объём подбирается заново под свободный остаток (все затраты,
+    // финальная котировка, пороги). Не выгодно — отказ до ордера.
+    let plan = if super::refit::needed(&plan, cap) {
+        match super::refit::plan(core, &d, cap).await {
+            Ok(p) => {
+                deal.note(format!(
+                    "Объём под свободный остаток {cap}: {} вместо {}, прибыль {} USDT (было {})",
+                    p.qty,
+                    plan.qty,
+                    p.profit_usd.round_dp(4),
+                    plan.profit_usd.round_dp(4)
+                ));
+                deal.plan = serde_json::to_value(&p).unwrap_or_default();
+                deal.plan_profit_usd = p.profit_usd;
+                super::ledger::save(core, &deal).await;
+                p
+            }
+            Err(why) => {
+                let why = format!(
+                    "на свободный остаток {cap} сделка невыгодна: {why} — ордер не ставился"
+                );
+                return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+            }
+        }
+    } else {
+        plan
+    };
     // Покупка на A.
     let bought = super::trade_ops::trade(
         core,
@@ -137,7 +173,7 @@ async fn run(core: &Core, d: Direction) {
         plan.qty,
         plan.buy_quote.route.clone(),
         plan.buy_quote.avg_price,
-        Some(budget),
+        Some(cap),
     )
     .await;
     let r = match bought {

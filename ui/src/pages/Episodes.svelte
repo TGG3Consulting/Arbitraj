@@ -13,7 +13,7 @@
 -->
 <script>
   import { get, seg } from '../lib/api.js';
-  import { onLive } from '../lib/live.svelte.js';
+  import { onLive, lagFor } from '../lib/live.svelte.js';
   import { dirText } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
@@ -53,7 +53,7 @@
         const i = rows.findIndex((r) => r.id === msg.data.id);
         if (i >= 0) rows[i] = msg.data;
         else rows = [msg.data, ...rows];
-      } else if (msg.type === 'lagged') reload();
+      } else if (lagFor(msg, 'core')) reload();
     });
     return () => {
       clearInterval(t);

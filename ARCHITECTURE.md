@@ -306,6 +306,7 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 | 2026-11-02 | BingX: депозит с фондового счёта на спот сразу после зачисления (решение 102): Venue::deposit_to_trading, venues/bingx/fund_move.rs, venue.deposit_to_spot, уведомление transfer.to_trading_failed. Объём под свободный остаток перед ордером (решение 103): core/refit.rs, profit::decide_capped |
 | 2026-11-02 | Сумма вывода — вниз до точности вывода биржи при исполнении перевода (решение 104), core/transfers.rs; настроек нет |
 | 2026-11-02 | deal.closed в Telegram только при состоявшейся покупке (решение 105), core/ledger.rs; настроек нет |
+| 2026-11-02 | «Живой экран», вид «Б» (решение 106): строка — монета с лучшим направлением, раскрытие — все направления; ширина не зависит от числа бирж | ui/src/components/LiveCoins.svelte, ui/src/lib/liveGrid.js, ui/src/pages/Live.svelte | нет | «Живой экран» |
 
 ## Открытые вопросы
 

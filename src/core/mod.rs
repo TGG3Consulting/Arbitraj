@@ -98,6 +98,7 @@ pub mod stuck;
 pub mod sub_state;
 pub mod subscribe;
 pub mod tick;
+pub mod ticker_index;
 pub mod touched;
 pub mod trade_ops;
 pub mod transfer_credit;

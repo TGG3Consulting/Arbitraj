@@ -45,6 +45,8 @@ pub struct Inner {
     pub kinds: RwLock<Vec<(VenueId, VenueKind)>>,
     /// Справочник монет и направлений.
     pub coins: RwLock<Vec<CoinEntry>>,
+    /// (площадка, тикер) → монета для тика стакана (решение 118, Я-9, ticker_index.rs).
+    pub tickers: RwLock<super::ticker_index::TickerIndex>,
     /// Адрес USDT в BSC или причина, почему его нет.
     pub usdt: RwLock<Result<Address, String>>,
     pub blacklist: RwLock<Blacklist>,
@@ -150,6 +152,7 @@ impl Inner {
             networks: RwLock::default(),
             kinds: RwLock::new(kinds),
             coins: RwLock::default(),
+            tickers: RwLock::default(),
             usdt: RwLock::new(Err("справочник бирж ещё не загружен".into())),
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),

@@ -34,7 +34,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 if first {
                     core.request_rebuild();
                 }
-                if let Some(a) = asset_by_ticker(&core, &ticker) {
+                if let Some(a) = asset_by_ticker(&core, &venue, &ticker) {
                     schedule(&core, a, venue);
                 }
             }
@@ -64,7 +64,9 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             }
             Touched::Invalidated { venue, ticker } => {
                 // У DEX данные монеты — её пулы: удаляем их по адресу контракта.
-                if let Some(token) = asset_by_ticker(&core, &ticker).and_then(|a| a.bsc_contract) {
+                if let Some(token) =
+                    asset_by_ticker(&core, &venue, &ticker).and_then(|a| a.bsc_contract)
+                {
                     lk(&core.inner.quote_cache).bump(&venue, token);
                     wr(&core.inner.market).drop_pools_of(&venue, token);
                     // Пулы сняты до перечитывания, а не исчезли: решение по чёрному списку держится (решение 71).
@@ -111,12 +113,10 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
     }
 }
 
-/// Монета справочника по тикеру (тикеры приходят от бирж; у DEX — тот, что передан в подписку).
-fn asset_by_ticker(core: &Core, ticker: &str) -> Option<Asset> {
-    rd(&core.inner.coins)
-        .iter()
-        .find(|c| c.asset.ticker == ticker && c.asset.bsc_contract.is_some())
-        .map(|c| c.asset.clone())
+/// Монета справочника по площадке и тикеру (тикеры приходят от бирж; у DEX — тот, что передан в подписку).
+/// Решение 118 (Я-9): по карте пересборки (ticker_index.rs) — O(1) и только монета этой площадки. Ошибок нет.
+fn asset_by_ticker(core: &Core, venue: &VenueId, ticker: &str) -> Option<Asset> {
+    rd(&core.inner.tickers).get(venue, ticker)
 }
 
 /// Монеты справочника, чей адрес контракта — один из токенов пула.

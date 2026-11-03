@@ -9,7 +9,8 @@
 //! настройка — «не проверено» (NotChecked): это не свойство монеты, чёрного списка нет (Outcome::Wait / Config).
 //! Кто вызывает: check/cycle.rs.
 //! От чего зависит: check/probe.rs, check/native_probe.rs (нативная BNB, решение 62), quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs, wallet/signer.rs, node/call.rs.
-//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера.
+//! Настройки: check.probe_usdt [bsc_dex] (сумма пробы); через probe.rs — адреса Universal Router, Permit2, квотера,
+//! exec.executor_address (пул вида без своего пути — проба через исполнитель, check/probe_exec.rs).
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6 (модель налога у
 //! Uniswap SDK: buyFeeBps/sellFeeBps — доля, удерживаемая при переводе).

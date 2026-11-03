@@ -111,8 +111,8 @@
   `coins(0)`, `coins(1)`, `bnb_gas()` пулов Pancake WBNB-stkBNB 0x0b03e3d6Ec0c5e5bBf993dED8D947C6fb6eEc18D и BNBx-BNB
   0x9c138bE1D76ee4C5162E0fe9D4eEA5542a23D1bD (по SDK — WBNB, не 0xEeee…) и `bnb_gas()` Lista (по умолчанию 4029);
   поиск пулов с меткой у фабрики Pancake V2 — getPairInfo(монета, 0xEeee…). (4) Проба пула через исполнитель (газ шага,
-  вместе с withdraw/deposit) — без неё у пулов STABLE_U256 / STABLE_U256_BNB нет замера газа и котировки (check/probe.rs
-  no_path). (5) Решение Тиграна: справочник индексатора — каким адресом он отдаёт BNB таких пулов (WBNB или 0xEeee…);
+  вместе с withdraw/deposit) — подключена (ветка router/probe, check/probe_exec.rs); проверить вживую замер газа у пулов
+  STABLE_U256 / STABLE_U256_BNB. (5) Решение Тиграна: справочник индексатора — каким адресом он отдаёт BNB таких пулов (WBNB или 0xEeee…);
   если 0xEeee… — пул находится только поиском по фабрикам (index.factory_scan).
 
 - **Решение «122 (Infinity Stable)» — открытое.** (1) Открыть официальный API `https://explorer.pancakeswap.com/api/cached/pools/list?chains=bsc&protocols=infinityStable` (у агента прокси закрыт): поле `id` — PoolId или адрес (SDK делает checksumAddress(remote.id)), `hookAddress` → `dex.stable_hooks`. (2) Отдаёт ли индексатор справочника эти пулы и под каким id DEX; если нет — пулы только из истории Initialize (`dex.history_scan`). (3) Запись с узла для сверки математики (tests/README.md, tests/bsc_dex_inf_stable.rs). (4) Сухая сделка DEX на пуле Infinity Stable (путь CL с ключом пула). (5) Решено Тиграном («122 (Infinity Stable, ответы)»): крючки dex.stable_hooks видом Infinity CL не берутся; сверка — CLQuoter и get_dy крючка параллельно; перечитывание каждым блоком. Задать `dex.quoter` [Infinity Stable] = CLQuoter Infinity (тот же, что у Infinity CL).
@@ -134,6 +134,11 @@
   решение 127), в журнале нет TransactionDeadlinePassed; (3) свой узел без feed.max_block_age_ms —
   торговли нет, в журнале venue.head_age «задайте feed.max_block_age_ms»; (4) продажа монеты с налогом сплитом через
   исполнитель — в котировке сигнал «налог на входе».
+- **«122 X (проба через исполнитель)» (ветка router/probe, не слита) — проверить вживую** (docs/notes/probe-executor-2026-11-03.md):
+  (1) при заданном exec.executor_address монеты только с пулами thena / topaz получают налоги или точную причину, записи
+  dex.check_not_configured «сборка пробы … не подключена» нет; (2) сухая сделка «как сделка» через такой пул — газ и
+  цена сходятся с пробой; (3) dex.native_probe для nomiswap / biswap / apeswap_bsc / … — одна запись «инфо» с причиной
+  «сделки BNB через этот пул нет», без dex.universal_router.
 - **Решение 127 — записать на сервере (своём узле):** eth_getBlockByNumber(N) и eth_simulateV1 поверх N с
   blockOverrides.time = timestamp(N) + 1 (ждём успех, timestamp симулированного блока = это значение) и = timestamp(N)
   (ждём отказ «block timestamps must be in order»). По записи — тест в tests/bsc_dex_sim_time.rs (сейчас тело запроса

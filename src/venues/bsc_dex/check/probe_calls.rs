@@ -1,13 +1,13 @@
 //! Файл: venues/bsc_dex/check/probe_calls.rs
 //! Что делает: вызовы пробного обмена для eth_simulateV1 — переводы, разрешения и балансы ERC-20.
 //! Кто вызывает: check/probe.rs.
-//! Там же: где лежат токены пула (holder), прошла ли продажа (sell_ok), откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха).
+//! Там же: где лежат токены пула (holder), прошла ли продажа (sell_ok), откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха, у Universal Router и у исполнителя).
 //! От чего зависит: check/simulate.rs (Call), node/abi.rs, quote/quoter_revert.rs.
 //! Настройки: нет.
 //!
 //! ERC-20 — https://eips.ethereum.org/EIPS/eip-20 .
 
-use alloy::sol_types::SolCall;
+use alloy::sol_types::{Revert, SolCall, SolError};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolKind, PoolRef};
@@ -76,7 +76,8 @@ pub fn buy_revert(ctx: &Ctx, i: usize, r: &CallResult, quoter: usize) -> Gateway
     Ok(why)
 }
 
-/// Откат «срок транзакции вышел» (TransactionDeadlinePassed): не вердикт по монете — голова устарела к симуляции или
+/// Откат «срок транзакции вышел» (TransactionDeadlinePassed Universal Router или `require(…, "deadline")` своего
+/// исполнителя, contracts/ArbExecutor.sol execute): не вердикт по монете — голова устарела к симуляции или
 /// dex.deadline_s меньше шага времени симулированного блока (1 с, решение 127), проверка «не проверено».
 /// Принимает: результат вызова. Ошибок нет.
 pub fn late(r: &CallResult) -> bool {
@@ -85,7 +86,9 @@ pub fn late(r: &CallResult) -> bool {
         .as_ref()
         .map(|e| e.message.as_str())
         .unwrap_or_default();
-    !r.ok() && ur::deadline_passed(&r.return_data, msg)
+    // Откат исполнителя — Error(string) «deadline» (Solidity require; разбор — alloy Revert): ровно эта строка.
+    let exec_late = Revert::abi_decode(&r.return_data).is_ok_and(|e| e.reason == "deadline");
+    !r.ok() && (ur::deadline_passed(&r.return_data, msg) || exec_late)
 }
 
 /// uint256 из ответа balanceOf. None — не по ABI.

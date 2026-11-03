@@ -12,7 +12,7 @@ use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
     events_algebra, events_bin, events_cl, events_curve, events_dodo, events_elastic,
-    events_solidly, events_v2, events_v3,
+    events_maverick, events_solidly, events_v2, events_v3,
 };
 
 /// Что произошло с записью после события.
@@ -41,6 +41,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
         Proto::CurveStable => events_curve::topics(),
+        Proto::Maverick => events_maverick::topics(),
     }
 }
 
@@ -65,6 +66,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::liquidity_topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
         Proto::CurveStable => events_curve::liquidity_topics(),
+        Proto::Maverick => events_maverick::liquidity_topics(),
     }
 }
 
@@ -80,6 +82,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::Algebra => events_algebra::apply(e, log),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
         Proto::CurveStable => events_curve::apply(e, log),
+        Proto::Maverick => events_maverick::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

@@ -11,6 +11,7 @@
 | `pmm_depth.rs` | Глубина пула DODO PMM в полосе (решение 86b): отклонение средней цены исполнения от getMidPrice по своей математике (math/swap_dodo), без комиссии пула |
 | `solidly_depth.rs` | Глубина СТАБИЛЬНОГО пула Solidly в полосе (решения 80, 85): отклонение средней цены исполнения от маржинальной цены кривой двоичным поиском (math/swap_solidly), без комиссии пула |
 | `stable_depth.rs` | Глубина пула StableSwap в полосе (решение 122 F): отклонение средней цены исполнения от маржинальной (производная инварианта) двоичным поиском, без комиссии |
+| `tick_bin_spot.rs` | Пул TickBin (Maverick V2, решение 122 F): цена активного тика (официальный TickMath) для размера пробы и глубина в полосе — порт расчёта обмена без комиссии до тика границы |
 | `spot.rs` | Монеты на сумму по текущей цене пула без обмена (проба продажи сверки с квотером, решение 73); DODO — getMidPrice; Solidly — отношение резервов |
 | `pool_quote.rs` | Обмен в одном пуле по локальной математике; полная комиссия V4 (протокольная + LP); DODO PMM — swap_dodo + комиссии lp/mt (решение 86b); Solidly — stable swap_solidly / volatile v2 (решения 80, 85) |
 | `direct.rs` | Лучший пул с учётом налогов монеты и влияния крючка; расчёт доли в пуле (`calc`); частичная ликвидность → `fillable_qty` |
@@ -45,6 +46,7 @@
 | `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
 | `quoter.rs` | Выход по квотеру DEX (eth_call) и сверка с математикой (`dex.quoter_max_diff_pct`) |
 | `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) |
+| `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 

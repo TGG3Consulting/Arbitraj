@@ -11,6 +11,7 @@
 //! Через исполнитель ArbExecutor (решение 122, часть X) — exec/executor/dry.rs: режим «через исполнитель» (любой маршрут,
 //! код подставлен в симуляцию) или графовый «бандл» при заданном exec.executor_address (как сделка).
 //! Кто вызывает: exec/dry_swap.rs.
+//! Решение 122 F: в графовой форме хопы через пулы Maverick V2 сверяются с квотером (exec/precheck_quoter.rs).
 //! От чего зависит: exec/{trade (общие шаги), live, chain, precheck, plan, universal, bundle, native, verify_gate}.rs,
 //! quote/{verify, graph_route, mixed_quoter, direct, via, steps}.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, smart.*, verify.*.
@@ -162,6 +163,10 @@ pub async fn build(
     } else {
         Wrap::None
     };
+    if shape != RouteMode::Direct {
+        // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером, как в сделке.
+        super::precheck_quoter::hops(ctx, &paths).await?;
+    }
     if shape == RouteMode::Direct {
         for h in paths.iter().flat_map(|(p, _)| p.hops.iter()) {
             precheck::quoter_now(ctx, &h.entry, h.token_in, &h.swapped, h.usable.hook_pct).await?;

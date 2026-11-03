@@ -274,6 +274,15 @@ fn side(
             )
             .ok_or_else(|| "расчёт глубины пула StableSwap невозможен".to_string())
         }
+        // TickBin (Maverick V2, решение 122 F): порт расчёта обмена без комиссии до тика границы полосы
+        // (quote/tick_bin_spot.rs depth); полоса не дочитана (непрочитанный тик) — full = false.
+        (PoolState::TickBin(d), PoolKind::TickBin) => {
+            let a_in = token_in == e.pool.token0;
+            let n = band_ticks(b, buy).ok_or("полоса вне 0–100%")?;
+            let (i, o, full) = super::tick_bin_spot::depth(d, a_in, n, U256::from(u128::MAX))
+                .ok_or("расчёт глубины пула Maverick V2 невозможен")?;
+            Ok((pick(i, o), full))
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;

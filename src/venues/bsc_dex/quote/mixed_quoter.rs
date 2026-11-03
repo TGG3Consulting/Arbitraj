@@ -172,5 +172,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "StableSwap не исполняется умным маршрутом (только шаг CURVE контракта-исполнителя)",
             ));
         }
+        // TickBin (Maverick V2, решение 122 F): MixedQuoter PancakeSwap его пулов не знает, Universal Router не
+        // исполняет — только шаг MAVERICK исполнителя; сверка — MaverickV2Quoter (quote/quoter_calls.rs, решение 73).
+        PoolKind::TickBin => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Maverick V2 не исполняется умным маршрутом (только шаг MAVERICK контракта-исполнителя)",
+            ));
+        }
     })
 }

@@ -12,7 +12,8 @@
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
 //! Нативная монета (решение 62) через исполнитель в v1 не исполняется (исполнитель работает только с ERC-20).
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
-//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, native, order, swap_send, txs,
+//! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
+//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, native, order, precheck_quoter, swap_send, txs,
 //! verify_gate}.rs, quote/{via, direct}.rs, wallet/{approve, nonce}.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited,
 //! exec.dex_slippage_pct, verify.*, send.*, channel.*.
@@ -115,6 +116,8 @@ pub async fn prepare(
 ) -> GatewayResult<Vec<Vec<Step>>> {
     let ctx = &v.q.ctx;
     let paths = live_paths(v, req, route, false).await?;
+    // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером на своём узле.
+    super::super::precheck_quoter::hops(ctx, &paths).await?;
     let (coins, paid) = paths
         .iter()
         .fold((Decimal::ZERO, Decimal::ZERO), |(c, u), (p, _)| {

@@ -33,6 +33,7 @@ pub mod native;
 pub mod order;
 pub mod plan;
 pub mod precheck;
+pub mod precheck_quoter;
 pub mod precheck_sim;
 pub mod result;
 pub mod smart_legs;

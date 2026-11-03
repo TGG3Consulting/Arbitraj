@@ -54,5 +54,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::StableSwap(d) => [d.i0, d.i1]
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
+        // TickBin (Maverick V2, решение 122 F): пуст при нулевом любом резерве пула (обмен в одну из сторон невозможен).
+        PoolState::TickBin(d) => d.reserve0.is_zero() || d.reserve1.is_zero(),
     }
 }

@@ -21,6 +21,7 @@ use super::super::directory::pool_key;
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
+use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::{ISolidlyFactory, IThenaV1Factory};
 use super::abi_v2v3::{IV2Factory, IV3Factory};
@@ -103,6 +104,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // StableSwap (Ellipsis; решение 122 F): фабрики с событием создания нет — новые пулы приходят только из
             // справочника и списка dex.stable_pools.
             Proto::CurveStable => continue,
+            // Maverick V2 (решение 122 F): PoolCreated(poolAddress, …, tokenA, tokenB, kinds, accessor) фабрики, все поля
+            // не индексированы (IMaverickV2Factory.sol L35-L47).
+            Proto::Maverick => (
+                "dex.factory",
+                IMaverickV2Factory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
@@ -243,6 +251,11 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = ICLFactory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Slipstream) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
+        }
+        Proto::Maverick => {
+            let e = IMaverickV2Factory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (Maverick V2) не по ABI: {e}"))?;
+            (e.tokenA, e.tokenB, e.poolAddress)
         }
         _ => {
             let e = IV3Factory::PoolCreated::decode_log_data(&log.inner.data)

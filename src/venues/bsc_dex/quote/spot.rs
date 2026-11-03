@@ -62,6 +62,10 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let ru = *d.rates.get(iu as usize)?;
             (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
         }
+        // TickBin (Maverick V2, решение 122 F): цена активного тика по его резервам (официальный TickMath
+        // getTickSqrtPriceAndL, math/maverick_tick_math.rs) в D18-масштабе пула: цена tokenA в tokenB = sqrtPrice²/1e18
+        // (D18 → единицы токенов — множители масштаба). Оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::TickBin(d) => super::tick_bin_spot::coins_for(d, coin0, amount),
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

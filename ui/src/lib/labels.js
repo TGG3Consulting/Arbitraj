@@ -54,6 +54,7 @@ const CHOICE = {
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   solidly_v1: 'Solidly V1 (THENA V1)',
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
+  maverick_v2: 'Maverick V2 (тики-бины, кривая квотера)',
   pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
   pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
   uniswap_v4: 'Uniswap V4',
@@ -68,6 +69,7 @@ const POOL_KIND = {
   Cl: 'V4 CL (концентрированная)',
   Bin: 'V4 Bin (бины)',
   StableSwap: 'StableSwap',
+  TickBin: 'Тики-бины (Maverick V2)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

@@ -87,6 +87,7 @@ pub async fn states(
             || w.family.proto.is_solidly()
             || w.family.proto == Proto::Slipstream
             || w.family.proto == Proto::CurveStable
+            || w.family.proto == Proto::Maverick
         {
             let r = load::state(
                 ctx,

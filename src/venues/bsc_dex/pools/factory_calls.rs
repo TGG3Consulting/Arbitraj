@@ -9,7 +9,8 @@
 //! ответа — без сети.
 //! Кто вызывает: pools/factory_scan.rs.
 //! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs.
-//! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
+//! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
+//! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings, dex.pair_lookup_max [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
 //!
 //! Сигнатуры — официальные интерфейсы фабрик (abi_v2v3.rs):
 //! getPair(address,address) returns (address) — https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Factory.sol#L9
@@ -68,6 +69,7 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
             }
             Proto::Algebra => vec![Q::Algebra],
             Proto::Slipstream => Vec::new(),
+            Proto::Maverick => Vec::new(),
             p if p.is_dodo() => vec![Q::Dodo],
             _ => continue,
         };
@@ -79,6 +81,15 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
         if f.proto == Proto::Slipstream {
             match spacings(ctx, f.id) {
                 Ok(list) => qs = list.into_iter().map(Q::Slipstream).collect(),
+                Err(why) => {
+                    out.notes.push(format!("{}: {why}", f.id));
+                    continue;
+                }
+            }
+        }
+        if f.proto == Proto::Maverick {
+            match lookup_max(ctx, f.id) {
+                Ok(n) => qs = vec![Q::Maverick(n)],
                 Err(why) => {
                     out.notes.push(format!("{}: {why}", f.id));
                     continue;
@@ -162,6 +173,18 @@ pub fn spacings(ctx: &Ctx, id: &str) -> Result<Vec<I24>, String> {
             )),
         })
         .collect()
+}
+
+/// Предел lookup(tokenA, tokenB, 0, N) Maverick V2 из dex.pair_lookup_max этой DEX. Возвращает: N или текст причины,
+/// почему Maverick V2 этой DEX по фабрике не ищется. Ошибок нет.
+pub fn lookup_max(ctx: &Ctx, id: &str) -> Result<u32, String> {
+    match ctx.dex_int("dex.pair_lookup_max", id) {
+        Ok(n) => u32::try_from(n).map_err(|_| "dex.pair_lookup_max слишком велик".to_string()),
+        Err(e) if e.code == ErrorCode::NotConfigured => {
+            Err("не задана dex.pair_lookup_max — Maverick V2 этой DEX по фабрике не ищется".into())
+        }
+        Err(e) => Err(format!("dex.pair_lookup_max: {}", e.message)),
+    }
 }
 
 /// Данные вызова: V2 getPair(coin, quote); V3 getPool(coin, quote, fee). Ошибок нет (fee уже проверен на uint24).

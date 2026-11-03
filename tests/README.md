@@ -115,3 +115,16 @@ ArbExecutor для цикла (tokenIn = tokenOut, все доли 10000 bps, mi
 "base": "0x…", "input_units": "…", "output_units": "…"}` (суммы Transfer базовой из кошелька и на кошелёк по BscScan).
 Цепочка ядра план → сделка с настоящей площадкой (цена газа eth_gasPrice с узла) тестом не покрыта — нужна запись
 ответов узла на одном блоке; проверяется сухой сделкой цикла (docs/OWN_NODE_SWITCH.md, шаг 5а).
+
+Окна (решение 125) — tests/core_windows.rs: логика окна монеты (вход второго направления той же монеты, удержание
+window.min_hold_ms, ожидание конца сделки, повторный проход — то же окно), список окон в настоящей SQLite (фильтры и
+страницы), настоящее ядро с настоящим адаптером BingX без сети — прошедший сухой кандидат CAKE (size_common/calc.rs)
+открывает окно, записанные кадры стакана BingX (tests/data/bingx/ws_spot_2026-10-23.jsonl) идут через приёмник адаптера
+в файл окна, окно закрывается, страница окна разбирает кадры адаптером. tests/bingx_window_tap.rs: разбор записанных
+стаканов, сделка @trade на примере сообщения из docs-v3 (dataUpdateDemo), строка кадра файла ⇄ кадр.
+Нужно записать (тесты #[ignore] до записи): (1) BingX — `tests/data/bingx_trades/trades.jsonl`, строки `{"m": текст}`
+сообщений канала `<SYMBOL>@trade` после GZIP (проще всего — открыть окно на сервере бота и взять строки `"s":"Trades"`
+из файла окна, поле `t`); (2) MEXC — `tests/data/mexc_ws/deals.hex` (кадры канала
+`spot@public.aggre.deals.v3.api.pb@10ms@<SYMBOL>`, по строке hex) и `tests/data/mexc_ws/depth.hex` (кадры
+`spot@public.limit.depth.v3.api.pb@<SYMBOL>@20`) — поле `h` строк файла окна.
+

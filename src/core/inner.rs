@@ -128,6 +128,19 @@ pub struct Inner {
     pub episode_lost: std::sync::atomic::AtomicU64,
     /// Приёмник канала — забирает задача эпизодов при запуске ядра (engine.rs).
     pub episode_rx: Mutex<Option<mpsc::Receiver<super::episode_run::EpMsg>>>,
+    /// Открытые окна (решение 125, window.rs).
+    pub windows: Mutex<super::window::Windows>,
+    /// Файлы окон (storage/episode_files.rs, свой экземпляр): <data-dir>/windows.
+    pub window_files: crate::storage::episode_files::EpisodeFiles,
+    /// Почему окна не пишутся (window.enabled = нет, не задана window.*); None — пишутся или ещё не проверялось.
+    pub window_off: Mutex<Option<String>>,
+    /// Канал задачи окон (window_worker.rs) и сколько сообщений потеряно (канал полон — тик не ждёт).
+    pub window_tx: mpsc::Sender<super::window_run::WinMsg>,
+    pub window_lost: std::sync::atomic::AtomicU64,
+    /// Приёмник канала — забирает задача окон при запуске ядра (engine.rs).
+    pub window_rx: Mutex<Option<mpsc::Receiver<super::window_run::WinMsg>>>,
+    /// Толчок задаче окон: направление перестало проходить, сделка сохранена — пора ли закрывать.
+    pub window_kick: Notify,
     /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
     pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
     /// Исполнение циклов DEX ↔ DEX (решение 124): толчок поиска и память причин (cycle_state.rs).
@@ -147,6 +160,11 @@ impl Inner {
         let (episode_tx, episode_rx) = mpsc::channel(deps.buffer);
         let episode_files =
             crate::storage::episode_files::EpisodeFiles::start(deps.data_dir.join("episodes"));
+        let (window_tx, window_rx) = mpsc::channel(deps.buffer);
+        let window_files = crate::storage::episode_files::EpisodeFiles::start_named(
+            deps.data_dir.join("windows"),
+            "windows",
+        );
         Inner {
             live: Live::new(deps.buffer),
             deps,
@@ -195,6 +213,13 @@ impl Inner {
             episode_tx,
             episode_lost: Default::default(),
             episode_rx: Mutex::new(Some(episode_rx)),
+            windows: Mutex::default(),
+            window_files,
+            window_off: Mutex::default(),
+            window_tx,
+            window_lost: Default::default(),
+            window_rx: Mutex::new(Some(window_rx)),
+            window_kick: Notify::new(),
             card_jobs: Mutex::default(),
             cycles: Default::default(),
         }

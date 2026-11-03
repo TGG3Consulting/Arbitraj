@@ -1,7 +1,8 @@
 //! Файл: venues/mexc/proto.rs
 //! Что делает: сообщения Protocol Buffers WebSocket MEXC — только нужные поля, по официальным .proto
 //! (https://github.com/mexcdevelop/websocket-proto, коммит 2026-09-09): обёртка PushDataV3ApiWrapper, частичный стакан
-//! PublicLimitDepthsV3Api (тело 303), изменение баланса PrivateAccountV3Api (307), ордер PrivateOrdersV3Api (304).
+//! PublicLimitDepthsV3Api (тело 303), изменение баланса PrivateAccountV3Api (307), ордер PrivateOrdersV3Api (304),
+//! сделки PublicAggreDealsV3Api (314, решение 125 — PublicAggreDealsV3Api.proto того же репозитория).
 //! Поля, которых здесь нет, prost пропускает (стандарт protobuf: неизвестные поля игнорируются).
 //! Кто вызывает: depth.rs, account_update.rs.
 //! От чего зависит: prost.
@@ -15,7 +16,7 @@
 pub struct Wrapper {
     #[prost(string, tag = "1")]
     pub channel: String,
-    #[prost(oneof = "Body", tags = "303, 304, 307")]
+    #[prost(oneof = "Body", tags = "303, 304, 307, 314")]
     pub body: Option<Body>,
     #[prost(string, optional, tag = "3")]
     pub symbol: Option<String>,
@@ -37,6 +38,34 @@ pub enum Body {
     /// privateAccount = 307.
     #[prost(message, tag = "307")]
     PrivateAccount(PrivateAccount),
+    /// publicAggreDeals = 314 (канал spot@public.aggre.deals.v3.api.pb, решение 125).
+    #[prost(message, tag = "314")]
+    AggreDeals(AggreDeals),
+}
+
+/// PublicAggreDealsV3Api.proto: deals = 1, eventType = 2.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct AggreDeals {
+    #[prost(message, repeated, tag = "1")]
+    pub deals: Vec<AggreDeal>,
+    #[prost(string, tag = "2")]
+    pub event_type: String,
+}
+
+/// PublicAggreDealsV3ApiItem: price = 1, quantity = 2, tradeType = 3 (1 — покупка, 2 — продажа), time = 4,
+/// tradeId = 5.
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct AggreDeal {
+    #[prost(string, tag = "1")]
+    pub price: String,
+    #[prost(string, tag = "2")]
+    pub quantity: String,
+    #[prost(int32, tag = "3")]
+    pub trade_type: i32,
+    #[prost(int64, tag = "4")]
+    pub time: i64,
+    #[prost(string, tag = "5")]
+    pub trade_id: String,
 }
 
 /// PublicLimitDepthsV3Api.proto: asks = 1, bids = 2, eventType = 3, version = 4, lastOrderCreateTime = 5.

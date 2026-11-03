@@ -26,6 +26,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
+use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
 
 use crate::core::types::PriceLevel;
@@ -98,6 +99,7 @@ pub async fn session(
                     Some(Err(e)) => return End::Broken(format!("ошибка чтения: {e}")),
                     Some(Ok(f)) => f,
                 };
+                let rx_ns = now_ns();
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
                 let msg = match frame {
@@ -105,7 +107,13 @@ pub async fn session(
                         if matches!(ctx.flag("raw.book_frames"), Ok(true)) {
                             ctx.raw.write(ID, name, &hex::encode(&b));
                         }
-                        depth::parse_binary(&b)
+                        let m = depth::parse_binary(&b);
+                        if let Msg::Depth { symbol, .. } | Msg::Bad { symbol: Some(symbol), .. } = &m
+                            && let Some(a) = by_symbol.get(symbol.as_str())
+                        {
+                            ctx.taps.push(ID, &a.ticker, TapStream::Book, name, rx_ns, || TapData::Binary(b.to_vec()));
+                        }
+                        m
                     }
                     Message::Text(t) => {
                         ctx.raw.write(ID, name, &t);

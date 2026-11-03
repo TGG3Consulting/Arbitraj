@@ -2,7 +2,8 @@
 //! Что делает: вход в эпизоды арбитражной ситуации (решение 74) для очереди кандидатов и тика — только память и
 //! отправка сообщений, без диска, базы и сети (их делает задача episode_worker.rs): прошедший кандидат открывает эпизод
 //! или даёт запись (не чаще episode.min_interval_ms — решает episode.rs); отказ, выход сигнала из «кандидата» или
-//! пропажа направления из справочника (sweep — при пересборке и по таймеру) закрывают эпизод с причиной.
+//! пропажа направления из справочника (sweep — при пересборке и по таймеру) закрывают эпизод с причиной; тот же путь
+//! сообщает окну монеты (решение 125, window_run.rs), что направление больше не проходит.
 //! Торговый путь эпизод не трогает: пересчёт кандидатов идёт как раньше, эпизод только наблюдает.
 //! Кто вызывает: core/candidates.rs (on_accept, failed), core/evaluate.rs (failed), core/rebuild.rs и
 //! episode_worker.rs (sweep), core/card_job.rs (send).
@@ -98,6 +99,8 @@ pub fn on_accept(core: &Core, calc: &Calc, dry: bool) -> Accepted {
 /// сухой сигнал уже сообщён. Принимает: ядро, направление, причину. Ошибок нет (эпизода нет — ничего).
 pub fn failed(core: &Core, d: &Direction, reason: &str) {
     lk(&core.inner.dry_told).remove(d);
+    // Решение 125: тот же путь «направление перестало проходить» — и для окна монеты (только память и толчок).
+    super::window_run::fail(core, d);
     if let Some(info) = lk(&core.inner.episodes).close(d, reason, Utc::now()) {
         send(core, EpMsg::Close { info });
     }
@@ -111,6 +114,7 @@ pub fn sweep(core: &Core) {
         .flat_map(|c| c.shown_directions())
         .collect();
     lk(&core.inner.dry_told).retain(|d| live.contains(d));
+    super::window_run::sweep(core, &live);
     let gone: Vec<Direction> = lk(&core.inner.episodes)
         .list()
         .into_iter()

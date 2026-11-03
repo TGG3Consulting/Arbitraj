@@ -40,6 +40,7 @@
 | `account_update.rs` | Разбор кадра ACCOUNT_UPDATE по docs-v3: причина m → вид изменения (DEPOSIT — поступление, WITHDRAW — вывод, ORDER — своё, INIT — снимок) |
 | `depth.rs` | Разбор сообщений: GZIP, ping, стакан |
 | `book.rs` | Стаканы в памяти, котировка на объём |
+| `tap.rs`, `trades.rs` | Запись окна (решение 125): текст кадров стакана монеты из ws_conn.rs (после GZIP); лента сделок — своё соединение на монету, `<SYMBOL>@trade` (docs-v3 «Subscription transaction by transaction»: одна сделка в сообщении), отписка reqType «unsub»; разбор кадра (стакан, сделка {t, p, q, T, m}) |
 
 Функции контракта только для DEX (`recheck_coins`, `dex_families`, `send_channels`, `check_send_channel`) отвечают
 ошибкой `NotApplicable` — у биржи их нет. Минимального депозита в официальной документации `config/getall` нет — `deposit_min` = None.
@@ -98,6 +99,7 @@
 | `walletType` вывода | 1, 2, 3, 4 (спот) | 1, 2, 3 | По docs-v3; значение — настройка `venue.withdraw_wallet_type` |
 | Заголовок `X-SOURCE-KEY: BX-AI-SKILL` | нет | обязателен для кода, созданного их AI-навыками | Не отправляется: это метка их навыков, в документации API её нет |
 | Канал `@incrDepth`: формат уровней | объект {цена: количество} | массив [цена, количество] | Пока не используется: только `@depth<N>` |
+| Канал `@trade` (спот): поле `data` | объект {e, E, s, t, p, q, T, m} (пример dataUpdateDemo) | «Array of trade records» | Решение 125: принимаются оба (tap.rs); живой записи ещё нет |
 
 ## Открытые вопросы
 

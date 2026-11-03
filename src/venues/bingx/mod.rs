@@ -25,7 +25,9 @@ pub mod pairs_watch;
 pub mod rest;
 pub mod subs;
 pub mod symbols;
+pub mod tap;
 pub mod trade;
+pub mod trades;
 pub mod transfers;
 pub mod user_key;
 pub mod user_stream;
@@ -188,5 +190,27 @@ impl Venue for Bingx {
 
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    // Решение 125: запись окна — tap.rs (кадры стакана — ws_conn.rs, лента сделок — trades.rs).
+    async fn window_tap(
+        &self,
+        asset: &Asset,
+        sink: crate::gateway::tap::TapSink,
+    ) -> GatewayResult<crate::gateway::tap::TapInfo> {
+        tap::start(&self.ctx, asset, sink)
+    }
+
+    async fn window_untap(&self, asset: &Asset) -> GatewayResult<()> {
+        tap::stop(&self.ctx, asset);
+        Ok(())
+    }
+
+    fn decode_tap(
+        &self,
+        stream: crate::gateway::tap::TapStream,
+        data: &crate::gateway::tap::TapData,
+    ) -> GatewayResult<crate::core::types::TapDecoded> {
+        tap::decode(stream, data)
     }
 }

@@ -100,8 +100,8 @@ pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, tic
     });
 }
 
-/// Читает настройки соединения. Ошибка — текст «не задана …».
-fn config(ctx: &Ctx) -> Result<Cfg, String> {
+/// Читает настройки соединения (и соединения сделок окна, trades.rs). Ошибка — текст «не задана …».
+pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
     let per_sec = ctx.int("venue.ws_subs_per_sec").map_err(|e| e.message)?;
     Ok(Cfg {
         url: ctx.text("venue.ws_url").map_err(|e| e.message)?,

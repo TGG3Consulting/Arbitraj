@@ -12,5 +12,6 @@ pub mod http;
 pub mod quote_stage;
 pub mod registry;
 pub mod rules;
+pub mod tap;
 pub mod tx_hash;
 pub mod urgency;

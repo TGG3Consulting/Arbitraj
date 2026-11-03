@@ -65,6 +65,15 @@ CREATE TABLE IF NOT EXISTS episodes (
     body TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS windows (
+    id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    deal INTEGER NOT NULL,
+    outcome TEXT,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS venue_state (
     venue TEXT NOT NULL,
     kind  TEXT NOT NULL,

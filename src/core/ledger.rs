@@ -38,6 +38,8 @@ fn recompute_exposure(core: &Core) {
 
 /// Сохраняет сделку (память, SQLite, интерфейс). Ошибка базы — в журнал, сделка продолжается.
 pub async fn save(core: &Core, deal: &Deal) {
+    // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
+    core.inner.window_kick.notify_one();
     lk(&core.inner.deals).insert(deal.id.clone(), deal.clone());
     recompute_exposure(core);
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &deal.id, deal).await {

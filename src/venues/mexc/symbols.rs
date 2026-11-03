@@ -65,6 +65,24 @@ impl SymbolRules {
     pub fn tradable(&self, buy: bool) -> bool {
         self.status == STATUS_ONLINE && if buy { self.api_buy } else { self.api_sell }
     }
+
+    /// Можно ли ставить ордер типа `t` на этой паре (решение 133). Типы IMMEDIATE_OR_CANCEL и FILL_OR_KILL есть в
+    /// перечне типов ордера документации (https://www.mexc.com/api-docs/spot-v3/public-api-definitions), но в
+    /// orderTypes пар exchangeInfo MEXC их не пишет ни у одной пары (живой ответ 03.11: даже BTCUSDT — LIMIT, MARKET,
+    /// LIMIT_MAKER). Живой факт: 02.11 21:31 сделка 20261102213158008XPL — покупка ордером IMMEDIATE_OR_CANCEL принята и
+    /// исполнена. IOC и FOK — лимитный ордер с правилом снятия остатка, поэтому допустимы, когда у пары есть LIMIT;
+    /// окончательно тип подтверждает пробный ордер /api/v3/order/test (venue.order_test_first). Остальные типы — только
+    /// из orderTypes. Поля orderTypes нет — проверяет только пробный ордер (true). Ошибок нет.
+    pub fn order_type_allowed(&self, t: &str) -> bool {
+        let Some(types) = &self.order_types else {
+            return true;
+        };
+        let need = match t {
+            "IMMEDIATE_OR_CANCEL" | "FILL_OR_KILL" => "LIMIT",
+            other => other,
+        };
+        types.iter().any(|x| x == need)
+    }
 }
 
 /// Справочник пар (ключ — тикер монеты). Дешёво клонируется.

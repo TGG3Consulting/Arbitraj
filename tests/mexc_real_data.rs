@@ -59,7 +59,7 @@ fn withdraw_max_beyond_decimal() {
 }
 
 /// Решение 118, А-🟡7: orderTypes пары читаются из живого exchangeInfo — LIMIT, MARKET, LIMIT_MAKER
-/// (IMMEDIATE_OR_CANCEL нет: с venue.order_type = IMMEDIATE_OR_CANCEL ордер не ставится).
+/// (IMMEDIATE_OR_CANCEL в списке нет; допустим при LIMIT — решение 133).
 #[test]
 fn order_types_from_exchange_info() {
     let allowed: HashSet<String> = ["CAKEUSDT".to_string()].into();
@@ -67,6 +67,12 @@ fn order_types_from_exchange_info() {
     let types = map["CAKE"].order_types.clone().expect("orderTypes есть");
     assert_eq!(types, ["LIMIT", "MARKET", "LIMIT_MAKER"]);
     assert!(!types.contains(&"IMMEDIATE_OR_CANCEL".to_string()));
+    // Решение 133: IOC/FOK в orderTypes MEXC не пишет, но принимает (живая сделка XPL 02.11) — допустимы при LIMIT.
+    let rules = &map["CAKE"];
+    assert!(rules.order_type_allowed("IMMEDIATE_OR_CANCEL"));
+    assert!(rules.order_type_allowed("FILL_OR_KILL"));
+    assert!(rules.order_type_allowed("LIMIT"));
+    assert!(!rules.order_type_allowed("STOP_LOSS"));
 }
 
 /// Решение 118, А-🟡15: точность котируемой монеты — только точное совпадение (символ = база + тикер). У USDT —

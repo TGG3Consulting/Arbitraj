@@ -5,7 +5,7 @@
 //! настоящий не ставится (решение 107: шаги цены и количества MEXC — толкование целых precision).
 //! Кто вызывает: mod.rs (trade из контракта).
 //! От чего зависит: rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs, fills.rs.
-//! Настройки: venue.order_type [mexc] (должен быть в orderTypes пары), venue.order_test_first [mexc];
+//! Настройки: venue.order_type [mexc] (в orderTypes пары; IOC/FOK — при LIMIT, решение 133), venue.order_test_first [mexc];
 //! ожидание итога — order_state.rs, venue.my_trades_limit — fills.rs (проверяются до отправки).
 //!
 //! Официальная документация:
@@ -101,9 +101,10 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         ));
     }
     let order_type = ctx.text("venue.order_type")?;
-    // Решение 118, А-🟡7: тип ордера — из orderTypes пары (exchangeInfo); нет в списке — ордер не ставится.
+    // Решение 118, А-🟡7 и решение 133: тип ордера сверяется с orderTypes пары (exchangeInfo); IOC/FOK — по LIMIT
+    // (symbols.rs, order_type_allowed). Не допустим — ордер не ставится.
     if let Some(types) = &rules.order_types
-        && !types.contains(&order_type)
+        && !rules.order_type_allowed(&order_type)
     {
         return Err(reject(
             ctx,

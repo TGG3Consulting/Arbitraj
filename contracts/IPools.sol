@@ -59,9 +59,19 @@ interface ICurvePool {
 // migo557/pancake-smart-contracts, 1:1 с verified-кодом BscScan пула 0x6D8f…CE5A5 в tintinweb/smart-contract-sanctuary-bsc);
 // Lista: lista-dao/moolah@eb7d73a src/dex/StableSwapPool.sol L478 (тот же заголовок + whenNotPaused и checkPriceDiff).
 // Селектор exchange(uint256,uint256,uint256,uint256) = 0x5b41b908. Вход списывает пул transferFrom(msg.sender, пул, dx),
-// выход — msg.sender (transfer_out); BNB (0xEeee…) исполнитель не поддерживает.
+// выход — msg.sender (transfer_out). Монета BNB_ADDRESS (0xEeee…): вход — msg.value == dx (TwoPool L457-L460, Lista
+// L507-L510), выход — msg.sender.call{gas: bnb_gas, value: dy}("") (TwoPool L644-L663, Lista L697-L716; bnb_gas 2300…23000,
+// по умолчанию 4029 — TwoPool L25-L26, L35; Lista L36-L37, L151) — шаг STABLE_U256_BNB.
 interface IStableSwapU256 {
-    function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external;
+    function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external payable;
+}
+
+// WBNB (обёртка BNB в BSC — копия WETH9): gnosis/canonical-weth@0dd1ea3e contracts/WETH9.sol L25-L42 — deposit()
+// payable зачисляет msg.value; withdraw(wad) списывает и шлёт BNB `msg.sender.transfer(wad)` (стипендия 2300 газа);
+// тот же интерфейс — lista-dao/moolah@eb7d73a src/provider/interfaces/IWBNB.sol L5-L7.
+interface IWBNB {
+    function deposit() external payable;
+    function withdraw(uint256 wad) external;
 }
 
 // Saddle / Nerve: nerve-finance/contracts@bda7578 contracts/Swap.sol L389-L402 (swap(uint8 from, uint8 to, dx, minDy,

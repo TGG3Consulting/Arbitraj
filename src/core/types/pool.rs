@@ -225,6 +225,11 @@ pub struct StableData {
     pub i0: u8,
     /// Индекс монеты token1 в пуле.
     pub i1: u8,
+    /// Индекс монеты пула, которая — нативная монета сети (решение «122 X (нативный BNB в стейблсвапах)»): у пула вместо
+    /// адреса токена — метка (BNB_ADDRESS 0xEeee… у PancakeSwap Stable / Lista), в паре (token0/token1) — обёртка
+    /// (dex.native_wrapped). None — все монеты пула — токены ERC-20.
+    #[serde(default)]
+    pub native: Option<u8>,
 }
 
 /// Проверка цены пула StableSwap после обмена против оракула (решение 122 F, 3) — данные с контракта пула на блоке.

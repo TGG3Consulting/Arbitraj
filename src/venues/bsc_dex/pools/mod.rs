@@ -99,6 +99,7 @@ pub mod reload_many;
 pub mod revive;
 pub mod scan;
 pub mod session;
+pub mod stable_native;
 pub mod ticks;
 pub mod verify;
 pub mod verify_algebra;

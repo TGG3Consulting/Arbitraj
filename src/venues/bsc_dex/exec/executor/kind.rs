@@ -2,10 +2,10 @@
 //! Что делает: ПУБЛИЧНЫЙ кодировщик шагов исполнителя ArbExecutor (решение 122, часть X) — один вход для всех семейств
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
-//! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10;
-//! сверяет тест tests/bsc_dex_executor_abi.rs с исходником); раскладка data — комментарий Step в контракте:
-//! V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j), SADDLE —
-//! (uint8 i, uint8 j), остальные — пусто.
+//! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
+//! STABLE_U256_BNB = 11; сверяет тест tests/bsc_dex_executor_abi.rs с исходником); раскладка data — комментарий Step в
+//! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
+//! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -14,13 +14,14 @@ use alloy::sol_types::sol_data::Uint;
 use alloy::sol_types::{SolType, SolValue};
 use alloy_primitives::{Address, Bytes, U256};
 
+use super::super::super::pools::stable_native;
 use super::abi::ArbExecutor;
 
 /// Нативная монета в пулах StableSwap — BNB_ADDRESS PancakeSwap Stable (pancake-smart-contracts@cb079908
-/// PancakeStableSwapTwoPool.sol L39) и Lista (moolah@eb7d73a StableSwapPool.sol L54); константа протокола, не настройка.
-/// Шаги StableSwap исполнителя её не поддерживают (контракт: require «native»).
-pub const STABLE_NATIVE: Address =
-    alloy_primitives::address!("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+/// PancakeStableSwapTwoPool.sol L39) и Lista (moolah@eb7d73a StableSwapPool.sol L54); константа протокола, не настройка
+/// (pools/stable_native.rs). Токеном шага быть не может (не ERC-20; контракт: require «native»): шаг через пул с BNB —
+/// вид STABLE_U256_BNB с токеном шага WBNB.
+pub const STABLE_NATIVE: Address = stable_native::NATIVE;
 
 /// Вся доля: 10000 bps = весь текущий баланс исполнителя по токену входа (константа BPS контракта).
 pub const ALL_BPS: u16 = 10_000;
@@ -50,6 +51,10 @@ pub enum Params {
     StableU256 { i: u8, j: u8 },
     /// Saddle (Nerve): swap(uint8 i, uint8 j, dx, 0, block.timestamp); индексы монет пула.
     Saddle { i: u8, j: u8 },
+    /// PancakeSwap StableSwap / Lista, монета пары — нативный BNB (решение «122 X (нативный BNB в стейблсвапах)»):
+    /// bnb_in — монета i нативная (вход: WBNB.withdraw → exchange{value}); иначе монета j (выход: BNB → WBNB.deposit).
+    /// Токены шага — WBNB и встречная монета.
+    StableU256Bnb { i: u8, j: u8, bnb_in: bool },
 }
 
 impl Params {
@@ -67,6 +72,7 @@ impl Params {
             Params::Elastic => 8,
             Params::StableU256 { .. } => 9,
             Params::Saddle { .. } => 10,
+            Params::StableU256Bnb { .. } => 11,
         }
     }
 
@@ -80,6 +86,9 @@ impl Params {
             }
             Params::Saddle { i, j } => {
                 Bytes::from(<(Uint<8>, Uint<8>) as SolType>::abi_encode_params(&(i, j)))
+            }
+            Params::StableU256Bnb { i, j, bnb_in } => {
+                Bytes::from((U256::from(i), U256::from(j), bnb_in).abi_encode_params())
             }
             _ => Bytes::new(),
         }
@@ -99,7 +108,8 @@ pub struct StepSpec {
 }
 
 /// Кодирует шаг в тип ABI контракта. Принимает: шаг. Возвращает: Step. Ошибки (текст): доля вне 1…10000, токены входа и
-/// выхода совпадают, шаг StableSwap с нативной монетой 0xEeee…, нулевой адрес — контракт отверг бы такой шаг откатом, здесь — до отправки.
+/// выхода совпадают, токен шага StableSwap — метка нативной монеты 0xEeee… (не ERC-20: шаг с BNB пула — STABLE_U256_BNB с
+/// токеном WBNB), нулевой адрес — контракт отверг бы такой шаг откатом, здесь — до отправки.
 pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
     if s.share_bps == 0 || s.share_bps > ALL_BPS {
         return Err(format!("доля шага {} bps вне 1…{ALL_BPS}", s.share_bps));
@@ -112,11 +122,14 @@ pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
     }
     let stable = matches!(
         s.params,
-        Params::Curve { .. } | Params::StableU256 { .. } | Params::Saddle { .. }
+        Params::Curve { .. }
+            | Params::StableU256 { .. }
+            | Params::Saddle { .. }
+            | Params::StableU256Bnb { .. }
     );
     if stable && (s.token_in == STABLE_NATIVE || s.token_out == STABLE_NATIVE) {
         return Err(
-            "шаг StableSwap с нативной монетой 0xEeee… — исполнитель такие шаги не поддерживает"
+            "токен шага StableSwap — метка нативной монеты 0xEeee… (не ERC-20): шаг через пул с BNB — STABLE_U256_BNB с токеном WBNB"
                 .into(),
         );
     }

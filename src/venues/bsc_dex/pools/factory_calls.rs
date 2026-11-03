@@ -10,6 +10,8 @@
 //! Кто вызывает: pools/factory_scan.rs.
 //! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs.
 //! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
+//! PancakeSwap Stable / Lista: пара с обёрткой BNB спрашивается и с меткой 0xEeee… (пул с нативным BNB фабрика хранит
+//! под меткой; решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs) — найденный пул записан с обёрткой.
 //! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings, dex.pair_lookup_max [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
 //!
 //! Сигнатуры — официальные интерфейсы фабрик (abi_v2v3.rs):
@@ -30,6 +32,7 @@ use super::super::ctx::Ctx;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::factory_ask::{Q, encode_q};
 use super::families::{self, Family, Proto};
+use super::stable_native;
 
 /// Предел uint24 (комиссия V3 в getPool) — из ABI: uint24 = 24 бита.
 const U24_MAX: u32 = (1 << 24) - 1;
@@ -123,16 +126,24 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
             }
         }
         let before = out.calls.len();
+        let stable_u = matches!(f.proto, Proto::PancakeStable | Proto::ListaStable);
+        let wrapped = stable_native::wrapped(ctx);
         for &coin in coins {
             for &quote in quotes.iter().filter(|q| **q != coin) {
-                for &q in &qs {
-                    out.calls.push((factory, encode_q(q, coin, quote)));
-                    out.asks.push(Ask {
-                        family: f,
-                        coin,
-                        quote,
-                        q,
-                    });
+                // Вопрос с той парой, что спрашиваем, и (стейблсвап Pancake / Lista) — с меткой BNB вместо обёртки.
+                let alt = stable_u
+                    .then(|| stable_native::registry_pair(coin, quote, wrapped))
+                    .flatten();
+                for (a, b) in std::iter::once((coin, quote)).chain(alt) {
+                    for &q in &qs {
+                        out.calls.push((factory, encode_q(q, a, b)));
+                        out.asks.push(Ask {
+                            family: f,
+                            coin,
+                            quote,
+                            q,
+                        });
+                    }
                 }
             }
         }

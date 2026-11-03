@@ -111,5 +111,6 @@ pub async fn load(
         strict: true,
         guard: None,
         halted: paused,
+        native: None,
     })))
 }

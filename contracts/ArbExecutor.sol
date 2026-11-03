@@ -9,8 +9,10 @@
 // Настройки: адрес развёрнутого контракта — exec.executor_address [bsc_dex].
 //
 // Безопасность (разбор — contracts/README.md): владелец задаётся один раз в конструкторе (развёртывающий кошелёк) и
-// не меняется; нет прокси, delegatecall, обновлений, произвольных вызовов, приёма BNB, selfdestruct. Обратный вызов пула
+// не меняется; нет прокси, delegatecall, обновлений, произвольных вызовов, selfdestruct. Обратный вызов пула
 // платит только пулу текущего шага (адрес записан в transient на время вызова), не больше суммы шага и один раз.
+// BNB (receive) принимается только от одного адреса, записанного в transient на время одного вызова шага
+// STABLE_U256_BNB (обёртка WBNB при withdraw или пул шага при exchange); после транзакции BNB на контракте нет.
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -28,7 +30,11 @@ contract ArbExecutor {
     uint8 internal constant ELASTIC = 8;
     uint8 internal constant STABLE_U256 = 9; // PancakeSwap StableSwap, Lista: exchange(uint256 i, uint256 j, dx, 0)
     uint8 internal constant SADDLE = 10; // Nerve (Saddle): swap(uint8 i, uint8 j, dx, 0, block.timestamp)
-    // Нативная монета в пулах StableSwap (BNB_ADDRESS Pancake / Lista) — шагами не поддерживается.
+    // PancakeSwap StableSwap / Lista, у пула одна из монет пары — нативный BNB (coins(k) = BNB_ADDRESS): вход —
+    // WBNB.withdraw → exchange{value}; выход — BNB от пула → WBNB.deposit. Токены шага — WBNB (ERC-20), не 0xEeee….
+    uint8 internal constant STABLE_U256_BNB = 11;
+    // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
+    // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     // Пределы цены «без ограничения» — TickMath.MIN_SQRT_RATIO + 1 / MAX_SQRT_RATIO − 1 (Uniswap/v3-core@5ea68a77
@@ -41,7 +47,8 @@ contract ArbExecutor {
 
     // Шаг маршрута. shareBps — доля ТЕКУЩЕГО баланса исполнителя по tokenIn (10000 — весь остаток).
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
-    // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); остальные — пусто.
+    // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
+    // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -59,6 +66,10 @@ contract ArbExecutor {
     address transient expToken;
     uint256 transient expMax;
     bool transient locked;
+    // От кого receive() примет BNB сейчас: обёртка WBNB на время withdraw или пул шага STABLE_U256_BNB на время
+    // exchange; в остальное время 0 — любой приход BNB откатывается. Отдельно от expPool: пул с выходом в BNB не
+    // должен получить право на _pay (expToken/expMax прошлого шага).
+    address transient bnbFrom;
 
     constructor() {
         owner = msg.sender;
@@ -70,7 +81,8 @@ contract ArbExecutor {
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
-    // на исполнитель (CURVE / STABLE_U256 / SADDLE) — тот же токен — посчитался бы входом следующей доли (ревью).
+    // на исполнитель (CURVE / STABLE_U256 / SADDLE / STABLE_U256_BNB) — тот же токен — посчитался бы входом следующей
+    // доли (ревью).
     function execute(
         address tokenIn,
         uint256 amountIn,
@@ -103,6 +115,7 @@ contract ArbExecutor {
             _sweep(steps[i].tokenIn);
             _sweep(steps[i].tokenOut);
         }
+        _sweepBnb();
         received = IERC20(tokenOut).balanceOf(msg.sender) - before;
         require(received >= minOut, "minOut");
         locked = false;
@@ -138,6 +151,8 @@ contract ArbExecutor {
             IMaverickV2Pool(s.pool).swap(to, p, abi.encode(s.tokenIn)); // непустые data — иначе пул не зовёт оплату
         } else if (k == CURVE || k == STABLE_U256 || k == SADDLE) {
             _stable(s, amount);
+        } else if (k == STABLE_U256_BNB) {
+            _stableBnb(s, amount);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
@@ -174,6 +189,44 @@ contract ArbExecutor {
         if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
         }
+    }
+
+    // StableSwap Pancake / Lista с нативным BNB (STABLE_U256_BNB). Пул: монета BNB_ADDRESS входит как msg.value
+    // (`require(dx == msg.value)`), выходит `msg.sender.call{gas: bnb_gas, value: dy}("")` (PancakeStableSwapTwoPool.sol
+    // L457-L464, L644-L663; StableSwapPool.sol L507-L514, L697-L716). Токены шага — WBNB (ERC-20) и встречная монета.
+    // bnbIn: WBNB.withdraw(сумма) (BNB приходит от WBNB — bnbFrom = WBNB) → exchange{value: сумма}(i, j, сумма, 0) без
+    //   approve; встречная монета — исполнителю, должна вырасти.
+    // !bnbIn: approve пулу ровно на шаг → exchange(i, j, сумма, 0) (BNB приходит от пула — bnbFrom = пул) → весь BNB
+    //   исполнителя → WBNB.deposit; WBNB исполнителя должен вырасти; разрешение после шага — 0.
+    // Сумма value = ровно сумма шага (снята с WBNB тем же шагом) — чужой BNB на контракте в обмен не уходит.
+    function _stableBnb(Step calldata s, uint256 amount) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
+        (uint256 i, uint256 j, bool bnbIn) = abi.decode(s.data, (uint256, uint256, bool));
+        uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
+        if (bnbIn) {
+            require(s.tokenIn.code.length > 0, "token code");
+            bnbFrom = s.tokenIn;
+            IWBNB(s.tokenIn).withdraw(amount);
+            bnbFrom = address(0);
+            IStableSwapU256(s.pool).exchange{value: amount}(i, j, amount, 0);
+        } else {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+            bnbFrom = s.pool;
+            IStableSwapU256(s.pool).exchange(i, j, amount, 0);
+            bnbFrom = address(0);
+            if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+                _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+            }
+            require(s.tokenOut.code.length > 0, "token code");
+            IWBNB(s.tokenOut).deposit{value: address(this).balance}();
+        }
+        require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+    }
+
+    // Приём BNB — только от bnbFrom (transient). Укладывается в 2300 газа (стипендия transfer у WBNB.withdraw; пулы
+    // шлют bnb_gas ≥ 2300 + стипендия 2300): только TLOAD (100 газа, EIP-1153) и сравнение, без SSTORE / событий.
+    receive() external payable {
+        require(msg.sender == bnbFrom, "bnb");
     }
 
     // Выход V2: вход = баланс пары − резерв (налог токена учтён), формула UniswapV2Library.getAmountOut с комиссией
@@ -224,6 +277,17 @@ contract ArbExecutor {
     function _sweep(address token) internal {
         uint256 b = IERC20(token).balanceOf(address(this));
         if (b > 0) _transfer(token, owner, b);
+    }
+
+    // BNB на контракте после маршрута — владельцу. Шаги STABLE_U256_BNB сами BNB не оставляют (вход — ровно value
+    // шага, выход — весь баланс в WBNB); остаток бывает только присланным в обход receive (selfdestruct / награда
+    // блока) — откат вместо возврата сделал бы исполнитель неработающим навсегда (1 wei извне).
+    function _sweepBnb() internal {
+        uint256 b = address(this).balance;
+        if (b > 0) {
+            (bool ok,) = owner.call{value: b}("");
+            require(ok, "bnb sweep");
+        }
     }
 
     // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).

@@ -6,13 +6,17 @@
 //! • Lista — реестр фабрики (dex.factory): getPairInfos(монета, встречный) содержит этот пул;
 //! • Saddle — список dex.stable_pools (фабрики нет);
 //! и у всех трёх обе монеты пары — среди монет пула (coins(k) / getToken(k); CLAUDE.md: адрес токена у биржи = в пуле).
+//! Нативный BNB у PancakeSwap / Lista (решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs): метка 0xEeee…
+//! среди монет пула = обёртка dex.native_wrapped в паре; реестр фабрики спрашивается и с меткой вместо обёртки (пул с
+//! BNB фабрика хранит под меткой). Пул, где есть и метка, и обёртка, не берётся.
 //! • WooFi — пул = dex.pmm_pool, quoteToken() = встречный токен, wooracle() = dex.oracle, реализация прокси (слот
 //!   EIP-1967) = dex.pool_implementation, оракул отдаёт состояние монеты (state(coin) не откатился, цена > 0).
 //!   Ссылка — PoolRef::Member (контракт, монета).
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs, verify_woo.rs, abi_curve.rs, abi_saddle.rs, abi_stable_u.rs, abi_woo.rs,
-//! load_curve.rs (coins_of), load_saddle.rs (tokens_of), discover.rs, verify.rs.
-//! Настройки: dex.factory, dex.stable_pools, dex.pmm_pool, dex.oracle, dex.pool_implementation [DEX].
+//! load_curve.rs (coins_of), load_saddle.rs (tokens_of), stable_native.rs, discover.rs, verify.rs.
+//! Настройки: dex.factory, dex.stable_pools, dex.pmm_pool, dex.oracle, dex.pool_implementation [DEX];
+//! dex.native_wrapped [bsc_dex].
 
 use std::str::FromStr;
 
@@ -31,6 +35,7 @@ use super::discover::Found;
 use super::families::Proto;
 use super::load_curve::coins_of;
 use super::load_saddle::tokens_of;
+use super::stable_native;
 use super::verify::{Candidate, Verdict};
 use super::verify_woo;
 
@@ -74,6 +79,14 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         Ok(list) => list,
         Err(why) => return Ok(Err(why)),
     };
+    // PancakeSwap / Lista: метка нативной монеты 0xEeee… — это обёртка в паре (stable_native.rs).
+    let coins = match c.family.proto {
+        Proto::SaddleStable => coins,
+        _ => match stable_native::pair_coins(&coins, stable_native::wrapped(ctx)) {
+            Ok(list) => list,
+            Err(why) => return Ok(Err(format!("пул {pool:#x}: {why}"))),
+        },
+    };
     if !coins.contains(&c.coin) || !coins.contains(&c.quote) {
         return Ok(Err(format!(
             "среди монет пула {pool:#x} нет пары {} / {}",
@@ -91,24 +104,29 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
     let reg = &got[n_coins..];
     let ok = match c.family.proto {
         Proto::SaddleStable => listed,
+        // По паре вопросов (getPairInfo, getThreePoolPairInfo) на каждую пару — как в plan (и пара с меткой BNB).
         Proto::PancakeStable => {
-            let two = reg.first().and_then(|r| r.as_ref().ok()).and_then(|b| {
-                IPancakeStableFactory::getPairInfoCall::abi_decode_returns(b)
-                    .ok()
-                    .map(|i| i.swapContract)
-            });
-            let three = reg.get(1).and_then(|r| r.as_ref().ok()).and_then(|b| {
-                IPancakeStableFactory::getThreePoolPairInfoCall::abi_decode_returns(b)
-                    .ok()
-                    .map(|i| i.swapContract)
-            });
-            listed || two == Some(pool) || three == Some(pool)
+            listed
+                || reg.chunks(2).any(|ch| {
+                    let two = ch.first().and_then(|r| r.as_ref().ok()).and_then(|b| {
+                        IPancakeStableFactory::getPairInfoCall::abi_decode_returns(b)
+                            .ok()
+                            .map(|i| i.swapContract)
+                    });
+                    let three = ch.get(1).and_then(|r| r.as_ref().ok()).and_then(|b| {
+                        IPancakeStableFactory::getThreePoolPairInfoCall::abi_decode_returns(b)
+                            .ok()
+                            .map(|i| i.swapContract)
+                    });
+                    two == Some(pool) || three == Some(pool)
+                })
         }
-        Proto::ListaStable => reg
-            .first()
-            .and_then(|r| r.as_ref().ok())
-            .and_then(|b| IListaStableFactory::getPairInfosCall::abi_decode_returns(b).ok())
-            .is_some_and(|l| l.iter().any(|i| i.swapContract == pool)),
+        Proto::ListaStable => reg.iter().any(|r| {
+            r.as_ref()
+                .ok()
+                .and_then(|b| IListaStableFactory::getPairInfosCall::abi_decode_returns(b).ok())
+                .is_some_and(|l| l.iter().any(|i| i.swapContract == pool))
+        }),
         _ => false,
     };
     if !ok {
@@ -162,32 +180,35 @@ fn plan(ctx: &Ctx, c: &Candidate, pool: Address) -> Result<(Vec<(Address, Bytes)
         ));
     }
     let factory = ctx.dex_addr("dex.factory", id).map_err(|e| e.message)?;
-    let (a, b) = (c.coin, c.quote);
-    if c.family.proto == Proto::PancakeStable {
-        calls.push((
-            factory,
-            IPancakeStableFactory::getPairInfoCall {
+    // Пара как есть и — если в ней обёртка BNB — пара с меткой 0xEeee… (stable_native.rs).
+    let alt = stable_native::registry_pair(c.coin, c.quote, stable_native::wrapped(ctx));
+    for (a, b) in std::iter::once((c.coin, c.quote)).chain(alt) {
+        if c.family.proto == Proto::PancakeStable {
+            calls.push((
+                factory,
+                IPancakeStableFactory::getPairInfoCall {
+                    _tokenA: a,
+                    _tokenB: b,
+                }
+                .abi_encode()
+                .into(),
+            ));
+            let three = IPancakeStableFactory::getThreePoolPairInfoCall {
                 _tokenA: a,
                 _tokenB: b,
-            }
-            .abi_encode()
-            .into(),
-        ));
-        let three = IPancakeStableFactory::getThreePoolPairInfoCall {
-            _tokenA: a,
-            _tokenB: b,
-        };
-        calls.push((factory, three.abi_encode().into()));
-    } else {
-        calls.push((
-            factory,
-            IListaStableFactory::getPairInfosCall {
-                _tokenA: a,
-                _tokenB: b,
-            }
-            .abi_encode()
-            .into(),
-        ));
+            };
+            calls.push((factory, three.abi_encode().into()));
+        } else {
+            calls.push((
+                factory,
+                IListaStableFactory::getPairInfosCall {
+                    _tokenA: a,
+                    _tokenB: b,
+                }
+                .abi_encode()
+                .into(),
+            ));
+        }
     }
     Ok((calls, MAX_COINS))
 }

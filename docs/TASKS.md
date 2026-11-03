@@ -103,6 +103,15 @@
   стейблсвапов)»: цикл — одна доля, CURVE через общий `_stable`, отказ по 0xEeee… до отправки); байткод снова новый —
   сухие сделки «через исполнитель» делать на нём.
   (5) Адреса для настроек — docs/OWN_NODE_SWITCH.md.
+- **«122 X (нативный BNB в стейблсвапах)» — открытое.** (1) Независимое ревью безопасности контракта (receive, bnbFrom,
+  _stableBnb, _sweepBnb — contracts/README.md, «Безопасность»). (2) Сухая сделка «через исполнитель» через Lista
+  slisBNB/BNB 0x3DcEA6AFBA8af84b25F1f8947058AF1ac4c06131 в обе стороны (docs/OWN_NODE_SWITCH.md, шаг 5). (3) На узле —
+  `coins(0)`, `coins(1)`, `bnb_gas()` пулов Pancake WBNB-stkBNB 0x0b03e3d6Ec0c5e5bBf993dED8D947C6fb6eEc18D и BNBx-BNB
+  0x9c138bE1D76ee4C5162E0fe9D4eEA5542a23D1bD (по SDK — WBNB, не 0xEeee…) и `bnb_gas()` Lista (по умолчанию 4029);
+  поиск пулов с меткой у фабрики Pancake V2 — getPairInfo(монета, 0xEeee…). (4) Проба пула через исполнитель (газ шага,
+  вместе с withdraw/deposit) — без неё у пулов STABLE_U256 / STABLE_U256_BNB нет замера газа и котировки (check/probe.rs
+  no_path). (5) Решение Тиграна: справочник индексатора — каким адресом он отдаёт BNB таких пулов (WBNB или 0xEeee…);
+  если 0xEeee… — пул находится только поиском по фабрикам (index.factory_scan).
 
 - **«Лучший из двух» (решение 123, слито в feat/own-bsc-node; дополнение — router/b) — проверить вживую:** (1) сухой режим,
   `exec.via_kyber` = да + `exec.dex_best_of` = да: в «Кандидатах» строки «Исполнитель DEX: KyberSwap X vs свой Y USDT

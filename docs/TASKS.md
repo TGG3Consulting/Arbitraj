@@ -90,8 +90,9 @@
 
 - **Решение 122, часть F (3) — открытое.** (1) Записи с узла для сверки математики: PancakeSwap Stable, Lista Stable,
   Nerve (tests/README.md, tests/bsc_dex_stable_families.rs). (2) WooFi: на узле — eth_getCode прокси и реализации,
-  селекторы query 0x… и swap 0x7dc20382 в байткоде реализации; ответ query на 3 суммы (tests/README.md). (3) Вопрос
-  Тиграну: котировать WooFi лесенкой query на каждом блоке (точно только в точках лесенки) или ждать исходник.
+  селекторы query 0x… и swap 0x7dc20382 в байткоде реализации; ответ query на 3 суммы (tests/README.md). (3) Решено Тиграном:
+  WooFi — «Лесенка цен пула» (dex.pmm_ladder_usd, решение «122 (часть F, 3, лесенка)»): задать суммы и записать
+  tests/data/woofi/ladder.json (tests/README.md).
   (4) Новые виды шагов исполнителя (exchange uint256, Saddle swap) — решение Тиграна о новом контракте.
   (5) Адреса для настроек — docs/OWN_NODE_SWITCH.md.
 

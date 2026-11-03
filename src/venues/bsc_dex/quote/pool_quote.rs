@@ -358,10 +358,33 @@ pub fn swap(
                 complete: true,
             })
         }
-        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет — выход только у квотера контракта.
-        (PoolState::OraclePmm(_), PoolKind::OraclePmm) => Err(why(
-            "WooFi: только котировщик пула, свой расчёт невозможен — развёрнутый код закрыт",
-        )),
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт) — выход по лесенке
+        // ответов квотера контракта на блоке (quote/pmm_ladder.rs): точно в точках, между ними — средняя цена линейно,
+        // выше последней точки — неисполнимо. Только точный вход.
+        (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
+            if !exact_in {
+                return Err(why("WooFi: точный выход по лесенке не поддерживается"));
+            }
+            // zero_for_one — вход token0; продаём базовую, если она token0 и вход token0 (или наоборот).
+            let points = if zero_for_one == d.base_is_token0 {
+                &d.ladder_base_in
+            } else {
+                &d.ladder_quote_in
+            };
+            if points.is_empty() {
+                return Err(why(
+                    "WooFi: лесенки цен пула нет (dex.pmm_ladder_usd не задана, пауза, цена оракула непригодна или реализация не та)",
+                ));
+            }
+            let out = super::pmm_ladder::out(points, amount).ok_or_else(|| {
+                why("WooFi: объём больше последней точки лесенки цен пула — неисполнимо")
+            })?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
+        }
         // TickBin (Maverick V2, решение 122 F): порт расчёта команды Maverick (math/maverick_swap.rs) без предела тика —
         // как шаг MAVERICK исполнителя (tickLimit = int32 max/min, contracts/ArbExecutor.sol); tokenA = token0.
         (PoolState::TickBin(d), PoolKind::TickBin) => {

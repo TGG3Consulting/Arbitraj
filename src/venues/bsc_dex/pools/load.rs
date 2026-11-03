@@ -103,7 +103,7 @@ pub async fn state(
                     .await?
             }
             (Proto::WooPP, PoolRef::Member { contract, coin }) => {
-                load_woo::load(ctx, f, *contract, *coin, pair, &tag).await?
+                load_woo::load(ctx, tokens, f, *contract, *coin, pair, usdt, &tag).await?
             }
             _ => {
                 return Err(ctx.err(

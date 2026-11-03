@@ -35,6 +35,7 @@ pub mod native_gas;
 pub mod path;
 pub mod pick;
 pub mod pmm_depth;
+pub mod pmm_ladder;
 pub mod pool_quote;
 pub mod quoter;
 pub mod quoter_calls;

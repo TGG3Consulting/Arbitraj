@@ -100,7 +100,7 @@ pub enum Proto {
     /// WooFi WooPPV2 (решение 122 F, 3): один общий контракт на все базовые монеты против одной котируемой, цена — от
     /// оракула (без событий оракула — состояние читается на каждом новом блоке). Ребро графа — PoolRef::Member
     /// (контракт, базовая монета). Своей математики нет до проверенного исходника развёрнутой реализации (прокси):
-    /// выход — только квотер контракта query(from, to, amount). Вид ядра — OraclePmm.
+    /// выход — лесенка ответов квотера контракта query(from, to, amount) (dex.pmm_ladder_usd). Вид ядра — OraclePmm.
     WooPP,
     /// Maverick V2 (решение 122 F; maverickprotocol/v2-common d91e871, IMaverickV2Pool.sol): тики с резервами tokenA и
     /// tokenB, комиссия по направлению fee(bool), бины разных видов. Расчёт обмена — порт команды Maverick
@@ -225,8 +225,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
             false,
             false,
         ),
-        // WooFi WooPPV2 (решение 122 F, 3): в справочнике и под наблюдением (состояние оракула на каждом блоке), выход —
-        // квотер контракта; своей математики нет — в котировку графа не идёт, пока нет исходника реализации.
+        // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
+        // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,

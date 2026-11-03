@@ -62,8 +62,13 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let ru = *d.rates.get(iu as usize)?;
             (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
         }
-        // PMM от оракула (WooFi, решение 122 F, 3): своей математики и цены пары нет (выход — квотер контракта).
-        PoolState::OraclePmm(_) => None,
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт). Лесенка цен пула: монет за `amount` встречного — по средней цене первой точки «котируемая → базовая».
+        PoolState::OraclePmm(d) => {
+            let p = d.ladder_quote_in.first()?;
+            (!p.amount_in.is_zero())
+                .then(|| mul_div(amount, p.amount_out, p.amount_in))
+                .flatten()
+        }
         // TickBin (Maverick V2, решение 122 F): цена активного тика по его резервам (официальный TickMath
         // getTickSqrtPriceAndL, math/maverick_tick_math.rs) в D18-масштабе пула: цена tokenA в tokenB = sqrtPrice²/1e18
         // (D18 → единицы токенов — множители масштаба). Оценка размера пробы (решение 73.19), не сверяемая величина.

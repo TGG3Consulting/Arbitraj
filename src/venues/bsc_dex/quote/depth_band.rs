@@ -284,8 +284,19 @@ fn side(
             .ok_or_else(|| "расчёт глубины пула StableSwap невозможен".to_string())
         }
         // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет — глубину не считаем (квотер контракта).
-        (PoolState::OraclePmm(_), PoolKind::OraclePmm) => {
-            Err("WooFi: только квотер пула, свой расчёт невозможен — развёрнутый код закрыт".into())
+        // Лесенка цен пула (quote/pmm_ladder.rs): покупка — вход котируемой, средняя цена (выход за вход) не ниже цены
+        // первой точки /(1 + b); продажа — вход базовой, не ниже ×(1 − b). Ответы квотера — с комиссией пула (глубина
+        // чуть занижена против «чистого объёма»). Лесенка кончилась раньше полосы — full = false.
+        (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
+            let (points, factor) = if buy {
+                (&d.ladder_quote_in, 1.0 / (1.0 + b))
+            } else {
+                (&d.ladder_base_in, 1.0 - b)
+            };
+            let f = U256::from((factor * 1e18) as u128);
+            let (i, o, full) = super::pmm_ladder::depth(points, f)
+                .ok_or("лесенки цен пула WooFi нет — глубина не считается")?;
+            Ok((pick(i, o), full))
         }
         // TickBin (Maverick V2, решение 122 F): порт расчёта обмена без комиссии до тика границы полосы
         // (quote/tick_bin_spot.rs depth); полоса не дочитана (непрочитанный тик) — full = false.

@@ -11,7 +11,7 @@
 - Свой маршрутизатор вместо KyberSwap: сплит с учётом газа, многошаговые ноги одним Universal Router, BNB в бандле,
   свой контракт-исполнитель ArbExecutor (одна транзакция через любые DEX), новые DEX: Slipstream, THENA Fusion,
   форки V3, THENA V1 (`solidly_v1`), DODO V2, Ellipsis (StableSwap); решение 122 F, 3 — StableSwap PancakeSwap, Lista,
-  Nerve (сигнал, без исполнения) и WooFi (наблюдение, только квотер пула). Lista V2 / Lista V3 (форки Uniswap V2/V3) —
+  Nerve (сигнал, без исполнения) и WooFi (сигнал по лесенке ответов квотера пула, dex.pmm_ladder_usd). Lista V2 / Lista V3 (форки Uniswap V2/V3) —
   кода не нужно: виды `v2_fork` / `v3_fork` с их фабриками (Lista V3 Factory 0xcb010ed373523942706F730b89792aA1C1597b20).
 - Проверка цены перед сделкой — по границе сделки (`worst_price`), а не по |дрейфу|.
 - «Сухая сделка DEX» (Ручное управление): собрать и просимулировать своп без отправки, в т.ч. «через исполнитель».
@@ -60,6 +60,7 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 | `dex.kind` [WooFi] | не задан | `woofi_v2` | общий контракт; поиск — только по оракулу (`index.factory_scan` = да) |
 | `dex.pmm_pool` / `dex.oracle` [WooFi] | не задана | `0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4` / `0x00021b2C857A8613DAEC2fd900122833866828a0` (woonetwork/docs 68dbdad, bnb-smart-chain.md) | WooPPV2 (прокси) и оракул |
 | `dex.pool_implementation` [WooFi] | не задана | `0x7b5fDb8C89A616d319202704B0eA18b168654281` (слот EIP-1967 на 03.11, сверено координатором) | сменилась реализация — пары не берутся |
+| `dex.pmm_ladder_usd` [WooFi] | не задана | суммы USDT по возрастанию, например 50, 200, 1000, 5000 | лесенка цен пула; не задана — WooFi только сигнал |
 | `dex.pool_enabled` [каждая новая] | не задана | да | без него DEX не подключена |
 | `dex.route_gas_aware` [bsc_dex] | не задана | да | газ при выборе маршрута (как gasInclude KyberSwap) |
 | `exec.executor_address` [bsc_dex] | не задана | после шага 4 | исполнитель |
@@ -105,6 +106,6 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 ## 5. Что не сделано (техдолг — docs/ROADMAP.md)
 - Maverick V2 (ждём официальный исходник пула), KyberSwap Elastic (без исполнителя), RFQ (не делаем).
 - PancakeSwap Stable, Lista Stable, Nerve (решение 122 F, 3) — в графе и сигналах, исполнения нет: у ArbExecutor нет
-  шага exchange(uint256,…) и swap(uint8,…,deadline). WooFi — только квотер пула, свой расчёт невозможен — развёрнутый
-  код закрыт; в котировку графа не идёт.
+  шага exchange(uint256,…) и swap(uint8,…,deadline). WooFi — котировка по лесенке ответов квотера пула (свой расчёт невозможен — развёрнутый
+  код закрыт); исполнения нет до шага WOO (сухая сделка).
 - Тесты THENA V1, Ellipsis, PancakeSwap Stable, Lista Stable, Nerve ждут записей с узла (tests/README.md).

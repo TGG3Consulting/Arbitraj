@@ -19,6 +19,11 @@ pub async fn check(ctx: &Ctx) -> Result<String, String> {
     let body = match gt_http::get(ctx, &path, 1).await.map_err(|e| e.message)? {
         Got::Body(b) => b,
         Got::PageEnd(t) => return Err(format!("индексатор ответил 400: {t}")),
+        Got::NotFound(t) => {
+            return Err(format!(
+                "индексатор ответил 404 на {path}: {t} — проверьте index.network и index.api_url"
+            ));
+        }
     };
     let (list, _) = gt_parse::dexes(&body).map_err(|w| format!("ответ {path}: {w}"))?;
     let key = if ctx.text("index.key_header").is_ok() {

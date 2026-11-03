@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/directory/mod.rs
 //! Что делает: справочник пулов от индексатора (решение 58) — общее состояние: очередь запросов к индексатору,
-//! список DEX индексатора, пулы по каждой монете (как отдал индексатор) и итог адаптера по каждому пулу.
+//! список DEX индексатора, пулы по каждой монете (как отдал индексатор; из событий создания; найденные фабриками на
+//! своём узле — решение 121, C3) и итог адаптера по каждому пулу.
 //! Индексатор — только справочник адресов: цены и состояние пулов адаптер берёт со своего узла.
 //! Кто вызывает: ctx.rs (поле index), directory/* (заполняют), mod.rs (pool_directory для интерфейса), pools/*.
 //! От чего зависит: core/types (directory.rs), node/pace.rs (очередь), gt_parse.rs.
@@ -41,6 +42,8 @@ pub struct TokenEntry {
     pub pages: u32,
     pub pools: Vec<IndexedPool>,
     pub error: Option<String>,
+    /// Сведение «индексатор не знает пулов монеты» (404, решение 121, C2) — не ошибка.
+    pub note: Option<String>,
 }
 
 /// Состояние справочника (под замком).
@@ -63,6 +66,11 @@ pub struct Snap {
     pub banned: HashMap<PoolRef, String>,
     /// Пулы из событий создания (не от индексатора) по монете — тоже в справочнике и в проверке (pools/index.rs).
     pub events: HashMap<Address, Vec<IndexedPool>>,
+    /// Пулы, найденные фабриками на своём узле (решение 121, C3; pools/factory_scan.rs) по монете — второй источник
+    /// справочника: та же проверка на узле и тот же реестр, что у пулов индексатора (pools/index.rs).
+    pub factory: HashMap<Address, Vec<IndexedPool>>,
+    /// Итог последнего прохода поиска по фабрикам — для интерфейса (taken считается при показе).
+    pub factory_scan: crate::core::types::FactoryScan,
     /// DEX индексатора с пулами, но не подключённые — для одной записи журнала на смену списка.
     pub unconnected: BTreeSet<String>,
     pub error: Option<String>,
@@ -104,14 +112,16 @@ impl Directory {
         })
     }
 
-    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора.
+    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора, событий создания
+    /// и поиска по фабрикам (решение 121, C3).
     /// Возвращает: (монета, по которой спрашивали, пул). Ошибок нет.
     pub fn relevant(&self) -> Vec<(Address, IndexedPool)> {
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut out = Vec::new();
         let events = s.events.iter().map(|(a, l)| (a, l.as_slice()));
+        let factory = s.factory.iter().map(|(a, l)| (a, l.as_slice()));
         let lists = s.tokens.iter().map(|(a, t)| (a, t.pools.as_slice()));
-        for (token, list) in lists.chain(events) {
+        for (token, list) in lists.chain(events).chain(factory) {
             for p in list {
                 if is_relevant(*token, p, &s.quotes) {
                     out.push((*token, p.clone()));

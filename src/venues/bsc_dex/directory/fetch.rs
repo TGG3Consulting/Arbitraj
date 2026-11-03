@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/directory/fetch.rs
 //! Что делает: запросы справочника к индексатору: пулы одной монеты по страницам (не больше index.pages_per_token;
 //! пустая страница, HTTP 400 на странице > 1 или страница короче index.page_size — конец списка) и список DEX сети по links.next
-//! (сохраняется в SQLite и в состояние справочника).
+//! (сохраняется в SQLite и в состояние справочника). 404 по монете — сведение «индексатор не знает пулов монеты»
+//! (решение 121, C2), а не ошибка.
 //! Кто вызывает: directory/refresh.rs.
 //! От чего зависит: ctx.rs, directory/{gt_http,gt_parse,store,mod}.rs.
 //! Настройки: через вызываемые — index.* [bsc_dex].
@@ -31,6 +32,12 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
         let body = match gt_http::get(ctx, &path, page).await {
             Ok(Got::Body(b)) => b,
             Ok(Got::PageEnd(_)) => break,
+            Ok(Got::NotFound(t)) => {
+                let msg =
+                    format!("Список DEX: индексатор ответил 404 ({t}) — проверьте index.network");
+                ctx.log(Level::Warn, "dex.index", msg, None).await;
+                return Ok(());
+            }
             Err(e) if stops(&e) => return Err(e),
             Err(e) => {
                 ctx.log(
@@ -65,15 +72,20 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
     Ok(())
 }
 
+/// Ответ индексатора по монете: пулы, сколько страниц прочитано, сведение «индексатор не знает пулов монеты».
+pub type TokenPools = (Vec<IndexedPool>, u32, Option<String>);
+
 /// Пулы одной монеты по страницам. Принимает: сеть, монету, предел страниц, размер страницы.
-/// Возвращает: (пулы, сколько страниц прочитано). Ошибки: запрос любой страницы (пол-списка — не факт), BadResponse.
+/// Возвращает: (пулы, сколько страниц прочитано, сведение). 404 на первой странице — пулов нет и сведение
+/// «индексатор не знает пулов монеты» (решение 121, C2), не ошибка. Ошибки: запрос любой страницы (пол-списка —
+/// не факт; 404 на странице больше первой — тоже ошибка BadResponse), BadResponse.
 pub async fn token_pools(
     ctx: &Ctx,
     net: &str,
     token: Address,
     pages: u32,
     size: usize,
-) -> GatewayResult<(Vec<IndexedPool>, u32)> {
+) -> GatewayResult<TokenPools> {
     let mut out = Vec::new();
     let mut read = 0;
     for page in 1..=pages {
@@ -83,6 +95,14 @@ pub async fn token_pools(
         let body = match gt_http::get(ctx, &path, page).await? {
             Got::Body(b) => b,
             Got::PageEnd(_) => break,
+            Got::NotFound(t) if page == 1 => return Ok((Vec::new(), 0, Some(unknown(&t)))),
+            Got::NotFound(t) => {
+                let why = format!(
+                    "{}: HTTP 404 на странице {page} ({path}): {t}",
+                    gt_http::SOURCE
+                );
+                return Err(ctx.err(ErrorCode::BadResponse, why));
+            }
         };
         let list = gt_parse::pools(&body).map_err(|w| {
             ctx.err(
@@ -101,5 +121,19 @@ pub async fn token_pools(
             break;
         }
     }
-    Ok((out, read))
+    Ok((out, read, None))
+}
+
+/// Текст сведения «индексатор не знает пулов монеты» (решение 121, C2). Принимает: текст ошибки индексатора.
+/// Ошибок нет.
+pub fn unknown(title: &str) -> String {
+    let t = if title.is_empty() {
+        String::new()
+    } else {
+        format!(" ({title})")
+    };
+    format!(
+        "индексатор не знает пулов монеты — HTTP 404{t}; пулы — из других источников (события создания, поиск по \
+         фабрикам index.factory_scan)"
+    )
 }

@@ -92,7 +92,7 @@
     try {
       for (const [key, value] of Object.entries(store.values)) {
         const [name, kind, id] = key.split('|');
-        // Только настройки из каталога: устаревшие (dex.enabled, dex.v3_fee_tiers) не переносятся.
+        // Только настройки из каталога: устаревшие (dex.enabled) не переносятся.
         if (kind !== 'Dex' || id !== from || !name.startsWith('dex.') || !defOf(name)) continue;
         if (store.values[`${name}|Dex|${to}`] !== undefined) continue;
         await setValue(name, { kind: 'Dex', id: to }, value);

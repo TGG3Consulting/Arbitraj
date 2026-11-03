@@ -232,6 +232,24 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// «Сухая сделка DEX» (решение 121, C4): маршрут и транзакция собираются своим сборщиком КАК ДЛЯ СДЕЛКИ и
+    /// прогоняются eth_simulateV1 от кошелька бота — ничего не отправляется, nonce и очередь кошелька не заняты.
+    /// Принимает: монету, сторону, сумму USDT. Возвращает: итог (форма маршрута, выходы, газ, минимум, причина отказа).
+    /// Ошибки: NotApplicable — не DEX; остальное (нет маршрута, узел) — причиной в итоге.
+    async fn dex_dry_swap(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let _ = (asset, side, usdt);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет сухой сделки DEX",
+        ))
+    }
+
     /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
     /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {

@@ -1,12 +1,14 @@
 //! Файл: venues/bsc_dex/directory/view.rs
 //! Что делает: справочник пулов для интерфейса (контракт pool_directory, решение 58): источник и подпись из настроек,
 //! DEX индексатора, монеты, пулы с USDT/промежуточными (и с нативным BNB — «не поддержан», и из событий создания) с
-//! итогом адаптера по каждому.
+//! итогом адаптера по каждому; пулы, найденные фабриками на своём узле, и итог поиска по фабрикам (решение 121, C3).
 //! Кто вызывает: mod.rs адаптера (pool_directory), tests.
 //! От чего зависит: directory/mod.rs (Directory, Snap, is_relevant, is_native), core/types (directory.rs), ctx.rs.
 //! Настройки: index.api_url, index.network, index.attribution_text, index.attribution_url [bsc_dex].
 
-use crate::core::types::{DirectoryPool, DirectoryStatus, DirectoryToken, PoolDirectory};
+use crate::core::types::{
+    DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, PoolDirectory,
+};
 
 use super::super::ctx::Ctx;
 use super::gt_parse::IndexedPool;
@@ -32,10 +34,18 @@ impl Directory {
                 pages: t.pages,
                 total: t.pools.len(),
                 error: t.error.clone(),
+                note: t.note.clone(),
             });
             let shown = |p: &&IndexedPool| is_relevant(*addr, p, &s.quotes) || is_native(*addr, p);
             let from_events = s.events.get(addr).map(|v| v.as_slice()).unwrap_or_default();
-            for p in t.pools.iter().chain(from_events).filter(shown) {
+            let from_factory = s
+                .factory
+                .get(addr)
+                .map(|v| v.as_slice())
+                .unwrap_or_default();
+            let mut seen = std::collections::HashSet::new();
+            let all = t.pools.iter().chain(from_events).chain(from_factory);
+            for p in all.filter(shown).filter(|p| seen.insert(p.pool.clone())) {
                 let status = if is_native(*addr, p) {
                     DirectoryStatus::Unsupported(NATIVE.into())
                 } else {
@@ -68,8 +78,22 @@ impl Directory {
             tokens,
             pools,
             error: s.error.clone(),
+            factory: factory_view(&s),
         }
     }
+}
+
+/// Итог поиска по фабрикам для интерфейса: сколько найденных фабриками пулов взято после проверки на узле
+/// (по итогу в status). Ошибок нет.
+fn factory_view(s: &super::Snap) -> FactoryScan {
+    let mut v = s.factory_scan.clone();
+    v.taken = s
+        .factory
+        .values()
+        .flatten()
+        .filter(|p| s.status.get(&p.pool) == Some(&DirectoryStatus::Taken))
+        .count();
+    v
 }
 
 /// Справочник для интерфейса (контракт pool_directory) с источником и подписью из настроек. Ошибок нет.

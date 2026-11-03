@@ -6,6 +6,8 @@
 //! получает слушатель (канал `tx`) — проверка на своём узле и подключение пулов. Ошибка запроса монеты не стирает
 //! прежний ответ (пол-списка — не факт): видна в интерфейсе, монета спрашивается снова через index.error_retry_s
 //! (решение 61; не задана — через index.refresh_s). Сырой ответ любого кода (и 404) — в сыром журнале (gt_http.rs).
+//! 404 по монете — не ошибка, а сведение «индексатор не знает пулов монеты» (решение 121, C2): пулов у индексатора
+//! нет, монета спрашивается снова через index.refresh_s, в журнал — Info один раз на переход.
 //! Кто вызывает: pools/market.rs (задача подписки; при новой подписке прерывается).
 //! От чего зависит: ctx.rs, directory/{fetch,gt_http,store,mod}.rs, settings/live.rs.
 //! Настройки: index.refresh_s, index.error_retry_s, index.pages_per_token, index.page_size [bsc_dex]; через вызываемые — index.*.
@@ -124,13 +126,21 @@ async fn pass(
         ctx.index
             .with(|s| s.tokens.entry(token).or_default().tried_at = Some(Utc::now()));
         match fetch::token_pools(ctx, &net, token, pages, size).await {
-            Ok((pools, n)) => {
+            Ok((pools, n, note)) => {
                 ok += 1;
-                let entry = ctx.index.with(|s| {
+                let (entry, fresh_note) = ctx.index.with(|s| {
                     let t = s.tokens.entry(token).or_default();
+                    let fresh = note.is_some() && t.note.is_none();
                     (t.fetched_at, t.pages, t.pools, t.error) = (Some(Utc::now()), n, pools, None);
-                    t.clone()
+                    t.note = note;
+                    (t.clone(), fresh)
                 });
+                // Решение 121 (C2): «индексатор не знает пулов монеты» — сведение Info, один раз на переход.
+                if fresh_note {
+                    let why = entry.note.clone().unwrap_or_default();
+                    let msg = format!("Справочник пулов: {} ({token:#x}): {why}", entry.ticker);
+                    ctx.log(Level::Info, "dex.index", msg, None).await;
+                }
                 if let Err(e) = store::save_token(ctx, &net, token, &entry).await {
                     ctx.log(Level::Error, "dex.index", e.message, None).await;
                 }

@@ -22,6 +22,25 @@
   общего баланса? (11) Скидка GT: если включена, комиссия ордера в GT — итог с монетой «GT»; выключить скидку GT в
   кабинете? (12) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
 
+- **Bybit (решение 136, ветка router/bybit).** Разбор — `docs/notes/bybit-integration-2026-11-04.md`. Вопросы:
+  (1) Тип счёта: V5 работает на едином счёте (UTA); проверка подключения принимает UTA 1.0 и 2.0 (unifiedMarginStatus 3–6),
+  classic — отказ («now unavailable»). Так? (2) Депозит Bybit приходит на FUND: переводить FUND → UNIFIED ботом
+  (venue.deposit_to_spot = да, право Wallet: AccountTransfer) или назначить в кабинете Bybit депозит на UNIFIED (Set Deposit
+  Account) и перевод не включать? (3) IOC у спота Limit — в документации timeInForce IOC общий для всех категорий, явного
+  «spot» нет: подтвердить первым живым ордером (venue.order_time_in_force = IOC). (4) Права ключа: Spot — SpotTrade; Wallet —
+  AccountTransfer, Withdraw; ключ главного аккаунта (вывод и адрес депозита — только master); прав ContractTrade / Options /
+  Derivatives не должно быть (иначе «Проверить подключение» — отказ). Вывод — только на адреса из адресной книги Bybit
+  (кошельки DEX из «Маппинга кошельков» и адреса депозита BingX/MEXC) — добавить их. (5) Статус депозита 10012 «Credited to
+  funding pool successfully» — не «final» по документации, бот ждёт 3; верно? (6) Номер u стакана: документация не обещает
+  +1, бот проверяет только рост u; на живой записи 04.11 u шёл строго +1 — сделать строгую проверку? (7) withdrawPercentageFee ≠ 0
+  у сети BSC — комиссия вывода «неизвестна», сделок с выводом нет (ядро считает комиссию числом монет); так оставить?
+  (8) Изменений баланса событиями (решение 76) у Bybit нет: зачисление — опросом статуса депозита. Ок?
+  (9) Тихая пара без изменений стакана дольше venue.book_stale_ms теряет котировку (как MEXC) — порог задать большим?
+- **Bybit — после выкладки (записать на живом боте, tests/bybit_real_data.rs #[ignore]):** coin/query-info целиком и ?coin=CAKE
+  (имя сети BSC в chain → venue.bsc_network, contractAddress, withdrawPercentageFee, minAccuracy); wallet-balance UNIFIED,
+  query-api, account/info; первый IOC-ордер (create, кадры order.spot и execution.spot, realtime, execution/list, cumFeeDetail);
+  депозит по BSC (query-record?txID=), перевод FUND → UNIFIED, вывод и его статусы, query-address. Замер нагрузки при «Стоп»
+  10–15 минут (решение 109) до перевода в работу.
 - **Маппинг кошельков (решение 132, ветка router/wallets, слита в feat/own-bsc-node).** План и ход — `docs/notes/wallet-mapping-2026-11-03.md`.
   Вопросы: (1) строка маппинга «пробы» (кошелёк для налоговых проб, крючков, оценки разрешений и сигналов циклов —
   только симуляции от адреса, без отправки) добавлена агентом, при переносе = «BingX» — оставить так?

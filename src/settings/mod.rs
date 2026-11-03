@@ -4,6 +4,7 @@
 //! От чего зависит: storage/db.rs.
 //! Настройки: все настройки системы (docs/SETTINGS.md). Значений по умолчанию нет.
 
+pub mod accounts;
 pub mod catalog;
 pub mod history;
 pub mod live;

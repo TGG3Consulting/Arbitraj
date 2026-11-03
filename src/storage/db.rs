@@ -82,6 +82,32 @@ CREATE TABLE IF NOT EXISTS venue_state (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (venue, kind, id)
 );
+CREATE TABLE IF NOT EXISTS dex_wallets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    executor TEXT,
+    queue_key TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dex_wallet_map (
+    row TEXT PRIMARY KEY,
+    wallet TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dex_wallet_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dex_wallet_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    what TEXT NOT NULL,
+    target TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    changed_by TEXT NOT NULL,
+    changed_at TEXT NOT NULL
+);
 ";
 
 /// Ошибка базы.

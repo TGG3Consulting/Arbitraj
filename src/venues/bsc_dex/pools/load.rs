@@ -22,8 +22,8 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_maverick,
-    load_saddle, load_slipstream, load_solidly, load_stable_u, load_v2v3, load_woo,
+    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_inf_stable,
+    load_maverick, load_saddle, load_slipstream, load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -91,7 +91,7 @@ pub async fn state(
     // (load_stable_u.rs, load_saddle.rs). WooFi — пара общего контракта (PoolRef::Member), состояние оракула (load_woo.rs).
     let stable = matches!(
         f.proto,
-        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::InfinityStable
     );
     if stable || f.proto == Proto::WooPP {
         let state = match (f.proto, reference) {
@@ -101,6 +101,10 @@ pub async fn state(
             (Proto::PancakeStable | Proto::ListaStable, PoolRef::Contract(a)) => {
                 load_stable_u::load(ctx, tokens, *a, pair, f.proto == Proto::ListaStable, &tag)
                     .await?
+            }
+            // Infinity Stable (решение «122 (Infinity Stable)»): состояние у крючка (load_inf_stable.rs).
+            (Proto::InfinityStable, PoolRef::Contract(a)) => {
+                load_inf_stable::load(ctx, f, *a, pair, &tag).await?
             }
             (Proto::WooPP, PoolRef::Member { contract, coin }) => {
                 load_woo::load(ctx, tokens, f, *contract, *coin, pair, usdt, &tag).await?

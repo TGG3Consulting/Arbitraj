@@ -138,7 +138,13 @@ pub fn relevant(raw: &str, mine: &HashSet<B256>) -> bool {
 async fn filters(p: &Pools, usdt: Address) -> Vec<Value> {
     let u = B256::left_padding_from(usdt.as_slice());
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for (addr, t0, v4, _) in created_log::sources(&p.ctx) {
+        // Один источник у двух видов (CLPoolManager: Infinity CL и Infinity Stable) — одна подписка, вид разбирает
+        // created_log::on_log.
+        if !seen.insert((addr, t0)) {
+            continue;
+        }
         // V2/V3: токены — topics[1], topics[2]; V4: PoolId — topics[1], валюты — topics[2], topics[3].
         let (a, b) = if v4 {
             (

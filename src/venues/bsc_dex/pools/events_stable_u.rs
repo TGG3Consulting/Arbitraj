@@ -1,20 +1,23 @@
 //! Файл: venues/bsc_dex/pools/events_stable_u.rs
-//! Что делает: события пулов PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) и общего контракта WooFi
-//! (решение 122 F, 3) — topic0 для подписки и применение: любое известное событие пула → перечитать пул целиком
-//! (балансы, A, комиссия, пауза; у WooFi — оракул, пауза и реализация прокси). Разбирать суммы событий не нужно:
+//! Что делает: события пулов PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve), общего контракта WooFi
+//! (решение 122 F, 3) и крючка PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»; пул живёт в крючке,
+//! события выпускает он — подписка по адресу крючка, Infinity Stable тоже перечитывается каждым блоком) — topic0
+//! для подписки и применение: любое известное событие пула → перечитать пул целиком (балансы, A, комиссия, пауза; у WooFi — оракул, пауза и реализация прокси). Разбирать суммы событий не нужно:
 //! перечитывание на блоке события точно. Lista и WooFi ещё перечитываются на каждом новом блоке (цена оракула меняется
 //! без событий пула — pools/session.rs).
 //! Кто вызывает: pools/events.rs.
-//! От чего зависит: abi_stable_u.rs, abi_saddle.rs, abi_woo.rs, abi_curve.rs (MAX_COINS), events.rs, registry.rs.
+//! От чего зависит: abi_stable_u.rs, abi_saddle.rs, abi_woo.rs, abi_inf_stable.rs, abi_curve.rs (MAX_COINS), events.rs,
+//! registry.rs.
 //! Настройки: нет.
 //!
-//! Сигнатуры — abi_stable_u.rs, abi_saddle.rs, abi_woo.rs (ссылки на официальные исходники там).
+//! Сигнатуры — abi_stable_u.rs, abi_saddle.rs, abi_woo.rs, abi_inf_stable.rs (ссылки на официальные исходники там).
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
 use alloy_primitives::B256;
 
 use super::abi_curve::MAX_COINS;
+use super::abi_inf_stable as inf_stable;
 use super::abi_saddle::ISaddleSwap as S;
 use super::abi_stable_u::{IListaStable as L, IPancakeStable as P, liquidity_topics as liq};
 use super::abi_woo::IWooPP as W;
@@ -66,6 +69,8 @@ pub fn topics(p: Proto) -> Vec<B256> {
             W::Unpaused::SIGNATURE_HASH,
             W::WooracleUpdated::SIGNATURE_HASH,
         ],
+        // Infinity Stable (решение «122 (Infinity Stable)»): события крючка — обмен, A, комиссия (abi_inf_stable.rs).
+        Proto::InfinityStable => return inf_stable::topics(),
         _ => Vec::new(),
     };
     out.extend(liquidity_topics(p));
@@ -81,6 +86,7 @@ pub fn liquidity_topics(p: Proto) -> Vec<B256> {
         Proto::ListaStable => liq(2, true),
         Proto::SaddleStable => vec![S::AddLiquidity::SIGNATURE_HASH],
         Proto::WooPP => Vec::new(),
+        Proto::InfinityStable => inf_stable::liquidity_topics(),
         _ => Vec::new(),
     }
 }

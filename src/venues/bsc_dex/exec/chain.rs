@@ -19,6 +19,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
+use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
 use super::super::quote::path::Path;
 use super::order::order;
@@ -116,6 +117,13 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             swap_v2v3::command(ctx, &s.entry, f, &s.order, to, s.from_wallet)
         }
         PoolKind::Cl | PoolKind::Bin => {
+            swap_v4::command(ctx, &s.entry, f, &s.order, (s.from_wallet, s.to_wallet))
+        }
+        // Infinity Stable (решение «122 (Infinity Stable)»): пул в крючке пула CL — обмен CL_SWAP_EXACT_IN_SINGLE с его
+        // PoolKey (hooks = крючок): beforeSwap забирает весь вход и отдаёт выход своей кривой (verified-код L1677-L1713),
+        // CL-пул меняет 0 (CLPool.sol#L251-L252); так же кодирует путь официальный SDK (@pancakeswap/smart-router 7.8.0
+        // encodeInfinityRouteToPath, evm.mjs L629-L668: InfinityStable как CL, hookData «0x»).
+        PoolKind::StableSwap if s.entry.family.proto == Proto::InfinityStable => {
             swap_v4::command(ctx, &s.entry, f, &s.order, (s.from_wallet, s.to_wallet))
         }
         // DODO PMM (решение 86b): не исполняется Universal Router — своп DODO будет в фазе 86c.

@@ -13,6 +13,7 @@
 | `own-exec-vs-kyber-audit-2026-11-03.md` | Свой исполнитель bsc_dex против KyberSwap: готовность к отказу от агрегатора, план переключения |
 | `own-node-connect-audit-2026-11-03.md` | Подключение к своему узлу BSC (geth-bsc v1.8.1): все JSON-RPC методы бота, флаги узла, проверки на сервере |
 | `own-node-features-audit-2026-11-03.md` | Свой узел BSC без KyberSwap: справочник и история пулов, проверки, баланс кошелька, газ, экран, сквозные сценарии, интерфейс — проблемы 🔴🟠🟡 и проверки curl |
+| `infinity-stable-2026-11-03.md` | PancakeSwap Infinity Stable: устройство пула в крючке CL (балансы, PoolKey, список пулов), математика StableSwap-NG по строкам verified-кода, внешние курсы монет, обмен через Universal Router (решение «122 (Infinity Stable)») |
 | `dex-coverage-map.md` | Карта покрытия DEX на BSC и проверенные адреса (копия документа проекта claude.ai) |
 
 Открытые задачи и вопросы к Тиграну — `docs/TASKS.md`. Техдолг — раздел «Техдолг» в `docs/ROADMAP.md`.

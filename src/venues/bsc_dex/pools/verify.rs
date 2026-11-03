@@ -28,8 +28,8 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
 use super::{
-    verify_algebra, verify_curve, verify_dodo, verify_maverick, verify_solidly, verify_stable_u,
-    verify_v4,
+    verify_algebra, verify_curve, verify_dodo, verify_inf_stable, verify_maverick, verify_solidly,
+    verify_stable_u, verify_v4,
 };
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
@@ -76,6 +76,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut curve = Vec::new();
     let mut stable_u = Vec::new();
     let mut mav = Vec::new();
+    let mut inf_stable = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -88,6 +89,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
                 stable_u.push(i)
             }
             Proto::Maverick => mav.push(i),
+            Proto::InfinityStable => inf_stable.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -140,6 +142,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in mav
         .into_iter()
         .zip(verify_maverick::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Infinity Stable (решение «122 (Infinity Stable)»): ключ у менеджера + крючок из dex.stable_hooks.
+    let list: Vec<Candidate> = inf_stable.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in inf_stable
+        .into_iter()
+        .zip(verify_inf_stable::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

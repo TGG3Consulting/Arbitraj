@@ -108,6 +108,14 @@ pub enum Proto {
     /// isFactoryPool / lookup / PoolCreated. Чтение — load_maverick.rs, события — events_maverick.rs, проверка —
     /// verify_maverick.rs. Вид ядра — TickBin.
     Maverick,
+    /// PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): пул StableSwap-NG живёт в КРЮЧКЕ пула Infinity CL
+    /// (CLStableSwapHook, verified-код BscScan 0x86c3DC08…, Vyper 0.3.10): один крючок — один пул из двух монет;
+    /// балансы, A, комиссия и курсы монет — у крючка, токены — в Vault Infinity. Ссылка на пул — адрес крючка
+    /// (PoolRef::Contract: у него состояние, события и квотер get_dy), ключ PoolKey (hooks = крючок) — для обмена через
+    /// Universal Router (CL_SWAP_EXACT_IN_SINGLE: beforeSwap крючка забирает весь вход, CL-пул меняет 0). Пул
+    /// подтверждает менеджер (poolIdToPoolKey) и список крючков dex.stable_hooks. Курсы монет могут идти от внешних
+    /// оракулов без событий — перечитывание на каждом блоке. Математика — math/stableswap_ng.rs. Вид ядра — StableSwap.
+    InfinityStable,
 }
 
 impl Proto {
@@ -115,7 +123,11 @@ impl Proto {
     pub fn is_stable(self) -> bool {
         matches!(
             self,
-            Proto::CurveStable | Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+            Proto::CurveStable
+                | Proto::PancakeStable
+                | Proto::ListaStable
+                | Proto::SaddleStable
+                | Proto::InfinityStable
         )
     }
 
@@ -237,6 +249,15 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
+        // PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): в графе и исполним Universal Router своей DEX
+        // (tradable, не форк) — пул живёт в синглтоне CLPoolManager, шага исполнителя ArbExecutor нет.
+        "pancake_infinity_stable" => (
+            PoolKind::StableSwap,
+            Proto::InfinityStable,
+            true,
+            true,
+            false,
+        ),
         _ => return None,
     })
 }
@@ -403,6 +424,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.pool_lens",
             "dex.tick_radius",
         ]),
+        // Infinity Stable (решение «122 (Infinity Stable)»): менеджер CL (ключ пула poolIdToPoolKey, события Initialize),
+        // Vault (там лежат токены пула — держатель для проб налога), список крючков пулов. Квотер — сам крючок (get_dy).
+        Proto::InfinityStable => list.extend(["dex.pool_manager", "dex.vault", "dex.stable_hooks"]),
     }
     list
 }

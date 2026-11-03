@@ -85,7 +85,10 @@ pub fn request(
     }
     // StableSwap (Ellipsis; решение 122 F): квотер — сам пул get_dy(i, j, dx) (StableSwap.vy L405-L416; индексы
     // монет пары — из состояния). При rates ≠ 1e18 get_dy округляет комиссию иначе, чем exchange (math/stableswap_v1).
-    if e.family.proto == Proto::CurveStable {
+    // Infinity Stable (решение «122 (Infinity Stable)»): квотер — сам крючок get_dy(int128, int128, uint256) — тот же
+    // селектор (abi_inf_stable.rs; verified-код L1188-L1199: считает views-контракт фабрики, его код не проверен —
+    // расхождение с математикой _exchange_received ловит сверка, dex.quoter_max_diff_pct).
+    if matches!(e.family.proto, Proto::CurveStable | Proto::InfinityStable) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
         };

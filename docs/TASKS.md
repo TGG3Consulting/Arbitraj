@@ -104,6 +104,8 @@
   сухие сделки «через исполнитель» делать на нём.
   (5) Адреса для настроек — docs/OWN_NODE_SWITCH.md.
 
+- **Решение «122 (Infinity Stable)» — открытое.** (1) Открыть официальный API `https://explorer.pancakeswap.com/api/cached/pools/list?chains=bsc&protocols=infinityStable` (у агента прокси закрыт): поле `id` — PoolId или адрес (SDK делает checksumAddress(remote.id)), `hookAddress` → `dex.stable_hooks`. (2) Отдаёт ли индексатор справочника эти пулы и под каким id DEX; если нет — пулы только из истории Initialize (`dex.history_scan`). (3) Запись с узла для сверки математики (tests/README.md, tests/bsc_dex_inf_stable.rs). (4) Сухая сделка DEX на пуле Infinity Stable (путь CL с ключом пула). (5) Вопросы Тиграну — в отчёте: тот же пул может прийти и видом Infinity CL (крючок группы C) — исключать ли его там явно; квотер сверки — get_dy крючка (views-контракт не проверен) или CLQuoter (настоящий swap с крючком).
+
 - **«Лучший из двух» (решение 123, слито в feat/own-bsc-node; дополнение — router/b) — проверить вживую:** (1) сухой режим,
   `exec.via_kyber` = да + `exec.dex_best_of` = да: в «Кандидатах» строки «Исполнитель DEX: KyberSwap X vs свой Y USDT
   за N (с газом) → …»; пометка «без газа: курс BNB не найден» — значит в реестре нет пула монеты BNB с USDT

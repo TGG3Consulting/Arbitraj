@@ -9,8 +9,8 @@
 //! От чего зависит: ctx.rs, pools/families.rs (Family).
 //! Настройки: exec.executor_address [bsc_dex] (заводит часть X; не задана — исполнителя нет).
 //!
-//! PancakeSwap Infinity и Uniswap V4 (общий PoolManager) исполняются своим Universal Router (часть R2) — вида шага
-//! исполнителя у них нет. KyberSwap Elastic вида шага пока не получает: его `swap(recipient, swapQty, isToken0,
+//! PancakeSwap Infinity (CL, Bin и Infinity Stable — пул в крючке CL, решение «122 (Infinity Stable)») и Uniswap V4
+//! (общий PoolManager) исполняются своим Universal Router (часть R2) — вида шага исполнителя у них нет. KyberSwap Elastic вида шага пока не получает: его `swap(recipient, swapQty, isToken0,
 //! limitSqrtP, data)` (ks-elastic-sc IPoolActions.sol) не совпадает с V3 `swap(recipient, zeroForOne,
 //! amountSpecified, sqrtPriceLimitX96, data)` — вопрос Тиграну (отчёт части F).
 
@@ -132,6 +132,7 @@ mod tests {
             "uniswap_v4",
             "kyber_elastic",
             "woofi_v2",
+            "pancake_infinity_stable",
             "unsupported",
         ];
         for k in DEX_KINDS {

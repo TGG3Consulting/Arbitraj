@@ -103,7 +103,10 @@ pub fn sell_ok(all: &[CallResult]) -> bool {
 pub fn holder(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
     Ok(match (&e.pool.reference, e.pool.kind, e.family.proto) {
         (PoolRef::Contract(a), PoolKind::V2 | PoolKind::V3, _) => *a,
-        (_, _, Proto::InfinityCl | Proto::InfinityBin) => ctx.dex_addr("dex.vault", e.family.id)?,
+        // Infinity Stable (решение «122 (Infinity Stable)»): токены пула — в Vault Infinity (крючок держит их там).
+        (_, _, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => {
+            ctx.dex_addr("dex.vault", e.family.id)?
+        }
         (PoolRef::Singleton { manager, .. }, _, _) => *manager,
         // Пара общего контракта (PMM от оракула): токены лежат в общем контракте.
         (PoolRef::Member { contract, .. }, _, _) => *contract,

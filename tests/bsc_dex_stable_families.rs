@@ -121,6 +121,7 @@ async fn stable_steps_take_indices_from_state() {
             strict: true,
             guard: None,
             halted,
+            ng: None,
             i0: 2,
             i1: 1,
         };

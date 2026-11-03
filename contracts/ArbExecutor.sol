@@ -61,6 +61,9 @@ contract ArbExecutor {
 
     // Исполняет маршрут. Вход amountIn токена tokenIn забирается у владельца (нужен approve на этот контракт);
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
+    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
+    // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
+    // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора).
     function execute(
         address tokenIn,
         uint256 amountIn,
@@ -73,12 +76,15 @@ contract ArbExecutor {
         require(!locked, "lock");
         locked = true;
         require(block.timestamp <= deadline, "deadline");
-        if (amountIn > 0) {
+        bool direct = amountIn > 0 && tokenIn != tokenOut && steps.length > 0 && steps[0].tokenIn == tokenIn
+            && steps[0].shareBps == BPS && _pushed(steps[0].kind);
+        if (amountIn > 0 && !direct) {
             _call(tokenIn, abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amountIn)));
         }
         uint256 before = IERC20(tokenOut).balanceOf(msg.sender);
         for (uint256 i = 0; i < steps.length; ++i) {
-            _step(steps[i], steps[i].tokenOut == tokenOut ? msg.sender : address(this));
+            address to = steps[i].tokenOut == tokenOut ? msg.sender : address(this);
+            _step(steps[i], to, i == 0 && direct ? amountIn : 0);
         }
         _sweep(tokenIn);
         _sweep(tokenOut);
@@ -91,17 +97,19 @@ contract ArbExecutor {
         locked = false;
     }
 
-    // Один шаг: сумма = баланс исполнителя по tokenIn × shareBps / 10000; выход — `to` (владелец, если это токен
-    // выхода маршрута; иначе сам исполнитель — для следующих шагов).
-    function _step(Step calldata s, address to) internal {
+    // Один шаг: сумма = баланс исполнителя по tokenIn × shareBps / 10000 (или fromOwner — вход прямо с владельца в
+    // пул, только у видов с переводом в пул); выход — `to` (владелец, если это токен выхода маршрута; иначе сам
+    // исполнитель — для следующих шагов).
+    function _step(Step calldata s, address to, uint256 fromOwner) internal {
         require(s.shareBps > 0 && s.shareBps <= BPS, "bps");
         require(s.tokenIn != s.tokenOut, "tokens");
-        uint256 amount = IERC20(s.tokenIn).balanceOf(address(this)) * s.shareBps / BPS;
+        uint256 amount =
+            fromOwner > 0 ? fromOwner : IERC20(s.tokenIn).balanceOf(address(this)) * s.shareBps / BPS;
         require(amount > 0, "amount");
         bool zeroIn = s.tokenIn < s.tokenOut; // token0 < token1 — пулы сортируют токены по адресу (фабрики V2/V3)
         uint8 k = s.kind;
         if (k == V2 || k == SOLIDLY) {
-            _transfer(s.tokenIn, s.pool, amount);
+            _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             uint256 out = k == V2 ? _v2Out(s, zeroIn) : _solidlyOut(s, zeroIn);
             // swap(uint256,uint256,address,bytes) — одна подпись у пары V2 и у пары Solidly (интерфейсы выше).
             IV2Pair(s.pool).swap(zeroIn ? 0 : out, zeroIn ? out : 0, to, "");
@@ -122,12 +130,12 @@ contract ArbExecutor {
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount))); // ровно на шаг
             ICurvePool(s.pool).exchange(i, j, amount, 0); // выход — исполнителю (msg.sender пула), затем _sweep
         } else if (k == DODO) {
-            _transfer(s.tokenIn, s.pool, amount);
+            _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
             else IDodoPool(s.pool).sellQuote(to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
-            _transfer(s.tokenIn, s.pool, amount);
+            _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             uint256 got = IERC20(s.tokenIn).balanceOf(s.pool) - had; // дошло до пула (налог токена)
             IWooPP(s.pool).swap(s.tokenIn, s.tokenOut, got, 0, to, address(this));
         } else {
@@ -184,6 +192,17 @@ contract ArbExecutor {
     function _sweep(address token) internal {
         uint256 b = IERC20(token).balanceOf(address(this));
         if (b > 0) _transfer(token, owner, b);
+    }
+
+    // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).
+    function _pushed(uint8 k) internal pure returns (bool) {
+        return k == V2 || k == SOLIDLY || k == DODO || k == WOO;
+    }
+
+    // Вход в пул: с баланса исполнителя или прямо с владельца (первый шаг, весь вход маршрута).
+    function _send(address token, address to, uint256 amount, bool fromOwner) internal {
+        if (fromOwner) _call(token, abi.encodeCall(IERC20.transferFrom, (owner, to, amount)));
+        else _transfer(token, to, amount);
     }
 
     function _transfer(address token, address to, uint256 amount) internal {

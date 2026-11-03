@@ -139,6 +139,12 @@
 
 ## Сделано (сессия 01–02.11.2026)
 
+- Решение 128 — id DEX в настройках (ветка router/d, не слита): адаптер сообщает DEX из справочника пулов и id с
+  заданными настройками (`dex_families`, `DexFamily.kind` → Option), «Добавить DEX» в карточках области «DEX», правило
+  записи id на сервере, необязательная `dex.id_max_len`; тесты settings_dex_id, bsc_dex_dex_ids. Проверить вживую:
+  строки `maverick-v2-bsc` и др. в карточке `dex.kind`; завести id для PancakeSwap Stable / Lista / Nerve / WooFi /
+  Infinity Stable / Ellipsis (OWN_NODE_SWITCH.md, раздел 2).
+
 - Решение 125 — окна (ветка router/w, не слита): запись сырых кадров стакана и сделок биржи по монете, пока её
   направление проходит расчёт прибыльности и до конца нашей сделки; экран «Окна», настройки window.*,
   venue.trades_interval [mexc], события window.opened / closed / stopped; тесты core_windows, bingx_window_tap,

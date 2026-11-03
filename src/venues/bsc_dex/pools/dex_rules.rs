@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/pools/dex_rules.rs
 //! Что делает: правила по строке таблицы сопоставления DEX (решения 38, 58, 59): исполняет ли её пулы умный роутер
-//! (smart_ok), не изменился ли её вид на лету (still), список DEX для интерфейса (for_ui).
+//! (smart_ok), не изменился ли её вид на лету (still), список DEX для интерфейса (for_ui; решение 128 — с id из
+//! справочника пулов и настроек, pools/dex_ids.rs).
 //! Кто вызывает: quote/select.rs, quote/smart_*.rs, exec/universal.rs, mod.rs (через families.rs).
-//! От чего зависит: ctx.rs, families.rs (classify, all), gateway/contract (DexFamily).
+//! От чего зависит: ctx.rs, families.rs (classify, all), dex_ids.rs, gateway/contract (DexFamily).
 //! Настройки: dex.universal_router, dex.permit2, dex.universal_router_version [DEX]; smart.universal_router,
 //! smart.permit2 [bsc_dex]; через classify — dex.kind, dex.pool_enabled и адреса.
 
@@ -40,17 +41,19 @@ pub fn still(ctx: &Ctx, f: &'static Family) -> Result<(), String> {
 }
 
 /// Список для контракта (dex_families): DEX с поддержанным видом из настроек; в названии — строка исполнителя
-/// (exec_kind::describe, решение 122 F). Ошибок нет.
+/// (exec_kind::describe, решение 122 F). Решение 128: плюс DEX из справочника пулов и id с уже заданными настройками
+/// области «DEX» (вид None) — pools/dex_ids.rs. Ошибок нет.
 pub fn for_ui(ctx: &Ctx) -> Vec<DexFamily> {
-    all(ctx)
+    let known = all(ctx)
         .into_iter()
         .map(|f| DexFamily {
             dex: f.id.to_string(),
             family: f.id.to_string(),
-            kind: f.kind,
+            kind: Some(f.kind),
             // Решение 122 F: как исполняются пулы этого вида (шаг контракта-исполнителя или его нет).
             title: format!("{} — {}", f.title, super::exec_kind::describe(ctx, f)),
             docs: Vec::new(),
         })
-        .collect()
+        .collect();
+    super::dex_ids::merge(known, super::dex_ids::extra(ctx))
 }

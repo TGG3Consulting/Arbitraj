@@ -6,7 +6,7 @@
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
-//! История — settings/history.rs.
+//! История — settings/history.rs. Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -21,6 +21,7 @@ use crate::storage::journal::{Journal, Level};
 
 use super::catalog;
 use super::live::Change;
+use super::scope::check_new_dex_id_len;
 use super::value::{Scope, validate};
 
 /// Ошибка записи настройки.
@@ -143,6 +144,17 @@ impl Store {
             _ => return Err(SetError::Unknown(name.to_string())),
         };
         let _turn = self.writer.lock().await;
+        // Решение 128: предел длины нового id DEX (dex.id_max_len, необязательная; очистка не проверяется).
+        if let (Scope::Dex(id), Some(_)) = (&scope, &new) {
+            let max = self
+                .get_exact("dex.id_max_len", &Scope::Global)
+                .and_then(|v| v.as_u64());
+            let known = {
+                let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
+                cache.keys().any(|(_, s)| s == &scope)
+            };
+            check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
+        }
         let old = self.get_exact(name, &scope);
         if old == new {
             return Ok(None);

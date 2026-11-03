@@ -5,14 +5,15 @@
 //!   роутер (без Permit2), проверка USDT — BALANCE_CHECK_ERC20 как обычно;
 //! - покупка: обмен USDT → WBNB на роутер → UNWRAP_WETH(кошелёк, сумма минимумов) — на кошелёк приходит нативный BNB;
 //! - резерв на газ (risk.min_bnb_balance) сделкой не тратится: сумма и газ транзакции — только сверх него;
-//! - факт по событиям WBNB Deposit / Withdrawal роутера (WETH9), а не Transfer на кошелёк.
+//! - факт по событиям WBNB Deposit / Withdrawal роутера (WETH9), а не Transfer на кошелёк;
+//! - через пул форка V2 и вид без своего пути (только исполнитель) сделки BNB нет — trade_path (причина для пробы).
 //!
 //! Почему внутри одной транзакции, а не отдельной транзакцией обёртки: WRAP_ETH / UNWRAP_WETH — официальные команды
 //! обоих Universal Router (exec/ur.rs), одна транзакция — один газ и одна очередь nonce, нет второй транзакции, которая
 //! может не попасть в блок между обёрткой и обменом, и минимум проверяется в той же транзакции (решение 40).
 //!
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/result.rs, check/native_probe.rs, quote/*, wallet/*.
-//! От чего зависит: exec/chain.rs (Step), ctx.rs, wallet/balances.rs, num.rs.
+//! От чего зависит: exec/chain.rs (Step), pools/families.rs (Family), ctx.rs, wallet/balances.rs, num.rs.
 //! Настройки: dex.native_ticker, dex.native_wrapped [bsc_dex]; risk.min_bnb_balance (система).
 //!
 //! WETH9: deposit() → Deposit(dst, wad), withdraw(wad) → Withdrawal(src, wad) —
@@ -29,6 +30,7 @@ use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 use super::super::num;
+use super::super::pools::families::Family;
 use super::super::send::track::Receipt;
 use super::super::send::{self, tx};
 use super::super::wallet::balances;
@@ -72,6 +74,31 @@ pub fn is_native(ctx: &Ctx, a: &Asset) -> bool {
 /// индексатора нет (пулы Infinity с BNB — с нативной валютой 0x0, их Тигран пока не берёт), проверить не на чем.
 pub fn pool_ok(kind: PoolKind) -> bool {
     matches!(kind, PoolKind::V2 | PoolKind::V3)
+}
+
+/// Идёт ли сделка с BNB через пул этого вида — и тогда есть что мерить пробой WRAP/UNWRAP (check/native_probe.rs).
+/// BNB обёртывается/развёртывается только командой Universal Router своей фабрики (WRAP_ETH / UNWRAP_WETH, adapt выше;
+/// в бандле — exec/bundle_native.rs). Форк (свой classic V2 Router): прямой путь форки не берёт
+/// (quote/classic_direct.rs::tradable), графовый маршрут BNB через ногу форка неисполним (quote/graph_exec.rs), бандл
+/// такую ногу не собирает (exec/bundle.rs). Вид без своего пути (tradable = false): нативная монета через
+/// исполнитель не идёт (exec/executor/mod.rs::takes, exec/executor/trade.rs). Принимает: вид пула.
+/// Возвращает: Ok — путь сделки BNB есть (Universal Router); Err — точная причина, почему его нет. Ошибок иных нет.
+pub fn trade_path(f: &Family) -> Result<(), String> {
+    if !f.tradable {
+        return Err(format!(
+            "{}: сделки BNB через этот пул нет — своего Universal Router у вида нет, а через контракт-исполнитель \
+             нативная монета не идёт (решение 122) — проба WRAP/UNWRAP не нужна",
+            f.title
+        ));
+    }
+    if f.fork {
+        return Err(format!(
+            "{}: сделки BNB через этот пул нет — у форка свой classic V2 Router без обёртки WBNB в сделке (прямой путь \
+             форки не берёт, графовый маршрут BNB через ногу форка неисполним) — проба WRAP/UNWRAP не нужна",
+            f.title
+        ));
+    }
+    Ok(())
 }
 
 /// Переделывает шаги долей под нативную монету. Продажа — первый шаг каждой доли платит роутер своей точной суммой

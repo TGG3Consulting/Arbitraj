@@ -7,6 +7,8 @@
 //! продажа) — затрата WrapGas котировки; газ нативного перевода — стоимость вывода на биржу. В обмене проверяется
 //! «кто меняет» (check/emitter.rs, решение 59).
 //! Налога у нативного перевода нет: это не вызов контракта токена (value транзакции), налог взять некому.
+//! Пул, через который сделки BNB нет (форк V2 со своим classic V2 Router, вид только с исполнителем —
+//! exec/native.rs::trade_path), не пробуется: в факты пула и журнал (Info, один раз) — точная причина.
 //! Кто вызывает: check/taxes.rs (после удачной пробы пула нативной монеты).
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe.rs (Measured), check/probe_calls.rs, check/emitter.rs,
 //! check/state.rs, exec/plan.rs, exec/native.rs, wallet/balances.rs, pools/registry.rs.
@@ -53,6 +55,21 @@ pub async fn after(
     };
     // Только V2/V3 (exec/native.rs::pool_ok): через V4 / Infinity BNB не торгуется — и мерить нечего.
     if !native::is_native(ctx, &asset) || !native::pool_ok(e.pool.kind) {
+        return;
+    }
+    // Сделки BNB через пул форка V2 или вида только с исполнителем нет (exec/native.rs::trade_path) — мерить нечего:
+    // проба не запускается (раньше шла через Universal Router и требовала dex.universal_router у форка). Причина — в
+    // факты пула и в журнал один раз (при смене).
+    if let Err(why) = native::trade_path(e.family) {
+        let same = matches!(&checks.pool(&e.pool.reference).wrap_gas, Some(Err(w)) if *w == why);
+        if !same {
+            let msg = format!(
+                "{} {}: проба нативной монеты (WRAP/UNWRAP) не запускается — {why}",
+                e.family.title, e.ticker
+            );
+            ctx.log(Level::Info, "dex.native_probe", msg, None).await;
+        }
+        checks.update_pool(&e.pool.reference, |f| f.wrap_gas = Some(Err(why)));
         return;
     }
     let res = match run(ctx, e, source, wallet, usdt_amount, heads, m).await {

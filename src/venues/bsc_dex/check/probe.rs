@@ -3,14 +3,16 @@
 //! продажу и перевод, газ обмена и газ разрешений в обе стороны. Тот же путь, что у настоящей сделки: у поддержанной
 //! DEX — Permit2 + Universal Router с проверкой баланса (exec/plan.rs); у ФОРКА (family.fork, решения 59, 82) — его
 //! собственный classic V2 Router + прямой ERC-20 approve (exec/fork_swap::probe_swap), иначе UR чужой пул не найдёт и
-//! форк-монета с налогом не проверится. Выбор — part(). В одном симулированном блоке,
+//! форк-монета с налогом не проверится; у вида без своего пути (family.tradable = false) — execute своего контракта-
+//! исполнителя одним шагом этого пула (check/probe_exec.rs, решение 122 X). Выбор — part(). В одном симулированном блоке,
 //! от имени кошелька бота (без подписи): USDT на кошелёк из другого пула → разрешения → расчёт без налога
 //! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод половины на адрес, где лежат токены
 //! пула (налог продажи: насколько вырос его баланс) → перевод четверти на пустой адрес (налог перевода) →
 //! разрешения и продажа остатка (газ продажи). В покупке и продаже проверяется, что обмен сделал сам этот пул
-//! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике.
+//! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике; через исполнитель — событие
+//! самого пула по адресу шага (check/probe_exec.rs::emitter).
 //! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/emitter.rs, exec/plan.rs, exec/fork_swap.rs,
+//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
 //! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
 //! Настройки: через вызываемые; dex.vault [Infinity] — где лежат токены пулов Infinity.
 //!
@@ -30,13 +32,12 @@ use super::super::ctx::Ctx;
 use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
-use super::super::pools::exec_kind;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
-use super::emitter;
 use super::probe_calls as pc;
+use super::probe_exec;
 use super::sim_base;
 use super::simulate::{self, Call};
 
@@ -60,7 +61,8 @@ pub struct Measured {
 /// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, головы сети (блок, поверх которого
 /// идут обе симуляции, и его время — для срока транзакции).
 /// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
-/// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs).
+/// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs); NoRoute — через исполнитель пул не выпустил
+/// события или пробу через этот пул собрать нечем (check/probe_exec.rs).
 pub async fn run(
     ctx: &Ctx,
     e: &Entry,
@@ -114,9 +116,8 @@ pub async fn run(
         return pc::buy_revert(ctx, i, r, q).map(Err);
     }
     // Кто меняет (решение 59): обмен должен сделать сам этот пул — иначе пул исключён, проверка «не проверено».
-    if let Err(why) = emitter::check(ctx, &[e], &first[x].logs).await {
-        return Err(ctx.err(ErrorCode::NotConfigured, why));
-    }
+    // Через исполнитель (tradable = false) — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
+    probe_exec::emitter(ctx, e, &first[x].logs).await?;
     let (Some(buy_expected), Some(bought)) = (
         quoter_calls::decode(e, &first[q].return_data),
         pc::u256(&first[x + 1]),
@@ -177,10 +178,8 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ баланса не по ABI".into()));
     };
-    if pc::sell_ok(&all)
-        && let Err(why) = emitter::check(ctx, &[e], &all[all.len() - 1].logs).await
-    {
-        return Err(ctx.err(ErrorCode::NotConfigured, why));
+    if pc::sell_ok(&all) {
+        probe_exec::emitter(ctx, e, &all[all.len() - 1].logs).await?;
     }
     let gas = |r: &[simulate::CallResult]| r.iter().map(|c| c.gas_used.to::<u64>()).sum::<u64>();
     let sell_appr = &all[base + 5..all.len() - 1];
@@ -203,8 +202,9 @@ pub async fn run(
 /// Части свопа пробы (разрешения, роутер, calldata) по виду пула. Форк (family.fork, решения 59, 82) — свой classic
 /// V2 Router и прямой ERC-20 approve (fork_swap::probe_swap), без Universal Router/Permit2: иначе проба форк-пула шла бы
 /// через UR, который чужой пул не находит, и форк-монета с налогом не проверялась бы. Иначе — Universal Router своей
-/// фабрики (exec/plan.rs), база BALANCE_CHECK = баланс выходного токена кошелька (решение 40). Принимает: пул, ордер
-/// пробы (минимум 1), кошелёк, время блока. Ошибки: NotConfigured (настройки/адреса), узел (баланс для UR-базы).
+/// фабрики (exec/plan.rs), база BALANCE_CHECK = баланс выходного токена кошелька (решение 40). Вид без своего пути —
+/// исполнитель (check/probe_exec.rs). Принимает: пул, ордер пробы (минимум 1), кошелёк, время блока.
+/// Ошибки: NotConfigured (настройки/адреса), NoRoute (пробу через пул собрать нечем), узел (баланс для UR-базы).
 async fn part(
     ctx: &Ctx,
     e: &Entry,
@@ -212,13 +212,12 @@ async fn part(
     wallet: Address,
     now: u64,
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
-    // Решение 122 F: у вида без своего пути исполнения (family.tradable = false: DODO, THENA Fusion, Solidly, Slipstream,
-    // форки V3, KyberSwap Elastic) пробу собрать нечем ни через Universal Router (чужой пул он не найдёт), ни через
-    // classic V2 Router форка (у V3-форка/Elastic его нет — своп откатился бы и выглядел как сбой монеты). Путь для
-    // них — шаг контракта-исполнителя (pools/exec_kind.rs); кодировщики шагов — exec/executor/* (часть X). Пока проба
-    // через исполнитель не подключена — чёткая причина; налог монеты проверяется по её другим пулам, если они есть.
+    // Решение 122 F/X: у вида без своего пути исполнения (family.tradable = false: DODO, THENA Fusion, Solidly,
+    // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
+    // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
+    // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
     if !e.family.tradable {
-        return Err(ctx.err(ErrorCode::NotConfigured, no_path(ctx, e)));
+        return probe_exec::part(ctx, e, order, wallet, now).await;
     }
     if e.family.fork {
         fork_swap::probe_swap(
@@ -235,26 +234,5 @@ async fn part(
         let plan = plan::build(ctx, &plan::single(e, order), wallet, now, true).await?;
         let data = plan.data(base);
         Ok((plan.approvals, plan.router, data))
-    }
-}
-
-/// Причина «пробу налога через этот пул собрать нечем» (решение 122 F) — для журнала и экрана «Монеты». Принимает:
-/// окружение, пул. Возвращает: текст. Ошибок нет.
-fn no_path(ctx: &Ctx, e: &Entry) -> String {
-    let t = e.family.title;
-    match e.family.executor_kind {
-        Some(k) if exec_kind::via_executor(ctx, e.family) => format!(
-            "{t}: проба налога через этот пул идёт шагом {} контракта-исполнителя — сборка пробы через исполнитель \
-             (exec/executor, часть X) ещё не подключена; налог — по другим пулам монеты",
-            k.name()
-        ),
-        Some(k) => format!(
-            "{t}: проба налога через этот пул невозможна — своего пути исполнения нет; шаг {} исполнителя включится, \
-             когда задан exec.executor_address; налог — по другим пулам монеты",
-            k.name()
-        ),
-        None => format!(
-            "{t}: проба налога через этот пул невозможна — пути исполнения нет; налог — по другим пулам монеты"
-        ),
     }
 }

@@ -136,3 +136,18 @@ async fn three_legs_shares_follow_remaining_balance() {
     let other = vec![step(entry(&q, WBNB_USDT_V2), (USDT, WBNB), e18(1), e18(1))];
     assert!(call::build(&q.ctx, &[one(1), other], EXECUTOR, NOW).is_err());
 }
+
+#[test]
+fn elastic_and_singleton_pools_do_not_go_via_executor() {
+    use arb::venues::bsc_dex::exec::executor::entry;
+    use arb::venues::bsc_dex::pools::families;
+    let pool = PoolRef::Contract(CAKE_USDT_PCS);
+    // KyberSwap Elastic: вид ELASTIC в контракте есть, но семейство неисполнимо (решение 121 B2) — шага нет.
+    let elastic = families::make("kyberswap-elastic-bsc", "kyber_elastic").unwrap();
+    assert!(entry::supported(elastic, &pool).is_err());
+    let v3 = families::make("pancakeswap-v3-bsc", "pancakeswap_v3").unwrap();
+    assert!(entry::supported(v3, &pool).is_ok());
+    // PancakeSwap Infinity CL — только Universal Router.
+    let cl = families::make("pancakeswap-infinity-cl-bsc", "pancakeswap_infinity_cl").unwrap();
+    assert!(entry::supported(cl, &pool).is_err());
+}

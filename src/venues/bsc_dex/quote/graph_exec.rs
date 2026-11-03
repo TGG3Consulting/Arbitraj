@@ -13,10 +13,10 @@
 //! Решение 39 (проверка и в котировке графа — Тигран, 03.11): у монеты с налогом путь через промежуточную (нога из 2+
 //! хопов) — только пулы V2 на каждом шаге (как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
 //! Решение 122, часть X: при заданном exec.executor_address маршрут, каждый шаг которого — вид исполнителя
-//! (exec/executor/entry.rs::supported), исполним одной транзакцией через свой исполнитель — бандловые каналы не нужны,
+//! (pools/exec_kind.rs::via_executor — пометка части F), исполним одной транзакцией через свой исполнитель — бандловые каналы не нужны,
 //! нога может пересекать роутеры и семейства; без адреса — как раньше.
 //! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
-//! От чего зависит: exec/executor/{mod, entry}.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
+//! От чего зависит: pools/exec_kind.rs, exec/executor/entry.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
 use alloy_primitives::Address;
@@ -25,7 +25,8 @@ use crate::core::types::{DexRoute, PoolKind};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::exec::executor::{self, entry};
+use super::super::exec::executor::entry;
+use super::super::pools::exec_kind;
 use super::super::pools::families::{self, Family, smart_ok};
 use super::path::Path;
 
@@ -58,9 +59,9 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
         ));
     }
     // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (отметка готовности семейства,
-    // exec/executor/entry.rs::supported) — маршрут исполним одной транзакцией через исполнитель: бандловые каналы не
+    // pools/exec_kind.rs::via_executor) — маршрут исполним одной транзакцией через исполнитель: бандловые каналы не
     // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
-    if !native && via_executor(ctx, legs)? {
+    if !native && all_via_executor(ctx, legs) {
         return Ok(());
     }
     // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
@@ -102,15 +103,14 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
     collectable(ctx, legs)
 }
 
-/// Пойдёт ли маршрут через исполнитель: адрес задан и все шаги — виды исполнителя. Ошибки (текст): адрес не читается.
-fn via_executor(ctx: &Ctx, legs: &[Path]) -> Result<bool, String> {
-    if executor::address(ctx).map_err(|e| e.message)?.is_none() {
-        return Ok(false);
-    }
-    Ok(legs
-        .iter()
-        .flat_map(|p| p.hops.iter())
-        .all(|h| entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()))
+/// Пойдёт ли маршрут через исполнитель: у каждого шага вид шага исполнителя при заданном адресе
+/// (pools/exec_kind.rs::via_executor — пометка части F) и у пула свой контракт (exec/executor/entry.rs::supported).
+/// Ошибок нет.
+fn all_via_executor(ctx: &Ctx, legs: &[Path]) -> bool {
+    legs.iter().flat_map(|p| p.hops.iter()).all(|h| {
+        exec_kind::via_executor(ctx, h.entry.family)
+            && entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()
+    })
 }
 
 /// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей

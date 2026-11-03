@@ -9,7 +9,7 @@
 | `mod.rs` | Адрес исполнителя из настроек (`address`) и выбор пути (`takes`: граф «бандл» + адрес задан) |
 | `abi.rs` | Типы ABI контракта — `alloy::sol!` из `contracts/out/ArbExecutor.abi` |
 | `kind.rs` | ПУБЛИЧНЫЙ кодировщик шага: `Params` (вид и параметры), `StepSpec`, `encode` → `ArbExecutor::Step`; номера видов = константы контракта |
-| `entry.rs` | Вид шага для пула реестра по протоколу семейства (V2 с комиссией пары, V3/Slipstream, Algebra, Solidly, DODO, Elastic) |
+| `entry.rs` | Шаг исполнителя для пула реестра по пометке части F (`Family.executor_kind`, pools/exec_kind.rs): V2 с комиссией пары, V3, Algebra, Solidly, DODO; нет вида шага (Infinity/V4, KyberSwap Elastic — решение 121 B2) — исполнителем не вызывается |
 | `call.rs` | Вызов `execute` из долей (шаги exec/chain.rs): доли входа в bps от текущего остатка, промежуточный шаг — весь токен, вход и минимум — суммы долей, срок `dex.deadline_s` |
 | `sim.rs` | Проба `execute` перед отправкой (eth_simulateV1) и сверка полученного с `req.worst_price` |
 | `trade.rs` | Сделка через исполнитель: доли по живому состоянию, минимумы верификации, approve исполнителю (после него — пересборка, решение 121 B1), проба, одна транзакция, факт |

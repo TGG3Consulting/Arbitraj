@@ -40,6 +40,8 @@ pub struct Want<'a> {
     pub spacing: Option<i32>,
     pub step: Option<u32>,
     pub usdt: Address,
+    /// Пара пула (token0 < token1): token0 нужен StableSwap — индексы пары среди монет пула (решение 122 F).
+    pub token0: Address,
     pub token1: Address,
 }
 
@@ -84,6 +86,7 @@ pub async fn states(
             || w.family.proto == Proto::Algebra
             || w.family.proto.is_solidly()
             || w.family.proto == Proto::Slipstream
+            || w.family.proto == Proto::CurveStable
         {
             let r = load::state(
                 ctx,
@@ -93,7 +96,7 @@ pub async fn states(
                 w.spacing,
                 w.step,
                 w.usdt,
-                w.token1,
+                (w.token0, w.token1),
                 block,
             )
             .await;

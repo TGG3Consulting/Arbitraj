@@ -22,6 +22,7 @@ use super::super::node::abi_dex::{
     IAlgebraQuoterV2, IElasticQuoterV2, IInfinityQuoter, IQuoterV2, ISlipstreamQuoterV2, IV2Router,
     IV4Quoter,
 };
+use super::super::pools::abi_curve::IStableSwapV1;
 use super::super::pools::abi_dodo::IDodoPool;
 use super::super::pools::abi_solidly::ISolidlyPool;
 use super::super::pools::families::Proto;
@@ -72,6 +73,31 @@ pub fn request(
             }
             .abi_encode()
         };
+        return Ok((pool, Bytes::from(data)));
+    }
+    // StableSwap (Ellipsis; решение 122 F): квотер — сам пул get_dy(i, j, dx) (StableSwap.vy L405-L416; индексы
+    // монет пары — из состояния). При rates ≠ 1e18 get_dy округляет комиссию иначе, чем exchange (math/stableswap_v1).
+    if e.family.proto == Proto::CurveStable {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
+        };
+        let PoolState::StableSwap(d) = &e.pool.state else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "состояние пула StableSwap не того вида",
+            ));
+        };
+        let (i, j) = if zero_for_one {
+            (d.i0, d.i1)
+        } else {
+            (d.i1, d.i0)
+        };
+        let data = IStableSwapV1::get_dyCall {
+            i: i as i128,
+            j: j as i128,
+            dx: amount,
+        }
+        .abi_encode();
         return Ok((pool, Bytes::from(data)));
     }
     // KyberSwap Elastic (решение 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn, feeUnits,
@@ -235,6 +261,10 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
     if e.family.proto.is_solidly() {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
+    }
+    // StableSwap: get_dy возвращает один uint256 — выход после комиссии.
+    if e.family.proto == Proto::CurveStable {
+        return IStableSwapV1::get_dyCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).
     if e.family.proto == Proto::Slipstream {

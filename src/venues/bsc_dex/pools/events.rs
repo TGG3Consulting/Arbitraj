@@ -11,8 +11,8 @@ use alloy_primitives::B256;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
-    events_algebra, events_bin, events_cl, events_dodo, events_elastic, events_solidly, events_v2,
-    events_v3,
+    events_algebra, events_bin, events_cl, events_curve, events_dodo, events_elastic,
+    events_solidly, events_v2, events_v3,
 };
 
 /// Что произошло с записью после события.
@@ -40,6 +40,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::topics(),
         Proto::Algebra => events_algebra::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
+        Proto::CurveStable => events_curve::topics(),
     }
 }
 
@@ -63,6 +64,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::liquidity_topics(),
         Proto::Algebra => events_algebra::liquidity_topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
+        Proto::CurveStable => events_curve::liquidity_topics(),
     }
 }
 
@@ -77,6 +79,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::apply(e, log),
         Proto::Algebra => events_algebra::apply(e, log),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
+        Proto::CurveStable => events_curve::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

@@ -12,6 +12,7 @@
 //! - Solidly (Velodrome) getPool(address,address,bool) — velodrome-finance/contracts b3065d8, PoolFactory.sol L68-L71;
 //!   Solidly V1 getPair(address,address,bool) — ThenafiBNB/THENA-Contracts f5bc742, PairFactoryUpgradeable.sol L24
 //!   (оба реестра заполнены в обе стороны токенов — порядок любой; нет пула — нулевой адрес);
+//! - Slipstream getPool(address,address,int24 tickSpacing) — velodrome-finance/slipstream, ICLFactory (abi_slipstream.rs);
 //! - Algebra poolByPair(address,address) — @cryptoalgebra/v1.9-core IAlgebraFactory.sol (abi_algebra.rs);
 //! - DODO getDODOPoolBidirection(token0, token1) → (base0[], base1[]) — DODOEX/contractV2 2f1bcda,
 //!   Factory/DVMFactory.sol, DPPFactory.sol, DSPFactory.sol (abi_dodo.rs): base0 — пулы с base = token0, base1 —
@@ -22,6 +23,7 @@ use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
+use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::ISolidlyFactory;
 use super::factory_calls::{decode, encode};
 use super::verify_solidly::registry_call;
@@ -37,6 +39,8 @@ pub enum Q {
     Solidly { v1: bool, stable: bool },
     /// Algebra (THENA Fusion): poolByPair(a, b).
     Algebra,
+    /// Slipstream: getPool(a, b, int24 tickSpacing) по уровню из dex.cl_tick_spacings.
+    Slipstream(i32),
     /// DODO V2 (DVM/DPP/DSP): getDODOPoolBidirection(a, b).
     Dodo,
 }
@@ -50,6 +54,7 @@ impl Q {
             Q::Solidly { v1: false, .. } => "getPool(stable)",
             Q::Solidly { v1: true, .. } => "getPair(stable)",
             Q::Algebra => "poolByPair",
+            Q::Slipstream(_) => "getPool(tickSpacing)",
             Q::Dodo => "getDODOPoolBidirection",
         }
     }
@@ -73,6 +78,13 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        Q::Slipstream(ts) => ICLFactory::getPoolCall {
+            tokenA: coin,
+            tokenB: quote,
+            tickSpacing: alloy_primitives::aliases::I24::try_from(ts).unwrap_or_default(),
+        }
+        .abi_encode()
+        .into(),
     }
 }
 
@@ -90,6 +102,10 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
         Q::Algebra => vec![
             IAlgebraFactory::poolByPairCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ poolByPair не по ABI: {e}"))?,
+        ],
+        Q::Slipstream(_) => vec![
+            ICLFactory::getPoolCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ getPool(tickSpacing) не по ABI: {e}"))?,
         ],
         Q::Dodo => {
             let r = IDodoFactory::getDODOPoolBidirectionCall::abi_decode_returns(out)

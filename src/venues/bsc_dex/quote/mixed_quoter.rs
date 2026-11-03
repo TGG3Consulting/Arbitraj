@@ -165,5 +165,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Solidly не исполняется умным маршрутом (tradable=false, следующая фаза)",
             ));
         }
+        // StableSwap (решение 122 F): Universal Router его пулы не исполняет — только шаг CURVE исполнителя (часть X).
+        PoolKind::StableSwap => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "StableSwap не исполняется умным маршрутом (только шаг CURVE контракта-исполнителя)",
+            ));
+        }
     })
 }

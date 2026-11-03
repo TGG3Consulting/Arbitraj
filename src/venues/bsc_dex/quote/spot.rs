@@ -53,6 +53,15 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             };
             (!ru.is_zero()).then(|| mul_div(amount, rc, ru)).flatten()
         }
+        // StableSwap (решение 122 F): цена для СИЗИНГА пробы (решение 73.19) — 1 : 1 в нормализованных 18 знаках
+        // (rates пула): монет = сумма · rate(встречного) / rate(монеты). Это оценка размера пробы, а не сверяемая
+        // величина — её считают локальная математика и квотер пула на одной и той же сумме.
+        PoolState::StableSwap(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let rc = *d.rates.get(ic as usize)?;
+            let ru = *d.rates.get(iu as usize)?;
+            (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
+        }
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

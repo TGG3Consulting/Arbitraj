@@ -188,6 +188,13 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         // Solidly (Topaz v2, THENA V1; решения 80, 85): комиссия пула — числитель над 10000 (getFee) → проценты = fee/100
         // (одна комиссия на обе ветви stable/volatile; направление цены комиссию не меняет).
         (PoolState::Solidly { fee, .. }, _) => Ok(Decimal::from(*fee) / Decimal::from(100u32)),
+        // StableSwap (решение 122 F): комиссия — числитель над 10^10 (fee() пула) → проценты = fee / 10^8.
+        (PoolState::StableSwap(d), _) => num::to_decimal(d.fee, 8).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "комиссия StableSwap не помещается в Decimal",
+            )
+        }),
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

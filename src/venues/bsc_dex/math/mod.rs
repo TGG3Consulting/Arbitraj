@@ -15,6 +15,7 @@ pub mod maverick_tick_math;
 pub mod solidly_math;
 pub mod solidly_v1_math;
 pub mod sqrt_price_math;
+pub mod stableswap_v1;
 pub mod swap_algebra;
 pub mod swap_cl;
 pub mod swap_curve;

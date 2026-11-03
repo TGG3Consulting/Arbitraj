@@ -257,6 +257,23 @@ fn side(
                 Ok((pick(eff, out), true))
             }
         }
+        // StableSwap (решение 122 F): средняя цена исполнения в полосе (quote/stable_depth.rs), без комиссии.
+        (PoolState::StableSwap(d), PoolKind::StableSwap) => {
+            let (ic, iu) = if e.coin == e.pool.token0 {
+                (d.i0, d.i1)
+            } else {
+                (d.i1, d.i0)
+            };
+            super::stable_depth::side(
+                &d.balances,
+                &d.rates,
+                d.amp,
+                (ic as usize, iu as usize),
+                b,
+                buy,
+            )
+            .ok_or_else(|| "расчёт глубины пула StableSwap невозможен".to_string())
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;

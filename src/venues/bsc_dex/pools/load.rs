@@ -22,8 +22,8 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_bin, load_cl, load_dodo, load_elastic, load_slipstream, load_solidly,
-    load_v2v3,
+    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_slipstream,
+    load_solidly, load_v2v3,
 };
 
 /// Прочитанное состояние.
@@ -34,7 +34,8 @@ pub struct Loaded {
 }
 
 /// Чтение состояния пула на блоке.
-/// Принимает: вид, ссылку, tickSpacing, binStep, USDT и token1 (кто из них Y у Bin), токены (decimals USDT), блок.
+/// Принимает: вид, ссылку, tickSpacing, binStep, USDT и пару (token0, token1) (кто из них Y у Bin; индексы пары у
+/// StableSwap), токены (decimals USDT и монет StableSwap), блок.
 /// Ошибки: не задана нужная настройка, узел, ответ не по ABI, нет tickSpacing/binStep у пула.
 #[allow(clippy::too_many_arguments)]
 pub async fn state(
@@ -45,9 +46,10 @@ pub async fn state(
     spacing: Option<i32>,
     step: Option<u32>,
     usdt: Address,
-    token1: Address,
+    pair: (Address, Address),
     block: u64,
 ) -> GatewayResult<Loaded> {
+    let token1 = pair.1;
     let tag = block_tag(block);
     let missing = |what: &str| {
         ctx.err(
@@ -68,6 +70,21 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул DODO не того вида", f.title),
+        ));
+    }
+    // StableSwap (Ellipsis; решение 122 F): вид ядра StableSwap, пул — отдельный контракт, чтение своё (load_curve.rs):
+    // coins/balances/A/fee одним Multicall3 + decimals монет. Карт тиков/бинов нет.
+    if f.proto == Proto::CurveStable {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_curve::load(ctx, tokens, *a, pair, &tag).await?,
+                ticks: None,
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул StableSwap не того вида", f.title),
         ));
     }
     // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
@@ -199,7 +216,7 @@ pub async fn entry(
         p.tick_spacing,
         p.bin_step,
         usdt,
-        p.token1,
+        (p.token0, p.token1),
         block,
     )
     .await?;
@@ -252,7 +269,7 @@ pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> Gatew
         p.tick_spacing,
         p.bin_step,
         e.usdt,
-        p.token1,
+        (p.token0, p.token1),
         block,
     )
     .await?;

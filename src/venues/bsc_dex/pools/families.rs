@@ -73,6 +73,12 @@ pub enum Proto {
     /// (без адреса пула), событие `PairCreated(token0, token1, bool stable, pair, uint)` (stable НЕ индексирован), и
     /// своя стабильная математика (_f другой формы, _get_y без отката — math/solidly_v1_math.rs). Вид ядра — Solidly.
     SolidlyV1,
+    /// StableSwap шаблона Curve 2020 (Vyper 0.2, без A_PRECISION) — Ellipsis StableSwap (решение 122 F;
+    /// ellipsis-finance/ellipsis 6bdf778, contracts/StableSwap.vy): N монет в пуле, coins(k)/balances(k)/A()/fee(),
+    /// квотер — сам пул get_dy(i, j, dx). Фабрики с реестром нет — пул подтверждает список dex.stable_pools.
+    /// Чтение — load_curve.rs, события — events_curve.rs, проверка — verify_curve.rs, математика —
+    /// math/stableswap_v1.rs. Вид ядра — StableSwap.
+    CurveStable,
 }
 
 impl Proto {
@@ -163,6 +169,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Solidly V1 — THENA V1 (решение 122 F): тот же пул, своя фабрика и своя стабильная математика (Proto::SolidlyV1).
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         "solidly_v1" => (PoolKind::Solidly, Proto::SolidlyV1, true, false, false),
+        // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
+        "curve_stableswap" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -314,6 +322,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         // Solidly V1 (THENA V1, решение 122 F) — то же: фабрика getPair(a, b, stable) / getFee(stable) / PairCreated.
         Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
+        // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.
+        Proto::CurveStable => list.push("dex.stable_pools"),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),

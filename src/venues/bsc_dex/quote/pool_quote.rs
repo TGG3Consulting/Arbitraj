@@ -21,7 +21,7 @@ use super::super::math::swap_algebra::{self, AlgebraState};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
-use super::super::math::{bin_swap, solidly_v1_math, swap_solidly, v2};
+use super::super::math::{bin_swap, solidly_v1_math, stableswap_v1, swap_solidly, v2};
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
@@ -305,6 +305,35 @@ pub fn swap(
                         .ok_or_else(none)
                 }
             }
+        }
+        // StableSwap (решение 122 F): выход как в exchange пула (math/stableswap_v1); только точный вход — обратной
+        // формулы у пула нет (get_dx в шаблоне 2020 отсутствует).
+        (PoolState::StableSwap(d), PoolKind::StableSwap) => {
+            if !exact_in {
+                return Err(why(
+                    "StableSwap: точный выход не поддерживается (нет обратной формулы у пула)",
+                ));
+            }
+            let (i, j) = if zero_for_one {
+                (d.i0, d.i1)
+            } else {
+                (d.i1, d.i0)
+            };
+            let out = stableswap_v1::exchange_out(
+                i as usize,
+                j as usize,
+                amount,
+                &d.balances,
+                &d.rates,
+                d.amp,
+                d.fee,
+            )
+            .ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
         }
         _ => Err(none()),
     }

@@ -45,6 +45,7 @@ pub mod smart_quote;
 pub mod smart_ways;
 pub mod solidly_depth;
 pub mod spot;
+pub mod stable_depth;
 pub mod steps;
 pub mod verify;
 pub mod verify_decide;

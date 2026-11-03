@@ -109,6 +109,7 @@ pub async fn run(
             spacing: e.pool.tick_spacing,
             step: e.pool.bin_step,
             usdt: e.usdt,
+            token0: e.pool.token0,
             token1: e.pool.token1,
         })
         .collect();

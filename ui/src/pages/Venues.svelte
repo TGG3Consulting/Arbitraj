@@ -3,12 +3,14 @@
   Что делает: экран «Площадки» — площадки из реестра шлюза (GET /api/venues); по каждой:
     «Проверить подключение» (POST /api/check/venue/{id}; у DEX — узел BSC и кошелёк), её секреты
     (GET /api/secrets/known, где scope = id; ключи каналов — в блоке каналов), её настройки области «площадка»
-    по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов» и «Каналы отправки» (lib/dex.svelte.js).
+    по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов», «Каналы отправки» (lib/dex.svelte.js)
+    и «Свой исполнитель (ArbExecutor)» с кнопкой «Развернуть исполнитель» (решение 122, components/ExecutorDeploy.svelte).
     Секреты площадок, которых ещё нет в шлюзе (например адаптер DEX не зарегистрирован), тоже видны —
     ключ можно ввести заранее. Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
-    SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte, ErrorText.svelte.
+    SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte, ExecutorDeploy.svelte,
+    ErrorText.svelte.
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -21,6 +23,7 @@
   import DexFamilies from '../components/DexFamilies.svelte';
   import VenueChannels from '../components/VenueChannels.svelte';
   import PoolDirectory from '../components/PoolDirectory.svelte';
+  import ExecutorDeploy from '../components/ExecutorDeploy.svelte';
   import ErrorText from '../components/ErrorText.svelte';
 
   const groups = $derived.by(() => {
@@ -73,6 +76,7 @@
     <ErrorText text={d?.familiesError} />
     {#if d?.channels}<VenueChannels venue={id} channels={d.channels} />{/if}
     <ErrorText text={d?.channelsError} />
+    {#if d?.families}<ExecutorDeploy venue={id} />{/if}
 
     <h3>Настройки площадки</h3>
     {#each groups as [group, defs] (group)}

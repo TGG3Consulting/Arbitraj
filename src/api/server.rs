@@ -18,8 +18,8 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    check, coins, control, core_api, dex, dex_dry, episodes, first_run, journal, rules, rules_meta,
-    secrets, settings, settings_io, static_ui, venues, wallet_queue, ws,
+    check, coins, control, core_api, dex, dex_dry, dex_executor, episodes, first_run, journal,
+    rules, rules_meta, secrets, settings, settings_io, static_ui, venues, wallet_queue, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -42,6 +42,11 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
         .route("/api/venues/{id}/dex-cycles", get(dex::cycles))
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
+        .route("/api/venues/{id}/executor/quote", get(dex_executor::quote))
+        .route(
+            "/api/venues/{id}/executor/deploy",
+            post(dex_executor::deploy),
+        )
         .route("/api/channels/{venue}", get(dex::channels))
         .route("/api/wallet-queue/{venue}", get(wallet_queue::get))
         .route(

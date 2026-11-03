@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/exec/result.rs
 //! Что делает: итог сделки DEX по квитанции — статус транзакции (в блоке / откат / не попала / вытеснена) и факт
 //! обмена по событиям Transfer: сколько монет и USDT реально ушло и пришло, средняя цена, газ.
-//! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs; подпись исполнителя (by, решение
+//! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/executor/fact.rs; подпись исполнителя (by, решение
 //! 121 B7) — exec/trade.rs.
 //! От чего зависит: exec/fill.rs, exec/txs.rs (Done), num.rs, core/types.
 //! Настройки: нет.
@@ -29,6 +29,8 @@ pub const BY_DIRECT: &str = "свой сборщик: прямой";
 pub const BY_SMART: &str = "свой сборщик: умный";
 /// Мульти-роутерный бандл свопов (exec/bundle_trade.rs, решение 84).
 pub const BY_BUNDLE: &str = "свой сборщик: бандл";
+/// Одна транзакция через свой контракт-исполнитель ArbExecutor (exec/executor/trade.rs, решение 122, часть X).
+pub const BY_EXECUTOR: &str = "свой сборщик: исполнитель";
 
 /// Итог сделки с подписью исполнителя (решение 121 B7): успех — поле executor; ошибка (откат, не попала в блок, отказ
 /// до отправки) — подпись в начале текста «[свой сборщик: …] …», код и факт транзакции не меняются. Принимает: итог,

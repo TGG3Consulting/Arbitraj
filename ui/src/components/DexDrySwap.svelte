@@ -1,7 +1,8 @@
 <!--
   Файл: ui/src/components/DexDrySwap.svelte
   Что делает: «Сухая сделка DEX» (решение 121, C4) на экране «Ручное управление»: монета (тикер и адрес контракта в
-    BSC), сторона (купить / продать на DEX), сумма USDT и кнопка «Проверить своп» → POST /api/dex/dry-swap. Бот собирает
+    BSC), сторона (купить / продать на DEX), сумма USDT, режим (как сделка / через исполнитель ArbExecutor с подставленным
+    кодом — решение 122, поле executor) и кнопка «Проверить своп» → POST /api/dex/dry-swap. Бот собирает
     маршрут и транзакцию своим сборщиком как для сделки и прогоняет eth_simulateV1 от кошелька — ничего не отправляет,
     nonce не тратит. Результат — таблицей: форма маршрута, пулы, выход по котировке / живому пересчёту / минимум
     (amountOutMin) / по симуляции, газ обмена и разрешений, сколько разрешений нужно, откуда вход в симуляции, блок,
@@ -19,6 +20,8 @@
   let contract = $state('');
   let side = $state('Buy');
   let usdt = $state('');
+  /** 'trade' — как пойдёт сделка; 'executor' — через исполнитель ArbExecutor с подставленным кодом (решение 122). */
+  let mode = $state('trade');
   let busy = $state(false);
   let error = $state('');
   let res = $state(null);
@@ -33,6 +36,7 @@
         asset: { ticker: ticker.trim(), bsc_contract: contract.trim() || null },
         side,
         usdt: usdt.trim(),
+        executor: mode === 'executor',
       });
     } catch (e) {
       error = e.message;
@@ -48,6 +52,8 @@
 <p class="muted">
   Маршрут и транзакция собираются как для сделки и прогоняются симуляцией (eth_simulateV1) от кошелька бота. В сеть ничего
   не уходит, nonce не тратится. Не хватает входа у кошелька — он переводится в симуляции из пула вне маршрута.
+  Режим «через исполнитель» (решение 122): маршрут собирается шагами своего контракта ArbExecutor, а его код и владелец
+  подставляются в симуляцию на будущий адрес развёртывания — так исполнитель проверяется на живых пулах до развёртывания.
 </p>
 <div class="row">
   <label>Тикер <input bind:value={ticker} placeholder="CAKE" size="8" /></label>
@@ -59,6 +65,12 @@
     </select>
   </label>
   <label>Сумма, USDT <input bind:value={usdt} inputmode="decimal" size="10" /></label>
+  <label>Режим
+    <select bind:value={mode}>
+      <option value="trade">как пойдёт сделка</option>
+      <option value="executor">через исполнитель (код подставлен, до развёртывания)</option>
+    </select>
+  </label>
   <button disabled={busy || !ticker.trim() || !contract.trim() || !usdt.trim()} onclick={check}>
     {busy ? 'Проверяю…' : 'Проверить своп'}
   </button>

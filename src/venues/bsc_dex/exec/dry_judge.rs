@@ -13,7 +13,7 @@ use alloy_primitives::U256;
 use super::super::check::emitter;
 use super::super::check::probe_calls as pc;
 use super::super::check::simulate::{CallResult, SimLog};
-use super::dry_build::{Ready, entries};
+use super::dry_build::{Built, Ready, entries};
 use super::dry_sim::Sim;
 use super::ur;
 
@@ -66,6 +66,11 @@ pub fn judge(
             sim.gas_swap += gas;
             logs.extend(c.logs.iter().cloned());
         }
+    }
+    // Исполнитель (решение 122) вызывает пул ровно по адресу шага — «кто меняет» (решение 59) не проверяется: события
+    // обмена его семейств (Solidly, Algebra, DODO…) check/emitter.rs не знает.
+    if matches!(r.built, Built::Exec(_)) {
+        return;
     }
     let pools = entries(&r.legs);
     let bad = emitter::missing(&pools, &logs);

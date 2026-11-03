@@ -83,20 +83,20 @@ impl SendCfg {
 }
 
 /// Лимит газа: eth_estimateGas × (1 + send.gas_limit_margin_pct/100).
-/// Принимает: отправителя, адрес, данные, сумму BNB (wei). Ошибки: откат (текст узла), настройка, BadResponse.
+/// Принимает: отправителя, адрес (или создание контракта — TxKind::Create, без поля to), данные, сумму BNB (wei).
+/// Ошибки: откат (текст узла), настройка, BadResponse.
 pub async fn limit(
     ctx: &Ctx,
     from: Address,
-    to: Address,
+    to: impl Into<TxKind>,
     data: &Bytes,
     value: U256,
 ) -> GatewayResult<u64> {
-    let est: U64 = rpc::call(
-        ctx,
-        "eth_estimateGas",
-        json!([{ "from": from, "to": to, "input": data, "value": value }]),
-    )
-    .await?;
+    let body = match to.into() {
+        TxKind::Call(to) => json!({ "from": from, "to": to, "input": data, "value": value }),
+        TxKind::Create => json!({ "from": from, "input": data, "value": value }),
+    };
+    let est: U64 = rpc::call(ctx, "eth_estimateGas", json!([body])).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;
     let g = Decimal::from(est.to::<u64>()) * (Decimal::ONE + margin / Decimal::ONE_HUNDRED);
     u64::try_from(g.ceil()).map_err(|_| {
@@ -107,13 +107,14 @@ pub async fn limit(
     })
 }
 
-/// Legacy-транзакция с chainId BSC (EIP-155). Ошибки: BadResponse — цена газа больше u128.
+/// Legacy-транзакция с chainId BSC (EIP-155); to — адрес вызова или TxKind::Create (развёртывание исполнителя,
+/// решение 122). Ошибки: BadResponse — цена газа больше u128.
 pub fn legacy(
     ctx: &Ctx,
     nonce: u64,
     price: U256,
     gas: u64,
-    to: Address,
+    to: impl Into<TxKind>,
     value: U256,
     input: Bytes,
 ) -> GatewayResult<TxLegacy> {
@@ -128,7 +129,7 @@ pub fn legacy(
         nonce,
         gas_price,
         gas_limit: gas,
-        to: TxKind::Call(to),
+        to: to.into(),
         value,
         input,
     })

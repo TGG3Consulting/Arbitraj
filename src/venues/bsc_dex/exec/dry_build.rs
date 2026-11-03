@@ -8,6 +8,8 @@
 //! разрешения — с узла). Умный / граф «один UR»: доли по живому состоянию, сверка с MixedQuoter, exec/universal.rs.
 //! Бандл: доли, свежие минимумы ног из верификации, exec/bundle.rs (первый nonce 0 — в симуляции nonce не нужен).
 //! Доли по живому состоянию и верификация графа — exec/dry_paths.rs.
+//! Через исполнитель ArbExecutor (решение 122, часть X) — exec/executor/dry.rs: режим «через исполнитель» (любой маршрут,
+//! код подставлен в симуляцию) или графовый «бандл» при заданном exec.executor_address (как сделка).
 //! Кто вызывает: exec/dry_swap.rs.
 //! От чего зависит: exec/{trade (общие шаги), live, chain, precheck, plan, universal, bundle, native, verify_gate}.rs,
 //! quote/{verify, graph_route, mixed_quoter, direct, via, steps}.rs.
@@ -26,15 +28,17 @@ use super::super::quote::{Quoting, direct};
 use super::bundle::Bundle;
 use super::chain::Step;
 use super::dry_paths::{live_paths, verified};
+use super::executor::dry::{DryMode, ExecTx};
 use super::native::{self, Wrap};
 use super::plan::Plan;
 use super::trade::{check_price, sides, worst_positive};
-use super::{bundle, chain, plan, precheck, universal, verify_gate};
+use super::{bundle, chain, executor, plan, precheck, universal, verify_gate};
 
-/// Что собрано: одна транзакция Universal Router (прямой / умный) или бандл.
+/// Что собрано: одна транзакция Universal Router (прямой / умный), бандл или вызов исполнителя ArbExecutor (решение 122).
 pub enum Built {
     One(Plan),
     Many(Bundle),
+    Exec(ExecTx),
 }
 
 /// Собранная сухая сделка.
@@ -57,6 +61,7 @@ pub async fn build(
     req: &TradeRequest,
     route: &DexRoute,
     wallet: alloy_primitives::Address,
+    mode: DryMode,
 ) -> GatewayResult<Ready> {
     let ctx = &q.ctx;
     worst_positive(ctx, req)?;
@@ -125,6 +130,29 @@ pub async fn build(
         }
     }
     let is_native = native::is_native(ctx, &req.asset);
+    // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
+    // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
+    let deployed = executor::address(ctx)?;
+    let takes = shape == RouteMode::Graph && executor::takes(ctx, route, is_native)?.is_some();
+    let via_exec = mode == DryMode::Executor || takes;
+    if via_exec {
+        if is_native {
+            let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";
+            return Err(ctx.err(ErrorCode::NoRoute, why));
+        }
+        let (at, now) = q.heads.at(ctx).await?;
+        let x = executor::dry::build(ctx, &legs, wallet, now, (mode, deployed)).await?;
+        let form = format!("{form} → {}", x.form);
+        let built = Built::Exec(x);
+        return Ok(Ready {
+            built,
+            legs,
+            coins,
+            usdt: paid,
+            form,
+            at,
+        });
+    }
     if is_native && shape == RouteMode::Graph {
         let why = "нативная монета в мульти-роутерном бандле (решение 84) в v1 не исполняется";
         return Err(ctx.err(ErrorCode::NoRoute, why));

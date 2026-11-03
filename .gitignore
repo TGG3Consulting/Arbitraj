@@ -21,6 +21,9 @@ secrets.enc
 /ui/build/
 /ui/.svelte-kit/
 
+# Сборка контракта-исполнителя (contracts/build.sh): solc-js ставится npm ci; артефакты contracts/out/ — в репозитории
+/contracts/node_modules/
+
 # Системное
 .DS_Store
 Thumbs.db

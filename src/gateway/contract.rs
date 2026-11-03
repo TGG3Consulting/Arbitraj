@@ -250,6 +250,48 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// «Сухая сделка DEX» через свой исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X):
+    /// любой маршрут собирается шагами исполнителя и прогоняется eth_simulateV1 с подменой состояния — проверка
+    /// исполнителя до развёртывания. Ничего не отправляет. Ошибки: NotApplicable — не DEX; остальное — причиной в итоге.
+    async fn dex_dry_swap_executor(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let _ = (asset, side, usdt);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет исполнителя DEX",
+        ))
+    }
+
+    /// Оценка развёртывания своего исполнителя ArbExecutor (решение 122, часть X): газ, цена, стоимость в BNB и USDT,
+    /// будущий адрес, хеш байткода. Ничего не отправляет. Ошибки: NotApplicable — не DEX; ключ, каналы, узел.
+    async fn dex_executor_quote(&self) -> GatewayResult<crate::core::types::ExecutorDeployQuote> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет исполнителя DEX",
+        ))
+    }
+
+    /// Развёртывание своего исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — действие с деньгами, только
+    /// по подтверждению человека. Принимает: SHA-256 байткода из оценки, которую видел человек. Ошибки: NotApplicable —
+    /// не DEX; QuoteMismatch — байткод не тот; ключ, каналы, узел.
+    async fn dex_executor_deploy(
+        &self,
+        sha256: String,
+    ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
+        let _ = sha256;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет исполнителя DEX",
+        ))
+    }
+
     /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
     /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {

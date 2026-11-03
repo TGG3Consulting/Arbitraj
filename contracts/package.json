@@ -1,0 +1,9 @@
+{
+  "name": "arb-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Сборка ArbExecutor.sol компилятором solc-js фиксированной версии (contracts/build.sh)",
+  "devDependencies": {
+    "solc": "0.8.37"
+  }
+}

@@ -11,7 +11,7 @@
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
-use alloy_primitives::{Address, B256, Bytes, U256};
+use alloy_primitives::{B256, Bytes, TxKind, U256};
 
 use crate::core::types::{ChainTx, SendMethod};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -51,7 +51,8 @@ pub struct Done {
     pub cancel: Option<(B256, Receipt)>,
 }
 
-/// Отправляет вызов и ждёт, пока его nonce не занят в блоке. Принимает: окружение, место в очереди кошелька, адрес,
+/// Отправляет вызов и ждёт, пока его nonce не занят в блоке. Принимает: окружение, место в очереди кошелька, адрес
+/// (или TxKind::Create — развёртывание исполнителя, решение 122),
 /// данные, сумму BNB (wei), чаевые (true — только для транзакции обмена), отметку «идёт обмен» (wallet/inflows.rs —
 /// снимается вместе с местом в очереди, когда nonce занят).
 /// Возвращает: Done (итог может быть «откат» / «не попала» / «вытеснена» — решает вызывающий).
@@ -60,7 +61,7 @@ pub struct Done {
 pub async fn send(
     env: &Env,
     slot: &Slot,
-    to: Address,
+    to: impl Into<TxKind>,
     data: Bytes,
     value: U256,
     with_tip: bool,
@@ -75,6 +76,7 @@ pub async fn send(
         .await?
         .max(send::gas_floor(&ready));
     let from = slot.from;
+    let to: TxKind = to.into();
     let nonce = slot.nonce(ctx).await?;
     let gas = tx::limit(ctx, from, to, &data, value).await?;
     let signed = signer::sign(ctx, tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;

@@ -47,7 +47,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `factory_ask.rs` | Вид вопроса к реестру фабрики при поиске пулов (решения 121 C3, 122 F): V2 getPair, V3 getPool(fee), Solidly getPool / Solidly V1 getPair (по stable), Algebra poolByPair, DODO V2 getDODOPoolBidirection; данные вызова и разбор ответа в список адресов |
 | `factory_calls.rs` | Вызовы реестра фабрик: V2 getPair(монета, встречный), V3 getPool(…, fee) по dex.v3_fee_tiers; заметки по DEX (не подключена, не задана dex.v3_fee_tiers); разбор ответа |
 | `families.rs` | DEX из таблицы сопоставления (dex.kind): вид, протокол; подключена ли DEX (classify), исполняет ли её умный роутер |
-| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO; `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал) |
+| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO / CURVE / MAVERICK / STABLE_U256 (PancakeSwap Stable, Lista) / SADDLE (Nerve); `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал) |
 | `graph.rs` | Граф токенов в ОЗУ по всем пулам (решение 80): снимок реестра, рёбра — пулы, фильтр по достоверности/глубине (решение 73), не больше dex.route_max_pools_per_edge на пару; индекс «токен → рёбра» для перебора путей |
 | `abi_check.rs` | ABI проверки пула: поля пула V2/V3, ключ у менеджера Infinity и у PositionManager Uniswap V4 |
 | `index.rs` | Справочник → пулы подписки: сопоставление, проверка, итог по пулу (взят / отклонён / не проверен) |

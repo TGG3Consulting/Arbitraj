@@ -4,7 +4,8 @@
 //! - ABI-кодирование шагов и вызова execute (тип из alloy sol! по ArbExecutor.abi) совпадает с ABI контракта: селектор
 //!   и подпись execute из JSON ABI, раскладка кортежа Step (поля и типы по порядку), кодирование → разбор без потерь;
 //! - номера видов шагов (kind.rs Params::kind) = константам контракта (uint8 internal constant … = N в ArbExecutor.sol);
-//! - раскладка data вида: V2 — uint32 комиссии, CURVE — (int128 i, int128 j), остальные — пусто;
+//! - раскладка data вида: V2 — uint32 комиссии, CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
+//!   SADDLE — (uint8 i, uint8 j), остальные — пусто; селекторы обмена новых видов — по официальным подписям;
 //! - хеши артефактов совпадают с ArbExecutor.sha256, код в сети — хвост кода создания, слот владельца — из раскладки.
 //!
 //! Кто вызывает: cargo test.
@@ -87,6 +88,8 @@ fn kinds_match_contract_constants() {
         ("WOO", Params::Woo),
         ("MAVERICK", Params::Maverick),
         ("ELASTIC", Params::Elastic),
+        ("STABLE_U256", Params::StableU256 { i: 0, j: 1 }),
+        ("SADDLE", Params::Saddle { i: 0, j: 1 }),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -100,6 +103,16 @@ fn step_data_layouts() {
     assert_eq!(u32::abi_decode(&v2).unwrap(), 2500);
     let c = Params::Curve { i: 1, j: 0 }.data();
     assert_eq!(<(i128, i128)>::abi_decode_params(&c).unwrap(), (1, 0));
+    // STABLE_U256 — abi.encode(uint256 i, uint256 j); SADDLE — abi.encode(uint8 i, uint8 j): по слову на индекс.
+    let u = Params::StableU256 { i: 1, j: 0 }.data();
+    assert_eq!(
+        <(U256, U256)>::abi_decode_params(&u).unwrap(),
+        (U256::from(1u8), U256::ZERO)
+    );
+    let sd = Params::Saddle { i: 2, j: 1 }.data();
+    assert_eq!(sd.len(), 64);
+    assert_eq!((sd[31], sd[63]), (2, 1));
+    assert!(sd[..31].iter().chain(&sd[32..63]).all(|b| *b == 0));
     for p in [
         Params::V3,
         Params::Algebra,
@@ -172,4 +185,42 @@ fn artifacts_match_recorded_hashes() {
     assert_eq!(code::owner_slot().unwrap(), B256::ZERO);
     assert!(code::solc().starts_with("0.8.37+"));
     assert_eq!(code::creation_sha256().len(), 64);
+}
+
+/// Селекторы обмена новых видов (решение 122 X, стейблсвапы) — keccak официальных подписей: PancakeSwap StableSwap
+/// (pancake-smart-contracts@cb079908 PancakeStableSwapTwoPool.sol L425) и Lista (moolah@eb7d73a StableSwapPool.sol
+/// L478) — exchange(uint256,uint256,uint256,uint256) = 0x5b41b908; Nerve (nerve-finance/contracts@bda7578 Swap.sol
+/// L389) — swap(uint8,uint8,uint256,uint256,uint256). Те же подписи — в contracts/IPools.sol, селекторы — в коде в сети
+/// (PUSH4 0x63 + селектор).
+#[test]
+fn stable_kinds_call_official_selectors() {
+    use alloy_primitives::keccak256;
+    let sel = |sig: &str| keccak256(sig.as_bytes())[..4].to_vec();
+    assert_eq!(
+        sel("exchange(uint256,uint256,uint256,uint256)"),
+        [0x5b, 0x41, 0xb9, 0x08]
+    );
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/contracts/IPools.sol"))
+        .unwrap();
+    assert!(
+        src.contains(
+            "function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external;"
+        )
+    );
+    assert!(src.contains(
+        "function swap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx, uint256 minDy, uint256 deadline)"
+    ));
+    let runtime = code::runtime().unwrap();
+    for sig in [
+        "exchange(uint256,uint256,uint256,uint256)",
+        "swap(uint8,uint8,uint256,uint256,uint256)",
+        "exchange(int128,int128,uint256,uint256)",
+    ] {
+        let mut push = vec![0x63u8];
+        push.extend(sel(sig));
+        assert!(
+            runtime.windows(5).any(|w| w == push.as_slice()),
+            "{sig} в коде"
+        );
+    }
 }

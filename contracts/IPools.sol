@@ -13,6 +13,7 @@ interface IERC20 {
     function transfer(address to, uint256 value) external returns (bool);
     function transferFrom(address from, address to, uint256 value) external returns (bool);
     function approve(address spender, uint256 value) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
 }
 
 // Uniswap V2 / PancakeSwap V2 и форки: Uniswap/v2-core@6a9e7c97 contracts/UniswapV2Pair.sol L38, L159;
@@ -51,6 +52,24 @@ interface IElasticPool {
 // Возвращаемое значение не читается (у Ellipsis его нет) — выход меряется по балансу.
 interface ICurvePool {
     function exchange(int128 i, int128 j, uint256 dx, uint256 minDy) external;
+}
+
+// PancakeSwap StableSwap (индексы uint256, payable, ничего не возвращает): pancakeswap/pancake-smart-contracts@cb079908
+// projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol L425-L430 (репозиторий закрыт — копия в форке
+// migo557/pancake-smart-contracts, 1:1 с verified-кодом BscScan пула 0x6D8f…CE5A5 в tintinweb/smart-contract-sanctuary-bsc);
+// Lista: lista-dao/moolah@eb7d73a src/dex/StableSwapPool.sol L478 (тот же заголовок + whenNotPaused и checkPriceDiff).
+// Селектор exchange(uint256,uint256,uint256,uint256) = 0x5b41b908. Вход списывает пул transferFrom(msg.sender, пул, dx),
+// выход — msg.sender (transfer_out); BNB (0xEeee…) исполнитель не поддерживает.
+interface IStableSwapU256 {
+    function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external;
+}
+
+// Saddle / Nerve: nerve-finance/contracts@bda7578 contracts/Swap.sol L389-L402 (swap(uint8 from, uint8 to, dx, minDy,
+// deadline) → SwapUtils.swap: transferFrom(msg.sender, пул, dx), вход = сколько дошло (transferredDx), выход —
+// msg.sender). Возврат не читается — выход меряется по балансу.
+interface ISaddleSwap {
+    function swap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx, uint256 minDy, uint256 deadline)
+        external returns (uint256);
 }
 
 // DODO V2 (DVM/DPP/DSP): DODOEX/contractV2@2f1bcdac contracts/DODOVendingMachine/impl/DVMTrader.sol L41, L65,

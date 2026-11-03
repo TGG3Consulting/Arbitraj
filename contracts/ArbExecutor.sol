@@ -26,6 +26,10 @@ contract ArbExecutor {
     uint8 internal constant WOO = 6;
     uint8 internal constant MAVERICK = 7;
     uint8 internal constant ELASTIC = 8;
+    uint8 internal constant STABLE_U256 = 9; // PancakeSwap StableSwap, Lista: exchange(uint256 i, uint256 j, dx, 0)
+    uint8 internal constant SADDLE = 10; // Nerve (Saddle): swap(uint8 i, uint8 j, dx, 0, block.timestamp)
+    // Нативная монета в пулах StableSwap (BNB_ADDRESS Pancake / Lista) — шагами не поддерживается.
+    address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     // Пределы цены «без ограничения» — TickMath.MIN_SQRT_RATIO + 1 / MAX_SQRT_RATIO − 1 (Uniswap/v3-core@5ea68a77
     // contracts/libraries/TickMath.sol L14, L16; те же числа у Pancake V3, Slipstream, Algebra V1.9, ks-elastic-sc).
@@ -36,7 +40,8 @@ contract ArbExecutor {
     uint256 internal constant PIPS = 1000000;
 
     // Шаг маршрута. shareBps — доля ТЕКУЩЕГО баланса исполнителя по tokenIn (10000 — весь остаток).
-    // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); остальные — пусто.
+    // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
+    // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -129,6 +134,8 @@ contract ArbExecutor {
             (int128 i, int128 j) = abi.decode(s.data, (int128, int128));
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount))); // ровно на шаг
             ICurvePool(s.pool).exchange(i, j, amount, 0); // выход — исполнителю (msg.sender пула), затем _sweep
+        } else if (k == STABLE_U256 || k == SADDLE) {
+            _stable(s, amount);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
@@ -142,6 +149,26 @@ contract ArbExecutor {
             revert("kind");
         }
         expPool = address(0);
+    }
+
+    // StableSwap с индексами uint256 (Pancake, Lista) и Saddle (Nerve): approve пулу ровно на шаг, пул сам списывает
+    // transferFrom(исполнитель, пул, dx); выход — исполнителю (msg.sender пула), затем _sweep; выход должен вырасти.
+    // Срок Saddle — block.timestamp (срок всей транзакции уже проверен в execute). Разрешение после шага — 0.
+    function _stable(Step calldata s, uint256 amount) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
+        _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+        uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
+        if (s.kind == STABLE_U256) {
+            (uint256 i, uint256 j) = abi.decode(s.data, (uint256, uint256));
+            IStableSwapU256(s.pool).exchange(i, j, amount, 0);
+        } else {
+            (uint8 i, uint8 j) = abi.decode(s.data, (uint8, uint8));
+            ISaddleSwap(s.pool).swap(i, j, amount, 0, block.timestamp);
+        }
+        require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+        if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+        }
     }
 
     // Выход V2: вход = баланс пары − резерв (налог токена учтён), формула UniswapV2Library.getAmountOut с комиссией

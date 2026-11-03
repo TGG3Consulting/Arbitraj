@@ -40,6 +40,11 @@ pub enum ExecKind {
     /// Maverick V2: `pool.swap(recipient, SwapParams{amount, tokenAIn, exactOutput=false, tickLimit}, data)` + обратный
     /// вызов `maverickV2SwapCallback`; направление tokenA и предел тика контракт берёт сам (contracts/ArbExecutor.sol).
     Maverick,
+    /// StableSwap с индексами uint256 — PancakeSwap Stable Swap и Lista: `approve` пулу + `exchange(uint256 i,
+    /// uint256 j, dx, 0)` (решение 122 X, стейблсвапы).
+    StableU256,
+    /// Saddle — Nerve: `approve` пулу + `swap(uint8 i, uint8 j, dx, 0, срок)` (решение 122 X, стейблсвапы).
+    Saddle,
 }
 
 impl ExecKind {
@@ -54,6 +59,8 @@ impl ExecKind {
             ExecKind::Dodo => "DODO",
             ExecKind::Woo => "WOO",
             ExecKind::Maverick => "MAVERICK",
+            ExecKind::StableU256 => "STABLE_U256",
+            ExecKind::Saddle => "SADDLE",
         }
     }
 }
@@ -63,8 +70,8 @@ impl ExecKind {
 /// CURVE — curve_stableswap (решение 122 F, 2), MAVERICK — maverick_v2 (решение 122 F, Maverick V2). WooFi (woofi_v2,
 /// решение 122 F, 3) шаг WOO пока НЕ получает: своей котировки нет (развёрнутый код закрыт), шаг включается только
 /// после сухой сделки на живом пуле (сверка подписи swap развёрнутой реализации, селектор 0x7dc20382 в байткоде).
-/// PancakeSwap / Lista StableSwap (exchange с индексами uint256) и Saddle (swap(uint8, uint8, …, deadline)) шага не
-/// получают — в контракте его нет (нужен новый вид шага, docs/TASKS.md). Ошибок нет.
+/// PancakeSwap / Lista StableSwap (exchange с индексами uint256) — STABLE_U256, Saddle / Nerve (swap(uint8, uint8, …,
+/// deadline)) — SADDLE (решение 122 X, стейблсвапы). Ошибок нет.
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" => ExecKind::V2,
@@ -76,6 +83,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         "curve_stableswap" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
+        "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
+        "saddle_stableswap" => ExecKind::Saddle,
         _ => return None,
     })
 }
@@ -122,9 +131,6 @@ mod tests {
             "pancakeswap_infinity_bin",
             "uniswap_v4",
             "kyber_elastic",
-            "pancake_stableswap",
-            "lista_stableswap",
-            "saddle_stableswap",
             "woofi_v2",
             "unsupported",
         ];

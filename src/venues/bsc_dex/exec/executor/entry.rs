@@ -5,7 +5,8 @@
 //! Нет вида шага — пул исполнителем не вызывается (Infinity / V4 — только Universal Router; KyberSwap Elastic — вид
 //! ELASTIC в контракте есть, но семейство неисполнимо, решение 121 B2). CURVE / WOO / MAVERICK из реестра пока не
 //! приходят (семейств нет). CURVE (StableSwap Ellipsis, решение 122 F2) — индексы пары из состояния пула
-//! (PoolState::StableSwap: i0 — token0, i1 — token1), направление — по токену входа шага.
+//! (PoolState::StableSwap: i0 — token0, i1 — token1), направление — по токену входа шага; так же STABLE_U256
+//! (PancakeSwap Stable, Lista) и SADDLE (Nerve) — решение 122 X, стейблсвапы; пул с halted — не исполняется.
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
 //! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии).
@@ -58,17 +59,23 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Dodo => Params::Dodo,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,
-        ExecKind::Curve => curve(e, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?,
+        ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
+            stable(e, k, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
+        }
     };
     Ok((p, pool))
 }
 
-/// Индексы шага CURVE: i — монета входа, j — выхода (exchange(i, j, dx, 0) пула). Принимает: пул реестра, токен входа.
-/// Возвращает: Params::Curve или причину (состояние не StableSwap; токен входа не token0/token1 пула).
-fn curve(e: &Entry, token_in: Address) -> Result<Params, String> {
+/// Индексы шага StableSwap (CURVE, STABLE_U256, SADDLE): i — монета входа, j — выхода. Принимает: пул реестра, вид,
+/// токен входа. Возвращает: параметры шага или причину (состояние не StableSwap; обмены пула остановлены — пауза /
+/// kill / сбой проверки цены Lista; токен входа не token0/token1 пула).
+fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
     let PoolState::StableSwap(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
     };
+    if d.halted {
+        return Err(format!("{}: обмены пула остановлены", e.family.id));
+    }
     let (i, j) = if token_in == e.pool.token0 {
         (d.i0, d.i1)
     } else if token_in == e.pool.token1 {
@@ -79,9 +86,13 @@ fn curve(e: &Entry, token_in: Address) -> Result<Params, String> {
             e.family.id
         ));
     };
-    Ok(Params::Curve {
-        i: i128::from(i),
-        j: i128::from(j),
+    Ok(match k {
+        ExecKind::StableU256 => Params::StableU256 { i, j },
+        ExecKind::Saddle => Params::Saddle { i, j },
+        _ => Params::Curve {
+            i: i128::from(i),
+            j: i128::from(j),
+        },
     })
 }
 

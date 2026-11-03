@@ -75,7 +75,11 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 4. **Сухие сделки DEX** (Ручное управление → «Сухая сделка DEX»), по одной на форму: V2, V3 Pancake, Infinity,
    Uniswap V3/V4, сплит, маршрут через промежуточную, BNB, монета с налогом. Везде «выход ≥ минимума».
 5. Те же сухие сделки «через исполнитель» (код подставляется в симуляцию, контракт ещё не развёрнут). Особо: Slipstream,
-   THENA Fusion, THENA V1, DODO, Ellipsis — эти шаги ещё ни разу не исполнялись.
+   THENA Fusion, THENA V1, DODO, Ellipsis, а также PancakeSwap Stable Swap и Lista (шаг STABLE_U256) и Nerve (шаг
+   SADDLE) — эти шаги ещё ни разу не исполнялись. Для новых стейблсвапов: в итоге сухой сделки — успех пробы,
+   «получено» ≈ котировке (разница — только округление), газ шага; Lista — пара, где цена близка к оракулу (у пула
+   checkPriceDiff: котировка за порогом сделку не даёт); пул на паузе (Nerve / Lista paused, Pancake is_killed) —
+   маршрута через него нет. После развёртывания — «Проверить подключение» исполнителя: код совпал (новый байткод).
 5а. **Сухая сделка цикла DEX ↔ DEX** (решение 124): задать `dex_dex.enabled` = да, `dex_dex.base_tokens`,
    `dex_dex.max_cycle_len`, `dex_dex.max_cycles`, `dex_dex.probe_input_base`, `dex_dex.min_profit_usd`,
    `dex_dex.size_step_base` (`dex_dex.execute` НЕ включать). Ручное управление → «Сухая сделка DEX» → «Что проверить:

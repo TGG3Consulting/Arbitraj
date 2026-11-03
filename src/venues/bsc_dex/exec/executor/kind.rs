@@ -2,15 +2,17 @@
 //! Что делает: ПУБЛИЧНЫЙ кодировщик шагов исполнителя ArbExecutor (решение 122, часть X) — один вход для всех семейств
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
-//! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8; сверяет тест
-//! tests/bsc_dex_executor_abi.rs с исходником); раскладка data — комментарий Step в контракте:
-//! V2 — abi.encode(uint32 feePips), CURVE — abi.encode(int128 i, int128 j), остальные — пусто.
+//! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10;
+//! сверяет тест tests/bsc_dex_executor_abi.rs с исходником); раскладка data — комментарий Step в контракте:
+//! V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j), SADDLE —
+//! (uint8 i, uint8 j), остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
 
-use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, Bytes};
+use alloy::sol_types::sol_data::Uint;
+use alloy::sol_types::{SolType, SolValue};
+use alloy_primitives::{Address, Bytes, U256};
 
 use super::abi::ArbExecutor;
 
@@ -38,6 +40,10 @@ pub enum Params {
     Maverick,
     /// KyberSwap Elastic: swap(получатель, вход, isToken0, предел, data) + swapCallback.
     Elastic,
+    /// PancakeSwap StableSwap и Lista: exchange(uint256 i, uint256 j, dx, 0); индексы монет пула.
+    StableU256 { i: u8, j: u8 },
+    /// Saddle (Nerve): swap(uint8 i, uint8 j, dx, 0, block.timestamp); индексы монет пула.
+    Saddle { i: u8, j: u8 },
 }
 
 impl Params {
@@ -53,6 +59,8 @@ impl Params {
             Params::Woo => 6,
             Params::Maverick => 7,
             Params::Elastic => 8,
+            Params::StableU256 { .. } => 9,
+            Params::Saddle { .. } => 10,
         }
     }
 
@@ -61,6 +69,12 @@ impl Params {
         match *self {
             Params::V2 { fee_pips } => Bytes::from(fee_pips.abi_encode()),
             Params::Curve { i, j } => Bytes::from((i, j).abi_encode_params()),
+            Params::StableU256 { i, j } => {
+                Bytes::from((U256::from(i), U256::from(j)).abi_encode_params())
+            }
+            Params::Saddle { i, j } => {
+                Bytes::from(<(Uint<8>, Uint<8>) as SolType>::abi_encode_params(&(i, j)))
+            }
             _ => Bytes::new(),
         }
     }

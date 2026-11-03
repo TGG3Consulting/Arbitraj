@@ -31,7 +31,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 маршрута, `shareBps` = 10000 и маршрут не цикл (`tokenIn ≠ tokenOut`), — исполнитель вход к себе не забирает, а
 переводит его `transferFrom(владелец → пул, amountIn)` прямо в пул шага. Монета с налогом на перевод платит его один
 раз (как у Universal Router через Permit2). У остальных видов (вход платится в обратном вызове или через approve
-пулу — V3, ALGEBRA, ELASTIC, MAVERICK, CURVE) и при сплите первого шага — как раньше: владелец → исполнитель → пул.
+пулу — V3, ALGEBRA, ELASTIC, MAVERICK, CURVE, STABLE_U256, SADDLE) и при сплите первого шага — как раньше: владелец → исполнитель → пул.
 
 | Вид | № | Пулы | Как вызывается | Источник интерфейса |
 | --- | --- | --- | --- | --- |
@@ -43,14 +43,19 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | `DODO` | 5 | DODO V2 DVM / DPP / DSP | перевод; `_BASE_TOKEN_() == tokenIn` ? `sellBase(to)` : `sellQuote(to)` | DODOEX/contractV2@2f1bcdac `DVMTrader.sol` L41, L65; `DVMStorage.sol` L30; `DPPTrader.sol`, `DSPTrader.sol` |
 | `WOO` | 6 | WooFi WooPPV2 | перевод; `swap(from, to, сколько дошло до пула, 0, to, исполнитель)` | woonetwork/WooPoolV2@f73a0f64 `WooPPV2.sol` L152-L170, L443 |
 | `MAVERICK` | 7 | Maverick V2 | `pool.swap(to, {сумма, tokenAIn, false, int32.max / int32.min}, data≠"")` + `maverickV2SwapCallback` | maverickprotocol/v2-common@d91e8714 `IMaverickV2Pool.sol` L106-L111, L233, L361-L386; `IMaverickV2SwapCallback.sol` L10 |
+| `STABLE_U256` | 9 | PancakeSwap Stable Swap, Lista StableSwap | `approve(pool, сумма)` + `exchange(uint256 i, uint256 j, сумма, 0)` (селектор `0x5b41b908`; payable — BNB не шлём); пул списывает `transferFrom(исполнитель, пул, dx)`, выход — исполнителю (msg.sender), выход должен вырасти; затем разрешение = 0 | pancakeswap/pancake-smart-contracts@cb079908 `projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol` L425-L466 (репозиторий закрыт — форк migo557, 1:1 с verified BscScan пула 0x6D8f…CE5A5, tintinweb/smart-contract-sanctuary-bsc); lista-dao/moolah@eb7d73a `src/dex/StableSwapPool.sol` L478-L519 (`whenNotPaused`, `checkPriceDiff`) |
+| `SADDLE` | 10 | Nerve (форк Saddle) | `approve(pool, сумма)` + `swap(uint8 from, uint8 to, сумма, 0, block.timestamp)`; пул списывает `transferFrom`, вход = сколько дошло (`transferredDx` — налог учтён), выход — исполнителю; затем разрешение = 0 | nerve-finance/contracts@bda7578 `contracts/Swap.sol` L389-L402, `SwapUtils.sol` L800-L850 |
 | `ELASTIC` | 8 | KyberSwap Elastic | `pool.swap(to, +сумма, isToken0, MIN+1 / MAX−1, "")` + `swapCallback` | KyberNetwork/ks-elastic-sc@4ab08c0a `IPoolActions.sol` L88-L94, `ISwapCallback.sol` L16, `Pool.sol` L328-L366 |
 
 Пределы цены — `TickMath.MIN_SQRT_RATIO + 1` / `MAX_SQRT_RATIO − 1` (те же числа у Uniswap/Pancake V3, Slipstream,
 Algebra V1.9, ks-elastic-sc — `TickMath.sol` L14, L16). KyberSwap Elastic отдельным видом: у его `swap` другой порядок
 аргументов (`int256 swapQty, bool isToken0`), чем у V3 (`bool zeroForOne, int256 amountSpecified`).
 
-PancakeSwap Stable Swap, Nerve (Saddle), Lista — **не** вид `CURVE`: у них другие подписи обмена (индексы uint256 /
-uint8 и срок), официальных исходников с подписью в репозиториях нет под рукой — не добавлено (вопрос Тиграну).
+PancakeSwap Stable Swap и Lista (индексы uint256) — вид `STABLE_U256`, Nerve (Saddle: индексы uint8 и срок) — вид
+`SADDLE` (решение 122 X, стейблсвапы; Тигран 03.11: «все три, и Nerve тоже»). Нативная монета в этих пулах
+(`0xEeee…`, BNB_ADDRESS) шагом не поддерживается — `require(tokenIn/tokenOut ≠ 0xEeee…)`. Прямой вход в пул у этих
+видов не используется: пул сам списывает вход по разрешению. Срок Saddle = `block.timestamp`: срок всей транзакции
+уже проверен в начале `execute`.
 PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) исполнитель не вызывает — только свой Universal Router.
 
 ## Безопасность — что может пойти не так и как закрыто
@@ -68,11 +73,13 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 | Старая транзакция исполнилась поздно | `deadline` (бот — время блока + `dex.deadline_s`) и minOut |
 | Прямой вход переводит деньги владельца в чужой адрес | Только внутри `execute` владельца, только в `pool` первого шага, только `amountIn` (сумма вызова) и только для видов, где пул сам меряет вход по балансу (V2/Solidly — баланс − резерв; DODO — баланс − резерв; WooPPV2 — прирост баланса, измеренный исполнителем); недобор выхода — откат всего по minOut. Цикл (`tokenIn = tokenOut`) прямой вход не использует: итог меряется после забора входа |
 | Разрешение `approve` пулу Curve осталось | `approve` ровно на сумму шага; `exchange` списывает её целиком (`transferFrom(msg.sender, pool, dx)` у Curve/Ellipsis) |
+| Разрешение пулу STABLE_U256 / SADDLE осталось или потрачено чужим | `approve` только пулу ТЕКУЩЕГО шага (адрес задал владелец в этом вызове) ровно на сумму шага; пул списывает `dx` целиком (`safeTransferFrom(msg.sender, this, dx)` у Pancake / Lista / Saddle); после шага исполнитель читает `allowance` и, если не 0, ставит 0 — разрешений после транзакции не остаётся. Пул обратно исполнитель не вызывает (у этих видов нет обратного вызова; `_pay` пускает только `expPool`, а он у этих видов 0) |
+| Пул STABLE_U256 / SADDLE ничего не отдал | `require(баланс исполнителя по tokenOut вырос)` — «out»; итог всё равно меряется у кошелька по minOut |
 | Сэндвич / MEV | Внутри шагов минимумов нет (как у роутеров с одним итоговым минимумом); итог защищён minOut, отправка — приватными каналами (решение 41) |
 
 Ограничения v1 (не риск потери, а отказ/откат): налоговый токен на входе V3/Algebra/Elastic/Maverick откатится (пул
 сверяет баланс после обратного вызова); монета с налогом на перевод на ВХОДЕ платит налог один раз, только если первый
 шаг — V2/SOLIDLY/DODO/WOO на весь вход (прямой вход в пул); при сплите первого шага или другом виде — дважды (кошелёк →
-исполнитель → пул); на выходе налог один раз (выход шага с токеном выхода маршрута идёт из пула прямо кошельку; кроме Curve — через
+исполнитель → пул); на выходе налог один раз (выход шага с токеном выхода маршрута идёт из пула прямо кошельку; кроме Curve, STABLE_U256 и SADDLE — через
 исполнитель). Итог меряется у кошелька — недобор = откат, деньги не теряются. Нативный BNB не поддерживается (бот
 отказывает до отправки).

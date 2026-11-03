@@ -1,7 +1,8 @@
 //! Файл: tests/bsc_dex_stable_families.rs
 //! Что делает: семейства решения 122 F, 3 без сети и без моков — PancakeSwap StableSwap, Lista StableSwap, Saddle
 //! (Nerve), WooFi WooPPV2: (1) таблица сопоставления → протокол, вид ядра, в графе, без своего пути, без шага
-//! исполнителя (у контракта нет подходящего вида шага), нужные настройки; (2) свойства общей математики шаблонов
+//! исполнителя: Pancake / Lista — STABLE_U256, Nerve — SADDLE (решение 122 X, стейблсвапы), WooFi — нет; индексы шага
+//! из состояния по токену входа, пул на паузе — не исполняется; нужные настройки; (2) свойства общей математики шаблонов
 //! (stableswap_v1::Template): A_PRECISION = 100 с A·100 даёт ровно то же, что сырой A (формулы Lista/Saddle сводятся к
 //! Curve 2020 точно); рампа A Lista (get_A); проверка цены Lista после обмена (stable_guard): малый обмен в
 //! сбалансированном пуле проходит, обмен, уводящий цену за порог, — нет; (3) сверка своей математики с квотером пула
@@ -17,6 +18,7 @@ use serde_json::Value;
 use arb::core::types::{PoolKind, StableGuard};
 use arb::venues::bsc_dex::math::stable_guard;
 use arb::venues::bsc_dex::math::stableswap_v1::{self, Template, curve2020};
+use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 use arb::venues::bsc_dex::pools::families::{self, Proto};
 use arb::venues::bsc_dex::pools::load_stable_u::ramp;
 
@@ -57,8 +59,113 @@ fn families_flags() {
             (true, false, false),
             "{kind}"
         );
-        assert_eq!(f.executor_kind, None, "{kind}: шага исполнителя нет");
+        // Решение 122 X (стейблсвапы): Pancake / Lista — STABLE_U256, Nerve — SADDLE; WooFi — без шага (нет котировки).
+        let want = match kind {
+            "pancake_stableswap" | "lista_stableswap" => Some(ExecKind::StableU256),
+            "saddle_stableswap" => Some(ExecKind::Saddle),
+            _ => None,
+        };
+        assert_eq!(f.executor_kind, want, "{kind}");
     }
+}
+
+/// Окружение на настоящей SQLite без настроек (для текста ошибок entry::params).
+async fn ctx(tag: &str) -> arb::venues::bsc_dex::ctx::Ctx {
+    use arb::settings::store::Store;
+    use arb::storage::{db::Db, journal::Journal, raw_log::RawLog};
+    let d = std::env::temp_dir().join(format!("arb-stable-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let db = Db::open(&d.join("t.sqlite")).unwrap();
+    let (changes, _) = tokio::sync::broadcast::channel(64);
+    let (jtx, _) = tokio::sync::broadcast::channel(64);
+    let journal = Journal::new(db.clone(), jtx);
+    let settings = Store::load(db, changes, journal.clone()).await.unwrap();
+    arb::venues::bsc_dex::ctx::Ctx {
+        raw: RawLog::start(d.join("raw"), settings.clone()),
+        pace: Default::default(),
+        failover: Default::default(),
+        index: Default::default(),
+        settings,
+        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+        http: reqwest::Client::new(),
+        journal,
+    }
+}
+
+/// Шаг исполнителя пула StableSwap: индексы из состояния (i0 — token0, i1 — token1) по токену входа; пул на паузе
+/// (halted) — не исполняется. Монеты — USDT / USDC BSC, индексы 2 и 1 (как у пула из трёх монет Nerve).
+#[tokio::test]
+async fn stable_steps_take_indices_from_state() {
+    use alloy_primitives::{Address, address};
+    use arb::core::types::{Pool, PoolRef, PoolState, StableData, VenueId};
+    use arb::venues::bsc_dex::exec::executor::{entry, kind::Params};
+    use arb::venues::bsc_dex::pools::registry::Entry;
+    const USDC: Address = address!("0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d");
+    const USDT: Address = address!("0x55d398326f99059fF775485246999027B3197955");
+    let c = ctx("idx").await;
+    let make = |kind: &str, halted: bool| {
+        let f = families::make("x-stable", kind).unwrap();
+        let (t0, t1) = if USDC < USDT {
+            (USDC, USDT)
+        } else {
+            (USDT, USDC)
+        };
+        let state = StableData {
+            balances: vec![e18(1); 3],
+            rates: vec![U256::from(1u8); 3],
+            amp: U256::from(100u8),
+            fee: U256::ZERO,
+            amp_precision: U256::from(100u8),
+            max_rounds: 256,
+            strict: true,
+            guard: None,
+            halted,
+            i0: 2,
+            i1: 1,
+        };
+        Entry {
+            family: f,
+            pool: Pool {
+                venue: VenueId("bsc_dex".into()),
+                family: f.id.into(),
+                kind: f.kind,
+                reference: PoolRef::Contract(address!(
+                    "0x1111111111111111111111111111111111111111"
+                )),
+                token0: t0,
+                token1: t1,
+                fee_pips: None,
+                tick_spacing: None,
+                bin_step: None,
+                hooks: None,
+                state: PoolState::StableSwap(Box::new(state)),
+                block: 1,
+                received_at: chrono::Utc::now(),
+            },
+            ticker: "USDC".into(),
+            coin: USDC,
+            usdt: USDT,
+            key: None,
+            ticks: None,
+            bins: None,
+            synced_block: 1,
+            synced_log: None,
+            valid: true,
+            asleep: false,
+        }
+    };
+    let e = make("saddle_stableswap", false);
+    let (t0, t1) = (e.pool.token0, e.pool.token1);
+    let (p, _) = entry::params(&c, &e, t0).unwrap();
+    assert_eq!(p, Params::Saddle { i: 2, j: 1 });
+    let (p, _) = entry::params(&c, &e, t1).unwrap();
+    assert_eq!(p, Params::Saddle { i: 1, j: 2 });
+    let e = make("lista_stableswap", false);
+    let (p, _) = entry::params(&c, &e, t1).unwrap();
+    assert_eq!(p, Params::StableU256 { i: 1, j: 2 });
+    let e = make("pancake_stableswap", true);
+    assert!(entry::params(&c, &e, t0).is_err(), "пул на паузе / kill");
 }
 
 /// A·100 при точности 100 = сырой A при точности 1 (дословно: деления на AP точны), для D и для обмена.

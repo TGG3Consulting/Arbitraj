@@ -76,6 +76,7 @@ async fn run() -> Result<(), String> {
         http: http.clone(),
         journal: journal.clone(),
         raw: raw.clone(),
+        taps: Default::default(),
     };
     registry
         .register(std::sync::Arc::new(arb::venues::bingx::Bingx::new(
@@ -89,6 +90,7 @@ async fn run() -> Result<(), String> {
         http: http.clone(),
         journal: journal.clone(),
         raw: raw.clone(),
+        taps: Default::default(),
     };
     registry
         .register(std::sync::Arc::new(arb::venues::mexc::Mexc::new(mexc_ctx)))

@@ -4,7 +4,8 @@
 //! прошедший, пока строится, — он ждёт следующим (более ранний ожидающий заменяется, отметка «первая запись эпизода»
 //! того же эпизода сохраняется), а если записи эпизода не нужно (пропуск по интервалу) — не ставится вовсе.
 //! Готовая карточка — в строку «Кандидатов» и живой поток; запись эпизода — сообщением задаче эпизодов
-//! (episode_worker.rs); эпизоды не ведутся — журнал и Telegram deal.candidate отсюда (told).
+//! (episode_worker.rs); эпизоды не ведутся — журнал и Telegram deal.candidate отсюда (told). Прибыль без бюджета —
+//! и в окно монеты (решение 125).
 //! Кто вызывает: core/candidates.rs (submit).
 //! От чего зависит: card.rs, card_text.rs, episode_run.rs (EpMsg), view.rs, gateway/urgency.rs.
 //! Настройки: через card.rs.
@@ -82,6 +83,9 @@ fn merge(old: Option<Job>, mut new: Job) -> Job {
 async fn run(core: &Core, job: Job) {
     let card = super::card::build(core, &job.calc, job.dry).await;
     publish(core, &job.calc.direction, &card);
+    // Решение 125: наибольшая прибыль без бюджета — и в окно монеты.
+    let unbounded = card.max.as_ref().ok().map(|m| m.opt_profit);
+    super::window_run::unbounded(core, &job.calc.direction, unbounded);
     if job.told {
         let mut text = super::card_text::text(&card);
         if let Some(s) = job.calc.size.as_ref() {

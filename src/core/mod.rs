@@ -121,6 +121,14 @@ pub mod usdt_return;
 pub mod view;
 pub mod vol;
 pub mod wait;
+pub mod window;
+pub mod window_cfg;
+pub mod window_close;
+pub mod window_info;
+pub mod window_run;
+pub mod window_tap;
+pub mod window_view;
+pub mod window_worker;
 pub mod worst;
 
 pub use engine::Core;

@@ -1,11 +1,12 @@
 //! Файл: storage/episode_files.rs
 //! Что делает: файлы эпизодов арбитражной ситуации (решение 74) — один файл на эпизод, сжатие zstd, как
 //! storage/raw_log.rs: <data-dir>/episodes/<id>.jsonl.zst, одна строка — одна запись JSON (заголовок, пересчёты,
-//! закрытие). Запись — в отдельном потоке, ядро не ждёт диск. После каждой записи сжатые данные сбрасываются на диск
-//! (открытый эпизод читается до последней записи). Сколько места занято — счётчик (для лимита episode.max_mb), с концом
+//! закрытие). Запись — в отдельном потоке, ядро не ждёт диск. Когда очередь записи пуста, сжатые данные сбрасываются
+//! на диск (открытый эпизод читается до последней сброшенной записи; при потоке кадров окна — не на каждой строке).
+//! Тот же код пишет файлы окон (решение 125): свой экземпляр, папка <data-dir>/windows (start_named). Сколько места занято — счётчик (для лимита episode.max_mb), с концом
 //! кадра при закрытии. remove и orphans — блокирующие: ядро зовёт их в spawn_blocking.
 //! Кто вызывает: core/episode_run.rs (open, line, close, remove, used), core/engine.rs (start), api/episodes.rs (read,
-//! path — через ядро).
+//! path — через ядро); окна — core/window_*.rs.
 //! От чего зависит: zstd.
 //! Настройки: нет (уровень сжатия episode.zstd_level передаёт ядро при открытии).
 
@@ -37,11 +38,16 @@ pub struct EpisodeFiles {
 impl EpisodeFiles {
     /// Что делает: запускает поток записи. Принимает: папку эпизодов. Ошибок нет: сбой — в лог процесса.
     pub fn start(dir: PathBuf) -> Self {
+        Self::start_named(dir, "episodes")
+    }
+
+    /// То же с именем потока записи (окна — «windows»). Принимает: папку, имя потока. Ошибок нет.
+    pub fn start_named(dir: PathBuf, name: &str) -> Self {
         let used = Arc::new(AtomicU64::new(scan(&dir)));
         let (tx, rx) = mpsc::unbounded_channel();
         let (d, u) = (dir.clone(), used.clone());
         std::thread::Builder::new()
-            .name("episodes".into())
+            .name(name.into())
             .spawn(move || writer(rx, d, u))
             .map_err(|e| tracing::error!(%e, "не удалось запустить запись эпизодов"))
             .ok();
@@ -72,6 +78,13 @@ impl EpisodeFiles {
     /// Путь файла эпизода. Ошибок нет.
     pub fn path(&self, id: &str) -> PathBuf {
         self.dir.join(format!("{id}.jsonl.zst"))
+    }
+
+    /// Размер файла на диске, байт (0 — нет файла). Ошибок нет.
+    pub fn size(&self, id: &str) -> u64 {
+        std::fs::metadata(self.path(id))
+            .map(|m| m.len())
+            .unwrap_or(0)
     }
 
     /// Занято места, байт. Ошибок нет.
@@ -142,6 +155,8 @@ fn scan(dir: &Path) -> u64 {
 /// Поток записи: открытые файлы по id.
 fn writer(mut rx: mpsc::UnboundedReceiver<Cmd>, dir: PathBuf, used: Arc<AtomicU64>) {
     let mut files: HashMap<String, (zstd::Encoder<'static, File>, u64)> = HashMap::new();
+    // Файлы с несброшенными строками: сброс — когда очередь пуста (не на каждой строке).
+    let mut dirty: std::collections::HashSet<String> = Default::default();
     while let Some(cmd) = rx.blocking_recv() {
         match cmd {
             Cmd::Open { id, level } => {
@@ -156,17 +171,16 @@ fn writer(mut rx: mpsc::UnboundedReceiver<Cmd>, dir: PathBuf, used: Arc<AtomicU6
                 }
             }
             Cmd::Line { id, text } => {
-                let Some((enc, size)) = files.get_mut(&id) else {
+                let Some((enc, _)) = files.get_mut(&id) else {
                     continue;
                 };
-                if let Err(e) = writeln!(enc, "{text}").and_then(|_| enc.flush()) {
+                if let Err(e) = writeln!(enc, "{text}") {
                     tracing::error!(%e, %id, "ошибка записи эпизода");
                 }
-                let now = enc.get_ref().metadata().map(|m| m.len()).unwrap_or(*size);
-                used.fetch_add(now.saturating_sub(*size), Ordering::Relaxed);
-                *size = now;
+                dirty.insert(id);
             }
             Cmd::Close { id } => {
+                dirty.remove(&id);
                 let Some((enc, size)) = files.remove(&id) else {
                     continue;
                 };
@@ -180,8 +194,30 @@ fn writer(mut rx: mpsc::UnboundedReceiver<Cmd>, dir: PathBuf, used: Arc<AtomicU6
                 }
             }
         }
+        if rx.is_empty() {
+            flush(&mut files, &mut dirty, &used);
+        }
     }
     for (_, (enc, _)) in files.drain() {
         let _ = enc.finish();
+    }
+}
+
+/// Сбрасывает несброшенные файлы на диск и досчитывает занятое место. Ошибок нет — сбой в лог процесса.
+fn flush(
+    files: &mut HashMap<String, (zstd::Encoder<'static, File>, u64)>,
+    dirty: &mut std::collections::HashSet<String>,
+    used: &AtomicU64,
+) {
+    for id in dirty.drain() {
+        let Some((enc, size)) = files.get_mut(&id) else {
+            continue;
+        };
+        if let Err(e) = enc.flush() {
+            tracing::error!(%e, %id, "ошибка записи эпизода");
+        }
+        let now = enc.get_ref().metadata().map(|m| m.len()).unwrap_or(*size);
+        used.fetch_add(now.saturating_sub(*size), Ordering::Relaxed);
+        *size = now;
     }
 }

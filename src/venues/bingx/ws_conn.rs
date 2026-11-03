@@ -1,7 +1,8 @@
 //! Файл: venues/bingx/ws_conn.rs
 //! Что делает: одна сессия WebSocket BingX: подключение, подписки по одной с паузой,
 //! ответ «Pong» на ping сразу, запись сырых сообщений, стаканы → память и ядру,
-//! отказ подписки или неразборчивый стакан → стакан этой пары недостоверен.
+//! отказ подписки или неразборчивый стакан → стакан этой пары недостоверен. Монета пишется окном (решение 125) —
+//! текст её кадра стакана (после GZIP) со временем получения уходит в приёмник окна (ctx.taps), ядро не ждёт.
 //! Ядру стаканы отдаются без ожидания (try_send): медленное ядро не задерживает ответ на ping.
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, book.rs, ctx.rs, tokio-tungstenite.
@@ -18,6 +19,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
+use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
 
 use super::book::{Alive, Books};
@@ -72,6 +74,7 @@ pub async fn session(
                     Ok(Some(Err(e))) => return End::Broken(format!("ошибка чтения: {e}")),
                     Ok(Some(Ok(f))) => f,
                 };
+                let rx_ns = now_ns();
                 // Любое сообщение (стакан, ping, ответ) — соединение живо (см. book.rs).
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
                 let text = match frame {
@@ -92,6 +95,7 @@ pub async fn session(
                     }
                     Msg::Depth { symbol, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(text.clone()));
                         let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
                         books.put(book.clone(), alive.clone());
                         match out.try_send(MarketEvent::Book(book)) {
@@ -103,6 +107,7 @@ pub async fn session(
                     }
                     Msg::BadDepth { symbol, reason } => {
                         if let Some(a) = by_symbol.get(symbol.as_str()) {
+                            ctx.taps.push(ID, &a.ticker, TapStream::Book, name, rx_ns, || TapData::Text(text.clone()));
                             invalidate(ctx, books, out, &a.ticker);
                         }
                         log(ctx, Level::Error, format!("WebSocket {name}: стакан {symbol} не разобран: {reason}"), &text).await;

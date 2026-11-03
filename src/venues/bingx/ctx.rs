@@ -1,6 +1,6 @@
 //! Файл: venues/bingx/ctx.rs
 //! Что делает: общее окружение адаптера BingX — настройки площадки, секреты, HTTP-клиент,
-//! журнал, запись сырых сообщений — и чтение настроек площадки в одном месте.
+//! журнал, запись сырых сообщений, приёмники окон (решение 125) — и чтение настроек площадки в одном месте.
 //! Кто вызывает: все файлы адаптера BingX.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
 //! Настройки: venue.* с областью «bingx» (docs/SETTINGS.md); секреты bingx.api_key, bingx.api_secret.
@@ -32,6 +32,8 @@ pub struct Ctx {
     pub http: reqwest::Client,
     pub journal: Journal,
     pub raw: RawLog,
+    /// Записи окон (решение 125): монеты, чьи сырые кадры стакана и сделок пишутся сейчас (gateway/tap.rs).
+    pub taps: crate::gateway::tap::Taps,
 }
 
 impl Ctx {

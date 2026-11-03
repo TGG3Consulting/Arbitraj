@@ -372,4 +372,46 @@ pub trait Venue: Send + Sync {
         let _ = (asset, amount);
         Ok(None)
     }
+
+    /// Запись окна (решение 125): начать писать сырые кадры стакана монеты и подписаться на её канал сделок (своё
+    /// соединение на время окна) — в приёмник `sink` (gateway/tap.rs). Принимает: монету, приёмник. Возвращает:
+    /// каналы и вид ленты сделок. Ошибки: NotApplicable — у площадки нет стакана (DEX); NotConfigured.
+    async fn window_tap(
+        &self,
+        asset: &Asset,
+        sink: super::tap::TapSink,
+    ) -> GatewayResult<super::tap::TapInfo> {
+        let _ = (asset, sink);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет стакана и ленты сделок",
+        ))
+    }
+
+    /// Запись окна закончена: перестать писать кадры монеты, отписаться от сделок и закрыть их соединение.
+    /// Ошибки: NotApplicable — как window_tap.
+    async fn window_untap(&self, asset: &Asset) -> GatewayResult<()> {
+        let _ = asset;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет стакана и ленты сделок",
+        ))
+    }
+
+    /// Разбор сырого кадра окна для показа (стакан или сделки в формате ядра). Принимает: поток, содержимое.
+    /// Ошибки: NotApplicable — как window_tap; BadResponse — кадр не разобран (причина).
+    fn decode_tap(
+        &self,
+        stream: super::tap::TapStream,
+        data: &super::tap::TapData,
+    ) -> GatewayResult<crate::core::types::TapDecoded> {
+        let _ = (stream, data);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет стакана и ленты сделок",
+        ))
+    }
 }

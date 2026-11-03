@@ -67,6 +67,10 @@ impl Core {
         if let Some(rx) = lk(&core.inner.episode_rx).take() {
             tokio::spawn(super::episode_worker::run(core.clone(), rx));
         }
+        // Задача окон (решение 125): при запуске закрывает прерванные перезапуском, дальше — запись, закрытие, уборка.
+        if let Some(rx) = lk(&core.inner.window_rx).take() {
+            tokio::spawn(super::window_worker::run(core.clone(), rx));
+        }
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

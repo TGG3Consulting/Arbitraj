@@ -1,7 +1,7 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, cycle_trade.rs, dry_swap.rs, executor.rs.
+//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, cycle_trade.rs, dry_swap.rs, executor.rs, window.rs.
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
@@ -22,6 +22,7 @@ pub mod pool_tick_bin;
 pub mod send;
 pub mod trade;
 pub mod transfer;
+pub mod window;
 
 pub use balance::{BalanceChange, BalanceKind};
 pub use check::{
@@ -50,3 +51,4 @@ pub use send::{
 };
 pub use trade::{Quote, Side, TradeRequest, TradeResult, TradeStatus};
 pub use transfer::{Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};
+pub use window::{TapDecoded, TapView, TradeTick};

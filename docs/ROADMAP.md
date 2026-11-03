@@ -29,6 +29,13 @@
 
 Отложенное, не забыть (с номером решения):
 
+- **Решение 125 — размеры файлов.** Окна добавили строки в файлы, которые уже были у предела 200 строк:
+  gateway/contract.rs (417), venues/bingx/mod.rs (216), venues/mexc/mod.rs (223), core/inner.rs (227),
+  storage/episode_files.rs (223), core/candidates.rs (209), core/ledger.rs (212). Разнести при следующей правке этих файлов
+  (контракт — по группам функций: биржа, DEX, окна).
+- **Решение 125 — живые записи ленты сделок.** Тесты разбора сделок BingX @trade и MEXC aggre.deals на живых кадрах —
+  #[ignore] до записи (tests/README.md).
+
 - **Решение 122 F — DEX без исполнения через исполнитель.** KyberSwap Elastic остаётся неисполнимым (только сигнал):
   его swap(recipient, swapQty, isToken0, limitSqrtP, data) не совпадает с шагом V3 исполнителя — вида шага нет.
   Решение 122 F, 3: PancakeSwap Stable, Lista Stable, Nerve подключены как сигнал — у ArbExecutor нет вида шага

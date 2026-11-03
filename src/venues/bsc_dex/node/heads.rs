@@ -198,10 +198,8 @@ impl Heads {
                 Err(_) => {}
             }
             // Возраст головы — каждый круг опроса, и при сбое опроса тоже: голова стареет — запись о переходе.
-            let age = match super::head_age::max_age_ms(&ctx) {
-                Ok(Some(_)) => Some(super::head_age::check(&ctx, self.block_time())),
-                _ => None,
-            };
+            let age = super::head_age::active(&ctx)
+                .then(|| super::head_age::check(&ctx, self.block_time()));
             age_log.step(&ctx, age.as_ref()).await;
             tokio::time::sleep(every).await;
         }

@@ -82,6 +82,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
         .route("/api/check/channel/{venue}/{id}", post(check::channel))
+        .route("/api/check/executor/{venue}", post(check::executor))
         .route("/api/secrets/known", get(secrets::known))
         .route("/api/secrets/status", get(secrets::status))
         .route("/api/secrets/create", post(secrets::create))

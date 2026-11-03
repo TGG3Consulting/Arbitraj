@@ -20,11 +20,11 @@ use rust_decimal::Decimal;
 use crate::core::types::{DexRoute, RouteMode, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::registry::Entry;
 use super::super::quote::graph_route::{self, GraphForm};
 use super::super::quote::mixed_quoter::{self, Leg};
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
+use super::super::{check::simulate::Base, pools::registry::Entry};
 use super::bundle::Bundle;
 use super::chain::Step;
 use super::dry_paths::{live_paths, verified};
@@ -50,8 +50,8 @@ pub struct Ready {
     pub coins: Decimal,
     pub usdt: Decimal,
     pub form: String,
-    /// Блок и его время (секунды), по которому считан срок транзакции; поверх этого блока — симуляция.
-    pub at: u64,
+    /// Блок, по времени которого считан срок; поверх него — симуляция (через исполнитель — со временем головы + 1 с).
+    pub at: Base,
 }
 
 /// Собирает сделку. Принимает: котировку, запрос (как для сделки), маршрут, кошелёк. Возвращает: Ready.
@@ -150,7 +150,7 @@ pub async fn build(
             coins,
             usdt: paid,
             form,
-            at,
+            at: Base::timed(at, now),
         });
     }
     if is_native && shape == RouteMode::Graph {
@@ -190,7 +190,7 @@ pub async fn build(
         coins,
         usdt: paid,
         form,
-        at,
+        at: at.into(),
     })
 }
 

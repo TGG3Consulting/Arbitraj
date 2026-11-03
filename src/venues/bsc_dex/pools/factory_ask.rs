@@ -19,6 +19,7 @@
 //!   с base = token1; оба — пулы этой пары.
 
 use alloy::sol_types::SolCall;
+use alloy_primitives::aliases::I24;
 use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
@@ -39,8 +40,9 @@ pub enum Q {
     Solidly { v1: bool, stable: bool },
     /// Algebra (THENA Fusion): poolByPair(a, b).
     Algebra,
-    /// Slipstream: getPool(a, b, int24 tickSpacing) по уровню из dex.cl_tick_spacings.
-    Slipstream(i32),
+    /// Slipstream: getPool(a, b, int24 tickSpacing) по уровню из dex.cl_tick_spacings (уже int24 — factory_calls.rs
+    /// spacings отвергает значение вне int24 с его текстом; ревью 122, пункт 6).
+    Slipstream(I24),
     /// DODO V2 (DVM/DPP/DSP): getDODOPoolBidirection(a, b).
     Dodo,
 }
@@ -81,7 +83,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
-            tickSpacing: alloy_primitives::aliases::I24::try_from(ts).unwrap_or_default(),
+            tickSpacing: ts,
         }
         .abi_encode()
         .into(),

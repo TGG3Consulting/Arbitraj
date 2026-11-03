@@ -126,6 +126,8 @@ pub fn split(
             }
         }
         let pick = choose(side, gas_aware, open, new);
+        // Ни один путь шаг не принял — остаток не отдан: доли меньше qty. Это не теряется молча: costs::quote ставит
+        // fillable_qty = сумма монет долей (< qty), ядро такую котировку отвергает (core/costs_quote.rs, trade_ops.rs).
         let Some((i, p, _)) = pick else { break };
         cands[i].qty += step;
         cands[i].got = Some(p);

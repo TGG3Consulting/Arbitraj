@@ -292,6 +292,16 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// «Проверить подключение» своего исполнителя ArbExecutor (ревью 122): код по exec.executor_address совпал с
+    /// репозиторием, владелец — кошелёк бота. Возвращает: ConnectionCheck. Ошибки: NotApplicable — не DEX.
+    async fn check_executor(&self) -> GatewayResult<ConnectionCheck> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет исполнителя DEX",
+        ))
+    }
+
     /// Ядро больше не ждёт депозит монеты на эту площадку (вывод на её адрес не состоялся или прерван):
     /// площадка снимает ожидание поступления. Ошибок нет у тех, кому это не нужно (биржа — ничего не делает).
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {

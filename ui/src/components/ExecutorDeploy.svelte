@@ -5,15 +5,18 @@
     nonce, будущий адрес, SHA-256 байткода, версия solc) → окно подтверждения → «Подтвердить и отправить» →
     POST /api/venues/{id}/executor/deploy {sha256} (транзакция создания с кошелька бота через очередь кошелька) →
     адрес и транзакция. Действие с деньгами — только по кнопке человека и после подтверждения в окне. Адрес в
-    exec.executor_address Тигран вписывает сам (настройки площадки ниже на этом же экране).
+    exec.executor_address Тигран вписывает сам (настройки площадки ниже на этом же экране). Рядом — «Проверить
+    подключение» исполнителя (POST /api/check/executor/{venue}, ревью 122): код по адресу совпал с репозиторием и
+    владелец — кошелёк бота; иначе — точная причина (без этой проверки ни approve, ни сделки через исполнитель нет).
   Кто вызывает: pages/Venues.svelte (у площадок DEX).
-  От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte.
+  От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
   Настройки: нет своих (адрес — exec.executor_address [площадка DEX]).
 -->
 <script>
   import { get, post, seg } from '../lib/api.js';
   import Modal from './Modal.svelte';
   import ErrorText from './ErrorText.svelte';
+  import CheckConnection from './CheckConnection.svelte';
 
   /** venue — id площадки DEX. */
   let { venue } = $props();
@@ -57,6 +60,7 @@
   (Ручное управление) в режиме «через исполнитель». После развёртывания впишите адрес в <code>exec.executor_address</code>.
 </p>
 <button disabled={busy} onclick={ask}>{busy && !quote ? 'Считаю…' : 'Развернуть исполнитель'}</button>
+<CheckConnection url={`/api/check/executor/${encodeURIComponent(venue)}`} />
 <ErrorText text={error} />
 {#if done}
   <p class={done.code_ok ? 'ok' : 'err'} role="status">{done.text}</p>

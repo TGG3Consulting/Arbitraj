@@ -29,7 +29,9 @@ pub enum ExecKind {
     Algebra,
     /// Solidly (THENA V1, Topaz v2; volatile и stable): `pair.getAmountOut` в контракте, перевод, `pair.swap`.
     Solidly,
-    /// Curve StableSwap (Ellipsis, Lista, Nerve, Pancake Stable): `approve` пулу + `exchange(i, j, dx, 0)`.
+    /// Curve StableSwap — только Ellipsis (плоский пул Curve): `approve` пулу + `exchange(int128 i, int128 j, dx, 0)`.
+    /// PancakeSwap Stable Swap, Nerve (Saddle), Lista — другие подписи обмена, не этот вид (техдолг, docs/ROADMAP.md;
+    /// contracts/README.md).
     Curve,
     /// DODO V2 (DVM/DPP/DSP): перевод в пул + `sellBase(to)` / `sellQuote(to)`.
     Dodo,

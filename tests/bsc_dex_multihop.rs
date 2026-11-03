@@ -6,10 +6,11 @@
 //! с минимумом сделки; входы команд V2/V3 кодируются по Dispatcher.sol обоих UR; средний шаг V4 (SETTLE из баланса
 //! роутера → обмен → TAKE роутеру) больше не отвергается; исполнимость графа: нога из 3 хопов одним UR — исполнима,
 //! длиннее dex.route_max_hops — нет; монета с налогом через промежуточную с пулом V3 — неисполнима и в котировке графа
-//! (решение 39).
+//! (решение 39); ревью 122, пункт 3 — монета с налогом на входе через исполнитель: только одна доля с первым шагом
+//! «вход переводом в пул» (V2/SOLIDLY), иначе (V3 первым, сплит) — сигнал с причиной.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{exec::{chain, live_hops, swap_v4, ur}, quote::{graph_exec, graph_legs,
-//! route_calc, route_paths}, pools::graph}, tests/route_common.
+//! route_calc, route_paths, graph_executor}, pools::{graph, families}}, tests/route_common.
 
 mod route_common;
 
@@ -29,11 +30,14 @@ use arb::venues::bsc_dex::exec::chain;
 use arb::venues::bsc_dex::exec::live_hops;
 use arb::venues::bsc_dex::exec::plan::Order;
 use arb::venues::bsc_dex::exec::{swap_v4, ur};
+use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::graph;
 use arb::venues::bsc_dex::pools::key::{PoolKey, UniswapPoolKeyData};
 use arb::venues::bsc_dex::quote::path::Path;
 use arb::venues::bsc_dex::quote::via::Via;
-use arb::venues::bsc_dex::quote::{graph_exec, graph_legs, route_calc, route_paths};
+use arb::venues::bsc_dex::quote::{
+    graph_exec, graph_executor, graph_legs, route_calc, route_paths,
+};
 
 use route_common::{BTCB, CAKE, USDT, WBNB};
 
@@ -225,10 +229,10 @@ async fn three_hop_leg_executable_within_max_hops() {
         .set("dex.bundle_max_routers", v.clone(), Some(json!(2)), "тест")
         .await
         .unwrap();
-    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, false)
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, false, false)
         .expect("нога 3 хопов исполнима");
     // Решение 39: у монеты с налогом путь через промежуточную — только V2; у ноги есть шаги V3 — сигнал с причиной.
-    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, true)
+    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, true, false)
         .expect_err("налог и V3 через промежуточную");
     assert!(why.contains("решение 39"), "{why}");
     // dex.route_max_hops = 2 — та же нога уже длиннее предела.
@@ -237,7 +241,8 @@ async fn three_hop_leg_executable_within_max_hops() {
         .set("dex.route_max_hops", v, Some(json!(2)), "тест")
         .await
         .unwrap();
-    let why = graph_exec::executable(&q.ctx, &[path], false, false).expect_err("длиннее предела");
+    let why =
+        graph_exec::executable(&q.ctx, &[path], false, false, false).expect_err("длиннее предела");
     assert!(why.contains("dex.route_max_hops"), "{why}");
 }
 
@@ -289,4 +294,38 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
     );
     assert!(!r.executable, "налог + V3 через промежуточную — неисполним");
     assert!(r.exec_note.unwrap_or_default().contains("решение 39"));
+}
+
+/// Ревью 122, пункт 3: налог на входе через исполнитель. Первый хоп пути записи с семейством вида шага V3 (slipstream,
+/// не своя форма UR) — сигнал; вида SOLIDLY (прямой вход в пул) — исполнимо; две доли — сигнал (налог дважды).
+#[tokio::test]
+async fn taxed_input_via_executor_only_single_push_first_step() {
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let v = Scope::Venue("bsc_dex".into());
+    let x = json!("0x00000000000000000000000000000000000000ee");
+    p.ctx
+        .settings
+        .set("exec.executor_address", v, Some(x), "тест")
+        .await
+        .unwrap();
+    let base = three_hop(&q);
+    let one = |kind: &str| {
+        let mut path = base.clone();
+        path.hops.truncate(1);
+        path.hops[0].entry.family = families::make("x-review", kind).unwrap();
+        path
+    };
+    let v3 = one("slipstream");
+    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&v3), false, true, true)
+        .expect_err("налог на входе и первый шаг V3 через исполнитель");
+    assert!(why.contains("налог на входе"), "{why}");
+    // Без налога на входе (покупка) тот же путь исполним через исполнитель.
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&v3), false, true, false)
+        .expect("покупка налоговой монеты: вход USDT");
+    let sol = one("solidly_v1");
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&sol), false, true, true)
+        .expect("первый шаг SOLIDLY на весь вход — прямой вход в пул, налог один раз");
+    let why = graph_executor::tax(&[sol.clone(), sol], true).expect_err("две доли");
+    assert!(why.contains("долей"), "{why}");
 }

@@ -4,14 +4,15 @@
 //! сухая сделка: exec/dry_paths.rs, exec/live.rs — проба крючка и допуск, решение 32), средняя цена против худшей,
 //! минимум каждой доли — из предторговой верификации (решение 83), шаги исполнителя (call.rs), очередь кошелька
 //! (решение 45), разрешение ERC-20 исполнителю (один раз на токен; отправленное разрешение ждёт блока — тогда всё
-//! собирается заново на живом состоянии со свежей верификацией, новое разрешение после этого — отказ, решение 121 B1),
+//! собирается заново на живом состоянии со свежей верификацией, новое разрешение после этого — отказ, решение 121 B1;
+//! до разрешения код и владелец исполнителя сверяются с узлом — onchain.rs),
 //! проба execute перед отправкой со сверкой req.worst_price (sim.rs), одна транзакция существующими каналами
 //! (exec/txs.rs), факт по событиям Transfer (fact.rs). Повторов нет (стартовое правило Тиграна).
 //! Отметка «идёт обмен» (wallet/inflows.rs) не нужна: минимум проверяет сам исполнитель по приросту баланса кошелька
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
 //! Нативная монета (решение 62) через исполнитель в v1 не исполняется (исполнитель работает только с ERC-20).
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
-//! От чего зависит: exec/executor/{call, sim, fact}.rs, exec/{chain, dry_paths, native, order, swap_send, txs,
+//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, native, order, swap_send, txs,
 //! verify_gate}.rs, quote/{via, direct}.rs, wallet/{approve, nonce}.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited,
 //! exec.dex_slippage_pct, verify.*, send.*, channel.*.
@@ -36,7 +37,7 @@ use super::super::trade::sides;
 use super::super::txs::{self, Env};
 use super::super::verify_gate::{self, Verified};
 use super::call::{self, ExecCall};
-use super::{fact, sim};
+use super::{fact, onchain, sim};
 
 /// Сделка через исполнитель. Принимает: котировку, окружение отправки, очередь кошелька, запрос, маршрут, итог
 /// верификации (минимумы долей), адрес исполнителя. Ошибки: NoRoute (нативная, доля не годится, пул без шага
@@ -71,6 +72,8 @@ pub async fn trade(
     let legs = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
+    // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
+    onchain::ensure(ctx, executor, wallet).await?;
     let (mut c, mut at) = build(q, &legs, executor).await?;
     let need = approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in).await?;
     if send_approvals(env, &slot, &need).await? {
@@ -136,12 +139,13 @@ pub async fn prepare(
     Ok(legs)
 }
 
-/// Вызов execute на текущем блоке. Возвращает: вызов и номер блока (поверх него — проба). Ошибки: как call::build, узел.
+/// Вызов execute на текущем блоке. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как
+/// call::build, узел.
 async fn build(
     q: &Quoting,
     legs: &[Vec<Step>],
     executor: Address,
-) -> GatewayResult<(ExecCall, u64)> {
+) -> GatewayResult<(ExecCall, (u64, u64))> {
     let (at, now) = q.heads.at(&q.ctx).await?;
-    Ok((call::build(&q.ctx, legs, executor, now)?, at))
+    Ok((call::build(&q.ctx, legs, executor, now)?, (at, now)))
 }

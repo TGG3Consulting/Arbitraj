@@ -3,7 +3,7 @@
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
 //! Подмена состояния (stateOverrides, run_with) — сухая сделка через неразвёрнутый исполнитель (решение 122, часть X).
 //! Кто вызывает: check/probe.rs, exec/precheck_sim.rs, exec/dry_sim.rs, exec/executor/sim.rs.
-//! От чего зависит: node/rpc.rs, ctx.rs.
+//! От чего зависит: node/rpc.rs, ctx.rs, check/sim_base.rs (Base — номер и время базового блока).
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
 //!
@@ -20,6 +20,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
+
+pub use super::sim_base::Base;
 
 /// Один вызов последовательности.
 #[derive(Debug, Clone)]
@@ -79,13 +81,14 @@ impl CallResult {
     }
 }
 
-/// Выполняет вызовы по порядку в одном симулированном блоке поверх блока `base` (номер, а не «latest»: срок
-/// транзакции считан по времени этого же блока, решение 61). Время симулированного блока узел ставит сам: у BSC —
-/// время базового + timestampIncrement = 12 с (bsc 947ba1cb internal/ethapi/simulate.go#L56-L57, #L577-L583), поэтому
-/// dex.deadline_s должен быть больше 12 с — иначе откат TransactionDeadlinePassed («не проверено», повтор).
-/// Принимает: вызовы, номер базового блока. Возвращает: итог каждого вызова в том же порядке.
+/// Выполняет вызовы по порядку в одном симулированном блоке поверх базового блока (Base или номер).
+/// Принимает: вызовы, базовый блок. Возвращает: итог каждого вызова в том же порядке.
 /// Ошибки: узел (метод не поддерживается — его текст), BadResponse (число итогов не совпало).
-pub async fn run(ctx: &Ctx, calls: &[Call], base: u64) -> GatewayResult<Vec<CallResult>> {
+pub async fn run(
+    ctx: &Ctx,
+    calls: &[Call],
+    base: impl Into<Base>,
+) -> GatewayResult<Vec<CallResult>> {
     run_valued(ctx, calls, &[], base).await
 }
 
@@ -96,7 +99,7 @@ pub async fn run_valued(
     ctx: &Ctx,
     calls: &[Call],
     values: &[(usize, U256)],
-    base: u64,
+    base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
     run_with(ctx, calls, values, &[], base).await
 }
@@ -118,8 +121,9 @@ pub async fn run_with(
     calls: &[Call],
     values: &[(usize, U256)],
     overrides: &[Override],
-    base: u64,
+    base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
+    let base = base.into();
     let list: Vec<_> = calls
         .iter()
         .enumerate()
@@ -146,9 +150,16 @@ pub async fn run_with(
             .collect();
         block["stateOverrides"] = serde_json::Value::Object(map);
     }
+    if let Some(t) = base.time {
+        block["blockOverrides"] = json!({ "time": U64::from(t) });
+    }
     let payload = json!({ "blockStateCalls": [block], "validation": false });
-    let blocks: Vec<BlockResult> =
-        rpc::call(ctx, "eth_simulateV1", json!([payload, block_tag(base)])).await?;
+    let blocks: Vec<BlockResult> = rpc::call(
+        ctx,
+        "eth_simulateV1",
+        json!([payload, block_tag(base.number)]),
+    )
+    .await?;
     let out = blocks
         .into_iter()
         .next()

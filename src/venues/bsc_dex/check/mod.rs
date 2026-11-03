@@ -21,6 +21,7 @@ pub mod quoter_verify;
 pub mod recheck;
 pub mod service_tax;
 pub mod service_tax_calls;
+pub mod sim_base;
 pub mod simulate;
 pub mod state;
 pub mod tax_cycle;

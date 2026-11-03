@@ -90,7 +90,7 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
         Side::Buy => ready.coins,
         Side::Sell => ready.usdt,
     });
-    r.block = Some(ready.at);
+    r.block = Some(ready.at.number);
     let (coin, usdt_t, decs) = super::trade::sides(q, &req).await?;
     let is_native = native::is_native(ctx, &r.asset);
     let out_dec = match (r.side, is_native) {

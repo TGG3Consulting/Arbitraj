@@ -20,7 +20,7 @@
 //! getPool[token0][token1][fee] и обратно — UniswapV3Factory.sol createPool). Нет пула — нулевой адрес.
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::aliases::U24;
+use alloy_primitives::aliases::{I24, U24};
 use alloy_primitives::{Address, Bytes};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -140,7 +140,7 @@ pub fn tiers(ctx: &Ctx, id: &str) -> Result<Vec<u32>, String> {
 
 /// Уровни tickSpacing Slipstream этой DEX из dex.cl_tick_spacings (список целых int24, как tickSpacing в getPool).
 /// Возвращает: список или текст причины, почему Slipstream этой DEX по фабрике не ищется. Ошибок нет.
-pub fn spacings(ctx: &Ctx, id: &str) -> Result<Vec<i32>, String> {
+pub fn spacings(ctx: &Ctx, id: &str) -> Result<Vec<I24>, String> {
     let list = match ctx.dex_list("dex.cl_tick_spacings", id) {
         Ok(l) => l,
         Err(e) if e.code == ErrorCode::NotConfigured => {
@@ -153,12 +153,11 @@ pub fn spacings(ctx: &Ctx, id: &str) -> Result<Vec<i32>, String> {
     if list.is_empty() {
         return Err("dex.cl_tick_spacings пуст — Slipstream этой DEX по фабрике не ищется".into());
     }
-    // int24: −2^23 ..= 2^23 − 1 (ABI int24).
-    let (lo, hi) = (-(1i32 << 23), (1i32 << 23) - 1);
+    // int24: −2^23 ..= 2^23 − 1 (ABI int24) — I24::try_from отвергает значение вне диапазона.
     list.iter()
-        .map(|s| match s.trim().parse::<i32>() {
-            Ok(v) if (lo..=hi).contains(&v) => Ok(v),
-            _ => Err(format!(
+        .map(|s| match s.trim().parse::<i32>().ok().and_then(|v| I24::try_from(v).ok()) {
+            Some(v) => Ok(v),
+            None => Err(format!(
                 "dex.cl_tick_spacings: «{s}» — не целое int24 — Slipstream этой DEX по фабрике не ищется"
             )),
         })

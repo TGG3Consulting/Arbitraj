@@ -9,7 +9,7 @@
 //!   адресу — первым вызовом той же симуляции. Так исполнитель проверяется на живых пулах, не будучи развёрнутым.
 //!
 //! Кто вызывает: exec/dry_build.rs.
-//! От чего зависит: exec/executor/{call, code, deploy}.rs, check/simulate.rs (Override), wallet/approve.rs, node/rpc.rs.
+//! От чего зависит: exec/executor/{call, code, deploy, onchain}.rs, check/simulate.rs (Override), wallet/approve.rs, node/rpc.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited.
 
 use alloy_primitives::{Address, B256, Bytes};
@@ -23,7 +23,7 @@ use super::super::super::wallet::approve::Approval;
 use super::super::super::wallet::approve_executor;
 use super::super::chain::Step;
 use super::call::{self, ExecCall};
-use super::{code, deploy};
+use super::{code, deploy, onchain};
 
 /// Режим сухой сделки.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +58,7 @@ pub async fn build(
     let internal = |w: String| ctx.err(ErrorCode::Internal, w);
     match (mode, deployed) {
         (DryMode::AsTrade, Some(x)) => {
+            onchain::ensure(ctx, x, wallet).await?;
             let call = call::build(ctx, legs, x, now)?;
             let approvals =
                 approve_executor::missing(ctx, call.token_in, wallet, x, call.amount_in).await?;

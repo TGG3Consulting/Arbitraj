@@ -157,7 +157,7 @@ pub fn check_url(s: &str) -> Result<(), String> {
 
 /// Что делает: хост адреса — петля (127.0.0.0/8, ::1 или имя localhost)?
 /// Принимает: разобранный адрес. Возвращает: да/нет. Ошибки: нет.
-fn is_loopback(url: &reqwest::Url) -> bool {
+pub fn is_loopback(url: &reqwest::Url) -> bool {
     // host_str даёт IPv6 в квадратных скобках («[::1]») — снимаем их перед разбором IP.
     let Some(host) = url.host_str() else {
         return false;

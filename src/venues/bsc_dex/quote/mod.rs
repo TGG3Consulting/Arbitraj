@@ -23,6 +23,7 @@ pub mod direct_route;
 pub mod emptiness;
 pub mod gas;
 pub mod graph_exec;
+pub mod graph_executor;
 pub mod graph_legs;
 pub mod graph_route;
 pub mod graph_split;

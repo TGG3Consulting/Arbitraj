@@ -23,7 +23,8 @@ use super::super::order::check_price;
 use super::abi::ArbExecutor;
 use super::call::ExecCall;
 
-/// Проба execute. Принимает: запрос, вызов, кошелёк, номер блока сборки, (decimals монеты, USDT).
+/// Проба execute. Принимает: запрос, вызов, кошелёк, (номер, время) блока сборки — симулированный блок на 1 с позже
+/// (check/simulate.rs Base::timed), (decimals монеты, USDT).
 /// Возвращает: сколько получит кошелёк (единицы токена выхода) и газ вызова.
 /// Ошибки: NoRoute (откат), StaleData (срок вышел), QuoteMismatch (цена хуже req.worst_price), BadResponse, узел.
 pub async fn check(
@@ -31,7 +32,7 @@ pub async fn check(
     req: &TradeRequest,
     c: &ExecCall,
     wallet: Address,
-    at: u64,
+    (at, now): (u64, u64),
     decs: (u8, u8),
 ) -> GatewayResult<(U256, u64)> {
     let call = Call {
@@ -39,7 +40,7 @@ pub async fn check(
         to: c.executor,
         input: c.data(),
     };
-    let res = simulate::run(ctx, &[call], at).await?;
+    let res = simulate::run(ctx, &[call], simulate::Base::timed(at, now)).await?;
     let r = res
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
@@ -56,7 +57,7 @@ pub fn received(ctx: &Ctx, r: &CallResult) -> GatewayResult<U256> {
             .as_ref()
             .map(|e| e.message.as_str())
             .unwrap_or_default();
-        // require(block.timestamp <= deadline, "deadline") — время симулированного блока у BSC +12 с (check/simulate.rs).
+        // require(block.timestamp <= deadline, "deadline") — симулированный блок: время головы + 1 с (check/simulate.rs).
         if text.contains("deadline") {
             let why = format!(
                 "проба исполнителя: срок транзакции вышел — увеличьте dex.deadline_s: {}",

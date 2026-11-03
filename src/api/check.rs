@@ -1,5 +1,5 @@
 //! Файл: api/check.rs
-//! Что делает: кнопки «Проверить подключение» — Telegram, площадки и каналы отправки DEX.
+//! Что делает: кнопки «Проверить подключение» — Telegram, площадки, каналы отправки DEX и исполнитель ArbExecutor.
 //! Ответ всегда {ok, details}: «Подключено …» или точная причина сбоя.
 //! Каждая проверка пишется в журнал.
 //! Кто вызывает: интерфейс (экраны «Уведомления», «Площадки», «Каналы отправки»).
@@ -9,6 +9,7 @@
 //! POST /api/check/telegram
 //! POST /api/check/venue/{id}
 //! POST /api/check/channel/{venue}/{id}
+//! POST /api/check/executor/{venue}  — свой исполнитель ArbExecutor DEX (ревью 122)
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -68,6 +69,29 @@ pub async fn channel(
         },
     };
     log(&st, Some(&venue), &format!("канала {id} ({venue})"), &res).await;
+    Json(res)
+}
+
+/// Проверка своего исполнителя ArbExecutor площадки DEX (шлюз `check_executor`): код и владелец по
+/// exec.executor_address. Ошибок нет: причина сбоя (в т.ч. «не применимо» для биржи) — в details.
+pub async fn executor(
+    State(st): State<AppState>,
+    Path(venue): Path<String>,
+) -> Json<ConnectionCheck> {
+    let res = match st.registry.get(&VenueId(venue.clone())).await {
+        Ok(v) => v
+            .check_executor()
+            .await
+            .unwrap_or_else(|e| ConnectionCheck {
+                ok: false,
+                details: e.message,
+            }),
+        Err(e) => ConnectionCheck {
+            ok: false,
+            details: e.message,
+        },
+    };
+    log(&st, Some(&venue), &format!("исполнителя ({venue})"), &res).await;
     Json(res)
 }
 

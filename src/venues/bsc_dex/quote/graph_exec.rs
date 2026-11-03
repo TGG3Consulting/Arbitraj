@@ -4,19 +4,16 @@
 //! мульти-роутерный бандл свопов (exec/bundle.rs). Неисполнимый маршрут — сигнал с причиной (exec_note).
 //! Решение 122, часть R2: нога из N шагов внутри ОДНОГО Universal Router (PancakeSwap: V2/V3/Infinity; Uniswap:
 //! V2/V3/V4) исполнима одной транзакцией — цепочка команд UR, промежуточный токен остаётся на роутере (ADDRESS_THIS,
-//! вход следующей команды — CONTRACT_BALANCE; exec/chain.rs). Прежнего жёсткого предела «≤ 2 хопов» нет; предел
-//! длины ноги — dex.route_max_hops (тот же, что у перебора путей). Нога, пересекающая роутеры (разные семейства), —
-//! по-прежнему сигнал (бандл такую ногу не собирает; позже — свой исполнитель, решение 122 часть X).
+//! вход следующей команды — CONTRACT_BALANCE; exec/chain.rs); предел длины ноги — dex.route_max_hops. Нога через
+//! разные роутеры бандлом не собирается — только исполнителем (часть X).
 //! Решение 122, часть R3: нативная монета BNB в бандле — обёртка/развёртка WBNB командой WRAP_ETH / UNWRAP_WETH в
 //! execute КАЖДОГО Universal Router бандла (exec/bundle_native.rs). Нога форка (свой classic V2 Router) обёртку не
 //! делает — маршрут с BNB через ногу форка неисполним с причиной.
 //! Решение 39 (проверка и в котировке графа — Тигран, 03.11): у монеты с налогом путь через промежуточную (нога из 2+
 //! хопов) — только пулы V2 на каждом шаге (как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
-//! Решение 122, часть X: при заданном exec.executor_address маршрут, каждый шаг которого — вид исполнителя
-//! (pools/exec_kind.rs::via_executor — пометка части F), исполним одной транзакцией через свой исполнитель — бандловые каналы не нужны,
-//! нога может пересекать роутеры и семейства; без адреса — как раньше.
+//! Решение 122, часть X: маршрут через свой исполнитель — правила в quote/graph_executor.rs (без адреса — как раньше).
 //! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
-//! От чего зависит: pools/exec_kind.rs, exec/executor/entry.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
+//! От чего зависит: quote/graph_executor.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
 use alloy_primitives::Address;
@@ -25,15 +22,20 @@ use crate::core::types::{DexRoute, PoolKind};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::exec::executor::entry;
-use super::super::pools::exec_kind;
 use super::super::pools::families::{self, Family, smart_ok};
+use super::graph_executor;
 use super::path::Path;
 
 /// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли, нативная ли монета (BNB),
-/// есть ли у монеты налог (решение 39). Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
-pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result<(), String> {
-    // Пустой маршрут не исполним (защитный guard; split этого не даёт).
+/// есть ли у монеты налог (решение 39), налоговая ли монета — ВХОД маршрута (продажа; ревью 122, пункт 3).
+/// Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
+pub fn executable(
+    ctx: &Ctx,
+    legs: &[Path],
+    native: bool,
+    taxed: bool,
+    taxed_in: bool,
+) -> Result<(), String> {
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
     }
@@ -58,11 +60,11 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
             h.entry.family.title, h.entry.pool.kind
         ));
     }
-    // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (отметка готовности семейства,
-    // pools/exec_kind.rs::via_executor) — маршрут исполним одной транзакцией через исполнитель: бандловые каналы не
+    // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (pools/exec_kind.rs) — маршрут
+    // не формы Universal Router (graph_form = бандл) идёт одной транзакцией через исполнитель: бандловые каналы не
     // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
-    if !native && all_via_executor(ctx, legs) {
-        return Ok(());
+    if !native && graph_executor::all_via(ctx, legs) && !graph_executor::ur_form(ctx, legs) {
+        return graph_executor::tax(legs, taxed_in);
     }
     // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
     if let Some(h) = legs
@@ -101,16 +103,6 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
     }
     // Мульти-роутер или форк: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs).
     collectable(ctx, legs)
-}
-
-/// Пойдёт ли маршрут через исполнитель: у каждого шага вид шага исполнителя при заданном адресе
-/// (pools/exec_kind.rs::via_executor — пометка части F) и у пула свой контракт (exec/executor/entry.rs::supported).
-/// Ошибок нет.
-fn all_via_executor(ctx: &Ctx, legs: &[Path]) -> bool {
-    legs.iter().flat_map(|p| p.hops.iter()).all(|h| {
-        exec_kind::via_executor(ctx, h.entry.family)
-            && entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()
-    })
 }
 
 /// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей

@@ -16,6 +16,7 @@ pub mod dry;
 pub mod entry;
 pub mod fact;
 pub mod kind;
+pub mod onchain;
 pub mod sim;
 pub mod trade;
 

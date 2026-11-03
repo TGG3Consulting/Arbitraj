@@ -303,6 +303,11 @@ impl Venue for BscDex {
         scope(Class::Trade, run).await
     }
 
+    /// «Проверить подключение» исполнителя ArbExecutor (ревью 122) — exec/executor/onchain.rs. Ошибок нет.
+    async fn check_executor(&self) -> GatewayResult<ConnectionCheck> {
+        Ok(exec::executor::onchain::probe(&self.p.ctx).await)
+    }
+
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
         Ok(send::channels::ALL.iter().map(|c| c.info()).collect())

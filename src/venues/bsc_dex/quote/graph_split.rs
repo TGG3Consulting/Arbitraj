@@ -7,8 +7,9 @@
 //! (газ обмена от суммы почти не зависит — он измерен пробой на пул). Покупка: цена шага = USDT шага + газ нового пути;
 //! продажа: отдача шага = USDT шага − газ нового пути. Поэтому выбор между путями разной длины — тоже по чистому
 //! выходу, а новая доля добавляется, только если её чистая отдача лучше увеличения уже открытой. Продажа: новая доля
-//! при уже открытой с чистой отдачей ≤ 0 не открывается вовсе (газ съедает прирост) — остаток объёма тогда не
-//! исполняется (маршрут не делает обмен себе в убыток). Не задано / «нет» — сплит без газа, как до решения 122.
+//! с чистой отдачей ≤ 0 (газ съедает прирост) не открывается, пока шаг принимает открытая доля. Объём сделки
+//! фиксирован (Тигран, 03.11): остаток не теряется — идёт в открытые доли, а если они его уже не принимают, открывается
+//! лучший новый путь. Не задано / «нет» — сплит без газа, как до решения 122.
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg, eval), quote/path.rs (Path).
 //! Настройки: smart.split_step_pct, smart.max_splits [bsc_dex]; учёт газа включает вызывающий (dex.route_gas_aware).
@@ -53,6 +54,36 @@ fn score(side: Side, delta: Decimal, opens: bool, gas: Decimal) -> Decimal {
     }
 }
 
+/// s лучше d для стороны (покупка — меньше, продажа — больше). Ошибок нет.
+fn better(side: Side, s: Decimal, d: Decimal) -> bool {
+    match side {
+        Side::Buy => s < d,
+        Side::Sell => s > d,
+    }
+}
+
+/// Выбор шага между увеличением открытой доли и открытием нового пути. Новый путь берётся, только если его чистая
+/// отдача лучше; у продажи при учёте газа новый путь с чистой отдачей ≤ 0 (газ съедает прирост) не открывается, пока
+/// шаг может принять открытая доля — даже если её прирост мал. Объём сделки фиксирован: если открытые доли шаг не
+/// принимают (ликвидность в прочитанных пределах кончилась), открывается лучший новый путь, иначе остаток не
+/// исполнился бы. Ошибок нет.
+fn choose<T>(
+    side: Side,
+    gas_aware: bool,
+    open: Option<(usize, T, Decimal)>,
+    new: Option<(usize, T, Decimal)>,
+) -> Option<(usize, T, Decimal)> {
+    match (open, new) {
+        (Some(o), Some(n)) => {
+            let unpaid = gas_aware && side == Side::Sell && n.2 <= Decimal::ZERO;
+            // Равенство — как прежний общий перебор: раньше по порядку кандидатов (меньший индекс).
+            let wins = better(side, n.2, o.2) || (n.2 == o.2 && n.0 < o.0);
+            if !unpaid && wins { Some(n) } else { Some(o) }
+        }
+        (o, n) => o.or(n),
+    }
+}
+
 /// Сплит. Принимает: окружение, кандидатов, сторону, количество монет, долю keep налога монеты, учитывать ли газ.
 /// Возвращает: доли (пути). Ошибки: NotConfigured (шаг/число долей), NoRoute (ни один путь не принял объём).
 pub fn split(
@@ -76,7 +107,9 @@ pub fn split(
     while left > Decimal::ZERO {
         let step = unit.min(left);
         let used = cands.iter().filter(|c| c.got.is_some()).count();
-        let mut pick: Option<(usize, Path, Decimal)> = None;
+        // Лучшее увеличение уже открытой доли и лучшее открытие нового пути — отдельно (R1: газ — только у нового).
+        let mut open: Option<(usize, Path, Decimal)> = None;
+        let mut new: Option<(usize, Path, Decimal)> = None;
         for (i, c) in cands.iter().enumerate() {
             let opens = c.got.is_none();
             if opens && used >= max_splits {
@@ -87,18 +120,12 @@ pub fn split(
             };
             let before = c.got.as_ref().map_or(Decimal::ZERO, |g| g.usdt);
             let s = score(side, p.usdt - before, opens, c.gas_usdt);
-            // R1: продажа — новая доля рядом с уже открытой не открывается, если газ съедает её прирост.
-            if gas_aware && opens && used > 0 && side == Side::Sell && s <= Decimal::ZERO {
-                continue;
-            }
-            let better = pick.as_ref().is_none_or(|(_, _, d)| match side {
-                Side::Buy => s < *d,
-                Side::Sell => s > *d,
-            });
-            if better {
-                pick = Some((i, p, s));
+            let slot = if opens { &mut new } else { &mut open };
+            if slot.as_ref().is_none_or(|(_, _, d)| better(side, s, *d)) {
+                *slot = Some((i, p, s));
             }
         }
+        let pick = choose(side, gas_aware, open, new);
         let Some((i, p, _)) = pick else { break };
         cands[i].qty += step;
         cands[i].got = Some(p);
@@ -116,6 +143,26 @@ mod tests {
     use super::*;
 
     /// Газ считается только при открытии пути и в нужную сторону. Ошибок нет.
+    #[test]
+    fn unpaid_new_share_goes_to_open_unless_open_is_full() {
+        let (z, one) = (Decimal::ZERO, Decimal::ONE);
+        let open = || Some((0usize, (), Decimal::from(5)));
+        let new = || Some((1usize, (), -one));
+        // Продажа с учётом газа: новый путь не окупает газ — шаг идёт в открытую долю.
+        assert_eq!(
+            choose(Side::Sell, true, open(), new()).map(|x| x.0),
+            Some(0)
+        );
+        // Открытая доля шаг не принимает — открывается новый путь (объём не теряется).
+        assert_eq!(choose(Side::Sell, true, None, new()).map(|x| x.0), Some(1));
+        // Новый путь лучше открытой — берётся.
+        let good = Some((1usize, (), Decimal::from(7)));
+        assert_eq!(choose(Side::Sell, true, open(), good).map(|x| x.0), Some(1));
+        // Покупка: меньше лучше.
+        let cheap = Some((1usize, (), z));
+        assert_eq!(choose(Side::Buy, true, open(), cheap).map(|x| x.0), Some(1));
+    }
+
     #[test]
     fn score_charges_gas_on_open_only() {
         let (d, g) = (Decimal::from(10), Decimal::from(3));

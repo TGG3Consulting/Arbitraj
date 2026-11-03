@@ -52,13 +52,18 @@ async fn set(p: &Parts, name: &str, v: serde_json::Value) {
 
 /// Котировка графа: покупка `qty` CAKE при цене газа `gas` (wei).
 async fn quote(p: &Parts, qty: u32, gas: u64) -> Quote {
+    quote_side(p, Side::Buy, qty, gas).await
+}
+
+/// Котировка графа стороны `side` на `qty` CAKE при цене газа `gas` (wei).
+async fn quote_side(p: &Parts, side: Side, qty: u32, gas: u64) -> Quote {
     let q = p.quoting();
     let t = zero();
     let v = Via {
         q: &q,
         coin: CAKE,
         usdt: USDT,
-        side: Side::Buy,
+        side,
         taxes: &t,
         coin_dec: 18,
         usdt_dec: 18,
@@ -181,4 +186,38 @@ async fn gas_aware_needs_wbnb() {
         .expect_err("без dex.native_wrapped газ не перевести");
     assert_eq!(e.code, ErrorCode::NotConfigured);
     assert!(e.message.contains("dex.native_wrapped"), "{}", e.message);
+}
+
+/// Объём сделки фиксирован (продажа — все монеты; Тигран, 03.11): если новая доля не окупает газ, остаток идёт в
+/// уже открытые доли, а когда они его не принимают — в новый путь, но не теряется. На записи продажа 1 000 000 CAKE
+/// при газе 10^16 wei: прежнее правило исполняло лишь 700 000 (лучший путь кончился, новый «не окупал газ»); теперь
+/// исполнено столько же, сколько без учёта газа. Покупка — так же.
+#[tokio::test]
+async fn gas_aware_fills_whole_volume() {
+    let p = route_common::parts().await;
+    set(&p, "dex.native_wrapped", json!(WBNB.to_string())).await;
+    const GAS_EXTREME: u64 = 10_000_000_000_000_000;
+    let mut plain = Vec::new();
+    for side in [Side::Sell, Side::Buy] {
+        for gas in [GAS_HIGH, GAS_EXTREME] {
+            plain.push(quote_side(&p, side, 1_000_000, gas).await.fillable_qty);
+        }
+    }
+    set(&p, "dex.route_gas_aware", json!(true)).await;
+    let mut i = 0;
+    for side in [Side::Sell, Side::Buy] {
+        for gas in [GAS_HIGH, GAS_EXTREME] {
+            let x = quote_side(&p, side, 1_000_000, gas).await;
+            assert_eq!(
+                x.fillable_qty, plain[i],
+                "{side:?}, газ {gas}: весь объём распределён"
+            );
+            assert_eq!(
+                x.fillable_qty,
+                Decimal::from(1_000_000u32),
+                "{side:?}, газ {gas}"
+            );
+            i += 1;
+        }
+    }
 }

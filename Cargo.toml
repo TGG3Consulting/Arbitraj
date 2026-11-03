@@ -7,6 +7,7 @@ edition = "2024"
 alloy = { version = "2.5.0", default-features = false, features = ["std", "sol-types", "json", "json-abi", "consensus", "eips", "network", "signer-local", "rpc-types", "serde", "json-rpc", "k256"] }
 alloy-primitives = { version = "1.7.3", features = ["serde"] }
 argon2 = "0.6.0"
+mimalloc = "0.1.52"
 async-trait = "0.1.92"
 axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.23.1"

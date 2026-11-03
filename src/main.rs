@@ -3,7 +3,7 @@
 //! уведомления (и приём кнопок Telegram), шлюз, ядро и веб-сервер интерфейса (с раздачей собранного интерфейса, если задан --ui-dir).
 //! Кто вызывает: операционная система (запуск программы).
 //! От чего зависит: все модули. Адаптеры площадок (BingX, DEX в сети BSC) регистрируются здесь.
-//! Настройки: свои — нет; аргументы запуска — cli.rs.
+//! Настройки: свои — нет; аргументы запуска — cli.rs. Распределитель памяти — mimalloc (см. GLOBAL).
 
 use std::process::ExitCode;
 
@@ -17,6 +17,14 @@ use arb::settings::live::Watch;
 use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::{Journal, Level};
+
+/// Распределитель памяти — mimalloc (https://github.com/microsoft/mimalloc, crate mimalloc: «#[global_allocator]
+/// static GLOBAL: MiMalloc = MiMalloc;»). Бинарь для Linux — статический musl (.github/workflows/linux.yml), а malloc musl
+/// держит одну общую блокировку на все потоки: на живом 03.11 с MEXC профиль perf — 64 % процессора в спин-блокировке
+/// futex (__lock/__unlock musl) и 54 % времени в ядре, 24 потока tokio на 70–100 %. mimalloc — свои кучи на поток, общей
+/// блокировки на каждое выделение нет.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Имя файла базы в папке данных.
 const DB_FILE: &str = "arb.sqlite";

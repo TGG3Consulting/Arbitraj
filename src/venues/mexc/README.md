@@ -31,7 +31,8 @@
 | `transfers.rs` | Вывод (`POST /api/v3/capital/withdraw`, `withdrawOrderId` с меткой попытки), его статус, поиск по `withdrawOrderId` при неизвестном итоге |
 | `deposits.rs` | Статус депозита по хешу (`gateway::tx_hash::same`) |
 | `account.rs` | Балансы, «Проверить подключение» (`apiKeyInfo`: права, включая SPOT_DEAL_READ, IP, срок ключа) |
-| `trade.rs` | Ордер с худшей ценой, тип — `venue.order_type` (должен быть в `orderTypes` пары); пробный ордер перед настоящим — `venue.order_test_first` |
+| `trade.rs` | Ордер с худшей ценой; правила и пробный ордер — `order_rules.rs` |
+| `order_rules.rs` | Правила ордера — одни у настоящего ордера и у проверки без исполнения (`check_order`, решение 134): API-сторона, тип `venue.order_type` (orderTypes; IOC/FOK при LIMIT), шаги, минимумы и максимум суммы, сроки итога и myTrades; пробный ордер `POST /api/v3/order/test` — `venue.order_test_first` |
 | `order_state.rs` | Ожидание итога (сбой запроса — повтор), отмена по сроку, чтение итога после отмены; поиск и отмена по своему ID (`origClientOrderId`) |
 | `fills.rs` | Комиссия по всем сделкам ордера: `myTrades` с `limit` (`venue.my_trades_limit`), сверка суммы `qty` с `executedQty` |
 | `proto.rs` | Нужные сообщения protobuf (prost) |

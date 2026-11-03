@@ -20,6 +20,7 @@ pub mod fees;
 pub mod fund_move;
 pub mod market;
 pub mod num;
+pub mod order_rules;
 pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
@@ -138,6 +139,12 @@ impl Venue for Bingx {
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, req).await
+    }
+
+    /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready). Пробного ордера у спота BingX нет.
+    async fn check_order(&self, req: &TradeRequest) -> GatewayResult<()> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        order_rules::ready(&self.ctx, &self.symbols, req).map(|_| ())
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {

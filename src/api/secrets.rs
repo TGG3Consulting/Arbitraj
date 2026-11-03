@@ -170,7 +170,7 @@ pub async fn password(
 }
 
 /// Параметры Argon2id из настроек. Ошибка 400 — не заданы.
-fn kdf(st: &AppState) -> Result<KdfParams, ApiError> {
+pub(super) fn kdf(st: &AppState) -> Result<KdfParams, ApiError> {
     let get = |n| {
         st.settings
             .integer(n, At::default())

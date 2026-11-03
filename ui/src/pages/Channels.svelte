@@ -5,7 +5,8 @@
     «Проверить подключение», состояние и статистика (отправлено, в блоке, откатов, газ впустую).
     Общие настройки отправки (send.*) — на «Площадках». Нет адаптера DEX — «нет данных» с причиной.
     Живое сообщение send_channel — список перечитывается (lib/dex.svelte.js). Над каналами — очередь кошелька
-    (components/WalletQueue.svelte): состояние и «Снять очередь после ручной проверки».
+    (components/WalletQueue.svelte) — по каждому кошельку DEX (решение 132): состояние и «Снять очередь после ручной
+    проверки».
   Кто вызывает: App.svelte.
   От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, NoData.svelte.
   Настройки: channel.* (через ChannelCard).
@@ -15,6 +16,15 @@
   import ChannelCard from '../components/ChannelCard.svelte';
   import WalletQueue from '../components/WalletQueue.svelte';
   import NoData from '../components/NoData.svelte';
+  import { get } from '../lib/api.js';
+
+  /** Кошельки DEX (решение 132): у каждого своя очередь. */
+  let wallets = $state([]);
+  $effect(() => {
+    get('/api/wallets')
+      .then((v) => (wallets = v.wallets))
+      .catch(() => (wallets = []));
+  });
 
   /** Площадки, давшие список каналов: [[id, channels]]. */
   const withChannels = $derived(
@@ -34,7 +44,11 @@
 {:else}
   {#each withChannels as [venue, channels] (venue)}
     <h2>{venue}</h2>
-    <WalletQueue {venue} />
+    {#each wallets as w (w.id)}
+      <WalletQueue {venue} wallet={w.id} name={w.name} />
+    {:else}
+      <p class="muted">Кошельков DEX нет — очереди появятся на экране «Маппинг кошельков» (#/wallets).</p>
+    {/each}
     {#each channels as channel (channel.info.id)}
       <ChannelCard {venue} {channel} />
     {:else}

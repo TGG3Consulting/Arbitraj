@@ -183,6 +183,12 @@ impl Venue for BscDex {
         Ok(())
     }
 
+    /// Адрес кошелька счёта (решение 132) — wallet/signer.rs; только у вида на счёт. Ошибки: счёт не выбран, ключ.
+    async fn wallet_address(&self) -> GatewayResult<String> {
+        self.p.ctx.bound()?;
+        Ok(wallet::signer::address(&self.p.ctx)?.to_string())
+    }
+
     /// Очередь транзакций кошелька (wallet/nonce.rs). Ошибок нет.
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
         self.p.ctx.bound()?;

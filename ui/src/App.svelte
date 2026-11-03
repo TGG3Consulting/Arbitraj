@@ -36,6 +36,7 @@
   import Windows from './pages/Windows.svelte';
   import FirstRun from './pages/FirstRun.svelte';
   import SettingsIO from './pages/SettingsIO.svelte';
+  import Wallets from './pages/Wallets.svelte';
 
   /**
    * Экраны в меню: адрес, название, компонент. Первый — открывается, если адрес пустой.
@@ -51,6 +52,7 @@
     { id: 'episodes', title: 'Эпизоды', page: Episodes, wide: true },
     { id: 'windows', title: 'Окна', page: Windows, wide: true },
     { id: 'manual', title: 'Ручное управление', page: Manual },
+    { id: 'wallets', title: 'Маппинг кошельков', page: Wallets },
     { id: 'channels', title: 'Каналы отправки', page: Channels, more: true },
     { id: 'gas', title: 'Статистика газа', page: GasStats, more: true },
     { id: 'settings', title: 'Настройки', page: Settings, menu: 'settings' },

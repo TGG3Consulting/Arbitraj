@@ -182,6 +182,16 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Решение 132: адрес кошелька счёта (выводится из ключа у адаптера; ключ наружу не отдаётся). Только у вида DEX на
+    /// счёт. Ошибки: NotApplicable — биржа; NotConfigured — счёт не выбран или ключ не введён; SecretsLocked.
+    async fn wallet_address(&self) -> GatewayResult<String> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет кошелька",
+        ))
+    }
+
     /// Очередь транзакций кошелька (DEX, решение 45): свободна / ждёт итога / остановлена до ручной проверки.
     /// Ошибки: NotApplicable — у площадки нет кошелька (биржа).
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {

@@ -5,6 +5,23 @@
 
 ## Ждут решения Тиграна
 
+- **Биржа Gate (решение 135, ветка router/gate).** Разбор и чек-лист уроков — `docs/notes/gate-integration-2026-11-04.md`.
+  Вопросы: (1) тип ордера — limit + time_in_force `ioc` (остаток снимает биржа, finish_as = ioc); `fok` тоже допущен
+  правилами — оставить только ioc? (2) Счёт депозита — по документации спот («DONE: Funds Credited to Spot Account»),
+  перевод не нужен; статус DEP_CREDITED («Deposit Credited, Withdrawal Pending Unlock») считается «ещё не зачислено» —
+  можно ли продавать до DONE? (3) Права ключа: «Проверить подключение» требует key.mode = 1 (классический; единый счёт
+  не поддержан), spot — запись, wallet; запрещает запись futures/delivery/margin/unified/options/loan/copy; права вывода
+  в перечне perms /account/main_keys нет — проверится первым выводом; включить белый список адресов вывода в кабинете
+  (ADDRESS_NOT_USED → InvalidAddress). (4) Шаги пары: precision / amount_precision как число знаков (как решение 107) —
+  подтвердить первым ордером (INVALID_PRECISION — отказ без денег). (5) Предел подписок на соединение и срок жизни
+  соединения WebSocket в документации нет — venue.ws_symbols_per_conn замером. (6) Retry-After у Gate нет, заголовок
+  X-Gate-RateLimit-Reset-Timestamp транспорт шлюза не отдаёт — читать его = правка gateway/http.rs (запрос на стык);
+  пока venue.rate_limit_pause_ms. (7) /spot/batch_fee (до 50 пар) — формат списка пар не описан; ставки — по одной паре
+  /wallet/fee. (8) withdraw_percent_on_chains: формат процента не описан — при проценте не ноль сеть без комиссии (сделок
+  нет). (9) Вывод FAIL («On-Chain Failure Pending Confirmation») — пока «ждём». (10) Поле change в spot.balances — изменение
+  общего баланса? (11) Скидка GT: если включена, комиссия ордера в GT — итог с монетой «GT»; выключить скидку GT в
+  кабинете? (12) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
+
 - **Маппинг кошельков (решение 132, ветка router/wallets, слита в feat/own-bsc-node).** План и ход — `docs/notes/wallet-mapping-2026-11-03.md`.
   Вопросы: (1) строка маппинга «пробы» (кошелёк для налоговых проб, крючков, оценки разрешений и сигналов циклов —
   только симуляции от адреса, без отправки) добавлена агентом, при переносе = «BingX» — оставить так?

@@ -35,6 +35,12 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "mexc",
         "Секретный ключ MEXC (Secret Key)",
     ),
+    ("gate.api_key", "gate", "API-ключ Gate (Key, API v4)"),
+    (
+        "gate.api_secret",
+        "gate",
+        "Секретный ключ Gate (Secret, API v4)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

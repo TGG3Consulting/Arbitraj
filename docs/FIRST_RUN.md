@@ -90,6 +90,27 @@
 | venue.ws_subs_per_sec | площадка BingX | `10` | Предел темпа подписок WebSocket | Документация BingX: не больше 10 |
 | venue.fee_requests_per_sec | площадка BingX | `2` | Предел запросов ставок комиссии | Документация BingX: не больше 2 |
 
+## Биржа Gate (решение 135)
+
+Советы, не значения по умолчанию. Включать — после замера нагрузки при «Стоп» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Gate | `https://api.gateio.ws/api/v4` | Адрес с префиксом /api/v4 — путь входит в подпись | Gate API v4, Access URL |
+| venue.ws_url | площадка Gate | `wss://api.gateio.ws/ws/v4/` | Стаканы, окна и поток балансов | Spot WebSocket v4; запись 04.11 |
+| venue.bsc_network | площадка Gate | `BSC` | Имя сети BNB Smart Chain у Gate | Живая запись 04.11 (/spot/currencies, currency_chains CAKE) |
+| venue.depth_levels | площадка Gate | `20` | Как у других бирж | spot.order_book: 5, 10, 20, 50, 100 |
+| venue.book_interval | площадка Gate | `100ms` | Самый частый снимок | spot.order_book: 100ms, 1000ms |
+| venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа | POST /spot/orders, time_in_force |
+| venue.order_test_first | площадка Gate | `нет` | Пробного ордера у Gate нет («да» — ошибка настройки) | Спот API v4 |
+| venue.ws_ping_ms | площадка Gate | `10000` | spot.ping сбрасывает таймер простоя | Официальный пример: раз в 10 с |
+| venue.fee_requests_per_sec | площадка Gate | `5` | Четверть предела /wallet/fee | «Frequency limit rule»: 200 за 10 с |
+| venue.rate_limit_pause_ms | площадка Gate | `10000` | Целое окно лимита после 429 (Retry-After нет) | «Frequency limit rule»: окно 10 с |
+| venue.order_history_limit | площадка Gate | `100` | Поиск своего ордера по text | GET /spot/orders: «default 100» |
+| venue.window_diff_interval | площадка Gate | `100ms` | Глубина 100 | spot.order_book_update: 20ms / 100ms |
+| venue.window_depth_limit | площадка Gate | `100` | Снимок той же глубины, что изменения | spot.order_book_update 100ms — глубина 100 |
+| venue.ws_symbols_per_conn | площадка Gate | *метод:* начать с 20, замерить при «Стоп», при обрывах уменьшить | Предела в документации нет | Spot WebSocket v4 (вопрос Тиграну) |
+
 ## Безопасность: вывод ключа из пароля (Argon2id)
 
 | Настройка | Область | Советуем / метод | Обоснование | Источник |

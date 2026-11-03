@@ -321,6 +321,137 @@ source = "Документация BingX: не больше 2"
 rationale = "Предел запросов ставок комиссии у BingX."
 prefill = { kind = "Venue", id = "bingx" }
 
+# --- Биржа Gate (решение 135) ---
+[[section]]
+title = "Биржа Gate (решение 135)"
+intro = "Адреса и значения из официальной документации Gate API v4 и живой записи 04.11.2026. Советы, не значения по умолчанию: без заданных настроек Gate не работает и говорит, какой не хватает. Включать — после замера нагрузки при «Стоп» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Gate"
+unit = "URL"
+value = "https://api.gateio.ws/api/v4"
+source = "Документация Gate API v4, Access URL: Live trading"
+rationale = "Адрес вместе с префиксом /api/v4: путь входит в подпись запроса."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Gate"
+unit = "URL"
+value = "wss://api.gateio.ws/ws/v4/"
+source = "Документация Spot WebSocket v4: адрес реальной торговли; живая запись 04.11"
+rationale = "Один адрес для стаканов, окон и потока балансов."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Gate"
+unit = "название"
+value = "BSC"
+source = "Живая запись 04.11: /spot/currencies и /wallet/currency_chains?currency=CAKE — chain «BSC»"
+rationale = "Так Gate называет сеть BNB Smart Chain (BEP20) в справочнике и при выводе."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Gate"
+unit = "уровней"
+value = "20"
+source = "Документация spot.order_book: уровни 5, 10, 20, 50, 100"
+rationale = "Как у других бирж; живая запись — 20 уровней."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.book_interval"
+area = "площадка Gate"
+unit = "интервал"
+value = "100ms"
+source = "Документация spot.order_book: 100ms или 1000ms"
+rationale = "Самый частый снимок стакана; одинаковые снимки ядру не отдаются (решение 109)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Gate"
+unit = "тип"
+value = "ioc"
+source = "Документация POST /spot/orders: «ioc: immediate execution or cancellation, taker-only»"
+rationale = "Стартовое правило Тиграна «не исполнился — отменяем»: остаток снимает биржа."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Gate"
+unit = "да/нет"
+method = "Поставить «нет»"
+source = "Спот API v4 Gate: пробного ордера нет"
+rationale = "«Да» у Gate — ошибка настройки: проверка ордера идёт только правилами пары."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Официальный пример Spot WebSocket v4: spot.ping раз в 10 с"
+rationale = "spot.ping сбрасывает таймер простоя сервера; срок простоя в документации не назван."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Gate"
+unit = "в секунду"
+value = "5"
+source = "Документация «Frequency limit rule»: приватные — 200 запросов за 10 с на конечную точку"
+rationale = "Четверть предела /wallet/fee — остаётся место на ручные проверки."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Документация «Frequency limit rule»: окно лимита — 10 с"
+rationale = "После 429 ждать целое окно лимита: Retry-After Gate не присылает."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.order_history_limit"
+area = "площадка Gate"
+unit = "ордеров"
+value = "100"
+source = "Документация GET /spot/orders: limit «default 100»"
+rationale = "Хватает, чтобы найти свой ордер по text за минуты после постановки."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.window_diff_interval"
+area = "площадка Gate"
+unit = "интервал"
+value = "100ms"
+source = "Документация spot.order_book_update: 20ms (глубина 20) или 100ms (глубина 100)"
+rationale = "Глубина 100 — шире снимка стакана; живая запись 04.11 — 100ms."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка Gate"
+unit = "уровней"
+value = "100"
+source = "Глубина канала spot.order_book_update при 100ms — 100"
+rationale = "Снимок REST той же глубины, что изменения."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Gate"
+unit = "штук"
+method = "Предела в документации нет — начать с 20 пар на соединение, замерить нагрузку при «Стоп» (решение 109), при обрывах уменьшить"
+source = "Документация Spot WebSocket v4: предела подписок на соединение нет (вопрос Тиграну)"
+rationale = "Без предела в документации число — только замером на живом сервере."
+prefill = { kind = "Venue", id = "gate" }
+
 # --- Безопасность (вывод ключа из пароля) ---
 [[section]]
 title = "Безопасность: вывод ключа из пароля (Argon2id)"

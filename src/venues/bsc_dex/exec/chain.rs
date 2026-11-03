@@ -1,8 +1,11 @@
 //! Файл: venues/bsc_dex/exec/chain.rs
 //! Что делает: шаги исполнения пути (quote/path.rs) — по команде Universal Router на каждый пул, по правилам
 //! официального SDK (research/flow/bsc_smart_router.md, раздел 3.1): первый шаг платит кошелёк (Permit2) своей суммой;
-//! следующий — роутер всем своим балансом (CONTRACT_BALANCE), промежуточный выход — роутеру (ADDRESS_THIS), последний —
-//! кошельку. Минимум выхода — у каждого шага: у промежуточного — ожидаемое после крючка × (1 − exec.dex_slippage_pct)
+//! следующие — роутер всем своим балансом (CONTRACT_BALANCE), промежуточный выход — роутеру (ADDRESS_THIS), последний —
+//! кошельку. Решение 122 R2: путь из любого числа пулов (1..dex.route_max_hops) одного Universal Router — цепочка
+//! команд одного execute (map(ADDRESS_THIS) = address(this) — pancake-v4-universal-router 1b6d479e
+//! src/base/Dispatcher.sol#L353-L361, universal-router edf19bfd contracts/base/Dispatcher.sol#L332-L340;
+//! CONTRACT_BALANCE во входе V3 — V3SwapRouter.sol#L85 / #L115, V2 через Payments.pay — Payments.sol#L32 / #L30). Минимум выхода — у каждого шага: у промежуточного — ожидаемое после крючка × (1 − exec.dex_slippage_pct)
 //! (SDK ставит 0, но обмен без минимума здесь не отправляется), у последнего — минимум сделки (exec/order.rs).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/plan.rs, exec/universal.rs.
 //! От чего зависит: exec/order.rs, exec/swap_v2v3.rs, exec/swap_v4.rs, exec/ur.rs, quote/path.rs, num.rs.
@@ -33,8 +36,11 @@ pub struct Step {
     pub to_wallet: bool,
 }
 
-/// Шаги пути сделки. Принимает: запрос, живой путь, количество монет доли, (decimals монеты, USDT).
-/// Ошибки: как у exec/order.rs (худшая цена ≤ 0, минимум 0); BadResponse (числа); NotConfigured (допуск).
+/// Шаги пути сделки. Принимает: запрос, живой путь (1..N пулов, решение 122 R2), количество монет доли,
+/// (decimals монеты, USDT). Первый шаг платит кошелёк суммой сделки, следующие — роутер всем балансом
+/// (CONTRACT_BALANCE); выход промежуточных шагов — роутеру (ADDRESS_THIS), последнего — кошельку с минимумом сделки.
+/// Ошибки: как у exec/order.rs (худшая цена ≤ 0, минимум 0); NoRoute (путь без пулов); QuoteMismatch (минимум
+/// промежуточного шага 0); BadResponse (числа); NotConfigured (допуск).
 pub fn steps(
     ctx: &Ctx,
     req: &TradeRequest,
@@ -43,62 +49,63 @@ pub fn steps(
     decs: (u8, u8),
 ) -> GatewayResult<Vec<Step>> {
     let fin = |e: &Entry| order(ctx, req, e, qty, (p.coins, p.usdt), decs);
-    match p.hops.as_slice() {
-        [h] => Ok(vec![Step {
-            entry: h.entry.clone(),
-            order: fin(&h.entry)?,
+    let n = p.hops.len();
+    let (Some(first_hop), Some(last_hop)) = (p.hops.first(), p.hops.last()) else {
+        return Err(ctx.err(ErrorCode::NoRoute, "путь без пулов"));
+    };
+    if n == 1 {
+        return Ok(vec![Step {
+            entry: first_hop.entry.clone(),
+            order: fin(&first_hop.entry)?,
             from_wallet: true,
             to_wallet: true,
-        }]),
-        [a, b] => {
-            // Последний шаг: токены и минимум сделки; вход — весь баланс роутера.
-            let mut o = fin(&b.entry)?;
-            (o.token_in, o.token_out, o.amount_in) = (b.token_in, b.token_out, CONTRACT_BALANCE);
-            // Первый шаг: вход — как у сделки (USDT при покупке, монеты при продаже), минимум — промежуточная.
-            let first = fin(&a.entry)?;
-            let slip = Decimal::ONE - ctx.dec("exec.dex_slippage_pct")? / Decimal::ONE_HUNDRED;
-            let keep = Decimal::ONE - a.usable.hook_pct / Decimal::ONE_HUNDRED;
-            let min_mid = num::to_units(a.pool_out * keep * slip, a.dec_out).ok_or_else(|| {
-                ctx.err(
-                    ErrorCode::BadResponse,
-                    "минимум промежуточного шага не считается",
-                )
-            })?;
-            if min_mid.is_zero() {
-                return Err(ctx.err(
-                    ErrorCode::QuoteMismatch,
-                    format!(
-                        "{}: минимум промежуточного шага 0 — обмен без минимума не отправляется",
-                        a.entry.family.title
-                    ),
-                ));
-            }
-            let mid = Order {
-                token_in: a.token_in,
-                token_out: a.token_out,
-                amount_in: first.amount_in,
-                min_out: min_mid,
-            };
-            Ok(vec![
-                Step {
-                    entry: a.entry.clone(),
-                    order: mid,
-                    from_wallet: true,
-                    to_wallet: false,
-                },
-                Step {
-                    entry: b.entry.clone(),
-                    order: o,
-                    from_wallet: false,
-                    to_wallet: true,
-                },
-            ])
-        }
-        _ => Err(ctx.err(
-            ErrorCode::NoRoute,
-            "путь — один пул или два через промежуточную монету",
-        )),
+        }]);
     }
+    // Вход первого шага — как у сделки (USDT при покупке, монеты при продаже).
+    let first_in = fin(&first_hop.entry)?.amount_in;
+    let slip = Decimal::ONE - ctx.dec("exec.dex_slippage_pct")? / Decimal::ONE_HUNDRED;
+    let mut out = Vec::with_capacity(n);
+    for (i, h) in p.hops[..n - 1].iter().enumerate() {
+        // Промежуточный шаг: минимум — ожидаемое после крючка × (1 − exec.dex_slippage_pct), выход роутеру.
+        let keep = Decimal::ONE - h.usable.hook_pct / Decimal::ONE_HUNDRED;
+        let min_mid = num::to_units(h.pool_out * keep * slip, h.dec_out).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                "минимум промежуточного шага не считается",
+            )
+        })?;
+        if min_mid.is_zero() {
+            return Err(ctx.err(
+                ErrorCode::QuoteMismatch,
+                format!(
+                    "{}: минимум промежуточного шага 0 — обмен без минимума не отправляется",
+                    h.entry.family.title
+                ),
+            ));
+        }
+        out.push(Step {
+            entry: h.entry.clone(),
+            order: Order {
+                token_in: h.token_in,
+                token_out: h.token_out,
+                amount_in: if i == 0 { first_in } else { CONTRACT_BALANCE },
+                min_out: min_mid,
+            },
+            from_wallet: i == 0,
+            to_wallet: false,
+        });
+    }
+    // Последний шаг: токены и минимум сделки; вход — весь баланс роутера.
+    let mut o = fin(&last_hop.entry)?;
+    (o.token_in, o.token_out, o.amount_in) =
+        (last_hop.token_in, last_hop.token_out, CONTRACT_BALANCE);
+    out.push(Step {
+        entry: last_hop.entry.clone(),
+        order: o,
+        from_wallet: false,
+        to_wallet: true,
+    });
+    Ok(out)
 }
 
 /// Команда шага. Принимает: шаг, формат Universal Router, кошелёк. Ошибки: как у swap_v2v3 / swap_v4.

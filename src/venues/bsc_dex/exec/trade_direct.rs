@@ -100,7 +100,15 @@ pub async fn trade(
     let d = send_swap(env, &slot, p, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
+    result::result(
+        ctx,
+        req,
+        d,
+        wallet,
+        (tin, out_token),
+        decs,
+        router.as_slice(),
+    )
 }
 
 /// Доля по живому состоянию: путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs), свежий

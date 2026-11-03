@@ -33,7 +33,7 @@ pub fn result(
         .as_ref()
         .map(|r| fill::moved(r, tin, Some(executor), Some(wallet)))
         .unwrap_or_default();
-    let mut t = result::result(ctx, req, d, wallet, (tin, tout), decs, None)?;
+    let mut t = result::result(ctx, req, d, wallet, (tin, tout), decs, &[])?;
     if back_u.is_zero() {
         return Ok(t);
     }

@@ -3,6 +3,7 @@
 //! (exec/bundle_trade.rs) с местом в очереди кошелька Slot. Шаги: (1) симуляция всего упорядоченного бандла
 //! eth_simulateV1 на своём узле (check/simulate.rs) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
 //! валидирует порядок; откат любого шага → не отправляем; попутно газ и кумулятивные базы BALANCE_CHECK (exec/bundle_sim.rs);
+//! (1б) продажа BNB (решение 122 R3) — резерв на газ не тратится (exec/bundle_native.rs::reserve_ok);
 //! (2) проверка «кто меняет» (решение 59) по событиям симуляции — чужой пул исключается; (3) цена газа — как у одиночной;
 //! (4) подпись по очереди (exec/bundle_sim.rs); (5) отправка одним бандлом через бандл-каналы (send/mod.rs dispatch_slice →
 //! eth_sendBundle, revertingTxHashes пуст = всё-или-ничего, maxBlockNumber = голова + send.bundle_max_blocks);
@@ -97,6 +98,8 @@ pub async fn send(
             return Err(e);
         }
     };
+    // Решение 122 R3: продажа BNB — value свопов + газ всех транзакций только сверх резерва risk.min_bnb_balance.
+    super::bundle_native::reserve_ok(ctx, wallet, bundle, &limits, price).await?;
     // Решение 59 («кто меняет»): событие обмена — только от пулов маршрута; чужой пул исключается, сделки нет.
     let logs: Vec<SimLog> = res.iter().flat_map(|r| r.logs.clone()).collect();
     if let Err(w) = emitter::check(ctx, entries, &logs).await {

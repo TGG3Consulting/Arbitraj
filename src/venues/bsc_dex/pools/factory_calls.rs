@@ -3,13 +3,13 @@
 //! вида V2 / форк V2 — getPair(монета, встречный токен); V3 (PancakeSwap / Uniswap ABI) — getPool(монета, встречный,
 //! fee) по каждому уровню комиссии из dex.v3_fee_tiers этой DEX (не задана — V3 этой DEX по фабрике не ищется).
 //! Решение 122 F: ещё Solidly / Solidly V1 (по обоим stable), Algebra (poolByPair) и DODO V2 (getDODOPoolBidirection —
-//! индексатор пулы DODO на BSC не отдаёт); вид вопроса и разбор — factory_ask.rs. Slipstream по фабрике не ищется
-//! (ключ пула — int24 tickSpacing, списка уровней tickSpacing в настройках нет — вопрос Тиграну, отчёт части F).
+//! индексатор пулы DODO на BSC не отдаёт); вид вопроса и разбор — factory_ask.rs. Slipstream — getPool(a, b, int24
+//! tickSpacing) по каждому уровню из dex.cl_tick_spacings (не задана — Slipstream этой DEX по фабрике не ищется).
 //! DEX не подключена (families::classify) — не ищется, причина в заметках прохода. Только сборка вызовов и разбор
 //! ответа — без сети.
 //! Кто вызывает: pools/factory_scan.rs.
 //! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs.
-//! Настройки: dex.factory, dex.v3_fee_tiers [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
+//! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
 //!
 //! Сигнатуры — официальные интерфейсы фабрик (abi_v2v3.rs):
 //! getPair(address,address) returns (address) — https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Factory.sol#L9
@@ -67,6 +67,7 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
                     .to_vec()
             }
             Proto::Algebra => vec![Q::Algebra],
+            Proto::Slipstream => Vec::new(),
             p if p.is_dodo() => vec![Q::Dodo],
             _ => continue,
         };
@@ -75,6 +76,15 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
             continue;
         }
         let factory = ctx.dex_addr("dex.factory", f.id)?;
+        if f.proto == Proto::Slipstream {
+            match spacings(ctx, f.id) {
+                Ok(list) => qs = list.into_iter().map(Q::Slipstream).collect(),
+                Err(why) => {
+                    out.notes.push(format!("{}: {why}", f.id));
+                    continue;
+                }
+            }
+        }
         if v3 {
             match tiers(ctx, f.id) {
                 Ok(list) => qs = list.into_iter().map(Q::V3).collect(),
@@ -123,6 +133,33 @@ pub fn tiers(ctx: &Ctx, id: &str) -> Result<Vec<u32>, String> {
             Ok(v) if v <= U24_MAX => Ok(v),
             _ => Err(format!(
                 "dex.v3_fee_tiers: «{s}» — не целое uint24 (fee в getPool) — V3 этой DEX по фабрике не ищется"
+            )),
+        })
+        .collect()
+}
+
+/// Уровни tickSpacing Slipstream этой DEX из dex.cl_tick_spacings (список целых int24, как tickSpacing в getPool).
+/// Возвращает: список или текст причины, почему Slipstream этой DEX по фабрике не ищется. Ошибок нет.
+pub fn spacings(ctx: &Ctx, id: &str) -> Result<Vec<i32>, String> {
+    let list = match ctx.dex_list("dex.cl_tick_spacings", id) {
+        Ok(l) => l,
+        Err(e) if e.code == ErrorCode::NotConfigured => {
+            return Err(
+                "не задана dex.cl_tick_spacings — Slipstream этой DEX по фабрике не ищется".into(),
+            );
+        }
+        Err(e) => return Err(format!("dex.cl_tick_spacings: {}", e.message)),
+    };
+    if list.is_empty() {
+        return Err("dex.cl_tick_spacings пуст — Slipstream этой DEX по фабрике не ищется".into());
+    }
+    // int24: −2^23 ..= 2^23 − 1 (ABI int24).
+    let (lo, hi) = (-(1i32 << 23), (1i32 << 23) - 1);
+    list.iter()
+        .map(|s| match s.trim().parse::<i32>() {
+            Ok(v) if (lo..=hi).contains(&v) => Ok(v),
+            _ => Err(format!(
+                "dex.cl_tick_spacings: «{s}» — не целое int24 — Slipstream этой DEX по фабрике не ищется"
             )),
         })
         .collect()

@@ -101,7 +101,7 @@ pub fn build(
         };
         left = left.saturating_sub(first_in);
         for (i, s) in leg.iter().enumerate() {
-            let (params, pool) = entry::params(ctx, &s.entry)?;
+            let (params, pool) = entry::params(ctx, &s.entry, s.order.token_in)?;
             let spec = StepSpec {
                 params,
                 pool,

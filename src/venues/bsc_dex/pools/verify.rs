@@ -27,7 +27,7 @@ use super::discover::Found;
 use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
-use super::{verify_algebra, verify_dodo, verify_solidly, verify_v4};
+use super::{verify_algebra, verify_curve, verify_dodo, verify_solidly, verify_v4};
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
 #[derive(Debug, Clone)]
@@ -70,6 +70,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut dodo = Vec::new();
     let mut algebra = Vec::new();
     let mut solidly = Vec::new();
+    let mut curve = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -77,6 +78,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             p if p.is_dodo() => dodo.push(i),
             Proto::Algebra => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
+            Proto::CurveStable => curve.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -105,6 +107,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in solidly
         .into_iter()
         .zip(verify_solidly::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // StableSwap (решение 122 F): список dex.stable_pools + монеты пула (verify_curve.rs).
+    let list: Vec<Candidate> = curve.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in curve
+        .into_iter()
+        .zip(verify_curve::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

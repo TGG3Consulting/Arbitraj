@@ -153,6 +153,7 @@ fn want<'a>(p: &'a (String, &'static families::Family, PoolRef, Option<i32>)) ->
         spacing: p.3,
         step: None,
         usdt: Address::ZERO,
+        token0: Address::ZERO,
         token1: Address::ZERO,
     }
 }

@@ -59,6 +59,7 @@ async fn load_group(
                 spacing: e.pool.tick_spacing,
                 step: e.pool.bin_step,
                 usdt: e.usdt,
+                token0: e.pool.token0,
                 token1: e.pool.token1,
             },
             None => Want {
@@ -67,6 +68,7 @@ async fn load_group(
                 spacing: f.tick_spacing,
                 step: f.bin_step,
                 usdt: listen_log::found_usdt(f),
+                token0: f.token0,
                 token1: f.token1,
             },
         })

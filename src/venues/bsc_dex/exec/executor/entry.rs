@@ -4,7 +4,8 @@
 //! как котировка, quote/pool_quote.rs), V3 (PancakeSwap/Uniswap V3, форки, Slipstream) → V3, ALGEBRA, SOLIDLY, DODO.
 //! Нет вида шага — пул исполнителем не вызывается (Infinity / V4 — только Universal Router; KyberSwap Elastic — вид
 //! ELASTIC в контракте есть, но семейство неисполнимо, решение 121 B2). CURVE / WOO / MAVERICK из реестра пока не
-//! приходят (семейств нет); у CURVE нужны индексы монет пула — без них шаг не строится.
+//! приходят (семейств нет). CURVE (StableSwap Ellipsis, решение 122 F2) — индексы пары из состояния пула
+//! (PoolState::StableSwap: i0 — token0, i1 — token1), направление — по токену входа шага.
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
 //! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии).
@@ -13,7 +14,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::core::types::PoolRef;
+use crate::core::types::{PoolRef, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
@@ -40,9 +41,9 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 }
 
 /// Вид шага и адрес пула. Принимает: пул реестра. Ошибки: NoRoute — у семейства нет шага исполнителя, пул
-/// менеджера-синглтона или шаг вида без параметров из реестра (CURVE); NotConfigured — комиссия V2 не задана или не в
-/// целых долях 1e-6.
-pub fn params(ctx: &Ctx, e: &Entry) -> GatewayResult<(Params, Address)> {
+/// менеджера-синглтона, у CURVE нет состояния StableSwap или токен входа не из пары пула; NotConfigured — комиссия V2
+/// не задана или не в целых долях 1e-6. `token_in` — токен входа шага (нужен виду CURVE для порядка i → j).
+pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
     let p = match k {
@@ -55,12 +56,31 @@ pub fn params(ctx: &Ctx, e: &Entry) -> GatewayResult<(Params, Address)> {
         ExecKind::Dodo => Params::Dodo,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,
-        ExecKind::Curve => {
-            let why = format!("{}: индексы монет Curve в реестре не известны", e.family.id);
-            return Err(ctx.err(ErrorCode::NoRoute, why));
-        }
+        ExecKind::Curve => curve(e, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?,
     };
     Ok((p, pool))
+}
+
+/// Индексы шага CURVE: i — монета входа, j — выхода (exchange(i, j, dx, 0) пула). Принимает: пул реестра, токен входа.
+/// Возвращает: Params::Curve или причину (состояние не StableSwap; токен входа не token0/token1 пула).
+fn curve(e: &Entry, token_in: Address) -> Result<Params, String> {
+    let PoolState::StableSwap(d) = &e.pool.state else {
+        return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
+    };
+    let (i, j) = if token_in == e.pool.token0 {
+        (d.i0, d.i1)
+    } else if token_in == e.pool.token1 {
+        (d.i1, d.i0)
+    } else {
+        return Err(format!(
+            "{}: токен входа {token_in} не из пары пула",
+            e.family.id
+        ));
+    };
+    Ok(Params::Curve {
+        i: i128::from(i),
+        j: i128::from(j),
+    })
 }
 
 /// Комиссия пары V2 в долях 1e-6: своя у пары (Pool.fee_pips) или dex.v2_fee_pct DEX × 10000. Ошибки: NotConfigured —

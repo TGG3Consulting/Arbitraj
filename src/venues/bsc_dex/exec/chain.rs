@@ -129,5 +129,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Solidly не исполняется (нет пути исполнения — tradable=false, следующая фаза)",
         )),
+        // StableSwap (решение 122 F, часть F): Universal Router его не исполняет — только шаг CURVE исполнителя.
+        PoolKind::StableSwap => Err(ctx.err(
+            ErrorCode::Internal,
+            "StableSwap не исполняется Universal Router (шаг CURVE контракта-исполнителя)",
+        )),
     }
 }

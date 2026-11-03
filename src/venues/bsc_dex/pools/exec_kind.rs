@@ -57,8 +57,8 @@ impl ExecKind {
 
 /// Вид шага исполнителя по варианту dex.kind. Принимает: вариант dex.kind. Возвращает: вид шага; None — пулы этого
 /// вида исполнитель не вызывает (Universal Router своей фабрики, KyberSwap Elastic — см. шапку, неизвестный вид).
-/// Виды CURVE / WOO / MAVERICK пока не выдаются: семейств с такими dex.kind ещё нет (нужны варианты состояния пула в
-/// core/types — отчёт части F). Ошибок нет.
+/// CURVE — curve_stableswap (решение 122 F, 2). Виды WOO / MAVERICK пока не выдаются: семейств WooFi и Maverick V2
+/// ещё нет (docs/TASKS.md). Ошибок нет.
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" => ExecKind::V2,
@@ -68,6 +68,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "thena_fusion" => ExecKind::Algebra,
         "solidly_v2" | "solidly_v1" => ExecKind::Solidly,
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
+        "curve_stableswap" => ExecKind::Curve,
         _ => return None,
     })
 }

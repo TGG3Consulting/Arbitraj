@@ -50,5 +50,9 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Solidly {
             reserve0, reserve1, ..
         } => reserve0.is_zero() || reserve1.is_zero(),
+        // StableSwap (решение 122 F): пуст, если нулевой баланс любой монеты пары (обмен по паре невозможен).
+        PoolState::StableSwap(d) => [d.i0, d.i1]
+            .iter()
+            .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
     }
 }

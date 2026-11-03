@@ -100,6 +100,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 ICLFactory::PoolCreated::SIGNATURE_HASH,
                 false,
             ),
+            // StableSwap (Ellipsis; решение 122 F): фабрики с событием создания нет — новые пулы приходят только из
+            // справочника и списка dex.stable_pools.
+            Proto::CurveStable => continue,
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));

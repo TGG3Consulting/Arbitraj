@@ -4,8 +4,9 @@
 //! (quote/via.rs, решение 52). Перед расчётом — повторная проба крючка B/C каждого пула (решение 32, exec/precheck.rs)
 //! и допуск пула по свежим итогам проверок (quote/select.rs). Пара: промежуточная монета включена и без налогов,
 //! у монеты с налогом — только V2 на каждом шаге (решение 39), прямой режим — оба пула одного Universal Router.
+//! Доля графа из трёх и более пулов (решение 122 R2) — exec/live_hops.rs.
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs.
-//! От чего зависит: exec/precheck.rs, quote/direct.rs, quote/via.rs, quote/path.rs, quote/select.rs,
+//! От чего зависит: exec/precheck.rs, exec/live_hops.rs, quote/direct.rs, quote/via.rs, quote/path.rs, quote/select.rs,
 //! quote/direct_route.rs (один роутер), pools/registry.rs, pools/mids.rs, tokens.rs.
 //! Настройки: через вызываемые — см. их шапки.
 
@@ -32,6 +33,10 @@ pub async fn path(
     direct_mode: bool,
 ) -> GatewayResult<Path> {
     let (q, ctx) = (v.q, &v.q.ctx);
+    // Решение 122 R2: доля графа из трёх и более пулов — exec/live_hops.rs (математика N хопов, как котировка графа).
+    if hops.len() > 2 {
+        return super::live_hops::path(v, hops, qty).await;
+    }
     let mut entries = Vec::with_capacity(hops.len());
     for h in hops {
         let e = q

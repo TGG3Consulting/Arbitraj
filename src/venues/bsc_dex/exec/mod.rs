@@ -7,6 +7,7 @@
 //! Настройки: dex.router, dex.deadline_s.
 
 pub mod bundle;
+pub mod bundle_native;
 pub mod bundle_notify;
 pub mod bundle_send;
 pub mod bundle_sim;
@@ -24,6 +25,7 @@ pub mod dry_swap;
 pub mod fill;
 pub mod fork_swap;
 pub mod live;
+pub mod live_hops;
 pub mod native;
 pub mod order;
 pub mod plan;

@@ -5,7 +5,8 @@
 //! Путь через промежуточную монету (решение 52, правила SDK — research/flow/bsc_smart_router.md, раздел 3.1):
 //! первый шаг — выход роутеру TAKE(валюта, ADDRESS_THIS, OPEN_DELTA); второй — SETTLE(валюта, CONTRACT_BALANCE,
 //! payerIsUser = false) из баланса роутера (сумма шага: CONTRACT_BALANCE у второго шага пути; точная сумма доли —
-//! у нативной продажи после WRAP_ETH, решение 62), обмен с amountIn = OPEN_DELTA (весь кредит), TAKE_ALL на кошелёк
+//! у нативной продажи после WRAP_ETH, решение 62), обмен с amountIn = OPEN_DELTA (весь кредит), TAKE_ALL на кошелёк;
+//! средний шаг пути из N пулов (решение 122 R2) — SETTLE из баланса роутера, обмен, TAKE роутеру
 //! (SETTLE 0x0b, TAKE 0x0e — Actions.sol; DeltaResolver._mapSettleAmount/_mapTakeAmount, CLRouterBase.sol#L26-L31;
 //! Uniswap — v4-periphery 0c4e5bd3 V4Router.sol#L67-L74, #L86).
 //! Кто вызывает: exec/plan.rs, exec/universal.rs.
@@ -49,8 +50,8 @@ alloy::sol! {
 }
 
 /// Команда V4_SWAP/INFI_SWAP и вход. Принимает: пул V4, формат, обмен (токены, вход, минимум выхода), платит ли кошелёк
-/// (false — роутер всем своим балансом), получает ли кошелёк (false — роутер). Ошибки: Internal (нет ключа или оба
-/// шага с роутером), NoRoute (суммы больше uint128).
+/// (false — роутер всем своим балансом), получает ли кошелёк (false — роутер; оба false — средний шаг пути из N пулов,
+/// решение 122 R2). Ошибки: Internal (нет ключа), NoRoute (суммы больше uint128).
 pub fn command(
     ctx: &Ctx,
     e: &Entry,
@@ -154,12 +155,18 @@ pub fn command(
                 take_all,
             ],
         ),
-        (false, false) => {
-            return Err(ctx.err(
-                ErrorCode::Internal,
-                "шаг V4 и из роутера, и роутеру — путь длиннее двух шагов",
-            ));
-        }
+        // Средний шаг пути из N пулов одного UR (решение 122 R2): вход — весь баланс роутера (SETTLE CONTRACT_BALANCE,
+        // payerIsUser = false), выход — роутеру (TAKE ADDRESS_THIS, OPEN_DELTA = весь кредит) для следующей команды.
+        // InfinityRouter.sol#L91-L98 / V4Router.sol#L67-L74; _mapSettleAmount / _mapTakeAmount — DeltaResolver.sol
+        // #L76-L92 (infinity-periphery 56a7a4f5) / #L79-L96 (v4-periphery 0c4e5bd3). Минимум шага — amountOutMinimum.
+        (false, false) => (
+            vec![SETTLE, action, TAKE],
+            vec![
+                Bytes::from((tin, amount_in, false).abi_encode_params()),
+                Bytes::from(swap),
+                Bytes::from((tout, ADDRESS_THIS, U256::ZERO).abi_encode_params()),
+            ],
+        ),
     };
     let actions = Bytes::from(actions);
     Ok((V4_SWAP, Bytes::from((actions, params).abi_encode_params())))

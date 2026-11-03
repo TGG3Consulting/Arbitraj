@@ -102,7 +102,15 @@ pub async fn trade(
     let d = send_swap(env, &slot, plan, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    result::result(ctx, req, d, wallet, (tin, out_token), decs, router)
+    result::result(
+        ctx,
+        req,
+        d,
+        wallet,
+        (tin, out_token),
+        decs,
+        router.as_slice(),
+    )
 }
 
 /// План execute на текущем блоке (exec/universal.rs): разрешения, которых не хватает сейчас. Принимает: котировку,

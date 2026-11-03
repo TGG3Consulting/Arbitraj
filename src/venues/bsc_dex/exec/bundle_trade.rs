@@ -6,13 +6,14 @@
 //! (exec/bundle.rs), занимает очередь кошелька местом Slot (резерв N nonce: первый = slot.nonce, дальше по порядку),
 //! отправляет бандл (exec/bundle_send.rs — симуляция/газ/подпись/отправка/ожидание/settle), по итогу строит факт из
 //! квитанций всех транзакций бандла (reuse exec/result.rs по объединённым логам). Повторов нет (стартовое правило
-//! Тиграна): бандл истекает по maxBlockNumber, nonce свободны. Нативная монета в бандле v1 не поддерживается.
+//! Тиграна): бандл истекает по maxBlockNumber, nonce свободны. Нативная монета BNB (решение 122 R3) — обёртка/развёртка
+//! WBNB командой каждого Universal Router бандла (exec/bundle_native.rs); факт — по WBNB Deposit / Withdrawal роутеров.
 //! После сборки шлёт уведомление bundle.assembled (exec/bundle_notify.rs, 80.8c-iii): роутеров/ног/транзакций/первый nonce.
 //! Решение 121 B1: разрешения здесь — транзакции того же атомарного бандла, что и свопы (exec/bundle.rs), в одном блоке;
 //! между ними нет ожидания блока, поэтому пересборка после approve (как в прямом и умном пути) не нужна.
 //! Итог и ошибку подписывает исполнителем «свой сборщик: бандл» вызывающий (exec/trade.rs, решение 121 B7). Классику/прямой/умный путь не трогает.
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
-//! От чего зависит: exec/{bundle,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
+//! От чего зависит: exec/{bundle,bundle_native,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
 //! Настройки: dex.bundle_max_routers (исполнимость — quote/graph_route.rs); через вызываемые — send.*, dex.*, channel.*.
 
@@ -32,7 +33,9 @@ use super::chain::Step;
 use super::trade::{check_price, sides, worst_positive};
 use super::txs::{self, Env};
 use super::verify_gate::Verified;
-use super::{bundle, bundle_notify, bundle_send, chain, live, native, result, verify_gate};
+use super::{
+    bundle, bundle_native, bundle_notify, bundle_send, chain, live, native, result, verify_gate,
+};
 
 /// Сделка мульти-роутерным бандлом. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса,
 /// итог верификации (свежие amountOutMin по ногам). Ошибки: NoRoute (нативная/пустой/доля не годится), QuoteMismatch
@@ -47,12 +50,7 @@ pub async fn trade(
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
     worst_positive(ctx, &req)?;
-    if native::is_native(ctx, &req.asset) {
-        return Err(ctx.err(
-            ErrorCode::NoRoute,
-            "нативная монета в мульти-роутерном бандле (решение 84) в v1 не исполняется",
-        ));
-    }
+    let is_native = native::is_native(ctx, &req.asset);
     let weights: Vec<Decimal> = route
         .legs
         .iter()
@@ -109,6 +107,10 @@ pub async fn trade(
         legs.push(steps);
     }
     check_price(ctx, &req, coins, paid)?;
+    // R3 (решение 122): BNB — первый шаг продажи платит роутер (WRAP_ETH), последний шаг покупки отдаёт роутеру.
+    if is_native {
+        bundle_native::adapt(ctx, req.side, &mut legs)?;
+    }
     // Очередь кошелька: резерв N nonce (решение 45) — первый у slot.nonce, дальше по порядку в сборке бандла.
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
@@ -127,7 +129,13 @@ pub async fn trade(
     let sent = bundle_send::send(env, &slot, &b, &entries).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, first_nonce)
+    let routers = if is_native {
+        bundle_native::routers(&b)
+    } else {
+        Vec::new()
+    };
+    let nr = (first_nonce, routers.as_slice());
+    bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, nr)
 }
 
 /// Факт сделки бандла: один синтетический итог транзакции по ОБЪЕДИНЁННЫМ логам всех квитанций бандла и суммарному
@@ -141,7 +149,7 @@ fn bundle_result(
     wallet: alloy_primitives::Address,
     (tin, tout): (alloy_primitives::Address, alloy_primitives::Address),
     decs: (u8, u8),
-    first_nonce: u64,
+    (first_nonce, native_routers): (u64, &[alloy_primitives::Address]),
 ) -> GatewayResult<TradeResult> {
     let outcome = sent.tracked.outcome;
     let gas_used: u64 = sent.receipts.iter().map(|r| r.gas_used.to::<u64>()).sum();
@@ -178,5 +186,5 @@ fn bundle_result(
         receipt,
         cancel: None,
     };
-    result::result(ctx, req, done, wallet, (tin, tout), decs, None)
+    result::result(ctx, req, done, wallet, (tin, tout), decs, native_routers)
 }

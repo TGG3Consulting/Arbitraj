@@ -134,5 +134,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "StableSwap не исполняется Universal Router (шаг CURVE контракта-исполнителя)",
         )),
+        // PMM от оракула (WooFi, решение 122 F, 3): не исполняется Universal Router.
+        PoolKind::OraclePmm => Err(ctx.err(
+            ErrorCode::Internal,
+            "WooFi не исполняется Universal Router (общий контракт со своим swap)",
+        )),
     }
 }

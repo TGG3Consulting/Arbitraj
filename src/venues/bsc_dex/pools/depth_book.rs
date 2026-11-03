@@ -180,5 +180,6 @@ pub fn label(r: &PoolRef) -> String {
     match r {
         PoolRef::Contract(a) => a.to_string(),
         PoolRef::Singleton { id, .. } => id.to_string(),
+        PoolRef::Member { contract, coin } => format!("{contract}/{coin}"),
     }
 }

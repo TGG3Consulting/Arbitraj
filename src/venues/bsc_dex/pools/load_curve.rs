@@ -82,6 +82,12 @@ pub async fn load(
         fee,
         i0,
         i1,
+        // Шаблон Curve 2020 (stableswap_v1::curve2020): сырой A, 255 раундов, без отката; проверки цены и паузы нет.
+        amp_precision: U256::from(1u8),
+        max_rounds: 255,
+        strict: false,
+        guard: None,
+        halted: false,
     })))
 }
 

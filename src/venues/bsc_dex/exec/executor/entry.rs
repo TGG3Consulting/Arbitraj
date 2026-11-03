@@ -33,6 +33,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         .ok_or_else(|| format!("{}: у вида пула нет шага исполнителя", f.id))?;
     match pool {
         PoolRef::Contract(a) => Ok((k, *a)),
+        // Пара общего контракта (WooPPV2, решение 122 F, 3): исполнитель вызывает сам общий контракт (шаг WOO).
+        PoolRef::Member { contract, .. } => Ok((k, *contract)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id

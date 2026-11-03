@@ -137,6 +137,8 @@ pub fn pool_key(r: &PoolRef) -> String {
     match r {
         PoolRef::Contract(a) => format!("{a:#x}"),
         PoolRef::Singleton { id, .. } => format!("{id}"),
+        // Пара общего контракта (решение 122 F, 3): индексатор и поиск по фабрике пишут адрес общего контракта.
+        PoolRef::Member { contract, .. } => format!("{contract:#x}"),
     }
 }
 

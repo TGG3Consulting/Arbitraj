@@ -79,9 +79,40 @@ pub enum Proto {
     /// Чтение — load_curve.rs, события — events_curve.rs, проверка — verify_curve.rs, математика —
     /// math/stableswap_v1.rs. Вид ядра — StableSwap.
     CurveStable,
+    /// PancakeSwap StableSwap (решение 122 F, 3): Solidity-порт шаблона Curve 2020 без A_PRECISION
+    /// (pancake-smart-contracts cb079908, projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol; копия —
+    /// scratchpad/sources/pancake-stable). Геттеры coins/balances/A/fee — как у Ellipsis (те же селекторы), индексы
+    /// обмена и квотера — uint256 (`exchange(uint256,uint256,uint256,uint256)`, `get_dy(uint256,uint256,uint256)`),
+    /// событие TokenExchange с индексами uint256. Пул подтверждает реестр фабрики (getPairInfo / getThreePoolPairInfo)
+    /// или список dex.stable_pools (пулы первого поколения). Математика — math/stableswap_v1.rs (curve2020).
+    PancakeStable,
+    /// Lista StableSwap (решение 122 F, 3): форк PancakeStableSwapTwoPool с A_PRECISION = 100 и проверкой цены пула
+    /// против оракула после обмена (lista-dao/moolah eb7d73a, src/dex/StableSwapPool.sol). Пул из двух монет, индексы
+    /// uint256, пауза (whenNotPaused). Пул подтверждает реестр фабрики getPairInfos(a, b). Цена оракула меняется без
+    /// событий пула — состояние перечитывается на каждом новом блоке. Математика — stableswap_v1 (A_PRECISION) +
+    /// math/stable_guard.rs.
+    ListaStable,
+    /// Saddle StableSwap — Nerve (решение 122 F, 3; nerve-finance/contracts bda7578, Swap.sol + SwapUtils.sol):
+    /// getToken(uint8)/getTokenBalance(uint8)/getAPrecise()/swapStorage(), квотер calculateSwap(uint8,uint8,uint256),
+    /// обмен swap(uint8,uint8,uint256,uint256,uint256 deadline). Пул подтверждает список dex.stable_pools.
+    /// Математика — stableswap_v1 (A_PRECISION, 256 раундов, откат при несходимости).
+    SaddleStable,
+    /// WooFi WooPPV2 (решение 122 F, 3): один общий контракт на все базовые монеты против одной котируемой, цена — от
+    /// оракула (без событий оракула — состояние читается на каждом новом блоке). Ребро графа — PoolRef::Member
+    /// (контракт, базовая монета). Своей математики нет до проверенного исходника развёрнутой реализации (прокси):
+    /// выход — только квотер контракта query(from, to, amount). Вид ядра — OraclePmm.
+    WooPP,
 }
 
 impl Proto {
+    /// Семейство StableSwap (все шаблоны: Curve 2020 Ellipsis, PancakeSwap, Lista, Saddle). Ошибок нет.
+    pub fn is_stable(self) -> bool {
+        matches!(
+            self,
+            Proto::CurveStable | Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+        )
+    }
+
     /// Семейство DODO (DVM/DPP/DSP) — PMM-пул. Ошибок нет.
     pub fn is_dodo(self) -> bool {
         matches!(self, Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp)
@@ -171,6 +202,26 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "solidly_v1" => (PoolKind::Solidly, Proto::SolidlyV1, true, false, false),
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
+        // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
+        // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
+        "pancake_stableswap" => (
+            PoolKind::StableSwap,
+            Proto::PancakeStable,
+            true,
+            false,
+            false,
+        ),
+        "lista_stableswap" => (PoolKind::StableSwap, Proto::ListaStable, true, false, false),
+        "saddle_stableswap" => (
+            PoolKind::StableSwap,
+            Proto::SaddleStable,
+            true,
+            false,
+            false,
+        ),
+        // WooFi WooPPV2 (решение 122 F, 3): в справочнике и под наблюдением (состояние оракула на каждом блоке), выход —
+        // квотер контракта; своей математики нет — в котировку графа не идёт, пока нет исходника реализации.
+        "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -324,6 +375,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
         // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.
         Proto::CurveStable => list.push("dex.stable_pools"),
+        // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
+        Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
+        // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.
+        Proto::SaddleStable => list.push("dex.stable_pools"),
+        // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
+        Proto::WooPP => list.extend(["dex.pmm_pool", "dex.oracle", "dex.pool_implementation"]),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),

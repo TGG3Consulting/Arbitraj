@@ -10,7 +10,9 @@
   возраст головы, Multicall3.
 - Свой маршрутизатор вместо KyberSwap: сплит с учётом газа, многошаговые ноги одним Universal Router, BNB в бандле,
   свой контракт-исполнитель ArbExecutor (одна транзакция через любые DEX), новые DEX: Slipstream, THENA Fusion,
-  форки V3, THENA V1 (`solidly_v1`), DODO V2, Ellipsis (StableSwap).
+  форки V3, THENA V1 (`solidly_v1`), DODO V2, Ellipsis (StableSwap); решение 122 F, 3 — StableSwap PancakeSwap, Lista,
+  Nerve (сигнал, без исполнения) и WooFi (наблюдение, только квотер пула). Lista V2 / Lista V3 (форки Uniswap V2/V3) —
+  кода не нужно: виды `v2_fork` / `v3_fork` с их фабриками (Lista V3 Factory 0xcb010ed373523942706F730b89792aA1C1597b20).
 - Проверка цены перед сделкой — по границе сделки (`worst_price`), а не по |дрейфу|.
 - «Сухая сделка DEX» (Ручное управление): собрать и просимулировать своп без отправки, в т.ч. «через исполнитель».
 - KyberSwap не удалён: `exec.via_kyber = да` — откат на него за один клик.
@@ -47,6 +49,15 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 | `dex.cl_tick_spacings` [Slipstream] | не задана | tickSpacing фабрики Topaz — по докам DEX | Slipstream по фабрике |
 | `dex.kind` [thena] | solidly_v2 | **solidly_v1** | у фабрики THENA V1 (0xAFD8…3970) другой интерфейс, сейчас её пулы не проходят проверку |
 | `dex.stable_pools` [Ellipsis] | не задана | адреса базовых пулов из доков Ellipsis | подтверждение StableSwap-пулов |
+| `dex.kind` [PancakeSwap Stable] | не задан | `pancake_stableswap` | решение 122 F, 3; id области — id DEX у индексатора (или любой id для поиска по фабрике) |
+| `dex.factory` [PancakeSwap Stable] | не задана | фабрика V2 `0x25a55f9f2279A54951133D503490342b50E5cd15` (официальный сабграф pancake-subgraph, exchange-stableswap/bsc) | реестр getPairInfo / getThreePoolPairInfo |
+| `dex.stable_pools` [PancakeSwap Stable] | не задана | пулы первого поколения (USDT-BUSD 0x169F…87EF, USDC-BUSD 0xc2F5…43Fe, USDT-USDC 0x3EFe…63DD, lisUSD-BUSD 0x4907…94eC — полные адреса из @pancakeswap/stable-swap-sdk 1.1.4) — по желанию | у фабрики V2 их нет |
+| `dex.kind` / `dex.factory` [Lista Stable] | не задан | `lista_stableswap` / фабрика `0xDE9c8E1536989d8c3817afDabC37C0fb44cB49b4` (lista-dao/moolah script/smartCollateral/SCAddress.sol) | реестр getPairInfos; нужен `dex.multicall3` |
+| `dex.kind` / `dex.stable_pools` [Nerve] | не задан | `saddle_stableswap` / только базовые пулы 3pool `0x1B3771a66ee31180906972580adE9b81AFc5fCDc`, BTC `0x6C341938bB75dDe823FAAfe7f446925c66E6270c`, ETH `0x146CD24dCc9f4EB224DFd010c5Bf2b0D25aFA9C0` (сверить с docs.nerve.fi/fundamentals/contract-addresses) | Nerve почти мёртв (TVL ≈ $0.9 млн) — по желанию; метапулы не подключать |
+| `dex.kind` [WooFi] | не задан | `woofi_v2` | общий контракт; поиск — только по оракулу (`index.factory_scan` = да) |
+| `dex.pmm_pool` / `dex.oracle` [WooFi] | не задана | `0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4` / `0x00021b2C857A8613DAEC2fd900122833866828a0` (woonetwork/docs 68dbdad, bnb-smart-chain.md) | WooPPV2 (прокси) и оракул |
+| `dex.pool_implementation` [WooFi] | не задана | `0x7b5fDb8C89A616d319202704B0eA18b168654281` (слот EIP-1967 на 03.11, сверено координатором) | сменилась реализация — пары не берутся |
+| `dex.pool_enabled` [каждая новая] | не задана | да | без него DEX не подключена |
 | `dex.route_gas_aware` [bsc_dex] | не задана | да | газ при выборе маршрута (как gasInclude KyberSwap) |
 | `exec.executor_address` [bsc_dex] | не задана | после шага 4 | исполнитель |
 
@@ -73,6 +84,8 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 - Независимая проверка ветки и контракта — пройдена (результат — в docs/notes).
 
 ## 5. Что не сделано (техдолг — docs/ROADMAP.md)
-- Maverick V2 (ждём официальный исходник пула), WooFi (оракул без событий — нужно решение), Nerve, Lista,
-  Pancake Stable (нет сверенного исходника), KyberSwap Elastic (без исполнителя), RFQ (не делаем).
-- Тесты THENA V1 и Ellipsis ждут записей с узла (tests/README.md).
+- Maverick V2 (ждём официальный исходник пула), KyberSwap Elastic (без исполнителя), RFQ (не делаем).
+- PancakeSwap Stable, Lista Stable, Nerve (решение 122 F, 3) — в графе и сигналах, исполнения нет: у ArbExecutor нет
+  шага exchange(uint256,…) и swap(uint8,…,deadline). WooFi — только квотер пула, свой расчёт невозможен — развёрнутый
+  код закрыт; в котировку графа не идёт.
+- Тесты THENA V1, Ellipsis, PancakeSwap Stable, Lista Stable, Nerve ждут записей с узла (tests/README.md).

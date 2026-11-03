@@ -51,8 +51,11 @@ pub fn empty(e: &Entry) -> bool {
             reserve0, reserve1, ..
         } => reserve0.is_zero() || reserve1.is_zero(),
         // StableSwap (решение 122 F): пуст, если нулевой баланс любой монеты пары (обмен по паре невозможен).
-        PoolState::StableSwap(d) => [d.i0, d.i1]
+        // Решение 122 F, 3: пул на паузе или выключен (kill) — пуст (обмен откатился бы).
+        PoolState::StableSwap(d) => d.halted || [d.i0, d.i1]
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
+        // PMM от оракула (WooFi, решение 122 F, 3): пуст, когда контракт на паузе или оракул не признаёт цену.
+        PoolState::OraclePmm(d) => d.paused || !d.feasible || d.price.is_zero(),
     }
 }

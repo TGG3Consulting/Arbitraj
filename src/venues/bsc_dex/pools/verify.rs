@@ -27,7 +27,9 @@ use super::discover::Found;
 use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
-use super::{verify_algebra, verify_curve, verify_dodo, verify_solidly, verify_v4};
+use super::{
+    verify_algebra, verify_curve, verify_dodo, verify_solidly, verify_stable_u, verify_v4,
+};
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
 #[derive(Debug, Clone)]
@@ -71,6 +73,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut algebra = Vec::new();
     let mut solidly = Vec::new();
     let mut curve = Vec::new();
+    let mut stable_u = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -79,6 +82,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Algebra => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             Proto::CurveStable => curve.push(i),
+            Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+                stable_u.push(i)
+            }
             _ => v2v3.push(i),
         }
     }
@@ -115,6 +121,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in curve
         .into_iter()
         .zip(verify_curve::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // PancakeSwap / Lista StableSwap, Saddle, WooFi (решение 122 F, 3): реестр фабрики / список / общий контракт.
+    let list: Vec<Candidate> = stable_u.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in stable_u
+        .into_iter()
+        .zip(verify_stable_u::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

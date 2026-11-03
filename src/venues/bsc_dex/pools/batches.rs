@@ -25,6 +25,8 @@ pub fn by_family(
     for f in found {
         let manager = match &f.reference {
             PoolRef::Singleton { manager, .. } => Some(*manager),
+            // Пары общего контракта (PMM от оракула) — одна пачка на контракт (общее чтение на каждом блоке).
+            PoolRef::Member { contract, .. } => Some(*contract),
             PoolRef::Contract(_) => None,
         };
         // Пулы найдены по монетам подписки, у каждой есть тикер; без тикера пул не слушается.

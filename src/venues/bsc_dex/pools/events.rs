@@ -12,7 +12,7 @@ use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
     events_algebra, events_bin, events_cl, events_curve, events_dodo, events_elastic,
-    events_solidly, events_v2, events_v3,
+    events_solidly, events_stable_u, events_v2, events_v3,
 };
 
 /// Что произошло с записью после события.
@@ -41,6 +41,10 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
         Proto::CurveStable => events_curve::topics(),
+        // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3 (events_stable_u.rs).
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+            events_stable_u::topics(f.proto)
+        }
     }
 }
 
@@ -65,6 +69,9 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::liquidity_topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
         Proto::CurveStable => events_curve::liquidity_topics(),
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+            events_stable_u::liquidity_topics(f.proto)
+        }
     }
 }
 
@@ -80,6 +87,9 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::Algebra => events_algebra::apply(e, log),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
         Proto::CurveStable => events_curve::apply(e, log),
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+            events_stable_u::apply(e, log)
+        }
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

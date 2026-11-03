@@ -103,6 +103,12 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // StableSwap (Ellipsis; решение 122 F): фабрики с событием создания нет — новые пулы приходят только из
             // справочника и списка dex.stable_pools.
             Proto::CurveStable => continue,
+            // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
+            // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
+            // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.
+            Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
+                continue;
+            }
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));

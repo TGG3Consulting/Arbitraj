@@ -172,5 +172,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "StableSwap не исполняется умным маршрутом (только шаг CURVE контракта-исполнителя)",
             ));
         }
+        // PMM от оракула (WooFi, решение 122 F, 3): Universal Router его не исполняет.
+        PoolKind::OraclePmm => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "WooFi не исполняется умным маршрутом (общий контракт со своим swap)",
+            ));
+        }
     })
 }

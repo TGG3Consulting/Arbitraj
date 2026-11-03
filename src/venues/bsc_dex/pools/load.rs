@@ -22,8 +22,8 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_slipstream,
-    load_solidly, load_v2v3,
+    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_saddle,
+    load_slipstream, load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -86,6 +86,37 @@ pub async fn state(
             ErrorCode::Internal,
             format!("{}: ссылка на пул StableSwap не того вида", f.title),
         ));
+    }
+    // PancakeSwap / Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: вид ядра StableSwap, свои чтения
+    // (load_stable_u.rs, load_saddle.rs). WooFi — пара общего контракта (PoolRef::Member), состояние оракула (load_woo.rs).
+    let stable = matches!(
+        f.proto,
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+    );
+    if stable || f.proto == Proto::WooPP {
+        let state = match (f.proto, reference) {
+            (Proto::SaddleStable, PoolRef::Contract(a)) => {
+                load_saddle::load(ctx, tokens, *a, pair, &tag).await?
+            }
+            (Proto::PancakeStable | Proto::ListaStable, PoolRef::Contract(a)) => {
+                load_stable_u::load(ctx, tokens, *a, pair, f.proto == Proto::ListaStable, &tag)
+                    .await?
+            }
+            (Proto::WooPP, PoolRef::Member { contract, coin }) => {
+                load_woo::load(ctx, f, *contract, *coin, pair, &tag).await?
+            }
+            _ => {
+                return Err(ctx.err(
+                    ErrorCode::Internal,
+                    format!("{}: ссылка на пул не того вида", f.title),
+                ));
+            }
+        };
+        return Ok(Loaded {
+            state,
+            ticks: None,
+            bins: None,
+        });
     }
     // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
     if f.proto == Proto::KyberElastic {

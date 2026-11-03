@@ -158,14 +158,18 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
         Topics::Liquidity => events::liquidity_topics(first.family),
     };
     match first.reference {
-        PoolRef::Contract(_) => {
-            let addrs: Vec<_> = pools
+        // Пара общего контракта (PMM от оракула, решение 122 F, 3) — по адресу общего контракта (события у него).
+        PoolRef::Contract(_) | PoolRef::Member { .. } => {
+            let mut addrs: Vec<_> = pools
                 .iter()
                 .filter_map(|f| match f.reference {
                     PoolRef::Contract(a) => Some(a),
+                    PoolRef::Member { contract, .. } => Some(contract),
                     PoolRef::Singleton { .. } => None,
                 })
                 .collect();
+            addrs.sort();
+            addrs.dedup();
             subs::by_address(&addrs, &topic0)
         }
         PoolRef::Singleton { manager, .. } => {
@@ -173,7 +177,7 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
                 .iter()
                 .filter_map(|f| match f.reference {
                     PoolRef::Singleton { id, .. } => Some(id),
-                    PoolRef::Contract(_) => None,
+                    PoolRef::Contract(_) | PoolRef::Member { .. } => None,
                 })
                 .collect();
             subs::by_pool_id(manager, &ids, &topic0)

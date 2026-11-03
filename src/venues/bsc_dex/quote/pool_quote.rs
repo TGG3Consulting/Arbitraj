@@ -21,7 +21,9 @@ use super::super::math::swap_algebra::{self, AlgebraState};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
-use super::super::math::{bin_swap, solidly_v1_math, stableswap_v1, swap_solidly, v2};
+use super::super::math::{
+    bin_swap, solidly_v1_math, stable_guard, stableswap_v1, swap_solidly, v2,
+};
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
@@ -319,22 +321,47 @@ pub fn swap(
             } else {
                 (d.i1, d.i0)
             };
-            let out = stableswap_v1::exchange_out(
-                i as usize,
-                j as usize,
+            if d.halted {
+                return Err(why(
+                    "StableSwap: пул на паузе или выключен (обмен откатился бы)",
+                ));
+            }
+            // Шаблон пула (решение 122 F, 3): точность A, раунды, откат при несходимости — из состояния.
+            let t = stableswap_v1::Template {
+                amp_precision: d.amp_precision,
+                max_rounds: d.max_rounds,
+                strict: d.strict,
+            };
+            let (i, j) = (i as usize, j as usize);
+            let out = stableswap_v1::exchange_out_t(
+                i,
+                j,
                 amount,
                 &d.balances,
                 &d.rates,
                 d.amp,
                 d.fee,
+                &t,
             )
             .ok_or_else(none)?;
+            // Проверка цены пула после обмена против оракула (Lista, math/stable_guard.rs): не пройдёт — обмен откатится.
+            if let Some(g) = &d.guard
+                && !stable_guard::passes(i, j, amount, &d.balances, &d.rates, d.amp, d.fee, &t, g)
+            {
+                return Err(why(
+                    "StableSwap: цена пула после обмена уйдёт от оракула дальше порога пула (обмен откатился бы)",
+                ));
+            }
             Ok(Swapped {
                 amount_in: amount,
                 amount_out: out,
                 complete: true,
             })
         }
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет — выход только у квотера контракта.
+        (PoolState::OraclePmm(_), PoolKind::OraclePmm) => Err(why(
+            "WooFi: только котировщик пула, свой расчёт невозможен — развёрнутый код закрыт",
+        )),
         _ => Err(none()),
     }
 }

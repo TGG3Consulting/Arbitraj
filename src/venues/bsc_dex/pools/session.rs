@@ -24,7 +24,7 @@ use super::events;
 use super::group::{self, Group, Msg};
 use super::listen::{End, Pools};
 use super::revive;
-use super::{link, listen_log, reload};
+use super::{link, listen_log, per_block, reload};
 
 /// Канал пулов, найденных после старта пачки.
 pub type Adds = mpsc::UnboundedReceiver<Vec<(Found, String)>>;
@@ -131,13 +131,20 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     g.conn.resynced(epoch);
                 }
             }
-            changed = heads.changed(), if !m.missing.is_empty() => {
+            changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) => {
                 if changed.is_err() {
                     return (End::Broken("поток новых блоков остановлен".into()), true);
                 }
                 let at = heads.borrow_and_update().as_ref().map(|h| h.number);
                 if let Some(at) = at
+                    && !m.missing.is_empty()
                     && let Err(end) = reload::retry(p, &m.pools, &mut m.missing, &mut m.abandoned, at).await
+                {
+                    return (end, true);
+                }
+                // Решение 122 F, 3: пулы, чьё состояние меняет оракул без событий (WooFi, Lista), — на каждом блоке.
+                if let Some(at) = at
+                    && let Err(end) = per_block::on_head(p, &m.pools, at).await
                 {
                     return (end, true);
                 }
@@ -183,6 +190,8 @@ async fn on_log(
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())));
     let Some(&i) = found else {
+        // Пары общего контракта (WooFi, PoolRef::Member): лог от адреса контракта — перечитать все его пары.
+        per_block::on_member_log(p, &m.pools, log).await?;
         return Ok(());
     };
     if m.deep.get(i).copied().unwrap_or(true) {

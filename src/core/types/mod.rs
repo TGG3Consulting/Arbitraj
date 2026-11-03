@@ -36,7 +36,10 @@ pub use directory::{
 pub use dry_swap::{DexDrySwap, DrySwapPool};
 pub use executor::{ExecutorDeployQuote, ExecutorDeployed};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
-pub use pool::{HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState, StableData};
+pub use pool::{
+    HookGroup, HookInfo, OraclePmmData, PmmData, Pool, PoolKind, PoolRef, PoolState, StableData,
+    StableGuard,
+};
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,

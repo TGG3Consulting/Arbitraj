@@ -264,6 +264,14 @@ fn side(
             } else {
                 (d.i1, d.i0)
             };
+            if d.halted {
+                return Err("пул StableSwap на паузе или выключен".into());
+            }
+            let t = super::super::math::stableswap_v1::Template {
+                amp_precision: d.amp_precision,
+                max_rounds: d.max_rounds,
+                strict: d.strict,
+            };
             super::stable_depth::side(
                 &d.balances,
                 &d.rates,
@@ -271,8 +279,13 @@ fn side(
                 (ic as usize, iu as usize),
                 b,
                 buy,
+                &t,
             )
             .ok_or_else(|| "расчёт глубины пула StableSwap невозможен".to_string())
+        }
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет — глубину не считаем (квотер контракта).
+        (PoolState::OraclePmm(_), PoolKind::OraclePmm) => {
+            Err("WooFi: только квотер пула, свой расчёт невозможен — развёрнутый код закрыт".into())
         }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {

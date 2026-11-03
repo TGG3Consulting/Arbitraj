@@ -12,7 +12,7 @@
 use alloy_primitives::U256;
 
 use super::super::math::full_math::mul_div;
-use super::super::math::stableswap_v1::{exchange_out, get_d, precision, xp};
+use super::super::math::stableswap_v1::{Template, exchange_out_t, get_d_t, precision, xp};
 
 /// Максимум удвоений при поиске верхней границы объёма (предел итераций, не порог торговли).
 const MAX_DOUBLE: u32 = 192;
@@ -20,9 +20,9 @@ const MAX_DOUBLE: u32 = 192;
 const BISECT: u32 = 64;
 
 /// Маржинальная цена монеты i в монете j (нормализованные 18 знаков, ·1e18). None — пустой пул, переполнение.
-fn price(xp: &[U256], amp: U256, i: usize, j: usize) -> Option<U256> {
+fn price(xp: &[U256], amp: U256, i: usize, j: usize, t: &Template) -> Option<U256> {
     let n = U256::from(xp.len());
-    let d = get_d(xp, amp)?;
+    let d = get_d_t(xp, amp, t)?;
     let mut dr = d;
     for x in xp {
         let den = x.checked_mul(n)?;
@@ -33,10 +33,12 @@ fn price(xp: &[U256], amp: U256, i: usize, j: usize) -> Option<U256> {
     }
     let ann = amp.checked_mul(n)?;
     let (xi, xj) = (*xp.get(i)?, *xp.get(j)?);
-    // (Ann + Dr/x_i)/(Ann + Dr/x_j) = (Ann·x_i·x_j + Dr·x_j) / (Ann·x_i·x_j + Dr·x_i).
+    // (Ann/AP + Dr/x_i)/(Ann/AP + Dr/x_j) = (Ann·x_i·x_j + AP·Dr·x_j) / (Ann·x_i·x_j + AP·Dr·x_i) (решение 122 F, 3:
+    // точность A шаблона; при AP = 1 — прежняя формула).
+    let ap = t.amp_precision;
     let base = ann.checked_mul(xi)?.checked_mul(xj)?;
-    let num = base.checked_add(dr.checked_mul(xj)?)?;
-    let den = base.checked_add(dr.checked_mul(xi)?)?;
+    let num = base.checked_add(ap.checked_mul(dr)?.checked_mul(xj)?)?;
+    let den = base.checked_add(ap.checked_mul(dr)?.checked_mul(xi)?)?;
     if den.is_zero() {
         return None;
     }
@@ -44,8 +46,8 @@ fn price(xp: &[U256], amp: U256, i: usize, j: usize) -> Option<U256> {
 }
 
 /// Глубина одной стороны пула в полосе b (доля 0..1). Принимает: балансы, rates, A, индекс монеты и встречного токена,
-/// полосу, направление (buy — встречный токен в пул). Возвращает: (сумма во ВСТРЕЧНОМ токене, полоса целиком).
-/// None — пустой пул или расчёт невозможен.
+/// полосу, направление (buy — встречный токен в пул), шаблон пула. Возвращает: (сумма во ВСТРЕЧНОМ токене, полоса
+/// целиком). None — пустой пул или расчёт невозможен.
 pub fn side(
     balances: &[U256],
     rates: &[U256],
@@ -53,12 +55,13 @@ pub fn side(
     (ic, iu): (usize, usize),
     b: f64,
     buy: bool,
+    t: &Template,
 ) -> Option<(U256, bool)> {
     if !(b > 0.0 && b < 1.0) {
         return None;
     }
     let x = xp(balances, rates)?;
-    let p = price(&x, amp, ic, iu)?;
+    let p = price(&x, amp, ic, iu, t)?;
     if p.is_zero() {
         return None;
     }
@@ -74,11 +77,11 @@ pub fn side(
         if buy {
             Some((
                 v,
-                exchange_out(iu, ic, v, balances, rates, amp, U256::ZERO)?,
+                exchange_out_t(iu, ic, v, balances, rates, amp, U256::ZERO, t)?,
             ))
         } else {
             Some((
-                exchange_out(ic, iu, v, balances, rates, amp, U256::ZERO)?,
+                exchange_out_t(ic, iu, v, balances, rates, amp, U256::ZERO, t)?,
                 v,
             ))
         }

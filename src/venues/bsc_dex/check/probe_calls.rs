@@ -105,6 +105,8 @@ pub fn holder(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
         (PoolRef::Contract(a), PoolKind::V2 | PoolKind::V3, _) => *a,
         (_, _, Proto::InfinityCl | Proto::InfinityBin) => ctx.dex_addr("dex.vault", e.family.id)?,
         (PoolRef::Singleton { manager, .. }, _, _) => *manager,
+        // Пара общего контракта (PMM от оракула): токены лежат в общем контракте.
+        (PoolRef::Member { contract, .. }, _, _) => *contract,
         (PoolRef::Contract(a), _, _) => *a,
     })
 }

@@ -59,8 +59,11 @@ impl ExecKind {
 
 /// Вид шага исполнителя по варианту dex.kind. Принимает: вариант dex.kind. Возвращает: вид шага; None — пулы этого
 /// вида исполнитель не вызывает (Universal Router своей фабрики, KyberSwap Elastic — см. шапку, неизвестный вид).
-/// CURVE — curve_stableswap (решение 122 F, 2). Виды WOO / MAVERICK пока не выдаются: семейств WooFi и Maverick V2
-/// ещё нет (docs/TASKS.md). Ошибок нет.
+/// CURVE — curve_stableswap (решение 122 F, 2). WooFi (woofi_v2, решение 122 F, 3) шаг WOO пока НЕ получает: своей
+/// котировки нет (развёрнутый код закрыт), шаг включается только после сухой сделки на живом пуле (сверка подписи
+/// swap развёрнутой реализации, селектор 0x7dc20382 в байткоде). PancakeSwap / Lista StableSwap
+/// (exchange с индексами uint256) и Saddle (swap(uint8, uint8, …, deadline)) шага не получают — в контракте его нет
+/// (нужен новый вид шага, docs/TASKS.md). Ошибок нет.
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" => ExecKind::V2,
@@ -117,6 +120,10 @@ mod tests {
             "pancakeswap_infinity_bin",
             "uniswap_v4",
             "kyber_elastic",
+            "pancake_stableswap",
+            "lista_stableswap",
+            "saddle_stableswap",
+            "woofi_v2",
             "unsupported",
         ];
         for k in DEX_KINDS {

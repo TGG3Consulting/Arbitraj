@@ -31,8 +31,15 @@
 
 - **Решение 122 F — DEX без исполнения через исполнитель.** KyberSwap Elastic остаётся неисполнимым (только сигнал):
   его swap(recipient, swapQty, isToken0, limitSqrtP, data) не совпадает с шагом V3 исполнителя — вида шага нет.
-  Pancake Stable не подключён: сигнатура exchange не сверена с официальным исходником. WooFi, Maverick V2, Nerve, Lista
-  — не подключены (docs/TASKS.md). StableSwap: во время плавной смены A (RampA) A() меняется каждым блоком без
+  Решение 122 F, 3: PancakeSwap Stable, Lista Stable, Nerve подключены как сигнал — у ArbExecutor нет вида шага
+  `exchange(uint256,uint256,uint256,uint256)` (PancakeSwap, Lista; payable, без возвращаемого значения) и
+  `swap(uint8,uint8,uint256,uint256,uint256 deadline)` (Saddle/Nerve) — контракт не менялся, нужен новый вид шага.
+  WooFi — только квотер пула: развёрнутая реализация WooPPV2 и новый оракул не верифицированы, своей математики нет;
+  ребро графа без котировки (вариант — лесенка query по суммам на каждом блоке, вопрос Тиграну); шаг WOO — после
+  сухой сделки. Подписка на NewStableSwapPair фабрик PancakeSwap/Lista — нет (пулы — из справочника и поиска по реестру).
+  PancakeSwap Infinity Stable (крючок Infinity CL) — исходника нет. Множитель точности Saddle берётся по decimals()
+  монеты (у пула он из параметра конструктора, геттера нет) — расхождение поймает сверка с calculateSwap.
+  Maverick V2 — не подключён (docs/TASKS.md). StableSwap: во время плавной смены A (RampA) A() меняется каждым блоком без
   события — расхождение ловит только сверка с квотером и перечитывание перед сделкой; пул из N монет в реестре — одна
   пара (первая взятая).
 

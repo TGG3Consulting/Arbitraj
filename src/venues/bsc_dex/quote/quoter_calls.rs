@@ -24,7 +24,10 @@ use super::super::node::abi_dex::{
 };
 use super::super::pools::abi_curve::IStableSwapV1;
 use super::super::pools::abi_dodo::IDodoPool;
+use super::super::pools::abi_saddle::ISaddleSwap;
 use super::super::pools::abi_solidly::ISolidlyPool;
+use super::super::pools::abi_stable_u::IPancakeStable;
+use super::super::pools::abi_woo::IWooPP;
 use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::load_dodo::FEE_TRADER;
@@ -99,6 +102,61 @@ pub fn request(
         }
         .abi_encode();
         return Ok((pool, Bytes::from(data)));
+    }
+    // Решение 122 F, 3: PancakeSwap / Lista StableSwap — сам пул get_dy(uint256 i, uint256 j, dx) (Lista — с комиссией,
+    // без проверки цены: её делает exchange); Saddle — сам пул calculateSwap(uint8, uint8, dx); WooFi — общий
+    // контракт query(fromToken, toToken, amount) (IWooPPV2.sol L91). Ссылки — abi_stable_u.rs, abi_saddle.rs, abi_woo.rs.
+    if matches!(
+        e.family.proto,
+        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
+    ) {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
+        };
+        let PoolState::StableSwap(d) = &e.pool.state else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "состояние пула StableSwap не того вида",
+            ));
+        };
+        let (i, j) = if zero_for_one {
+            (d.i0, d.i1)
+        } else {
+            (d.i1, d.i0)
+        };
+        let data = if e.family.proto == Proto::SaddleStable {
+            ISaddleSwap::calculateSwapCall {
+                tokenIndexFrom: i,
+                tokenIndexTo: j,
+                dx: amount,
+            }
+            .abi_encode()
+        } else {
+            IPancakeStable::get_dyCall {
+                i: U256::from(i),
+                j: U256::from(j),
+                dx: amount,
+            }
+            .abi_encode()
+        };
+        return Ok((pool, Bytes::from(data)));
+    }
+    if e.family.proto == Proto::WooPP {
+        let PoolRef::Member { contract, .. } = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::Internal, "ссылка на пару WooFi не того вида"));
+        };
+        let (from, to) = if zero_for_one {
+            (e.pool.token0, e.pool.token1)
+        } else {
+            (e.pool.token1, e.pool.token0)
+        };
+        let data = IWooPP::queryCall {
+            fromToken: from,
+            toToken: to,
+            fromAmount: amount,
+        }
+        .abi_encode();
+        return Ok((contract, Bytes::from(data)));
     }
     // KyberSwap Elastic (решение 81): свой QuoterV2.quoteExactInputSingle(tokenIn, tokenOut, amountIn, feeUnits,
     // limitSqrtP) — вид ядра Cl без ключа, отдельная ветка по протоколу.
@@ -262,8 +320,8 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto.is_solidly() {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
     }
-    // StableSwap: get_dy возвращает один uint256 — выход после комиссии.
-    if e.family.proto == Proto::CurveStable {
+    // StableSwap (все шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).
+    if e.family.proto.is_stable() || e.family.proto == Proto::WooPP {
         return IStableSwapV1::get_dyCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).

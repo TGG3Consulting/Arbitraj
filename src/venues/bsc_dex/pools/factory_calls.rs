@@ -69,13 +69,30 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
             Proto::Algebra => vec![Q::Algebra],
             Proto::Slipstream => Vec::new(),
             p if p.is_dodo() => vec![Q::Dodo],
+            // Решение 122 F, 3: PancakeSwap StableSwap — двух- и трёхмонетный реестр; Lista — getPairInfos;
+            // WooFi — вопрос оракулу (адрес общего контракта — dex.pmm_pool, проверяется classify ниже).
+            Proto::PancakeStable => vec![
+                Q::PancakeStable { three: false },
+                Q::PancakeStable { three: true },
+            ],
+            Proto::ListaStable => vec![Q::ListaStable],
+            Proto::WooPP => match ctx.dex_addr("dex.pmm_pool", f.id) {
+                Ok(pool) => vec![Q::Woo(pool)],
+                Err(_) => Vec::new(),
+            },
             _ => continue,
         };
         if let Err(why) = families::classify(ctx, f.id) {
             out.notes.push(format!("{}: не ищется — {why}", f.id));
             continue;
         }
-        let factory = ctx.dex_addr("dex.factory", f.id)?;
+        // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
+        let registry = if f.proto == Proto::WooPP {
+            "dex.oracle"
+        } else {
+            "dex.factory"
+        };
+        let factory = ctx.dex_addr(registry, f.id)?;
         if f.proto == Proto::Slipstream {
             match spacings(ctx, f.id) {
                 Ok(list) => qs = list.into_iter().map(Q::Slipstream).collect(),

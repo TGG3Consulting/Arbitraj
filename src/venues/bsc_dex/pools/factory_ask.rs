@@ -26,6 +26,8 @@ use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::ISolidlyFactory;
+use super::abi_stable_u::{IListaStableFactory, IPancakeStableFactory};
+use super::abi_woo::IWooracle;
 use super::factory_calls::{decode, encode};
 use super::verify_solidly::registry_call;
 
@@ -45,6 +47,14 @@ pub enum Q {
     Slipstream(I24),
     /// DODO V2 (DVM/DPP/DSP): getDODOPoolBidirection(a, b).
     Dodo,
+    /// PancakeSwap StableSwap V2 (решение 122 F, 3): getPairInfo(a, b) — двухмонетный пул; three = true —
+    /// getThreePoolPairInfo(a, b) — трёхмонетный (PancakeStableSwapFactory.sol L194, L203).
+    PancakeStable { three: bool },
+    /// Lista StableSwap: getPairInfos(a, b) — все пулы пары (StableSwapFactory.sol L206).
+    ListaStable,
+    /// WooFi (решение 122 F, 3): оракул state(монета) — цена > 0 значит, монета — базовая общего контракта `pool`
+    /// (IWooracleV2_2.sol). Вопрос задаётся оракулу (dex.oracle), найденный пул — общий контракт dex.pmm_pool.
+    Woo(Address),
 }
 
 impl Q {
@@ -58,6 +68,10 @@ impl Q {
             Q::Algebra => "poolByPair",
             Q::Slipstream(_) => "getPool(tickSpacing)",
             Q::Dodo => "getDODOPoolBidirection",
+            Q::PancakeStable { three: false } => "getPairInfo",
+            Q::PancakeStable { three: true } => "getThreePoolPairInfo",
+            Q::ListaStable => "getPairInfos",
+            Q::Woo(_) => "state(base)",
         }
     }
 }
@@ -80,6 +94,25 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        Q::PancakeStable { three: false } => IPancakeStableFactory::getPairInfoCall {
+            _tokenA: coin,
+            _tokenB: quote,
+        }
+        .abi_encode()
+        .into(),
+        Q::PancakeStable { three: true } => IPancakeStableFactory::getThreePoolPairInfoCall {
+            _tokenA: coin,
+            _tokenB: quote,
+        }
+        .abi_encode()
+        .into(),
+        Q::ListaStable => IListaStableFactory::getPairInfosCall {
+            _tokenA: coin,
+            _tokenB: quote,
+        }
+        .abi_encode()
+        .into(),
+        Q::Woo(_) => IWooracle::stateCall { base: coin }.abi_encode().into(),
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -116,6 +149,26 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
                 .into_iter()
                 .chain(r.baseToken1Pools)
                 .collect()
+        }
+        Q::PancakeStable { three: false } => vec![
+            IPancakeStableFactory::getPairInfoCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ getPairInfo не по ABI: {e}"))?
+                .swapContract,
+        ],
+        Q::PancakeStable { three: true } => vec![
+            IPancakeStableFactory::getThreePoolPairInfoCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ getThreePoolPairInfo не по ABI: {e}"))?
+                .swapContract,
+        ],
+        Q::ListaStable => IListaStableFactory::getPairInfosCall::abi_decode_returns(out)
+            .map_err(|e| format!("ответ getPairInfos не по ABI: {e}"))?
+            .into_iter()
+            .map(|i| i.swapContract)
+            .collect(),
+        Q::Woo(pool) => {
+            let st = IWooracle::stateCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ state(base) не по ABI: {e}"))?;
+            if st.price > 0 { vec![pool] } else { Vec::new() }
         }
     };
     Ok(list.into_iter().filter(|a| *a != Address::ZERO).collect())

@@ -54,6 +54,10 @@ const CHOICE = {
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   solidly_v1: 'Solidly V1 (THENA V1)',
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
+  pancake_stableswap: 'StableSwap PancakeSwap',
+  lista_stableswap: 'StableSwap Lista (с оракулом)',
+  saddle_stableswap: 'StableSwap Saddle (Nerve)',
+  woofi_v2: 'WooFi WooPPV2 (только квотер пула)',
   pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
   pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
   uniswap_v4: 'Uniswap V4',
@@ -68,6 +72,7 @@ const POOL_KIND = {
   Cl: 'V4 CL (концентрированная)',
   Bin: 'V4 Bin (бины)',
   StableSwap: 'StableSwap',
+  OraclePmm: 'PMM от оракула',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

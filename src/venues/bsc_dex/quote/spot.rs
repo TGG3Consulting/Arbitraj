@@ -62,6 +62,8 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let ru = *d.rates.get(iu as usize)?;
             (!rc.is_zero()).then(|| mul_div(amount, ru, rc)).flatten()
         }
+        // PMM от оракула (WooFi, решение 122 F, 3): своей математики и цены пары нет (выход — квотер контракта).
+        PoolState::OraclePmm(_) => None,
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

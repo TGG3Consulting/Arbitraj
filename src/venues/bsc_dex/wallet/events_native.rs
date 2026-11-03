@@ -110,6 +110,7 @@ impl Native {
             tx_hash: None,
             at: Utc::now(),
             source: format!("баланс BNB кошелька, блоки {}–{block}", from + 1),
+            account: ctx.account.clone().map(crate::core::types::DexAccountId),
         }))
     }
 }

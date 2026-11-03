@@ -35,7 +35,7 @@ use super::super::ctx::Ctx;
 use super::super::node::rpc;
 use super::{queue_store, signer};
 
-/// Очередь кошелька: одна на адаптер. Дешёво клонируется.
+/// Очередь кошелька: одна на кошелёк (решение 132 — parts_wallet.rs). Дешёво клонируется.
 #[derive(Clone)]
 pub struct Nonces {
     lock: Arc<Mutex<()>>,
@@ -78,8 +78,9 @@ pub struct Hold {
 impl Nonces {
     /// Встаёт в очередь (ждёт, пока прошлая транзакция кошелька займёт свой nonce в блоке).
     /// Возвращает: Slot. Ошибки: OutcomeUnknown — очередь остановлена до ручной проверки (причина в тексте);
-    /// ключ кошелька (SecretsLocked, NotConfigured).
+    /// ключ кошелька (SecretsLocked, NotConfigured); NotConfigured — счёт не выбран (решение 132: без счёта не отправляем).
     pub async fn acquire(&self, ctx: &Ctx) -> GatewayResult<Slot> {
+        ctx.bound()?;
         let guard = self.lock.clone().lock_owned().await;
         self.restore(ctx).await;
         if let WalletQueueState::Halted { reason, .. } = self.state() {

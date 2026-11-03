@@ -58,6 +58,7 @@ async fn ctx(tag: &str) -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
         settings,
         vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
@@ -77,7 +78,13 @@ async fn ctx(tag: &str) -> Ctx {
         )
         .await
         .unwrap();
-    c
+    // Решение 132: очередь выдаёт место только кошельку счёта — кошелёк с этим секретом и окружение на его счёт.
+    let a = c.settings.accounts();
+    let id = a.reserve_id().await.unwrap();
+    a.add(&id, "тест", SECRET_WALLET_KEY, "bsc_dex", "тест")
+        .await
+        .unwrap();
+    c.with_account(&id)
 }
 
 /// Бутафорская SendCfg (ветки NotIncluded/halt её полей в цикле не используют).

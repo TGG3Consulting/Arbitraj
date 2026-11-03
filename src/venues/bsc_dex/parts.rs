@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/parts.rs
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
-//! ожидаемые поступления, счётчики каналов, сигнал «перепроверить») и сборка окружений для котировки, сделки и слушателей пулов.
+//! ожидаемые поступления, счётчики каналов, сигнал «перепроверить»; кошельковое — по счетам, parts_wallet.rs) и сборка окружений для котировки, сделки и слушателей пулов.
 //! Кто вызывает: mod.rs.
 //! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
 //! wallet/inflows.rs.
@@ -46,6 +46,9 @@ pub struct Parts {
     pub wake: super::check::recheck::Recheck,
     /// «Данные пулов отстают на N блоков» — лента квитанций догоняет без сброса (решение 72).
     pub lag: super::node::events_lag::EventsLag,
+    /// Своё состояние каждого кошелька (решение 132, parts_wallet.rs). Поля nonces, inflows, allow выше — кошелька
+    /// окружения: у привязанного к счёту (Parts::bound) — этого счёта; у непривязанного — только чтение и пробы.
+    pub wallets: super::parts_wallet::Wallets,
 }
 
 impl Parts {
@@ -66,6 +69,7 @@ impl Parts {
             allow: Default::default(),
             wake: Default::default(),
             lag: Default::default(),
+            wallets: Default::default(),
         }
     }
 

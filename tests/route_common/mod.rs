@@ -230,6 +230,7 @@ async fn ctx() -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
         settings,
         vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
@@ -284,6 +285,29 @@ pub async fn channel(p: &Parts, id: &str, method: &str) {
             .await
             .unwrap();
     }
+}
+
+/// Решение 132: исполнитель ArbExecutor — у кошелька. Кошелёк «тест» (создаётся один раз) с адресом исполнителя `x`,
+/// строка «пробы» → он (котировки и сигналы без счёта берут исполнитель кошелька проб). Ошибок нет.
+#[allow(dead_code)]
+pub async fn executor(p: &Parts, x: &str) {
+    let a = p.ctx.settings.accounts();
+    let id = match a.wallets().into_iter().find(|w| w.name == "тест") {
+        Some(w) => w.id,
+        None => {
+            let id = a.reserve_id().await.unwrap();
+            a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+                .await
+                .unwrap();
+            id
+        }
+    };
+    a.set_executor(&id, Some(x.to_string()), "тест")
+        .await
+        .unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест")
+        .await
+        .unwrap();
 }
 
 /// Окружение по записи маршрута routes_2026-10-29 (блок 130521896) — удобный частный случай parts_from.

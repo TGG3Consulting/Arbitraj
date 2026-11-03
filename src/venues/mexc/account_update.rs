@@ -99,6 +99,7 @@ pub fn parse(data: &[u8], venue: &VenueId) -> Frame {
             tx_hash: None,
             at,
             source: format!("MEXC private.account type={reason}"),
+            account: None,
         }),
         reason,
     }

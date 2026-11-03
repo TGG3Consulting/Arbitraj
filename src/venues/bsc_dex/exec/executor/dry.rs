@@ -70,9 +70,10 @@ pub async fn build(
                 form,
             })
         }
-        (DryMode::AsTrade, None) => Err(internal(
-            "исполнитель не задан (exec.executor_address)".into(),
-        )),
+        (DryMode::AsTrade, None) => Err(internal(format!(
+            "у кошелька «{}» не развёрнут исполнитель (экран «Маппинг кошельков»)",
+            ctx.wallet_name()
+        ))),
         (DryMode::Executor, _) => {
             let nonce = deploy::next_nonce(ctx, wallet).await?;
             let at = wallet.create(nonce);

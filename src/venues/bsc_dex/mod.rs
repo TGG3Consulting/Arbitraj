@@ -18,6 +18,7 @@ pub mod connection_extra;
 pub mod connection_sync;
 pub mod ctx;
 pub mod ctx_url;
+pub mod ctx_wallet;
 pub mod directory;
 pub mod errors;
 pub mod exec;
@@ -25,13 +26,16 @@ pub mod math;
 pub mod node;
 pub mod num;
 pub mod parts;
+pub mod parts_wallet;
 pub mod pools;
 pub mod quote;
 pub mod resubscribe;
+pub mod resubscribe_wallets;
 pub mod send;
 pub mod settings_wait;
 pub mod tokens;
 pub mod venue;
+pub mod venue_account;
 pub mod wallet;
 
 use parts::Parts;
@@ -57,6 +61,8 @@ impl BscDex {
             journal: ctx.journal.clone(),
             raw: ctx.raw.clone(),
             pace: Default::default(),
+            // Решение 132: кошелёк — у вида адаптера на счёт (venue_account.rs); здесь — без кошелька.
+            wallet: None,
         };
         let p = Parts::new(ctx);
         // Решение 112: свопы KyberSwap идут тем же кошельком — одна очередь и один запомненный nonce с переводами

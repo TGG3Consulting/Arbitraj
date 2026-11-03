@@ -41,7 +41,10 @@ pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayRes
         }
         Err(why) => Err(ctx.err(
             ErrorCode::InvalidAddress,
-            format!("exec.executor_address: {why} — разрешения и сделки через исполнитель нет"),
+            format!(
+                "исполнитель кошелька «{}»: {why} — разрешения и сделки через исполнитель нет",
+                ctx.wallet_name()
+            ),
         )),
     }
 }
@@ -82,7 +85,10 @@ async fn inspect(
 pub async fn probe(ctx: &Ctx) -> ConnectionCheck {
     let res = async {
         let Some(executor) = super::address(ctx).map_err(|e| e.message)? else {
-            return Err("exec.executor_address не задан".to_string());
+            return Err(format!(
+                "у кошелька «{}» не развёрнут исполнитель (экран «Маппинг кошельков»)",
+                ctx.wallet_name()
+            ));
         };
         let wallet = signer::address(ctx).map_err(|e| e.message)?;
         inspect(ctx, executor, wallet)

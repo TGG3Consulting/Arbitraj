@@ -57,6 +57,7 @@ pub async fn queue(p: &Parts) -> WalletQueue {
     let nonce_taken = taken(p, &state).await.ok().flatten();
     WalletQueue {
         venue: p.ctx.venue(),
+        account: p.ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken,
     }
@@ -106,6 +107,7 @@ pub async fn release(p: &Parts, by: &str, pending_ok: bool) -> GatewayResult<Wal
     super::queue_store::save(ctx, &state).await;
     let q = WalletQueue {
         venue: ctx.venue(),
+        account: ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken: None,
     };

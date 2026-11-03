@@ -75,6 +75,7 @@ impl Accounts {
             journal,
             st: Arc::new(RwLock::new(st)),
             writer: Arc::new(tokio::sync::Mutex::new(())),
+            changed: Arc::new(tokio::sync::watch::Sender::new(0)),
         })
     }
 

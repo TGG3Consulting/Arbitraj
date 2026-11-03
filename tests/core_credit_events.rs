@@ -117,6 +117,7 @@ fn deposit(hash: &str) -> BalanceChange {
         tx_hash: Some(hash.to_string()),
         at: Utc::now(),
         source: "Transfer в блоке 129702236".into(),
+        account: None,
     }
 }
 

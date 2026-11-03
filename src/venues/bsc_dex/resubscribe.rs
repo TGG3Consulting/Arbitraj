@@ -6,7 +6,8 @@
 //! Кто вызывает: mod.rs (subscribe_market, watch_settings).
 //! От чего зависит: parts.rs, pools/market.rs, settings/live.rs (Watch).
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
-//! С подпиской живёт и задача событий баланса кошелька (wallet/events.rs, решение 76).
+//! С подпиской живут задачи событий баланса — по одной на кошелёк (wallet/events.rs, решение 76; решение 132: у
+//! каждого кошелька своя очередь и свои события). Изменение кошельков или маппинга пересобирает подписку.
 //! Настройки: dex.intermediate_*, dex.native_ticker (следит за изменениями).
 
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,9 @@ type Last = Option<(Vec<Asset>, mpsc::Sender<MarketEvent>)>;
 pub struct Subs {
     tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
     last: Arc<Mutex<Last>>,
+    /// Задачи кошельков (события баланса, решение 132) и окружение слушателей, из которого они собраны.
+    pub(super) wallet_tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    pub(super) pools: Arc<Mutex<Option<super::pools::listen::Pools>>>,
 }
 
 impl Subs {
@@ -41,23 +45,10 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        // Очередь кошелька после запуска — из SQLite; остановленная — сразу ядру (уведомление, экран).
-        p.nonces.restore(&p.ctx).await;
         let pools = p.pools(out.clone());
-        if let st @ crate::core::types::WalletQueueState::Halted { .. } = p.nonces.state() {
-            let q = crate::core::types::WalletQueue {
-                venue: p.ctx.venue(),
-                state: st,
-                nonce_taken: None,
-            };
-            let _ = out.try_send(MarketEvent::WalletQueue(q));
-        }
-        let mut new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
-        // Изменения баланса кошелька событиями — для зачисления переводов без опроса (решение 76).
-        new.push(tokio::spawn(super::wallet::events::run(
-            pools.clone(),
-            p.inflows.clone(),
-        )));
+        let new = pools::market::subscribe(&pools, &p.scanned, &p.wake, assets.clone()).await?;
+        // Решение 132: очереди и события баланса — по кошелькам (resubscribe_wallets.rs).
+        self.wallets(p, Some(pools.clone())).await;
         let mut tasks = self.tasks.lock().unwrap_or_else(|x| x.into_inner());
         for old in tasks.drain(..) {
             old.abort();
@@ -76,20 +67,33 @@ impl Subs {
                 rx,
                 vec!["dex.intermediate_".into(), "dex.native_ticker".into()],
             );
-            while let Some(c) = w.next().await {
+            // Решение 132: кошельки или маппинг изменились — пересобираются только задачи кошельков (пулы не трогаем).
+            let mut acc = p.ctx.settings.accounts().subscribe();
+            loop {
+                let c = tokio::select! {
+                    c = w.next() => match c {
+                        Some(c) => c,
+                        None => return,
+                    },
+                    r = acc.changed() => match r {
+                        Ok(()) => {
+                            me.wallets(&p, None).await;
+                            continue;
+                        }
+                        Err(_) => return,
+                    },
+                };
+                let name = c.name;
                 let last = me.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
                 let Some((assets, out)) = last else { continue };
                 let msg = match me.subscribe(&p, assets, out).await {
                     Ok(()) => (
                         Level::Info,
-                        format!("{} изменена — подписка DEX пересобрана", c.name),
+                        format!("{name} изменена — подписка DEX пересобрана"),
                     ),
                     Err(e) => (
                         Level::Error,
-                        format!(
-                            "{} изменена, подписка не пересобрана: {}",
-                            c.name, e.message
-                        ),
+                        format!("{name} изменена, подписка не пересобрана: {}", e.message),
                     ),
                 };
                 p.ctx.log(msg.0, "dex.intermediate", msg.1, None).await;

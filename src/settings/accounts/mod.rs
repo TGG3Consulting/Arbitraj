@@ -65,12 +65,19 @@ pub struct Accounts {
     pub(crate) st: Arc<RwLock<State>>,
     /// Изменения — строго по одному.
     pub(crate) writer: Arc<tokio::sync::Mutex<()>>,
+    /// Сигнал «кошельки или маппинг изменились» (адаптер DEX пересобирает слежение за кошельками). Ошибок нет.
+    pub(crate) changed: Arc<tokio::sync::watch::Sender<u64>>,
 }
 
 impl Accounts {
     /// Копия состояния под замком чтения. Ошибок нет.
     pub(crate) fn read(&self) -> std::sync::RwLockReadGuard<'_, State> {
         self.st.read().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Подписка на «кошельки или маппинг изменились». Ошибок нет.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.changed.subscribe()
     }
 
     /// Все кошельки по id. Ошибок нет.

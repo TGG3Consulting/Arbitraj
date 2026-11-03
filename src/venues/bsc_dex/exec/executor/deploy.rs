@@ -120,8 +120,8 @@ pub async fn deploy(
     let code_ok = d.chain.outcome == TxOutcome::Included && on_chain_ok(ctx, address).await?;
     let text = match (d.chain.outcome, code_ok) {
         (TxOutcome::Included, true) => format!(
-            "Исполнитель развёрнут: {address:#x} (tx {}). Код в сети совпал с репозиторием. Впишите адрес в \
-             exec.executor_address (Настройки, площадка DEX), чтобы маршруты через разные DEX шли одной транзакцией",
+            "Исполнитель развёрнут: {address:#x} (tx {}). Код в сети совпал с репозиторием. Адрес записан у кошелька \
+             (экран «Маппинг кошельков», решение 132) — маршруты через разные DEX идут одной транзакцией",
             d.chain.hash
         ),
         (TxOutcome::Included, false) => format!(

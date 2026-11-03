@@ -6,14 +6,15 @@
 //! От чего зависит: файлы этой папки, gateway, settings.
 //! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex;
 //! exec.via_kyber, exec.dex_best_of (решение 123, «лучший из двух» — best_of/).
+//! Решение 132: деньги и адрес кошелька — только у вида на счёт (venue_account.rs); без привязки — отказ (Ctx::bound).
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, Quote, SendChannelInfo, Side,
-    TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, PoolDirectory, Quote, SendChannelInfo,
+    Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -35,6 +36,11 @@ impl Venue for BscDex {
         VenueKind::Dex
     }
 
+    /// Решение 132: вид адаптера на кошелёк счёта — venue_account.rs. Ошибки: NotConfigured — нет кошелька.
+    fn for_account(&self, account: &DexAccountId) -> GatewayResult<std::sync::Arc<dyn Venue>> {
+        self.on_account(account)
+    }
+
     /// «Проверить подключение»: узел HTTP (eth_chainId = 56, eth_blockNumber), узел WebSocket (newHeads), кошелёк,
     /// eth_simulateV1 — connection.rs (execution-apis src/eth, коммит 16caee27). Ошибок нет: причина — в ответе.
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
@@ -54,6 +60,13 @@ impl Venue for BscDex {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        // Решение 132: подписка — только у основного адаптера; вид на счёт рынок не слушает.
+        if self.is_bound() {
+            return Err(self.p.ctx.err(
+                ErrorCode::NotApplicable,
+                "подписка на рынок — у адаптера DEX без привязки к кошельку",
+            ));
+        }
         // Исполнению через KyberSwap (exec.via_kyber) нужен тот же набор монет (адрес USDT и монет) — отдаём его
         // контексту KS. KyberSwap как площадку-цены не подписываем: цены и сигналы идут с bsc_dex.
         self.kyber.set_assets(assets.clone());
@@ -92,6 +105,8 @@ impl Venue for BscDex {
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        // Решение 132: сделка — только кошельком счёта (Ctx::bound).
+        self.p.ctx.bound()?;
         // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
         // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
         // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
@@ -121,6 +136,7 @@ impl Venue for BscDex {
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
     /// Ошибки: InvalidAddress, NotConfigured, каналы, TxNotIncluded / WithdrawRejected (с фактом транзакции).
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         let env = self.p.env();
         scope(
             Class::Trade,
@@ -132,6 +148,7 @@ impl Venue for BscDex {
     /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.
     /// Ошибки: узел, хеш не 32 байта, BadResponse.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         let w = wallet::signer::address(&self.p.ctx)?;
         let work =
             wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w);
@@ -141,6 +158,8 @@ impl Venue for BscDex {
     /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —
     /// wallet/inflows.rs. Ошибки: ключ кошелька, NotConfigured (у монеты нет адреса в BSC).
     async fn deposit_address(&self, asset: &Asset, _network: &str) -> GatewayResult<String> {
+        // Решение 132: адрес депозита — кошелька счёта сделки; без счёта не отдаётся (монеты не уйдут не туда).
+        self.p.ctx.bound()?;
         let w = wallet::signer::address(&self.p.ctx)?;
         let token = wallet::transfer::token(&self.p.ctx, asset)?;
         self.p.inflows.expect(token).await;
@@ -149,6 +168,7 @@ impl Venue for BscDex {
 
     /// Статус зачисления; любое завершение снимает ожидаемое поступление — wallet/deposit.rs.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
+        self.p.ctx.bound()?;
         scope(
             Class::Trade,
             wallet::deposit::status(&self.p, asset, tx_hash),
@@ -158,17 +178,20 @@ impl Venue for BscDex {
 
     /// Вывод на кошелёк не состоялся — ожидание поступления снято (wallet/deposit.rs). Ошибок нет.
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
+        self.p.ctx.bound()?;
         wallet::deposit::abandoned(&self.p, asset).await;
         Ok(())
     }
 
     /// Очередь транзакций кошелька (wallet/nonce.rs). Ошибок нет.
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {
+        self.p.ctx.bound()?;
         Ok(wallet::deposit::queue(&self.p).await)
     }
 
     /// «Снять очередь после ручной проверки» — wallet/deposit.rs. Ошибки: NotApplicable — очередь не остановлена.
     async fn release_wallet_queue(&self, by: &str, pending_ok: bool) -> GatewayResult<WalletQueue> {
+        self.p.ctx.bound()?;
         scope(
             Class::Trade,
             wallet::deposit::release(&self.p, by, pending_ok),
@@ -178,12 +201,14 @@ impl Venue for BscDex {
 
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
+        self.p.ctx.bound()?;
         wallet::balances::all(&self.p.ctx, &self.p.tokens).await
     }
 
     /// Баланс одного актива: 1–2 запроса к узлу вместо запроса по каждому токену (решение 113) — wallet/balances.rs.
     /// Ошибки: ключ кошелька, узел.
     async fn balance(&self, asset: &str) -> GatewayResult<Option<Balance>> {
+        self.p.ctx.bound()?;
         wallet::balances::single(&self.p.ctx, &self.p.tokens, asset).await
     }
 
@@ -309,6 +334,10 @@ impl Venue for BscDex {
         input: Decimal,
         with_wallet: bool,
     ) -> GatewayResult<crate::core::types::CycleQuote> {
+        // Баланс базовой — кошелька счёта циклов (решение 132).
+        if with_wallet {
+            self.p.ctx.bound()?;
+        }
         let q = self.p.quoting();
         let run = async {
             let legs = quote::cycle_legs::now(&q, cycle).await?;
@@ -324,6 +353,7 @@ impl Venue for BscDex {
         &self,
         req: crate::core::types::CycleTradeRequest,
     ) -> GatewayResult<crate::core::types::CycleTradeResult> {
+        self.p.ctx.bound()?;
         let (q, env) = (self.p.quoting(), self.p.env());
         scope(
             Class::Trade,
@@ -351,6 +381,8 @@ impl Venue for BscDex {
     /// Оценка развёртывания исполнителя ArbExecutor (решение 122, часть X): газ, цена, стоимость, будущий адрес — ничего не
     /// отправляет. Ошибки: ключ кошелька, каналы, узел.
     async fn dex_executor_quote(&self) -> GatewayResult<crate::core::types::ExecutorDeployQuote> {
+        // Решение 132: исполнитель разворачивается кошельком, у которого нажата кнопка.
+        self.p.ctx.bound()?;
         let (q, env) = (self.p.quoting(), self.p.env());
         scope(Class::Check, exec::executor::deploy::quote(&q, &env)).await
     }
@@ -361,6 +393,7 @@ impl Venue for BscDex {
         &self,
         sha256: String,
     ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
+        self.p.ctx.bound()?;
         let (q, env) = (self.p.quoting(), self.p.env());
         let run = exec::executor::deploy::deploy(&q, &env, &self.p.nonces, &sha256);
         scope(Class::Trade, run).await

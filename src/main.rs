@@ -114,6 +114,7 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
     };
     let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);

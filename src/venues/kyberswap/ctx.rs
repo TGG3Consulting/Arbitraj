@@ -5,7 +5,7 @@
 //! Кто вызывает: все файлы адаптера kyberswap.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types, gateway/http, gateway/errors.
 //! Настройки: venue.* [kyberswap] (quote_asset, bsc_network, enabled), kyber.* (все), http.* (docs/SETTINGS.md).
-//! Секреты: bsc_dex.wallet_key (один кошелёк, решение 45), kyber.node_http_key (docs/SECURITY.md).
+//! Секреты: ключ кошелька счёта DEX (имя — поле wallet, решение 132), kyber.node_http_key (docs/SECURITY.md).
 
 use std::time::Duration;
 
@@ -24,8 +24,6 @@ use crate::storage::raw_log::RawLog;
 
 /// Идентификатор площадки — имя адаптера; по нему ищутся его настройки venue.* и секреты.
 pub const ID: &str = "kyberswap";
-/// Имя секрета приватного ключа кошелька — тот же, что у bsc_dex (один кошелёк, решение 45).
-pub const SECRET_WALLET_KEY: &str = "bsc_dex.wallet_key";
 /// Имя секрета ключа провайдера узла BSC для исполнения.
 pub const SECRET_NODE_KEY: &str = "kyber.node_http_key";
 /// Метка в адресе узла, на место которой ставится ключ провайдера (в журнал адрес не пишется).
@@ -41,6 +39,9 @@ pub struct Ctx {
     pub raw: RawLog,
     /// Темп запросов к API агрегатора (kyber.rps): время следующего свободного слота. Общий на все клоны.
     pub pace: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>>,
+    /// Решение 132: имя секрета ключа кошелька счёта DEX, от которого идёт своп (тот же кошелёк, что у bsc_dex для
+    /// этого счёта — venues/bsc_dex/venue_account.rs). None — кошелёк не выбран: подписи нет.
+    pub wallet: Option<String>,
 }
 
 impl Ctx {

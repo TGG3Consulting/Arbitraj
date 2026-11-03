@@ -116,6 +116,7 @@ fn update(body: &Value, venue: &VenueId) -> Result<(String, Vec<BalanceChange>),
             tx_hash: None,
             at,
             source: format!("ACCOUNT_UPDATE m={reason}"),
+            account: None,
         });
     }
     Ok((reason, out))

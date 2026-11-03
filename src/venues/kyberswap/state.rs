@@ -65,6 +65,26 @@ impl Parts {
         }
     }
 
+    /// Вид состояния на кошелёк счёта DEX (решение 132): тот же список монет, кэш decimals и поллинг, но ключ — этого
+    /// кошелька (имя секрета) и очередь — его очередь bsc_dex (замок и запомненный nonce, решение 112). Ошибок нет.
+    pub fn for_wallet(
+        &self,
+        secret: String,
+        wallet_lock: Arc<Mutex<()>>,
+        nonce_next: Arc<StdMutex<Option<u64>>>,
+    ) -> Self {
+        let mut ctx = self.ctx.clone();
+        ctx.wallet = Some(secret);
+        Self {
+            ctx,
+            assets: self.assets.clone(),
+            decimals: self.decimals.clone(),
+            wallet_lock,
+            nonce_next,
+            poll: self.poll.clone(),
+        }
+    }
+
     /// Заменяет список активных монет. Ошибок нет.
     pub fn set_assets(&self, assets: Vec<Asset>) {
         *self.assets.write().unwrap_or_else(|p| p.into_inner()) = assets;

@@ -341,6 +341,7 @@ fn kyber_quote(
         journal: base.journal.clone(),
         raw: base.raw.clone(),
         pace: Default::default(),
+        wallet: None,
     };
     let r = rest::parse_routes(&kctx, data).expect("записанный ответ /routes разбирается");
     let inp = num::to_decimal(amount_in.parse::<U256>().unwrap(), 18).unwrap();

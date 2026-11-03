@@ -58,4 +58,11 @@
 
 ## Ход работ
 
-(дополняется по этапам)
+- Этап 1 — хранилище `settings/accounts/`, перенос, `DexAccountId`, тесты `tests/wallet_accounts.rs`.
+- Этап 2 — адаптер: `Ctx.account` + `ctx_wallet.rs` (кошелёк счёта / «пробы», `bound()` — счёт обязателен для подписи,
+  очереди, адреса депозита, балансов, сделки, вывода, исполнителя), `parts_wallet.rs` (очередь, разрешения, поступления
+  по кошелькам), `venue_account.rs` (`for_account`), KyberSwap — `kyberswap::Ctx.wallet` и очередь кошелька,
+  `resubscribe_wallets.rs` (очередь и события баланса каждого кошелька), `WalletQueue.account`, `BalanceChange.account`
+  (у бирж — None), `exec.executor_address` убрана из каталога (исполнитель — у кошелька). Шлюз: `Registry::get_as`.
+  Тесты: `tests/bsc_dex_accounts.rs`. После этапа 2 ядро ещё не передаёт счёт — сделки с DEX отказывают «кошелёк не
+  выбран» до этапа 3 (ветка не слита).

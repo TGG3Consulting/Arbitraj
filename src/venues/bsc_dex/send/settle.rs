@@ -122,6 +122,7 @@ async fn emit(a: &After<'_>, state: WalletQueueState) {
     queue_store::save(a.ctx, &state).await;
     a.stats.emit(MarketEvent::WalletQueue(WalletQueue {
         venue: a.ctx.venue(),
+        account: a.ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken: None,
     }));

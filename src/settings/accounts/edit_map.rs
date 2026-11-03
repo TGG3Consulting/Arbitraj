@@ -205,5 +205,7 @@ impl Accounts {
             .journal
             .write(Level::Info, JOURNAL_KIND, None, text, None)
             .await;
+        // Номер версии растёт; нет слушателей — не ошибка.
+        self.changed.send_modify(|v| *v += 1);
     }
 }

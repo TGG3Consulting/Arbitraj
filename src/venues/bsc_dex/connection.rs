@@ -185,12 +185,14 @@ async fn history(ctx: &Ctx) -> Result<String, String> {
     ))
 }
 
-/// Кошелёк: ключ из секретов → адрес, баланс BNB.
+/// Кошелёк окружения (решение 132: у вида на счёт — кошелёк счёта; без привязки — кошелёк строки «пробы»): ключ из
+/// секретов → адрес, баланс BNB.
 async fn wallet(ctx: &Ctx) -> Result<String, String> {
     let run = async {
+        let name = ctx.wallet()?.name;
         let addr = signer::address(ctx)?;
         let bnb = balances::bnb(ctx, addr).await?;
-        GatewayResult::Ok(format!("адрес {addr}, BNB {bnb}"))
+        GatewayResult::Ok(format!("«{name}»: адрес {addr}, BNB {bnb}"))
     };
     run.await.map_err(|e| e.message)
 }

@@ -109,6 +109,7 @@ pub fn plan_quote(
         costs: Vec::new(),
         route: Some(route.clone()),
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     })
 }

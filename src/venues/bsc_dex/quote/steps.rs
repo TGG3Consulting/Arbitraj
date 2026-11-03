@@ -195,6 +195,17 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
                 "комиссия StableSwap не помещается в Decimal",
             )
         }),
+        // TickBin (Maverick V2, решение 122 F): комиссия по направлению fee(tokenAIn), D18 (1e18 = 100%) → проценты =
+        // fee / 1e16; tokenA = token0.
+        (PoolState::TickBin(d), _) => {
+            let fee = if zero_for_one { d.fee0_in } else { d.fee1_in };
+            num::to_decimal(fee, 16).ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::BadResponse,
+                    "комиссия Maverick V2 не помещается в Decimal",
+                )
+            })
+        }
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

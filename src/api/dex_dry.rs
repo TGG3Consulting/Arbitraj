@@ -8,13 +8,16 @@
 //! POST /api/dex/dry-swap {venue?, asset: {ticker, bsc_contract}, side: "Buy"|"Sell", usdt: "100", executor?: bool}
 //! → DexDrySwap; executor = true — через исполнитель ArbExecutor с подставленным кодом (решение 122, часть X).
 //! venue не задан — единственная площадка вида DEX в реестре (их несколько — 400 с просьбой указать).
+//! POST /api/dex/dry-cycle {cycle: DexCycle (из GET /api/venues/{id}/dex-cycles), budget_usdt?: "100", executor?: bool}
+//! → DexDrySwap (решение 124): весь путь ядра для цикла DEX ↔ DEX (бюджет, размер, порог, граница — core/cycle_dry.rs) и
+//! сборка + eth_simulateV1 у адаптера; ничего не отправляется. Не составлен план (настройки, бюджет, баланс, порог) — 400.
 
 use axum::Json;
 use axum::extract::State;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::core::types::{Asset, DexDrySwap, Side, VenueId};
+use crate::core::types::{Asset, DexCycle, DexDrySwap, Side, VenueId};
 use crate::gateway::contract::VenueKind;
 
 use super::state::{ApiError, AppState};
@@ -61,6 +64,34 @@ pub async fn dry_swap(
         venue.dex_dry_swap(b.asset, b.side, b.usdt).await
     };
     r.map(Json).map_err(ApiError::gateway)
+}
+
+/// Тело запроса сухой сделки цикла (решение 124).
+#[derive(Deserialize)]
+pub struct DryCycleReq {
+    pub cycle: DexCycle,
+    /// Свой бюджет USDT; нет — по лимитам money.* (и dry.budget_usdt в сухом режиме).
+    #[serde(default)]
+    pub budget_usdt: Option<Decimal>,
+    /// true — через исполнитель ArbExecutor с подставленным кодом (решение 122); нет — как пойдёт сделка.
+    #[serde(default)]
+    pub executor: bool,
+}
+
+/// Сухая сделка цикла DEX ↔ DEX. Принимает: тело. Возвращает: итог (отказ сборки — reason внутри).
+/// Ошибки: 400 — бюджет ≤ 0 или план ядра не составлен (причина текстом).
+pub async fn dry_cycle(
+    State(st): State<AppState>,
+    Json(b): Json<DryCycleReq>,
+) -> Result<Json<DexDrySwap>, ApiError> {
+    if b.budget_usdt.is_some_and(|x| x <= Decimal::ZERO) {
+        return Err(ApiError::bad("бюджет USDT должен быть больше 0"));
+    }
+    st.core
+        .dry_cycle(b.cycle, b.budget_usdt, b.executor)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad)
 }
 
 /// Единственная площадка вида DEX в реестре шлюза. Ошибки: 400 — ни одной или несколько.

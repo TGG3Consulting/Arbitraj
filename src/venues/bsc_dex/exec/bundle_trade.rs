@@ -142,7 +142,7 @@ pub async fn trade(
 /// газу — и общий разбор exec/result.rs (суммы Transfer монеты/USDT, средняя цена). Ошибки: как у result::result
 /// (SwapReverted / TxNotIncluded / OutcomeUnknown с фактом; Included — факт по логам).
 #[allow(clippy::too_many_arguments)]
-fn bundle_result(
+pub fn bundle_result(
     ctx: &super::super::ctx::Ctx,
     req: TradeRequest,
     sent: &bundle_send::Sent,

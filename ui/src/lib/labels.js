@@ -58,6 +58,7 @@ const CHOICE = {
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',
   woofi_v2: 'WooFi WooPPV2 (только квотер пула)',
+  maverick_v2: 'Maverick V2 (тики-бины, кривая квотера)',
   pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
   pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
   uniswap_v4: 'Uniswap V4',
@@ -73,6 +74,7 @@ const POOL_KIND = {
   Bin: 'V4 Bin (бины)',
   StableSwap: 'StableSwap',
   OraclePmm: 'PMM от оракула',
+  TickBin: 'Тики-бины (Maverick V2)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

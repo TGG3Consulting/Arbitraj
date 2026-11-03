@@ -72,6 +72,8 @@ impl Core {
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));
         tokio::spawn(super::reconcile::run(core.clone()));
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
+        // Решение 124: исполнение циклов DEX ↔ DEX — одна задача, толчки событий пулов сливаются.
+        tokio::spawn(super::cycle_watch::run(core.clone()));
         for (id, kind) in kinds {
             if kind == VenueKind::Cex {
                 tokio::spawn(super::registry_sync::run(core.clone(), id));

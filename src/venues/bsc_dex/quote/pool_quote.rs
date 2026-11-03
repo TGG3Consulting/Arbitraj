@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, solidly_v1_math, stable_guard, stableswap_v1, swap_solidly, v2,
+    bin_swap, maverick_swap, solidly_v1_math, stable_guard, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
@@ -362,6 +362,18 @@ pub fn swap(
         (PoolState::OraclePmm(_), PoolKind::OraclePmm) => Err(why(
             "WooFi: только котировщик пула, свой расчёт невозможен — развёрнутый код закрыт",
         )),
+        // TickBin (Maverick V2, решение 122 F): порт расчёта команды Maverick (math/maverick_swap.rs) без предела тика —
+        // как шаг MAVERICK исполнителя (tickLimit = int32 max/min, contracts/ArbExecutor.sol); tokenA = token0.
+        (PoolState::TickBin(d), PoolKind::TickBin) => {
+            let limit = if zero_for_one { i32::MAX } else { i32::MIN };
+            maverick_swap::swap(d, amount, zero_for_one, !exact_in, limit)
+                .map(|r| Swapped {
+                    amount_in: r.amount_in,
+                    amount_out: r.amount_out,
+                    complete: r.complete,
+                })
+                .ok_or_else(none)
+        }
         _ => Err(none()),
     }
 }

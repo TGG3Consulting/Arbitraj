@@ -65,6 +65,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_stable_u.rs` | Проверка пулов PancakeSwap Stable (реестр фабрики V2 getPairInfo/getThreePoolPairInfo или dex.stable_pools), Lista Stable (getPairInfos), Saddle/Nerve (dex.stable_pools) и пар WooFi (общий контракт dex.pmm_pool: quoteToken, wooracle = dex.oracle, реализация = dex.pool_implementation, цена оракула; ссылка PoolRef::Member) — решение 122 F, 3 |
 | `verify_woo.rs` | Решение по паре WooFi (quoteToken, wooracle = dex.oracle, реализация прокси = dex.pool_implementation, цена оракула) и сборка найденного пула |
+| `verify_maverick.rs` | Проверка пула Maverick V2 (решение 122 F): isFactoryPool фабрики, tokenA/tokenB = пара, permissionedSwap = false |
 | `verify_solidly.rs` | Проверка пула Solidly (Topaz v2, THENA V1; решения 80, 85): реестр фабрики getPool(coin,quote,stable) для обоих stable содержит пул |
 | `created_log.rs` | Событие создания → проверенный пул → подписка (V2/V3 PairCreated/PoolCreated, V4 Initialize, Elastic PoolCreated, DODO NewDVM/NewDPP/NewDSP, Solidly PoolCreated, Slipstream PoolCreated по int24 tickSpacing) |
 | `abi_v2v3.rs`, `abi_v4.rs` | ABI фабрик, пулов, менеджеров V4, StateView, TickLens (+ сверка topic0 с исследованием) |
@@ -74,6 +75,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_stable_u.rs` | ABI PancakeSwap / Lista StableSwap (индексы uint256, is_killed / paused, A с точностью и проверка цены Lista, реестры фабрик, события) — решение 122 F, 3 |
 | `abi_saddle.rs` | ABI пула Saddle — Nerve (getToken/getTokenBalance uint8, getAPrecise, swapStorage, paused, calculateSwap, swap с deadline, события) |
 | `abi_woo.rs` | ABI WooFi WooPPV2 и оракула по публичным интерфейсам (quoteToken, wooracle, paused, query/tryQuery, WooSwap, Upgraded; state(base)) и слот реализации EIP-1967 |
+| `abi_maverick.rs` | ABI Maverick V2 (решение 122 F): пул (getState, fee, tickSpacing, tokenA/B, масштабы, события), фабрика (isFactoryPool, lookup, PoolCreated), PoolLens (getTicksAroundActive), Quoter (calculateSwap) — v2-common d91e871, v2-interfaces f9f4f3e |
 | `abi_solidly.rs` | ABI пула/фабрики Solidly (Topaz v2, THENA V1; решения 80, 85): metadata/getReserves/stable/getAmountOut, Sync(uint256,uint256), getPool/isPool/getFee, PoolCreated (velodrome-finance HEAD b3065d8) |
 | `abi_slipstream.rs` | ABI пула/фабрики Slipstream (Topaz v3; решения 80, 85): slot0 форка (6 полей, без feeProtocol)/liquidity/fee/tickSpacing/tickBitmap/ticks (10 полей), CLFactory getPool(a,b,int24)/PoolCreated(…,int24 tickSpacing,pool) (velodrome-finance/slipstream HEAD 193a6b8); Swap/Mint/Burn берутся из abi_v2v3 (идентичны Uni V3) |
 | `key.rs` | PoolKey V4 (Infinity, Uniswap), PoolId, разбор parameters (тест — реальный пул из документации PancakeSwap) |
@@ -104,6 +106,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_stable_u.rs` | Состояние пула PancakeSwap / Lista StableSwap на блоке (у Lista — A по рампе на время блока, проверка цены, пауза) |
 | `load_saddle.rs` | Состояние пула Saddle (Nerve) на блоке (A_PRECISION, 256 раундов, откат при несходимости, пауза) |
 | `load_woo.rs` | Состояние пары WooFi на блоке: state(base) оракула, paused, wooracle (= dex.oracle), реализация прокси. Своей математики нет |
+| `load_maverick.rs` | Состояние пула Maverick V2 на блоке (решение 122 F): getState, tickSpacing, fee(true/false), tokenA, масштабы + PoolLens.getTicksAroundActive(dex.tick_radius) одной пачкой Multicall3 по dex.load_batch → PoolState::TickBin |
 | `load_solidly.rs` | Состояние пула Solidly на блоке (решения 80, 85): metadata() пула + getFee(pool,stable) фабрики → PoolState::Solidly (резервы, stable, decimals, комиссия) — по одному пулу |
 | `load_slipstream.rs` | Состояние пула Slipstream (Topaz v3; решения 80, 85): slot0 форка + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens) → PoolState::V3 + карта тиков — по одному пулу |
 | `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах) |
@@ -113,6 +116,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_curve.rs` | События StableSwap (решение 122 F): любое событие пула (обмен, ликвидность, комиссия, A) → перечитывание |
 | `events_stable_u.rs` | События PancakeSwap / Lista Stable, Saddle и WooFi: любое известное → перечитать |
 | `per_block.rs` | Перечитывание Lista Stable и WooFi на каждом новом блоке (оракул без событий пула) и всех пар общего контракта по его логу |
+| `events_maverick.rs` | События Maverick V2 (решение 122 F): PoolSwap / PoolAddLiquidity / PoolRemoveLiquidity / PoolMigrateBinsUpStack / PoolSetVariableFee → перечитывание пула |
 | `events_solidly.rs` | События Solidly (решения 80, 85): Sync(uint256,uint256) → новые резервы в PoolState::Solidly (stable/decimals/комиссия сохраняются) |
 | `listen.rs` | Слушатель пачки пулов |
 | `listen_log.rs` | Один лог: применить, перечитать, отправить ядру |

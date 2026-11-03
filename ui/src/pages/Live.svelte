@@ -11,14 +11,15 @@
     components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte,
     components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85).
   Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
-  Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете.
+  Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете;
+    в режиме «лучший из двух» (решение 123) — кто дал финальную котировку DEX и на сколько USDT (Quote.pick).
   Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
     раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
 -->
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
-  import { dirText, dirKey } from '../lib/coreLabels.js';
+  import { dirText, dirKey, pickLines } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
@@ -94,6 +95,9 @@
     {#if calc?.size}
       <p class="muted">Объём (решение 66): {calc.size.why}</p>
     {/if}
+    {#each pickLines(calc) as line, i (i)}
+      <p>Исполнитель DEX, {line}</p>
+    {/each}
     {#if calc}
       <details>
         <summary>Полный расчёт: вложено {calc.invested}, выручка {calc.proceeds}, затраты {calc.costs_usdt} USDT, T = {calc.transit_s} с, σ = {calc.sigma}</summary>

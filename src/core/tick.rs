@@ -3,7 +3,8 @@
 //! пересчёт только направлений этой монеты, где участвует площадка (2×(N−1)) → signal → «Живой экран»;
 //! кандидат — в очередь полного расчёта (candidates.rs); цены — в замеры волатильности (vol.rs).
 //! Новые стаканы, пулы и проверки толкают пересборку справочника. Пересчёт одной монеты идёт
-//! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор.
+//! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор. Событие пула толкает поиск циклов
+//! DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs).
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
 //! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
@@ -58,6 +59,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 if first {
                     core.request_rebuild();
                 }
+                // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
+                core.inner.cycles.kick.notify_one();
                 for a in assets_by_tokens(&core, tokens) {
                     schedule(&core, a, venue.clone());
                 }

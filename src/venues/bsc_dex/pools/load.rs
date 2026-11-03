@@ -22,8 +22,8 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_saddle,
-    load_slipstream, load_solidly, load_stable_u, load_v2v3, load_woo,
+    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_maverick,
+    load_saddle, load_slipstream, load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -112,6 +112,21 @@ pub async fn state(
                 ));
             }
         };
+        return Ok(Loaded {
+            state,
+            ticks: None,
+            bins: None,
+        });
+    }
+    // Maverick V2 (решение 122 F): вид ядра TickBin, чтение своё (load_maverick.rs): состояние, тики и кривая квотера.
+    if f.proto == Proto::Maverick {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Maverick не того вида", f.title),
+            ));
+        };
+        let state = load_maverick::load(ctx, f, *a, pair, &tag).await?;
         return Ok(Loaded {
             state,
             ticks: None,

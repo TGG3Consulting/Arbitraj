@@ -4,7 +4,8 @@
 //! отдельно): не задано/выключено — поиск не работает (пусто, как везде в проекте). Строит тот же граф пулов всех DEX
 //! (pools/graph.rs, решение 80), для каждой базовой монеты (dex_dex.base_tokens) перечисляет циклы base → … → base
 //! (quote/route_paths::enumerate_cycles) в пределах dex_dex.max_cycle_len / dex_dex.max_cycles, считает каждый цикл
-//! (quote/cycle.rs) на пробном входе dex_dex.probe_input_base и собирает сигналы. Оба обхода цикла — отдельными
+//! (quote/cycle.rs) на ОПТИМАЛЬНОМ входе в пределах dex_dex.probe_input_base (верхняя граница; quote/cycle_opt.rs,
+//! решение 124) и собирает сигналы — вход и прибыль сигнала — на этом входе. Оба обхода цикла — отдельными
 //! сигналами (разные первые рёбра), считаются независимо (решение 85).
 //! Через налоговые токены цикл не строим (как мост через промежуточную — quote/via.rs): каждый НЕбазовый токен цикла
 //! должен быть проверенной монетой без налогов (покупки/продажи/перевода); иначе цикл пропускается — «налог токена на
@@ -13,12 +14,12 @@
 //! лучший пул WBNB–USDT, quote/rate.rs). Нет перевода — чистой прибыли нет, видна валовая (quote/cycle.rs).
 //! Первичный фильтр BingX ↔ DEX (монета на бирже / выводится по BSC) к DEX ↔ DEX НЕ применяется (решение 85): нужна
 //! только ликвидность пулов и совпадение адресов токенов в пулах (это обеспечивает граф и реестр).
-//! Исполнение цикла (бандл) — следующая фаза; этот код авто-сделки НЕ запускает.
-//! Кто вызывает: слой стратегии/сигнала DEX ↔ DEX (следующий стык, решение 85); тесты — напрямую quote/cycle.rs.
+//! Сам поиск сделок не запускает: сигналы забирает ядро (core/cycle_watch.rs, решение 124) и интерфейс.
+//! Кто вызывает: venue.rs (dex_cycles — ядро и «Живой экран»); тесты — напрямую quote/cycle.rs.
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
 //! send/mod.rs (чаевые канала), num.rs.
 //! Настройки: dex_dex.enabled, dex_dex.base_tokens, dex_dex.max_cycle_len, dex_dex.max_cycles, dex_dex.probe_input_base,
-//! dex_dex.min_profit_base [bsc_dex]; через граф — dex.route_max_pools_per_edge и глубина (решение 73).
+//! dex_dex.min_profit_base [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
 
 use std::collections::{HashMap, HashSet};
 
@@ -34,7 +35,7 @@ use super::super::pools::graph;
 use super::super::pools::registry::Registry;
 use super::Quoting;
 use super::cycle::{self, CycleSignal};
-use super::{rate, route_paths};
+use super::{cycle_opt, rate, route_paths};
 
 /// Включено ли направление DEX ↔ DEX (решение 85). Не задано — выключено (как dry.enabled). Ошибок нет.
 pub fn enabled(ctx: &Ctx) -> bool {
@@ -114,7 +115,8 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             let Ok(legs) = cycle::legs_for_cycle(q, path, usdt_dec, &dec) else {
                 continue;
             };
-            let Ok(p) = cycle::eval(ctx, &legs, input) else {
+            // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
+            let Ok(p) = cycle_opt::best(ctx, &legs, input) else {
                 continue;
             };
             if let Ok(sig) =

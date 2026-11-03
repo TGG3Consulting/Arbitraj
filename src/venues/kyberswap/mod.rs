@@ -23,6 +23,8 @@ pub mod rest;
 pub mod signer;
 pub mod state;
 pub mod trade;
+pub mod trade_fact;
+pub mod trade_prep;
 pub mod transfer;
 pub mod tx;
 pub mod venue;

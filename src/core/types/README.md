@@ -3,7 +3,8 @@
 | Файл | Типы |
 | --- | --- |
 | `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
-| `pool.rs` | PoolKind (V2/V3/Cl/Bin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
+| `pool.rs` | PoolKind (V2/V3/Cl/Bin/Pmm/Solidly/StableSwap/TickBin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
+| `pool_tick_bin.rs` | TickBinData, TickReserves — состояние пула TickBin (решение 122 F, Maverick V2): тики около активного, комиссии по направлениям, масштабы токенов, доля протокола |
 | `trade.rs` | Side, Quote (котировка на объём + затраты + маршрут DEX), TradeRequest, TradeStatus, TradeResult |
 | `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене, шаг маршрута), RouteStep (номер шага и пара токенов, решение 52), RouteMode, RouteHop, RouteLeg, DexRoute |
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
@@ -14,6 +15,7 @@
 | `executor.rs` | ExecutorDeployQuote, ExecutorDeployed — развёртывание своего исполнителя ArbExecutor (решение 122, часть X): оценка перед подтверждением и итог |
 | `pool_depth.rs` | PoolDepth, CrossCheck — пул DEX глазами адаптера для экрана «Монеты»: глубина по направлениям, вердикт, спит ли, независимая сверка расчёта (перечисление), подробности площадки строками (решение 73) |
 | `dex_cycle.rs` | DexCycle, DexCycleHop — сигнал замкнутого цикла DEX ↔ DEX для «Живого экрана» (решение 85, фаза сигнала): базовая монета, вложено/получено, валовая и чистая прибыль, газ/чаевые (BNB) и их перевод в базовую, маршрут по хопам, флаг исполнимости и причина, блок |
+| `cycle_trade.rs` | CycleQuote, CycleTradeRequest, CycleTradeResult — исполнение цикла DEX ↔ DEX (решение 124): расчёт на вход для подбора размера, запрос сделки (вход и граница minOut ядра), итог (своп «базовая → базовая» и курсы для учёта) |
 | `control.rs` | CoinGasStats, StuckAlert, ManualHolding, ManualAction, ManualCommand, CommandSource |
 
 Деньги — `rust_decimal::Decimal`, значения блокчейна — `alloy_primitives::U256`/`Address`/`B256`.

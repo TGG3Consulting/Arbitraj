@@ -1,11 +1,12 @@
 //! Файл: venues/bsc_dex/pools/factory_ask.rs
 //! Что делает: вид вопроса к реестру фабрики при поиске пулов на своём узле (решение 121 C3, дополнено решением 122 F):
 //! V2 getPair, V3 getPool по уровню комиссии, Solidly getPool / Solidly V1 (THENA V1) getPair по флагу stable, Algebra
-//! poolByPair, DODO V2 getDODOPoolBidirection (DVM/DPP/DSP — индексатор их пулы на BSC не отдаёт, карта покрытия).
+//! poolByPair, DODO V2 getDODOPoolBidirection (DVM/DPP/DSP — индексатор их пулы на BSC не отдаёт, карта покрытия),
+//! Maverick V2 lookup(tokenA, tokenB, 0, N) (решение 122 F).
 //! Сборка данных вызова и разбор ответа в список адресов пулов — без сети.
 //! Кто вызывает: pools/factory_calls.rs (plan), pools/factory_scan.rs (разбор ответов).
 //! От чего зависит: factory_calls.rs (encode/decode V2/V3), verify_solidly.rs (registry_call), abi_algebra.rs,
-//! abi_dodo.rs, abi_solidly.rs.
+//! abi_dodo.rs, abi_solidly.rs, abi_maverick.rs.
 //! Настройки: нет (адрес фабрики и уровни комиссии — factory_calls.rs).
 //!
 //! Сигнатуры — официальные интерфейсы фабрик:
@@ -16,7 +17,10 @@
 //! - Algebra poolByPair(address,address) — @cryptoalgebra/v1.9-core IAlgebraFactory.sol (abi_algebra.rs);
 //! - DODO getDODOPoolBidirection(token0, token1) → (base0[], base1[]) — DODOEX/contractV2 2f1bcda,
 //!   Factory/DVMFactory.sol, DPPFactory.sol, DSPFactory.sol (abi_dodo.rs): base0 — пулы с base = token0, base1 —
-//!   с base = token1; оба — пулы этой пары.
+//!   с base = token1; оба — пулы этой пары;
+//! - Maverick V2 lookup(IERC20 _tokenA, IERC20 _tokenB, uint256 startIndex, uint256 endIndex) → пулы[] —
+//!   maverickprotocol/v2-common d91e871, IMaverickV2Factory.sol L352-L357 (постраничный список пулов пары —
+//!   maverick-v2-examples 68e4d2f README.md L8-L25); endIndex — dex.pair_lookup_max.
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::I24;
@@ -24,6 +28,7 @@ use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
+use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::ISolidlyFactory;
 use super::abi_stable_u::{IListaStableFactory, IPancakeStableFactory};
@@ -55,6 +60,8 @@ pub enum Q {
     /// WooFi (решение 122 F, 3): оракул state(монета) — цена > 0 значит, монета — базовая общего контракта `pool`
     /// (IWooracleV2_2.sol). Вопрос задаётся оракулу (dex.oracle), найденный пул — общий контракт dex.pmm_pool.
     Woo(Address),
+    /// Maverick V2: lookup(tokenA, tokenB, 0, предел) — все пулы пары (предел — dex.pair_lookup_max).
+    Maverick(u32),
 }
 
 impl Q {
@@ -72,6 +79,7 @@ impl Q {
             Q::PancakeStable { three: true } => "getThreePoolPairInfo",
             Q::ListaStable => "getPairInfos",
             Q::Woo(_) => "state(base)",
+            Q::Maverick(_) => "lookup(tokenA, tokenB)",
         }
     }
 }
@@ -113,6 +121,23 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         .abi_encode()
         .into(),
         Q::Woo(_) => IWooracle::stateCall { base: coin }.abi_encode().into(),
+        // Maverick V2: tokenA < tokenB (IMaverickV2Pool.sol L231-L233; фабрика create откатывает обратный порядок —
+        // FactoryInvalidTokenOrder, IMaverickV2Factory.sol L17), поэтому пара — по возрастанию адреса.
+        Q::Maverick(end) => {
+            let (a, b) = if coin < quote {
+                (coin, quote)
+            } else {
+                (quote, coin)
+            };
+            IMaverickV2Factory::lookupCall {
+                _tokenA: a,
+                _tokenB: b,
+                startIndex: alloy_primitives::U256::ZERO,
+                endIndex: alloy_primitives::U256::from(end),
+            }
+            .abi_encode()
+            .into()
+        }
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -142,6 +167,8 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             ICLFactory::getPoolCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ getPool(tickSpacing) не по ABI: {e}"))?,
         ],
+        Q::Maverick(_) => IMaverickV2Factory::lookupCall::abi_decode_returns(out)
+            .map_err(|e| format!("ответ lookup(tokenA, tokenB) не по ABI: {e}"))?,
         Q::Dodo => {
             let r = IDodoFactory::getDODOPoolBidirectionCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ getDODOPoolBidirection не по ABI: {e}"))?;

@@ -12,7 +12,7 @@ use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
     events_algebra, events_bin, events_cl, events_curve, events_dodo, events_elastic,
-    events_solidly, events_stable_u, events_v2, events_v3,
+    events_maverick, events_solidly, events_stable_u, events_v2, events_v3,
 };
 
 /// Что произошло с записью после события.
@@ -45,6 +45,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
             events_stable_u::topics(f.proto)
         }
+        Proto::Maverick => events_maverick::topics(),
     }
 }
 
@@ -72,6 +73,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
             events_stable_u::liquidity_topics(f.proto)
         }
+        Proto::Maverick => events_maverick::liquidity_topics(),
     }
 }
 
@@ -90,6 +92,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
             events_stable_u::apply(e, log)
         }
+        Proto::Maverick => events_maverick::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

@@ -3,7 +3,9 @@
   Что делает: экран «Сделки» — идущие и закрытые сделки: направление, шаг (покупка, перевод, продажа,
     застрявшая монета, ждёт человека…), где сейчас монеты и сколько, вложено, выручка, затраты, итог против
     плана; раскрывается хронология шагов и план (полный расчёт затрат). Данные — GET /api/deals,
-    живое сообщение deal обновляет строку на месте.
+    живое сообщение deal обновляет строку на месте. Решение 123 («лучший из двух»): под строкой — кто дал финальную
+    котировку DEX в плане (Quote.pick); кто исполнил своп и почему — в хронологии («исполнил: свой сборщик: … /
+    KyberSwap; лучший из двух: …»).
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte.
   Настройки: нет.
@@ -11,7 +13,7 @@
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
-  import { stepLabel, dirText } from '../lib/coreLabels.js';
+  import { stepLabel, dirText, pickLines } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
@@ -71,6 +73,9 @@
         {#each d.timeline as [at, text], i (i)}<tr><td>{showTime(at)}</td><td>{text}</td></tr>{/each}
       </tbody></table>
     </details>
+    {#each pickLines(d.plan) as line, i (i)}
+      <p class="muted">План, исполнитель DEX (решение 123), {line}</p>
+    {/each}
     {#if d.plan?.costs}
       <details>
         <summary>План: объём {d.plan.qty}, прибыль {d.plan.profit_usd} USDT</summary>

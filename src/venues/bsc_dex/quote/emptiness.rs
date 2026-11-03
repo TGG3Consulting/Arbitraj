@@ -57,5 +57,7 @@ pub fn empty(e: &Entry) -> bool {
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
         // PMM от оракула (WooFi, решение 122 F, 3): пуст, когда контракт на паузе или оракул не признаёт цену.
         PoolState::OraclePmm(d) => d.paused || !d.feasible || d.price.is_zero(),
+        // TickBin (Maverick V2, решение 122 F): пуст при нулевом любом резерве пула (обмен в одну из сторон невозможен).
+        PoolState::TickBin(d) => d.reserve0.is_zero() || d.reserve1.is_zero(),
     }
 }

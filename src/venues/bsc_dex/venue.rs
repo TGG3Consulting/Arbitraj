@@ -93,6 +93,11 @@ impl Venue for BscDex {
         if self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
             match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
                 Err(e) if e.code == ErrorCode::NoRoute => {}
+                // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.
+                Err(mut e) => {
+                    e.message = format!("[KyberSwap] {}", e.message);
+                    return Err(e);
+                }
                 other => return other,
             }
         }

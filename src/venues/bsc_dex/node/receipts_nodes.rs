@@ -43,11 +43,21 @@ pub fn list(ctx: &Ctx) -> GatewayResult<Option<(Vec<String>, u64)>> {
             ));
         }
     };
-    if let Some(bad) = urls.iter().find(|u| !u.starts_with("https://")) {
-        return Err(ctx.not_set(
-            "bsc.receipts_node_urls",
-            format!("bsc.receipts_node_urls: адрес {bad} — не https"),
-        ));
+    // Решение 121: https — любой узел; http — только узел на этом же сервере (127.0.0.1, ::1, localhost) — то же правило,
+    // что у адресов в настройках (settings/value.rs check_url).
+    for u in &urls {
+        if !u.starts_with("https://") && !u.starts_with("http://") {
+            return Err(ctx.not_set(
+                "bsc.receipts_node_urls",
+                format!("bsc.receipts_node_urls: адрес {u} — не https/http"),
+            ));
+        }
+        if let Err(why) = crate::settings::value::check_url(u) {
+            return Err(ctx.not_set(
+                "bsc.receipts_node_urls",
+                format!("bsc.receipts_node_urls: {why}"),
+            ));
+        }
     }
     let rps = ctx
         .settings

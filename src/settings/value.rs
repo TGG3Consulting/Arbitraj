@@ -140,7 +140,7 @@ fn check_scope_id(scope: &Scope) -> Result<(), String> {
 /// http://127.0.0.1:8545 и ws://127.0.0.1:8546, трафик не выходит с сервера, ключ в адресе не утекает.
 /// Принимает: адрес строкой. Возвращает: Ok(()) или Err(понятная причина по-русски).
 /// Ошибки: неверный адрес; схема не https/wss/http/ws; http/ws для хоста не петли.
-fn check_url(s: &str) -> Result<(), String> {
+pub fn check_url(s: &str) -> Result<(), String> {
     let url = reqwest::Url::parse(s).map_err(|e| format!("Неверный адрес: {e}"))?;
     match url.scheme() {
         "https" | "wss" => Ok(()),

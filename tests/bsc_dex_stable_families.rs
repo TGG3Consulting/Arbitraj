@@ -189,6 +189,23 @@ async fn stable_steps_take_indices_from_state() {
         }
         e
     };
+    // Ревью 7b4ea25 (🟡1): сторона BNB шага обязана совпадать с dex.native_wrapped — без неё (или с другой) отказ.
+    let e = with_native("lista_stableswap", 2);
+    let why = entry::params(&c, &e, t0).expect_err("dex.native_wrapped не задана");
+    assert!(
+        why.message.contains("dex.native_wrapped"),
+        "{}",
+        why.message
+    );
+    c.settings
+        .set(
+            "dex.native_wrapped",
+            arb::settings::scope::Scope::Venue("bsc_dex".into()),
+            Some(serde_json::json!(t0.to_string())),
+            "тест",
+        )
+        .await
+        .unwrap();
     for k in ["pancake_stableswap", "lista_stableswap"] {
         let e = with_native(k, 2);
         let (p, _) = entry::params(&c, &e, t0).unwrap();

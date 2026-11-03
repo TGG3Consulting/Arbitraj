@@ -24,6 +24,7 @@ use super::super::super::ctx::Ctx;
 use super::super::super::pools::exec_kind::ExecKind;
 use super::super::super::pools::families::Family;
 use super::super::super::pools::registry::Entry;
+use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
 use super::kind::{Params, STABLE_NATIVE};
 
@@ -62,7 +63,8 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
-            stable(e, k, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
+            stable(e, k, token_in, stable_native::wrapped(ctx))
+                .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
     };
     Ok((p, pool))
@@ -72,7 +74,12 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
 /// токен входа. Возвращает: параметры шага или причину (состояние не StableSwap; обмены пула остановлены — пауза /
 /// kill / сбой проверки цены Lista; в паре — сама метка 0xEeee…; нативная монета пары у вида без шага с BNB; токен входа
 /// не token0/token1 пула).
-fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
+fn stable(
+    e: &Entry,
+    k: ExecKind,
+    token_in: Address,
+    wrapped: Option<Address>,
+) -> Result<Params, String> {
     let PoolState::StableSwap(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
     };
@@ -99,6 +106,21 @@ fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
     };
     // Нативная монета пула — монета этой пары (вход или выход шага): шаг с BNB (только PancakeSwap Stable / Lista).
     if let Some(n) = d.native.filter(|n| *n == i || *n == j) {
+        // Ревью 7b4ea25 (🟡1): сторона BNB шага — текущая обёртка dex.native_wrapped. Настройку могли сменить на лету, а
+        // пара пула сопоставлена при загрузке: иначе контракт вызвал бы withdraw/deposit не у той обёртки (откат).
+        let bnb_side = if n == i {
+            token_in
+        } else if token_in == e.pool.token0 {
+            e.pool.token1
+        } else {
+            e.pool.token0
+        };
+        if wrapped != Some(bnb_side) {
+            return Err(format!(
+                "{}: сторона BNB пары {bnb_side} не совпадает с dex.native_wrapped ({wrapped:?}) — пул перечитается",
+                e.family.id
+            ));
+        }
         return match k {
             ExecKind::StableU256 => Ok(Params::StableU256Bnb {
                 i,

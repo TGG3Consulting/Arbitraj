@@ -22,6 +22,7 @@ pub mod plan;
 pub mod precheck;
 pub mod precheck_sim;
 pub mod result;
+pub mod smart_legs;
 pub mod swap_send;
 pub mod swap_v2v3;
 pub mod swap_v4;

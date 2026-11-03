@@ -5,6 +5,8 @@
 //! Сверка: |локально − квотер| / квотер · 100 > dex.quoter_max_diff_pct → пул исключается до следующей сверки.
 //! У пула с крючком B/C квотер исполняет крючок, а математика — нет: локальный выход берётся за вычетом измеренного
 //! влияния крючка (check/hooks_probe.rs) — так сверяются и математика пула, и то, что крючок ведёт себя как при пробе.
+//! Infinity Stable (решение «122 (Infinity Stable, ответы)»): основной квотер — CLQuoter, дополнительный — get_dy крючка
+//! (quote/quoter_extra.rs), оба параллельно; расхождение или отказ любого — пул не сверен.
 //! Кто вызывает: check/quoter_cycle.rs (цикл dex.quoter_check_s), check/hooks_probe.rs, exec/precheck.rs (перед сделкой),
 //! quote/mixed_quoter.rs (less_hook, diff_pct).
 //! От чего зависит: node/rpc.rs, quote/quoter_calls.rs, pools/registry.rs, quote/pool_quote.rs, quote/emptiness.rs.
@@ -64,7 +66,16 @@ pub async fn compare(
     if !local.complete {
         return Ok(Err(emptiness::short(emptiness::SHORT_LOCAL)));
     }
-    let remote = match out(ctx, e, token_in, amount).await {
+    // Решение «122 (Infinity Stable, ответы)»: у Infinity Stable ещё get_dy крючка — параллельно с основным квотером
+    // (quote/quoter_extra.rs); у остальных видов дополнительный сразу Ok.
+    let (main, extra) = tokio::join!(
+        out(ctx, e, token_in, amount),
+        super::quoter_extra::check(ctx, e, token_in, amount, local.amount_out)
+    );
+    if let Err(why) = extra? {
+        return Ok(Err(why));
+    }
+    let remote = match main {
         Ok(r) => r,
         Err(err) => {
             return match quoter_revert::liquidity_short(&err) {

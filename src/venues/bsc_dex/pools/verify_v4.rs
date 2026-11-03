@@ -3,7 +3,8 @@
 //! Multicall3: PancakeSwap Infinity — ключ пула у своего менеджера (poolIdToPoolKey), Uniswap V4 — у PositionManager
 //! (poolKeys по первым 25 байтам PoolId; сам PositionManager сверяется с менеджером — poolManager()). Ключ должен дать
 //! тот же PoolId (keccak256 ключа), менеджер в ключе — менеджер DEX из настроек, валюты — монета и встречный токен.
-//! Так история событий Initialize (dex.history_scan) для этих пулов не нужна.
+//! Так история событий Initialize (dex.history_scan) для этих пулов не нужна. Infinity CL не берёт пул, чей крючок
+//! в dex.stable_hooks (это пул Infinity Stable — решение «122 (Infinity Stable, ответы)»).
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_check.rs, key.rs, discover_v4.rs (from_key), discover.rs.
 //! Настройки: dex.pool_manager, dex.position_manager [DEX].
@@ -25,6 +26,7 @@ use super::key::{
     InfinityPoolKeyData, PoolKey, UniswapPoolKeyData, infinity_bin_step, infinity_tick_spacing,
 };
 use super::verify::{Candidate, Verdict};
+use super::verify_inf_stable::{claimed, claimed_reason};
 
 /// Проверка пачки кандидатов V4 частями по `size` вызовов. Возвращает: итог по каждому (сбой узла на части — Failed).
 /// Ошибок нет.
@@ -87,6 +89,15 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         out.push(match (key, pm) {
             (Err(node), _) | (_, Err(node)) => Verdict::Failed(node),
             (Ok(key), Ok(pm)) => match decide(c, id, manager, key, pm) {
+                // Решение «122 (Infinity Stable, ответы)»: крючок из dex.stable_hooks — пул Infinity Stable, не CL.
+                Ok(f)
+                    if c.family.proto == Proto::InfinityCl
+                        && f.key.as_ref().is_some_and(|k| claimed(ctx, k.hooks())) =>
+                {
+                    Verdict::Rejected(claimed_reason(
+                        f.key.as_ref().map_or_else(Default::default, |k| k.hooks()),
+                    ))
+                }
                 Ok(f) => Verdict::Taken(Box::new(f)),
                 Err(w) => Verdict::Rejected(w),
             },

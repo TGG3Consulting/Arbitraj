@@ -39,6 +39,7 @@ pub mod pmm_ladder;
 pub mod pool_quote;
 pub mod quoter;
 pub mod quoter_calls;
+pub mod quoter_extra;
 pub mod quoter_maverick;
 pub mod quoter_revert;
 pub mod rate;

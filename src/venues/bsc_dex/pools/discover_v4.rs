@@ -68,10 +68,18 @@ pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<V
 }
 
 /// Разбор одного Initialize вида: Some — пул этого вида, None — не его пул (Infinity Stable: крючок не из
-/// dex.stable_hooks или без флагов обмена крючком — verify_inf_stable::found). Ошибки: как у parse.
+/// dex.stable_hooks или без флагов обмена крючком — verify_inf_stable::found; Infinity CL: крючок занят видом Infinity
+/// Stable — verify_inf_stable::claimed). Ошибки: как у parse.
 pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Option<Found>> {
     if f.proto != Proto::InfinityStable {
-        return parse(ctx, f, log).map(Some);
+        let found = parse(ctx, f, log)?;
+        // Решение «122 (Infinity Stable, ответы)»: пул с крючком из dex.stable_hooks — только вид Infinity Stable.
+        let taken = f.proto == Proto::InfinityCl
+            && found
+                .key
+                .as_ref()
+                .is_some_and(|k| super::verify_inf_stable::claimed(ctx, k.hooks()));
+        return Ok((!taken).then_some(found));
     }
     let e = IInfinityCl::Initialize::decode_log_data(&log.inner.data).map_err(|e| {
         ctx.err(

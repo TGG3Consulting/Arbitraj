@@ -5,7 +5,7 @@
 //! пробным обменом; глубина нужного направления в полосе цены не ниже dex.min_pool_liquidity_usd (решение 73).
 //! Кто вызывает: quote/direct.rs.
 //! От чего зависит: check/state.rs, pools/registry.rs, pools/depth_book.rs, tokens.rs.
-//! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
+//! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! dex.min_pool_liquidity_usd, через depth_book.rs — dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
 //!
 //! Динамическая комиссия V4 (fee = DYNAMIC_FEE_FLAG) — группа B: её влияние измеряется квотером
@@ -21,8 +21,9 @@ use crate::settings::read::At;
 
 use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
-use super::super::pools::families;
+use super::super::pools::families::{self, Proto};
 use super::super::pools::registry::{Entry, Registry};
+use super::super::pools::verify_inf_stable;
 use super::super::tokens::Tokens;
 use super::Quoting;
 
@@ -50,6 +51,14 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     }
     // DEX подключена и её вид не менялся на лету (pools/families.rs); пул не исключён проверкой «кто меняет».
     families::still(ctx, e.family)?;
+    // Решение «122 (Infinity Stable, ответы)»: пул Infinity CL с крючком из dex.stable_hooks — это пул Infinity Stable
+    // (одна математика на пул), видом CL в котировку не идёт (например, взят до того, как крючок внесли в список).
+    if e.family.proto == Proto::InfinityCl
+        && let Some(k) = e.key.as_ref()
+        && verify_inf_stable::claimed(ctx, k.hooks())
+    {
+        return Err(verify_inf_stable::claimed_reason(k.hooks()));
+    }
     if let Some(why) = ctx.index.banned(&e.pool.reference) {
         return Err(why);
     }

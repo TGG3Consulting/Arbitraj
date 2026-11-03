@@ -48,23 +48,22 @@ pub async fn trade(
     nonces: &Nonces,
     req: TradeRequest,
 ) -> GatewayResult<TradeResult> {
-    let who = req
-        .route
-        .as_ref()
-        .map_or(result::BY_DIRECT, |r| by_whom(&q.ctx, r));
+    let who = req.route.as_ref().map_or(result::BY_DIRECT, |r| {
+        by_whom(&q.ctx, r, super::native::is_native(&q.ctx, &req.asset))
+    });
     result::by(run(q, env, nonces, req).await, who)
 }
 
 /// Кто исполнит маршрут — по тем же правилам, что выбор пути в run: умный режим — умный; граф — по форме
-/// (quote/graph_route::graph_form), форма «бандл» при заданном exec.executor_address — исполнитель (решение 122);
+/// (quote/graph_route::graph_form), форма «бандл», которую берёт исполнитель (executor::takes), — исполнитель (решение 122);
 /// иначе прямой. Ошибок нет (адрес не читается — подпись бандла, сама сделка вернёт ошибку настройки).
-fn by_whom(ctx: &Ctx, route: &DexRoute) -> &'static str {
+fn by_whom(ctx: &Ctx, route: &DexRoute, native: bool) -> &'static str {
     match route.mode {
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {
             GraphForm::Direct => result::BY_DIRECT,
             GraphForm::OneUr => result::BY_SMART,
-            GraphForm::Bundle if matches!(executor::address(ctx), Ok(Some(_))) => {
+            GraphForm::Bundle if matches!(executor::takes(ctx, route, native), Ok(Some(_))) => {
                 result::BY_EXECUTOR
             }
             GraphForm::Bundle => result::BY_BUNDLE,
@@ -120,7 +119,8 @@ async fn run(
             }
             // Решение 122 (часть X): задан exec.executor_address — одной транзакцией через свой исполнитель.
             GraphForm::Bundle => {
-                if let Some(x) = executor::address(ctx)? {
+                let is_native = super::native::is_native(ctx, &req.asset);
+                if let Some(x) = executor::takes(ctx, &route, is_native)? {
                     return executor::trade::trade(q, env, nonces, req, &route, verified, x).await;
                 }
                 return bundle_trade::trade(q, env, nonces, req, &route, verified).await;

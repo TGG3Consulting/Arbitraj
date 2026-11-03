@@ -12,9 +12,12 @@
 //! делает — маршрут с BNB через ногу форка неисполним с причиной.
 //! Решение 39 (проверка и в котировке графа — Тигран, 03.11): у монеты с налогом путь через промежуточную (нога из 2+
 //! хопов) — только пулы V2 на каждом шаге (как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
+//! Решение 122, часть X: при заданном exec.executor_address маршрут, каждый шаг которого — вид исполнителя
+//! (exec/executor/entry.rs::supported), исполним одной транзакцией через свой исполнитель — бандловые каналы не нужны,
+//! нога может пересекать роутеры и семейства; без адреса — как раньше.
 //! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
-//! От чего зависит: pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
-//! Настройки: dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
+//! От чего зависит: exec/executor/{mod, entry}.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
+//! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
 use alloy_primitives::Address;
 
@@ -22,6 +25,7 @@ use crate::core::types::{DexRoute, PoolKind};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::exec::executor::{self, entry};
 use super::super::pools::families::{self, Family, smart_ok};
 use super::path::Path;
 
@@ -31,17 +35,6 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
     // Пустой маршрут не исполним (защитный guard; split этого не даёт).
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
-    }
-    // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
-    if let Some(h) = legs
-        .iter()
-        .flat_map(|p| p.hops.iter())
-        .find(|h| !h.entry.family.tradable)
-    {
-        return Err(format!(
-            "маршрут проходит через {} без своего пути исполнения — это сигнал, авто-сделкой не исполняется",
-            h.entry.family.id
-        ));
     }
     // R2: длина ноги — не больше dex.route_max_hops (перебор путей и так не строит длиннее; проверка явная).
     let max_hops = ctx.int("dex.route_max_hops").map_err(|e| e.message)?;
@@ -62,6 +55,23 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
         return Err(format!(
             "у монеты налог — путь через промежуточную только V2 (решение 39), а шаг идёт через {} {:?} — сигнал",
             h.entry.family.title, h.entry.pool.kind
+        ));
+    }
+    // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (отметка готовности семейства,
+    // exec/executor/entry.rs::supported) — маршрут исполним одной транзакцией через исполнитель: бандловые каналы не
+    // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
+    if !native && via_executor(ctx, legs)? {
+        return Ok(());
+    }
+    // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
+    if let Some(h) = legs
+        .iter()
+        .flat_map(|p| p.hops.iter())
+        .find(|h| !h.entry.family.tradable)
+    {
+        return Err(format!(
+            "маршрут проходит через {} без своего пути исполнения — это сигнал, авто-сделкой не исполняется",
+            h.entry.family.id
         ));
     }
     // Форк исполняется ТОЛЬКО своим роутером бандлом (решения 59, 82) — не прямым/умным путём Universal Router.
@@ -90,6 +100,17 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result
     }
     // Мульти-роутер или форк: исполним, если собирается в атомарный бандл свопов (решение 84, exec/bundle.rs).
     collectable(ctx, legs)
+}
+
+/// Пойдёт ли маршрут через исполнитель: адрес задан и все шаги — виды исполнителя. Ошибки (текст): адрес не читается.
+fn via_executor(ctx: &Ctx, legs: &[Path]) -> Result<bool, String> {
+    if executor::address(ctx).map_err(|e| e.message)?.is_none() {
+        return Ok(false);
+    }
+    Ok(legs
+        .iter()
+        .flat_map(|p| p.hops.iter())
+        .all(|h| entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()))
 }
 
 /// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей
@@ -161,7 +182,17 @@ pub fn graph_form(ctx: &Ctx, route: &DexRoute) -> GraphForm {
     if has_fork {
         return GraphForm::Bundle;
     }
-    if route.legs.len() == 1 && route.legs.first().is_some_and(|l| l.hops.len() == 1) {
+    // Прямая форма — только у семейства со своим Universal Router (tradable, не форк); шаг другого семейства в
+    // исполнимом маршруте возможен только через исполнитель (решение 122) — форма «бандл».
+    let own_ur = |h: &crate::core::types::RouteHop| {
+        families::classify(ctx, &h.family).is_ok_and(|f| f.tradable && !f.fork)
+    };
+    if route.legs.len() == 1
+        && route
+            .legs
+            .first()
+            .is_some_and(|l| l.hops.len() == 1 && l.hops.iter().all(own_ur))
+    {
         return GraphForm::Direct;
     }
     let one_ur = route.legs.iter().all(|l| {

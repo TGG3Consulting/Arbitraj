@@ -59,7 +59,8 @@ pub async fn units(
     let amount = amount.ok_or_else(bad)?;
     // Решение 122 (часть X): маршрут через исполнитель ArbExecutor — одно разрешение ERC-20 исполнителю, без Permit2
     // (память — wallet/allow_cache.rs::erc20). Газ — тот же измеренный пробным обменом (верхняя оценка).
-    if let Some(x) = super::super::exec::executor::takes(ctx, route)? {
+    let native = super::super::exec::native::is_native(ctx, &quote.asset);
+    if let Some(x) = super::super::exec::executor::takes(ctx, route, native)? {
         let wallet = signer::address(ctx)?;
         if q.allow.erc20(ctx, token, wallet, x).await? >= amount {
             return Ok(None);

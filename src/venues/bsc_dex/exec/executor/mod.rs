@@ -25,6 +25,7 @@ use crate::core::types::{DexRoute, RouteMode};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::pools::families;
 use super::super::quote::graph_route::{self, GraphForm};
 
 /// Адрес развёрнутого исполнителя (exec.executor_address). Принимает: окружение. Возвращает: None — не задан (маршруты
@@ -38,9 +39,20 @@ pub fn address(ctx: &Ctx) -> GatewayResult<Option<Address>> {
 }
 
 /// Пойдёт ли маршрут через исполнитель: графовый маршрут формы «бандл» (не один Universal Router, не прямой) при
-/// заданном exec.executor_address. Возвращает: адрес исполнителя или None. Ошибки: как у address.
-pub fn takes(ctx: &Ctx, route: &DexRoute) -> GatewayResult<Option<Address>> {
-    if route.mode != RouteMode::Graph || graph_route::graph_form(ctx, route) != GraphForm::Bundle {
+/// заданном exec.executor_address, монета не нативная и каждый шаг — вид исполнителя (entry.rs::supported, та же
+/// проверка, что исполнимость графа quote/graph_exec.rs); иначе — бандл, как раньше. Принимает: маршрут, нативная ли
+/// монета. Возвращает: адрес исполнителя или None. Ошибки: как у address.
+pub fn takes(ctx: &Ctx, route: &DexRoute, native: bool) -> GatewayResult<Option<Address>> {
+    if native
+        || route.mode != RouteMode::Graph
+        || graph_route::graph_form(ctx, route) != GraphForm::Bundle
+    {
+        return Ok(None);
+    }
+    let all = route.legs.iter().flat_map(|l| l.hops.iter()).all(|h| {
+        families::classify(ctx, &h.family).is_ok_and(|f| entry::supported(f, &h.pool).is_ok())
+    });
+    if !all {
         return Ok(None);
     }
     address(ctx)

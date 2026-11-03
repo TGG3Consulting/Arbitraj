@@ -133,7 +133,8 @@ pub async fn build(
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
     let deployed = executor::address(ctx)?;
-    let via_exec = mode == DryMode::Executor || (shape == RouteMode::Graph && deployed.is_some());
+    let takes = shape == RouteMode::Graph && executor::takes(ctx, route, is_native)?.is_some();
+    let via_exec = mode == DryMode::Executor || takes;
     if via_exec {
         if is_native {
             let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";

@@ -14,7 +14,7 @@
 | `pmm_ladder.rs` | Котировка и глубина по лесенке цен пула (WooFi, решение 122 F, 3): точно в точках, средняя цена линейно между точками, выше последней — неисполнимо |
 | `tick_bin_spot.rs` | Пул TickBin (Maverick V2, решение 122 F): цена активного тика (официальный TickMath) для размера пробы и глубина в полосе — порт расчёта обмена без комиссии до тика границы |
 | `spot.rs` | Монеты на сумму по текущей цене пула без обмена (проба продажи сверки с квотером, решение 73); DODO — getMidPrice; Solidly — отношение резервов |
-| `pool_quote.rs` | Обмен в одном пуле по локальной математике; полная комиссия V4 (протокольная + LP); DODO PMM — swap_dodo + комиссии lp/mt (решение 86b); Solidly — stable swap_solidly / volatile v2 (решения 80, 85) |
+| `pool_quote.rs` | Обмен в одном пуле по локальной математике; полная комиссия V4 (протокольная + LP); DODO PMM — swap_dodo + комиссии lp/mt (решение 86b); Solidly — stable swap_solidly / volatile v2 (решения 80, 85) Infinity Stable — шаблон StableSwap-NG (math/stableswap_ng.rs, решение «122 (Infinity Stable)»). |
 | `direct.rs` | Лучший пул с учётом налогов монеты и влияния крючка; расчёт доли в пуле (`calc`); частичная ликвидность → `fillable_qty` |
 | `smart.rs` | Умный маршрут: деление объёма шагами `smart.split_step_pct` между пулами PancakeSwap (не больше `smart.max_splits`); монета с налогом — только V2 |
 | `smart_ways.rs` | Кандидаты деления умного маршрута: пулы с USDT и пары через промежуточные; расчёт кандидата |
@@ -49,7 +49,7 @@
 | `costs.rs` | Котировка ядру: средняя цена, маршрут, затраты (комиссия пула, налоги, крючок — в цене; газ — отдельно, BNB) |
 | `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
 | `quoter.rs` | Выход по квотеру DEX (eth_call) и сверка с математикой (`dex.quoter_max_diff_pct`) |
-| `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) |
+| `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) Infinity Stable — get_dy крючка. |
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |

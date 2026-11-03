@@ -2,11 +2,12 @@
 //! Что делает: одно событие создания пула → пул подписки (решение 58: между обновлениями справочника). Источник события
 //! (адрес контракта и topic0) сверяется с подключёнными DEX: V2 PairCreated / V3 PoolCreated своей фабрики — пул из
 //! события проверяется на узле (verify.rs: токены, реестр фабрики, своя комиссия пары) и подключается; V4 Initialize
-//! своего менеджера — ключ из события, PoolId сверяется (discover_v4::parse), затем та же проверка ключа у менеджера.
+//! своего менеджера — ключ из события, PoolId сверяется (discover_v4::parse), затем та же проверка ключа у менеджера
+//! (Infinity Stable — тот же Initialize CLPoolManager, пул — если крючок из dex.stable_hooks).
 //! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
 //! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
-//! Настройки: dex.factory, dex.pool_manager [DEX].
+//! Настройки: dex.factory, dex.pool_manager, dex.stable_hooks [DEX].
 //!
 //! События — research/flow/bsc_dex.md (схема п. 2: PairCreated(token0, token1, pair, n), PoolCreated(token0, token1,
 //! fee, tickSpacing, pool)) и research/flow/bsc_v4.md, раздел 3 (Initialize).
@@ -66,6 +67,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::UniswapV4 => (
                 "dex.pool_manager",
                 IUniswapV4::Initialize::SIGNATURE_HASH,
+                true,
+            ),
+            // Infinity Stable (решение «122 (Infinity Stable)»): Initialize того же CLPoolManager; пул берётся, если
+            // hooks ключа — из dex.stable_hooks (discover_v4::parse_opt).
+            Proto::InfinityStable => (
+                "dex.pool_manager",
+                IInfinityCl::Initialize::SIGNATURE_HASH,
                 true,
             ),
             // KyberSwap Elastic (решение 81): PoolCreated своей фабрики — пул отдельным контрактом (как V3).
@@ -130,18 +138,33 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
 pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
     let log: Log = serde_json::from_str(raw).map_err(|e| format!("лог не разобран: {e}"))?;
     let t0 = log.topics().first().copied().unwrap_or_default();
-    let Some((_, _, v4, f)) = sources(&p.ctx)
+    // У одного менеджера CL может быть два вида (Infinity CL и Infinity Stable — решение «122 (Infinity Stable)»):
+    // событие разбирается каждым подключённым видом этого источника. Нет ни одного — DEX выключили на лету.
+    let all: Vec<_> = sources(&p.ctx)
         .into_iter()
-        .find(|(a, t, _, _)| *a == log.inner.address && *t == t0)
-    else {
-        return Ok(()); // DEX выключили на лету — событие не нужно.
-    };
+        .filter(|(a, t, _, _)| *a == log.inner.address && *t == t0)
+        .collect();
+    for (_, _, v4, f) in all {
+        one(p, w, &log, v4, f).await?;
+    }
+    Ok(())
+}
+
+/// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
+async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
     let c = if v4 {
-        let all = discover_v4::parse(&p.ctx, f, &log).map_err(|e| e.message)?;
+        // Infinity Stable: событие пула не с крючком из dex.stable_hooks — не его пул (None).
+        let Some(all) = discover_v4::parse_opt(&p.ctx, f, log).map_err(|e| e.message)? else {
+            return Ok(());
+        };
         let Some(x) = against(&all, w.usdt) else {
             return Ok(());
         };
-        let pool = pool_key(&x.reference);
+        // Проверка V4 идёт по PoolId; у Infinity Stable ссылка — адрес крючка, PoolId — из ключа.
+        let pool = match (&x.key, f.proto) {
+            (Some(k), Proto::InfinityStable) => format!("{}", k.id()),
+            _ => pool_key(&x.reference),
+        };
         Candidate {
             family: f,
             pool,
@@ -149,7 +172,7 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
             quote: w.usdt,
         }
     } else {
-        candidate(f, &log, w.usdt)?
+        candidate(f, log, w.usdt)?
     };
     if !w.coins.contains_key(&c.coin) {
         return Ok(());

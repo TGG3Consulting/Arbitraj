@@ -225,6 +225,19 @@ pub struct StableData {
     pub i0: u8,
     /// Индекс монеты token1 в пуле.
     pub i1: u8,
+    /// Шаблон Curve StableSwap-NG (решение «122 (Infinity Stable)»): Some — комиссия динамическая и D считается по
+    /// формуле NG (адаптер, math/stableswap_ng.rs); None — шаблоны без NG. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub ng: Option<StableNg>,
+}
+
+/// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним
+/// оракулом (вид монеты 1 — rate oracle, 3 — ERC4626) уже входят в `StableData::rates` (`stored_rates()` пула на этом
+/// блоке): вид монеты у пула не читается (immutable без геттера), поэтому такие пулы перечитываются каждым блоком.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StableNg {
+    /// Множитель комиссии вне привязки — числитель над 10^10 (`offpeg_fee_multiplier()`); ≤ 10^10 — комиссия постоянна.
+    pub offpeg_fee_multiplier: U256,
 }
 
 /// Проверка цены пула StableSwap после обмена против оракула (решение 122 F, 3) — данные с контракта пула на блоке.

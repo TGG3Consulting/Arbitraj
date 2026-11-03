@@ -24,6 +24,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
+use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::registry::Entry;
 use super::path::Path;
@@ -128,7 +129,16 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 Bytes::from(U24::from(fee).abi_encode()),
             )
         }
-        PoolKind::Cl | PoolKind::Bin => {
+        // Infinity Stable (решение «122 (Infinity Stable)»): как CL-пул с ключом (hooks = крючок) — так же SDK
+        // (@pancakeswap/smart-router 7.8.0 evm.mjs L6269, L6343: isInfinityClPool || isInfinityStablePool).
+        // Прочие StableSwap Universal Router не исполняет — только шаги CURVE / STABLE_U256 / SADDLE исполнителя.
+        PoolKind::Cl | PoolKind::Bin | PoolKind::StableSwap => {
+            if e.pool.kind == PoolKind::StableSwap && e.family.proto != Proto::InfinityStable {
+                return Err(ctx.err(
+                    ErrorCode::Internal,
+                    "StableSwap не исполняется умным маршрутом (только шаг CURVE контракта-исполнителя)",
+                ));
+            }
             let Some(PoolKey::Infinity(k)) = e.key.as_ref() else {
                 return Err(ctx.err(ErrorCode::Internal, "у пула Infinity нет ключа"));
             };
@@ -163,13 +173,6 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
             return Err(ctx.err(
                 ErrorCode::Internal,
                 "Solidly не исполняется умным маршрутом (tradable=false, следующая фаза)",
-            ));
-        }
-        // StableSwap (решение 122 F): Universal Router его пулы не исполняет — только шаг CURVE исполнителя (часть X).
-        PoolKind::StableSwap => {
-            return Err(ctx.err(
-                ErrorCode::Internal,
-                "StableSwap не исполняется умным маршрутом (только шаг CURVE контракта-исполнителя)",
             ));
         }
         // PMM от оракула (WooFi, решение 122 F, 3): Universal Router его не исполняет.

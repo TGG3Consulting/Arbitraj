@@ -41,10 +41,13 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
         Proto::CurveStable => events_curve::topics(),
-        // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3 (events_stable_u.rs).
-        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
-            events_stable_u::topics(f.proto)
-        }
+        // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3; Infinity Stable (события крючка) —
+        // решение «122 (Infinity Stable)» (events_stable_u.rs).
+        Proto::PancakeStable
+        | Proto::ListaStable
+        | Proto::SaddleStable
+        | Proto::WooPP
+        | Proto::InfinityStable => events_stable_u::topics(f.proto),
         Proto::Maverick => events_maverick::topics(),
     }
 }
@@ -70,9 +73,11 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::Algebra => events_algebra::liquidity_topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
         Proto::CurveStable => events_curve::liquidity_topics(),
-        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
-            events_stable_u::liquidity_topics(f.proto)
-        }
+        Proto::PancakeStable
+        | Proto::ListaStable
+        | Proto::SaddleStable
+        | Proto::WooPP
+        | Proto::InfinityStable => events_stable_u::liquidity_topics(f.proto),
         Proto::Maverick => events_maverick::liquidity_topics(),
     }
 }
@@ -89,9 +94,11 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::Algebra => events_algebra::apply(e, log),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
         Proto::CurveStable => events_curve::apply(e, log),
-        Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
-            events_stable_u::apply(e, log)
-        }
+        Proto::PancakeStable
+        | Proto::ListaStable
+        | Proto::SaddleStable
+        | Proto::WooPP
+        | Proto::InfinityStable => events_stable_u::apply(e, log),
         Proto::Maverick => events_maverick::apply(e, log),
     };
     if let Some(b) = log.block_number

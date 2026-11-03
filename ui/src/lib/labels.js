@@ -59,6 +59,7 @@ const CHOICE = {
   saddle_stableswap: 'StableSwap Saddle (Nerve)',
   woofi_v2: 'WooFi WooPPV2 (лесенка цен пула)',
   maverick_v2: 'Maverick V2 (тики-бины, кривая квотера)',
+  pancake_infinity_stable: 'PancakeSwap Infinity Stable (StableSwap-NG в крючке CL)',
   pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
   pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
   uniswap_v4: 'Uniswap V4',

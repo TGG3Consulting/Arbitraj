@@ -62,6 +62,11 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
 | `dex.pmm_pool` / `dex.oracle` [WooFi] | не задана | `0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4` / `0x00021b2C857A8613DAEC2fd900122833866828a0` (woonetwork/docs 68dbdad, bnb-smart-chain.md) | WooPPV2 (прокси) и оракул |
 | `dex.pool_implementation` [WooFi] | не задана | `0x7b5fDb8C89A616d319202704B0eA18b168654281` (слот EIP-1967 на 03.11, сверено координатором) | сменилась реализация — пары не берутся |
 | `dex.pmm_ladder_usd` [WooFi] | не задана | суммы USDT по возрастанию, например 50, 200, 1000, 5000 | лесенка цен пула; не задана — WooFi только сигнал |
+| `dex.kind` [PancakeSwap Infinity Stable] | не задан | `pancake_infinity_stable` | решение «122 (Infinity Stable)»; id области — id DEX у индексатора (если он отдаёт эти пулы) или любой id (пулы найдёт история Initialize) |
+| `dex.pool_manager` / `dex.vault` [Infinity Stable] | не задана | те же, что у PancakeSwap Infinity CL (CLPoolManager и Vault) | ключ пула, события Initialize, держатель токенов |
+| `dex.stable_hooks` [Infinity Stable] | не задана | адреса крючков из официального API (`hookAddress`, explorer.pancakeswap.com …protocols=infinityStable), минимум `0x86c3DC08FB5a6663cCa15551575d5429e5Efc017` (verified BscScan) | без списка пулы не берутся |
+| `dex.universal_router` / `dex.universal_router_version` / `dex.permit2` [Infinity Stable] | не задана | те же, что у Infinity CL; версия `pancakeswap_infinity` | исполнение путём CL |
+| `dex.history_scan` [bsc_dex] | нет | на время первого поиска — да (или пулы из справочника по PoolId) | у менеджера нет реестра пулов, hooks в Initialize не индексирован |
 | `dex.pool_enabled` [каждая новая] | не задана | да | без него DEX не подключена |
 | `dex.route_gas_aware` [bsc_dex] | не задана | да | газ при выборе маршрута (как gasInclude KyberSwap) |
 | `exec.executor_address` [bsc_dex] | не задана | после шага 4 | исполнитель |

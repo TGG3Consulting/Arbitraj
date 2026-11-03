@@ -5,6 +5,8 @@
 //! встречный токен (USDT или промежуточная монета) выбирается уже из прочитанного (discover.rs) — так история
 //! не читается заново на каждый встречный токен.
 //! Кто вызывает: pools/discover.rs, pools/history_v4.rs, pools/history_store.rs, pools/created.rs, pools/verify_v4.rs (from_key).
+//! Infinity Stable (решение «122 (Infinity Stable)»): тот же Initialize CLPoolManager — пул берётся, если hooks ключа
+//! из dex.stable_hooks (parse_opt → verify_inf_stable::found; hooks в событии не индексирован — фильтр у нас).
 //! От чего зависит: ctx.rs, pools/scan.rs, abi_v4.rs, key.rs, hooks.rs, discover.rs (Found).
 //! Настройки: через scan.rs — dex.logs_block_batch, dex.scan_progress_s.
 //!
@@ -32,7 +34,8 @@ use super::{hooks, scan};
 /// topic0 события Initialize вида пула (фильтр eth_getLogs и подписки). Ошибок нет.
 pub fn topic(f: &Family) -> B256 {
     match f.proto {
-        Proto::InfinityCl => IInfinityCl::Initialize::SIGNATURE_HASH,
+        // Infinity Stable (решение «122 (Infinity Stable)») — пул в крючке пула того же CLPoolManager.
+        Proto::InfinityCl | Proto::InfinityStable => IInfinityCl::Initialize::SIGNATURE_HASH,
         Proto::InfinityBin => IInfinityBin::Initialize::SIGNATURE_HASH,
         _ => IUniswapV4::Initialize::SIGNATURE_HASH,
     }
@@ -52,9 +55,43 @@ pub async fn logs(
     scan::logs(ctx, manager, json!([topic(f)]), from, to, &what).await
 }
 
-/// Разбор пачки логов Initialize. Ошибки: как у parse (первый же неверный лог — ошибка целиком).
+/// Разбор пачки логов Initialize (у Infinity Stable — только пулы с крючком из dex.stable_hooks).
+/// Ошибки: как у parse (первый же неверный лог — ошибка целиком).
 pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<Vec<Found>> {
-    logs.iter().map(|log| parse(ctx, f, log)).collect()
+    let mut out = Vec::with_capacity(logs.len());
+    for log in logs {
+        if let Some(x) = parse_opt(ctx, f, log)? {
+            out.push(x);
+        }
+    }
+    Ok(out)
+}
+
+/// Разбор одного Initialize вида: Some — пул этого вида, None — не его пул (Infinity Stable: крючок не из
+/// dex.stable_hooks или без флагов обмена крючком — verify_inf_stable::found). Ошибки: как у parse.
+pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Option<Found>> {
+    if f.proto != Proto::InfinityStable {
+        return parse(ctx, f, log).map(Some);
+    }
+    let e = IInfinityCl::Initialize::decode_log_data(&log.inner.data).map_err(|e| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            format!("{}: Initialize: {e}", f.title),
+        )
+    })?;
+    let k = InfinityPoolKeyData {
+        currency0: e.currency0,
+        currency1: e.currency1,
+        hooks: e.hooks,
+        manager: log.inner.address,
+        fee: e.fee.to(),
+        parameters: e.parameters,
+    };
+    let ours = PoolKey::Infinity(k.clone()).id();
+    if ours != e.id {
+        return Err(mismatch(ctx, f, e.id, ours));
+    }
+    Ok(super::verify_inf_stable::found(ctx, f, k).ok())
 }
 
 /// Разбор одного Initialize в найденный пул. coin = currency0 до выбора встречного токена (discover::against).

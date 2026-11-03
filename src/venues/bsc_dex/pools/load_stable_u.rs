@@ -154,6 +154,7 @@ pub async fn load(
         strict: false,
         guard,
         halted,
+        ng: None,
     })))
 }
 

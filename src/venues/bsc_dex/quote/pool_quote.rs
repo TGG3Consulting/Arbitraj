@@ -22,7 +22,8 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, maverick_swap, solidly_v1_math, stable_guard, stableswap_v1, swap_solidly, v2,
+    bin_swap, maverick_swap, solidly_v1_math, stable_guard, stableswap_ng, stableswap_v1,
+    swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
@@ -333,16 +334,31 @@ pub fn swap(
                 strict: d.strict,
             };
             let (i, j) = (i as usize, j as usize);
-            let out = stableswap_v1::exchange_out_t(
-                i,
-                j,
-                amount,
-                &d.balances,
-                &d.rates,
-                d.amp,
-                d.fee,
-                &t,
-            )
+            // Шаблон StableSwap-NG (Infinity Stable, решение «122 (Infinity Stable)»): динамическая комиссия и D по
+            // формуле NG — выход _exchange_received крючка (math/stableswap_ng.rs).
+            let out = match &d.ng {
+                Some(ng) => stableswap_ng::exchange_received(
+                    i,
+                    j,
+                    amount,
+                    &d.balances,
+                    &d.rates,
+                    d.amp,
+                    d.fee,
+                    ng.offpeg_fee_multiplier,
+                )
+                .map(|r| r.0),
+                None => stableswap_v1::exchange_out_t(
+                    i,
+                    j,
+                    amount,
+                    &d.balances,
+                    &d.rates,
+                    d.amp,
+                    d.fee,
+                    &t,
+                ),
+            }
             .ok_or_else(none)?;
             // Проверка цены пула после обмена против оракула (Lista, math/stable_guard.rs): не пройдёт — обмен откатится.
             if let Some(g) = &d.guard

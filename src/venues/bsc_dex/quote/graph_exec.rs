@@ -10,22 +10,24 @@
 //! Решение 122, часть R3: нативная монета BNB в бандле — обёртка/развёртка WBNB командой WRAP_ETH / UNWRAP_WETH в
 //! execute КАЖДОГО Universal Router бандла (exec/bundle_native.rs). Нога форка (свой classic V2 Router) обёртку не
 //! делает — маршрут с BNB через ногу форка неисполним с причиной.
+//! Решение 39 (проверка и в котировке графа — Тигран, 03.11): у монеты с налогом путь через промежуточную (нога из 2+
+//! хопов) — только пулы V2 на каждом шаге (как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
 //! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
 //! От чего зависит: pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
 use alloy_primitives::Address;
 
-use crate::core::types::DexRoute;
+use crate::core::types::{DexRoute, PoolKind};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::pools::families::{self, Family, smart_ok};
 use super::path::Path;
 
-/// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли, нативная ли монета (BNB).
-/// Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
-pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> {
+/// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли, нативная ли монета (BNB),
+/// есть ли у монеты налог (решение 39). Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
+pub fn executable(ctx: &Ctx, legs: &[Path], native: bool, taxed: bool) -> Result<(), String> {
     // Пустой маршрут не исполним (защитный guard; split этого не даёт).
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
@@ -47,6 +49,19 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
         return Err(format!(
             "нога маршрута из {} хопов длиннее dex.route_max_hops ({max_hops}) — сигнал",
             p.hops.len()
+        ));
+    }
+    // Решение 39: у монеты с налогом путь через промежуточную — только V2 на каждом шаге (сделка это тоже проверяет).
+    if taxed
+        && let Some(h) = legs
+            .iter()
+            .filter(|p| p.hops.len() > 1)
+            .flat_map(|p| p.hops.iter())
+            .find(|h| h.entry.pool.kind != PoolKind::V2)
+    {
+        return Err(format!(
+            "у монеты налог — путь через промежуточную только V2 (решение 39), а шаг идёт через {} {:?} — сигнал",
+            h.entry.family.title, h.entry.pool.kind
         ));
     }
     // Форк исполняется ТОЛЬКО своим роутером бандлом (решения 59, 82) — не прямым/умным путём Universal Router.

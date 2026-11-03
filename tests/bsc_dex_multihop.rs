@@ -5,7 +5,8 @@
 //! суммой сделки, средние — роутер всем балансом (CONTRACT_BALANCE) роутеру же (ADDRESS_THIS), последний — кошельку
 //! с минимумом сделки; входы команд V2/V3 кодируются по Dispatcher.sol обоих UR; средний шаг V4 (SETTLE из баланса
 //! роутера → обмен → TAKE роутеру) больше не отвергается; исполнимость графа: нога из 3 хопов одним UR — исполнима,
-//! длиннее dex.route_max_hops — нет.
+//! длиннее dex.route_max_hops — нет; монета с налогом через промежуточную с пулом V3 — неисполнима и в котировке графа
+//! (решение 39).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{exec::{chain, live_hops, swap_v4, ur}, quote::{graph_exec, graph_legs,
 //! route_calc, route_paths}, pools::graph}, tests/route_common.
@@ -224,14 +225,68 @@ async fn three_hop_leg_executable_within_max_hops() {
         .set("dex.bundle_max_routers", v.clone(), Some(json!(2)), "тест")
         .await
         .unwrap();
-    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false)
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, false)
         .expect("нога 3 хопов исполнима");
+    // Решение 39: у монеты с налогом путь через промежуточную — только V2; у ноги есть шаги V3 — сигнал с причиной.
+    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, true)
+        .expect_err("налог и V3 через промежуточную");
+    assert!(why.contains("решение 39"), "{why}");
     // dex.route_max_hops = 2 — та же нога уже длиннее предела.
     p.ctx
         .settings
         .set("dex.route_max_hops", v, Some(json!(2)), "тест")
         .await
         .unwrap();
-    let why = graph_exec::executable(&q.ctx, &[path], false).expect_err("длиннее предела");
+    let why = graph_exec::executable(&q.ctx, &[path], false, false).expect_err("длиннее предела");
     assert!(why.contains("dex.route_max_hops"), "{why}");
+}
+
+/// Решение 39 в котировке графа: монета с налогом покупки (1%) — доля через промежуточную с пулом V3 не делает маршрут
+/// исполнимым (причина в exec_note); одиночные пулы (одна доля, один хоп) налогом не ограничены.
+#[tokio::test]
+async fn taxed_coin_multihop_v3_not_executable_in_quote() {
+    use arb::venues::bsc_dex::quote::graph_route;
+    use arb::venues::bsc_dex::quote::steps::Names;
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let t = TokenTaxes {
+        buy_pct: Decimal::ONE,
+        sell_pct: Decimal::ZERO,
+        transfer_pct: Decimal::ZERO,
+    };
+    let v = Via {
+        q: &q,
+        coin: CAKE,
+        usdt: USDT,
+        side: Side::Buy,
+        taxes: &t,
+        coin_dec: 18,
+        usdt_dec: 18,
+    };
+    let names = Names {
+        usdt: (USDT, "USDT"),
+        coin: (CAKE, "CAKE"),
+        mids: &p.mids,
+    };
+    let asset = Asset {
+        ticker: "CAKE".into(),
+        bsc_contract: Some(CAKE),
+    };
+    // 50 000 CAKE на записи раскладываются в том числе по пути через WBNB (пул CAKE-WBNB — V3).
+    let quote = graph_route::quote(
+        &v,
+        &names,
+        &asset,
+        Decimal::from(50_000u32),
+        U256::from(1_000_000_000u64),
+    )
+    .await
+    .expect("котировка графа");
+    let r = quote.route.expect("маршрут");
+    assert!(
+        r.legs.iter().any(|l| l.hops.len() > 1),
+        "есть доля через промежуточную"
+    );
+    assert!(!r.executable, "налог + V3 через промежуточную — неисполним");
+    assert!(r.exec_note.unwrap_or_default().contains("решение 39"));
 }

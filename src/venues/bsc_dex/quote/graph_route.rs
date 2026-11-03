@@ -99,7 +99,7 @@ pub async fn quote(
         ));
     }
     let legs = graph_split::split(ctx, &mut cands, v.side, qty, tax_keep, gas_aware)?;
-    let exec = graph_exec::executable(ctx, &legs, native::is_native(ctx, asset));
+    let exec = graph_exec::executable(ctx, &legs, native::is_native(ctx, asset), v.taxed());
     let mut quote = costs::quote(
         ctx,
         asset,

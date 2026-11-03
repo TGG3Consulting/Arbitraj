@@ -2,7 +2,9 @@
 // Что делает: общее хранилище списков адаптера DEX по каждой площадке из GET /api/venues:
 //   DEX и виды пулов (GET /api/venues/{id}/dex-families), каналы отправки (GET /api/channels/{id}) и справочник
 //   пулов от индексатора (GET /api/venues/{id}/pool-directory, решение 58).
-//   Это id областей настроек «DEX» и «канал» — интерфейс не выдумывает их, а берёт у адаптера.
+//   Это id областей настроек «DEX» и «канал» — интерфейс берёт их у адаптера. Решение 128: адаптер сообщает DEX с
+//   видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит только
+//   поиск по фабрике, оракул или события Initialize), человек вводит сам — правило id: checkDexId.
 //   Ответ 400 — «не применимо» (биржа): площадка просто не DEX. Иначе ошибка показывается как есть.
 //   Перечитывается при старте, при «lagged» (переподключение), по живому сообщению «send_channel» и по записи
 //   журнала вида dex.index (справочник обновился) — без таймеров и опроса.
@@ -12,7 +14,7 @@
 
 import { get, seg } from './api.js';
 import { onLive } from './live.svelte.js';
-import { store } from './settings.svelte.js';
+import { store, valueKey } from './settings.svelte.js';
 
 /**
  * byVenue: id → {families, familiesError, channels, channelsError, directory, directoryError};
@@ -157,3 +159,18 @@ export function dexIdsFor(def) {
 
 /** Является ли настройка настройкой уровня DEX (а не вида пула). Принимает: описание. Возвращает: bool. */
 export const isDexLevel = (def) => def?.dex_id === 'Dex';
+
+/**
+ * Что делает: проверка id DEX, который вводят руками (решение 128). Правило то же, что у сервера
+ * (settings/scope.rs check_dex_id и check_new_dex_id_len): непустой, только строчная латиница, цифры, «-» и «_»;
+ * не длиннее dex.id_max_len (вся система; не задана — без предела). Сервер проверяет то же при сохранении.
+ * Принимает: id (уже без пробелов по краям). Возвращает: '' — подходит, иначе причину текстом.
+ */
+export function checkDexId(id) {
+  if (!id) return 'Не указан id DEX';
+  const bad = [...id].find((c) => !/[a-z0-9_-]/.test(c));
+  if (bad !== undefined) return `Недопустимый символ «${bad}» — только строчная латиница, цифры, «-» и «_»`;
+  const max = store.values[valueKey('dex.id_max_len', { kind: 'Global' })];
+  if (typeof max === 'number' && [...id].length > max) return `Длиннее ${max} символов (dex.id_max_len)`;
+  return '';
+}

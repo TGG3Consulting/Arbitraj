@@ -5,15 +5,19 @@
     вся система; каждая площадка из GET /api/venues (у настроек времени в пути — подпись направлением
     перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод тикера;
     события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
-    (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Свои id для DEX и
-    каналов не вводятся: их даёт только адаптер. Кнопка «История».
+    (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Решение 128: адаптер даёт
+    DEX с видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит
+    только поиск по фабрике, оракул или события Initialize), вводится руками — «Добавить DEX» в карточке настройки
+    области «DEX» (правило id — checkDexId: строчная латиница, цифры, «-», «_», длина — dex.id_max_len). Строка
+    появляется в этой карточке; после первого сохранения адаптер сообщает id сам — он во всех карточках области «DEX».
+    Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
   Кто вызывает: pages/Settings.svelte.
   От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, components/SettingEditor.svelte, SettingHistory.svelte.
-  Настройки: любая — по описанию из схемы.
+  Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
 -->
 <script>
   import { store, venueScopeLabel } from '../lib/settings.svelte.js';
-  import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
+  import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
@@ -21,9 +25,12 @@
   /** def — описание настройки из схемы. */
   let { def } = $props();
   let showHistory = $state(false);
-  let added = $state({ Coin: [], Event: [] });
+  let added = $state({ Coin: [], Event: [], Dex: [] });
   let coinInput = $state('');
   let eventInput = $state('');
+  let dexInput = $state('');
+  /** Причина, по которой введённый id DEX не подходит (решение 128); '' — подходит или поле пустое. */
+  const dexInputError = $derived(dexInput.trim() ? checkDexId(dexInput.trim()) : '');
 
   /** Идентификаторы областей вида kind, для которых значение уже задано, плюс добавленные вручную. */
   function idsOf(kind) {
@@ -51,6 +58,16 @@
     const out = new Map(fromAdapter.map((x) => [x.id, { ...x, unknown: false }]));
     for (const id of idsOf(kind)) if (!out.has(id)) out.set(id, { id, title: id, unknown: true });
     return [...out.values()];
+  }
+
+  /**
+   * Подпись строки области DEX/канал. Принимает: вид, {id, title, unknown}. Возвращает: текст.
+   * Решение 128: id, добавленный руками и ещё без значений, подписан «добавлена руками — задайте dex.kind».
+   */
+  function scopeTitle(kind, sc) {
+    if (!sc.unknown) return `${sc.title} · ${sc.id}`;
+    if (kind === 'Dex' && added.Dex.includes(sc.id)) return `${sc.id} (добавлена руками — задайте dex.kind и адреса)`;
+    return `${sc.id} (адаптер не сообщает)`;
   }
 
   const eventTitle = (code) => store.schema.events.find((e) => e.code === code)?.title ?? code;
@@ -104,7 +121,7 @@
 
   {#each ['Dex', 'Channel'].filter((k) => def.scopes.includes(k)) as kind (kind)}
     {#each adapterScopes(kind) as sc (sc.id)}
-      <SettingEditor {def} scope={{ kind, id: sc.id }} label={sc.unknown ? `${sc.id} (адаптер не сообщает)` : `${sc.title} · ${sc.id}`} />
+      <SettingEditor {def} scope={{ kind, id: sc.id }} label={scopeTitle(kind, sc)} />
     {:else}
       <p class="nodata">
         Нет данных: {scopeLabel(kind)} — список даёт адаптер DEX, сейчас ни одна площадка его не дала.
@@ -112,6 +129,19 @@
       </p>
     {/each}
   {/each}
+  {#if def.scopes.includes('Dex')}
+    <!-- Решение 128: DEX, которой нет в списке адаптера (нет в справочнике пулов) — id вводится руками. -->
+    <div class="adder">
+      <input bind:value={dexInput} placeholder="id новой DEX, например lista-stable" />
+      <button
+        disabled={!dexInput.trim() || !!dexInputError}
+        onclick={() => { add('Dex', dexInput); dexInput = ''; }}
+      >
+        Добавить DEX
+      </button>
+      {#if dexInputError}<span class="err">{dexInputError}</span>{/if}
+    </div>
+  {/if}
 
   <button class="quiet" onclick={() => (showHistory = !showHistory)}>
     {showHistory ? 'Скрыть историю' : 'История'}

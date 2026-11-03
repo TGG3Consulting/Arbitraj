@@ -118,7 +118,7 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
     }
 }
 
-/// Проверка области: идентификатор не пустой, событие есть в каталоге уведомлений.
+/// Проверка области: идентификатор не пустой, событие есть в каталоге уведомлений, id DEX по правилу записи (решение 128).
 /// Возвращает Err с причиной, если область неверная.
 fn check_scope_id(scope: &Scope) -> Result<(), String> {
     match scope {
@@ -131,6 +131,8 @@ fn check_scope_id(scope: &Scope) -> Result<(), String> {
         Scope::Event(code) if crate::notify::catalog::find(code).is_none() => {
             Err(format!("События «{code}» нет в каталоге уведомлений"))
         }
+        // Решение 128: id DEX может ввести человек — правило записи ключа (settings/scope.rs).
+        Scope::Dex(id) => super::scope::check_dex_id(id),
         _ => Ok(()),
     }
 }

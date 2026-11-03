@@ -211,7 +211,8 @@ impl Venue for BscDex {
         Ok(())
     }
 
-    /// DEX с видом пулов из таблицы сопоставления (id области «DEX» = id DEX индексатора) — pools/families.rs. Ошибок нет.
+    /// DEX с видом пулов из таблицы сопоставления (id области «DEX» = id DEX индексатора) — pools/families.rs; решение
+    /// 128 — плюс DEX из справочника пулов и id с уже заданными настройками (вид None) — pools/dex_ids.rs. Ошибок нет.
     async fn dex_families(&self) -> GatewayResult<Vec<DexFamily>> {
         Ok(pools::families::for_ui(&self.p.ctx))
     }

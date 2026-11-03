@@ -48,7 +48,9 @@ pub struct DexFamily {
     pub dex: String,
     /// id области «DEX» для dex.kind, dex.pool_enabled и адресов контрактов (id DEX у индексатора).
     pub family: String,
-    pub kind: PoolKind,
+    /// Вид пулов (dex.kind). None — вид не задан или не поддерживается (решение 128): id из справочника пулов или с
+    /// уже заданными настройками — чтобы в интерфейсе можно было задать его dex.kind и адреса.
+    pub kind: Option<PoolKind>,
     /// Название для интерфейса.
     pub title: String,
     /// Ссылки на официальную документацию (адреса контрактов).

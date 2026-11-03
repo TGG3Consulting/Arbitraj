@@ -19,7 +19,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::super::check::simulate::Override;
 use super::super::super::ctx::Ctx;
 use super::super::super::node::rpc;
-use super::super::super::wallet::approve::{self, Approval};
+use super::super::super::wallet::approve::Approval;
+use super::super::super::wallet::approve_executor;
 use super::super::chain::Step;
 use super::call::{self, ExecCall};
 use super::{code, deploy};
@@ -59,7 +60,7 @@ pub async fn build(
         (DryMode::AsTrade, Some(x)) => {
             let call = call::build(ctx, legs, x, now)?;
             let approvals =
-                approve::executor_missing(ctx, call.token_in, wallet, x, call.amount_in).await?;
+                approve_executor::missing(ctx, call.token_in, wallet, x, call.amount_in).await?;
             let form = format!("граф: исполнитель {x:#x}");
             Ok(ExecTx {
                 call,
@@ -91,7 +92,7 @@ pub async fn build(
                 )],
             };
             let call = call::build(ctx, legs, at, now)?;
-            let approvals = approve::executor_all(ctx, call.token_in, at, call.amount_in)?;
+            let approvals = approve_executor::all(ctx, call.token_in, at, call.amount_in)?;
             let form = format!(
                 "через исполнитель: код подставлен в симуляцию по адресу {at:#x} (nonce {nonce})"
             );

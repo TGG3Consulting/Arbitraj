@@ -25,7 +25,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::quote::via::Via;
 use super::super::super::quote::{Quoting, direct};
-use super::super::super::wallet::approve;
+use super::super::super::wallet::approve_executor;
 use super::super::super::wallet::nonce::Nonces;
 use super::super::chain::{self, Step};
 use super::super::dry_paths::live_paths;
@@ -72,13 +72,13 @@ pub async fn trade(
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let (mut c, mut at) = build(q, &legs, executor).await?;
-    let need = approve::executor_missing(ctx, c.token_in, wallet, executor, c.amount_in).await?;
+    let need = approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in).await?;
     if send_approvals(env, &slot, &need).await? {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
         let legs = prepare(&v, &req, route, &mins, decs).await?;
         (c, at) = build(q, &legs, executor).await?;
-        if !approve::executor_missing(ctx, c.token_in, wallet, executor, c.amount_in)
+        if !approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
             .await?
             .is_empty()
         {

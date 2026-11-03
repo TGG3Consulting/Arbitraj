@@ -7,7 +7,7 @@
 //! Решение 122 (часть X): так же в памяти — ERC-20 allowance кошелька исполнителю ArbExecutor (erc20), чтобы котировка
 //! маршрута через исполнитель не спрашивала узел на каждом тике; сделка читает разрешение с узла всегда.
 //! Кто вызывает: quote/approve_gas.rs (read, erc20), exec/txs.rs (clear).
-//! От чего зависит: wallet/approve.rs (Read, read, erc20_allowance).
+//! От чего зависит: wallet/approve.rs (Read, read), wallet/approve_executor.rs (allowance).
 //! Настройки: нет.
 
 use std::collections::HashMap;
@@ -72,7 +72,7 @@ impl Allowances {
         {
             return Ok(*v);
         }
-        let v = approve::erc20_allowance(ctx, token, wallet, spender).await?;
+        let v = super::approve_executor::allowance(ctx, token, wallet, spender).await?;
         self.erc20
             .lock()
             .unwrap_or_else(|p| p.into_inner())

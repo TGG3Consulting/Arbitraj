@@ -13,15 +13,19 @@ use chrono::Utc;
 
 use super::blacklist::{self, BlockChange, TaxLimits};
 use super::engine::{Core, rd, wr};
+use super::market_state::MarketState;
 use super::rebuild::has_pool;
 use super::registry::CoinEntry;
 
 /// Чёрный список по справочнику: ручная отметка, проверки налогов со всех DEX, где у монеты есть
 /// пул с USDT. Заполняет block / problem у монет. Возвращает: изменения для уведомлений.
-pub fn apply_blacklist(core: &Core, coins: &mut [CoinEntry]) -> Vec<BlockChange> {
+pub fn apply_blacklist(
+    core: &Core,
+    market: &MarketState,
+    coins: &mut [CoinEntry],
+) -> Vec<BlockChange> {
     let s = &core.inner.deps.settings;
     let limits = TaxLimits::read(s);
-    let market = rd(&core.inner.market);
     let mut bl = wr(&core.inner.blacklist);
     let now = Utc::now();
     let kinds = rd(&core.inner.kinds).clone();
@@ -33,7 +37,7 @@ pub fn apply_blacklist(core: &Core, coins: &mut [CoinEntry]) -> Vec<BlockChange>
         let measured = c
             .asset
             .bsc_contract
-            .and_then(|t| super::transfer_tax::measured(&market, &kinds, t));
+            .and_then(|t| super::transfer_tax::measured(market, &kinds, t));
         c.cex_cex = (cexes >= 2 && measured.is_none() && !untaxed_ok)
             .then(|| super::transfer_tax::UNMEASURED.to_string());
         let checks: Vec<_> = match c.asset.bsc_contract {

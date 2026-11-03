@@ -104,7 +104,7 @@ pub async fn load(
         state,
         BinMap {
             step,
-            reserves,
+            reserves: reserves.into(),
             range,
         },
     ))

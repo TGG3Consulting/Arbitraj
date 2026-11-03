@@ -14,7 +14,6 @@ use crate::gateway::contract::VenueKind;
 
 use super::deps::Deps;
 pub use super::inner::{Inner, TransitKey};
-use super::registry::CoinEntry;
 use super::signal::SpreadView;
 use super::view::CoreEvent;
 
@@ -92,7 +91,8 @@ impl Core {
     }
 
     /// Справочник монет (экран «Монеты и направления»).
-    pub fn coins(&self) -> Vec<CoinEntry> {
+    /// Решение 131: снимок за Arc — без копии записей; все монеты (рабочие и неподвижные, coin_book.rs).
+    pub fn coins(&self) -> super::coin_book::CoinBook {
         rd(&self.inner.coins).clone()
     }
 

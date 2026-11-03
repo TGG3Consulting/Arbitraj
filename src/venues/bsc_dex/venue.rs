@@ -252,7 +252,13 @@ impl Venue for BscDex {
             .wei(&q.ctx, &q.heads)
             .await?
             .max(send::planned_floor(&q.ctx)?);
-        let signals = quote::cycle_scan::scan(&q, gas).await?;
+        // Решение 131: поиск циклов — счёт CPU, вне рабочих потоков tokio (quote/cpu.rs).
+        let qc = q.clone();
+        let signals = quote::cpu::run(
+            &q.ctx,
+            async move { quote::cycle_scan::scan(&qc, gas).await },
+        )
+        .await?;
         let venue = self.id();
         Ok(signals
             .iter()

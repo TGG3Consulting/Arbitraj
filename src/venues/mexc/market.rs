@@ -20,7 +20,6 @@ use crate::storage::journal::Level;
 
 use super::book::Books;
 use super::ctx::Ctx;
-use super::fees::Fees;
 use super::pairs::Snapshot;
 use super::symbols::Symbols;
 use super::ws;
@@ -31,7 +30,8 @@ const MAX_TOPICS_PER_CONN: u64 = 30;
 const DEPTH_LEVELS: [u64; 3] = [5, 10, 20];
 
 /// Подписывается на стаканы монет. Монеты, которых нет среди торгуемых пар MEXC, пропускаются
-/// с записью в журнал. Возвращает: запущенные задачи (соединения и обновление комиссий) —
+/// с записью в журнал. Возвращает: запущенные задачи соединений и символы подписанных пар (по ним subs.rs ведёт
+/// обновление комиссий) —
 /// вызывающий хранит их и останавливает перед новой подпиской, — и снимок пар (pairs.rs), с которым
 /// pairs_watch.rs сравнивает обновлённый справочник пар.
 /// Ошибки: NotConfigured (настройки вне пределов документации или не заданы), справочник пар.
@@ -39,10 +39,9 @@ pub async fn subscribe(
     ctx: &Ctx,
     symbols: &Symbols,
     books: &Books,
-    fees: &Fees,
     assets: Vec<Asset>,
     out: mpsc::Sender<MarketEvent>,
-) -> GatewayResult<(Vec<JoinHandle<()>>, Snapshot)> {
+) -> GatewayResult<(Vec<JoinHandle<()>>, Snapshot, Vec<String>)> {
     let per_conn = ctx.int("venue.ws_symbols_per_conn")?;
     if per_conn > MAX_TOPICS_PER_CONN {
         return Err(bad(
@@ -84,10 +83,10 @@ pub async fn subscribe(
             out.clone(),
         )));
     }
-    // Ставки комиссии подписанных пар обновляются фоном (котировка берёт их из памяти).
+    // Ставки комиссии подписанных пар обновляются фоном (котировка берёт их из памяти). Задачу обновления держит
+    // subs.rs: при том же списке символов круг tradeFee не начинается заново (решение 131).
     let syms: Vec<String> = ok.iter().map(|(_, s)| s.clone()).collect();
-    tasks.push(tokio::spawn(fees.clone().refresh_loop(ctx.clone(), syms)));
-    Ok((tasks, snap))
+    Ok((tasks, snap, syms))
 }
 
 /// Запись в журнал: монеты без торгуемой пары и пары, закрытые для API. Ошибок нет.

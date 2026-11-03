@@ -50,10 +50,11 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         return Start::Dry(why);
     }
     let d = calc.direction.clone();
-    let tradable = rd(&core.inner.coins)
-        .iter()
-        .find(|c| c.asset == d.asset)
-        .is_some_and(|c| c.directions().contains(&d));
+    let tradable = {
+        let coins = rd(&core.inner.coins);
+        super::ticker_index::find(core, &coins, &d.asset)
+            .is_some_and(|c| c.directions().contains(&d))
+    };
     if !tradable {
         return Start::NotTradable;
     }

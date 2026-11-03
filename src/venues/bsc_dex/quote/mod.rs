@@ -5,6 +5,7 @@
 //! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
 //! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
 //! Нативная монета BNB (решение 62): газ обёртки — quote/native_gas.rs; у продажи BNB разрешений нет (approve_gas.rs).
+//! Выбор маршрута (классика, граф, merge) — quote/routing.rs, вне рабочих потоков tokio (quote/cpu.rs, решение 129).
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов).
@@ -14,6 +15,7 @@
 pub mod approve_gas;
 pub mod classic_direct;
 pub mod costs;
+pub mod cpu;
 pub mod cycle;
 pub mod cycle_cost;
 pub mod cycle_legs;
@@ -46,6 +48,7 @@ pub mod rate;
 pub mod route_calc;
 pub mod route_gas;
 pub mod route_paths;
+pub mod routing;
 pub mod select;
 pub mod smart;
 pub mod smart_quote;
@@ -77,8 +80,6 @@ use super::pools::registry::Registry;
 use super::tokens::Tokens;
 use super::wallet::balances::BNB;
 use gas::GasPrice;
-use steps::Names;
-use via::Via;
 
 /// Всё, что нужно котировке. Дешёво клонируется.
 #[derive(Clone)]
@@ -145,37 +146,24 @@ impl Quoting {
             .await?
             .max(super::send::planned_floor(ctx)?);
         let usdt_ticker = ctx.text("venue.quote_asset")?;
-        let v = Via {
-            q: self,
+        // Выбор маршрута — счёт CPU: вне рабочих потоков tokio (quote/cpu.rs, решение 129 часть 2), срок расчёта
+        // ядра срабатывает вовремя. Логика выбора — quote/routing.rs (перенесена без изменений).
+        let input = routing::Input {
+            asset: asset.clone(),
+            side,
+            qty,
             coin,
             usdt,
-            side,
-            taxes: &taxes,
+            taxes: taxes.clone(),
             coin_dec,
             usdt_dec,
+            entries,
+            mids,
+            gas,
+            usdt_ticker,
+            smart: mode == "smart",
         };
-        let names = Names {
-            usdt: (usdt, &usdt_ticker),
-            coin: (coin, &asset.ticker),
-            mids: &self.mids,
-        };
-        // Классика (решения 29, 38): прямой или умный режим. При dex.router_mode = graph ниже сравним с графом.
-        let mut q = if mode == "smart" {
-            smart_quote::quote(&v, &names, asset, qty, entries, &mids, gas).await?
-        } else {
-            // Форки из классического ПРЯМОГО пути исключаем (ревью #86): форк исполним ТОЛЬКО через graph→bundle
-            // (свой роутер). Решение 121: так же — неисполнимые семейства (tradable = нет): они не выигрывают
-            // котировку как Direct, а видны только как signal_route (quote/classic_direct.rs).
-            classic_direct::quote(&v, &names, asset, qty, entries, &mids, &|_| true, gas).await?
-        };
-        // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
-        // неизменно; «graph» — считаем маршрут по графу и выбираем котировку-на-сделку среди ИСПОЛНИМЫХ маршрутов
-        // (graph_route::merge, решение 84 вариант Б): неисполнимый граф-маршрут на сделку не идёт (остаётся лучшим
-        // сигналом для карточки, PR 80.5b), поэтому graph-режим не исполняет хуже классики. Деньги не рискуют.
-        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph") {
-            let g = graph_route::quote(&v, &names, asset, qty, gas).await;
-            q = graph_route::merge(self, q, g, side, usdt_dec).await;
-        }
+        let mut q = cpu::run(ctx, routing::run(self.clone(), input)).await?;
         // Газ разрешений и чаевые — к первому шагу маршрута (разрешения — на токен входа первого шага).
         let first = q.costs.iter().find_map(|c| c.step.clone());
         let with_step = |c: Cost| match &first {

@@ -24,8 +24,9 @@ impl Core {
         let usdt = rd(&self.inner.usdt).clone().ok();
         let s = &self.inner.deps.settings;
         let nets = rd(&self.inner.networks);
+        // Экран — все монеты: рабочие и неподвижные (решение 131, coin_book.rs).
         let list: Vec<Value> = coins
-            .iter()
+            .all()
             .map(|c| {
                 let dex: Vec<_> = c.presence.iter().filter(|p| p.info.is_none()).collect();
                 let checks: Vec<_> = match c.asset.bsc_contract {

@@ -20,7 +20,8 @@ use super::engine::{Core, lk, rd};
 /// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API; не на паузе).
 fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     let coins = rd(&core.inner.coins);
-    let Some(e) = coins.iter().find(|c| c.asset == deal.direction.asset) else {
+    // Решение 131: по карте места, без прохода справочника.
+    let Some(e) = super::ticker_index::find(core, &coins, &deal.direction.asset) else {
         return vec![];
     };
     let can_send = e.at(&deal.at).is_some_and(|p| p.can_send);

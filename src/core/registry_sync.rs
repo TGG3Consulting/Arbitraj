@@ -9,9 +9,13 @@
 //! От чего зависит: engine.rs, wait.rs, gateway (coin_networks), settings.
 //! Настройки: venue.enabled, venue.networks_poll_ms, venue.status_poll_ms, venue.status_bulk_min,
 //! venue.status_confirm_polls (по площадке; сглаживание мигания статусов — status_debounce.rs, решение 112);
-//! сопоставление нативной монеты с обёрткой (решение 62) — native.rs.
+//! сопоставление нативной монеты с обёрткой (решение 62) — native.rs; venue.networks_fresh_ms — толчок внутри окна
+//! свежести ждёт его конца (решение 129).
+//! Решение 129: справочник без изменений (кроме времени получения) пересборку справочника монет не толкает.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::core::types::{CoinNetworkInfo, VenueId};
 use crate::settings::read::At;
@@ -45,10 +49,17 @@ pub async fn run(core: Core, venue: VenueId) {
     let mut own = Pacer::new("venue.networks_poll_ms", Unit::Ms, Some(venue.0.clone()));
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(venue.0.clone()));
     let mut last_err: Option<String> = None;
+    // Решение 129: когда справочник получен последний раз — толчок (аномальный спред, ошибка вывода) внутри
+    // venue.networks_fresh_ms ждёт конца окна, а не качает справочник заново (у MEXC ~5.6 МБ на ответ).
+    let mut fetched: Option<Instant> = None;
     // Решение 112: смена статуса ввода/вывода принимается после venue.status_confirm_polls опросов подряд.
     let mut debounce = super::status_debounce::Debounce::default();
     loop {
         if enabled(&core, &venue) {
+            if let Some(wait) = fresh_left(&core, &venue, fetched) {
+                tokio::time::sleep(wait).await;
+            }
+            fetched = Some(Instant::now());
             let res = match deps.gw.get(&venue).await {
                 Ok(v) => v.coin_networks().await,
                 Err(e) => Err(e),
@@ -60,8 +71,14 @@ pub async fn run(core: Core, venue: VenueId) {
                     let list = super::native::map(&core, &venue, list);
                     let list = debounce.apply(&core, &venue, list);
                     report_changes(&core, &venue, &list).await;
-                    wr(&core.inner.networks).insert(venue.clone(), list);
-                    core.request_rebuild();
+                    // Решение 129: тот же справочник (кроме времени получения) — без пересборки справочника монет.
+                    let same = rd(&core.inner.networks)
+                        .get(&venue)
+                        .is_some_and(|old| same_lists(old, &list));
+                    wr(&core.inner.networks).insert(venue.clone(), Arc::new(list));
+                    if !same {
+                        core.request_rebuild();
+                    }
                 }
                 Err(e) if last_err.as_deref() != Some(e.message.as_str()) => {
                     deps.log(
@@ -142,4 +159,43 @@ async fn report_changes(core: &Core, venue: &VenueId, new: &[CoinNetworkInfo]) {
         deps.notify("venue.transfer_status", Some(&venue.0), &text)
             .await;
     }
+}
+
+/// Сколько ещё ждать до следующего получения справочника: venue.networks_fresh_ms задана и справочник получен моложе
+/// неё (так бывает только по толчку — плановый опрос venue.networks_poll_ms реже). Не задана — None: толчок качает
+/// справочник сразу, как до решения 129. Ошибок нет.
+fn fresh_left(core: &Core, venue: &VenueId, fetched: Option<Instant>) -> Option<Duration> {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    let fresh = core
+        .inner
+        .deps
+        .settings
+        .integer("venue.networks_fresh_ms", at)
+        .ok()
+        .map(Duration::from_millis)?;
+    fresh
+        .checked_sub(fetched?.elapsed())
+        .filter(|d| !d.is_zero())
+}
+
+/// Одинаковы ли справочники по содержанию: все поля, кроме времени получения (updated_at). Ошибок нет.
+pub fn same_lists(a: &[CoinNetworkInfo], b: &[CoinNetworkInfo]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.venue == y.venue
+                && x.asset == y.asset
+                && x.network == y.network
+                && x.deposit_enabled == y.deposit_enabled
+                && x.withdraw_enabled == y.withdraw_enabled
+                && x.withdraw_fee == y.withdraw_fee
+                && x.withdraw_min == y.withdraw_min
+                && x.withdraw_max == y.withdraw_max
+                && x.deposit_min == y.deposit_min
+                && x.deposit_confirmations == y.deposit_confirmations
+                && x.withdraw_precision == y.withdraw_precision
+                && x.withdraw_step == y.withdraw_step
+        })
 }

@@ -58,9 +58,8 @@ impl DirCtx {
     pub fn build(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
         let s = &core.inner.deps.settings;
         let coins = rd(&core.inner.coins);
-        let entry = coins
-            .iter()
-            .find(|c| c.asset == dir.asset)
+        // Решение 131: по карте места, без прохода справочника.
+        let entry = super::ticker_index::find(core, &coins, &dir.asset)
             .ok_or("монеты нет в справочнике")?;
         let a = entry.at(&dir.buy_on).ok_or("A нет у монеты")?.clone();
         let b = entry.at(&dir.sell_on).ok_or("B нет у монеты")?.clone();

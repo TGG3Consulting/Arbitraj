@@ -165,7 +165,7 @@ fn one_tick(tick: i32, net: i128) -> TickMap {
     );
     TickMap {
         spacing: 60,
-        ticks,
+        ticks: ticks.into(),
         words: (i16::MIN, i16::MAX),
     }
 }
@@ -242,7 +242,7 @@ fn swap_stops_at_price_limit() {
 fn swap_partial_at_window_edge() {
     let tm = TickMap {
         spacing: 60,
-        ticks: BTreeMap::new(),
+        ticks: BTreeMap::new().into(),
         words: (0, 0), // окно сырых тиков [0, 255]
     };
     let s = AlgebraState {

@@ -81,7 +81,7 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         .iter()
         .map(|p| bsc_net(p["ticker"].as_str().unwrap(), addr(&p["token"])))
         .collect();
-    let networks = HashMap::from([(bingx(), nets)]);
+    let networks = HashMap::from([(bingx(), std::sync::Arc::new(nets))]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
     let bsc_network = HashMap::from([(bingx(), "BEP20".to_string())]);
     // Свежесть справочника пар (pairs_fresh.rs) на подписку DEX не влияет — не проверяется.

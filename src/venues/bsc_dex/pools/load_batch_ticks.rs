@@ -102,7 +102,7 @@ pub async fn finish(
             state,
             ticks: Some(TickMap {
                 spacing,
-                ticks,
+                ticks: ticks.into(),
                 words,
             }),
             bins: None,

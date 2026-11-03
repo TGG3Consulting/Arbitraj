@@ -26,8 +26,25 @@ impl MarketState {
     /// Принимает: площадку, адрес токена. Возвращает: сколько пулов удалено.
     pub fn drop_pools_of(&mut self, venue: &VenueId, token: Address) -> usize {
         let before = self.pools.len();
-        self.pools
-            .retain(|(v, _), p| !(v == venue && (p.token0 == token || p.token1 == token)));
+        let mut gone = Vec::new();
+        self.pools.retain(|(v, r), p| {
+            let drop = v == venue && (p.token0 == token || p.token1 == token);
+            if drop {
+                gone.push((
+                    super::market_state::pair_key(v, p.token0, p.token1),
+                    r.clone(),
+                ));
+            }
+            !drop
+        });
+        for (k, r) in gone {
+            if let Some(s) = self.pool_pairs.get_mut(&k) {
+                s.remove(&r);
+                if s.is_empty() {
+                    self.pool_pairs.remove(&k);
+                }
+            }
+        }
         before - self.pools.len()
     }
 
@@ -89,16 +106,50 @@ impl MarketState {
 
     /// Пулы пары токенов на площадке (монета с USDT или с промежуточной монетой, решение 52).
     /// Принимает: площадку, адрес монеты, адрес второго токена.
+    /// Решение 129: по индексу пары (market_state.rs pool_pairs), а не проходом всех пулов.
     pub fn usdt_pools(&self, venue: &VenueId, token: Address, usdt: Address) -> Vec<&Pool> {
-        self.pools
-            .iter()
-            .filter(|((v, _), p)| {
-                v == venue
-                    && ((p.token0 == token && p.token1 == usdt)
-                        || (p.token1 == token && p.token0 == usdt))
-            })
-            .map(|(_, p)| p)
+        let Some(refs) = self
+            .pool_pairs
+            .get(&super::market_state::pair_key(venue, token, usdt))
+        else {
+            return Vec::new();
+        };
+        refs.iter()
+            .filter_map(|r| self.pools.get(&(venue.clone(), r.clone())))
             .collect()
+    }
+
+    /// Снимок для сборки справочника монет (решение 129): всё, что читают registry_build.rs, presence.rs,
+    /// subscribe.rs (cex_pair), pairs_fresh.rs и rebuild_blacklist.rs, — чтобы сборка шла без блокировки рынка (тик
+    /// пишет в рынок на каждое событие). Стаканы — без уровней (справочнику нужно только «стакан пришёл»); каналы и
+    /// очереди кошелька не копируются. Ошибок нет.
+    pub fn registry_view(&self) -> MarketState {
+        MarketState {
+            books: self
+                .books
+                .iter()
+                .map(|(k, b)| {
+                    let head = OrderBook {
+                        venue: b.venue.clone(),
+                        asset: b.asset.clone(),
+                        bids: vec![],
+                        asks: vec![],
+                        exchange_time: b.exchange_time,
+                        received_at: b.received_at,
+                    };
+                    (k.clone(), head)
+                })
+                .collect(),
+            pools: self.pools.clone(),
+            pool_pairs: self.pool_pairs.clone(),
+            coin_checks: self.coin_checks.clone(),
+            pool_checks: self.pool_checks.clone(),
+            spot: self.spot.clone(),
+            loading: self.loading.clone(),
+            pairs: self.pairs.clone(),
+            pairs_at: self.pairs_at.clone(),
+            ..Default::default()
+        }
     }
 
     /// Последняя проверка налогов монеты на площадке DEX. None — проверок ещё не было.

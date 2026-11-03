@@ -94,7 +94,7 @@ async fn v3_ticks(
     }
     Ok(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words: (lo, hi),
     })
 }

@@ -3,7 +3,8 @@
 //! плюс фоновое обновление справочника пар (pairs_watch.rs). Новая подписка останавливает старые задачи (без
 //! дублей соединений); подписка из ядра и пересподписка из pairs_watch.rs идут строго по одной (замок gate),
 //! поэтому задачи не теряются и не запускаются дважды. С первой подпиской запускается поток аккаунта (user_stream.rs,
-//! решение 76) — один на адаптер.
+//! решение 76) — один на адаптер. Обновление ставок комиссии (fees.rs) перезапускается только при смене списка
+//! символов (решение 131).
 //! Кто вызывает: mod.rs (subscribe_market из контракта), pairs_watch.rs (resubscribe при смене пар).
 //! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs, user_stream.rs.
 //! Настройки: нет своих (venue.symbols_refresh_s читает pairs_watch.rs).
@@ -48,6 +49,8 @@ struct Inner {
     watch: Mutex<Option<JoinHandle<()>>>,
     /// Поток аккаунта (решение 76): запускается с первой подпиской и живёт, пока жив канал ядра.
     account: Mutex<Option<JoinHandle<()>>>,
+    /// Обновление ставок комиссии и его список символов (решение 131): тот же список — задача не перезапускается.
+    fees: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
 }
 
 impl Subs {
@@ -105,13 +108,26 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<Snapshot> {
-        let (new, snap) =
-            super::market::subscribe(&p.ctx, &p.symbols, &p.books, &p.fees, assets, out).await?;
+        let (new, snap, syms) =
+            super::market::subscribe(&p.ctx, &p.symbols, &p.books, assets, out).await?;
         let mut tasks = self.inner.tasks.lock().unwrap_or_else(|e| e.into_inner());
         for old in tasks.drain(..) {
             old.abort();
         }
         *tasks = new;
+        // Решение 131: круг tradeFee (тысячи символов при venue.fee_requests_per_sec) начинается заново только при
+        // новом списке символов или упавшей задаче; иначе пересподписка оставляла бы поздние символы без ставки.
+        let mut fees = self.inner.fees.lock().unwrap_or_else(|e| e.into_inner());
+        let same = fees
+            .as_ref()
+            .is_some_and(|(list, h)| *list == syms && !h.is_finished());
+        if !same {
+            if let Some((_, old)) = fees.take() {
+                old.abort();
+            }
+            let h = tokio::spawn(p.fees.clone().refresh_loop(p.ctx.clone(), syms.clone()));
+            *fees = Some((syms, h));
+        }
         Ok(snap)
     }
 }

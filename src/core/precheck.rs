@@ -52,7 +52,7 @@ async fn transfer_open(
     // монеты теряли сеть BSC до следующего опроса). Справочника биржи ещё нет — не пишем (его соберёт registry_sync).
     {
         let mut nets = wr(&core.inner.networks);
-        if let Some(all) = nets.get_mut(v) {
+        if let Some(all) = nets.get_mut(v).map(std::sync::Arc::make_mut) {
             all.retain(|i| i.asset.ticker != d.asset.ticker);
             all.extend(list);
         }

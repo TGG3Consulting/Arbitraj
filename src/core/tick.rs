@@ -24,6 +24,15 @@ use super::view::CoreEvent;
 
 /// Задача приёма событий адаптеров. Работает, пока жив канал.
 pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
+    // Решение 129: события, которые ждут журнал, Telegram или учёт (очередь кошелька, проход проверок, баланс,
+    // уведомление площадки), идут своей задачей по порядку — цикл тика их не ждёт и не стоит, пока пишется журнал.
+    let (slow_tx, mut slow_rx) = mpsc::unbounded_channel::<Touched>();
+    let slow_core = core.clone();
+    tokio::spawn(async move {
+        while let Some(t) = slow_rx.recv().await {
+            super::tick_slow::slow(&slow_core, t).await;
+        }
+    });
     while let Some(ev) = rx.recv().await {
         let touched = wr(&core.inner.market).apply(ev);
         match touched {
@@ -86,31 +95,17 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 core.request_rebuild();
             }
             Touched::Channel(s) => core.inner.live.send(CoreEvent::SendChannel(s)),
-            Touched::WalletQueue { queue, prev } => {
-                super::queue_notify::wallet_queue(&core, queue, prev).await
+            slow @ (Touched::WalletQueue { .. }
+            | Touched::CheckPass { .. }
+            | Touched::Balance(_)
+            | Touched::Notice { .. }) => {
+                let _ = slow_tx.send(slow);
             }
             Touched::SpotPairs => core.request_rebuild(),
             Touched::PoolsLoading { changed } => {
                 if changed {
                     core.request_rebuild();
                 }
-            }
-            Touched::CheckPass {
-                venue,
-                counts: [ok, failed, waiting, config, loading],
-            } => {
-                let n = super::first_pass::Counts {
-                    ok,
-                    failed,
-                    waiting,
-                    config,
-                    loading,
-                };
-                super::first_pass::done(&core, &venue.0, n).await
-            }
-            Touched::Balance(b) => super::credit_event::on_change(&core, b).await,
-            Touched::Notice { venue, code, text } => {
-                core.inner.deps.notify(&code, Some(&venue.0), &text).await
             }
         }
     }
@@ -122,16 +117,13 @@ fn asset_by_ticker(core: &Core, venue: &VenueId, ticker: &str) -> Option<Asset> 
     rd(&core.inner.tickers).get(venue, ticker)
 }
 
-/// Монеты справочника, чей адрес контракта — один из токенов пула.
+/// Монеты справочника, чей адрес контракта — один из токенов пула. Решение 129: по карте адрес → монеты
+/// (ticker_index.rs), а не проходом всего справочника на каждое событие пула. Ошибок нет.
 fn assets_by_tokens(
     core: &Core,
     t: (alloy_primitives::Address, alloy_primitives::Address),
 ) -> Vec<Asset> {
-    rd(&core.inner.coins)
-        .iter()
-        .filter(|c| c.asset.bsc_contract.is_some_and(|a| a == t.0 || a == t.1))
-        .map(|c| c.asset.clone())
-        .collect()
+    rd(&core.inner.tickers).by_tokens(t)
 }
 
 /// Ставит пересчёт монеты: если он уже идёт — запоминает площадку для повтора, иначе запускает задачу.

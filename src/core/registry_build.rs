@@ -15,12 +15,16 @@ use crate::gateway::contract::VenueKind;
 use super::market_state::MarketState;
 use super::registry::{CoinEntry, Presence};
 
+/// Справочник сетей бирж: биржа → её сети. Списки за `Arc` (решение 129): снимок для пересборки справочника монет
+/// — копия указателей, без копии тысяч записей MEXC и без удержания блокировки сетей во время сборки.
+pub type Networks = HashMap<VenueId, std::sync::Arc<Vec<CoinNetworkInfo>>>;
+
 /// Входные данные сборки справочника.
 pub struct Inputs<'a> {
     /// Площадки из реестра шлюза (только включённые) и их вид.
     pub venues: &'a [(VenueId, VenueKind)],
     /// Справочник сетей каждой биржи (coin_networks).
-    pub networks: &'a HashMap<VenueId, Vec<CoinNetworkInfo>>,
+    pub networks: &'a Networks,
     /// Адрес USDT в BSC (см. usdt_address).
     pub usdt: Option<Address>,
     /// Котируемая монета каждой биржи (venue.quote_asset) — сама в справочник не входит.
@@ -41,7 +45,7 @@ pub struct Inputs<'a> {
 /// Адрес USDT в BSC: из справочника бирж (котируемая монета в сети BSC).
 /// Возвращает: адрес; Err — ни одна биржа его не дала или биржи расходятся (тогда DEX не торгуется).
 pub fn usdt_address(
-    networks: &HashMap<VenueId, Vec<CoinNetworkInfo>>,
+    networks: &Networks,
     quote: &HashMap<VenueId, String>,
 ) -> Result<Address, String> {
     let mut found: Vec<(VenueId, Address)> = vec![];
@@ -63,6 +67,23 @@ pub fn usdt_address(
 /// Собирает справочник. Монеты бирж группируются по адресу контракта в BSC и тикеру (решение 118); монеты без адреса
 /// остаются в справочнике с причиной (их видно на экране «Монеты»). Ошибок нет.
 pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
+    build_part(inp, Part::All)
+}
+
+/// Какую часть справочника собирать (решение 131, coin_book.rs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    /// Все монеты.
+    All,
+    /// Рабочие: хотя бы у одной сети монеты на бирже есть адрес контракта.
+    Live,
+    /// Неподвижные: адреса контракта нет ни в одной сети монеты на бирже.
+    Inert,
+}
+
+/// Собирает часть справочника (как build, только монеты этой части; у неподвижных монет запись — по бирже, адреса
+/// нет, поэтому части не пересекаются и вместе дают то же, что build). Ошибок нет.
+pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
     // ключ: адрес контракта или тикер (у монеты без адреса) → (монета, площадка → данные сети)
     let mut coins: BTreeMap<String, (Asset, Vec<Presence>)> = BTreeMap::new();
     for (venue, _) in inp.venues.iter().filter(|(_, k)| *k == VenueKind::Cex) {
@@ -78,6 +99,10 @@ pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
                 .push(i);
         }
         for (ticker, nets) in by_ticker {
+            let live = nets.iter().any(|i| i.asset.bsc_contract.is_some());
+            if (part == Part::Live && !live) || (part == Part::Inert && live) {
+                continue;
+            }
             let bsc = inp.bsc_network.get(venue).map(String::as_str);
             let fresh = inp.pairs_fresh.get(venue).cloned().unwrap_or_else(|| {
                 Err(format!(

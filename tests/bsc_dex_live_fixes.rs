@@ -150,7 +150,7 @@ fn v3_math_names_the_failing_step() {
     );
     let map = TickMap {
         spacing: 1,
-        ticks,
+        ticks: ticks.into(),
         words: (-1, 0),
     };
     let s = ClState {

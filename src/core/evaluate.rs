@@ -20,8 +20,10 @@ use super::view::CoreEvent;
 /// в один пересчёт). Ошибок нет: причины — в строках экрана.
 pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::HashSet<VenueId>) {
     let (dirs, ref_price, waiting) = {
+        // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
+        // карта ещё от прежнего справочника.
         let coins = rd(&core.inner.coins);
-        let Some(entry) = coins.iter().find(|c| &c.asset == asset) else {
+        let Some(entry) = super::ticker_index::find(core, &coins, asset) else {
             return;
         };
         let market = rd(&core.inner.market);

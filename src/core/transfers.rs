@@ -31,9 +31,10 @@ use super::wait::{Pacer, Unit};
 /// Ошибка: ни у одной биржи монеты нет сети BSC.
 pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, String> {
     let coins = rd(&core.inner.coins);
-    let entry = coins
-        .iter()
-        .find(|c| c.asset.bsc_contract == asset.bsc_contract && asset.bsc_contract.is_some());
+    // Решение 131: по карте адрес → монеты, без прохода справочника.
+    let entry = asset
+        .bsc_contract
+        .and_then(|t| super::ticker_index::find_by_token(core, &coins, t));
     let any = rd(&core.inner.networks)
         .get(venue)
         .and_then(|l| {

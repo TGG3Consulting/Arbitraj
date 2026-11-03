@@ -11,7 +11,7 @@
 //! `X-MEXC-APIKEY`. Все параметры (в том числе у POST/PUT/DELETE) отправляются в строке запроса — это разрешено
 //! («parameters may be sent entirely in the Query String») и снимает вопрос Content-Type (application/x-www-form-urlencoded
 //! даёт 700013). recvWindow — меньше 60000 (700005 «recvWindow must less than 60000»; решение 118, А-🟡1).
-//! Разбор ответа и пауза по Retry-After — reply.rs.
+//! Разбор ответа и пауза по Retry-After — reply.rs. Большой ответ (signed_heavy) разбирается вне рабочих потоков.
 
 use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Method;
@@ -74,6 +74,25 @@ pub async fn signed(
     send(ctx, method, path, &full, Some(key.as_str()), op).await
 }
 
+/// Подписанный запрос с большим ответом (решение 131: config/getall ~5.6 МБ): разбор JSON — в потоке блокирующих
+/// задач (spawn_blocking), не в рабочем потоке tokio. Принимает и возвращает — как signed.
+pub async fn signed_heavy(
+    ctx: &Ctx,
+    method: Method,
+    path: &str,
+    params: Params,
+    op: Op,
+) -> GatewayResult<Value> {
+    HEAVY
+        .scope(true, signed(ctx, method, path, params, op))
+        .await
+}
+
+tokio::task_local! {
+    /// Разбор ответа — вне рабочих потоков (signed_heavy).
+    static HEAVY: bool;
+}
+
 /// Строка параметров «k=v&k=v» в порядке передачи (он же порядок подписи). Значения кодируются по правилам строки
 /// запроса (запятые в списках — «URL-encode them when signing; encoding must use uppercase only»).
 /// Ошибка Internal — в значении перевод строки (защита от подмены параметров).
@@ -131,7 +150,21 @@ async fn send(
         }
         match crate::gateway::http::exchange_full(req, lim).await {
             Ok(r) => {
-                return reply::parse(ctx, path, &r, op).map_err(|e| errors::unsure(e, op));
+                let parsed = if HEAVY.try_with(|h| *h).unwrap_or(false) {
+                    let (c, p) = (ctx.clone(), path.to_string());
+                    tokio::task::spawn_blocking(move || reply::parse(&c, &p, &r, op))
+                        .await
+                        .map_err(|e| {
+                            GatewayError::new(
+                                ErrorCode::Internal,
+                                Some(ctx.venue()),
+                                format!("разбор ответа {path} прерван: {e}"),
+                            )
+                        })?
+                } else {
+                    reply::parse(ctx, path, &r, op)
+                };
+                return parsed.map_err(|e| errors::unsure(e, op));
             }
             // Резерв — только если запрос точно не дошёл; иначе ордер или вывод мог исполниться — не повторяем.
             Err(f) if may_fallback(&f, op) => last = Some(errors::from_fail(&f, &lim)),

@@ -160,7 +160,7 @@ fn v3(
     };
     e.ticks = Some(TickMap {
         spacing,
-        ticks,
+        ticks: ticks.into(),
         words,
     });
     e

@@ -103,6 +103,20 @@ async fn run() -> Result<(), String> {
     registry
         .register(std::sync::Arc::new(arb::venues::mexc::Mexc::new(mexc_ctx)))
         .await;
+    // Биржа KuCoin (решение 137): тот же контракт, свои настройки venue.* [kucoin] и секреты kucoin.*.
+    let kucoin_ctx = arb::venues::kucoin::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::kucoin::Kucoin::new(
+            kucoin_ctx,
+        )))
+        .await;
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.

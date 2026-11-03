@@ -6,5 +6,6 @@
 
 pub mod bingx;
 pub mod bsc_dex;
+pub mod kucoin;
 pub mod kyberswap;
 pub mod mexc;

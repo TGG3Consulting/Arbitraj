@@ -245,6 +245,19 @@ impl Venue for BscDex {
             .collect())
     }
 
+    /// «Сухая сделка DEX» (решение 121, C4): сборка своим сборщиком как для сделки и eth_simulateV1 от кошелька —
+    /// exec/dry_swap.rs. Ничего не отправляет, nonce не занимает. Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_swap(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        // Класс Check (решение 61): ниже пути сделки, выше котировок живого экрана и фона.
+        Ok(scope(Class::Check, exec::dry_swap::run(&q, asset, side, usdt)).await)
+    }
+
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.
     async fn send_channels(&self) -> GatewayResult<Vec<SendChannelInfo>> {
         Ok(send::channels::ALL.iter().map(|c| c.info()).collect())

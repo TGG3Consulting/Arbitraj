@@ -15,7 +15,8 @@
 | `GET /api/venues/kinds` | Площадки с видом `[{id, kind: "Cex" \| "Dex"}]` — подпись направления перевода у настроек `venue_role: "TransferSource"` (решение 51) |
 | `GET /api/venues/{id}/dex-families` | DEX и виды пулов адаптера (id области «DEX»); биржа — 400 «не применимо» |
 | `GET /api/venues/{id}/dex-cycles` | Сигналы циклов DEX ↔ DEX (решение 85): `[DexCycle {venue, base, base_ticker, input, output, gross_profit, gas_units, gas_bnb, tip_bnb, bnb_cost, bnb_cost_in_base, net_profit, hops: [{index, family, kind, pool, token_in, token_out, fee_pct, hook_pct, gas_units}], executable, exec_note, block}]` — шлюз `dex_cycles`; за `dex_dex.enabled`, выключено — пусто; биржа — 400 «не применимо» |
-| `GET /api/venues/{id}/pool-directory` | Справочник пулов от индексатора (решение 58): `PoolDirectory {source, network, attribution_text, attribution_url, dexes: [{id, name}], dexes_at, tokens: [{token, ticker, fetched_at, pages, total, error}], pools: [{token, dex_id, pool, base, quote, base_symbol, quote_symbol, reserve_usd, status}], error}`; `status` — `"Unchecked"`, `"Taken"`, `{"NotConnected": причина}`, `{"Rejected": причина}`, `{"Unsupported": причина}` (например нативный BNB); биржа — 400 |
+| `GET /api/venues/{id}/pool-directory` | Справочник пулов от индексатора (решение 58): `PoolDirectory {source, network, attribution_text, attribution_url, dexes: [{id, name}], dexes_at, tokens: [{token, ticker, fetched_at, pages, total, error}], pools: [{token, dex_id, pool, base, quote, base_symbol, quote_symbol, reserve_usd, status}], error}`; `status` — `"Unchecked"`, `"Taken"`, `{"NotConnected": причина}`, `{"Rejected": причина}`, `{"Unsupported": причина}` (например нативный BNB); биржа — 400; с решения 121 — `tokens[].note` («индексатор не знает пулов монеты», 404 — сведение, не ошибка) и `factory {enabled, at, calls, found, taken, failed, notes, error}` — поиск по фабрикам на своём узле (`index.factory_scan`) |
+| `POST /api/dex/dry-swap` | «Сухая сделка DEX» (решение 121, C4): тело `{venue?, asset: {ticker, bsc_contract}, side: "Buy"\|"Sell", usdt: "100"}` → `DexDrySwap {venue, asset, side, usdt, qty, form, pools: [{dex, kind, pool, leg}], out_symbol, quote_out, live_out, min_out, sim_out, gas_swap, gas_approve, approvals, block, funding, ok, reason, notes}` — шлюз `dex_dry_swap`: сборка своим сборщиком как для сделки и eth_simulateV1 от кошелька, без отправки. `venue` не задан — единственная DEX реестра. Отказ сборки/симуляции — `ok: false` и `reason` (HTTP 200); 400 — нет адреса монеты, сумма ≤ 0, площадка не DEX |
 | `GET /api/channels/{venue}` | Каналы отправки адаптера DEX (id области «канал»): `[{info, stats}]`; `stats: null` — по каналу ещё не было событий |
 | `GET /api/wallet-queue/{venue}` | Очередь транзакций кошелька DEX: свободна / ждёт итога (nonce, хеш) / остановлена до ручной проверки (причина) |
 | `POST /api/wallet-queue/{venue}/release` | «Снять очередь после ручной проверки» `{pending_ok}` — только остановленную (иначе 400); nonce ещё не занят без `pending_ok` — 409, интерфейс просит второе подтверждение |
@@ -114,6 +115,7 @@
 | --- | --- | --- |
 | `GET /api/venues/{id}/dex-families` | — | `[DexFamily]` — шлюз `dex_families`; биржа — 400 «не применимо» |
 | `GET /api/venues/{id}/dex-cycles` | — | `[DexCycle]` — шлюз `dex_cycles` (сигналы циклов DEX ↔ DEX, решение 85; за `dex_dex.enabled`, выключено — пусто); биржа — 400 «не применимо» |
+| `POST /api/dex/dry-swap` | `{venue?, asset, side, usdt}` | `DexDrySwap` — шлюз `dex_dry_swap` (решение 121, C4); биржа — 400 «не применимо» |
 
 ## Файлы
 
@@ -130,6 +132,7 @@
 | `wallet_queue.rs` | Очередь кошелька DEX: состояние (и занят ли nonce остановленной), снятие после ручной проверки |
 | `venues.rs` | Список площадок из реестра шлюза |
 | `dex.rs` | DEX и виды пулов, каналы отправки — из реестра шлюза |
+| `dex_dry.rs` | «Сухая сделка DEX» (решение 121, C4): POST /api/dex/dry-swap → шлюз `dex_dry_swap` |
 | `coins.rs` | Экран «Монеты»: справочник из ядра, «Перепроверить» по Asset |
 | `control.rs` | «Ручное управление» и «Статистика газа» — данные и команды ядра |
 | `core_api.rs` | «Живой экран», «Сделки», время в пути, «Управление» (Старт/Стоп/Пауза) |

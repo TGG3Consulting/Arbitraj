@@ -11,8 +11,10 @@
     Решение 101: «Продать и перегнать» (у алерта и остановленной сделки) — продажа по рынку, затем выручка USDT
     переводится на площадку покупки (откуда пришли деньги), независимо от режима возврата USDT.
     Живые сообщения stuck_alert, manual, deal — перечитать.
+    Решение 121 (C4): внизу — «Сухая сделка DEX» (components/DexDrySwap.svelte): проверка своего свопа без отправки,
+    не зависит от данных ядра.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/remote.svelte.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/remote.svelte.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte, DexDrySwap.svelte.
   Настройки: нет (режим и пороги — stuck.*, экран «Настройки»).
 -->
 <script>
@@ -22,6 +24,7 @@
   import { showTime } from '../lib/labels.js';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
+  import DexDrySwap from '../components/DexDrySwap.svelte';
 
   const manual = remote('/api/manual', ['stuck_alert', 'manual', 'deal']);
   let busy = $state(false);
@@ -130,3 +133,5 @@
     </tbody>
   </table>
 {/if}
+
+<DexDrySwap />

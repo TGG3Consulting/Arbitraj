@@ -9,7 +9,8 @@
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
-| `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken, PoolDirectory — справочник пулов от индексатора (решение 58) |
+| `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken (note — «индексатор не знает пулов», решение 121), PoolDirectory, FactoryScan (поиск по фабрикам на своём узле, решение 121) — справочник пулов (решение 58) |
+| `dry_swap.rs` | DexDrySwap, DrySwapPool — итог «сухой сделки DEX» (решение 121, C4): форма маршрута, пулы, выходы, минимум, газ, причина |
 | `pool_depth.rs` | PoolDepth, CrossCheck — пул DEX глазами адаптера для экрана «Монеты»: глубина по направлениям, вердикт, спит ли, независимая сверка расчёта (перечисление), подробности площадки строками (решение 73) |
 | `dex_cycle.rs` | DexCycle, DexCycleHop — сигнал замкнутого цикла DEX ↔ DEX для «Живого экрана» (решение 85, фаза сигнала): базовая монета, вложено/получено, валовая и чистая прибыль, газ/чаевые (BNB) и их перевод в базовую, маршрут по хопам, флаг исполнимости и причина, блок |
 | `control.rs` | CoinGasStats, StuckAlert, ManualHolding, ManualAction, ManualCommand, CommandSource |

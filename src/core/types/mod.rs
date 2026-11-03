@@ -1,7 +1,7 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs.
+//! От чего зависит: balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dry_swap.rs.
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
@@ -12,6 +12,7 @@ pub mod control;
 pub mod cost;
 pub mod dex_cycle;
 pub mod directory;
+pub mod dry_swap;
 pub mod market;
 pub mod pool;
 pub mod pool_depth;
@@ -31,6 +32,7 @@ pub use dex_cycle::{DexCycle, DexCycleHop};
 pub use directory::{
     DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, IndexerDex, PoolDirectory,
 };
+pub use dry_swap::{DexDrySwap, DrySwapPool};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState};
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};

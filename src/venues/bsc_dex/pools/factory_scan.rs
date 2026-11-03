@@ -137,7 +137,7 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
     let mut first_bad = None;
     for (ask, a) in plan.asks.iter().zip(answers) {
         let pool = match a {
-            Ok(Ok(b)) => match factory_calls::decode(ask, &b) {
+            Ok(Ok(b)) => match factory_calls::decode(ask.fee, &b) {
                 Ok(p) => p,
                 Err(why) => {
                     bad += 1;

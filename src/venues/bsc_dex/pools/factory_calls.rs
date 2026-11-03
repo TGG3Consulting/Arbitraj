@@ -118,7 +118,7 @@ pub fn tiers(ctx: &Ctx, id: &str) -> Result<Vec<u32>, String> {
 }
 
 /// Данные вызова: V2 getPair(coin, quote); V3 getPool(coin, quote, fee). Ошибок нет (fee уже проверен на uint24).
-fn encode(coin: Address, quote: Address, fee: Option<u32>) -> Bytes {
+pub fn encode(coin: Address, quote: Address, fee: Option<u32>) -> Bytes {
     match fee {
         None => IV2Factory::getPairCall {
             tokenA: coin,
@@ -136,10 +136,10 @@ fn encode(coin: Address, quote: Address, fee: Option<u32>) -> Bytes {
     }
 }
 
-/// Разбор ответа: адрес пула (нулевой — пула нет). Принимает: вопрос, байты ответа.
-/// Возвращает: адрес или текст «ответ не по ABI». Ошибок нет.
-pub fn decode(ask: &Ask, out: &[u8]) -> Result<Address, String> {
-    match ask.fee {
+/// Разбор ответа: адрес пула (нулевой — пула нет). Принимает: уровень комиссии вопроса (None — V2 getPair), байты
+/// ответа. Возвращает: адрес или текст «ответ не по ABI». Ошибок нет.
+pub fn decode(fee: Option<u32>, out: &[u8]) -> Result<Address, String> {
+    match fee {
         None => IV2Factory::getPairCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ getPair не по ABI: {e}")),
         Some(_) => IV3Factory::getPoolCall::abi_decode_returns(out)

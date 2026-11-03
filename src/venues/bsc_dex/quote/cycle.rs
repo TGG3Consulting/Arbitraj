@@ -9,9 +9,9 @@
 //! чистая прибыль = (выход − вход) базовой монеты − эти затраты, переведённые в базовую монету (quote/cycle_scan.rs).
 //! Транзитных затрат (вывод, перевод, депозит, время в пути, риск движения цены за перевод) у цикла НЕТ — перевода нет,
 //! цикл в одном блоке (решение 85).
-//! Исполнимость (решение 84/85, фаза сигнала): цикл «исполним», только если ВСЕ его хопы через tradable-пулы; иначе —
-//! сигнал, но не исполнимый (экзотические семейства сейчас tradable = false). Сам бандл-исполнитель цикла — следующая
-//! фаза; авто-сделки по циклам этот код НЕ запускает.
+//! Исполнимость (решение 124): цикл «исполним», если у него есть форма исполнения — исполнитель ArbExecutor (все шаги —
+//! его виды) или бандл (все хопы через Universal Router, каналы бандловые) — exec/cycle_gate.rs; иначе — сигнал с
+//! причиной. executable() — только структурная проверка «все хопы tradable». Сделку запускает ядро (core/cycle_watch.rs).
 //! Кто вызывает: quote/cycle_scan.rs (перебор циклов по базовым монетам); тесты.
 //! От чего зависит: quote/route_calc.rs (Leg, eval), quote/path.rs (Path, Hop), quote/steps.rs (fee_pct),
 //! quote/graph_legs.rs (hop_side), quote/route_paths.rs (RoutePath), quote/select.rs (Usable), pools/registry.rs,
@@ -84,8 +84,7 @@ pub struct CycleSignal {
     pub net_profit: Option<Decimal>,
     /// Маршрут цикла по шагам.
     pub hops: Vec<CycleHop>,
-    /// Цикл исполним как есть (все хопы через tradable-пулы) — решение 84/85. Исполнитель цикла — следующая фаза;
-    /// авто-сделки этот сигнал НЕ запускает.
+    /// Цикл исполним как есть — есть форма исполнения (исполнитель или бандл, решение 124, exec/cycle_gate.rs).
     pub executable: bool,
     /// Почему не исполним (для карточки). None — исполним.
     pub exec_note: Option<String>,
@@ -191,7 +190,11 @@ pub fn build_signal(
     let bnb_cost_in_base = bnb_in_base.map(|r| bnb_cost * r);
     let gross_profit = path.usdt - path.coins;
     let net_profit = bnb_cost_in_base.map(|c| gross_profit - c);
-    let exec = executable(legs);
+    // Решение 124: исполним — если у цикла есть форма исполнения (исполнитель ArbExecutor или бандл при бандловых
+    // каналах — exec/cycle_gate.rs), а не только «все хопы tradable» (виды исполнителя — Solidly, Algebra, DODO… — тоже).
+    let exec = super::super::exec::cycle_gate::form(ctx, legs)
+        .map(|_| ())
+        .map_err(|e| e.message);
     Ok(CycleSignal {
         base,
         base_ticker: base_ticker.to_string(),

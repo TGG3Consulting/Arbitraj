@@ -88,3 +88,15 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
 Свой исполнитель ArbExecutor (решение 122, часть X) — tests/bsc_dex_executor_abi.rs: ABI-кодирование execute и шага совпадает с ABI контракта (contracts/out/ArbExecutor.abi: селектор, подпись, поля Step, обратные вызовы), номера видов = константам ArbExecutor.sol, раскладка data видов, хеши артефактов и слот владельца; tests/bsc_dex_executor.rs — сборка вызова execute из долей на пулах реальной записи CAKE (route_common): виды шагов, доли в bps от остатка, промежуточный шаг, вход/минимум/срок.
 
 Семейство StableSwap — Ellipsis (решение 122 F, часть 2) — tests/bsc_dex_curve_family.rs: вид curve_stableswap (Proto::CurveStable, вид ядра StableSwap, шаг CURVE), проверка пула по ответам coins(k) в ABI StableSwap.vy. Сверка своей математики (exchange) с ответом пула get_dy — `ellipsis_math_matches_live_get_dy`, #[ignore] до записи. **Запись (свой узел, один блок N, eth_call с тегом N):** пул(ы) Ellipsis из dex.stable_pools (например 3pool BUSD/USDC/USDT): `coins(uint256 k)` (0xc6610657) и `balances(uint256 k)` (0x4903b0d1) для k = 0.. до отката, `A()` (0xf446c1d0), `fee()` (0xddca3f43), `decimals()` (0x313ce567) каждой монеты, `get_dy(int128 i, int128 j, uint256 dx)` (0x5e0d443f) — каждая пара i≠j, по 3 суммы (малая, ~1% и ~10% баланса). Сохранить в tests/data/ellipsis/responses.json: `{block, pools: [{pool, coins: ["<result>"…], balances: ["<result>"…], decimals: [18…], A: "<result>", fee: "<result>", quotes: [{i, j, dx: "<десятичное>", out: "<result>"}]}]}`; затем `cargo test --test bsc_dex_curve_family -- --ignored` и снять #[ignore].
+
+Исполнение цикла DEX ↔ DEX (решение 124) — tests/bsc_dex_cycle_trade.rs на записи CAKE 2026-10-29 (route_common, блок
+130521896), без сети: ноги цикла по сигналу ядра DexCycle (незамкнутый цикл, чужой пул, нативный BNB — отказ), вызов
+ArbExecutor для цикла (tokenIn = tokenOut, все доли 10000 bps, minOut — граница ядра), выбор формы (исполнитель →
+бандл → отказ с причинами), граница бандла на последнем хопе, курсы по пулам записи, порог чистой прибыли после
+симуляции, запрос «базовая → базовая», память причин ядра. **Цикл DEX ↔ DEX: квитанция** — тест
+`fact_from_recorded_cycle_receipt` помечен `#[ignore]`: записи живой сделки цикла нет. Что записать с первой живой
+сделки цикла (или первой сухой сделки цикла, повторённой живой на малой сумме): `tests/data/cycle_exec_2026-11/receipt.json`
+— ответ `eth_getTransactionReceipt` (поле `result`) транзакции execute исполнителя; `meta.json` — `{"wallet": "0x…",
+"base": "0x…", "input_units": "…", "output_units": "…"}` (суммы Transfer базовой из кошелька и на кошелёк по BscScan).
+Цепочка ядра план → сделка с настоящей площадкой (цена газа eth_gasPrice с узла) тестом не покрыта — нужна запись
+ответов узла на одном блоке; проверяется сухой сделкой цикла (docs/OWN_NODE_SWITCH.md, шаг 5а).

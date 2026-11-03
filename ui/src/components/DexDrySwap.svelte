@@ -7,14 +7,20 @@
     nonce не тратит. Результат — таблицей: форма маршрута, пулы, выход по котировке / живому пересчёту / минимум
     (amountOutMin) / по симуляции, газ обмена и разрешений, сколько разрешений нужно, откуда вход в симуляции, блок,
     итог «годится» или причина отказа, заметки (что не измерено).
+  Режим «цикл» (решение 124) — components/DexDryCycle.svelte: цикл DEX ↔ DEX из текущих сигналов, весь путь ядра
+    (бюджет, размер, граница) и симуляция без отправки. Итог обоих режимов — components/DryResult.svelte.
   Кто вызывает: pages/Manual.svelte.
-  От чего зависит: lib/api.js, lib/coinLabels.js (poolRefText), components/ErrorText.svelte.
+  От чего зависит: lib/api.js, components/{ErrorText, DryResult, DexDryCycle}.svelte.
   Настройки: нет своих (через бэкенд — exec.dex_slippage_pct, dex.*, smart.*, verify.*, dex.multicall3).
 -->
 <script>
   import { post } from '../lib/api.js';
-  import { poolRefText } from '../lib/coinLabels.js';
   import ErrorText from './ErrorText.svelte';
+  import DryResult from './DryResult.svelte';
+  import DexDryCycle from './DexDryCycle.svelte';
+
+  /** 'swap' — своп монеты; 'cycle' — цикл DEX ↔ DEX (решение 124). */
+  let kind = $state('swap');
 
   let ticker = $state('');
   let contract = $state('');
@@ -43,9 +49,6 @@
     }
     busy = false;
   }
-
-  /** Значение или «—» (не дошли до этого шага). */
-  const v = (x) => (x === null || x === undefined ? '—' : x);
 </script>
 
 <h2>Сухая сделка DEX — проверить свой своп без отправки</h2>
@@ -55,6 +58,17 @@
   Режим «через исполнитель» (решение 122): маршрут собирается шагами своего контракта ArbExecutor, а его код и владелец
   подставляются в симуляцию на будущий адрес развёртывания — так исполнитель проверяется на живых пулах до развёртывания.
 </p>
+<div class="row">
+  <label>Что проверить
+    <select bind:value={kind}>
+      <option value="swap">своп монеты</option>
+      <option value="cycle">цикл DEX ↔ DEX</option>
+    </select>
+  </label>
+</div>
+{#if kind === 'cycle'}
+  <DexDryCycle />
+{:else}
 <div class="row">
   <label>Тикер <input bind:value={ticker} placeholder="CAKE" size="8" /></label>
   <label>Адрес в BSC <input bind:value={contract} placeholder="0x…" size="44" /></label>
@@ -76,26 +90,5 @@
   </button>
 </div>
 <ErrorText text={error} />
-{#if res}
-  <p class={res.ok ? 'ok' : 'err'} role="status">
-    {res.ok ? 'Годится: собрано, симуляция прошла, выход ≥ минимума, обмен сделали пулы маршрута.' : `Отказ: ${res.reason ?? 'без причины'}`}
-  </p>
-  <table>
-    <tbody>
-      <tr><th>Монета, сторона</th><td>{res.asset.ticker} <code>{res.asset.bsc_contract}</code>, {res.side === 'Buy' ? 'покупка' : 'продажа'} на {res.usdt} USDT</td></tr>
-      <tr><th>Количество монет</th><td>{v(res.qty)}</td></tr>
-      <tr><th>Форма маршрута</th><td>{v(res.form)}</td></tr>
-      <tr><th>Пулы</th><td>
-        {#each res.pools as p, i (i)}<div>доля {p.leg + 1}: {p.dex} ({p.kind}) <code>{poolRefText(p.pool)}</code></div>{:else}—{/each}
-      </td></tr>
-      <tr><th>Выход по котировке</th><td>{v(res.quote_out)} {res.out_symbol ?? ''}</td></tr>
-      <tr><th>Выход по живому пересчёту</th><td>{v(res.live_out)} {res.out_symbol ?? ''}</td></tr>
-      <tr><th>Минимум (amountOutMin)</th><td>{v(res.min_out)} {res.out_symbol ?? ''}</td></tr>
-      <tr><th>Выход по симуляции</th><td>{v(res.sim_out)} {res.out_symbol ?? ''}</td></tr>
-      <tr><th>Газ обмена / разрешений</th><td>{v(res.gas_swap)} / {v(res.gas_approve)} (разрешений: {res.approvals})</td></tr>
-      <tr><th>Вход в симуляции</th><td>{v(res.funding)}</td></tr>
-      <tr><th>Блок симуляции</th><td>{v(res.block)}</td></tr>
-    </tbody>
-  </table>
-  {#each res.notes as n, i (i)}<p class="muted">{n}</p>{/each}
+<DryResult {res} />
 {/if}

@@ -10,6 +10,7 @@ pub mod control;
 pub mod core_api;
 pub mod dex;
 pub mod dex_dry;
+pub mod dex_executor;
 pub mod episodes;
 pub mod first_run;
 pub mod guard;

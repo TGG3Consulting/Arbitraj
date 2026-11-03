@@ -9,14 +9,17 @@
 //! Графовый маршрут (RouteMode::Graph, решения 83, 84): перед формированием ордера — предторговая верификация точечным
 //! Multicall3 (exec/verify_gate.rs) за правилом шлюза: Reject → ошибка, ордер не формируем; Ok → свежие amountOutMin
 //! по ногам. Дальше по форме (quote/graph_route::graph_form): прямая (одна доля, один хоп) — exec/trade_direct.rs;
-//! один Universal Router PancakeSwap — умным (exec/trade_smart.rs); мульти-роутер — атомарным бандлом (exec/bundle_trade.rs).
+//! один Universal Router PancakeSwap — умным (exec/trade_smart.rs); мульти-роутер — атомарным бандлом (exec/bundle_trade.rs),
+//! а при заданном exec.executor_address — одной транзакцией через свой исполнитель ArbExecutor (exec/executor/trade.rs,
+//! решение 122, часть X).
 //! Кто вызывает: venue.rs (контракт trade); общие шаги — exec/trade_direct.rs, exec/trade_smart.rs,
 //! exec/bundle_trade.rs, exec/verify_gate.rs.
-//! От чего зависит: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/verify_gate.rs, exec/order.rs,
+//! От чего зависит: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/executor/*, exec/verify_gate.rs, exec/order.rs,
 //! exec/plan.rs, exec/txs.rs, exec/native.rs, quote/graph_route.rs, wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs.
-//! Настройки: exec.dex_slippage_pct [bsc_dex] (допуск к ожидаемому выходу); через вызываемые — dex.*, send.*, channel.*.
+//! Настройки: exec.dex_slippage_pct, exec.executor_address [bsc_dex] (допуск; исполнитель); через вызываемые — dex.*, send.*, channel.*.
 //! Уведомление: dex.rebuilt_after_approve (маршрут собран заново после разрешений, решение 121 B1).
-//! Решение 121 B7: итог и любая ошибка сделки подписаны исполнителем (exec/result.rs by) — здесь, для всех путей.
+//! Решение 121 B7: итог и любая ошибка сделки подписаны исполнителем (exec/result.rs by) — здесь, для всех путей
+//! («свой сборщик: прямой / умный / бандл / исполнитель»).
 //!
 //! Минимум выхода и проверка цены — exec/order.rs (худшая цена ≤ 0 или минимум 0 — ошибка до отправки).
 //! Нативная монета BNB (решение 62) — exec/native.rs: WRAP_ETH / UNWRAP_WETH в той же транзакции, резерв на газ не трогается.
@@ -34,7 +37,7 @@ use super::super::wallet::nonce::Nonces;
 pub use super::order::{check_price, order, worst_positive};
 pub use super::swap_send::{no_new_approvals, rebuilt_notice, send_approvals, send_swap};
 use super::txs::Env;
-use super::{bundle_trade, result, trade_direct, trade_smart, verify_gate};
+use super::{bundle_trade, executor, result, trade_direct, trade_smart, verify_gate};
 
 /// Сделка. Итог и любая ошибка подписаны исполнителем (решение 121 B7): «свой сборщик: прямой / умный / бандл» —
 /// по форме маршрута из запроса (как выберет run). Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой),
@@ -48,18 +51,22 @@ pub async fn trade(
     let who = req
         .route
         .as_ref()
-        .map_or(result::BY_DIRECT, |r| executor(&q.ctx, r));
+        .map_or(result::BY_DIRECT, |r| by_whom(&q.ctx, r));
     result::by(run(q, env, nonces, req).await, who)
 }
 
 /// Кто исполнит маршрут — по тем же правилам, что выбор пути в run: умный режим — умный; граф — по форме
-/// (quote/graph_route::graph_form); иначе прямой. Ошибок нет.
-fn executor(ctx: &Ctx, route: &DexRoute) -> &'static str {
+/// (quote/graph_route::graph_form), форма «бандл» при заданном exec.executor_address — исполнитель (решение 122);
+/// иначе прямой. Ошибок нет (адрес не читается — подпись бандла, сама сделка вернёт ошибку настройки).
+fn by_whom(ctx: &Ctx, route: &DexRoute) -> &'static str {
     match route.mode {
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {
             GraphForm::Direct => result::BY_DIRECT,
             GraphForm::OneUr => result::BY_SMART,
+            GraphForm::Bundle if matches!(executor::address(ctx), Ok(Some(_))) => {
+                result::BY_EXECUTOR
+            }
             GraphForm::Bundle => result::BY_BUNDLE,
         },
         RouteMode::Direct => result::BY_DIRECT,
@@ -111,7 +118,11 @@ async fn run(
                 )
                 .await;
             }
+            // Решение 122 (часть X): задан exec.executor_address — одной транзакцией через свой исполнитель.
             GraphForm::Bundle => {
+                if let Some(x) = executor::address(ctx)? {
+                    return executor::trade::trade(q, env, nonces, req, &route, verified, x).await;
+                }
                 return bundle_trade::trade(q, env, nonces, req, &route, verified).await;
             }
         }

@@ -6,6 +6,8 @@
 //! после. Выход по симуляции = после − до; газ — gasUsed вызовов; «кто меняет» (решение 59) — check/emitter::missing
 //! БЕЗ исключения пула (сухая сделка ничего не меняет в справочнике). Ничего не подписывается и не отправляется.
 //! Выход BNB (покупка нативной монеты, UNWRAP_WETH) — Multicall3.getEthBalance (dex.multicall3); не задан — не измерен.
+//! Через исполнитель ArbExecutor (решение 122, часть X): разрешение ERC-20 исполнителю → execute; не развёрнут —
+//! его код и слот владельца подставляются подменой состояния (check/simulate.rs::run_with, stateOverrides).
 //! Разбор итогов — exec/dry_judge.rs.
 //! Кто вызывает: exec/dry_swap.rs.
 //! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/{dry_build, dry_fund, bundle_sim,
@@ -105,7 +107,12 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         calls.push(c);
         calls.len() - 1
     });
-    let res = simulate::run_valued(ctx, &calls, &values, r.at).await?;
+    // Исполнитель не развёрнут (режим «через исполнитель», решение 122): его код и владелец — подменой состояния.
+    let over: Vec<_> = match &r.built {
+        Built::Exec(x) => x.over.iter().cloned().collect(),
+        _ => Vec::new(),
+    };
+    let res = simulate::run_with(ctx, &calls, &values, &over, r.at).await?;
     judge(r, &res, &mains, in_idx.map(|i| (i, io.need)), &mut sim);
     if sim.reason.is_none() {
         let read = |i: Option<usize>| i.and_then(|i| pc::u256(&res[i]));
@@ -159,6 +166,23 @@ async fn push_main(
             if !p.value().is_zero() {
                 values.push((calls.len() - 1, p.value()));
             }
+            mains.push((calls.len() - 1, false));
+        }
+        Built::Exec(x) => {
+            for (to, data) in &x.approvals {
+                calls.push(Call {
+                    from: wallet,
+                    to: *to,
+                    input: data.clone(),
+                });
+                mains.push((calls.len() - 1, true));
+            }
+            sim.approvals = x.approvals.len();
+            calls.push(Call {
+                from: wallet,
+                to: x.call.executor,
+                input: x.call.data(),
+            });
             mains.push((calls.len() - 1, false));
         }
         Built::Many(b) => {

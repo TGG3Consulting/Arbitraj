@@ -260,7 +260,47 @@ impl Venue for BscDex {
     ) -> GatewayResult<crate::core::types::DexDrySwap> {
         let q = self.p.quoting();
         // Класс Check (решение 61): ниже пути сделки, выше котировок живого экрана и фона.
-        Ok(scope(Class::Check, exec::dry_swap::run(&q, asset, side, usdt)).await)
+        let mode = exec::executor::dry::DryMode::AsTrade;
+        Ok(scope(
+            Class::Check,
+            exec::dry_swap::run(&q, asset, side, usdt, mode),
+        )
+        .await)
+    }
+
+    /// «Сухая сделка DEX» через исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X) —
+    /// проверка исполнителя на живой сети до развёртывания. Ничего не отправляет. Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_swap_executor(
+        &self,
+        asset: Asset,
+        side: Side,
+        usdt: Decimal,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        let mode = exec::executor::dry::DryMode::Executor;
+        Ok(scope(
+            Class::Check,
+            exec::dry_swap::run(&q, asset, side, usdt, mode),
+        )
+        .await)
+    }
+
+    /// Оценка развёртывания исполнителя ArbExecutor (решение 122, часть X): газ, цена, стоимость, будущий адрес — ничего не
+    /// отправляет. Ошибки: ключ кошелька, каналы, узел.
+    async fn dex_executor_quote(&self) -> GatewayResult<crate::core::types::ExecutorDeployQuote> {
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(Class::Check, exec::executor::deploy::quote(&q, &env)).await
+    }
+
+    /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:
+    /// SHA-256 байткода, который он видел в оценке. Ошибки: QuoteMismatch (байткод не тот), ключ, каналы, узел.
+    async fn dex_executor_deploy(
+        &self,
+        sha256: String,
+    ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
+        let (q, env) = (self.p.quoting(), self.p.env());
+        let run = exec::executor::deploy::deploy(&q, &env, &self.p.nonces, &sha256);
+        scope(Class::Trade, run).await
     }
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.

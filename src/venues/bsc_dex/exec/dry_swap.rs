@@ -7,6 +7,8 @@
 //! и не отправляет, очередь кошелька и nonce не трогает, уведомлений сделки не шлёт, пулы не исключает.
 //! Итог — DexDrySwap: форма маршрута, пулы, выход по котировке / живому пересчёту / минимум / симуляции, газ, причина.
 //! Подбор количества под сумму USDT — exec/dry_size.rs.
+//! Режим «через исполнитель» (решение 122, часть X): маршрут — шагами ArbExecutor, код подставлен в симуляцию
+//! (exec/executor/dry.rs) — проверка исполнителя на живой сети до развёртывания.
 //! Кто вызывает: venue.rs (контракт dex_dry_swap).
 //! От чего зависит: quote/mod.rs (Quoting::quote), quote/spot.rs, exec/{dry_build, dry_sim}.rs, wallet/{signer,
 //! balances}.rs, num.rs.
@@ -24,19 +26,34 @@ use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built, Ready};
 use super::dry_sim::{self, Io};
 use super::dry_size;
+use super::executor::dry::DryMode;
 use super::native;
 
-/// Сухая сделка. Принимает: котировку, монету, сторону, сумму USDT. Возвращает: итог (отказ — reason). Ошибок нет.
-pub async fn run(q: &Quoting, asset: Asset, side: Side, usdt: Decimal) -> DexDrySwap {
+/// Сухая сделка. Принимает: котировку, монету, сторону, сумму USDT, режим (как сделка / через исполнитель с
+/// подставленным кодом — решение 122). Возвращает: итог (отказ — reason). Ошибок нет.
+pub async fn run(
+    q: &Quoting,
+    asset: Asset,
+    side: Side,
+    usdt: Decimal,
+    mode: DryMode,
+) -> DexDrySwap {
     let mut r = DexDrySwap::new(q.ctx.venue(), asset, side, usdt);
-    if let Err(e) = fill(q, &mut r).await {
+    if mode == DryMode::Executor {
+        r.notes.push(
+            "режим «через исполнитель»: маршрут собран шагами ArbExecutor, код исполнителя и его владелец (кошелёк) \
+             подставлены в симуляцию на будущий адрес развёртывания — в сети ничего не создаётся"
+                .into(),
+        );
+    }
+    if let Err(e) = fill(q, &mut r, mode).await {
         r.reason = Some(e.message);
     }
     r
 }
 
 /// Тело run: заполняет итог по шагам. Ошибки: любая на пути — становится причиной.
-async fn fill(q: &Quoting, r: &mut DexDrySwap) -> GatewayResult<()> {
+async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<()> {
     let ctx = &q.ctx;
     if r.usdt <= Decimal::ZERO {
         return Err(ctx.err(ErrorCode::Internal, "сумма USDT должна быть больше 0"));
@@ -67,7 +84,7 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap) -> GatewayResult<()> {
         deal_id: "dry-swap".into(),
         route: Some(route.clone()),
     };
-    let ready = dry_build::build(q, &req, &route, wallet).await?;
+    let ready = dry_build::build(q, &req, &route, wallet, mode).await?;
     r.form = Some(ready.form.clone());
     r.live_out = Some(match r.side {
         Side::Buy => ready.coins,

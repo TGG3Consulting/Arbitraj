@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/check/simulate.rs
 //! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния заданного блока, без
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
-//! Кто вызывает: check/probe.rs, exec/precheck_sim.rs.
+//! Подмена состояния (stateOverrides, run_with) — сухая сделка через неразвёрнутый исполнитель (решение 122, часть X).
+//! Кто вызывает: check/probe.rs, exec/precheck_sim.rs, exec/dry_sim.rs, exec/executor/sim.rs.
 //! От чего зависит: node/rpc.rs, ctx.rs.
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
@@ -10,7 +11,7 @@
 //! схемы — src/schemas/execute.yaml (EthSimulatePayload, BlockStateCalls, CallResult: status, returnData, gasUsed, error).
 //! В узле BSC — BlockChainAPI.SimulateV1: https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/internal/ethapi/api.go#L1142 .
 
-use alloy_primitives::{Address, Bytes, U64, U256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -97,6 +98,28 @@ pub async fn run_valued(
     values: &[(usize, U256)],
     base: u64,
 ) -> GatewayResult<Vec<CallResult>> {
+    run_with(ctx, calls, values, &[], base).await
+}
+
+/// Подмена состояния счёта в симуляции (execute.yaml AccountOverride: code и state — полная замена хранилища):
+/// так «Сухая сделка DEX» проверяет ещё не развёрнутый исполнитель ArbExecutor на живой сети (решение 122, часть X).
+#[derive(Debug, Clone)]
+pub struct Override {
+    pub address: Address,
+    pub code: Bytes,
+    /// Слоты хранилища (ключ → значение); остальные слоты — нули.
+    pub state: Vec<(B256, B256)>,
+}
+
+/// То же с подменой состояния (blockStateCalls[].stateOverrides — execution-apis 16caee27 src/schemas/execute.yaml
+/// L40-L99). Принимает: вызовы, суммы BNB, подмены, номер базового блока. Ошибки: как у run.
+pub async fn run_with(
+    ctx: &Ctx,
+    calls: &[Call],
+    values: &[(usize, U256)],
+    overrides: &[Override],
+    base: u64,
+) -> GatewayResult<Vec<CallResult>> {
     let list: Vec<_> = calls
         .iter()
         .enumerate()
@@ -105,7 +128,25 @@ pub async fn run_valued(
             None => json!({ "from": c.from, "to": c.to, "input": c.input }),
         })
         .collect();
-    let payload = json!({ "blockStateCalls": [{ "calls": list }], "validation": false });
+    let mut block = json!({ "calls": list });
+    if !overrides.is_empty() {
+        let map: serde_json::Map<String, serde_json::Value> = overrides
+            .iter()
+            .map(|o| {
+                let state: serde_json::Map<String, serde_json::Value> = o
+                    .state
+                    .iter()
+                    .map(|(k, v)| (format!("{k:#x}"), json!(v)))
+                    .collect();
+                (
+                    format!("{:#x}", o.address),
+                    json!({ "code": o.code, "state": state }),
+                )
+            })
+            .collect();
+        block["stateOverrides"] = serde_json::Value::Object(map);
+    }
+    let payload = json!({ "blockStateCalls": [block], "validation": false });
     let blocks: Vec<BlockResult> =
         rpc::call(ctx, "eth_simulateV1", json!([payload, block_tag(base)])).await?;
     let out = blocks

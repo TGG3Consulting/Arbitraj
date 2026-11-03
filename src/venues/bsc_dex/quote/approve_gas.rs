@@ -2,8 +2,9 @@
 //! Что делает: газ разрешений для котировки (решение 35: «газ approve, первый раз на монету»): есть ли у кошелька
 //! разрешения ERC-20 → Permit2 и Permit2 → Universal Router маршрута на сумму сделки; нет — газ, измеренный пробным
 //! обменом в первом пуле маршрута (разрешения одни на токен входа первого шага, от пула не зависят).
+//! Маршрут через исполнитель ArbExecutor (решение 122, часть X): ERC-20 allowance кошелька исполнителю (память).
 //! Кто вызывает: quote/mod.rs.
-//! От чего зависит: wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
+//! От чего зависит: exec/executor/mod.rs (takes), wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
 //! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), smart.universal_router, smart.permit2
 //! [bsc_dex] (умный); через approve.rs — dex.approve_unlimited, dex.permit2_expiration_s.
 
@@ -56,6 +57,15 @@ pub async fn units(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
+    // Решение 122 (часть X): маршрут через исполнитель ArbExecutor — одно разрешение ERC-20 исполнителю, без Permit2
+    // (память — wallet/allow_cache.rs::erc20). Газ — тот же измеренный пробным обменом (верхняя оценка).
+    if let Some(x) = super::super::exec::executor::takes(ctx, route)? {
+        let wallet = signer::address(ctx)?;
+        if q.allow.erc20(ctx, token, wallet, x).await? >= amount {
+            return Ok(None);
+        }
+        return measured(q, &e.pool.reference, quote.side);
+    }
     let (ur, permit2) = if route.mode == RouteMode::Smart {
         (
             ctx.addr("smart.universal_router")?,
@@ -74,14 +84,23 @@ pub async fn units(
     if approve::lacking(ctx, &r, (token, permit2, ur), amount, now)?.is_empty() {
         return Ok(None);
     }
-    let f = q.checks.pool(&e.pool.reference);
-    let g = if quote.side == Side::Buy {
+    measured(q, &e.pool.reference, quote.side)
+}
+
+/// Газ разрешений, измеренный пробным обменом в пуле (сторона покупки или продажи). Ошибки: CoinNotChecked — не измерен.
+fn measured(
+    q: &Quoting,
+    pool: &crate::core::types::PoolRef,
+    side: Side,
+) -> GatewayResult<Option<u64>> {
+    let f = q.checks.pool(pool);
+    let g = if side == Side::Buy {
         f.gas_approve_buy
     } else {
         f.gas_approve_sell
     };
     g.map(Some).ok_or_else(|| {
-        ctx.err(
+        q.ctx.err(
             ErrorCode::CoinNotChecked,
             "газ разрешений не измерен пробным обменом",
         )

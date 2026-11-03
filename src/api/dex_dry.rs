@@ -1,11 +1,12 @@
 //! Файл: api/dex_dry.rs
 //! Что делает: «Сухая сделка DEX» для интерфейса (решение 121, C4): POST /api/dex/dry-swap → шлюз `dex_dry_swap`
-//! площадки DEX. Сборка и симуляция без отправки — у адаптера; api только находит площадку в реестре шлюза.
+//! (или `dex_dry_swap_executor` — режим «через исполнитель», решение 122) площадки DEX. Сборка и симуляция без отправки — у адаптера; api только находит площадку в реестре шлюза.
 //! Кто вызывает: интерфейс (экран «Ручное управление», components/DexDrySwap.svelte).
 //! От чего зависит: api/state.rs, gateway/registry.rs, gateway/contract.rs (VenueKind), core/types (DexDrySwap).
 //! Настройки: нет.
 //!
-//! POST /api/dex/dry-swap {venue?, asset: {ticker, bsc_contract}, side: "Buy"|"Sell", usdt: "100"} → DexDrySwap.
+//! POST /api/dex/dry-swap {venue?, asset: {ticker, bsc_contract}, side: "Buy"|"Sell", usdt: "100", executor?: bool}
+//! → DexDrySwap; executor = true — через исполнитель ArbExecutor с подставленным кодом (решение 122, часть X).
 //! venue не задан — единственная площадка вида DEX в реестре (их несколько — 400 с просьбой указать).
 
 use axum::Json;
@@ -28,6 +29,10 @@ pub struct DryReq {
     pub side: Side,
     /// Сумма USDT (строкой или числом, как Decimal).
     pub usdt: Decimal,
+    /// Решение 122 (часть X): true — режим «через исполнитель» (любой маршрут шагами ArbExecutor, код подставлен в
+    /// симуляцию — проверка до развёртывания); нет или false — как пойдёт сделка.
+    #[serde(default)]
+    pub executor: bool,
 }
 
 /// Сухая сделка DEX. Принимает: тело. Возвращает: итог адаптера (отказ — reason внутри, не HTTP-ошибка).
@@ -50,11 +55,12 @@ pub async fn dry_swap(
         None => only_dex(&st).await?,
     };
     let venue = st.registry.get(&id).await.map_err(ApiError::gateway)?;
-    venue
-        .dex_dry_swap(b.asset, b.side, b.usdt)
-        .await
-        .map(Json)
-        .map_err(ApiError::gateway)
+    let r = if b.executor {
+        venue.dex_dry_swap_executor(b.asset, b.side, b.usdt).await
+    } else {
+        venue.dex_dry_swap(b.asset, b.side, b.usdt).await
+    };
+    r.map(Json).map_err(ApiError::gateway)
 }
 
 /// Единственная площадка вида DEX в реестре шлюза. Ошибки: 400 — ни одной или несколько.

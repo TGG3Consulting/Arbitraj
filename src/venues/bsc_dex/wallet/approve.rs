@@ -4,7 +4,9 @@
 //! вызовы, которых не хватает. Сумма — на сделку или «без ограничения» (dex.approve_unlimited).
 //! Форк (решения 59, 82, фаза 80.9b): classic V2 Router списывает по ОБЫЧНОМУ ERC-20 allowance — fork_all/fork_missing
 //! дают прямой approve(router, сумма) БЕЗ Permit2.
-//! Кто вызывает: exec/plan.rs; котировка — через wallet/allow_cache.rs (read, lacking).
+//! Исполнитель ArbExecutor (решение 122, часть X): executor_missing/executor_all — тот же прямой approve(исполнитель),
+//! erc20_allowance — чтение allowance для памяти разрешений (wallet/allow_cache.rs::erc20).
+//! Кто вызывает: exec/plan.rs, exec/executor/{trade, dry}.rs; котировка — через wallet/allow_cache.rs (read, lacking, erc20).
 //! От чего зависит: node/call.rs, node/abi.rs, ctx.rs.
 //! Настройки: dex.approve_unlimited, dex.permit2_expiration_s [bsc_dex].
 //!
@@ -179,6 +181,45 @@ pub async fn fork_missing(
         return Ok(Vec::new());
     }
     fork_all(ctx, token, router, amount)
+}
+
+/// Разрешения исполнителя ArbExecutor (решение 122, часть X): он забирает вход transferFrom(кошелёк, исполнитель) по
+/// обычному ERC-20 allowance — как роутер форка, без Permit2; один раз на токен при dex.approve_unlimited = да.
+/// Каких не хватает (читает allowance(кошелёк, исполнитель) с узла). Ошибки: NotConfigured, узел.
+pub async fn executor_missing(
+    ctx: &Ctx,
+    token: Address,
+    wallet: Address,
+    executor: Address,
+    amount: U256,
+) -> GatewayResult<Vec<Approval>> {
+    fork_missing(ctx, token, wallet, executor, amount).await
+}
+
+/// Все разрешения исполнителю сразу (сухая сделка с подставленным кодом — без узла). Ошибки: NotConfigured.
+pub fn executor_all(
+    ctx: &Ctx,
+    token: Address,
+    executor: Address,
+    amount: U256,
+) -> GatewayResult<Vec<Approval>> {
+    fork_all(ctx, token, executor, amount)
+}
+
+/// ERC-20 allowance(владелец, тратящий) с узла. Ошибки: узел.
+pub async fn erc20_allowance(
+    ctx: &Ctx,
+    token: Address,
+    owner: Address,
+    spender: Address,
+) -> GatewayResult<U256> {
+    call::view(
+        ctx,
+        token,
+        &IERC20::allowanceCall { owner, spender },
+        "latest",
+    )
+    .await
 }
 
 /// ERC-20 approve. Ошибок нет.

@@ -2,6 +2,7 @@
 //! Что делает: исполнение обмена на DEX — прямой обмен в одном пуле через Universal Router своей DEX
 //! (V2, V3, V4) с проверкой реально полученного баланса в той же транзакции, разрешения Permit2, сделка целиком.
 //! Сухая сделка DEX (решение 121, C4) — dry_swap.rs: сборка как для сделки и симуляция без отправки.
+//! Свой контракт-исполнитель ArbExecutor (решение 122, часть X) — executor/: одна транзакция по пулам разных DEX.
 //! Кто вызывает: check/probe.rs, mod.rs (trade), venue.rs (dex_dry_swap).
 //! От чего зависит: node/abi_dex.rs, pools/*.
 //! Настройки: dex.router, dex.deadline_s.
@@ -21,6 +22,7 @@ pub mod dry_paths;
 pub mod dry_sim;
 pub mod dry_size;
 pub mod dry_swap;
+pub mod executor;
 pub mod fill;
 pub mod fork_swap;
 pub mod live;

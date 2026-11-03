@@ -13,7 +13,7 @@ use super::market::{Asset, VenueId};
 
 /// Данные площадки о монете в одной сети: можно ли ввести и вывести, сколько стоит вывод.
 /// Источник — только API площадки.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CoinNetworkInfo {
     pub venue: VenueId,
     pub asset: Asset,

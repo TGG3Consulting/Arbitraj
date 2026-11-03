@@ -28,6 +28,7 @@ use crate::core::types::PoolRef;
 use super::super::ctx::Ctx;
 use super::super::quote::depth_band::{self, Band};
 use super::super::tokens::Tokens;
+use super::depth_key::Prep;
 use super::depth_log::{self, Said};
 use super::registry::{Entry, Registry};
 
@@ -106,6 +107,13 @@ impl Book {
         e: &Entry,
         usdt_dec: u8,
     ) -> Result<Depth, String> {
+        let p = Self::prep(ctx, tokens)?;
+        self.depth_prep(ctx, reg, tokens, e, usdt_dec, &p)
+    }
+
+    /// Подготовка к расчёту глубины многих пулов подряд (решение 131, pools/graph.rs build): настройки глубины —
+    /// один раз. Ошибки (текст): не задана настройка глубины, гистерезис вне 0..100.
+    pub fn prep(ctx: &Ctx, tokens: &Tokens) -> Result<Prep, String> {
         let read = |n: &str| ctx.dec(n).map_err(|e| e.message);
         let (band_pct, min) = (
             read("dex.depth_band_pct")?,
@@ -117,7 +125,21 @@ impl Book {
                 "dex.depth_hysteresis_pct = {hyst}: нужно от 0 и меньше 100"
             ));
         }
-        let key = super::depth_key::Key::new(ctx, reg, tokens, e, band_pct, min, hyst);
+        Ok(Prep::new(ctx, tokens, band_pct, min, hyst))
+    }
+
+    /// Глубина пула при готовой подготовке (prep) — то же, что depth. Ошибки: глубина не считается (depth_band.rs).
+    pub fn depth_prep(
+        &self,
+        ctx: &Ctx,
+        reg: &Registry,
+        tokens: &Tokens,
+        e: &Entry,
+        usdt_dec: u8,
+        p: &Prep,
+    ) -> Result<Depth, String> {
+        let (band_pct, min, hyst) = (p.band, p.min, p.hyst);
+        let key = p.key(reg, e);
         let r = &e.pool.reference;
         let prev = match self.lock().get(r) {
             Some(s) if s.key == key => return Ok(s.depth.clone()),

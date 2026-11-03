@@ -2,6 +2,8 @@
 //! Что делает: справочник монет и сетей MEXC (config/getall) с кэшем в памяти не старше venue.networks_fresh_ms
 //! (решение 118, А-🟡13: ответ ~5.6 МБ, вес 10, фильтра по монете нет), стоимость вывода. Помнит соответствие кода сети
 //! (netWork — для нового вывода) и отображаемого имени (network — для адреса депозита и истории).
+//! Решение 131: справочник — за `Arc` (кэш без копии), ответ и разбор — вне рабочих потоков tokio; сети одной монеты
+//! (coin_networks_of) — фильтром общего справочника без копии всех монет.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs (имя сети).
 //! От чего зависит: rest.rs, networks_parse.rs (разбор), ctx.rs, symbols.rs (точность), core/types.
 //! Настройки: venue.bsc_network [mexc] — код netWork сети BSC (тот, что принимает новый вывод; ядро сравнивает с ним
@@ -31,7 +33,7 @@ use super::rest;
 use super::symbols::Symbols;
 
 /// Справочник и когда он получен.
-type Cached = (Instant, Vec<CoinNetworkInfo>);
+type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
 
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -50,8 +52,8 @@ impl Networks {
         m.get(&(ticker.to_string(), code.to_string())).cloned()
     }
 
-    /// Справочник из кэша, если он моложе fresh. Ошибок нет.
-    fn cached(&self, fresh: Duration) -> Option<Vec<CoinNetworkInfo>> {
+    /// Справочник из кэша, если он моложе fresh (указатель, без копии — решение 131). Ошибок нет.
+    fn cached(&self, fresh: Duration) -> Option<Arc<Vec<CoinNetworkInfo>>> {
         let c = self.cache.read().unwrap_or_else(|p| p.into_inner());
         c.as_ref()
             .filter(|(at, _)| at.elapsed() < fresh)
@@ -68,6 +70,32 @@ pub async fn coin_networks(
     nets: &Networks,
     symbols: &Symbols,
 ) -> GatewayResult<Vec<CoinNetworkInfo>> {
+    Ok(Arc::unwrap_or_clone(shared(ctx, nets, symbols).await?))
+}
+
+/// Сети одной монеты (решение 131: из общего справочника без копии всех монет — предпроверка сделки).
+/// Ошибки: как coin_networks.
+pub async fn coin_networks_of(
+    ctx: &Ctx,
+    nets: &Networks,
+    symbols: &Symbols,
+    ticker: &str,
+) -> GatewayResult<Vec<CoinNetworkInfo>> {
+    let all = shared(ctx, nets, symbols).await?;
+    Ok(all
+        .iter()
+        .filter(|i| i.asset.ticker == ticker)
+        .cloned()
+        .collect())
+}
+
+/// Справочник за `Arc` (решение 131): из кэша — указатель; запрос — ответ разбирается вне рабочих потоков tokio
+/// (rest::signed_heavy, spawn_blocking для networks_parse). Ошибки: как coin_networks.
+async fn shared(
+    ctx: &Ctx,
+    nets: &Networks,
+    symbols: &Symbols,
+) -> GatewayResult<Arc<Vec<CoinNetworkInfo>>> {
     let fresh = ctx
         .int("venue.networks_fresh_ms")
         .ok()
@@ -78,7 +106,7 @@ pub async fn coin_networks(
     let bsc = ctx.text("venue.bsc_network")?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     symbols.ensure_fresh(ctx).await?;
-    let data = rest::signed(
+    let data = rest::signed_heavy(
         ctx,
         Method::GET,
         "/api/v3/capital/config/getall",
@@ -86,9 +114,19 @@ pub async fn coin_networks(
         Op::Other,
     )
     .await?;
-    let p = parse_networks(&data, &bsc, &ctx.venue(), min_ok, symbols)?;
+    let (c, sy, venue) = (ctx.clone(), symbols.clone(), ctx.venue());
+    let p = tokio::task::spawn_blocking(move || parse_networks(&data, &bsc, &venue, min_ok, &sy))
+        .await
+        .map_err(|e| {
+            c.tag(GatewayError::new(
+                ErrorCode::Internal,
+                None,
+                format!("разбор config/getall прерван: {e}"),
+            ))
+        })??;
+    let list = Arc::new(p.list);
     *nets.names.write().unwrap_or_else(|e| e.into_inner()) = p.names;
-    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), p.list.clone()));
+    *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
     let (skipped, unclear) = (p.skipped.join("; "), p.unclear_step.join(", "));
     let (new_skipped, new_unclear) = {
         let mut t = nets.told.write().unwrap_or_else(|e| e.into_inner());
@@ -112,7 +150,7 @@ pub async fn coin_networks(
         );
         log(ctx, msg).await;
     }
-    Ok(p.list)
+    Ok(list)
 }
 
 /// Предупреждение в журнал (venue.networks).
@@ -138,7 +176,7 @@ pub async fn withdraw_cost(
     asset: &Asset,
     network: &str,
 ) -> GatewayResult<Vec<Cost>> {
-    let all = coin_networks(ctx, nets, symbols).await?;
+    let all = shared(ctx, nets, symbols).await?;
     let info = all
         .iter()
         .find(|c| c.asset.ticker == asset.ticker && c.network == network)

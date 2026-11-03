@@ -91,7 +91,10 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             "dex_dex.enabled = да, а список dex_dex.base_tokens пуст",
         ));
     }
-    let g = graph::build(ctx, &q.reg, &q.tokens, usdt_dec)?;
+    // Решение 131: граф — тот же кэш на состояние реестра и блок, что у котировки (pools/graph.rs cached), а не новое
+    // построение на каждый толчок поиска (каждое событие пула).
+    let head = q.heads.latest().map_or(0, |h| h.number);
+    let g = graph::cached(ctx, &q.reg, &q.tokens, usdt_dec, head)?;
     let wbnb = ctx.addr("dex.native_wrapped").ok();
     let tickers = coin_tickers(&q.reg);
     let tip = tip_bnb(ctx);
@@ -172,8 +175,8 @@ fn bnb_in_base(
 /// Тикеры монет по адресу (из реестра: токен как `coin` своего пула). Ошибок нет.
 fn coin_tickers(reg: &Registry) -> HashMap<Address, String> {
     let mut m = HashMap::new();
-    for e in reg.all() {
-        m.entry(e.coin).or_insert(e.ticker);
+    for e in reg.snapshot() {
+        m.entry(e.coin).or_insert_with(|| e.ticker.clone());
     }
     m
 }

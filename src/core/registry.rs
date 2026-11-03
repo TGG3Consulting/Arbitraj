@@ -46,7 +46,7 @@ pub enum Exclusion {
 }
 
 /// Монета на одной площадке.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Presence {
     pub venue: VenueId,
     /// Название сети BSC у биржи (для вывода и депозита); у DEX — None.
@@ -68,7 +68,7 @@ pub struct Presence {
 }
 
 /// Монета справочника.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CoinEntry {
     pub asset: Asset,
     pub presence: Vec<Presence>,

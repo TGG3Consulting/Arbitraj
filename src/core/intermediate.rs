@@ -8,12 +8,10 @@
 //! От чего зависит: settings, core/types.
 //! Настройки: dex.intermediate_enabled, dex.intermediate_tokens (по площадке DEX).
 
-use std::collections::HashMap;
-
 use alloy_primitives::Address;
 use serde::Serialize;
 
-use crate::core::types::{CoinNetworkInfo, VenueId};
+use crate::core::types::VenueId;
 use crate::settings::read::At;
 use crate::settings::store::Store;
 
@@ -50,19 +48,16 @@ pub fn read(s: &Store, venue: &VenueId) -> Intermediate {
 }
 
 /// Тикер токена по адресу контракта — из справочника бирж. None — ни одна биржа не знает этот адрес.
-pub fn ticker_of(
-    networks: &HashMap<VenueId, Vec<CoinNetworkInfo>>,
-    addr: Address,
-) -> Option<String> {
+pub fn ticker_of(networks: &super::registry_build::Networks, addr: Address) -> Option<String> {
     networks
         .values()
-        .flatten()
+        .flat_map(|l| l.iter())
         .find(|i| i.asset.bsc_contract == Some(addr))
         .map(|i| i.asset.ticker.clone())
 }
 
 /// Подпись промежуточной монеты: тикер (если биржа знает адрес) и адрес.
-pub fn label(networks: &HashMap<VenueId, Vec<CoinNetworkInfo>>, addr: Address) -> String {
+pub fn label(networks: &super::registry_build::Networks, addr: Address) -> String {
     match ticker_of(networks, addr) {
         Some(t) => format!("{t} ({addr})"),
         None => addr.to_string(),

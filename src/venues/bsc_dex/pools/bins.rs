@@ -9,6 +9,7 @@
 //! https://github.com/pancakeswap/infinity-core/blob/3c5ef1be1f71442d8bc60cc6fd11f9c677b714df/src/pool-bin/interfaces/IBinPoolManager.sol#L140-L149 .
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// Резервы бинов пула.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,7 +17,8 @@ pub struct BinMap {
     /// binStep пула (1 = 0,01%).
     pub step: u32,
     /// id → (reserveX, reserveY); только непустые бины.
-    pub reserves: BTreeMap<u32, (u128, u128)>,
+    /// За `Arc` (решение 129): копия записи реестра не копирует бины; изменение — копия при записи, если карту держит снимок.
+    pub reserves: Arc<BTreeMap<u32, (u128, u128)>>,
     /// Прочитанная полоса id (включительно): за её пределами бины неизвестны.
     pub range: (u32, u32),
 }
@@ -33,10 +35,11 @@ impl BinMap {
         if !self.covers(id) {
             return;
         }
+        let reserves = Arc::make_mut(&mut self.reserves);
         if x == 0 && y == 0 {
-            self.reserves.remove(&id);
+            reserves.remove(&id);
         } else {
-            self.reserves.insert(id, (x, y));
+            reserves.insert(id, (x, y));
         }
     }
 }

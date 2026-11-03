@@ -90,7 +90,7 @@ pub async fn load(
         state,
         TickMap {
             spacing,
-            ticks: map,
+            ticks: map.into(),
             words: (i16::MIN, i16::MAX),
         },
     ))

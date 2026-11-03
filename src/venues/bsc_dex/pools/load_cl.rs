@@ -136,7 +136,7 @@ pub async fn load(
         state,
         TickMap {
             spacing,
-            ticks: ticks_map(ticks),
+            ticks: ticks_map(ticks).into(),
             words: (lo, hi),
         },
     ))

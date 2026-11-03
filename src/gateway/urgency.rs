@@ -48,3 +48,12 @@ pub fn is_set() -> Option<Urgency> {
 pub async fn scope<F: Future>(class: Urgency, work: F) -> F::Output {
     CLASS.scope(class, work).await
 }
+
+/// Как `scope`, но класс может быть не задан — тогда работа идёт без него (решение 129: перенос класса в поток счёта
+/// котировки DEX, venues/bsc_dex/quote/cpu.rs). Ошибок нет.
+pub async fn scope_opt<F: Future>(class: Option<Urgency>, work: F) -> F::Output {
+    match class {
+        Some(c) => CLASS.scope(c, work).await,
+        None => work.await,
+    }
+}

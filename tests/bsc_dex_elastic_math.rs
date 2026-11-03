@@ -119,7 +119,7 @@ fn ticks(tick: i32, net: i128, words: (i16, i16)) -> TickMap {
     );
     TickMap {
         spacing: 1,
-        ticks: m,
+        ticks: m.into(),
         words,
     }
 }

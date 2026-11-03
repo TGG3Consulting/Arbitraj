@@ -81,7 +81,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
         state,
         TickMap {
             spacing: 1,
-            ticks: map,
+            ticks: map.into(),
             words: (lo, hi),
         },
     ))

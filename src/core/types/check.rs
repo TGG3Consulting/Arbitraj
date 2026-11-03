@@ -103,7 +103,7 @@ pub enum BlockReason {
 }
 
 /// Запись чёрного списка монеты.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CoinBlock {
     pub asset: Asset,
     pub reason: BlockReason,

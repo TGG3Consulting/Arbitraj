@@ -27,6 +27,16 @@ pub async fn final_scope<F: Future>(work: F) -> F::Output {
     FINAL.scope(true, work).await
 }
 
+/// Как `final_scope`, но только если `on` (решение 129: перенос признака в поток счёта котировки DEX,
+/// venues/bsc_dex/quote/cpu.rs). Ошибок нет.
+pub async fn final_if<F: Future>(on: bool, work: F) -> F::Output {
+    if on {
+        FINAL.scope(true, work).await
+    } else {
+        work.await
+    }
+}
+
 /// Идёт ли сейчас финальная котировка расчёта. Не задано — нет. Ошибок нет.
 pub fn is_final() -> bool {
     FINAL.try_with(|f| *f).unwrap_or(false)

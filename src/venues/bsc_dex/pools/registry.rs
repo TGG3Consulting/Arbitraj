@@ -2,13 +2,15 @@
 //! Что делает: реестр пулов адаптера в памяти — пул в формате ядра плюс то, что нужно только адаптеру:
 //! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
-//! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs.
+//! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs, registry_index.rs.
 //! Решение 129: номер версии реестра (растёт при любой записи — put, update, retain) — по нему граф маршрутов строится
 //! один раз на состояние реестра, а не на каждую котировку (pools/graph.rs cached); pair_marks — отметки синхронизации
-//! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs).
+//! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs). Записи — за `Arc`, пары и тикеры —
+//! по индексам (registry_index.rs): by_pair / by_ticker / pair_marks не проходят весь реестр; карты тиков и бинов
+//! общие при копии записи (ticks.rs, bins.rs); snapshot — все записи без копирования (граф маршрутов). Блокировка
+//! держится только на чтение индекса и копию нужных записей — счёт котировки идёт без неё.
 //! Настройки: нет.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -19,6 +21,7 @@ use crate::core::types::{Pool, PoolRef};
 use super::bins::BinMap;
 use super::families::Family;
 use super::key::PoolKey;
+use super::registry_index::Pools;
 use super::ticks::TickMap;
 
 /// Запись о пуле.
@@ -55,7 +58,8 @@ pub struct Entry {
 /// Реестр пулов. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Registry {
-    inner: Arc<RwLock<HashMap<PoolRef, Entry>>>,
+    /// Записи за `Arc` и индексы по паре и тикеру (registry_index.rs, решение 129).
+    inner: Arc<RwLock<Pools>>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
     depth: super::depth_book::Book,
     /// Версия: растёт при любой записи (решение 129).
@@ -90,20 +94,21 @@ impl Registry {
         &self.graph
     }
 
+    /// Чтение под блокировкой (короткое: только индекс и копии нужных записей). Ошибок нет.
+    fn read(&self) -> std::sync::RwLockReadGuard<'_, Pools> {
+        self.inner.read().unwrap_or_else(|p| p.into_inner())
+    }
+
     /// Добавляет или заменяет запись. Ошибок нет.
     pub fn put(&self, e: Entry) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
-        m.insert(e.pool.reference.clone(), e);
+        m.insert(e);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Копия записи. None — пула нет.
     pub fn get(&self, r: &PoolRef) -> Option<Entry> {
-        self.inner
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(r)
-            .cloned()
+        self.read().get(r).map(|e| (**e).clone())
     }
 
     /// Изменение записи на месте. Принимает: ссылку и функцию. Возвращает: её результат; None — пула нет.
@@ -111,60 +116,50 @@ impl Registry {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию.
         self.version.fetch_add(1, Ordering::AcqRel);
-        m.get_mut(r).map(f)
+        m.update(r, f)
     }
 
-    /// Пулы пары «монета — встречный токен» (копии). Ошибок нет.
+    /// Пулы пары «монета — встречный токен» (копии; карты тиков и бинов — общие, за `Arc`). По индексу пары, а не
+    /// проходом реестра (решение 129). Ошибок нет.
     pub fn by_pair(&self, coin: Address, quote: Address) -> Vec<Entry> {
-        let m = self.inner.read().unwrap_or_else(|p| p.into_inner());
-        m.values()
-            .filter(|e| e.coin == coin && e.usdt == quote)
-            .cloned()
+        self.read()
+            .pair(coin, quote)
+            .map(|e| (**e).clone())
             .collect()
     }
 
     /// Отметки синхронизации пулов пары «монета — встречный токен»: (блок, logIndex, достоверен) — без копирования
     /// записей (решение 129: ключ кэша глубины считается для каждого пула при построении графа). Ошибок нет.
     pub fn pair_marks(&self, coin: Address, quote: Address) -> Vec<(u64, Option<u64>, bool)> {
-        let m = self.inner.read().unwrap_or_else(|p| p.into_inner());
-        m.values()
-            .filter(|e| e.coin == coin && e.usdt == quote)
+        self.read()
+            .pair(coin, quote)
             .map(|e| (e.synced_block, e.synced_log, e.valid))
             .collect()
     }
 
-    /// Все пулы монеты (копии). Ошибок нет.
+    /// Все пулы монеты (копии) — по индексу тикера. Ошибок нет.
     pub fn by_ticker(&self, ticker: &str) -> Vec<Entry> {
-        let m = self.inner.read().unwrap_or_else(|p| p.into_inner());
-        m.values().filter(|e| e.ticker == ticker).cloned().collect()
+        self.read().ticker(ticker).map(|e| (**e).clone()).collect()
     }
 
     /// Есть ли такой пул. Ошибок нет.
     pub fn contains(&self, r: &PoolRef) -> bool {
-        self.inner
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .contains_key(r)
+        self.read().contains(r)
     }
 
-    /// Копии всех записей пулов (граф маршрутов, решение 80). Ошибок нет.
+    /// Копии всех записей пулов. Ошибок нет.
     pub fn all(&self) -> Vec<Entry> {
-        self.inner
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .values()
-            .cloned()
-            .collect()
+        self.read().values().map(|e| (**e).clone()).collect()
+    }
+
+    /// Снимок всех записей без копирования (решение 129: граф маршрутов строится по нему вне блокировки). Ошибок нет.
+    pub fn snapshot(&self) -> Vec<Arc<Entry>> {
+        self.read().values().cloned().collect()
     }
 
     /// Ссылки на все пулы. Ошибок нет.
     pub fn refs(&self) -> Vec<PoolRef> {
-        self.inner
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .keys()
-            .cloned()
-            .collect()
+        self.read().refs().cloned().collect()
     }
 
     /// Удаляет пулы монет, которых больше нет в подписке. Принимает: функцию «оставить ли». Ошибок нет.
@@ -172,7 +167,7 @@ impl Registry {
         self.inner
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .retain(|_, e| keep(e));
+            .retain(keep);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
 }

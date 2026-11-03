@@ -27,6 +27,10 @@ pub use super::touched::Touched;
 pub struct MarketState {
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
     pub(super) pools: HashMap<(VenueId, PoolRef), Pool>,
+    /// Индекс пулов по паре токенов (решение 129): (площадка, меньший адрес, больший адрес) → пулы. Справочник монет
+    /// искал пулы пары проходом ВСЕХ пулов на каждую монету и промежуточную (O(монеты × пулы)) — у MEXC это тысячи ×
+    /// тысячи на каждую пересборку.
+    pub(super) pool_pairs: HashMap<(VenueId, Address, Address), HashSet<PoolRef>>,
     /// Проверка налогов: ключ — площадка DEX и адрес контракта монеты.
     pub(super) coin_checks: HashMap<(VenueId, Address), CoinCheck>,
     pub(super) pool_checks: HashMap<(VenueId, PoolRef), PoolCheck>,
@@ -42,6 +46,15 @@ pub struct MarketState {
     pub(super) pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
     /// Биржа → когда её справочник пар последний раз получен (SpotPairs.loaded_at; свежесть — pairs_fresh.rs).
     pub(super) pairs_at: HashMap<VenueId, DateTime<Utc>>,
+}
+
+/// Ключ индекса пары: площадка и адреса по возрастанию. Ошибок нет.
+pub(super) fn pair_key(venue: &VenueId, a: Address, b: Address) -> (VenueId, Address, Address) {
+    if a <= b {
+        (venue.clone(), a, b)
+    } else {
+        (venue.clone(), b, a)
+    }
 }
 
 impl MarketState {
@@ -61,7 +74,14 @@ impl MarketState {
             MarketEvent::Pool(p) => {
                 let key = (p.venue.clone(), p.reference.clone());
                 let (venue, tokens) = (p.venue.clone(), (p.token0, p.token1));
+                let r = p.reference.clone();
                 let first = self.pools.insert(key, p).is_none();
+                if first {
+                    self.pool_pairs
+                        .entry(pair_key(&venue, tokens.0, tokens.1))
+                        .or_default()
+                        .insert(r);
+                }
                 Touched::Pool {
                     venue,
                     tokens,

@@ -119,6 +119,10 @@ impl Venue for Mexc {
         wallet::coin_networks(&self.ctx, &self.nets, &self.symbols).await
     }
 
+    async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
+    }
+
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,

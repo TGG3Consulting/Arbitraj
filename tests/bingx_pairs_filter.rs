@@ -106,7 +106,7 @@ fn coins(market: &MarketState, n: Vec<CoinNetworkInfo>, limit: u64) -> Vec<CoinE
     let fresh = pairs_fresh::check(market, &bingx(), &Ok(limit), ms(GETALL_AT_MS));
     let pairs_fresh = HashMap::from([(bingx(), fresh)]);
     let kinds = vec![(bingx(), VenueKind::Cex)];
-    let networks = HashMap::from([(bingx(), n)]);
+    let networks = HashMap::from([(bingx(), std::sync::Arc::new(n))]);
     let quote = HashMap::from([(bingx(), "USDT".to_string())]);
     let bsc = HashMap::from([(bingx(), "BEP20".to_string())]);
     let intermediate = HashMap::new();

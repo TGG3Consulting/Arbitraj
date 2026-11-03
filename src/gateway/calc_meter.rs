@@ -8,7 +8,7 @@
 //! (task_local, как класс срочности urgency.rs); новая задача его не наследует — запросы задач, запущенных адаптером
 //! через spawn, не считаются (их время всё равно входит в этап, который их ждёт). Не задан — `record` ничего не делает.
 //! Кто вызывает: core/candidates.rs (scope), core/calc_timing.rs (snapshot), venues/bsc_dex/node/pace.rs и
-//! venues/kyberswap/rest.rs (record).
+//! venues/kyberswap/rest.rs (record), venues/bsc_dex/quote/cpu.rs (current, scope_opt).
 //! От чего зависит: tokio (task_local).
 //! Настройки: нет (замер всегда — несколько атомарных сложений на запрос).
 
@@ -79,6 +79,20 @@ tokio::task_local! {
 /// Выполняет работу со счётчиком. Принимает: счётчик, работу. Возвращает: её результат. Ошибок нет.
 pub async fn scope<F: Future>(meter: Arc<Meter>, work: F) -> F::Output {
     METER.scope(meter, work).await
+}
+
+/// Счётчик текущей задачи, если задан (решение 129: счёт котировки DEX вне рабочих потоков переносит его в свой
+/// поток — venues/bsc_dex/quote/cpu.rs). Ошибок нет.
+pub fn current() -> Option<Arc<Meter>> {
+    METER.try_with(|m| m.clone()).ok()
+}
+
+/// Как `scope`, но счётчик может отсутствовать — тогда работа идёт без него. Ошибок нет.
+pub async fn scope_opt<F: Future>(meter: Option<Arc<Meter>>, work: F) -> F::Output {
+    match meter {
+        Some(m) => METER.scope(m, work).await,
+        None => work.await,
+    }
 }
 
 /// Запрос ушёл: источник, число вызовов в нём (пачка JSON-RPC — N), ожидание очереди и время самого запроса.

@@ -14,9 +14,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use tokio::sync::{Notify, broadcast, mpsc};
 
-use crate::core::types::{
-    Asset, CoinGasStats, CoinNetworkInfo, Direction, ManualHolding, StuckAlert, VenueId,
-};
+use crate::core::types::{Asset, CoinGasStats, Direction, ManualHolding, StuckAlert, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::gateway::events::MarketEvent;
 
@@ -25,7 +23,6 @@ use super::deal::Deal;
 use super::deps::Deps;
 use super::limits::Exposure;
 use super::market_state::MarketState;
-use super::registry::CoinEntry;
 use super::risk::Risk;
 use super::signal::{Signals, SpreadView};
 use super::view::Live;
@@ -40,11 +37,12 @@ pub struct Inner {
     pub live: Live,
     pub market: RwLock<MarketState>,
     /// Справочник сетей каждой биржи (последний успешный coin_networks).
-    pub networks: RwLock<HashMap<VenueId, Vec<CoinNetworkInfo>>>,
+    pub networks: RwLock<super::registry_build::Networks>,
     /// Площадки реестра шлюза и их вид (заполняется при старте).
     pub kinds: RwLock<Vec<(VenueId, VenueKind)>>,
     /// Справочник монет и направлений.
-    pub coins: RwLock<Vec<CoinEntry>>,
+    /// Решение 131: снимок за Arc, рабочие и неподвижные монеты (coin_book.rs); разыменование — рабочие.
+    pub coins: RwLock<super::coin_book::CoinBook>,
     /// (площадка, тикер) → монета для тика стакана (решение 118, Я-9, ticker_index.rs).
     pub tickers: RwLock<super::ticker_index::TickerIndex>,
     /// Адрес USDT в BSC или причина, почему его нет.

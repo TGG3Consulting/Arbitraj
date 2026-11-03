@@ -77,7 +77,8 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
     };
     let code = v.get("code").and_then(Value::as_i64);
     match code {
-        Some(0) | Some(200) if status < 400 => Ok(v.get("data").cloned().unwrap_or(v)),
+        // Решение 131: поле data забирается из ответа, а не копируется (у config/getall это ~5.6 МБ).
+        Some(0) | Some(200) if status < 400 => Ok(take_data(v)),
         Some(c) => {
             if c == 429
                 && let Some(s) = r.retry_after_s
@@ -90,4 +91,13 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
         None if status < 400 => Ok(v),
         None => Err(errors::from_http(status, &r.text, r.retry_after_s)),
     }
+}
+
+/// Поле data ответа (как `v.get("data").cloned().unwrap_or(v)`, но без копии): есть — оно, нет — весь ответ.
+/// Ошибок нет.
+fn take_data(mut v: Value) -> Value {
+    if let Some(d) = v.as_object_mut().and_then(|m| m.remove("data")) {
+        return d;
+    }
+    v
 }

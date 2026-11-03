@@ -3,22 +3,24 @@
 //! (blacklist.rs) — по «толчку»: новый справочник сетей, новый пул или стакан, проверка монеты или
 //! крючка, изменение настроек монет, налогов, крючков и площадок, а при неудавшейся подписке площадки — изменение
 //! любой настройки. Толчки подряд сливаются.
+//! Решение 129: сборка — на снимках рынка и сетей вне их блокировок; неизменный справочник не публикуется заново.
+//! Решение 131: неподвижные монеты (без адреса контракта) — только при смене их входов (coin_book.rs).
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
 //! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, episode_run.rs (закрыть эпизоды пропавших направлений), settings.
 //! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network, venue.symbols_stale_s (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use chrono::Utc;
-
-use crate::core::types::{Pool, VenueId};
+use crate::core::types::VenueId;
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
-use super::blacklist;
+use super::coin_book::{CoinBook, InertKey};
 use super::engine::{Core, lk, rd, wr};
-use super::registry::{self, CoinEntry, Exclusion, Inputs};
+use super::registry::{self, Exclusion};
+use super::registry_build::{Networks, Part};
 use super::registry_sync::enabled;
 use super::view::CoreEvent;
 
@@ -50,6 +52,7 @@ pub async fn watch_settings(core: Core) {
     let mut w = core.inner.deps.watch(&[]);
     while let Some(c) = w.next().await {
         // Нативная монета ↔ обёртка (решение 62, native.rs): справочник сетей бирж — перечитать сразу.
+        super::coin_book::on_setting(&c.name);
         if super::native::affects(&c.name) {
             core.inner.kick_networks.notify_waiters();
         }
@@ -89,9 +92,47 @@ pub async fn rebuild(core: &Core) {
             bsc.insert(v.clone(), n);
         }
     }
-    let usdt = registry::usdt_address(&rd(&inner.networks), &quote);
-    let mut coins = build(core, &venues, &quote, &bsc, usdt.as_ref().ok().copied());
-    let changes = super::rebuild_blacklist::apply_blacklist(core, &mut coins);
+    // Решение 129: снимки рынка и сетей — блокировки держатся только на копию (сети — указатели за Arc, рынок — без
+    // уровней стаканов); сборка справочника идёт без них, тик пишет в рынок не дожидаясь пересборки.
+    let nets: Networks = rd(&inner.networks).clone();
+    let market = rd(&inner.market).registry_view();
+    let usdt = registry::usdt_address(&nets, &quote);
+    let usdt_at = usdt.as_ref().ok().copied();
+    let prev = rd(&inner.coins).clone();
+    // Решение 131: неподвижные монеты (без адреса контракта ни у одной биржи — coin_book.rs) собираются заново только
+    // при смене их входов: справочника сетей, названий сети BSC, котируемой монеты, площадок, ручного чёрного списка.
+    let key = InertKey::new(&venues, &nets, &quote, &bsc);
+    use super::rebuild_build::build;
+    let (inert, inert_new) = match &prev.inert_key {
+        Some(k) if k.same(&key) => (prev.inert.clone(), false),
+        _ => {
+            let mut v = build(
+                core,
+                &venues,
+                &quote,
+                &bsc,
+                usdt_at,
+                &nets,
+                &market,
+                Part::Inert,
+            );
+            for ch in super::rebuild_blacklist::apply_blacklist(core, &market, &mut v) {
+                super::rebuild_report::report_block(core, ch).await;
+            }
+            (Arc::new(v), true)
+        }
+    };
+    let mut coins = build(
+        core,
+        &venues,
+        &quote,
+        &bsc,
+        usdt_at,
+        &nets,
+        &market,
+        Part::Live,
+    );
+    let changes = super::rebuild_blacklist::apply_blacklist(core, &market, &mut coins);
     for ch in changes {
         super::rebuild_report::report_block(core, ch).await;
     }
@@ -100,13 +141,25 @@ pub async fn rebuild(core: &Core) {
     let live_dirs: std::collections::HashSet<_> =
         coins.iter().flat_map(|c| c.shown_directions()).collect();
     let directions = live_dirs.len();
-    let count = coins.len();
+    let count = coins.len() + inert.len();
+    // Решение 129: справочник не изменился (тот же список, тот же USDT) — карту тикеров, справочник и «Живой экран» не
+    // трогаем; подписки всё равно сверяются (повтор неудавшейся подписки идёт по толчку пересборки).
+    let same =
+        !inert_new && *prev.live == coins && rd(&inner.usdt).as_ref().ok() == usdt.as_ref().ok();
+    if same {
+        super::subscribe::sync(core, &venues).await;
+        return;
+    }
     // Направления, которых больше нет, уходят с «Живого экрана».
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;
-    *wr(&inner.coins) = coins;
+    *wr(&inner.coins) = CoinBook {
+        live: Arc::new(coins),
+        inert,
+        inert_key: Some(key),
+    };
     // Эпизоды направлений, которых больше нет, закрываются (решение 74) — только память и сообщения.
     super::episode_run::sweep(core);
     inner.live.send(CoreEvent::Coins {
@@ -114,50 +167,6 @@ pub async fn rebuild(core: &Core) {
         directions,
     });
     super::subscribe::sync(core, &venues).await;
-}
-
-/// Сборка справочника под блокировками рынка и сетей (без await).
-fn build(
-    core: &Core,
-    venues: &[(VenueId, VenueKind)],
-    quote: &HashMap<VenueId, String>,
-    bsc_network: &HashMap<VenueId, String>,
-    usdt: Option<alloy_primitives::Address>,
-) -> Vec<CoinEntry> {
-    let s = &core.inner.deps.settings;
-    let market = rd(&core.inner.market);
-    // Свежесть справочника пар каждой биржи (pairs_fresh.rs): устаревший — по её парам не торгуем.
-    let now = Utc::now();
-    let pairs_fresh: HashMap<VenueId, Result<(), String>> = venues
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Cex)
-        .map(|(v, _)| {
-            let limit = super::pairs_fresh::limit(s, v);
-            (
-                v.clone(),
-                super::pairs_fresh::check(&market, v, &limit, now),
-            )
-        })
-        .collect();
-    let pool_ok =
-        |p: &Pool| blacklist::pool_admission(p, market.pool_check(&p.venue, &p.reference), s);
-    let nets = rd(&core.inner.networks);
-    let intermediate: HashMap<VenueId, super::intermediate::Intermediate> = venues
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| (v.clone(), super::intermediate::read(s, v)))
-        .collect();
-    registry::build(&Inputs {
-        venues,
-        networks: &nets,
-        usdt,
-        quote,
-        bsc_network,
-        pairs_fresh: &pairs_fresh,
-        market: &market,
-        pool_ok: &pool_ok,
-        intermediate: &intermediate,
-    })
 }
 
 /// Есть ли у монеты на DEX пул с USDT (допущенный или нет — проверка налогов нужна в обоих случаях).

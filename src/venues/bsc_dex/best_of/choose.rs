@@ -6,7 +6,7 @@
 //! бандл, исполнитель — решения 84, 122); на сделке обе — не хуже req.worst_price (худшая цена ядра). Ошибка одной
 //! стороны (лимит 429, срок, нет маршрута, неисполнима) — берётся другая; обеих — отказ. Обе годны: сначала полнота
 //! (fillable ≥ qty лучше неполной), затем итог в USDT за одно количество (меньшее из исполнимых) с затратами вне цены
-//! (газ, approve, чаевые): покупка — меньше отдадим, продажа — больше получим; равенство — KyberSwap (как без режима).
+//! (газ, approve, чаевые): покупка — меньше отдадим, продажа — больше получим; равенство — своя (Тигран 03.11).
 //! Затраты вне цены одной стороны не переведены в USDT (нет курса BNB) — обе сравниваются без них, с пометкой.
 //!
 //! Кто вызывает: best_of/quote.rs (финальная котировка), best_of/trade.rs (на сделке); tests/bsc_dex_best_of.rs.
@@ -134,7 +134,7 @@ fn compare(side: Side, k: Offer<'_>, o: Offer<'_>) -> Choice {
     }
     let vol = k.quote.fillable_qty.min(o.quote.fillable_qty);
     if vol <= Decimal::ZERO {
-        let who = if o.quote.fillable_qty > k.quote.fillable_qty {
+        let who = if o.quote.fillable_qty >= k.quote.fillable_qty {
             Who::Own
         } else {
             Who::Kyber
@@ -162,9 +162,10 @@ fn compare(side: Side, k: Offer<'_>, o: Offer<'_>) -> Choice {
         net / q.fillable_qty * vol
     };
     let (tk, to) = (total(&k), total(&o));
+    // Равенство — своя (Тигран 03.11: без лимита запросов, копим живые свопы своего сборщика).
     let own_better = match side {
-        Side::Buy => to < tk,
-        Side::Sell => to > tk,
+        Side::Buy => to <= tk,
+        Side::Sell => to >= tk,
     };
     let who = if own_better { Who::Own } else { Who::Kyber };
     let gain = (tk - to).abs();

@@ -5,14 +5,15 @@
 //! Сравнение тем же choose.rs (с худшей ценой ядра req.worst_price) и исполнение победителя со всеми его проверками:
 //! KyberSwap — kyberswap/trade.rs execute (approve и пересборка, решение 99); свой — exec/trade.rs по свежему маршруту
 //! (верификация, минимумы по худшей цене exec/leg_min.rs, пересборка после approve, симуляция, проверка исполнителя
-//! exec/executor/onchain.rs). Свой отказал ДО отправки свопа (pre_send) — в той же сделке KyberSwap по уже
-//! подготовленному маршруту (он прошёл проверку худшей цены). После отправки — повторов нет (стартовое правило
+//! exec/executor/onchain.rs). Победитель отказал ДО отправки свопа (pre_send) — в той же сделке другая сторона, если
+//! годна: свой → KyberSwap по подготовленному маршруту (прошёл проверку худшей цены); KyberSwap → свой, если его маршрут
+//! исполним как есть и в пределах худшей цены (решение 123, дополнение). После отправки — повторов нет (стартовое правило
 //! Тиграна). Кто исполнил и почему — TradeResult.executor и начало текста ошибки (хронология сделки), журнал dex.best_of.
 //! Кто вызывает: venue.rs (trade при exec.via_kyber = да и exec.dex_best_of = да).
 //! От чего зависит: kyberswap/{trade, trade_prep}.rs, exec/trade.rs, quote/mod.rs, best_of/{choose, extra}.rs.
 //! Настройки: через вызываемые — kyber.*, exec.*, dex.*, send.*.
 
-use crate::core::types::{TradeRequest, TradeResult};
+use crate::core::types::{Quote, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency::{Urgency as Class, scope};
 use crate::storage::journal::Level;
@@ -20,6 +21,7 @@ use crate::venues::kyberswap::{self, trade_prep::Prepared};
 
 use super::super::exec;
 use super::super::parts::Parts;
+use super::super::quote::Quoting;
 use super::choose::{self, Offer, Who};
 use super::extra;
 
@@ -77,23 +79,31 @@ pub async fn trade(
         }
     };
     log(p, &req, &format!("выбор на сделке: {}", c.why)).await;
+    // Запасной — другая сторона, если она годна (своя: исполнима как есть и в пределах худшей цены; KyberSwap —
+    // подготовка уже прошла проверку худшей цены). Откат — только при отказе победителя ДО отправки (pre_send).
+    let own_ok =
+        |x: &Quote| choose::usable_own(x).and_then(|_| choose::within_worst(x, req.worst_price));
     match (c.who, k, o) {
-        (Who::Kyber, Ok(prep), _) => run_kyber(kyber, req, prep, &c.why).await,
-        (Who::Own, k, Ok(own)) => {
-            let mut r = req.clone();
-            r.route = own.route;
-            let env = p.env();
-            let res = scope(Class::Trade, exec::trade::trade(&q, &env, &p.nonces, r)).await;
-            match (res, k) {
-                // Свой отказал ДО отправки свопа — KyberSwap в той же сделке (его маршрут уже в пределах худшей цены).
-                (Err(e), Ok(prep)) if pre_send(e.code, e.tx.is_some()) => {
-                    let why = format!("{}; свой не отправлен ({}) → KyberSwap", c.why, e.message);
+        (Who::Kyber, Ok(prep), o) => {
+            let res = run_kyber(kyber, req.clone(), prep).await;
+            match (res, o) {
+                (Err(e), Ok(own)) if pre_send(e.code, e.tx.is_some()) && own_ok(&own).is_ok() => {
+                    let why = format!("{}; KyberSwap не отправлен ({}) → свой", c.why, e.message);
                     log(p, &req, &why).await;
-                    run_kyber(kyber, req, prep, &why).await
+                    tag(run_own(p, &q, req, own).await, &why)
                 }
                 (res, _) => tag(res, &c.why),
             }
         }
+        (Who::Own, k, Ok(own)) => match (run_own(p, &q, req.clone(), own).await, k) {
+            // Свой отказал ДО отправки свопа — KyberSwap в той же сделке (его маршрут уже в пределах худшей цены).
+            (Err(e), Ok(prep)) if pre_send(e.code, e.tx.is_some()) => {
+                let why = format!("{}; свой не отправлен ({}) → KyberSwap", c.why, e.message);
+                log(p, &req, &why).await;
+                tag(run_kyber(kyber, req, prep).await, &why)
+            }
+            (res, _) => tag(res, &c.why),
+        },
         // Недостижимо: choose выбирает только годную сторону.
         _ => Err(p.ctx.err(
             ErrorCode::Internal,
@@ -102,9 +112,23 @@ pub async fn trade(
     }
 }
 
-/// Отказ своего исполнителя ДО отправки свопа (симуляция, проверка цены, верификация, проверка исполнителя): своп в
-/// сеть не уходил — в той же сделке можно исполнить KyberSwap. Транзакция в ошибке есть (своп ушёл) или код не из
+/// Своп своим сборщиком по свежему маршруту своей котировки (exec/trade.rs — все его проверки). Ошибки: как у
+/// exec::trade::trade (подписаны «[свой сборщик: …]»).
+async fn run_own(
+    p: &Parts,
+    q: &Quoting,
+    mut req: TradeRequest,
+    own: Quote,
+) -> GatewayResult<TradeResult> {
+    req.route = own.route;
+    let env = p.env();
+    scope(Class::Trade, exec::trade::trade(q, &env, &p.nonces, req)).await
+}
+
+/// Отказ исполнителя ДО отправки свопа (симуляция, проверка цены, верификация, проверка исполнителя, сборка): своп в
+/// сеть не уходил — в той же сделке можно исполнить другой стороной. Транзакция в ошибке есть (своп ушёл) или код не из
 /// «отказов до отправки» — нельзя (стартовое правило Тиграна: отправлено и не исполнилось — больше не пробуем).
+/// Одно правило для обеих сторон (своя → KyberSwap и KyberSwap → своя, решение 123, дополнение).
 /// Принимает: код ошибки, есть ли в ней транзакция. Возвращает: да/нет. Ошибок нет.
 pub fn pre_send(code: ErrorCode, has_tx: bool) -> bool {
     !has_tx
@@ -121,24 +145,20 @@ pub fn pre_send(code: ErrorCode, has_tx: bool) -> bool {
 }
 
 /// Своп KyberSwap по подготовленному маршруту под строгой очередью кошелька (общий замок с bsc_dex, решение 112).
-/// Ошибки: как у kyberswap::trade::execute — подписаны «[KyberSwap]» и причиной выбора.
+/// Ошибки: как у kyberswap::trade::execute — подписаны «[KyberSwap]» (код и факт транзакции не меняются).
 async fn run_kyber(
     kyber: &kyberswap::state::Parts,
     req: TradeRequest,
     prep: Prepared,
-    why: &str,
 ) -> GatewayResult<TradeResult> {
     let res = {
         let _guard = kyber.wallet_lock.lock().await;
         kyberswap::trade::execute(kyber, req, prep).await
     };
-    match res {
-        Err(mut e) => {
-            e.message = format!("[{}] {}", kyberswap::trade_fact::BY_KYBER, e.message);
-            tag(Err(e), why)
-        }
-        ok => tag(ok, why),
-    }
+    res.map_err(|mut e| {
+        e.message = format!("[{}] {}", kyberswap::trade_fact::BY_KYBER, e.message);
+        e
+    })
 }
 
 /// Причина выбора — к подписи исполнителя (успех) или к тексту ошибки. Ошибок своих нет.

@@ -2,7 +2,7 @@
 //! Что делает: клиент REST агрегатора KyberSwap (EVM-свопы) — две операции по официальной документации: GET
 //! /{chain}/api/v1/routes (котировка-маршрут) и POST /{chain}/api/v1/route/build (сборка транзакции из маршрута).
 //! Разбор ответа {code, message, data}, перевод ошибок в коды шлюза, запись сырого ответа в журнал.
-//! Кто вызывает: quote.rs, trade.rs, market.rs, connection.rs.
+//! Кто вызывает: quote.rs, trade_prep.rs, market.rs, connection.rs; parse_routes — ещё tests/bsc_dex_best_of.rs.
 //! От чего зависит: ctx.rs, errors.rs, gateway/http.rs, alloy-primitives, reqwest, serde_json.
 //! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.user_agent, kyber.http_timeout_ms, http.*; темп — kyber.rps,
 //! kyber.max_wait_ms (ctx.rs pace_slot, решение 95).
@@ -72,6 +72,12 @@ pub async fn routes(
     let query =
         format!("tokenIn={token_in}&tokenOut={token_out}&amountIn={amount_in}&gasInclude=true");
     let data = send(ctx, Method::GET, "/routes", &query, None).await?;
+    parse_routes(ctx, &data)
+}
+
+/// Разбор поля `data` ответа GET /routes (без сети — и для тестов на записанных ответах, решение 123).
+/// Ошибки: NoRoute (amountOut = 0), BadResponse (нет полей).
+pub fn parse_routes(ctx: &Ctx, data: &Value) -> GatewayResult<Route> {
     let summary = data
         .get("routeSummary")
         .cloned()
@@ -86,7 +92,7 @@ pub async fn routes(
         .ok_or_else(|| errors::bad("нет routeSummary.gas", SOURCE, &summary.to_string()))?;
     let gas_price = summary.get("gasPrice").and_then(u256_any);
     let gas_usd = summary.get("gasUsd").and_then(as_decimal);
-    let router = addr_field(&data, "routerAddress")?;
+    let router = addr_field(data, "routerAddress")?;
     Ok(Route {
         amount_out,
         gas_units,

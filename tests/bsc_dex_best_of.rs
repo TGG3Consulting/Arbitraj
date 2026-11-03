@@ -7,7 +7,8 @@
 //! Ошибки KyberSwap — настоящие коды шлюза (RateLimited — HTTP 429, Timeout, NoRoute). Моков площадок нет.
 //! Проверяется: ошибка одной стороны → другая; ошибки обеих → отказ с причинами обеих; своя неисполнимая
 //! (кросс-DEX сплит графа, решение 84) не берётся; покупка — меньше USDT, продажа — больше; полный объём лучше
-//! неполного; худшая цена ядра на сделке отсекает сторону; отказы «до отправки» для отката на KyberSwap.
+//! неполного; равенство — своя; худшая цена ядра на сделке отсекает сторону; отказы «до отправки» для отката (в обе
+//! стороны). Тест на записанном ответе KyberSwap /routes — #[ignore] до записи (tests/README.md).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::best_of::{choose, extra}, arb::venues::bsc_dex::quote, tests/route_common.
 
@@ -306,4 +307,92 @@ fn pre_send_only_before_swap_left() {
         "канал мог разослать — не повторяем"
     );
     assert!(!pre_send(ErrorCode::TxNotIncluded, false));
+}
+
+#[tokio::test]
+async fn tie_goes_to_own() {
+    // Решение 123 (дополнение, Тигран 03.11): равенство итогов — своя (без лимита запросов, копим живые свопы своего
+    // сборщика). Одна и та же записанная котировка у обеих сторон — итоги равны.
+    for side in [Side::Buy, Side::Sell] {
+        let own = classic(&route_common::parts().await.quoting(), side, 1000).await;
+        let mut kyber = own.clone();
+        kyber.route = None;
+        let c = choose::choose(side, None, offer(&kyber), offer(&own)).unwrap();
+        assert_eq!(c.who, Who::Own, "{side:?}: {}", c.why);
+        assert_eq!(c.gain_usdt, Some(Decimal::ZERO));
+    }
+}
+
+/// Котировка KyberSwap из записанного ответа GET /routes (поле data): средняя по amountIn запроса и amountOut ответа,
+/// decimals 18 (USDT и CAKE в BSC). Принимает: контекст bsc_dex записи (для контекста KyberSwap), сторону, объём,
+/// amountIn запроса (wei), data ответа. Ошибок нет (тест падает).
+fn kyber_quote(
+    base: &arb::venues::bsc_dex::ctx::Ctx,
+    side: Side,
+    qty: Decimal,
+    amount_in: &str,
+    data: &serde_json::Value,
+) -> Quote {
+    use arb::venues::kyberswap::{ctx::Ctx as KCtx, num, quote as kq, rest};
+    let kctx = KCtx {
+        settings: base.settings.clone(),
+        vault: base.vault.clone(),
+        http: base.http.clone(),
+        journal: base.journal.clone(),
+        raw: base.raw.clone(),
+        pace: Default::default(),
+    };
+    let r = rest::parse_routes(&kctx, data).expect("записанный ответ /routes разбирается");
+    let inp = num::to_decimal(amount_in.parse::<U256>().unwrap(), 18).unwrap();
+    let out = num::to_decimal(r.amount_out, 18).unwrap();
+    let (usdt, coins) = if side == Side::Buy {
+        (inp, out)
+    } else {
+        (out, inp)
+    };
+    Quote {
+        venue: arb::core::types::VenueId("bsc_dex".into()),
+        asset: cake(),
+        side,
+        qty,
+        fillable_qty: coins.min(qty),
+        avg_price: usdt / coins,
+        costs: kq::costs(&kctx, &r),
+        route: None,
+        signal_route: None,
+        pick: None,
+        at: chrono::Utc::now(),
+    }
+}
+
+#[tokio::test]
+#[ignore = "нет записи ответов KyberSwap /routes — tests/README.md, «Лучший из двух»"]
+async fn recorded_kyber_routes_vs_own_same_block() {
+    // Запись: tests/data/kyber_routes/ — пулы CAKE рекордером record_route.js (calls.json, responses.json) и kyber.json
+    // {block, qty, buy: {amount_in, data}, sell: {amount_in, data}} — ответы GET /routes на том же блоке.
+    let dir = "tests/data/kyber_routes";
+    let text = std::fs::read_to_string(format!("{dir}/kyber.json")).unwrap();
+    let k: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let qty: Decimal = k["qty"].as_str().unwrap().parse().unwrap();
+    let qty_u: u32 = qty.trunc().to_string().parse().unwrap();
+    let p = route_common::parts_from(dir).await;
+    for (side, key) in [(Side::Buy, "buy"), (Side::Sell, "sell")] {
+        let amount_in = k[key]["amount_in"].as_str().unwrap();
+        let kq = kyber_quote(&p.ctx, side, qty, amount_in, &k[key]["data"]);
+        let own = classic(&p.quoting(), side, qty_u).await;
+        let c = choose::choose(side, None, offer(&kq), offer(&own)).unwrap();
+        let (to, tk) = (total(&own), total(&kq));
+        let own_better = if side == Side::Buy {
+            to <= tk
+        } else {
+            to >= tk
+        };
+        let want = if own_better { Who::Own } else { Who::Kyber };
+        assert_eq!(c.who, want, "{side:?}: {}", c.why);
+        assert!(
+            c.why.contains("KyberSwap") && c.why.contains("vs свой"),
+            "{}",
+            c.why
+        );
+    }
 }

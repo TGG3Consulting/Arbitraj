@@ -6,6 +6,8 @@
 //! От чего зависит: ctx.rs, rest.rs, state.rs, balances.rs (decimals), num.rs, core/types.
 //! Настройки: venue.quote_asset [kyberswap] (тикер USDT), kyber.buy_fill_tolerance_pct (допуск недобора при покупке).
 //! Решение 95: вызывается и из bsc_dex — финальная котировка расчёта кандидата при exec.via_kyber.
+//! Решение 123: fill_tol и costs открыты для trade_prep.rs (вид котировки собранного маршрута на сделке — «лучший из
+//! двух», bsc_dex/best_of/).
 //!
 //! Агрегатор отдаёт amountOut для amountIn (входной токен). Продажа монеты (вход — монета) ложится прямо; покупка
 //! монеты (вход — USDT, нужен ТОЧНЫЙ выход монет) подбирается: оценка входа обратной котировкой и одно уточнение
@@ -27,7 +29,7 @@ use super::state::Parts;
 /// Доля, ниже которой выход монет при покупке считается недобором (kyber.buy_fill_tolerance_pct: 0,1 → 0,999).
 /// Агрегатор маршрутизирует по входу, точного выхода у API нет — недобор в пределах допуска считается полным.
 /// Ошибки: NotConfigured.
-fn fill_tol(ctx: &Ctx) -> GatewayResult<Decimal> {
+pub fn fill_tol(ctx: &Ctx) -> GatewayResult<Decimal> {
     let pct = ctx.dec("kyber.buy_fill_tolerance_pct")?;
     Ok(Decimal::ONE - pct / Decimal::ONE_HUNDRED)
 }
@@ -85,6 +87,7 @@ pub async fn quote(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Gatewa
         costs: costs(ctx, &route),
         route: None,
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     })
 }
@@ -140,7 +143,7 @@ pub async fn buy_route(
 
 /// Затраты котировки: газ (BNB из gas×gasPrice, иначе USDT из gasUsd). Комиссии пулов и налог свопа уже в средней
 /// цене (amountOut агрегатора) — отдельными строками не дублируются. Ошибок нет.
-fn costs(ctx: &Ctx, r: &Route) -> Vec<Cost> {
+pub fn costs(ctx: &Ctx, r: &Route) -> Vec<Cost> {
     if let Some(price) = r.gas_price {
         let wei = price.saturating_mul(U256::from(r.gas_units));
         if let Some(bnb) = num::to_decimal(wei, num::BNB_DECIMALS) {

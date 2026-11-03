@@ -2,6 +2,7 @@
 // Что делает: подписи данных ядра по-русски: режим системы, состояние направления на «Живом экране»,
 //   шаг сделки, вердикт кандидата. Значения — как их сериализует ядро (src/api/README.md).
 //   Короткое состояние для компактной строки и причина отдельно — для всплывающего окна (Issue #33).
+//   pickLines — выбор исполнителя DEX «лучший из двух» (решение 123) для «Кандидатов» и плана сделки.
 // Кто вызывает: components/ControlBar.svelte, components/SpreadCell.svelte, components/LiveCoinModal.svelte,
 //   pages/Live.svelte, pages/Deals.svelte.
 // От чего зависит: lib/labels.js (showTime).
@@ -76,3 +77,15 @@ export const dirText = (d) => `${d.asset.ticker}: ${d.buy_on} → ${d.sell_on}`;
 
 /** Ключ направления для списков. */
 export const dirKey = (d) => `${d.asset.ticker}|${d.asset.bsc_contract}|${d.buy_on}|${d.sell_on}`;
+
+/**
+ * Выбор исполнителя DEX «лучший из двух» (решение 123, exec.dex_best_of) из котировок расчёта: Quote.pick — текст
+ * адаптера («KyberSwap 24.15 vs свой 24.21 USDT за 10 CAKE (с газом) → свой (+0.06)»). Принимает: Calc (или null).
+ * Возвращает: строки «покупка: …» / «продажа: …»; пусто — выбора не было.
+ */
+export function pickLines(calc) {
+  if (!calc) return [];
+  return [['покупка', calc.buy_quote], ['продажа', calc.sell_quote]]
+    .filter(([, q]) => q?.pick)
+    .map(([side, q]) => `${side}: ${q.pick}`);
+}

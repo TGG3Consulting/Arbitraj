@@ -4,7 +4,8 @@
 //! вывода — Trade; котировка — класс ядра или Quote; остальное — фон.
 //! Кто вызывает: main.rs (через mod.rs: создаёт и регистрирует в реестре шлюза).
 //! От чего зависит: файлы этой папки, gateway, settings.
-//! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex.
+//! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex;
+//! exec.via_kyber, exec.dex_best_of (решение 123, «лучший из двух» — best_of/).
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -68,6 +69,10 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::is_final()
             && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
         {
+            // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
+            if super::best_of::enabled(&self.p.ctx) {
+                return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty).await;
+            }
             match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
                 Err(e) if e.code == ErrorCode::NoRoute => {}
                 Err(e) => return Err(e),
@@ -91,6 +96,10 @@ impl Venue for BscDex {
         // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
         // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
         if self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
+            // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
+            if super::best_of::enabled(&self.p.ctx) {
+                return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
+            }
             match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
                 Err(e) if e.code == ErrorCode::NoRoute => {}
                 // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.

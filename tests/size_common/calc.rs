@@ -40,6 +40,7 @@ fn quote(venue: &str, side: Side, qty: Decimal, avg: Decimal) -> Quote {
         costs: vec![],
         route: None,
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     }
 }

@@ -118,5 +118,8 @@ pub async fn load(
         ng: Some(StableNg {
             offpeg_fee_multiplier: offpeg,
         }),
+        // Нативная монета у Infinity — Currency address(0) в PoolKey, её ведёт путь Infinity Universal Router (не метка
+        // 0xEeee… стейблсвапов, решение «122 X (нативный BNB в стейблсвапах)»).
+        native: None,
     })))
 }

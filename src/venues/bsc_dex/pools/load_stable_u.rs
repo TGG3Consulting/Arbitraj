@@ -5,10 +5,13 @@
 //! по времени блока как get_A — A() Lista делит на A_PRECISION и теряет точность), admin_fee, skipPriceDiff, пороги,
 //! цены оракула (fetchOraclePrice), paused() и время блока (Multicall3.getCurrentBlockTimestamp). Множители точности —
 //! правило `RATES = 1e18·10^(18 − decimals)` = 10^(36 − decimals) (инициализация пула). Собирает PoolState::StableSwap.
+//! Нативный BNB (решение «122 X (нативный BNB в стейблсвапах)», pools/stable_native.rs): монета пула 0xEeee… в паре —
+//! dex.native_wrapped (WBNB), decimals метки = 18 по initialize пула (decimals() у неё не вызывается — кода нет),
+//! индекс метки — StableData.native (шаг исполнителя STABLE_U256_BNB).
 //! Кто вызывает: pools/load.rs (ветки Proto::PancakeStable, Proto::ListaStable).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, tokens.rs, abi_curve.rs, abi_stable_u.rs,
-//! math/stableswap_v1.rs.
-//! Настройки: dex.multicall3 [bsc_dex] (у Lista обязателен — время блока).
+//! stable_native.rs, math/stableswap_v1.rs.
+//! Настройки: dex.multicall3 [bsc_dex] (у Lista обязателен — время блока); dex.native_wrapped [bsc_dex] (пул с BNB).
 //!
 //! Источники: PancakeStableSwapTwoPool.sol (cb079908) `initialize` L113-L151 (RATES), `get_A` L152-L170, `A()` L171;
 //! Lista StableSwapPool.sol (moolah eb7d73a) `initialize` L125-L143 (RATES, A·A_PRECISION), `get_A` L161-L178.
@@ -25,9 +28,11 @@ use super::super::node::{call, multicall};
 use super::super::tokens::Tokens;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_stable_u::{IListaStable as L, IMulticall3Time, IPancakeStable, LISTA_A_PRECISION};
+use super::stable_native::{self, NATIVE, NATIVE_DECIMALS};
 
 /// Состояние пула на блоке. Принимает: окружение, токены, пул, пару, true — Lista (иначе PancakeSwap), блок-тег.
-/// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 36, не задан dex.multicall3 (Lista).
+/// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 36, не задан dex.multicall3 (Lista); BadResponse —
+/// у пула нативная монета 0xEeee…, а dex.native_wrapped не задана или обёртка тоже среди монет пула.
 pub async fn load(
     ctx: &Ctx,
     tokens: &Tokens,
@@ -96,8 +101,10 @@ pub async fn load(
             .map_err(|r| bad(format!("вызов {i} откатился: {r}")))
     };
     let fee = call::decode::<IStableSwapV1::feeCall>(ok(tail)?)?;
+    // Монеты пары: метка нативной монеты — это обёртка (stable_native.rs); индексы — по порядку монет пула.
+    let paired = stable_native::pair_coins(&coins, stable_native::wrapped(ctx)).map_err(bad)?;
     let index = |t: Address| {
-        coins
+        paired
             .iter()
             .position(|c| *c == t)
             .map(|p| p as u8)
@@ -106,7 +113,11 @@ pub async fn load(
     let (i0, i1) = (index(pair.0)?, index(pair.1)?);
     let mut rates = Vec::with_capacity(coins.len());
     for c in &coins {
-        let d = tokens.decimals(ctx, *c).await?;
+        let d = if *c == NATIVE {
+            NATIVE_DECIMALS
+        } else {
+            tokens.decimals(ctx, *c).await?
+        };
         rates.push(rate_for_decimals(d).ok_or_else(|| bad(format!("decimals {d} > 36")))?);
     }
     let base = tail + 1;
@@ -155,6 +166,7 @@ pub async fn load(
         guard,
         halted,
         ng: None,
+        native: stable_native::native_index(&coins),
     })))
 }
 

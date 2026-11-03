@@ -229,6 +229,11 @@ pub struct StableData {
     /// формуле NG (адаптер, math/stableswap_ng.rs); None — шаблоны без NG. `#[serde(default)]` — старые записи эпизодов.
     #[serde(default)]
     pub ng: Option<StableNg>,
+    /// Индекс монеты пула, которая — нативная монета сети (решение «122 X (нативный BNB в стейблсвапах)»): у пула вместо
+    /// адреса токена — метка (BNB_ADDRESS 0xEeee… у PancakeSwap Stable / Lista), в паре (token0/token1) — обёртка
+    /// (dex.native_wrapped). None — все монеты пула — токены ERC-20.
+    #[serde(default)]
+    pub native: Option<u8>,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

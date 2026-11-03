@@ -85,7 +85,12 @@ curl -s -XPOST 127.0.0.1:8545 -H 'content-type: application/json' -d '{"jsonrpc"
    SADDLE) — эти шаги ещё ни разу не исполнялись. Для новых стейблсвапов: в итоге сухой сделки — успех пробы,
    «получено» ≈ котировке (разница — только округление), газ шага; Lista — пара, где цена близка к оракулу (у пула
    checkPriceDiff: котировка за порогом сделку не даёт); пул на паузе (Nerve / Lista paused, Pancake is_killed) —
-   маршрута через него нет. После развёртывания — «Проверить подключение» исполнителя: код совпал (новый байткод).
+   маршрута через него нет. Нативный BNB пула (шаг STABLE_U256_BNB, «122 X (нативный BNB в стейблсвапах)»): сухая
+   сделка через Lista slisBNB/BNB 0x3DcE…6131 в обе стороны (нужны `dex.native_wrapped` = WBNB и WBNB промежуточной
+   монетой): WBNB → slisBNB (WBNB.withdraw → exchange с value) и slisBNB → WBNB (BNB от пула с `bnb_gas` → deposit);
+   в итоге — успех пробы, «получено» ≈ котировке, у исполнителя после симуляции нет ни BNB, ни WBNB, ни разрешений;
+   откат «BNB transfer failed» — receive не принял BNB (сообщить). После развёртывания — «Проверить подключение»
+   исполнителя: код совпал (новый байткод).
 5а. **Сухая сделка цикла DEX ↔ DEX** (решение 124): задать `dex_dex.enabled` = да, `dex_dex.base_tokens`,
    `dex_dex.max_cycle_len`, `dex_dex.max_cycles`, `dex_dex.probe_input_base`, `dex_dex.min_profit_usd`,
    `dex_dex.size_step_base` (`dex_dex.execute` НЕ включать). Ручное управление → «Сухая сделка DEX» → «Что проверить:

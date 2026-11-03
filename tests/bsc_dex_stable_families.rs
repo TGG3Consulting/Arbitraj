@@ -124,6 +124,7 @@ async fn stable_steps_take_indices_from_state() {
             ng: None,
             i0: 2,
             i1: 1,
+            native: None,
         };
         Entry {
             family: f,
@@ -178,6 +179,44 @@ async fn stable_steps_take_indices_from_state() {
         let why = entry::params(&c, &e, e.pool.token1).expect_err("нативная монета");
         assert!(why.message.contains("0xEeee"), "{k}: {}", why.message);
     }
+    // Решение «122 X (нативный BNB в стейблсвапах)»: нативная монета пула — монета пары (индекс 2 = token0, в паре —
+    // WBNB): Pancake / Lista — шаг STABLE_U256_BNB (bnb_in — когда BNB на входе), у Saddle — отказ; нативная монета
+    // вне пары (индекс 0) — обычный STABLE_U256.
+    let with_native = |k: &str, n: u8| {
+        let mut e = make(k, false);
+        if let PoolState::StableSwap(d) = &mut e.pool.state {
+            d.native = Some(n);
+        }
+        e
+    };
+    for k in ["pancake_stableswap", "lista_stableswap"] {
+        let e = with_native(k, 2);
+        let (p, _) = entry::params(&c, &e, t0).unwrap();
+        assert_eq!(
+            p,
+            Params::StableU256Bnb {
+                i: 2,
+                j: 1,
+                bnb_in: true
+            },
+            "{k}"
+        );
+        let (p, _) = entry::params(&c, &e, t1).unwrap();
+        assert_eq!(
+            p,
+            Params::StableU256Bnb {
+                i: 1,
+                j: 2,
+                bnb_in: false
+            },
+            "{k}"
+        );
+        let e = with_native(k, 0);
+        let (p, _) = entry::params(&c, &e, t1).unwrap();
+        assert_eq!(p, Params::StableU256 { i: 1, j: 2 }, "{k}");
+    }
+    let e = with_native("saddle_stableswap", 2);
+    assert!(entry::params(&c, &e, t0).is_err(), "Saddle с BNB");
 }
 
 /// A·100 при точности 100 = сырой A при точности 1 (дословно: деления на AP точны), для D и для обмена.

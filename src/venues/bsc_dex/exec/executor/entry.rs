@@ -7,6 +7,8 @@
 //! приходят (семейств нет). CURVE (StableSwap Ellipsis, решение 122 F2) — индексы пары из состояния пула
 //! (PoolState::StableSwap: i0 — token0, i1 — token1), направление — по токену входа шага; так же STABLE_U256
 //! (PancakeSwap Stable, Lista) и SADDLE (Nerve) — решение 122 X, стейблсвапы; пул с halted — не исполняется.
+//! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
+//! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
 //! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии).
@@ -68,7 +70,8 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
 
 /// Индексы шага StableSwap (CURVE, STABLE_U256, SADDLE): i — монета входа, j — выхода. Принимает: пул реестра, вид,
 /// токен входа. Возвращает: параметры шага или причину (состояние не StableSwap; обмены пула остановлены — пауза /
-/// kill / сбой проверки цены Lista; монета пары — нативная 0xEeee…; токен входа не token0/token1 пула).
+/// kill / сбой проверки цены Lista; в паре — сама метка 0xEeee…; нативная монета пары у вида без шага с BNB; токен входа
+/// не token0/token1 пула).
 fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
     let PoolState::StableSwap(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
@@ -76,10 +79,11 @@ fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
     if d.halted {
         return Err(format!("{}: обмены пула остановлены", e.family.id));
     }
-    // Нативная монета пула (BNB_ADDRESS 0xEeee…): шаги StableSwap исполнителя её не поддерживают — отказ до отправки.
+    // Метка BNB_ADDRESS (0xEeee…) в паре быть не должна: загрузка ставит вместо неё обёртку (pools/stable_native.rs);
+    // токеном шага она быть не может — отказ до отправки.
     if [e.pool.token0, e.pool.token1].contains(&STABLE_NATIVE) {
         return Err(format!(
-            "{}: монета пары — нативная 0xEeee… (BNB_ADDRESS пула), исполнитель такой шаг не поддерживает",
+            "{}: в паре метка нативной монеты 0xEeee… (не ERC-20) — шаг не строится",
             e.family.id
         ));
     }
@@ -93,6 +97,21 @@ fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
             e.family.id
         ));
     };
+    // Нативная монета пула — монета этой пары (вход или выход шага): шаг с BNB (только PancakeSwap Stable / Lista).
+    if let Some(n) = d.native.filter(|n| *n == i || *n == j) {
+        return match k {
+            ExecKind::StableU256 => Ok(Params::StableU256Bnb {
+                i,
+                j,
+                bnb_in: n == i,
+            }),
+            _ => Err(format!(
+                "{}: монета пары — нативный BNB пула, у вида {} шага с BNB нет",
+                e.family.id,
+                k.name()
+            )),
+        };
+    }
     Ok(match k {
         ExecKind::StableU256 => Params::StableU256 { i, j },
         ExecKind::Saddle => Params::Saddle { i, j },

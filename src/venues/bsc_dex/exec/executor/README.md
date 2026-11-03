@@ -8,7 +8,7 @@
 | --- | --- |
 | `mod.rs` | Адрес исполнителя из настроек (`address`) и выбор пути (`takes`: граф «бандл» + адрес задан) |
 | `abi.rs` | Типы ABI контракта — `alloy::sol!` из `contracts/out/ArbExecutor.abi` |
-| `kind.rs` | ПУБЛИЧНЫЙ кодировщик шага: `Params` (вид и параметры), `StepSpec`, `encode` → `ArbExecutor::Step`; номера видов = константы контракта (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10) |
+| `kind.rs` | ПУБЛИЧНЫЙ кодировщик шага: `Params` (вид и параметры; `StableU256Bnb` — пул с нативным BNB, вид 11), `StepSpec`, `encode` → `ArbExecutor::Step`; номера видов = константы контракта (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10) |
 | `onchain.rs` | Ревью 122, пункт 1: до approve и сделки — код по `exec.executor_address` побайтно = `ArbExecutor.bin-runtime` и владелец (слот `owner`) = кошелёк бота; успех помнится по паре (адрес, кошелёк); кнопка «Проверить подключение» исполнителя (`probe`) |
 | `entry.rs` | Шаг исполнителя для пула реестра по пометке части F (`Family.executor_kind`, pools/exec_kind.rs): V2 с комиссией пары, V3, Algebra, Solidly, DODO, Maverick; StableSwap — CURVE (Ellipsis), STABLE_U256 (PancakeSwap Stable, Lista), SADDLE (Nerve): индексы из состояния по токену входа, пул на паузе — нет; нет вида шага (Infinity/V4, KyberSwap Elastic — решение 121 B2) — исполнителем не вызывается |
 | `call.rs` | Вызов `execute` из долей (шаги exec/chain.rs): доли входа в bps от текущего остатка, промежуточный шаг — весь токен, вход и минимум — суммы долей, срок `dex.deadline_s` |

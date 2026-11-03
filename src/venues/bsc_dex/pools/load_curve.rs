@@ -89,6 +89,7 @@ pub async fn load(
         guard: None,
         halted: false,
         ng: None,
+        native: None,
     })))
 }
 

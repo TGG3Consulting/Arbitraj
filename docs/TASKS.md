@@ -103,6 +103,15 @@
   стейблсвапов)»: цикл — одна доля, CURVE через общий `_stable`, отказ по 0xEeee… до отправки); байткод снова новый —
   сухие сделки «через исполнитель» делать на нём.
   (5) Адреса для настроек — docs/OWN_NODE_SWITCH.md.
+- **«122 X (нативный BNB в стейблсвапах)» — открытое.** (1) Независимое ревью безопасности контракта (receive, bnbFrom,
+  _stableBnb, _sweepBnb — contracts/README.md, «Безопасность»). (2) Сухая сделка «через исполнитель» через Lista
+  slisBNB/BNB 0x3DcEA6AFBA8af84b25F1f8947058AF1ac4c06131 в обе стороны (docs/OWN_NODE_SWITCH.md, шаг 5). (3) На узле —
+  `coins(0)`, `coins(1)`, `bnb_gas()` пулов Pancake WBNB-stkBNB 0x0b03e3d6Ec0c5e5bBf993dED8D947C6fb6eEc18D и BNBx-BNB
+  0x9c138bE1D76ee4C5162E0fe9D4eEA5542a23D1bD (по SDK — WBNB, не 0xEeee…) и `bnb_gas()` Lista (по умолчанию 4029);
+  поиск пулов с меткой у фабрики Pancake V2 — getPairInfo(монета, 0xEeee…). (4) Проба пула через исполнитель (газ шага,
+  вместе с withdraw/deposit) — без неё у пулов STABLE_U256 / STABLE_U256_BNB нет замера газа и котировки (check/probe.rs
+  no_path). (5) Решение Тиграна: справочник индексатора — каким адресом он отдаёт BNB таких пулов (WBNB или 0xEeee…);
+  если 0xEeee… — пул находится только поиском по фабрикам (index.factory_scan).
 
 - **Решение «122 (Infinity Stable)» — открытое.** (1) Открыть официальный API `https://explorer.pancakeswap.com/api/cached/pools/list?chains=bsc&protocols=infinityStable` (у агента прокси закрыт): поле `id` — PoolId или адрес (SDK делает checksumAddress(remote.id)), `hookAddress` → `dex.stable_hooks`. (2) Отдаёт ли индексатор справочника эти пулы и под каким id DEX; если нет — пулы только из истории Initialize (`dex.history_scan`). (3) Запись с узла для сверки математики (tests/README.md, tests/bsc_dex_inf_stable.rs). (4) Сухая сделка DEX на пуле Infinity Stable (путь CL с ключом пула). (5) Вопросы Тиграну — в отчёте: тот же пул может прийти и видом Infinity CL (крючок группы C) — исключать ли его там явно; квотер сверки — get_dy крючка (views-контракт не проверен) или CLQuoter (настоящий swap с крючком).
 

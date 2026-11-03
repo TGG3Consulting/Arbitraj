@@ -5,7 +5,9 @@
 //!   и подпись execute из JSON ABI, раскладка кортежа Step (поля и типы по порядку), кодирование → разбор без потерь;
 //! - номера видов шагов (kind.rs Params::kind) = константам контракта (uint8 internal constant … = N в ArbExecutor.sol);
 //! - раскладка data вида: V2 — uint32 комиссии, CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
-//!   SADDLE — (uint8 i, uint8 j), остальные — пусто; селекторы обмена новых видов — по официальным подписям;
+//!   SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), остальные — пусто; селекторы
+//!   обмена новых видов — по официальным подписям; шаг с нативным BNB пула — receive() только от bnbFrom, WBNB
+//!   withdraw/deposit в коде, BNB после маршрута — владельцу (решение «122 X (нативный BNB в стейблсвапах)»);
 //! - хеши артефактов совпадают с ArbExecutor.sha256, код в сети — хвост кода создания, слот владельца — из раскладки.
 //!
 //! Кто вызывает: cargo test.
@@ -90,6 +92,14 @@ fn kinds_match_contract_constants() {
         ("ELASTIC", Params::Elastic),
         ("STABLE_U256", Params::StableU256 { i: 0, j: 1 }),
         ("SADDLE", Params::Saddle { i: 0, j: 1 }),
+        (
+            "STABLE_U256_BNB",
+            Params::StableU256Bnb {
+                i: 0,
+                j: 1,
+                bnb_in: true,
+            },
+        ),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -108,6 +118,28 @@ fn step_data_layouts() {
     assert_eq!(
         <(U256, U256)>::abi_decode_params(&u).unwrap(),
         (U256::from(1u8), U256::ZERO)
+    );
+    // STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn): три слова.
+    let b = Params::StableU256Bnb {
+        i: 1,
+        j: 0,
+        bnb_in: true,
+    }
+    .data();
+    assert_eq!(b.len(), 96);
+    assert_eq!(
+        <(U256, U256, bool)>::abi_decode_params(&b).unwrap(),
+        (U256::from(1u8), U256::ZERO, true)
+    );
+    let b = Params::StableU256Bnb {
+        i: 0,
+        j: 1,
+        bnb_in: false,
+    }
+    .data();
+    assert_eq!(
+        <(U256, U256, bool)>::abi_decode_params(&b).unwrap(),
+        (U256::ZERO, U256::from(1u8), false)
     );
     let sd = Params::Saddle { i: 2, j: 1 }.data();
     assert_eq!(sd.len(), 64);
@@ -183,6 +215,11 @@ fn stable_native_refused_and_contract_rules_present() {
         Params::Curve { i: 0, j: 1 },
         Params::StableU256 { i: 0, j: 1 },
         Params::Saddle { i: 0, j: 1 },
+        Params::StableU256Bnb {
+            i: 0,
+            j: 1,
+            bnb_in: false,
+        },
     ] {
         let spec = StepSpec {
             params,
@@ -205,6 +242,58 @@ fn stable_native_refused_and_contract_rules_present() {
     .unwrap();
     assert!(src.contains("} else if (k == CURVE || k == STABLE_U256 || k == SADDLE) {"));
     assert!(src.contains("\"loop\")"));
+}
+
+/// Нативный BNB пула (решение «122 X (нативный BNB в стейблсвапах)»): в контракте — свой путь STABLE_U256_BNB, приём
+/// BNB только от bnbFrom (transient), BNB после маршрута — владельцу; в ABI — receive (payable), execute — не payable;
+/// в коде в сети — селекторы WBNB withdraw(uint256) / deposit() (gnosis/canonical-weth@0dd1ea3e WETH9.sol L25-L42).
+#[test]
+fn stable_bnb_contract_rules_present() {
+    use alloy::json_abi::StateMutability;
+    use alloy_primitives::keccak256;
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/contracts/ArbExecutor.sol"
+    ))
+    .unwrap();
+    for must in [
+        "} else if (k == STABLE_U256_BNB) {",
+        "receive() external payable {\n        require(msg.sender == bnbFrom, \"bnb\");\n    }",
+        "address transient bnbFrom;",
+        "bnbFrom = s.tokenIn;",
+        "bnbFrom = s.pool;",
+        "IStableSwapU256(s.pool).exchange{value: amount}(i, j, amount, 0);",
+        "IWBNB(s.tokenOut).deposit{value: address(this).balance}();",
+        "_sweepBnb();",
+    ] {
+        assert!(src.contains(must), "нет в контракте: {must}");
+    }
+    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (две установки — два обнуления).
+    assert_eq!(src.matches("bnbFrom = address(0);").count(), 2);
+    let abi = abi();
+    assert_eq!(
+        abi.receive.as_ref().map(|r| r.state_mutability),
+        Some(StateMutability::Payable)
+    );
+    assert!(abi.fallback.is_none());
+    assert_eq!(
+        abi.function("execute").unwrap()[0].state_mutability,
+        StateMutability::NonPayable
+    );
+    let runtime = code::runtime().unwrap();
+    for sig in ["withdraw(uint256)", "deposit()"] {
+        let mut push = vec![0x63u8];
+        push.extend(&keccak256(sig.as_bytes())[..4]);
+        assert!(
+            runtime.windows(5).any(|w| w == push.as_slice()),
+            "{sig} в коде"
+        );
+    }
+    assert_eq!(
+        &keccak256(b"withdraw(uint256)")[..4],
+        [0x2e, 0x1a, 0x7d, 0x4d]
+    );
+    assert_eq!(&keccak256(b"deposit()")[..4], [0xd0, 0xe3, 0x0d, 0xb0]);
 }
 
 #[test]
@@ -234,11 +323,9 @@ fn stable_kinds_call_official_selectors() {
     );
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/contracts/IPools.sol"))
         .unwrap();
-    assert!(
-        src.contains(
-            "function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external;"
-        )
-    );
+    assert!(src.contains(
+        "function exchange(uint256 i, uint256 j, uint256 dx, uint256 minDy) external payable;"
+    ));
     assert!(src.contains(
         "function swap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx, uint256 minDy, uint256 deadline)"
     ));

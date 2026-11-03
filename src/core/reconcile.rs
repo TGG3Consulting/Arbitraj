@@ -10,6 +10,8 @@
 //! Решение 118 (Я-11): балансы одной площадки не получены (подтверждено теми же кругами) — пауза этой площадки
 //! (venue_paused), а не системы; системная пауза — только при расхождении монет по учёту. Я-21: «вложено по монетам»
 //! на «Балансах» — по «тикер (адрес коротко)».
+//! Решение 132: у DEX сверяется каждый кошелёк отдельно (reconcile_holders.rs): свои балансы, учёт сделок кошелька,
+//! «мало USDT» и «мало BNB»; на «Балансах» — строка «площадка «кошелёк»».
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs, reconcile_confirm.rs.
 //! Настройки: ledger.reconcile_interval_s, ledger.reconcile_confirm_rounds, alert.min_usdt (через low_usdt.rs),
@@ -108,37 +110,38 @@ async fn once(core: &Core) -> Vec<Found> {
     let mut out = vec![];
     let mut all = serde_json::Map::new();
     let mut free_usdt = HashMap::new();
-    for (v, kind) in venues {
+    // Решение 132: у DEX — каждый кошелёк отдельно (свои балансы, учёт, «мало USDT/BNB»); подпись — «площадка «кошелёк»».
+    for (v, kind, acc, label) in super::reconcile_holders::list(core, venues) {
         let at = At {
             venue: Some(&v.0),
             coin: None,
         };
         // Учёт площадки до и после запроса балансов (решение 112): сверяются только монеты, по которым сделки за это
         // время не сдвинулись.
-        let before = expected(core, &v);
-        let b = match deps.gw.get(&v).await {
+        let before = expected(core, &v, acc.as_ref());
+        let b = match deps.gw.get_as(&v, acc.as_ref()).await {
             Ok(x) => x.balances().await,
             Err(e) => Err(e),
         };
-        let held = stable(&before, &expected(core, &v));
+        let held = stable(&before, &expected(core, &v, acc.as_ref()));
         let b = match b {
             Ok(b) => b,
             Err(e) => {
                 out.push((
                     "risk.reconcile_mismatch",
                     Some(v.0.clone()),
-                    format!("{}: балансы не получены — {}", v.0, e.message),
-                    Some(format!("{}{UNAVAILABLE}", v.0)),
+                    format!("{label}: балансы не получены — {}", e.message),
+                    Some(format!("{label}{UNAVAILABLE}")),
                 ));
                 continue;
             }
         };
-        all.insert(v.0.clone(), json!(b));
+        all.insert(label.clone(), json!(b));
         if let Ok(q) = deps.settings.text("venue.quote_asset", at) {
             let f: Decimal = b.iter().filter(|x| x.asset == q).map(|x| x.free).sum();
-            free_usdt.insert(v.clone(), f);
-            // Решение 54: свой порог алерта по площадке, один раз на пересечение (low_usdt.rs).
-            super::low_usdt::check(core, &v, f, &q).await;
+            free_usdt.insert((v.clone(), acc.clone()), f);
+            // Решение 54: свой порог алерта по площадке, один раз на пересечение (low_usdt.rs); у DEX — по кошельку.
+            super::low_usdt::check(core, &v, acc.as_ref(), &label, f, &q).await;
         }
         // Мало BNB на газ — по уже полученным балансам (решение 113: раньше bnb_ok запрашивал балансы кошелька второй
         // раз за круг). Резерв не задан — та же причина, что у bnb_ok.
@@ -152,7 +155,7 @@ async fn once(core: &Core) -> Vec<Found> {
                 .settings
                 .decimal("risk.min_bnb_balance", At::default())
                 .map_err(|e| e.message)
-                .and_then(|min| super::precheck::bnb_enough(&v, have, min, Decimal::ZERO));
+                .and_then(|min| super::precheck::bnb_enough(&label, have, min, Decimal::ZERO));
             if let Err(e) = r {
                 out.push(("risk.low_bnb", Some(v.0.clone()), e, None));
             }
@@ -177,8 +180,8 @@ async fn once(core: &Core) -> Vec<Found> {
                 out.push((
                     "risk.reconcile_mismatch",
                     Some(ev.0.clone()),
-                    format!("{}: {ticker} по учёту {need}, на площадке {have}", ev.0),
-                    Some(format!("{}/{ticker}", ev.0)),
+                    format!("{label}: {ticker} по учёту {need}, на площадке {have}"),
+                    Some(format!("{label}/{ticker}")),
                 ));
             }
         }

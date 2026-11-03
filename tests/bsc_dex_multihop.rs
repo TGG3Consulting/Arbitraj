@@ -302,13 +302,7 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
 async fn taxed_input_via_executor_only_single_push_first_step() {
     let p = route_common::parts().await;
     let q = p.quoting();
-    let v = Scope::Venue("bsc_dex".into());
-    let x = json!("0x00000000000000000000000000000000000000ee");
-    p.ctx
-        .settings
-        .set("exec.executor_address", v, Some(x), "тест")
-        .await
-        .unwrap();
+    route_common::executor(&p, "0x00000000000000000000000000000000000000ee").await;
     let base = three_hop(&q);
     let one = |kind: &str| {
         let mut path = base.clone();

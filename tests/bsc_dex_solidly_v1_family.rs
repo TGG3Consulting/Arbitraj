@@ -49,6 +49,7 @@ async fn ctx(tag: &str) -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
         settings,
         vault: arb::secrets::Vault::locked(d.join("secrets.enc")),

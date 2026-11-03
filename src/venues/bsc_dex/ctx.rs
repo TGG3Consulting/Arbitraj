@@ -1,12 +1,12 @@
 //! Файл: venues/bsc_dex/ctx.rs
 //! Что делает: общее окружение адаптера DEX — настройки (площадка, DEX/вид пула, канал), секреты,
 //! HTTP-клиент, журнал, запись сырых сообщений — и чтение настроек в одном месте.
-//! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs.
+//! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs. Кошелёк счёта (решение 132) — ctx_wallet.rs.
 //! Кто вызывает: все файлы адаптера DEX.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
 //! Настройки: venue.* и feed.* с областью «bsc_dex», dex.* (область «DEX»), channel.* (область «канал»),
 //! bsc.node_ws_url, bsc.node_http_url, http.timeout_ms (docs/SETTINGS.md).
-//! Секреты: bsc_dex.wallet_key, bsc.node_ws_key, bsc.node_http_key, channel.<id>.key (docs/SECURITY.md).
+//! Секреты: ключи кошельков (имя — у записи кошелька, settings/accounts/), bsc.node_ws_key, bsc.node_http_key, channel.<id>.key (docs/SECURITY.md).
 
 use std::time::Duration;
 
@@ -24,7 +24,8 @@ use crate::storage::raw_log::RawLog;
 
 /// Идентификатор площадки DEX — имя адаптера; по нему ищутся его настройки и секреты.
 pub const ID: &str = "bsc_dex";
-/// Имя секрета приватного ключа кошелька (тот же список — secrets::KNOWN).
+/// Имя секрета ключа прежнего единственного кошелька (secrets::KNOWN) — теперь источник кошелька переноса
+/// (решение 132, settings/accounts/migrate.rs); ключи кошельков берутся по записи кошелька (ctx_wallet.rs).
 pub const SECRET_WALLET_KEY: &str = "bsc_dex.wallet_key";
 /// Метка в адресе узла или канала, на место которой ставится ключ провайдера (docs/SETTINGS.md, «Узел BSC»).
 pub const KEY_MARK: &str = "{key}";
@@ -43,6 +44,9 @@ pub struct Ctx {
     pub failover: super::node::failover::Failover,
     /// Справочник пулов от индексатора: очередь запросов и состояние (directory/, решение 58).
     pub index: super::directory::Directory,
+    /// Счёт (кошелёк) DEX, к которому привязано окружение (решение 132, ctx_wallet.rs). None — без счёта: только
+    /// чтение и симуляции от кошелька строки «пробы»; подписать и отправить транзакцию нельзя.
+    pub account: Option<String>,
 }
 
 impl Ctx {

@@ -218,6 +218,7 @@ async fn ctx() -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
         settings,
         vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
@@ -416,14 +417,15 @@ async fn finds_cycles_from_base() {
 /// Решение 124: исполнимость сигнала = есть форма исполнения (exec/cycle_gate.rs). Задаёт адрес исполнителя ArbExecutor —
 /// хопы V3 (pancakeswap_v3 / uniswap_v3) — его вид, цикл исполним через исполнитель. Ошибок нет.
 async fn with_executor(p: &Parts) {
-    p.ctx
-        .settings
-        .set(
-            "exec.executor_address",
-            Scope::Venue("bsc_dex".into()),
-            Some(json!("0x00000000000000000000000000000000000000ee")),
-            "тест",
-        )
+    // Решение 132: исполнитель — у кошелька строки «пробы» (сигнал цикла без счёта).
+    let a = p.ctx.settings.accounts();
+    let id = a.reserve_id().await.unwrap();
+    a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+        .await
+        .unwrap();
+    let x = "0x00000000000000000000000000000000000000ee".to_string();
+    a.set_executor(&id, Some(x), "тест").await.unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест")
         .await
         .unwrap();
 }

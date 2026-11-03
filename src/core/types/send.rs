@@ -154,6 +154,9 @@ pub enum WalletQueueState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WalletQueue {
     pub venue: super::market::VenueId,
+    /// Решение 132: чья очередь — id счёта (кошелька) DEX; у каждого кошелька своя очередь. None — до решения 132.
+    #[serde(default)]
+    pub account: Option<super::account::DexAccountId>,
     pub state: WalletQueueState,
     /// Только у остановленной очереди с известным nonce: занят ли он уже в блоке (nonce кошелька на «latest»).
     /// false — висящая транзакция ещё может пройти позже: снятие — только с отдельным подтверждением.

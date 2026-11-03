@@ -87,9 +87,25 @@ pub async fn send(
     asset: &Asset,
     qty: Decimal,
 ) -> Result<(Transfer, Transfer), OpError> {
+    // Решение 132: DEX — кошелёк сделки (адрес депозита на DEX, вывод с кошелька — его).
+    let acc = super::dex_account::of_deal(core, deal)?;
+    send_as(core, deal, from, to, asset, qty, acc.as_ref()).await
+}
+
+/// Как send, но счёт DEX задан явно (перегон USDT вне сделки — строка маппинга биржи, решение 132).
+/// Принимает: …, счёт DEX (None — DEX не участвует). Ошибки: как у send.
+pub async fn send_as(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+    acc: Option<&crate::core::types::DexAccountId>,
+) -> Result<(Transfer, Transfer), OpError> {
     let deps = &core.inner.deps;
-    let gw_from = deps.gw.get(from).await.map_err(|e| e.message)?;
-    let gw_to = deps.gw.get(to).await.map_err(|e| e.message)?;
+    let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
+    let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
     let net_to = network(core, asset, to)?;
     let address = gw_to
@@ -116,6 +132,9 @@ pub async fn send(
         )));
     }
     let ticket = super::credit_expect::ticket(core, deal, from, to, asset, &net_from, qty).await;
+    if let Some(t) = &ticket {
+        t.set_account(acc.cloned());
+    }
     let req = WithdrawRequest {
         venue: from.clone(),
         asset: asset.clone(),

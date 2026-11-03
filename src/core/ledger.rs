@@ -128,13 +128,15 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
 
 /// Новая сделка с уникальным ID (решение 118, Я-17): ID = время до мс + тикер (только буквы и цифры — так его примут
 /// ID ордера и вывода); занят в учёте — к нему добавляется счётчик. Выдача и запись в память — под одним замком учёта,
-/// поэтому два параллельных расчёта не получат один ID. Принимает: направление, план, прибыль плана.
+/// поэтому два параллельных расчёта не получат один ID. Принимает: направление, план, прибыль плана, счёт DEX
+/// (решение 132; None — без DEX).
 /// Возвращает: сделку (уже в памяти учёта; в базу и интерфейс — ledger::save). Ошибок нет.
 pub fn open(
     core: &Core,
     d: &crate::core::types::Direction,
     plan: serde_json::Value,
     plan_profit: Decimal,
+    account: Option<crate::core::types::DexAccountId>,
 ) -> Deal {
     let t: String = d
         .asset
@@ -150,7 +152,9 @@ pub fn open(
         id = format!("{base}{n}");
         n += 1;
     }
-    let deal = Deal::new(id.clone(), d.clone(), plan, plan_profit);
+    let mut deal = Deal::new(id.clone(), d.clone(), plan, plan_profit);
+    // Решение 132: счёт DEX сделки — сразу в учёте (до первого шага сделки).
+    deal.dex_account = account;
     deals.insert(id, deal.clone());
     deal
 }

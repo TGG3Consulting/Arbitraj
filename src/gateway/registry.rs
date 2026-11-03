@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-use crate::core::types::VenueId;
+use crate::core::types::{DexAccountId, VenueId};
 
-use super::contract::Venue;
+use super::contract::{Venue, VenueKind};
 use super::errors::{ErrorCode, GatewayError, GatewayResult};
 
 /// Реестр адаптеров. Дешёво клонируется (общий указатель).
@@ -43,6 +43,21 @@ impl Registry {
                 "Площадка не подключена",
             )
         })
+    }
+
+    /// Адаптер по идентификатору, привязанный к счёту DEX (решение 132): DEX — вид на кошелёк счёта
+    /// (contract::for_account), биржа — сам адаптер (счёт ей не нужен). Принимает: id площадки, счёт (None — без
+    /// привязки: DEX только читает). Ошибки: VenueNotConnected; NotConfigured — нет такого кошелька.
+    pub async fn get_as(
+        &self,
+        id: &VenueId,
+        account: Option<&DexAccountId>,
+    ) -> GatewayResult<Arc<dyn Venue>> {
+        let v = self.get(id).await?;
+        match account {
+            Some(a) if v.kind() == VenueKind::Dex => v.for_account(a),
+            _ => Ok(v),
+        }
     }
 
     /// Список идентификаторов подключённых площадок. Ошибок нет.

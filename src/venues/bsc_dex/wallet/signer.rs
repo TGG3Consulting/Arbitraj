@@ -3,8 +3,8 @@
 //! подпись транзакции и её хеш (считается локально до отправки — research/flow/bsc_send.md, раздел 5).
 //! Ключ живёт только в памяти на время подписи и затирается (zeroize); в журнал, ошибки и логи не попадает.
 //! Кто вызывает: wallet/balances.rs, wallet/nonce.rs, wallet/approve.rs, wallet/transfer.rs, exec/*, connection.rs.
-//! От чего зависит: ctx.rs (секреты), alloy (signer-local, consensus, network, eips).
-//! Настройки: нет. Секрет: bsc_dex.wallet_key (docs/SECURITY.md, решение 45 — один кошелёк).
+//! От чего зависит: ctx.rs, ctx_wallet.rs (кошелёк счёта, секреты), alloy (signer-local, consensus, network, eips).
+//! Настройки: нет. Секрет: ключ кошелька счёта (имя — у записи кошелька, решение 132; docs/SECURITY.md).
 //!
 //! Подпись — EIP-155 (защита от повтора в другой сети: узел BSC принимает по RPC только такие —
 //! https://github.com/bnb-chain/bsc/blob/947ba1cb1ef05d4a5f71b738113a3d8b4c16f6b7/internal/ethapi/api.go#L2315-L2324 ),
@@ -18,7 +18,7 @@ use alloy_primitives::{Address, B256, Bytes, Signature};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::ctx::{Ctx, SECRET_WALLET_KEY};
+use super::super::ctx::Ctx;
 
 /// Подписанная транзакция: байты для отправки и хеш.
 #[derive(Debug, Clone)]
@@ -27,14 +27,19 @@ pub struct SignedTx {
     pub hash: B256,
 }
 
-/// Подписант из секрета bsc_dex.wallet_key (64 hex-знака, можно с 0x).
-/// Ошибки: SecretsLocked, NotConfigured (ключ не введён или не в формате ключа — без показа самого ключа).
+/// Подписант кошелька окружения (решение 132: счёт сделки или, без счёта, строка «пробы» — ctx_wallet.rs) из его
+/// секрета (64 hex-знака, можно с 0x). Ошибки: SecretsLocked, NotConfigured (кошелька нет, ключ не введён или не в
+/// формате ключа — без показа самого ключа).
 pub fn signer(ctx: &Ctx) -> GatewayResult<PrivateKeySigner> {
-    let key = ctx.vault.get(SECRET_WALLET_KEY).map_err(|e| ctx.tag(e))?;
+    let w = ctx.wallet()?;
+    let key = ctx.vault.get(&w.secret).map_err(|e| ctx.tag(e))?;
     key.trim().parse::<PrivateKeySigner>().map_err(|_| {
         ctx.err(
             ErrorCode::NotConfigured,
-            format!("Секрет {SECRET_WALLET_KEY}: это не приватный ключ (нужно 64 шестнадцатеричных знака)"),
+            format!(
+                "Кошелёк «{}», секрет {}: это не приватный ключ (нужно 64 шестнадцатеричных знака)",
+                w.name, w.secret
+            ),
         )
     })
 }
@@ -46,12 +51,14 @@ pub fn address(ctx: &Ctx) -> GatewayResult<Address> {
 
 /// Подписывает транзакцию любого вида (legacy, EIP-1559) ключом кошелька.
 /// Принимает: транзакцию с заполненными nonce, газом, chain_id. Возвращает: байты и хеш.
-/// Ошибки: как у signer; Internal — подпись не удалась (текст alloy, без ключа).
+/// Ошибки: как у signer; NotConfigured — счёт не выбран (Ctx::bound); Internal — подпись не удалась (текст alloy, без ключа).
 pub fn sign<T>(ctx: &Ctx, tx: T) -> GatewayResult<SignedTx>
 where
     T: SignableTransaction<Signature>,
     TxEnvelope: From<alloy::consensus::Signed<T>>,
 {
+    // Решение 132: подпись — только от кошелька счёта (без счёта — отказ, транзакция не уходит).
+    ctx.bound()?;
     sign_with(&signer(ctx)?, tx)
         .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись транзакции: {e}")))
 }

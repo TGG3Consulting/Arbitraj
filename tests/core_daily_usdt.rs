@@ -149,7 +149,7 @@ async fn low_usdt_once_per_crossing_and_survives_restart() {
     {
         let (core, settings) = start(&d).await;
         // Не задано — алерта нет, состояние не меняется.
-        arb::core::low_usdt::check(&core, &bx, Decimal::from(10), "USDT").await;
+        arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(10), "USDT").await;
         assert!(core.inner.usdt_below.lock().unwrap().get(&bx).is_none());
         settings
             .set(
@@ -160,12 +160,12 @@ async fn low_usdt_once_per_crossing_and_survives_restart() {
             )
             .await
             .unwrap();
-        arb::core::low_usdt::check(&core, &bx, Decimal::from(50), "USDT").await;
+        arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(50), "USDT").await;
         assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&true));
     }
     let (core, _) = start(&d).await;
     // Состояние «ниже порога» восстановлено — повторного алерта после перезапуска нет.
     assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&true));
-    arb::core::low_usdt::check(&core, &bx, Decimal::from(51), "USDT").await;
+    arb::core::low_usdt::check(&core, &bx, None, "bingx", Decimal::from(51), "USDT").await;
     assert_eq!(core.inner.usdt_below.lock().unwrap().get(&bx), Some(&false));
 }

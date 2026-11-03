@@ -28,8 +28,9 @@ use crate::gateway::contract::VenueKind;
 /// Принимает: зависимости, направление, объём. Возвращает: (покупка на A, продажа на B).
 /// Ошибки: текст причины (площадка не подключена, нет данных, данные устарели).
 pub async fn quotes(deps: &Deps, dir: &Direction, qty: Decimal) -> Result<(Quote, Quote), String> {
-    let a = deps.gw.get(&dir.buy_on).await.map_err(|e| e.message)?;
-    let b = deps.gw.get(&dir.sell_on).await.map_err(|e| e.message)?;
+    // Решение 132: DEX — кошелёк строки маппинга направления.
+    let a = super::dex_account::venue_dir(deps, dir, &dir.buy_on).await?;
+    let b = super::dex_account::venue_dir(deps, dir, &dir.sell_on).await?;
     let (qa, qb) = tokio::join!(
         a.quote(&dir.asset, Side::Buy, qty),
         b.quote(&dir.asset, Side::Sell, qty)
@@ -82,7 +83,8 @@ async fn side_quote(
         }
         _ => None,
     };
-    let a = deps.gw.get(venue).await.map_err(|e| e.message)?;
+    // Решение 132: DEX — кошелёк строки маппинга направления; нет строки — «нет кошелька DEX в маппинге».
+    let a = super::dex_account::venue_dir(deps, dir, venue).await?;
     let q = a
         .quote(&dir.asset, side, qty)
         .await

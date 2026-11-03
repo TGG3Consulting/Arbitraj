@@ -1,16 +1,17 @@
 <!--
   Файл: ui/src/components/ExecutorDeploy.svelte
-  Что делает: блок «Свой исполнитель (ArbExecutor)» на экране «Площадки» у DEX (решение 122, часть X): кнопка
+  Что делает: исполнитель ArbExecutor кошелька DEX на экране «Маппинг кошельков» (решения 122 X, 132: у каждого кошелька
+    свой исполнитель — запросы с ?wallet=<id>; адрес после развёртывания записывается у кошелька сам): кнопка
     «Развернуть исполнитель» → GET /api/venues/{id}/executor/quote (газ, цена газа, стоимость в BNB и USDT, кошелёк,
     nonce, будущий адрес, SHA-256 байткода, версия solc) → окно подтверждения → «Подтвердить и отправить» →
     POST /api/venues/{id}/executor/deploy {sha256} (транзакция создания с кошелька бота через очередь кошелька) →
-    адрес и транзакция. Действие с деньгами — только по кнопке человека и после подтверждения в окне. Адрес в
-    exec.executor_address Тигран вписывает сам (настройки площадки ниже на этом же экране). Рядом — «Проверить
+    адрес и транзакция. Действие с деньгами — только по кнопке человека и после подтверждения в окне. Код в сети
+    совпал — адрес записан у кошелька (решение 132). Рядом — «Проверить
     подключение» исполнителя (POST /api/check/executor/{venue}, ревью 122): код по адресу совпал с репозиторием и
     владелец — кошелёк бота; иначе — точная причина (без этой проверки ни approve, ни сделки через исполнитель нет).
-  Кто вызывает: pages/Venues.svelte (у площадок DEX).
+  Кто вызывает: pages/Wallets.svelte (у каждого кошелька).
   От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
-  Настройки: нет своих (адрес — exec.executor_address [площадка DEX]).
+  Настройки: нет (адрес исполнителя — у кошелька).
 -->
 <script>
   import { get, post, seg } from '../lib/api.js';
@@ -18,8 +19,9 @@
   import ErrorText from './ErrorText.svelte';
   import CheckConnection from './CheckConnection.svelte';
 
-  /** venue — id площадки DEX. */
-  let { venue } = $props();
+  /** venue — id площадки DEX; wallet — id кошелька (решение 132); ondone — после записи адреса. */
+  let { venue, wallet, ondone } = $props();
+  const q = $derived(`?wallet=${seg(wallet)}`);
 
   let quote = $state(null);
   let done = $state(null);
@@ -32,7 +34,7 @@
     done = null;
     busy = true;
     try {
-      quote = await get(`/api/venues/${seg(venue)}/executor/quote`);
+      quote = await get(`/api/venues/${seg(venue)}/executor/quote${q}`);
     } catch (e) {
       error = e.message;
     }
@@ -44,8 +46,9 @@
     error = '';
     busy = true;
     try {
-      done = await post(`/api/venues/${seg(venue)}/executor/deploy`, { sha256: quote.bytecode_sha256 });
+      done = await post(`/api/venues/${seg(venue)}/executor/deploy${q}`, { sha256: quote.bytecode_sha256 });
       quote = null;
+      ondone?.();
     } catch (e) {
       error = e.message;
     }
@@ -53,14 +56,8 @@
   }
 </script>
 
-<h3>Свой исполнитель (ArbExecutor)</h3>
-<p class="muted">
-  Контракт из репозитория (contracts/ArbExecutor.sol): маршрут через пулы разных DEX — одной транзакцией. Владелец —
-  кошелёк бота, вызывать может только он, денег контракт не хранит. Проверить его до развёртывания — «Сухая сделка DEX»
-  (Ручное управление) в режиме «через исполнитель». После развёртывания впишите адрес в <code>exec.executor_address</code>.
-</p>
 <button disabled={busy} onclick={ask}>{busy && !quote ? 'Считаю…' : 'Развернуть исполнитель'}</button>
-<CheckConnection url={`/api/check/executor/${encodeURIComponent(venue)}`} />
+<CheckConnection url={`/api/check/executor/${encodeURIComponent(venue)}${q}`} />
 <ErrorText text={error} />
 {#if done}
   <p class={done.code_ok ? 'ok' : 'err'} role="status">{done.text}</p>
@@ -69,7 +66,7 @@
 
 {#if quote}
   <Modal title="Развернуть исполнитель — подтверждение" onclose={() => (quote = null)}>
-    <p>С кошелька бота уйдёт транзакция создания контракта. Это трата BNB на газ, отменить её нельзя.</p>
+    <p>С этого кошелька уйдёт транзакция создания контракта (владелец — он). Это трата BNB на газ, отменить её нельзя.</p>
     <table>
       <tbody>
         <tr><th>Кошелёк (владелец)</th><td><code>{quote.wallet}</code></td></tr>

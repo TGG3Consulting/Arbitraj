@@ -56,8 +56,13 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
     }
     let d = cycle_plan::direction(&plan.cycle);
     let v = d.buy_on.clone();
+    // Решение 132: цикл — кошельком строки «DEX ↔ DEX»; нет строки — цикл не исполняется.
+    let acc = match super::dex_account::of_direction(&core.inner.deps, &d).await {
+        Ok(a) => a,
+        Err(why) => return Outcome::Refused(why),
+    };
     let plan_json = serde_json::to_value(&plan).unwrap_or_default();
-    let mut deal = super::ledger::open(core, &d, plan_json, plan.profit_usd);
+    let mut deal = super::ledger::open(core, &d, plan_json, plan.profit_usd, acc);
     deal.note(format!(
         "План цикла DEX ↔ DEX: вход {} {t}, ожидаемо {} {t}, граница {} {t}, чистая {} {t} (≈ {} USDT), {}",
         plan.input,
@@ -75,9 +80,13 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
         input: plan.input,
         min_out: plan.min_out,
     };
-    let res = match core.inner.deps.gw.get(&v).await {
+    let res = match super::dex_account::venue_deal(core, &deal.id, &v).await {
         Ok(x) => x.dex_cycle_trade(req).await,
-        Err(e) => Err(e),
+        Err(e) => Err(crate::gateway::errors::GatewayError::new(
+            crate::gateway::errors::ErrorCode::NotConfigured,
+            Some(v.clone()),
+            e,
+        )),
     };
     match res {
         Ok(r) => {

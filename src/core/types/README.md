@@ -2,6 +2,7 @@
 
 | Файл | Типы |
 | --- | --- |
+| `account.rs` | DexAccountId — абстрактный id счёта (кошелька) DEX, решение 132: ядро знает только id, адреса и ключи — у адаптера |
 | `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
 | `pool.rs` | PoolKind (V2/V3/Cl/Bin/Pmm/Solidly/StableSwap/TickBin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
 | `pool_tick_bin.rs` | TickBinData, TickReserves — состояние пула TickBin (решение 122 F, Maverick V2): тики около активного, комиссии по направлениям, масштабы токенов, доля протокола |

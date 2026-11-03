@@ -81,10 +81,13 @@ pub fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
 }
 
 /// Выбор формы: исполнитель, иначе бандл, иначе отказ с причинами. Принимает: ноги цикла. Ошибки: NoRoute (обе формы
-/// не годятся — причины обеих), Internal (exec.executor_address не читается).
+/// не годятся — причины обеих), Internal (адрес исполнителя кошелька не читается).
 pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
     let exec_why = match executor::address(ctx)? {
-        None => "exec.executor_address не задан".to_string(),
+        None => format!(
+            "у кошелька «{}» не развёрнут исполнитель ArbExecutor (экран «Маппинг кошельков»)",
+            ctx.wallet_name()
+        ),
         Some(x) => match legs.iter().find_map(|l| step_why(ctx, l)) {
             None => return Ok(Form::Executor(x)),
             Some(w) => w,

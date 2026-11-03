@@ -3,9 +3,10 @@
   Что делает: очередь транзакций кошелька площадки DEX (решение 45) на экране «Каналы отправки»: свободна /
     ждёт итога (nonce, хеш, с какого времени) / остановлена до ручной проверки (причина; занят ли nonce в блоке) и
     кнопка «Снять очередь после ручной проверки» (POST /api/wallet-queue/{venue}/release). Если nonce остановленной
-    транзакции ещё не занят — висящая транзакция может пройти позже: снятие только вторым подтверждением
+    транзакции ещё не занят — висящая транзакция может пройти позже: снятие только вторым подтверждением. Решение 132:
+    очередь своя у каждого кошелька (?wallet=<id>; живое сообщение — по площадке и счёту)
     (pending_ok = true). Обновляется сам по живому сообщению wallet_queue (lib/live.svelte.js).
-  Кто вызывает: pages/Channels.svelte.
+  Кто вызывает: pages/Channels.svelte (по кошельку из GET /api/wallets).
   От чего зависит: lib/api.js, lib/live.svelte.js (onLive), lib/labels.js (showTime).
   Настройки: send.cancel_max_gas_gwei, send.cancel_max_attempts, send.queue_max_wait_s (их задают на «Площадках»).
 -->
@@ -14,8 +15,9 @@
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { showTime } from '../lib/labels.js';
 
-  /** venue — id площадки DEX. */
-  let { venue } = $props();
+  /** venue — id площадки DEX; wallet — id кошелька (решение 132: очередь своя у кошелька); name — его имя. */
+  let { venue, wallet, name } = $props();
+  const q = $derived(`?wallet=${seg(wallet)}`);
   let queue = $state(null);
   let error = $state('');
   let busy = $state(false);
@@ -26,7 +28,7 @@
   async function load() {
     error = '';
     try {
-      queue = await get(`/api/wallet-queue/${seg(venue)}`);
+      queue = await get(`/api/wallet-queue/${seg(venue)}${q}`);
     } catch (e) {
       error = e.message;
     }
@@ -41,7 +43,7 @@
     busy = true;
     error = '';
     try {
-      queue = await post(`/api/wallet-queue/${seg(venue)}/release`, { pending_ok: pendingOk });
+      queue = await post(`/api/wallet-queue/${seg(venue)}/release${q}`, { pending_ok: pendingOk });
       pending = '';
     } catch (e) {
       if (e.status === 409) pending = e.message;
@@ -54,7 +56,7 @@
   $effect(() => {
     load();
     return onLive((msg) => {
-      if (msg.type === 'wallet_queue' && msg.data?.venue === venue) {
+      if (msg.type === 'wallet_queue' && msg.data?.venue === venue && msg.data?.account === wallet) {
         queue = { ...msg.data, nonce_taken: null };
         if (msg.data.state?.Halted) load();
       } else if (lagFor(msg, 'core')) {
@@ -69,7 +71,7 @@
 </script>
 
 <article class="card">
-  <header><strong>Очередь кошелька</strong> <button onclick={load}>Обновить</button></header>
+  <header><strong>Очередь кошелька «{name}»</strong> <button onclick={load}>Обновить</button></header>
   {#if error}
     <p class="err">{error}</p>
   {/if}

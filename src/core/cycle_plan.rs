@@ -69,7 +69,8 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         Some(b) => b,
         None => limits(core, c, v)?,
     };
-    let venue = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    // Решение 132: кошелёк — строки «DEX ↔ DEX» маппинга; нет строки — цикл не исполняется (NO_WALLET).
+    let venue = super::dex_account::venue_dir(&core.inner.deps, &direction(c), v).await?;
     // Один запрос с кошельком: курсы, форма исполнения, свободная базовая (потолок входа).
     let probe = venue
         .dex_cycle_quote(c, c.input, true)

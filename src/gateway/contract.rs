@@ -167,6 +167,31 @@ pub trait Venue: Send + Sync {
     /// Возвращает: ConnectionCheck. Ошибки: NotApplicable (биржа); неизвестный канал — NotConfigured.
     async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck>;
 
+    /// Решение 132: вид площадки, привязанный к счёту (кошельку) DEX — им идут сделка, вывод, адрес депозита, балансы,
+    /// очередь, исполнитель этого кошелька. Без привязки DEX — только чтение и симуляции (кошелёк строки «пробы»).
+    /// Принимает: id счёта. Ошибки: NotApplicable — не DEX (биржа: счёт ей не нужен); NotConfigured — нет такого кошелька.
+    fn for_account(
+        &self,
+        account: &crate::core::types::DexAccountId,
+    ) -> GatewayResult<std::sync::Arc<dyn Venue>> {
+        let _ = account;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет счетов DEX",
+        ))
+    }
+
+    /// Решение 132: адрес кошелька счёта (выводится из ключа у адаптера; ключ наружу не отдаётся). Только у вида DEX на
+    /// счёт. Ошибки: NotApplicable — биржа; NotConfigured — счёт не выбран или ключ не введён; SecretsLocked.
+    async fn wallet_address(&self) -> GatewayResult<String> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет кошелька",
+        ))
+    }
+
     /// Очередь транзакций кошелька (DEX, решение 45): свободна / ждёт итога / остановлена до ручной проверки.
     /// Ошибки: NotApplicable — у площадки нет кошелька (биржа).
     async fn wallet_queue(&self) -> GatewayResult<WalletQueue> {

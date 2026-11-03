@@ -108,5 +108,6 @@ pub async fn change(
         tx_hash: Some(mv.tx.to_string()),
         at: Utc::now(),
         source: format!("Transfer в блоке {}", mv.block),
+        account: ctx.account.clone().map(crate::core::types::DexAccountId),
     })
 }

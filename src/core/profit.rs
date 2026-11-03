@@ -242,9 +242,10 @@ fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
 /// Ошибки: текст — площадка не подключена, котировка не получена.
 async fn final_fillable(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Decimal, String> {
     let d = &cx.dir;
-    let gw = &core.inner.deps.gw;
-    let a = gw.get(&d.buy_on).await.map_err(|e| e.message)?;
-    let b = gw.get(&d.sell_on).await.map_err(|e| e.message)?;
+    // Решение 132: DEX — кошелёк строки маппинга направления.
+    let deps = &core.inner.deps;
+    let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
+    let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
     let (qa, qb) = crate::gateway::quote_stage::final_scope(async {
         tokio::join!(
             a.quote(&d.asset, Side::Buy, qty),

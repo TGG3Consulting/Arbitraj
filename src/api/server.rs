@@ -19,8 +19,8 @@ use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
     check, coins, control, core_api, dex, dex_dry, dex_executor, episodes, first_run, journal,
-    rules, rules_meta, secrets, settings, settings_io, static_ui, venues, wallet_queue, windows,
-    ws,
+    rules, rules_meta, secrets, settings, settings_io, static_ui, venues, wallet_queue, wallets,
+    wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -84,6 +84,16 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/windows/{id}", get(windows::get))
         .route("/api/windows/{id}/file", get(windows::file))
         .route("/api/journal", get(journal::list))
+        .route("/api/wallets", get(wallets::list).post(wallets::add))
+        .route("/api/wallets/map", put(wallets::map))
+        .route("/api/wallets/history", get(wallets::history))
+        .route(
+            "/api/wallets/{id}",
+            axum::routing::patch(wallets::rename).delete(wallets::remove),
+        )
+        .route("/api/wallets/{id}/balances", get(wallets_dex::balances))
+        .route("/api/wallets/{id}/executor", put(wallets_dex::set_executor))
+        .route("/api/check/wallet/{id}", post(wallets_dex::check))
         .route("/api/check/telegram", post(check::telegram))
         .route("/api/check/venue/{id}", post(check::venue))
         .route("/api/check/channel/{venue}/{id}", post(check::channel))

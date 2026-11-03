@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
-use crate::core::types::{Asset, BalanceChange, VenueId};
+use crate::core::types::{Asset, BalanceChange, DexAccountId, VenueId};
 
 use super::engine::Core;
 
@@ -49,9 +49,19 @@ pub(super) struct Expect {
     /// Прикреплённые события и закрывает ли каждое (transfer.credit_by_event на момент события).
     pub(super) hits: Vec<(BalanceChange, bool)>,
     pub(super) wake: Arc<Notify>,
+    /// Решение 132: кошелёк DEX перевода (получатель или отправитель — DEX); событие другого кошелька — не наше.
+    pub(super) account: Option<DexAccountId>,
 }
 
 impl Expect {
+    /// Тот же кошелёк DEX (решение 132): у события и ожидания счёт известен и различается — не наше. Ошибок нет.
+    pub(super) fn same_wallet(&self, b: &BalanceChange) -> bool {
+        match (&self.account, &b.account) {
+            (Some(a), Some(x)) => a == x,
+            _ => true,
+        }
+    }
+
     /// Событие этого перевода: без хеша — да; с хешем — только если хеш отправителя известен и совпал.
     pub(super) fn ours(&self, b: &BalanceChange) -> bool {
         match (&b.tx_hash, &self.tx) {
@@ -87,6 +97,14 @@ impl Ticket {
         let (keep, foreign): (Vec<_>, Vec<_>) = hits.into_iter().partition(|(b, _)| e.ours(b));
         e.hits = keep;
         foreign.into_iter().map(|(b, _)| b).collect()
+    }
+
+    /// Кошелёк DEX перевода (решение 132): события баланса другого кошелька к этому ожиданию не прикрепляются.
+    /// Принимает: счёт. Ошибок нет.
+    pub fn set_account(&self, acc: Option<DexAccountId>) {
+        if let Some(e) = lock(&self.core).list.get_mut(&self.id) {
+            e.account = acc;
+        }
     }
 
     /// Событие, закрывающее ожидание (своё — Expect::ours — и закрытие включено). Ошибок нет.
@@ -151,6 +169,7 @@ pub fn register(
         tx: None,
         hits: Vec::new(),
         wake: wake.clone(),
+        account: None,
     };
     st.list.insert(id, e);
     Ticket {

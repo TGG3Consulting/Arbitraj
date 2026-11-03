@@ -21,14 +21,28 @@ pub async fn wallet_queue(
     core.inner.live.send(CoreEvent::WalletQueue(q.clone()));
     let was_halted = matches!(prev, Some(S::Halted { .. }));
     let venue = q.venue.0.clone();
+    // Решение 132: у каждого кошелька своя очередь — в тексте имя кошелька.
+    let who = match &q.account {
+        Some(a) => {
+            let name = core
+                .inner
+                .deps
+                .settings
+                .accounts()
+                .wallet(&a.0)
+                .map(|w| w.name);
+            format!("{venue} «{}»", name.unwrap_or_else(|| a.0.clone()))
+        }
+        None => venue.clone(),
+    };
     let (code, text) = match &q.state {
         S::Halted { reason, .. } if !was_halted => (
             "send.queue_halted",
-            format!("{venue}: отправки остановлены до ручной проверки — {reason}"),
+            format!("{who}: отправки остановлены до ручной проверки — {reason}"),
         ),
         S::Free if was_halted => (
             "send.queue_released",
-            format!("{venue}: очередь кошелька снята после ручной проверки"),
+            format!("{who}: очередь кошелька снята после ручной проверки"),
         ),
         _ => return,
     };

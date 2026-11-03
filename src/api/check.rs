@@ -77,8 +77,10 @@ pub async fn channel(
 pub async fn executor(
     State(st): State<AppState>,
     Path(venue): Path<String>,
+    axum::extract::Query(w): axum::extract::Query<super::dex_executor::WalletQuery>,
 ) -> Json<ConnectionCheck> {
-    let res = match st.registry.get(&VenueId(venue.clone())).await {
+    // Решение 132: исполнитель — кошелька ?wallet=id (без него — кошелёк строки «пробы»).
+    let res = match super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref()).await {
         Ok(v) => v
             .check_executor()
             .await

@@ -3,8 +3,8 @@
 //! транзакции (EIP-155, chainId BSC) и её хеш (keccak256 закодированных байт). Ключ живёт только в памяти на время
 //! подписи и затирается (zeroize). Своя копия адаптера kyberswap (изоляция), на alloy напрямую.
 //! Кто вызывает: nonce.rs, balances.rs, tx.rs, connection.rs.
-//! От чего зависит: ctx.rs (секрет bsc_dex.wallet_key — один кошелёк, решение 45), alloy.
-//! Настройки: нет. Секрет: bsc_dex.wallet_key (docs/SECURITY.md).
+//! От чего зависит: ctx.rs (имя секрета кошелька счёта DEX — поле wallet, решение 132), alloy.
+//! Настройки: нет. Секрет: ключ кошелька счёта DEX (docs/SECURITY.md).
 //!
 //! Подпись — EIP-155 (https://eips.ethereum.org/EIPS/eip-155), кодирование — EIP-2718
 //! (https://eips.ethereum.org/EIPS/eip-2718), хеш — keccak256 закодированных байт.
@@ -17,7 +17,7 @@ use alloy_primitives::{Address, B256, Bytes, Signature, TxKind, U256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::ctx::{Ctx, SECRET_WALLET_KEY};
+use super::ctx::Ctx;
 use super::node::BSC_CHAIN_ID;
 
 /// Подписанная транзакция: байты для отправки и хеш.
@@ -27,14 +27,21 @@ pub struct SignedTx {
     pub hash: B256,
 }
 
-/// Подписант из секрета bsc_dex.wallet_key (64 hex-знака, можно с 0x).
-/// Ошибки: SecretsLocked, NotConfigured (ключ не введён или не в формате ключа — без показа ключа).
+/// Подписант из секрета кошелька счёта DEX (64 hex-знака, можно с 0x; решение 132).
+/// Ошибки: SecretsLocked, NotConfigured (счёт не выбран, ключ не введён или не в формате ключа — без показа ключа).
 pub fn signer(ctx: &Ctx) -> GatewayResult<PrivateKeySigner> {
-    let key = ctx.vault.get(SECRET_WALLET_KEY).map_err(|e| ctx.tag(e))?;
+    // Решение 132: ключ — кошелька счёта DEX (поле wallet); без счёта — отказ (своп не уходит).
+    let secret = ctx.wallet.as_deref().ok_or_else(|| {
+        ctx.err(
+            ErrorCode::NotConfigured,
+            "Кошелёк DEX не выбран: своп KyberSwap идёт только от кошелька сделки (экран «Маппинг кошельков»)",
+        )
+    })?;
+    let key = ctx.vault.get(secret).map_err(|e| ctx.tag(e))?;
     key.trim().parse::<PrivateKeySigner>().map_err(|_| {
         ctx.err(
             ErrorCode::NotConfigured,
-            format!("Секрет {SECRET_WALLET_KEY}: это не приватный ключ (нужно 64 шестнадцатеричных знака)"),
+            format!("Секрет {secret}: это не приватный ключ (нужно 64 шестнадцатеричных знака)"),
         )
     })
 }

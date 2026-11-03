@@ -44,7 +44,8 @@ async fn return_locked(
 ) -> Result<String, String> {
     let key = super::coin_key::CoinKey::of(&h.asset);
     // Реальный свободный баланс (BNB на DEX — сверх резерва и газа продажи, решение 62) — manual_halted::on_hand.
-    let (qty, gas_note) = super::manual_halted::on_hand(core, &h.venue, &h.asset, h.qty).await?;
+    let (qty, gas_note) =
+        super::manual_halted::on_hand(core, &old, &h.venue, &h.asset, h.qty).await?;
     let share = if h.qty.is_zero() {
         Decimal::ZERO
     } else {
@@ -57,6 +58,8 @@ async fn return_locked(
         old.plan_profit_usd,
     );
     deal.at = h.venue.clone();
+    // Решение 132: «Вернуть боту» — тем же кошельком DEX, что и исходная сделка.
+    deal.dex_account = super::dex_account::of(core, &old)?;
     deal.qty = qty;
     deal.invested = old.invested * share;
     deal.spent = old.spent * share;

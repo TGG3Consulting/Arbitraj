@@ -36,11 +36,16 @@ async fn executor_kind_without_address_is_setting_and_no_kind_is_not() {
         .reg
         .get(&PoolRef::Contract(CAKE_USDT_PCS))
         .expect("пул в реестре");
-    // THENA V1 (Solidly): шаг SOLIDLY есть, адрес исполнителя в тесте не задан — настройка exec.executor_address.
+    // THENA V1 (Solidly): шаг SOLIDLY есть, исполнителя у кошелька проб нет (решение 132: адрес — у кошелька, не
+    // настройка) — «не задано» с причиной.
     e.family = make("thena", "solidly_v1").expect("вид из каталога");
     let err = probe_exec::no_path(&q.ctx, &e);
     assert_eq!(err.code, ErrorCode::NotConfigured);
-    assert_eq!(err.setting.as_deref(), Some("exec.executor_address"));
+    assert!(
+        err.message.contains("не развёрнут исполнитель"),
+        "{}",
+        err.message
+    );
     // KyberSwap Elastic: шага исполнителя нет — не настройка, «не проверено» с причиной.
     e.family = make("kyberswap_elastic", "kyber_elastic").expect("вид из каталога");
     let err = probe_exec::no_path(&q.ctx, &e);

@@ -114,8 +114,27 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        account: None,
         index: Default::default(),
     };
+    // Решение 132, пункт 5: перенос прежнего единственного кошелька — один раз, после разблокировки секретов
+    // (api/secrets.rs): кошелёк «BingX» с тем же секретом, исполнитель — значение exec.executor_address [bsc_dex],
+    // строки маппинга bingx и «пробы». Деньги не переводятся.
+    settings
+        .accounts()
+        .configure_legacy(arb::settings::accounts::migrate::LegacyCfg {
+            name: "BingX".into(),
+            secret: arb::venues::bsc_dex::ctx::SECRET_WALLET_KEY.into(),
+            queue_key: arb::venues::bsc_dex::ctx::ID.into(),
+            executor_setting: "exec.executor_address".into(),
+            executor_scope: arb::settings::scope::Scope::Venue(
+                arb::venues::bsc_dex::ctx::ID.into(),
+            ),
+            rows: vec![
+                arb::venues::bingx::ctx::ID.into(),
+                arb::settings::accounts::ROW_PROBE.into(),
+            ],
+        });
     let dex = arb::venues::bsc_dex::BscDex::new(dex_ctx);
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
     dex.watch_settings(changes.subscribe());

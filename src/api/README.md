@@ -23,6 +23,7 @@
 | `GET /api/channels/{venue}` | Каналы отправки адаптера DEX (id области «канал»): `[{info, stats}]`; `stats: null` — по каналу ещё не было событий |
 | `GET /api/wallet-queue/{venue}` | Очередь транзакций кошелька DEX: свободна / ждёт итога (nonce, хеш) / остановлена до ручной проверки (причина) |
 | `POST /api/wallet-queue/{venue}/release` | «Снять очередь после ручной проверки» `{pending_ok}` — только остановленную (иначе 400); nonce ещё не занят без `pending_ok` — 409, интерфейс просит второе подтверждение |
+| `GET /api/wallets` и др. (решение 132) | Экран «Маппинг кошельков»: `GET /api/wallets` → `{unlocked, dex, wallets[{id, name, secret, executor, address, address_error, rows, open_deals, legacy}], rows[{row, kind: cex/dex_dex/probe, wallet}], shared[{wallet, name, rows}]}`; `POST /api/wallets {name, key, password}` (секреты разблокированы; ключ — в зашифрованный файл под `wallet.<id>.key`, ответ без ключа; ключ того же адреса, что у другого кошелька, — 400); `PATCH /api/wallets/{id} {name}`; `DELETE /api/wallets/{id}` (400 — в маппинге или в незавершённой сделке; секрет не удаляется); `PUT /api/wallets/map {row, wallet|null}` (строки — биржи реестра, `dex_dex`, `probe`); `GET /api/wallets/history?limit=N`; `GET /api/wallets/{id}/balances` → `{bnb, usdt, quote, error}`; `PUT /api/wallets/{id}/executor {address|null}` (запись — только после проверки «код совпал, владелец — этот кошелёк»); `POST /api/check/wallet/{id}` → ConnectionCheck. Исполнитель, очередь, проверка исполнителя — те же маршруты с `?wallet=<id>` (`/api/venues/{id}/executor/quote|deploy`, `/api/wallet-queue/{venue}[/release]`, `/api/check/executor/{venue}`); развёртывание с кодом, совпавшим в сети, записывает адрес у кошелька. Ключ не отдаётся никогда — только имя секрета и адрес |
 | `GET /api/journal?limit=N[&before=ID]` | Журнал |
 | `GET /api/coins`, `POST /api/coins/recheck` | Экран «Монеты»: справочник из ядра; «Перепроверить» — шлюз `recheck_coins` |
 | `GET /api/manual`, `POST /api/manual/command` | Экран «Ручное управление»: алерты и монеты человека, команды ядру |
@@ -82,6 +83,7 @@
 | `GET /api/channels/{venue}` | — | `[{info: SendChannelInfo, stats: SendChannelStats \| null}]` — шлюз `send_channels` + последние события ядра; биржа — 400 «не применимо» |
 | `GET /api/wallet-queue/{venue}` | — | `WalletQueue {venue, state: Free \| Busy{nonce, hash, since} \| Halted{reason, nonce, hash, since}}` — шлюз `wallet_queue`; биржа — 400 |
 | `POST /api/wallet-queue/{venue}/release` | `{pending_ok: bool}` | `WalletQueue` после снятия — шлюз `release_wallet_queue`; очередь не остановлена — 400; nonce не занят без `pending_ok` — 409 |
+| `/api/wallets*` | см. строку «решение 132» выше | Ответы без ключей: только имя секрета и адрес (тест tests/api_wallets.rs) |
 | `POST /api/check/channel/{venue}/{id}` | — | `{ok, details}` — шлюз `check_send_channel`, пишется в журнал |
 | настройки канала | `PUT /api/settings` с `scope:{kind:"Channel",id:"club48"}` (`channel.*`); ключ — `PUT /api/secrets/channel.<id>.key` | как у настроек и секретов |
 | WS `/api/ws` | — | `{"type":"send_channel","data":SendChannelStats}` |
@@ -137,6 +139,10 @@
 | `rules_meta.rs` | Справочник для формы правил (полнота проверяется при сборке) |
 | `rules_codes.rs` | Коды ошибок шлюза для формы правил — смысл по-русски |
 | `wallet_queue.rs` | Очередь кошелька DEX: состояние (и занят ли nonce остановленной), снятие после ручной проверки |
+| `wallets.rs` | Решение 132: «Маппинг кошельков» — список, добавить (ключ сразу в зашифрованные секреты), переименовать, удалить, строка маппинга, история |
+| `wallets_view.rs` | Решение 132: данные экрана — кошельки с адресами от адаптера, строки (биржи реестра, `dex_dex`, `probe`), «деньги смешиваются» |
+| `wallets_dex.rs` | Решение 132: DEX на кошелёк (`venue_as`, `dex_for`), балансы BNB/USDT, «Проверить подключение» кошелька, запись исполнителя после проверки |
+| `wallets_migrate.rs` | Решение 132: перенос прежнего кошелька после разблокировки секретов и после ввода секрета |
 | `venues.rs` | Список площадок из реестра шлюза |
 | `dex.rs` | DEX и виды пулов, каналы отправки — из реестра шлюза |
 | `dex_dry.rs` | «Сухая сделка DEX» (решение 121, C4): POST /api/dex/dry-swap → шлюз `dex_dry_swap` |

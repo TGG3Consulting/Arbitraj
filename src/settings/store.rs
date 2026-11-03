@@ -6,7 +6,7 @@
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
-//! История — settings/history.rs. Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
+//! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -46,6 +46,8 @@ pub struct Store {
     journal: Journal,
     /// Изменения — строго по одному.
     writer: Arc<Mutex<()>>,
+    /// Кошельки DEX и маппинг «биржа → кошелёк» (решение 132, settings/accounts/) — свои таблицы и история.
+    accounts: super::accounts::Accounts,
 }
 
 impl Store {
@@ -69,6 +71,7 @@ impl Store {
                 it.collect()
             })
             .await?;
+        let accounts = super::accounts::Accounts::load(db.clone(), journal.clone()).await?;
         let mut map = HashMap::new();
         for (name, scope, value) in rows {
             match (
@@ -87,7 +90,13 @@ impl Store {
             changes,
             journal,
             writer: Arc::new(Mutex::new(())),
+            accounts,
         })
+    }
+
+    /// Кошельки DEX и маппинг (решение 132). Ошибок нет.
+    pub fn accounts(&self) -> &super::accounts::Accounts {
+        &self.accounts
     }
 
     /// Значение ровно в этой области (без подстановки из общей).

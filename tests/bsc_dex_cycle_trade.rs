@@ -192,7 +192,7 @@ async fn form_prefers_executor_then_bundle_then_refuses() {
     let e = cycle_gate::form(&q.ctx, &legs).expect_err("нет исполнителя и каналов");
     assert_eq!(e.code, ErrorCode::NoRoute);
     assert!(
-        e.message.contains("exec.executor_address не задан"),
+        e.message.contains("не развёрнут исполнитель"),
         "{}",
         e.message
     );
@@ -201,7 +201,7 @@ async fn form_prefers_executor_then_bundle_then_refuses() {
     route_common::channel(&p, "club48", "bundle").await;
     assert_eq!(cycle_gate::form(&q.ctx, &legs).unwrap(), Form::Bundle);
 
-    set(&p, "exec.executor_address", json!(EXECUTOR.to_string())).await;
+    route_common::executor(&p, &EXECUTOR.to_string()).await;
     assert_eq!(
         cycle_gate::form(&q.ctx, &legs).unwrap(),
         Form::Executor(EXECUTOR)
@@ -369,7 +369,7 @@ fn wbnb_signal(p: &Parts) -> DexCycle {
 #[tokio::test]
 async fn wbnb_base_cycle_end_to_end_without_network() {
     let p = parts().await;
-    set(&p, "exec.executor_address", json!(EXECUTOR.to_string())).await;
+    route_common::executor(&p, &EXECUTOR.to_string()).await;
     let q = p.quoting();
     let c = wbnb_signal(&p);
     let legs = cycle_legs::now(&q, &c).await.expect("ноги цикла WBNB");

@@ -31,13 +31,29 @@ pub type Expected = HashMap<String, (Decimal, Vec<Print>)>;
 
 /// Учёт площадки сейчас: открытые сделки не в пути (не покупка и не перевод), монеты которых лежат на площадке.
 /// Принимает: ядро, площадку. Возвращает: Expected. Ошибок нет.
-pub fn expected(core: &Core, venue: &VenueId) -> Expected {
+pub fn expected(
+    core: &Core,
+    venue: &VenueId,
+    acc: Option<&crate::core::types::DexAccountId>,
+) -> Expected {
     let mut out: Expected = HashMap::new();
-    for d in lk(&core.inner.deals)
+    let deals: Vec<_> = lk(&core.inner.deals)
         .values()
         .filter(|d| d.is_open() && d.step != Step::Transfer && d.step != Step::Buying)
         .filter(|d| &d.at == venue)
-    {
+        .cloned()
+        .collect();
+    for d in deals {
+        // Решение 132: у DEX — только сделки этого кошелька.
+        if acc.is_some()
+            && super::dex_account::of_deal(core, &d.id)
+                .ok()
+                .flatten()
+                .as_ref()
+                != acc
+        {
+            continue;
+        }
         let e = out.entry(d.direction.asset.ticker.clone()).or_default();
         e.0 += d.qty;
         e.1.push((d.id.clone(), d.step, d.qty, d.updated_at));

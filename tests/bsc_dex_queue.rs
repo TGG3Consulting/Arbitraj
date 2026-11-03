@@ -25,7 +25,20 @@ async fn ctx(d: &std::path::Path) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
+    // Решение 132: очередь — своя у кошелька (ключ очереди записи кошелька); кошелёк создаётся один раз на базу.
+    let a = settings.accounts();
+    let id = match a.wallets().first() {
+        Some(w) => w.id.clone(),
+        None => {
+            let id = a.reserve_id().await.unwrap();
+            a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест")
+                .await
+                .unwrap();
+            id
+        }
+    };
     Ctx {
+        account: Some(id),
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),

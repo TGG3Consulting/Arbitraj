@@ -8,7 +8,7 @@
 //! Токены вне справочника монет бота (спам), обёртка BNB и токены с неразобранными decimals не обрабатываются вовсе —
 //! ни запросов к узлу, ни событий ядру (счётчик — Debug в лог процесса).
 //! Выключено (venue.balance_events не «да») — подписки нет, ждём изменения настроек.
-//! Кто вызывает: resubscribe.rs (задача подписки на рынок).
+//! Кто вызывает: resubscribe_wallets.rs (задача подписки на рынок — по одной на кошелёк, решение 132).
 //! От чего зависит: node/source.rs, events_log.rs, events_tx.rs, events_native.rs, inflows.rs, signer.rs, pools/listen.rs.
 //! Настройки: venue.balance_events, send.deposit_confirmations, venue.ws_reconnect_pause_ms [bsc_dex];
 //! bsc.pool_events_source (через node/source.rs).
@@ -64,7 +64,7 @@ pub async fn run(p: Pools, inflows: Inflows) {
             Err(e) => e.message,
         };
         if why != told {
-            let msg = format!("События баланса кошелька: {why}");
+            let msg = format!("События баланса кошелька «{}»: {why}", p.ctx.wallet_name());
             p.ctx.log(Level::Warn, "dex.balance_event", msg, None).await;
             told = why;
         }

@@ -46,10 +46,9 @@ pub async fn on_change(core: &Core, b: BalanceChange) {
                 Err(e) => Some(format!("не сверено с переводами: {}", e.message)),
             },
             BalanceKind::Withdraw if b.delta < Decimal::ZERO => {
-                let ours = st
-                    .list
-                    .values()
-                    .any(|e| e.from == b.venue && same_asset(&e.asset, &b.asset));
+                let ours = st.list.values().any(|e| {
+                    e.from == b.venue && same_asset(&e.asset, &b.asset) && e.same_wallet(&b)
+                });
                 if ours {
                     return;
                 }
@@ -94,6 +93,8 @@ fn deposit(st: &mut State, b: &BalanceChange, tol: Decimal, close: bool) -> Opti
         .list
         .iter()
         .filter(|(_, e)| e.to == b.venue && same_asset(&e.asset, &b.asset))
+        // Решение 132: поступление на другой кошелёк DEX — не этого перевода.
+        .filter(|(_, e)| e.same_wallet(b))
         // Уже есть своё событие — ожидание занято.
         .filter(|(_, e)| !e.hits.iter().any(|(h, _)| e.ours(h)))
         .filter(|(_, e)| match (&hash, &e.tx) {

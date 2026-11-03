@@ -87,6 +87,8 @@ pub async fn unlock(
         return Err(ApiError::bad(e));
     }
     log(&st, Level::Info, "Секреты разблокированы").await;
+    // Решение 132: перенос прежнего кошелька DEX — один раз, когда старый ключ виден.
+    super::wallets_migrate::after_unlock(&st).await;
     let notifier = st.notifier.clone();
     tokio::spawn(async move {
         notifier
@@ -127,6 +129,7 @@ pub async fn put(
         &format!("Секрет {name} добавлен или заменён"),
     )
     .await;
+    super::wallets_migrate::after_unlock(&st).await;
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
     Ok(Json(st.vault.status()))
@@ -167,7 +170,7 @@ pub async fn password(
 }
 
 /// Параметры Argon2id из настроек. Ошибка 400 — не заданы.
-fn kdf(st: &AppState) -> Result<KdfParams, ApiError> {
+pub(super) fn kdf(st: &AppState) -> Result<KdfParams, ApiError> {
     let get = |n| {
         st.settings
             .integer(n, At::default())

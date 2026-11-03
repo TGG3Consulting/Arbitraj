@@ -12,10 +12,12 @@
 //!   nonce ещё не занят и pending_ok = false — 400 (NonceConflict), интерфейс просит второе подтверждение
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
-use crate::core::types::{VenueId, WalletQueue};
+use crate::core::types::WalletQueue;
+
+use super::dex_executor::WalletQuery;
 
 use super::state::{ApiError, AppState};
 
@@ -23,10 +25,10 @@ use super::state::{ApiError, AppState};
 pub async fn get(
     State(st): State<AppState>,
     Path(venue): Path<String>,
+    Query(w): Query<WalletQuery>,
 ) -> Result<Json<WalletQueue>, ApiError> {
-    let v = st
-        .registry
-        .get(&VenueId(venue))
+    // Решение 132: очередь — своя у кошелька (?wallet=id).
+    let v = super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
     v.wallet_queue().await.map(Json).map_err(ApiError::gateway)
@@ -46,11 +48,10 @@ pub struct Release {
 pub async fn release(
     State(st): State<AppState>,
     Path(venue): Path<String>,
+    Query(w): Query<WalletQuery>,
     Json(body): Json<Release>,
 ) -> Result<Json<WalletQueue>, ApiError> {
-    let v = st
-        .registry
-        .get(&VenueId(venue))
+    let v = super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
     v.release_wallet_queue("интерфейс", body.pending_ok)

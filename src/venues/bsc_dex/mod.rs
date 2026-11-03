@@ -10,6 +10,7 @@
 //! 1b (пулы), 1c (математика, котировка, проверки), 1d (исполнение, каналы отправки), 1e (умный режим).
 //! Здесь — сам адаптер (BscDex); общее состояние — parts.rs; функции контракта — venue.rs.
 
+pub mod best_of;
 pub mod check;
 pub mod coins;
 pub mod connection;

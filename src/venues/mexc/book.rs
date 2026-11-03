@@ -130,6 +130,7 @@ impl Books {
             )],
             route: None,
             signal_route: None,
+            pick: None,
             at: book.received_at,
         })
     }

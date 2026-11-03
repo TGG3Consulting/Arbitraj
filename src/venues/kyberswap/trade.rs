@@ -1,58 +1,46 @@
 //! Файл: venues/kyberswap/trade.rs
-//! Что делает: своп через роутер агрегатора KyberSwap: свежий маршрут (GET /routes на объём сделки), проверка худшей
-//! цены, сборка транзакции (POST /route/build со slippageTolerance и deadline из настроек), при нехватке разрешения —
-//! ERC-20 approve роутеру из ответа, отправка свопа, ожидание квитанции, факт по логам Transfer. Маршрут берётся
-//! свежим на сделке (документация: маршрут живёт секунды) — req.route из котировки не используется.
+//! Что делает: своп через роутер агрегатора KyberSwap. Решение 123: две части — «получить маршрут» (trade_prep.rs:
+//! свежий GET /routes на объём сделки, POST /route/build со slippageTolerance и deadline, проверка худшей цены) и
+//! «исполнить» (execute здесь: при нехватке разрешения — ERC-20 approve роутеру из ответа и пересборка, отправка
+//! свопа, ожидание квитанции, факт по логам Transfer — trade_fact.rs). Режим «лучший из двух» (bsc_dex/best_of/)
+//! сравнивает подготовленный маршрут со своим и исполняет его этим же execute — без второго запроса к KyberSwap.
+//! Маршрут берётся свежим на сделке (документация: маршрут живёт секунды) — req.route из котировки не используется.
 //! Не исполнилось — ошибка с фактом транзакции (газ мог сгореть), повторов нет (стартовое правило Тиграна).
-//! Кто вызывает: venue.rs (trade).
-//! От чего зависит: ctx.rs, state.rs, rest.rs, tx.rs, node.rs, abi.rs, num.rs, signer.rs, quote.rs, core/types.
-//! Настройки: kyber.slippage_bps, kyber.deadline_s; через tx.rs — kyber.gas_*, kyber.receipt_*.
+//! Кто вызывает: bsc_dex/venue.rs (trade), bsc_dex/best_of/trade.rs (execute).
+//! От чего зависит: ctx.rs, state.rs, trade_prep.rs, trade_fact.rs, tx.rs, node.rs, abi.rs.
+//! Настройки: через trade_prep.rs — kyber.slippage_bps, kyber.deadline_s; через tx.rs — kyber.gas_*, kyber.receipt_*.
 
-use alloy::sol_types::{SolCall, SolEvent};
+use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
-use chrono::Utc;
-use rust_decimal::Decimal;
 
-use crate::core::types::{Side, TradeRequest, TradeResult, TradeStatus, TxOutcome};
+use crate::core::types::{TradeRequest, TradeResult, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::abi::IERC20;
-use super::balances::decimals;
 use super::ctx::Ctx;
-use super::node::{self, Receipt};
-use super::rest::{self, Built, Route};
 use super::state::Parts;
-use super::{num, quote, signer, tx};
+use super::trade_prep::{self, Prepared};
+use super::{node, trade_fact, tx};
 
-/// Своп на объём req.qty. Ошибки: NoRoute, QuoteMismatch (цена хуже допустимой), SwapReverted / TxNotIncluded /
-/// OutcomeUnknown (с фактом транзакции), узел, сеть.
+pub use super::trade_fact::moved;
+
+/// Своп на объём req.qty: строгая очередь кошелька, подготовка (trade_prep.rs) и исполнение. Ошибки: NoRoute,
+/// QuoteMismatch (цена хуже допустимой), SwapReverted / TxNotIncluded / OutcomeUnknown (с фактом транзакции), узел, сеть.
 pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
-    let ctx = &p.ctx;
-    let coin = req.asset.bsc_contract.ok_or_else(|| {
-        ctx.err(
-            ErrorCode::NoRoute,
-            format!("{}: нет адреса контракта в BSC", req.asset.ticker),
-        )
-    })?;
-    let usdt = quote::usdt(p)?;
-    let coin_dec = decimals(p, coin).await?;
-    let usdt_dec = decimals(p, usdt).await?;
-    // Вход/выход и адрес входного токена для approve.
-    let (token_in, token_out) = if req.side == Side::Buy {
-        (usdt, coin)
-    } else {
-        (coin, usdt)
-    };
-    // Строгая очередь кошелька: approve и своп одной сделки идут без параллельных транзакций (решение 45).
+    // Строгая очередь кошелька: маршрут, approve и своп одной сделки идут без параллельных транзакций (решение 45).
     let _guard = p.wallet_lock.lock().await;
-    let wallet = signer::address(ctx)?;
+    let prep = trade_prep::prepare(p, &req).await?;
+    execute(p, req, prep).await
+}
 
-    let route = fresh_route(p, coin, usdt, (coin_dec, usdt_dec), req.side, req.qty).await?;
-    let slippage = ctx.int("kyber.slippage_bps")?;
-    let deadline = deadline_unix(ctx).await?;
-    let mut built = rest::build(ctx, &route, wallet, wallet, slippage, deadline).await?;
-    check_price(ctx, &req, &built, (coin_dec, usdt_dec))?;
-
+/// Исполнение подготовленного свопа. Очередь кошелька (p.wallet_lock) держит ВЫЗЫВАЮЩИЙ (замок не повторный).
+/// Принимает: состояние, запрос, подготовку (сборка уже прошла проверку худшей цены). Возвращает: факт свопа.
+/// Ошибки: QuoteMismatch (после approve маршрут требует больше входа / цена хуже), SwapReverted / TxNotIncluded /
+/// OutcomeUnknown (с фактом транзакции), узел, сеть.
+pub async fn execute(p: &Parts, req: TradeRequest, prep: Prepared) -> GatewayResult<TradeResult> {
+    let ctx = &p.ctx;
+    let (wallet, token_in) = (prep.wallet, prep.token_in);
+    let mut built = prep.built;
     // Разрешение на списание входного токена роутером (ERC-20 approve), если его не хватает; у свопа с нативной
     // монетой на входе (value > 0) approve не нужен.
     if built.value.is_zero()
@@ -69,10 +57,10 @@ pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
         // Решение 99: approve — отдельная транзакция, ждём её блока (секунды). Маршрут и транзакция свопа, собранные
         // ДО него, к этому моменту устарели — симуляция свопа откатывалась «Return amount is not enough» (сделка
         // 20261101182135312CAKE). Собираем заново на свежем маршруте и снова сверяем худшую цену.
-        let route = fresh_route(p, coin, usdt, (coin_dec, usdt_dec), req.side, req.qty).await?;
-        let deadline = deadline_unix(ctx).await?;
-        built = rest::build(ctx, &route, wallet, wallet, slippage, deadline).await?;
-        check_price(ctx, &req, &built, (coin_dec, usdt_dec))?;
+        let pair = (prep.coin, prep.usdt);
+        built = trade_prep::build(p, &req, pair, prep.decs, wallet, prep.slippage)
+            .await?
+            .0;
         // Новая сборка могла потребовать больше входа (покупка) — второй approve не делаем (снова устареет маршрут).
         if allowance(ctx, token_in, wallet, built.router).await? < built.amount_in {
             return Err(ctx.err(
@@ -96,83 +84,8 @@ pub async fn trade(p: &Parts, req: TradeRequest) -> GatewayResult<TradeResult> {
         ctx.err(ErrorCode::OutcomeUnknown, "своп в блоке, но нет квитанции")
             .with_tx(d.chain.clone())
     })?;
-    result(
-        ctx,
-        req,
-        d,
-        &r,
-        wallet,
-        (token_in, token_out),
-        (coin_dec, usdt_dec),
-    )
-}
-
-/// Свежий маршрут на объём сделки (как котировка). Для покупки вход подбирается под точный выход (quote::amounts).
-async fn fresh_route(
-    p: &Parts,
-    coin: Address,
-    usdt: Address,
-    decs: (u8, u8),
-    side: Side,
-    qty: Decimal,
-) -> GatewayResult<Route> {
-    let ctx = &p.ctx;
-    match side {
-        Side::Sell => {
-            let amount_in = num::to_units(qty, decs.0).ok_or_else(|| {
-                ctx.err(
-                    ErrorCode::BadResponse,
-                    "объём не переводится в единицы монеты",
-                )
-            })?;
-            rest::routes(ctx, coin, usdt, amount_in).await
-        }
-        Side::Buy => {
-            // Подбор входа USDT под выход qty монет — тот же, что в котировке.
-            let (_usdt, _coins, route) = quote::buy_route(p, coin, usdt, decs, qty).await?;
-            Ok(route)
-        }
-    }
-}
-
-/// Проверка худшей цены (req.worst_price): покупка — средняя не выше, продажа — не ниже. Ошибки: QuoteMismatch.
-fn check_price(
-    ctx: &Ctx,
-    req: &TradeRequest,
-    built: &Built,
-    (coin_dec, usdt_dec): (u8, u8),
-) -> GatewayResult<()> {
-    let (coins_u, usdt_u) = if req.side == Side::Buy {
-        (built.amount_out, built.amount_in)
-    } else {
-        (built.amount_in, built.amount_out)
-    };
-    let coins = num::to_decimal(coins_u, coin_dec);
-    let usdt = num::to_decimal(usdt_u, usdt_dec);
-    let (Some(coins), Some(usdt)) = (coins, usdt) else {
-        return Err(ctx.err(
-            ErrorCode::BadResponse,
-            "суммы сборки не переводятся в числа",
-        ));
-    };
-    if coins.is_zero() {
-        return Err(ctx.err(ErrorCode::NoRoute, "сборка вернула нулевой объём монеты"));
-    }
-    let avg = usdt / coins;
-    let bad = match req.side {
-        Side::Buy => avg > req.worst_price,
-        Side::Sell => avg < req.worst_price,
-    };
-    if bad {
-        return Err(ctx.err(
-            ErrorCode::QuoteMismatch,
-            format!(
-                "средняя цена сборки {avg} хуже допустимой {} ({:?})",
-                req.worst_price, req.side
-            ),
-        ));
-    }
-    Ok(())
+    let tokens = (token_in, prep.token_out);
+    trade_fact::result(ctx, req, d, &r, wallet, tokens, prep.decs)
 }
 
 /// Текущее разрешение роутеру на списание токена (ERC-20 allowance). Ошибки: узел.
@@ -244,79 +157,4 @@ fn outcome_ok(ctx: &Ctx, d: &tx::Done) -> GatewayResult<()> {
             )
             .with_tx(d.chain.clone())),
     }
-}
-
-/// Факт свопа по квитанции: суммы из логов Transfer кошелька, средняя цена, газ. Ошибки: OutcomeUnknown (суммы не
-/// переводятся в числа — с фактом транзакции).
-fn result(
-    ctx: &Ctx,
-    req: TradeRequest,
-    d: tx::Done,
-    r: &Receipt,
-    wallet: Address,
-    (tin, tout): (Address, Address),
-    (coin_dec, usdt_dec): (u8, u8),
-) -> GatewayResult<TradeResult> {
-    let spent = moved(r, tin, Some(wallet), None);
-    let got = moved(r, tout, None, Some(wallet));
-    let (coins_u, usdt_u) = if req.side == Side::Buy {
-        (got, spent)
-    } else {
-        (spent, got)
-    };
-    let (Some(coins), Some(usdt), Some(fee)) = (
-        num::to_decimal(coins_u, coin_dec),
-        num::to_decimal(usdt_u, usdt_dec),
-        d.chain.gas_bnb,
-    ) else {
-        return Err(ctx
-            .err(
-                ErrorCode::OutcomeUnknown,
-                format!(
-                    "Своп в блоке, tx {}, но суммы не переводятся в числа",
-                    d.chain.hash
-                ),
-            )
-            .with_tx(d.chain));
-    };
-    let status = if coins.is_zero() {
-        TradeStatus::NotFilled
-    } else if coins < req.qty {
-        TradeStatus::PartiallyFilled
-    } else {
-        TradeStatus::Filled
-    };
-    Ok(TradeResult {
-        status,
-        filled_qty: coins,
-        avg_price: if coins.is_zero() {
-            Decimal::ZERO
-        } else {
-            usdt / coins
-        },
-        fee,
-        fee_asset: super::balances::BNB.to_string(),
-        venue_ref: d.chain.hash.to_string(),
-        chain: Some(d.chain),
-        finished_at: Utc::now(),
-        // Решение 121 B7: кто исполнил своп — для журнала и хронологии сделки.
-        executor: Some("KyberSwap".to_string()),
-        request: req,
-    })
-}
-
-/// Сумма переводов токена по квитанции (события Transfer с нужными from/to). Ошибок нет.
-pub fn moved(r: &Receipt, token: Address, from: Option<Address>, to: Option<Address>) -> U256 {
-    r.logs
-        .iter()
-        .filter(|l| l.address() == token)
-        .filter_map(|l| IERC20::Transfer::decode_log_data(&l.inner.data).ok())
-        .filter(|t| from.is_none_or(|f| t.from == f) && to.is_none_or(|x| t.to == x))
-        .fold(U256::ZERO, |acc, t| acc.saturating_add(t.value))
-}
-
-/// deadline сборки = текущее время блока узла + kyber.deadline_s (Unix-секунды). Ошибки: узел, NotConfigured.
-async fn deadline_unix(ctx: &Ctx) -> GatewayResult<u64> {
-    let extra = ctx.int("kyber.deadline_s")?;
-    Ok(Utc::now().timestamp() as u64 + extra)
 }

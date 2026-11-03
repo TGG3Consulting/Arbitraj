@@ -82,6 +82,7 @@ pub fn quote(
         costs,
         route: Some(route),
         signal_route: None,
+        pick: None,
         at: Utc::now(),
     })
 }

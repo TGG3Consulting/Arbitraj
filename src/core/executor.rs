@@ -106,10 +106,12 @@ async fn run(core: &Core, d: Direction) {
         serde_json::to_value(&plan).unwrap_or_default(),
         plan.profit_usd,
     );
+    // Решение 123: выбор исполнителя DEX по финальной котировке («лучший из двух») — в хронологию.
     deal.note(format!(
-        "План: объём {}, прибыль {} USDT",
+        "План: объём {}, прибыль {} USDT{}",
         plan.qty,
-        plan.profit_usd.round_dp(4)
+        plan.profit_usd.round_dp(4),
+        plan.pick_note()
     ));
     super::ledger::save(core, &deal).await;
     // Решение 66: покупка только с бюджетом подбора объёма — без него предела списания нет, сделки нет.

@@ -2,7 +2,8 @@
 //! Что делает: выбор лучшей из двух котировок одной стороны — сначала больше исполнимое количество, затем лучше итог
 //! в USDT после газа (продажа — больше получим, покупка — меньше отдадим). Газ в USDT — продажей суммы газа в BNB
 //! в пул «BNB — USDT» реестра (монета или промежуточная с тикером BNB); нет такого пула — сравнение без газа.
-//! Кто вызывает: quote/mod.rs (прямой пул против пути через промежуточную), quote/smart_quote.rs (умный против Uniswap).
+//! Кто вызывает: quote/mod.rs (прямой пул против пути через промежуточную), quote/smart_quote.rs (умный против Uniswap);
+//! gas_usdt — ещё best_of/extra.rs (решение 123).
 //! От чего зависит: quote/pool_quote.rs, pools/registry.rs, tokens.rs, num.rs.
 //! Настройки: нет своих.
 //!
@@ -41,7 +42,8 @@ pub async fn pick(q: &Quoting, a: Quote, b: Quote, side: Side, usdt_dec: u8) -> 
 }
 
 /// Затраты котировки в BNB (не в цене), переведённые в USDT по пулу «BNB — USDT» реестра. None — нет пула.
-async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
+/// Решение 123: открыта для best_of/extra.rs (газ обеих котировок «лучшего из двух»).
+pub async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
     let ctx = &q.ctx;
     let usdt = q.tokens.usdt(ctx).ok()?;
     let bnb: Decimal = x

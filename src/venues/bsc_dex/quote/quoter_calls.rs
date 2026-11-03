@@ -112,7 +112,7 @@ pub fn request(
     // Solidly (Topaz v2, THENA V1; решения 80, 85): квотер — сам пул (getAmountOut(amountIn, tokenIn); отдельного
     // квотера нет). Пул применяет комиссию getFee(pool, stable) внутри — тот же fee, что наш локальный расчёт берёт из
     // состояния. Pool.getAmountOut (velodrome-finance Pool.sol, решение 23).
-    if e.family.proto == Proto::Solidly {
+    if e.family.proto.is_solidly() {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул Solidly не того вида"));
         };
@@ -233,7 +233,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
             .map(|r| r.amountOut);
     }
     // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
-    if e.family.proto == Proto::Solidly {
+    if e.family.proto.is_solidly() {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).

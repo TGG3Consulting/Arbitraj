@@ -202,7 +202,8 @@ async fn quote_route(p: &Parts) -> DexRoute {
 }
 
 /// make(): v2_fork — graphable, tradable и fork (исполним своим роутером, 80.9b); поддержанный V2 — graphable+tradable,
-/// НЕ форк; v3_fork — пока только справочник (ни graphable, ни tradable).
+/// НЕ форк; v3_fork (решение 122 F) — в графе и сигналах, но без своего пути исполнения (graphable, НЕ tradable; шаг V3
+/// контракта-исполнителя).
 #[test]
 fn family_flags_split() {
     let fork = families::make("biswap", "v2_fork").unwrap();
@@ -217,13 +218,13 @@ fn family_flags_split() {
     );
     let v3f = families::make("some-v3-fork", "v3_fork").unwrap();
     assert!(
-        !v3f.graphable && !v3f.tradable,
-        "v3_fork пока только справочник"
+        v3f.graphable && !v3f.tradable && v3f.fork,
+        "v3_fork — в графе, сигнал, исполнение через исполнитель"
     );
 }
 
 /// classify(): V2-форк подключается в граф с фабрикой/роутером/комиссией БЕЗ Universal Router и Permit2; без роутера —
-/// не подключается; v3_fork (не graphable) — только справочник, в граф не берётся.
+/// не подключается; v3_fork без dex.pool_enabled и адресов — не подключается.
 #[tokio::test]
 async fn classify_fork_router_not_ur() {
     let p = route_common::parts().await;
@@ -265,7 +266,7 @@ async fn classify_fork_router_not_ur() {
         families::classify(&p.ctx, "biswap2").is_err(),
         "без dex.router форк не должен подключаться"
     );
-    // v3_fork — не graphable: только справочник, в граф не берётся.
+    // v3_fork (решение 122 F — graphable) без dex.pool_enabled/фабрики/TickLens/квотера не подключается.
     p.ctx
         .settings
         .set(
@@ -278,7 +279,7 @@ async fn classify_fork_router_not_ur() {
         .unwrap();
     assert!(
         families::classify(&p.ctx, "v3f").is_err(),
-        "v3_fork (не graphable) в граф не берётся"
+        "v3_fork без настроек не подключается"
     );
 }
 

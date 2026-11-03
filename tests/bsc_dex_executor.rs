@@ -171,3 +171,18 @@ async fn fresh_leg_min_never_below_worst_price_min() {
     apply_leg_min(&q.ctx, &mut leg, Decimal::from(6), 18).unwrap();
     assert_eq!(leg[0].order.min_out, e18(6), "строже свежий — ставится");
 }
+
+/// Ревью стейблсвапов: цикл (вход = выход) из двух долей не собирается — контракт исполняет цикл одной долей («loop»).
+#[tokio::test]
+async fn loop_with_two_shares_is_refused() {
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let leg = || {
+        vec![
+            step(entry(&q, CAKE_USDT_PCS), (USDT, CAKE), e18(10), e18(1)),
+            step(entry(&q, CAKE_USDT_PCS), (CAKE, USDT), e18(1), e18(10)),
+        ]
+    };
+    let why = call::build(&q.ctx, &[leg(), leg()], EXECUTOR, NOW).expect_err("цикл из двух долей");
+    assert!(why.message.contains("цикл"), "{}", why.message);
+}

@@ -175,6 +175,38 @@ fn encode_round_trips_and_rejects_bad_steps() {
     );
 }
 
+/// Ревью стейблсвапов: шаг StableSwap (CURVE / STABLE_U256 / SADDLE) с нативной монетой 0xEeee… не кодируется; в
+/// контракте — один путь _stable для всех трёх (approve → обмен → «out» → разрешение 0) и запрет цикла из долей («loop»).
+#[test]
+fn stable_native_refused_and_contract_rules_present() {
+    for params in [
+        Params::Curve { i: 0, j: 1 },
+        Params::StableU256 { i: 0, j: 1 },
+        Params::Saddle { i: 0, j: 1 },
+    ] {
+        let spec = StepSpec {
+            params,
+            pool: POOL,
+            token_in: kind::STABLE_NATIVE,
+            token_out: USDT,
+            share_bps: ALL_BPS,
+        };
+        assert!(kind::encode(&spec).is_err(), "{params:?}");
+        let ok = StepSpec {
+            token_in: WBNB,
+            ..spec
+        };
+        assert!(kind::encode(&ok).is_ok(), "{params:?}");
+    }
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/contracts/ArbExecutor.sol"
+    ))
+    .unwrap();
+    assert!(src.contains("} else if (k == CURVE || k == STABLE_U256 || k == SADDLE) {"));
+    assert!(src.contains("\"loop\")"));
+}
+
 #[test]
 fn artifacts_match_recorded_hashes() {
     let bin = code::creation().expect("код создания сверен");

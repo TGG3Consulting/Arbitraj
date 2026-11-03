@@ -166,6 +166,17 @@ async fn stable_steps_take_indices_from_state() {
     assert_eq!(p, Params::StableU256 { i: 1, j: 2 });
     let e = make("pancake_stableswap", true);
     assert!(entry::params(&c, &e, t0).is_err(), "пул на паузе / kill");
+    // Ревью стейблсвапов: монета пары — нативная 0xEeee… (BNB_ADDRESS) — отказ до отправки, у всех трёх видов.
+    for k in [
+        "pancake_stableswap",
+        "lista_stableswap",
+        "saddle_stableswap",
+    ] {
+        let mut e = make(k, false);
+        e.pool.token0 = arb::venues::bsc_dex::exec::executor::kind::STABLE_NATIVE;
+        let why = entry::params(&c, &e, e.pool.token1).expect_err("нативная монета");
+        assert!(why.message.contains("0xEeee"), "{k}: {}", why.message);
+    }
 }
 
 /// A·100 при точности 100 = сырой A при точности 1 (дословно: деления на AP точны), для D и для обмена.

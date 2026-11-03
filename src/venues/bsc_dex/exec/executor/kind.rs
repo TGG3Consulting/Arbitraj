@@ -16,6 +16,12 @@ use alloy_primitives::{Address, Bytes, U256};
 
 use super::abi::ArbExecutor;
 
+/// Нативная монета в пулах StableSwap — BNB_ADDRESS PancakeSwap Stable (pancake-smart-contracts@cb079908
+/// PancakeStableSwapTwoPool.sol L39) и Lista (moolah@eb7d73a StableSwapPool.sol L54); константа протокола, не настройка.
+/// Шаги StableSwap исполнителя её не поддерживают (контракт: require «native»).
+pub const STABLE_NATIVE: Address =
+    alloy_primitives::address!("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+
 /// Вся доля: 10000 bps = весь текущий баланс исполнителя по токену входа (константа BPS контракта).
 pub const ALL_BPS: u16 = 10_000;
 
@@ -93,7 +99,7 @@ pub struct StepSpec {
 }
 
 /// Кодирует шаг в тип ABI контракта. Принимает: шаг. Возвращает: Step. Ошибки (текст): доля вне 1…10000, токены входа и
-/// выхода совпадают, нулевой адрес — контракт отверг бы такой шаг откатом, здесь — до отправки.
+/// выхода совпадают, шаг StableSwap с нативной монетой 0xEeee…, нулевой адрес — контракт отверг бы такой шаг откатом, здесь — до отправки.
 pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
     if s.share_bps == 0 || s.share_bps > ALL_BPS {
         return Err(format!("доля шага {} bps вне 1…{ALL_BPS}", s.share_bps));
@@ -103,6 +109,16 @@ pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
     }
     if s.pool.is_zero() || s.token_in.is_zero() || s.token_out.is_zero() {
         return Err("у шага нулевой адрес пула или токена".into());
+    }
+    let stable = matches!(
+        s.params,
+        Params::Curve { .. } | Params::StableU256 { .. } | Params::Saddle { .. }
+    );
+    if stable && (s.token_in == STABLE_NATIVE || s.token_out == STABLE_NATIVE) {
+        return Err(
+            "шаг StableSwap с нативной монетой 0xEeee… — исполнитель такие шаги не поддерживает"
+                .into(),
+        );
     }
     if let Params::V2 { fee_pips } = s.params
         && fee_pips >= 1_000_000

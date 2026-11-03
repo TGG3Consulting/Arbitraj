@@ -39,7 +39,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | `V3` | 1 | PancakeSwap V3, Uniswap V3, форки V3, Slipstream (Topaz) | `pool.swap(to, zeroForOne, +сумма, MIN+1 / MAX−1, "")` + `uniswapV3SwapCallback` / `pancakeV3SwapCallback` | Uniswap/v3-core@5ea68a77 `IUniswapV3PoolActions.sol` L75-L81, `IUniswapV3SwapCallback.sol` L16; pancakeswap/pancake-v3-contracts@98684794 `IPancakeV3PoolActions.sol` L75-L81, `IPancakeV3SwapCallback.sol` L16; velodrome-finance/slipstream@193a6b85 `ICLPoolActions.sol` L131-L137, `ICLSwapCallback.sol` L16 (имя обратного вызова — `uniswapV3SwapCallback`, `CLPool.sol` L855) |
 | `ALGEBRA` | 2 | THENA Fusion (Algebra V1.9) | та же подпись `swap` + `algebraSwapCallback` | npm `@cryptoalgebra/v1.9-core@1.0.0` `IAlgebraPoolActions.sol` L96-L102, `IAlgebraSwapCallback.sol` L18 |
 | `SOLIDLY` | 3 | THENA V1 (volatile, stable) | перевод; вход = баланс − резерв; выход = `pair.getAmountOut(вход, tokenIn)`; `pair.swap(…, to, "")` | ThenafiBNB/THENA-Contracts@f5bc742e `contracts/Pair.sol` L239, L379-L413, L459; velodrome-finance/v1 `Pair.sol` L198, L338, L416 |
-| `CURVE` | 4 | Curve / Ellipsis (плоский StableSwap) | `approve(pool, сумма)` + `exchange(int128 i, int128 j, сумма, 0)`; выход — исполнителю | curvefi/curve-contract@574f4402 `SwapTemplateBase.vy` L447; ellipsis-finance/ellipsis@6bdf7788 `StableSwap.vy` L436 |
+| `CURVE` | 4 | Curve / Ellipsis (плоский StableSwap) | общий путь `_stable` (как STABLE_U256 / SADDLE): `approve(pool, сумма)` + `exchange(int128 i, int128 j, сумма, 0)`; выход — исполнителю, выход должен вырасти, затем разрешение = 0 | curvefi/curve-contract@574f4402 `SwapTemplateBase.vy` L447; ellipsis-finance/ellipsis@6bdf7788 `StableSwap.vy` L436 |
 | `DODO` | 5 | DODO V2 DVM / DPP / DSP | перевод; `_BASE_TOKEN_() == tokenIn` ? `sellBase(to)` : `sellQuote(to)` | DODOEX/contractV2@2f1bcdac `DVMTrader.sol` L41, L65; `DVMStorage.sol` L30; `DPPTrader.sol`, `DSPTrader.sol` |
 | `WOO` | 6 | WooFi WooPPV2 | перевод; `swap(from, to, сколько дошло до пула, 0, to, исполнитель)` | woonetwork/WooPoolV2@f73a0f64 `WooPPV2.sol` L152-L170, L443 |
 | `MAVERICK` | 7 | Maverick V2 | `pool.swap(to, {сумма, tokenAIn, false, int32.max / int32.min}, data≠"")` + `maverickV2SwapCallback` | maverickprotocol/v2-common@d91e8714 `IMaverickV2Pool.sol` L106-L111, L233, L361-L386; `IMaverickV2SwapCallback.sol` L10 |
@@ -53,7 +53,10 @@ Algebra V1.9, ks-elastic-sc — `TickMath.sol` L14, L16). KyberSwap Elastic от
 
 PancakeSwap Stable Swap и Lista (индексы uint256) — вид `STABLE_U256`, Nerve (Saddle: индексы uint8 и срок) — вид
 `SADDLE` (решение 122 X, стейблсвапы; Тигран 03.11: «все три, и Nerve тоже»). Нативная монета в этих пулах
-(`0xEeee…`, BNB_ADDRESS) шагом не поддерживается — `require(tokenIn/tokenOut ≠ 0xEeee…)`. Прямой вход в пул у этих
+(`0xEeee…`, BNB_ADDRESS) шагом не поддерживается — `require(tokenIn/tokenOut ≠ 0xEeee…)`; бот отказывает раньше —
+до отправки (kind.rs encode, entry.rs: монета пары пула = 0xEeee… → NoRoute). В граф такие пары и не попадают:
+пара пула — монета и встречный токен из списка бота (0xEeee… среди них нет), а загрузка пула Pancake / Lista
+читает decimals() всех монет пула — у 0xEeee… кода нет, пул не загружается. Прямой вход в пул у этих
 видов не используется: пул сам списывает вход по разрешению. Срок Saddle = `block.timestamp`: срок всей транзакции
 уже проверен в начале `execute`.
 PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) исполнитель не вызывает — только свой Universal Router.
@@ -73,8 +76,9 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 | Старая транзакция исполнилась поздно | `deadline` (бот — время блока + `dex.deadline_s`) и minOut |
 | Прямой вход переводит деньги владельца в чужой адрес | Только внутри `execute` владельца, только в `pool` первого шага, только `amountIn` (сумма вызова) и только для видов, где пул сам меряет вход по балансу (V2/Solidly — баланс − резерв; DODO — баланс − резерв; WooPPV2 — прирост баланса, измеренный исполнителем); недобор выхода — откат всего по minOut. Цикл (`tokenIn = tokenOut`) прямой вход не использует: итог меряется после забора входа |
 | Разрешение `approve` пулу Curve осталось | `approve` ровно на сумму шага; `exchange` списывает её целиком (`transferFrom(msg.sender, pool, dx)` у Curve/Ellipsis) |
+| Цикл (`tokenIn = tokenOut`) из нескольких долей: выход CURVE / STABLE_U256 / SADDLE остаётся на исполнителе тем же токеном и посчитался бы входом следующей доли (её bps — от остатка) | Цикл — ровно одна доля: `require(«loop»)` — вход маршрута берёт только шаг 0 и целиком (10000 bps), ни один следующий шаг не берёт `tokenIn` маршрута. Выбрано вместо пересылки выхода этих видов на `to`: одна проверка, поток денег не меняется, нет лишнего перевода (и второго налога токена на выходе). Бот такой маршрут не собирает (call.rs: цикл из > 1 доли — отказ) |
 | Разрешение пулу STABLE_U256 / SADDLE осталось или потрачено чужим | `approve` только пулу ТЕКУЩЕГО шага (адрес задал владелец в этом вызове) ровно на сумму шага; пул списывает `dx` целиком (`safeTransferFrom(msg.sender, this, dx)` у Pancake / Lista / Saddle); после шага исполнитель читает `allowance` и, если не 0, ставит 0 — разрешений после транзакции не остаётся. Пул обратно исполнитель не вызывает (у этих видов нет обратного вызова; `_pay` пускает только `expPool`, а он у этих видов 0) |
-| Пул STABLE_U256 / SADDLE ничего не отдал | `require(баланс исполнителя по tokenOut вырос)` — «out»; итог всё равно меряется у кошелька по minOut |
+| Пул CURVE / STABLE_U256 / SADDLE ничего не отдал | `require(баланс исполнителя по tokenOut вырос)` — «out»; итог всё равно меряется у кошелька по minOut |
 | Сэндвич / MEV | Внутри шагов минимумов нет (как у роутеров с одним итоговым минимумом); итог защищён minOut, отправка — приватными каналами (решение 41) |
 
 Ограничения v1 (не риск потери, а отказ/откат): налоговый токен на входе V3/Algebra/Elastic/Maverick откатится (пул

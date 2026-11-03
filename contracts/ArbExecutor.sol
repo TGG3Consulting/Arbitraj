@@ -68,7 +68,9 @@ contract ArbExecutor {
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
     // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
-    // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора).
+    // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
+    // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
+    // на исполнитель (CURVE / STABLE_U256 / SADDLE) — тот же токен — посчитался бы входом следующей доли (ревью).
     function execute(
         address tokenIn,
         uint256 amountIn,
@@ -87,7 +89,11 @@ contract ArbExecutor {
             _call(tokenIn, abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amountIn)));
         }
         uint256 before = IERC20(tokenOut).balanceOf(msg.sender);
+        bool loop = tokenIn == tokenOut;
         for (uint256 i = 0; i < steps.length; ++i) {
+            if (loop) {
+                require(i == 0 ? steps[0].tokenIn == tokenIn && steps[0].shareBps == BPS : steps[i].tokenIn != tokenIn, "loop");
+            }
             address to = steps[i].tokenOut == tokenOut ? msg.sender : address(this);
             _step(steps[i], to, i == 0 && direct ? amountIn : 0);
         }
@@ -130,11 +136,7 @@ contract ArbExecutor {
             IMaverickV2Pool.SwapParams memory p =
                 IMaverickV2Pool.SwapParams(amount, aIn, false, aIn ? type(int32).max : type(int32).min);
             IMaverickV2Pool(s.pool).swap(to, p, abi.encode(s.tokenIn)); // непустые data — иначе пул не зовёт оплату
-        } else if (k == CURVE) {
-            (int128 i, int128 j) = abi.decode(s.data, (int128, int128));
-            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount))); // ровно на шаг
-            ICurvePool(s.pool).exchange(i, j, amount, 0); // выход — исполнителю (msg.sender пула), затем _sweep
-        } else if (k == STABLE_U256 || k == SADDLE) {
+        } else if (k == CURVE || k == STABLE_U256 || k == SADDLE) {
             _stable(s, amount);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -151,14 +153,17 @@ contract ArbExecutor {
         expPool = address(0);
     }
 
-    // StableSwap с индексами uint256 (Pancake, Lista) и Saddle (Nerve): approve пулу ровно на шаг, пул сам списывает
+    // StableSwap — Curve / Ellipsis (int128), с индексами uint256 (Pancake, Lista) и Saddle (Nerve): approve пулу ровно на шаг, пул сам списывает
     // transferFrom(исполнитель, пул, dx); выход — исполнителю (msg.sender пула), затем _sweep; выход должен вырасти.
     // Срок Saddle — block.timestamp (срок всей транзакции уже проверен в execute). Разрешение после шага — 0.
     function _stable(Step calldata s, uint256 amount) internal {
         require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
         _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
         uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
-        if (s.kind == STABLE_U256) {
+        if (s.kind == CURVE) {
+            (int128 i, int128 j) = abi.decode(s.data, (int128, int128));
+            ICurvePool(s.pool).exchange(i, j, amount, 0);
+        } else if (s.kind == STABLE_U256) {
             (uint256 i, uint256 j) = abi.decode(s.data, (uint256, uint256));
             IStableSwapU256(s.pool).exchange(i, j, amount, 0);
         } else {

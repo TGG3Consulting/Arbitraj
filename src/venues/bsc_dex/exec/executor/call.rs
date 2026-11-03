@@ -70,6 +70,15 @@ pub fn build(
         return Err(ctx.err(ErrorCode::NoRoute, "исполнитель: доля без шагов"));
     }
     let (token_in, token_out) = (first.order.token_in, last.order.token_out);
+    // Ревью стейблсвапов: цикл (вход = выход) — одна доля, как требует контракт («loop»): иначе выход вида с выходом на
+    // исполнитель (CURVE / STABLE_U256 / SADDLE) посчитался бы входом следующей доли.
+    if token_in == token_out && legs.len() > 1 {
+        let why = format!(
+            "исполнитель: цикл (вход = выход) из {} долей — контракт исполняет цикл только одной долей",
+            legs.len()
+        );
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
     let same =
         |(a, b): &(&Step, &Step)| a.order.token_in == token_in && b.order.token_out == token_out;
     if !ends.iter().all(same) {

@@ -23,7 +23,7 @@ use super::super::super::pools::exec_kind::ExecKind;
 use super::super::super::pools::families::Family;
 use super::super::super::pools::registry::Entry;
 use super::super::super::quote::pool_quote;
-use super::kind::Params;
+use super::kind::{Params, STABLE_NATIVE};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
@@ -68,13 +68,20 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
 
 /// Индексы шага StableSwap (CURVE, STABLE_U256, SADDLE): i — монета входа, j — выхода. Принимает: пул реестра, вид,
 /// токен входа. Возвращает: параметры шага или причину (состояние не StableSwap; обмены пула остановлены — пауза /
-/// kill / сбой проверки цены Lista; токен входа не token0/token1 пула).
+/// kill / сбой проверки цены Lista; монета пары — нативная 0xEeee…; токен входа не token0/token1 пула).
 fn stable(e: &Entry, k: ExecKind, token_in: Address) -> Result<Params, String> {
     let PoolState::StableSwap(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
     };
     if d.halted {
         return Err(format!("{}: обмены пула остановлены", e.family.id));
+    }
+    // Нативная монета пула (BNB_ADDRESS 0xEeee…): шаги StableSwap исполнителя её не поддерживают — отказ до отправки.
+    if [e.pool.token0, e.pool.token1].contains(&STABLE_NATIVE) {
+        return Err(format!(
+            "{}: монета пары — нативная 0xEeee… (BNB_ADDRESS пула), исполнитель такой шаг не поддерживает",
+            e.family.id
+        ));
     }
     let (i, j) = if token_in == e.pool.token0 {
         (d.i0, d.i1)

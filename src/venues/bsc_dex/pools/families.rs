@@ -425,8 +425,15 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.tick_radius",
         ]),
         // Infinity Stable (решение «122 (Infinity Stable)»): менеджер CL (ключ пула poolIdToPoolKey, события Initialize),
-        // Vault (там лежат токены пула — держатель для проб налога), список крючков пулов. Квотер — сам крючок (get_dy).
-        Proto::InfinityStable => list.extend(["dex.pool_manager", "dex.vault", "dex.stable_hooks"]),
+        // Vault (там лежат токены пула — держатель для проб налога), список крючков пулов.
+        // Квотер сверки — CLQuoter Infinity (dex.quoter, основной) и get_dy крючка (дополнительный) — решение
+        // «122 (Infinity Stable, ответы)».
+        Proto::InfinityStable => list.extend([
+            "dex.pool_manager",
+            "dex.vault",
+            "dex.stable_hooks",
+            "dex.quoter",
+        ]),
     }
     list
 }

@@ -85,10 +85,9 @@ pub fn request(
     }
     // StableSwap (Ellipsis; решение 122 F): квотер — сам пул get_dy(i, j, dx) (StableSwap.vy L405-L416; индексы
     // монет пары — из состояния). При rates ≠ 1e18 get_dy округляет комиссию иначе, чем exchange (math/stableswap_v1).
-    // Infinity Stable (решение «122 (Infinity Stable)»): квотер — сам крючок get_dy(int128, int128, uint256) — тот же
-    // селектор (abi_inf_stable.rs; verified-код L1188-L1199: считает views-контракт фабрики, его код не проверен —
-    // расхождение с математикой _exchange_received ловит сверка, dex.quoter_max_diff_pct).
-    if matches!(e.family.proto, Proto::CurveStable | Proto::InfinityStable) {
+    // Infinity Stable (решение «122 (Infinity Stable, ответы)»): ОСНОВНОЙ квотер — CLQuoter Infinity (dex.quoter) с ключом
+    // пула (ветка PoolKey::Infinity ниже: настоящий swap с крючком); get_dy крючка — дополнительный (quote/quoter_extra.rs).
+    if e.family.proto == Proto::CurveStable {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
         };
@@ -331,8 +330,11 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto == Proto::Maverick {
         return super::quoter_maverick::decode(out);
     }
-    // StableSwap (все шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).
-    if e.family.proto.is_stable() || e.family.proto == Proto::WooPP {
+    // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
+    // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).
+    if (e.family.proto.is_stable() && e.family.proto != Proto::InfinityStable)
+        || e.family.proto == Proto::WooPP
+    {
         return IStableSwapV1::get_dyCall::abi_decode_returns(out).ok();
     }
     // Slipstream (Topaz v3): первое возвращаемое значение — amountOut (как Uni V3 QuoterV2).

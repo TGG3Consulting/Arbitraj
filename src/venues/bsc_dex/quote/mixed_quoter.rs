@@ -3,7 +3,8 @@
 //! монету: paths = токены по порядку, действие и параметры на каждый пул) по MixedQuoter PancakeSwap
 //! (quoteMixedExactInput, eth_call на «latest») против локального расчёта доли. Квотер исполняет настоящий обмен
 //! (с крючками) и откатывается внутри, поэтому локальный выход сравнивается с учётом влияния крючка.
-//! Расхождение больше dex.quoter_max_diff_pct хотя бы у одной доли — сделки нет.
+//! Расхождение больше dex.quoter_max_diff_pct хотя бы у одной доли — сделки нет. Шаг Infinity Stable — ещё сверка с
+//! get_dy крючка параллельно (quote/quoter_extra.rs, решение «122 (Infinity Stable, ответы)»).
 //! Кто вызывает: exec/trade_smart.rs.
 //! От чего зависит: node/call.rs, pools/registry.rs, pools/key.rs, quote/quoter.rs (diff_pct).
 //! Настройки: smart.mixed_quoter, dex.quoter_max_diff_pct [bsc_dex].
@@ -60,7 +61,27 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<()> {
         .iter()
         .map(|l| request(ctx, l.path))
         .collect::<GatewayResult<Vec<_>>>()?;
-    let outs = call::view_many(ctx, to, &calls, "latest").await?;
+    // Решение «122 (Infinity Stable, ответы)»: шаги Infinity Stable — ещё get_dy крючка на свой вход (дополнительный
+    // квотер, quote/quoter_extra.rs), параллельно с MixedQuoter (основной: действие INFI_CL — swap с крючком).
+    let extras = legs.iter().flat_map(|l| l.path.hops.iter()).map(|h| {
+        super::quoter_extra::check(
+            ctx,
+            &h.entry,
+            h.token_in,
+            h.swapped.amount_in,
+            h.swapped.amount_out,
+        )
+    });
+    let (outs, extras) = tokio::join!(
+        call::view_many(ctx, to, &calls, "latest"),
+        futures_util::future::join_all(extras)
+    );
+    for r in extras {
+        if let Err(why) = r? {
+            return Err(ctx.err(ErrorCode::QuoteMismatch, why));
+        }
+    }
+    let outs = outs?;
     for (l, out) in legs.iter().zip(outs) {
         let last = l
             .path

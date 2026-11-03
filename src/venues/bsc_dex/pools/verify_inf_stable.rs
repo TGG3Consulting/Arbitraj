@@ -5,6 +5,8 @@
 //! списке dex.stable_hooks этой DEX, в parameters включены beforeSwap и beforeSwapReturnsDelta (обмен идёт крючком),
 //! валюты — монета и встречный токен. Ссылка на пул — адрес крючка (там состояние, события и квотер), ключ — для обмена.
 //! Сам крючок (pool_manager(), N_COINS, coins) сверяется при каждом чтении состояния (load_inf_stable.rs).
+//! claimed — крючок занят видом Infinity Stable: вид Infinity CL такой пул не берёт (решение «122 (Infinity Stable,
+//! ответы)»; зовут pools/verify_v4.rs, pools/discover_v4.rs, quote/select.rs).
 //! Кто вызывает: pools/verify.rs (ветка Proto::InfinityStable), pools/discover_v4.rs (история и новые пулы Initialize).
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_check.rs, abi_inf_stable.rs, key.rs, discover.rs.
 //! Настройки: dex.pool_manager, dex.stable_hooks [DEX].
@@ -149,6 +151,23 @@ pub fn found(ctx: &Ctx, f: &'static Family, key: InfinityPoolKeyData) -> Result<
         hooks: None,
         key: Some(PoolKey::Infinity(key)),
     })
+}
+
+/// Крючок в dex.stable_hooks ЛЮБОЙ DEX вида Infinity Stable (решение «122 (Infinity Stable, ответы)», Тигран: один пул —
+/// одна математика): такой пул не берётся видом Infinity CL ни в поиске, ни в проверке, ни в котировке. Ошибок нет
+/// (список не задан или не читается — крючок не занят).
+pub fn claimed(ctx: &Ctx, hook: Address) -> bool {
+    super::families::all(ctx)
+        .into_iter()
+        .filter(|f| f.proto == super::families::Proto::InfinityStable)
+        .any(|f| listed(ctx, f, hook).unwrap_or(false))
+}
+
+/// Причина отказа виду Infinity CL по занятому крючку (одна формулировка для поиска, проверки и котировки). Ошибок нет.
+pub fn claimed_reason(hook: Address) -> String {
+    format!(
+        "крючок {hook:#x} — пул Infinity Stable (dex.stable_hooks): видом Infinity CL не берётся (одна математика на пул)"
+    )
 }
 
 /// Крючок в dex.stable_hooks DEX. Ошибки (текст): список не задан или не читается.

@@ -43,7 +43,7 @@ determined by the KyberSwap Aggregator algorithm»). Страницу специ
 | Свой роутер форков | `exec/fork_swap.rs` (classic V2 Router, `swapExactTokensForTokensSupportingFeeOnTransferTokens`) — только бандлом | 🟡 | Требует, чтобы все готовые каналы были бандловыми (🟠3) | Проверить каналы |
 | approve на роутер | Permit2: `wallet/approve.rs` (ERC-20 → Permit2, Permit2 → UR), кэш `wallet/allow_cache.rs`; форк — прямой ERC-20 approve | 🟡 (только симуляция) | После 01.11 разрешения давались роутеру KyberSwap, а не Permit2. Первая своя сделка по каждой монете отправит 2 approve и столкнётся с устаревшим маршрутом (🟠2) | Исправить порядок (🟠2) |
 | minAmountOut (`slippageTolerance`) | `exec/order.rs`: минимум = max(по худшей цене, ожидание × (1 − `exec.dex_slippage_pct`)) + `BALANCE_CHECK_ERC20` в той же транзакции (решение 40); минимум 0 не отправляется | 🟡 | — | — |
-| deadline | `dex.deadline_s` (`plan.rs`); значение должно быть **больше 12 с** — шаг времени симуляции BSC (`check/simulate.rs:83-84`) | 🟡 | Меньше 12 с — каждая проба падает StaleData | Проверить значение |
+| deadline | `dex.deadline_s` (`plan.rs`); ~~больше 12 с~~ — снято решением 127 (симулированный блок — голова + 1 с у всех проб) | ✅ | — | Совет 3–6 с (docs/SETTINGS.md) |
 | Симуляция перед отправкой | `exec/precheck_sim.rs` (eth_simulateV1 + «кто менял», решение 59), `bundle_send.rs` (весь бандл), `eth_estimateGas` в `send/tx.rs:87` | 🟡 | — | — |
 | Факт по логам Transfer | `exec/result.rs`, `exec/fill.rs`; BNB — Deposit/Withdrawal WBNB | 🟡 | Ни на одном живом свопе не проверено | Сверить первые сделки вручную с BscScan |
 | Налоги токена | Проба налогов своей симуляцией (`check/probe.rs`, `taxes*.rs`) | ✅ (живой бот) | — | — |
@@ -183,7 +183,7 @@ SETTINGS.md, секрет, `final_gate` переименовать или убр
 **Шаг 2. Настройки в интерфейсе** (вручную, кликами):
 - `exec.via_kyber` = нет; `kyber.final_gate_usd` — пусто или 0;
 - `dex.router_mode` = graph; `dex.swap_mode` — как сейчас;
-- `exec.dex_slippage_pct`, `dex.deadline_s` (больше 12 с), `dex.approve_unlimited`, `dex.permit2_expiration_s`;
+- `exec.dex_slippage_pct`, `dex.deadline_s` (3–6 с, решение 127), `dex.approve_unlimited`, `dex.permit2_expiration_s`;
 - у каждого исполняемого DEX — `dex.universal_router`, `dex.universal_router_version`, `dex.permit2`; `smart.*`,
   `smart.mixed_quoter`;
 - `dex.quoter_max_diff_pct`, `verify.max_price_drift_pct` (с запасом, 🟠4), `verify.max_staleness_blocks`,

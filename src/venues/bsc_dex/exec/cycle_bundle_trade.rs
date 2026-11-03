@@ -10,7 +10,7 @@
 //! Бандл не попал в блок — истекает по maxBlockNumber, газа нет, nonce свободны (решение 84). Повторов нет.
 //! Кто вызывает: exec/cycle_trade.rs.
 //! От чего зависит: exec/{cycle_bundle, cycle_steps, bundle_sim, bundle_send, bundle_trade, bundle_notify}.rs,
-//! check/{simulate, probe_calls}.rs, wallet/nonce.rs.
+//! check/{simulate, sim_base, probe_calls}.rs, wallet/nonce.rs.
 //! Настройки: send.gas_limit_margin_pct [bsc_dex]; через вызываемые — send.*, channel.*, dex.*, dex_dex.min_profit_usd.
 
 use alloy_primitives::{Address, U256};
@@ -20,7 +20,8 @@ use crate::core::types::{CycleTradeRequest, CycleTradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::check::probe_calls as pc;
-use super::super::check::simulate;
+use super::super::check::sim_base;
+use super::super::check::simulate::{self, Base};
 use super::super::ctx::Ctx;
 use super::super::num;
 use super::super::pools::registry::Entry;
@@ -52,7 +53,8 @@ pub async fn trade(
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let first_nonce = slot.nonce(ctx).await?;
-    let (at, now) = q.heads.at(ctx).await?;
+    // Решение 127: срок бандла и замер — от одной головы; симулированный блок на 1 с позже (check/sim_base.rs).
+    let (at, now) = sim_base::head(ctx, &q.heads).await?;
     let at4 = (wallet, first_nonce, now, false);
     let a = cycle_bundle::build_floor(ctx, &legs, (req.input, floor), at4).await?;
     let (out, gas) = measure(ctx, &a.bundle, wallet, base, at, (req.input, dec)).await?;
@@ -76,14 +78,14 @@ pub async fn trade(
 }
 
 /// Своя симуляция бандла: баланс базовой у кошелька до первой и после последней транзакции, газ всех транзакций.
-/// Принимает: бандл, кошелёк, базовую, блок, (вход, decimals базовой). Возвращает: выход цикла (вход + прирост базовой)
+/// Принимает: бандл, кошелёк, базовую, базовый блок (голова + 1 с, решение 127), (вход, decimals базовой). Возвращает: выход цикла (вход + прирост базовой)
 /// и газ. Ошибки: NoRoute (откат, итог меньше границы — выход ниже входа), BadResponse, узел.
 pub async fn measure(
     ctx: &Ctx,
     b: &Bundle,
     wallet: Address,
     base: Address,
-    at: u64,
+    at: Base,
     (input, dec): (Decimal, u8),
 ) -> GatewayResult<(Decimal, u64)> {
     let plan = build_sim(b, wallet);

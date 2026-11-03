@@ -2,7 +2,10 @@
 //! Что делает: eth_simulateV1 — последовательность вызовов в одном блоке поверх состояния заданного блока, без
 //! транзакций в сети и без подписи (validation = false): так меряются налоги и газ пробным обменом (решение 30).
 //! Подмена состояния (stateOverrides, run_with) — сухая сделка через неразвёрнутый исполнитель (решение 122, часть X).
-//! Кто вызывает: check/probe.rs, exec/precheck_sim.rs, exec/dry_sim.rs, exec/executor/sim.rs.
+//! Время симулированного блока (решение 127): у всех проб перед отправкой и проб налогов — голова + 1 с
+//! (check/sim_base.rs head → blockOverrides.time), а не +12 с узла BSC; без времени — только проверка поддержки метода.
+//! Кто вызывает: check/{probe, native_probe, service_tax}.rs, exec/{precheck_sim, bundle_send, cycle_bundle_trade,
+//! cycle_exec, dry_sim}.rs, exec/executor/sim.rs.
 //! От чего зависит: node/rpc.rs, ctx.rs, check/sim_base.rs (Base — номер и время базового блока).
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
@@ -124,6 +127,40 @@ pub async fn run_with(
     base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
     let base = base.into();
+    let blocks: Vec<BlockResult> = rpc::call(
+        ctx,
+        "eth_simulateV1",
+        params(calls, values, overrides, base),
+    )
+    .await?;
+    let out = blocks
+        .into_iter()
+        .next()
+        .map(|b| b.calls)
+        .unwrap_or_default();
+    if out.len() != calls.len() {
+        return Err(ctx.err(
+            ErrorCode::BadResponse,
+            format!(
+                "eth_simulateV1: вызовов {}, итогов {}",
+                calls.len(),
+                out.len()
+            ),
+        ));
+    }
+    Ok(out)
+}
+
+/// Параметры запроса eth_simulateV1: [EthSimulatePayload, номер базового блока] (execution-apis 16caee27
+/// src/eth/execute.yaml#L137-L160). Время задано (Base::timed, решение 127) — blockStateCalls[0].blockOverrides.time
+/// (hex-секунды, src/schemas/execute.yaml#L100-L117). Принимает: вызовы, суммы BNB, подмены, базовый блок.
+/// Возвращает: массив параметров. Ошибок нет (чистая функция — проверяется тестом tests/bsc_dex_sim_time.rs).
+pub fn params(
+    calls: &[Call],
+    values: &[(usize, U256)],
+    overrides: &[Override],
+    base: Base,
+) -> serde_json::Value {
     let list: Vec<_> = calls
         .iter()
         .enumerate()
@@ -154,26 +191,5 @@ pub async fn run_with(
         block["blockOverrides"] = json!({ "time": U64::from(t) });
     }
     let payload = json!({ "blockStateCalls": [block], "validation": false });
-    let blocks: Vec<BlockResult> = rpc::call(
-        ctx,
-        "eth_simulateV1",
-        json!([payload, block_tag(base.number)]),
-    )
-    .await?;
-    let out = blocks
-        .into_iter()
-        .next()
-        .map(|b| b.calls)
-        .unwrap_or_default();
-    if out.len() != calls.len() {
-        return Err(ctx.err(
-            ErrorCode::BadResponse,
-            format!(
-                "eth_simulateV1: вызовов {}, итогов {}",
-                calls.len(),
-                out.len()
-            ),
-        ));
-    }
-    Ok(out)
+    json!([payload, block_tag(base.number)])
 }

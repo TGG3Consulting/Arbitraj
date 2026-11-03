@@ -195,7 +195,8 @@ pub async fn build(
         coins,
         usdt: paid,
         form,
-        at: at.into(),
+        // Решение 127: прямой, умный и графовый (бандл) — голова + 1 с, как исполнитель (раньше +12 с узла BSC).
+        at: Base::timed(at, now),
     })
 }
 

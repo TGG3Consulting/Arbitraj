@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/exec/bundle_send.rs
 //! Что делает: отправка собранного бандла свопов (exec/bundle.rs, решение 84). Вызывается боевым путём графа
 //! (exec/bundle_trade.rs) с местом в очереди кошелька Slot. Шаги: (1) симуляция всего упорядоченного бандла
-//! eth_simulateV1 на своём узле (check/simulate.rs) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
+//! eth_simulateV1 на своём узле (check/simulate.rs; время блока — голова + 1 с, решение 127) — видит эффект ноги N на ногу N+1 (межтранзакционная передача) и
 //! валидирует порядок; откат любого шага → не отправляем; попутно газ и кумулятивные базы BALANCE_CHECK (exec/bundle_sim.rs);
 //! (1б) продажа BNB (решение 122 R3) — резерв на газ не тратится (exec/bundle_native.rs::reserve_ok);
 //! (2) проверка «кто меняет» (решение 59) по событиям симуляции — чужой пул исключается; (3) цена газа — как у одиночной;
@@ -29,8 +29,8 @@ use crate::core::types::TxOutcome;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency as priority;
 
-use super::super::check::emitter;
 use super::super::check::simulate::{self, SimLog};
+use super::super::check::{emitter, sim_base};
 use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
@@ -79,7 +79,8 @@ pub async fn send(
         .wei(ctx, &env.heads)
         .await?
         .max(send::gas_floor(&ready));
-    let (at, _now) = env.heads.at(ctx).await?;
+    // Решение 127: симулированный блок — время головы + 1 с (check/sim_base.rs), срок бандла dex.deadline_s не раздувается.
+    let (at, _now) = sim_base::head(ctx, &env.heads).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;
     // Одна симуляция всего упорядоченного бандла: газ, кумулятивные базы BALANCE_CHECK и события обмена.
     // Уведомления (bundle.simulated / bundle.sim_reverted) — только отображение, тот же исход/ошибка пробрасывается.

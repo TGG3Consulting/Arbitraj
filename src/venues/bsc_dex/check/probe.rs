@@ -10,7 +10,7 @@
 //! разрешения и продажа остатка (газ продажи). В покупке и продаже проверяется, что обмен сделал сам этот пул
 //! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике.
 //! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/plan.rs, exec/fork_swap.rs,
+//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/emitter.rs, exec/plan.rs, exec/fork_swap.rs,
 //! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
 //! Настройки: через вызываемые; dex.vault [Infinity] — где лежат токены пулов Infinity.
 //!
@@ -37,6 +37,7 @@ use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
 use super::emitter;
 use super::probe_calls as pc;
+use super::sim_base;
 use super::simulate::{self, Call};
 
 /// Что измерено (в минимальных единицах; проценты считает taxes.rs).
@@ -71,8 +72,10 @@ pub async fn run(
     let (usdt, coin) = (e.usdt, e.coin);
     let holder = pc::holder(ctx, e)?;
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
-    // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61).
-    let (at, now) = heads.at(ctx).await?;
+    // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61);
+    // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
+    // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
+    let (at, now) = sim_base::head(ctx, heads).await?;
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -156,7 +159,7 @@ pub async fn run(
     let all = simulate::run(ctx, &list, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
-            "TransactionDeadlinePassed: срок транзакции меньше шага времени симулированного блока (у BSC +12 с к базовому, check/simulate.rs) — увеличьте dex.deadline_s: {}",
+            "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
             r.why()
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));

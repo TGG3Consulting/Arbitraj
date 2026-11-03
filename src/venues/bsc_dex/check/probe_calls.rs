@@ -64,7 +64,7 @@ pub fn buy_revert(ctx: &Ctx, i: usize, r: &CallResult, quoter: usize) -> Gateway
     // Срок транзакции вышел (TransactionDeadlinePassed) — не свойство монеты: не проверено, повтор (не чёрный список).
     if late(r) {
         let m = format!(
-            "{why} — TransactionDeadlinePassed: срок транзакции меньше шага времени симулированного блока (у BSC +12 с к базовому, check/simulate.rs) — увеличьте dex.deadline_s"
+            "{why} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла"
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));
     }
@@ -76,8 +76,8 @@ pub fn buy_revert(ctx: &Ctx, i: usize, r: &CallResult, quoter: usize) -> Gateway
     Ok(why)
 }
 
-/// Откат «срок транзакции вышел» (TransactionDeadlinePassed): не вердикт по монете — срок меньше шага времени
-/// симулированного блока (настройка), проверка «не проверено».
+/// Откат «срок транзакции вышел» (TransactionDeadlinePassed): не вердикт по монете — голова устарела к симуляции или
+/// dex.deadline_s меньше шага времени симулированного блока (1 с, решение 127), проверка «не проверено».
 /// Принимает: результат вызова. Ошибок нет.
 pub fn late(r: &CallResult) -> bool {
     let msg = r

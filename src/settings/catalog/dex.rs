@@ -114,7 +114,7 @@ pub static DEX: &[SettingDef] = &[
     d("DEX", "dex.bin_depth_usd", K::Decimal, L::Positive, "USDT", V, "Bin: на какую глубину в USDT читать бины в обе стороны от активного"),
     d("DEX", "dex.quoter_max_diff_pct", K::Decimal, L::Percent, "%", V, "Расхождение расчёта с квотером / eth_call больше — стоп по пулу, сделки нет"),
     d("DEX", "dex.quoter_check_s", K::Integer, L::Positive, "секунды", V, "Как часто сверять локальный расчёт пулов с квотером"),
-    d("DEX", "dex.deadline_s", K::Integer, L::Positive, "секунды", V, "Срок жизни транзакции обмена (deadline роутера)"),
+    d("DEX", "dex.deadline_s", K::Integer, L::Positive, "секунды", V, "Срок жизни транзакции обмена (deadline роутера и исполнителя) от времени головы сети; проба перед отправкой — блок головы + 1 с (решение 127), советуем 3–6 с"),
     d("DEX", "dex.approve_unlimited", K::Bool, L::None, "да/нет", V, "Разрешение (approve) на максимальную сумму один раз; нет — на сумму каждой сделки"),
     d("DEX", "dex.permit2_expiration_s", K::Integer, L::Positive, "секунды", V, "Срок разрешения Permit2 → Universal Router"),
     d("Умный режим", "smart.universal_router", K::Address, L::None, "адрес", V, "Universal Router PancakeSwap Infinity, исполнитель умного маршрута (решение 38)"),

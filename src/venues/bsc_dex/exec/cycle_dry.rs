@@ -94,7 +94,12 @@ async fn fill(
             let a =
                 cycle_bundle::build_floor(ctx, &legs, (req.input, floor), (wallet, 0, now, false))
                     .await?;
-            (Built::Many(a.bundle), Base::from(at), Form::Bundle.text())
+            // Решение 127: бандл — тоже голова + 1 с, как исполнитель (раньше +12 с узла BSC).
+            (
+                Built::Many(a.bundle),
+                Base::timed(at, now),
+                Form::Bundle.text(),
+            )
         }
         _ => {
             let deployed = executor::address(ctx)?;

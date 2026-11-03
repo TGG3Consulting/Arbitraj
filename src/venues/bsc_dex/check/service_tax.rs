@@ -14,7 +14,7 @@
 //! Нет пула-источника — повтор по «пул готов»; сбой узла, не задана настройка — через tax.retry_s; известен —
 //! перепроверка раз в tax.recheck_interval_s.
 //! Кто вызывает: pools/market.rs (задача подписки, класс Check очереди узла).
-//! От чего зависит: check/service_tax_calls.rs (вызовы, разбор), check/simulate.rs, check/taxes_util.rs, check/state.rs,
+//! От чего зависит: check/service_tax_calls.rs (вызовы, разбор), check/simulate.rs, check/sim_base.rs (время блока), check/taxes_util.rs, check/state.rs,
 //! quote/select.rs, wallet/signer.rs, tokens.rs, node/heads.rs, pools/listen.rs (Pools), num.rs.
 //! Настройки: venue.quote_asset, check.probe_usdt [bsc_dex], tax.recheck_interval_s, tax.retry_s.
 //!
@@ -158,7 +158,10 @@ async fn measure(p: &Pools) -> GatewayResult<Option<TokenTaxes>> {
     else {
         return Ok(None);
     };
-    let (at, _) = p.heads.at(ctx).await?;
+    // Срока у переводов нет, но время блока — то же, что у всех проб (решение 127, check/sim_base.rs): налог токена
+    // может зависеть от block.timestamp (антибот-окна, налог «первые N секунд»), мерить его надо при времени, близком
+    // к реальному блоку сделки, а не +12 с узла BSC; и проба пулов/переводов идёт на одной и той же модели времени.
+    let (at, _) = super::sim_base::head(ctx, &p.heads).await?;
     let r = simulate::run(ctx, &calls(usdt, source, wallet, amount), at).await?;
     let (taxes, gas) = read(&r, amount, dec)
         .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{ticker}: {why}")))?;

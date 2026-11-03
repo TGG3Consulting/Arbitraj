@@ -5,7 +5,7 @@
 //! Чужой пул — пул исключается, сделки нет. Проба откатилась — сделки нет (с текстом узла); откат «срок транзакции
 //! вышел» — StaleData (наша помеха, не свойство пула).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs.
-//! От чего зависит: check/simulate.rs, check/emitter.rs, exec/plan.rs (Plan), wallet/balances.rs, pools/registry.rs.
+//! От чего зависит: check/simulate.rs (Base — голова + 1 с, решение 127), check/emitter.rs, exec/plan.rs (Plan), wallet/balances.rs, pools/registry.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! eth_simulateV1 — execution-apis 16caee27 src/eth/execute.yaml#L137-L260 (CallResult.logs).
@@ -13,16 +13,17 @@
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::check::emitter;
-use super::super::check::simulate::{self, Call};
+use super::super::check::simulate::{self, Base, Call};
 use super::super::ctx::Ctx;
 use super::super::pools::registry::Entry;
 use super::super::wallet::balances;
 use super::plan::Plan;
 use super::ur;
 
-/// Проба плана. Принимает: план (разрешения + обмен), пулы маршрута, номер блока, по времени которого считан срок. Ошибки: NoRoute (обмен не в пулах маршрута —
-/// пулы исключены; проба откатилась), узел.
-pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry], at: u64) -> GatewayResult<()> {
+/// Проба плана. Принимает: план (разрешения + обмен), пулы маршрута, базовый блок — голова, по времени которой считан
+/// срок, симулированный блок на 1 с позже (check/sim_base.rs head, решение 127). Ошибки: NoRoute (обмен не в пулах
+/// маршрута — пулы исключены; проба откатилась), StaleData (срок вышел), узел.
+pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry], at: Base) -> GatewayResult<()> {
     let base = balances::token_units(ctx, p.token_out, p.wallet).await?;
     let mut calls: Vec<Call> = p
         .approvals
@@ -47,11 +48,12 @@ pub async fn emitters(ctx: &Ctx, p: &Plan, entries: &[&Entry], at: u64) -> Gatew
             .as_ref()
             .map(|e| e.message.as_str())
             .unwrap_or_default();
-        // Срок транзакции вышел (TransactionDeadlinePassed): время плана устарело в очереди узла — это наша помеха,
-        // не свойство пула или монеты: StaleData (сделки нет, пулы не исключаются, монета не в чёрный список).
+        // Срок транзакции вышел (TransactionDeadlinePassed): симулированный блок — голова + 1 с (решение 127), значит
+        // голова устарела в очереди узла или dex.deadline_s < 1 — наша помеха, не свойство пула или монеты: StaleData
+        // (сделки нет, пулы не исключаются, монета не в чёрный список).
         if ur::deadline_passed(&r.return_data, text) {
             let msg = format!(
-                "проба сделки перед отправкой: шаг {i} — TransactionDeadlinePassed: срок транзакции меньше шага времени симулированного блока (у BSC +12 с к базовому, check/simulate.rs) — увеличьте dex.deadline_s: {}",
+                "проба сделки перед отправкой: шаг {i} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
                 r.why()
             );
             return Err(ctx.err(ErrorCode::StaleData, msg));

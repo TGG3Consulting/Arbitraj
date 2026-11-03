@@ -10,7 +10,7 @@
 //! Выходной токен не должен ждать поступлений во время обмена (wallet/inflows.rs); чаевые — только к обмену.
 //! Итог и ошибку подписывает исполнителем «свой сборщик: прямой» вызывающий (exec/trade.rs, решение 121 B7). Повторов нет (стартовое правило Тиграна).
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
-//! От чего зависит: exec/trade.rs (общие шаги), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
+//! От чего зависит: exec/trade.rs (общие шаги), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
 //! exec/precheck.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
@@ -21,6 +21,7 @@ use crate::core::types::{DexRoute, RouteLeg, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use super::super::check::sim_base::{self, Base};
 use super::super::pools::registry::Entry;
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
@@ -153,13 +154,14 @@ async fn prepare(
 }
 
 /// План обмена на текущем блоке: время блока и разрешения, которых не хватает сейчас (exec/plan.rs). Принимает:
-/// котировку, долю, кошелёк. Возвращает: план и номер блока (для «кто меняет»). Ошибки: NotConfigured, Internal, узел.
+/// котировку, долю, кошелёк. Возвращает: план и базовый блок пробы (голова + 1 с, решение 127 — срок плана от той же
+/// головы). Ошибки: NotConfigured, Internal, узел.
 async fn build(
     q: &Quoting,
     prep: &Prep,
     wallet: alloy_primitives::Address,
-) -> GatewayResult<(Plan, u64)> {
-    let (at, now) = q.heads.at(&q.ctx).await?;
+) -> GatewayResult<(Plan, Base)> {
+    let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
     let p = plan::build(&q.ctx, &prep.steps, wallet, now, false)
         .await?
         .with_native(prep.wrap);

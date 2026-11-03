@@ -13,7 +13,7 @@
 //! Кто вызывает: exec/trade.rs.
 //! Графовый маршрут (решение 83): вызывающий (exec/trade.rs) передаёт свежие amountOutMin по ногам из предторговой
 //! верификации (exec/verify_gate.rs) — они ставятся последнему шагу каждой доли; умный путь без графа передаёт None.
-//! От чего зависит: exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
+//! От чего зависит: check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
 //! quote/direct.rs, quote/via.rs, quote/mixed_quoter.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 //!
@@ -27,6 +27,7 @@ use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 
+use super::super::check::sim_base::{self, Base};
 use super::super::pools::registry::Entry;
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
@@ -114,13 +115,13 @@ pub async fn trade(
 }
 
 /// План execute на текущем блоке (exec/universal.rs): разрешения, которых не хватает сейчас. Принимает: котировку,
-/// доли, кошелёк. Возвращает: план и номер блока (для «кто меняет»). Ошибки: NotConfigured, Internal, узел.
+/// доли, кошелёк. Возвращает: план и базовый блок пробы (голова + 1 с, решение 127). Ошибки: NotConfigured, Internal, узел.
 async fn build(
     q: &Quoting,
     prep: &Prep,
     wallet: alloy_primitives::Address,
-) -> GatewayResult<(Plan, u64)> {
-    let (at, now) = q.heads.at(&q.ctx).await?;
+) -> GatewayResult<(Plan, Base)> {
+    let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
     let plan = universal::build(&q.ctx, &prep.steps, wallet, now)
         .await?
         .with_native(prep.wrap);

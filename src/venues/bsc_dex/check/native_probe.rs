@@ -8,7 +8,7 @@
 //! «кто меняет» (check/emitter.rs, решение 59).
 //! Налога у нативного перевода нет: это не вызов контракта токена (value транзакции), налог взять некому.
 //! Кто вызывает: check/taxes.rs (после удачной пробы пула нативной монеты).
-//! От чего зависит: check/simulate.rs, check/probe.rs (Measured), check/probe_calls.rs, check/emitter.rs,
+//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe.rs (Measured), check/probe_calls.rs, check/emitter.rs,
 //! check/state.rs, exec/plan.rs, exec/native.rs, wallet/balances.rs, pools/registry.rs.
 //! Настройки: через вызываемые — dex.native_ticker, dex.native_wrapped, адреса Universal Router и Permit2.
 //!
@@ -31,6 +31,7 @@ use super::super::wallet::balances;
 use super::emitter;
 use super::probe::Measured;
 use super::probe_calls as pc;
+use super::sim_base;
 use super::simulate::{self, Call};
 use super::state::Checks;
 
@@ -94,8 +95,9 @@ async fn run(
     if send_amt.is_zero() {
         return Ok(Err("куплено слишком мало для пробы".into()));
     }
-    // Поверх одного блока `at`, срок транзакции — от его времени (как в обычной пробе, check/probe.rs, решение 61).
-    let (at, now) = heads.at(ctx).await?;
+    // Поверх одного блока `at`, срок транзакции — от его времени (как в обычной пробе, check/probe.rs, решение 61);
+    // симулированный блок — голова + 1 с (решение 127, check/sim_base.rs).
+    let (at, now) = sim_base::head(ctx, heads).await?;
     let buy = side_plan(ctx, e, Side::Buy, usdt_amount, wallet, now).await?;
     let sell = side_plan(ctx, e, Side::Sell, sell_amt, wallet, now).await?;
     let mut list = vec![pc::transfer(source, e.usdt, wallet, usdt_amount)];

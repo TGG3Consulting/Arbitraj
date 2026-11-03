@@ -570,6 +570,73 @@ area = "площадка Bybit"
 unit = "название"
 method = "Значение поля chain сети BSC из живого coin/query-info — в документации имени сети BSC нет."
 rationale = "Только факты из ответа API."
+# --- Биржа KuCoin (решение 137) ---
+[[section]]
+title = "Биржа KuCoin (решение 137)"
+intro = "Значения из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка KuCoin"
+unit = "URL"
+value = "https://api.kucoin.com"
+source = "Документация KuCoin, Get Public Token: «POST /api/v1/bullet-public on https://api.kucoin.com»; примеры SDK"
+rationale = "Основной адрес REST Classic API."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка KuCoin"
+unit = "название"
+value = "bsc"
+source = "Живой ответ GET /api/v3/currencies/CAKE 04.11: chainId «bsc», chainName «BEP20»"
+rationale = "chainId сети BSC — его принимают вывод и адрес депозита."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.api_key_version"
+area = "площадка KuCoin"
+unit = "версия"
+value = "3"
+source = "Документация KuCoin, Authentication: KC-API-KEY-VERSION — версия со страницы API Management (в примерах 3)"
+rationale = "Сверить со страницей ключа: «Проверить подключение» сравнит с apiVersion."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка KuCoin"
+unit = "тип"
+value = "IOC"
+source = "Документация KuCoin, Add Order: timeInForce GTC, GTT, IOC, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка KuCoin"
+unit = "уровней"
+value = "50"
+source = "Документация KuCoin: темы /spotMarket/level2Depth5 и level2Depth50, раз в 100 мс при изменении"
+rationale = "Глубина для котировки на объём; 5 — меньше нагрузки."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка KuCoin"
+unit = "в секунду"
+value = "10"
+source = "Документация KuCoin, rate limit: 100 сообщений клиента за 10 с на соединение"
+rationale = "Потолок темпа подписок."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка KuCoin"
+unit = "уровней"
+value = "100"
+source = "Документация KuCoin, Get Part OrderBook: size «optional value: 20, 100»"
+rationale = "Снимок для изменений стакана в окнах; больше 100 у этого эндпоинта нет."
+prefill = { kind = "Venue", id = "kucoin" }
 
 # --- Безопасность (вывод ключа из пароля) ---
 [[section]]

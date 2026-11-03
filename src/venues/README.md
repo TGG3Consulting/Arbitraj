@@ -11,3 +11,8 @@
 | --- | --- |
 | `gate/` | Биржа Gate (спот, API v4, решение 135) — README.md папки |
 `bybit/` — биржа Bybit, API V5, только спот (решение 136): README.md папки — официальные источники и файлы.
+| `bingx/` | BingX (спот) |
+| `mexc/` | MEXC (спот, API v3, решение 107) |
+| `kucoin/` | KuCoin (спот, Classic API, решение 137) |
+| `bsc_dex/` | DEX в сети BSC |
+| `kyberswap/` | Исполнение через агрегатор KyberSwap (внутри bsc_dex, решение 91) |

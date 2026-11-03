@@ -41,6 +41,33 @@
   query-api, account/info; первый IOC-ордер (create, кадры order.spot и execution.spot, realtime, execution/list, cumFeeDetail);
   депозит по BSC (query-record?txID=), перевод FUND → UNIFIED, вывод и его статусы, query-address. Замер нагрузки при «Стоп»
   10–15 минут (решение 109) до перевода в работу.
+- **KuCoin (решение 137, ветка router/kucoin).** Чек-лист и разбор — `docs/notes/kucoin-integration-2026-11-04.md`. Вопросы:
+  (1) **Счёт — Classic, не UTA.** Адаптер на Classic API; счёт бота должен быть в классическом режиме (переход в UTA —
+  по выбору, «Main accounts and sub-accounts can each be switched … independently»). Подтвердить, что счёт/субсчёт бота
+  классический, и что торговать будем им. (2) **Счета main/trade.** Депозит приходит на main (по умолчанию), торговля —
+  на trade, вывод — только с main (115007). Сделано: после зачисления перевод main → trade (`venue.deposit_to_spot`),
+  перед выводом trade → main (новая `venue.withdraw_from_trade`), обоим нужно право ключа FlexTransfers. Либо создать в
+  кабинете адрес депозита с зачислением на TRADE — тогда перевод после депозита не нужен (адаптер берёт адрес TRADE,
+  если он есть). Как удобнее? Автосоздание адреса (POST /api/v3/deposit-address/create) не сделано — нужно ли? (3) **IOC.**
+  Ордер — limit + timeInForce IOC (или FOK) через hf/orders/sync: неисполненное снимает биржа; если ордер всё же активен
+  к venue.order_final_wait_ms — отмена. Подтвердить IOC. (4) **Passphrase и версия ключа.** Passphrase — секрет
+  `kucoin.api_passphrase` (в запросе — HMAC-SHA256 секретом, Base64), версия — `venue.api_key_version` (у новых ключей 3;
+  «Проверить подключение» сверяет с apiVersion). (5) **Права ключа:** General, Spot, Withdrawal (+ FlexTransfers при
+  переводах main ↔ trade); Margin и Futures — снять («Проверить подключение» откажет). Имена Withdrawal и FlexTransfers —
+  из x-api-permission спецификации SDK (в описании поля permission их нет): сверить с живым ответом /api/v1/user/api-key.
+  IP — привязать ключ к IP сервера (`venue.api_ip_bound`, `venue.api_ip`); белый список адресов вывода — включить в
+  кабинете, если есть (в API-документации его нет). (6) **Комиссия вывода:** withdrawalMinFee; формулы с withdrawFeeRate в
+  документации нет — у сети с ненулевой долей комиссия «неизвестна» (вывода нет); в записи 04.11 таких сетей BSC одна.
+  (7) **Комиссия торговли:** ставка trade-fees × makerFeeCoefficient/takerFeeCoefficient пары (так в описании поля) —
+  сверить с feeRate живых сделок /api/v1/hf/fills. (8) **Свежесть стакана:** снимок level2Depth50 приходит только при
+  изменении рынка — `venue.book_stale_ms` у KuCoin необязательна (тихая пара иначе «устарела»). Задавать ли её? (9) Предел
+  длины remark вывода не указан — метка попытки ≤ 20 символов (как remark ордера). (10) **HF-счёт:** ордера — через
+  /api/v1/hf/*; «Проверить подключение» требует hf/accounts/opened = true. (11) Запрос на изменение стыка: шлюзу нужен
+  заголовок `gw-ratelimit-reset` из ответа (gateway/http.rs отдаёт только Retry-After) — пока пауза пула на всё окно 30 с.
+  **Записать на живом боте** (tests/README.md): /account/balance (депозит, перевод, сделка), ответ /api/v1/user/api-key
+  (без ключа), ответы hf/orders/sync + GET ордера + hf/fills одной сделки, deposit-addresses, withdrawals/{id}, deposits,
+  /market/match. Замер нагрузки при «Стопе» (решение 109) — до включения.
+
 - **Маппинг кошельков (решение 132, ветка router/wallets, слита в feat/own-bsc-node).** План и ход — `docs/notes/wallet-mapping-2026-11-03.md`.
   Вопросы: (1) строка маппинга «пробы» (кошелёк для налоговых проб, крючков, оценки разрешений и сигналов циклов —
   только симуляции от адреса, без отправки) добавлена агентом, при переносе = «BingX» — оставить так?

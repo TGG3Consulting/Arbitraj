@@ -131,6 +131,22 @@
 | venue.withdraw_account | площадка Bybit | *метод:* `UTA`, если депозит не переводится на FUND ботом; решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
 | venue.deposit_to_spot | площадка Bybit | *метод:* да — если в кабинете депозит идёт на FUND (по умолчанию) | Депозит по умолчанию — FUND | Set Deposit Account |
 | venue.recv_window_ms | площадка Bybit | `5000` | Значение по умолчанию Bybit | Integration Guidance: «default value is 5,000» |
+## Биржа KuCoin (решение 137)
+
+Из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+Включать по желанию (без записи в таблицу-источник: да/нет вводит Тигран): `venue.deposit_to_spot` = да (депозит на main →
+перевод на trade), `venue.withdraw_from_trade` = да (вывод только с main), `venue.order_test_first` = да (пробный ордер до
+проверки шагов на живом), `venue.balance_events` = да (поток аккаунта).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка KuCoin | `https://api.kucoin.com` | Основной адрес REST Classic | Документация KuCoin (Get Public Token), примеры SDK |
+| venue.bsc_network | площадка KuCoin | `bsc` | chainId сети BSC (принимают вывод и адрес депозита) | Живой ответ /api/v3/currencies/CAKE 04.11 |
+| venue.api_key_version | площадка KuCoin | `3` | Сверить со страницей ключа; «Проверить подключение» сравнит с apiVersion | Документация: Authentication |
+| venue.order_time_in_force | площадка KuCoin | `IOC` | Неисполненное снимает биржа | Документация: Add Order, timeInForce |
+| venue.depth_levels | площадка KuCoin | `50` | Глубина для котировки; 5 — меньше нагрузки | Документация: level2Depth5 / level2Depth50 |
+| venue.ws_subs_per_sec | площадка KuCoin | `10` | Потолок темпа подписок | Документация: 100 сообщений за 10 с |
+| venue.window_depth_limit | площадка KuCoin | `100` | Снимок для изменений стакана в окнах | Документация: Get Part OrderBook, size 20 или 100 |
 
 ## Безопасность: вывод ключа из пароля (Argon2id)
 

@@ -130,6 +130,8 @@ pub struct Inner {
     pub episode_rx: Mutex<Option<mpsc::Receiver<super::episode_run::EpMsg>>>,
     /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
     pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
+    /// Исполнение циклов DEX ↔ DEX (решение 124): толчок поиска и память причин (cycle_state.rs).
+    pub cycles: super::cycle_state::CycleState,
 }
 
 impl Inner {
@@ -194,6 +196,7 @@ impl Inner {
             episode_lost: Default::default(),
             episode_rx: Mutex::new(Some(episode_rx)),
             card_jobs: Mutex::default(),
+            cycles: Default::default(),
         }
     }
 }

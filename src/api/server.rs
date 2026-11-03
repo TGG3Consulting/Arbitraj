@@ -42,6 +42,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/venues/{id}/pool-directory", get(dex::directory))
         .route("/api/venues/{id}/dex-cycles", get(dex::cycles))
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
+        .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))
         .route("/api/venues/{id}/executor/quote", get(dex_executor::quote))
         .route(
             "/api/venues/{id}/executor/deploy",

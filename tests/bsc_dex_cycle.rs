@@ -413,6 +413,21 @@ async fn finds_cycles_from_base() {
     assert!(route_paths::enumerate_cycles(&g, USDT, 1, 100).is_empty());
 }
 
+/// Решение 124: исполнимость сигнала = есть форма исполнения (exec/cycle_gate.rs). Задаёт адрес исполнителя ArbExecutor —
+/// хопы V3 (pancakeswap_v3 / uniswap_v3) — его вид, цикл исполним через исполнитель. Ошибок нет.
+async fn with_executor(p: &Parts) {
+    p.ctx
+        .settings
+        .set(
+            "exec.executor_address",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!("0x00000000000000000000000000000000000000ee")),
+            "тест",
+        )
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn evaluates_cycle_profit_model_85() {
     let (g, p) = graph_and_ctx().await;
@@ -444,6 +459,7 @@ async fn evaluates_cycle_profit_model_85() {
     let gas_wei = U256::from(1_000_000_000u64); // 1 gwei
     let tip = Decimal::ZERO;
     let rate = Decimal::new(600, 0); // 600 USDT за 1 BNB (базовая = USDT)
+    with_executor(&p).await;
     let sig = cycle::build_signal(&p.ctx, USDT, "USDT", &path, &legs, gas_wei, tip, Some(rate))
         .expect("сигнал собирается");
 
@@ -463,7 +479,7 @@ async fn evaluates_cycle_profit_model_85() {
         "с учётом газа прибыль тем более отрицательна"
     );
 
-    // Оба хопа через tradable-семейства (pancakeswap_v3 / uniswap_v3) → цикл исполним как есть.
+    // Оба хопа V3 — вид шага исполнителя, исполнитель задан → цикл исполним как есть (решение 124).
     assert!(sig.executable, "все хопы tradable → исполним");
     assert!(sig.exec_note.is_none());
     assert_eq!(sig.hops.len(), 2);
@@ -537,6 +553,7 @@ async fn maps_cycle_signal_to_core_dex_cycle_74() {
     let path = cycle::eval(&p.ctx, &legs, input).unwrap();
     let gas_wei = U256::from(1_000_000_000u64);
     let rate = Decimal::new(600, 0);
+    with_executor(&p).await;
     let sig = cycle::build_signal(
         &p.ctx,
         USDT,

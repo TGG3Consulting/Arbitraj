@@ -222,8 +222,9 @@ pub trait Venue: Send + Sync {
     }
 
     /// Сигналы циклов DEX ↔ DEX (решение 85, фаза сигнала): замкнутые циклы базовых монет с чистой прибылью, маршрутом
-    /// и флагом исполнимости — для «Живого экрана». Направление за dex_dex.enabled; выключено — пусто. Расчёт только
-    /// read-поверхность: авто-сделки НЕ запускает. Ошибки: NotApplicable — не DEX; прочие — как у котировки (узел, настройки).
+    /// и флагом исполнимости — для «Живого экрана» и ядра. Направление за dex_dex.enabled; выключено — пусто. Расчёт сам
+    /// сделок не запускает; по ним ядро ведёт сделку цикла (решение 124, core/cycle_watch.rs).
+    /// Ошибки: NotApplicable — не DEX; прочие — как у котировки (узел, настройки).
     async fn dex_cycles(&self) -> GatewayResult<Vec<crate::core::types::DexCycle>> {
         Err(GatewayError::new(
             ErrorCode::NotApplicable,
@@ -264,6 +265,57 @@ pub trait Venue: Send + Sync {
             ErrorCode::NotApplicable,
             Some(self.id()),
             "у площадки нет исполнителя DEX",
+        ))
+    }
+
+    /// Расчёт цикла DEX ↔ DEX на вход `input` базовой монеты (решение 124): по состоянию пулов в памяти адаптера — выход,
+    /// затраты (газ свопов, разрешения, чаевые) в BNB и в базовой, чистая прибыль, курсы базовой и BNB в USDT, форма
+    /// исполнения; with_wallet — ещё свободный баланс базовой у кошелька (запрос к узлу). Ядро зовёт его на каждую точку
+    /// подбора размера (core/size_search.rs). Ошибки: NotApplicable — не DEX; NoRoute — цикл не исполним (причина) или
+    /// шаг не исполним целиком (объём велик); NotConfigured, StaleData, узел.
+    async fn dex_cycle_quote(
+        &self,
+        cycle: &crate::core::types::DexCycle,
+        input: Decimal,
+        with_wallet: bool,
+    ) -> GatewayResult<crate::core::types::CycleQuote> {
+        let _ = (cycle, input, with_wallet);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет циклов DEX ↔ DEX",
+        ))
+    }
+
+    /// Сделка цикла DEX ↔ DEX (решение 124): пулы перечитываются на свежем блоке, цикл собирается исполнителем
+    /// ArbExecutor (одна транзакция) или бандлом свопов (решение 84), симулируется и отправляется ОДИН раз — без повторов.
+    /// Ошибки: NotApplicable — не DEX; NoRoute / QuoteMismatch / StaleData — до отправки (сделки не было);
+    /// SwapReverted / TxNotIncluded / OutcomeUnknown — с фактом транзакции.
+    async fn dex_cycle_trade(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+    ) -> GatewayResult<crate::core::types::CycleTradeResult> {
+        let _ = req;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет циклов DEX ↔ DEX",
+        ))
+    }
+
+    /// «Сухая сделка» цикла (решение 124): та же сборка, что dex_cycle_trade, и eth_simulateV1 от кошелька — ничего не
+    /// отправляется; executor = true — через исполнитель с подставленным кодом (решение 122). Ошибки: NotApplicable —
+    /// не DEX; остальное — причиной в итоге.
+    async fn dex_dry_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        executor: bool,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let _ = (req, executor);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет циклов DEX ↔ DEX",
         ))
     }
 

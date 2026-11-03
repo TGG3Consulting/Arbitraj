@@ -239,7 +239,7 @@ impl Venue for BscDex {
 
     /// Сигналы циклов DEX ↔ DEX (решение 85, фаза сигнала): поиск циклов (quote/cycle_scan.rs) и перевод в read-тип ядра
     /// (quote/cycle_view.rs). Направление за dex_dex.enabled; выключено — пусто (газ не трогаем). Только read-поверхность:
-    /// авто-сделки НЕ запускает. Ошибки: StaleData (нет свежего блока), NotConfigured (настройки цикла), узел.
+    /// сделок не запускает (их ведёт ядро, решение 124). Ошибки: StaleData (нет свежего блока), NotConfigured (настройки цикла), узел.
     async fn dex_cycles(&self) -> GatewayResult<Vec<crate::core::types::DexCycle>> {
         let q = self.p.quoting();
         if !quote::cycle_scan::enabled(&q.ctx) {
@@ -292,6 +292,53 @@ impl Venue for BscDex {
             exec::dry_swap::run(&q, asset, side, usdt, mode),
         )
         .await)
+    }
+
+    /// Расчёт цикла DEX ↔ DEX на вход (решение 124): ноги по памяти реестра (quote/cycle_legs.rs), курсы и затраты —
+    /// quote/cycle_cost.rs; with_wallet — ещё баланс базовой у кошелька. Ошибки: NoRoute, NotConfigured, узел.
+    async fn dex_cycle_quote(
+        &self,
+        cycle: &crate::core::types::DexCycle,
+        input: Decimal,
+        with_wallet: bool,
+    ) -> GatewayResult<crate::core::types::CycleQuote> {
+        let q = self.p.quoting();
+        let run = async {
+            let legs = quote::cycle_legs::now(&q, cycle).await?;
+            let r = quote::cycle_cost::rates(&q, cycle.base).await?;
+            quote::cycle_cost::quote(&q, &legs, cycle.base, input, (r, with_wallet)).await
+        };
+        scope(Class::Quote, run).await
+    }
+
+    /// Сделка цикла DEX ↔ DEX (решение 124) — exec/cycle_trade.rs: свежее перечтение, исполнитель или бандл, проба,
+    /// одна отправка без повторов. Ошибки: как у сделки DEX.
+    async fn dex_cycle_trade(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+    ) -> GatewayResult<crate::core::types::CycleTradeResult> {
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(
+            Class::Trade,
+            exec::cycle_trade::trade(&q, &env, &self.p.nonces, req),
+        )
+        .await
+    }
+
+    /// Сухая сделка цикла (решение 124) — exec/cycle_dry.rs: сборка как у сделки и eth_simulateV1, ничего не уходит.
+    /// Ошибок нет: отказ — причиной в итоге.
+    async fn dex_dry_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        executor: bool,
+    ) -> GatewayResult<crate::core::types::DexDrySwap> {
+        let q = self.p.quoting();
+        let mode = if executor {
+            exec::executor::dry::DryMode::Executor
+        } else {
+            exec::executor::dry::DryMode::AsTrade
+        };
+        Ok(scope(Class::Check, exec::cycle_dry::run(&q, req, mode)).await)
     }
 
     /// Оценка развёртывания исполнителя ArbExecutor (решение 122, часть X): газ, цена, стоимость, будущий адрес — ничего не

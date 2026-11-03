@@ -1,10 +1,10 @@
 <!--
   Файл: ui/src/components/DexCycles.svelte
   Что делает: карточки сигналов циклов DEX ↔ DEX (решение 85, фаза сигнала) на «Живом экране»: по каждой площадке-DEX
-    из GET /api/venues/{id}/dex-cycles — базовая монета, вложено и чистая прибыль (через fmt.js), маршрут цикла по шагам
+    из GET /api/venues/{id}/dex-cycles — базовая монета, ОПТИМАЛЬНЫЙ вход (решение 124) и чистая прибыль на нём (через fmt.js), маршрут цикла по шагам
     (пул, вид, комиссия), флаг «исполнимо / нет» + причина. Пусто — направление выключено (dex_dex.enabled) или циклов
     нет. Площадки-DEX берутся из GET /api/venues/kinds (ответ 400 по площадке — не DEX, пропускается). Обновляется на
-    старте, по кнопке «Обновить» и при переподключении (lagged); расчёт цикла — read-поверхность, авто-сделок нет.
+    старте, по кнопке «Обновить» и при переподключении (lagged); исполнение — ядром при dex_dex.execute (решение 124).
   Кто вызывает: pages/Live.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/fmt.js, lib/coinLabels.js (poolRefText), lib/labels.js (вид пула),
     components/CopyAddr.svelte, components/NoData.svelte, components/ErrorText.svelte.
@@ -60,7 +60,7 @@
 
 <div class="row">
   <button onclick={reload}>Обновить</button>
-  <span class="muted">Сигнал (решение 85): расчёт без исполнения — авто-сделок по циклам нет.</span>
+  <span class="muted">Сигнал (решение 85). Исполнение — dex_dex.execute (решение 124): ядро само подбирает вход и торгует исполнимые прибыльные циклы; проверить без денег — «Ручное управление» → «Сухая сделка DEX» → «цикл».</span>
 </div>
 <ErrorText text={error} />
 <NoData text={note} />
@@ -75,12 +75,13 @@
       <span class="muted">блок {c.block}</span>
     </header>
     <p>
-      Вложено <strong>{fmtPrice(c.input)}</strong> {c.base_ticker} → получено {fmtPrice(c.output)};
-      валовая {fmtPrice(c.gross_profit)}
+      Оптимальный вход <strong>{fmtPrice(c.input)}</strong> {c.base_ticker}
+      <span class="muted">(наибольшая чистая прибыль в пределах dex_dex.probe_input_base, решение 124)</span>
+      → получено {fmtPrice(c.output)}; валовая {fmtPrice(c.gross_profit)}
     </p>
     <p>
       {#if c.net_profit != null}
-        Чистая прибыль: <strong class={Number(c.net_profit) > 0 ? 'ok' : 'err'}>{fmtPrice(c.net_profit)} {c.base_ticker}</strong>
+        Чистая прибыль на нём: <strong class={Number(c.net_profit) > 0 ? 'ok' : 'err'}>{fmtPrice(c.net_profit)} {c.base_ticker}</strong>
         <span class="muted">(затраты {fmtPrice(c.bnb_cost)} BNB ≈ {fmtPrice(c.bnb_cost_in_base)} {c.base_ticker})</span>
       {:else}
         <span class="warn-text">чистая прибыль не посчитана: газ/чаевые нечем перевести в {c.base_ticker} (нет пула база ↔ WBNB)</span>

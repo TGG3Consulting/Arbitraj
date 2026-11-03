@@ -90,6 +90,28 @@
 | venue.ws_subs_per_sec | площадка BingX | `10` | Предел темпа подписок WebSocket | Документация BingX: не больше 10 |
 | venue.fee_requests_per_sec | площадка BingX | `2` | Предел запросов ставок комиссии | Документация BingX: не больше 2 |
 
+## Биржа Bybit (решение 136)
+
+Адреса и потолки — из официальной документации Bybit V5; остальное — ориентиры.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Bybit | `https://api.bybit.com` | Основной адрес mainnet | Integration Guidance: «both endpoints are available» |
+| venue.rest_fallback_url | площадка Bybit | `https://api.bytick.com` | Второй адрес mainnet — только при сбое сети | Integration Guidance |
+| venue.ws_url | площадка Bybit | `wss://stream.bybit.com/v5/public/spot` | Публичный поток спота | Connect |
+| venue.ws_private_url | площадка Bybit | `wss://stream.bybit.com/v5/private` | Приватный поток | Connect |
+| venue.quote_asset | площадка Bybit | `USDT` | Котируемая монета пар | instruments-info: quoteCoin |
+| venue.order_time_in_force | площадка Bybit | `IOC` | Остаток снимает биржа (правило «не исполнился — отменяем») | enum timeInForce |
+| venue.depth_levels | площадка Bybit | `50` | 50 уровней, кадры раз в 20 мс | Orderbook → Depths → Spot (1, 50, 200, 1000) |
+| venue.ws_symbols_per_conn | площадка Bybit | `100` | Предел args на соединение спота | Connect: «up to 100 args for a single connection» |
+| venue.ws_ping_ms | площадка Bybit | `20000` | Совет Bybit — ping раз в 20 с | Connect: «every 20 seconds» |
+| venue.my_trades_limit | площадка Bybit | `100` | Наибольший limit исполнений ордера | Get Trade History: «[1, 100]» |
+| venue.fee_requests_per_sec | площадка Bybit | `5` | Потолок fee-rate | Rate Limit: /v5/account/fee-rate 5/s |
+| venue.bsc_network | площадка Bybit | *метод:* значение поля chain сети BSC из живого coin/query-info | В документации имени сети BSC нет | coin/query-info |
+| venue.withdraw_account | площадка Bybit | *метод:* `UTA`, если депозит не переводится на FUND ботом; решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
+| venue.deposit_to_spot | площадка Bybit | *метод:* да — если в кабинете депозит идёт на FUND (по умолчанию) | Депозит по умолчанию — FUND | Set Deposit Account |
+| venue.recv_window_ms | площадка Bybit | `5000` | Значение по умолчанию Bybit | Integration Guidance: «default value is 5,000» |
+
 ## Безопасность: вывод ключа из пароля (Argon2id)
 
 | Настройка | Область | Советуем / метод | Обоснование | Источник |

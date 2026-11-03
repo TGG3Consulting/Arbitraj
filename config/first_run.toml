@@ -321,6 +321,126 @@ source = "Документация BingX: не больше 2"
 rationale = "Предел запросов ставок комиссии у BingX."
 prefill = { kind = "Venue", id = "bingx" }
 
+# --- Биржа Bybit (решение 136) ---
+[[section]]
+title = "Биржа Bybit (решение 136)"
+intro = "Адреса и потолки — из официальной документации Bybit V5. Имя сети BSC (venue.bsc_network), счёт вывода и перевод FUND → UNIFIED задаёт Тигран по живым ответам."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "https://api.bybit.com"
+source = "Integration Guidance: «both endpoints are available»"
+rationale = "Основной адрес REST mainnet."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "https://api.bytick.com"
+source = "Integration Guidance"
+rationale = "Второй адрес mainnet — только при сбое сети."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "wss://stream.bybit.com/v5/public/spot"
+source = "Connect"
+rationale = "Публичный поток спота."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Bybit"
+unit = "URL"
+value = "wss://stream.bybit.com/v5/private"
+source = "Connect"
+rationale = "Приватный поток (order, execution, wallet)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Bybit"
+unit = "монета"
+value = "USDT"
+source = "instruments-info: quoteCoin"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Bybit"
+unit = "тип"
+value = "IOC"
+source = "enum timeInForce"
+rationale = "Остаток снимает биржа (правило «не исполнился — отменяем»)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Bybit"
+unit = "уровней"
+value = "50"
+source = "Orderbook → Depths → Spot: 1, 50, 200, 1000"
+rationale = "50 уровней, кадры раз в 20 мс."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Bybit"
+unit = "штук"
+value = "100"
+source = "Connect: «up to 100 args for a single connection»"
+rationale = "Предел подписок спота на соединение."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "20000"
+source = "Connect: «every 20 seconds»"
+rationale = "Совет Bybit по heartbeat."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка Bybit"
+unit = "штук"
+value = "100"
+source = "Get Trade History: limit [1, 100]"
+rationale = "Наибольший limit исполнений ордера."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Bybit"
+unit = "в секунду"
+value = "5"
+source = "Rate Limit: /v5/account/fee-rate 5/s"
+rationale = "Потолок запросов ставок комиссии."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "5000"
+source = "Integration Guidance: «default value is 5,000»"
+rationale = "Окно подписи по умолчанию Bybit."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Bybit"
+unit = "название"
+method = "Значение поля chain сети BSC из живого coin/query-info — в документации имени сети BSC нет."
+rationale = "Только факты из ответа API."
+
 # --- Безопасность (вывод ключа из пароля) ---
 [[section]]
 title = "Безопасность: вывод ключа из пароля (Argon2id)"

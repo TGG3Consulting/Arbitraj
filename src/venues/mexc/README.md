@@ -37,7 +37,7 @@
 | `proto.rs` | Нужные сообщения protobuf (prost) |
 | `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WebSocket стаканов: частичный стакан `spot@public.limit.depth.v3.api.pb@SYM@N`, PING, стаканы в памяти, котировка; свежесть — по соединению и по кадру пары (`venue.book_stale_ms`) |
 | `user_key.rs`, `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток баланса по listenKey (`spot@private.account.v3.api.pb`); после обрыва — тот же ключ, пока продление проходит |
-| `tap.rs`, `trades.rs` | Запись окна (решение 125): двоичные кадры стакана монеты из ws_conn.rs как есть; лента сделок — своё соединение на монету, канал `spot@public.aggre.deals.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (Trade Streams: каждая сделка отдельно с tradeId, кадр за интервал venue.trades_interval), отписка UNSUBSCRIPTION; разбор кадра (тела 303 и 314) |
+| `tap.rs`, `feed.rs`, `tap_snap.rs` | Запись окна (решение 125): двоичные кадры стакана монеты из ws_conn.rs как есть; свои соединения на монету — лента `spot@public.aggre.deals.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.trades_interval) и изменения всей глубины `spot@public.aggre.depth.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.window_depth_interval) со снимком REST /api/v3/depth (venue.window_depth_limit) после первого кадра и при разрыве версий; отписка UNSUBSCRIPTION; разбор кадров (тела 303, 313, 314, снимок) |
 
 ## Что важно знать
 

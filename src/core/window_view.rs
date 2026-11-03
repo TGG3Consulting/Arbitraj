@@ -2,7 +2,8 @@
 //! Что делает: данные экрана «Окна» (решение 125): страница списка окон с фильтрами (монета, со сделкой / без,
 //! плюсовая / минусовая) — открытые с живыми счётчиками из памяти, размер — с диска; почему окна не пишутся; одно окно —
 //! кадры из файла (с offset, не больше limit) разобранные адаптером своей площадки (стакан на момент кадра, сделки),
-//! время площадки и время получения ботом, наши сделки окна с хронологией; путь файла для «Скачать файл».
+//! время площадки и время получения ботом, стакан всей глубины после каждого кадра изменений (window_book.rs: полный +
+//! изменения с начала файла, верхние top уровней), наши сделки окна с хронологией; путь файла для «Скачать файл».
 //! Кто вызывает: api/windows.rs.
 //! От чего зависит: window.rs, window_cfg.rs, window_tap.rs (parse), storage/windows_db.rs, storage/episode_files.rs,
 //! шлюз (Venue::decode_tap).
@@ -13,11 +14,14 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
+use crate::core::types::{TapDecoded, TapView};
 use crate::gateway::contract::Venue;
+use crate::gateway::tap::TapStream;
 use crate::storage::{episode_files, windows_db};
 
 use super::engine::{Core, lk};
 use super::window::WindowInfo;
+use super::window_book::Book;
 use super::window_cfg::Cfg;
 
 impl Core {
@@ -61,13 +65,15 @@ impl Core {
     }
 
     /// Что делает: окно — сводка, служебные строки файла (открытие, включение записи, вход, закрытие), кадры с offset
-    /// не больше limit (разобранные), сделки окна. Принимает: id, offset, limit.
+    /// не больше limit (разобранные; у изменений — стакан после кадра, top уровней), сделки окна. Принимает: id, offset,
+    /// limit, top.
     /// Возвращает: {info, lines, frames, frames_read, truncated, deals}; None — нет окна. Ошибки: база, файл.
     pub async fn window(
         &self,
         id: &str,
         offset: usize,
         limit: usize,
+        top: usize,
     ) -> Result<Option<Value>, String> {
         let Some(body) = windows_db::get(&self.inner.deps.db, id)
             .await
@@ -88,6 +94,8 @@ impl Core {
             .map_err(|e| format!("файл окна {}: {e}", path.display()))?;
         let mut venues: HashMap<String, Arc<dyn Venue>> = HashMap::new();
         let (mut lines, mut frames, mut n) = (vec![], vec![], 0usize);
+        // Стакан всей глубины по биржам (дополнение решения 125): изменения применяются с начала файла, в том числе до offset.
+        let mut books: HashMap<String, Book> = HashMap::new();
         for r in rows
             .iter()
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
@@ -97,7 +105,9 @@ impl Core {
                 continue;
             };
             n += 1;
-            if n <= offset || frames.len() >= limit {
+            let diff = matches!(f.stream, TapStream::Diff | TapStream::Snapshot);
+            let shown = n > offset && frames.len() < limit;
+            if !shown && !diff {
                 continue;
             }
             if !venues.contains_key(&f.venue.0)
@@ -112,9 +122,23 @@ impl Core {
                     f.venue.0
                 )),
             };
+            let book = decoded.as_ref().ok().and_then(|d| {
+                books
+                    .entry(f.venue.0.clone())
+                    .or_default()
+                    .apply(&d.view, top)
+            });
+            if !shown {
+                continue;
+            }
+            // Изменения и снимок — без самих уровней (у полного их тысячи): сводка кадра и стакан после него.
+            let decoded = match (diff, decoded) {
+                (true, Ok(d)) => Ok(compact(&d)),
+                (_, d) => d.map(|d| json!(d)),
+            };
             frames.push(json!({
                 "i": n - 1, "venue": f.venue.0, "stream": f.stream, "conn": f.conn, "recv_ns": f.recv_ns,
-                "bytes": f.data.len(), "decoded": decoded,
+                "bytes": f.data.len(), "decoded": decoded, "book": book,
             }));
         }
         let deals: Vec<Value> = {
@@ -134,5 +158,21 @@ impl Core {
     pub fn window_path(&self, id: &str) -> Option<std::path::PathBuf> {
         let ok = !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
         ok.then(|| self.inner.window_files.path(id))
+    }
+}
+
+/// Сводка кадра изменений: время, полный ли, версии, сколько уровней изменилось. Ошибок нет.
+fn compact(d: &TapDecoded) -> Value {
+    match &d.view {
+        TapView::Diff {
+            bids,
+            asks,
+            full,
+            from,
+            to,
+        } => json!({
+            "exchange_ms": d.exchange_ms, "full": full, "from": from, "to": to, "changed": [bids.len(), asks.len()],
+        }),
+        v => json!({ "exchange_ms": d.exchange_ms, "view": v }),
     }
 }

@@ -326,7 +326,7 @@ async fn window_records_raw_frames_and_closes() {
     // Строка закрытия дописывается потоком записи — ждём её в файле.
     let mut page = Value::Null;
     for _ in 0..50 {
-        page = core.window(&info.id, 0, 100).await.unwrap().unwrap();
+        page = core.window(&info.id, 0, 100, 10).await.unwrap().unwrap();
         if page["lines"]
             .as_array()
             .unwrap()

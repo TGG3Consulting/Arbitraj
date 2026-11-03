@@ -11,6 +11,9 @@ use crate::settings::schema::{Kind as K, Limit as L, SettingDef};
 /// Наибольший уровень сжатия zstd — ZSTD_maxCLevel() из документации zstd (https://facebook.github.io/zstd/zstd_manual.html).
 const ZSTD_MAX_LEVEL: u64 = 22;
 
+/// Наибольший limit снимка стакана MEXC GET /api/v3/depth — официальная документация (Market Data → Order Book: «max 5000»).
+const MEXC_DEPTH_MAX: u64 = 5000;
+
 /// Настройки решения 125. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static WINDOW: &[SettingDef] = &[
@@ -22,4 +25,6 @@ pub static WINDOW: &[SettingDef] = &[
     d("Окна", "window.zstd_level", K::Integer, L::Positive, "уровень", G, "Решение 125: уровень сжатия zstd файлов окон, 1–22 (документация zstd: ZSTD_maxCLevel() = 22)").max(ZSTD_MAX_LEVEL),
     d("Окна", "window.cleanup_s", K::Integer, L::Positive, "секунды", G, "Решение 125: как часто уборка окон — закрытые старше window.keep_days, лишнее сверх window.max_mb, файлы без строки в базе. Ещё — при запуске"),
     d("Окна", "venue.trades_interval", K::Choice, L::None, "интервал", V, "Решение 125, только MEXC: интервал канала сделок spot@public.aggre.deals.v3.api.pb@(100ms|10ms)@<symbol> (официальная документация Trade Streams): кадр несёт все сделки за интервал, каждую отдельно с tradeId. Не задан — лента сделок MEXC в окна не пишется (стакан пишется)").choices(&["10ms", "100ms"]).optional(),
+    d("Окна", "venue.window_depth_interval", K::Choice, L::None, "интервал", V, "Дополнение решения 125, только MEXC: интервал канала изменений стакана всей глубины spot@public.aggre.depth.v3.api.pb@(100ms|10ms)@<symbol> (официально — Diff.Depth Stream). Не задан — изменения стакана MEXC не пишутся (снимки N уровней пишутся)").choices(&["10ms", "100ms"]).optional(),
+    d("Окна", "venue.window_depth_limit", K::Integer, L::Positive, "уровней", V, "Дополнение решения 125, только MEXC: глубина снимка REST GET /api/v3/depth (limit; официально «default 100; max 5000»), с которого начинают изменения стакана, — в начале окна и при разрыве версий (fromVersion ≠ toVersion + 1). Не задана — изменения стакана MEXC не пишутся").max(MEXC_DEPTH_MAX).optional(),
 ];

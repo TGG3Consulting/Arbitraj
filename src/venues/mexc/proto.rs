@@ -2,7 +2,8 @@
 //! Что делает: сообщения Protocol Buffers WebSocket MEXC — только нужные поля, по официальным .proto
 //! (https://github.com/mexcdevelop/websocket-proto, коммит 2026-09-09): обёртка PushDataV3ApiWrapper, частичный стакан
 //! PublicLimitDepthsV3Api (тело 303), изменение баланса PrivateAccountV3Api (307), ордер PrivateOrdersV3Api (304),
-//! сделки PublicAggreDealsV3Api (314, решение 125 — PublicAggreDealsV3Api.proto того же репозитория).
+//! изменения стакана PublicAggreDepthsV3Api (313) и сделки PublicAggreDealsV3Api (314) — решение 125, .proto того же
+//! репозитория.
 //! Поля, которых здесь нет, prost пропускает (стандарт protobuf: неизвестные поля игнорируются).
 //! Кто вызывает: depth.rs, account_update.rs.
 //! От чего зависит: prost.
@@ -16,7 +17,7 @@
 pub struct Wrapper {
     #[prost(string, tag = "1")]
     pub channel: String,
-    #[prost(oneof = "Body", tags = "303, 304, 307, 314")]
+    #[prost(oneof = "Body", tags = "303, 304, 307, 313, 314")]
     pub body: Option<Body>,
     #[prost(string, optional, tag = "3")]
     pub symbol: Option<String>,
@@ -38,9 +39,28 @@ pub enum Body {
     /// privateAccount = 307.
     #[prost(message, tag = "307")]
     PrivateAccount(PrivateAccount),
+    /// publicAggreDepths = 313 (канал spot@public.aggre.depth.v3.api.pb, дополнение решения 125).
+    #[prost(message, tag = "313")]
+    AggreDepths(AggreDepths),
     /// publicAggreDeals = 314 (канал spot@public.aggre.deals.v3.api.pb, решение 125).
     #[prost(message, tag = "314")]
     AggreDeals(AggreDeals),
+}
+
+/// PublicAggreDepthsV3Api.proto: asks = 1, bids = 2, eventType = 3, fromVersion = 4, toVersion = 5
+/// (уровни — PublicAggreDepthV3ApiItem: price = 1, quantity = 2, тот же вид, что DepthItem).
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct AggreDepths {
+    #[prost(message, repeated, tag = "1")]
+    pub asks: Vec<DepthItem>,
+    #[prost(message, repeated, tag = "2")]
+    pub bids: Vec<DepthItem>,
+    #[prost(string, tag = "3")]
+    pub event_type: String,
+    #[prost(string, tag = "4")]
+    pub from_version: String,
+    #[prost(string, tag = "5")]
+    pub to_version: String,
 }
 
 /// PublicAggreDealsV3Api.proto: deals = 1, eventType = 2.

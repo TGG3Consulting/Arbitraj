@@ -271,6 +271,24 @@ source = "Официальная документация MEXC, Trade Streams: (
 rationale = "Ближе к сырому потоку: кадр за 10 мс, в нём каждая сделка отдельно с tradeId."
 prefill = { kind = "Venue", id = "mexc" }
 
+[[section.rec]]
+name = "venue.window_depth_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Официальная документация MEXC, Diff.Depth Stream: (100ms|10ms)"
+rationale = "Ближе к сырому потоку изменений стакана (ответ Тиграна по решению 125)."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка MEXC"
+unit = "уровней"
+value = "1000"
+source = "Документация MEXC: Order Book «max 5000»; процедура локального стакана — limit=1000"
+rationale = "Глубина снимка, которую берёт сама процедура MEXC; предел — 5000."
+prefill = { kind = "Venue", id = "mexc" }
+
 # --- Лимиты биржи BingX ---
 [[section]]
 title = "Лимиты биржи BingX"

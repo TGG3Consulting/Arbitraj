@@ -113,7 +113,7 @@ fn frame_line_round_trip() {
 }
 
 /// Живая запись ленты сделок BingX: tests/data/bingx_trades/trades.jsonl — строки {"m": текст после GZIP} канала
-/// <SYMBOL>@trade (как пишет trades.rs). Записать на сервере бота: окно с монетой BingX или сырой журнал соединения.
+/// <SYMBOL>@trade (как пишет feed.rs). Записать на сервере бота: окно с монетой BingX или сырой журнал соединения.
 #[test]
 #[ignore = "нет живой записи канала @trade — tests/README.md"]
 fn recorded_trades_decode() {

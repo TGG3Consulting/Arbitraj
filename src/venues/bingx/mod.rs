@@ -15,6 +15,7 @@ pub mod ctx;
 pub mod deposit_addr;
 pub mod depth;
 pub mod errors;
+pub mod feed;
 pub mod fees;
 pub mod fund_move;
 pub mod market;
@@ -26,8 +27,8 @@ pub mod rest;
 pub mod subs;
 pub mod symbols;
 pub mod tap;
+pub mod tap_diff;
 pub mod trade;
-pub mod trades;
 pub mod transfers;
 pub mod user_key;
 pub mod user_stream;
@@ -192,7 +193,7 @@ impl Venue for Bingx {
         Err(self.not_applicable("проверка канала отправки транзакций"))
     }
 
-    // Решение 125: запись окна — tap.rs (кадры стакана — ws_conn.rs, лента сделок — trades.rs).
+    // Решение 125: запись окна — tap.rs (кадры стакана — ws_conn.rs, лента сделок и изменения стакана — feed.rs).
     async fn window_tap(
         &self,
         asset: &Asset,

@@ -8,7 +8,8 @@
 //!
 //! GET /api/windows?limit=N&offset=M&coin=T&deal=yes|no&outcome=plus|minus|zero
 //!                                 — {windows: [WindowInfo], total, off: причина | null, used_bytes}
-//! GET /api/windows/{id}?limit=N&offset=M — {info, lines, frames, frames_read, truncated, deals}; 404 — нет окна
+//! GET /api/windows/{id}?limit=N&offset=M&levels=K — {info, lines, frames (у изменений стакана — book: стакан после кадра,
+//!                                 K верхних уровней), frames_read, truncated, deals}; 404 — нет окна
 //! GET /api/windows/{id}/file      — файл <id>.jsonl.zst (application/zstd, attachment)
 
 use axum::Json;
@@ -38,6 +39,8 @@ pub struct ListQ {
 #[derive(Deserialize)]
 pub struct GetQ {
     limit: usize,
+    /// Сколько верхних уровней стакана всей глубины показать на кадр изменений.
+    levels: usize,
     #[serde(default)]
     offset: usize,
 }
@@ -83,7 +86,7 @@ pub async fn get(
     Path(id): Path<String>,
     Query(q): Query<GetQ>,
 ) -> Result<Json<Value>, ApiError> {
-    match st.core.window(&id, q.offset, q.limit).await {
+    match st.core.window(&id, q.offset, q.limit, q.levels).await {
         Ok(Some(v)) => Ok(Json(v)),
         Ok(None) => Err(ApiError(StatusCode::NOT_FOUND, format!("окна {id} нет"))),
         Err(e) => Err(ApiError::internal(e)),

@@ -76,6 +76,8 @@
 | window.zstd_level | вся система | `3` | Быстрое сжатие в потоке без нагрузки на процессор; поднять, если места мало. | Документация zstd: уровень по умолчанию библиотеки — 3 |
 | window.cleanup_s | вся система | `3600` | Уборка раз в час; при нехватке места уборка идёт сразу. | Ориентир (как episode.cleanup_s) |
 | venue.trades_interval | площадка MEXC | `10ms` | Ближе к сырому потоку: кадр за 10 мс, в нём каждая сделка отдельно с tradeId. | Официальная документация MEXC, Trade Streams: (100ms\|10ms) |
+| venue.window_depth_interval | площадка MEXC | `10ms` | Ближе к сырому потоку изменений стакана (ответ Тиграна по решению 125) | Официальная документация MEXC, Diff.Depth Stream: (100ms\|10ms) |
+| venue.window_depth_limit | площадка MEXC | `1000` | Глубина снимка, которую берёт сама процедура MEXC «How to Properly Maintain a Local Copy of the Order Book»; предел — 5000 | Документация MEXC: Order Book «max 5000», процедура — limit=1000 |
 
 ## Лимиты биржи BingX
 

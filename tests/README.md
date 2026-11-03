@@ -128,3 +128,12 @@ window.min_hold_ms, ожидание конца сделки, повторный
 `spot@public.aggre.deals.v3.api.pb@10ms@<SYMBOL>`, по строке hex) и `tests/data/mexc_ws/depth.hex` (кадры
 `spot@public.limit.depth.v3.api.pb@<SYMBOL>@20`) — поле `h` строк файла окна.
 
+Окна, дополнение решения 125 — tests/window_depth_diff.rs: кадр BingX @incrDepth на примере из docs-v3 (уровни объектом)
+и вид массивом из api-ai-skills, ответ MEXC /api/v3/depth на примере из документации, стакан на момент кадра
+(core/window_book.rs) на уровнях записанного кадра BingX depth20. Нужно записать (тесты #[ignore]):
+(3) BingX `tests/data/bingx_incr/incr.jsonl` — строки `{"m": текст}` канала `<SYMBOL>@incrDepth` подряд с первого
+(action «all»); проверить, объект или массив уровни и есть ли разрывы lastUpdateId; (4) MEXC
+`tests/data/mexc_ws/depth_diff.hex` (кадры `spot@public.aggre.depth.v3.api.pb@10ms@<SYMBOL>` подряд, по строке hex — поле
+`h` строк потока Diff файла окна) и `tests/data/mexc_ws/depth_snapshot.json` (строка потока Snapshot того же окна, поле
+`t`). На первой записи сделок MEXC (deals.hex) проверить, что tradeId у всех сделок разные (решение 125, дополнение) —
+добавить проверку в recorded_deals_decode.

@@ -33,6 +33,16 @@ pub enum TapView {
     },
     /// Сделки кадра (BingX — одна, MEXC — пачка за интервал).
     Trades(Vec<TradeTick>),
+    /// Изменения стакана (дополнение решения 125): уровни с НОВЫМ количеством (0 — уровня больше нет); full — это полный
+    /// стакан (BingX action «all», снимок REST MEXC), с которого начинают; версии — с какой по какую (у BingX обе —
+    /// lastUpdateId, у MEXC — fromVersion / toVersion, у снимка — lastUpdateId).
+    Diff {
+        bids: Vec<PriceLevel>,
+        asks: Vec<PriceLevel>,
+        full: bool,
+        from: Option<i64>,
+        to: Option<i64>,
+    },
     /// Кадр не стакан и не сделки (ответ на подписку и т. п.) — текст для показа.
     Other(String),
 }

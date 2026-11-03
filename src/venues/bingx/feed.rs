@@ -1,18 +1,24 @@
-//! Файл: venues/bingx/trades.rs
-//! Что делает: соединение ленты сделок одной монеты на время окна (решение 125): подключение к venue.ws_url,
-//! подписка «<SYMBOL>@trade», ответ «Pong» на ping, каждый кадр сделки (текст после GZIP) — в приёмник окна
-//! (ctx.taps) со временем получения; обрыв — журнал, пауза venue.ws_reconnect_pause_ms, переподключение; окно
-//! закрыто (выключатель) — отписка «unsub» и закрытие соединения. Отдельное соединение на монету: в нём одна подписка
-//! (предел BingX — 200 на соединение), торговые соединения стаканов не трогаются.
+//! Файл: venues/bingx/feed.rs
+//! Что делает: соединение окна (решение 125) для одной монеты и одного канала на время окна — лента сделок
+//! «<SYMBOL>@trade» или инкрементальный стакан всей глубины «<SYMBOL>@incrDepth»: подключение к venue.ws_url, подписка,
+//! «Pong» на ping, каждый кадр канала (текст после GZIP) — в приёмник окна (ctx.taps) со временем получения; обрыв —
+//! журнал, пауза venue.ws_reconnect_pause_ms, переподключение; окно закрыто — отписка «unsub» и закрытие. У @incrDepth
+//! разрыв lastUpdateId (N-й ≠ (N-1)-й + 1) — переподключение: после подписки BingX снова шлёт полный стакан
+//! (action «all»), он тоже пишется. Своё соединение на канал монеты: одна подписка (предел BingX — 200 на соединение),
+//! торговые соединения не трогаются.
 //! Кто вызывает: tap.rs (запуск при открытии окна).
-//! От чего зависит: ws.rs (Cfg, config), depth.rs (gunzip, parse), ctx.rs, gateway/tap.rs.
+//! От чего зависит: ws.rs (Cfg, config), depth.rs (gunzip, parse), tap_diff.rs (of_channel, gap), ctx.rs, gateway/tap.rs.
 //! Настройки: venue.ws_url, venue.ws_silence_ms, venue.ws_reconnect_pause_ms, http.timeout_ms (через ws::config).
 //!
-//! Официально (docs-v3, Spot → Websocket Market Data → «Subscription transaction by transaction»,
-//! https://bingx-api.github.io/docs-v3/#/en/Spot/Websocket%20Market%20Data/Subscription%20transaction%20by%20transaction):
-//! dataType «<symbol>@trade», подписка {"id","reqType":"sub","dataType"}, отписка — тот же запрос с reqType «unsub»;
-//! «Due to multi-threaded push, it cannot be guaranteed that the push transaction ID is ordered»; каждое сообщение —
-//! одна сделка (zh: «逐筆交易推送每一筆成交的信息»). Подписки не чаще 10/с, лимита каналов на IP нет (FAQ-13).
+//! Официально (docs-v3, Spot → Websocket Market Data; https://bingx-api.github.io/docs-v3/#/en/Spot/Websocket%20Market%20Data/):
+//! - «Subscription transaction by transaction»: dataType «<symbol>@trade», одна сделка в сообщении, «it cannot be
+//!   guaranteed that the push transaction ID is ordered»;
+//! - «Incremental and Full Depth Information»: dataType «<symbol>@incrDepth», «Push incremental depth information of
+//!   1000 levels every 500ms»; первым — полный стакан action «all» с lastUpdateId, дальше action «update»,
+//!   lastUpdateId N-го = N-1-го + 1; «In rare cases where lastUpdateId is not continuous, you can choose to reconnect».
+//!
+//! Подписка {"id","reqType":"sub","dataType"}, отписка — reqType «unsub». Подписки не чаще 10/с, лимита каналов на IP
+//! нет (FAQ-13).
 
 use std::time::Duration;
 
@@ -28,9 +34,31 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::ws::{Cfg, config};
 
-/// Канал сделок пары по документации: «<symbol>@trade».
-pub fn channel(symbol: &str) -> String {
-    format!("{symbol}@trade")
+/// Какой канал окна.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Feed {
+    /// Лента сделок «<symbol>@trade».
+    Trades,
+    /// Инкрементальный стакан всей глубины «<symbol>@incrDepth».
+    Diff,
+}
+
+impl Feed {
+    /// Канал по документации. Принимает: символ BingX.
+    pub fn channel(self, symbol: &str) -> String {
+        match self {
+            Feed::Trades => format!("{symbol}@trade"),
+            Feed::Diff => format!("{symbol}@incrDepth"),
+        }
+    }
+
+    /// Поток записи окна. Ошибок нет.
+    fn stream(self) -> TapStream {
+        match self {
+            Feed::Trades => TapStream::Trades,
+            Feed::Diff => TapStream::Diff,
+        }
+    }
 }
 
 /// Почему сессия закончилась.
@@ -41,17 +69,24 @@ enum End {
     Broken(String),
 }
 
-/// Работает, пока окно открыто. Принимает: окружение, тикер, символ BingX, выключатель окна. Ошибок нет — в журнал.
-pub async fn run(ctx: Ctx, ticker: String, symbol: String, mut stop: watch::Receiver<bool>) {
-    let name = format!("trades {symbol}");
+/// Работает, пока окно открыто. Принимает: окружение, тикер, символ BingX, канал, выключатель окна. Ошибок нет.
+pub async fn run(
+    ctx: Ctx,
+    ticker: String,
+    symbol: String,
+    feed: Feed,
+    mut stop: watch::Receiver<bool>,
+) {
+    let ch = feed.channel(&symbol);
+    let name = format!("window {ch}");
     while !*stop.borrow() {
         let end = match config(&ctx) {
-            Ok(cfg) => session(&ctx, &name, &ticker, &symbol, &mut stop, cfg).await,
+            Ok(cfg) => session(&ctx, &name, &ticker, &ch, feed, &mut stop, cfg).await,
             Err(e) => {
                 log(
                     &ctx,
                     Level::Error,
-                    format!("лента сделок {symbol} для окна не пишется: {e}"),
+                    format!("канал {ch} для окна не пишется: {e}"),
                 )
                 .await;
                 return;
@@ -62,7 +97,7 @@ pub async fn run(ctx: Ctx, ticker: String, symbol: String, mut stop: watch::Rece
             End::Broken(r) => r,
         };
         let Ok(pause) = ctx.int("venue.ws_reconnect_pause_ms") else {
-            log(&ctx, Level::Error, format!("WebSocket {name}: {r}; не задана venue.ws_reconnect_pause_ms — лента окна остановлена")).await;
+            log(&ctx, Level::Error, format!("WebSocket {name}: {r}; не задана venue.ws_reconnect_pause_ms — канал окна остановлен")).await;
             return;
         };
         log(
@@ -78,12 +113,13 @@ pub async fn run(ctx: Ctx, ticker: String, symbol: String, mut stop: watch::Rece
     }
 }
 
-/// Одна сессия ленты сделок. Возвращает причину окончания.
+/// Одна сессия канала. Возвращает причину окончания.
 async fn session(
     ctx: &Ctx,
     name: &str,
     ticker: &str,
-    symbol: &str,
+    ch: &str,
+    feed: Feed,
     stop: &mut watch::Receiver<bool>,
     cfg: Cfg,
 ) -> End {
@@ -100,12 +136,13 @@ async fn session(
         _ = stop.changed() => return End::Stop,
     };
     let (mut sink, mut stream) = ws.split();
-    let ch = channel(symbol);
     let id = format!("{name}-sub");
     let sub = json!({ "id": id, "reqType": "sub", "dataType": ch });
     if let Err(e) = sink.send(Message::Text(sub.to_string().into())).await {
         return End::Broken(format!("отправка подписки: {e}"));
     }
+    // Последний lastUpdateId канала @incrDepth (разрыв — переподключение).
+    let mut last: Option<i64> = None;
     loop {
         tokio::select! {
             _ = stop.changed() => {
@@ -140,22 +177,18 @@ async fn session(
                     Msg::SubAck { code, msg, .. } if code != 0 => {
                         log(ctx, Level::Error, format!("WebSocket {name}: подписка {ch} отклонена, код {code}: {msg}")).await;
                     }
-                    _ if is_trade(&text, &ch) => {
-                        ctx.taps.push(ID, ticker, TapStream::Trades, name, rx_ns, || TapData::Text(text));
+                    _ => {
+                        let Some(v) = super::tap_diff::of_channel(&text, ch) else { continue };
+                        let gap = if feed == Feed::Diff { super::tap_diff::gap(&v, &mut last) } else { None };
+                        ctx.taps.push(ID, ticker, feed.stream(), name, rx_ns, || TapData::Text(text));
+                        if let Some(why) = gap {
+                            return End::Broken(why);
+                        }
                     }
-                    _ => {}
                 }
             }
         }
     }
-}
-
-/// Кадр канала сделок: dataType совпадает с подпиской и есть data. Ошибок нет.
-fn is_trade(text: &str, ch: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(text).is_ok_and(|v| {
-        v.get("dataType").and_then(|d| d.as_str()) == Some(ch)
-            && v.get("data").is_some_and(|d| !d.is_null())
-    })
 }
 
 /// Запись в журнал. Ошибок нет.

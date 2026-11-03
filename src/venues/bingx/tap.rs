@@ -1,10 +1,11 @@
 //! Файл: venues/bingx/tap.rs
 //! Что делает: запись окна на BingX (решение 125): включить запись монеты (кадры её стакана из торговых соединений —
-//! ws_conn.rs, лента сделок — своё соединение trades.rs), выключить и разобрать записанный кадр для показа —
-//! стакан канала «<SYMBOL>@depth<N>» (depth.rs) и сделку канала «<SYMBOL>@trade».
+//! ws_conn.rs; лента сделок и изменения стакана всей глубины — свои соединения feed.rs), выключить и разобрать
+//! записанный кадр для показа — стакан канала «<SYMBOL>@depth<N>» (depth.rs), сделку «<SYMBOL>@trade», изменения
+//! «<SYMBOL>@incrDepth» (tap_diff.rs).
 //! Кто вызывает: mod.rs (контракт: window_tap, window_untap, decode_tap), тесты (decode).
-//! От чего зависит: ctx.rs, depth.rs, num.rs, trades.rs, gateway/tap.rs, core/types.
-//! Настройки: venue.quote_asset, venue.depth_levels (имя канала стакана); соединение сделок — trades.rs.
+//! От чего зависит: ctx.rs, depth.rs, num.rs, feed.rs, tap_diff.rs, gateway/tap.rs, core/types.
+//! Настройки: venue.quote_asset, venue.depth_levels (имя канала стакана); соединения сделок и изменений — feed.rs.
 //!
 //! Формат сделки — docs-v3, Spot → Websocket Market Data → «Subscription transaction by transaction» (пример
 //! dataUpdateDemo): {"code":0,"data":{"E":время события,"T":время сделки,"e":"trade","m":buyer is maker,"p":цена,
@@ -21,6 +22,7 @@ use crate::gateway::tap::{TapData, TapInfo, TapSink, TapStream};
 
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
+use super::feed::Feed;
 use super::num;
 
 /// Что делает: включает запись монеты и запускает её ленту сделок. Принимает: окружение, монету, приёмник.
@@ -29,18 +31,17 @@ pub fn start(ctx: &Ctx, asset: &Asset, sink: TapSink) -> GatewayResult<TapInfo> 
     let symbol = ctx.symbol(&asset.ticker)?;
     let levels = ctx.int("venue.depth_levels")?;
     let stop = ctx.taps.add(&asset.ticker, sink);
-    tokio::spawn(super::trades::run(
-        ctx.clone(),
-        asset.ticker.clone(),
-        symbol.clone(),
-        stop,
-    ));
+    for feed in [Feed::Trades, Feed::Diff] {
+        let (c, t, s) = (ctx.clone(), asset.ticker.clone(), symbol.clone());
+        tokio::spawn(super::feed::run(c, t, s, feed, stop.clone()));
+    }
     Ok(TapInfo {
         book_channel: format!("{symbol}@depth{levels}"),
-        trades_channel: Ok(super::trades::channel(&symbol)),
+        trades_channel: Ok(Feed::Trades.channel(&symbol)),
         trades_form:
             "по одной сделке в сообщении (docs-v3: «Subscription transaction by transaction»)"
                 .into(),
+        diff_channel: Ok(Feed::Diff.channel(&symbol)),
     })
 }
 
@@ -70,6 +71,10 @@ pub fn decode(stream: TapStream, data: &TapData) -> GatewayResult<TapDecoded> {
             _ => Ok(other(text)),
         },
         TapStream::Trades => trades(text),
+        TapStream::Diff => super::tap_diff::decode(text).map_err(|e| bad(&e)),
+        TapStream::Snapshot => Err(bad(
+            "у BingX снимок стакана приходит в канале @incrDepth (action «all»)",
+        )),
     }
 }
 

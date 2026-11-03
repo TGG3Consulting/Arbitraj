@@ -122,6 +122,7 @@ pub mod view;
 pub mod vol;
 pub mod wait;
 pub mod window;
+pub mod window_book;
 pub mod window_cfg;
 pub mod window_close;
 pub mod window_info;

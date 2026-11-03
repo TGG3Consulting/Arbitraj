@@ -1,12 +1,13 @@
 <!--
   Файл: ui/src/components/WindowView.svelte
   Что делает: страница окна (решение 125): что писалось на каждой бирже (каналы стакана и сделок, вид ленты или
-    причина, почему не пишется); стакан по времени — шаг по кадрам стакана (‹ › и ползунок), уровни на момент кадра,
+    причина, почему не пишется); стакан всей глубины — полный + применённые изменения после каждого кадра изменений
+    (DepthStepper, собирает сервер — core/window_book.rs); стакан N уровней по времени — шаг по кадрам стакана (‹ › и ползунок), уровни на момент кадра,
     время биржи и время получения ботом; лента сделок — каждая сделка (время биржи, время получения, цена, количество,
     сторона агрессора, ID) вместе с событиями наших сделок окна на одной шкале времени; «Скачать файл». Кадры читаются
     с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере.
   Кто вызывает: pages/Windows.svelte.
-  От чего зависит: lib/api.js, lib/windowLabels.js, components/Modal.svelte, PageSize.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
   Настройки: нет.
 -->
 <script>
@@ -15,6 +16,7 @@
   import Modal from './Modal.svelte';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
+  import DepthStepper from './DepthStepper.svelte';
 
   let { win, onclose } = $props();
   let limit = $state(null);
@@ -25,8 +27,8 @@
   let levels = $state(null);
 
   $effect(() => {
-    if (!limit) return;
-    get(`/api/windows/${seg(win.id)}?limit=${limit}&offset=${offset}`)
+    if (!limit || !levels) return;
+    get(`/api/windows/${seg(win.id)}?limit=${limit}&offset=${offset}&levels=${levels}`)
       .then((r) => {
         data = r;
         step = 0;
@@ -69,6 +71,7 @@
     <div class="muted">
       <code>{v.venue}</code> с {msTime(Date.parse(v.since))}:
       {#if v.tap?.Ok}стакан <code>{v.tap.Ok.book_channel}</code>;
+        изменения {#if v.tap.Ok.diff_channel?.Ok}<code>{v.tap.Ok.diff_channel.Ok}</code>{:else}<span class="warn-text">не пишутся: {v.tap.Ok.diff_channel?.Err}</span>{/if};
         сделки {#if v.tap.Ok.trades_channel.Ok}<code>{v.tap.Ok.trades_channel.Ok}</code> — {v.tap.Ok.trades_form}{:else}<span class="warn-text">не пишутся: {v.tap.Ok.trades_channel.Err}</span>{/if}
       {:else if v.tap?.Err}<span class="err">запись не включена: {v.tap.Err}</span>
       {:else}<span class="muted">запись включается…</span>{/if}
@@ -79,21 +82,24 @@
 
   <div class="row">
     <PageSize key="window.frames" bind:value={limit} label="Кадров читать:" />
+    <PageSize key="window.levels" bind:value={levels} label="Уровней стакана:" />
     <button disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - limit))}>‹ раньше</button>
     <span>кадры с {offset + 1}</span>
     <button disabled={!data?.truncated} onclick={() => (offset += limit)}>дальше ›</button>
   </div>
-  {#if !limit}<p class="unset">Задайте, сколько кадров читать.</p>{/if}
+  {#if !limit || !levels}<p class="unset">Задайте, сколько кадров читать и сколько уровней стакана показывать.</p>{/if}
   <ErrorText text={error} />
 
-  <h3>Стакан по времени ({books.length} кадров)</h3>
+  <h3>Стакан всей глубины: полный + изменения</h3>
+  <DepthStepper frames={(data?.frames ?? []).filter((f) => f.book)} />
+
+  <h3>Стакан N уровней по времени — кадры как есть ({books.length})</h3>
   {#if cur}
     <div class="row">
       <button disabled={step <= 0} onclick={() => (step -= 1)}>‹</button>
       <input type="range" min="0" max={books.length - 1} bind:value={step} />
       <button disabled={step >= books.length - 1} onclick={() => (step += 1)}>›</button>
       <span>кадр {cur.i + 1} · <code>{cur.venue}</code> · биржа {msTime(cur.decoded?.Ok?.exchange_ms)} · получен {nsTime(cur.recv_ns)}</span>
-      <PageSize key="window.levels" bind:value={levels} label="Уровней:" />
     </div>
     {#if cur.decoded?.Err}<p class="err">{cur.decoded.Err}</p>{/if}
     <div class="row">

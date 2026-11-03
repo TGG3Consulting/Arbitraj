@@ -141,6 +141,8 @@ pub fn parse(v: &serde_json::Value) -> Option<TapFrame> {
         stream: match v["s"].as_str()? {
             "Book" => TapStream::Book,
             "Trades" => TapStream::Trades,
+            "Diff" => TapStream::Diff,
+            "Snapshot" => TapStream::Snapshot,
             _ => return None,
         },
         conn: v["c"].as_str().unwrap_or_default().to_string(),
@@ -154,6 +156,8 @@ fn stream(s: TapStream) -> &'static str {
     match s {
         TapStream::Book => "Book",
         TapStream::Trades => "Trades",
+        TapStream::Diff => "Diff",
+        TapStream::Snapshot => "Snapshot",
     }
 }
 

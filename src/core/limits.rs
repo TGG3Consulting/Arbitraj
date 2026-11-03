@@ -61,13 +61,14 @@ pub async fn budget(core: &Core, cx: &DirCtx, mode: &super::dry::Mode) -> Result
 }
 
 /// Предел списания покупки прямо перед ордером (решение 94): меньшее из бюджета плана и свободного баланса котируемой
-/// монеты на A, прочитанного сейчас одним запросом. Принимает: ядро, направление, бюджет плана.
+/// монеты на A, прочитанного сейчас одним запросом. Принимает: ядро, направление, бюджет плана, счёт DEX сделки.
 /// Возвращает: (предел, свободно, тикер котируемой монеты). Ошибки: не задан venue.quote_asset у A, сбой балансов,
 /// свободно 0.
 pub async fn buy_cap(
     core: &Core,
     d: &crate::core::types::Direction,
     budget: Decimal,
+    acc: Option<&crate::core::types::DexAccountId>,
 ) -> Result<(Decimal, Decimal, String), String> {
     let at = At {
         venue: Some(&d.buy_on.0),
@@ -79,7 +80,7 @@ pub async fn buy_cap(
         .settings
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
-    let free = free_now(core, &d.buy_on, &quote).await?;
+    let free = free_now(core, &d.buy_on, acc, &quote).await?;
     if free <= Decimal::ZERO {
         return Err(format!("на {} свободно 0 {quote}", d.buy_on.0));
     }
@@ -87,10 +88,22 @@ pub async fn buy_cap(
 }
 
 /// Свободный баланс котируемой монеты на площадке — ОДИН запрос прямо перед ордером покупки (решение 94).
-/// Принимает: ядро, площадку, тикер котируемой монеты. Возвращает: свободную сумму (0, если монеты нет).
+/// Принимает: ядро, площадку, счёт DEX (решение 132; None — биржа), тикер котируемой монеты. Возвращает: свободную сумму (0, если монеты нет).
 /// Ошибки: площадка не подключена, сбой запроса балансов (текст площадки, например лимит частоты).
-pub async fn free_now(core: &Core, venue: &VenueId, quote: &str) -> Result<Decimal, String> {
-    let a = core.inner.deps.gw.get(venue).await.map_err(|e| e.message)?;
+pub async fn free_now(
+    core: &Core,
+    venue: &VenueId,
+    acc: Option<&crate::core::types::DexAccountId>,
+    quote: &str,
+) -> Result<Decimal, String> {
+    // Решение 132: у DEX — баланс кошелька счёта (сделки или перегона).
+    let a = core
+        .inner
+        .deps
+        .gw
+        .get_as(venue, acc)
+        .await
+        .map_err(|e| e.message)?;
     // Решение 113: баланс одной монеты — у DEX один balanceOf, а не запрос по каждому токену кошелька (~11 с);
     // у биржи — тот же один REST балансов (по умолчанию контракта).
     Ok(a.balance(quote)

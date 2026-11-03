@@ -133,7 +133,9 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     let (mut alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
-    match super::manual_halted::on_hand(core, &deal.at, &deal.direction.asset, deal.qty).await {
+    match super::manual_halted::on_hand(core, &deal, &deal.at, &deal.direction.asset, deal.qty)
+        .await
+    {
         Ok((qty, note)) => super::manual_halted::set_qty(&mut deal, qty, note),
         Err(e) => {
             // Алерт остаётся — человек решит иначе («Продано вручную», «Беру на себя»).

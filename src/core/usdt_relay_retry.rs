@@ -15,20 +15,22 @@ use std::time::{Duration, Instant};
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Transfer, VenueId};
+use crate::core::types::{Asset, DexAccountId, Transfer, VenueId};
 use crate::gateway::errors::ErrorCode;
 use crate::settings::read::At;
 
 use super::engine::Core;
 use super::op_error::OpError;
 
-/// Отправляет перегон с ожиданием баланса и повтором при откате. Принимает: ядро, ID, откуда, куда, монету, сумму.
+/// Отправляет перегон с ожиданием баланса и повтором при откате. Принимает: ядро, ID, откуда, куда, счёт DEX
+/// перегона (решение 132: кошелёк сделки или строки маппинга биржи; None — без DEX), монету, сумму.
 /// Возвращает: (вывод, зачисление) как transfers::send. Ошибки: последняя ошибка перевода или «баланс не появился».
 pub async fn send(
     core: &Core,
     id: &str,
     from: &VenueId,
     to: &VenueId,
+    acc: Option<&DexAccountId>,
     asset: &Asset,
     amount: Decimal,
 ) -> Result<(Transfer, Transfer), OpError> {
@@ -39,8 +41,8 @@ pub async fn send(
     let mut n = 0;
     loop {
         n += 1;
-        wait_balance(core, from, &asset.ticker, amount).await?;
-        match super::transfers::send(core, id, from, to, asset, amount).await {
+        wait_balance(core, from, acc, &asset.ticker, amount).await?;
+        match super::transfers::send_as(core, id, from, to, asset, amount, acc).await {
             Ok(r) => return Ok(r),
             Err(e) if e.code == Some(ErrorCode::SwapReverted) && n < attempts => {
                 core.inner
@@ -72,6 +74,7 @@ pub async fn send(
 async fn wait_balance(
     core: &Core,
     venue: &VenueId,
+    acc: Option<&DexAccountId>,
     ticker: &str,
     amount: Decimal,
 ) -> Result<(), OpError> {
@@ -84,7 +87,7 @@ async fn wait_balance(
     };
     let started = Instant::now();
     loop {
-        let last = match super::limits::free_now(core, venue, ticker).await {
+        let last = match super::limits::free_now(core, venue, acc, ticker).await {
             Ok(free) if free >= amount => return Ok(()),
             Ok(free) => format!("свободно {free} {ticker}"),
             Err(e) => e,

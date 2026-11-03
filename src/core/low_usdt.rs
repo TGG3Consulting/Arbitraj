@@ -35,9 +35,22 @@ pub async fn load(core: &Core) {
     }
 }
 
-/// Проверка одной площадки. Принимает: ядро, площадку, свободно USDT, тикер котируемой монеты.
+/// Проверка одной площадки (у DEX — одного кошелька, решение 132: порог — площадки, состояние — своё у кошелька).
+/// Принимает: ядро, площадку, счёт DEX (None — биржа), подпись для текста, свободно USDT, тикер котируемой монеты.
 /// Ошибок нет: всё — в журнал и Telegram.
-pub async fn check(core: &Core, venue: &VenueId, free: Decimal, quote: &str) {
+pub async fn check(
+    core: &Core,
+    venue: &VenueId,
+    acc: Option<&crate::core::types::DexAccountId>,
+    label: &str,
+    free: Decimal,
+    quote: &str,
+) {
+    // Ключ состояния «ниже порога»: площадка или «площадка:кошелёк».
+    let key = match acc {
+        Some(a) => VenueId(format!("{}:{a}", venue.0)),
+        None => venue.clone(),
+    };
     let deps = &core.inner.deps;
     let min = match deps
         .settings
@@ -60,11 +73,11 @@ pub async fn check(core: &Core, venue: &VenueId, free: Decimal, quote: &str) {
     };
     lk(&core.inner.usdt_alert_unset).remove(venue);
     let below = free <= min;
-    let was = lk(&core.inner.usdt_below).insert(venue.clone(), below);
+    let was = lk(&core.inner.usdt_below).insert(key.clone(), below);
     if was == Some(below) {
         return;
     }
-    if let Err(e) = super::persist::save(&deps.db, KIND, &venue.0, &(venue.clone(), below)).await {
+    if let Err(e) = super::persist::save(&deps.db, KIND, &key.0, &(key.clone(), below)).await {
         deps.log(
             Level::Error,
             "core.low_usdt",
@@ -75,18 +88,12 @@ pub async fn check(core: &Core, venue: &VenueId, free: Decimal, quote: &str) {
         .await;
     }
     if below {
-        let t = format!(
-            "{}: свободно {free} {quote} — не больше порога алерта {min}",
-            venue.0
-        );
+        let t = format!("{label}: свободно {free} {quote} — не больше порога алерта {min}");
         deps.log(Level::Warn, "core.low_usdt", Some(&venue.0), &t, None)
             .await;
         deps.notify("risk.low_usdt", Some(&venue.0), &t).await;
     } else if was.is_some() {
-        let t = format!(
-            "{}: свободно {free} {quote} — снова выше порога алерта {min}",
-            venue.0
-        );
+        let t = format!("{label}: свободно {free} {quote} — снова выше порога алерта {min}");
         deps.log(Level::Info, "core.low_usdt", Some(&venue.0), t, None)
             .await;
     }

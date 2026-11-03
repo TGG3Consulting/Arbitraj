@@ -31,8 +31,10 @@ pub async fn quote(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resu
     } else {
         (&d.buy_on, Side::Buy)
     };
-    let gw = &core.inner.deps.gw;
-    let v = gw.get(venue).await.map_err(|e| Fail::Stop(e.message))?;
+    // Решение 132: DEX — кошелёк строки маппинга направления (его разрешения и исполнитель); нет строки — отказ.
+    let v = super::dex_account::venue_dir(&core.inner.deps, d, venue)
+        .await
+        .map_err(Fail::Stop)?;
     let q = v
         .quote(&d.asset, side, qty)
         .await

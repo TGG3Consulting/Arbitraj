@@ -15,6 +15,8 @@
 //! покупкой — третий замок (buy_gate). После покупки сделка доводится как обычно.
 //! Решение 94: свободный баланс площадки A читается один раз — сразу после третьего замка, прямо перед ордером
 //! покупки (limits::buy_cap); предел списания — меньшее из бюджета плана и свободного.
+//! Решение 132: счёт (кошелёк) DEX сделки — по маппингу перед предпроверкой (dex_account.rs); нет строки — сделки нет;
+//! маппинг поменяли во время предпроверки — сделки нет. Счёт записывается в сделку, все шаги идут им.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -83,8 +85,18 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты.
 async fn run(core: &Core, d: Direction) {
     let deps = &core.inner.deps;
-    let plan = match super::precheck::run(core, &d).await {
-        Ok(c) => c,
+    // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
+    let pre = async {
+        let acc = super::dex_account::of_direction(deps, &d).await?;
+        let plan = super::precheck::run(core, &d).await?;
+        // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.
+        if super::dex_account::of_direction(deps, &d).await? != acc {
+            return Err("маппинг кошельков изменился во время предпроверки".to_string());
+        }
+        Ok((acc, plan))
+    };
+    let (acc, plan) = match pre.await {
+        Ok(x) => x,
         Err(e) => {
             deps.log(
                 Level::Info,
@@ -106,6 +118,7 @@ async fn run(core: &Core, d: Direction) {
         &d,
         serde_json::to_value(&plan).unwrap_or_default(),
         plan.profit_usd,
+        acc.clone(),
     );
     // Решение 123: выбор исполнителя DEX по финальной котировке («лучший из двух») — в хронологию.
     deal.note(format!(
@@ -114,6 +127,10 @@ async fn run(core: &Core, d: Direction) {
         plan.profit_usd.round_dp(4),
         plan.pick_note()
     ));
+    if let Some(a) = &acc {
+        let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);
+        deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));
+    }
     super::ledger::save(core, &deal).await;
     // Решение 66: покупка только с бюджетом подбора объёма — без него предела списания нет, сделки нет.
     let Some(budget) = plan.size.as_ref().map(|s| s.budget) else {
@@ -126,7 +143,7 @@ async fn run(core: &Core, d: Direction) {
     }
     // Решение 94: свободный баланс A — один запрос прямо перед ордером (не на каждый расчёт); предел списания —
     // меньшее из бюджета плана и свободного. Не хватает на объём плана — объём заново под остаток (решение 103).
-    let cap = match super::limits::buy_cap(core, &d, budget).await {
+    let cap = match super::limits::buy_cap(core, &d, budget, deal.dex_account.as_ref()).await {
         Ok((cap, free, q)) => {
             deal.note(format!(
                 "Перед покупкой свободно на {}: {free} {q}; предел списания {cap}",

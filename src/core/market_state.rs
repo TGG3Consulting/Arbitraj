@@ -37,7 +37,9 @@ pub struct MarketState {
     /// Каналы отправки по id (в SendChannelStats площадки нет; каналы есть только у адаптера DEX).
     pub(super) channels: HashMap<String, SendChannelStats>,
     /// Последнее состояние очереди кошелька по площадке DEX — уведомления только на смену состояния.
-    pub(super) queues: HashMap<VenueId, WalletQueueState>,
+    /// Очереди кошельков DEX по (площадка, счёт) — решение 132: у каждого кошелька своя.
+    pub(super) queues:
+        HashMap<(VenueId, Option<crate::core::types::DexAccountId>), WalletQueueState>,
     /// Биржа → монеты с торгуемой спот-парой (MarketEvent::SpotPairs).
     pub(super) spot: HashMap<VenueId, HashSet<String>>,
     /// DEX → монеты, чьи пулы найдены, но ещё не прочитаны (MarketEvent::PoolsLoading, решение 61).
@@ -138,7 +140,8 @@ impl MarketState {
                 Touched::PoolsLoading { changed }
             }
             MarketEvent::WalletQueue(q) => {
-                let prev = self.queues.insert(q.venue.clone(), q.state.clone());
+                let key = (q.venue.clone(), q.account.clone());
+                let prev = self.queues.insert(key, q.state.clone());
                 Touched::WalletQueue { queue: q, prev }
             }
             MarketEvent::Balance(b) => Touched::Balance(b),

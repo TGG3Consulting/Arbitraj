@@ -64,7 +64,8 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
         return Ok(vec![fee, tax]);
     }
     let d = &cx.dir;
-    let a = deps.gw.get(&d.buy_on).await.map_err(|e| e.message)?;
+    // Решение 132: DEX — кошелёк строки маппинга направления (нет строки — отказ NO_WALLET).
+    let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
     a.withdraw_cost(&d.asset, &cx.net_a, amount)
         .await
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
@@ -103,7 +104,7 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
         }
         return Ok(vec![fee_line(info)?]);
     }
-    let b = deps.gw.get(&d.sell_on).await.map_err(|e| e.message)?;
+    let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
     b.withdraw_cost(&cx.usdt, &cx.net_b, amount)
         .await
         .map_err(|e| {

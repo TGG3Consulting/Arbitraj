@@ -67,6 +67,8 @@ pub struct Accounts {
     pub(crate) writer: Arc<tokio::sync::Mutex<()>>,
     /// Сигнал «кошельки или маппинг изменились» (адаптер DEX пересобирает слежение за кошельками). Ошибок нет.
     pub(crate) changed: Arc<tokio::sync::watch::Sender<u64>>,
+    /// Что переносить (migrate.rs, задаёт main.rs).
+    pub(crate) legacy: Arc<RwLock<Option<migrate::LegacyCfg>>>,
 }
 
 impl Accounts {

@@ -31,7 +31,69 @@ pub struct Legacy<'a> {
     pub rows: &'a [&'a str],
 }
 
+/// Что переносить — задаёт main.rs из констант адаптеров (id биржи, id DEX, имя старого секрета), чтобы здесь не было
+/// имён площадок.
+#[derive(Debug, Clone)]
+pub struct LegacyCfg {
+    /// Имя кошелька переноса (решение Тиграна).
+    pub name: String,
+    /// Имя старого секрета ключа.
+    pub secret: String,
+    /// Ключ прежней строки очереди (id площадки DEX).
+    pub queue_key: String,
+    /// Старая настройка адреса исполнителя и её область (значение читается в момент переноса).
+    pub executor_setting: String,
+    pub executor_scope: crate::settings::scope::Scope,
+    /// Строки маппинга кошелька переноса.
+    pub rows: Vec<String>,
+}
+
+impl crate::settings::store::Store {
+    /// Перенос по настройке main.rs (configure_legacy): есть ли старый ключ — говорит вызывающий (api/secrets.rs после
+    /// разблокировки и после ввода секрета). Возвращает: кошелёк переноса (Some — перенос сделан сейчас).
+    /// Ошибки: база. Не настроено — ничего.
+    pub async fn migrate_wallets(
+        &self,
+        has_key: bool,
+        by: &str,
+    ) -> Result<Option<Wallet>, EditError> {
+        let Some(cfg) = self.accounts().legacy_cfg() else {
+            return Ok(None);
+        };
+        let executor = self
+            .get_exact(&cfg.executor_setting, &cfg.executor_scope)
+            .and_then(|v| v.as_str().map(str::to_string));
+        let rows: Vec<&str> = cfg.rows.iter().map(String::as_str).collect();
+        let l = Legacy {
+            name: &cfg.name,
+            secret: &cfg.secret,
+            queue_key: &cfg.queue_key,
+            executor,
+            rows: &rows,
+        };
+        self.accounts().migrate(has_key, l, by).await
+    }
+}
+
 impl Accounts {
+    /// Задаёт, что переносить (main.rs при запуске). Ошибок нет.
+    pub fn configure_legacy(&self, cfg: LegacyCfg) {
+        *self.legacy.write().unwrap_or_else(|p| p.into_inner()) = Some(cfg);
+    }
+
+    /// Что переносить (None — не настроено). Ошибок нет.
+    pub fn legacy_cfg(&self) -> Option<LegacyCfg> {
+        self.legacy
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
+    /// Имя старого секрета, наличие которого запускает перенос (None — не настроено). Ошибок нет.
+    pub fn legacy_secret(&self) -> Option<String> {
+        self.legacy_cfg().map(|c| c.secret)
+    }
+
     /// Выполняет перенос, если он нужен. Принимает: есть ли старый ключ в секретах, что переносить, кто.
     /// Возвращает: кошелёк переноса (Some — перенос сделан сейчас). Ошибки: база.
     pub async fn migrate(

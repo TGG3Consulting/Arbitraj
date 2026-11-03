@@ -66,3 +66,13 @@
   (у бирж — None), `exec.executor_address` убрана из каталога (исполнитель — у кошелька). Шлюз: `Registry::get_as`.
   Тесты: `tests/bsc_dex_accounts.rs`. После этапа 2 ядро ещё не передаёт счёт — сделки с DEX отказывают «кошелёк не
   выбран» до этапа 3 (ветка не слита).
+- Этап 3 — ядро: `core/dex_account.rs` (счёт направления по маппингу, счёт сделки, площадка на счёт); исполнитель
+  сделки берёт счёт до предпроверки и сверяет после (маппинг поменяли — сделки нет); `ledger::open(…, счёт)`;
+  `Deal.dex_account`; покупка/продажа (trade_ops), перевод и адрес депозита (transfers, `send_as`), баланс перед
+  покупкой (limits), BNB на газ (precheck), котировки расчёта и тика (costs_quote, costs_withdraw, profit, prices),
+  ручные действия (manual_halted/manual/manual_return — кошелёк сделки, «Вернуть боту» наследует), циклы DEX ↔ DEX
+  (строка `dex_dex`, cycle_plan/cycle_deal), перегон USDT (кошелёк сделки; «отдельно» — только биржа ↔ её кошелёк),
+  сверка балансов и «мало USDT/BNB» по кошелькам (reconcile_holders.rs), зачисление по событию — только того же
+  кошелька (credit_watch), очереди кошельков в ядре по (площадка, счёт). Перенос — после разблокировки секретов
+  (api/wallets_migrate.rs, что переносить — main.rs). Уведомления wallet.added / wallet.mapping_changed /
+  wallet.executor_deployed в каталоге. Тест: `tests/core_wallet_mapping.rs`.

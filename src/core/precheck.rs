@@ -83,32 +83,32 @@ fn pair_side(core: &Core, v: &VenueId, d: &Direction, buy: bool) -> Result<(), S
 }
 
 /// BNB на газ у DEX-площадки: свободный нативный BNB ≥ резерв risk.min_bnb_balance + газ транзакций сделки на ней
-/// (need; сверка балансов — 0). Ошибка — текст (мало BNB, резерв не задан или баланс не получен).
-pub async fn bnb_ok(core: &Core, v: &VenueId, need: Decimal) -> Result<(), String> {
+/// (need; сверка балансов — 0). Решение 132: кошелёк — строки маппинга направления. Принимает: ядро, направление,
+/// площадку, газ сделки. Ошибка — текст (мало BNB, резерв не задан, нет кошелька в маппинге, баланс не получен).
+pub async fn bnb_ok(core: &Core, d: &Direction, v: &VenueId, need: Decimal) -> Result<(), String> {
     let min = core
         .inner
         .deps
         .settings
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| e.message)?;
-    let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    let gw = super::dex_account::venue_dir(&core.inner.deps, d, v).await?;
     // Решение 113: только BNB (у DEX — eth_getBalance), а не балансы всех токенов кошелька (~11 с на вызов).
     let have = gw
         .balance(super::convert::GAS_TICKER)
         .await
         .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?
         .map_or(Decimal::ZERO, |x| x.free);
-    bnb_enough(v, have, min, need)
+    bnb_enough(&v.0, have, min, need)
 }
 
 /// Хватает ли BNB на газ: свободный BNB не меньше минимума risk.min_bnb_balance плюс газ сделки. Принимает: площадку,
 /// свободный BNB, минимум, газ сделки. Ошибка — текст причины. Вызывают bnb_ok и сверка (reconcile.rs — по уже
 /// полученным балансам, без второго запроса).
-pub fn bnb_enough(v: &VenueId, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
+pub fn bnb_enough(who: &str, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
     if have < min + need {
         return Err(format!(
-            "{}: BNB на газ {have} меньше минимума {min} + газ сделки {need}",
-            v.0
+            "{who}: BNB на газ {have} меньше минимума {min} + газ сделки {need}"
         ));
     }
     Ok(())
@@ -195,7 +195,7 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
             }
             VenueKind::Dex => {
                 let at = Instant::now();
-                let r = bnb_ok(core, v, Decimal::ZERO).await;
+                let r = bnb_ok(core, d, v, Decimal::ZERO).await;
                 t.mark(format!("баланс BNB {}", v.0), at);
                 if let Err(e) = r {
                     core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
@@ -221,7 +221,7 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
             continue;
         }
         let at = Instant::now();
-        let r = bnb_ok(core, v, gas_need(&c.costs, &stages)).await;
+        let r = bnb_ok(core, d, v, gas_need(&c.costs, &stages)).await;
         t.mark(format!("газ BNB {}", v.0), at);
         if let Err(e) = r {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;

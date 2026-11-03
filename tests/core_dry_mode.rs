@@ -170,7 +170,7 @@ async fn live_deal_never_gets_virtual_budget() {
     set(&s, "dry.enabled", Some(json!(true))).await;
     set(&s, "dry.budget_usdt", Some(json!("1000"))).await;
     // Живая сделка: баланс — только через шлюз (площадки в реестре нет — ошибка, а не 1000 виртуальных).
-    let live = limits::free_now(&core, &bingx, "USDT").await;
+    let live = limits::free_now(&core, &bingx, None, "USDT").await;
     assert!(live.is_err(), "{live:?}");
     // Сухой расчёт кандидата — виртуальный бюджет из настроек, к площадке не ходит.
     match dry::mode(&s) {

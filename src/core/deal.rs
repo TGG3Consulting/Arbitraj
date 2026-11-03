@@ -74,6 +74,10 @@ pub struct Deal {
     /// None — не учитывался или уже заменён фактом.
     #[serde(default)]
     pub provisional_usd: Option<Decimal>,
+    /// Решение 132: счёт (кошелёк) DEX сделки — по маппингу на момент открытия; все шаги сделки идут им, даже если
+    /// маппинг потом поменяли. None — без DEX (биржа ↔ биржа) или сделка до решения 132 (тогда — кошелёк переноса).
+    #[serde(default)]
+    pub dex_account: Option<crate::core::types::DexAccountId>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
     pub started_at: DateTime<Utc>,
@@ -104,6 +108,7 @@ impl Deal {
             unsent_retries: 0,
             result_usd: None,
             provisional_usd: None,
+            dex_account: None,
             timeline: vec![],
             started_at: now,
             updated_at: now,

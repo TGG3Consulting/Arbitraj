@@ -27,5 +27,6 @@ pub mod state;
 pub mod static_ui;
 pub mod venues;
 pub mod wallet_queue;
+pub mod wallets_migrate;
 pub mod windows;
 pub mod ws;

@@ -19,14 +19,16 @@ use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 
 /// Сколько монет можно продать на площадке: реальный свободный баланс (BNB на DEX — сверх резерва на газ и газа
-/// продажи), не больше `cap`. Возвращает: количество и заметку для хронологии. Ошибки: шлюз, балансы, ноль.
+/// продажи), не больше `cap`. Решение 132: у DEX — баланс кошелька сделки. Принимает: ядро, сделку, площадку, монету,
+/// предел. Возвращает: количество и заметку для хронологии. Ошибки: шлюз, балансы, ноль, нет кошелька сделки.
 pub async fn on_hand(
     core: &Core,
+    deal: &Deal,
     venue: &VenueId,
     asset: &Asset,
     cap: Decimal,
 ) -> Result<(Decimal, Option<String>), String> {
-    let gw = core.inner.deps.gw.get(venue).await.map_err(|e| e.message)?;
+    let gw = super::dex_account::venue_of(core, deal, venue).await?;
     // Решение 113: баланс одной монеты (у DEX — 1–2 запроса к узлу, а не по каждому токену кошелька).
     let free = gw
         .balance(&asset.ticker)
@@ -91,7 +93,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
             deal.direction.asset.ticker
         ));
     }
-    match on_hand(core, &deal.at, &deal.direction.asset, deal.qty).await {
+    match on_hand(core, &deal, &deal.at, &deal.direction.asset, deal.qty).await {
         Ok((qty, note)) => set_qty(&mut deal, qty, note),
         Err(e) => {
             deal.step = Step::Halted;

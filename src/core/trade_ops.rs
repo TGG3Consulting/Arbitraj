@@ -82,9 +82,14 @@ pub async fn trade(
             deal_id: deal.to_string(),
             route: route.clone(),
         };
-        let res = match core.inner.deps.gw.get(v).await {
+        // Решение 132: DEX — кошелёк сделки.
+        let res = match super::dex_account::venue_deal(core, deal, v).await {
             Ok(x) => x.trade(req).await,
-            Err(e) => Err(e),
+            Err(e) => Err(GatewayError::new(
+                ErrorCode::NotConfigured,
+                Some(v.clone()),
+                e,
+            )),
         };
         let err = match res {
             Ok(r) => {

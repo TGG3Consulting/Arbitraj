@@ -77,6 +77,7 @@ pub mod partial;
 pub mod persist;
 pub mod precheck;
 pub mod precheck_deposit;
+pub mod precheck_sell;
 pub mod presence;
 pub mod prices;
 pub mod profit;

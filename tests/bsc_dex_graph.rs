@@ -113,8 +113,8 @@ const SHALLOW: Address = address!("0x00000000000000000000000000000000000000a3");
 const CW: Address = address!("0x00000000000000000000000000000000000000a4");
 const WU: Address = address!("0x00000000000000000000000000000000000000a5");
 
-/// Граф из набора пулов: два глубоких COIN–USDT (разной глубины), мелкий COIN–USDT, цепочка COIN–WBNB–USDT.
-async fn graph_with(max_per_edge: i64) -> graph::Graph {
+/// Реестр из набора пулов: два глубоких COIN–USDT (разной глубины), мелкий COIN–USDT, цепочка COIN–WBNB–USDT.
+async fn parts_with(max_per_edge: i64) -> Parts {
     let p = Parts::new(ctx(max_per_edge).await);
     let e18 = 10u128.pow(18);
     p.tokens.set(&[
@@ -136,6 +136,12 @@ async fn graph_with(max_per_edge: i64) -> graph::Graph {
     ] {
         p.registry.put(e);
     }
+    p
+}
+
+/// Граф из набора пулов parts_with.
+async fn graph_with(max_per_edge: i64) -> graph::Graph {
+    let p = parts_with(max_per_edge).await;
     graph::build(&p.ctx, &p.registry, &p.tokens, 18).expect("граф строится")
 }
 
@@ -176,4 +182,37 @@ async fn cap_keeps_deepest() {
     assert_eq!(coin_usdt.len(), 1);
     assert_eq!(pool_of(coin_usdt[0]), BIG);
     assert_eq!(g.len(), 3, "по одному ребру на пару");
+}
+
+#[tokio::test]
+async fn cached_graph_rebuilds_only_on_change() {
+    // Решение 129: тот же реестр и блок — тот же снимок графа (без перестроения); запись в реестр или новый блок —
+    // новый граф, равный построенному заново.
+    // Предел 3 на пару (своя временная папка — другие тесты берут 1 и 2).
+    let p = parts_with(3).await;
+    let a = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 7).unwrap();
+    let b = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 7).unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&a, &b),
+        "реестр не менялся — граф из кэша"
+    );
+    assert_eq!(a.len(), 4);
+    let c = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 8).unwrap();
+    assert!(
+        !std::sync::Arc::ptr_eq(&a, &c),
+        "новый блок — граф строится заново"
+    );
+    // Запись в реестр: пул SHALLOW заменён глубоким пулом COIN–WBNB — версия реестра выросла, у пары COIN–WBNB
+    // теперь два ребра.
+    let e18 = 10u128.pow(18);
+    p.registry
+        .put(pair(SHALLOW, COIN, WBNB, 50_000 * e18, 250 * e18));
+    let d = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 8).unwrap();
+    assert!(
+        !std::sync::Arc::ptr_eq(&c, &d),
+        "реестр изменился — граф строится заново"
+    );
+    let fresh = graph::build(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    assert_eq!(d.len(), fresh.len(), "кэш равен построенному заново");
+    assert_eq!(d.between(COIN, WBNB).len(), 2);
 }

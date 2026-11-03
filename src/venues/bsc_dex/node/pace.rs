@@ -8,7 +8,8 @@
 //! Срочность (решение 61): очередь со строгим порядком классов и гарантированной долей фона — node/queue.rs,
 //! классы — gateway/urgency.rs.
 //! Кто вызывает: node/rpc.rs (call_raw, batch); правило — ещё directory/limit.rs (индексатор).
-//! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, storage/rules.rs.
+//! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, gateway/calc_meter.rs (решение 129:
+//! ожидание очереди и время запроса — в счётчик расчёта кандидата), storage/rules.rs.
 //! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система; не задана — строгий порядок без доли
 //! фона); правила шлюза для RateLimited.
 //!
@@ -16,6 +17,7 @@
 
 use std::time::Duration;
 
+use crate::gateway::calc_meter::{self, Source};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::rules::{RuleAction, pick_rule};
 use crate::gateway::urgency;
@@ -59,8 +61,13 @@ where
 {
     let mut tries = 0u32;
     loop {
+        // Решение 129: ожидание очереди и время запроса — в счётчик расчёта кандидата (gateway/calc_meter.rs).
+        let t0 = std::time::Instant::now();
         wait(ctx, weight).await?;
-        let err = match send().await {
+        let t1 = std::time::Instant::now();
+        let res = send().await;
+        calc_meter::record(Source::Node, weight, t1 - t0, t1.elapsed());
+        let err = match res {
             Err(e) if e.code == ErrorCode::RateLimited => e,
             other => return other,
         };

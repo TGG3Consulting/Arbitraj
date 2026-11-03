@@ -58,11 +58,9 @@ fn rate_key(
     if e.usdt == usdt {
         return Vec::new();
     }
-    let mut v: Vec<_> = reg
-        .by_pair(e.usdt, usdt)
-        .iter()
-        .map(|x| (x.synced_block, x.synced_log, x.valid))
-        .collect();
+    // Решение 129: отметки без копирования записей пулов (раньше — копия каждого пула «промежуточная — USDT» с картой
+    // тиков на каждый пул с промежуточной монетой при каждом построении графа).
+    let mut v = reg.pair_marks(e.usdt, usdt);
     v.sort_unstable();
     v
 }

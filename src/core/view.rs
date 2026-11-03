@@ -3,7 +3,8 @@
 //! (src/api/README.md: coin_check, pool_check, coin_block, stuck_alert, manual, send_channel, gas_stats)
 //! и дополнительные: spread (строка «Живого экрана»), coins (справочник изменился — перечитать GET),
 //! candidate, deal, balances, control (появляются в следующих частях ядра).
-//! Кто вызывает: модули ядра (публикуют), api/ws.rs (подписывается через Core::subscribe).
+//! Кто вызывает: модули ядра (публикуют), api/ws.rs (подписывается через Core::subscribe); api/core_api.rs —
+//! Core::candidates (последние расчёты кандидатов) и Core::channel_stats.
 //! От чего зависит: core/types, signal.rs, serde.
 //! Настройки: нет.
 
@@ -77,5 +78,23 @@ impl Live {
     /// Подписка для интерфейса (api/ws.rs). Отстал — получит Lagged и перечитает данные по REST.
     pub fn subscribe(&self) -> broadcast::Receiver<CoreEvent> {
         self.tx.subscribe()
+    }
+}
+
+/// Строки «Живого экрана» и экрана «Каналы отправки» (перенесены из candidates.rs, решение 129 — размер файла).
+impl super::engine::Core {
+    /// Последние расчёты кандидатов по направлениям (новые сверху) — «Живой экран».
+    pub fn candidates(&self) -> serde_json::Value {
+        let mut v: Vec<serde_json::Value> = super::engine::lk(&self.inner.candidates)
+            .values()
+            .cloned()
+            .collect();
+        v.sort_by(|a, b| b["at"].as_str().cmp(&a["at"].as_str()));
+        serde_json::Value::Array(v)
+    }
+
+    /// Последняя статистика каналов отправки (события адаптеров DEX) — экран «Каналы отправки».
+    pub fn channel_stats(&self) -> Vec<crate::core::types::SendChannelStats> {
+        super::engine::rd(&self.inner.market).channels()
     }
 }

@@ -46,7 +46,10 @@ pub async fn quote(
     gas: U256,
 ) -> GatewayResult<Quote> {
     let ctx = &v.q.ctx;
-    let g = graph::build(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec)?;
+    // Решение 129: граф — один на состояние реестра и блок (pools/graph.rs cached), а не новый на каждую котировку.
+    // Свежесть головы проверяет вызывающий (quote/mod.rs); здесь номер блока — только ключ кэша (нет головы — 0).
+    let head = v.q.heads.latest().map_or(0, |h| h.number);
+    let g = graph::cached(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, head)?;
     let allowed: HashSet<Address> = v.q.mids.active(ctx).iter().map(|m| m.address).collect();
     let (max_hops, max_paths) = route_paths::limits(ctx)?;
     let mut paths = route_paths::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, max_paths);

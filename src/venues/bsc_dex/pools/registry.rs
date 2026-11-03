@@ -3,9 +3,13 @@
 //! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
 //! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs.
+//! Решение 129: номер версии реестра (растёт при любой записи — put, update, retain) — по нему граф маршрутов строится
+//! один раз на состояние реестра, а не на каждую котировку (pools/graph.rs cached); pair_marks — отметки синхронизации
+//! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs).
 //! Настройки: нет.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use alloy_primitives::Address;
@@ -54,6 +58,10 @@ pub struct Registry {
     inner: Arc<RwLock<HashMap<PoolRef, Entry>>>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
     depth: super::depth_book::Book,
+    /// Версия: растёт при любой записи (решение 129).
+    version: Arc<AtomicU64>,
+    /// Граф маршрутов последней версии (решение 129, graph.rs cached).
+    graph: super::graph::Cache,
 }
 
 impl Entry {
@@ -72,10 +80,21 @@ impl Registry {
         &self.depth
     }
 
+    /// Версия реестра (решение 129): растёт при любой записи. Ошибок нет.
+    pub fn version(&self) -> u64 {
+        self.version.load(Ordering::Acquire)
+    }
+
+    /// Кэш графа маршрутов (решение 129, graph.rs). Ошибок нет.
+    pub fn graph_cache(&self) -> &super::graph::Cache {
+        &self.graph
+    }
+
     /// Добавляет или заменяет запись. Ошибок нет.
     pub fn put(&self, e: Entry) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         m.insert(e.pool.reference.clone(), e);
+        self.version.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Копия записи. None — пула нет.
@@ -90,6 +109,8 @@ impl Registry {
     /// Изменение записи на месте. Принимает: ссылку и функцию. Возвращает: её результат; None — пула нет.
     pub fn update<T>(&self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию.
+        self.version.fetch_add(1, Ordering::AcqRel);
         m.get_mut(r).map(f)
     }
 
@@ -99,6 +120,16 @@ impl Registry {
         m.values()
             .filter(|e| e.coin == coin && e.usdt == quote)
             .cloned()
+            .collect()
+    }
+
+    /// Отметки синхронизации пулов пары «монета — встречный токен»: (блок, logIndex, достоверен) — без копирования
+    /// записей (решение 129: ключ кэша глубины считается для каждого пула при построении графа). Ошибок нет.
+    pub fn pair_marks(&self, coin: Address, quote: Address) -> Vec<(u64, Option<u64>, bool)> {
+        let m = self.inner.read().unwrap_or_else(|p| p.into_inner());
+        m.values()
+            .filter(|e| e.coin == coin && e.usdt == quote)
+            .map(|e| (e.synced_block, e.synced_log, e.valid))
             .collect()
     }
 
@@ -142,5 +173,6 @@ impl Registry {
             .write()
             .unwrap_or_else(|p| p.into_inner())
             .retain(|_, e| keep(e));
+        self.version.fetch_add(1, Ordering::AcqRel);
     }
 }

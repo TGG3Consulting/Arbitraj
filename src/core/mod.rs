@@ -8,6 +8,8 @@
 //! Карта файлов — core/README.md и ARCHITECTURE.md («Карта ядра»).
 
 pub mod blacklist;
+pub mod calc_report;
+pub mod calc_timing;
 pub mod candidates;
 pub mod card;
 pub mod card_book;

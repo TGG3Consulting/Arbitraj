@@ -103,6 +103,19 @@ async fn run() -> Result<(), String> {
     registry
         .register(std::sync::Arc::new(arb::venues::mexc::Mexc::new(mexc_ctx)))
         .await;
+    // Биржа Bybit (решение 136): API V5, только спот; свои настройки venue.* [bybit] и секреты bybit.*.
+    let bybit_ctx = arb::venues::bybit::ctx::Ctx::new(
+        settings.clone(),
+        vault.clone(),
+        http.clone(),
+        journal.clone(),
+        raw.clone(),
+    );
+    registry
+        .register(std::sync::Arc::new(arb::venues::bybit::Bybit::new(
+            bybit_ctx,
+        )))
+        .await;
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.

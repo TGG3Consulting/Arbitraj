@@ -108,7 +108,7 @@ pub async fn state(
     if f.proto.is_solidly() {
         if let PoolRef::Contract(a) = reference {
             return Ok(Loaded {
-                state: load_solidly::load(ctx, f.id, *a, &tag).await?,
+                state: load_solidly::load(ctx, f, *a, &tag).await?,
                 ticks: None,
                 bins: None,
             });

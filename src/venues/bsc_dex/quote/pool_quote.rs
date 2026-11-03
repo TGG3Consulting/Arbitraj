@@ -21,7 +21,8 @@ use super::super::math::swap_algebra::{self, AlgebraState};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
-use super::super::math::{bin_swap, swap_solidly, v2};
+use super::super::math::{bin_swap, solidly_v1_math, swap_solidly, v2};
+use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
 
@@ -232,6 +233,10 @@ pub fn swap(
         // volatile → обычная V2 x·y=k (math/v2). Комиссия пула — fee (числитель над 10000) из состояния: stable передаёт
         // его прямо в get_amount_out, volatile — дробью (10000−fee)/10000 в v2. Стабильная сторона — только точный вход
         // (обратной формулы get_y под точный выход нет); волатильная — обе стороны (V2).
+        // Решение 122 F: Solidly V1 (THENA V1) — своя стабильная математика Pair.sol (math/solidly_v1_math); точный вход
+        // волатильного пула — формула контракта (вход минус floor(in·fee/10000), затем in·R/(R+in) — одинакова у THENA V1
+        // и Velodrome), а не V2-дробь (она округляет вход иначе); точный выход волатильного — по-прежнему V2-обратная
+        // (getAmountIn у контракта нет).
         (
             PoolState::Solidly {
                 reserve0,
@@ -254,14 +259,25 @@ pub fn swap(
                         "Solidly stable: точный выход не поддерживается (нет обратной формулы кривой)",
                     ));
                 }
-                let out = swap_solidly::get_amount_out(
-                    amount,
-                    r_in,
-                    r_out,
-                    dec_in,
-                    dec_out,
-                    U256::from(*fee),
-                )
+                let out = if e.family.proto == Proto::SolidlyV1 {
+                    solidly_v1_math::stable_amount_out(
+                        amount,
+                        r_in,
+                        r_out,
+                        dec_in,
+                        dec_out,
+                        U256::from(*fee),
+                    )
+                } else {
+                    swap_solidly::get_amount_out(
+                        amount,
+                        r_in,
+                        r_out,
+                        dec_in,
+                        dec_out,
+                        U256::from(*fee),
+                    )
+                }
                 .ok_or_else(none)?;
                 Ok(Swapped {
                     amount_in: amount,
@@ -272,7 +288,7 @@ pub fn swap(
                 // Volatile: дробь после комиссии (10000−fee)/10000 — как контракт убирает fee из входа (Pool.sol).
                 let ratio = (U256::from(10_000u32 - *fee), U256::from(10_000u32));
                 if exact_in {
-                    v2::amount_out(amount, r_in, r_out, ratio)
+                    solidly_v1_math::volatile_amount_out(amount, r_in, r_out, U256::from(*fee))
                         .map(|o| Swapped {
                             amount_in: amount,
                             amount_out: o,

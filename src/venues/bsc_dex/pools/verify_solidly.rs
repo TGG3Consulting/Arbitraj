@@ -11,6 +11,9 @@
 //!
 //! getPool(tokenA, tokenB, bool stable) → address — PoolFactory.sol L68-L71 (реестр `_getPool`, заполнен в обе
 //! стороны L153-L154), velodrome-finance HEAD b3065d8 (решение 23).
+//! Solidly V1 — THENA V1 (решение 122 F): реестр — `getPair(tokenA, tokenB, bool stable)` (публичный mapping,
+//! заполнен в обе стороны — ThenafiBNB/THENA-Contracts HEAD f5bc742, PairFactoryUpgradeable.sol L24, L124-L125);
+//! ответ — тот же один address.
 
 use std::str::FromStr;
 
@@ -21,8 +24,9 @@ use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::abi_solidly::ISolidlyFactory;
+use super::abi_solidly::{ISolidlyFactory, IThenaV1Factory};
 use super::discover::{Found, sorted};
+use super::families::Proto;
 use super::verify::{Candidate, Verdict};
 
 /// Проверка пачки кандидатов Solidly частями по `size` вызовов (по 2 вызова на кандидата: getPool для stable=true и
@@ -37,19 +41,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             let factory = ctx
                 .dex_addr("dex.factory", c.family.id)
                 .map_err(|e| e.message)?;
-            let one = |stable: bool| {
-                (
-                    factory,
-                    Bytes::from(
-                        ISolidlyFactory::getPoolCall {
-                            tokenA: c.coin,
-                            tokenB: c.quote,
-                            stable,
-                        }
-                        .abi_encode(),
-                    ),
-                )
-            };
+            let v1 = c.family.proto == Proto::SolidlyV1;
+            let one = |stable: bool| (factory, registry_call(v1, c.coin, c.quote, stable));
             Ok((pool, one(true), one(false)))
         })();
         match plan {
@@ -75,6 +68,26 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         out.push(decide(c, pool, a_true, a_false));
     }
     out
+}
+
+/// Вызов реестра фабрики: Solidly (Velodrome) — getPool(a, b, stable); Solidly V1 (THENA V1) — getPair(a, b, stable).
+/// Ответ у обоих — один address (разбор одинаков). Ошибок нет.
+pub fn registry_call(v1: bool, a: Address, b: Address, stable: bool) -> Bytes {
+    if v1 {
+        let ask = IThenaV1Factory::getPairCall {
+            tokenA: a,
+            tokenB: b,
+            stable,
+        };
+        Bytes::from(ask.abi_encode())
+    } else {
+        let ask = ISolidlyFactory::getPoolCall {
+            tokenA: a,
+            tokenB: b,
+            stable,
+        };
+        Bytes::from(ask.abi_encode())
+    }
 }
 
 /// Итог по двум ответам реестра (stable=true и stable=false), без сети. Пул принят, если любой ответ — его адрес.

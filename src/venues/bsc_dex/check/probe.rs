@@ -30,7 +30,7 @@ use super::super::ctx::Ctx;
 use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
-use super::super::pools::families::Proto;
+use super::super::pools::exec_kind;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::approve::Approval;
@@ -209,28 +209,13 @@ async fn part(
     wallet: Address,
     now: u64,
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
-    // DODO PMM (решение 86b): исполнения свопа пока нет (роутер DODO — фаза 86c), поэтому пробу налога через его
-    // пул собрать нечем (ни Universal Router, ни свой роутер-форк). Чёткая причина, не молчаливый сбой: налог монеты
-    // проверяется по её другим пулам (Pancake и т. п.), если они есть.
-    if e.family.proto.is_dodo() {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
-            format!(
-                "{}: проба налога через пул DODO невозможна — исполнение свопа ещё не реализовано (фаза 86c)",
-                e.family.title
-            ),
-        ));
-    }
-    // KyberSwap Elastic (решение 121 B2): своего пути исполнения нет — роутер Elastic не classic V2 Router, проба
-    // вызовом fork_swap откатилась бы и выглядела как сбой монеты. Чёткая причина; налог — по другим пулам монеты.
-    if e.family.proto == Proto::KyberElastic {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
-            format!(
-                "{}: проба налога через пул KyberSwap Elastic невозможна — своего пути исполнения ещё нет (решение 121)",
-                e.family.title
-            ),
-        ));
+    // Решение 122 F: у вида без своего пути исполнения (family.tradable = false: DODO, THENA Fusion, Solidly, Slipstream,
+    // форки V3, KyberSwap Elastic) пробу собрать нечем ни через Universal Router (чужой пул он не найдёт), ни через
+    // classic V2 Router форка (у V3-форка/Elastic его нет — своп откатился бы и выглядел как сбой монеты). Путь для
+    // них — шаг контракта-исполнителя (pools/exec_kind.rs); кодировщики шагов — exec/executor/* (часть X). Пока проба
+    // через исполнитель не подключена — чёткая причина; налог монеты проверяется по её другим пулам, если они есть.
+    if !e.family.tradable {
+        return Err(ctx.err(ErrorCode::NotConfigured, no_path(ctx, e)));
     }
     if e.family.fork {
         fork_swap::probe_swap(
@@ -247,5 +232,26 @@ async fn part(
         let plan = plan::build(ctx, &plan::single(e, order), wallet, now, true).await?;
         let data = plan.data(base);
         Ok((plan.approvals, plan.router, data))
+    }
+}
+
+/// Причина «пробу налога через этот пул собрать нечем» (решение 122 F) — для журнала и экрана «Монеты». Принимает:
+/// окружение, пул. Возвращает: текст. Ошибок нет.
+fn no_path(ctx: &Ctx, e: &Entry) -> String {
+    let t = e.family.title;
+    match e.family.executor_kind {
+        Some(k) if exec_kind::via_executor(ctx, e.family) => format!(
+            "{t}: проба налога через этот пул идёт шагом {} контракта-исполнителя — сборка пробы через исполнитель \
+             (exec/executor, часть X) ещё не подключена; налог — по другим пулам монеты",
+            k.name()
+        ),
+        Some(k) => format!(
+            "{t}: проба налога через этот пул невозможна — своего пути исполнения нет; шаг {} исполнителя включится, \
+             когда задан exec.executor_address; налог — по другим пулам монеты",
+            k.name()
+        ),
+        None => format!(
+            "{t}: проба налога через этот пул невозможна — пути исполнения нет; налог — по другим пулам монеты"
+        ),
     }
 }

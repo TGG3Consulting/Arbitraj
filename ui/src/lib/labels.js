@@ -52,6 +52,7 @@ const CHOICE = {
   v2_fork: 'форк V2',
   v3_fork: 'форк V3 (ABI Uniswap)',
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
+  solidly_v1: 'Solidly V1 (THENA V1)',
   pancakeswap_infinity_cl: 'PancakeSwap Infinity CL',
   pancakeswap_infinity_bin: 'PancakeSwap Infinity Bin',
   uniswap_v4: 'Uniswap V4',

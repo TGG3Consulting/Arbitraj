@@ -2,7 +2,7 @@
 //! Что делает: поиск пулов по фабрикам на своём узле (решение 121, C3) — второй источник справочника пулов рядом с
 //! индексатором (решение 58 дополнено). Включён index.factory_scan [bsc_dex] (не задана — выключен): по каждой монете
 //! подписки и каждому встречному токену (USDT и промежуточные, решение 52) — вызовы реестра фабрик подключённых DEX
-//! (factory_calls.rs) пачками Multicall3 по dex.load_batch на одном теге latest. Найденный пул (ненулевой адрес) —
+//! (factory_calls.rs; виды вопросов — factory_ask.rs: V2, V3, Solidly, Algebra, DODO V2 — решение 122 F) пачками Multicall3 по dex.load_batch на одном теге latest. Найденный пул (ненулевой адрес) —
 //! в справочник (поле factory) и в ту же проверку на своём узле и тот же реестр, что пулы индексатора: монета уходит
 //! в канал «монета обновлена» (index_watch.rs → index::take → verify → attach). Фабрика даёт только адрес.
 //! Проход — при старте подписки и после изменения index.factory_scan или dex.* (без опроса); часть пачки без ответа
@@ -28,6 +28,7 @@ use crate::storage::journal::Level;
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
+use super::factory_ask::decode_q;
 use super::factory_calls::{self, Plan};
 
 /// Работает, пока жива подписка. Принимает: окружение, монеты подписки (адрес → тикер, с промежуточными),
@@ -136,8 +137,8 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
     let (mut reverted, mut bad, mut no_answer) = (0, 0, 0);
     let mut first_bad = None;
     for (ask, a) in plan.asks.iter().zip(answers) {
-        let pool = match a {
-            Ok(Ok(b)) => match factory_calls::decode(ask.fee, &b) {
+        let pools = match a {
+            Ok(Ok(b)) => match decode_q(ask.q, &b) {
                 Ok(p) => p,
                 Err(why) => {
                     bad += 1;
@@ -154,23 +155,23 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
                 continue;
             }
         };
-        if pool == Address::ZERO {
-            continue;
+        // Нулевые адреса (пула нет) уже отброшены decode_q; у DODO в одном ответе может быть несколько пулов пары.
+        for pool in pools {
+            found.entry(ask.coin).or_default().push(IndexedPool {
+                dex_id: ask.family.id.to_string(),
+                pool: format!("{pool:#x}"),
+                base: ask.coin,
+                quote: ask.quote,
+                base_symbol: sym(ask.coin),
+                quote_symbol: sym(ask.quote),
+                reserve_usd: None,
+            });
         }
-        found.entry(ask.coin).or_default().push(IndexedPool {
-            dex_id: ask.family.id.to_string(),
-            pool: format!("{pool:#x}"),
-            base: ask.coin,
-            quote: ask.quote,
-            base_symbol: sym(ask.coin),
-            quote_symbol: sym(ask.quote),
-            reserve_usd: None,
-        });
     }
     let mut notes = Vec::new();
     if reverted > 0 {
         notes.push(format!(
-            "вызовов откатилось: {reverted} — фабрика не отвечает getPair/getPool (проверьте dex.factory и dex.kind)"
+            "вызовов откатилось: {reverted} — фабрика не отвечает на вызов реестра своего вида (проверьте dex.factory и dex.kind)"
         ));
     }
     if let Some(b) = first_bad {

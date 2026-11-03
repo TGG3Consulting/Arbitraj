@@ -3,7 +3,8 @@
 //! (quote/quoter.rs) и для пробного обмена в симуляции (check/probe.rs).
 //! V2 — Router.getAmountsOut; V3 — QuoterV2.quoteExactInputSingle; Infinity CL/Bin — CLQuoter/BinQuoter;
 //! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые); KyberSwap Elastic — свой QuoterV2
-//! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81).
+//! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81); Maverick V2 — MaverickV2Quoter.calculateSwap
+//! (quote/quoter_maverick.rs, решение 122 F).
 //! Кто вызывает: quote/quoter.rs, check/probe.rs.
 //! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, ctx.rs.
 //! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула].
@@ -43,6 +44,10 @@ pub fn request(
         e.pool.token0
     };
     let zero_for_one = token_in == e.pool.token0;
+    // Maverick V2 (решение 122 F): MaverickV2Quoter.calculateSwap (quote/quoter_maverick.rs).
+    if e.family.proto == Proto::Maverick {
+        return super::quoter_maverick::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -261,6 +266,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     // Solidly (Topaz v2, THENA V1): getAmountOut возвращает один uint256 — выход после комиссии пула.
     if e.family.proto.is_solidly() {
         return ISolidlyPool::getAmountOutCall::abi_decode_returns(out).ok();
+    }
+    if e.family.proto == Proto::Maverick {
+        return super::quoter_maverick::decode(out);
     }
     // StableSwap: get_dy возвращает один uint256 — выход после комиссии.
     if e.family.proto == Proto::CurveStable {

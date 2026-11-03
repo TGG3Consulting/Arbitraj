@@ -134,5 +134,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "StableSwap не исполняется Universal Router (шаг CURVE контракта-исполнителя)",
         )),
+        // TickBin (Maverick V2, решение 122 F): Universal Router его не исполняет — только шаг MAVERICK исполнителя.
+        PoolKind::TickBin => Err(ctx.err(
+            ErrorCode::Internal,
+            "Maverick V2 не исполняется Universal Router (шаг MAVERICK контракта-исполнителя)",
+        )),
     }
 }

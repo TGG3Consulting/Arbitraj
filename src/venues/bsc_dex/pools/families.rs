@@ -79,6 +79,12 @@ pub enum Proto {
     /// Чтение — load_curve.rs, события — events_curve.rs, проверка — verify_curve.rs, математика —
     /// math/stableswap_v1.rs. Вид ядра — StableSwap.
     CurveStable,
+    /// Maverick V2 (решение 122 F; maverickprotocol/v2-common d91e871, IMaverickV2Pool.sol): тики с резервами tokenA и
+    /// tokenB, комиссия по направлению fee(bool), бины разных видов. Расчёт обмена — порт команды Maverick
+    /// (math/maverick_swap.rs; Solidity-исходник закрыт), сверка — MaverickV2Quoter.calculateSwap (решение 73). Фабрика —
+    /// isFactoryPool / lookup / PoolCreated. Чтение — load_maverick.rs, события — events_maverick.rs, проверка —
+    /// verify_maverick.rs. Вид ядра — TickBin.
+    Maverick,
 }
 
 impl Proto {
@@ -177,6 +183,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Solidly — в графе и для сигналов, но guard executable (quote/graph_route.rs, cycle.rs) по family.tradable в
         // авто-сделку не пускает. Вид ядра — V3 (PoolState::V3), чтение/дискавери/квотер — свои (два отличия от Uni V3).
         "slipstream" => (PoolKind::V3, Proto::Slipstream, true, false, false),
+        // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
+        // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
+        "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
         _ => return None,
     })
 }
@@ -329,6 +338,14 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Slipstream => list.extend(["dex.factory", "dex.quoter"]),
+        // Maverick V2 (решение 122 F): фабрика (isFactoryPool, PoolCreated), квотер (сверка перед сделкой, решение 73),
+        // PoolLens и радиус тиков — без них состояние пула не прочитать.
+        Proto::Maverick => list.extend([
+            "dex.factory",
+            "dex.quoter",
+            "dex.pool_lens",
+            "dex.tick_radius",
+        ]),
     }
     list
 }

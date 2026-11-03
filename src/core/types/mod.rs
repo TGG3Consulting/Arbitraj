@@ -17,6 +17,7 @@ pub mod executor;
 pub mod market;
 pub mod pool;
 pub mod pool_depth;
+pub mod pool_tick_bin;
 pub mod send;
 pub mod trade;
 pub mod transfer;
@@ -36,7 +37,10 @@ pub use directory::{
 pub use dry_swap::{DexDrySwap, DrySwapPool};
 pub use executor::{ExecutorDeployQuote, ExecutorDeployed};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
-pub use pool::{HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState, StableData};
+pub use pool::{
+    HookGroup, HookInfo, PmmData, Pool, PoolKind, PoolRef, PoolState, StableData, TickBinData,
+    TickReserves,
+};
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,

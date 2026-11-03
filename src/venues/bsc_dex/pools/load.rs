@@ -22,8 +22,8 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_slipstream,
-    load_solidly, load_v2v3,
+    load_algebra, load_bin, load_cl, load_curve, load_dodo, load_elastic, load_maverick,
+    load_slipstream, load_solidly, load_v2v3,
 };
 
 /// Прочитанное состояние.
@@ -86,6 +86,21 @@ pub async fn state(
             ErrorCode::Internal,
             format!("{}: ссылка на пул StableSwap не того вида", f.title),
         ));
+    }
+    // Maverick V2 (решение 122 F): вид ядра TickBin, чтение своё (load_maverick.rs): состояние, тики и кривая квотера.
+    if f.proto == Proto::Maverick {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                format!("{}: ссылка на пул Maverick не того вида", f.title),
+            ));
+        };
+        let state = load_maverick::load(ctx, f, *a, pair, &tag).await?;
+        return Ok(Loaded {
+            state,
+            ticks: None,
+            bins: None,
+        });
     }
     // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
     if f.proto == Proto::KyberElastic {

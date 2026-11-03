@@ -9,7 +9,8 @@
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
     components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte,
-    components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85).
+    components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85), components/CalcTiming.svelte (время расчёта по
+    этапам, решение 129).
   Настройки: нет (пороги signal.*, money.*, profit.*, подбор объёма size.* — экран «Настройки»).
   Кандидат показывает, как подобран объём (calc.size.why, решение 66): оптимум, прибыль, прибыль на бюджете;
     в режиме «лучший из двух» (решение 123) — кто дал финальную котировку DEX и на сколько USDT (Quote.pick).
@@ -27,6 +28,7 @@
   import DryBanner from '../components/DryBanner.svelte';
   import SignalCard from '../components/SignalCard.svelte';
   import DexCycles from '../components/DexCycles.svelte';
+  import CalcTiming from '../components/CalcTiming.svelte';
 
   let spreads = $state({});
   let cands = $state({});
@@ -86,6 +88,9 @@
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
     </header>
+    {#if c.timing}
+      <CalcTiming timing={c.timing} />
+    {/if}
     {#if c.card}
       <details open>
         <summary>Карточка сигнала</summary>

@@ -10,7 +10,8 @@
 //! выручку не входит); пределы ордера биржи (minQty/maxQty, minNotional/maxNotional) — по худшей цене ордера
 //! (costs_quote.rs); списание по бюджету spend_max — количество × худшая цена покупки; комиссии вывода и возврата
 //! биржи — из справочника сетей ядра, без запросов к бирже (costs_withdraw.rs).
-//! Типы расчёта (Calc, CostLine) — costs_types.rs.
+//! Типы расчёта (Calc, CostLine) — costs_types.rs. Решение 129: каждый запрос к шлюзу — часть замера этапа
+//! (calc_timing.rs): котировка A / B с id площадки, стоимость вывода и возврата, курсы затрат.
 //! Кто вызывает: core/size_curve.rs (подбор объёма), core/partial.rs.
 //! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_withdraw.rs, dirctx.rs, size.rs, engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
@@ -20,6 +21,7 @@ use rust_decimal::{Decimal, MathematicalOps};
 
 use crate::core::types::{Cost, CostKind, Side};
 
+use super::calc_timing::stage;
 use super::convert;
 use super::costs_quote::{floor_step, order_limits, quote, worst};
 pub use super::costs_types::{Calc, CostLine};
@@ -34,7 +36,11 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
     let deps = &core.inner.deps;
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
-    let qa = quote(core, d, false, qty).await?;
+    let qa = stage(
+        || format!("котировка A {}", d.buy_on.0),
+        quote(core, d, false, qty),
+    )
+    .await?;
     // Списание по бюджету — по худшей цене покупки (лимит биржи, допуск DEX): столько может уйти или замёрзнуть.
     let worst_a = worst(core, &d.buy_on, &d.asset, Side::Buy, qty, qa.avg_price)?;
     order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst_a)?;
@@ -48,7 +54,11 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
     };
     let to_send = floor_precision(qty - coin_fee(&qa.costs), cx.a.info.as_ref());
     cx.check_withdraw(to_send)?;
-    let wc = withdraw_a(deps, cx, to_send).await?;
+    let wc = stage(
+        || format!("стоимость вывода {}", d.buy_on.0),
+        withdraw_a(deps, cx, to_send),
+    )
+    .await?;
     let arrive = to_send - coin_fee(&wc);
     lines.extend(wc.into_iter().map(|c| (c, "перевод")));
     cx.check_deposit(arrive)?;
@@ -59,13 +69,14 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
         )));
     }
     // Изменение ликвидности к моменту продажи: используем только долю h глубины B.
-    quote(core, d, true, sell_qty / cx.h)
+    let name_b = || format!("котировка B {}", d.sell_on.0);
+    stage(name_b, quote(core, d, true, sell_qty / cx.h))
         .await
         .map_err(|e| match e {
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,
         })?;
-    let qb = quote(core, d, true, sell_qty).await?;
+    let qb = stage(name_b, quote(core, d, true, sell_qty)).await?;
     let worst_b = worst(
         core,
         &d.sell_on,
@@ -95,7 +106,8 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
             .filter(|c| !c.in_price && c.asset == cx.quote[1])
             .map(|c| c.amount)
             .sum();
-        let rc = return_b(deps, cx, proceeds - sell_fee).await?;
+        let ret = return_b(deps, cx, proceeds - sell_fee);
+        let rc = stage(|| format!("стоимость возврата USDT {}", d.sell_on.0), ret).await?;
         lines.extend(
             rc.into_iter()
                 .map(|c| (convert::usdt_return(c), "возврат USDT")),
@@ -123,7 +135,8 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
         .filter(|(c, _)| !c.in_price)
         .map(|(c, _)| c.clone())
         .collect();
-    let rates = convert::rates(deps, &cx.cex, cx.quote.clone(), &coin, qa.avg_price, &must).await?;
+    let rates = convert::rates(deps, &cx.cex, cx.quote.clone(), &coin, qa.avg_price, &must);
+    let rates = stage(|| "курсы затрат".into(), rates).await?;
     let mut costs = vec![];
     let mut costs_usdt = Decimal::ZERO;
     for (c, stage) in lines {

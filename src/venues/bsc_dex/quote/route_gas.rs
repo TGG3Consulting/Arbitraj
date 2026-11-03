@@ -3,7 +3,8 @@
 //! газ пути = сумма газа обмена каждого его пула (замер пробным обменом своей стороны пула — quote/select.rs Usable.gas,
 //! check/state.rs) × текущая цена газа (quote/gas.rs — та же цена, что у котировки и отправки); BNB газа (= WBNB 1:1)
 //! переводится в USDT продажей этой суммы в лучший достоверный пул «WBNB — USDT» реестра нашей математикой
-//! (quote/rate.rs). Сплит (quote/graph_split.rs) вычитает газ из прироста новой доли: доля/путь берётся по ЧИСТОМУ
+//! (quote/rate.rs). Пулы «WBNB — USDT» берутся из реестра один раз на котировку (решение 129: раньше — копия этих пулов
+//! с картами тиков на каждый путь графа). Сплит (quote/graph_split.rs) вычитает газ из прироста новой доли: доля/путь берётся по ЧИСТОМУ
 //! выходу. Сама затрата газа в котировке по-прежнему считается отдельно (quote/steps.rs) — здесь только выбор.
 //! Кто вызывает: quote/graph_split.rs (через quote/graph_route.rs).
 //! От чего зависит: quote/rate.rs, quote/route_calc.rs (Leg), pools/registry.rs, num.rs, ctx.rs.
@@ -17,7 +18,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::pools::registry::Registry;
+use super::super::pools::registry::{Entry, Registry};
 use super::rate;
 use super::route_calc::Leg;
 
@@ -35,6 +36,8 @@ pub struct GasUsdt<'a> {
     pub usdt_dec: u8,
     pub wbnb: Address,
     pub gas_wei: U256,
+    /// Пулы «WBNB — USDT» на момент котировки (решение 129); у USDT = WBNB — пусто.
+    pub pools: Vec<Entry>,
 }
 
 impl<'a> GasUsdt<'a> {
@@ -52,6 +55,11 @@ impl<'a> GasUsdt<'a> {
                 "dex.route_gas_aware = да: нужен адрес WBNB (dex.native_wrapped), чтобы перевести газ пути в USDT",
             )
         })?;
+        let pools = if wbnb == usdt {
+            Vec::new()
+        } else {
+            reg.by_pair(wbnb, usdt)
+        };
         Ok(Self {
             ctx,
             reg,
@@ -59,6 +67,7 @@ impl<'a> GasUsdt<'a> {
             usdt_dec,
             wbnb,
             gas_wei,
+            pools,
         })
     }
 
@@ -71,7 +80,11 @@ impl<'a> GasUsdt<'a> {
             return Ok(Decimal::ZERO);
         }
         // BNB газа = WBNB 1:1 (18 знаков, num::BNB_DECIMALS): продаём эту сумму WBNB в пул «WBNB — USDT».
-        let got = rate::to_usdt(self.ctx, self.reg, self.usdt, self.wbnb, wei)?;
+        let got = if self.wbnb == self.usdt {
+            wei
+        } else {
+            rate::best_in(self.ctx, &self.pools, self.wbnb, self.wbnb, wei)?
+        };
         num::to_decimal(got, self.usdt_dec).ok_or_else(|| {
             self.ctx.err(
                 ErrorCode::BadResponse,

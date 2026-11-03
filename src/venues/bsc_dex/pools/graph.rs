@@ -10,12 +10,18 @@
 //! оставляет не больше dex.route_max_pools_per_edge самых глубоких рёбер, чтобы держать ширину перебора путей.
 //! Допуск ребра к КОТИРОВКЕ/СДЕЛКЕ (сверка с квотером, крючок, газ) проверяет quote/select.rs при оценке пути —
 //! граф даёт только достижимость и ликвидность.
-//! Кто вызывает: перечисление путей графа (решение 80, следующий шаг) — quote/*.
+//! Решение 129: `cached` — граф строится один раз на состояние реестра (версия реестра), блок головы и настройки графа;
+//! все котировки этого состояния (подбор объёма считает десятки объёмов на кандидата, кандидаты идут параллельно)
+//! берут готовый снимок. Раньше каждая котировка DEX копировала весь реестр с картами тиков и считала ключ глубины
+//! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
+//! настроек, токенов и (через устаревание) блока — всё это в ключе кэша.
+//! Кто вызывает: quote/graph_route.rs (cached), quote/cycle_scan.rs (build).
 //! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
@@ -75,6 +81,71 @@ impl Graph {
     pub fn between(&self, x: Address, y: Address) -> Vec<&Edge> {
         self.edges_from(x).filter(|e| e.other(x) == y).collect()
     }
+}
+
+/// На чём построен граф (решение 129): версия реестра, блок головы, dex.route_max_pools_per_edge, настройки глубины
+/// (полоса, порог, гистерезис — текстом), USDT и его decimals.
+#[derive(Clone, PartialEq, Eq)]
+struct Stamp {
+    version: u64,
+    head: u64,
+    settings: Vec<String>,
+    usdt: Option<Address>,
+    usdt_dec: u8,
+}
+
+/// Кэш последнего графа (решение 129). Один на реестр (pools/registry.rs). Дешёво клонируется.
+#[derive(Clone, Default)]
+pub struct Cache(Arc<Mutex<Option<Built>>>);
+
+/// Построенный граф и на чём он построен.
+type Built = (Stamp, Arc<Graph>);
+
+/// Граф текущего состояния: из кэша, если с его построения не менялись реестр, блок головы и настройки графа, иначе
+/// строится заново (build) и кладётся в кэш. Принимает: окружение, реестр, токены, знаки USDT, номер блока головы.
+/// Возвращает: граф. Ошибки: как у build.
+pub fn cached(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+    head: u64,
+) -> GatewayResult<Arc<Graph>> {
+    // Версия — ДО чтения реестра: запись во время построения даст новую версию, и следующий вызов перестроит граф.
+    let version = reg.version();
+    // Значения как прочитаны (не задана — пусто; build сам скажет, какой нет).
+    let dec = |n: &str| {
+        ctx.dec(n)
+            .map(|d| d.normalize().to_string())
+            .unwrap_or_default()
+    };
+    let stamp = Stamp {
+        version,
+        head,
+        settings: vec![
+            ctx.int("dex.route_max_pools_per_edge")
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            dec("dex.depth_band_pct"),
+            dec("dex.min_pool_liquidity_usd"),
+            dec("dex.depth_hysteresis_pct"),
+        ],
+        usdt: tokens.usdt(ctx).ok(),
+        usdt_dec,
+    };
+    let slot = &reg.graph_cache().0;
+    if let Some((st, g)) = slot.lock().unwrap_or_else(|p| p.into_inner()).as_ref()
+        && *st == stamp
+    {
+        return Ok(g.clone());
+    }
+    let g = Arc::new(build(ctx, reg, tokens, usdt_dec)?);
+    let mut m = slot.lock().unwrap_or_else(|p| p.into_inner());
+    // Не затираем более новый граф, построенный параллельно.
+    if m.as_ref().is_none_or(|(st, _)| st.version <= version) {
+        *m = Some((stamp, g.clone()));
+    }
+    Ok(g)
 }
 
 /// Построение графа из реестра (решение 80). Берёт достоверные, не спящие пулы торгуемых DEX, глубокие хотя бы по

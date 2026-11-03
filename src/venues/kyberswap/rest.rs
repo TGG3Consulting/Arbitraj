@@ -3,7 +3,7 @@
 //! /{chain}/api/v1/routes (котировка-маршрут) и POST /{chain}/api/v1/route/build (сборка транзакции из маршрута).
 //! Разбор ответа {code, message, data}, перевод ошибок в коды шлюза, запись сырого ответа в журнал.
 //! Кто вызывает: quote.rs, trade_prep.rs, market.rs, connection.rs; parse_routes — ещё tests/bsc_dex_best_of.rs.
-//! От чего зависит: ctx.rs, errors.rs, gateway/http.rs, alloy-primitives, reqwest, serde_json.
+//! От чего зависит: ctx.rs, errors.rs, gateway/http.rs, gateway/calc_meter.rs (решение 129), alloy-primitives, reqwest, serde_json.
 //! Настройки: kyber.base_url, kyber.chain, kyber.client_id, kyber.user_agent, kyber.http_timeout_ms, http.*; темп — kyber.rps,
 //! kyber.max_wait_ms (ctx.rs pace_slot, решение 95).
 //!
@@ -21,6 +21,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
+use crate::gateway::calc_meter::{self, Source};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::http;
 
@@ -152,7 +153,9 @@ async fn send(
     body: Option<Value>,
 ) -> GatewayResult<Value> {
     // Темп запросов (kyber.rps / kyber.max_wait_ms) — до запроса, чтобы не превышать лимит агрегатора.
+    let t0 = std::time::Instant::now();
     ctx.pace_slot().await?;
+    let waited = t0.elapsed();
     let base = ctx.api_base()?;
     let lim = ctx.limits()?;
     let url = if query.is_empty() {
@@ -177,9 +180,11 @@ async fn send(
     if let Some(b) = &body {
         req = req.json(b);
     }
-    let (status, text) = http::exchange(req, lim)
-        .await
-        .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
+    let t1 = std::time::Instant::now();
+    let got = http::exchange(req, lim).await;
+    // Решение 129: ожидание темпа и время запроса — в счётчик расчёта кандидата (gateway/calc_meter.rs).
+    calc_meter::record(Source::Aggregator, 1, waited, t1.elapsed());
+    let (status, text) = got.map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
     ctx.raw.write(ID, &format!("rest {path}"), &text);
     let v: Value = serde_json::from_str(&text).map_err(|_| {
         if status.is_success() {

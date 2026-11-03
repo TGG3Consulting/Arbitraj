@@ -14,13 +14,17 @@
 //! window_run.rs): прошедший открывает его или входит в него ДО исполнителя; отказ — «направление не проходит».
 //! Журнал и Telegram deal.candidate: эпизоды ведутся — при открытии эпизода (episode_notify.rs); не ведутся — на каждый
 //! прошедший, в сухом режиме — один раз, пока направление проходит (inner.dry_told).
+//! Решение 129: каждый расчёт замеряется по этапам (calc_timing.rs: очередь до старта, этапы и части, запросы к узлу и
+//! агрегатору) — поле `timing` строки «Кандидатов»; отказ по сроку называет этап, на котором расчёт стоит (calc_report.rs),
+//! повтор той же причины в журнал не пишется по ключу без чисел.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
-//! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs.
+//! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
+//! calc_report.rs, gateway/calc_meter.rs.
 //! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -30,6 +34,8 @@ use crate::core::types::Direction;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
+use super::calc_report;
+use super::calc_timing::{self, Timing};
 use super::card_job::{Job, submit};
 use super::costs::Calc;
 use super::dry::Mode;
@@ -38,6 +44,7 @@ use super::episode_run::Accepted;
 use super::executor::Start;
 use super::profit::{self, Verdict};
 use super::view::CoreEvent;
+use crate::gateway::calc_meter;
 use crate::gateway::urgency::{self, Urgency};
 
 /// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
@@ -50,7 +57,12 @@ pub fn enqueue(core: &Core, d: &Direction) {
     if !lk(&core.inner.queued).insert(d.clone()) {
         return;
     }
-    if core.inner.cand_tx.try_send(d.clone()).is_err() {
+    if core
+        .inner
+        .cand_tx
+        .try_send((d.clone(), Instant::now()))
+        .is_err()
+    {
         lk(&core.inner.queued).remove(d);
     }
 }
@@ -58,9 +70,9 @@ pub fn enqueue(core: &Core, d: &Direction) {
 /// Задача очереди: раздаёт расчёты параллельно — на каждый кандидат свой расчёт (решение 88), ни один не ждёт другого.
 /// Предел одновременных расчётов — profit.calc_concurrency (0 или не задана — без предела); достигнут — направление
 /// снимается из очереди, следующий тик поставит снова (как при полном канале). Работает, пока жив канал.
-pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
+pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
     let inflight = Arc::new(AtomicUsize::new(0));
-    while let Some(d) = rx.recv().await {
+    while let Some((d, at)) = rx.recv().await {
         let cap = core
             .inner
             .deps
@@ -80,7 +92,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
         // Свой расчёт на каждый кандидат: тяжёлый счёт (в памяти) идёт параллельно, узел не нагружается
         // (цена газа — общий кэш на блок, пулы из стрима). Класс Trade ставится внутри задачи (task_local не наследуется).
         tokio::spawn(async move {
-            calc_one(&core, &d).await;
+            calc_one(&core, &d, at).await;
             lk(&core.inner.queued).remove(&d);
             inflight.fetch_sub(1, Ordering::AcqRel);
         });
@@ -88,13 +100,22 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<Direction>) {
 }
 
 /// Один расчёт кандидата. Режим и общий срок фиксируются на расчёт. Срок profit.calc_timeout_ms не даёт расчёту
-/// зависнуть, когда узел медлит (отмена decide безопасна — блокировки через await не держатся); не задан — без срока.
-/// Принимает: ядро, направление. Ошибок нет — итог в строку «Кандидатов» и журнал.
-async fn calc_one(core: &Core, d: &Direction) {
+/// зависнуть (отмена decide безопасна — блокировки через await не держатся); не задан — без срока. Замер этапов —
+/// решение 129. Принимает: ядро, направление, момент постановки в очередь. Ошибок нет — итог в «Кандидаты» и журнал.
+async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
     let mode = super::dry::mode(&core.inner.deps.settings);
+    let t = Timing::new(queued_at);
     // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
-    let work = urgency::scope(Urgency::Trade, profit::decide(core, d, &mode));
+    let work = urgency::scope(
+        Urgency::Trade,
+        calc_meter::scope(
+            t.meter.clone(),
+            calc_timing::scope(t.clone(), profit::decide(core, d, &mode)),
+        ),
+    );
+    // Ключ повтора причины в журнале: у отказа по сроку — без чисел замера (иначе каждый повтор — новая строка).
+    let mut key = None;
     let verdict = match core
         .inner
         .deps
@@ -105,22 +126,25 @@ async fn calc_one(core: &Core, d: &Direction) {
     {
         Some(ms) => match timeout(Duration::from_millis(ms), work).await {
             Ok(v) => v,
-            Err(_) => Verdict::Reject {
-                reason: format!("расчёт не уложился в срок {ms} мс — узел медлит или перегружен"),
-                best: None,
-            },
+            Err(_) => {
+                // Решение 129: причина называет этап, на котором расчёт стоит, и сколько длились прошедшие.
+                let (reason, k) = calc_report::timeout_reason(ms, &calc_report::report(&t));
+                key = Some(k);
+                Verdict::Reject { reason, best: None }
+            }
         },
         None => work.await,
     };
+    let timing = serde_json::to_value(calc_report::report(&t)).unwrap_or_default();
     match verdict {
-        Verdict::Accept(calc) => accepted(core, d, calc, &mode).await,
+        Verdict::Accept(calc) => accepted_timed(core, d, calc, &mode, timing).await,
         Verdict::Reject { reason, best } => {
-            let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now() });
+            let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now(), "timing": timing });
             publish(core, d, row);
             // Направление перестало проходить — эпизод закрывается с этой причиной (решение 74).
             super::episode_run::failed(core, d, &reason);
-            let same = lk(&core.inner.last_reject).insert(d.clone(), reason.clone())
-                == Some(reason.clone());
+            let key = key.unwrap_or_else(|| reason.clone());
+            let same = lk(&core.inner.last_reject).insert(d.clone(), key.clone()) == Some(key);
             if !same {
                 let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
                 core.inner
@@ -140,8 +164,19 @@ async fn calc_one(core: &Core, d: &Direction) {
 
 /// Что делает: прошедший кандидат (см. шапку). Обычный режим — сразу исполнитель; сухой (режим расчёта) — исполнитель
 /// не вызывается. Затем строка «Кандидатов», эпизод (память и сообщение), карточка — отдельной задачей.
-/// Принимает: ядро, направление, расчёт, режим, в котором он посчитан. Ошибок нет.
+/// Принимает: ядро, направление, расчёт, режим, в котором он посчитан. Ошибок нет. Без замера этапов (тесты).
 pub async fn accepted(core: &Core, d: &Direction, calc: Calc, mode: &Mode) {
+    accepted_timed(core, d, calc, mode, serde_json::Value::Null).await
+}
+
+/// То же с замером этапов расчёта (решение 129) — поле `timing` строки. Ошибок нет.
+async fn accepted_timed(
+    core: &Core,
+    d: &Direction,
+    calc: Calc,
+    mode: &Mode,
+    timing: serde_json::Value,
+) {
     lk(&core.inner.last_reject).remove(d);
     // Решение 125: окно монеты — до исполнителя, чтобы запись на биржах началась раньше сделки (только память).
     super::window_run::pass(core, &calc, matches!(mode, Mode::Dry(_)));
@@ -163,6 +198,7 @@ pub async fn accepted(core: &Core, d: &Direction, calc: Calc, mode: &Mode) {
         "at": chrono::Utc::now(),
         "dry": dry,
         "card": prev,
+        "timing": timing,
     });
     publish(core, d, row);
     let ep = super::episode_run::on_accept(core, &calc, dry);
@@ -192,18 +228,4 @@ pub async fn accepted(core: &Core, d: &Direction, calc: Calc, mode: &Mode) {
 fn publish(core: &Core, d: &Direction, row: serde_json::Value) {
     lk(&core.inner.candidates).insert(d.clone(), row.clone());
     core.inner.live.send(CoreEvent::Candidate(row));
-}
-
-impl Core {
-    /// Последние расчёты кандидатов по направлениям (новые сверху) — «Живой экран».
-    pub fn candidates(&self) -> serde_json::Value {
-        let mut v: Vec<serde_json::Value> = lk(&self.inner.candidates).values().cloned().collect();
-        v.sort_by(|a, b| b["at"].as_str().cmp(&a["at"].as_str()));
-        serde_json::Value::Array(v)
-    }
-
-    /// Последняя статистика каналов отправки (события адаптеров DEX) — экран «Каналы отправки».
-    pub fn channel_stats(&self) -> Vec<crate::core::types::SendChannelStats> {
-        super::engine::rd(&self.inner.market).channels()
-    }
 }

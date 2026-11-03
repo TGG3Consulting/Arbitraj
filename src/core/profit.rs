@@ -9,6 +9,8 @@
 //! Решение 95: найденный оптимум пересчитывается ФИНАЛЬНОЙ котировкой (gateway/quote_stage.rs) — у DEX при
 //! exec.via_kyber это цена KyberSwap (тот, кто исполнит); пороги проверяются по ней. Отказ финальной котировки —
 //! отказ кандидата с причиной. Решение 111: исполнитель даёт маршрут не на весь объём — пересчёт на исполнимый объём.
+//! Решение 129: этапы расчёта замеряются (calc_timing.rs): контекст направления, бюджет, подбор объёма, финальная
+//! котировка — по ним отказ по сроку называет, где расчёт стоял.
 //! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
@@ -18,6 +20,7 @@ use serde::Serialize;
 use crate::core::types::{Direction, Side};
 use crate::settings::read::At;
 
+use super::calc_timing::{stage, stage_sync};
 use super::costs::Calc;
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
@@ -52,7 +55,8 @@ pub async fn decide_capped(
     if let super::dry::Mode::Dry(Err(e)) = mode {
         return reject(e.clone(), None);
     }
-    let cx = match DirCtx::build(core, d) {
+    let cx = match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
+    {
         Ok(c) => c,
         Err(e) => return reject(e, None),
     };
@@ -64,7 +68,8 @@ pub async fn decide_capped(
         (Ok(a), Ok(b)) => (a, b),
         (Err(e), _) | (_, Err(e)) => return reject(e.message, None),
     };
-    let budget = match super::limits::budget(core, &cx, mode).await {
+    let budget = match stage(|| "бюджет".into(), super::limits::budget(core, &cx, mode)).await
+    {
         Ok(b) => cap.map_or(b, |c| b.min(c)),
         Err(e) => return reject(e, None),
     };
@@ -81,7 +86,12 @@ pub async fn decide_capped(
         Err(e) => return reject(e, None),
     };
     let mut curve = CoreCurve { core, cx: &cx };
-    let found = match super::size_search::search(&mut curve, &p).await {
+    let found = match stage(
+        || "подбор объёма".into(),
+        super::size_search::search(&mut curve, &p),
+    )
+    .await
+    {
         Ok(f) => f,
         Err(e) => return reject(e.to_string(), None),
     };
@@ -104,7 +114,8 @@ pub async fn decide_capped(
     }
     // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
     // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
-    let mut c = match final_calc(core, &cx, choice.qty, budget, p.step).await {
+    let fin = final_calc(core, &cx, choice.qty, budget, p.step);
+    let mut c = match stage(|| "финальная котировка".into(), fin).await {
         Ok(f) => f,
         Err(e) => {
             return reject(

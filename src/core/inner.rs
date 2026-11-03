@@ -77,8 +77,9 @@ pub struct Inner {
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
     /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
     pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
-    /// Очередь тяжёлого расчёта (candidates.rs) и направления, уже стоящие в ней.
-    pub cand_tx: mpsc::Sender<Direction>,
+    /// Очередь тяжёлого расчёта (candidates.rs; с моментом постановки — замер очереди, решение 129) и направления,
+    /// уже стоящие в ней.
+    pub cand_tx: mpsc::Sender<(Direction, std::time::Instant)>,
     pub queued: Mutex<HashSet<Direction>>,
     /// Последний расчёт кандидата по направлению: {direction, verdict, at} — для «Живого экрана».
     pub candidates: Mutex<HashMap<Direction, serde_json::Value>>,
@@ -153,7 +154,7 @@ impl Inner {
         deps: Deps,
         kinds: Vec<(VenueId, VenueKind)>,
         market_tx: mpsc::Sender<MarketEvent>,
-        cand_tx: mpsc::Sender<Direction>,
+        cand_tx: mpsc::Sender<(Direction, std::time::Instant)>,
     ) -> Self {
         let (coin_ticks, _) = broadcast::channel(deps.buffer);
         // Канал ограничен (--live-buffer): тик и очередь кандидатов не ждут и не копят память без предела.

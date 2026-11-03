@@ -3,7 +3,7 @@
 //! состоянию лучшего достоверного пула «промежуточная — USDT» реестра — локальной математикой пула (та же, что
 //! у котировки). Нужен там, где сумма задана в USDT, а пул — с промежуточной монетой: сумма пробы
 //! (check.probe_usdt) и ликвидность пула против dex.min_pool_liquidity_usd.
-//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs.
+//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs; best_in — quote/route_gas.rs.
 //! От чего зависит: pools/registry.rs, quote/pool_quote.rs, ctx.rs.
 //! Настройки: через pool_quote — dex.v2_fee_pct [вид пула V2].
 
@@ -12,7 +12,7 @@ use alloy_primitives::{Address, U256};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::pools::registry::Registry;
+use super::super::pools::registry::{Entry, Registry};
 use super::pool_quote;
 
 /// Сколько единиц встречного токена `quote` дают `amount` единиц USDT (точный вход, лучший пул quote–USDT).
@@ -51,7 +51,19 @@ fn best(
     if quote == usdt {
         return Ok(amount);
     }
-    reg.by_pair(quote, usdt)
+    best_in(ctx, &reg.by_pair(quote, usdt), quote, token_in, amount)
+}
+
+/// То же по уже взятым пулам «quote — USDT» (решение 129: учёт газа в графе берёт их один раз на котировку, а не на
+/// каждый путь). Принимает: пулы пары, встречный токен (для текста), токен входа, сумму. Ошибки: NoRoute.
+pub fn best_in(
+    ctx: &Ctx,
+    pools: &[Entry],
+    quote: Address,
+    token_in: Address,
+    amount: U256,
+) -> GatewayResult<U256> {
+    pools
         .iter()
         .filter(|e| e.valid)
         .filter_map(|e| pool_quote::swap(ctx, e, token_in, true, amount).ok())

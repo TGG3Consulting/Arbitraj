@@ -1,7 +1,8 @@
 //! Файл: tests/bsc_dex_bundle_wire.rs
 //! Что делает: флип executable и классификация формы графового маршрута (quote/graph_route.rs, решение 84, фаза
 //! 80.8c-ii) на пулах реальной записи CAKE (tests/route_common), без реальной сети. Проверяет: мульти-роутерный
-//! маршрут исполним (executable=true) только когда задан dex.bundle_max_routers и роутеров не больше него; не задан
+//! маршрут исполним (executable=true) только когда задан dex.bundle_max_routers и роутеров не больше него (и все
+//! включённые каналы бандловые — решение 121 B3, в тестах один бандловый канал); не задан
 //! или роутеров больше предела → не исполним (сигнал); graph_form различает прямую / один-UR / бандл (боевой путь
 //! exec/trade.rs по ней выбирает прямой/умный/бандл). Отправку бандла сетью не гоняем.
 //! Кто вызывает: cargo test.
@@ -83,6 +84,8 @@ async fn quote(q: &Quoting) -> arb::core::types::Quote {
 async fn multi_router_executable_only_with_bundle_max_routers() {
     // Без dex.bundle_max_routers мульти-роутерный (здесь — многодолевой) маршрут не исполним — сигнал.
     let p = route_common::parts().await;
+    // Решение 121 B3: бандл исполним, только если все включённые каналы бандловые — один такой канал.
+    route_common::channel(&p, "club48", "bundle").await;
     let q = p.quoting();
     let r = quote(&q).await;
     let route = r.route.as_ref().unwrap();
@@ -128,6 +131,7 @@ fn distinct_routers(ctx: &arb::venues::bsc_dex::ctx::Ctx, route: &DexRoute) -> u
 async fn router_count_capped_by_bundle_max_routers() {
     // Uniswap — на отдельном Universal Router: прямая доля CAKE-USDT через Uniswap даёт второй роутер в маршруте.
     let p = route_common::parts().await;
+    route_common::channel(&p, "club48", "bundle").await;
     let d = Scope::Dex("uniswap_v3".into());
     let uni = json!("0x00000000000000000000000000000000000000bb");
     set(&p, d.clone(), "dex.universal_router", uni.clone()).await;

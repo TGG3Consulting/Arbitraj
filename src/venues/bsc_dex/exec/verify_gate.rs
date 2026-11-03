@@ -2,7 +2,8 @@
 //! Что делает: предторговая верификация графового маршрута точечным Multicall3 (решение 83, фаза 80.6b) за правилом
 //! шлюза. Перед формированием сделки по маршруту RouteMode::Graph восстанавливает план-котировку из запроса (среднюю
 //! цену — обратной формулой core/worst.rs: worst = avg × (1 ± exec.dex_slippage_pct)), перечитывает пулы маршрута на
-//! свежем блоке (quote/verify.rs run) и переводит вердикт в решение шлюза: Reject → ошибка (QuoteMismatch — цена
+//! свежем блоке (quote/verify.rs run; граница сделки req.worst_price передаётся туда же — решение 121 B4: отказ, только
+//! если свежая средняя цена хуже неё) и переводит вердикт в решение шлюза: Reject → ошибка (QuoteMismatch — цена
 //! уехала; StaleData — свежесть/чтение/таймаут), ордер НЕ формируется (стартовое правило Тиграна «не исполнился —
 //! отменяем, больше не пробуем»: здесь не отправляем вовсе); Ok → свежие amountOutMin по ногам (решение 84), которые
 //! ставятся последнему шагу каждой доли (apply_leg_min). Результат уходит в уведомления (exec.verified /
@@ -72,7 +73,8 @@ pub async fn gate(
         coin: (coin, &req.asset.ticker),
         mids: &q.mids,
     };
-    let verdict = verify::run(&v, &names, &plan, gas).await?;
+    // Граница сделки ядра (req.worst_price) — прямо в вердикт (решение 121 B4): отказ, только если свежая цена хуже её.
+    let verdict = verify::run(&v, &names, &plan, gas, req.worst_price).await?;
     announce(env, ctx, req, &verdict);
     outcome(ctx, verdict)
 }

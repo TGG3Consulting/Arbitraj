@@ -266,6 +266,26 @@ async fn ctx() -> Ctx {
     c
 }
 
+/// Готовый канал отправки `id` способом `method` («bundle» / «single») — без ключа, без чаевых (решение 121 B3:
+/// бандл-маршрут исполним, только если все включённые каналы бандловые). Адрес канала к сети не используется: тест
+/// только читает готовность канала (send::ready::prepare). Принимает: окружение, id канала, способ. Ошибок нет.
+pub async fn channel(p: &Parts, id: &str, method: &str) {
+    let s = Scope::Channel(id.into());
+    for (n, v) in [
+        ("channel.enabled", json!(true)),
+        ("channel.url", json!("https://example.invalid")),
+        ("channel.method", json!(method)),
+        ("channel.min_gas_price_gwei", json!("0.05")),
+        ("channel.tip_enabled", json!(false)),
+    ] {
+        p.ctx
+            .settings
+            .set(n, s.clone(), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+}
+
 /// Окружение по записи маршрута routes_2026-10-29 (блок 130521896) — удобный частный случай parts_from.
 pub async fn parts() -> Parts {
     parts_from("tests/data/routes_2026-10-29").await

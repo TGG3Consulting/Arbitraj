@@ -167,6 +167,7 @@ pub async fn result(
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),
+        executor: None,
     })
 }
 

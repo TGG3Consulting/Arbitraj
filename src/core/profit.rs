@@ -9,7 +9,8 @@
 //! Решение 95: найденный оптимум пересчитывается ФИНАЛЬНОЙ котировкой (gateway/quote_stage.rs) — у DEX при
 //! exec.via_kyber это цена KyberSwap (тот, кто исполнит); пороги проверяются по ней. Отказ финальной котировки —
 //! отказ кандидата с причиной. Решение 111: исполнитель даёт маршрут не на весь объём — пересчёт на исполнимый объём.
-//! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
+//! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111; только при exec.via_kyber =
+//! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -86,9 +87,9 @@ pub async fn decide_capped(
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
-    // Решение 111: фильтр финальной котировки (kyber.final_gate_usd). У направления с DEX финальная котировка — запрос
-    // к KyberSwap (лимит запросов); своя математика заведомо минусовая — не тратим запрос. 0 или не задано — без
-    // фильтра, финальная котировка у каждого кандидата, как раньше (решение 95).
+    // Решение 111: фильтр финальной котировки (kyber.final_gate_usd). У направления с DEX при exec.via_kyber = да
+    // финальная котировка — запрос к KyberSwap (лимит запросов); своя математика заведомо минусовая — не тратим запрос.
+    // Решение 121 B5: при своём сборщике (exec.via_kyber = нет) фильтр не действует. 0 или не задано — без фильтра.
     if let Some(gate) = final_gate(core, d)
         && choice.profit < gate
     {
@@ -204,13 +205,18 @@ async fn final_calc(
     Ok(c2)
 }
 
-/// Порог фильтра финальной котировки (kyber.final_gate_usd), если в направлении есть DEX. None — 0, не задан или DEX
-/// нет. Ошибок нет.
+/// Порог фильтра финальной котировки (kyber.final_gate_usd), если в направлении есть DEX, чья финальная котировка —
+/// у внешнего исполнителя (решение 121 B5: exec.via_kyber = да — спрашивает шлюз, gateway::quote_stage::final_external;
+/// ядро адаптеры не знает). Свой сборщик — запросов к агрегатору нет, фильтр не нужен. None — 0, не задан, DEX нет
+/// или внешнего исполнителя нет. Ошибок нет.
 fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
-    let dex = rd(&core.inner.kinds).iter().any(|(v, k)| {
-        (v == &d.buy_on || v == &d.sell_on) && *k == crate::gateway::contract::VenueKind::Dex
+    let settings = &core.inner.deps.settings;
+    let external = rd(&core.inner.kinds).iter().any(|(v, k)| {
+        (v == &d.buy_on || v == &d.sell_on)
+            && *k == crate::gateway::contract::VenueKind::Dex
+            && crate::gateway::quote_stage::final_external(settings, v)
     });
-    if !dex {
+    if !external {
         return None;
     }
     core.inner

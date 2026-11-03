@@ -90,4 +90,8 @@ pub struct TradeResult {
     /// DEX: транзакция в сети (каналы, блок, газ). Биржа — None.
     pub chain: Option<ChainTx>,
     pub finished_at: DateTime<Utc>,
+    /// Кто исполнил своп DEX (решение 121, часть B7) — текст для журнала и хронологии сделки: «свой сборщик: прямой /
+    /// умный / бандл» или «KyberSwap». Ядро его не разбирает, только показывает. Биржа — None.
+    #[serde(default)]
+    pub executor: Option<String>,
 }

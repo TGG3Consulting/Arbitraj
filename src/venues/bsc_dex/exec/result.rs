@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/exec/result.rs
 //! Что делает: итог сделки DEX по квитанции — статус транзакции (в блоке / откат / не попала / вытеснена) и факт
 //! обмена по событиям Transfer: сколько монет и USDT реально ушло и пришло, средняя цена, газ.
-//! Кто вызывает: exec/trade.rs.
+//! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs; подпись исполнителя (by, решение
+//! 121 B7) — exec/trade.rs.
 //! От чего зависит: exec/fill.rs, exec/txs.rs (Done), num.rs, core/types.
 //! Настройки: нет.
 //! Нативная монета BNB (решение 62): монеты — по событиям WBNB Deposit / Withdrawal роутера (exec/native.rs), USDT — по Transfer.
@@ -20,6 +21,29 @@ use super::super::num;
 use super::super::wallet::balances::BNB;
 use super::txs;
 use super::{fill, native};
+
+/// Кто исполнил своп (решение 121, часть B7) — подпись в TradeResult.executor для журнала и хронологии сделки.
+pub const BY_DIRECT: &str = "свой сборщик: прямой";
+/// Умный путь: все доли одним execute Universal Router PancakeSwap (exec/trade_smart.rs).
+pub const BY_SMART: &str = "свой сборщик: умный";
+/// Мульти-роутерный бандл свопов (exec/bundle_trade.rs, решение 84).
+pub const BY_BUNDLE: &str = "свой сборщик: бандл";
+
+/// Итог сделки с подписью исполнителя (решение 121 B7): успех — поле executor; ошибка (откат, не попала в блок, отказ
+/// до отправки) — подпись в начале текста «[свой сборщик: …] …», код и факт транзакции не меняются. Принимает: итог,
+/// подпись. Возвращает: тот же итог с подписью. Ошибок своих нет.
+pub fn by(r: GatewayResult<TradeResult>, who: &str) -> GatewayResult<TradeResult> {
+    match r {
+        Ok(mut t) => {
+            t.executor = Some(who.to_string());
+            Ok(t)
+        }
+        Err(mut e) => {
+            e.message = format!("[{who}] {}", e.message);
+            Err(e)
+        }
+    }
+}
 
 /// Итог сделки по квитанции. Ошибки: SwapReverted / TxNotIncluded с фактом транзакции; OutcomeUnknown (ядро не
 /// повторяет, площадка на паузу) — «вытеснена» или обмен в блоке, а суммы не считаются (сырые числа и факт «в блоке»).
@@ -119,6 +143,7 @@ pub fn result(
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),
+        executor: None,
         request: req,
     })
 }

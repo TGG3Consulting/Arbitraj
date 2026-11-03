@@ -219,6 +219,32 @@ pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
     tip(&ready).map(|(_, amount)| amount)
 }
 
+/// Умеют ли бандл ВСЕ каналы, готовые сейчас (решение 121 B3) — так же, как потребует отправка бандла
+/// (dispatch_slice: любой не-бандловый канал → NotConfigured). Нужна на котировке: маршрут бандлом при таких каналах
+/// неисполним (сигнал есть, сделки нет). Возвращает: Ok или понятную причину. Ошибок нет.
+pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
+    let ready: Vec<Ready> = channels::ALL
+        .iter()
+        .filter_map(|c| ready::prepare(ctx, c).ok())
+        .collect();
+    if ready.is_empty() {
+        return Err("нет ни одного готового канала отправки — бандл некуда отправить".into());
+    }
+    let single: Vec<&str> = ready
+        .iter()
+        .filter(|r| r.method != SendMethod::Bundle)
+        .map(|r| r.ch.title)
+        .collect();
+    if single.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "маршрут исполняется только бандлом, а включённые каналы отправки {} не в режиме бандла (channel.method) — \
+         сигнал, авто-сделкой не исполняется; оставьте включёнными только бандловые каналы",
+        single.join(", ")
+    ))
+}
+
 /// Нижняя граница цены газа по каналам, готовым сейчас (для расчёта затрат: газ в котировке не ниже того, с которым
 /// транзакция реально уйдёт). Ошибки: NotConfigured — нет ни одного готового канала.
 pub fn planned_floor(ctx: &Ctx) -> GatewayResult<U256> {

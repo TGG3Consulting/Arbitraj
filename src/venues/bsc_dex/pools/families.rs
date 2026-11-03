@@ -3,12 +3,15 @@
 //! (id области настроек «DEX»), её вид — настройка dex.kind: PancakeSwap V2 / V3 / Infinity CL / Infinity Bin,
 //! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики — graphable и tradable, не форк), V2-форк
 //! (Biswap и прочие — graphable, tradable и fork: исполняется СВОИМ роутером бандлом, решения 59, 82, фаза 80.9b),
-//! V3-форки (пока только справочник) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
+//! V3-форки (решение 122 F: в графе и сигналах — математика и чтение как у V3 своего ABI; исполнение — через
+//! контракт-исполнитель) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
 //! адаптера, а какие DEX каким видом считать и их адреса — вводит Тигран. Подключена ли DEX (classify): вид с путём
 //! исполнения, dex.pool_enabled = да и заданы все адреса, без которых пул нельзя проверить, слушать, сверить с
 //! квотером и исполнить; иначе — «DEX X не подключена: причина».
 //! Кто вызывает: mod.rs (dex_families), pools/* (виды и разбор), directory (сопоставление), quote/*, exec/*.
 //! От чего зависит: core/types (PoolKind), gateway/contract (DexFamily), ctx.rs.
+//! Вид шага исполнителя (решение 122, часть F) — поле executor_kind (pools/exec_kind.rs): с ним вид исполним через
+//! ArbExecutor, когда задан exec.executor_address (exec_kind::via_executor); без адреса — сигнал, как раньше.
 //! Настройки: dex.kind, dex.pool_enabled и адреса dex.* [DEX индексатора]; smart.universal_router, smart.permit2 [bsc_dex].
 
 use std::collections::HashMap;
@@ -18,6 +21,7 @@ use crate::core::types::PoolKind;
 use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
+use super::exec_kind::{self, ExecKind};
 
 /// Протокол вида пула: от него зависит ABI событий и чтение состояния.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,6 +67,12 @@ pub enum Proto {
     /// таблицы дефолтов). Вид ядра — V3. Чтение — load_slipstream.rs, события — events_v3.rs (Swap/Mint/Burn как у Uni
     /// V3), проверка — verify.rs (фабрика getPool по int24), квотер — quoter_calls.rs (ISlipstreamQuoterV2).
     Slipstream,
+    /// Solidly V1 — THENA V1 (решение 122 F): исходный Solidly-Pair (ThenafiBNB/THENA-Contracts, HEAD f5bc742,
+    /// contracts/Pair.sol, PairFactoryUpgradeable.sol). Пул — тот же интерфейс, что у Solidly (metadata, Sync(uint256,
+    /// uint256), getAmountOut), но фабрика другая: реестр `getPair(a, b, bool stable)`, комиссия `getFee(bool stable)`
+    /// (без адреса пула), событие `PairCreated(token0, token1, bool stable, pair, uint)` (stable НЕ индексирован), и
+    /// своя стабильная математика (_f другой формы, _get_y без отката — math/solidly_v1_math.rs). Вид ядра — Solidly.
+    SolidlyV1,
 }
 
 impl Proto {
@@ -71,9 +81,9 @@ impl Proto {
         matches!(self, Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp)
     }
 
-    /// Семейство Solidly (ve(3,3)-форки: Topaz v2, THENA V1). Ошибок нет.
+    /// Семейство Solidly (ve(3,3)-форки: Topaz v2 — Solidly, THENA V1 — SolidlyV1). Ошибок нет.
     pub fn is_solidly(self) -> bool {
-        matches!(self, Proto::Solidly)
+        matches!(self, Proto::Solidly | Proto::SolidlyV1)
     }
 }
 
@@ -98,6 +108,9 @@ pub struct Family {
     /// поддержанных DEX (PancakeSwap/Uniswap) false — у них Universal Router. Используется сборкой бандла
     /// (exec/bundle.rs, exec/fork_swap.rs) и классификацией формы исполнения (quote/graph_route.rs).
     pub fork: bool,
+    /// Вид шага контракта-исполнителя (решение 122, часть F; pools/exec_kind.rs). None — исполнитель пулы этого вида
+    /// не вызывает. Исполнимость через исполнитель — exec_kind::via_executor (нужен ещё exec.executor_address).
+    pub executor_kind: Option<ExecKind>,
 }
 
 /// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,
@@ -116,8 +129,12 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
-        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, false, false, true),
-        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, false, false, true),
+        // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
+        // (Uniswap / PancakeSwap: фабрика getPool, TickLens, QuoterV2 — настройки этой DEX). tradable=false: своего
+        // пути через Universal Router нет; исполнение — шаг V3 контракта-исполнителя (exec_kind::via_executor).
+        // fork=true оставлен: пул не попадает в классический прямой путь (quote/classic_direct.rs) и не требует UR.
+        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, true, false, true),
+        "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, true, false, true),
         // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic). Решение 121 B2:
         // tradable=false — своего пути исполнения нет: в exec/ нет ветки Proto::KyberElastic, а нога форка собиралась
         // вызовом classic V2 Router (exec/fork_swap.rs), которого у роутера Elastic (свой контракт со своим
@@ -143,6 +160,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
         // DODO 86b / THENA Algebra — в графе и для сигналов, но guard executable (exec/chain.rs) в авто-сделку не пускает.
         "solidly_v2" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
+        // Solidly V1 — THENA V1 (решение 122 F): тот же пул, своя фабрика и своя стабильная математика (Proto::SolidlyV1).
+        // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
+        "solidly_v1" => (PoolKind::Solidly, Proto::SolidlyV1, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -153,17 +173,26 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
     })
 }
 
-/// Записи видов: (id, протокол, graphable, tradable, fork) → вид. Новая запись — только при новом сочетании.
-type Interned = HashMap<(String, Proto, bool, bool, bool), &'static Family>;
+/// Записи видов: (id, протокол, graphable, tradable, fork, вид шага исполнителя) → вид. Новая запись — только при
+/// новом сочетании.
+type Interned = HashMap<(String, Proto, bool, bool, bool, Option<ExecKind>), &'static Family>;
 static INTERNED: Mutex<Option<Interned>> = Mutex::new(None);
 
 /// Вид пула DEX по id и варианту dex.kind. None — вариант неизвестен или «не поддерживается». Ошибок нет.
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
     let (pk, proto, graphable, tradable, fork) = spec(kind)?;
+    let executor_kind = exec_kind::of(kind);
     let mut m = INTERNED.lock().unwrap_or_else(|p| p.into_inner());
     let map = m.get_or_insert_with(HashMap::new);
     let f = map
-        .entry((id.to_string(), proto, graphable, tradable, fork))
+        .entry((
+            id.to_string(),
+            proto,
+            graphable,
+            tradable,
+            fork,
+            executor_kind,
+        ))
         .or_insert_with(|| {
             let id: &'static str = Box::leak(id.to_string().into_boxed_str());
             Box::leak(Box::new(Family {
@@ -174,6 +203,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
                 graphable,
                 tradable,
                 fork,
+                executor_kind,
             }))
         });
     Some(*f)
@@ -282,7 +312,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // stable), решение 59), читается комиссия (getFee(pool, stable), load_solidly.rs) и слушается событие создания
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.
         // Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
-        Proto::Solidly => list.push("dex.factory"),
+        // Solidly V1 (THENA V1, решение 122 F) — то же: фабрика getPair(a, b, stable) / getFee(stable) / PairCreated.
+        Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),

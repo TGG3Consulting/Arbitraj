@@ -7,6 +7,9 @@
 //! Кто вызывает: pools/load.rs (ветка proto.is_solidly).
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_solidly.rs, core/types (PoolState).
 //! Настройки: dex.factory [DEX] (фабрика — источник комиссии getFee).
+//! Solidly V1 — THENA V1 (решение 122 F): комиссия — `getFee(bool stable)` фабрики (без адреса пула;
+//! ThenafiBNB/THENA-Contracts HEAD f5bc742, PairFactoryUpgradeable.sol L104-L106; её же применяет Pair.getAmountOut
+//! L461). Остальное чтение (metadata) — то же.
 //!
 //! Геттеры — velodrome-finance/contracts, HEAD b3065d8 (решение 23): Pool.metadata() (Pool.sol L122-L129),
 //! PoolFactory.getFee(pool, stable) (PoolFactory.sol L131-L133). Комиссия пула читается у фабрики по флагу stable
@@ -20,23 +23,24 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::abi_solidly::{ISolidlyFactory, ISolidlyPool};
+use super::abi_solidly::{ISolidlyFactory, ISolidlyPool, IThenaV1Factory};
+use super::families::{Family, Proto};
 
-/// Состояние пула Solidly на блоке. Принимает: окружение, id DEX (для адреса фабрики), адрес пула, блок-тег.
-/// Ошибки: не задана dex.factory, узел, ответ не по ABI, комиссия пула не помещается в u32.
-pub async fn load(ctx: &Ctx, dex_id: &str, pool: Address, tag: &str) -> GatewayResult<PoolState> {
+/// Состояние пула Solidly на блоке. Принимает: окружение, вид пула (id DEX — адрес фабрики; протокол — какой getFee),
+/// адрес пула, блок-тег. Ошибки: не задана dex.factory, узел, ответ не по ABI, комиссия пула не помещается в u32.
+pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<PoolState> {
     let meta = call::view(ctx, pool, &ISolidlyPool::metadataCall {}, tag).await?;
-    let factory = ctx.dex_addr("dex.factory", dex_id)?;
-    let fee_raw = call::view(
-        ctx,
-        factory,
-        &ISolidlyFactory::getFeeCall {
+    let factory = ctx.dex_addr("dex.factory", f.id)?;
+    let fee_raw = if f.proto == Proto::SolidlyV1 {
+        let ask = IThenaV1Factory::getFeeCall { stable: meta.st };
+        call::view(ctx, factory, &ask, tag).await?
+    } else {
+        let ask = ISolidlyFactory::getFeeCall {
             pool,
             stable: meta.st,
-        },
-        tag,
-    )
-    .await?;
+        };
+        call::view(ctx, factory, &ask, tag).await?
+    };
     let fee = fee_u32(ctx, fee_raw)?;
     Ok(PoolState::Solidly {
         reserve0: meta.r0,

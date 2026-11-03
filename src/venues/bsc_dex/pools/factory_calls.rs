@@ -2,6 +2,9 @@
 //! Что делает: вызовы реестра фабрик для поиска пулов на своём узле (решение 121, C3): по каждой подключённой DEX
 //! вида V2 / форк V2 — getPair(монета, встречный токен); V3 (PancakeSwap / Uniswap ABI) — getPool(монета, встречный,
 //! fee) по каждому уровню комиссии из dex.v3_fee_tiers этой DEX (не задана — V3 этой DEX по фабрике не ищется).
+//! Решение 122 F: ещё Solidly / Solidly V1 (по обоим stable), Algebra (poolByPair) и DODO V2 (getDODOPoolBidirection —
+//! индексатор пулы DODO на BSC не отдаёт); вид вопроса и разбор — factory_ask.rs. Slipstream по фабрике не ищется
+//! (ключ пула — int24 tickSpacing, списка уровней tickSpacing в настройках нет — вопрос Тиграну, отчёт части F).
 //! DEX не подключена (families::classify) — не ищется, причина в заметках прохода. Только сборка вызовов и разбор
 //! ответа — без сети.
 //! Кто вызывает: pools/factory_scan.rs.
@@ -24,18 +27,19 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
+use super::factory_ask::{Q, encode_q};
 use super::families::{self, Family, Proto};
 
 /// Предел uint24 (комиссия V3 в getPool) — из ABI: uint24 = 24 бита.
 const U24_MAX: u32 = (1 << 24) - 1;
 
-/// Один вопрос к фабрике: DEX, монета, встречный токен, уровень комиссии (только V3).
+/// Один вопрос к фабрике: DEX, монета, встречный токен, вид вопроса (V3 — с уровнем комиссии).
 #[derive(Debug, Clone)]
 pub struct Ask {
     pub family: &'static Family,
     pub coin: Address,
     pub quote: Address,
-    pub fee: Option<u32>,
+    pub q: Q,
 }
 
 /// Все вопросы прохода: вызовы (фабрика, данные) по порядку вопросов и заметки по DEX.
@@ -46,15 +50,24 @@ pub struct Plan {
     pub notes: Vec<String>,
 }
 
-/// Собирает вопросы по всем подключённым DEX вида V2 / V3. Принимает: монеты подписки, встречные токены (USDT и
+/// Собирает вопросы по всем подключённым DEX вида V2 / V3 / Solidly / Algebra / DODO. Принимает: монеты подписки, встречные токены (USDT и
 /// промежуточные). Возвращает: план. Ошибки: Internal (dex.factory не читается у подключённой DEX — не бывает
 /// после classify, но не молчим).
 pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
-        let v3 = match f.proto {
-            Proto::V2 => false,
-            Proto::PancakeV3 | Proto::UniswapV3 => true,
+        let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3);
+        let mut qs: Vec<Q> = match f.proto {
+            Proto::V2 => vec![Q::V2],
+            Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),
+            p if p.is_solidly() => {
+                let v1 = p == Proto::SolidlyV1;
+                [true, false]
+                    .map(|stable| Q::Solidly { v1, stable })
+                    .to_vec()
+            }
+            Proto::Algebra => vec![Q::Algebra],
+            p if p.is_dodo() => vec![Q::Dodo],
             _ => continue,
         };
         if let Err(why) = families::classify(ctx, f.id) {
@@ -62,32 +75,30 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
             continue;
         }
         let factory = ctx.dex_addr("dex.factory", f.id)?;
-        let fees: Vec<Option<u32>> = if v3 {
+        if v3 {
             match tiers(ctx, f.id) {
-                Ok(list) => list.into_iter().map(Some).collect(),
+                Ok(list) => qs = list.into_iter().map(Q::V3).collect(),
                 Err(why) => {
                     out.notes.push(format!("{}: {why}", f.id));
                     continue;
                 }
             }
-        } else {
-            vec![None]
-        };
+        }
         let before = out.calls.len();
         for &coin in coins {
             for &quote in quotes.iter().filter(|q| **q != coin) {
-                for &fee in &fees {
-                    out.calls.push((factory, encode(coin, quote, fee)));
+                for &q in &qs {
+                    out.calls.push((factory, encode_q(q, coin, quote)));
                     out.asks.push(Ask {
                         family: f,
                         coin,
                         quote,
-                        fee,
+                        q,
                     });
                 }
             }
         }
-        let kind = if v3 { "getPool" } else { "getPair" };
+        let kind = qs.first().map_or("", |q| q.name());
         let n = out.calls.len() - before;
         out.notes.push(format!("{}: {kind} — {n} вызовов", f.id));
     }

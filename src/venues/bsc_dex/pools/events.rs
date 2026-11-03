@@ -39,7 +39,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::KyberElastic => events_elastic::topics(),
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::topics(),
         Proto::Algebra => events_algebra::topics(),
-        Proto::Solidly => events_solidly::topics(),
+        Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
     }
 }
 
@@ -62,7 +62,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::KyberElastic => events_elastic::liquidity_topics(),
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::liquidity_topics(),
         Proto::Algebra => events_algebra::liquidity_topics(),
-        Proto::Solidly => events_solidly::liquidity_topics(),
+        Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
     }
 }
 
@@ -76,7 +76,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::KyberElastic => events_elastic::apply(e, log),
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::apply(e, log),
         Proto::Algebra => events_algebra::apply(e, log),
-        Proto::Solidly => events_solidly::apply(e, log),
+        Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

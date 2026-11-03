@@ -39,7 +39,8 @@ pub fn still(ctx: &Ctx, f: &'static Family) -> Result<(), String> {
     }
 }
 
-/// Список для контракта (dex_families): DEX с поддержанным видом из настроек. Ошибок нет.
+/// Список для контракта (dex_families): DEX с поддержанным видом из настроек; в названии — строка исполнителя
+/// (exec_kind::describe, решение 122 F). Ошибок нет.
 pub fn for_ui(ctx: &Ctx) -> Vec<DexFamily> {
     all(ctx)
         .into_iter()
@@ -47,7 +48,8 @@ pub fn for_ui(ctx: &Ctx) -> Vec<DexFamily> {
             dex: f.id.to_string(),
             family: f.id.to_string(),
             kind: f.kind,
-            title: f.title.to_string(),
+            // Решение 122 F: как исполняются пулы этого вида (шаг контракта-исполнителя или его нет).
+            title: format!("{} — {}", f.title, super::exec_kind::describe(ctx, f)),
             docs: Vec::new(),
         })
         .collect()

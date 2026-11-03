@@ -21,6 +21,12 @@
 //!   L143-L156); isPool(address) → bool (IPoolFactory.sol L36); getFee(address pool, bool stable) → uint256 (комиссия
 //!   пула, числитель над 10000 — PoolFactory.sol L131-L133); событие PoolCreated(token0, token1, stable, pool, uint)
 //!   (IPoolFactory.sol L9).
+//! - фабрика Solidly V1 — THENA V1 (решение 122 F; ThenafiBNB/THENA-Contracts HEAD f5bc742,
+//!   contracts/factories/PairFactoryUpgradeable.sol): реестр — публичный mapping `getPair(a, b, bool stable)` (L24,
+//!   заполнен в обе стороны L124-L125), `isPair(address)` (L26), `getFee(bool stable)` (L104-L106, числитель над 10000
+//!   — Pair.sol L461), событие `PairCreated(address indexed token0, address indexed token1, bool stable, address pair,
+//!   uint)` (L32 — stable НЕ индексирован, в отличие от Velodrome). Пул THENA V1 — тот же интерфейс ISolidlyPool
+//!   (Pair.sol: metadata L128, Sync(uint,uint) L86, getAmountOut L459).
 
 alloy::sol! {
     interface ISolidlyPool {
@@ -41,6 +47,14 @@ alloy::sol! {
         function getPool(address tokenA, address tokenB, bool stable) external view returns (address);
         function isPool(address pool) external view returns (bool);
         function getFee(address pool, bool stable) external view returns (uint256);
+    }
+
+    interface IThenaV1Factory {
+        event PairCreated(address indexed token0, address indexed token1, bool stable, address pair, uint256 allPairsLength);
+
+        function getPair(address tokenA, address tokenB, bool stable) external view returns (address);
+        function isPair(address pair) external view returns (bool);
+        function getFee(bool stable) external view returns (uint256);
     }
 }
 
@@ -86,6 +100,23 @@ mod tests {
         assert_eq!(
             ISolidlyFactory::getFeeCall::SELECTOR.to_vec(),
             sel("getFee(address,bool)")
+        );
+        // Solidly V1 — THENA V1 (решение 122 F): PairFactoryUpgradeable.sol HEAD f5bc742.
+        assert_eq!(
+            IThenaV1Factory::PairCreated::SIGNATURE_HASH,
+            topic("PairCreated(address,address,bool,address,uint256)")
+        );
+        assert_eq!(
+            IThenaV1Factory::getPairCall::SELECTOR.to_vec(),
+            sel("getPair(address,address,bool)")
+        );
+        assert_eq!(
+            IThenaV1Factory::isPairCall::SELECTOR.to_vec(),
+            sel("isPair(address)")
+        );
+        assert_eq!(
+            IThenaV1Factory::getFeeCall::SELECTOR.to_vec(),
+            sel("getFee(bool)")
         );
     }
 }

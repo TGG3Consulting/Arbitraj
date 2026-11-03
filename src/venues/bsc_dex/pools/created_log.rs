@@ -22,7 +22,7 @@ use super::abi_algebra::IAlgebraFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
 use super::abi_slipstream::ICLFactory;
-use super::abi_solidly::ISolidlyFactory;
+use super::abi_solidly::{ISolidlyFactory, IThenaV1Factory};
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
 use super::attach;
@@ -84,6 +84,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::Solidly => (
                 "dex.factory",
                 ISolidlyFactory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
+            // Solidly V1 — THENA V1 (решение 122 F): PairCreated(token0, token1, stable, pair, n), stable не индексирован
+            // (PairFactoryUpgradeable.sol L32, THENA-Contracts f5bc742).
+            Proto::SolidlyV1 => (
+                "dex.factory",
+                IThenaV1Factory::PairCreated::SIGNATURE_HASH,
                 false,
             ),
             // Slipstream (Topaz v3; решения 80, 85): CLFactory эмитит PoolCreated(token0, token1, tickSpacing, pool)
@@ -221,6 +228,11 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = ISolidlyFactory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Solidly) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
+        }
+        Proto::SolidlyV1 => {
+            let e = IThenaV1Factory::PairCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PairCreated (Solidly V1) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pair)
         }
         // Slipstream (Topaz v3; решения 80, 85): PoolCreated(token0, token1, int24 tickSpacing, pool) — третий
         // индексируемый параметр tickSpacing (а не fee как у Uni V3), адрес пула и реальная пара из события.

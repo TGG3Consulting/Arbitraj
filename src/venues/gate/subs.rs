@@ -56,6 +56,8 @@ struct Inner {
     account: Mutex<Option<JoinHandle<()>>>,
     /// Обновление ставок комиссии и его список символов (решение 131): тот же список — задача не перезапускается.
     fees: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
+    /// Баланс GT для скидки комиссии (решение 158): один круг на адаптер, запускается с первой подпиской.
+    gt: Mutex<Option<JoinHandle<()>>>,
     /// Сведения депозита (решение 143) и тикеры их монет: тот же список — задача не перезапускается.
     deposit: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
 }
@@ -79,6 +81,12 @@ impl Subs {
                     p.ctx.clone(),
                     out.clone(),
                 )));
+            }
+        }
+        {
+            let mut gt = self.inner.gt.lock().unwrap_or_else(|e| e.into_inner());
+            if gt.as_ref().is_none_or(|h| h.is_finished()) {
+                *gt = Some(tokio::spawn(p.fees.gt.clone().run(p.ctx.clone())));
             }
         }
         let mut watch = self.inner.watch.lock().unwrap_or_else(|e| e.into_inner());

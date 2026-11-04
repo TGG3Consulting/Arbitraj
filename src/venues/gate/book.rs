@@ -116,8 +116,10 @@ impl Books {
         let (filled, notional) = walk(levels, qty);
         let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
         let mode = ctx.text("venue.fee_deduction")?;
-        let (rate, in_gt) = rates
-            .plan(&mode)
+        // Решение 158: скидка GT — только если GT хватает (память gt_balance.rs), иначе обычная ставка.
+        let (gt_ok, _) = fees.gt.ok(ctx);
+        let (rate, in_gt, _why) = rates
+            .plan(&mode, gt_ok)
             .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
         let avg = if filled.is_zero() {
             Decimal::ZERO

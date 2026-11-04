@@ -58,24 +58,35 @@ impl Rates {
         })
     }
 
-    /// Что делает: ставка taker для расчёта по варианту списания venue.fee_deduction (coin / gt) и проверка, что
-    /// вариант совпадает со счётом. Принимает: вариант. Возвращает: (ставка, комиссия в GT ли).
-    /// Ошибки: текст причины (котировки нет): вариант не совпадает со скидкой GT счёта или неизвестен.
-    pub fn plan(&self, mode: &str) -> Result<(Decimal, bool), String> {
-        match (mode, self.gt_discount) {
-            (FEE_COIN, false) => Ok((self.taker, false)),
-            (FEE_GT, true) if self.gt_taker > Decimal::ZERO => Ok((self.gt_taker, true)),
-            (FEE_COIN, true) => Err(
-                "venue.fee_deduction = coin, а на счёте Gate включена скидка GT (gt_discount) — комиссия ушла бы в GT; \
-                 выключите скидку в кабинете или поставьте gt"
-                    .into(),
-            ),
-            (FEE_GT, _) => Err(format!(
-                "venue.fee_deduction = gt, а скидка GT на счёте Gate выключена (gt_discount = {}, gt_taker_fee = {}) — \
-                 включите её в кабинете или поставьте coin",
-                self.gt_discount, self.gt_taker
+    /// Что делает: ставка taker для расчёта по варианту списания venue.fee_deduction (решение 158, Тигран 05.11).
+    /// coin — обычная ставка в монете сделки, даже если на счёте включена скидка GT (обычная ставка — худший случай:
+    /// со скидкой комиссия только меньше и уходит в GT, монеты остаётся не меньше; факт — из ордера).
+    /// gt — ставка со скидкой в GT, только если скидка на счёте включена и GT хватает (gt_ok — gt_balance.rs);
+    /// иначе — обычная ставка в монете сделки (когда GT кончится, сделки идут дальше по обычной ставке).
+    /// Принимает: вариант, хватает ли GT. Возвращает: (ставка, комиссия в GT ли, пояснение или None).
+    /// Ошибки: текст причины (котировки нет) — вариант неизвестен.
+    pub fn plan(&self, mode: &str, gt_ok: bool) -> Result<(Decimal, bool, Option<String>), String> {
+        match mode {
+            FEE_COIN if self.gt_discount => Ok((
+                self.taker,
+                false,
+                Some(
+                    "скидка GT на счёте включена — расчёт по обычной ставке (худший случай)".into(),
+                ),
             )),
-            (other, _) => Err(format!(
+            FEE_COIN => Ok((self.taker, false, None)),
+            FEE_GT if self.gt_discount && self.gt_taker > Decimal::ZERO && gt_ok => {
+                Ok((self.gt_taker, true, None))
+            }
+            FEE_GT => Ok((
+                self.taker,
+                false,
+                Some(format!(
+                    "скидка GT недоступна (gt_discount = {}, gt_taker_fee = {}, GT хватает: {gt_ok}) — расчёт по обычной ставке",
+                    self.gt_discount, self.gt_taker
+                )),
+            )),
+            other => Err(format!(
                 "venue.fee_deduction = {other}: у Gate варианты {FEE_COIN} (в монете сделки) или {FEE_GT} (в GT)"
             )),
         }
@@ -90,6 +101,8 @@ pub const FEE_GT: &str = "gt";
 #[derive(Clone, Default)]
 pub struct Fees {
     cache: Arc<RwLock<HashMap<String, Rates>>>,
+    /// Баланс GT для скидки (решение 158, gt_balance.rs).
+    pub gt: super::gt_balance::GtBalance,
 }
 
 impl Fees {

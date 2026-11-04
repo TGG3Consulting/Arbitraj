@@ -1,0 +1,56 @@
+//! Файл: venues/okx/ws_req.rs
+//! Что делает: подключение WebSocket OKX и запросы подписки (op = subscribe / unsubscribe) пачками не длиннее 64 КБ —
+//! общие для соединений стаканов (ws_conn.rs) и потока аккаунта (user_stream_conn.rs).
+//! Кто вызывает: ws_conn.rs, user_stream_conn.rs, тесты.
+//! От чего зависит: tokio-tungstenite, serde_json.
+//! Настройки: нет (адрес и срок передаёт вызывающий).
+//!
+//! Официально (https://www.okx.com/docs-v5/en/, «Overview → WebSocket»): «the total length of multiple channels cannot
+//! exceed 64 KB»; «The total number of 'subscribe'/'unsubscribe'/'login' requests per connection is limited to 480 times
+//! per hour».
+
+use std::time::Duration;
+
+use serde_json::json;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+
+/// Предел длины одного запроса подписки — официально «cannot exceed 64 KB».
+pub const MAX_REQ_BYTES: usize = 64 * 1024;
+/// Запросов subscribe/unsubscribe/login на соединение в час — официально «480 times per hour».
+pub const MAX_OPS_PER_HOUR: usize = 480;
+
+/// Открытое соединение.
+pub type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+/// Что делает: подключение. Принимает: адрес, срок. Ошибка — текст.
+pub async fn open(url: &str, timeout: Duration) -> Result<Ws, String> {
+    match tokio::time::timeout(timeout, tokio_tungstenite::connect_async(url)).await {
+        Err(_) => Err("не удалось подключиться за отведённое время".into()),
+        Ok(Err(e)) => Err(format!("подключение к {url}: {e}")),
+        Ok(Ok((ws, _))) => Ok(ws),
+    }
+}
+
+/// Запросы подписки (op = subscribe / unsubscribe): аргументы пачками, чтобы запрос был не длиннее 64 КБ. Ошибок нет.
+pub fn requests(op: &str, channel: &str, insts: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut args: Vec<serde_json::Value> = Vec::new();
+    // Длина «обёртки» запроса без аргументов — считается, а не задаётся числом.
+    let envelope = json!({"op": op, "args": []}).to_string().len();
+    let mut len = envelope;
+    for i in insts {
+        let a = json!({"channel": channel, "instId": i});
+        let n = a.to_string().len() + 1;
+        if !args.is_empty() && len + n > MAX_REQ_BYTES {
+            out.push(json!({"op": op, "args": std::mem::take(&mut args)}).to_string());
+            len = envelope;
+        }
+        len += n;
+        args.push(a);
+    }
+    if !args.is_empty() {
+        out.push(json!({"op": op, "args": args}).to_string());
+    }
+    out
+}

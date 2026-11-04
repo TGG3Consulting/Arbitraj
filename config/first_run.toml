@@ -771,6 +771,172 @@ source = "Get Deposit Address V3: to — MAIN или TRADE; решение Ти�
 rationale = "Адрес MAIN при выключенном переводе бот не отдаёт (монету не продать) — отказ с причиной."
 prefill = { kind = "Venue", id = "kucoin" }
 
+# --- Биржа OKX (решение 161) ---
+[[section]]
+title = "Биржа OKX (решение 161)"
+intro = "Из официальной документации OKX API v5 (живых ответов ещё нет — из среды разработки OKX закрыт; сверить на сервере бота, tests/README.md, раздел OKX). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Режим счёта Spot (acctLv 1), ключ основного счёта с правами Read, Trade, Withdraw, привязан к IP; адреса вывода — заранее в кабинете OKX."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка OKX"
+unit = "URL"
+method = "Домен — по сущности счёта, не выбирается ботом: основной https://openapi.okx.com, EEA — https://eea.okx.com, US — https://us.okx.com. Какой у счёта — видно по сайту входа (my.okx.com — EEA, app.okx.com — US/AU)."
+source = "Документация OKX v5, Overview → Production Trading Services: «Using openapi.okx.com will not work for the regions below»"
+rationale = "Запросы на чужой домен сущности не проходят."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка OKX"
+unit = "URL"
+method = "Публичный WebSocket той же сущности: основной wss://ws.okx.com/ws/v5/public (у EEA / US — свой домен из того же раздела документации)."
+source = "Документация OKX v5, Overview → Production Trading Services; порт 8443 закрыт с 31.10.2026 (журнал изменений)"
+rationale = "Стаканы books5 / books."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_business_url"
+area = "площадка OKX"
+unit = "URL"
+method = "WebSocket business той же сущности: основной wss://ws.okx.com/ws/v5/business."
+source = "Документация OKX v5, Deposit info channel: «URL Path /ws/v5/business (required login)»"
+rationale = "Зачисление депозитов событием с хешем (venue.balance_events)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка OKX"
+unit = "да/нет"
+value = "да"
+source = "Документация OKX v5, Deposit info channel"
+rationale = "Депозит закрывается событием, а не опросом статуса."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка OKX"
+unit = "название"
+method = "Часть chain после «<монета>-» сети BSC в живом ответе GET /api/v5/asset/currencies?ccy=CAKE (ожидается BSC — в документации только пример USDT-ERC20)."
+source = "Документация OKX v5, Get currencies: chain «e.g. USDT-ERC20»"
+rationale = "Название сети одно на все монеты у ядра; chain OKX бот берёт из справочника."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка OKX"
+unit = "да/нет"
+method = "По живому ответу currencies: minDep у монет BSC приходит — не задавать; пустой у многих — решение Тиграна (что значит пустой minDep, документация не говорит)."
+source = "Документация OKX v5, Get currencies: minDep"
+rationale = "Решение 143: «0» и пустое у биржи могут значить разное."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка OKX"
+unit = "уровней"
+value = "400"
+source = "Документация OKX v5, Order book channel: books — 400 уровней + изменения каждые 100 мс; books5 — 5 уровней"
+rationale = "Глубина для котировки на объём; при нагрузке процессора — 5 (снимки books5)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "20000"
+source = "Документация OKX v5, Overview → WebSocket → Connect: «Set a timer of N seconds … N is less than 30»"
+rationale = "Сервер рвёт молчащее соединение через 30 с."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "40000"
+source = "Документация OKX v5, Connect: «If the response message is not received within N seconds, please raise an error or reconnect»"
+rationale = "Пинг через 20 с тишины + 20 с на pong."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.ws_connects_per_sec"
+area = "площадка OKX"
+unit = "в секунду"
+value = "3"
+source = "Документация OKX v5, Connect: «Connection limit: 3 requests per second (based on IP)»"
+rationale = "Потолок темпа подключений."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.order_type"
+area = "площадка OKX"
+unit = "тип"
+value = "ioc"
+source = "Документация OKX v5, Place order: ordType ioc / fok"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка OKX"
+unit = "запросов/с"
+value = "2"
+source = "Документация OKX v5, Get fee rates: «5 requests per 2 seconds»"
+rationale = "Потолок лимита эндпоинта (целое вниз)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "2000"
+source = "Документация OKX v5, Rate Limits: лимиты почти всех эндпоинтов — за 2 с; Retry-After не описан"
+rationale = "Пауза на окно лимита после 50011 / HTTP 429."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка OKX"
+unit = "да/нет"
+value = "да"
+source = "Документация OKX v5, Withdrawal: «Only supported withdrawal of assets from funding account»"
+rationale = "Торговля — на Trading, вывод — с Funding: перед выводом перевод 18 → 6."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка OKX"
+unit = "да/нет"
+method = "Не задавать, если в кабинете у адреса BSC зачисление на Trading account (to = 18). «да» — только если адрес зачисляет на Funding (6): тогда после зачисления перевод 6 → 18."
+source = "Документация OKX v5, Get deposit address: to «6: Funding account 18: Trading account»"
+rationale = "Адрес Funding при выключенном переводе бот не отдаёт — отказ с причиной."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.transfer_poll_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "1000"
+source = "Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state"
+rationale = "Опрос итога перевода без упора в лимит."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.transfer_wait_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "30000"
+source = "Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result»"
+rationale = "Не дождались — итог неизвестен, ручная проверка."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка OKX"
+unit = "да/нет"
+method = "Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки."
+source = "Документация OKX v5, Order precheck"
+rationale = "check_order — только правила пары."
+prefill = { kind = "Venue", id = "okx" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

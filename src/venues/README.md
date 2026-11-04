@@ -14,5 +14,6 @@
 | `bingx/` | BingX (спот) |
 | `mexc/` | MEXC (спот, API v3, решение 107) |
 | `kucoin/` | KuCoin (спот, Classic API, решение 137) |
+| `okx/` | OKX (спот, API v5, решение 161) |
 | `bsc_dex/` | DEX в сети BSC |
 | `kyberswap/` | Исполнение через агрегатор KyberSwap (внутри bsc_dex, решение 91) |

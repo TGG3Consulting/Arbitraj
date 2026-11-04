@@ -181,6 +181,31 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.withdraw_from_trade | площадка KuCoin | `да` | Вывод только с main: перед ним trade → main (право FlexTransfers) | Код 115007; решение Тиграна 04.11 |
 | venue.deposit_to_spot | площадка KuCoin | *метод:* не задавать — адрес депозита зачисляет на TRADE | Перевод main → trade не нужен | Get Deposit Address V3 (to); решение Тиграна 04.11 |
 
+## Биржа OKX (решение 161)
+
+Из официальной документации OKX API v5 (живых ответов ещё нет — из среды разработки OKX закрыт; сверить на сервере бота, tests/README.md, раздел OKX). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Режим счёта Spot (acctLv 1), ключ основного счёта с правами Read, Trade, Withdraw, привязан к IP; адреса вывода — заранее в кабинете OKX.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка OKX | *метод:* Домен — по сущности счёта, не выбирается ботом: основной https://openapi.okx.com, EEA — https://eea.okx.com, US — https://us.okx.com. Какой у счёта — видно по сайту входа (my.okx.com — EEA, app.okx.com — US/AU). | Запросы на чужой домен сущности не проходят. | Документация OKX v5, Overview → Production Trading Services: «Using openapi.okx.com will not work for the regions below» |
+| venue.ws_url | площадка OKX | *метод:* Публичный WebSocket той же сущности: основной wss://ws.okx.com/ws/v5/public (у EEA / US — свой домен из того же раздела документации). | Стаканы books5 / books. | Документация OKX v5, Overview → Production Trading Services; порт 8443 закрыт с 31.10.2026 (журнал изменений) |
+| venue.ws_business_url | площадка OKX | *метод:* WebSocket business той же сущности: основной wss://ws.okx.com/ws/v5/business. | Зачисление депозитов событием с хешем (venue.balance_events). | Документация OKX v5, Deposit info channel: «URL Path /ws/v5/business (required login)» |
+| venue.balance_events | площадка OKX | `да` | Депозит закрывается событием, а не опросом статуса. | Документация OKX v5, Deposit info channel |
+| venue.bsc_network | площадка OKX | *метод:* Часть chain после «<монета>-» сети BSC в живом ответе GET /api/v5/asset/currencies?ccy=CAKE (ожидается BSC — в документации только пример USDT-ERC20). | Название сети одно на все монеты у ядра; chain OKX бот берёт из справочника. | Документация OKX v5, Get currencies: chain «e.g. USDT-ERC20» |
+| venue.deposit_min_absent_ok | площадка OKX | *метод:* По живому ответу currencies: minDep у монет BSC приходит — не задавать; пустой у многих — решение Тиграна (что значит пустой minDep, документация не говорит). | Решение 143: «0» и пустое у биржи могут значить разное. | Документация OKX v5, Get currencies: minDep |
+| venue.depth_levels | площадка OKX | `400` | Глубина для котировки на объём; при нагрузке процессора — 5 (снимки books5). | Документация OKX v5, Order book channel: books — 400 уровней + изменения каждые 100 мс; books5 — 5 уровней |
+| venue.ws_ping_ms | площадка OKX | `20000` | Сервер рвёт молчащее соединение через 30 с. | Документация OKX v5, Overview → WebSocket → Connect: «Set a timer of N seconds … N is less than 30» |
+| venue.ws_silence_ms | площадка OKX | `40000` | Пинг через 20 с тишины + 20 с на pong. | Документация OKX v5, Connect: «If the response message is not received within N seconds, please raise an error or reconnect» |
+| venue.ws_connects_per_sec | площадка OKX | `3` | Потолок темпа подключений. | Документация OKX v5, Connect: «Connection limit: 3 requests per second (based on IP)» |
+| venue.order_type | площадка OKX | `ioc` | Правило Тиграна: неисполненный остаток снимает биржа. | Документация OKX v5, Place order: ordType ioc / fok |
+| venue.fee_requests_per_sec | площадка OKX | `2` | Потолок лимита эндпоинта (целое вниз). | Документация OKX v5, Get fee rates: «5 requests per 2 seconds» |
+| venue.rate_limit_pause_ms | площадка OKX | `2000` | Пауза на окно лимита после 50011 / HTTP 429. | Документация OKX v5, Rate Limits: лимиты почти всех эндпоинтов — за 2 с; Retry-After не описан |
+| venue.withdraw_from_trade | площадка OKX | `да` | Торговля — на Trading, вывод — с Funding: перед выводом перевод 18 → 6. | Документация OKX v5, Withdrawal: «Only supported withdrawal of assets from funding account» |
+| venue.deposit_to_spot | площадка OKX | *метод:* Не задавать, если в кабинете у адреса BSC зачисление на Trading account (to = 18). «да» — только если адрес зачисляет на Funding (6): тогда после зачисления перевод 6 → 18. | Адрес Funding при выключенном переводе бот не отдаёт — отказ с причиной. | Документация OKX v5, Get deposit address: to «6: Funding account 18: Trading account» |
+| venue.transfer_poll_ms | площадка OKX | `1000` | Опрос итога перевода без упора в лимит. | Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state |
+| venue.transfer_wait_ms | площадка OKX | `30000` | Не дождались — итог неизвестен, ручная проверка. | Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result» |
+| venue.order_test_first | площадка OKX | *метод:* Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки. | check_order — только правила пары. | Документация OKX v5, Order precheck |
+
 ## Зачисление по блокчейну (решение 151)
 
 Перевод сделки на кошелёк DEX засчитывается по приходу монеты в блокчейне, не дожидаясь API биржи-отправителя. Работает при заданных venue.balance_events и transfer.credit_amount_tolerance_pct у площадки DEX.

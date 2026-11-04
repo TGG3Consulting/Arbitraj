@@ -173,3 +173,55 @@ PancakeSwap Infinity Stable (решение «122 (Infinity Stable)») — tests
 Биржа Gate (решение 135) — tests/gate_real_data.rs на живых публичных ответах 2026-11-04 (tests/data/cex_samples_2026_11_04/gate_*): весь справочник пар (шаги 10^−precision, минимумы, белый список ключа, buy_start), весь справочник монет (сеть «BSC», адрес контракта в смешанном регистре, закрытые сети), currency_chains CAKE (decimal 8 сильнее точности пары), снимок REST для окна, кадры WebSocket (ответы на подписку, spot.pong, spot.order_book — 20 уровней, lastUpdateId не убывает; spot.order_book_update и spot.trades для окна), правила ордера ioc на живой паре и свой text «t-…». Приватные — #[ignore], что записать на живом боте: GET /wallet/withdraw_status (весь и ?currency=CAKE: withdraw_fix_on_chains["BSC"], формат withdraw_percent_on_chains); /account/detail (key.mode, ip_whitelist, currency_pairs) и /account/main_keys (perms: имена, read_only, есть ли право вывода); /spot/accounts (весь и ?currency=USDT); ордер ioc на минимальную сумму CAKE_USDT покупкой и продажей (ответ POST /spot/orders, GET /spot/orders/{id}, GET /spot/orders?status=finished — text, fee, gt_fee, point_fee, finish_as); /wallet/deposit_address?currency=CAKE; вывод POST /withdrawals и GET /wallet/withdrawals?withdraw_id= по шагам статуса; /wallet/deposits (TRACK → DONE / DEP_CREDITED); кадры spot.balances при депозите, ордере и выводе.
 
 Решение 141 — tests/core_uncapped.rs (расчёт «без потолка» на записанных стакане и пуле CAKE: не хуже, чем с потолком и чем боевой подбор на том же бюджете; минимум до плюса совпадает с прямым расчётом кривой и на шаг меньше не проходит; «не становится плюсовой»; упущено = 0 при не ограничивающем бюджете, > 0 при ограничивающем; таблица потолков не убывает), tests/core_uncapped_peaks.rs (многопиковая кривая из записи CAKE — две сделки подряд на тех же записях: два пика, оптимум на втором, не хуже перебора; замер стоимости при разных uncapped.max_evals).
+
+## OKX (решение 161) — tests/okx_real_data.rs
+
+Без сети: подпись по формуле официального SDK github.com/okxapi/python-okx v0.4.4 (`okx/utils.py` signature,
+`okx/websocket/WsUtils.py` initLoginParams) на примере документации «REST Authentication»
+(`GET /api/v5/account/balance?ccy=BTC`, время `2020-12-08T09:08:57.715Z`), POST ордера и вход WebSocket. Живых ответов
+OKX нет (из среды разработки www.okx.com закрыт прокси) — тесты на записях `#[ignore]`, пока не записаны файлы
+`tests/data/cex_samples_2026_11_05/okx_*`. Записывать на сервере бота; `R` — домен REST сущности счёта
+(значение `venue.rest_url`: основной `https://openapi.okx.com`, EEA `https://eea.okx.com`, US `https://us.okx.com`),
+`W` — WebSocket public той же сущности (`venue.ws_url`, основной `wss://ws.okx.com/ws/v5/public`).
+
+Публичные (без ключа):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+curl -sS --compressed "$R/api/v5/public/instruments?instType=SPOT" -o $D/okx_instruments_spot.json
+curl -sS --compressed "$R/api/v5/market/books?instId=CAKE-USDT&sz=400" -o $D/okx_books_rest_CAKE-USDT.json
+(echo '{"op":"subscribe","args":[{"channel":"books5","instId":"CAKE-USDT"}]}'; sleep 60) \
+  | websocat -t "$W" > $D/okx_books5.jsonl
+(echo '{"op":"subscribe","args":[{"channel":"books","instId":"CAKE-USDT"}]}'; sleep 120) \
+  | websocat -t "$W" > $D/okx_books.jsonl
+```
+
+Приватные (ключ бота; переменные `OKX_KEY`, `OKX_SECRET`, `OKX_PASS` — только в оболочке, в файлы не писать). Подпись —
+как sign.rs: Base64(HMAC-SHA256(время + GET + путь?запрос)):
+
+```bash
+okx() { TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+  SIGN=$(printf '%s' "${TS}GET$1" | openssl dgst -sha256 -hmac "$OKX_SECRET" -binary | base64)
+  curl -sS --compressed "$R$1" -H "OK-ACCESS-KEY: $OKX_KEY" -H "OK-ACCESS-SIGN: $SIGN" \
+    -H "OK-ACCESS-TIMESTAMP: $TS" -H "OK-ACCESS-PASSPHRASE: $OKX_PASS"; }
+okx '/api/v5/asset/currencies?ccy=CAKE,USDT' > $D/okx_currencies_CAKE.json
+okx '/api/v5/asset/currencies' > $D/okx_currencies_all.json            # размер ответа (урок 9)
+okx '/api/v5/asset/deposit-address?ccy=CAKE' > $D/okx_deposit_address_CAKE.json
+okx '/api/v5/asset/deposit-history?ccy=CAKE' > $D/okx_deposit_history.json
+okx '/api/v5/asset/withdrawal-history?ccy=CAKE' > $D/okx_withdrawal_history.json
+okx '/api/v5/account/trade-fee?instType=SPOT&instId=CAKE-USDT' > $D/okx_trade_fee_CAKE.json
+okx '/api/v5/account/config' > $D/okx_account_config.json             # перед коммитом заменить uid, mainUid, label, ip
+okx '/api/v5/account/balance?ccy=USDT,CAKE' > $D/okx_account_balance.json
+okx '/api/v5/asset/balances' > $D/okx_funding_balances.json
+```
+
+С живого бота (сырой журнал `data/raw/okx`, без ключей): соединение «account» — кадры канала deposit-info
+(`okx_deposit_info.jsonl`: депозит state 0 → 1 → 2), «rest /api/v5/trade/order» — первый ордер ioc CAKE-USDT покупкой и
+продажей (ответ постановки и GET ордера: sCode, accFillSz, avgPx, fee, feeCcy), «rest /api/v5/asset/transfer» и
+transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по шагам state. Затем
+`cargo test --test okx_real_data -- --ignored` и снять `#[ignore]` с записанных.
+
+Что проверить на записях (документация прочитана пересказчиком): имя сети BSC в chain (`CAKE-BSC`?) и полный ли
+`ctAddr` в currencies; `canDep` / `canWd` — boolean или строка; пустой ли `minDep`; `to` адреса депозита — «6» / «18»;
+знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
+(seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.

@@ -142,7 +142,12 @@ pub async fn post(
     // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело (пачка Multicall3 — до ~1 МБ) дочитывается,
     // пока данные идут чаще http.body_idle_ms.
     let lim = ctx.limits()?;
-    let mut req = ctx.http.post(url).json(body);
+    // Решение 142: сжатие HTTP включено для площадок; узел BSC свой и локальный — без сжатия (лишний процессор).
+    let mut req = ctx
+        .http
+        .post(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "identity")
+        .json(body);
     for (k, v) in headers {
         req = req.header(*k, *v);
     }

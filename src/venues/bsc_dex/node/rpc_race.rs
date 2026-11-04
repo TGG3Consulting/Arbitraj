@@ -147,7 +147,15 @@ pub(super) async fn one(
 ) -> GatewayResult<Capped<String>> {
     // Ошибка называет узел (только хост): 429 одного из публичных узлов ленты — видно, какого.
     let source = host_source(url);
-    match http::exchange(ctx.http.post(url).json(body), lim).await {
+    match http::exchange(
+        ctx.http
+            .post(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
+            .json(body),
+        lim,
+    )
+    .await
+    {
         Ok((status, text)) => status_ok(status, text, &source).map(Capped::Got),
         Err(f @ (Fail::TooBig { .. } | Fail::Total { .. })) => Ok(Capped::Over(f)),
         Err(f) => Err(errors::from_fail(&f, &lim, &source)),

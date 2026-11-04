@@ -144,7 +144,16 @@ async fn relay_sold_here_close_starts_return_and_failure_alarms() {
         }
         other => panic!("ждали «не вернулись», а {other:?}"),
     }
-    let alarm = entries(&j, "core.usdt_not_returned", "сделка t1TWT").await;
+    // Страховка пишется в журнал сразу после смены состояния (отдельной записью) — ждём её, а не читаем
+    // в тот же миг: иначе тест изредка падал на гонке (05.11).
+    let mut alarm = Vec::new();
+    for _ in 0..100 {
+        alarm = entries(&j, "core.usdt_not_returned", "сделка t1TWT").await;
+        if !alarm.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
     assert_eq!(alarm.len(), 1);
     assert!(alarm[0].message.contains("24.69 USDT, лежат на bsc_dex"));
 }

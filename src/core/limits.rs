@@ -6,6 +6,7 @@
 //! Решение 94: свободный баланс площадки A в РАСЧЁТЕ кандидата больше не читается — расчёт идёт на каждом тике по
 //! многим кандидатам, и биржа блокирует частые запросы баланса (BingX, код 100410). Реальный свободный баланс
 //! читается ОДИН раз — прямо перед отправкой ордера покупки (free_now, вызывает executor.rs) и ограничивает списание.
+//! Решение 141: составляющие бюджета и какая ограничила — limits_parts.rs (budget — меньшее из них).
 //! Кто вызывает: core/profit.rs (budget), core/executor.rs (free_now); executor.rs ведёт учёт Exposure.
 //! От чего зависит: engine.rs, deps.rs (шлюз), dry.rs, settings.
 //! Настройки: money.max_per_trade_usd, money.max_per_coin_usd, money.max_in_transit_usd, dry.enabled, dry.budget_usdt.
@@ -18,7 +19,7 @@ use crate::core::types::{Asset, VenueId};
 use crate::settings::read::At;
 
 use super::dirctx::DirCtx;
-use super::engine::{Core, lk};
+use super::engine::Core;
 
 /// Деньги в открытых сделках (ведёт executor.rs): вложено по монете и сумма в пути.
 #[derive(Default, Debug, Clone)]
@@ -31,30 +32,17 @@ pub struct Exposure {
 /// Принимает: ядро, контекст направления, режим (зафиксирован вызывающим). Возвращает: сумму USDT (> 0).
 /// Ошибки: не задан лимит, лимит исчерпан; в сухом режиме — не задан dry.budget_usdt.
 pub async fn budget(core: &Core, cx: &DirCtx, mode: &super::dry::Mode) -> Result<Decimal, String> {
-    let s = &core.inner.deps.settings;
-    let d = &cx.dir;
-    let g = |name: &str, venue: Option<&str>| {
-        s.decimal(name, At { venue, coin: None })
-            .map_err(|e| e.message)
-    };
-    let per_trade = g("money.max_per_trade_usd", Some(&d.buy_on.0))?;
-    let per_coin = g("money.max_per_coin_usd", None)?;
-    let transit = g("money.max_in_transit_usd", None)?;
-    let ex = lk(&core.inner.exposure).clone();
-    let coin_left = per_coin - ex.per_coin.get(&d.asset).copied().unwrap_or_default();
-    let transit_left = transit - ex.in_transit;
-    let mut cap = per_trade.min(coin_left).min(transit_left);
-    let mut virt = String::new();
-    // Сухой режим: виртуальный бюджет вместо денег площадки (решение 74).
-    if let super::dry::Mode::Dry(b) = mode {
-        let b = b.clone()?;
-        cap = cap.min(b);
-        virt = format!(", виртуальный бюджет dry.budget_usdt {b}");
-    }
+    // Решение 141: составляющие — limits_parts.rs (та же формула; «без потолка» пишет, какая ограничила).
+    let p = super::limits_parts::parts(core, &cx.dir, mode)?;
+    let cap = p.cap();
     if cap <= Decimal::ZERO {
+        let virt = p
+            .dry
+            .map(|b| format!(", виртуальный бюджет dry.budget_usdt {b}"))
+            .unwrap_or_default();
         return Err(format!(
-            "нет бюджета: на сделку {per_trade}, остаток на монету {coin_left}, \
-             остаток лимита в пути {transit_left}{virt}"
+            "нет бюджета: на сделку {}, остаток на монету {}, остаток лимита в пути {}{virt}",
+            p.per_trade, p.coin_left, p.transit_left
         ));
     }
     Ok(cap)

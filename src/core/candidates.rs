@@ -17,6 +17,8 @@
 //! Решение 129: каждый расчёт замеряется по этапам (calc_timing.rs: очередь до старта, этапы и части, запросы к узлу и
 //! агрегатору) — поле `timing` строки «Кандидатов»; отказ по сроку называет этап, на котором расчёт стоит (calc_report.rs),
 //! повтор той же причины в журнал не пишется по ключу без чисел.
+//! Решение 141: прошедший без запущенной сделки и отклонённый с расчётом — в фоновый расчёт «без потолка»
+//! (uncapped_entry.rs, очередь не ждёт); прежний итог «без потолка» в строке остаётся до нового.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
 //! calc_report.rs, gateway/calc_meter.rs.
@@ -141,6 +143,10 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
         Verdict::Reject { reason, best } => {
             let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now(), "timing": timing });
             publish(core, d, row);
+            // Решение 141: отказ с расчётом — фоновый расчёт «без потолка» (путь не ждёт).
+            if let Some(b) = &best {
+                super::uncapped_entry::cand(core, d, b, Some(&reason), &mode);
+            }
             // Направление перестало проходить — эпизод закрывается с этой причиной (решение 74).
             super::episode_run::failed(core, d, &reason);
             let key = key.unwrap_or_else(|| reason.clone());
@@ -187,6 +193,10 @@ async fn accepted_timed(
         Mode::Live => super::executor::accepted(core, calc.clone()).await,
     };
     let dry = matches!(start, Start::Dry(_));
+    // Решение 141: сделка не запущена — расчёт «без потолка» кандидата; запущена — его ставит исполнитель после покупки.
+    if start != Start::Started {
+        super::uncapped_entry::cand(core, d, &calc, None, mode);
+    }
     // Прежняя карточка остаётся видна, пока card_job.rs не построит новую.
     let prev = lk(&core.inner.candidates)
         .get(d)
@@ -224,8 +234,15 @@ async fn accepted_timed(
     );
 }
 
-/// Строка «Кандидатов» — в память и живой поток. Ошибок нет.
-fn publish(core: &Core, d: &Direction, row: serde_json::Value) {
-    lk(&core.inner.candidates).insert(d.clone(), row.clone());
+/// Строка «Кандидатов» — в память и живой поток. Прежний итог «без потолка» (решение 141, поле uncapped) остаётся
+/// виден, пока фоновый расчёт не даст новый. Ошибок нет.
+fn publish(core: &Core, d: &Direction, mut row: serde_json::Value) {
+    {
+        let mut rows = lk(&core.inner.candidates);
+        if let Some(u) = rows.get(d).and_then(|r| r.get("uncapped")).cloned() {
+            row["uncapped"] = u;
+        }
+        rows.insert(d.clone(), row.clone());
+    }
     core.inner.live.send(CoreEvent::Candidate(row));
 }

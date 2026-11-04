@@ -144,6 +144,8 @@ pub struct Inner {
     pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
     /// Исполнение циклов DEX ↔ DEX (решение 124): толчок поиска и память причин (cycle_state.rs).
     pub cycles: super::cycle_state::CycleState,
+    /// Фоновая очередь расчёта «без потолка» (решение 141, uncapped_state.rs).
+    pub uncapped: super::uncapped_state::State,
 }
 
 impl Inner {
@@ -221,6 +223,7 @@ impl Inner {
             window_kick: Notify::new(),
             card_jobs: Mutex::default(),
             cycles: Default::default(),
+            uncapped: Default::default(),
         }
     }
 }

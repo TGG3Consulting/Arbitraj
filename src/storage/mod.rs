@@ -12,6 +12,7 @@ pub mod episodes_db;
 pub mod journal;
 pub mod raw_log;
 pub mod rules;
+pub mod uncapped_db;
 pub mod venue_state;
 pub mod wallet_queue;
 pub mod windows_db;

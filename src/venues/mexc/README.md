@@ -31,6 +31,8 @@
 | `transfers.rs` | Вывод (`POST /api/v3/capital/withdraw`, `withdrawOrderId` с меткой попытки), его статус, поиск по `withdrawOrderId` при неизвестном итоге |
 | `deposits.rs` | Статус депозита по хешу (`gateway::tx_hash::same`) |
 | `account.rs` | Балансы, «Проверить подключение» (`apiKeyInfo`: права, включая SPOT_DEAL_READ, IP, срок ключа) |
+| `all_balances.rs` | Панель «Балансы» (решение 144): счета «Спот» (`GET /api/v3/account`) и «Фьючерсы» (`GET /api/v1/private/account/assets`) параллельно, ошибка счёта — в его `error`; других счетов (маржа, Earn, фонд) в API MEXC нет |
+| `futures_rest.rs` | Подписанный GET фьючерсного API (свой домен `venue.futures_rest_url`, заголовки `ApiKey`/`Request-Time`/`Signature`, подпись `accessKey+timestamp+параметры`), коды ошибок фьючерсов, своя пауза по Retry-After |
 | `trade.rs` | Ордер с худшей ценой; правила и пробный ордер — `order_rules.rs` |
 | `order_rules.rs` | Правила ордера — одни у настоящего ордера и у проверки без исполнения (`check_order`, решение 134): API-сторона, тип `venue.order_type` (orderTypes; IOC/FOK при LIMIT), шаги, минимумы и максимум суммы, сроки итога и myTrades; пробный ордер `POST /api/v3/order/test` — `venue.order_test_first` |
 | `order_state.rs` | Ожидание итога (сбой запроса — повтор), отмена по сроку, чтение итога после отмены; поиск и отмена по своему ID (`origClientOrderId`) |

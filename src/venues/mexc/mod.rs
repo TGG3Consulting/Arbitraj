@@ -10,6 +10,7 @@
 
 pub mod account;
 pub mod account_update;
+pub mod all_balances;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
@@ -19,6 +20,7 @@ pub mod errors;
 pub mod feed;
 pub mod fees;
 pub mod fills;
+pub mod futures_rest;
 pub mod market;
 pub mod networks_parse;
 pub mod num;
@@ -176,6 +178,11 @@ impl Venue for Mexc {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    /// Решение 144: панель «Балансы» — счета «Спот» и «Фьючерсы» параллельно (all_balances.rs), только чтение.
+    async fn account_balances(&self) -> GatewayResult<Vec<crate::core::types::AccountBalances>> {
+        Ok(all_balances::all(&self.ctx).await)
     }
 
     async fn deposit_to_trading(

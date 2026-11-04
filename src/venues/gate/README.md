@@ -29,6 +29,7 @@
 | `wallet.rs`, `wallet_cost.rs`, `networks_parse.rs` | Монеты и сети (/spot/currencies + /wallet/withdraw_status) за `Arc` с кэшем venue.networks_fresh_ms; одна монета — /spot/currencies/{c}, withdraw_status?currency=, /wallet/currency_chains (точность вывода decimal); комиссия вывода — withdraw_fix_on_chains |
 | `deposit_addr.rs` | Адрес депозита (/wallet/deposit_address, multichain_addresses по chain): memo — отказ, obtain_failed — отказ; минимум депозита и подтверждения — в справочник |
 | `deposit_info.rs` | Решение 143: фоновый круг адресов депозита по монетам подписки — минимум депозита (min_deposit_amount) и подтверждения в справочник сетей; venue.deposit_info_requests_per_sec, venue.deposit_info_refresh_s |
+| `all_balances.rs`, `all_balances_parse.rs` | Решение 144: панель «Балансы» — все счета Gate (спот, маржа, фьючерсы по venue.futures_settles, поставочные по venue.delivery_settles, опционы, Earn, итог /wallet/total_balance), только чтение |
 | `transfers.rs`, `deposits.rs` | Вывод POST /withdrawals (withdraw_order_id на попытку), статус и поиск по withdraw_order_id; статус депозита по хешу (/wallet/deposits) |
 | `account.rs` | Балансы /spot/accounts (все и одной монеты); «Проверить подключение»: key.mode, state, perms, IP |
 | `order_rules.rs` | Правила ордера — одни у ордера и у check_order (решение 134): сторона через API, ioc/fok, шаги, пределы; свой text «t-…» |

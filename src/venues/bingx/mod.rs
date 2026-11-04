@@ -10,6 +10,8 @@
 
 pub mod account;
 pub mod account_update;
+pub mod all_balances;
+pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
@@ -43,8 +45,8 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, VenueId, WithdrawRequest,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -165,6 +167,11 @@ impl Venue for Bingx {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    /// Решение 144: все счета BingX (спот, фонд, фьючерсы USDT-M / COIN-M / стандартные, обзор) — all_balances.rs.
+    async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
+        all_balances::read(&self.ctx).await
     }
 
     async fn deposit_to_trading(

@@ -13,6 +13,8 @@
 
 pub mod account;
 pub mod account_update;
+pub mod all_balances;
+pub mod all_balances_parse;
 pub mod book;
 pub mod bullet;
 pub mod ctx;
@@ -51,8 +53,8 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, VenueId, WithdrawRequest,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -173,6 +175,11 @@ impl Venue for Kucoin {
 
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
+    }
+
+    /// Решение 144: все счета KuCoin для панели «Балансы» — all_balances.rs (только чтение).
+    async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
+        all_balances::read(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

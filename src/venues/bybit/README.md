@@ -39,6 +39,7 @@
 | `transfers.rs` | Вывод (forceChain=1, feeType=1, requestId, accountType = venue.withdraw_account), статус, поиск при неизвестном итоге |
 | `fund_move.rs` | FUND → UNIFIED после зачисления (venue.deposit_to_spot) |
 | `account.rs` | Балансы UNIFIED, баланс одной монеты, «Проверить подключение» (права, master, UTA, IP) |
+| `all_balances.rs`, `all_balances_parse.rs` | Решение 144: панель «Балансы» — UNIFIED (wallet-balance), FUND (query-account-coins-balance), прочие счета (asset-overview: Earn, боты, копитрейдинг, займы…), параллельно, только чтение |
 | `order_rules.rs` | Правила ордера — одни у ордера и check_order; предел цены price-limit (venue.price_limit_check) |
 | `trade.rs`, `order_state.rs`, `fills.rs` | Limit + IOC/FOK, ожидание итога (поток или REST), отмена по сроку, комиссия и её монета |
 | `user_stream.rs`, `user_stream_conn.rs`, `private_cache.rs` | Приватный поток order.spot, execution.spot, wallet (venue.private_stream) |

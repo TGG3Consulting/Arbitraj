@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote, SendChannelInfo, Side,
-    TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote,
+    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    WithdrawRequest,
 };
 
 use super::errors::{ErrorCode, GatewayError, GatewayResult};

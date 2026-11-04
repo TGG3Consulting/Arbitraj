@@ -18,10 +18,9 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    balances,
-    check, coins, control, core_api, dex, dex_dry, dex_executor, episodes, first_run, journal,
-    rules, rules_meta, secrets, settings, settings_io, static_ui, uncapped, venues, wallet_queue,
-    wallets, wallets_dex, windows, ws,
+    balances, check, coins, control, core_api, dex, dex_dry, dex_executor, episodes, first_run,
+    journal, rules, rules_meta, secrets, settings, settings_io, static_ui, uncapped, venues,
+    wallet_queue, wallets, wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой

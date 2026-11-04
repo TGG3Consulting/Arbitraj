@@ -37,10 +37,20 @@ pub enum Pool {
     Spot,
     /// Management (по UID): счета, переводы, ввод и вывод, ключ.
     Management,
+    /// Futures (по UID): фьючерсный домен — только чтение балансов панели (all_balances.rs).
+    Futures,
+    /// Earn (по UID): вклады Earn — только чтение балансов панели (all_balances.rs).
+    Earn,
 }
 
 /// До какого момента (unix мс) пул закрыт. Один адаптер KuCoin на процесс — состояние модуля. 0 — открыт.
-static PAUSE: [AtomicI64; 3] = [AtomicI64::new(0), AtomicI64::new(0), AtomicI64::new(0)];
+static PAUSE: [AtomicI64; 5] = [
+    AtomicI64::new(0),
+    AtomicI64::new(0),
+    AtomicI64::new(0),
+    AtomicI64::new(0),
+    AtomicI64::new(0),
+];
 
 /// Номер пула в PAUSE. Ошибок нет.
 fn slot(p: Pool) -> usize {
@@ -48,6 +58,8 @@ fn slot(p: Pool) -> usize {
         Pool::Public => 0,
         Pool::Spot => 1,
         Pool::Management => 2,
+        Pool::Futures => 3,
+        Pool::Earn => 4,
     }
 }
 

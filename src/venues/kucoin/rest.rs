@@ -79,9 +79,17 @@ pub async fn signed(
     send(ctx, r).await
 }
 
-/// Что делает: отправка запроса с переходом на резервный адрес при сбое сети.
+/// Что делает: отправка запроса на адреса venue.rest_url (+ резерв при сбое сети).
 /// Принимает: окружение, запрос. Возвращает: data ответа. Ошибки: как public / signed.
 pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
+    let urls = ctx.rest_urls()?;
+    send_at(ctx, &urls, r).await
+}
+
+/// Что делает: отправка запроса на заданные базовые адреса по порядку (следующий — только при сбое сети); нужен для
+/// другого домена (фьючерсы — venue.futures_rest_url, all_balances.rs).
+/// Принимает: окружение, базовые адреса без «/» в конце, запрос. Возвращает: data ответа. Ошибки: как public / signed.
+pub async fn send_at(ctx: &Ctx, urls: &[String], r: Req<'_>) -> GatewayResult<Value> {
     let (raw_q, enc_q) = query(&r.query)?;
     let path_q = if raw_q.is_empty() {
         r.path.to_string()
@@ -89,12 +97,11 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
         format!("{}?{raw_q}", r.path)
     };
     let body = r.body.as_ref().map(Value::to_string).unwrap_or_default();
-    let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
     // Пул на паузе после 429000 — запрос не отправляется вовсе.
     reply::gate(r.pool).map_err(|e| ctx.tag(e))?;
     let mut last = None;
-    for base in &urls {
+    for base in urls {
         let url = if enc_q.is_empty() {
             format!("{base}{}", r.path)
         } else {

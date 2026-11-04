@@ -12,6 +12,8 @@
 //! 04.11), запасной вариант — перевод FUND → UNIFIED (fund_move.rs, venue.deposit_to_spot).
 
 pub mod account;
+pub mod all_balances;
+pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
@@ -51,8 +53,8 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side, TradeRequest, TradeResult,
-    Transfer, VenueId, WithdrawRequest,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
+    TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -180,6 +182,11 @@ impl Venue for Bybit {
     /// Решение 113: у Bybit есть запрос баланса одной монеты (wallet-balance&coin=).
     async fn balance(&self, asset: &str) -> GatewayResult<Option<Balance>> {
         account::balance(&self.ctx, asset).await
+    }
+
+    /// Решение 144: все счета Bybit (UNIFIED, FUND, прочие из Asset Overview) — all_balances.rs, только чтение.
+    async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
+        all_balances::read(&self.ctx).await
     }
 
     /// Решение 102 для Bybit: запасной вариант — депозит на FUND → перевод на UNIFIED (venue.deposit_to_spot; по решению

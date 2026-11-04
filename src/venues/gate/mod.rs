@@ -12,6 +12,8 @@
 
 pub mod account;
 pub mod account_update;
+pub mod all_balances;
+pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
@@ -183,6 +185,11 @@ impl Venue for Gate {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, None).await
+    }
+
+    /// Решение 144: все счета Gate (спот, маржа, фьючерсы, поставочные, опционы, Earn, итог) — all_balances.rs, только чтение.
+    async fn account_balances(&self) -> GatewayResult<Vec<crate::core::types::AccountBalances>> {
+        all_balances::account_balances(&self.ctx).await
     }
 
     /// Решение 113: баланс одной монеты — GET /spot/accounts?currency=.

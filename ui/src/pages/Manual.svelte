@@ -13,6 +13,10 @@
     Живые сообщения stuck_alert, manual, deal — перечитать.
     Решение 156: кнопки строк рисуются из records (GET /api/manual: у каждой записи — кнопки, команда ядра, вопрос
     подтверждения, ввод суммы, недоступность с причиной; core/manual_feed.rs) — ровно те же уходят в Telegram.
+    Решение 163: «USDT не вернулись — ждут перегона» (usdt из GET /api/manual): закрытая сделка, выручка USDT не
+    вернулась на площадку покупки (повторы usdt.return_retry_s / usdt.return_retries_max кончились, исход неизвестен
+    или повторов нет) — сделка, сумма, где лежат, куда должны, причина; кнопки «Перегнать» (ещё одна попытка
+    возврата) и «Перегнано вручную» (человек перевёл сам). Кнопок «Продать» нет — уже продано.
     Решение 121 (C4): внизу — «Сухая сделка DEX» (components/DexDrySwap.svelte): проверка своего свопа без отправки,
     не зависит от данных ядра.
   Кто вызывает: App.svelte.
@@ -48,7 +52,7 @@
     manual.reload();
   }
 
-  /** Кнопки записи экрана по ключу («a.<id>», «h.<id>», «d.<id>») — из records (решение 156). */
+  /** Кнопки записи экрана по ключу («a.<id>», «h.<id>», «d.<id>», «u.<id>») — из records (решения 156, 163). */
   function buttonsOf(key) {
     return (manual.data?.records ?? []).find((r) => r.key === key)?.buttons ?? [];
   }
@@ -137,6 +141,23 @@
         </tr>
       {:else}
         <tr><td colspan="8" class="muted">Остановленных сделок нет.</td></tr>
+      {/each}
+    </tbody>
+  </table>
+
+  <h2>USDT не вернулись — ждут перегона</h2>
+  <p class="muted">Сделка закрыта, а выручка USDT не вернулась на площадку покупки и бот сам больше не вернёт (повторы кончились, исход неизвестен или повторов нет). «Перегнать» — ещё одна попытка: свободные USDT площадки, не больше суммы. «Перегнано вручную» — вы перевели сами, запись закроется.</p>
+  <table>
+    <thead><tr><th>Сделка</th><th class="num">Сумма, USDT</th><th>Где лежат</th><th>Куда должны</th><th>Причина</th><th></th></tr></thead>
+    <tbody>
+      {#each manual.data.usdt ?? [] as d (d.id)}
+        <tr>
+          <td><code>{d.id}</code></td><td class="num">{d.usdt_return.amount}</td><td>{d.usdt_return.at}</td>
+          <td>{d.direction.buy_on}</td><td class="err">{d.usdt_return.why}</td>
+          <td class="row">{@render buttons('u.' + d.id)}</td>
+        </tr>
+      {:else}
+        <tr><td colspan="6" class="muted">Невернувшихся USDT нет.</td></tr>
       {/each}
     </tbody>
   </table>

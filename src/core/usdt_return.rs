@@ -9,7 +9,7 @@
 //! Кнопка «Продать и перегнать» (решение 101, deal.return_usdt) — перегон выручки этой сделки при любом режиме.
 //! Решение 138: возврат выручки закрытой сделки решает usdt_return_deal.rs (общий шаг ledger::finish), здесь — сам
 //! перегон (relay) и режим «отдельно».
-//! Кто вызывает: usdt_return_deal.rs (relay), reconcile.rs (separate).
+//! Кто вызывает: usdt_return_job.rs (relay, relay_try), usdt_return_retry.rs (relay_try, решение 163), reconcile.rs (separate).
 //! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, settings.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
 
@@ -28,7 +28,7 @@ use super::op_error::OpError;
 pub type Holder = (VenueId, Option<DexAccountId>);
 
 /// USDT в BSC как актив (тикер — котируемая монета площадки, адрес — из справочника бирж).
-fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
+pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
     let ticker = core
         .inner
         .deps
@@ -58,35 +58,44 @@ pub(super) async fn relay(
     acc: Option<&DexAccountId>,
     amount: Decimal,
 ) -> Result<Decimal, OpError> {
-    let deps = &core.inner.deps;
-    let res = match usdt(core, from) {
-        // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
-        Ok(a) => super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await,
-        Err(e) => Err(e.into()),
-    };
-    match res {
-        Ok((_, t)) => {
-            let text = format!(
-                "USDT {amount}: {} → {}, зачислено {}",
-                from.0, to.0, t.amount
-            );
-            deps.log(Level::Info, "core.usdt_return", Some(&from.0), &text, None)
-                .await;
-            deps.notify("usdt.relayed", Some(&from.0), &text).await;
-            Ok(t.amount)
-        }
-        Err(e) => {
-            let text = format!(
-                "Перегон USDT {amount}: {} → {} не состоялся: {e}. Деньги остались на {} — перегнать вручную",
-                from.0, to.0, from.0
-            );
-            deps.log(Level::Error, "core.usdt_return", Some(&from.0), &text, None)
-                .await;
-            // Решение 108: раньше — только журнал; деньги молча оставались не на той площадке.
-            deps.notify("usdt.relay_failed", Some(&from.0), &text).await;
-            Err(e)
-        }
+    let res = relay_try(core, id, from, to, acc, amount).await;
+    if let Err(e) = &res {
+        let deps = &core.inner.deps;
+        let text = format!(
+            "Перегон USDT {amount}: {} → {} не состоялся: {e}. Деньги остались на {} — перегнать вручную",
+            from.0, to.0, from.0
+        );
+        deps.log(Level::Error, "core.usdt_return", Some(&from.0), &text, None)
+            .await;
+        // Решение 108: раньше — только журнал; деньги молча оставались не на той площадке.
+        deps.notify("usdt.relay_failed", Some(&from.0), &text).await;
     }
+    res
+}
+
+/// Перегон как relay, но сбой не извещается (решение 163: при повторах возврата выручки итог извещает
+/// usdt_return_retry.rs — журнал на каждую попытку, Telegram только когда повторы кончились). Успех — журнал и
+/// usdt.relayed. Возвращает: сколько зачислено на to. Ошибки: перегон не состоялся (OpError).
+pub(super) async fn relay_try(
+    core: &Core,
+    id: &str,
+    from: &VenueId,
+    to: &VenueId,
+    acc: Option<&DexAccountId>,
+    amount: Decimal,
+) -> Result<Decimal, OpError> {
+    let deps = &core.inner.deps;
+    // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
+    let a = usdt(core, from)?;
+    let (_, t) = super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await?;
+    let text = format!(
+        "USDT {amount}: {} → {}, зачислено {}",
+        from.0, to.0, t.amount
+    );
+    deps.log(Level::Info, "core.usdt_return", Some(&from.0), &text, None)
+        .await;
+    deps.notify("usdt.relayed", Some(&from.0), &text).await;
+    Ok(t.amount)
 }
 
 /// Режим «отдельно»: по свободным USDT площадок (из сверки). Решение 132: у DEX — каждый кошелёк отдельно; перегон

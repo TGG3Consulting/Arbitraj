@@ -1,10 +1,12 @@
 //! Файл: core/usdt_return_job.rs
 //! Что делает: запуск перегона выручки закрытой сделки на площадку покупки (решение 138) — отдельная задача класса Trade
 //! (путь сделки, решение 61), итог — в состояние сделки (usdt_return_state.rs): вернулись / не вернулись (сбой, исход
-//! неизвестен). Задача оборвалась до итога (паника) — страховка «USDT не вернулись» из Drop.
+//! неизвестен). Задача оборвалась до итога (паника) — страховка «USDT не вернулись» из Drop. Решение 163: сбой, при
+//! котором вывод точно не ушёл, и заданы повторы (usdt.return_retry_s, usdt.return_retries_max) — повторы
+//! (usdt_return_retry.rs); тогда сбой первой попытки не извещается usdt.relay_failed — итог известит повтор.
 //! Кто вызывает: core/usdt_return_deal.rs (prepare создаёт Job), core/ledger.rs (finish запускает после сохранения).
-//! От чего зависит: usdt_return.rs (relay), usdt_return_state.rs, gateway/urgency.rs.
-//! Настройки: через usdt_return.rs (usdt_return.*).
+//! От чего зависит: usdt_return.rs (relay, relay_try), usdt_return_retry.rs, usdt_return_state.rs, gateway/urgency.rs.
+//! Настройки: через usdt_return.rs (usdt_return.*), через usdt_return_retry.rs (usdt.return_retry_s, usdt.return_retries_max).
 
 use rust_decimal::Decimal;
 
@@ -38,15 +40,13 @@ impl Job {
                 done: false,
             };
             let id = format!("{}u", self.deal);
-            let res = super::usdt_return::relay(
-                &c,
-                &id,
-                &self.from,
-                &self.to,
-                self.acc.as_ref(),
-                self.amount,
-            )
-            .await;
+            let acc = self.acc.as_ref();
+            // Решение 163: повторы заданы — сбой первой попытки известит итог повторов, а не usdt.relay_failed.
+            let res = if super::usdt_return_retry::plan(&c, &self.from).is_some() {
+                super::usdt_return::relay_try(&c, &id, &self.from, &self.to, acc, self.amount).await
+            } else {
+                super::usdt_return::relay(&c, &id, &self.from, &self.to, acc, self.amount).await
+            };
             guard.done = true;
             match res {
                 Ok(credited) => {
@@ -62,15 +62,13 @@ impl Job {
                     };
                     st::set(&c, &self.deal, state, &note).await;
                 }
-                Err(e) if e.outcome_unknown() => {
-                    let why = format!(
-                        "исход перегона неизвестен ({e}) — проверьте обе площадки, перевод мог уйти"
-                    );
-                    st::mark_not_returned(&c, &self.deal, self.amount, &self.from, &why).await;
-                }
+                // Решение 163: исход неизвестен, вывод мог уйти, повторов нет — «не вернулись» (usdt_return_retry::fail).
                 Err(e) => {
-                    let why = format!("перегон не состоялся: {e}");
-                    st::mark_not_returned(&c, &self.deal, self.amount, &self.from, &why).await;
+                    let way = (&self.from, &self.to);
+                    if super::usdt_return_retry::fail(&c, &self.deal, self.amount, way, 0, &e).await
+                    {
+                        super::usdt_return_retry::schedule(&c, &self.deal);
+                    }
                 }
             }
         }));

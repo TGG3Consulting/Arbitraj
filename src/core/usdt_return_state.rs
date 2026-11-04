@@ -1,9 +1,12 @@
 //! Файл: core/usdt_return_state.rs
 //! Что делает: состояние возврата выручки USDT закрытой сделки на площадку покупки (решение 138) — поле
-//! Deal.usdt_return: идёт / вернулись / не вернулись. Плюс страховка: «USDT не вернулись» — журнал
-//! (core.usdt_not_returned), событие Telegram usdt.not_returned и строка на экране «Сделки» (по полю сделки).
+//! Deal.usdt_return: идёт / ждёт повтора (решение 163) / вернулись / не вернулись / перегнано вручную (решение 163).
+//! Плюс страховка: «USDT не вернулись» — журнал (core.usdt_not_returned), событие Telegram usdt.not_returned, строка
+//! на экране «Сделки» (по полю сделки) и запись с кнопками на экране «Ручное управление» (решение 163,
+//! core/manual_usdt.rs; в Telegram — событием manual.record).
 //! Кто вызывает: core/usdt_return_deal.rs (шаг после закрытия), core/ledger.rs (load — возврат, прерванный
-//! перезапуском), core/manual_halted.rs («Продано вручную» — возврата нет по решению 100).
+//! перезапуском), core/manual_halted.rs («Продано вручную» — возврата нет по решению 100), core/usdt_return_retry.rs
+//! (повторы, решение 163), core/manual_usdt.rs («Перегнать», «Перегнано вручную»).
 //! От чего зависит: deal.rs, engine.rs, ledger.rs (save), deps.rs (журнал, уведомления).
 //! Настройки: нет (событие включается на экране уведомлений).
 
@@ -39,6 +42,23 @@ pub enum UsdtReturn {
         at: VenueId,
         why: String,
     },
+    /// Решение 163: перегон не состоялся, а прежний вывод точно не ушёл — ждёт повтора через usdt.return_retry_s.
+    /// tries — сколько повторов уже сделано (первая попытка при закрытии не считается), why — причина последнего сбоя.
+    /// Переживает перезапуск: задача повторов поднимается при запуске (usdt_return_retry::resume).
+    Retrying {
+        amount: Decimal,
+        from: VenueId,
+        to: VenueId,
+        tries: u64,
+        why: String,
+    },
+    /// Решение 163: «Перегнано вручную» — человек перевёл USDT сам; by — кто нажал (журнал и хронология).
+    Manual {
+        amount: Decimal,
+        at: VenueId,
+        to: VenueId,
+        by: String,
+    },
 }
 
 /// Текст страховки «USDT не вернулись». Принимает: id сделки, сумму, где лежат, причину. Ошибок нет.
@@ -67,7 +87,7 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
 }
 
 /// Ставит состояние возврата закрытой сделке в учёте (память, SQLite, интерфейс) с записью в хронологию.
-/// Принимает: ядро, id сделки, состояние, текст для хронологии. Ошибок нет: сделки нет в учёте — ничего.
+/// Принимает: ядро, id сделки, состояние, текст для хронологии («» — без записи). Ошибок нет: сделки нет — ничего.
 pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
     let d = {
         let mut deals = lk(&core.inner.deals);
@@ -75,7 +95,9 @@ pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
             return;
         };
         d.usdt_return = Some(state);
-        d.note(note.to_string());
+        if !note.is_empty() {
+            d.note(note.to_string());
+        }
         d.clone()
     };
     super::ledger::save(core, &d).await;

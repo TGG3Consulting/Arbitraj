@@ -1,6 +1,7 @@
 //! Файл: tests/core_close_guard.rs
 //! Что делает: страж решения 138 по исходникам: возврат USDT после закрытия решается только в ledger::finish
-//! (usdt_return_deal::prepare — только в ledger.rs), сам перегон выручки — только из usdt_return_job.rs, и никто не
+//! (usdt_return_deal::prepare — только в ledger.rs), сам перегон выручки — только из usdt_return_job.rs (решение 163:
+//! и повтор — usdt_return_attempt.rs), и никто не
 //! ставит Step::Closed в обход ledger::finish. Новый путь закрытия, написанный мимо общего шага, этот тест не пройдёт.
 //! Кто вызывает: cargo test.
 //! От чего зависит: только исходники src/ (чтение файлов). Моков нет.
@@ -41,6 +42,13 @@ fn return_step_only_in_ledger_finish() {
         // Сам перегон — только из шага закрытия и режима «отдельно».
         if s.contains("usdt_return::relay(") {
             assert_eq!(f, "usdt_return_job.rs", "{p:?}");
+        }
+        // Решение 163: перегон без извещения о сбое — только шаг закрытия и попытка повтора (повторы, «Перегнать»).
+        if s.contains("usdt_return::relay_try(") {
+            assert!(
+                f == "usdt_return_job.rs" || f == "usdt_return_attempt.rs",
+                "{p:?}"
+            );
         }
         // Закрыть сделку в обход ledger::finish нельзя: шаг Closed ставит только он.
         for bad in ["step = Step::Closed", "step: Step::Closed"] {

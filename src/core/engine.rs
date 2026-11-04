@@ -58,6 +58,8 @@ impl Core {
         // Итог дня — раньше сделок: прерванные перезапуском сделки сразу добавляют предварительный убыток.
         super::daily::load(&core).await;
         super::ledger::load(&core).await;
+        // Решение 163: возвраты USDT «ждёт повтора» продолжают повторы после перезапуска.
+        super::usdt_return_retry::resume(&core);
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
         super::transit::load(&core).await;

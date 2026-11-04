@@ -3,12 +3,12 @@
 //! сейчас не ниже нуля (решение 47: любая прибыль забирается сразу; порог прибыли решает только вход) —
 //! продаём; иначе — режим застрявшей монеты (stuck.rs, решение 37).
 //! Продажа по рынку — для режимов «Ожидание», «Порог убытка», «Перегон» и кнопки «Продать сейчас».
-//! Продано всё — сделка закрыта, возврат USDT в каждой сделке (usdt_return.rs); продано не всё —
+//! Продано всё — сделка закрыта (возврат USDT — общий шаг закрытия ledger::finish, решение 138); продано не всё —
 //! остаток снова через режим застрявшей монеты (меньше шага или минимума ордера биржи — пыль, dust.rs, решение 66); продажа не прошла — алерт человеку
 //! (manual.rs, решение 100), монеты на месте; продажа не ушла в сеть — режим застрявшей монеты, не больше
 //! stuck.unsent_retries_max раз (решение 110); исход продажи неизвестен — сделка остановлена до ручной проверки.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, usdt_return.rs, deal.rs.
+//! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs.
 //! Настройки: stuck.unsent_retries_max (решение 110).
 
 use rust_decimal::Decimal;
@@ -90,8 +90,8 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 super::ledger::save(core, &deal).await;
                 return Box::pin(super::stuck::handle(core, deal)).await;
             }
+            // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
-            super::usdt_return::after_deal(core, &deal).await;
         }
         // BNB на DEX (решение 62): отказ резерва на газ (InsufficientBalance) — монета на месте, просто газ продажи
         // сейчас не помещается сверх резерва: «застрявшая монета» (stuck.rs), а не остановка сделки.

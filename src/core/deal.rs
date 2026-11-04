@@ -78,6 +78,14 @@ pub struct Deal {
     /// маппинг потом поменяли. None — без DEX (биржа ↔ биржа) или сделка до решения 132 (тогда — кошелёк переноса).
     #[serde(default)]
     pub dex_account: Option<crate::core::types::DexAccountId>,
+    /// Решение 138: возврат выручки USDT на площадку покупки после закрытия (usdt_return_deal.rs): идёт / вернулись /
+    /// не вернулись. None — возврат не нужен (продано на площадке покупки, режим «отдельно») или сделка до решения 138.
+    #[serde(default)]
+    pub usdt_return: Option<super::usdt_return_state::UsdtReturn>,
+    /// Решение 138: путь закрытия, на котором возврата по решению нет (например «Продано вручную», решение 100), —
+    /// причина; при закрытии вместо перегона — страховка «USDT не вернулись». None — обычный путь.
+    #[serde(default)]
+    pub usdt_return_skip: Option<String>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
     pub started_at: DateTime<Utc>,
@@ -109,6 +117,8 @@ impl Deal {
             result_usd: None,
             provisional_usd: None,
             dex_account: None,
+            usdt_return: None,
+            usdt_return_skip: None,
             timeline: vec![],
             started_at: now,
             updated_at: now,

@@ -67,6 +67,14 @@
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
       {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
     </p>
+    <!-- Решение 138: возврат выручки USDT на площадку покупки после закрытия (поле сделки usdt_return). -->
+    {#if d.usdt_return?.state === 'pending'}
+      <p class="muted">Возврат USDT: идёт — {d.usdt_return.amount} USDT <code>{d.usdt_return.from}</code> → <code>{d.usdt_return.to}</code></p>
+    {:else if d.usdt_return?.state === 'done'}
+      <p class="ok">USDT вернулись: {d.usdt_return.amount} USDT <code>{d.usdt_return.from}</code> → <code>{d.usdt_return.to}</code>, зачислено {d.usdt_return.credited}</p>
+    {:else if d.usdt_return?.state === 'not_returned'}
+      <p class="err">USDT не вернулись: {d.usdt_return.amount} USDT лежат на <code>{d.usdt_return.at}</code> — {d.usdt_return.why}. Перегоните на площадку покупки вручную</p>
+    {/if}
     <details>
       <summary>Хронология ({d.timeline.length})</summary>
       <table><tbody>

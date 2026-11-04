@@ -173,6 +173,9 @@ pub async fn sold_manually(
         deal.qty
     ));
     deal.qty = Decimal::ZERO;
+    // Решение 138: продал человек — бот выручку не двигает (решение 100); не на площадке покупки — страховка.
+    deal.usdt_return_skip =
+        Some("продано вручную человеком — бот выручку не перегоняет (решение 100)".into());
     super::ledger::finish(core, &mut deal, Step::Closed, "продано вручную человеком").await;
     Ok(format!(
         "Сделка {deal_id} закрыта: выручка {got} USDT, итог {} USDT",

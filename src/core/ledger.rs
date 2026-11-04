@@ -4,8 +4,9 @@
 //! итог, план против факта, итог дня (daily.rs: факт или предварительный убыток, решение 53), статистика монеты (gas_stats.rs), уведомление deal.closed,
 //! пауза направления (signal.route_cooldown_s). Уведомление deal.closed — только если покупка была (решение 105). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
-//! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске).
-//! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs.
+//! Закрытие (Closed) — общий шаг возврата USDT на площадку покупки (решение 138, usdt_return_deal.rs).
+//! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
+//! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -20,10 +21,10 @@ use super::limits::Exposure;
 use super::view::CoreEvent;
 
 /// Вид записи в учёте ядра.
-const KIND: &str = "deal";
+pub(super) const KIND: &str = "deal";
 
 /// Пересчитывает деньги в открытых сделках по всем сделкам в памяти.
-fn recompute_exposure(core: &Core) {
+pub(super) fn recompute_exposure(core: &Core) {
     let deals = lk(&core.inner.deals);
     let mut ex = Exposure::default();
     for d in deals.values().filter(|d| d.is_open()) {
@@ -75,7 +76,15 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         Step::Halted | Step::TakenOver => super::daily::provisional(core, deal).await,
         _ => None,
     };
+    // Решение 138: общий шаг после закрытия — возврат выручки USDT на площадку покупки (для всех путей закрытия).
+    let ret = match step {
+        Step::Closed => super::usdt_return_deal::prepare(core, deal).await,
+        _ => None,
+    };
     save(core, deal).await;
+    if let Some(job) = ret {
+        job.start(core);
+    }
     let deps = &core.inner.deps;
     let d = &deal.direction;
     let text = format!(
@@ -165,46 +174,8 @@ pub fn discard(core: &Core, id: &str) {
     lk(&core.inner.deals).remove(id);
 }
 
-/// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.
-pub async fn load(core: &Core) {
-    let deps = &core.inner.deps;
-    let deals = match super::persist::load::<Deal>(&deps.db, KIND).await {
-        Ok(d) => d,
-        Err(e) => {
-            deps.log(
-                Level::Error,
-                "core.ledger",
-                None,
-                format!("Сделки не загружены: {e}"),
-                None,
-            )
-            .await;
-            return;
-        }
-    };
-    for mut d in deals {
-        // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
-        if d.is_open() && d.step != Step::WaitingHuman {
-            let text = format!(
-                "Сделка {} ({}, шаг {:?}, {} монет на {}) прервана перезапуском — проверьте вручную",
-                d.id, d.direction.asset.ticker, d.step, d.qty, d.at.0
-            );
-            d.step = Step::Halted;
-            d.note(text.clone());
-            // Решение 53: остановленная сделка — предварительный убыток в итог дня.
-            if let Some(stop) = super::daily::provisional(core, &mut d).await {
-                deps.notify("risk.daily_loss", None, &stop).await;
-            }
-            deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)
-                .await;
-            deps.notify("risk.stop", Some(&d.at.0), &text).await;
-            save(core, &d).await;
-        } else {
-            lk(&core.inner.deals).insert(d.id.clone(), d);
-        }
-    }
-    recompute_exposure(core);
-}
+/// Загрузка сделок при запуске — ledger_load.rs.
+pub use super::ledger_load::load;
 
 impl Core {
     /// Все сделки (экран «Сделки»): идущие и история, план против факта.

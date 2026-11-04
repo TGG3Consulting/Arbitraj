@@ -123,7 +123,11 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         Some(dir) => api.fallback_service(static_ui::service(&dir)),
         None => api,
     };
+    // Решение 145: сжатие ответов (gzip) — интерфейс ходит через SSH-туннель, а ответы большие (/api/coins ~14 МБ,
+    // справочник пулов ~3,4 МБ): без сжатия они занимали туннель десятки секунд, и все остальные запросы ждали за ними.
+    // Сжимается только то, что браузер просит (Accept-Encoding); поток /api/ws не затрагивается.
     app.layer(axum::middleware::from_fn_with_state(guard, guard::check))
+        .layer(tower_http::compression::CompressionLayer::new())
 }
 
 /// Запускает сервер и работает до остановки процесса.

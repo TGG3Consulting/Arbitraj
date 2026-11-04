@@ -5,6 +5,7 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 165, после деплоя:** закрыть «Продано вручную» сделку 20261104222708667LUCIC (406 LUCIC, выручка 44.50 USDT) — до исправления отказ «идёт другая сделка» (метка монеты не снималась). Gate выключен 05.11 до подтверждения адреса w3 в адресной книге Gate (ADDRESS_NOT_USED).
 - **Решение 158 (GT Gate), после деплоя:** venue.fee_deduction [gate] = gt, venue.gt_min_balance (≈ на 10 сделок), venue.gt_balance_poll_s = 30.
 - **Решения 156–157 (Telegram):** после деплоя — notify.manual_repeat_s = 10, включить событие manual.record на «Уведомлениях»; BotFather privacy mode (/menu без @имени может не доходить); нужен ли список разрешённых пользователей (сейчас любой участник группы); кнопка «Поставить площадку на паузу»; очереди кошельков и балансы в меню; записать живые ответы Telegram в tests/data.
 - **После деплоя сборки решений 146–155 задать:** guard.sell_slip_count = 3, guard.sell_slip_pct = 0.2; venue.fee_retry_s = 30 (все биржи); transfer.credit_by_chain [bsc_dex] = да; stuck.reject_retry_pause_ms = 1500 (и stuck.unsent_retries_max, если не задана); journal.repeat_flush_ms = 5000.

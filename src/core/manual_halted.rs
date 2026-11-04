@@ -177,6 +177,9 @@ pub async fn sold_manually(
     deal.usdt_return_skip =
         Some("продано вручную человеком — бот выручку не перегоняет (решение 100)".into());
     super::ledger::finish(core, &mut deal, Step::Closed, "продано вручную человеком").await;
+    // Решение 165 (05.11): снять метку монеты — иначе следующая сделка и «Продано вручную» по этой монете
+    // получали отказ «идёт другая сделка» до перезапуска (найдено на двух LUCIC Gate).
+    lk(&core.inner.active).remove(&key);
     Ok(format!(
         "Сделка {deal_id} закрыта: выручка {got} USDT, итог {} USDT",
         deal.result_usd.unwrap_or_default().round_dp(4)

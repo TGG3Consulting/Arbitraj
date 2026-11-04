@@ -14,7 +14,10 @@
 //!   Transfer function to move them to the trade account before trading»; type main / trade; balance, available, holds.
 //! - Get Apikey Info GET /api/v1/user/api-key (Management, вес 20) https://www.kucoin.com/docs-new/api-3470130 —
 //!   apiVersion, permission («General, Spot, Margin, Futures, InnerTransfer, Transfer, Earn»), ipWhitelist, isMaster.
-//!   Имена прав вывода и Flex-перевода — из спецификации эндпоинтов (x-api-permission: «Withdrawal», «FlexTransfers»).
+//!   Имена прав в ответе — как в описании поля permission, а не как в x-api-permission спецификации («Withdrawal»,
+//!   «FlexTransfers»): живой ответ 04.11.2026 у ключа с включёнными в кабинете «Вывод средств» и «Разрешить гибкие
+//!   переводы» — «General, Futures, Unified, Spot, Earn, InnerTransfer, Transfer, Margin»: вывод — Transfer, гибкие
+//!   переводы — InnerTransfer (дополнение решения 137, 04.11).
 //! - Get Account Type - Spot GET /api/v1/hf/accounts/opened (Spot, вес 30) https://www.kucoin.com/docs-new/api-3470120 —
 //!   «True means the current user is a high-frequency spot user».
 //! - Get Account Mode (UTA REST V2) GET /api/ua/v2/account/mode (право General, Management, вес 30)
@@ -36,9 +39,9 @@ use super::{num, rest};
 /// Счёт, на котором бот торгует (значение type из документации).
 const TRADE_TYPE: &str = "trade";
 /// Права, без которых бот не работает.
-const REQUIRED: [&str; 3] = ["General", "Spot", "Withdrawal"];
-/// Права, которых у ключа бота быть не должно (только спот — CLAUDE.md).
-const FORBIDDEN: [&str; 2] = ["Margin", "Futures"];
+const REQUIRED: [&str; 3] = ["General", "Spot", "Transfer"];
+/// Права, которых у ключа бота быть не должно (только спот — CLAUDE.md; единый счёт бот не поддерживает).
+const FORBIDDEN: [&str; 3] = ["Margin", "Futures", "Unified"];
 
 /// Балансы торгового счёта; currency — одна монета (None — все). Ошибки: ключи, связь, ответ KuCoin.
 pub async fn balances(ctx: &Ctx, currency: Option<&str>) -> GatewayResult<Vec<Balance>> {
@@ -100,7 +103,7 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
     let moves = ctx.flag("venue.deposit_to_spot").unwrap_or(false)
         || ctx.flag("venue.withdraw_from_trade").unwrap_or(false);
     if moves {
-        need.push("FlexTransfers");
+        need.push("InnerTransfer");
     }
     let missing: Vec<&str> = need
         .into_iter()
@@ -108,7 +111,7 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
         .collect();
     if !missing.is_empty() {
         return Err(format!(
-            "У ключа KuCoin нет прав: {} (есть: {})",
+            "У ключа KuCoin нет прав: {} (есть: {}). Transfer — «Вывод средств», InnerTransfer — «Разрешить гибкие переводы»",
             missing.join(", "),
             perms.join(", ")
         ));

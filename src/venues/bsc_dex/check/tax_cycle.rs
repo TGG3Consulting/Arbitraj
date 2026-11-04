@@ -36,6 +36,17 @@ use super::taxes;
 /// Цикл налогов. Принимает: окружение, монеты (адрес → тикер), USDT, очередь «Перепроверить». Работает постоянно.
 pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, queue: Queue) {
     for (addr, ticker) in &coins {
+        // Решение 159 (Тигран 05.11): цикл перезапускается при каждой пересподписке (смена списка монет — например,
+        // площадку выключили и включили). Прежде он сбрасывал ВСЕ монеты в «не проверено» — у монеты в середине сделки
+        // продажа падала «налоги ещё не проверены» (RWA 04.11 21:59, сделка в ручное управление). Известный итог (прошла
+        // / не прошла) той же монеты по тому же адресу остаётся в памяти и действует, пока новая проверка его не заменит.
+        let kept = p.checks.coin(ticker).is_some_and(|c| {
+            c.asset.bsc_contract == Some(*addr)
+                && matches!(c.taxes, CheckState::Known(_) | CheckState::Failed { .. })
+        });
+        if kept {
+            continue;
+        }
         let c = CoinCheck {
             venue: p.ctx.venue(),
             asset: Asset {

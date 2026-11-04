@@ -11,11 +11,12 @@
 //! - живой: сделка (cycle_deal.rs). Не больше одного цикла за проход: очередь nonce кошелька общая (решение 45),
 //!   циклы идут по одному.
 //!
-//! Причины отказа — в журнал core.cycle один раз на смену причины по циклу (cycle_state.rs), а не на каждом блоке.
+//! Причины отказа — в журнал core.cycle один раз на смену причины по циклу (cycle_state.rs), а не на каждом блоке;
+//! причины на всю площадку (поиск циклов не удался, нет кошелька «DEX ↔ DEX» в маппинге) — один раз на площадку (решение 139).
 //! dex_dex.scan_min_interval_ms (необязательная) — наименьший промежуток между проходами (как
 //! signal.eval_min_interval_ms, решение 109); не задана — без предела (проход сразу за толчком).
 //! Кто вызывает: core/engine.rs (задача run).
-//! От чего зависит: core/{cycle_plan, cycle_deal, cycle_state, risk, dry, deps}.rs, gateway (Venue, VenueKind).
+//! От чего зависит: core/{cycle_plan, cycle_deal, cycle_state, risk, dry, deps, dex_account}.rs, gateway (Venue, VenueKind).
 //! Настройки: dex_dex.execute, dex_dex.min_profit_usd, dex_dex.scan_min_interval_ms [площадка DEX]; через вызываемые —
 //! money.*, risk.*, size.*, dex_dex.size_step_base, dry.*.
 
@@ -31,7 +32,7 @@ use crate::storage::journal::Level;
 
 use super::cycle_deal::{self, Outcome};
 use super::cycle_plan::{self, CyclePlan};
-use super::cycle_state::key;
+use super::cycle_state::{key, venue_key};
 use super::engine::{Core, rd};
 
 /// Задача исполнения циклов. Работает, пока жив процесс.
@@ -79,15 +80,27 @@ async fn pass(core: &Core, v: &VenueId) {
         Ok(l) => l,
         Err(e) => {
             let why = format!("поиск циклов: {}", e.message);
-            return say(core, v, &format!("{}:scan", v.0), &why).await;
+            return say(core, v, &venue_key(v, "scan"), &why).await;
         }
     };
+    core.inner.cycles.fresh(&venue_key(v, "scan"), "");
     let cands: Vec<DexCycle> = list
         .into_iter()
         .filter(|c| c.executable && c.net_profit.is_some_and(|p| p > Decimal::ZERO))
         .collect();
     let alive: HashSet<String> = cands.iter().map(key).collect();
     core.inner.cycles.retain(&v.0, &alive);
+    // Решение 139: причина на всю площадку (нет кошелька «DEX ↔ DEX» в маппинге) — одна запись на смену причины, а не
+    // по записи на каждый цикл каждого блока (ключи циклов меняются вместе с сигналами).
+    if let Some(c) = cands.first() {
+        let wk = venue_key(v, "wallet");
+        match super::dex_account::of_direction(deps, &cycle_plan::direction(c)).await {
+            Ok(_) => {
+                core.inner.cycles.fresh(&wk, "");
+            }
+            Err(why) => return say(core, v, &wk, &why).await,
+        }
+    }
     for c in cands {
         let k = key(&c);
         let d = cycle_plan::direction(&c);

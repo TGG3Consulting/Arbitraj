@@ -6,66 +6,72 @@
 ## Ждут решения Тиграна
 
 - **Биржа Gate (решение 135, ветка router/gate).** Разбор и чек-лист уроков — `docs/notes/gate-integration-2026-11-04.md`.
-  Вопросы: (1) тип ордера — limit + time_in_force `ioc` (остаток снимает биржа, finish_as = ioc); `fok` тоже допущен
-  правилами — оставить только ioc? (2) Счёт депозита — по документации спот («DONE: Funds Credited to Spot Account»),
-  перевод не нужен; статус DEP_CREDITED («Deposit Credited, Withdrawal Pending Unlock») считается «ещё не зачислено» —
-  можно ли продавать до DONE? (3) Права ключа: «Проверить подключение» требует key.mode = 1 (классический; единый счёт
-  не поддержан), spot — запись, wallet; запрещает запись futures/delivery/margin/unified/options/loan/copy; права вывода
-  в перечне perms /account/main_keys нет — проверится первым выводом; включить белый список адресов вывода в кабинете
-  (ADDRESS_NOT_USED → InvalidAddress). (4) Шаги пары: precision / amount_precision как число знаков (как решение 107) —
-  подтвердить первым ордером (INVALID_PRECISION — отказ без денег). (5) Предел подписок на соединение и срок жизни
-  соединения WebSocket в документации нет — venue.ws_symbols_per_conn замером. (6) Retry-After у Gate нет, заголовок
-  X-Gate-RateLimit-Reset-Timestamp транспорт шлюза не отдаёт — читать его = правка gateway/http.rs (запрос на стык);
-  пока venue.rate_limit_pause_ms. (7) /spot/batch_fee (до 50 пар) — формат списка пар не описан; ставки — по одной паре
-  /wallet/fee. (8) withdraw_percent_on_chains: формат процента не описан — при проценте не ноль сеть без комиссии (сделок
-  нет). (9) Вывод FAIL («On-Chain Failure Pending Confirmation») — пока «ждём». (10) Поле change в spot.balances — изменение
-  общего баланса? (11) Скидка GT: если включена, комиссия ордера в GT — итог с монетой «GT»; выключить скидку GT в
-  кабинете? (12) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
+  Отвечено Тиграном 04.11 (сделано в router/cexfix, DECISIONS 135 «Дополнение»): время жизни ioc/fok — настройкой; DEP_CREDITED —
+  зачислено, продаём сразу; вывод FAIL — ждём + событие `exec.withdraw_fail_pending`; скидка GT — `venue.fee_deduction`
+  (coin / gt). Открытые вопросы: (1) **нехватка GT** при `venue.fee_deduction` = gt: что делает Gate (списывает в монете
+  сделки по полной ставке? частично GT?) — в документации API нет (TradeFee, Order, /account/debit_fee). Сейчас: расчёт по
+  gt_taker_fee; если факт пришёл в монете — учёт по факту (core/fills.rs), если и fee, и gt_fee не ноль — итог «не в одной
+  монете», ручная проверка. Держать GT на счёте с запасом или проверять баланс GT до сделки? (2) В каком активе Gate
+  списывает комиссию при `coin`: сделано по ответу Тиграна «в монете сделки» — покупка в купленной монете, продажа — в
+  USDT (полученной); в документации API правила нет — сверить fee_currency первого живого ордера. (3) Права ключа:
+  «Проверить подключение» требует key.mode = 1 (классический; единый счёт не поддержан), spot — запись, wallet; запрещает
+  запись futures/delivery/margin/unified/options/loan/copy; права вывода в перечне perms /account/main_keys нет — проверится
+  первым выводом; включить белый список адресов вывода в кабинете (ADDRESS_NOT_USED → InvalidAddress). (4) Шаги пары:
+  precision / amount_precision как число знаков (как решение 107) — подтвердить первым ордером (INVALID_PRECISION — отказ
+  без денег). (5) Предел подписок на соединение и срок жизни соединения WebSocket в документации нет —
+  venue.ws_symbols_per_conn замером. (6) Retry-After у Gate нет, заголовок X-Gate-RateLimit-Reset-Timestamp транспорт шлюза
+  не отдаёт — читать его = правка gateway/http.rs (запрос на стык); пока venue.rate_limit_pause_ms. (7) /spot/batch_fee
+  (до 50 пар) — формат списка пар не описан; ставки — по одной паре /wallet/fee. (8) withdraw_percent_on_chains: формат
+  процента не описан — при проценте не ноль сеть без комиссии (сделок нет). (9) Поле change в spot.balances — изменение
+  общего баланса? (10) В живом ответе /wallet/currency_chains есть withdraw_amount_min (в модели SDK нет) — не используется.
+- **Gate — проверить на живом (tests/gate_real_data.rs #[ignore]):** первый ордер fok и ioc (finish_as, fee_currency,
+  gt_fee); /wallet/fee при скидке GT вкл/выкл (gt_discount, gt_taker_fee — разбор `fees::Rates::parse`); депозит со статусом
+  DEP_CREDITED: продажа проходит сразу, не мешает ли «Withdrawal Pending Unlock» выводу USDT после продажи (возврат); вывод
+  со статусом FAIL — событие в Telegram один раз, итоговый статус после FAIL. Замер нагрузки при «Стоп» (решение 109).
 
-- **Bybit (решение 136, ветка router/bybit).** Разбор — `docs/notes/bybit-integration-2026-11-04.md`. Вопросы:
-  (1) Тип счёта: V5 работает на едином счёте (UTA); проверка подключения принимает UTA 1.0 и 2.0 (unifiedMarginStatus 3–6),
-  classic — отказ («now unavailable»). Так? (2) Депозит Bybit приходит на FUND: переводить FUND → UNIFIED ботом
-  (venue.deposit_to_spot = да, право Wallet: AccountTransfer) или назначить в кабинете Bybit депозит на UNIFIED (Set Deposit
-  Account) и перевод не включать? (3) IOC у спота Limit — в документации timeInForce IOC общий для всех категорий, явного
-  «spot» нет: подтвердить первым живым ордером (venue.order_time_in_force = IOC). (4) Права ключа: Spot — SpotTrade; Wallet —
-  AccountTransfer, Withdraw; ключ главного аккаунта (вывод и адрес депозита — только master); прав ContractTrade / Options /
-  Derivatives не должно быть (иначе «Проверить подключение» — отказ). Вывод — только на адреса из адресной книги Bybit
-  (кошельки DEX из «Маппинга кошельков» и адреса депозита BingX/MEXC) — добавить их. (5) Статус депозита 10012 «Credited to
-  funding pool successfully» — не «final» по документации, бот ждёт 3; верно? (6) Номер u стакана: документация не обещает
-  +1, бот проверяет только рост u; на живой записи 04.11 u шёл строго +1 — сделать строгую проверку? (7) withdrawPercentageFee ≠ 0
-  у сети BSC — комиссия вывода «неизвестна», сделок с выводом нет (ядро считает комиссию числом монет); так оставить?
-  (8) Изменений баланса событиями (решение 76) у Bybit нет: зачисление — опросом статуса депозита. Ок?
-  (9) Тихая пара без изменений стакана дольше venue.book_stale_ms теряет котировку (как MEXC) — порог задать большим?
+- **Bybit (решение 136, ветка router/bybit).** Разбор — `docs/notes/bybit-integration-2026-11-04.md`. Отвечено Тиграном 04.11
+  (сделано в router/cexfix, DECISIONS 136 «Дополнение»): депозит — на UNIFIED в кабинете, бот не переводит
+  (`venue.deposit_to_spot` не задавать; AccountTransfer нужно только при «да»); строгая проверка `u` —
+  `venue.book_seq_strict`; тип счёта в «Проверить подключение» — явно (UTA 1.0 / 2.0, pro), аккаунты Тигран проверит сам.
+  Открытые вопросы: (1) IOC у спота Limit — в документации timeInForce IOC общий для всех категорий, явного «spot» нет:
+  подтвердить первым живым ордером (venue.order_time_in_force = IOC). (2) Права ключа: Spot — SpotTrade; Wallet — Withdraw
+  (+ AccountTransfer при venue.deposit_to_spot = да); ключ главного аккаунта; прав ContractTrade / Options / Derivatives не
+  должно быть. Вывод — только на адреса из адресной книги Bybit (кошельки DEX из «Маппинга кошельков» и адреса депозита
+  BingX/MEXC) — добавить их. (3) Статус депозита 10012 «Credited to funding pool successfully» — не «final» по документации,
+  бот ждёт 3; верно (при зачислении на UNIFIED)? (4) withdrawPercentageFee ≠ 0 у сети BSC — комиссия вывода «неизвестна»,
+  сделок с выводом нет (ядро считает комиссию числом монет); так оставить? (5) Изменений баланса событиями (решение 76) у
+  Bybit нет: зачисление — опросом статуса депозита. Ок? (6) Тихая пара без изменений стакана дольше venue.book_stale_ms
+  теряет котировку (как MEXC) — порог задать большим? (7) Счёт зачисления депозита API прочитать не даёт (только запись
+  Set Deposit Account): ставить ли его ботом (POST /v5/asset/deposit/deposit-to-account, accountType UNIFIED) по кнопке,
+  или только кабинет?
 - **Bybit — после выкладки (записать на живом боте, tests/bybit_real_data.rs #[ignore]):** coin/query-info целиком и ?coin=CAKE
   (имя сети BSC в chain → venue.bsc_network, contractAddress, withdrawPercentageFee, minAccuracy); wallet-balance UNIFIED,
-  query-api, account/info; первый IOC-ордер (create, кадры order.spot и execution.spot, realtime, execution/list, cumFeeDetail);
-  депозит по BSC (query-record?txID=), перевод FUND → UNIFIED, вывод и его статусы, query-address. Замер нагрузки при «Стоп»
-  10–15 минут (решение 109) до перевода в работу.
-- **KuCoin (решение 137, ветка router/kucoin).** Чек-лист и разбор — `docs/notes/kucoin-integration-2026-11-04.md`. Вопросы:
-  (1) **Счёт — Classic, не UTA.** Адаптер на Classic API; счёт бота должен быть в классическом режиме (переход в UTA —
-  по выбору, «Main accounts and sub-accounts can each be switched … independently»). Подтвердить, что счёт/субсчёт бота
-  классический, и что торговать будем им. (2) **Счета main/trade.** Депозит приходит на main (по умолчанию), торговля —
-  на trade, вывод — только с main (115007). Сделано: после зачисления перевод main → trade (`venue.deposit_to_spot`),
-  перед выводом trade → main (новая `venue.withdraw_from_trade`), обоим нужно право ключа FlexTransfers. Либо создать в
-  кабинете адрес депозита с зачислением на TRADE — тогда перевод после депозита не нужен (адаптер берёт адрес TRADE,
-  если он есть). Как удобнее? Автосоздание адреса (POST /api/v3/deposit-address/create) не сделано — нужно ли? (3) **IOC.**
-  Ордер — limit + timeInForce IOC (или FOK) через hf/orders/sync: неисполненное снимает биржа; если ордер всё же активен
-  к venue.order_final_wait_ms — отмена. Подтвердить IOC. (4) **Passphrase и версия ключа.** Passphrase — секрет
+  query-api, account/info (тип счёта в «Проверить подключение»); первый IOC-ордер (create, кадры order.spot и execution.spot,
+  realtime, execution/list, cumFeeDetail); депозит по BSC на UNIFIED (query-record?txID=, статус, баланс UNIFIED сразу),
+  вывод и его статусы, query-address; при venue.book_seq_strict = да — нет ли лишних пересинхронизаций в журнале. Замер
+  нагрузки при «Стоп» 10–15 минут (решение 109) до перевода в работу.
+- **KuCoin (решение 137, ветка router/kucoin).** Чек-лист и разбор — `docs/notes/kucoin-integration-2026-11-04.md`. Отвечено
+  Тиграном 04.11 (сделано в router/cexfix, DECISIONS 137 «Дополнение»): счёт Classic — «Проверить подключение» пишет тип
+  (Classic / UTA по selfAccountMode, HF), аккаунты Тигран проверит сам; адрес депозита BSC — в кабинете с зачислением на
+  TRADE, бот берёт его (адрес только MAIN без перевода — отказ), `venue.deposit_to_spot` не задавать; перед выводом
+  trade → main — `venue.withdraw_from_trade` = да. Автосоздание адреса — не нужно. Открытые вопросы: (3) **IOC.** Ордер —
+  limit + timeInForce IOC (или FOK) через hf/orders/sync: неисполненное снимает биржа; если ордер всё же активен к
+  venue.order_final_wait_ms — отмена. Подтвердить IOC. (4) **Passphrase и версия ключа.** Passphrase — секрет
   `kucoin.api_passphrase` (в запросе — HMAC-SHA256 секретом, Base64), версия — `venue.api_key_version` (у новых ключей 3;
-  «Проверить подключение» сверяет с apiVersion). (5) **Права ключа:** General, Spot, Withdrawal (+ FlexTransfers при
-  переводах main ↔ trade); Margin и Futures — снять («Проверить подключение» откажет). Имена Withdrawal и FlexTransfers —
-  из x-api-permission спецификации SDK (в описании поля permission их нет): сверить с живым ответом /api/v1/user/api-key.
-  IP — привязать ключ к IP сервера (`venue.api_ip_bound`, `venue.api_ip`); белый список адресов вывода — включить в
-  кабинете, если есть (в API-документации его нет). (6) **Комиссия вывода:** withdrawalMinFee; формулы с withdrawFeeRate в
-  документации нет — у сети с ненулевой долей комиссия «неизвестна» (вывода нет); в записи 04.11 таких сетей BSC одна.
-  (7) **Комиссия торговли:** ставка trade-fees × makerFeeCoefficient/takerFeeCoefficient пары (так в описании поля) —
-  сверить с feeRate живых сделок /api/v1/hf/fills. (8) **Свежесть стакана:** снимок level2Depth50 приходит только при
-  изменении рынка — `venue.book_stale_ms` у KuCoin необязательна (тихая пара иначе «устарела»). Задавать ли её? (9) Предел
-  длины remark вывода не указан — метка попытки ≤ 20 символов (как remark ордера). (10) **HF-счёт:** ордера — через
-  /api/v1/hf/*; «Проверить подключение» требует hf/accounts/opened = true. (11) Запрос на изменение стыка: шлюзу нужен
-  заголовок `gw-ratelimit-reset` из ответа (gateway/http.rs отдаёт только Retry-After) — пока пауза пула на всё окно 30 с.
-  **Записать на живом боте** (tests/README.md): /account/balance (депозит, перевод, сделка), ответ /api/v1/user/api-key
-  (без ключа), ответы hf/orders/sync + GET ордера + hf/fills одной сделки, deposit-addresses, withdrawals/{id}, deposits,
+  «Проверить подключение» сверяет с apiVersion). (5) **Права ключа:** General, Spot, Withdrawal, FlexTransfers (перевод
+  trade → main перед выводом); Margin и Futures — снять. Имена Withdrawal и FlexTransfers — из x-api-permission спецификации
+  SDK (в описании поля permission их нет): сверить с живым ответом /api/v1/user/api-key. IP — привязать ключ к IP сервера
+  (`venue.api_ip_bound`, `venue.api_ip`); белый список адресов вывода — включить в кабинете, если есть. (6) **Комиссия
+  вывода:** withdrawalMinFee; формулы с withdrawFeeRate в документации нет — у сети с ненулевой долей комиссия «неизвестна»
+  (вывода нет). (7) **Комиссия торговли:** ставка trade-fees × makerFeeCoefficient/takerFeeCoefficient пары — сверить с
+  feeRate живых сделок /api/v1/hf/fills. (8) **Свежесть стакана:** снимок level2Depth50 приходит только при изменении
+  рынка — `venue.book_stale_ms` у KuCoin необязательна. Задавать ли её? (9) Предел длины remark вывода не указан — метка
+  попытки ≤ 20 символов. (11) Запрос на изменение стыка: шлюзу нужен заголовок `gw-ratelimit-reset` (gateway/http.rs отдаёт
+  только Retry-After) — пока пауза пула на всё окно 30 с. (12) Перевод trade → main прошёл, а вывод отклонён — сумма
+  остаётся на main; следующий вывод снова переведёт с trade (на trade её уже нет — отказ перевода). Возвращать main → trade
+  при отказе вывода или оставить ручной проверке? **Записать на живом боте** (tests/README.md): /account/balance (депозит
+  на TRADE, перевод, сделка), ответ /api/v1/user/api-key (без ключа), /api/ua/v2/account/mode (selfAccountMode), ответы
+  hf/orders/sync + GET ордера + hf/fills одной сделки, deposit-addresses (поле to = TRADE), withdrawals/{id}, deposits,
   /market/match. Замер нагрузки при «Стопе» (решение 109) — до включения.
 
 - **Маппинг кошельков (решение 132, ветка router/wallets, слита в feat/own-bsc-node).** План и ход — `docs/notes/wallet-mapping-2026-11-03.md`.

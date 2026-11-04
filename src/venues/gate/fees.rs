@@ -13,8 +13,12 @@
 //! GET /spot/fee того же смысла помечен «This API is deprecated» — не используется. Пакетный GET /spot/batch_fee
 //! («Maximum 50 currency pairs per request») не используется: формат списка пар в параметре не описан (вопрос
 //! Тиграну, docs/TASKS.md). Лимит — приватные «200r/10s» на конечную точку: venue.fee_requests_per_sec — меньше 20.
-//! Скидка GT (gt_discount, gt_taker_fee) не учитывается: при ней комиссия списывается в GT — другой монетой; котировка
-//! берёт taker_fee (без скидки — не меньше факта), факт комиссии — из ордера (order_state.rs).
+//! Скидка GT (решение 135, Тигран 04.11): вариант списания — настройка venue.fee_deduction [gate] (coin — комиссия в
+//! монете сделки по taker_fee; gt — в GT по gt_taker_fee, «Taker fee rate if using GT deduction. It will be 0 if GT
+//! deduction is disabled»; gt_discount — «Whether GT deduction discount is enabled»). Вариант сверяется со счётом:
+//! coin при включённой скидке GT или gt при выключенной — котировки нет (Gate списал бы не так, как посчитано). Что
+//! Gate делает при нехватке GT, в документации API нет (вопрос Тиграну, docs/TASKS.md); факт комиссии — из ордера
+//! (order_state.rs: fee / fee_currency или gt_fee).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -31,12 +35,56 @@ use super::ctx::Ctx;
 use super::errors::Op;
 use super::{num, rest};
 
-/// Ставки комиссии пары (доли, например 0.001 = 0,1%).
+/// Ставки комиссии пары (доли, например 0.001 = 0,1%) и скидка GT аккаунта.
 #[derive(Debug, Clone, Copy)]
 pub struct Rates {
     pub taker: Decimal,
     pub maker: Decimal,
+    /// Скидка GT включена на счёте (gt_discount).
+    pub gt_discount: bool,
+    /// Ставка taker при списании в GT (gt_taker_fee; 0 — скидка выключена).
+    pub gt_taker: Decimal,
 }
+
+impl Rates {
+    /// Что делает: ставки из ответа GET /wallet/fee (поля — шапка). Принимает: data ответа. Возвращает: Rates.
+    /// Ошибки: BadResponse — нет taker_fee / maker_fee или не число; gt_* отсутствуют — скидки нет (0, false).
+    pub fn parse(data: &serde_json::Value) -> GatewayResult<Self> {
+        Ok(Self {
+            taker: num::dec(data, "taker_fee")?,
+            maker: num::dec(data, "maker_fee")?,
+            gt_discount: data.get("gt_discount").and_then(|v| v.as_bool()) == Some(true),
+            gt_taker: num::dec_opt(data, "gt_taker_fee")?.unwrap_or_default(),
+        })
+    }
+
+    /// Что делает: ставка taker для расчёта по варианту списания venue.fee_deduction (coin / gt) и проверка, что
+    /// вариант совпадает со счётом. Принимает: вариант. Возвращает: (ставка, комиссия в GT ли).
+    /// Ошибки: текст причины (котировки нет): вариант не совпадает со скидкой GT счёта или неизвестен.
+    pub fn plan(&self, mode: &str) -> Result<(Decimal, bool), String> {
+        match (mode, self.gt_discount) {
+            (FEE_COIN, false) => Ok((self.taker, false)),
+            (FEE_GT, true) if self.gt_taker > Decimal::ZERO => Ok((self.gt_taker, true)),
+            (FEE_COIN, true) => Err(
+                "venue.fee_deduction = coin, а на счёте Gate включена скидка GT (gt_discount) — комиссия ушла бы в GT; \
+                 выключите скидку в кабинете или поставьте gt"
+                    .into(),
+            ),
+            (FEE_GT, _) => Err(format!(
+                "venue.fee_deduction = gt, а скидка GT на счёте Gate выключена (gt_discount = {}, gt_taker_fee = {}) — \
+                 включите её в кабинете или поставьте coin",
+                self.gt_discount, self.gt_taker
+            )),
+            (other, _) => Err(format!(
+                "venue.fee_deduction = {other}: у Gate варианты {FEE_COIN} (в монете сделки) или {FEE_GT} (в GT)"
+            )),
+        }
+    }
+}
+
+/// Варианты venue.fee_deduction [gate]: комиссия в монете сделки или в GT (решение 135, Тигран 04.11).
+pub const FEE_COIN: &str = "coin";
+pub const FEE_GT: &str = "gt";
 
 /// Ставки по символу. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -108,8 +156,5 @@ impl Fees {
 async fn fetch(ctx: &Ctx, symbol: &str) -> GatewayResult<Rates> {
     let p = vec![("currency_pair", symbol.to_string())];
     let data = rest::signed(ctx, Method::GET, "/wallet/fee", p, None, Op::Other).await?;
-    Ok(Rates {
-        taker: num::dec(&data, "taker_fee")?,
-        maker: num::dec(&data, "maker_fee")?,
-    })
+    Rates::parse(&data)
 }

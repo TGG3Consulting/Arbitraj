@@ -1,18 +1,18 @@
 //! Файл: venues/bybit/account.rs
 //! Что делает: балансы единого торгового счёта Bybit (UNIFIED — там торгует спот), баланс одной монеты и кнопка
 //! «Проверить подключение»: ключ действует, есть нужные права и НЕТ прав на деривативы (урок 19), ключ главного
-//! аккаунта (вывод и адрес депозита — только у master), аккаунт — единый (UTA), привязка к IP совпадает с настройками.
+//! аккаунта, счёт UTA (тип — явно, решение 136, Тигран 04.11), привязка к IP. Счёт зачисления депозита API не читает
+//! (есть только запись Set Deposit Account) — не проверяется: UNIFIED назначается в кабинете Bybit.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: venue.api_ip_bound, venue.api_ip [bybit].
+//! Настройки: venue.api_ip_bound, venue.api_ip, venue.deposit_to_spot [bybit] (да — нужно право AccountTransfer).
 //!
 //! Официальная документация:
 //! - «Get Wallet Balance» GET /v5/account/wallet-balance?accountType=UNIFIED[&coin=] https://bybit-exchange.github.io/docs/v5/account/wallet-balance
 //!   — list[0].coin[]: coin, walletBalance, locked («Locked balance due to the Spot open order»), spotBorrow («Old
 //!   walletBalance = New walletBalance - spotBorrow»); «By default, currency information with assets or liabilities of
 //!   0 is not returned». Свободно = walletBalance − spotBorrow − locked (займов бот не берёт: isLeverage = 0).
-//! - «Get API Key Information» GET /v5/user/query-api …/user/apikey-info — readOnly, permissions (Spot: SpotTrade;
-//!   Wallet: AccountTransfer, Withdraw; ContractTrade, Options, Derivatives), ips, deadlineDay, uta, isMaster.
+//! - «Get API Key Information» GET /v5/user/query-api …/user/apikey-info — readOnly, permissions, ips, deadlineDay, uta, isMaster.
 //! - «Get Account Info» GET /v5/account/info …/account/account-info — unifiedMarginStatus (1 classic, 3/4 UTA 1.0,
 //!   5/6 UTA 2.0 — enum unifiedMarginStatus; «Different Account Modes»: classic «now unavailable»).
 
@@ -27,12 +27,13 @@ use super::errors::Op;
 use super::{num, rest};
 
 const PATH_WALLET: &str = "/v5/account/wallet-balance";
-/// Права, без которых бот не работает: (группа, право) — имена из документации.
-const REQUIRED: [(&str, &str); 3] = [
-    ("Spot", "SpotTrade"),
-    ("Wallet", "AccountTransfer"),
-    ("Wallet", "Withdraw"),
-];
+/// Права, без которых бот не работает: (группа, право) — имена из документации. Перевод FUND → UNIFIED
+/// (Wallet: AccountTransfer) нужен только при venue.deposit_to_spot = да.
+const REQUIRED: [(&str, &str); 2] = [("Spot", "SpotTrade"), ("Wallet", "Withdraw")];
+const TRANSFER: (&str, &str) = ("Wallet", "AccountTransfer");
+/// Тип счёта по enum unifiedMarginStatus (1 — classic, 3/4 — UTA 1.0 / pro, 5/6 — UTA 2.0 / pro).
+#[rustfmt::skip]
+const UTA: [(i64, &str); 4] = [(3, "UTA 1.0"), (4, "UTA 1.0 pro"), (5, "UTA 2.0"), (6, "UTA 2.0 pro")];
 /// Группы прав торговли не спотом (урок 19: фьючерсов и маржи в проекте нет) — должны быть пусты.
 const FORBIDDEN: [&str; 3] = ["ContractTrade", "Options", "Derivatives"];
 
@@ -100,7 +101,11 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
             .and_then(Value::as_array)
             .is_some_and(|a| a.iter().any(|x| x.as_str() == Some(p)))
     };
-    let missing: Vec<String> = REQUIRED
+    let mut need = REQUIRED.to_vec();
+    if ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
+        need.push(TRANSFER);
+    }
+    let missing: Vec<String> = need
         .iter()
         .filter(|(g, p)| !has(g, p))
         .map(|(g, p)| format!("{g}: {p}"))
@@ -131,11 +136,12 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         Ok(d) => num::int(&d, "unifiedMarginStatus").unwrap_or(-1),
         Err(e) => return fail(e.message),
     };
-    if !(3..=6).contains(&mode) {
-        return fail(format!(
-            "Режим аккаунта unifiedMarginStatus = {mode} — нужен единый (UTA, 3–6)"
-        ));
-    }
+    let Some((_, kind)) = UTA.iter().find(|(m, _)| *m == mode) else {
+        let m = format!(
+            "Тип счёта Bybit: classic или неизвестный (unifiedMarginStatus = {mode}) — нужен UTA"
+        );
+        return fail(m);
+    };
     let ips: Vec<String> = info
         .get("ips")
         .and_then(Value::as_array)
@@ -156,8 +162,12 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     ConnectionCheck {
         ok: true,
         details: format!(
-            "Подключено: права есть (Spot: SpotTrade, Wallet: AccountTransfer, Withdraw), прав деривативов нет, \
-             UTA (unifiedMarginStatus {mode}), {ip_note}, {term}"
+            "Подключено. Тип счёта: {kind} — единый торговый счёт (unifiedMarginStatus {mode}). Права есть ({}), прав деривативов нет, \
+             {ip_note}, {term}",
+            need.iter()
+                .map(|(g, p)| format!("{g}: {p}"))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     }
 }

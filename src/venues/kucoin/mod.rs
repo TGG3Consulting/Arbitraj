@@ -168,7 +168,7 @@ impl Venue for Kucoin {
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
-        Ok(self.addrs.get(&self.ctx, asset, network).await?.address)
+        deposit_addr::for_deposit(&self.addrs, &self.ctx, asset, network).await
     }
 
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {

@@ -11,8 +11,9 @@
 //! Credited, Withdrawal Pending Unlock»), DONE («Funds Credited to Spot Account»), INVALID, MANUAL, PEND, REVIEW, TRACK
 //! («Tracking Block Confirmations, Pending Spot Account Credit»); txid, chain, amount.
 //! Депозит зачисляется на спот («Funds Credited to Spot Account») — перевод между счетами не нужен (mod.rs,
-//! deposit_to_trading). «Зачислено» = DONE. DEP_CREDITED — пока «ждём»: доступность для продажи до DONE в документации
-//! не сказана (вопрос Тиграну, docs/TASKS.md). BLOCKED, INVALID — не зачислен.
+//! deposit_to_trading). «Зачислено» = DONE или DEP_CREDITED («Deposit Credited, Withdrawal Pending Unlock» — деньги на
+//! счёте, ждёт только разблокировка вывода): продаём сразу, DONE не ждём (решение 135, Тигран 04.11). BLOCKED,
+//! INVALID — не зачислен.
 
 use reqwest::Method;
 
@@ -45,8 +46,8 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
     })?;
     let st = num::text_opt(rec, "status").unwrap_or_default();
     let status = match st.as_str() {
-        "DONE" => TransferStatus::Credited,
-        "PEND" | "TRACK" | "MANUAL" | "REVIEW" | "DEP_CREDITED" => TransferStatus::Sent,
+        "DONE" | "DEP_CREDITED" => TransferStatus::Credited,
+        "PEND" | "TRACK" | "MANUAL" | "REVIEW" => TransferStatus::Sent,
         "BLOCKED" | "INVALID" => {
             let m = format!("Gate: депозит {tx_hash} не зачислен, статус {st}");
             return Err(ctx.tag(

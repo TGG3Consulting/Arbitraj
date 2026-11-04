@@ -4,7 +4,7 @@
 //! уровней в формате ядра (bids — по убыванию цены, asks — по возрастанию).
 //! Кто вызывает: ws_conn.rs (по кадру стакана), тесты.
 //! От чего зависит: core/types (PriceLevel), num.rs.
-//! Настройки: нет (глубину передаёт ws_conn.rs из venue.depth_levels).
+//! Настройки: нет своих (глубину и venue.book_seq_strict передаёт ws_conn.rs).
 //!
 //! Правила — официальная документация Orderbook https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook,
 //! «Process snapshot/delta»: «Once you have subscribed successfully, you will receive a snapshot… If you receive a new
@@ -12,7 +12,10 @@
 //! entry; If you receive an amount that does not exist, insert it; If the entry exists, you simply update the value»;
 //! «spot level 1 data: if 3 seconds have elapsed without a change… a snapshot message will be pushed again, and the
 //! field u will be the same as that in the previous message». Что номер u у спота растёт строго на 1 — в документации
-//! НЕ сказано (вопрос Тиграну, docs/TASKS.md): проверяется только рост u (изменение с u не больше прежнего — разрыв).
+//! НЕ сказано; на живой записи 04.11 шёл строго +1. Строгая проверка — настройка venue.book_seq_strict [bybit]
+//! (решение 136, Тигран 04.11): да — изменение с u ≠ прежний + 1 — разрыв; нет или не задана — только рост u.
+//! Разрыв → пересинхронизация в ws_conn.rs (повторный разрыв раньше venue.ws_reconnect_pause_ms — переподключение,
+//! без бесконечного круга пересподписок).
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -58,12 +61,13 @@ pub struct LocalBook {
 }
 
 impl LocalBook {
-    /// Что делает: применяет кадр. Принимает: снимок ли, номер u, уровни [цена, количество] строками.
-    /// Возвращает: Applied. Ошибок нет: неразборчивое число — Gap с причиной (стакан сброшен).
+    /// Что делает: применяет кадр. Принимает: снимок ли, номер u, строгую ли проверку u (+1), уровни [цена,
+    /// количество] строками. Возвращает: Applied. Ошибок нет: неразборчивое число — Gap с причиной (стакан сброшен).
     pub fn apply(
         &mut self,
         snapshot: bool,
         u: i64,
+        strict: bool,
         bids: &[[&str; 2]],
         asks: &[[&str; 2]],
     ) -> Applied {
@@ -78,6 +82,11 @@ impl LocalBook {
                 None => return self.reset("изменение (delta) пришло до снимка".into()),
                 Some(cur) if u <= cur => {
                     return self.reset(format!("номер u не вырос: был {cur}, пришёл {u}"));
+                }
+                Some(cur) if strict && u != cur + 1 => {
+                    return self.reset(format!(
+                        "пропуск номера u: был {cur}, пришёл {u} (venue.book_seq_strict = да)"
+                    ));
                 }
                 _ => {}
             }

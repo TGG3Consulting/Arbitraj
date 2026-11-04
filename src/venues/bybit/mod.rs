@@ -8,7 +8,8 @@
 //! Только по официальной документации Bybit V5 (https://bybit-exchange.github.io/docs/v5/intro; исходник —
 //! github.com/bybit-exchange/docs). Ссылки — в шапке каждого файла и в README.md этой папки. Фьючерсов, маржи и
 //! опционов нет: каждый запрос — category=spot, ордер — isLeverage=0, ключ с правами деривативов не проходит проверку.
-//! Счёт: единый торговый (UNIFIED) — торговля и балансы; депозит приходит на FUND — перевод fund_move.rs.
+//! Счёт: единый торговый (UNIFIED) — торговля и балансы; депозит — на UNIFIED по настройке кабинета (решение 136, Тигран
+//! 04.11), запасной вариант — перевод FUND → UNIFIED (fund_move.rs, venue.deposit_to_spot).
 
 pub mod account;
 pub mod book;
@@ -181,7 +182,8 @@ impl Venue for Bybit {
         account::balance(&self.ctx, asset).await
     }
 
-    /// Решение 102 для Bybit: депозит приходит на FUND — перевод на UNIFIED (venue.deposit_to_spot).
+    /// Решение 102 для Bybit: запасной вариант — депозит на FUND → перевод на UNIFIED (venue.deposit_to_spot; по решению
+    /// Тиграна 04.11 не задаётся: в кабинете депозит назначен на UNIFIED).
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

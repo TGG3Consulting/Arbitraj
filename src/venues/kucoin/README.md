@@ -28,6 +28,12 @@
   прежний `POST /api/v2/accounts/inner-transfer` в спецификации помечен «abandon». После зачисления — main → trade
   (`venue.deposit_to_spot`; не нужно, если адрес депозита сам зачисляет на TRADE), перед выводом — trade → main
   (`venue.withdraw_from_trade`).
+- Решение Тиграна (04.11): адрес депозита BSC создаётся в кабинете с зачислением на TRADE; бот берёт именно его
+  (`to = TRADE`), main → trade после депозита не нужен (`venue.deposit_to_spot` не задаётся). Адрес только MAIN при
+  выключенном переводе — отказ «адрес зачисляет на MAIN» (монету не продать). Перед выводом trade → main —
+  `venue.withdraw_from_trade = да`.
+- «Проверить подключение» пишет тип счёта явно: Classic или UTA (`GET /api/ua/v2/account/mode`, selfAccountMode) и HF
+  ли спот (`/api/v1/hf/accounts/opened`); UTA и не HF — отказ.
 
 ## Файлы
 

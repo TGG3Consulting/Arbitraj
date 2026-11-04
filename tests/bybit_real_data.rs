@@ -104,7 +104,10 @@ fn orderbook_stream_live() {
                     deltas += 1;
                     assert_eq!(Some(u - 1), last_u, "u подряд");
                 }
-                assert_eq!(book.apply(snapshot, u, &bids, &asks), Applied::Changed);
+                assert_eq!(
+                    book.apply(snapshot, u, true, &bids, &asks),
+                    Applied::Changed
+                );
                 last_u = Some(u);
                 let (b, a) = book.top(50);
                 assert!(b.windows(2).all(|w| w[0].price > w[1].price));
@@ -121,12 +124,58 @@ fn orderbook_stream_live() {
     assert!(acks >= 2);
     // Повтор того же u у снимка — Repeat; изменение с тем же u — разрыв.
     let u = last_u.expect("u");
-    assert_eq!(book.apply(true, u, &[], &[]), Applied::Repeat);
-    assert!(matches!(book.apply(false, u, &[], &[]), Applied::Gap(_)));
+    assert_eq!(book.apply(true, u, false, &[], &[]), Applied::Repeat);
+    assert!(matches!(
+        book.apply(false, u, false, &[], &[]),
+        Applied::Gap(_)
+    ));
     assert!(
-        matches!(book.apply(false, u + 1, &[], &[]), Applied::Gap(_)),
+        matches!(book.apply(false, u + 1, false, &[], &[]), Applied::Gap(_)),
         "после разрыва — только снимок"
     );
+}
+
+/// Строгая проверка u (venue.book_seq_strict, решение 136, Тигран 04.11) на живом потоке с одним выброшенным кадром
+/// delta (так выглядит потерянный кадр): строго — разрыв на следующем кадре; без строгой — только рост u, стакан идёт.
+#[test]
+fn orderbook_strict_seq_live_skip() {
+    let frames = ws_frames();
+    let is_delta = |f: &String| {
+        matches!(
+            depth::parse(f),
+            Msg::Book {
+                snapshot: false,
+                ..
+            }
+        )
+    };
+    let skip = frames.iter().position(is_delta).expect("есть delta");
+    let run = |strict: bool| {
+        let mut book = LocalBook::default();
+        let mut gaps = 0;
+        for (i, f) in frames.iter().enumerate() {
+            if i == skip {
+                continue;
+            }
+            if let Msg::Book {
+                snapshot,
+                u,
+                bids,
+                asks,
+                ..
+            } = depth::parse(f)
+                && matches!(
+                    book.apply(snapshot, u, strict, &bids, &asks),
+                    Applied::Gap(_)
+                )
+            {
+                gaps += 1;
+            }
+        }
+        gaps
+    };
+    assert!(run(true) >= 1, "строгая проверка видит пропуск");
+    assert_eq!(run(false), 0, "без строгой — только рост u");
 }
 
 /// Разбор кадров окна на живой записи: сделки publicTrade (S Buy/Sell → buy/sell, i, T), стакан Book — снимок как Book,

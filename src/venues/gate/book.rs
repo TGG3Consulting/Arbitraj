@@ -4,7 +4,12 @@
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [gate] (обязательна) — кадр стакана этой пары старше — котировки нет.
+//! устарели; venue.book_stale_ms [gate] (обязательна) — кадр стакана этой пары старше — котировки нет;
+//! venue.fee_deduction [gate] (обязательна) — вариант списания комиссии (fees.rs, Rates::plan).
+//!
+//! Комиссия в котировке (решение 135, Тигран 04.11): coin — покупка платит комиссию монетой сделки (затрата в монете:
+//! ядро уменьшает на неё количество к выводу, core/costs.rs), продажа — USDT; gt — ставка со скидкой GT, затрата в
+//! USDT-эквиваленте суммы, монета сделки не уменьшается (комиссию списывает GT). Факт — из ордера (order_state.rs).
 //!
 //! Две проверки свежести (как MEXC, решение 118, А-🟠8): живость соединения (любой кадр, включая spot.pong) и время
 //! последнего кадра стакана самой пары — оно обновляется и тогда, когда снимок не изменился и ядру не отдаётся
@@ -110,6 +115,10 @@ impl Books {
         };
         let (filled, notional) = walk(levels, qty);
         let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
+        let mode = ctx.text("venue.fee_deduction")?;
+        let (rate, in_gt) = rates
+            .plan(&mode)
+            .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
         let avg = if filled.is_zero() {
             Decimal::ZERO
         } else {
@@ -122,13 +131,12 @@ impl Books {
             qty,
             fillable_qty: filled,
             avg_price: avg,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
-            costs: vec![Cost::new(
-                CostKind::TradeFee,
-                notional * rates.taker,
-                "USDT",
-                false,
-            )],
+            // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — USDT по сумме.
+            costs: vec![if side == Side::Buy && !in_gt {
+                Cost::new(CostKind::TradeFee, filled * rate, &asset.ticker, false)
+            } else {
+                Cost::new(CostKind::TradeFee, notional * rate, "USDT", false)
+            }],
             route: None,
             signal_route: None,
             pick: None,

@@ -47,5 +47,14 @@
 
 - Приватные ответы не записаны (нужен ключ на живом боте) — tests/gate_real_data.rs #[ignore], список — tests/README.md.
 - Замер нагрузки при «Стоп» (решение 109) — до включения в торговлю.
-- Telegram: своих событий у Gate нет — общие события площадок (ошибки, статусы ввода/вывода, внешнее изменение баланса)
-  приходят с площадкой gate через уже существующий каталог уведомлений (фильтр notify.event.venues).
+- Telegram: своё событие у Gate одно — exec.withdraw_fail_pending (вывод в статусе FAIL, см. ниже); остальные — общие
+  события площадок (ошибки, статусы ввода/вывода, внешнее изменение баланса) с площадкой gate (фильтр notify.event.venues).
+
+## Ответы Тиграна 04.11 (ветка router/cexfix, DECISIONS 135 «Дополнение»)
+
+| № | Ответ | Как сделано |
+| --- | --- | --- |
+| 1 | Время жизни ioc ИЛИ fok — настройкой | Уже было: venue.order_time_in_force, проверка в order_rules.rs check_rules (одна функция у ордера и check_order); описание настройки, SETTINGS, FIRST_RUN — обновлены |
+| 2 | DEP_CREDITED — зачислено, продавать сразу | deposits.rs: DONE и DEP_CREDITED → Credited |
+| 3 | Вывод FAIL — не провал: ждать, сразу событие и журнал | transfers.rs: FAIL → Pending + withdraw_notice.rs (журнал venue.transfer Warn и Notice exec.withdraw_fail_pending, один раз на вывод; канал ядра — из subscribe_market) |
+| 4 | Скидка GT — настройка: монета сделки / GT | venue.fee_deduction (coin / gt), fees.rs Rates::parse/plan (taker_fee или gt_taker_fee; сверка с gt_discount — не совпадает → котировки нет), book.rs: coin + покупка — комиссия в монете (ядро уменьшает количество к выводу, core/costs.rs), иначе — USDT; факт — order_state.rs как было. Нехватка GT — в документации API нет (TASKS, вопрос 1) |

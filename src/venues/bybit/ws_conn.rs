@@ -7,7 +7,7 @@
 //! недостоверны.
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, local_book.rs, book.rs, ctx.rs, tokio-tungstenite.
-//! Настройки: приходят из ws.rs (Cfg); raw.book_frames [bybit] — писать ли кадры стаканов в сырой журнал.
+//! Настройки: из ws.rs (Cfg); raw.book_frames [bybit] — кадры стаканов в сырой журнал; venue.book_seq_strict — u строго +1.
 //!
 //! Официально (Connect https://bybit-exchange.github.io/docs/v5/ws/connect): «Spot can input up to 10 args for each
 //! subscription request»; ответ подписки спота — {"success", "ret_msg", "req_id", "op":"subscribe"}. Тишина считается от
@@ -127,7 +127,8 @@ pub async fn session(
                             local.insert(symbol.to_string(), LocalBook::default());
                         }
                         let Some(lb) = local.get_mut(symbol) else { continue };
-                        match lb.apply(snapshot, u, &bids, &asks) {
+                        let strict = matches!(ctx.flag("venue.book_seq_strict"), Ok(true));
+                        match lb.apply(snapshot, u, strict, &bids, &asks) {
                             Applied::Changed => {
                                 let (b, a) = lb.top(depth);
                                 let book = OrderBook {

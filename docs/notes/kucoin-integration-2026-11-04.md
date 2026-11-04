@@ -56,6 +56,13 @@
 | 19 | Права ключа: только спот | Требуются General, Spot, Withdrawal (+ FlexTransfers при переводах) `account.rs:34`; Margin/Futures — отказ «Проверить подключение» `account.rs:36`; IP — venue.api_ip_bound/api_ip; белый список адресов вывода — в кабинете (в API-документации нет, TASKS п. 5) |
 | 20 | Ядро и шлюз не меняются; кошелёк — «Маппинг кошельков» | Изменены только `main.rs` (регистрация), `secrets/mod.rs`, `settings/catalog/base.rs`, `window.rs` (описание), `venues/mod.rs`; строка kucoin на «Маппинге кошельков» появляется сама (биржи реестра, `api/wallets_view.rs`). Запрос на стык: заголовок gw-ratelimit-reset (TASKS п. 11) |
 
+## Ответы Тиграна 04.11 (ветка router/cexfix, DECISIONS 137 «Дополнение»)
+
+| № | Ответ | Как сделано |
+| --- | --- | --- |
+| 7 | Адрес депозита BSC — с зачислением на TRADE; перед выводом trade → main; main → trade не нужен | deposit_addr.rs: из адресов сети берётся to = TRADE (было), for_deposit — адрес MAIN отдаётся ядру только при venue.deposit_to_spot = да, иначе отказ InvalidAddress с причиной; trade → main перед выводом — fund_move.rs to_main при venue.withdraw_from_trade = да (проверено: сумма = сумма вывода, feeDeductType INTERNAL); FIRST_RUN, README, TASKS |
+| 8 | Тип счёта явно | account.rs: GET /api/ua/v2/account/mode (selfAccountMode CLASSIC / UNIFIED; General, Management, вес 30) + hf/accounts/opened → «Тип счёта: Classic, спот — HF»; UTA или не HF — отказ |
+
 ## Записано / не записано
 
 - Есть (04.11, публичные): symbols v2, currencies v3, currency CAKE, part orderbook level2_20, bullet-public, WS 20 с.

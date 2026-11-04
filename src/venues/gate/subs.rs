@@ -4,9 +4,9 @@
 //! дублей соединений); подписка из ядра и пересподписка из pairs_watch.rs идут строго по одной (замок gate),
 //! поэтому задачи не теряются и не запускаются дважды. С первой подпиской запускается поток аккаунта (user_stream.rs,
 //! решение 76) — один на адаптер. Обновление ставок комиссии (fees.rs) перезапускается только при смене списка
-//! символов (решение 131).
+//! символов (решение 131); так же — фоновое обновление минимума депозита (deposit_info.rs, решение 143).
 //! Кто вызывает: mod.rs (subscribe_market из контракта), pairs_watch.rs (resubscribe при смене пар).
-//! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs, user_stream.rs.
+//! От чего зависит: deposit_info.rs, market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs, user_stream.rs.
 //! Настройки: нет своих (venue.symbols_refresh_s читает pairs_watch.rs).
 
 use std::sync::{Arc, Mutex};
@@ -20,9 +20,11 @@ use crate::gateway::events::MarketEvent;
 
 use super::book::Books;
 use super::ctx::Ctx;
+use super::deposit_addr::DepositAddrs;
 use super::fees::Fees;
 use super::pairs::Snapshot;
 use super::symbols::Symbols;
+use super::wallet::Networks;
 
 /// Всё, что нужно для подписки. Дешёво клонируется.
 #[derive(Clone)]
@@ -31,6 +33,9 @@ pub struct Parts {
     pub symbols: Symbols,
     pub books: Books,
     pub fees: Fees,
+    /// Справочник сетей и кэш адресов депозита — для фонового обновления минимума депозита (решение 143).
+    pub nets: Networks,
+    pub addrs: DepositAddrs,
 }
 
 /// Текущая подписка. Дешёво клонируется (общее состояние).
@@ -51,6 +56,8 @@ struct Inner {
     account: Mutex<Option<JoinHandle<()>>>,
     /// Обновление ставок комиссии и его список символов (решение 131): тот же список — задача не перезапускается.
     fees: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
+    /// Сведения депозита (решение 143) и тикеры их монет: тот же список — задача не перезапускается.
+    deposit: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
 }
 
 impl Subs {
@@ -108,8 +115,9 @@ impl Subs {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<Snapshot> {
+        let tickers: Vec<String> = assets.iter().map(|a| a.ticker.clone()).collect();
         let (new, snap, syms) =
-            super::market::subscribe(&p.ctx, &p.symbols, &p.books, assets, out).await?;
+            super::market::subscribe(&p.ctx, &p.symbols, &p.books, assets.clone(), out).await?;
         let mut tasks = self.inner.tasks.lock().unwrap_or_else(|e| e.into_inner());
         for old in tasks.drain(..) {
             old.abort();
@@ -127,6 +135,24 @@ impl Subs {
             }
             let h = tokio::spawn(p.fees.clone().refresh_loop(p.ctx.clone(), syms.clone()));
             *fees = Some((syms, h));
+        }
+        // Решение 143: минимум депозита Gate — только из адреса депозита; круг по монетам подписки, перезапуск — как у
+        // комиссий, только при новом списке монет или упавшей задаче.
+        let mut dep = self.inner.deposit.lock().unwrap_or_else(|e| e.into_inner());
+        let same = dep
+            .as_ref()
+            .is_some_and(|(list, h)| *list == tickers && !h.is_finished());
+        if !same {
+            if let Some((_, old)) = dep.take() {
+                old.abort();
+            }
+            let h = tokio::spawn(super::deposit_info::refresh_loop(
+                p.ctx.clone(),
+                p.nets.clone(),
+                p.addrs.clone(),
+                assets,
+            ));
+            *dep = Some((tickers, h));
         }
         Ok(snap)
     }

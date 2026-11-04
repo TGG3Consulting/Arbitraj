@@ -118,6 +118,9 @@
 | venue.book_interval | площадка Gate | `100ms` | Самый частый снимок | spot.order_book: 100ms, 1000ms |
 | venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа; `fok` тоже допустим — выбор настройкой (Тигран, 04.11) | POST /spot/orders, time_in_force |
 | venue.fee_deduction | площадка Gate | *метод:* `coin` — скидка GT в кабинете выключена; `gt` — включена и есть GT. Должно совпадать с кабинетом, иначе котировок нет | Расчёт — по выбранной ставке и монете комиссии; факт — из ордера | GET /wallet/fee: gt_discount, gt_taker_fee; решение Тиграна 04.11 |
+| venue.deposit_info_requests_per_sec | площадка Gate | `2` | Минимум депозита по монетам подписки — фоном, с большим запасом от лимита Gate | Wallet «The Others: 200r/10s per endpoint»; решение 143 |
+| venue.deposit_info_refresh_s | площадка Gate | `3600` | Раз в час перепроверить минимумы депозита | решение 143 |
+| venue.deposit_min_absent_ok | площадка Gate | `да` | Пока минимум депозита монеты не получен фоном — 0 (решение 143) | min_deposit_amount только в адресе депозита |
 | venue.order_test_first | площадка Gate | `нет` | Пробного ордера у Gate нет («да» — ошибка настройки) | Спот API v4 |
 | venue.ws_ping_ms | площадка Gate | `10000` | spot.ping сбрасывает таймер простоя | Официальный пример: раз в 10 с |
 | venue.fee_requests_per_sec | площадка Gate | `5` | Четверть предела /wallet/fee | «Frequency limit rule»: 200 за 10 с |
@@ -160,6 +163,7 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | venue.rest_url | площадка KuCoin | `https://api.kucoin.com` | Основной адрес REST Classic | Документация KuCoin (Get Public Token), примеры SDK |
+| venue.deposit_min_absent_ok | площадка KuCoin | `да` | depositMinSize = null у большинства монет — считать 0 (решение 143) | /api/v3/currencies, записанный ответ 04.11 |
 | venue.bsc_network | площадка KuCoin | `bsc` | chainId сети BSC (принимают вывод и адрес депозита) | Живой ответ /api/v3/currencies/CAKE 04.11 |
 | venue.api_key_version | площадка KuCoin | `3` | Сверить со страницей ключа; «Проверить подключение» сравнит с apiVersion | Документация: Authentication |
 | venue.order_time_in_force | площадка KuCoin | `IOC` | Неисполненное снимает биржа | Документация: Add Order, timeInForce |

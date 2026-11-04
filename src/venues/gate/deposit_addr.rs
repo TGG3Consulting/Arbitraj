@@ -3,7 +3,7 @@
 //! MEXC, решение 118, Я-5). Адрес с memo (payment_id) — ошибка «требует memo — не поддерживается» (Я-15: вывод без
 //! memo не зачислится), такой не кэшируется; obtain_failed = 1 — адрес не получен, повторить позже. Минимум депозита
 //! и подтверждения сети запоминаются для справочника сетей (wallet.rs, networks_parse::Extra).
-//! Кто вызывает: mod.rs (deposit_address из контракта).
+//! Кто вызывает: mod.rs (deposit_address из контракта), deposit_info.rs (фоновое обновление минимума, решение 143).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, wallet.rs (Networks).
 //! Настройки: нет своих.
 //!
@@ -52,6 +52,20 @@ pub async fn deposit_address(
     {
         return Ok(a.clone());
     }
+    fetch(ctx, addrs, nets, asset, network).await
+}
+
+/// Что делает: запрос адреса депозита всегда (без кэша): запоминает минимум депозита и подтверждения сети
+/// (справочник сетей) и годный адрес. Вызывают deposit_address и фоновое обновление сведений депозита
+/// (deposit_info.rs, решение 143). Принимает и возвращает — как deposit_address. Ошибки: как deposit_address.
+pub async fn fetch(
+    ctx: &Ctx,
+    addrs: &DepositAddrs,
+    nets: &Networks,
+    asset: &Asset,
+    network: &str,
+) -> GatewayResult<String> {
+    let key = (asset.ticker.clone(), network.to_string());
     let p = vec![("currency", asset.ticker.clone())];
     let data = rest::signed(
         ctx,

@@ -15,6 +15,7 @@ pub mod account_update;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
+pub mod deposit_info;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
@@ -139,6 +140,8 @@ impl Venue for Gate {
             symbols: self.symbols.clone(),
             books: self.books.clone(),
             fees: self.fees.clone(),
+            nets: self.nets.clone(),
+            addrs: self.addrs.clone(),
         };
         self.subs.subscribe(&parts, assets, out).await
     }

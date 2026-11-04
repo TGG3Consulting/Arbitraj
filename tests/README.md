@@ -100,6 +100,56 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   /api/v1/user/api-key (permission, apiVersion), /api/v1/hf/accounts/opened, /api/ua/v2/account/mode (selfAccountMode — тип счёта Classic / UTA), ответы hf/orders/test, hf/orders/sync,
   GET /api/v1/hf/orders/{id} и /api/v1/hf/fills одной сделки, /api/v3/deposit-addresses?chain=bsc, /api/v1/deposits,
   /api/v1/withdrawals/{id}, /api/v3/accounts/universal-transfer, кадры /spotMarket/tradeOrdersV2.
+- `bitget_real_data.rs` — адаптер Bitget (решение 162, Classic API v2). Без записей (идут всегда): подпись — значения
+  функций официального SDK (`bitget-python-sdk-api/bitget/utils.py`: `pre_hash`, `sign`), строка запроса как
+  `parse_params_to_str` SDK, правило своего clientOid (≤ 32, Best Practices), подписка пачками ≤ 4096 байт. `#[ignore]` до
+  записи в `data/cex_samples_2026_11_05/` (с сервера бота; из среды разработки api.bitget.com закрыт прокси) — раздел ниже.
+
+### Bitget — команды записи (решение 162)
+
+Вектор подписи пересчитать функциями SDK (каталог SDK — github.com/BitgetLimited/v3-bitget-api-sdk):
+
+```bash
+python3 -I -c "import sys; sys.path.insert(0, 'bitget-python-sdk-api'); from bitget import utils; \
+print(utils.sign(utils.pre_hash(1695808949356, 'GET', '/api/v2/spot/account/assets?coin=USDT', ''), 'test_api_secret'))"
+# X+fN2ZKIaQNx8I+bkoc82/yTFv2yygsJ5/FLmL2+zIM=
+```
+
+Публичные (ключ не нужен; монеты CAKE и USDT; адреса и параметры — по официальной документации Classic v2):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+# Get Symbol Info — все пары и одна (CAKEUSDT)
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/public/symbols' > $D/bitget_symbols.json
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/public/symbols?symbol=CAKEUSDT' > $D/bitget_symbols_CAKEUSDT.json
+# Get Coin Info — все монеты (замерить размер: wc -c), CAKE и USDT. Путь документации — /public/; SDK зовёт /market/coins
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/public/coins' > $D/bitget_coins.json
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/public/coins?coin=CAKE' > $D/bitget_coins_CAKE.json
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/public/coins?coin=USDT' > $D/bitget_coins_USDT.json
+curl -sS -o /dev/null -w '%{http_code}\n' 'https://api.bitget.com/api/v2/spot/market/coins?coin=CAKE'
+# Имя сети BSC (поле chain у CAKE) — одной строкой в $D/bitget_bsc_network.txt (его же — в venue.bsc_network)
+python3 -c "import json; d=json.load(open('$D/bitget_coins_CAKE.json'))['data'][0]; print([c['chain'] for c in d['chains']])"
+# Стакан REST
+curl -sS --compressed 'https://api.bitget.com/api/v2/spot/market/orderbook?symbol=CAKEUSDT&type=step0&limit=150' > $D/bitget_orderbook_CAKEUSDT.json
+# WebSocket books15 (CAKEUSDT) и books5 (USDCUSDT) — по строке на кадр, «ping» раз в 30 с, ~65 секунд
+( echo '{"op":"subscribe","args":[{"instType":"SPOT","channel":"books15","instId":"CAKEUSDT"},{"instType":"SPOT","channel":"books5","instId":"USDCUSDT"}]}'; \
+  sleep 30; echo ping; sleep 30; echo ping ) | timeout 65 websocat -t wss://ws.bitget.com/v2/ws/public > $D/bitget_ws_books15.jsonl
+```
+
+Что проверить по записи: есть ли `contractAddress` у сети BSC CAKE (0x0E09…cE82); `withdrawFee`, `extraWithdrawFee`,
+`minDepositAmount` («0» или пусто?), `withdrawMinScale`, `withdrawStep`, `needTag`; `pricePrecision` / `quantityPrecision`
+CAKEUSDT и есть ли `maxLimitOrderValue`; шлёт ли books15 одинаковые снимки (тот же `seq`) без изменений рынка; порядок
+уровней; ответ на подписку.
+
+Приватные — на живом боте (без ключей в файлах; из сырого журнала data/raw/bitget, записи «rest <путь>»):
+`bitget_all_trade_rate.json` (GET /api/v2/common/all-trade-rate?businessType=spot), /api/v2/spot/account/info
+(authorities, ips), /api/v2/spot/account/upgrade-status (что отвечает классический счёт), /api/v2/spot/account/deduct-info,
+/api/v2/spot/account/assets (регистр имени монеты), /api/v2/account/funding-assets, /api/v2/account/all-account-balance,
+/api/v2/spot/wallet/deposit-address?coin=CAKE&chain=<сеть BSC> (формат поля chain), первый IOC-ордер: ответ place-order и
+`bitget_order_info.json` (GET /api/v2/spot/trade/orderInfo — status cancelled или canceled, знак и вид feeDetail), депозит
+и вывод в deposit-records / withdrawal-records (на какой счёт пришёл депозит; входит ли комиссия в size вывода), перевод
+/api/v2/spot/wallet/transfer. Приватный WebSocket: единица времени входа (мс по тексту документации или секунды по примеру
+Java и SDK) и кадры канала баланса спота (страница канала не прочитана — поток аккаунта Bitget не подключён).
 
 Семейство Solidly V1 — THENA V1 (решение 122, часть F) — tests/bsc_dex_solidly_v1_family.rs: вид solidly_v1 (Proto::SolidlyV1, в графе, без своего пути, шаг SOLIDLY исполнителя, только dex.factory; без exec.executor_address — сигнал), данные вызовов реестра фабрик (getPair(address,address,bool), getPool(…,bool), poolByPair, getDODOPoolBidirection) по официальным сигнатурам. Сверка своей математики Pair.sol с ответом пула getAmountOut — `thena_v1_math_matches_live_get_amount_out`, помечен #[ignore] до записи. **Запись (на сервере, свой узел, ОДИН блок N для всех вызовов, eth_call с тегом N):** по 1 стабильному и 1 волатильному пулу THENA V1 (адрес фабрики — dex.factory DEX THENA V1): `pool.metadata()` (селектор 0x392f37e9), `factory.getFee(bool stable)` (0x512b45ea, stable — из metadata), `pool.getAmountOut(uint256 amountIn, address tokenIn)` (0xf140a35a) — по 3 суммы в обе стороны (малая, ~1% резерва, ~10% резерва). Сохранить в tests/data/thena_v1/responses.json: `{block, pools: [{pool, metadata: "<result>", fee: "<result>", quotes: [{amount_in: "<десятичное>", token_in: "0x…", out: "<result>"}]}]}`; затем `cargo test --test bsc_dex_solidly_v1_family -- --ignored` и снять #[ignore].
 Пути проб у пулов без своего Universal Router (решение «122 X (проба через исполнитель)») — tests/bsc_dex_probe_paths.rs: причина пробы налога (шаг исполнителя без exec.executor_address — настройка, вида шага нет — не настройка) на пуле записи CAKE (route_common), откат исполнителя «deadline» — помеха, проба BNB только у видов со своим Universal Router (форк V2, THENA, Topaz — причина без dex.universal_router).

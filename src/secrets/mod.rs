@@ -73,6 +73,13 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bitget",
         "Passphrase ключа Bitget (задаётся при создании ключа; заголовок ACCESS-PASSPHRASE)",
     ),
+    ("okx.api_key", "okx", "API-ключ OKX (API key, API v5)"),
+    ("okx.api_secret", "okx", "Секретный ключ OKX (Secret key)"),
+    (
+        "okx.api_passphrase",
+        "okx",
+        "Passphrase ключа OKX (задаётся при создании ключа; в запросе — заголовок OK-ACCESS-PASSPHRASE)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

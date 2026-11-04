@@ -2,7 +2,7 @@
 //! Что делает: балансы спот-счёта Gate (все и одной монеты — решение 113) и кнопка «Проверить подключение»: ключ
 //! принят, режим счёта классический, права спота на запись и кошелька есть, нет прав записи фьючерсов и маржи, IP.
 //! Кто вызывает: mod.rs (функции контракта).
-//! От чего зависит: rest.rs, num.rs, ctx.rs.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, key_info.rs (своя запись в списке /account/main_keys).
 //! Настройки: venue.api_ip_bound, venue.api_ip [gate].
 //!
 //! Официальная документация https://www.gate.com/docs/developers/apiv4/en/ (SDK https://github.com/gate/gateapi-python):
@@ -82,6 +82,16 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
                 e.message
             ));
         }
+    };
+    // Ответ — список всех ключей аккаунта: берём запись своего ключа (key_info.rs).
+    let my_key = match ctx.keys() {
+        Ok((k, _)) => k,
+        Err(e) => return fail(e.message),
+    };
+    let Some(keys) = super::key_info::own(&keys, &my_key) else {
+        return fail(
+            "Ключа бота нет в списке ключей аккаунта Gate (/account/main_keys) — проверьте gate.api_key".into(),
+        );
     };
     if let Some(s) = keys
         .get("state")

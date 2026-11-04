@@ -20,6 +20,7 @@ pub mod depth;
 pub mod errors;
 pub mod feed;
 pub mod fees;
+pub mod key_info;
 pub mod market;
 pub mod networks_parse;
 pub mod num;

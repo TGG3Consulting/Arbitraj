@@ -142,6 +142,19 @@ async fn run() -> Result<(), String> {
             kucoin_ctx,
         )))
         .await;
+    // Биржа Bitget (решение 162): Classic API v2, только спот; свои настройки venue.* [bitget] и секреты bitget.*.
+    let bitget_ctx = arb::venues::bitget::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::bitget::Bitget::new(
+            bitget_ctx,
+        )))
+        .await;
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.

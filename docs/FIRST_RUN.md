@@ -181,6 +181,31 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.withdraw_from_trade | площадка KuCoin | `да` | Вывод только с main: перед ним trade → main (право FlexTransfers) | Код 115007; решение Тиграна 04.11 |
 | venue.deposit_to_spot | площадка KuCoin | *метод:* не задавать — адрес депозита зачисляет на TRADE | Перевод main → trade не нужен | Get Deposit Address V3 (to); решение Тиграна 04.11 |
 
+## Биржа Bitget (решение 162)
+
+Из официальной документации Bitget Classic v2; живых ответов ещё нет (из среды разработки api.bitget.com закрыт). Счёт —
+Classic (не UTA: «Проверить подключение» откажет). Адреса вывода — заранее в адресную книгу кабинета Bitget (код 11000),
+ключ с выводом — только с привязкой IP сервера. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Bitget | `https://api.bitget.com` | Основной адрес REST Classic v2. | Classic → REST API: «https://api.bitget.com»; SDK consts.py API_URL |
+| venue.ws_url | площадка Bitget | `wss://ws.bitget.com/v2/ws/public` | Стаканы books5/books15. | Classic → WebSocket intro: публичный «wss://ws.bitget.com/v2/ws/public» |
+| venue.quote_asset | площадка Bitget | `USDT` | Котируемая монета пар. | Get Symbol Info: quoteCoin; minTradeUSDT — минимум суммы в USDT |
+| venue.depth_levels | площадка Bitget | `15` | Глубина для котировки на объём; 5 — меньше нагрузки. | Depth Channel: books1 (10 мс), books5 и books15 (200 мс) — снимками |
+| venue.ws_symbols_per_conn | площадка Bitget | `49` | Рекомендация документации — меньше 50 каналов на соединение. | WebSocket intro: «less than 50 channels in one connection», «Max 1000 channel subscription/connection» |
+| venue.ws_subs_per_sec | площадка Bitget | `10` | Потолок темпа сообщений; подписка идёт пачками ≤ 4096 байт. | WebSocket intro: до 10 сообщений клиента в секунду (ping, login, subscribe) |
+| venue.ws_ping_ms | площадка Bitget | `30000` | Совет документации — раз в 30 с. | WebSocket intro: строка «ping» каждые 30 с, без ping 2 минуты — разрыв |
+| venue.ws_silence_ms | площадка Bitget | *метод:* больше venue.ws_ping_ms с запасом на ответ «pong» (например, два интервала ping) — решает Тигран | Без кадров дольше — соединение оборвано. | WebSocket intro: ответ «pong» на каждый «ping» |
+| venue.order_time_in_force | площадка Bitget | `ioc` | Правило Тиграна: неисполненный остаток снимает биржа. | Place Order: force gtc / post_only / fok / ioc |
+| venue.order_test_first | площадка Bitget | *метод:* не задавать (или «нет»): пробного ордера у Bitget Classic нет — «да» даёт отказ ордера | Правила ордера проверяет order_rules::ready. | Spot → Trade: среди эндпоинтов нет test order |
+| venue.bsc_network | площадка Bitget | *метод:* значение поля chain сети BSC из живого ответа GET /api/v2/spot/public/coins?coin=CAKE | В документации имени сети BSC нет. | Get Coin Info: chain «Chain name» (в примере только BTC) |
+| venue.deposit_min_absent_ok | площадка Bitget | *метод:* решает Тигран после живого ответа: у монет с minDepositAmount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Bitget | Урок 21: «0» и пусто у биржи могут значить разное. | Get Coin Info: minDepositAmount; смысл «0» не описан |
+| venue.history_window_s | площадка Bitget | *метод:* с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран | Окно поиска статусов депозита и вывода. | Get Deposit/Withdrawal Records: startTime и endTime обязательны, предел промежутка не указан |
+| venue.rate_limit_pause_ms | площадка Bitget | *метод:* пауза после 429 — Retry-After в документации нет, окно лимитов — секунда (например, 1000–2000); решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Classic → REST API: «429»; лимиты «N times/1s» |
+| venue.deposit_to_spot | площадка Bitget | *метод:* не задавать, если в кабинете (или Modify Deposit Account) зачисление монеты назначено на spot; «да» — если депозит приходит на фонд (право ключа «Transfer»); проверить первым депозитом | На какой счёт зачисляется депозит, в документации Classic не сказано. | Modify Deposit Account (accountType spot / funding …); Transfer p2p → spot |
+| venue.withdraw_from_trade | площадка Bitget | *метод:* «да» — если малый вывод со спота отклонён (вывод с фонда); иначе не задавать | Проверить малым выводом. | Withdraw: с какого счёта списывается — не описано |
+
 ## Зачисление по блокчейну (решение 151)
 
 Перевод сделки на кошелёк DEX засчитывается по приходу монеты в блокчейне, не дожидаясь API биржи-отправителя. Работает при заданных venue.balance_events и transfer.credit_amount_tolerance_pct у площадки DEX.

@@ -5,6 +5,7 @@
 //! Настройки: venue.* по каждой площадке.
 
 pub mod bingx;
+pub mod bitget;
 pub mod bsc_dex;
 pub mod bybit;
 pub mod gate;

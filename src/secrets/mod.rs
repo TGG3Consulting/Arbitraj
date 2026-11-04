@@ -58,6 +58,21 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "kucoin",
         "Passphrase ключа KuCoin (задаётся при создании ключа; в запросе — зашифрованной HMAC-SHA256)",
     ),
+    (
+        "bitget.api_key",
+        "bitget",
+        "API-ключ Bitget (API Key, Classic v2)",
+    ),
+    (
+        "bitget.api_secret",
+        "bitget",
+        "Секретный ключ Bitget (Secret Key, подпись HMAC SHA256)",
+    ),
+    (
+        "bitget.api_passphrase",
+        "bitget",
+        "Passphrase ключа Bitget (задаётся при создании ключа; заголовок ACCESS-PASSPHRASE)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

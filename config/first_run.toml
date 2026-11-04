@@ -771,6 +771,154 @@ source = "Get Deposit Address V3: to — MAIN или TRADE; решение Ти�
 rationale = "Адрес MAIN при выключенном переводе бот не отдаёт (монету не продать) — отказ с причиной."
 prefill = { kind = "Venue", id = "kucoin" }
 
+# --- Биржа Bitget (решение 162) ---
+[[section]]
+title = "Биржа Bitget (решение 162)"
+intro = "Значения из официальной документации Bitget Classic v2 (www.bitget.com/docs). Живых ответов ещё нет — имя сети BSC, счета депозита и вывода задаёт Тигран по живым ответам. Счёт — Classic (не UTA). Адреса вывода (кошелёк бота, адреса других бирж) — заранее в адресную книгу кабинета Bitget (код 11000); ключ с выводом — только с привязкой IP сервера. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Bitget"
+unit = "URL"
+value = "https://api.bitget.com"
+source = "Classic → REST API: «https://api.bitget.com»; SDK consts.py API_URL"
+rationale = "Основной адрес REST Classic v2."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Bitget"
+unit = "URL"
+value = "wss://ws.bitget.com/v2/ws/public"
+source = "Classic → WebSocket intro: публичный «wss://ws.bitget.com/v2/ws/public»"
+rationale = "Стаканы books5/books15."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Bitget"
+unit = "монета"
+value = "USDT"
+source = "Get Symbol Info: quoteCoin; minTradeUSDT — минимум суммы в USDT"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Bitget"
+unit = "уровней"
+value = "15"
+source = "Depth Channel: books1 (10 мс), books5 и books15 (200 мс) — снимками"
+rationale = "Глубина для котировки на объём; 5 — меньше нагрузки."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Bitget"
+unit = "штук"
+value = "49"
+source = "WebSocket intro: «less than 50 channels in one connection», «Max 1000 channel subscription/connection»"
+rationale = "Рекомендация документации — меньше 50 каналов на соединение."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Bitget"
+unit = "в секунду"
+value = "10"
+source = "WebSocket intro: до 10 сообщений клиента в секунду (ping, login, subscribe)"
+rationale = "Потолок темпа сообщений; подписка идёт пачками ≤ 4096 байт."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Bitget"
+unit = "мс"
+value = "30000"
+source = "WebSocket intro: строка «ping» каждые 30 с, без ping 2 минуты — разрыв"
+rationale = "Совет документации — раз в 30 с."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Bitget"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ «pong» (например, два интервала ping) — решает Тигран"
+source = "WebSocket intro: ответ «pong» на каждый «ping»"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Bitget"
+unit = "тип"
+value = "ioc"
+source = "Place Order: force gtc / post_only / fok / ioc"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Bitget Classic нет — «да» даёт отказ ордера"
+source = "Spot → Trade: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Bitget"
+unit = "название"
+method = "значение поля chain сети BSC из живого ответа GET /api/v2/spot/public/coins?coin=CAKE"
+source = "Get Coin Info: chain «Chain name» (в примере только BTC)"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "решает Тигран после живого ответа: у монет с minDepositAmount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Bitget"
+source = "Get Coin Info: minDepositAmount; смысл «0» не описан"
+rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка Bitget"
+unit = "с"
+method = "с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран"
+source = "Get Deposit/Withdrawal Records: startTime и endTime обязательны, предел промежутка не указан"
+rationale = "Окно поиска статусов депозита и вывода."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Bitget"
+unit = "мс"
+method = "пауза после 429 — Retry-After в документации нет, окно лимитов — секунда (например, 1000–2000); решает Тигран"
+source = "Classic → REST API: «429»; лимиты «N times/1s»"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "не задавать, если в кабинете (или Modify Deposit Account) зачисление монеты назначено на spot; «да» — если депозит приходит на фонд (право ключа «Transfer»); проверить первым депозитом"
+source = "Modify Deposit Account (accountType spot / funding …); Transfer p2p → spot"
+rationale = "На какой счёт зачисляется депозит, в документации Classic не сказано."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка Bitget"
+unit = "да/нет"
+method = "«да» — если малый вывод со спота отклонён (вывод с фонда); иначе не задавать"
+source = "Withdraw: с какого счёта списывается — не описано"
+rationale = "Проверить малым выводом."
+prefill = { kind = "Venue", id = "bitget" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

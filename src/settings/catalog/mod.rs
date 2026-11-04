@@ -12,6 +12,7 @@
 //! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе.
 
 mod base;
+mod bitget;
 pub mod dex;
 mod gate;
 mod index;
@@ -86,6 +87,7 @@ static PARTS: &[&[SettingDef]] = &[
     uncapped::UNCAPPED,
     window::WINDOW,
     gate::GATE,
+    bitget::BITGET,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

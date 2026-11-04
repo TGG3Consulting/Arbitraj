@@ -5,6 +5,9 @@
 ## Какие секреты есть
 - API-ключ и секрет BingX — с правом торговли и вывода.
 - KuCoin (решение 137): API-ключ `kucoin.api_key`, секрет `kucoin.api_secret` и passphrase `kucoin.api_passphrase`
+- Bitget (решение 162): API-ключ `bitget.api_key`, секрет `bitget.api_secret` и passphrase `bitget.api_passphrase`;
+  права ключа — спот-торговля (stow), вывод (wwow, только с привязкой IP), перевод (wtow — если включены переводы
+  spot ↔ p2p); без фьючерсов, маржи и копитрейдинга; адреса вывода — в адресной книге кабинета (код 11000)
   (задаётся при создании ключа; в запрос уходит только HMAC-SHA256 от неё, Base64). Права: General, Spot, Withdrawal,
   FlexTransfers (переводы main ↔ trade); Margin и Futures — нет. Ключ привязать к IP сервера. Токены WebSocket (bullet)
   — секрет сессии: в журнал и сырой журнал не пишутся.

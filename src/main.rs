@@ -142,6 +142,20 @@ async fn run() -> Result<(), String> {
             kucoin_ctx,
         )))
         .await;
+    // Биржа Binance (решение 160): спот API и Wallet SAPI; свои настройки venue.* [binance] и секреты binance.*.
+    let binance_ctx = arb::venues::binance::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::binance::Binance::new(
+            binance_ctx,
+        )))
+        .await;
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.

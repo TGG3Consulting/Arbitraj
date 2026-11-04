@@ -14,5 +14,6 @@
 | `bingx/` | BingX (спот) |
 | `mexc/` | MEXC (спот, API v3, решение 107) |
 | `kucoin/` | KuCoin (спот, Classic API, решение 137) |
+| `binance/` | Binance (спот API + Wallet SAPI, решение 160) — README.md папки |
 | `bsc_dex/` | DEX в сети BSC |
 | `kyberswap/` | Исполнение через агрегатор KyberSwap (внутри bsc_dex, решение 91) |

@@ -101,7 +101,8 @@
 | venue.bsc_network | площадка Gate | `BSC` | Имя сети BNB Smart Chain у Gate | Живая запись 04.11 (/spot/currencies, currency_chains CAKE) |
 | venue.depth_levels | площадка Gate | `20` | Как у других бирж | spot.order_book: 5, 10, 20, 50, 100 |
 | venue.book_interval | площадка Gate | `100ms` | Самый частый снимок | spot.order_book: 100ms, 1000ms |
-| venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа | POST /spot/orders, time_in_force |
+| venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа; `fok` тоже допустим — выбор настройкой (Тигран, 04.11) | POST /spot/orders, time_in_force |
+| venue.fee_deduction | площадка Gate | *метод:* `coin` — скидка GT в кабинете выключена; `gt` — включена и есть GT. Должно совпадать с кабинетом, иначе котировок нет | Расчёт — по выбранной ставке и монете комиссии; факт — из ордера | GET /wallet/fee: gt_discount, gt_taker_fee; решение Тиграна 04.11 |
 | venue.order_test_first | площадка Gate | `нет` | Пробного ордера у Gate нет («да» — ошибка настройки) | Спот API v4 |
 | venue.ws_ping_ms | площадка Gate | `10000` | spot.ping сбрасывает таймер простоя | Официальный пример: раз в 10 с |
 | venue.fee_requests_per_sec | площадка Gate | `5` | Четверть предела /wallet/fee | «Frequency limit rule»: 200 за 10 с |
@@ -112,7 +113,8 @@
 | venue.ws_symbols_per_conn | площадка Gate | *метод:* начать с 20, замерить при «Стоп», при обрывах уменьшить | Предела в документации нет | Spot WebSocket v4 (вопрос Тиграну) |
 ## Биржа Bybit (решение 136)
 
-Адреса и потолки — из официальной документации Bybit V5; остальное — ориентиры.
+Адреса и потолки — из официальной документации Bybit V5; остальное — ориентиры. Депозит (решение Тиграна 04.11): в кабинете
+Bybit назначить зачисление на UNIFIED (Set Deposit Account); бот перевод FUND → UNIFIED не делает.
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
@@ -128,14 +130,16 @@
 | venue.my_trades_limit | площадка Bybit | `100` | Наибольший limit исполнений ордера | Get Trade History: «[1, 100]» |
 | venue.fee_requests_per_sec | площадка Bybit | `5` | Потолок fee-rate | Rate Limit: /v5/account/fee-rate 5/s |
 | venue.bsc_network | площадка Bybit | *метод:* значение поля chain сети BSC из живого coin/query-info | В документации имени сети BSC нет | coin/query-info |
-| venue.withdraw_account | площадка Bybit | *метод:* `UTA`, если депозит не переводится на FUND ботом; решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
-| venue.deposit_to_spot | площадка Bybit | *метод:* да — если в кабинете депозит идёт на FUND (по умолчанию) | Депозит по умолчанию — FUND | Set Deposit Account |
+| venue.withdraw_account | площадка Bybit | *метод:* `UTA` (торговый баланс — на UNIFIED, депозит туда же); решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
+| venue.deposit_to_spot | площадка Bybit | *метод:* не задавать — депозит назначен на UNIFIED в кабинете; «да» — только запасной вариант при депозите на FUND (право Wallet: AccountTransfer) | Счёт зачисления API прочитать не даёт — проверяет Тигран в кабинете | Set Deposit Account; решение Тиграна 04.11 |
+| venue.book_seq_strict | площадка Bybit | *метод:* да — на живом потоке `u` изменений шёл строго +1 (запись 04.11); частые пересинхронизации в журнале — нет | Потерянный кадр виден сразу | Orderbook (+1 не обещано); решение Тиграна 04.11 |
 | venue.recv_window_ms | площадка Bybit | `5000` | Значение по умолчанию Bybit | Integration Guidance: «default value is 5,000» |
 ## Биржа KuCoin (решение 137)
 
 Из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
-Включать по желанию (без записи в таблицу-источник: да/нет вводит Тигран): `venue.deposit_to_spot` = да (депозит на main →
-перевод на trade), `venue.withdraw_from_trade` = да (вывод только с main), `venue.order_test_first` = да (пробный ордер до
+Решение Тиграна (04.11): счёт Classic, спот HF; адрес депозита BSC создаётся в кабинете с зачислением на TRADE —
+`venue.deposit_to_spot` не задавать (бот берёт адрес TRADE; адрес только MAIN — отказ с причиной); `venue.withdraw_from_trade`
+= да (вывод только с main — перед ним перевод trade → main). По желанию: `venue.order_test_first` = да (пробный ордер до
 проверки шагов на живом), `venue.balance_events` = да (поток аккаунта).
 
 | Настройка | Область | Советуем | Обоснование | Источник |
@@ -147,6 +151,8 @@
 | venue.depth_levels | площадка KuCoin | `50` | Глубина для котировки; 5 — меньше нагрузки | Документация: level2Depth5 / level2Depth50 |
 | venue.ws_subs_per_sec | площадка KuCoin | `10` | Потолок темпа подписок | Документация: 100 сообщений за 10 с |
 | venue.window_depth_limit | площадка KuCoin | `100` | Снимок для изменений стакана в окнах | Документация: Get Part OrderBook, size 20 или 100 |
+| venue.withdraw_from_trade | площадка KuCoin | `да` | Вывод только с main: перед ним trade → main (право FlexTransfers) | Код 115007; решение Тиграна 04.11 |
+| venue.deposit_to_spot | площадка KuCoin | *метод:* не задавать — адрес депозита зачисляет на TRADE | Перевод main → trade не нужен | Get Deposit Address V3 (to); решение Тиграна 04.11 |
 
 ## Безопасность: вывод ключа из пароля (Argon2id)
 

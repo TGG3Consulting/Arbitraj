@@ -1,7 +1,8 @@
 //! Файл: venues/kucoin/account.rs
 //! Что делает: балансы торгового счёта KuCoin (trade) — все и одной монеты (решение 113), и кнопка «Проверить
 //! подключение»: ключ принят, версия ключа совпадает с настройкой, права (без маржи и фьючерсов — урок 19), привязка
-//! к IP, высокочастотный ли спот-счёт (ордера адаптера — HF-эндпоинты /api/v1/hf/*).
+//! к IP, высокочастотный ли спот-счёт (ордера адаптера — HF-эндпоинты /api/v1/hf/*) и тип счёта — Classic или UTA,
+//! явно в тексте (решение 137, Тигран 04.11): адаптер на Classic API, счёт UTA — отказ проверки.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.api_key_version, venue.api_ip_bound, venue.api_ip, venue.deposit_to_spot, venue.withdraw_from_trade
@@ -16,6 +17,10 @@
 //!   Имена прав вывода и Flex-перевода — из спецификации эндпоинтов (x-api-permission: «Withdrawal», «FlexTransfers»).
 //! - Get Account Type - Spot GET /api/v1/hf/accounts/opened (Spot, вес 30) https://www.kucoin.com/docs-new/api-3470120 —
 //!   «True means the current user is a high-frequency spot user».
+//! - Get Account Mode (UTA REST V2) GET /api/ua/v2/account/mode (право General, Management, вес 30)
+//!   https://www.kucoin.com/docs-new/v2/rest/ua/get-account-mode — «query the list of unified and classic sub-accounts
+//!   and current account mode»; data.selfAccountMode — в примерах документации CLASSIC и UNIFIED (перечень значений
+//!   формально не описан: другое значение — отказ проверки с этим значением).
 
 use reqwest::Method;
 
@@ -134,11 +139,28 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
     let hf = get("/api/v1/hf/accounts/opened", Pool::Spot).await?;
     if hf.as_bool() != Some(true) {
         return Err(format!(
-            "Спот-счёт KuCoin не высокочастотный (hf/accounts/opened = {hf}) — ордера адаптера идут через /api/v1/hf/*"
+            "Тип спот-счёта KuCoin: не HF (hf/accounts/opened = {hf}) — ордера адаптера идут через /api/v1/hf/*, нужен HF"
         ));
     }
+    let mode = get("/api/ua/v2/account/mode", Pool::Management).await?;
+    let mode = num::text_opt(&mode, "selfAccountMode").unwrap_or_default();
+    match mode.as_str() {
+        "CLASSIC" => {}
+        "UNIFIED" => {
+            return Err(
+                "Тип счёта KuCoin: UTA (selfAccountMode = UNIFIED) — адаптер работает на Classic API, нужен классический счёт"
+                    .into(),
+            );
+        }
+        other => {
+            return Err(format!(
+                "Тип счёта KuCoin не распознан: selfAccountMode = «{other}»"
+            ));
+        }
+    }
     Ok(format!(
-        "Подключено: версия ключа {got}, права есть ({}), {ip_note}, спот-счёт высокочастотный",
+        "Подключено. Тип счёта: Classic (selfAccountMode = CLASSIC), спот — HF (высокочастотный, hf/accounts/opened = true). \
+         Версия ключа {got}, права есть ({}), {ip_note}",
         perms.join(", ")
     ))
 }

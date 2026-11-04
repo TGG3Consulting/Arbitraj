@@ -1,6 +1,6 @@
 //! Файл: venues/gate/trade.rs
-//! Что делает: покупка или продажа на Gate лимитным ордером с худшей допустимой ценой и временем жизни ioc (что не
-//! исполнилось сразу — снимает биржа) и проверка факта (количество, средняя цена, комиссия — order_state.rs).
+//! Что делает: покупка или продажа на Gate лимитным ордером с худшей допустимой ценой и временем жизни ioc или fok
+//! (venue.order_time_in_force, решение 135 — Тигран 04.11; что не исполнилось сразу — снимает биржа) и проверка факта (количество, средняя цена, комиссия — order_state.rs).
 //! Правила пары, округление и пределы — order_rules.rs: та же функция у проверки ордера без исполнения (решение 134).
 //! Кто вызывает: mod.rs (trade из контракта).
 //! От чего зависит: order_rules.rs, order_state.rs, rest.rs, symbols.rs, num.rs, ctx.rs.
@@ -11,7 +11,7 @@
 //! #create_order) — ответ 201 «Order created. The execution result depends on the time-in-force policy», тело — ордер
 //! (id, status, filled_amount, filled_total, fee, fee_currency, finish_as; action_mode по умолчанию FULL — «Full mode»).
 //! Лимит — «10r/s (UID+Market)» на постановку и изменение; правило доли исполнения (fill-ratio) — не больше 10
-//! запросов за 10 с, если доля исполнения за 24 ч мала («Frequency limit rule»): бот ставит ordre только ioc по худшей
+//! запросов за 10 с, если доля исполнения за 24 ч мала («Frequency limit rule»): бот ставит ордера только ioc/fok по худшей
 //! цене, отказ лимита — RateLimited (правила шлюза).
 
 use reqwest::Method;

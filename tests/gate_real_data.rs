@@ -337,3 +337,11 @@ fn wallet_private() {
     // POST /withdrawals и GET /wallet/withdrawals?withdraw_id= по шагам статуса; GET /wallet/deposits (txid, статусы
     // TRACK → DONE / DEP_CREDITED); кадры spot.balances при депозите, ордере и выводе (change, freeze_change, change_type).
 }
+
+#[test]
+#[ignore = "записать на живом боте: GET /wallet/fee?currency_pair=CAKE_USDT при скидке GT вкл и выкл — tests/README.md"]
+fn wallet_fee_gt() {
+    // Записать оба ответа (gate_wallet_fee_gt_on.json / _off.json): taker_fee, gt_discount, gt_taker_fee. Проверить
+    // fees::Rates::parse и plan: off — coin даёт taker_fee, gt — отказ; on — gt даёт gt_taker_fee, coin — отказ.
+    // И fee_currency / gt_fee ордера при каждом варианте (комиссия покупки в монете при coin).
+}

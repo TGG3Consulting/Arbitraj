@@ -2,9 +2,12 @@
 //! Что делает: адрес депозита KuCoin по монете и сети (chainId) и счёт, на который он зачисляет (MAIN или TRADE).
 //! Кэш в памяти на время процесса (адрес нужен в предпроверке каждой сделки). Адрес с непустым memo — ошибка «требует
 //! memo — не поддерживается» (вывод на него без memo не зачислится); такой не кэшируется.
+//! Адрес для перевода на KuCoin (for_deposit) — только с зачислением на TRADE (решение 137, Тигран 04.11: адрес BSC с
+//! зачислением на TRADE создаётся в кабинете; перевод main → trade после депозита по умолчанию не нужен). Адрес MAIN
+//! принимается только при venue.deposit_to_spot = да (запасной вариант: перевод main → trade после зачисления).
 //! Кто вызывает: mod.rs (deposit_address), fund_move.rs (на какой счёт приходит депозит).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: нет своих.
+//! Настройки: venue.deposit_to_spot [kucoin] (да — допускается адрес MAIN).
 //!
 //! Официально — Get Deposit Address (V3) GET /api/v3/deposit-addresses?currency=&chain= (пул Management, вес 5)
 //! https://www.kucoin.com/docs-new/api-3470140: «If the returned data is empty, you may need to add the deposit address
@@ -98,6 +101,27 @@ impl DepositAddrs {
             .insert(key, a.clone());
         Ok(a)
     }
+}
+
+/// Что делает: адрес, на который ядро переводит монету на KuCoin: с зачислением на TRADE; MAIN — только при
+/// venue.deposit_to_spot = да (см. шапку). Принимает: адреса, окружение, монету, chainId. Возвращает: адрес.
+/// Ошибки: как DepositAddrs::get; InvalidAddress — адрес зачисляет на MAIN, а перевод main → trade выключен.
+pub async fn for_deposit(
+    addrs: &DepositAddrs,
+    ctx: &Ctx,
+    asset: &Asset,
+    chain: &str,
+) -> GatewayResult<String> {
+    let a = addrs.get(ctx, asset, chain).await?;
+    if a.to != super::fund_move::TRADE && !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
+        let m = format!(
+            "Адрес депозита KuCoin {} в сети {chain} зачисляет на {} (не TRADE): монету не продать без перевода — \
+             создайте в кабинете KuCoin адрес с зачислением на Trading Account или включите venue.deposit_to_spot",
+            asset.ticker, a.to
+        );
+        return Err(invalid(ctx, m));
+    }
+    Ok(a.address)
 }
 
 /// Ошибка InvalidAddress с площадкой KuCoin.

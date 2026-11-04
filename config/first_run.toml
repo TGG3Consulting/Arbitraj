@@ -376,8 +376,17 @@ name = "venue.order_time_in_force"
 area = "площадка Gate"
 unit = "тип"
 value = "ioc"
-source = "Документация POST /spot/orders: «ioc: immediate execution or cancellation, taker-only»"
-rationale = "Стартовое правило Тиграна «не исполнился — отменяем»: остаток снимает биржа."
+source = "Документация POST /spot/orders: «ioc: immediate execution or cancellation, taker-only», «fok: FillOrKill, fill in full or cancel in full»"
+rationale = "Стартовое правило Тиграна «не исполнился — отменяем»: остаток снимает биржа. fok тоже допустим — выбор настройкой (Тигран, 04.11)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "venue.fee_deduction"
+area = "площадка Gate"
+unit = "вариант"
+method = "coin — если в кабинете Gate скидка GT выключена (комиссия в монете сделки); gt — если включена и на счёте есть GT. Должно совпадать с кабинетом: иначе котировок Gate нет (бот пишет причину)."
+source = "GET /wallet/fee: taker_fee, gt_discount, gt_taker_fee; решение Тиграна 04.11"
+rationale = "Расчёт берёт ставку и монету комиссии по выбранному варианту; факт — из ордера."
 prefill = { kind = "Venue", id = "gate" }
 
 [[section.rec]]
@@ -454,7 +463,7 @@ prefill = { kind = "Venue", id = "gate" }
 # --- Биржа Bybit (решение 136) ---
 [[section]]
 title = "Биржа Bybit (решение 136)"
-intro = "Адреса и потолки — из официальной документации Bybit V5. Имя сети BSC (venue.bsc_network), счёт вывода и перевод FUND → UNIFIED задаёт Тигран по живым ответам."
+intro = "Адреса и потолки — из официальной документации Bybit V5. Имя сети BSC (venue.bsc_network) и счёт вывода задаёт Тигран по живым ответам. Депозит: в кабинете Bybit назначить зачисление на UNIFIED (Set Deposit Account) — venue.deposit_to_spot не задавать (решение Тиграна 04.11)."
 
 [[section.rec]]
 name = "venue.rest_url"
@@ -570,10 +579,28 @@ area = "площадка Bybit"
 unit = "название"
 method = "Значение поля chain сети BSC из живого coin/query-info — в документации имени сети BSC нет."
 rationale = "Только факты из ответа API."
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Bybit"
+unit = "да/нет"
+method = "Не задавать: в кабинете Bybit депозит назначен на UNIFIED (Set Deposit Account). «да» — только запасной вариант, если депозит остаётся на FUND (нужно право Wallet: AccountTransfer)."
+source = "Set Deposit Account: «Your funds will be deposited into FUND wallet by default»; решение Тиграна 04.11"
+rationale = "Бот перевод FUND → UNIFIED не делает; счёт зачисления API прочитать не даёт — проверяет Тигран в кабинете."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.book_seq_strict"
+area = "площадка Bybit"
+unit = "да/нет"
+method = "да — если на живом потоке u изменений шёл строго +1 (запись 04.11 — так); частые пересинхронизации стаканов в журнале — поставить нет (только рост u)."
+source = "Orderbook: snapshot/delta (строгое +1 не обещано); живая запись 04.11; решение Тиграна 04.11"
+rationale = "Строгая проверка ловит потерянный кадр сразу; без неё — только откат номера."
+prefill = { kind = "Venue", id = "bybit" }
 # --- Биржа KuCoin (решение 137) ---
 [[section]]
 title = "Биржа KuCoin (решение 137)"
-intro = "Значения из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+intro = "Значения из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109). Счёт — Classic, спот HF; адрес депозита BSC создаётся в кабинете с зачислением на TRADE (решение Тиграна 04.11)."
 
 [[section.rec]]
 name = "venue.rest_url"
@@ -636,6 +663,24 @@ unit = "уровней"
 value = "100"
 source = "Документация KuCoin, Get Part OrderBook: size «optional value: 20, 100»"
 rationale = "Снимок для изменений стакана в окнах; больше 100 у этого эндпоинта нет."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.withdraw_from_trade"
+area = "площадка KuCoin"
+unit = "да/нет"
+value = "да"
+source = "Код 115007 «withdrawals only come from the funds account»; Flex Transfer; решение Тиграна 04.11"
+rationale = "Торговля — на trade, вывод — только с main: перед выводом бот переводит сумму trade → main (право ключа FlexTransfers)."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка KuCoin"
+unit = "да/нет"
+method = "Не задавать: адрес депозита BSC создан в кабинете с зачислением на TRADE — перевод main → trade не нужен. «да» — только если адрес зачисляет на MAIN."
+source = "Get Deposit Address V3: to — MAIN или TRADE; решение Тиграна 04.11"
+rationale = "Адрес MAIN при выключенном переводе бот не отдаёт (монету не продать) — отказ с причиной."
 prefill = { kind = "Venue", id = "kucoin" }
 
 # --- Безопасность (вывод ключа из пароля) ---

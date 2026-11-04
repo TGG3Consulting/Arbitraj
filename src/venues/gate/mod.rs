@@ -39,6 +39,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod wallet;
 pub mod wallet_cost;
+pub mod withdraw_notice;
 pub mod ws;
 pub mod ws_conn;
 
@@ -61,6 +62,7 @@ use fees::Fees;
 use subs::{Parts, Subs};
 use symbols::Symbols;
 use wallet::Networks;
+use withdraw_notice::Notices;
 
 /// Адаптер Gate.
 pub struct Gate {
@@ -74,6 +76,8 @@ pub struct Gate {
     nets: Networks,
     /// Адреса депозита в памяти (deposit_addr.rs).
     addrs: DepositAddrs,
+    /// Событие «вывод в статусе FAIL» (withdraw_notice.rs): канал ядра — из подписки на рынок.
+    notices: Notices,
 }
 
 impl Gate {
@@ -87,6 +91,7 @@ impl Gate {
             fees: Fees::default(),
             nets: Networks::default(),
             addrs: DepositAddrs::default(),
+            notices: Notices::default(),
         }
     }
 
@@ -127,6 +132,7 @@ impl Venue for Gate {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        self.notices.set_out(out.clone());
         let parts = Parts {
             ctx: self.ctx.clone(),
             symbols: self.symbols.clone(),
@@ -160,7 +166,7 @@ impl Venue for Gate {
     }
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
-        transfers::withdrawal_status(&self.ctx, venue_ref).await
+        transfers::withdrawal_status(&self.ctx, &self.notices, venue_ref).await
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {

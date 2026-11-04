@@ -49,6 +49,14 @@
 | 19 | Права ключа | account.rs:31 REQUIRED (SpotTrade, AccountTransfer, Withdraw), :37 FORBIDDEN (ContractTrade, Options, Derivatives — отказ проверки), master (:90), UTA; вывод — только на адреса из адресной книги Bybit («make sure you add address in the address book first») |
 | 20 | Ядро и шлюз не менялись | Изменены только main.rs (регистрация), venues/mod.rs, secrets KNOWN, каталог настроек (4 строки + описание), документы. Кошелёк — строка «Маппинга кошельков» сама |
 
+## Ответы Тиграна 04.11 (ветка router/cexfix, DECISIONS 136 «Дополнение»)
+
+| № | Ответ | Как сделано |
+| --- | --- | --- |
+| 5 | Депозит — на UNIFIED в кабинете, бот не переводит | venue.deposit_to_spot не задаётся (FIRST_RUN, README); fund_move.rs — запасной вариант; account.rs: право AccountTransfer требуется только при deposit_to_spot = да. Прочитать счёт зачисления API не даёт (есть только POST Set Deposit Account) — в «Проверить подключение» не добавлено |
+| 6 | Строгая проверка u (+1) — настройка | venue.book_seq_strict: local_book.rs apply(strict) — пропуск номера = разрыв; ws_conn.rs — пересподписка, повтор раньше venue.ws_reconnect_pause_ms — переподключение; тест orderbook_strict_seq_live_skip на живой записи с выброшенным кадром |
+| 8 | Тип счёта явно | account.rs: «Тип счёта: UTA 1.0 / 1.0 pro / 2.0 / 2.0 pro — единый торговый счёт (unifiedMarginStatus N)», classic и прочее — отказ |
+
 ## Что осталось проверить на живом (замер нагрузки — решение 109, ADAPTER_TEMPLATE п. 8)
 
 См. docs/TASKS.md («Bybit — после выкладки»). Замер CPU/памяти с включённой Bybit при режиме «Стоп» — не сделан.

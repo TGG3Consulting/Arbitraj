@@ -4,8 +4,9 @@
 //! (account.rs): без перевода монету сделки не продать, а возвращённые USDT не видны для покупки.
 //! Кто вызывает: mod.rs (deposit_to_trading контракта — после зачисления перевода, core/transfer_credit.rs).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, getrandom (UUID).
-//! Настройки: venue.deposit_to_spot [bybit] (да — переводить; нет или не задано — не переводить: например, если в
-//! кабинете Bybit депозит уже направлен на UNIFIED — Set Deposit Account).
+//! Настройки: venue.deposit_to_spot [bybit] (да — переводить; нет или не задано — не переводить). Решение Тиграна
+//! (04.11): в кабинете Bybit депозит направлен на UNIFIED (Set Deposit Account), настройка не задаётся — этот перевод
+//! остаётся запасным вариантом.
 //!
 //! Официальная документация:
 //! - «Create Internal Transfer» POST /v5/asset/transfer/inter-transfer https://bybit-exchange.github.io/docs/v5/asset/transfer/create-inter-transfer

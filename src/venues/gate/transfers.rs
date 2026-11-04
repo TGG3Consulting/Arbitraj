@@ -2,7 +2,7 @@
 //! Что делает: вывод с Gate на адрес в сети и его статус; поиск вывода по своему withdraw_order_id при неизвестном
 //! итоге (как MEXC, решение 118, А-🟠5). Статус депозита — deposits.rs.
 //! Кто вызывает: mod.rs (функции контракта), deposits.rs (transfer).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, withdraw_notice.rs, core/types.
 //! Настройки: нет своих (сеть — из запроса ядра: venue.bsc_network [gate]).
 //!
 //! Официальная документация https://www.gate.com/docs/developers/apiv4/en/ (SDK https://github.com/gate/gateapi-python):
@@ -16,8 +16,8 @@
 //!   withdraw_order_id — «up to 32 length and can only include 0-9, A-Z, a-z, underscore(_), hyphen(-) or dot(.)».
 //!
 //! Статусы → ядро: DONE — Sent (сеть подтвердила, есть txid); CANCEL, REJECT, INVALID — отказ с причиной fail_reason;
-//! остальные — Pending (ждём). FAIL — Pending: «ожидает подтверждения», окончательный итог — следующий статус (вопрос
-//! Тиграну, docs/TASKS.md).
+//! остальные — Pending (ждём). FAIL — Pending: «ожидает подтверждения», окончательный итог — следующий статус; сразу —
+//! журнал и событие exec.withdraw_fail_pending, один раз на вывод (withdraw_notice.rs; решение 135, Тигран 04.11).
 
 use chrono::Utc;
 use reqwest::Method;
@@ -28,6 +28,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
+use super::withdraw_notice::Notices;
 use super::{num, rest};
 
 /// Длина withdraw_order_id — из официальной документации («up to 32 length»).
@@ -116,8 +117,9 @@ async fn find(ctx: &Ctx, order_id: &str) -> Option<String> {
         .and_then(|r| num::text_opt(r, "id"))
 }
 
-/// Статус вывода по ID Gate (см. шапку). Ошибки: вывод не найден, отказ (WithdrawRejected), неизвестный статус, связь.
-pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
+/// Статус вывода по ID Gate (см. шапку); FAIL — событие через notices. Ошибки: вывод не найден, отказ
+/// (WithdrawRejected), неизвестный статус, связь.
+pub async fn withdrawal_status(ctx: &Ctx, notices: &Notices, id: &str) -> GatewayResult<Transfer> {
     let list = history(ctx, ("withdraw_id", id)).await?;
     let rec = list
         .iter()
@@ -139,8 +141,12 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
                 GatewayError::new(ErrorCode::WithdrawRejected, None, m).with_raw(rec.to_string()),
             ));
         }
-        "BCODE" | "CANCELPEND" | "EXTPEND" | "FAIL" | "FVERIFY" | "LOCKED" | "MANUAL"
-        | "REQUEST" | "REVIEW" | "VERIFY" | "PROCES" | "PEND" | "DMOVE" => TransferStatus::Pending,
+        "FAIL" => {
+            notices.fail_pending(ctx, id, rec).await;
+            TransferStatus::Pending
+        }
+        "BCODE" | "CANCELPEND" | "EXTPEND" | "FVERIFY" | "LOCKED" | "MANUAL" | "REQUEST"
+        | "REVIEW" | "VERIFY" | "PROCES" | "PEND" | "DMOVE" => TransferStatus::Pending,
         other => {
             return Err(errors::bad(
                 &format!("неизвестный статус вывода {other}"),

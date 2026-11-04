@@ -89,6 +89,10 @@ pub enum ManualAction {
     SellHaltedReturn { deal_id: String },
     /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
     SoldManually { deal_id: String, usdt: String },
+    /// Решение 163: «Перегнать» — ещё одна попытка возврата выручки USDT закрытой сделки («USDT не вернулись»).
+    UsdtRetry { deal_id: String },
+    /// Решение 163: «Перегнано вручную» — человек перевёл USDT сам; запись закрывается, возврат — «вручную».
+    UsdtReturnedManually { deal_id: String },
     /// Решение 157: плашка режима (ControlBar) из Telegram — «Старт» / «Пауза» / «Стоп» (Core::set_mode_by).
     SetMode { mode: crate::core::risk::Mode },
     /// Решение 157: «Снять паузу» площадки (как POST /api/control/venue/{id}/resume).
@@ -110,6 +114,8 @@ impl ManualAction {
             Self::TakeOver { .. } => "Беру на себя",
             Self::ReturnToBot { .. } => "Вернуть боту",
             Self::SoldManually { .. } => "Продано вручную",
+            Self::UsdtRetry { .. } => "Перегнать",
+            Self::UsdtReturnedManually { .. } => "Перегнано вручную",
             Self::SetMode {
                 mode: Mode::Running,
             } => "Старт",

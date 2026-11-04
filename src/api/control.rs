@@ -5,7 +5,8 @@
 //! От чего зависит: api/state.rs, core (Core::manual, Core::command, Core::gas_stats), core/types.
 //! Настройки: нет (режим застрявших монет — stuck.*, экран «Настройки»).
 //!
-//! GET  /api/manual          — {alerts: [StuckAlert], holdings: [ManualHolding], halted: [Deal]} (решение 100)
+//! GET  /api/manual          — {alerts: [StuckAlert], holdings: [ManualHolding], halted: [Deal] (решение 100),
+//!                              usdt: [Deal] — «USDT не вернулись» (решение 163), records: [ManualRecord] (решение 156)}
 //! POST /api/manual/command  — {action: ManualAction} → {ok, details}
 //! GET  /api/gas-stats       — [CoinGasStats]
 

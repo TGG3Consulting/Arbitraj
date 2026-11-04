@@ -92,7 +92,8 @@ async fn return_locked(
 }
 
 impl Core {
-    /// Экран «Ручное управление» (GET /api/manual): алерты, монеты человека, остановленные сделки и записи с кнопками
+    /// Экран «Ручное управление» (GET /api/manual): алерты, монеты человека, остановленные сделки, «USDT не вернулись»
+    /// (usdt, решение 163) и записи с кнопками
     /// (records, решение 156: core/manual_feed.rs).
     pub fn manual(&self) -> serde_json::Value {
         let alerts: Vec<StuckAlert> = lk(&self.inner.alerts)
@@ -107,6 +108,10 @@ impl Core {
         let halted = self.halted();
         // Решение 156: записи с кнопками — экран рисует кнопки из них (те же, что уходят в Telegram).
         let records = self.manual_records();
-        serde_json::json!({ "alerts": alerts, "holdings": holdings, "halted": halted, "records": records })
+        // Решение 163: закрытые сделки, чьи USDT не вернулись (manual_usdt.rs).
+        let usdt = self.usdt_not_returned();
+        serde_json::json!({
+            "alerts": alerts, "holdings": holdings, "halted": halted, "usdt": usdt, "records": records
+        })
     }
 }

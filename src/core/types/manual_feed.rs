@@ -19,6 +19,8 @@ pub enum RecordKind {
     Holding,
     /// «Остановленные сделки — ждут разбора» (Deal в шаге Halted, решение 100).
     Halted,
+    /// «USDT не вернулись — ждут перегона» (закрытая сделка, Deal.usdt_return = NotReturned, решение 163).
+    UsdtReturn,
 }
 
 impl RecordKind {
@@ -28,6 +30,7 @@ impl RecordKind {
             Self::Alert => 'a',
             Self::Holding => 'h',
             Self::Halted => 'd',
+            Self::UsdtReturn => 'u',
         }
     }
 
@@ -37,6 +40,7 @@ impl RecordKind {
             Self::Alert => "Застрявшая монета — ждёт решения",
             Self::Holding => "Монеты «Беру на себя»",
             Self::Halted => "Остановленная сделка — ждёт разбора",
+            Self::UsdtReturn => "USDT не вернулись — ждут перегона",
         }
     }
 }
@@ -44,7 +48,8 @@ impl RecordKind {
 /// Кнопка записи — ровно та, что на экране.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManualButton {
-    /// Код кнопки внутри записи (sell_now, sell_ret, take_over, sold_man, return_bot) — уходит в callback_data.
+    /// Код кнопки внутри записи (sell_now, sell_ret, take_over, sold_man, return_bot, usdt_retry, usdt_manual) — уходит
+    /// в callback_data.
     pub code: String,
     /// Надпись (как на экране).
     pub title: String,
@@ -88,7 +93,7 @@ pub struct ManualRecord {
     /// Ключ записи «<буква вида>.<id>» (id алерта, записи «Беру на себя» или сделки).
     pub key: String,
     pub kind: RecordKind,
-    /// id объекта: алерта, записи «Беру на себя» или сделки (для Halted).
+    /// id объекта: алерта, записи «Беру на себя» или сделки (для Halted и UsdtReturn).
     pub object_id: String,
     /// Сделка записи.
     pub deal_id: String,
@@ -118,6 +123,10 @@ impl ManualRecord {
             (RecordKind::Halted, M::SellHalted { deal_id } | M::SellHaltedReturn { deal_id }) => {
                 deal_id == &self.object_id
             }
+            (
+                RecordKind::UsdtReturn,
+                M::UsdtRetry { deal_id } | M::UsdtReturnedManually { deal_id },
+            ) => deal_id == &self.object_id,
             (_, M::SoldManually { deal_id, .. }) => deal_id == &self.deal_id,
             _ => false,
         }

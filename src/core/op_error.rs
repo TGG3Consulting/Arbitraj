@@ -4,6 +4,7 @@
 //! транзакция могла исполниться) от обычного отказа: такую сделку нельзя ни продавать, ни перегонять — только
 //! ручная проверка (core/executor.rs).
 //! Повтор продажи, не ушедшей в сеть, — retry_safe (решение 110) и rejected_unsent (решение 154), core/sell_unsent.rs.
+//! Повтор возврата USDT — withdraw_unsent (решение 163), core/usdt_return_retry.rs.
 //! Кто вызывает: core/trade_ops.rs, core/transfers.rs (создают), core/executor.rs, core/sell_unsent.rs (читают код).
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.
@@ -50,6 +51,35 @@ impl OpError {
     /// транзакцией безопасен. Ошибок нет.
     pub fn rejected_unsent(&self) -> bool {
         !self.sent && self.code == Some(ErrorCode::ChannelRejected)
+    }
+
+    /// Решение 163: прежний вывод (перегон USDT) точно не ушёл — повтор не создаст двойного вывода. Да: ошибка до
+    /// вывода (своя, кода нет), площадка вывод отказала (WithdrawRejected — в том числе удержание MEXC 16021; так же статус вывода «отказ» после создания:
+    /// деньги вернулись на баланс), откат транзакции (SwapReverted) и отказы доступа, настроек, лимита запросов.
+    /// Нет: исход неизвестен (адаптер уже искал вывод в истории по своему withdrawOrderId и не нашёл — MEXC), нет ответа
+    /// или ответ не разобран (вывод мог создаться), у транзакции есть факт в сети. Ошибок нет.
+    pub fn withdraw_unsent(&self) -> bool {
+        if self.sent && self.code != Some(ErrorCode::SwapReverted) {
+            return false;
+        }
+        match self.code {
+            None => true,
+            Some(c) => matches!(
+                c,
+                ErrorCode::WithdrawRejected
+                    | ErrorCode::InsufficientBalance
+                    | ErrorCode::InvalidAddress
+                    | ErrorCode::SwapReverted
+                    | ErrorCode::RateLimited
+                    | ErrorCode::NotConfigured
+                    | ErrorCode::SecretsLocked
+                    | ErrorCode::VenueNotConnected
+                    | ErrorCode::InvalidCredentials
+                    | ErrorCode::InsufficientPermissions
+                    | ErrorCode::IpNotAllowed
+                    | ErrorCode::StaleData
+            ),
+        }
     }
 }
 

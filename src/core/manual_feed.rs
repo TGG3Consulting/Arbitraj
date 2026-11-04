@@ -1,10 +1,10 @@
 //! Файл: core/manual_feed.rs
 //! Что делает: записи экрана «Ручное управление» с их кнопками (решение 156): алерты застрявших монет, монеты
-//! «Беру на себя», остановленные сделки. Кнопки, команды ядра, вопросы подтверждения и недоступность — ровно как
+//! «Беру на себя», остановленные сделки, «USDT не вернулись» (решение 163, manual_usdt.rs). Кнопки, команды ядра, вопросы подтверждения и недоступность — ровно как
 //! на экране (ui/src/pages/Manual.svelte рисует кнопки из этих же записей), поэтому Telegram (notify/mirror*.rs)
 //! получает те же кнопки и те же команды, второй логики нет.
 //! Кто вызывает: manual_return.rs (Core::manual → GET /api/manual), notify (Core::manual_records).
-//! От чего зависит: core/types/manual_feed.rs, manual_rows.rs (алерты и «Беру на себя»), deal.rs, engine.rs.
+//! От чего зависит: core/types/manual_feed.rs, manual_rows.rs (алерты и «Беру на себя»), manual_usdt.rs, deal.rs, engine.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -14,6 +14,7 @@ use crate::core::types::{ManualAction as A, ManualHolding, ManualRecord, RecordK
 use super::deal::Deal;
 use super::engine::{Core, lk};
 use super::manual_rows::{alert_record, btn, holding_record, sold};
+use super::usdt_return_state::UsdtReturn;
 
 /// Последняя запись хронологии сделки без «Предварительный убыток» — причина остановки (как lastNote экрана).
 fn last_note(d: &Deal) -> String {
@@ -83,7 +84,8 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
 }
 
 impl Core {
-    /// Все записи экрана «Ручное управление» с кнопками: алерты, «Беру на себя», остановленные сделки — в порядке
+    /// Все записи экрана «Ручное управление» с кнопками: алерты, «Беру на себя», остановленные сделки, «USDT не
+    /// вернулись» — в порядке
     /// таблиц экрана; внутри вида — по времени (старые сверху), остановленные — как Core::halted. Ошибок нет.
     pub fn manual_records(&self) -> Vec<ManualRecord> {
         let mut alerts: Vec<StuckAlert> = lk(&self.inner.alerts)
@@ -99,6 +101,24 @@ impl Core {
         let mut v: Vec<ManualRecord> = alerts.iter().map(alert_record).collect();
         v.extend(holdings.iter().map(holding_record));
         v.extend(self.halted().iter().map(halted_record));
+        // Решение 163: «USDT не вернулись» — после остановленных (порядок таблиц экрана).
+        v.extend(
+            self.usdt_not_returned()
+                .iter()
+                .filter_map(super::manual_usdt::usdt_record),
+        );
+        v
+    }
+
+    /// Закрытые сделки, чьи USDT не вернулись (таблица «USDT не вернулись — ждут перегона»), старые сверху.
+    /// Ошибок нет.
+    pub fn usdt_not_returned(&self) -> Vec<Deal> {
+        let mut v: Vec<Deal> = lk(&self.inner.deals)
+            .values()
+            .filter(|d| matches!(d.usdt_return, Some(UsdtReturn::NotReturned { .. })))
+            .cloned()
+            .collect();
+        v.sort_by_key(|d| d.updated_at);
         v
     }
 }

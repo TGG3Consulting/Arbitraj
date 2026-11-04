@@ -3,9 +3,10 @@
 //! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
 //! (manual_halted.rs, решение 100); «Продать и перегнать» — у алерта и остановленной сделки (решение 101). Кнопка Telegram принимается только из настроенного
 //! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
-//! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты.
+//! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
+//! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
-//! От чего зависит: manual.rs, risk.rs, settings, deps.rs.
+//! От чего зависит: manual.rs, commands_control.rs, risk.rs, settings, deps.rs, view.rs.
 //! Настройки: notify.telegram_chat.
 
 use serde_json::json;
@@ -35,6 +36,11 @@ impl Core {
     /// Выполнение команды и запись в журнал (см. command).
     async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
         let res = self.run_command(&cmd).await;
+        // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
+        self.inner.live.send(super::view::CoreEvent::Command(json!({
+            "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),
+            "text": res.clone().unwrap_or_else(|e| e),
+        })));
         let (level, text) = match &res {
             Ok(t) => (
                 Level::Info,
@@ -81,17 +87,15 @@ impl Core {
             ManualAction::SellHalted { .. }
             | ManualAction::SellHaltedReturn { .. }
             | ManualAction::SoldManually { .. } => None,
+            // Решение 157: команды плашки режима — commands_control.rs.
+            _ => return super::commands_control::run(self, &cmd.action, &who(cmd)).await,
         };
         if let Some(what) = gone {
             return Ok(format!(
                 "{what} уже закрыт(а) или не существует — команда проигнорирована"
             ));
         }
-        let who = match (&cmd.source, &cmd.by) {
-            (CommandSource::Ui, _) => "интерфейс".to_string(),
-            (CommandSource::Telegram { chat }, Some(by)) => format!("Telegram {chat}, {by}"),
-            (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
-        };
+        let who = who(cmd);
         match &cmd.action {
             ManualAction::SellNow { alert_id } => {
                 super::manual::sell_now(self, alert_id, false).await
@@ -114,13 +118,19 @@ impl Core {
             ManualAction::SoldManually { deal_id, usdt } => {
                 super::manual_halted::sold_manually(self, deal_id, usdt, &who).await
             }
+            _ => super::commands_control::run(self, &cmd.action, &who).await,
         }
     }
 
     /// Экран «Управление»: режим системы (Running — «Старт», Stopped — «Стоп», Paused — «Пауза»).
     /// Возвращает: текст для журнала. Ошибок нет.
     pub async fn set_mode(&self, mode: Mode) -> String {
-        let t = risk::set_mode(self, mode, Some("команда из интерфейса".into()));
+        self.set_mode_by(mode, "команда из интерфейса").await
+    }
+
+    /// То же, что set_mode, с причиной «кто» (решение 157: Telegram — «команда из Telegram, @имя»). Ошибок нет.
+    pub async fn set_mode_by(&self, mode: Mode, reason: &str) -> String {
+        let t = risk::set_mode(self, mode, Some(reason.into()));
         self.inner
             .deps
             .log(Level::Info, "core.control", None, &t, None)
@@ -172,17 +182,11 @@ impl Core {
     }
 }
 
-impl Core {
-    /// Канал команд для кнопок Telegram (core/types/control.rs, CommandTx): каждая команда выполняется
-    /// по очереди через Core::command. Размер очереди — --live-buffer. Ошибок нет.
-    pub fn command_channel(&self) -> crate::core::types::CommandTx {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(self.inner.deps.buffer);
-        let core = self.clone();
-        tokio::spawn(async move {
-            while let Some(cmd) = rx.recv().await {
-                let _ = core.command(cmd).await;
-            }
-        });
-        tx
+/// Кто дал команду — для журнала и итога: «интерфейс» или «Telegram <чат>, <пользователь>».
+pub fn who(cmd: &ManualCommand) -> String {
+    match (&cmd.source, &cmd.by) {
+        (CommandSource::Ui, _) => "интерфейс".to_string(),
+        (CommandSource::Telegram { chat }, Some(by)) => format!("Telegram {chat}, {by}"),
+        (CommandSource::Telegram { chat }, None) => format!("Telegram {chat}"),
     }
 }

@@ -6,17 +6,28 @@
 | `telegram.rs` | Telegram Bot API: getMe, getChat, sendMessage — по https://core.telegram.org/bots/api |
 | `tg_text.rs` | Подгонка текста под предел длины Telegram (4096) |
 | `tg_buttons.rs` | Bot API для кнопок: sendMessage с InlineKeyboardMarkup, getUpdates (длинный опрос), answerCallbackQuery, editMessageText |
-| `callback.rs` | Клавиатура события из каталога; callback_data «код:id» (≤ 64 байт); кнопка → ManualAction |
-| `press.rs` | Одно нажатие: только из notify.telegram_chat, команда в канал ядра, ответ на нажатие, правка сообщения |
-| `updates.rs` | Приём нажатий: getUpdates длинным опросом, offset, ожидание при сбоях |
+| `callback.rs` | Клавиатура события из каталога; callback_data «код:id» (≤ 64 байт) |
+| `press.rs` | Одно нажатие: только из notify.telegram_chat, разбор callback_data и передача обработчику |
+| `press_record.rs` | Кнопка записи «Ручного управления»: по текущим записям экрана; нет записи — «уже выполнено»; недоступна — причина; ввод суммы — ForceReply; иначе подтверждение |
+| `press_confirm.rs` | «Да, …» / «Отмена»: команда ядру (Core::command, источник Telegram, кто нажал), правка вопроса «Выполнено: кто, что, итог» |
+| `mirror.rs`, `mirror_send.rs` | Дубль экрана «Ручное управление» (решение 156): сообщение на новую запись, напоминание пачкой каждые `notify.manual_repeat_s`, правка ушедших записей, 429 — пауза retry_after |
+| `mirror_state.rs` | Память дубля (отправленные, ушедшие, выполненные, ожидания «Да», вопросы суммы) — чистые функции, тесты tests/notify_mirror.rs |
+| `mirror_view.rs` | Текст и кнопки записи и напоминания — из записей экрана (core/manual_feed.rs) |
+| `menu.rs`, `menu_press.rs` | Меню /menu (/dev): Состояние, Ручное управление, Режим системы, Площадки и карантин, Лимит дня — как плашка режима; навигация editMessageText, «Назад» (решение 157) |
+| `tg_commands.rs` | Сообщения: /help, /menu, /dev, /status, /manual, /start, /resume, /pause, /stop; ответ на вопрос суммы |
+| `tg_methods.rs` | Bot API: sendMessage с разметкой (message_id), editMessageText с кнопками, editMessageReplyMarkup, setMyCommands, ForceReply |
+| `updates_idle.rs` | Ожидание приёма после сбоев (retry_after, notify.updates_retry_ms, wake) |
+| `updates.rs` | Приём нажатий и сообщений: getUpdates (message, callback_query) длинным опросом, offset; после подключения getMe и setMyCommands |
 | `client.rs` | Собирает клиента из актуальных настроек и секретов |
 | `dispatch.rs` | Отправлять ли событие (вкл/выкл, площадки) и отправка (`send`, `send_with_buttons`); итог — в журнал |
 | `check.rs` | «Проверить подключение»: токен (getMe) и доступ к чату (getChat) |
 | `settings_watch.rs` | Каждое изменение настроек → журнал и событие `system.settings_changed` |
 
-Настройки: `notify.*`, `http.timeout_ms`. Токен — секрет `telegram.bot_token`.
-Кнопки (`stuck.loss_alert`: «Продать сейчас», «Беру на себя»): событие отправляется через `Notifier::send_with_buttons`
-с id алерта; `updates.rs` слушает getUpdates длинным опросом (`notify.updates_timeout_s`), принимает нажатия только
-из `notify.telegram_chat` и отдаёт ядру `ManualCommand` (core/types/control.rs, поле `by` — кто нажал) в канал `CommandTx`.
-После ошибки getUpdates — пауза `notify.updates_retry_ms` и повтор (`retry_after` из ответа Telegram сильнее). Канал команд — `core::types::CommandTx` (стык), его даёт `Core::command_channel()`; `wake` подаёт api после разблокировки, смены и блокировки секретов.
+Настройки: `notify.*` (в т.ч. `notify.manual_repeat_s` — напоминание «Ручного управления»), `http.timeout_ms`. Токен — секрет `telegram.bot_token`.
+Решение 156: записи экрана «Ручное управление» (core/manual_feed.rs) уходят событием `manual.record` с теми же кнопками,
+что на экране; нажатие → подтверждение «Да, …» → та же команда ядра, что у экрана (`Core::command`, источник — Telegram,
+`by` — кто нажал). Напоминание — одно сообщение на все ждущие записи (лимиты Telegram), 429 — пауза `retry_after`.
+Решение 157: команды бота (`tg_commands.rs`), меню (`menu*.rs`) — те же команды ядра, что плашка режима; настроек из Telegram нет.
+`updates.rs` принимает `message` и `callback_query` только из `notify.telegram_chat`. После ошибки getUpdates — пауза
+`notify.updates_retry_ms` (`retry_after` сильнее); `wake` подаёт api после разблокировки, смены и блокировки секретов.
 Условие события (`notify.event.condition`) проверяется с этапа 5; пока условие задано — событие не отправляется, причина пишется в журнал.

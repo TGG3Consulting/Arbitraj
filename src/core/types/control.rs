@@ -1,6 +1,6 @@
 //! Файл: core/types/control.rs
 //! Что делает: статистика газа по монете (решение 36), застрявшие монеты и ручное управление
-//! (решение 37), команды человека из интерфейса и Telegram.
+//! (решение 37), команды человека из интерфейса и Telegram (решение 157: и команды плашки режима).
 //! Кто вызывает: ядро (ведёт), интерфейс (экраны «Статистика газа», «Ручное управление»),
 //! уведомления (кнопки Telegram превращаются в команды).
 //! От чего зависит: core/types/market.rs, rust_decimal.
@@ -89,6 +89,39 @@ pub enum ManualAction {
     SellHaltedReturn { deal_id: String },
     /// «Продано вручную»: человек продал сам; usdt — полученная выручка (строка-число) — сделка закрывается фактом.
     SoldManually { deal_id: String, usdt: String },
+    /// Решение 157: плашка режима (ControlBar) из Telegram — «Старт» / «Пауза» / «Стоп» (Core::set_mode_by).
+    SetMode { mode: crate::core::risk::Mode },
+    /// Решение 157: «Снять паузу» площадки (как POST /api/control/venue/{id}/resume).
+    ResumeVenue { venue: String },
+    /// Решение 157: «Снять карантин» монеты (как POST /api/control/quarantine/{id}/release); id — адрес или тикер.
+    ReleaseQuarantine { id: String },
+    /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset).
+    ResetDailyLimit,
+}
+
+impl ManualAction {
+    /// Надпись кнопки действия — как на экранах «Ручное управление» и плашке режима (для журнала и Telegram).
+    /// Принимает: действие. Возвращает: надпись. Ошибок нет.
+    pub fn title(&self) -> &'static str {
+        use crate::core::risk::Mode;
+        match self {
+            Self::SellNow { .. } | Self::SellHalted { .. } => "Продать сейчас",
+            Self::SellNowReturn { .. } | Self::SellHaltedReturn { .. } => "Продать и перегнать",
+            Self::TakeOver { .. } => "Беру на себя",
+            Self::ReturnToBot { .. } => "Вернуть боту",
+            Self::SoldManually { .. } => "Продано вручную",
+            Self::SetMode {
+                mode: Mode::Running,
+            } => "Старт",
+            Self::SetMode { mode: Mode::Paused } => "Пауза",
+            Self::SetMode {
+                mode: Mode::Stopped,
+            } => "Стоп",
+            Self::ResumeVenue { .. } => "Снять паузу",
+            Self::ReleaseQuarantine { .. } => "Снять карантин",
+            Self::ResetDailyLimit => "Сбросить лимит дня",
+        }
+    }
 }
 
 /// Команда с источником — для журнала.
@@ -102,7 +135,3 @@ pub struct ManualCommand {
     pub by: Option<String>,
     pub at: DateTime<Utc>,
 }
-
-/// Канал команд человека ядру: notify (кнопки Telegram) кладёт команду, ядро выполняет (core/commands.rs).
-/// Отправка — try_send: очередь полна — нажавший видит «команда не передана, нажмите ещё раз».
-pub type CommandTx = tokio::sync::mpsc::Sender<ManualCommand>;

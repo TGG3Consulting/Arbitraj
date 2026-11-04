@@ -64,24 +64,8 @@ impl Notifier {
             .await;
             return;
         };
-        let enabled = self
-            .settings
-            .event_value("notify.event.enabled", code)
-            .and_then(|v| v.as_bool());
-        if enabled != Some(true) {
+        if !self.passes(code, venue) {
             return;
-        }
-        if let (Some(v), Some(list)) = (
-            venue,
-            self.settings.event_value("notify.event.venues", code),
-        ) {
-            let allowed: Vec<&str> = list
-                .as_array()
-                .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
-                .unwrap_or_default();
-            if !allowed.is_empty() && !allowed.contains(&v) {
-                return;
-            }
         }
         if self
             .settings
@@ -145,6 +129,41 @@ impl Notifier {
                 .await
             }
         }
+    }
+
+    /// Включено ли событие (notify.event.enabled = да) и разрешена ли площадка (notify.event.venues).
+    /// Принимает: код события, площадку. Возвращает: true — проходит. Ошибок нет.
+    fn passes(&self, code: &str, venue: Option<&str>) -> bool {
+        let enabled = self
+            .settings
+            .event_value("notify.event.enabled", code)
+            .and_then(|v| v.as_bool());
+        if enabled != Some(true) {
+            return false;
+        }
+        if let (Some(v), Some(list)) = (
+            venue,
+            self.settings.event_value("notify.event.venues", code),
+        ) {
+            let allowed: Vec<&str> = list
+                .as_array()
+                .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
+                .unwrap_or_default();
+            if !allowed.is_empty() && !allowed.contains(&v) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Уйдёт ли событие (как в deliver: включено, площадка, условие не задано) — для дубля «Ручного управления»
+    /// (notify/mirror.rs, событие manual.record), который шлёт сам. Принимает: код, площадку. Ошибок нет.
+    pub fn allows(&self, code: &str, venue: Option<&str>) -> bool {
+        self.passes(code, venue)
+            && self
+                .settings
+                .event_value("notify.event.condition", code)
+                .is_none()
     }
 
     /// Запись в журнал от имени уведомлений. Ошибка журнала уже выведена в лог процесса.

@@ -1,43 +1,36 @@
 //! Файл: notify/press.rs
-//! Что делает: обрабатывает одно нажатие кнопки Telegram (CallbackQuery):
-//! принимает только из настроенного чата notify.telegram_chat — чужие игнорируются и пишутся в журнал;
-//! разбирает callback_data в команду ядру (ManualCommand) и кладёт её в канал команд ядра;
-//! отвечает на каждое нажатие (answerCallbackQuery); после переданной команды правит сообщение —
-//! убирает кнопки и дописывает результат, чтобы второй раз не нажать.
+//! Что делает: одно нажатие кнопки Telegram (CallbackQuery): принимает только из настроенного чата notify.telegram_chat
+//! (чужие игнорируются и пишутся в журнал), разбирает callback_data и передаёт нужному обработчику:
+//! «<код>:<ключ записи>» — кнопка записи «Ручного управления» (press_record.rs, решение 156);
+//! «y:<n>» / «n:<n>» — «Да, …» / «Отмена» подтверждения (press_confirm.rs); «m:<экран>» — экран меню (menu_press.rs,
+//! решение 157); «c:<что>» — кнопка плашки режима в меню (menu_press.rs). На каждое нажатие — answerCallbackQuery.
 //! Кто вызывает: notify/updates.rs — на каждое Update с callback_query.
-//! От чего зависит: notify/tg_buttons.rs, notify/callback.rs, core/types/control.rs, storage/journal.
+//! От чего зависит: notify/callback.rs (decode), press_record.rs, press_confirm.rs, menu_press.rs, tg_buttons.rs, core.
 //! Настройки: notify.telegram_chat (передаёт вызывающий).
 
-use std::collections::HashSet;
-
-use chrono::Utc;
-use serde_json::json;
-use tokio::sync::mpsc;
-
-use crate::core::types::{CommandSource, ManualCommand};
+use crate::core::Core;
 use crate::storage::journal::{Journal, Level};
 
 use super::callback;
+use super::mirror_state::Shared;
 use super::telegram::Telegram;
 use super::tg_buttons::{CallbackQuery, Chat};
 
-/// Канал команд человека ядру — стык core/types/control.rs.
-pub use crate::core::types::CommandTx;
-
-/// Всё, что нужно для обработки нажатий. Живёт, пока работает приём (notify/updates.rs).
-pub struct Press<'a> {
+/// Всё, что нужно обработчикам нажатий и сообщений. Живёт, пока работает приём (notify/updates.rs).
+pub struct Ctx<'a> {
     pub tg: &'a Telegram,
     /// Значение notify.telegram_chat: числовой id чата или @username.
     pub chat: &'a str,
-    pub commands: &'a CommandTx,
+    /// Имя бота (getMe) — для команд вида /cmd@имя_бота в группах.
+    pub bot: &'a str,
+    pub core: &'a Core,
     pub journal: &'a Journal,
-    /// Сообщения (чат, id), по которым команда уже передана, — защита от второго нажатия,
-    /// пока правка сообщения не дошла. Только в памяти; растёт на одно значение на каждое решение человека.
-    pub handled: &'a mut HashSet<(i64, i64)>,
+    /// Память дубля «Ручного управления» (общая с notify/mirror.rs).
+    pub state: &'a Shared,
 }
 
-/// Из настроенного ли чата нажатие.
-/// Принимает: notify.telegram_chat и чат сообщения с кнопкой.
+/// Из настроенного ли чата нажатие или сообщение.
+/// Принимает: notify.telegram_chat и чат сообщения.
 /// Возвращает: true — значение настройки равно id чата, или это «@username» и он совпадает с username чата
 /// (sendMessage принимает оба вида chat_id, https://core.telegram.org/bots/api#sendmessage).
 pub fn chat_matches(setting: &str, chat: &Chat) -> bool {
@@ -50,9 +43,9 @@ pub fn chat_matches(setting: &str, chat: &Chat) -> bool {
     }
 }
 
-impl Press<'_> {
+impl Ctx<'_> {
     /// Обрабатывает нажатие. Ошибок не возвращает: всё пишется в журнал, нажавший получает ответ.
-    pub async fn handle(&mut self, q: CallbackQuery) {
+    pub async fn handle(&self, q: CallbackQuery) {
         let who = q.from.describe();
         let Some(msg) = q.message.as_ref() else {
             self.answer(&q.id, None).await;
@@ -72,10 +65,7 @@ impl Press<'_> {
             .await;
             return;
         }
-        let parsed = q.data.as_deref().and_then(callback::decode);
-        let Some((button, object, action)) =
-            parsed.and_then(|(b, o)| callback::to_action(b, o).map(|a| (b, o, a)))
-        else {
+        let Some((code, object)) = q.data.as_deref().and_then(callback::decode) else {
             self.answer(&q.id, Some("Неизвестная кнопка")).await;
             self.log(
                 Level::Warn,
@@ -84,70 +74,19 @@ impl Press<'_> {
             .await;
             return;
         };
-        let title = callback::title(button).unwrap_or(button);
-        let key = (msg.chat.id, msg.message_id);
-        if self.handled.contains(&key) {
-            self.answer(&q.id, Some("Уже обработано")).await;
-            return;
-        }
-        let cmd = ManualCommand {
-            action,
-            source: CommandSource::Telegram {
-                chat: msg.chat.id.to_string(),
+        match code {
+            "y" | "n" => match object.parse::<u64>() {
+                Ok(n) => self.confirm(&q, msg, n, code == "y").await,
+                Err(_) => self.answer(&q.id, Some("Неизвестная кнопка")).await,
             },
-            by: Some(who.clone()),
-            at: Utc::now(),
-        };
-        let result = match self.commands.try_send(cmd) {
-            Ok(()) => {
-                self.handled.insert(key);
-                Ok(format!("«{title}»: команда передана ядру"))
-            }
-            Err(mpsc::error::TrySendError::Full(_)) => Err(format!(
-                "«{title}»: очередь команд ядра заполнена — команда не передана, нажмите ещё раз"
-            )),
-            Err(mpsc::error::TrySendError::Closed(_)) => Err(format!(
-                "«{title}»: ядро не принимает команды — команда не передана"
-            )),
-        };
-        let (level, text) = match &result {
-            Ok(t) => (Level::Info, t.clone()),
-            Err(t) => (Level::Error, t.clone()),
-        };
-        self.answer(&q.id, Some(&text)).await;
-        let data = json!({ "button": button, "object": object, "from": who, "chat": msg.chat.id, "message_id": msg.message_id });
-        let _ = self
-            .journal
-            .write(
-                level,
-                "notify",
-                None,
-                format!("{text} (нажал {who})"),
-                Some(data),
-            )
-            .await;
-        if result.is_ok() {
-            let at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
-            let body = format!(
-                "{}\n\n{text}. Нажал {who}, {at}.",
-                msg.text.as_deref().unwrap_or_default()
-            );
-            if let Err(e) = self
-                .tg
-                .edit_text_drop_keyboard(msg.chat.id, msg.message_id, body.trim_start())
-                .await
-            {
-                self.log(
-                    Level::Error,
-                    format!("Не удалось убрать кнопки у сообщения: {e}"),
-                )
-                .await;
-            }
+            "m" => self.menu_screen(&q, msg, object).await,
+            "c" => self.menu_control(&q, msg, object).await,
+            _ => self.record_button(&q, msg, code, object).await,
         }
     }
 
     /// answerCallbackQuery; ошибка — в журнал. Принимает: id нажатия, текст ответа.
-    async fn answer(&self, id: &str, text: Option<&str>) {
+    pub async fn answer(&self, id: &str, text: Option<&str>) {
         if let Err(e) = self.tg.answer_callback(id, text).await {
             self.log(Level::Warn, format!("answerCallbackQuery: {e}"))
                 .await;
@@ -155,7 +94,7 @@ impl Press<'_> {
     }
 
     /// Запись в журнал от имени уведомлений. Ошибка журнала уже выведена в лог процесса.
-    async fn log(&self, level: Level, message: String) {
+    pub async fn log(&self, level: Level, message: String) {
         let _ = self
             .journal
             .write(level, "notify", None, message, None)

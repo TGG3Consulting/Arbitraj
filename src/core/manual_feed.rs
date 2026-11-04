@@ -1,0 +1,104 @@
+//! Файл: core/manual_feed.rs
+//! Что делает: записи экрана «Ручное управление» с их кнопками (решение 156): алерты застрявших монет, монеты
+//! «Беру на себя», остановленные сделки. Кнопки, команды ядра, вопросы подтверждения и недоступность — ровно как
+//! на экране (ui/src/pages/Manual.svelte рисует кнопки из этих же записей), поэтому Telegram (notify/mirror*.rs)
+//! получает те же кнопки и те же команды, второй логики нет.
+//! Кто вызывает: manual_return.rs (Core::manual → GET /api/manual), notify (Core::manual_records).
+//! От чего зависит: core/types/manual_feed.rs, manual_rows.rs (алерты и «Беру на себя»), deal.rs, engine.rs.
+//! Настройки: нет.
+
+use rust_decimal::Decimal;
+
+use crate::core::types::{ManualAction as A, ManualHolding, ManualRecord, RecordKind, StuckAlert};
+
+use super::deal::Deal;
+use super::engine::{Core, lk};
+use super::manual_rows::{alert_record, btn, holding_record, sold};
+
+/// Последняя запись хронологии сделки без «Предварительный убыток» — причина остановки (как lastNote экрана).
+fn last_note(d: &Deal) -> String {
+    d.timeline
+        .iter()
+        .rev()
+        .map(|(_, x)| x)
+        .find(|x| !x.starts_with("Предварительный убыток"))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Запись остановленной сделки: «Продать сейчас», «Продать и перегнать», «Продано вручную»; недоступность —
+/// как на экране: монет нет — обе продажи недоступны; монеты уже на площадке покупки — перегонять некуда.
+pub fn halted_record(d: &Deal) -> ManualRecord {
+    let (t, v, buy) = (&d.direction.asset.ticker, &d.at.0, &d.direction.buy_on.0);
+    let empty = (d.qty <= Decimal::ZERO)
+        .then(|| "монет в сделке нет — закройте её «Продано вручную»".to_string());
+    let same = (v == buy).then(|| format!("монеты уже на площадке покупки {buy}"));
+    let est = d
+        .provisional_usd
+        .map(|x| x.to_string())
+        .unwrap_or_else(|| "—".into());
+    ManualRecord {
+        key: ManualRecord::key_of(RecordKind::Halted, &d.id),
+        kind: RecordKind::Halted,
+        object_id: d.id.clone(),
+        deal_id: d.id.clone(),
+        venue: v.clone(),
+        text: format!(
+            "{t} на {v}: {}, вложено {}, оценка в итоге дня {est}\nПричина: {}\nСделка {}",
+            d.qty,
+            d.invested,
+            last_note(d),
+            d.id
+        ),
+        buttons: vec![
+            btn(
+                "sell_now",
+                "Продать сейчас",
+                A::SellHalted {
+                    deal_id: d.id.clone(),
+                },
+                format!(
+                    "Продать {t} сделки {} на {v} по рынку сейчас? Количество — по реальному балансу.",
+                    d.id
+                ),
+                empty.clone(),
+                false,
+            ),
+            btn(
+                "sell_ret",
+                "Продать и перегнать",
+                A::SellHaltedReturn {
+                    deal_id: d.id.clone(),
+                },
+                format!(
+                    "Продать {t} сделки {} на {v} и перегнать выручку USDT на {buy}?",
+                    d.id
+                ),
+                empty.or(same),
+                false,
+            ),
+            sold(&d.id, t, d.qty),
+        ],
+    }
+}
+
+impl Core {
+    /// Все записи экрана «Ручное управление» с кнопками: алерты, «Беру на себя», остановленные сделки — в порядке
+    /// таблиц экрана; внутри вида — по времени (старые сверху), остановленные — как Core::halted. Ошибок нет.
+    pub fn manual_records(&self) -> Vec<ManualRecord> {
+        let mut alerts: Vec<StuckAlert> = lk(&self.inner.alerts)
+            .values()
+            .map(|(a, _)| a.clone())
+            .collect();
+        alerts.sort_by_key(|a| a.at);
+        let mut holdings: Vec<ManualHolding> = lk(&self.inner.holdings)
+            .values()
+            .map(|(h, _)| h.clone())
+            .collect();
+        holdings.sort_by_key(|h| h.taken_at);
+        let mut v: Vec<ManualRecord> = alerts.iter().map(alert_record).collect();
+        v.extend(holdings.iter().map(holding_record));
+        v.extend(self.halted().iter().map(halted_record));
+        v
+    }
+}

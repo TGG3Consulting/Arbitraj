@@ -1,10 +1,13 @@
 //! Файл: notify/updates.rs
-//! Что делает: принимает нажатия кнопок Telegram длинным опросом getUpdates (у системы нет
-//! публичного HTTPS-адреса для webhook) и передаёт каждое нажатие в notify/press.rs.
+//! Что делает: принимает нажатия кнопок и сообщения Telegram длинным опросом getUpdates (у системы нет
+//! публичного HTTPS-адреса для webhook): нажатие — в notify/press.rs, сообщение (команды /help, /menu …, ответ на
+//! вопрос суммы) — в notify/tg_commands.rs (решения 156, 157). После подключения — getMe (имя бота для «/cmd@бот»)
+//! и setMyCommands (подсказка команд по «/»).
 //! offset: после каждого ответа — наибольший update_id + 1 (замечание 2 к getUpdates:
 //! «recalculate offset after each server response»); обновление подтверждается следующим вызовом.
-//! Кто вызывает: main.rs (запускает задачу run).
-//! От чего зависит: notify/client.rs, notify/tg_buttons.rs, notify/press.rs, settings, secrets, storage/journal.
+//! Кто вызывает: main.rs (запускает задачу run). Ожидание после сбоев — updates_idle.rs.
+//! От чего зависит: notify/client.rs, notify/tg_buttons.rs, notify/press.rs, notify/tg_commands.rs, notify/tg_methods.rs,
+//! notify/mirror_state.rs, core (команды — Core::command), settings, secrets, storage/journal.
 //! Настройки: notify.updates_timeout_s (параметр timeout getUpdates), notify.updates_retry_ms, notify.telegram_chat,
 //! notify.telegram_api_url, http.timeout_ms; секрет telegram.bot_token.
 //!
@@ -16,9 +19,7 @@
 //!
 //! getUpdates: https://core.telegram.org/bots/api#getupdates
 
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::sync::Notify;
 
@@ -28,9 +29,13 @@ use crate::settings::read::At;
 use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 
+use crate::core::Core;
+
 use super::client;
-use super::press::{CommandTx, Press};
-use super::telegram::TgError;
+use super::mirror_state::Shared;
+use super::press::Ctx;
+use super::tg_commands::COMMANDS;
+use super::updates_idle::retry_of;
 
 /// Префиксы настроек, при изменении которых приём пробует снова.
 pub const WATCH_PREFIXES: &[&str] = &["notify.", "http.timeout_ms"];
@@ -41,15 +46,17 @@ pub struct Updates {
     pub settings: Store,
     pub vault: Vault,
     pub journal: Journal,
-    /// Канал команд человека ядру.
-    pub commands: CommandTx,
+    /// Ядро — команды человека (Core::command) и данные меню (Core::control, Core::manual_records).
+    pub core: Core,
+    /// Память дубля «Ручного управления» (общая с notify/mirror.rs).
+    pub state: Shared,
     /// Сигнал «секреты изменились» (разблокировка, смена токена): прервать опрос, сбросить offset
     /// (у другого бота свои update_id), начать заново. Подаёт тот, кто меняет секреты (api/secrets.rs).
     pub wake: Arc<Notify>,
 }
 
 /// Чем закончилось ожидание.
-enum Woke {
+pub(super) enum Woke {
     /// Изменились настройки — пробуем снова.
     Settings,
     /// Сигнал wake — сбросить offset и пробовать снова.
@@ -62,7 +69,8 @@ enum Woke {
 /// Ошибок не возвращает: всё пишется в журнал.
 pub async fn run(u: Updates, mut watch: Watch) {
     let mut offset: Option<i64> = None;
-    let mut handled = HashSet::new();
+    // Имя бота (getMe) после подключения; None — узнать заново (после ожидания: могли смениться токен или чат).
+    let mut bot: Option<String> = None;
     loop {
         let ready = match client::build(&u.http, &u.settings, &u.vault) {
             Ok(r) => r,
@@ -78,6 +86,28 @@ pub async fn run(u: Updates, mut watch: Watch) {
                 continue;
             }
         };
+        if bot.is_none() {
+            match ready.tg.get_me().await {
+                Ok(name) => {
+                    if let Err(e) = ready.tg.set_my_commands(COMMANDS).await {
+                        u.log(Level::Warn, format!("setMyCommands: {e}")).await;
+                    }
+                    bot = Some(name);
+                }
+                Err(e) => {
+                    u.log(
+                        Level::Error,
+                        format!("Кнопки и команды Telegram: getMe: {e}"),
+                    )
+                    .await;
+                    let retry = retry_of(&u, &e);
+                    if !u.idle(&mut watch, &mut offset, retry).await {
+                        return;
+                    }
+                    continue;
+                }
+            }
+        }
         let timeout_s = match u
             .settings
             .integer("notify.updates_timeout_s", At::default())
@@ -99,83 +129,38 @@ pub async fn run(u: Updates, mut watch: Watch) {
             r = ready.tg.get_updates(offset, timeout_s) => r,
             _ = u.wake.notified() => {
                 offset = None;
+                bot = None;
                 continue;
             }
         };
         match polled {
             Ok(list) => {
-                let mut press = Press {
+                let ctx = Ctx {
                     tg: &ready.tg,
                     chat: &ready.chat,
-                    commands: &u.commands,
+                    bot: bot.as_deref().unwrap_or_default(),
+                    core: &u.core,
                     journal: &u.journal,
-                    handled: &mut handled,
+                    state: &u.state,
                 };
                 for upd in list {
                     offset = Some(offset.map_or(upd.update_id + 1, |o| o.max(upd.update_id + 1)));
                     if let Some(q) = upd.callback_query {
-                        press.handle(q).await;
+                        ctx.handle(q).await;
+                    }
+                    if let Some(m) = upd.message {
+                        ctx.message(m).await;
                     }
                 }
             }
             Err(e) => {
-                let retry = match &e {
-                    TgError::Api {
-                        retry_after: Some(s),
-                        ..
-                    } if *s > 0 => Some(Duration::from_secs(s.unsigned_abs())),
-                    _ => u
-                        .settings
-                        .integer("notify.updates_retry_ms", At::default())
-                        .ok()
-                        .map(Duration::from_millis),
-                };
+                let retry = retry_of(&u, &e);
                 u.log(Level::Error, format!("getUpdates: {e}")).await;
+                bot = None;
                 if !u.idle(&mut watch, &mut offset, retry).await {
                     return;
                 }
             }
         }
-    }
-}
-
-impl Updates {
-    /// Ждёт: изменения настроек, сигнала wake или (если задано) паузы retry_after от Telegram.
-    /// Принимает: подписку, offset (сбрасывается по wake), паузу. Возвращает: false — система останавливается.
-    async fn idle(
-        &self,
-        watch: &mut Watch,
-        offset: &mut Option<i64>,
-        retry: Option<Duration>,
-    ) -> bool {
-        let woke = tokio::select! {
-            c = watch.next() => if c.is_some() { Woke::Settings } else { Woke::Stop },
-            _ = self.wake.notified() => Woke::Secrets,
-            _ = sleep_or_never(retry) => Woke::Settings,
-        };
-        match woke {
-            Woke::Settings => true,
-            Woke::Secrets => {
-                *offset = None;
-                true
-            }
-            Woke::Stop => false,
-        }
-    }
-
-    /// Запись в журнал от имени уведомлений. Ошибка журнала уже выведена в лог процесса.
-    async fn log(&self, level: Level, message: String) {
-        let _ = self
-            .journal
-            .write(level, "notify", None, message, None)
-            .await;
-    }
-}
-
-/// Пауза, если она задана; иначе — никогда не заканчивается (ждём другие сигналы).
-async fn sleep_or_never(d: Option<Duration>) {
-    match d {
-        Some(d) => tokio::time::sleep(d).await,
-        None => std::future::pending().await,
     }
 }

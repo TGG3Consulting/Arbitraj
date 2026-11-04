@@ -83,7 +83,7 @@ pub async fn load(core: &Core) {
 }
 
 /// Алерт: сделка ждёт решения человека — «убыток выше порога» (stuck.rs) или «продажа не прошла» (sell.rs,
-/// решение 100). Уведомление stuck.loss_alert несёт id алерта (кнопки Telegram — по notify/catalog.rs).
+/// решение 100). Уведомление stuck.loss_alert — текст; кнопки — запись manual.record (решение 156).
 /// Принимает: сделку, убыток % (None — котировки нет), причину. Ошибок нет.
 pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>, reason: String) {
     let id = match super::ids::uuid_v4() {
@@ -119,11 +119,11 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>,
     lk(&core.inner.alerts).insert(alert.id.clone(), (alert.clone(), deal));
     persist(core).await;
     core.inner.live.send(CoreEvent::StuckAlert(alert.clone()));
-    // Кнопки «Продать сейчас» и «Беру на себя» несут id алерта (notify/callback.rs).
+    // Решение 156: кнопки записи уходят событием manual.record (notify/mirror.rs) — те же, что на экране;
+    // здесь — только извещение.
     core.inner
         .deps
-        .notifier
-        .send_with_buttons("stuck.loss_alert", Some(&alert.venue.0), &text, &alert.id)
+        .notify("stuck.loss_alert", Some(&alert.venue.0), &text)
         .await;
 }
 

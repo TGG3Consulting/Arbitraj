@@ -48,8 +48,19 @@ fn encode_respects_protocol_limit() {
 
 #[test]
 fn keyboard_from_catalog() {
-    let def = catalog::find("stuck.loss_alert").unwrap();
-    let kb = callback::keyboard(def, "A1").unwrap().unwrap();
+    // Решение 156: кнопки записей «Ручного управления» — из самих записей (tests/notify_mirror.rs); у событий каталога
+    // кнопок сейчас нет, механизм клавиатуры события проверяем на описании с кнопками.
+    static BTN: &[catalog::ButtonDef] = &[catalog::ButtonDef {
+        code: "sell_now",
+        title: "Продать сейчас",
+    }];
+    let def = catalog::EventDef {
+        code: "x",
+        group: "x",
+        title: "x",
+        buttons: BTN,
+    };
+    let kb = callback::keyboard(&def, "A1").unwrap().unwrap();
     let row = &kb["inline_keyboard"][0];
     assert_eq!(row.as_array().unwrap().len(), def.buttons.len());
     for (b, j) in def.buttons.iter().zip(row.as_array().unwrap()) {
@@ -58,6 +69,7 @@ fn keyboard_from_catalog() {
     }
     let plain = catalog::find("system.started").unwrap();
     assert_eq!(callback::keyboard(plain, "A1").unwrap(), None);
+    assert!(catalog::find("manual.record").is_some());
 }
 
 #[test]

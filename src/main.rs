@@ -192,16 +192,33 @@ async fn run() -> Result<(), String> {
     })
     .await;
 
-    // Кнопки Telegram → команды ядру (CommandTx, core/types/control.rs). wake — сигнал «секреты
+    // Кнопки и команды Telegram → команды ядру (Core::command, решения 156, 157). wake — сигнал «секреты
     // изменились» от api/secrets.rs: приём начинает заново с актуальным токеном.
     let secrets_wake = std::sync::Arc::new(tokio::sync::Notify::new());
+    // Память дубля «Ручного управления» — общая у отправки (mirror.rs) и приёма нажатий (updates.rs).
+    let mirror_state = arb::notify::mirror_state::Shared::default();
+    tokio::spawn(arb::notify::mirror::run(
+        arb::notify::mirror::Mirror {
+            core: core.clone(),
+            notifier: notifier.clone(),
+            state: mirror_state.clone(),
+        },
+        Watch::new(
+            changes.subscribe(),
+            arb::notify::updates::WATCH_PREFIXES
+                .iter()
+                .map(|p| p.to_string())
+                .collect(),
+        ),
+    ));
     tokio::spawn(arb::notify::updates::run(
         arb::notify::updates::Updates {
             http: http.clone(),
             settings: settings.clone(),
             vault: vault.clone(),
             journal: journal.clone(),
-            commands: core.command_channel(),
+            core: core.clone(),
+            state: mirror_state,
             wake: secrets_wake.clone(),
         },
         Watch::new(

@@ -24,10 +24,11 @@ use serde_json::{Value, json};
 use super::telegram::{Telegram, TgError};
 use super::tg_text::fit_text;
 
-/// Тип обновлений, которые нужны системе, — только нажатия кнопок.
-/// Имя поля Update «callback_query», https://core.telegram.org/bots/api#update
+/// Типы обновлений, которые нужны системе: нажатия кнопок и сообщения (решение 157: команды /help, /menu …
+/// и ответы на ForceReply — ввод суммы «Продано вручную», решение 156).
+/// Имена полей Update «message» и «callback_query», https://core.telegram.org/bots/api#update
 /// (параметр allowed_updates, https://core.telegram.org/bots/api#getupdates).
-pub const ALLOWED_UPDATES: &[&str] = &["callback_query"];
+pub const ALLOWED_UPDATES: &[&str] = &["message", "callback_query"];
 
 /// Update: https://core.telegram.org/bots/api#update — нужны update_id и callback_query.
 #[derive(Debug, Clone, Deserialize)]
@@ -35,6 +36,21 @@ pub struct Update {
     /// «The update's unique identifier» — по нему считается offset.
     pub update_id: i64,
     pub callback_query: Option<CallbackQuery>,
+    /// Новое сообщение (команда или ответ на сообщение бота), https://core.telegram.org/bots/api#message
+    pub message: Option<InMessage>,
+}
+
+/// Входящее сообщение (Message): https://core.telegram.org/bots/api#message — нужны чат, автор, текст
+/// и reply_to_message (ответ на сообщение бота с ForceReply).
+#[derive(Debug, Clone, Deserialize)]
+pub struct InMessage {
+    pub message_id: i64,
+    pub chat: Chat,
+    /// «Sender for messages sent to chats» — может отсутствовать (сообщение от имени канала).
+    pub from: Option<User>,
+    pub text: Option<String>,
+    /// На какое сообщение это ответ (поля как у CbMessage).
+    pub reply_to_message: Option<Box<CbMessage>>,
 }
 
 /// CallbackQuery: https://core.telegram.org/bots/api#callbackquery

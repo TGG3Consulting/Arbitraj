@@ -11,6 +11,8 @@
     Решение 101: «Продать и перегнать» (у алерта и остановленной сделки) — продажа по рынку, затем выручка USDT
     переводится на площадку покупки (откуда пришли деньги), независимо от режима возврата USDT.
     Живые сообщения stuck_alert, manual, deal — перечитать.
+    Решение 156: кнопки строк рисуются из records (GET /api/manual: у каждой записи — кнопки, команда ядра, вопрос
+    подтверждения, ввод суммы, недоступность с причиной; core/manual_feed.rs) — ровно те же уходят в Telegram.
     Решение 121 (C4): внизу — «Сухая сделка DEX» (components/DexDrySwap.svelte): проверка своего свопа без отправки,
     не зависит от данных ядра.
   Кто вызывает: App.svelte.
@@ -46,14 +48,26 @@
     manual.reload();
   }
 
+  /** Кнопки записи экрана по ключу («a.<id>», «h.<id>», «d.<id>») — из records (решение 156). */
+  function buttonsOf(key) {
+    return (manual.data?.records ?? []).find((r) => r.key === key)?.buttons ?? [];
+  }
+
   /**
-   * «Продано вручную»: спрашивает выручку USDT и отправляет SoldManually. Принимает: id сделки, монету, количество.
-   * Пустой ввод или «Отмена» — ничего не отправляется; число проверяет ядро.
+   * Нажатие кнопки записи: с вводом («Продано вручную») — спрашивает выручку USDT (пустой ввод или «Отмена» —
+   * ничего не отправляется; число проверяет ядро) и подставляет её в команду и вопрос; затем confirm и команда ядру.
    */
-  async function soldManually(dealId, ticker, qty) {
-    const usdt = prompt(`Сколько USDT вы получили за ${qty} ${ticker}? Сделка ${dealId} закроется этой выручкой.`);
-    if (usdt === null || usdt.trim() === '') return;
-    await command({ SoldManually: { deal_id: dealId, usdt: usdt.trim() } }, `Закрыть сделку ${dealId}: выручка ${usdt.trim()} USDT?`);
+  async function press(b) {
+    let action = b.action;
+    let question = b.confirm;
+    if (b.input) {
+      const usdt = prompt(b.input);
+      if (usdt === null || usdt.trim() === '') return;
+      const key = Object.keys(action)[0];
+      action = { [key]: { ...action[key], usdt: usdt.trim() } };
+      question = question.replace('{usdt}', usdt.trim());
+    }
+    await command(action, question);
   }
 
   /** Последняя запись хронологии сделки — причина остановки. */
@@ -63,6 +77,12 @@
     return notes.length ? notes[notes.length - 1][1] : '';
   }
 </script>
+
+{#snippet buttons(key)}
+  {#each buttonsOf(key) as b (b.code)}
+    <button class={b.quiet ? 'quiet' : ''} disabled={busy || !!b.disabled} title={b.disabled ?? ''} onclick={() => press(b)}>{b.title}</button>
+  {/each}
+{/snippet}
 
 <h1>Ручное управление</h1>
 <NoData text={manual.noData} />
@@ -80,12 +100,7 @@
         <tr>
           <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num">{a.qty}</td><td class="num err">{a.loss_pct ?? '—'}</td>
           <td>{a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
-          <td class="row">
-            <button disabled={busy} onclick={() => command({ SellNow: { alert_id: a.id } }, `Продать ${a.qty} ${a.asset.ticker} на ${a.venue} по рынку сейчас?`)}>Продать сейчас</button>
-            <button disabled={busy} onclick={() => command({ SellNowReturn: { alert_id: a.id } }, `Продать ${a.qty} ${a.asset.ticker} на ${a.venue} по рынку и перегнать выручку USDT на площадку покупки?`)}>Продать и перегнать</button>
-            <button class="quiet" disabled={busy} onclick={() => command({ TakeOver: { alert_id: a.id } }, `Забрать ${a.qty} ${a.asset.ticker} на себя? Бот спишет их из учёта.`)}>Беру на себя</button>
-            <button class="quiet" disabled={busy} onclick={() => soldManually(a.deal_id, a.asset.ticker, a.qty)}>Продано вручную</button>
-          </td>
+          <td class="row">{@render buttons('a.' + a.id)}</td>
         </tr>
       {:else}
         <tr><td colspan="8" class="muted">Алертов нет.</td></tr>
@@ -101,10 +116,7 @@
         <tr>
           <td>{assetLabel(h.asset)}</td><td>{h.venue}</td><td class="num">{h.qty}</td><td>{h.reason}</td>
           <td><code>{h.deal_id}</code></td><td>{showTime(h.taken_at)}</td>
-          <td class="row">
-            <button disabled={busy} onclick={() => command({ ReturnToBot: { holding_id: h.id } }, `Вернуть ${h.asset.ticker} боту? Учёт — по реальному балансу ${h.venue}.`)}>Вернуть боту</button>
-            <button class="quiet" disabled={busy} onclick={() => soldManually(h.deal_id, h.asset.ticker, h.qty)}>Продано вручную</button>
-          </td>
+          <td class="row">{@render buttons('h.' + h.id)}</td>
         </tr>
       {:else}
         <tr><td colspan="7" class="muted">Монет на ручном управлении нет.</td></tr>
@@ -121,11 +133,7 @@
         <tr>
           <td>{assetLabel(d.direction.asset)}</td><td>{d.at}</td><td class="num">{d.qty}</td><td class="num">{d.invested}</td>
           <td class="num err">{d.provisional_usd ?? '—'}</td><td>{lastNote(d)}</td><td><code>{d.id}</code></td>
-          <td class="row">
-            <button disabled={busy || !(Number(d.qty) > 0)} onclick={() => command({ SellHalted: { deal_id: d.id } }, `Продать ${d.direction.asset.ticker} сделки ${d.id} на ${d.at} по рынку сейчас? Количество — по реальному балансу.`)}>Продать сейчас</button>
-            <button disabled={busy || !(Number(d.qty) > 0) || d.at === d.direction.buy_on} onclick={() => command({ SellHaltedReturn: { deal_id: d.id } }, `Продать ${d.direction.asset.ticker} сделки ${d.id} на ${d.at} и перегнать выручку USDT на ${d.direction.buy_on}?`)}>Продать и перегнать</button>
-            <button class="quiet" disabled={busy} onclick={() => soldManually(d.id, d.direction.asset.ticker, d.qty)}>Продано вручную</button>
-          </td>
+          <td class="row">{@render buttons('d.' + d.id)}</td>
         </tr>
       {:else}
         <tr><td colspan="8" class="muted">Остановленных сделок нет.</td></tr>

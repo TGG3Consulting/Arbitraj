@@ -143,7 +143,12 @@ where
 
 /// Чем ограничен поиск сверху: точка на шаг выше наибольшего объёма. Принимает: расчёты, параметры, наибольший объём
 /// в шагах, найден ли он точно. Возвращает: (упёрлись в предел поиска, текст). Ошибок нет.
-async fn edge<C: Curve>(m: &mut Memo<'_, C>, p: &Params, hi: u64, exact: bool) -> (bool, String) {
+pub async fn edge<C: Curve>(
+    m: &mut Memo<'_, C>,
+    p: &Params,
+    hi: u64,
+    exact: bool,
+) -> (bool, String) {
     let next = m.qty(hi + 1);
     match m.beyond(hi + 1).await {
         Ok(pt) if pt.invested > p.budget => (

@@ -31,6 +31,7 @@
 | `GET /api/spreads`, `GET /api/candidates` | «Живой экран»: спреды направлений и последние расчёты кандидатов с причиной отказа |
 | `GET /api/episodes`, `GET /api/episodes/{id}`, `GET /api/episodes/{id}/file` | «Эпизоды» (решение 74): список, записи эпизода, файл .jsonl.zst |
 | `GET /api/windows`, `GET /api/windows/{id}`, `GET /api/windows/{id}/file` | «Окна» (решение 125): страница списка с фильтрами, кадры окна разобранные адаптером, файл .jsonl.zst |
+| `GET /api/uncapped/summary`, `GET /api/uncapped`, `GET /api/uncapped/{id}`, `GET /api/uncapped/deal/{id}` | «Упущено из-за потолка» (решение 141): итоги за период, записи страницей, одна запись, запись сделки (api/uncapped.rs) |
 | `GET /api/deals` | Экран «Сделки»: план и факт по шагам |
 | `GET /api/transits` | История времени в пути (решение 50) |
 | `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{id}/release` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты |

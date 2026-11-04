@@ -16,6 +16,7 @@
     в режиме «лучший из двух» (решение 123) — кто дал финальную котировку DEX и на сколько USDT (Quote.pick).
   Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
     раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
+  Решение 141: у кандидата — строка «без потолка: вложить X → прибыль Y; плюс от Z» (UncappedLine, поле uncapped).
 -->
 <script>
   import { get } from '../lib/api.js';
@@ -28,6 +29,7 @@
   import DryBanner from '../components/DryBanner.svelte';
   import SignalCard from '../components/SignalCard.svelte';
   import DexCycles from '../components/DexCycles.svelte';
+  import UncappedLine from '../components/UncappedLine.svelte';
   import CalcTiming from '../components/CalcTiming.svelte';
 
   let spreads = $state({});
@@ -90,6 +92,9 @@
     </header>
     {#if c.timing}
       <CalcTiming timing={c.timing} />
+    {/if}
+    {#if c.uncapped}
+      <UncappedLine u={c.uncapped} />
     {/if}
     {#if c.card}
       <details open>

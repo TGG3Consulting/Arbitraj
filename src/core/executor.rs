@@ -17,6 +17,7 @@
 //! покупки (limits::buy_cap); предел списания — меньшее из бюджета плана и свободного.
 //! Решение 132: счёт (кошелёк) DEX сделки — по маппингу перед предпроверкой (dex_account.rs); нет строки — сделки нет;
 //! маппинг поменяли во время предпроверки — сделки нет. Счёт записывается в сделку, все шаги идут им.
+//! Решение 141: покупка исполнилась — фоновый расчёт «без потолка» с id сделки (uncapped_entry.rs; путь не ждёт).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -112,6 +113,8 @@ async fn run(core: &Core, d: Direction) {
             return;
         }
     };
+    // Решение 141: составляющие бюджета — до открытия сделки (своя сделка ещё не в учёте лимитов).
+    let parts = super::limits_parts::parts(core, &d, &super::dry::Mode::Live).ok();
     // Решение 118 (Я-17): ID сделки выдаётся и занимается в учёте под одним замком — повтор невозможен.
     let mut deal = super::ledger::open(
         core,
@@ -211,6 +214,8 @@ async fn run(core: &Core, d: Direction) {
     };
     super::fills::trade(core, &mut deal, &r).await;
     deal.buy = Some(r.clone());
+    // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт).
+    super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts);
     let text = format!(
         "{}: куплено {} {} на {} по {}",
         deal.id, r.filled_qty, d.asset.ticker, d.buy_on.0, r.avg_price

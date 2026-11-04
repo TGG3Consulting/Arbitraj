@@ -5,9 +5,10 @@
     плана; раскрывается хронология шагов и план (полный расчёт затрат). Данные — GET /api/deals,
     живое сообщение deal обновляет строку на месте. Решение 123 («лучший из двух»): под строкой — кто дал финальную
     котировку DEX в плане (Quote.pick); кто исполнил своп и почему — в хронологии («исполнил: свой сборщик: … /
-    KyberSwap; лучший из двух: …»).
+    KyberSwap; лучший из двух: …»). Решение 141: «зашли на X → потенциал без потолка Y и прибыль Z, упущено» (DealUncapped).
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte,
+    components/DealUncapped.svelte.
   Настройки: нет.
 -->
 <script>
@@ -17,6 +18,7 @@
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
+  import DealUncapped from '../components/DealUncapped.svelte';
 
   let deals = $state({});
   let error = $state('');
@@ -75,6 +77,7 @@
     {:else if d.usdt_return?.state === 'not_returned'}
       <p class="err">USDT не вернулись: {d.usdt_return.amount} USDT лежат на <code>{d.usdt_return.at}</code> — {d.usdt_return.why}. Перегоните на площадку покупки вручную</p>
     {/if}
+    {#if d.buy}<DealUncapped id={d.id} fact={d.result_usd} />{/if}
     <details>
       <summary>Хронология ({d.timeline.length})</summary>
       <table><tbody>

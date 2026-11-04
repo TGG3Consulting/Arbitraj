@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS windows (
     body TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS uncapped (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    deal_id TEXT,
+    ticker TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    body TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS uncapped_started ON uncapped (started_at);
+CREATE INDEX IF NOT EXISTS uncapped_deal ON uncapped (deal_id);
 CREATE TABLE IF NOT EXISTS venue_state (
     venue TEXT NOT NULL,
     kind  TEXT NOT NULL,

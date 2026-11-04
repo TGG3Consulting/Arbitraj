@@ -289,6 +289,80 @@ source = "Документация MEXC: Order Book «max 5000»; процеду
 rationale = "Глубина снимка, которую берёт сама процедура MEXC; предел — 5000."
 prefill = { kind = "Venue", id = "mexc" }
 
+# --- Упущено из-за потолка (решение 141) ---
+[[section]]
+title = "Упущено из-за потолка (решение 141)"
+intro = "Фоновый расчёт «без потолка»: сколько дала бы сделка без лимитов money.*, свободного остатка и виртуального бюджета — только ликвидность и предел card.max_search_usdt. На торговлю не влияет; стоимость — процессор (замер — docs/notes/uncapped-2026-11-04.md)."
+
+[[section.rec]]
+name = "uncapped.enabled"
+area = "вся система"
+unit = "да/нет"
+method = "Включить («да»), когда заданы остальные uncapped.* и card.max_search_usdt. Переключатель задаёт Тигран сам."
+rationale = "Расчёт — наблюдение, на торговлю не влияет; включается отдельно, чтобы видеть его цену по процессору."
+
+[[section.rec]]
+name = "uncapped.max_concurrent"
+area = "вся система"
+unit = "расчётов"
+value = "1"
+source = "Ориентир (решение 141; процессор — больное место, решения 129–131)"
+rationale = "Один фоновый поток: не больше одного ядра на расчёты без потолка и не больше одного места dex.quote_cpu_max."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.min_interval_ms"
+area = "вся система"
+unit = "мс"
+value = "30000"
+source = "Ориентир (решение 141)"
+rationale = "Кандидат держится секунды–минуты: раз в 30 с по направлению хватает, чтобы поймать пик упущенного эпизода; сделки — без интервала."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.queue_max"
+area = "вся система"
+unit = "работ"
+value = "64"
+source = "Ориентир (решение 141)"
+rationale = "Повторы направления сливаются — в очереди не больше одной работы на направление; 64 — запас на всплеск сигналов, пропуски видны счётчиком."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.max_evals"
+area = "вся система"
+unit = "расчётов"
+value = "160"
+source = "Замер на записи CAKE (tests/core_uncapped.rs, docs/notes/uncapped-2026-11-04.md)"
+rationale = "Оптимум без потолка на записи — тот же, что при 300 (полный поиск — 213–238 расчётов); на 80 уже отходит. Живой расчёт ≈ 160 × 1–2 котировки DEX по ~2 мс."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.ladder_usdt"
+area = "вся система"
+unit = "USDT, список"
+value = "100, 200, 500, 1000, 2000, 5000, 10000"
+source = "Ориентир (задача Тиграна 04.11.2026: «потолок 100/200/500/1000/…»)"
+rationale = "Шкала от нынешнего потолка до размеров, где обычно кончается ликвидность пулов BSC."
+
+[[section.rec]]
+name = "uncapped.episode_gap_ms"
+area = "вся система"
+unit = "мс"
+value = "120000"
+source = "Ориентир (решение 141)"
+rationale = "Четыре интервала uncapped.min_interval_ms: короткий провал кандидата не дробит эпизод."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.keep_days"
+area = "вся система"
+unit = "дней"
+value = "30"
+source = "Ориентир (решение 141)"
+rationale = "Месяц для анализа потолка; строка — несколько КБ JSON."
+prefill = { kind = "Global" }
+
 # --- Лимиты биржи BingX ---
 [[section]]
 title = "Лимиты биржи BingX"

@@ -52,5 +52,5 @@ pub use send::{
     WalletQueueState,
 };
 pub use trade::{Quote, Side, TradeRequest, TradeResult, TradeStatus};
-pub use transfer::{Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};
+pub use transfer::{AccountBalances, Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest};
 pub use window::{TapDecoded, TapView, TradeTick};

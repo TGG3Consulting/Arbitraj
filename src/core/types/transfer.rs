@@ -92,3 +92,16 @@ pub struct Balance {
     pub free: Decimal,
     pub locked: Decimal,
 }
+
+/// Решение 144: балансы одного счёта площадки (спот, фьючерсы, фонд/funding, earn…) для панели «Балансы» — только чтение.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountBalances {
+    /// Название счёта для человека, как у площадки: «Спот», «Фьючерсы USDT-M», «Фонд (Funding)», «Earn»…
+    pub account: String,
+    /// Ненулевые строки счёта (free — доступно, locked — заморожено / в ордерах / в марже).
+    pub balances: Vec<Balance>,
+    /// Счёт не прочитан — точная причина (нет прав ключа, ошибка площадки); строки тогда пусты.
+    pub error: Option<String>,
+    /// Доп. сведения счёта по ответу площадки (например, «эквити 12.3 USDT, нереализованный PnL −0.4»); None — нет.
+    pub note: Option<String>,
+}

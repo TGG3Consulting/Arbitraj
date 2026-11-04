@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote, SendChannelInfo, Side,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
 };
 
@@ -140,6 +140,23 @@ pub trait Venue: Send + Sync {
     /// Балансы всех активов на площадке (или в кошельке для DEX).
     /// Ошибки: ключ, связь.
     async fn balances(&self) -> GatewayResult<Vec<Balance>>;
+
+    /// Решение 144 (Тигран, 04.11): балансы ВСЕХ счетов площадки — спот, фьючерсы, фонд/funding, earn и др. — для панели
+    /// «Балансы» интерфейса. Только чтение, на торговлю не влияет. Ошибка одного счёта — в его AccountBalances::error,
+    /// остальные счета показываются. По умолчанию — один счёт «Спот» из balances().
+    /// Возвращает: счета со строками. Ошибки: как balances (только если не прочитан ни один счёт).
+    async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
+        let b = self.balances().await?;
+        Ok(vec![AccountBalances {
+            account: "Спот".into(),
+            balances: b
+                .into_iter()
+                .filter(|x| !x.free.is_zero() || !x.locked.is_zero())
+                .collect(),
+            error: None,
+            note: None,
+        }])
+    }
 
     /// Баланс одного актива (решение 113): на пути сделки нужна одна монета (BNB на газ, USDT перед покупкой), а не
     /// весь список. По умолчанию — balances() с фильтром (биржа: один REST и так отдаёт все активы). DEX переопределяет:

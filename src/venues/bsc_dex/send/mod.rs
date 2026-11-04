@@ -3,6 +3,8 @@
 //! правила (открытый канал — только один и не вместе с закрытыми; несколько закрытых — параллельно и без чаевых),
 //! нижняя граница цены газа по выбранным каналам, параллельная отправка одной и той же транзакции, счётчики.
 //! Каждый канал — свой файл по своей официальной документации; общий вид — channel.rs, отправка — ready.rs.
+//! Решение 154: ни один канал не принял — свой узел проверяет, что транзакции нет ни в блоке, ни в пуле (absent.rs);
+//! только тогда ChannelRejected, иначе транзакция считается отправленной «без ясного ответа» и идёт к трекеру.
 //! Кто вызывает: exec/*, wallet/transfer.rs, mod.rs (send_channels, check_send_channel).
 //! От чего зависит: файлы этой папки, ctx.rs.
 //! Настройки: channel.* [канал], send.* [bsc_dex].
@@ -12,6 +14,7 @@
 //! на адрес своего билдера, поэтому только при отправке в один канал (48 Club: бандл с переводом другому билдеру —
 //! ошибка 4851).
 
+pub mod absent;
 pub mod blink;
 pub mod blockrazor;
 pub mod blockrazor_builder;
@@ -114,7 +117,8 @@ impl Dispatched {
 
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
 /// (только при одном канале), предел блока бандла. Возвращает: кто принял и кто не ответил ясно.
-/// Ошибки: ChannelRejected — все каналы ответили отказом (транзакции точно нигде нет; причины всех каналов в тексте).
+/// Ошибки: ChannelRejected — все каналы ответили отказом и свой узел не знает ни транзакцию, ни перевод чаевых
+/// (решение 154, send/absent.rs: транзакции точно нигде нет; причины всех каналов в тексте).
 pub async fn dispatch(
     ctx: &Ctx,
     stats: &Stats,
@@ -130,7 +134,9 @@ pub async fn dispatch(
         }
         async move { (r.ch.id, r.send(ctx, &txs, max_block).await) }
     });
-    classify(ctx, stats, join_all(jobs).await).await
+    let mut all = vec![tx.clone()];
+    all.extend(tip_tx.cloned());
+    classify(ctx, stats, join_all(jobs).await, &all).await
 }
 
 /// Отправляет весь бандл из нескольких транзакций (решение 84) во все выбранные каналы параллельно. Все каналы должны
@@ -157,18 +163,21 @@ pub async fn dispatch_slice(
     let jobs = ready
         .iter()
         .map(|r| async move { (r.ch.id, r.send(ctx, txs, max_block).await) });
-    classify(ctx, stats, join_all(jobs).await).await
+    classify(ctx, stats, join_all(jobs).await, txs).await
 }
 
-/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Ошибки: ChannelRejected —
-/// ни один канал не принял (транзакции точно нигде нет; причины всех каналов в тексте).
+/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Принимает: итоги каналов и
+/// отправленные транзакции (для проверки решения 154). Ошибки: ChannelRejected — ни один канал не принял и свой узел
+/// не знает ни одной из транзакций (транзакции точно нигде нет; причины всех каналов в тексте).
 async fn classify(
     ctx: &Ctx,
     stats: &Stats,
     results: Vec<(&'static str, GatewayResult<()>)>,
+    txs: &[Bytes],
 ) -> GatewayResult<Dispatched> {
     let mut out = Dispatched::default();
     let mut why = Vec::new();
+    let ids: Vec<String> = results.iter().map(|(id, _)| id.to_string()).collect();
     for (id, res) in results {
         match res {
             Ok(()) => {
@@ -201,10 +210,7 @@ async fn classify(
         }
     }
     if out.accepted.is_empty() && out.uncertain.is_empty() {
-        return Err(ctx.err(
-            ErrorCode::ChannelRejected,
-            format!("Ни один канал не принял транзакцию: {}", why.join("; ")),
-        ));
+        return absent::rejected_all(ctx, ids, why, txs).await;
     }
     Ok(out)
 }

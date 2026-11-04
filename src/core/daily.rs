@@ -1,17 +1,18 @@
 //! Файл: core/daily.rs
-//! Что делает: итог дня для дневного лимита убытка (решение 53). Закрытая сделка — фактический итог.
-//! Остановленная сделка (Halted) и «Беру на себя» — сразу предварительный убыток по худшему варианту:
-//! выручка − вложено − затраты (монеты считаются потерянными); он входит в итог дня и может остановить
-//! систему (risk.max_daily_loss_usd). У сделки запоминается учтённая сумма и день. Разбор («Продать сейчас»,
-//! «Вернуть боту» и продажа, любое закрытие такой сделки): предварительное снимается, добавляется факт.
-//! Разбор в другой день — коррекция (факт − предварительное) идёт в итог дня разбора, а день учёта не
-//! меняется. Итог дня — таблица daily_result (storage/db.rs), строка на дату; после перезапуска
-//! восстанавливается; неразобранные предварительные убытки переносятся в новый день (в его итог не входят).
-//! Кто вызывает: ledger.rs (finish), manual_return.rs (перенос доли), engine.rs (load).
-//! От чего зависит: risk.rs (DayView, check_daily), deal.rs, storage/db.rs.
-//! Настройки: risk.max_daily_loss_usd (через risk.rs).
+//! Что делает: итог дня (решения 53, 152). Итог дня = факт закрытых сегодня сделок (result_usd) + оценка позиций, которые
+//! бот сам не довёл: остановленная сделка (Halted) и «Беру на себя». Оценка позиции — стоимость её монет по рынку
+//! площадки, где они лежат, − вложено − затраты (daily_value.rs); цены нет — худший случай (вся сумма) с пометкой
+//! (DayView.unpriced). У сделки запоминается учтённая оценка и день. Разбор («Продать сейчас», «Продать и перегнать»,
+//! «Продано вручную», «Вернуть боту» и продажа — любое закрытие этой сделки): её оценка снимается ровно на эту сделку,
+//! добавляется факт. Разбор в другой день — коррекция (факт − оценка) идёт в итог дня разбора, день учёта не меняется.
+//! Итог дня — таблица daily_result (storage/db.rs), строка на дату; после перезапуска восстанавливается; неразобранные
+//! оценки переносятся в новый день (в его итог не входят). Там же — отметка сброса лимита дня (решение 153,
+//! daily_limit.rs): действует только в свой день.
+//! Кто вызывает: ledger.rs (finish), ledger_load.rs, manual_return.rs (перенос доли), engine.rs (load), daily_limit.rs.
+//! От чего зависит: daily_value.rs (оценка), daily_limit.rs (лимит), day_view.rs, deal.rs, storage/db.rs.
+//! Настройки: risk.max_daily_loss_usd (через daily_limit.rs).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{NaiveDate, Utc};
 use rusqlite::params;
@@ -20,25 +21,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::storage::journal::Level;
 
+use super::daily_value::Estimate;
+use super::day_view::LimitReset;
 use super::deal::Deal;
 use super::engine::{Core, lk};
 
+pub use super::daily_load::{load, transfer};
+
 /// Строка таблицы daily_result.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct Book {
-    final_usd: Decimal,
-    /// Неразобранные предварительные убытки: сделка → (сумма, день учёта).
-    provisional: BTreeMap<String, (Decimal, NaiveDate)>,
+pub(super) struct Book {
+    pub(super) final_usd: Decimal,
+    /// Неразобранные оценки позиций: сделка → (сумма, день учёта).
+    pub(super) provisional: BTreeMap<String, (Decimal, NaiveDate)>,
+    /// Сделки, чья оценка — худший случай (цены не было; решение 152).
+    #[serde(default)]
+    pub(super) unpriced: BTreeSet<String>,
+    /// Сброс лимита дня (решение 153) — только этого дня.
+    #[serde(default)]
+    pub(super) limit_reset: Option<LimitReset>,
 }
 
-/// Пересчитывает DayView из книги дня и сохраняет. Возвращает: Some(текст) — сработал стоп.
-async fn commit(core: &Core, date: NaiveDate, book: Book) -> Option<String> {
-    let prov: Decimal = book
-        .provisional
+/// Сумма оценок, учтённых в день `date`. Ошибок нет.
+pub(super) fn prov_on(book: &Book, date: NaiveDate) -> Decimal {
+    book.provisional
         .values()
         .filter(|(_, d)| *d == date)
         .map(|(a, _)| *a)
-        .sum();
+        .sum()
+}
+
+/// Пересчитывает DayView из книги дня, сохраняет и проверяет лимит. Возвращает: Some(текст) — сработал стоп.
+pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Option<String> {
+    let prov = prov_on(&book, date);
     {
         let mut r = lk(&core.inner.risk);
         r.day.date = date;
@@ -46,6 +61,8 @@ async fn commit(core: &Core, date: NaiveDate, book: Book) -> Option<String> {
         r.day.provisional_usd = prov;
         r.day.result_usd = book.final_usd + prov;
         r.day.provisional = book.provisional.clone();
+        r.day.unpriced = book.unpriced.clone();
+        r.day.limit_reset = book.limit_reset.clone();
     }
     let body = serde_json::to_string(&book).unwrap_or_default();
     let day = date.to_string();
@@ -69,48 +86,72 @@ async fn commit(core: &Core, date: NaiveDate, book: Book) -> Option<String> {
             .log(Level::Error, "core.daily", None, m, None)
             .await;
     }
-    super::risk::check_daily(core)
+    let (stop, cleared) = super::daily_limit::check(core);
+    // Решение 152: факт пришёл, лимит больше не превышен — остановку снимает человек, но он должен это видеть.
+    if let Some(t) = cleared {
+        core.inner
+            .deps
+            .log(Level::Info, "core.daily_loss", None, t, None)
+            .await;
+    }
+    stop
 }
 
-/// Книга на сегодня: смена даты — фактический итог с нуля, неразобранные предварительные — переносятся.
-fn today_book(core: &Core) -> (NaiveDate, Book) {
+/// Книга на сегодня: смена даты — факт с нуля, сброса лимита нет; неразобранные оценки — переносятся.
+pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
     let today = Utc::now().date_naive();
     let r = lk(&core.inner.risk);
-    let fin = if r.day.date == today {
-        r.day.final_usd
-    } else {
-        Decimal::ZERO
-    };
+    let same = r.day.date == today;
     (
         today,
         Book {
-            final_usd: fin,
+            final_usd: if same { r.day.final_usd } else { Decimal::ZERO },
             provisional: r.day.provisional.clone(),
+            unpriced: r.day.unpriced.clone(),
+            limit_reset: if same {
+                r.day.limit_reset.clone()
+            } else {
+                None
+            },
         },
     )
 }
 
-/// Предварительный убыток остановленной сделки или «Беру на себя» (по худшему варианту).
-/// Принимает: сделку (у неё запоминается учтённая сумма). Возвращает: Some(текст) — сработал стоп.
+/// Оценка позиции остановленной сделки или «Беру на себя» (решение 152): стоимость монет по рынку площадки, где они
+/// лежат; цены нет — худший случай с пометкой. Принимает: сделку. Возвращает: Some(текст) — сработал стоп.
 pub async fn provisional(core: &Core, deal: &mut Deal) -> Option<String> {
-    let amount = deal.proceeds - deal.invested - deal.spent;
+    let value = super::daily_value::value_now(core, deal).await;
+    let est = super::daily_value::estimate(deal, value);
+    record(core, deal, est).await
+}
+
+/// Записывает оценку позиции в итог дня (повторный учёт той же сделки заменяет прежний). Принимает: сделку (у неё
+/// запоминается сумма), оценку (daily_value::estimate). Возвращает: Some(текст) — сработал стоп.
+pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Option<String> {
     let (today, mut book) = today_book(core);
-    // Повторный учёт той же сделки — заменяет прежний (снимаем старый, ставим новый на сегодня).
     if let Some((old, day)) = book.provisional.remove(&deal.id)
         && day != today
     {
         book.final_usd -= old;
     }
-    book.provisional.insert(deal.id.clone(), (amount, today));
-    deal.provisional_usd = Some(amount);
+    book.provisional
+        .insert(deal.id.clone(), (est.amount, today));
+    if est.priced {
+        book.unpriced.remove(&deal.id);
+    } else {
+        book.unpriced.insert(deal.id.clone());
+    }
+    deal.provisional_usd = Some(est.amount);
     deal.note(format!(
-        "Предварительный убыток в итог дня {today}: {amount} USDT (решение 53)"
+        "В итог дня {today}: {} USDT — {} (решение 152)",
+        est.amount.round_dp(6),
+        est.note
     ));
     commit(core, today, book).await
 }
 
-/// Факт закрытой сделки: снимает её предварительный убыток (если был) и добавляет факт; разбор в другой
-/// день — коррекция в итог дня разбора. Принимает: сделку, факт. Возвращает: Some(текст) — сработал стоп.
+/// Факт закрытой сделки: снимает её оценку (если была) и добавляет факт; разбор в другой день — коррекция в итог дня
+/// разбора. Принимает: сделку, факт. Возвращает: Some(текст) — сработал стоп.
 pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Option<String> {
     let (today, mut book) = today_book(core);
     match book.provisional.remove(&deal.id) {
@@ -118,86 +159,7 @@ pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Option<Strin
         Some((old, _)) => book.final_usd += fact - old,
         None => book.final_usd += fact,
     }
+    book.unpriced.remove(&deal.id);
     deal.provisional_usd = None;
     commit(core, today, book).await
-}
-
-/// «Вернуть боту»: доля предварительного убытка переходит к новой сделке (по доле вернувшихся монет),
-/// остаток остаётся у старой (монеты, которых нет на балансе, — потеряны). День учёта сохраняется.
-pub async fn transfer(core: &Core, from: &mut Deal, to: &mut Deal, share: Decimal) {
-    let (today, mut book) = today_book(core);
-    let Some((amount, day)) = book.provisional.remove(&from.id) else {
-        return;
-    };
-    let moved = amount * share;
-    book.provisional.insert(to.id.clone(), (moved, day));
-    if amount != moved {
-        book.provisional
-            .insert(from.id.clone(), (amount - moved, day));
-    }
-    from.provisional_usd = Some(amount - moved);
-    to.provisional_usd = Some(moved);
-    commit(core, today, book).await;
-}
-
-/// Восстанавливает итог дня при запуске: последняя строка daily_result. Ошибка базы — в журнал.
-pub async fn load(core: &Core) {
-    let rows = core
-        .inner
-        .deps
-        .db
-        .call(|c| {
-            c.query_row(
-                "SELECT day, body FROM daily_result ORDER BY day DESC LIMIT 1",
-                [],
-                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
-            )
-            .map(Some)
-            .or_else(|e| {
-                if e == rusqlite::Error::QueryReturnedNoRows {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })
-        })
-        .await;
-    match rows {
-        Ok(Some((day, body))) => {
-            let (Ok(date), Ok(book)) = (
-                day.parse::<NaiveDate>(),
-                serde_json::from_str::<Book>(&body),
-            ) else {
-                core.inner
-                    .deps
-                    .log(
-                        Level::Error,
-                        "core.daily",
-                        None,
-                        format!("Итог дня {day} повреждён"),
-                        None,
-                    )
-                    .await;
-                return;
-            };
-            lk(&core.inner.risk).day.date = date;
-            lk(&core.inner.risk).day.final_usd = book.final_usd;
-            let (today, mut cur) = today_book(core);
-            cur.provisional = book.provisional;
-            commit(core, today, cur).await;
-        }
-        Ok(None) => {}
-        Err(e) => {
-            core.inner
-                .deps
-                .log(
-                    Level::Error,
-                    "core.daily",
-                    None,
-                    format!("Итог дня не загружен: {e}"),
-                    None,
-                )
-                .await
-        }
-    }
 }

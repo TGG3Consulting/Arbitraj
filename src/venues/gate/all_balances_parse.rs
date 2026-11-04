@@ -87,26 +87,50 @@ pub fn margin(v: &Value, venue: &VenueId) -> GatewayResult<Part> {
 /// Ошибки: BadResponse — не объект, нет currency, поле не число.
 pub fn contract(v: &Value, venue: &VenueId) -> GatewayResult<Part> {
     let cur = num::text(v, "currency")?;
-    let (total, free) = (or_zero(v, "total")?, or_zero(v, "available")?);
+    let (total, avail) = (or_zero(v, "total")?, or_zero(v, "available")?);
     let (pnl, om) = (or_zero(v, "unrealised_pnl")?, or_zero(v, "order_margin")?);
-    let locked = (total - free).max(Decimal::ZERO);
+    // Живой ответ 04.11: total ≈ 0, available = 49.99 = USDT спота — available Gate считает с учётом других счетов
+    // (кросс-маржа), это не деньги фьючерсного счёта. Деньги счёта — total; доступно — не больше total.
+    let (free, locked) = own(total, avail);
     let balances = row(venue, cur.clone(), free, locked).into_iter().collect();
-    let note = (!total.is_zero() || !pnl.is_zero() || !om.is_zero())
+    let mut note = (!total.is_zero() || !pnl.is_zero() || !om.is_zero())
         .then(|| format!("баланс {total} {cur}, нереализованный PnL {pnl}, маржа ордеров {om}"));
+    cross(&mut note, total, avail, &cur);
     Ok(Part { balances, note })
 }
 
-/// Что делает: опционный счёт: free = available, locked = total − available (не меньше 0).
+/// Что делает: опционный счёт: деньги счёта — total (свободно — available, но не больше total; own()).
 /// Возвращает: строку и пояснение (эквити, нереализованный PnL). Ошибки: BadResponse.
 pub fn options(v: &Value, venue: &VenueId) -> GatewayResult<Part> {
     let cur = num::text(v, "currency")?;
-    let (total, free) = (or_zero(v, "total")?, or_zero(v, "available")?);
+    let (total, avail) = (or_zero(v, "total")?, or_zero(v, "available")?);
     let (equity, pnl) = (or_zero(v, "equity")?, or_zero(v, "unrealised_pnl")?);
-    let locked = (total - free).max(Decimal::ZERO);
+    let (free, locked) = own(total, avail);
     let balances = row(venue, cur.clone(), free, locked).into_iter().collect();
-    let note = (!equity.is_zero() || !pnl.is_zero())
+    let mut note = (!equity.is_zero() || !pnl.is_zero())
         .then(|| format!("эквити {equity} {cur}, нереализованный PnL {pnl}"));
+    cross(&mut note, total, avail, &cur);
     Ok(Part { balances, note })
+}
+
+/// Деньги самого счёта: (свободно, заморожено) из total и available — свободно не больше total (available Gate может
+/// включать средства других счетов), заморожено = total − свободно. Ошибок нет.
+fn own(total: Decimal, avail: Decimal) -> (Decimal, Decimal) {
+    let free = avail.min(total).max(Decimal::ZERO);
+    (free, (total - free).max(Decimal::ZERO))
+}
+
+/// Пояснение «доступно с учётом других счетов», если available больше денег счёта. Ошибок нет.
+fn cross(note: &mut Option<String>, total: Decimal, avail: Decimal, cur: &str) {
+    if avail > total {
+        let t = format!(
+            "доступно для сделок с учётом других счетов {avail} {cur} (это не деньги этого счёта)"
+        );
+        *note = Some(match note.take() {
+            Some(n) => format!("{n}; {t}"),
+            None => t,
+        });
+    }
 }
 
 /// Что делает: Earn (Uni Lend): по строке на монету — free = amount − frozen_amount (вложено), locked = frozen_amount

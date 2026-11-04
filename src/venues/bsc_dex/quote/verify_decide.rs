@@ -26,7 +26,7 @@ use super::route_calc::{self, Leg};
 use super::steps::Names;
 use super::verify::Verdict;
 use super::via::Via;
-use super::{costs, graph_legs, select};
+use super::{costs, graph_legs, pool_tax, select};
 
 /// Пределы вердикта верификации (решение 121, часть B4).
 #[derive(Debug, Clone, Copy)]
@@ -55,11 +55,6 @@ pub fn decide(
     let Some(route) = plan.route.as_ref() else {
         return reject("нет маршрута для верификации".into());
     };
-    let tax_keep = route_calc::keep(if v.side == Side::Buy {
-        v.taxes.buy_pct
-    } else {
-        v.taxes.sell_pct
-    });
     let mut paths = Vec::with_capacity(route.legs.len());
     for leg in &route.legs {
         let legs = match rebuild(v, &leg.hops, fresh) {
@@ -71,6 +66,8 @@ pub fn decide(
             Side::Buy => leg.expected_out,
             Side::Sell => leg.share * plan.qty,
         };
+        // Решение 146: налог монеты — пула шага монеты этой доли (quote/pool_tax.rs).
+        let tax_keep = pool_tax::coin_keep(&legs, v.side, v.taxes);
         match route_calc::eval(ctx, &legs, v.side, qty, tax_keep) {
             Ok(p) => paths.push(p),
             Err(e) => return reject(e.message),

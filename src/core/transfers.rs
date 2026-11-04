@@ -5,9 +5,12 @@
 //! ожидаемое зачисление — credit_expect.rs, credit_watch.rs; шаг зачисления — transfer_credit.rs). Перевод дольше transfer.max_time_s —
 //! уведомление и карантин монеты, ждём дальше (монеты в пути). Фактическое время в пути пишется в историю
 //! (для T в расчёте, dirctx.rs). Сумма вывода — вниз до точности вывода биржи (решение 104).
-//! Кто вызывает: executor.rs (перевод сделки), stuck.rs (перегон), usdt_return.rs (USDT).
+//! Решение 151: перевод сделки на кошелёк DEX (send_trade) засчитывается и по приходу монеты в блокчейне, не дожидаясь
+//! хеша от биржи-отправителя (credit_chain.rs, transfer_chain.rs; transfer.credit_by_chain получателя). Перегон
+//! (send), возврат USDT (send_as), биржа ↔ биржа и переводы на биржу — как раньше (решение 76).
+//! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
-//! credit_watch.rs, transfer_credit.rs.
+//! credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network.
 
@@ -92,6 +95,20 @@ pub async fn send(
     send_as(core, deal, from, to, asset, qty, acc.as_ref()).await
 }
 
+/// Перевод сделки (executor.rs): как send, но на кошелёк DEX сделки зачисляется и по приходу в блокчейне (решение
+/// 151). Возвращает: (вывод, зачисление, строка хронологии сделки — если зачислено по блокчейну). Ошибки: как у send.
+pub async fn send_trade(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+) -> Result<(Transfer, Transfer, Option<String>), OpError> {
+    let acc = super::dex_account::of_deal(core, deal)?;
+    go(core, deal, from, to, asset, qty, acc.as_ref(), true).await
+}
+
 /// Как send, но счёт DEX задан явно (перегон USDT вне сделки — строка маппинга биржи, решение 132).
 /// Принимает: …, счёт DEX (None — DEX не участвует). Ошибки: как у send.
 pub async fn send_as(
@@ -103,6 +120,23 @@ pub async fn send_as(
     qty: Decimal,
     acc: Option<&crate::core::types::DexAccountId>,
 ) -> Result<(Transfer, Transfer), OpError> {
+    let (sent, credited, _) = go(core, deal, from, to, asset, qty, acc, false).await?;
+    Ok((sent, credited))
+}
+
+/// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
+/// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send.
+#[allow(clippy::too_many_arguments)]
+async fn go(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+    acc: Option<&crate::core::types::DexAccountId>,
+    chain: bool,
+) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let deps = &core.inner.deps;
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
@@ -144,6 +178,10 @@ pub async fn send_as(
         deal_id: deal.to_string(),
     };
     let started = Utc::now();
+    // Решение 151: только получатель — DEX и известен кошелёк сделки (credit_chain.rs).
+    if chain {
+        super::credit_chain::arm(core, ticket.as_ref(), to, acc.is_some(), started);
+    }
     let mut attempt = 0;
     let created = loop {
         attempt += 1;
@@ -171,6 +209,27 @@ pub async fn send_as(
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
     let mut last = String::new();
     let sent = loop {
+        // Решение 151: приход в блокчейне уже засчитан зачислением — к продаже, хеш биржи сверяется фоном.
+        if let Some(hit) = ticket
+            .as_ref()
+            .and_then(super::credit_watch::Ticket::chain_hit)
+        {
+            let c = super::transfer_chain::Chain {
+                deal,
+                from,
+                to,
+                asset,
+                net_from: &net_from,
+                net_to: net_to.clone(),
+                qty,
+                started,
+                created: created.clone(),
+                gw_from: gw_from.clone(),
+                gw_to: gw_to.clone(),
+            };
+            let (sent, credited, note) = super::transfer_chain::finish(core, c, hit, ticket).await;
+            return Ok((sent, credited, Some(note)));
+        }
         // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
         match gw_from.withdrawal_status(&created.venue_ref).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
@@ -232,5 +291,5 @@ pub async fn send_as(
     // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
     let (f, a) = (&net_from, credited.amount);
     super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a).await;
-    Ok((sent, credited))
+    Ok((sent, credited, None))
 }

@@ -34,12 +34,21 @@ pub fn ur_form(ctx: &Ctx, legs: &[Path]) -> bool {
         || hops().all(|h| smart_ok(ctx, h.entry.family))
 }
 
+/// Налоговая ли монета на ВХОДЕ маршрута (решение 146): у первого шага какой-либо доли монета пула — вход шага (продажа
+/// монеты пула) и налог продажи ИМЕННО этого пула > 0 (Hop.usable.tax_pct). Ошибок нет.
+pub fn taxed_in(legs: &[Path]) -> bool {
+    legs.iter()
+        .filter_map(|p| p.hops.first())
+        .any(|h| h.token_in == h.entry.coin && h.usable.tax_pct > rust_decimal::Decimal::ZERO)
+}
+
 /// Ревью 122, пункт 3: монета с налогом на ВХОДЕ через исполнитель платит налог один раз, только если весь вход берёт
 /// единственный первый шаг вида «вход переводом в пул» (V2 / SOLIDLY / DODO / WOO — прямой вход владелец → пул,
 /// contracts/README.md). Иначе вход идёт кошелёк → исполнитель → пул (налог дважды; V3 / ALGEBRA / MAVERICK пул
-/// откатит обмен по недобору) — неисполнимо, сигнал с причиной. Принимает: доли, налоговая ли монета на входе.
-pub fn tax(legs: &[Path], taxed_in: bool) -> Result<(), String> {
-    if !taxed_in {
+/// откатит обмен по недобору) — неисполнимо, сигнал с причиной. Налоговость входа — по налогу пула первого шага
+/// (taxed_in, решение 146). Принимает: доли.
+pub fn tax(legs: &[Path]) -> Result<(), String> {
+    if !taxed_in(legs) {
         return Ok(());
     }
     if legs.len() > 1 {

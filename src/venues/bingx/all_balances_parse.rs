@@ -26,7 +26,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Balance, VenueId};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::{errors, num};
 
@@ -35,6 +35,21 @@ use super::{errors, num};
 /// Ошибки: BadResponse — нет массива balances или поля строки не те.
 pub fn free_locked(venue: &VenueId, data: &Value) -> GatewayResult<Vec<Balance>> {
     let mut out = Vec::new();
+    // Пустой фонд: balances = null — счёт пуст, не сбой. Поля balances нет вовсе — ошибка с тем, что пришло (живой
+    // ответ 04.11 на /openApi/fund/v1/account/balance — «нет массива balances»; документация docs-v3 — data.balances,
+    // api-ai-skills — data.balance (object): форму проверить по тексту ошибки).
+    match data.get("balances") {
+        Some(Value::Null) => return Ok(out),
+        Some(_) => {}
+        None => {
+            let shown: String = data.to_string().chars().take(400).collect();
+            return Err(GatewayError::new(
+                ErrorCode::BadResponse,
+                None,
+                format!("BingX: нет массива balances, пришло: {shown}"),
+            ));
+        }
+    }
     for b in num::arr(data, "balances")? {
         push(
             &mut out,

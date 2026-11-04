@@ -6,7 +6,7 @@
 //! частный случай графа глубины 2 (решение 80): множитель-mid здесь один, расчёт пути — общий.
 //! Кто вызывает: quote/via_pools.rs (лучшая пара), quote/smart.rs (доля через промежуточную), exec/live.rs.
 //! Пулы шагов, допуск промежуточной монеты и выбор лучшей пары — quote/via_pools.rs.
-//! От чего зависит: quote/route_calc.rs, quote/path.rs, quote/select.rs, pools/registry.rs, pools/mids.rs.
+//! От чего зависит: quote/route_calc.rs, quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs, quote/select.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: через вызываемые — см. их шапки.
 //!
 //! Промежуточная монета должна быть проверена и без налогов (покупки, продажи, перевода): налог промежуточной на
@@ -23,7 +23,8 @@ use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::Quoting;
 use super::path::Path;
-use super::route_calc::{self, Leg, keep};
+use super::pool_tax;
+use super::route_calc::{self, Leg};
 use super::select::Usable;
 
 /// Что нужно для расчёта путей одной монеты.
@@ -60,22 +61,18 @@ impl Via<'_> {
             dec_out,
         };
         // Хопы — в порядке исполнения стороны; налог монеты на её стороне (покупка — выход P2, продажа — вход P2).
-        let (legs, tax_keep) = match self.side {
-            Side::Buy => (
-                vec![
-                    leg(p1, (self.usdt, m.address), (self.usdt_dec, mid_dec)),
-                    leg(p2, (m.address, self.coin), (mid_dec, self.coin_dec)),
-                ],
-                keep(self.taxes.buy_pct),
-            ),
-            Side::Sell => (
-                vec![
-                    leg(p2, (self.coin, m.address), (self.coin_dec, mid_dec)),
-                    leg(p1, (m.address, self.usdt), (mid_dec, self.usdt_dec)),
-                ],
-                keep(self.taxes.sell_pct),
-            ),
+        let legs = match self.side {
+            Side::Buy => vec![
+                leg(p1, (self.usdt, m.address), (self.usdt_dec, mid_dec)),
+                leg(p2, (m.address, self.coin), (mid_dec, self.coin_dec)),
+            ],
+            Side::Sell => vec![
+                leg(p2, (self.coin, m.address), (self.coin_dec, mid_dec)),
+                leg(p1, (m.address, self.usdt), (mid_dec, self.usdt_dec)),
+            ],
         };
+        // Решение 146: налог монеты — пула её шага (P2), не монеты целиком (quote/pool_tax.rs).
+        let tax_keep = pool_tax::coin_keep(&legs, self.side, self.taxes);
         route_calc::eval(&self.q.ctx, &legs, self.side, qty, tax_keep)
     }
 }

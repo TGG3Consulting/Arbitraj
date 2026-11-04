@@ -163,6 +163,7 @@ async fn scene(id: &str, kind: &str) -> Parts {
         f.gas_sell = Some(120_000);
         f.quoter.buy = Some(Ok(()));
         f.quoter.sell = Some(Ok(()));
+        f.taxes = Some(route_common::clean_taxes());
     });
     p
 }
@@ -523,6 +524,7 @@ async fn scene_with_signal_only() -> Parts {
         f.gas_sell = Some(120_000);
         f.quoter.buy = Some(Ok(()));
         f.quoter.sell = Some(Ok(()));
+        f.taxes = Some(route_common::clean_taxes());
     });
     p
 }

@@ -14,6 +14,7 @@ pub mod all_balances;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
+pub mod deposit_hold;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
@@ -178,6 +179,11 @@ impl Venue for Mexc {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
+    }
+
+    /// Решение 150: предварительно зачисленные депозиты (deposit/hisrec, статус 9) — их нельзя вывести.
+    async fn withdraw_hold(&self) -> GatewayResult<crate::core::types::WithdrawHold> {
+        deposit_hold::withdraw_hold(&self.ctx).await
     }
 
     /// Решение 144: панель «Балансы» — счета «Спот» и «Фьючерсы» параллельно (all_balances.rs), только чтение.

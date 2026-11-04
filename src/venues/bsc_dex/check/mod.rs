@@ -11,6 +11,7 @@ pub mod emitter;
 pub mod fresh;
 pub mod hooks_probe;
 pub mod native_probe;
+pub mod pool_taxes;
 pub mod probe;
 pub mod probe_calls;
 pub mod probe_exec;

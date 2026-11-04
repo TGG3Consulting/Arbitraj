@@ -1,15 +1,43 @@
 //! Файл: venues/bsc_dex/check/state.rs
 //! Что делает: итоги проверок в памяти — налоги монет (CoinCheck), влияние крючков пулов (PoolCheck), газ обмена
-//! по пулу из пробного обмена (покупка, продажа), итог сверки пула с квотером. По ним котировка решает, какие
-//! пулы можно использовать: пока проверка не закончена — торговли нет (решения 30, 32).
-//! Кто вызывает: check/cycle.rs, check/taxes.rs, check/hooks_probe.rs, quote/quoter.rs (пишут), quote/direct.rs (читает).
-//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef).
+//! по пулу из пробного обмена (покупка, продажа), налоги монеты В КАЖДОМ пуле (решение 146), итог сверки пула с
+//! квотером. По ним котировка решает, какие пулы можно использовать: пока проверка не закончена — торговли нет
+//! (решения 30, 32).
+//! Кто вызывает: check/cycle.rs, check/taxes.rs, check/hooks_probe.rs, quote/quoter.rs (пишут), quote/direct.rs,
+//! quote/select.rs (читают).
+//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side).
 //! Настройки: нет.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::core::types::{CoinCheck, PoolCheck, PoolRef};
+use rust_decimal::Decimal;
+
+use crate::core::types::{CoinCheck, PoolCheck, PoolRef, Side};
+
+/// Налоги монеты пула (Entry.coin), измеренные пробным обменом ИМЕННО в этом пуле (решение 146, check/probe.rs): у
+/// токенов с налогом «только при обмене через зарегистрированные пулы» (живой случай FLOKI 04.11: продажи на 0,30 %
+/// хуже плана при налоге монеты 0) налог зависит от пула.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoolTaxes {
+    /// Налог покупки, %: (ответ квотера − пришло монет) / ответ квотера.
+    pub buy_pct: Decimal,
+    /// Налог продажи, %: (ответ квотера на продажу − пришло встречного токена) / ответ квотера. None — НЕ ИЗМЕРЕН
+    /// (продажа пробы откатилась или квотер не ответил) — это не 0: пул по продаже не используется.
+    pub sell_pct: Option<Decimal>,
+    /// Налог простого перевода на пустой адрес, % (от пула не зависит).
+    pub transfer_pct: Decimal,
+}
+
+impl PoolTaxes {
+    /// Налог нужной стороны (покупка / продажа монеты пула). None — не измерен. Ошибок нет.
+    pub fn side(&self, side: Side) -> Option<Decimal> {
+        match side {
+            Side::Buy => Some(self.buy_pct),
+            Side::Sell => self.sell_pct,
+        }
+    }
+}
 
 /// Факты о пуле из проверок.
 #[derive(Debug, Clone, Default)]
@@ -33,6 +61,9 @@ pub struct PoolFacts {
     /// Нативная монета (решение 62, check/native_probe.rs): газ обёртки сверх обмена токеном — (покупка с
     /// UNWRAP_WETH, продажа с WRAP_ETH); None — не мерился; Some(Err) — проба не прошла (причина).
     pub wrap_gas: Option<Result<(u64, u64), String>>,
+    /// Налоги монеты в этом пуле (решение 146, check/taxes.rs): пишутся по каждой удачной пробе пула; None — проба
+    /// пула ещё не прошла (или пробный обмен в пуле откатился) — пул в котировку не идёт (quote/select.rs).
+    pub taxes: Option<PoolTaxes>,
 }
 
 /// Хранилище итогов проверок. Дешёво клонируется.

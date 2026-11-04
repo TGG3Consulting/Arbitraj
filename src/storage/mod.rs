@@ -10,6 +10,7 @@ pub mod db;
 pub mod episode_files;
 pub mod episodes_db;
 pub mod journal;
+pub mod journal_repeat;
 pub mod raw_log;
 pub mod rules;
 pub mod uncapped_db;

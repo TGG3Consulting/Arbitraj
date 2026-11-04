@@ -21,7 +21,7 @@ use crate::core::types::{Asset, DexDrySwap, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::num;
-use super::super::quote::{Quoting, direct};
+use super::super::quote::{Quoting, direct, pool_tax};
 use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built, Ready};
 use super::dry_sim::{self, Io};
@@ -119,7 +119,12 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
             return Err(ctx.err(ErrorCode::InsufficientBalance, why));
         }
     }
-    let taxes = direct::taxes(q, &r.asset).ok();
+    // Решение 146: пополнение входа продажи — с НАИБОЛЬШИМ налогом покупки среди пулов монеты (пул-источник любой, налог
+    // зависит от пула; в CoinCheck — наименьший), quote/pool_tax.rs max_buy.
+    let taxes = direct::taxes(q, &r.asset).ok().map(|mut t| {
+        t.buy_pct = t.buy_pct.max(pool_tax::max_buy(q, &r.asset.ticker));
+        t
+    });
     let io = Io {
         taxes_in: if r.side == Side::Sell {
             taxes.as_ref()

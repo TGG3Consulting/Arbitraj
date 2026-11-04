@@ -30,6 +30,7 @@
 | `deposit_addr.rs` | Адрес депозита: кэш по (монета, сеть) на время процесса, адрес с `memo` — ошибка «не поддерживается» |
 | `transfers.rs` | Вывод (`POST /api/v3/capital/withdraw`, `withdrawOrderId` с меткой попытки), его статус, поиск по `withdrawOrderId` при неизвестном итоге |
 | `deposits.rs` | Статус депозита по хешу (`gateway::tx_hash::same`) |
+| `deposit_hold.rs` | Удержания вывода (решение 150): предварительно зачисленные депозиты — `GET /api/v3/capital/deposit/hisrec` (вес 10), записи `status` = 9 PRE_SUCCESS за окно API по умолчанию (7 дней); торговать ими можно, выводить нельзя |
 | `account.rs` | Балансы, «Проверить подключение» (`apiKeyInfo`: права, включая SPOT_DEAL_READ, IP, срок ключа) |
 | `all_balances.rs` | Панель «Балансы» (решение 144): счета «Спот» (`GET /api/v3/account`) и «Фьючерсы» (`GET /api/v1/private/account/assets`) параллельно, ошибка счёта — в его `error`; других счетов (маржа, Earn, фонд) в API MEXC нет |
 | `futures_rest.rs` | Подписанный GET фьючерсного API (свой домен `venue.futures_rest_url`, заголовки `ApiKey`/`Request-Time`/`Signature`, подпись `accessKey+timestamp+параметры`), коды ошибок фьючерсов, своя пауза по Retry-After |

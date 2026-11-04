@@ -67,6 +67,9 @@ async fn ctx() -> Ctx {
         ("dex.depth_band_pct", v.clone(), json!(10)),
         ("dex.depth_hysteresis_pct", v.clone(), json!(0)),
         ("exec.dex_slippage_pct", v.clone(), json!(1)),
+        // Решение 146: пороги налога пула в котировке (quote/pool_tax.rs), значения теста.
+        ("tax.max_buy_pct", Scope::Global, json!("5")),
+        ("tax.max_sell_pct", Scope::Global, json!("5")),
         (
             "dex.kind",
             Scope::Dex("pancakeswap_v2".into()),
@@ -223,6 +226,11 @@ async fn buy_and_sell_through_wbnb() {
             f.gas_sell = Some(110_000);
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
+            f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+                buy_pct: Decimal::ZERO,
+                sell_pct: Some(Decimal::ZERO),
+                transfer_pct: Decimal::ZERO,
+            });
         });
     }
     p.checks.set_coin(clean("BNB", WBNB));

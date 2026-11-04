@@ -1,9 +1,9 @@
 //! Файл: core/ledger_load.rs
 //! Что делает: загрузка сделок при запуске (вынесено из ledger.rs): незакрытые — «прервана перезапуском», шаг Halted,
-//! уведомление risk.stop и предварительный убыток (решение 53); ждущие решения человека остаются ждать; у закрытой
+//! уведомление risk.stop и оценка позиции в итог дня (решения 53, 152); ждущие решения человека остаются ждать; у закрытой
 //! сделки возврат USDT «идёт» — задача потеряна вместе с памятью: «не вернулись» со страховкой (решение 138).
 //! Кто вызывает: engine.rs (через ledger::load).
-//! От чего зависит: ledger.rs (save, KIND), persist.rs, daily.rs, usdt_return_state.rs, deal.rs.
+//! От чего зависит: ledger.rs (save, KIND), persist.rs, daily.rs, daily_value.rs, usdt_return_state.rs, deal.rs.
 //! Настройки: нет.
 
 use crate::storage::journal::Level;
@@ -38,8 +38,12 @@ pub async fn load(core: &Core) {
             );
             d.step = Step::Halted;
             d.note(text.clone());
-            // Решение 53: остановленная сделка — предварительный убыток в итог дня.
-            if let Some(stop) = super::daily::provisional(core, &mut d).await {
+            // Решения 53, 152: остановленная сделка — оценка позиции в итог дня (цены ещё нет — худший случай).
+            // При запуске рыночных данных ещё нет (стаканы и пулы не загружены), а котировка DEX пошла бы на узел и
+            // задержала запуск — оценка сразу «цены нет».
+            let est =
+                super::daily_value::estimate(&d, Err("перезапуск: рыночных данных ещё нет".into()));
+            if let Some(stop) = super::daily::record(core, &mut d, est).await {
                 deps.notify("risk.daily_loss", None, &stop).await;
             }
             deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)

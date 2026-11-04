@@ -2,10 +2,13 @@
 //! Что делает: можно ли использовать пул в котировке и сделке прямо сейчас — с понятной причиной, если нельзя:
 //! пул достоверен; DEX и вид пула включены; группа крючка допущена (hooks.allowed_groups), влияние B/C измерено
 //! и в допуске (hooks.max_impact_b_pct / _c_pct); пул сверен с квотером без расхождения (любой пул, с крючком тоже); газ стороны измерен
-//! пробным обменом; глубина нужного направления в полосе цены не ниже dex.min_pool_liquidity_usd (решение 73).
-//! Кто вызывает: quote/direct.rs.
-//! От чего зависит: check/state.rs, pools/registry.rs, pools/depth_book.rs, tokens.rs.
+//! пробным обменом; налог монеты нужной стороны ИМЕННО в этом пуле измерен пробой и не больше tax.max_buy_pct /
+//! tax.max_sell_pct (решение 146); глубина нужного направления в полосе цены не ниже dex.min_pool_liquidity_usd (решение 73).
+//! Кто вызывает: quote/direct.rs и все сборщики ног маршрута (graph_legs, via_pools, smart_ways, cycle*, verify_decide, exec/live*).
+//! От чего зависит: check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
 //! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
+//! tax.max_buy_pct, tax.max_sell_pct (не задан порог — пул не используется с причиной «не задана настройка», как у
+//! порогов ядра core/blacklist.rs: монета на DEX не торгуется),
 //! dex.min_pool_liquidity_usd, через depth_book.rs — dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
 //!
 //! Динамическая комиссия V4 (fee = DYNAMIC_FEE_FLAG) — группа B: её влияние измеряется квотером
@@ -34,6 +37,10 @@ pub struct Usable {
     pub gas: u64,
     /// Влияние крючка на эту сторону, % (0 — крючка B/C нет).
     pub hook_pct: Decimal,
+    /// Налог монеты пула (Entry.coin) на эту сторону ИМЕННО в этом пуле, % (решение 146, PoolFacts.taxes): покупка —
+    /// налог покупки, продажа — налог продажи. Котировка берёт его на шаге монеты (quote/route_calc.rs coin_keep,
+    /// quote/steps.rs, quote/direct.rs calc).
+    pub tax_pct: Decimal,
 }
 
 /// Проверка пула. Возвращает: Ok(Usable) или Err(причина, почему пул не используется).
@@ -76,7 +83,12 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
         Side::Sell => facts.gas_sell,
     }
     .ok_or("газ обмена не измерен пробным обменом")?;
-    Ok(Usable { gas, hook_pct })
+    let tax_pct = super::pool_tax::usable(ctx, &facts, side)?;
+    Ok(Usable {
+        gas,
+        hook_pct,
+        tax_pct,
+    })
 }
 
 /// Допуск крючка и его влияние на сторону, %. Err — пул не допущен (причина).

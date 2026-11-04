@@ -18,7 +18,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Side, TokenTaxes};
+use crate::core::types::Side;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::mids::Mid;
@@ -46,9 +46,7 @@ pub fn best(
             "smart.split_step_pct должен быть в (0; 100], smart.max_splits — больше нуля",
         ));
     }
-    let t: &TokenTaxes = v.taxes;
-    let taxed = !(t.buy_pct.is_zero() && t.sell_pct.is_zero() && t.transfer_pct.is_zero());
-    let (mut ways, mut why) = pools(v.q, entries, v.side, taxed, v.usdt_dec);
+    let (mut ways, mut why) = pools(v.q, entries, v.side, v.usdt_dec);
     ways.extend(pairs(v, mids, qty, &mut why));
     let mut slots: Vec<Slot> = ways
         .into_iter()

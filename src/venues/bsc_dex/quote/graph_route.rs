@@ -31,7 +31,7 @@ use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
-use super::{Quoting, costs, graph_exec, graph_legs, pick, route_calc, route_paths};
+use super::{Quoting, costs, graph_exec, graph_legs, pick, route_paths};
 
 pub use super::graph_exec::{GraphForm, graph_form};
 
@@ -65,11 +65,6 @@ pub async fn quote(
         ));
     }
     let dec = decimals(v, &paths).await?;
-    let tax_keep = route_calc::keep(if v.side == Side::Buy {
-        v.taxes.buy_pct
-    } else {
-        v.taxes.sell_pct
-    });
     // R1 (решение 122): газ пути в USDT для выбора — только при dex.route_gas_aware = да.
     let gas_aware = route_gas::enabled(ctx);
     let conv = if gas_aware {
@@ -101,15 +96,9 @@ pub async fn quote(
             ),
         ));
     }
-    let legs = graph_split::split(ctx, &mut cands, v.side, qty, tax_keep, gas_aware)?;
-    let taxed_in = v.taxed() && v.side == Side::Sell;
-    let exec = graph_exec::executable(
-        ctx,
-        &legs,
-        native::is_native(ctx, asset),
-        v.taxed(),
-        taxed_in,
-    );
+    let legs = graph_split::split(ctx, &mut cands, v.side, qty, v.taxes, gas_aware)?;
+    // Решения 39 и 146: налоговые правила исполнимости — по налогу ПУЛА каждого шага (Usable.tax_pct), не монеты.
+    let exec = graph_exec::executable(ctx, &legs, native::is_native(ctx, asset));
     let mut quote = costs::quote(
         ctx,
         asset,

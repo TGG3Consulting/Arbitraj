@@ -108,6 +108,14 @@ pub fn legs_for_cycle(
         let hs = hop_side(entry, s.token_in).ok_or("ребро не соединяет токены хопа")?;
         let usable = super::select::usable(q, entry, hs, usdt_dec)
             .map_err(|w| format!("{} {}: {w}", entry.family.title, entry.ticker))?;
+        // Решение 146: цикл считается без налогов (tax_keep = 1) — пул, где налог монеты на этой стороне не 0, в цикл не
+        // идёт (налог монеты целиком мог быть 0 по чистому пулу, а этот пул — с налогом).
+        if !usable.tax_pct.is_zero() {
+            return Err(format!(
+                "{} {}: налог монеты в этом пуле {}% — цикл через налог не строится",
+                entry.family.title, entry.ticker, usable.tax_pct
+            ));
+        }
         let dec_in = *dec.get(&s.token_in).ok_or("нет decimals токена входа")?;
         let dec_out = *dec.get(&s.token_out).ok_or("нет decimals токена выхода")?;
         legs.push(Leg {

@@ -98,7 +98,11 @@ async fn dry_mode_never_calls_executor() {
     // Включение снято на лету — замок пропускает, дальше отказ ядра (площадок в реестре нет).
     set(&s, "dry.enabled", Some(json!(false))).await;
     assert_eq!(dry::mode(&s), Mode::Live);
-    assert_eq!(executor::accepted(&core, calc).await, Start::NotTradable);
+    // Решение 147: отказ с причиной — монеты нет в справочнике (площадок в реестре нет).
+    match executor::accepted(&core, calc).await {
+        Start::NotTradable(why) => assert!(why.contains("нет в рабочем справочнике"), "{why}"),
+        r => panic!("ожидался отказ «не торгуемо»: {r:?}"),
+    }
     assert!(core.deals().is_empty());
 }
 

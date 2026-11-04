@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/check/taxes_util.rs
-//! Что делает: части проверки налогов: пулы монеты для пробы (фильтр ликвидности, порядок V2 → V3 → V4), налоги в
-//! процентах по замеру пробы и выбор источника встречного токена для пробы.
-//! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/probe.rs (Measured), pools/registry.rs, node/call.rs, num.rs.
+//! Что делает: части проверки налогов: пулы монеты для пробы (фильтр ликвидности, порядок V2 → V3 → V4), налог в
+//! процентах по паре «отправлено / дошло» и выбор источника встречного токена для пробы. Налоги пула по замеру пробы и
+//! налоги монеты по пулам — check/pool_taxes.rs (решение 146).
+//! Кто вызывает: check/taxes.rs, check/pool_taxes.rs, check/service_tax_calls.rs.
+//! От чего зависит: pools/registry.rs, node/call.rs, num.rs.
 //! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6.
@@ -14,7 +15,7 @@ use std::sync::Mutex;
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolKind, PoolRef, TokenTaxes};
+use crate::core::types::{PoolKind, PoolRef};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
@@ -24,17 +25,6 @@ use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::select;
 use super::super::tokens::Tokens;
-use super::probe::Measured;
-
-/// Налоги в процентах. None — делить не на что (ожидалось 0).
-pub fn percent(m: &Measured, decimals: u8) -> Option<TokenTaxes> {
-    let pct = |sent: U256, got: U256| pct(sent, got, decimals);
-    Some(TokenTaxes {
-        buy_pct: pct(m.buy_expected, m.buy_got)?,
-        sell_pct: pct(m.sell_sent, m.sell_got)?,
-        transfer_pct: pct(m.transfer_sent, m.transfer_got)?,
-    })
-}
 
 /// Налог, %: (отправлено − дошло) / отправлено · 100 (дошло больше — 0). Принимает: суммы в минимальных единицах,
 /// знаки токена. Возвращает: None — отправлено 0 или не переводится. Ошибок нет.

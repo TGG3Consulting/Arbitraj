@@ -11,16 +11,17 @@
 //! фиксирован (Тигран, 03.11): остаток не теряется — идёт в открытые доли, а если они его уже не принимают, открывается
 //! лучший новый путь. Не задано / «нет» — сплит без газа, как до решения 122.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: quote/route_calc.rs (Leg, eval), quote/path.rs (Path).
+//! От чего зависит: quote/route_calc.rs (Leg, eval), quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs (Path).
 //! Настройки: smart.split_step_pct, smart.max_splits [bsc_dex]; учёт газа включает вызывающий (dex.route_gas_aware).
 
 use rust_decimal::Decimal;
 
-use crate::core::types::Side;
+use crate::core::types::{Side, TokenTaxes};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::path::Path;
+use super::pool_tax;
 use super::route_calc;
 
 /// Путь-кандидат сплита: ноги в порядке исполнения, сколько монет ему уже отдано, его расчёт и газ пути в USDT
@@ -84,14 +85,15 @@ fn choose<T>(
     }
 }
 
-/// Сплит. Принимает: окружение, кандидатов, сторону, количество монет, долю keep налога монеты, учитывать ли газ.
+/// Сплит. Принимает: окружение, кандидатов, сторону, количество монет, налоги монеты из проверки (запасные: у каждого
+/// пути налог — пула его шага монеты, quote/pool_tax.rs coin_keep, решение 146), учитывать ли газ.
 /// Возвращает: доли (пути). Ошибки: NotConfigured (шаг/число долей), NoRoute (ни один путь не принял объём).
 pub fn split(
     ctx: &Ctx,
     cands: &mut [Cand],
     side: Side,
     qty: Decimal,
-    tax_keep: Decimal,
+    t: &TokenTaxes,
     gas_aware: bool,
 ) -> GatewayResult<Vec<Path>> {
     let max_splits = usize::try_from(ctx.int("smart.max_splits")?).unwrap_or(usize::MAX);
@@ -115,6 +117,7 @@ pub fn split(
             if opens && used >= max_splits {
                 continue;
             }
+            let tax_keep = pool_tax::coin_keep(&c.legs, side, t);
             let Ok(p) = route_calc::eval(ctx, &c.legs, side, c.qty + step, tax_keep) else {
                 continue;
             };

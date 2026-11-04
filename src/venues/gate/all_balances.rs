@@ -152,8 +152,19 @@ async fn read(ctx: &Ctx, name: String, path: String, perm: &str, f: Parser) -> A
         .and_then(|v| f(&v, &ctx.venue()))
     {
         Ok(p) => ok(name, p.balances, p.note),
+        Err(e) if not_opened(&e) => ok(
+            name,
+            vec![],
+            Some("счёт не открыт (Gate: USER_NOT_FOUND)".into()),
+        ),
         Err(e) => failed(name, reason(&e, perm)),
     }
+}
+
+/// Счёт не открыт: Gate отвечает USER_NOT_FOUND «please transfer funds first to create futures account» (живой ответ
+/// 04.11 на /futures/btc/accounts, /futures/usd1/accounts, /delivery/usdt/accounts) — это пустой счёт, не сбой.
+fn not_opened(e: &GatewayError) -> bool {
+    e.message.contains("USER_NOT_FOUND")
 }
 
 /// Что делает: Earn (Uni Lend) — все страницы /earn/uni/lends (limit 100 — максимум по документации; страница короче —

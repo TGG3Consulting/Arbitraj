@@ -1,6 +1,6 @@
 // Файл: ui/src/lib/control.svelte.js
 // Что делает: режим системы для всего интерфейса (экран «Управление», решение 46): «Стоп» после запуска,
-//   «Старт», «Пауза»; паузы площадок, карантины монет, итог дня. Данные — GET /api/control, живое
+//   «Старт», «Пауза»; паузы площадок, карантины монет, итог дня, «Сбросить лимит дня» (решение 153). Данные — GET /api/control, живое
 //   сообщение control (src/api/README.md); команды — POST /api/control и снятие паузы/карантина.
 // Кто вызывает: App.svelte (start), components/ControlBar.svelte.
 // От чего зависит: lib/api.js, lib/live.svelte.js.
@@ -51,3 +51,6 @@ export const resumeVenue = (id) => command(`/api/control/venue/${seg(id)}/resume
 
 /** Снять карантин монеты. Принимает: id — адрес контракта (решение 118) или тикер монеты без адреса. */
 export const releaseCoin = (t) => command(`/api/control/quarantine/${seg(t)}/release`);
+
+/** «Сбросить лимит дня» (решение 153): режим не меняется; подтверждение — в ControlBar.svelte. */
+export const resetDailyLimit = () => command('/api/control/daily-limit/reset');

@@ -18,6 +18,7 @@
 //! Решение 132: счёт (кошелёк) DEX сделки — по маппингу перед предпроверкой (dex_account.rs); нет строки — сделки нет;
 //! маппинг поменяли во время предпроверки — сделки нет. Счёт записывается в сделку, все шаги идут им.
 //! Решение 141: покупка исполнилась — фоновый расчёт «без потолка» с id сделки (uncapped_entry.rs; путь не ждёт).
+//! Решение 147: отказ на входе (NotTradable, Busy) несёт точную причину (start_reason.rs) — в «Кандидаты» и журнал.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -37,10 +38,11 @@ pub enum Start {
     Started,
     /// Сухой режим (решение 74): ничего не делается — причина.
     Dry(String),
-    /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике).
-    NotTradable,
-    /// По монете уже идёт сделка (решение 118: одна сделка на монету).
-    Busy,
+    /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике, площадка
+    /// исключена) — точная причина (решение 147, start_reason::not_tradable).
+    NotTradable(String),
+    /// По монете уже идёт сделка или действие (решение 118: одна сделка на монету) — какое (решение 147).
+    Busy(String),
 }
 
 /// Кандидат прошёл расчёт — запускает сделку, если режим не сухой (решение 74), направление по-прежнему торгуемо
@@ -53,17 +55,22 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         return Start::Dry(why);
     }
     let d = calc.direction.clone();
-    let tradable = {
+    let refused = {
         let coins = rd(&core.inner.coins);
-        super::ticker_index::find(core, &coins, &d.asset)
-            .is_some_and(|c| c.directions().contains(&d))
+        let c = super::ticker_index::find(core, &coins, &d.asset);
+        let ok = c.is_some_and(|c| c.directions().contains(&d));
+        // Решение 147: причина — по той же записи справочника, по которой решено.
+        (!ok).then(|| super::start_reason::not_tradable(c, &d))
     };
-    if !tradable {
-        return Start::NotTradable;
+    if let Some(why) = refused {
+        return Start::NotTradable(why);
     }
     let key = super::coin_key::CoinKey::of(&d.asset);
     if !lk(&core.inner.active).insert(key.clone()) {
-        return Start::Busy;
+        return Start::Busy(super::start_reason::busy(
+            lk(&core.inner.deals).values(),
+            &d,
+        ));
     }
     let core = core.clone();
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
@@ -96,20 +103,33 @@ async fn run(core: &Core, d: Direction) {
         }
         Ok((acc, plan))
     };
+    // Решение 155: отказ предпроверки повторяется на каждый прошедший расчёт (в тексте — новые миллисекунды) — одна
+    // строка журнала на вид причины со счётчиком, как у core.candidate_rejected; прошла — строка закрывается.
+    let key = format!("precheck|{}", super::candidates::reject_key(&d));
     let (acc, plan) = match pre.await {
-        Ok(x) => x,
+        Ok(x) => {
+            core.inner.last_reject.close(&deps.journal, &key).await;
+            x
+        }
         Err(e) => {
-            deps.log(
-                Level::Info,
-                "core.precheck",
-                Some(&d.buy_on.0),
-                format!(
-                    "{} {} → {}: сделки нет — {e}",
-                    d.asset.ticker, d.buy_on.0, d.sell_on.0
-                ),
-                None,
-            )
-            .await;
+            let message = format!(
+                "{} {} → {}: сделки нет — {e}",
+                d.asset.ticker, d.buy_on.0, d.sell_on.0
+            );
+            let note = super::reject_log::Note {
+                level: Level::Info,
+                kind: "core.precheck",
+                venue: Some(&d.buy_on.0),
+                shape: super::reject_shape::shape(&e),
+                exact: e.clone(),
+                message,
+                data: None,
+            };
+            let every = super::candidates::flush_every(core);
+            core.inner
+                .last_reject
+                .note(&deps.journal, &key, note, every)
+                .await;
             return;
         }
     };
@@ -248,8 +268,14 @@ async fn run(core: &Core, d: Direction) {
     // Перевод на B.
     deal.step = Step::Transfer;
     super::ledger::save(core, &deal).await;
-    match super::transfers::send(core, &deal.id, &d.buy_on, &d.sell_on, &d.asset, deal.qty).await {
-        Ok((sent, credited)) => {
+    // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
+    match super::transfers::send_trade(core, &deal.id, &d.buy_on, &d.sell_on, &d.asset, deal.qty)
+        .await
+    {
+        Ok((sent, credited, chain)) => {
+            if let Some(line) = chain {
+                deal.note(line);
+            }
             super::fills::transfer(core, &mut deal, &sent, &credited, &d.sell_on, r.avg_price).await
         }
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "перевод", &e).await,

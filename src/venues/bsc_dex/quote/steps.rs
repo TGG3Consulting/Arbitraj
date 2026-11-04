@@ -1,11 +1,11 @@
 //! Файл: venues/bsc_dex/quote/steps.rs
 //! Что делает: затраты одного шага пути (решения 35, 52) — у каждого обмена своя строка с шагом маршрута (Cost::with_step):
 //! газ обмена в этом пуле (BNB), комиссия пула (в токене входа шага), налог монеты на её шаге (покупка — шаг, где
-//! монета на выходе; продажа — где на входе), влияние крючка (в токене выхода шага). Комиссия, налог и крючок уже
+//! монета на выходе; продажа — где на входе) — налог ИМЕННО пула этого шага (решение 146, quote/pool_tax.rs), влияние крючка (в токене выхода шага). Комиссия, налог и крючок уже
 //! в цене (in_price = true — для прозрачности), газ — отдельно. Валюта каждой затраты — тикер, который ядро может
 //! пересчитать: USDT (venue.quote_asset), тикер монеты, тикер промежуточной (биржи или «BNB» для WBNB).
 //! Кто вызывает: quote/costs.rs.
-//! От чего зависит: quote/path.rs, quote/pool_quote.rs (комиссия V4), pools/mids.rs, num.rs, core/types (Cost, RouteStep).
+//! От чего зависит: quote/path.rs, quote/pool_quote.rs (комиссия V4), quote/pool_tax.rs (налог пула шага), pools/mids.rs, num.rs, core/types (Cost, RouteStep).
 //! Настройки: dex.v2_fee_pct [вид пула V2].
 //!
 //! Проскальзывания отдельным видом затраты нет (ответ техлида, Issue #7): цена каждого шага уже посчитана по реальной
@@ -26,6 +26,7 @@ use super::super::pools::registry::Entry;
 use super::super::wallet::balances::BNB;
 use super::path::{Hop, Path};
 use super::pool_quote::swap_fee;
+use super::pool_tax::step_pct;
 
 /// Тикеры токенов пути для затрат.
 pub struct Names<'a> {
@@ -69,7 +70,8 @@ impl Names<'_> {
     }
 }
 
-/// Затраты всех шагов пути. Принимает: путь, сторону, налоги монеты, цену газа (wei), тикеры.
+/// Затраты всех шагов пути. Принимает: путь, сторону, налоги монеты из проверки (запасные — когда монета сделки не
+/// монета пула шага, quote/pool_tax.rs step_pct), цену газа (wei), тикеры.
 /// Ошибки: BadResponse (числа, тикер), NotConfigured (dex.v2_fee_pct).
 pub fn path_costs(
     ctx: &Ctx,
@@ -106,7 +108,7 @@ pub fn path_costs(
             add(
                 &mut out,
                 CostKind::BuyTax,
-                pct(p.coins, t.buy_pct),
+                pct(p.coins, step_pct(&h.entry, &h.usable, coin, side, t)),
                 &from_coin(names),
                 true,
             );
@@ -115,7 +117,7 @@ pub fn path_costs(
             add(
                 &mut out,
                 CostKind::SellTax,
-                pct(p.coins, t.sell_pct),
+                pct(p.coins, step_pct(&h.entry, &h.usable, coin, side, t)),
                 &from_coin(names),
                 true,
             );

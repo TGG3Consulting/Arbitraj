@@ -9,33 +9,29 @@
 //! Решение 122, часть R3: нативная монета BNB в бандле — обёртка/развёртка WBNB командой WRAP_ETH / UNWRAP_WETH в
 //! execute КАЖДОГО Universal Router бандла (exec/bundle_native.rs). Нога форка (свой classic V2 Router) обёртку не
 //! делает — маршрут с BNB через ногу форка неисполним с причиной.
-//! Решение 39 (проверка и в котировке графа — Тигран, 03.11): у монеты с налогом путь через промежуточную (нога из 2+
-//! хопов) — только пулы V2 на каждом шаге (как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
+//! Решение 39 (проверка и в котировке графа — Тигран, 03.11) по налогу ПУЛА (решение 146, Тигран 04.11): в пути через
+//! промежуточную (нога из 2+ хопов) шаг, у пула которого налог монеты на стороне шага > 0, — только пул V2
+//! (quote/pool_tax.rs v2_only, как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
 //! Решение 122, часть X: маршрут через свой исполнитель — правила в quote/graph_executor.rs (без адреса — как раньше).
 //! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
-//! От чего зависит: quote/graph_executor.rs, pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
+//! От чего зависит: quote/graph_executor.rs, quote/pool_tax.rs (v2_only), pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
 use alloy_primitives::Address;
 
-use crate::core::types::{DexRoute, PoolKind};
+use crate::core::types::DexRoute;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::pools::families::{self, Family, smart_ok};
 use super::graph_executor;
 use super::path::Path;
+use super::pool_tax;
 
-/// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли, нативная ли монета (BNB),
-/// есть ли у монеты налог (решение 39), налоговая ли монета — ВХОД маршрута (продажа; ревью 122, пункт 3).
+/// Исполним ли маршрут одной транзакцией или бандлом как есть (решение 84). Принимает: доли (налог пула каждого шага —
+/// в Hop.usable.tax_pct, решение 146), нативная ли монета (BNB).
 /// Возвращает: Ok — исполним; Err — причина (сигнал). Ошибок иных нет.
-pub fn executable(
-    ctx: &Ctx,
-    legs: &[Path],
-    native: bool,
-    taxed: bool,
-    taxed_in: bool,
-) -> Result<(), String> {
+pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> {
     if legs.is_empty() {
         return Err("пустой маршрут".to_string());
     }
@@ -47,16 +43,15 @@ pub fn executable(
             p.hops.len()
         ));
     }
-    // Решение 39: у монеты с налогом путь через промежуточную — только V2 на каждом шаге (сделка это тоже проверяет).
-    if taxed
-        && let Some(h) = legs
-            .iter()
-            .filter(|p| p.hops.len() > 1)
-            .flat_map(|p| p.hops.iter())
-            .find(|h| h.entry.pool.kind != PoolKind::V2)
+    // Решение 39 по налогу пула (решение 146): в пути через промежуточную пул с налогом стороны > 0 — только V2.
+    if let Some((h, why)) = legs
+        .iter()
+        .filter(|p| p.hops.len() > 1)
+        .flat_map(|p| p.hops.iter())
+        .find_map(|h| pool_tax::v2_only(&h.entry, &h.usable).err().map(|w| (h, w)))
     {
         return Err(format!(
-            "у монеты налог — путь через промежуточную только V2 (решение 39), а шаг идёт через {} {:?} — сигнал",
+            "путь через промежуточную: шаг {} {:?} — {why} — сигнал",
             h.entry.family.title, h.entry.pool.kind
         ));
     }
@@ -64,7 +59,7 @@ pub fn executable(
     // не формы Universal Router (graph_form = бандл) идёт одной транзакцией через исполнитель: бандловые каналы не
     // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
     if !native && graph_executor::all_via(ctx, legs) && !graph_executor::ur_form(ctx, legs) {
-        return graph_executor::tax(legs, taxed_in);
+        return graph_executor::tax(legs);
     }
     // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
     if let Some(h) = legs

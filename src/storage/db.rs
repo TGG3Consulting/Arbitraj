@@ -3,6 +3,7 @@
 //! Запросы выполняются в отдельном потоке (spawn_blocking), чтобы не тормозить рыночные задачи.
 //! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs.
 //! От чего зависит: rusqlite, tokio.
+//! Миграции: новые столбцы старых таблиц — ADDED_COLUMNS (добавляются при открытии, если их нет).
 //! Настройки: путь к папке данных — аргумент запуска --data-dir (до старта настроек его взять негде).
 
 use std::path::Path;
@@ -121,6 +122,26 @@ CREATE TABLE IF NOT EXISTS dex_wallet_history (
 );
 ";
 
+/// Столбцы, добавленные к уже существующим таблицам: (таблица, столбец, тип). Старая база получает их при открытии
+/// (ALTER TABLE … ADD COLUMN), новая — так же сразу после CREATE TABLE. Решение 155: журнал — счётчик повторов одной
+/// причины (`repeats`) и время последнего повтора (`last_at`); у обычных записей оба NULL.
+const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
+    ("journal", "repeats", "INTEGER"),
+    ("journal", "last_at", "TEXT"),
+];
+
+/// Миграция: добавляет недостающие столбцы ADDED_COLUMNS. Принимает: соединение. Ошибки: SQLite.
+fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
+    for (table, col, ty) in ADDED_COLUMNS {
+        let mut st = conn.prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))?;
+        let have: Vec<String> = st.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        if !have.iter().any(|c| c == col) {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {col} {ty};"))?;
+        }
+    }
+    Ok(())
+}
+
 /// Ошибка базы.
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
@@ -147,6 +168,7 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })

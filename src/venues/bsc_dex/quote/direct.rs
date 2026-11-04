@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/quote/direct.rs
 //! Что делает: котировка «прямого» режима (решение 29) — лучший одиночный пул монеты с USDT по её реальной
-//! ликвидности (локальная математика пула) с учётом налогов монеты и влияния крючка; затраты — в quote/costs.rs.
+//! ликвидности (локальная математика пула) с учётом налога монеты ИМЕННО в этом пуле (решение 146, Usable.tax_pct) и
+//! влияния крючка; затраты — в quote/costs.rs.
 //! Покупка Q монет: сколько USDT отдать, чтобы после налога покупки и крючка пришло Q (точный выход из пула);
 //! продажа Q монет: сколько USDT придёт (в пул доходит Q за вычетом налога продажи, точный вход).
 //! Не хватает ликвидности в прочитанных пределах — fillable_qty меньше qty.
@@ -50,7 +51,7 @@ pub fn best(
     let mut reasons = Vec::new();
     for e in entries {
         let r = select::usable(q, &e, side, usdt_dec).and_then(|u| {
-            calc(ctx, &e, &u, side, qty, &taxes, (coin_dec, usdt_dec))
+            calc(ctx, &e, &u, side, qty, (coin_dec, usdt_dec))
                 .map(|(swapped, coins, usdt)| Candidate {
                     entry: e.clone(),
                     usable: u,
@@ -96,7 +97,8 @@ pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
     }
 }
 
-/// Расчёт в одном пуле. Принимает: пул, его допуск, сторону, количество монет, налоги, (decimals монеты, USDT).
+/// Расчёт в одном пуле. Принимает: пул, его допуск (налог монеты этой стороны в этом пуле — Usable.tax_pct, решение
+/// 146; крючок), сторону, количество монет, (decimals монеты, USDT).
 /// Возвращает: (обмен в пуле, монет получим/продадим, USDT отдадим/получим).
 /// Ошибки: NoRoute (математика, налоги забирают всё), BadResponse (числа не помещаются).
 pub fn calc(
@@ -105,7 +107,6 @@ pub fn calc(
     u: &Usable,
     side: Side,
     qty: Decimal,
-    t: &TokenTaxes,
     (coin_dec, usdt_dec): (u8, u8),
 ) -> GatewayResult<(Swapped, Decimal, Decimal)> {
     let keep = |pct: Decimal| Decimal::ONE - pct / Decimal::ONE_HUNDRED;
@@ -117,7 +118,7 @@ pub fn calc(
     };
     match side {
         Side::Buy => {
-            let k = keep(t.buy_pct) * keep(u.hook_pct);
+            let k = keep(u.tax_pct) * keep(u.hook_pct);
             if k <= Decimal::ZERO {
                 return Err(ctx.err(ErrorCode::NoRoute, "налог покупки и крючок забирают всё"));
             }
@@ -128,7 +129,7 @@ pub fn calc(
             Ok((s, got.min(qty), usdt))
         }
         Side::Sell => {
-            let k = keep(t.sell_pct);
+            let k = keep(u.tax_pct);
             if k <= Decimal::ZERO {
                 return Err(ctx.err(ErrorCode::NoRoute, "налог продажи забирает всё"));
             }

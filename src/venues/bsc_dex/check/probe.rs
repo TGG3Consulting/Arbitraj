@@ -6,18 +6,23 @@
 //! форк-монета с налогом не проверится; у вида без своего пути (family.tradable = false) — execute своего контракта-
 //! исполнителя одним шагом этого пула (check/probe_exec.rs, решение 122 X). Выбор — part(). В одном симулированном блоке,
 //! от имени кошелька бота (без подписи): USDT на кошелёк из другого пула → разрешения → расчёт без налога
-//! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод половины на адрес, где лежат токены
-//! пула (налог продажи: насколько вырос его баланс) → перевод четверти на пустой адрес (налог перевода) →
-//! разрешения и продажа остатка (газ продажи). В покупке и продаже проверяется, что обмен сделал сам этот пул
-//! (check/emitter.rs, решение 59): Universal Router сам выбирает пару по своей фабрике; через исполнитель — событие
-//! самого пула по адресу шага (check/probe_exec.rs::emitter).
+//! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод четверти на пустой адрес (налог перевода) →
+//! разрешения продажи → квотер на продажу остатка (расчёт без налога) → баланс встречного токена → продажа остатка →
+//! баланс встречного токена (налог продажи = (квотер − прирост баланса) / квотер; решение 146: настоящей продажей,
+//! а не переводом на адрес пула — токены с налогом «только при обмене через зарегистрированные пулы», живой случай
+//! FLOKI 04.11, переводом не ловятся). Продажа откатилась или квотер не ответил — налог продажи НЕ ИЗМЕРЕН (не 0).
+//! В покупке и продаже проверяется, что обмен сделал сам этот пул (check/emitter.rs, решение 59): Universal Router сам
+//! выбирает пару по своей фабрике; через исполнитель — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
 //! Кто вызывает: check/taxes.rs.
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
 //! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
-//! Настройки: через вызываемые; dex.vault [Infinity] — где лежат токены пулов Infinity.
+//! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s).
 //!
-//! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Токены V2/V3 лежат в самом пуле,
-//! Infinity — в Vault («Vault … holds all tokens», research/flow/bsc_v4.md, раздел 1), Uniswap V4 — в PoolManager.
+//! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Квотер DEX выдаёт выход БЕЗ налога
+//! токена (решение 146, проверено по коду): V2 Router.getAmountsOut — математика резервов, без переводов; QuoterV2
+//! (Uniswap/PancakeSwap V3, Algebra, Slipstream, KyberSwap Elastic) и MaverickV2Quoter — откат в колбэке обмена ДО
+//! перевода входного токена в пул; CLQuoter/BinQuoter Infinity и V4Quoter — откат с дельтами без переводов; DODO
+//! querySell*, Solidly getAmountOut, StableSwap get_dy/calculateSwap, WooFi query — view-расчёт без переводов.
 //! Пустой адрес — последние 20 байт keccak256(адрес кошелька) — вычисляется, не зашит.
 //! Ограничение (подтверждено техлидом, Issue #7): налог перевода меряется на пустой адрес, а не на депозит биржи —
 //! налог может зависеть от получателя (белые/чёрные списки); факт перевода — по событиям Transfer (exec/fill.rs).
@@ -41,13 +46,24 @@ use super::probe_exec;
 use super::sim_base;
 use super::simulate::{self, Call};
 
-/// Что измерено (в минимальных единицах; проценты считает taxes.rs).
+/// Почему налог продажи пула не измерен (решение 146).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SellMiss {
+    /// true — продажа пробы (или её разрешения) откатилась: вердикт по пулу; false — помеха (квотер не ответил,
+    /// ответ не по ABI).
+    pub reverted: bool,
+    /// Причина текстом.
+    pub why: String,
+}
+
+/// Что измерено (в минимальных единицах; проценты считает check/pool_taxes.rs).
 #[derive(Debug, Clone)]
 pub struct Measured {
     pub buy_expected: U256,
     pub buy_got: U256,
-    pub sell_sent: U256,
-    pub sell_got: U256,
+    /// Продажа (решение 146): Ok((ответ квотера на продажу, прирост встречного токена кошелька за продажу)) в
+    /// единицах встречного токена пула (Entry.usdt); Err — налог продажи не измерен.
+    pub sell: Result<(U256, U256), SellMiss>,
     pub transfer_sent: U256,
     pub transfer_got: U256,
     pub gas_buy: u64,
@@ -72,7 +88,6 @@ pub async fn run(
     heads: &Heads,
 ) -> GatewayResult<Result<Measured, String>> {
     let (usdt, coin) = (e.usdt, e.coin);
-    let holder = pc::holder(ctx, e)?;
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61);
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
@@ -124,6 +139,9 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };
+    // Доли купленного: четверть — пробный перевод, остаток (четверть) — продажа; половина остаётся на кошельке
+    // (раньше уходила переводом на адрес пула; решение 146: у V2 такой перевод исказил бы продажу — пара считает вход
+    // как balanceOf − резерв). Остаток — тот же, что раньше, газ продажи сравним с прежними замерами.
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
     let (sell_aps, sell_router, sell_data) = part(
@@ -141,9 +159,6 @@ pub async fn run(
     .await?;
     let base = list.len();
     list.extend([
-        pc::balance(wallet, coin, holder),
-        pc::transfer(wallet, coin, holder, half),
-        pc::balance(wallet, coin, holder),
         pc::transfer(wallet, coin, empty, quarter),
         pc::balance(wallet, coin, empty),
     ]);
@@ -152,11 +167,22 @@ pub async fn run(
         to: *to,
         input: d.clone(),
     }));
+    // Решение 146: квотер на продажу ТОГО ЖЕ остатка — прямо перед продажей (после переводов и разрешений, состояние
+    // пула то же, что увидит продажа), баланс встречного токена кошелька до и после продажи — в том же пакете.
+    let (sq_to, sq_data) = quoter_calls::request(ctx, e, coin, rest)?;
+    let sq = list.len();
+    list.push(Call {
+        from: wallet,
+        to: sq_to,
+        input: sq_data,
+    });
+    list.push(pc::balance(wallet, usdt, wallet));
     list.push(Call {
         from: wallet,
         to: sell_router,
         input: sell_data,
     });
+    list.push(pc::balance(wallet, usdt, wallet));
     let all = simulate::run(ctx, &list, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
@@ -165,37 +191,32 @@ pub async fn run(
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));
     }
-    if let Some((i, r)) = all.iter().enumerate().take(base + 5).find(|(_, r)| !r.ok()) {
+    if let Some((i, r)) = all.iter().enumerate().take(base + 2).find(|(_, r)| !r.ok()) {
         return Ok(Err(format!(
             "шаг {i} пробы (перевод монеты) откатился: {}",
             r.why()
         )));
     }
-    let (Some(pb0), Some(pb1), Some(xb)) = (
-        pc::u256(&all[base]),
-        pc::u256(&all[base + 2]),
-        pc::u256(&all[base + 4]),
-    ) else {
+    let Some(xb) = pc::u256(&all[base + 1]) else {
         return Ok(Err("ответ баланса не по ABI".into()));
     };
-    if pc::sell_ok(&all) {
-        probe_exec::emitter(ctx, e, &all[all.len() - 1].logs).await?;
+    let sell_appr = &all[base + 2..sq];
+    let sell_swap = &all[sq + 2];
+    let sold = sell_swap.ok() && sell_appr.iter().all(|c| c.ok());
+    if sold {
+        probe_exec::emitter(ctx, e, &sell_swap.logs).await?;
     }
     let gas = |r: &[simulate::CallResult]| r.iter().map(|c| c.gas_used.to::<u64>()).sum::<u64>();
-    let sell_appr = &all[base + 5..all.len() - 1];
-    let sell_swap = &all[all.len() - 1];
     Ok(Ok(Measured {
         buy_expected,
         buy_got: bought,
-        sell_sent: half,
-        sell_got: pb1.saturating_sub(pb0),
+        sell: pc::sell_result(e, &all[sq..sq + 4], sold),
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),
         gas_approve_buy: gas(&all[1..1 + n_appr]),
-        gas_transfer: all[base + 3].gas_used.to(),
-        gas_sell: (sell_swap.ok() && sell_appr.iter().all(|c| c.ok()))
-            .then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
+        gas_transfer: all[base].gas_used.to(),
+        gas_sell: sold.then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
 }
 

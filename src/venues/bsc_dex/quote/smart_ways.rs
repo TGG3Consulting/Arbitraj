@@ -7,7 +7,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolKind, Side};
+use crate::core::types::Side;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::families::smart_ok;
@@ -16,6 +16,7 @@ use super::super::pools::registry::Entry;
 use super::Quoting;
 use super::direct::{self, Candidate};
 use super::path::Path;
+use super::pool_tax;
 use super::select::{self, Usable};
 use super::via::{Ok2, Via};
 
@@ -33,24 +34,13 @@ pub struct Slot {
 }
 
 /// Пулы DEX умного роутера с USDT, пригодные для умного маршрута. Возвращает: кандидаты и причины отказа по остальным.
-pub fn pools(
-    q: &Quoting,
-    entries: &[Entry],
-    side: Side,
-    taxed: bool,
-    usdt_dec: u8,
-) -> (Vec<Way>, Vec<String>) {
+pub fn pools(q: &Quoting, entries: &[Entry], side: Side, usdt_dec: u8) -> (Vec<Way>, Vec<String>) {
     let mut ok = Vec::new();
     let mut why = Vec::new();
     for e in entries.iter().filter(|e| smart_ok(&q.ctx, e.family)) {
-        if taxed && e.pool.kind != PoolKind::V2 {
-            why.push(format!(
-                "{}: у монеты налог — в умном маршруте только V2",
-                e.family.title
-            ));
-            continue;
-        }
-        match select::usable(q, e, side, usdt_dec) {
+        // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 в умном маршруте — только V2.
+        match select::usable(q, e, side, usdt_dec).and_then(|u| pool_tax::v2_only(e, &u).map(|_| u))
+        {
             Ok(u) => ok.push(Way::One(Box::new((e.clone(), u)))),
             Err(w) => why.push(format!("{}: {w}", e.family.title)),
         }
@@ -95,15 +85,8 @@ pub fn calc(v: &Via<'_>, w: &Way, qty: Decimal) -> GatewayResult<Path> {
     match w {
         Way::One(x) => {
             let (e, u) = (&x.0, &x.1);
-            let (swapped, coins, usdt) = direct::calc(
-                &v.q.ctx,
-                e,
-                u,
-                v.side,
-                qty,
-                v.taxes,
-                (v.coin_dec, v.usdt_dec),
-            )?;
+            let (swapped, coins, usdt) =
+                direct::calc(&v.q.ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
             if !swapped.complete {
                 return Err(v
                     .q

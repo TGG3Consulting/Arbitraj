@@ -8,14 +8,14 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, CheckState, PoolKind, Side};
+use crate::core::types::{Asset, CheckState, Side};
 
 use super::super::exec::native;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::path::Path;
-use super::select;
 use super::via::{Ok2, Via};
+use super::{pool_tax, select};
 
 impl Via<'_> {
     /// Пулы шагов через промежуточную m: P1 — «m — USDT», P2 — «монета — m»; фильтр (вид, DEX) — от вызывающего.
@@ -26,19 +26,14 @@ impl Via<'_> {
         keep: &dyn Fn(&Entry) -> bool,
     ) -> Result<(Vec<Ok2>, Vec<Ok2>), String> {
         self.mid_ok(m)?;
-        let taxed = self.taxed();
         let mut why = Vec::new();
         let mut pick = |list: Vec<Entry>| -> Vec<Ok2> {
             let mut ok = Vec::new();
             for e in list.into_iter().filter(|e| keep(e)) {
-                if taxed && e.pool.kind != PoolKind::V2 {
-                    why.push(format!(
-                        "{}: у монеты налог — через промежуточную только V2",
-                        e.family.title
-                    ));
-                    continue;
-                }
-                match select::usable(self.q, &e, self.side, self.usdt_dec) {
+                // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
+                match select::usable(self.q, &e, self.side, self.usdt_dec)
+                    .and_then(|u| pool_tax::v2_only(&e, &u).map(|_| u))
+                {
                     Ok(u) => ok.push((e, u)),
                     Err(w) => why.push(format!("{} {}: {w}", e.family.title, e.ticker)),
                 }
@@ -103,12 +98,6 @@ impl Via<'_> {
                 m.ticker
             )),
         }
-    }
-
-    /// Есть ли у монеты налог (покупки, продажи или перевода): тогда на каждом шаге — только V2. Ошибок нет.
-    pub fn taxed(&self) -> bool {
-        let t = self.taxes;
-        !(t.buy_pct.is_zero() && t.sell_pct.is_zero() && t.transfer_pct.is_zero())
     }
 
     /// Лучший путь через промежуточные монеты среди допущенных пар. Принимает: промежуточные с decimals, количество,

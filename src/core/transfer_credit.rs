@@ -7,7 +7,10 @@
 //!
 //! Расхождение события и статуса дольше transfer.credit_mismatch_s — журнал (credit_mismatch.rs).
 //!
-//! Кто вызывает: core/transfers.rs.
+//! Решение 151: зачисление по приходу в блокчейне (перевод сделки на DEX) — transfer_chain.rs, он же берёт отсюда
+//! done и to_trading.
+//!
+//! Кто вызывает: core/transfers.rs, core/transfer_chain.rs.
 //! От чего зависит: credit_watch.rs, credit_mismatch.rs, transit.rs, transfer_watch.rs, wait.rs, deps.rs (шлюз).
 //! После зачисления — перевод на торговый счёт площадки (решение 102, Venue::deposit_to_trading; у BingX — фондовый → спот).
 //! Настройки: venue.status_poll_ms (по площадке получателя); venue.deposit_to_spot — у адаптера BingX.
@@ -104,7 +107,7 @@ pub async fn wait(
 
 /// Зачислено: время в пути, снятие карантина, журнал и уведомление. Принимает: перевод, зачисление, момент, откуда
 /// известно. Ошибок нет.
-async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<Utc>, by: &str) {
+pub(super) async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<Utc>, by: &str) {
     let deps = &core.inner.deps;
     let ms = (at - leg.started).num_milliseconds().max(0);
     let secs = Decimal::from(ms) / Decimal::ONE_THOUSAND;
@@ -130,7 +133,7 @@ async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<Utc>, by: &
 /// Сбой — по правилам шлюза (повтор или стоп, core/rules_apply.rs; «итог неизвестен» не повторяется), журнал и
 /// уведомление transfer.to_trading_failed: монеты или USDT остаются на фондовом счёте — продажа сделки там не пройдёт и
 /// уйдёт в «Ручное управление» (решение 100). Принимает: перевод, шлюз получателя, зачисление. Ошибок нет.
-async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, t: &Transfer) {
+pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, t: &Transfer) {
     let deps = &core.inner.deps;
     let mut attempt = 0;
     loop {

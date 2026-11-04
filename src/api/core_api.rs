@@ -2,7 +2,7 @@
 //! Что делает: экраны «Живой экран», «Сделки», «Управление» — данные и команды ядра.
 //! Кто вызывает: интерфейс.
 //! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue,
-//! release_quarantine, transits), core/risk.rs (Mode), storage/journal (через ядро).
+//! release_quarantine, reset_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
 //! Настройки: нет.
 //!
 //! GET  /api/spreads                               — [SpreadView]: спред направления, состояние, причина
@@ -14,6 +14,7 @@
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
 //! POST /api/control/quarantine/{id}/release   — снять карантин монеты (id — адрес контракта или тикер) → Risk
+//! POST /api/control/daily-limit/reset            — «Сбросить лимит дня» (решение 153) → Risk; режим не меняется
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -79,5 +80,13 @@ pub async fn resume_venue(State(st): State<AppState>, Path(id): Path<String>) ->
 /// Ошибок нет.
 pub async fn release(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
     st.core.release_quarantine(&id).await;
+    Json(st.core.control())
+}
+
+/// «Сбросить лимит дня» (решение 153): лимит дальше считает только изменения итога дня после отметки; режим системы не
+/// меняется (остановлена по лимиту — запуск кнопкой «Старт»). Ядро пишет core.loss_limit_reset и шлёт
+/// risk.daily_limit_reset. Ошибок нет.
+pub async fn reset_daily_limit(State(st): State<AppState>) -> Json<Risk> {
+    st.core.reset_daily_limit("интерфейс").await;
     Json(st.core.control())
 }

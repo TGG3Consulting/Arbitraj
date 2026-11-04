@@ -1,6 +1,8 @@
 //! Файл: storage/journal.rs
 //! Что делает: журнал системы в SQLite — ошибки, уведомления, изменения настроек, события.
 //! Каждая запись также уходит в живой поток для интерфейса (broadcast).
+//! Решение 155: запись может быть «повторяющейся» — одна строка на смену причины со счётчиком повторов (`repeats`) и
+//! временем последнего (`last_at`); запись и обновление таких строк — journal_repeat.rs. У обычных записей оба пусты.
 //! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/; позже шлюз (ошибки).
 //! От чего зависит: storage/db.rs, tokio::sync::broadcast.
 //! Настройки: нет.
@@ -34,13 +36,20 @@ pub struct Entry {
     pub message: String,
     /// Дополнительные данные (без секретов).
     pub data: Option<serde_json::Value>,
+    /// Решение 155: сколько раз повторилась та же причина (`at` — первый раз, `last_at` — последний). Нет — обычная
+    /// запись.
+    #[serde(default)]
+    pub repeats: Option<i64>,
+    /// Решение 155: время последнего повтора; нет — обычная запись.
+    #[serde(default)]
+    pub last_at: Option<DateTime<Utc>>,
 }
 
 /// Журнал: запись в базу + живой поток.
 #[derive(Clone)]
 pub struct Journal {
-    db: Db,
-    live: broadcast::Sender<Entry>,
+    pub(super) db: Db,
+    pub(super) live: broadcast::Sender<Entry>,
 }
 
 impl Journal {
@@ -73,6 +82,8 @@ impl Journal {
             venue: venue.map(str::to_string),
             message: message.into(),
             data,
+            repeats: None,
+            last_at: None,
         };
         let row = e.clone();
         let res = self
@@ -112,45 +123,54 @@ impl Journal {
     pub async fn list(&self, limit: u32, before_id: Option<i64>) -> Result<Vec<Entry>, DbError> {
         self.db
             .call(move |c| {
-                let mut st = c.prepare(
-                    "SELECT id, at, level, kind, venue, message, data FROM journal
-                     WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2",
-                )?;
-                let rows = st.query_map(params![before_id, limit], |r| {
-                    let at: String = r.get(1)?;
-                    let level: String = r.get(2)?;
-                    let data: Option<String> = r.get(6)?;
-                    Ok(Entry {
-                        id: r.get(0)?,
-                        at: DateTime::parse_from_rfc3339(&at)
-                            .map(|t| t.with_timezone(&Utc))
-                            .map_err(|e| {
-                                rusqlite::Error::FromSqlConversionFailure(
-                                    1,
-                                    rusqlite::types::Type::Text,
-                                    Box::new(e),
-                                )
-                            })?,
-                        level: match level.as_str() {
-                            "Error" => Level::Error,
-                            "Warn" => Level::Warn,
-                            "Info" => Level::Info,
-                            other => {
-                                return Err(rusqlite::Error::InvalidColumnType(
-                                    2,
-                                    other.to_string(),
-                                    rusqlite::types::Type::Text,
-                                ));
-                            }
-                        },
-                        kind: r.get(3)?,
-                        venue: r.get(4)?,
-                        message: r.get(5)?,
-                        data: data.and_then(|d| serde_json::from_str(&d).ok()),
-                    })
-                })?;
+                let mut st = c.prepare(&format!(
+                    "SELECT {COLUMNS} FROM journal WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2"
+                ))?;
+                let rows = st.query_map(params![before_id, limit], row_entry)?;
                 rows.collect()
             })
             .await
     }
+}
+
+/// Столбцы записи для row_entry — в этом порядке (list и journal_repeat.rs).
+pub(super) const COLUMNS: &str = "id, at, level, kind, venue, message, data, repeats, last_at";
+
+/// Время из текста базы (RFC 3339). Принимает: номер столбца, текст. Ошибки: не время.
+fn time(col: usize, s: &str) -> rusqlite::Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(s)
+        .map(|t| t.with_timezone(&Utc))
+        .map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(col, rusqlite::types::Type::Text, Box::new(e))
+        })
+}
+
+/// Строка базы (столбцы COLUMNS) → запись. Ошибки: неизвестный уровень, не время.
+pub(super) fn row_entry(r: &rusqlite::Row<'_>) -> rusqlite::Result<Entry> {
+    let at: String = r.get(1)?;
+    let level: String = r.get(2)?;
+    let data: Option<String> = r.get(6)?;
+    let last_at: Option<String> = r.get(8)?;
+    Ok(Entry {
+        id: r.get(0)?,
+        at: time(1, &at)?,
+        level: match level.as_str() {
+            "Error" => Level::Error,
+            "Warn" => Level::Warn,
+            "Info" => Level::Info,
+            other => {
+                return Err(rusqlite::Error::InvalidColumnType(
+                    2,
+                    other.to_string(),
+                    rusqlite::types::Type::Text,
+                ));
+            }
+        },
+        kind: r.get(3)?,
+        venue: r.get(4)?,
+        message: r.get(5)?,
+        data: data.and_then(|d| serde_json::from_str(&d).ok()),
+        repeats: r.get(7)?,
+        last_at: last_at.as_deref().map(|t| time(8, t)).transpose()?,
+    })
 }

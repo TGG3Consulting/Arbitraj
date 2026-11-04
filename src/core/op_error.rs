@@ -3,7 +3,8 @@
 //! плюс код шлюза, если ошибку дала площадка. По коду исполнитель отличает «исход неизвестен» (OutcomeUnknown:
 //! транзакция могла исполниться) от обычного отказа: такую сделку нельзя ни продавать, ни перегонять — только
 //! ручная проверка (core/executor.rs).
-//! Кто вызывает: core/trade_ops.rs, core/transfers.rs (создают), core/executor.rs (читает код).
+//! Повтор продажи, не ушедшей в сеть, — retry_safe (решение 110) и rejected_unsent (решение 154), core/sell_unsent.rs.
+//! Кто вызывает: core/trade_ops.rs, core/transfers.rs (создают), core/executor.rs, core/sell_unsent.rs (читают код).
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.
 
@@ -41,6 +42,14 @@ impl OpError {
                         | ErrorCode::SwapReverted
                 )
             )
+    }
+
+    /// Решение 154: ни один канал отправки не принял транзакцию, и адаптер своим узлом проверил, что её нет ни в блоке,
+    /// ни в пуле (venues/bsc_dex/send/absent.rs: ChannelRejected без факта транзакции означает «точно не ушла»; узел её
+    /// знает или проверка не удалась — адаптер ChannelRejected не отдаёт, транзакция идёт к трекеру). Повтор новой
+    /// транзакцией безопасен. Ошибок нет.
+    pub fn rejected_unsent(&self) -> bool {
+        !self.sent && self.code == Some(ErrorCode::ChannelRejected)
     }
 }
 

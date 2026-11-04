@@ -39,6 +39,7 @@ pub mod pick;
 pub mod pmm_depth;
 pub mod pmm_ladder;
 pub mod pool_quote;
+pub mod pool_tax;
 pub mod quoter;
 pub mod quoter_calls;
 pub mod quoter_extra;

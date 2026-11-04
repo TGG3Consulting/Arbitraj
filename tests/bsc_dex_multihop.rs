@@ -23,7 +23,7 @@ use rust_decimal::Decimal;
 use serde_json::json;
 
 use arb::core::types::{
-    Asset, CheckState, CoinCheck, PoolKind, Side, TokenTaxes, TradeRequest, VenueId,
+    Asset, CheckState, CoinCheck, PoolKind, PoolRef, Side, TokenTaxes, TradeRequest, VenueId,
 };
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::exec::chain;
@@ -229,10 +229,17 @@ async fn three_hop_leg_executable_within_max_hops() {
         .set("dex.bundle_max_routers", v.clone(), Some(json!(2)), "тест")
         .await
         .unwrap();
-    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, false, false)
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false)
         .expect("нога 3 хопов исполнима");
-    // Решение 39: у монеты с налогом путь через промежуточную — только V2; у ноги есть шаги V3 — сигнал с причиной.
-    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false, true, false)
+    // Решение 39 по налогу пула (решение 146): в пути через промежуточную шаг V3 с налогом стороны > 0 — сигнал.
+    let mut taxed = path.clone();
+    let h = taxed
+        .hops
+        .iter_mut()
+        .find(|h| h.entry.pool.kind != PoolKind::V2)
+        .expect("в пути записи есть шаг V3");
+    h.usable.tax_pct = Decimal::ONE;
+    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&taxed), false)
         .expect_err("налог и V3 через промежуточную");
     assert!(why.contains("решение 39"), "{why}");
     // dex.route_max_hops = 2 — та же нога уже длиннее предела.
@@ -241,8 +248,7 @@ async fn three_hop_leg_executable_within_max_hops() {
         .set("dex.route_max_hops", v, Some(json!(2)), "тест")
         .await
         .unwrap();
-    let why =
-        graph_exec::executable(&q.ctx, &[path], false, false, false).expect_err("длиннее предела");
+    let why = graph_exec::executable(&q.ctx, &[path], false).expect_err("длиннее предела");
     assert!(why.contains("dex.route_max_hops"), "{why}");
 }
 
@@ -253,6 +259,21 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
     use arb::venues::bsc_dex::quote::graph_route;
     use arb::venues::bsc_dex::quote::steps::Names;
     let p = route_common::parts().await;
+    // Решение 146: налог покупки 1 % — у пулов монеты (налог пула шага), как раньше у монеты целиком.
+    for a in [
+        route_common::CAKE_USDT_PCS,
+        route_common::CAKE_USDT_UNI,
+        route_common::CAKE_WBNB_PCS,
+        route_common::CAKE_BTCB_UNI,
+    ] {
+        p.checks.update_pool(&PoolRef::Contract(a), |f| {
+            f.taxes = Some(arb::venues::bsc_dex::check::state::PoolTaxes {
+                buy_pct: Decimal::ONE,
+                sell_pct: Some(Decimal::ZERO),
+                transfer_pct: Decimal::ZERO,
+            })
+        });
+    }
     let q = p.quoting();
     let t = TokenTaxes {
         buy_pct: Decimal::ONE,
@@ -304,22 +325,32 @@ async fn taxed_input_via_executor_only_single_push_first_step() {
     let q = p.quoting();
     route_common::executor(&p, "0x00000000000000000000000000000000000000ee").await;
     let base = three_hop(&q);
-    let one = |kind: &str| {
+    // Решение 146: налог пула первого шага 1 %; `sell` — монета пула на входе шага (продажа, налог на входе).
+    let one = |kind: &str, sell: bool| {
         let mut path = base.clone();
         path.hops.truncate(1);
-        path.hops[0].entry.family = families::make("x-review", kind).unwrap();
+        let h = &mut path.hops[0];
+        h.entry.family = families::make("x-review", kind).unwrap();
+        h.usable.tax_pct = Decimal::ONE;
+        if sell {
+            h.token_in = h.entry.coin;
+        }
         path
     };
-    let v3 = one("slipstream");
-    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&v3), false, true, true)
+    let v3 = one("slipstream", true);
+    let why = graph_exec::executable(&q.ctx, std::slice::from_ref(&v3), false)
         .expect_err("налог на входе и первый шаг V3 через исполнитель");
     assert!(why.contains("налог на входе"), "{why}");
     // Без налога на входе (покупка) тот же путь исполним через исполнитель.
-    graph_exec::executable(&q.ctx, std::slice::from_ref(&v3), false, true, false)
-        .expect("покупка налоговой монеты: вход USDT");
-    let sol = one("solidly_v1");
-    graph_exec::executable(&q.ctx, std::slice::from_ref(&sol), false, true, true)
+    graph_exec::executable(
+        &q.ctx,
+        std::slice::from_ref(&one("slipstream", false)),
+        false,
+    )
+    .expect("покупка налоговой монеты: вход USDT");
+    let sol = one("solidly_v1", true);
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&sol), false)
         .expect("первый шаг SOLIDLY на весь вход — прямой вход в пул, налог один раз");
-    let why = graph_executor::tax(&[sol.clone(), sol], true).expect_err("две доли");
+    let why = graph_executor::tax(&[sol.clone(), sol]).expect_err("две доли");
     assert!(why.contains("долей"), "{why}");
 }

@@ -4,7 +4,8 @@
 //! остановка новых сделок при расхождении сверки. Торговля не включается, пока не заданы все настройки
 //! групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
-//! Кто вызывает: executor.rs (перед сделкой и при ошибках), ledger.rs (итог дня, сверка), transfers.rs
+//! Лимит убытка за день — daily_limit.rs (решения 53, 152, 153).
+//! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs.
 //! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd, все money.* и risk.*.
@@ -43,8 +44,10 @@ pub struct Risk {
     /// quarantine.rs); в интерфейс — списком.
     #[serde(serialize_with = "super::quarantine::serialize")]
     pub quarantine: super::quarantine::Map,
-    /// Итог дня (решение 53, daily.rs): дата, всего, из них фактический и предварительный.
+    /// Итог дня (решения 53, 152, daily.rs): дата, всего, из них факт и оценка позиций; лимит дня (daily_limit.rs).
     pub day: DayView,
+    /// Система остановлена именно по лимиту дня (daily_limit.rs); любая смена режима снимает отметку.
+    pub daily_stop: bool,
 }
 
 impl Default for Risk {
@@ -56,13 +59,14 @@ impl Default for Risk {
             errors_in_row: HashMap::new(),
             quarantine: HashMap::new(),
             day: DayView::default(),
+            daily_stop: false,
         }
     }
 }
 
 /// Публикует состояние управления в интерфейс. Ошибок нет.
 pub fn publish(core: &Core) {
-    let r = lk(&core.inner.risk).clone();
+    let r = snapshot(core);
     if let Ok(v) = serde_json::to_value(r) {
         core.inner.live.send(CoreEvent::Control(v));
     }
@@ -115,6 +119,7 @@ pub fn set_mode(core: &Core, mode: Mode, reason: Option<String>) -> String {
         let mut r = lk(&core.inner.risk);
         r.mode = mode;
         r.reason = reason.clone();
+        r.daily_stop = false;
     }
     publish(core);
     format!(
@@ -165,35 +170,11 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     publish(core);
 }
 
-/// Проверка дневного лимита убытка по итогу дня (risk.max_daily_loss_usd). Достигнут — система
-/// останавливается до ручного решения. Возвращает: Some(текст) — остановлена сейчас.
-pub fn check_daily(core: &Core) -> Option<String> {
-    let max = core
-        .inner
-        .deps
-        .settings
-        .decimal("risk.max_daily_loss_usd", At::default());
-    let stop = {
-        let mut r = lk(&core.inner.risk);
-        let loss = -r.day.result_usd;
-        match max {
-            Ok(m) if loss >= m && r.mode != Mode::Stopped => {
-                let t = format!(
-                    "убыток за день {loss} USDT (из них предварительный {}) достиг лимита {m}",
-                    -r.day.provisional_usd
-                );
-                r.mode = Mode::Stopped;
-                r.reason = Some(t.clone());
-                Some(t)
-            }
-            _ => None,
-        }
-    };
-    publish(core);
-    stop
-}
+// Проверка дневного лимита убытка и «Сбросить лимит дня» — core/daily_limit.rs (решения 53, 152, 153).
 
-/// Состояние для экрана «Управление».
+/// Состояние для экрана «Управление»; лимит дня — по текущей настройке (daily_limit::view).
 pub fn snapshot(core: &Core) -> Risk {
-    lk(&core.inner.risk).clone()
+    let mut r = lk(&core.inner.risk).clone();
+    r.day.limit = super::daily_limit::view(core, &r.day);
+    r
 }

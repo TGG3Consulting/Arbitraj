@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/check/probe_calls.rs
 //! Что делает: вызовы пробного обмена для eth_simulateV1 — переводы, разрешения и балансы ERC-20.
 //! Кто вызывает: check/probe.rs.
-//! Там же: где лежат токены пула (holder), прошла ли продажа (sell_ok), откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха, у Universal Router и у исполнителя).
-//! От чего зависит: check/simulate.rs (Call), node/abi.rs, quote/quoter_revert.rs.
+//! Там же: итог пробной продажи — пара «квотер / пришло» или почему налог продажи не измерен (sell_result, решение 146),
+//! откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха, у Universal Router и у исполнителя).
+//! От чего зависит: check/simulate.rs (Call), check/probe.rs (SellMiss), node/abi.rs, quote/quoter_calls.rs, quote/quoter_revert.rs.
 //! Настройки: нет.
 //!
 //! ERC-20 — https://eips.ethereum.org/EIPS/eip-20 .
@@ -10,16 +11,14 @@
 use alloy::sol_types::{Revert, SolCall, SolError};
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::{PoolKind, PoolRef};
-
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::ur;
 use super::super::node::abi::IERC20;
-use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
-use super::super::quote::quoter_revert;
+use super::super::quote::{quoter_calls, quoter_revert};
+use super::probe::SellMiss;
 use super::simulate::{Call, CallResult};
 
 /// Вызов from → to с данными. Ошибок нет.
@@ -96,23 +95,39 @@ pub fn u256(r: &CallResult) -> Option<U256> {
     IERC20::balanceOfCall::abi_decode_returns(&r.return_data).ok()
 }
 
-/// Продажа пробы прошла (последний вызов). Ошибок нет.
-pub fn sell_ok(all: &[CallResult]) -> bool {
-    all.last().is_some_and(|c| c.ok())
-}
-
-/// Адрес, где лежат токены пула: V2/V3 — сам пул; Infinity — Vault (dex.vault); Uniswap V4 — PoolManager.
-/// Ошибки: NotConfigured (dex.vault).
-pub fn holder(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
-    Ok(match (&e.pool.reference, e.pool.kind, e.family.proto) {
-        (PoolRef::Contract(a), PoolKind::V2 | PoolKind::V3, _) => *a,
-        // Infinity Stable (решение «122 (Infinity Stable)»): токены пула — в Vault Infinity (крючок держит их там).
-        (_, _, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => {
-            ctx.dex_addr("dex.vault", e.family.id)?
-        }
-        (PoolRef::Singleton { manager, .. }, _, _) => *manager,
-        // Пара общего контракта (PMM от оракула): токены лежат в общем контракте.
-        (PoolRef::Member { contract, .. }, _, _) => *contract,
-        (PoolRef::Contract(a), _, _) => *a,
-    })
+/// Итог пробной продажи (решение 146). Принимает: пул, четыре итога подряд — квотер на продажу остатка, баланс
+/// встречного токена кошелька до продажи, продажа, баланс после; прошла ли продажа с её разрешениями.
+/// Возвращает: Ok((ответ квотера, прирост баланса)) или Err(SellMiss) — налог продажи НЕ ИЗМЕРЕН: продажа откатилась
+/// (reverted = true, вердикт по пулу) или квотер не ответил / ответ не по ABI (помеха). Ошибок иных нет.
+pub fn sell_result(e: &Entry, r: &[CallResult], sold: bool) -> Result<(U256, U256), SellMiss> {
+    let miss = |reverted, why: String| SellMiss { reverted, why };
+    let [quote, before, swap, after] = r else {
+        return Err(miss(false, "итогов пробной продажи не четыре".into()));
+    };
+    if !sold {
+        return Err(miss(
+            true,
+            format!(
+                "пробная продажа или её разрешения откатились: {}",
+                swap.why()
+            ),
+        ));
+    }
+    if !quote.ok() {
+        return Err(miss(
+            false,
+            format!("квотер продажи не ответил: {}", quote.why()),
+        ));
+    }
+    match (
+        quoter_calls::decode(e, &quote.return_data),
+        u256(before),
+        u256(after),
+    ) {
+        (Some(expected), Some(b0), Some(b1)) => Ok((expected, b1.saturating_sub(b0))),
+        _ => Err(miss(
+            false,
+            "ответ квотера продажи или баланса не по ABI".into(),
+        )),
+    }
 }

@@ -3,7 +3,8 @@
 //! и депозита на B — перечитываются напрямую из API бирж; покупка через API на A и продажа на B — по свежему справочнику
 //! пар (pairs_fresh.rs); у биржи B — адрес депозита монеты (решение 118, precheck_deposit.rs); BNB на газ у DEX-сторон не ниже
 //! risk.min_bnb_balance; затем полный расчёт заново (profit.rs) по свежим стаканам и пулам; биржа B примет ордер
-//! продажи на объём плана (решение 134, precheck_sell.rs).
+//! продажи на объём плана (решение 134, precheck_sell.rs); на бирже A хватит средств, которые можно вывести (решение 150,
+//! precheck_withdraw.rs).
 //! Кто вызывает: executor.rs.
 //! От чего зависит: risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
 //! Настройки: risk.min_bnb_balance, venue.symbols_stale_s (+ всё, что читают risk.rs и profit.rs).
@@ -216,6 +217,11 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
     let at = Instant::now();
     let r = super::precheck_sell::check(core, d, &c).await;
     t.mark(format!("проверка продажи {}", d.sell_on.0), at);
+    r?;
+    // Решение 150: на бирже A хватит выводимого (без предварительно зачисленных депозитов) — до покупки.
+    let at = Instant::now();
+    let r = super::precheck_withdraw::check(core, d, &c).await;
+    t.mark(format!("удержания вывода {}", d.buy_on.0), at);
     r?;
     // Решение 62: газ всех транзакций сделки на DEX — сверх резерва, иначе после покупки BNB перевод на биржу
     // упадёт с InsufficientBalance и монета застрянет. A — покупка и перевод, B — продажа и возврат USDT.

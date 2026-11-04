@@ -81,8 +81,14 @@ pub struct Inner {
     pub queued: Mutex<HashSet<Direction>>,
     /// Последний расчёт кандидата по направлению: {direction, verdict, at} — для «Живого экрана».
     pub candidates: Mutex<HashMap<Direction, serde_json::Value>>,
-    /// Последняя причина отказа по направлению (чтобы не повторять её в журнале).
-    pub last_reject: Mutex<HashMap<Direction, String>>,
+    /// Решение 155: открытая строка журнала отказа по направлению (core.candidate_rejected — одна строка на смену вида
+    /// причины со счётчиком повторов; reject_log.rs).
+    pub last_reject: super::reject_log::RejectLog,
+    /// Решение 147: последняя записанная в журнал причина отказа исполнителя по направлению (core.start_refused —
+    /// одна запись на смену причины); сделка запущена — запись стирается.
+    pub start_refused: Mutex<HashMap<Direction, String>>,
+    /// Решение 148: защита по факту продажи выключена — причина, уже записанная в журнал (одна запись на смену).
+    pub slip_off: Mutex<Option<String>>,
     /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
     pub transits: Mutex<HashMap<TransitKey, Vec<Decimal>>>,
     /// Ожидаемые зачисления переводов и площадки, приславшие события баланса (credit_watch.rs, решение 76).
@@ -191,7 +197,9 @@ impl Inner {
             cand_tx,
             queued: Mutex::default(),
             candidates: Mutex::default(),
-            last_reject: Mutex::default(),
+            last_reject: Default::default(),
+            start_refused: Mutex::default(),
+            slip_off: Mutex::default(),
             transits: Mutex::default(),
             credits: Default::default(),
             exposure: Mutex::default(),

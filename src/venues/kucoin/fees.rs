@@ -84,6 +84,9 @@ impl Fees {
                 return;
             };
             let gap = Duration::from_secs_f64(1.0 / rate.max(1) as f64);
+            // Решение 149: круг со сбоями (например, секреты ещё не разблокированы при старте) — повтор через
+            // venue.fee_retry_s, а не через полный venue.fee_cache_s (пары без ставки иначе стоят без котировки весь срок).
+            let mut failed = false;
             for chunk in list.chunks(PAIRS_PER_REQUEST) {
                 match fetch(&ctx, chunk).await {
                     Ok(got) => {
@@ -107,6 +110,7 @@ impl Fees {
                         }
                     }
                     Err(e) => {
+                        failed = true;
                         let m = format!(
                             "Ставки комиссии {} не получены: {}",
                             chunk.join(","),
@@ -117,7 +121,8 @@ impl Fees {
                 }
                 tokio::time::sleep(gap).await;
             }
-            tokio::time::sleep(Duration::from_secs(period)).await;
+            let retry = failed.then(|| ctx.int("venue.fee_retry_s").ok()).flatten();
+            tokio::time::sleep(Duration::from_secs(retry.unwrap_or(period))).await;
         }
     }
 }

@@ -13,13 +13,13 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolKind, RouteHop, Side};
+use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::quote::path::Path;
 use super::super::quote::route_calc::{self, Leg};
 use super::super::quote::via::Via;
-use super::super::quote::{graph_legs, select};
+use super::super::quote::{graph_legs, pool_tax, select};
 use super::precheck;
 
 /// Живой путь доли из N пулов. Принимает: расчёт путей (монета, сторона, налоги, decimals), пулы доли в порядке
@@ -65,13 +65,12 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
                 })?;
             v.mid_ok(m).map_err(no)?;
         }
-        if v.taxed() && e.pool.kind != PoolKind::V2 {
-            return Err(no("у монеты налог — через промежуточную только V2".into()));
-        }
         let hs = graph_legs::hop_side(&e, token_in)
             .ok_or_else(|| no("ребро не соединяет токены хопа".into()))?;
         let usable = select::usable(q, &e, hs, v.usdt_dec)
             .map_err(|why| no(format!("{}: {why}", e.family.title)))?;
+        // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
+        pool_tax::v2_only(&e, &usable).map_err(|w| no(format!("{}: {w}", e.family.title)))?;
         let dec_in = q.tokens.decimals(ctx, token_in).await?;
         let dec_out = q.tokens.decimals(ctx, token_out).await?;
         legs.push(Leg {
@@ -89,10 +88,7 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
             "пулы доли не ведут к токену выхода сделки — цепочка не сходится".into(),
         ));
     }
-    let tax = if v.side == Side::Buy {
-        v.taxes.buy_pct
-    } else {
-        v.taxes.sell_pct
-    };
-    route_calc::eval(ctx, &legs, v.side, qty, route_calc::keep(tax))
+    // Решение 146: налог монеты — пула её шага (quote/pool_tax.rs), не монеты целиком.
+    let tax_keep = pool_tax::coin_keep(&legs, v.side, v.taxes);
+    route_calc::eval(ctx, &legs, v.side, qty, tax_keep)
 }

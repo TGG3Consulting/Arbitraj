@@ -264,6 +264,7 @@ async fn ctx() -> Ctx {
             .await
             .unwrap();
     }
+    tax_limits(&c, "5").await;
     c
 }
 
@@ -426,7 +427,31 @@ pub async fn parts_from(dir: &str) -> Parts {
             f.gas_sell = Some(120_000);
             f.quoter.buy = Some(Ok(()));
             f.quoter.sell = Some(Ok(()));
+            f.taxes = Some(clean_taxes());
         });
     }
     p
+}
+
+/// Решение 146: налоги монеты пула, измеренные пробой в этом пуле, — нулевые (как налоги монет записи выше).
+/// Ошибок нет.
+#[allow(dead_code)]
+pub fn clean_taxes() -> arb::venues::bsc_dex::check::state::PoolTaxes {
+    arb::venues::bsc_dex::check::state::PoolTaxes {
+        buy_pct: Decimal::ZERO,
+        sell_pct: Some(Decimal::ZERO),
+        transfer_pct: Decimal::ZERO,
+    }
+}
+
+/// Решение 146: пороги налога пула в котировке (quote/pool_tax.rs) — глобальные tax.max_buy_pct / tax.max_sell_pct.
+/// Принимает: окружение, порог, %. Ошибок нет.
+#[allow(dead_code)]
+pub async fn tax_limits(c: &Ctx, pct: &str) {
+    for n in ["tax.max_buy_pct", "tax.max_sell_pct"] {
+        c.settings
+            .set(n, Scope::Global, Some(json!(pct)), "тест")
+            .await
+            .unwrap();
+    }
 }

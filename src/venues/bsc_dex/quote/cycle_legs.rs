@@ -145,6 +145,14 @@ async fn legs(q: &Quoting, c: &DexCycle, entries: Vec<Entry>) -> GatewayResult<V
             );
             ctx.err(ErrorCode::NoRoute, why)
         })?;
+        // Решение 146: цикл без налогов (quote/cycle.rs eval, tax_keep = 1) — пул с налогом монеты на этой стороне не идёт.
+        if !usable.tax_pct.is_zero() {
+            let why = format!(
+                "шаг {} ({} {}): налог монеты в этом пуле {}% — цикл через налог не строится",
+                h.index, entry.family.title, entry.ticker, usable.tax_pct
+            );
+            return Err(ctx.err(ErrorCode::NoRoute, why));
+        }
         out.push(Leg {
             dec_in: q.tokens.decimals(ctx, h.token_in).await?,
             dec_out: q.tokens.decimals(ctx, h.token_out).await?,

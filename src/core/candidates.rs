@@ -10,19 +10,25 @@
 //! фиксируется один раз на расчёт и передаётся явно (dry.rs). Итог — на «Живой экран» (событие candidate, у прошедшего —
 //! метка «сухой»); прошедший — на исполнение (executor.rs; в сухом режиме — нет), в эпизод (episode_run.rs — только
 //! память и сообщение), карточка сигнала — отдельной задачей (card_job.rs), очередь её не ждёт; отказ — в журнал с
-//! причиной (повтор той же причины по направлению не пишется) и закрывает эпизод направления. Окно монеты (решение 125,
+//! причиной (повтор того же вида причины — счётчиком в той же строке, решение 155) и закрывает эпизод направления. Окно монеты (решение 125,
 //! window_run.rs): прошедший открывает его или входит в него ДО исполнителя; отказ — «направление не проходит».
 //! Журнал и Telegram deal.candidate: эпизоды ведутся — при открытии эпизода (episode_notify.rs); не ведутся — на каждый
 //! прошедший, в сухом режиме — один раз, пока направление проходит (inner.dry_told).
 //! Решение 129: каждый расчёт замеряется по этапам (calc_timing.rs: очередь до старта, этапы и части, запросы к узлу и
 //! агрегатору) — поле `timing` строки «Кандидатов»; отказ по сроку называет этап, на котором расчёт стоит (calc_report.rs),
 //! повтор той же причины в журнал не пишется по ключу без чисел.
+//! Решение 155: core.candidate_rejected — одна строка на смену вида причины по направлению (числа в сравнение не входят),
+//! повторы — счётчиком и временем последнего в той же строке (reject_log.rs, частота обновления journal.repeat_flush_ms;
+//! не задана — прежний режим, строка на каждый отказ с другим текстом); прошёл — строка закрывается итоговым счётчиком.
+//! Решение 147: исполнитель отказал на входе (направление не торгуемо, по монете занято) — точная причина в поле
+//! `start` строки «Кандидатов», в тексте карточки (журнал/Telegram deal.candidate) и в журнале core.start_refused
+//! (Warn, одна запись на смену причины по направлению; сделка запущена — память причины стирается).
 //! Решение 141: прошедший без запущенной сделки и отклонённый с расчётом — в фоновый расчёт «без потолка»
 //! (uncapped_entry.rs, очередь не ждёт); прежний итог «без потолка» в строке остаётся до нового.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
-//! calc_report.rs, gateway/calc_meter.rs.
-//! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs.
+//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs.
+//! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs; journal.repeat_flush_ms (решение 155).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -45,6 +51,8 @@ use super::engine::{Core, lk};
 use super::episode_run::Accepted;
 use super::executor::Start;
 use super::profit::{self, Verdict};
+use super::reject_log::Note;
+use super::reject_shape;
 use super::view::CoreEvent;
 use crate::gateway::calc_meter;
 use crate::gateway::urgency::{self, Urgency};
@@ -149,21 +157,23 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
             }
             // Направление перестало проходить — эпизод закрывается с этой причиной (решение 74).
             super::episode_run::failed(core, d, &reason);
-            let key = key.unwrap_or_else(|| reason.clone());
-            let same = lk(&core.inner.last_reject).insert(d.clone(), key.clone()) == Some(key);
-            if !same {
-                let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
-                core.inner
-                    .deps
-                    .log(
-                        Level::Info,
-                        "core.candidate_rejected",
-                        Some(&d.buy_on.0),
-                        format!("{pair}: отказ — {reason}"),
-                        best.and_then(|b| serde_json::to_value(b).ok()),
-                    )
-                    .await;
-            }
+            // Решение 155: одна строка журнала на смену вида причины (без чисел), повторы — счётчиком в ней же.
+            let exact = key.unwrap_or_else(|| reason.clone());
+            let pair = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
+            let note = Note {
+                level: Level::Info,
+                kind: "core.candidate_rejected",
+                venue: Some(&d.buy_on.0),
+                shape: reject_shape::shape(&exact),
+                exact,
+                message: format!("{pair}: отказ — {reason}"),
+                data: best.and_then(|b| serde_json::to_value(b).ok()),
+            };
+            let deps = &core.inner.deps;
+            core.inner
+                .last_reject
+                .note(&deps.journal, &reject_key(d), note, flush_every(core))
+                .await;
         }
     }
 }
@@ -183,7 +193,11 @@ async fn accepted_timed(
     mode: &Mode,
     timing: serde_json::Value,
 ) {
-    lk(&core.inner.last_reject).remove(d);
+    // Решение 155: кандидат прошёл — строка отказа закрывается итоговым счётчиком.
+    core.inner
+        .last_reject
+        .close(&core.inner.deps.journal, &reject_key(d))
+        .await;
     // Решение 125: окно монеты — до исполнителя, чтобы запись на биржах началась раньше сделки (только память).
     super::window_run::pass(core, &calc, matches!(mode, Mode::Dry(_)));
     let start = match mode {
@@ -193,6 +207,13 @@ async fn accepted_timed(
         Mode::Live => super::executor::accepted(core, calc.clone()).await,
     };
     let dry = matches!(start, Start::Dry(_));
+    // Решение 147: отказ исполнителя на входе — причина в строку, журнал (на смену причины) и текст карточки.
+    let refused = match &start {
+        Start::NotTradable(why) => Some(format!("сделки нет — направление не торгуемо: {why}")),
+        Start::Busy(why) => Some(format!("сделки нет — по монете занято: {why}")),
+        _ => None,
+    };
+    refused_log(core, d, &start, refused.as_deref()).await;
     // Решение 141: сделка не запущена — расчёт «без потолка» кандидата; запущена — его ставит исполнитель после покупки.
     if start != Start::Started {
         super::uncapped_entry::cand(core, d, &calc, None, mode);
@@ -209,6 +230,7 @@ async fn accepted_timed(
         "dry": dry,
         "card": prev,
         "timing": timing,
+        "start": refused.clone(),
     });
     publish(core, d, row);
     let ep = super::episode_run::on_accept(core, &calc, dry);
@@ -219,7 +241,7 @@ async fn accepted_timed(
     };
     let note = match start {
         Start::Dry(why) => Some(why),
-        _ => None,
+        _ => refused,
     };
     submit(
         core,
@@ -232,6 +254,53 @@ async fn accepted_timed(
         },
         wait,
     );
+}
+
+/// Решение 147: журнал core.start_refused (Warn) — одна запись на смену причины по направлению; сделка запущена —
+/// память причины стирается (следующий отказ снова пишется). Принимает: ядро, направление, итог входа, текст отказа
+/// (None — не отказ). Ошибок нет.
+async fn refused_log(core: &Core, d: &Direction, start: &Start, refused: Option<&str>) {
+    let Some(why) = refused else {
+        if *start == Start::Started {
+            lk(&core.inner.start_refused).remove(d);
+        }
+        return;
+    };
+    let same = lk(&core.inner.start_refused)
+        .insert(d.clone(), why.to_string())
+        .as_deref()
+        == Some(why);
+    if same {
+        return;
+    }
+    let text = format!(
+        "{} {} → {}: расчёт прошёл, {why}",
+        d.asset.ticker, d.buy_on.0, d.sell_on.0
+    );
+    core.inner
+        .deps
+        .log(
+            Level::Warn,
+            "core.start_refused",
+            Some(&d.buy_on.0),
+            text,
+            None,
+        )
+        .await;
+}
+
+/// Решение 155: ключ строки отказа в журнале — направление целиком. Ошибок нет.
+pub(super) fn reject_key(d: &Direction) -> String {
+    serde_json::to_string(d).unwrap_or_else(|_| format!("{d:?}"))
+}
+
+/// Решение 155: journal.repeat_flush_ms — как часто обновлять строку повторов (0 — каждый повтор); не задана — None
+/// (прежний режим: новая строка на каждый отказ с другим текстом). Ошибок нет.
+pub(super) fn flush_every(core: &Core) -> Option<Duration> {
+    let s = &core.inner.deps.settings;
+    s.integer("journal.repeat_flush_ms", At::default())
+        .ok()
+        .map(Duration::from_millis)
 }
 
 /// Строка «Кандидатов» — в память и живой поток. Прежний итог «без потолка» (решение 141, поле uncapped) остаётся

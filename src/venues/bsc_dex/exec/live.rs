@@ -12,7 +12,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{PoolKind, RouteHop, Side};
+use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::mids::Mid;
@@ -20,7 +20,7 @@ use super::super::pools::registry::Entry;
 use super::super::quote::direct::{self, Candidate};
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
-use super::super::quote::{direct_route, select};
+use super::super::quote::{direct_route, pool_tax, select};
 use super::precheck;
 
 /// Живой путь доли. Принимает: расчёт путей (монета, сторона, налоги, decimals), пулы доли из котировки, количество
@@ -51,7 +51,7 @@ pub async fn path(
     match entries.as_slice() {
         [(e, u)] => {
             let (swapped, coins, usdt) =
-                direct::calc(ctx, e, u, v.side, qty, v.taxes, (v.coin_dec, v.usdt_dec))?;
+                direct::calc(ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
             let c = Candidate {
                 entry: e.clone(),
                 usable: u.clone(),
@@ -66,11 +66,10 @@ pub async fn path(
             let (p1, p2) = if v.side == Side::Buy { (a, b) } else { (b, a) };
             let m = mid(v, &p1.0, &p2.0)?;
             v.mid_ok(&m).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
-            if v.taxed() && (p1.0.pool.kind != PoolKind::V2 || p2.0.pool.kind != PoolKind::V2) {
-                return Err(ctx.err(
-                    ErrorCode::NoRoute,
-                    "у монеты налог — через промежуточную только V2",
-                ));
+            // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
+            for (e, u) in [p1, p2] {
+                pool_tax::v2_only(e, u)
+                    .map_err(|w| ctx.err(ErrorCode::NoRoute, format!("{}: {w}", e.family.title)))?;
             }
             if direct_mode {
                 direct_route::one_router(ctx, &a.0, &b.0)

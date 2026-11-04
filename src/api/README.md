@@ -34,7 +34,7 @@
 | `GET /api/uncapped/summary`, `GET /api/uncapped`, `GET /api/uncapped/{id}`, `GET /api/uncapped/deal/{id}` | «Упущено из-за потолка» (решение 141): итоги за период, записи страницей, одна запись, запись сделки (api/uncapped.rs) |
 | `GET /api/deals` | Экран «Сделки»: план и факт по шагам |
 | `GET /api/transits` | История времени в пути (решение 50) |
-| `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{id}/release` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты |
+| `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{id}/release`, `POST /api/control/daily-limit/reset` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты, «Сбросить лимит дня» (решение 153) |
 | `POST /api/check/telegram` | «Проверить подключение» Telegram |
 | `POST /api/check/venue/{id}` | «Проверить подключение» площадки |
 | `POST /api/check/channel/{venue}/{id}` | «Проверить подключение» канала отправки (шлюз `check_send_channel`) |
@@ -111,10 +111,11 @@
 | `GET /api/candidates` | — | `[{direction, verdict, at, dry?, card?}]` (у прошедшего — `dry` и карточка сигнала `card` решения 74, core/card.rs: `{dry, ticker, contract, buy_on, sell_on, qty, buy_avg, sell_qty, sell_avg, budget, profit_usd, profit_pct, books: [BookSide], pools: [PoolSide], max: {"Ok": MaxVolume} \| {"Err": причина}, links: [{venue, kind: "pair" \| "pool", label, url \| null, why \| null}]}`), новые сверху; `verdict` — `{"Accept": Calc}` или `{"Reject": {reason, best: Calc \| null}}`; `Calc.costs[]` — `{kind, stage, amount, asset, usdt \| null, in_price, in_qty, step: {index, from, to, from_token, to_token} \| null}` |
 | `GET /api/deals` | — | `[Deal]` (core/deal.rs): шаг, где монеты, вложено, выручка, затраты, план, факт покупки/переводов/продаж, хронология, итог |
 | `GET /api/transits` | — | `[{asset, from, to, count, avg_s}]` |
-| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine: [{id, ticker, label, reason}], day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}}}` — итог дня с предварительной частью (решение 53) |
+| `GET /api/control` | — | `Risk`: `{mode: "Stopped" \| "Running" \| "Paused", reason, venue_paused, errors_in_row, quarantine: [{id, ticker, label, reason}], day: {date, result_usd, final_usd, provisional_usd, provisional: {сделка: [сумма, день учёта]}, unpriced: [сделка], limit_reset: {at, base_usd, by} \| null, limit: {max_usd, loss_usd, exceeded} \| null}, daily_stop}` — итог дня: факт + оценка позиций (решения 53, 152: стоимость монет по рынку − вложено; `unpriced` — цены не было, взят худший случай), лимит дня и его сброс (решение 153); `daily_stop` — остановлена именно по лимиту дня |
 | `POST /api/control` | `{mode}` | `Risk`; пишется в журнал, уведомления `system.started` / `system.stopped` |
 | `POST /api/control/venue/{id}/resume` | — | `Risk` — пауза площадки снята |
 | `POST /api/control/quarantine/{id}/release` | — | `Risk` — карантин монеты снят (id — адрес контракта или тикер монеты без адреса, решение 118), `route.quarantine_out` |
+| `POST /api/control/daily-limit/reset` | — | `Risk` — «Сбросить лимит дня» (решение 153): отметка времени и итога дня; лимит дальше считает только изменения после неё; итог дня и сделки не меняются; режим не меняется; журнал `core.loss_limit_reset`, уведомление `risk.daily_limit_reset` |
 | WS `/api/ws` | — | `spread` (SpreadView), `candidate`, `deal` (Deal), `balances` (`{venues, in_transit_usd, per_coin_usd}`), `control` (Risk), `coins` (`{coins, directions}` — перечитать GET /api/coins) |
 
 ### DEX и виды пулов (экран «Площадки», настройки области «DEX»)

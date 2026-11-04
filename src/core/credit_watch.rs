@@ -7,6 +7,9 @@
 //! - без хеша (поток BingX, баланс BNB) — по сумме, при единственном подходящем ожидании (credit_event.rs);
 //! - и только если у получателя transfer.credit_by_event = да (флаг на момент события).
 //!
+//! Решение 151: у перевода сделки на DEX («вооружён» — chain_since) поступление в блокчейне может закрыть ожидание и
+//! без хеша отправителя (credit_chain.rs: chain_hit; методы Ticket::set_chain, chain_hit — там же).
+//!
 //! Ручной ввод и вывод, «Вернуть боту», «Беру на себя» ожиданий не создают — зачислением они не считаются.
 //!
 //! Кто вызывает: transfers.rs, transfer_credit.rs, credit_mismatch.rs (ожидание), credit_event.rs (сверка).
@@ -16,6 +19,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
@@ -51,6 +55,11 @@ pub(super) struct Expect {
     pub(super) wake: Arc<Notify>,
     /// Решение 132: кошелёк DEX перевода (получатель или отправитель — DEX); событие другого кошелька — не наше.
     pub(super) account: Option<DexAccountId>,
+    /// Решение 151: перевод сделки на DEX — момент запроса вывода; приход в блокчейне может закрыть ожидание без
+    /// хеша от отправителя (credit_chain.rs). None — только как в решении 76.
+    pub(super) chain_since: Option<DateTime<Utc>>,
+    /// Решение 151: поступление, засчитанное зачислением по блокчейну.
+    pub(super) chain_hit: Option<BalanceChange>,
 }
 
 impl Expect {
@@ -79,8 +88,8 @@ pub fn norm(h: &str) -> String {
 
 /// Ожидание перевода; при удалении снимается.
 pub struct Ticket {
-    core: Core,
-    id: u64,
+    pub(super) core: Core,
+    pub(super) id: u64,
     pub wake: Arc<Notify>,
 }
 
@@ -170,6 +179,8 @@ pub fn register(
         hits: Vec::new(),
         wake: wake.clone(),
         account: None,
+        chain_since: None,
+        chain_hit: None,
     };
     st.list.insert(id, e);
     Ticket {

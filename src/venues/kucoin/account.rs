@@ -14,10 +14,12 @@
 //!   Transfer function to move them to the trade account before trading»; type main / trade; balance, available, holds.
 //! - Get Apikey Info GET /api/v1/user/api-key (Management, вес 20) https://www.kucoin.com/docs-new/api-3470130 —
 //!   apiVersion, permission («General, Spot, Margin, Futures, InnerTransfer, Transfer, Earn»), ipWhitelist, isMaster.
-//!   Имена прав в ответе — как в описании поля permission, а не как в x-api-permission спецификации («Withdrawal»,
-//!   «FlexTransfers»): живой ответ 04.11.2026 у ключа с включёнными в кабинете «Вывод средств» и «Разрешить гибкие
-//!   переводы» — «General, Futures, Unified, Spot, Earn, InnerTransfer, Transfer, Margin»: вывод — Transfer, гибкие
-//!   переводы — InnerTransfer (дополнение решения 137, 04.11).
+//!   Имена прав в ответе — значения поля permission, а не имена x-api-permission эндпоинтов («Withdrawal», «FlexTransfers»).
+//!   Официально: спецификация KuCoin (github.com/Kucoin/kucoin-universal-sdk, spec/rest/api/openapi-account-account.json,
+//!   Get API Key Info) — «permission … possible values: General, Spot, Margin, Futures, InnerTransfer, Transfer, Earn»;
+//!   openapi-account-subaccount.json — «InnerTransfer (Flex Transfer)»; страница API Key Permissions — у Withdrawal:
+//!   «the Transfer permission» (вывод). Живой ответ 04.11.2026 — «General, Futures, Unified, Spot, Earn, InnerTransfer,
+//!   Transfer, Margin» (дополнение решения 137).
 //! - Get Account Type - Spot GET /api/v1/hf/accounts/opened (Spot, вес 30) https://www.kucoin.com/docs-new/api-3470120 —
 //!   «True means the current user is a high-frequency spot user».
 //! - Get Account Mode (UTA REST V2) GET /api/ua/v2/account/mode (право General, Management, вес 30)

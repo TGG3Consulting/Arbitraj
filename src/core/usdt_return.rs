@@ -7,7 +7,9 @@
 //! ведётся по ходу круга). «В каждой сделке» уходит выручка минус комиссия продажи в котируемой монете. Каждый перегон — уведомление usdt.relayed. Сухой режим (решение 74, dry.rs) — «отдельно»
 //! не перегоняет; «в каждой сделке» — часть начатой сделки, она доводится как обычно.
 //! Кнопка «Продать и перегнать» (решение 101, deal.return_usdt) — перегон выручки этой сделки при любом режиме.
-//! Кто вызывает: sell.rs (after_deal), reconcile.rs (separate).
+//! Решение 138: возврат выручки закрытой сделки решает usdt_return_deal.rs (общий шаг ledger::finish), здесь — сам
+//! перегон (relay) и режим «отдельно».
+//! Кто вызывает: usdt_return_deal.rs (relay), reconcile.rs (separate).
 //! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, settings.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
 
@@ -19,8 +21,8 @@ use crate::core::types::{Asset, DexAccountId, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::deal::Deal;
 use super::engine::{Core, rd};
+use super::op_error::OpError;
 
 /// Держатель USDT в сверке: площадка и счёт DEX (None — биржа).
 pub type Holder = (VenueId, Option<DexAccountId>);
@@ -47,15 +49,15 @@ fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
 }
 
 /// Перегон USDT с from на to. Принимает: …, счёт DEX перегона (решение 132; None — DEX не участвует).
-/// Ошибок нет: итог — в журнал и уведомления.
-async fn relay(
+/// Возвращает: сколько зачислено на to. Ошибки: перегон не состоялся (OpError; уже в журнале и usdt.relay_failed).
+pub(super) async fn relay(
     core: &Core,
     id: &str,
     from: &VenueId,
     to: &VenueId,
     acc: Option<&DexAccountId>,
     amount: Decimal,
-) {
+) -> Result<Decimal, OpError> {
     let deps = &core.inner.deps;
     let res = match usdt(core, from) {
         // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
@@ -71,6 +73,7 @@ async fn relay(
             deps.log(Level::Info, "core.usdt_return", Some(&from.0), &text, None)
                 .await;
             deps.notify("usdt.relayed", Some(&from.0), &text).await;
+            Ok(t.amount)
         }
         Err(e) => {
             let text = format!(
@@ -81,83 +84,9 @@ async fn relay(
                 .await;
             // Решение 108: раньше — только журнал; деньги молча оставались не на той площадке.
             deps.notify("usdt.relay_failed", Some(&from.0), &text).await;
+            Err(e)
         }
     }
-}
-
-/// Режим «в каждой сделке» или кнопка «Продать и перегнать» (решение 101): выручка закрытой сделки — обратно на
-/// площадку покупки. Ошибок нет.
-pub async fn after_deal(core: &Core, deal: &Deal) {
-    let mode = core
-        .inner
-        .deps
-        .settings
-        .text("usdt_return.mode", At::default());
-    // Варианты настройки — per_trade / separate (settings/catalog/trade.rs). Решение 101: кнопка «Продать и
-    // перегнать» (deal.return_usdt) — перегон выручки при любом режиме.
-    let wanted = deal.return_usdt || mode.ok().as_deref() == Some("per_trade");
-    if !wanted {
-        return;
-    }
-    if deal.at == deal.direction.buy_on {
-        // Решение 108: продано там же, где куплено (монета не уезжала) — выручка уже на площадке покупки.
-        if deal.return_usdt {
-            core.inner
-                .deps
-                .log(
-                    Level::Info,
-                    "core.usdt_return",
-                    Some(&deal.at.0),
-                    format!(
-                        "Сделка {}: перегон не нужен — продано на {}, выручка уже на площадке покупки",
-                        deal.id, deal.at.0
-                    ),
-                    None,
-                )
-                .await;
-        }
-        return;
-    }
-    // Решение 118 (Я-22): уходит то, что пришло: выручка минус комиссия продажи в котируемой монете площадки.
-    let amount = match usdt(core, &deal.at) {
-        Ok(q) => deal.proceeds - sell_fee(deal, &q.ticker),
-        Err(_) => deal.proceeds,
-    };
-    // Решение 132: перегон выручки — кошельком сделки.
-    let acc = match super::dex_account::of_deal(core, &deal.id) {
-        Ok(a) => a,
-        Err(e) => {
-            let text = format!("Сделка {}: перегон USDT не начат — {e}", deal.id);
-            let deps = &core.inner.deps;
-            deps.log(
-                Level::Error,
-                "core.usdt_return",
-                Some(&deal.at.0),
-                &text,
-                None,
-            )
-            .await;
-            deps.notify("usdt.relay_failed", Some(&deal.at.0), &text)
-                .await;
-            return;
-        }
-    };
-    let (c, id, from, to) = (
-        core.clone(),
-        format!("{}u", deal.id),
-        deal.at.clone(),
-        deal.direction.buy_on.clone(),
-    );
-    tokio::spawn(async move { relay(&c, &id, &from, &to, acc.as_ref(), amount).await });
-}
-
-/// Комиссия продаж сделки в котируемой монете (её нет в выручке). Принимает: сделку, тикер котируемой. Ошибок нет.
-fn sell_fee(deal: &Deal, quote: &str) -> Decimal {
-    deal.sells
-        .iter()
-        .filter(|r| r.fee_asset == quote)
-        .map(|r| r.fee)
-        .sum()
 }
 
 /// Режим «отдельно»: по свободным USDT площадок (из сверки). Решение 132: у DEX — каждый кошелёк отдельно; перегон
@@ -198,7 +127,8 @@ pub async fn separate(core: &Core, free: &HashMap<Holder, Decimal>) {
         if let Some(from) = donor {
             let id = format!("u{}", chrono::Utc::now().format("%Y%m%d%H%M%S%3f"));
             let acc = from.1.clone().or_else(|| low_h.1.clone());
-            relay(core, &id, &from.0, &low_h.0, acc.as_ref(), amount).await;
+            // Итог перегона «отдельно» — в журнале и уведомлениях (relay); сверка продолжается.
+            let _ = relay(core, &id, &from.0, &low_h.0, acc.as_ref(), amount).await;
             *free.entry(from).or_default() -= amount;
             *free.entry(low_h.clone()).or_default() += amount;
         }

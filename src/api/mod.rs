@@ -4,6 +4,7 @@
 //! От чего зависит: settings, storage, gateway, notify, secrets. Никогда — venues.
 //! Настройки: нет своих; адрес — аргумент запуска --listen.
 
+pub mod balances;
 pub mod check;
 pub mod coins;
 pub mod control;

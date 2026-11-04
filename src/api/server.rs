@@ -18,6 +18,7 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
+    balances,
     check, coins, control, core_api, dex, dex_dry, dex_executor, episodes, first_run, journal,
     rules, rules_meta, secrets, settings, settings_io, static_ui, uncapped, venues, wallet_queue,
     wallets, wallets_dex, windows, ws,
@@ -38,6 +39,8 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/rules/meta", get(rules_meta::meta))
         .route("/api/rules/{id}", put(rules::update))
         .route("/api/venues", get(venues::list))
+        .route("/api/balances", get(balances::list))
+        .route("/api/balances/{id}", get(balances::venue))
         .route("/api/venues/kinds", get(venues::kinds))
         .route("/api/venues/{id}/dex-families", get(dex::families))
         .route("/api/venues/{id}/pool-directory", get(dex::directory))

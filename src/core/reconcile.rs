@@ -137,8 +137,10 @@ async fn once(core: &Core) -> Vec<Found> {
             }
         };
         all.insert(label.clone(), json!(b));
-        if let Ok(q) = deps.settings.text("venue.quote_asset", at) {
-            let f: Decimal = b.iter().filter(|x| x.asset == q).map(|x| x.free).sum();
+        // Решение 140: у кошелька DEX нет строки USDT — «нет данных», не 0: ни алерта, ни перегона «отдельно».
+        if let Ok(q) = deps.settings.text("venue.quote_asset", at)
+            && let Some(f) = super::low_usdt::free_of(kind, &b, &q)
+        {
             free_usdt.insert((v.clone(), acc.clone()), f);
             // Решение 54: свой порог алерта по площадке, один раз на пересечение (low_usdt.rs); у DEX — по кошельку.
             super::low_usdt::check(core, &v, acc.as_ref(), &label, f, &q).await;

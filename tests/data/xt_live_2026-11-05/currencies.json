@@ -1,0 +1,1 @@
+{"rc":0,"mc":"SUCCESS","result":{"time":1793902899200,"version":"01aec7766c9f8a0dfbfa6883acf9a781","currencies":[{"id":2,"currency":"btc","displayName":"BTC","depositStatus":1,"withdrawStatus":1,"maxPrecision":10,"isListing":1},{"id":1236,"currency":"cake","displayName":"CAKE","depositStatus":1,"withdrawStatus":1,"maxPrecision":8,"isListing":1}]}}

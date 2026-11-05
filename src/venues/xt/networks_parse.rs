@@ -12,7 +12,8 @@
 //!   withdrawEnabled, withdrawFeeAmount, withdrawMinAmount, depositFeeRate, contract}]}]; «The currency and chain in
 //!   the response need to be used in other deposit/withdrawal API».
 //! - GET /v4/public/currencies (#balancecurrenciesGet, `_balance/currenciesGet.md`): [{currency, depositStatus,
-//!   withdrawStatus («0 close 1 open»), maxPrecision}].
+//!   withdrawStatus («0 close 1 open»), maxPrecision}]. Живой ответ 05.11.2026 (решение 184): result — объект
+//!   {time, version, currencies[...]}, статусы — числа; разбор принимает и массив, и result.currencies.
 //!
 //! Чего в документации НЕТ: минимума депозита, числа подтверждений, точности суммы вывода по сети (есть только
 //! WITHDRAW_010 «precision of withdrawal is invalid»), смысла depositFeeRate (доля? процент?) — не придумываем.
@@ -40,9 +41,17 @@ pub struct Parsed {
 /// Статусы монеты из /v4/public/currencies: тикер ядра → (ввод открыт, вывод открыт).
 /// Ошибка BadResponse — не массив или нет currency.
 pub fn parse_statuses(data: &Value) -> GatewayResult<HashMap<String, (bool, bool)>> {
+    // Решение 184: живой ответ 05.11.2026 — result объект {time, version, currencies[...]}, а документация показывает
+    // массив; принимаются оба вида (tests/data/xt_live_2026-11-05).
     let list = data
         .as_array()
-        .ok_or_else(|| errors::bad("/v4/public/currencies не массив", &data.to_string()))?;
+        .or_else(|| data.get("currencies").and_then(Value::as_array))
+        .ok_or_else(|| {
+            errors::bad(
+                "/v4/public/currencies: нет массива (ни result, ни result.currencies)",
+                &data.to_string(),
+            )
+        })?;
     let mut map = HashMap::new();
     for c in list {
         let open = |f: &str| num::text_opt(c, f).as_deref() == Some("1");

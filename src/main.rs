@@ -310,6 +310,19 @@ async fn run() -> Result<(), String> {
     let secrets_wake = std::sync::Arc::new(tokio::sync::Notify::new());
     // Память дубля «Ручного управления» — общая у отправки (mirror.rs) и приёма нажатий (updates.rs).
     let mirror_state = arb::notify::mirror_state::Shared::default();
+    // Решение 176: память экранов чата «Управление» — общая у приёма нажатий и лайв-обновления (notify/ctl/live.rs).
+    let ctl_state = arb::notify::ctl::sessions::Shared::default();
+    tokio::spawn(arb::notify::ctl::live::run(
+        arb::notify::ctl::live::Live {
+            http: http.clone(),
+            settings: settings.clone(),
+            vault: vault.clone(),
+            core: core.clone(),
+            mirror: mirror_state.clone(),
+            ctl: ctl_state.clone(),
+        },
+        Watch::new(changes.subscribe(), vec!["notify.".to_string()]),
+    ));
     tokio::spawn(arb::notify::mirror::run(
         arb::notify::mirror::Mirror {
             core: core.clone(),
@@ -332,6 +345,7 @@ async fn run() -> Result<(), String> {
             journal: journal.clone(),
             core: core.clone(),
             state: mirror_state,
+            ctl: ctl_state,
             wake: secrets_wake.clone(),
         },
         Watch::new(

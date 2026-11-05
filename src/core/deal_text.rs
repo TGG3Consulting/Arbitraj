@@ -67,7 +67,7 @@ pub fn closed(d: &Deal, why: &str) -> String {
 /// Закрытая сделка — формат Тиграна (решение 164): заголовок по знаку факта, монета и маршрут, план, факт, итог;
 /// способ закрытия — короткой строкой, если продано вручную или есть продажа. Принимает: сделку, причину.
 fn closed_result(d: &Deal, why: &str) -> String {
-    let fact = d.result_usd.unwrap_or(d.proceeds - d.invested - d.spent);
+    let fact = fact(d);
     let plus = fact >= Decimal::ZERO;
     let mut m = if plus {
         Msg::new(h::OK, "Сделка плюсовая")
@@ -87,6 +87,18 @@ fn closed_result(d: &Deal, why: &str) -> String {
         m = m.kv("Закрыта", how);
     }
     m.id(&d.id).render()
+}
+
+/// Факт закрытой сделки: итог из учёта, иначе выручка − вложено − затраты. Принимает: сделку. Ошибок нет.
+fn fact(d: &Deal) -> Decimal {
+    d.result_usd.unwrap_or(d.proceeds - d.invested - d.spent)
+}
+
+/// Решение 176: исход закрытия для маршрута чатов (notify/routes.rs) — тот же знак, что у заголовка «плюсовая» /
+/// «минусовая». Принимает: сделку. Возвращает: Some(true) — закрыта с итогом ≥ 0, Some(false) — с итогом < 0,
+/// None — не закрыта (остановлена, у человека). Ошибок нет.
+pub fn outcome(d: &Deal) -> Option<bool> {
+    (d.step == Step::Closed).then(|| fact(d) >= Decimal::ZERO)
 }
 
 /// Способ закрытия коротко: «продано вручную» или «продажей на DEX». Нет продажи — None.

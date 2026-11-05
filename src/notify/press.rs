@@ -1,45 +1,55 @@
 //! Файл: notify/press.rs
-//! Что делает: одно нажатие кнопки Telegram (CallbackQuery): принимает только из настроенного чата notify.telegram_chat
-//! (чужие игнорируются и пишутся в журнал), разбирает callback_data и передаёт нужному обработчику:
-//! «<код>:<ключ записи>» — кнопка записи «Ручного управления» (press_record.rs, решение 156);
-//! «y:<n>» / «n:<n>» — «Да, …» / «Отмена» подтверждения (press_confirm.rs); «m:<экран>» — экран меню (menu_press.rs,
-//! решение 157); «c:<что>» — кнопка плашки режима в меню (menu_press.rs). На каждое нажатие — answerCallbackQuery.
-//! Кто вызывает: notify/updates.rs — на каждое Update с callback_query.
-//! От чего зависит: notify/callback.rs (decode), press_record.rs, press_confirm.rs, menu_press.rs, tg_buttons.rs, core.
-//! Настройки: notify.telegram_chat (передаёт вызывающий).
+//! Что делает: одно нажатие кнопки Telegram (CallbackQuery). Роль чата уже определил опрос (updates_poll.rs, решение
+//! 176); здесь — разрешён ли пользователь в этой роли (notify/roles.rs::allowed) и принимает ли роль эту кнопку
+//! (accepts: кнопка чужого чата — отказ и журнал), затем разбор callback_data и обработчик:
+//! «<код>:<ключ записи>» — кнопка записи «Ручного управления» (press_record.rs, решение 156; чаты «Общий» и «Неудачные»);
+//! «y:<n>» / «n:<n>» — «Да, …» / «Отмена» подтверждения (press_confirm.rs); «m:<экран>» — экран меню /menu «Общего»
+//! (menu_press.rs, решение 157); «c:<что>» — кнопка плашки режима (menu_press.rs; «Общий» и «Управление»);
+//! «k:<экран>», «s:<номер>.<строка>», «t:<номер>.<шаг>» — экраны, «Продать» и перевод USDT чата «Управление»
+//! (notify/ctl/*). На каждое нажатие — answerCallbackQuery.
+//! Кто вызывает: notify/updates_poll.rs — на каждое Update с callback_query.
+//! От чего зависит: notify/callback.rs (decode), roles.rs, press_record.rs, press_confirm.rs, menu_press.rs, ctl/*, core.
+//! Настройки: разрешённые пользователи ролей (notify.control_users, notify.general_users, notify.failures_users).
 
 use crate::core::Core;
+use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 
 use super::callback;
+use super::ctl::sessions::Shared as CtlShared;
 use super::mirror_state::Shared;
+use super::roles::{self, Role};
 use super::telegram::Telegram;
-use super::tg_buttons::{CallbackQuery, Chat};
+use super::tg_buttons::CallbackQuery;
 
-/// Всё, что нужно обработчикам нажатий и сообщений. Живёт, пока работает приём (notify/updates.rs).
+pub use super::roles::chat_matches;
+
+/// Всё, что нужно обработчикам нажатий и сообщений одного обновления.
 pub struct Ctx<'a> {
     pub tg: &'a Telegram,
-    /// Значение notify.telegram_chat: числовой id чата или @username.
+    /// ID чата роли из настройки: числовой id чата или @username.
     pub chat: &'a str,
+    /// Роль чата обновления.
+    pub role: Role,
     /// Имя бота (getMe) — для команд вида /cmd@имя_бота в группах.
     pub bot: &'a str,
     pub core: &'a Core,
     pub journal: &'a Journal,
+    pub settings: &'a Store,
     /// Память дубля «Ручного управления» (общая с notify/mirror.rs).
     pub state: &'a Shared,
+    /// Память экранов чата «Управление» (notify/ctl/sessions.rs).
+    pub ctl: &'a CtlShared,
 }
 
-/// Из настроенного ли чата нажатие или сообщение.
-/// Принимает: notify.telegram_chat и чат сообщения.
-/// Возвращает: true — значение настройки равно id чата, или это «@username» и он совпадает с username чата
-/// (sendMessage принимает оба вида chat_id, https://core.telegram.org/bots/api#sendmessage).
-pub fn chat_matches(setting: &str, chat: &Chat) -> bool {
-    if setting == chat.id.to_string() {
-        return true;
-    }
-    match (setting.strip_prefix('@'), chat.username.as_deref()) {
-        (Some(want), Some(have)) => want == have,
-        _ => false,
+/// Принимает ли роль кнопку с этим кодом (кнопка чужого чата — отказ). Принимает: роль, код из callback_data.
+/// Возвращает: true — обработать. Ошибок нет.
+pub fn accepts(role: Role, code: &str) -> bool {
+    match role {
+        Role::Deals => false,
+        Role::Control => matches!(code, "y" | "n" | "c" | "k" | "s" | "t"),
+        Role::General => !matches!(code, "k" | "s" | "t"),
+        Role::Failures => !matches!(code, "m" | "c" | "k" | "s" | "t"),
     }
 }
 
@@ -49,31 +59,51 @@ impl Ctx<'_> {
         let who = q.from.describe();
         let Some(msg) = q.message.as_ref() else {
             self.answer(&q.id, None).await;
-            self.log(
-                Level::Warn,
-                format!("Нажатие без сообщения бота (inline-режим) от {who} — игнор"),
-            )
-            .await;
-            return;
+            return self
+                .log(
+                    Level::Warn,
+                    format!("Нажатие без сообщения бота (inline-режим) от {who} — игнор"),
+                )
+                .await;
         };
-        if !chat_matches(self.chat, &msg.chat) {
-            self.answer(&q.id, None).await;
-            self.log(
-                Level::Warn,
-                format!("Нажатие из чужого чата {} от {who} — игнор", msg.chat.id),
+        if !roles::allowed(self.settings, self.role, &q.from) {
+            self.answer(
+                &q.id,
+                Some("Нет доступа: вашего пользователя нет в списке разрешённых"),
             )
             .await;
-            return;
+            return self
+                .log(
+                    Level::Warn,
+                    format!(
+                        "Чат «{}»: нажатие от неразрешённого {who} — отказ",
+                        self.role.title()
+                    ),
+                )
+                .await;
         }
         let Some((code, object)) = q.data.as_deref().and_then(callback::decode) else {
             self.answer(&q.id, Some("Неизвестная кнопка")).await;
-            self.log(
-                Level::Warn,
-                format!("Неизвестная кнопка {:?} от {who}", q.data),
-            )
-            .await;
-            return;
+            return self
+                .log(
+                    Level::Warn,
+                    format!("Неизвестная кнопка {:?} от {who}", q.data),
+                )
+                .await;
         };
+        if !accepts(self.role, code) {
+            self.answer(&q.id, Some("Эта кнопка не для этого чата"))
+                .await;
+            return self
+                .log(
+                    Level::Warn,
+                    format!(
+                        "Чат «{}»: чужая кнопка {code} от {who} — отказ",
+                        self.role.title()
+                    ),
+                )
+                .await;
+        }
         match code {
             "y" | "n" => match object.parse::<u64>() {
                 Ok(n) => self.confirm(&q, msg, n, code == "y").await,
@@ -81,6 +111,9 @@ impl Ctx<'_> {
             },
             "m" => self.menu_screen(&q, msg, object).await,
             "c" => self.menu_control(&q, msg, object).await,
+            "k" => self.ctl_nav(&q, msg, object).await,
+            "s" => self.ctl_sell(&q, msg, object).await,
+            "t" => self.ctl_transfer(&q, msg, object).await,
             _ => self.record_button(&q, msg, code, object).await,
         }
     }

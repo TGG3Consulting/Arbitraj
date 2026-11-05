@@ -63,8 +63,8 @@ pub struct MirrorState {
     pub done: HashSet<String>,
     pub pending: HashMap<u64, Pending>,
     next: u64,
-    /// id сообщения с ForceReply → вопрос.
-    pub prompts: HashMap<i64, Prompt>,
+    /// (чат, id сообщения с ForceReply) → вопрос (id сообщения уникален только внутри чата, решение 176: чатов несколько).
+    pub prompts: HashMap<(i64, i64), Prompt>,
     /// Последнее напоминание: id сообщения (его кнопки снимаются при следующем).
     pub reminder: Option<i64>,
     /// Когда начался отсчёт до следующего напоминания (None — ждущих нет).
@@ -73,6 +73,14 @@ pub struct MirrorState {
     pub pause_until: Option<Instant>,
     /// Последняя записанная в журнал ошибка — одна и та же не пишется повторно.
     pub last_error: Option<String>,
+    /// Чат, в который ушли сообщения записей (решение 176: «Неудачные», если задан, иначе «Общий»).
+    pub chat: Option<String>,
+}
+
+/// Начало номеров ожиданий и экранов — время запуска в мс: номер кнопки прошлого запуска не совпадёт с новым. Ошибок нет.
+pub fn start_seed() -> u64 {
+    static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *SEED.get_or_init(|| chrono::Utc::now().timestamp_millis().unsigned_abs())
 }
 
 /// Общая память (дёшево клонируется).
@@ -114,6 +122,24 @@ impl MirrorState {
         diff
     }
 
+    /// Чат зеркала сменился (задали или сняли чат «Неудачные», решение 176): прежние сообщения остаются в старом чате
+    /// (их кнопки работают по текущим записям), отправленное забывается — записи уйдут в новый чат заново.
+    /// Принимает: текущий чат зеркала. Возвращает: true — сменился. Ошибок нет.
+    pub fn switch_chat(&mut self, chat: &str) -> bool {
+        if self.chat.as_deref() == Some(chat) {
+            return false;
+        }
+        let first = self.chat.is_none();
+        self.chat = Some(chat.to_string());
+        if !first {
+            self.sent.clear();
+            self.closed.clear();
+            self.reminder = None;
+            self.last_reminder = None;
+        }
+        !first
+    }
+
     /// Записи, по которым ещё нет действия: на экране и не выполнены из Telegram. Порядок — как на экране.
     pub fn waiting<'a>(&self, recs: &'a [ManualRecord]) -> Vec<&'a ManualRecord> {
         recs.iter()
@@ -151,7 +177,9 @@ impl MirrorState {
 
     /// Кладёт ожидание подтверждения. Возвращает: номер для callback_data «y:<номер>».
     pub fn add_pending(&mut self, p: Pending) -> u64 {
-        self.next += 1;
+        // Решение 176: номера — с времени запуска (start_seed): «Да» старого сообщения после перезапуска не совпадёт
+        // с новым ожиданием и не выполнит чужое действие.
+        self.next = self.next.max(start_seed()) + 1;
         self.pending.insert(self.next, p);
         self.next
     }

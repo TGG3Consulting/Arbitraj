@@ -3,7 +3,8 @@
 //! тех же данных, что плашка режима сверху интерфейса (ControlBar.svelte, GET /api/control → Risk) и экран
 //! «Ручное управление» (записи с кнопками, core/manual_feed.rs). Доступность кнопок — как на плашке:
 //! «Старт» — если не «В работе», «Пауза» — только из «В работе», «Стоп» — если не «Стоп». Настроек из Telegram нет.
-//! Кто вызывает: notify/menu_press.rs, notify/tg_commands.rs.
+//! Кто вызывает: notify/menu_press.rs, notify/tg_commands.rs, notify/ctl/screens.rs (решение 176: «Состояние» чата
+//! «Управление» — те же кнопки).
 //! От чего зависит: core/risk.rs (Risk, Mode), core/commands_control.rs (label), notify/mirror_view.rs,
 //! notify/menu_day.rs (лимит дня — общий и по площадкам, решение 173).
 //! Настройки: нет.
@@ -91,8 +92,9 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
     (t, with_back(vec![b("Обновить", "m:st")]))
 }
 
-/// «Режим системы»: доступные кнопки — как на плашке. Принимает: Risk.
-pub fn mode(r: &Risk) -> (String, Value) {
+/// Кнопки режима, доступные сейчас — как на плашке (решение 176: и экран «Состояние» чата «Управление»).
+/// Принимает: Risk. Возвращает: кнопки «c:mode.<режим>». Ошибок нет.
+pub fn mode_buttons(r: &Risk) -> Vec<Value> {
     let mut rows = Vec::new();
     for (m, title) in [
         (Mode::Running, "Старт"),
@@ -103,6 +105,12 @@ pub fn mode(r: &Risk) -> (String, Value) {
             rows.push(b(title, &format!("c:mode.{m:?}")));
         }
     }
+    rows
+}
+
+/// «Режим системы»: доступные кнопки — как на плашке. Принимает: Risk.
+pub fn mode(r: &Risk) -> (String, Value) {
+    let rows = mode_buttons(r);
     (
         format!(
             "Режим системы: {}{}",
@@ -129,6 +137,13 @@ pub fn mode_disabled(now: Mode, want: Mode) -> Option<String> {
 
 /// «Площадки и карантин»: паузы площадок и карантины монет с кнопками снятия — как на плашке. Принимает: Risk.
 pub fn venues(r: &Risk) -> (String, Value) {
+    let (t, rows) = venue_buttons(r);
+    (t, with_back(rows))
+}
+
+/// Текст и кнопки снятия пауз площадок, циклов и карантина (решение 176: и «Состояние» чата «Управление»).
+/// Принимает: Risk. Возвращает: (текст, кнопки «c:vr.…», «c:qr.…»). Ошибок нет.
+pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
     let mut t = String::from("Площадки и карантин");
     let mut rows = Vec::new();
     let mut paused: Vec<_> = r.venue_paused.iter().collect();
@@ -152,7 +167,7 @@ pub fn venues(r: &Risk) -> (String, Value) {
     if rows.is_empty() {
         t.push_str("\nПлощадок на паузе и монет в карантине нет.");
     }
-    (t, with_back(rows))
+    (t, rows)
 }
 
 /// «Лимит дня»: итог дня, общий лимит и лимиты площадок, кнопки «Сбросить лимит дня» — общий и по площадке

@@ -39,9 +39,13 @@ fn return_step_only_in_ledger_finish() {
                 "{p:?}: возврат USDT — только из ledger::finish"
             );
         }
-        // Сам перегон — только из шага закрытия и режима «отдельно».
+        // Сам перегон — только из шага закрытия и режима «отдельно»; решение 176: и ручной перевод USDT
+        // (usdt_transfer.rs — не сделка: тот же перегон по кнопке человека, возврат выручки сделки он не решает).
         if s.contains("usdt_return::relay(") {
-            assert_eq!(f, "usdt_return_job.rs", "{p:?}");
+            assert!(
+                f == "usdt_return_job.rs" || f == "usdt_transfer.rs",
+                "{p:?}"
+            );
         }
         // Решение 163: перегон без извещения о сбое — только шаг закрытия и попытка повтора (повторы, «Перегнать»).
         if s.contains("usdt_return::relay_try(") {

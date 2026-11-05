@@ -28,6 +28,7 @@ pub mod settings_io_fmt;
 pub mod state;
 pub mod static_ui;
 pub mod uncapped;
+pub mod usdt_transfer;
 pub mod venues;
 pub mod wallet_queue;
 pub mod wallets;

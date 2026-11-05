@@ -111,6 +111,15 @@ pub enum ManualAction {
         account: String,
         asset: String,
     },
+    /// Решение 176: «Перевести USDT» — с площадки `from` (у DEX — кошелёк `from_wallet`) на `to` (`to_wallet`) сумму
+    /// `amount` (строка-число) тем же перегоном USDT ядра, что возврат выручки (core/usdt_transfer.rs).
+    TransferUsdt {
+        from: String,
+        from_wallet: Option<String>,
+        to: String,
+        to_wallet: Option<String>,
+        amount: String,
+    },
 }
 
 impl ManualAction {
@@ -138,6 +147,7 @@ impl ManualAction {
             Self::ResetDailyLimit => "Сбросить лимит дня",
             Self::ResetVenueLimit { .. } => "Сбросить лимит дня площадки",
             Self::SellBalance { .. } => "Продать",
+            Self::TransferUsdt { .. } => "Перевести USDT",
         }
     }
 }

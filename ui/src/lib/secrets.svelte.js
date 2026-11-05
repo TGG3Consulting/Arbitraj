@@ -14,6 +14,17 @@ import { onLive, lagFor } from './live.svelte.js';
 /** Имя секрета токена Telegram (src/secrets/mod.rs, TELEGRAM_BOT_TOKEN) — экраны «Уведомления» и «Площадки». */
 export const TELEGRAM_TOKEN = 'telegram.bot_token';
 
+/**
+ * Решение 176: роли чатов Telegram (src/notify/roles.rs) — код роли (POST /api/check/telegram/{code}), название, настройка
+ * ID чата, секрет токена, настройка разрешённых пользователей (null — у роли нет кнопок).
+ */
+export const TELEGRAM_ROLES = [
+  { code: 'control', title: 'Управление', chat: 'notify.control_chat', token: 'telegram.control_token', users: 'notify.control_users' },
+  { code: 'general', title: 'Общий', chat: 'notify.telegram_chat', token: TELEGRAM_TOKEN, users: 'notify.general_users' },
+  { code: 'deals', title: 'Сделки', chat: 'notify.deals_chat', token: 'telegram.deals_token', users: null },
+  { code: 'failures', title: 'Неудачные', chat: 'notify.failures_chat', token: 'telegram.failures_token', users: 'notify.failures_users' },
+];
+
 /** status: {file_exists, unlocked, names} или null — ещё не загружено; known: [{name, scope, description}]. */
 export const secrets = $state({ status: null, known: [], error: '' });
 

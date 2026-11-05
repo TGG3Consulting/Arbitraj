@@ -14,6 +14,12 @@ pub use vault::Vault;
 
 /// Имя секрета токена Telegram-бота.
 pub const TELEGRAM_BOT_TOKEN: &str = "telegram.bot_token";
+/// Решение 176: токен бота чата «Управление» (notify/roles.rs). Может совпадать с другими — один бот на несколько чатов.
+pub const TELEGRAM_CONTROL_TOKEN: &str = "telegram.control_token";
+/// Решение 176: токен бота чата «Сделки».
+pub const TELEGRAM_DEALS_TOKEN: &str = "telegram.deals_token";
+/// Решение 176: токен бота чата «Неудачные».
+pub const TELEGRAM_FAILURES_TOKEN: &str = "telegram.failures_token";
 
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
@@ -22,6 +28,21 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         TELEGRAM_BOT_TOKEN,
         "telegram",
         "Токен Telegram-бота (BotFather)",
+    ),
+    (
+        TELEGRAM_CONTROL_TOKEN,
+        "telegram",
+        "Токен бота чата «Управление» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_DEALS_TOKEN,
+        "telegram",
+        "Токен бота чата «Сделки» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_FAILURES_TOKEN,
+        "telegram",
+        "Токен бота чата «Неудачные» (решение 176; может быть тем же ботом)",
     ),
     ("bingx.api_key", "bingx", "API-ключ BingX"),
     (

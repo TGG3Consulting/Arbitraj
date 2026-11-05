@@ -48,23 +48,50 @@ pub async fn check(core: &Core, d: &Direction, plan: &Calc) -> Result<(), String
         .settings
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
+    let (held, why) = match held(core, a, &quote).await? {
+        Held::Nothing => return Ok(()),
+        Held::Unknown(why) => {
+            unknown_once(core, a, &why).await;
+            return Ok(());
+        }
+        Held::Usdt { usdt, why } => (usdt, why),
+    };
+    let free = super::limits::free_now(core, a, None, &quote).await?;
+    verdict(&a.0, &quote, free, held, plan.spend_max, &why)
+}
+
+/// Удержания вывода биржи (решение 166).
+pub enum Held {
+    /// Удержаний нет.
+    Nothing,
+    /// Биржа не может сказать (нет в документации) — причина от адаптера.
+    Unknown(String),
+    /// Удержано на сумму usdt (в USDT), тексты удержаний через «; ».
+    Usdt { usdt: Decimal, why: String },
+}
+
+/// Сколько удержано от вывода на бирже A — контракт withdraw_hold с котируемой монетой, в USDT по живым ценам.
+/// Тот же расчёт — у ручного перевода USDT (решение 176, usdt_transfer_plan.rs). Принимает: ядро, биржу, котируемую.
+/// Возвращает: Held. Ошибки: сбой запроса удержаний («не торгуем вслепую»), нет цены удержания.
+pub async fn held(core: &Core, a: &VenueId, quote: &str) -> Result<Held, String> {
     let gw = core.inner.deps.gw.get(a).await.map_err(|e| e.message)?;
-    let hold = gw.withdraw_hold(&quote).await.map_err(|e| {
+    let hold = gw.withdraw_hold(quote).await.map_err(|e| {
         format!(
             "{}: сколько можно вывести — не получено: {} — не торгуем вслепую",
             a.0, e.message
         )
     })?;
     if let Some(why) = &hold.unknown {
-        unknown_once(core, a, why).await;
-        return Ok(());
+        return Ok(Held::Unknown(why.clone()));
     }
     if hold.is_empty() {
-        return Ok(());
+        return Ok(Held::Nothing);
     }
-    let held = held_usdt(core, a, &quote, &hold).await?;
-    let free = super::limits::free_now(core, a, None, &quote).await?;
-    verdict(&a.0, &quote, free, held, plan.spend_max, &reasons(&hold))
+    let usdt = held_usdt(core, a, quote, &hold).await?;
+    Ok(Held::Usdt {
+        usdt,
+        why: reasons(&hold),
+    })
 }
 
 /// Что делает: стоимость всех удержаний в USDT. Котируемая монета A — как есть; другая — по живому стакану биржи

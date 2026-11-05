@@ -15,16 +15,16 @@ use crate::storage::journal::Level;
 
 use super::mirror::Mirror;
 use super::mirror_state::lock;
-use super::mirror_view::{batch_message, closed_text, reminder_header};
+use super::mirror_view::{batch_message_for, closed_text, reminder_header};
 use super::telegram::{Telegram, TgError};
 use super::{client, tg_methods};
 
 impl Mirror {
-    /// Напоминание пачкой, если пора. Принимает: клиента, чат, записи, разрешённые записи.
+    /// Напоминание пачкой, если пора. Принимает: клиента, (чат, показывать ли недоступные кнопки), записи, разрешённые.
     pub(super) async fn remind(
         &self,
         tg: &Telegram,
-        chat: &str,
+        (chat, all): (&str, bool),
         recs: &[ManualRecord],
         allowed: &[&ManualRecord],
     ) {
@@ -44,7 +44,7 @@ impl Mirror {
             lock(&self.state).last_reminder = None;
             return;
         }
-        let (text, kb) = batch_message(&list, &reminder_header(list.len()));
+        let (text, kb) = batch_message_for(&list, &reminder_header(list.len()), all);
         match tg.send_markup(chat, &text, kb, None).await {
             Ok(id) => {
                 let old = {
@@ -82,10 +82,12 @@ impl Mirror {
         if closed.is_empty() {
             return;
         }
-        let Ok(ready) = client::build(
+        let role = super::roles::mirror_role(&self.notifier.settings);
+        let Ok(ready) = client::build_role(
             &self.notifier.http,
             &self.notifier.settings,
             &self.notifier.vault,
+            role,
         ) else {
             return;
         };

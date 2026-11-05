@@ -4,17 +4,19 @@
 //! кто нажал — имя пользователя), и правит сообщение вопроса: «Выполнено: кто, что, итог» или «Отклонено: причина»,
 //! кнопки убираются. Второе нажатие того же «Да» или по уже выполненной записи — «Уже выполнено», действие не
 //! повторяется. Журнал: ядро пишет команду с источником и пользователем; здесь — кто нажал и итог.
-//! Кто вызывает: notify/press.rs, press_record.rs, menu_press.rs, tg_commands.rs.
+//! Решение 176: «Да» перевода USDT — отдельной задачей с ходом перевода в том же сообщении (notify/ctl/progress.rs).
+//! Кто вызывает: notify/press.rs, press_record.rs, menu_press.rs, tg_commands.rs, notify/ctl/*.
 //! От чего зависит: core (Core::command), core/types/control.rs, mirror_state.rs, tg_methods.rs, storage/journal.
 //! Настройки: нет.
 
 use chrono::Utc;
 use serde_json::json;
 
-use crate::core::types::{CommandSource, ManualCommand};
-use crate::storage::journal::Level;
+use crate::core::Core;
+use crate::core::types::{CommandSource, ManualAction, ManualCommand};
+use crate::storage::journal::{Journal, Level};
 
-use super::mirror_state::{Pending, lock};
+use super::mirror_state::{Pending, Shared, lock};
 use super::press::Ctx;
 use super::press_record::ALREADY;
 use super::tg_buttons::{CallbackQuery, CbMessage, User};
@@ -99,6 +101,26 @@ impl Ctx<'_> {
         }
         self.answer(&q.id, Some(&format!("Выполняю «{}»…", p.title)))
             .await;
+        // Решение 176: перевод USDT идёт минуты — отдельной задачей с ходом в том же сообщении (ctl/progress.rs),
+        // опрос Telegram не ждёт.
+        if let ManualAction::TransferUsdt {
+            from, from_wallet, ..
+        } = &p.action
+        {
+            let key = match from_wallet {
+                Some(w) => format!("{from}/{w}"),
+                None => from.clone(),
+            };
+            return super::ctl::progress::spawn(
+                self,
+                p,
+                q.from.clone(),
+                (msg.chat.id, msg.message_id),
+                base,
+                key,
+            )
+            .await;
+        }
         let text = self.execute(&p, &q.from, msg.chat.id).await;
         if let Err(e) = self
             .tg
@@ -113,51 +135,64 @@ impl Ctx<'_> {
         }
     }
 
-    /// Передаёт команду ядру и отмечает запись выполненной. Принимает: ожидание, кто, чат.
+    /// Передаёт команду ядру и отмечает запись выполненной (run_pending). Принимает: ожидание, кто, чат.
     /// Возвращает: строку итога «Выполнено: …» или «Отклонено: …». Ошибок нет.
     pub async fn execute(&self, p: &Pending, from: &User, chat: i64) -> String {
-        let who = from.describe();
-        let cmd = ManualCommand {
-            action: p.action.clone(),
-            source: CommandSource::Telegram {
-                chat: chat.to_string(),
-            },
-            by: Some(who.clone()),
-            at: Utc::now(),
-        };
-        // Запись отмечается выполненной ДО команды: второе нажатие во время выполнения — «уже выполнено».
-        // Ушла с экрана — отметку снимает mirror_state (запись с тем же ключом может вернуться); отказ — снимаем здесь.
-        if let Some(k) = &p.key {
-            lock(self.state).done.insert(k.clone());
-        }
-        let res = self.core.command(cmd).await;
-        if res.is_err()
-            && let Some(k) = &p.key
-        {
-            lock(self.state).done.remove(k);
-        }
-        let at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
-        let (level, text) = match res {
-            Ok(t) => (
-                Level::Info,
-                format!("Выполнено: {who}, «{}» — {t}, {at}.", p.title),
-            ),
-            Err(e) => (
-                Level::Warn,
-                format!("Отклонено: {who}, «{}» — {e}, {at}.", p.title),
-            ),
-        };
-        let data = json!({ "action": p.action, "from": who, "chat": chat });
-        let _ = self
-            .journal
-            .write(
-                level,
-                "notify",
-                None,
-                format!("Telegram: {text}"),
-                Some(data),
-            )
-            .await;
-        text
+        run_pending(self.core, self.journal, self.state, p, from, chat).await
     }
+}
+
+/// Команда ожидания ядру тем же путём, что у экрана (Core::command, источник — Telegram, кто нажал), отметка записи
+/// выполненной, итог в журнал. Принимает: ядро, журнал, память дубля, ожидание, кто, чат.
+/// Возвращает: строку итога «Выполнено: …» или «Отклонено: …». Ошибок нет.
+pub async fn run_pending(
+    core: &Core,
+    journal: &Journal,
+    state: &Shared,
+    p: &Pending,
+    from: &User,
+    chat: i64,
+) -> String {
+    let who = from.describe();
+    let cmd = ManualCommand {
+        action: p.action.clone(),
+        source: CommandSource::Telegram {
+            chat: chat.to_string(),
+        },
+        by: Some(who.clone()),
+        at: Utc::now(),
+    };
+    // Запись отмечается выполненной ДО команды: второе нажатие во время выполнения — «уже выполнено».
+    // Ушла с экрана — отметку снимает mirror_state (запись с тем же ключом может вернуться); отказ — снимаем здесь.
+    if let Some(k) = &p.key {
+        lock(state).done.insert(k.clone());
+    }
+    let res = core.command(cmd).await;
+    if res.is_err()
+        && let Some(k) = &p.key
+    {
+        lock(state).done.remove(k);
+    }
+    let at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
+    let (level, text) = match res {
+        Ok(t) => (
+            Level::Info,
+            format!("Выполнено: {who}, «{}» — {t}, {at}.", p.title),
+        ),
+        Err(e) => (
+            Level::Warn,
+            format!("Отклонено: {who}, «{}» — {e}, {at}.", p.title),
+        ),
+    };
+    let data = json!({ "action": p.action, "from": who, "chat": chat });
+    let _ = journal
+        .write(
+            level,
+            "notify",
+            None,
+            format!("Telegram: {text}"),
+            Some(data),
+        )
+        .await;
+    text
 }

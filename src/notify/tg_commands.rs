@@ -1,8 +1,10 @@
 //! Файл: notify/tg_commands.rs
-//! Что делает: сообщения в Telegram (решение 157) — только из настроенного чата notify.telegram_chat:
-//! команды /help, /menu и /dev (меню управления), /status, /manual, /start, /resume, /pause, /stop (короткие пути
-//! плашки режима — с подтверждением «Да, …»); в группе «/cmd@другой_бот» — не нам, игнор. Плюс ответ человека на вопрос
-//! суммы «Продано вручную» (ForceReply, решение 156) — дальше подтверждение «Да, …» с этой суммой.
+//! Что делает: сообщения в Telegram (решение 157) по роли чата (решение 176, notify/roles.rs) и только от разрешённых
+//! пользователей роли. «Общий» — как раньше: команды /help, /menu и /dev (меню управления), /status, /manual, /start,
+//! /resume, /pause, /stop (короткие пути плашки режима — с подтверждением «Да, …»); в группе «/cmd@другой_бот» — не нам,
+//! игнор. «Общий» и «Неудачные» — ответ человека на вопрос суммы «Продано вручную» (ForceReply, решение 156) — дальше
+//! подтверждение «Да, …» с этой суммой. «Управление» — /menu (и /start, /help) — главное меню кнопками; ответ на
+//! вопрос суммы перевода USDT (notify/ctl/transfer_press.rs). «Сделки» — сообщения не принимаются.
 //! Список команд регистрируется setMyCommands (подсказка по «/», https://core.telegram.org/bots/api#setmycommands).
 //! Кто вызывает: notify/updates.rs — на каждое Update с message.
 //! От чего зависит: press.rs (Ctx, chat_matches), press_confirm.rs, press_record.rs, menu_press.rs, mirror_state.rs.
@@ -15,6 +17,7 @@ use super::menu_press::control_action;
 use super::mirror_state::{Pending, lock};
 use super::press::{Ctx, chat_matches};
 use super::press_record::ALREADY;
+use super::roles::{self, Role};
 use super::tg_buttons::InMessage;
 
 /// Команды бота: (команда без «/», описание) — для /help и setMyCommands.
@@ -47,6 +50,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
         "Стоп — новые сделки не открываются (с подтверждением)",
     ),
 ];
+
+/// Команды чата «Управление» (решение 176: всё кнопками, команда — только открыть меню).
+pub const CONTROL_COMMANDS: &[(&str, &str)] =
+    &[("menu", "Главное меню: состояние, балансы, перевод USDT")];
 
 /// Разбирает команду. Принимает: текст, имя бота. Возвращает: команду строчными без «/» или None — не команда или
 /// адресована другому боту («/cmd@другой»).
@@ -86,15 +93,37 @@ impl Ctx<'_> {
                 )
                 .await;
         }
+        let allowed = m
+            .from
+            .as_ref()
+            .is_some_and(|u| roles::allowed(self.settings, self.role, u));
+        if !allowed {
+            return self
+                .log(
+                    Level::Warn,
+                    format!(
+                        "Чат «{}»: сообщение от неразрешённого {who} — игнор",
+                        self.role.title()
+                    ),
+                )
+                .await;
+        }
         let text = m.text.clone().unwrap_or_default();
+        if self.role == Role::Control {
+            return self.ctl_message(&m, &text, &who).await;
+        }
         let prompt = m
             .reply_to_message
             .as_ref()
-            .and_then(|r| lock(self.state).prompts.remove(&r.message_id));
+            .and_then(|r| lock(self.state).prompts.remove(&(m.chat.id, r.message_id)));
         if let Some(p) = prompt {
             return self
                 .amount(&p.key, &p.code, &text, m.message_id, &who)
                 .await;
+        }
+        // «Неудачные» — только ответы на вопрос суммы; команды меню — у «Общего» (как раньше) и «Управления».
+        if self.role != Role::General {
+            return;
         }
         let Some(cmd) = parse(&text, self.bot) else {
             return;
@@ -152,7 +181,7 @@ impl Ctx<'_> {
     }
 
     /// Простое сообщение в чат (ответом на сообщение). Ошибка — в журнал.
-    async fn say(&self, text: &str, reply_to: Option<i64>) {
+    pub async fn say(&self, text: &str, reply_to: Option<i64>) {
         if let Err(e) = self.tg.send_markup(self.chat, text, None, reply_to).await {
             self.log(Level::Error, format!("Ответ в Telegram не отправлен: {e}"))
                 .await;

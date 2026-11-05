@@ -5,6 +5,7 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 176 (Telegram, 4 чата):** Тигран даст ID чатов и токены ботов → задать notify.control_chat / deals_chat / failures_chat, секреты telegram.control_token / deals_token / failures_token, notify.live_refresh_s = 5, notify.live_idle_s = 120, notify.dialog_ttl_s = 600, notify.transfer_pct = 25, 50; проверить «Проверить подключение» у каждой роли.
 - **После деплоя сборки решений 160–173 задать: risk.max_daily_loss_usd = 15 по каждой бирже (сейчас временно 100 на всю систему из-за застрявших), risk.max_daily_loss_total_usd — не задавать; delist.block_hours = 72, delist.refresh_s = 3600;** usdt.return_retry_s = 10, usdt.return_retries_max = 5; transfer.locked_retry_ms = 1000 (bybit 10000), transfer.locked_retries_max = 10 (решение 166); закрыть «Перегнано вручную» DOGE 20261104225504576DOGE (83.10 USDT, Тигран перевёл сам); разобрать старые «USDT не вернулись» (WKC, TWT); записать живые ответы Binance, OKX, Bitget, XT, Phemex, Poloniex, CoinEx, HTX, Kraken (команды — tests/README.md) и снять #[ignore]; HTX — venue.contract_field, CoinEx — venue.bsc_contract_chain, Kraken — есть ли сеть BSC.
 - **Решение 165, после деплоя:** закрыть «Продано вручную» сделку 20261104222708667LUCIC (406 LUCIC, выручка 44.50 USDT) — до исправления отказ «идёт другая сделка» (метка монеты не снималась). Gate выключен 05.11 до подтверждения адреса w3 в адресной книге Gate (ADDRESS_NOT_USED).
 - **Решение 158 (GT Gate), после деплоя:** venue.fee_deduction [gate] = gt, venue.gt_min_balance (≈ на 10 сделок), venue.gt_balance_poll_s = 30.

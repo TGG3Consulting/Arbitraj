@@ -9,6 +9,7 @@
     Решение 174: у каждой монеты биржи (кроме котируемой) — кнопка «Продать»: подтверждение, затем команда ядру
     SellBalance (всё свободное по рынку в USDT; не со спота — сначала перевод на торговый счёт; выручка — на споте).
     Недоступна — disabled, причина по наведению (поле sell ответа). Итог — над балансами биржи; баланс обновляется сразу.
+    Решение 176: «Перевести USDT» — форма components/UsdtTransfer.svelte (та же команда ядра, что в Telegram).
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js (GET /api/balances, /api/balances/{id}, /api/wallets, /api/wallets/{id}/balances,
     POST /api/manual/command),
@@ -19,11 +20,13 @@
   import { onDestroy, untrack } from 'svelte';
   import { get, post, seg } from '../lib/api.js';
   import { load, save } from '../lib/prefs.js';
+  import UsdtTransfer from './UsdtTransfer.svelte';
 
   let open = $state(load('balances.open') === '1');
   let refreshMs = $state(null);
   let refreshError = $state('');
   let listError = $state('');
+  let transfer = $state(false);
   /** Строки панели: {key, kind: 'cex'|'dex', id, title, data, error, at, busy}. */
   let rows = $state([]);
   /** Будильники ожидания по key: ⟳ будит сразу. */
@@ -162,6 +165,8 @@
         {#if refreshMs}обновление раз в {refreshMs} мс{:else}автообновления нет: {refreshError}{/if}
       </span>
     </div>
+    <button class="small" onclick={() => (transfer = !transfer)}>{transfer ? 'Скрыть перевод' : 'Перевести USDT'}</button>
+    {#if transfer}<UsdtTransfer onDone={() => rows.forEach(refresh)} />{/if}
     {#if listError}<p class="err">{listError}</p>{/if}
     {#each rows as r (r.key)}
       <section>

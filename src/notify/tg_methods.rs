@@ -12,6 +12,7 @@
 //! - ForceReply (force_reply, input_field_placeholder 1-64 символа): https://core.telegram.org/bots/api#forcereply
 //! - editMessageText: https://core.telegram.org/bots/api#editmessagetext
 //! - editMessageReplyMarkup: https://core.telegram.org/bots/api#editmessagereplymarkup
+//! - BotCommandScopeChat (type «chat», chat_id): https://core.telegram.org/bots/api#botcommandscopechat
 //! - setMyCommands / BotCommand (command 1-32 символа: строчные латинские, цифры, «_»; description 1-256):
 //!   https://core.telegram.org/bots/api#setmycommands, https://core.telegram.org/bots/api#botcommand
 //!
@@ -95,14 +96,23 @@ impl Telegram {
             .map(|_| ())
     }
 
-    /// setMyCommands — список команд бота (подсказка по «/»). Принимает: пары (команда без «/», описание).
+    /// setMyCommands — список команд бота (подсказка по «/»). Принимает: пары (команда без «/», описание), чат —
+    /// только для него (BotCommandScopeChat {type: "chat", chat_id}, решение 176) или None — вся область бота.
     /// Ошибки: TgError.
-    pub async fn set_my_commands(&self, commands: &[(&str, &str)]) -> Result<(), TgError> {
+    pub async fn set_my_commands(
+        &self,
+        commands: &[(&str, &str)],
+        chat: Option<&str>,
+    ) -> Result<(), TgError> {
         let list: Vec<Value> = commands
             .iter()
             .map(|(c, d)| json!({ "command": c, "description": d }))
             .collect();
-        self.call_with("setMyCommands", json!({ "commands": list }), self.timeout())
+        let mut p = json!({ "commands": list });
+        if let Some(c) = chat {
+            p["scope"] = json!({ "type": "chat", "chat_id": c });
+        }
+        self.call_with("setMyCommands", p, self.timeout())
             .await
             .map(|_| ())
     }

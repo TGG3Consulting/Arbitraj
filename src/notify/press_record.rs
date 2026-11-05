@@ -76,7 +76,7 @@ impl Ctx<'_> {
             {
                 Ok(id) => {
                     lock(self.state).prompts.insert(
-                        id,
+                        (msg.chat.id, id),
                         Prompt {
                             key,
                             code: code.into(),

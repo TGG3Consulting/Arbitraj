@@ -112,6 +112,10 @@ pub struct Inner {
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
+    /// Решение 176: память панели «Балансы» (биржи и кошельки DEX) — её читает Telegram (balances_cache.rs).
+    pub bal_cache: super::balances_cache::Cache,
+    /// Решение 176: идущие ручные переводы USDT по отправителю (повторное нажатие — «уже идёт»; ход — для экрана).
+    pub usdt_moves: Mutex<HashMap<String, super::usdt_transfer::Move>>,
     /// Статистика газа по монете (gas_stats.rs).
     pub gas: Mutex<HashMap<Asset, CoinGasStats>>,
     /// Алерты «убыток выше порога» и их сделки (manual.rs).
@@ -216,6 +220,8 @@ impl Inner {
             deals: Mutex::default(),
             active: Mutex::default(),
             balance_sells: Mutex::default(),
+            bal_cache: Default::default(),
+            usdt_moves: Mutex::default(),
             gas: Mutex::default(),
             alerts: Mutex::default(),
             holdings: Mutex::default(),

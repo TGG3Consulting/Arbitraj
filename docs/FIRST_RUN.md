@@ -313,6 +313,35 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.history_window_s | площадка Poloniex | *метод:* с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран | Окно поиска статусов депозита и вывода. | Wallets Activity Records: start и end обязательны, предел промежутка не указан |
 | venue.rate_limit_pause_ms | площадка Poloniex | *метод:* пауза после HTTP 429: ответ при превышении и Retry-After в документации не описаны, лимиты — «в секунду» (например, 1000–2000); решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Spot → API → Rate Limits: по UID и IP, ответ не описан |
 | venue.balance_events | площадка Poloniex | *метод:* «да» — поток аккаунта (канал balances); transfer.credit_by_event у Poloniex не включать до живой записи (хеша в уведомлении нет) | Изменения баланса без опроса (решение 76). | Websocket → Balance: available, hold, eventType, version |
+## Биржа Phemex (решение 168)
+
+Значения из официальной документации Phemex (phemex-docs.github.io). Живых ответов ещё нет — имя сети BSC, статус пары, счёт зачисления депозита задаёт Тигран по живым ответам. Ключ «Read & Trade & Withdraw» — с привязкой IP сервера; адреса вывода (кошелёк бота, адреса других бирж) — заранее в «withdrawal address list» кабинета Phemex. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Phemex | `https://api.phemex.com` | Основной адрес REST (vapi.phemex.com — только для IP из белого списка Phemex). | General API information: public user endpoints — Rest API «https://api.phemex.com» |
+| venue.ws_url | площадка Phemex | `wss://ws.phemex.com` | Стаканы и поток аккаунта — один адрес. | General API information: Websocket «wss://ws.phemex.com (further URI or querystring not allowed)» |
+| venue.quote_asset | площадка Phemex | `USDT` | Котируемая монета пар. | Query product information: спот-пары sXXXUSDT; fee-rate по quoteCurrency |
+| venue.pair_status_listed | площадка Phemex | *метод:* значение поля status пары CAKE из живого ответа GET /public/products (в примерах CCXT — «Listed»; в официальной документации поле не описано) | Без него справочник пар не загружается (торгуемость не угадываем). | Query product information: перечня полей нет |
+| venue.depth_levels | площадка Phemex | `30` | Вся глубина канала для котировки на объём. | Subscribe orderBook: «depth = 30 and interval = 20ms» |
+| venue.ws_symbols_per_conn | площадка Phemex | `20` | Предел документации. | API Rate Limits: «Each connection has subscription limit to 20 in maximum» |
+| venue.ws_max_conns | площадка Phemex | `5` | Потолок документации; при venue.balance_events = да одно соединение — поток аккаунта. | API Rate Limits: «Each Client has concurrent connection limit to 5 in maximum» |
+| venue.ws_subs_per_sec | площадка Phemex | `10` | Половина предела — запас на server.ping. | API Rate Limits: «Each connection has throttle limit to 20 request/s» |
+| venue.ws_ping_ms | площадка Phemex | `5000` | Совет документации. | Heartbeat: «interval less than 30 seconds», «recommended to be set as 5 seconds» |
+| venue.ws_silence_ms | площадка Phemex | `15000` | Три интервала ping. | Heartbeat: «reconnect … if don't receive messages in 3 heartbeat intervals» |
+| venue.recv_window_ms | площадка Phemex | `60000` | Совет документации; тот же срок у входа WebSocket. | REST request header: expiry «normally it should be (Now() + 1 minute)»; user.auth — не больше 2 минут |
+| venue.order_time_in_force | площадка Phemex | `ImmediateOrCancel` | Правило Тиграна: неисполненный остаток снимает биржа. | Place order: timeInForce GoodTillCancel, PostOnly, ImmediateOrCancel, FillOrKill |
+| venue.order_test_first | площадка Phemex | *метод:* не задавать (или «нет»): пробного ордера у Phemex нет — «да» даёт отказ ордера | Правила ордера проверяет order_rules::ready. | Spot REST API: среди эндпоинтов нет test order |
+| venue.bsc_network | площадка Phemex | *метод:* значение chainName сети BSC из живого ответа chainCfg?currency=CAKE (в документации примеры только BTC, ETH, TRX, EOS) | В документации имени сети BSC нет. | Query deposit chain settings: chainName |
+| venue.deposit_min_absent_ok | площадка Phemex | *метод:* решает Тигран после живого ответа: у монет с minAmountRv «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Phemex | Урок 21: «0» и пусто у биржи могут значить разное. | Query deposit chain settings: minAmountRv необязателен, в примере «0» |
+| venue.networks_requests_per_min | площадка Phemex | *метод:* с запасом от предела группы Others 100/мин (её делят балансы, вывод, история, ставки) — например 30; решает Тигран | Круг ~300 монет × 2 запроса при 30/мин — около 20 минут. | Rate limits: Others «100/minute»; сети — по одной монете (chainCfg + asset/info) |
+| venue.history_rows | площадка Phemex | *метод:* больше числа депозитов и выводов монеты за время ожидания перевода (например 50); решает Тигран | Поиска по хешу и id нет — ищем в последних записях. | Query deposit/withdraw history records: limit «default 20», максимум не указан |
+| venue.rate_limit_pause_ms | площадка Phemex | *метод:* окно лимита пользователя — минута, IP-блок — 5 минут; например 60000; решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Rate limits: 429 + x-ratelimit-retry-after-<group> (транспорт не читает); IP 5000/5 мин — блок 5 мин |
+| venue.book_seq_strict | площадка Phemex | *метод:* не задавать до записи кадров: «да» — только если в записи sequence изменений пары идёт ровно +1 | Без записи строгая проверка могла бы рвать стакан на каждом кадре. | OrderBook message: sequence «Latest message sequence» — правило номеров не описано |
+| venue.book_stale_ms | площадка Phemex | *метод:* больше 60000 (контрольный снимок раз в 60 с) — например 90000; решает Тигран | Тихая пара не должна считаться устаревшей. | OrderBook message: «Snapshot messages are published with 60-second interval» |
+| venue.deposit_to_spot | площадка Phemex | *метод:* не задавать; «да» — только если первый живой депозит пришёл на Contract (поле depositTo / accountType записи) | На какой счёт зачисляется депозит, в документации не сказано. | Query deposit history records: depositTo SPOT или Contract; у адреса депозита параметра счёта нет |
+| venue.balance_events | площадка Phemex | *метод:* не включать до записи кадров wallet-order при сделке и депозите: в сообщении нет причины изменения | Вид изменения выводится из событий ордеров в том же сообщении — проверить. | Wallet-Order message: wallets (весь баланс), orders; причины и хеша нет |
+| venue.futures_balance_currencies | площадка Phemex | `USDT` | Панель «Балансы»: фьючерсы USDT-M и UTA по USDT. | Query Account Positions (USDT-M) и Query asset (UTA): currency обязателен |
 
 ## Зачисление по блокчейну (решение 151)
 

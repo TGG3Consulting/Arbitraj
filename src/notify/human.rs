@@ -40,6 +40,7 @@ pub fn venue(id: &str) -> String {
         "kucoin" => "KuCoin",
         "poloniex" => "Poloniex",
         "bybit" => "Bybit",
+        "phemex" => "Phemex",
         "bsc_dex" => "DEX",
         "kyberswap" => "KyberSwap",
         "xt" => "XT",

@@ -202,6 +202,86 @@ bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IO
 Первый живой ордер IOC — ответ FULL (`fills`, `commissionAsset`) из сырого журнала (`rest /api/v3/order`).
 Затем `cargo test --test binance_real_data -- --ignored` и снять `#[ignore]` с прошедших.
 
+### Phemex — tests/phemex_real_data.rs и команды записи (решение 168)
+
+Без записей (идут всегда): строка для подписи — ровно «Signed string» примеров 1–3 документации (General API
+information → Signature example), HMAC SHA256 hex — посчитан теми же вызовами, что официальный пример клиента
+(github.com/phemex/phemex-python-api, client.py: `hmac.new(secret, message, sha256).hexdigest()`); подпись входа
+user.auth — на ключе и expiry примера документации; строка запроса в заданном порядке; перевод масштабированных целых
+на числах таблицы «All Spot trading products» (sBTCUSDT); свой clOrdID — UUID v4; вид подписки orderbook.subscribe.
+Вектор пересчитать:
+
+```bash
+python3 -I -c "import hmac,hashlib; print(hmac.new(b'test_api_secret', b'/orders/activeListordStatus=New&ordStatus=PartiallyFilled&ordStatus=Untriggered&symbol=BTCUSD1575735951', hashlib.sha256).hexdigest())"
+# 09a06e3d4152159bdb6db5a66791a4f3b920e8b1b150da723cef2ce0d4b8619e
+```
+
+Публичные (ключ не нужен; монеты CAKE и USDT; адреса — по документации; из среды разработки api.phemex.com закрыт):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+# Справочник пар и монет (замерить размер: wc -c) и с датами листинга
+curl -sS --compressed 'https://api.phemex.com/public/products' > $D/phemex_products.json
+curl -sS --compressed 'https://api.phemex.com/public/products-plus' > $D/phemex_products_plus.json
+# Поля пары sCAKEUSDT и монет CAKE, USDT — имена полей, status (→ venue.pair_status_listed), priceScale, …Ev
+python3 -I -c "import json; d=json.load(open('$D/phemex_products.json'))['data']; \
+print([p for p in d['products'] if p.get('symbol')=='sCAKEUSDT']); print([c for c in d['currencies'] if c.get('currency') in ('CAKE','USDT')])"
+# Стакан REST (формат {error, id, result})
+curl -sS --compressed 'https://api.phemex.com/md/orderbook?symbol=sCAKEUSDT' > $D/phemex_orderbook_sCAKEUSDT.json
+# Публичный справочник сетей (формат в документации не описан)
+curl -sS --compressed 'https://api.phemex.com/exchange/public/cfg/chain-settings?currency=CAKE' > $D/phemex_chain_settings_CAKE.json
+# WebSocket: две пары (номер sequence — свой у пары или общий?), ping раз в 5 с, 130 с — два контрольных снимка
+( echo '{"id":1,"method":"orderbook.subscribe","params":["sCAKEUSDT"]}'; \
+  echo '{"id":2,"method":"orderbook.subscribe","params":["sBTCUSDT"]}'; \
+  for i in $(seq 1 25); do sleep 5; echo '{"id":0,"method":"server.ping","params":[]}'; done ) \
+  | timeout 130 websocat -t wss://ws.phemex.com > $D/phemex_ws_orderbook_sCAKEUSDT.jsonl
+```
+
+Что проверить по записи: имена полей пары (baseCurrency, quoteCurrency, priceScale, baseTickSizeEv, quoteTickSizeEv,
+minOrderValueEv, maxBaseOrderSizeEv, maxOrderValueEv, status) и монеты (currency, valueScale); идёт ли sequence пары
+ровно +1 (→ venue.book_seq_strict) или общий на соединение; повторяется ли снимок раз в 60 с; ответ на подписку и на
+ping; вид ошибки (подписка на несуществующую пару).
+
+Приватные — на сервере бота (ключ только в переменных сессии, не в файлах; или из сырого журнала data/raw/phemex,
+записи «rest <путь>»):
+
+```bash
+export PHEMEX_KEY=… PHEMEX_SECRET=…
+phx() {  # phx МЕТОД /путь 'строка запроса'
+python3 -I - "$1" "$2" "$3" <<'PY'
+import hmac, hashlib, os, sys, time, urllib.request
+m, p, q = sys.argv[1], sys.argv[2], sys.argv[3]
+e = str(int(time.time()) + 60)
+s = hmac.new(os.environ['PHEMEX_SECRET'].encode(), (p + q + e).encode(), hashlib.sha256).hexdigest()
+h = {'x-phemex-access-token': os.environ['PHEMEX_KEY'], 'x-phemex-request-expiry': e, 'x-phemex-request-signature': s}
+r = urllib.request.Request('https://api.phemex.com' + p + ('?' + q if q else ''), method=m, headers=h)
+print(urllib.request.urlopen(r).read().decode())
+PY
+}
+phx GET /phemex-deposit/wallets/api/chainCfg 'currency=CAKE' > $D/phemex_chaincfg_CAKE.json
+phx GET /phemex-deposit/wallets/api/chainCfg 'currency=USDT' > $D/phemex_chaincfg_USDT.json
+phx GET /phemex-withdraw/wallets/api/asset/info 'currency=CAKE' > $D/phemex_asset_info_CAKE.json
+phx GET /phemex-withdraw/wallets/api/asset/info 'currency=USDT&amount=10' > $D/phemex_asset_info_USDT_10.json
+phx GET /phemex-withdraw/wallets/api/asset/info '' > $D/phemex_asset_info_all.json   # что без монеты?
+phx GET /api-data/spots/fee-rate 'quoteCurrency=USDT' > $D/phemex_fee_rate.json        # сколько пар (страницы?)
+phx GET /spot/wallets '' > $D/phemex_spot_wallets.json
+phx GET /margin-trade/wallets '' > $D/phemex_margin_wallets.json
+phx GET /g-accounts/accountPositions 'currency=USDT' > $D/phemex_gaccounts_USDT.json
+phx GET /uta-biz/assets 'currency=USDT' > $D/phemex_uta_USDT.json
+phx GET /phemex-deposit/wallets/api/depositAddress 'currency=CAKE&chainName=<сеть BSC>' > $D/phemex_deposit_addr_CAKE.json
+phx GET /phemex-deposit/wallets/api/depositHist 'currency=CAKE&offset=0&limit=20' > $D/phemex_deposit_hist_CAKE.json
+phx GET /phemex-withdraw/wallets/api/withdrawHist 'offset=0&limit=20' > $D/phemex_withdraw_hist.json
+```
+
+Что проверить: chainName сети BSC и contractAddress CAKE (0x0E09…cE82) в обоих справочниках; minAmountRv («0» или
+пусто?); withdrawFeeRv без amount и с amount; fee-rate — все ли пары USDT; balanceEv — весь баланс с замороженным;
+первый IOC-ордер (из сырого журнала: ответ PUT /spot/orders/create и `GET /api-data/spots/orders/by-order-id` —
+cumBaseValueEv = исполненное количество?, cumQuoteValueEv, cumFeeEv, feeCurrency, ordStatus у IOC с остатком;
+принимается ли UUID как clOrdID); первый депозит — depositTo / accountType (→ venue.deposit_to_spot), статусы Confirmed
+→ Success; первый малый вывод — входит ли комиссия в amount, статус Success или Succeed; кадры wallet-order
+(`phemex_ws_wo.jsonl` из сырого журнала, соединение «account») при ордере и при депозите — в одном ли сообщении баланс и
+ордер. Затем `cargo test --test phemex_real_data -- --ignored` и снять `#[ignore]` с прошедших.
+
 Семейство Solidly V1 — THENA V1 (решение 122, часть F) — tests/bsc_dex_solidly_v1_family.rs: вид solidly_v1 (Proto::SolidlyV1, в графе, без своего пути, шаг SOLIDLY исполнителя, только dex.factory; без exec.executor_address — сигнал), данные вызовов реестра фабрик (getPair(address,address,bool), getPool(…,bool), poolByPair, getDODOPoolBidirection) по официальным сигнатурам. Сверка своей математики Pair.sol с ответом пула getAmountOut — `thena_v1_math_matches_live_get_amount_out`, помечен #[ignore] до записи. **Запись (на сервере, свой узел, ОДИН блок N для всех вызовов, eth_call с тегом N):** по 1 стабильному и 1 волатильному пулу THENA V1 (адрес фабрики — dex.factory DEX THENA V1): `pool.metadata()` (селектор 0x392f37e9), `factory.getFee(bool stable)` (0x512b45ea, stable — из metadata), `pool.getAmountOut(uint256 amountIn, address tokenIn)` (0xf140a35a) — по 3 суммы в обе стороны (малая, ~1% резерва, ~10% резерва). Сохранить в tests/data/thena_v1/responses.json: `{block, pools: [{pool, metadata: "<result>", fee: "<result>", quotes: [{amount_in: "<десятичное>", token_in: "0x…", out: "<result>"}]}]}`; затем `cargo test --test bsc_dex_solidly_v1_family -- --ignored` и снять #[ignore].
 Пути проб у пулов без своего Universal Router (решение «122 X (проба через исполнитель)») — tests/bsc_dex_probe_paths.rs: причина пробы налога (шаг исполнителя без exec.executor_address — настройка, вида шага нет — не настройка) на пуле записи CAKE (route_common), откат исполнителя «deadline» — помеха, проба BNB только у видов со своим Universal Router (форк V2, THENA, Topaz — причина без dex.universal_router).
 

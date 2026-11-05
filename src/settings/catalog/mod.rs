@@ -5,6 +5,7 @@
 //! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
 //! «без потолка» — решение 141), window.rs (окна —
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
+//! решение 125), gate.rs, okx.rs, phemex.rs (настройки только Gate, только OKX, только Phemex).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -19,6 +20,7 @@ mod gate;
 mod index;
 mod kyber;
 mod okx;
+mod phemex;
 mod send;
 mod signals;
 mod trade;
@@ -94,6 +96,7 @@ static PARTS: &[&[SettingDef]] = &[
     okx::OKX,
     binance::BINANCE,
     xt::XT,
+    phemex::PHEMEX,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

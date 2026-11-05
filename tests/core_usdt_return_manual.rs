@@ -65,10 +65,12 @@ async fn old_not_returned_is_on_screen_after_restart() {
             .iter()
             .all(|b| b.disabled.is_none() && b.input.is_none())
     );
+    // Решение 164: исходный текст причины — в reason_full, в тексте записи — человеческий.
     assert!(
-        rec.text
-            .contains("Причина: перегон не состоялся: MEXC, код 16021")
+        rec.reason_full
+            .contains("перегон не состоялся: MEXC, код 16021")
     );
+    assert!(rec.text.contains("Причина:"), "{}", rec.text);
     // Таблица экрана — поле usdt в GET /api/manual.
     assert_eq!(core.manual()["usdt"][0]["id"], "m1DOGE");
 }

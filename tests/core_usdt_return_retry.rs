@@ -106,8 +106,7 @@ async fn retries_with_interval_then_record_with_two_buttons() {
     let codes: Vec<&str> = rec.buttons.iter().map(|b| b.code.as_str()).collect();
     assert_eq!(codes, ["usdt_retry", "usdt_manual"]);
     assert!(
-        rec.text
-            .contains("83.10 USDT, лежат на mexc, должны вернуться на bingx"),
+        rec.text.contains("83.10 USDT") && rec.text.contains("MEXC") && rec.text.contains("BingX"),
         "{}",
         rec.text
     );

@@ -15,6 +15,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{ManualAction as A, ManualRecord, RecordKind, VenueId};
 use crate::gateway::urgency::{self, Urgency};
+use crate::notify::human as hu;
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
@@ -41,9 +42,16 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
         object_id: id.clone(),
         deal_id: id.clone(),
         venue: v.clone(),
-        text: format!(
-            "USDT не вернулись: сделка {id}, сумма {sum} USDT, лежат на {v}, должны вернуться на {to}\nПричина: {why}"
-        ),
+        // Решение 164: человеческий текст записи (тот же уходит в Telegram зеркалом экрана).
+        text: hu::Msg::new(hu::STOP, "USDT не вернулись на биржу")
+            .line(format!("{} {}", hu::usd(*amount), hu::route(v, to)))
+            .kv("Лежат на", hu::venue(v))
+            .reason(why)
+            .todo("«Перегнать» или, если перевели сами, «Перегнано вручную»")
+            .id(id)
+            .render(),
+        reason: crate::notify::reason::short(why),
+        reason_full: why.clone(),
         buttons: vec![
             btn(
                 "usdt_retry",

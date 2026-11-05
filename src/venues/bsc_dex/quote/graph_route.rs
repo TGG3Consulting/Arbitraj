@@ -3,6 +3,8 @@
 //! пути USDT ↔ монета (quote/route_paths.rs), оценивает каждый путь нашей математикой (quote/route_calc.rs),
 //! делит объём между путями/пулами (сплит, quote/graph_split.rs — решения 38, 80) и собирает котировку ядру через
 //! quote/costs.rs с маршрутом по долям (RouteMode::Graph). Фаза 80, PR 80.4 — оценка и сплит; PR 80.5a — врезка.
+//! Решение 187: при заданной dex.route_search_max_paths перебор идёт короткими путями первыми, а в сплит попадают
+//! dex.route_max_paths ЛУЧШИХ путей по расчёту (quote/route_best.rs), а не первые найденные.
 //! Решение 122 R1: при dex.route_gas_aware = да сплит выбирает доли и пути по чистому выходу (газ пути в USDT —
 //! quote/route_gas.rs). Исполнимость маршрута как есть (DexRoute.executable, решение 84; R2/R3 решения 122) —
 //! quote/graph_exec.rs: неисполнимый — сигнал/карточка, авто-сделкой не исполняется (exec/trade.rs отказывает).
@@ -10,8 +12,8 @@
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Кто вызывает: quote/mod.rs за переключателем dex.router_mode (merge, quote); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs, quote/graph_split.rs,
-//! quote/graph_exec.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
-//! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
+//! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
+//! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
@@ -31,7 +33,7 @@ use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
-use super::{Quoting, costs, graph_exec, graph_legs, pick, route_paths};
+use super::{Quoting, costs, graph_exec, graph_legs, pick, route_best, route_paths};
 
 pub use super::graph_exec::{GraphForm, graph_form};
 
@@ -52,7 +54,13 @@ pub async fn quote(
     let g = graph::cached(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, head)?;
     let allowed: HashSet<Address> = v.q.mids.active(ctx).iter().map(|m| m.address).collect();
     let (max_hops, max_paths) = route_paths::limits(ctx)?;
-    let mut paths = route_paths::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, max_paths);
+    // Решение 187: задан предел перебора — короткие пути первыми, затем отбор max_paths лучших (route_best.rs);
+    // не задан — как раньше: первые max_paths путей обхода.
+    let cap = route_best::search_cap(ctx)?;
+    let mut paths = match cap {
+        Some(c) => route_best::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, c),
+        None => route_paths::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, max_paths),
+    };
     // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
     // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
     if native::is_native(ctx, asset) {
@@ -95,6 +103,18 @@ pub async fn quote(
                 why.join("; ")
             ),
         ));
+    }
+    if cap.is_some() {
+        cands = route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)?;
+        if cands.is_empty() {
+            return Err(ctx.err(
+                ErrorCode::NoRoute,
+                format!(
+                    "{}: граф — ни один путь не взял первую долю объёма",
+                    asset.ticker
+                ),
+            ));
+        }
     }
     let legs = graph_split::split(ctx, &mut cands, v.side, qty, v.taxes, gas_aware)?;
     // Решения 39 и 146: налоговые правила исполнимости — по налогу ПУЛА каждого шага (Usable.tax_pct), не монеты.

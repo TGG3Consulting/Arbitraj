@@ -47,7 +47,7 @@ impl Cand {
 
 /// Чистая отдача шага: прирост USDT шага (покупка — отдадим больше, продажа — получим больше) с газом нового пути.
 /// Покупка — меньше лучше, продажа — больше лучше. Ошибок нет.
-fn score(side: Side, delta: Decimal, opens: bool, gas: Decimal) -> Decimal {
+pub fn score(side: Side, delta: Decimal, opens: bool, gas: Decimal) -> Decimal {
     let g = if opens { gas } else { Decimal::ZERO };
     match side {
         Side::Buy => delta + g,
@@ -56,7 +56,7 @@ fn score(side: Side, delta: Decimal, opens: bool, gas: Decimal) -> Decimal {
 }
 
 /// s лучше d для стороны (покупка — меньше, продажа — больше). Ошибок нет.
-fn better(side: Side, s: Decimal, d: Decimal) -> bool {
+pub fn better(side: Side, s: Decimal, d: Decimal) -> bool {
     match side {
         Side::Buy => s < d,
         Side::Sell => s > d,

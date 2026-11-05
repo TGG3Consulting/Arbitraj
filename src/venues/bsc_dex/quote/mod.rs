@@ -46,6 +46,7 @@ pub mod quoter_extra;
 pub mod quoter_maverick;
 pub mod quoter_revert;
 pub mod rate;
+pub mod route_best;
 pub mod route_calc;
 pub mod route_gas;
 pub mod route_paths;

@@ -77,10 +77,20 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         Ok(r) => {
             super::fills::trade(core, &mut deal, &r).await;
             deal.sells.push(r.clone());
-            let text = format!(
-                "{}: продано {} {} на {} по {} ({why})",
-                deal.id, r.filled_qty, a.ticker, v.0, r.avg_price
-            );
+            let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Продано")
+                .line(format!(
+                    "{} {} на {} по {}",
+                    crate::notify::human::qty(r.filled_qty),
+                    a.ticker,
+                    crate::notify::human::venue(&v.0),
+                    crate::notify::human::qty(r.avg_price)
+                ))
+                .kv(
+                    "Выручка",
+                    crate::notify::human::usd(r.filled_qty * r.avg_price),
+                )
+                .id(&deal.id)
+                .render();
             core.inner
                 .deps
                 .notify("deal.sell_filled", Some(&v.0), &text)

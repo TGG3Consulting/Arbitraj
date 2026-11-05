@@ -96,10 +96,16 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     }
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
+        // Решение 164: режим по-русски («Стоп», «Пауза»), а не внутреннее имя.
+        let why = r.reason.clone().unwrap_or_default();
+        let why = if why.is_empty() {
+            String::new()
+        } else {
+            format!(" — {why}")
+        };
         return Err(format!(
-            "система не в работе: {:?} ({})",
-            r.mode,
-            r.reason.clone().unwrap_or_default()
+            "торговля в режиме «{}»{why}",
+            super::commands_control::label(r.mode)
         ));
     }
     for v in [&d.buy_on, &d.sell_on] {
@@ -145,7 +151,7 @@ pub fn on_error(core: &Core, venue: &VenueId) -> Option<String> {
         let n = *n;
         match max {
             Ok(m) if n >= m => {
-                let t = format!("{n} ошибок подряд (risk.max_errors_in_row = {m})");
+                let t = format!("{n} ошибок подряд — предел {m}");
                 r.venue_paused.insert(venue.clone(), t.clone());
                 Some(t)
             }

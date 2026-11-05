@@ -66,6 +66,19 @@ pub async fn settle(core: &Core, deal: &mut Deal, price: Decimal) {
         let deps = &core.inner.deps;
         deps.log(Level::Info, "deal.dust", Some(&v.0), &text, None)
             .await;
-        deps.notify("deal.dust", Some(&v.0), &text).await;
+        let tg = crate::notify::human::Msg::new(
+            crate::notify::human::INFO,
+            "После продажи остался остаток монеты",
+        )
+        .line(format!(
+            "{} {t} на {} ≈ {}",
+            crate::notify::human::qty(qty),
+            crate::notify::human::venue(&v.0),
+            crate::notify::human::usd(qty * price)
+        ))
+        .line("Меньше минимального ордера — продать нельзя, остаётся на балансе")
+        .id(&deal.id)
+        .render();
+        deps.notify("deal.dust", Some(&v.0), &tg).await;
     }
 }

@@ -133,8 +133,10 @@ async fn sender_hash(core: Core, c: Check) {
         coin: Some(&c.ticker),
     };
     let head = format!(
-        "{} {}: зачислено по блокчейну ({})",
-        c.deal, c.ticker, c.hash
+        "{}: {} зачислено по блокчейну (транзакция {})",
+        c.deal,
+        c.ticker,
+        crate::notify::human::addr(&c.hash)
     );
     let total = match deps.settings.integer("transfer.max_time_s", at) {
         Ok(s) => Duration::from_secs(s),
@@ -197,8 +199,8 @@ async fn sender_hash(core: Core, c: Check) {
         }
     }
     let text = format!(
-        "{head}; хеш вывода от {} не получен за transfer.max_time_s — проверьте вручную",
-        c.from.0
+        "{head}; хеш вывода от {} не получен за отведённое время — проверьте вручную",
+        crate::notify::human::venue(&c.from.0)
     );
     report(&core, &c.from, Level::Warn, text).await;
 }
@@ -208,6 +210,7 @@ async fn report(core: &Core, from: &VenueId, level: Level, text: String) {
     let deps = &core.inner.deps;
     deps.log(level, "core.transfer_chain", Some(&from.0), &text, None)
         .await;
-    deps.notify("exec.chain_hash_mismatch", Some(&from.0), &text)
+    let tg = crate::notify::human::from_core("exec.chain_hash_mismatch", Some(&from.0), &text);
+    deps.notify("exec.chain_hash_mismatch", Some(&from.0), &tg)
         .await;
 }

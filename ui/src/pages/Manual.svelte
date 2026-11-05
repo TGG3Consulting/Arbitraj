@@ -17,10 +17,12 @@
     вернулась на площадку покупки (повторы usdt.return_retry_s / usdt.return_retries_max кончились, исход неизвестен
     или повторов нет) — сделка, сумма, где лежат, куда должны, причина; кнопки «Перегнать» (ещё одна попытка
     возврата) и «Перегнано вручную» (человек перевёл сам). Кнопок «Продать» нет — уже продано.
+    Решение 164: числа округлены (USDT — 2 знака, количество — 4 значащие цифры, lib/fmt.js), «Причина» — короткий
+    человеческий текст из records (reason), полный исходный текст — по наведению (reason_full).
     Решение 121 (C4): внизу — «Сухая сделка DEX» (components/DexDrySwap.svelte): проверка своего свопа без отправки,
     не зависит от данных ядра.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/remote.svelte.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte, DexDrySwap.svelte.
+  От чего зависит: lib/api.js, lib/remote.svelte.js, lib/fmt.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte, DexDrySwap.svelte.
   Настройки: нет (режим и пороги — stuck.*, экран «Настройки»).
 -->
 <script>
@@ -28,6 +30,7 @@
   import { remote } from '../lib/remote.svelte.js';
   import { assetLabel } from '../lib/coinLabels.js';
   import { showTime } from '../lib/labels.js';
+  import { fmtUsd, fmtQty } from '../lib/fmt.js';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import DexDrySwap from '../components/DexDrySwap.svelte';
@@ -74,11 +77,9 @@
     await command(action, question);
   }
 
-  /** Последняя запись хронологии сделки — причина остановки. */
-  function lastNote(d) {
-    const t = d.timeline || [];
-    const notes = t.filter(([, x]) => !x.startsWith('Предварительный убыток'));
-    return notes.length ? notes[notes.length - 1][1] : '';
+  /** Запись экрана по ключу — причина коротко (reason) и полностью (reason_full), решение 164. */
+  function recordOf(key) {
+    return (manual.data?.records ?? []).find((r) => r.key === key) ?? {};
   }
 </script>
 
@@ -102,8 +103,8 @@
     <tbody>
       {#each manual.data.alerts as a (a.id)}
         <tr>
-          <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num">{a.qty}</td><td class="num err">{a.loss_pct ?? '—'}</td>
-          <td>{a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
+          <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num" title={a.qty}>{fmtQty(a.qty)}</td><td class="num err" title={a.loss_pct ?? ''}>{a.loss_pct == null ? '—' : Number(a.loss_pct).toFixed(2)}</td>
+          <td title={recordOf('a.' + a.id).reason_full ?? a.reason ?? ''}>{recordOf('a.' + a.id).reason ?? a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
           <td class="row">{@render buttons('a.' + a.id)}</td>
         </tr>
       {:else}
@@ -118,7 +119,7 @@
     <tbody>
       {#each manual.data.holdings as h (h.id)}
         <tr>
-          <td>{assetLabel(h.asset)}</td><td>{h.venue}</td><td class="num">{h.qty}</td><td>{h.reason}</td>
+          <td>{assetLabel(h.asset)}</td><td>{h.venue}</td><td class="num" title={h.qty}>{fmtQty(h.qty)}</td><td title={recordOf('h.' + h.id).reason_full ?? h.reason}>{recordOf('h.' + h.id).reason ?? h.reason}</td>
           <td><code>{h.deal_id}</code></td><td>{showTime(h.taken_at)}</td>
           <td class="row">{@render buttons('h.' + h.id)}</td>
         </tr>
@@ -135,8 +136,8 @@
     <tbody>
       {#each manual.data.halted ?? [] as d (d.id)}
         <tr>
-          <td>{assetLabel(d.direction.asset)}</td><td>{d.at}</td><td class="num">{d.qty}</td><td class="num">{d.invested}</td>
-          <td class="num err">{d.provisional_usd ?? '—'}</td><td>{lastNote(d)}</td><td><code>{d.id}</code></td>
+          <td>{assetLabel(d.direction.asset)}</td><td>{d.at}</td><td class="num" title={d.qty}>{fmtQty(d.qty)}</td><td class="num" title={d.invested}>{fmtUsd(d.invested)}</td>
+          <td class="num err" title={d.provisional_usd ?? ''}>{fmtUsd(d.provisional_usd)}</td><td title={recordOf('d.' + d.id).reason_full ?? ''}>{recordOf('d.' + d.id).reason ?? ''}</td><td><code>{d.id}</code></td>
           <td class="row">{@render buttons('d.' + d.id)}</td>
         </tr>
       {:else}

@@ -15,6 +15,8 @@ use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::gateway::rules::{RuleAction, pick_rule};
 use crate::storage::journal::Level;
 
+use crate::notify::human::{self as h, Msg};
+
 use super::engine::Core;
 use super::risk::{self, Mode};
 
@@ -77,19 +79,26 @@ pub async fn on_error(
         };
         if fresh {
             risk::publish(core);
-            deps.notify("send.outcome_unknown", Some(&venue.0), &text)
+            let tg = tg_error("send.outcome_unknown", op, venue, deal, err)
+                .todo(format!(
+                    "проверить на {}, прошла ли операция, затем «Снять паузу» площадки",
+                    h::venue(&venue.0)
+                ))
+                .render();
+            deps.notify("send.outcome_unknown", Some(&venue.0), &tg)
                 .await;
-            let t = format!("Площадка {} на паузе: {why}", venue.0);
-            deps.notify("risk.stop", Some(&venue.0), &t).await;
+            deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why))
+                .await;
         }
         return Next::Stop;
     }
     if let Some(code) = event_of(err.code) {
-        deps.notify(code, Some(&venue.0), &text).await;
+        let tg = tg_error(code, op, venue, deal, err).render();
+        deps.notify(code, Some(&venue.0), &tg).await;
     }
     if let Some(paused) = risk::on_error(core, venue) {
-        let t = format!("Площадка {} на паузе: {paused}", venue.0);
-        deps.notify("risk.stop", Some(&venue.0), &t).await;
+        deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &paused))
+            .await;
     }
     let rules = match crate::storage::rules::list(&deps.db).await {
         Ok(r) => r,
@@ -126,21 +135,51 @@ pub async fn on_error(
             super::engine::lk(&core.inner.risk)
                 .venue_paused
                 .insert(venue.clone(), why.clone());
-            deps.notify(
-                "risk.stop",
-                Some(&venue.0),
-                &format!("Площадка {} остановлена: {why}", venue.0),
-            )
-            .await;
+            deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why))
+                .await;
             Next::Stop
         }
         RuleAction::StopAll => {
             let why = format!("правило шлюза №{}: {:?} на {}", rule.id, err.code, venue.0);
-            let t = risk::set_mode(core, Mode::Stopped, Some(why));
-            deps.notify("risk.stop", Some(&venue.0), &t).await;
+            risk::set_mode(core, Mode::Stopped, Some(why.clone()));
+            let tg = Msg::new(h::STOP, "Торговля остановлена")
+                .line(format!("Ошибка на {}: {op}", h::venue(&venue.0)))
+                .reason(&err.message)
+                .kv("Сработало", format!("правило шлюза №{}", rule.id))
+                .id(deal.unwrap_or_default())
+                .render();
+            deps.notify("risk.stop", Some(&venue.0), &tg).await;
             Next::Stop
         }
         // CancelNoRetry, NotifyOnly, исчерпанные повторы: результат операции не получен — дальше не идём.
         _ => Next::Stop,
+    }
+}
+
+/// Решение 164: текст ошибки операции для Telegram — заголовок события, где и что делали, человеческая причина,
+/// неизвестный ответ биржи — последней строкой, id сделки. Принимает: код события, операцию, площадку, сделку, ошибку.
+fn tg_error(code: &str, op: &str, venue: &VenueId, deal: Option<&str>, err: &GatewayError) -> Msg {
+    let head = crate::notify::heads::head(code, "");
+    let (icon, title) = head.split_once(' ').unwrap_or((h::WARN, head.as_str()));
+    Msg::new(icon, title)
+        .line(format!("{}: {}", h::venue(&venue.0), lower(op)))
+        .reason(&err.message)
+        .id(deal.unwrap_or_default())
+}
+
+/// Решение 164: площадка на паузе (risk.stop). Принимает: площадку, причину паузы.
+fn paused_text(venue: &VenueId, why: &str) -> String {
+    Msg::new(h::STOP, format!("Площадка {} на паузе", h::venue(&venue.0)))
+        .reason(why)
+        .todo("разобраться с причиной, затем «Снять паузу» на экране «Управление»")
+        .render()
+}
+
+/// Первая буква — строчная (операция в середине строки). Принимает: текст.
+fn lower(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_lowercase().collect::<String>() + c.as_str(),
+        None => String::new(),
     }
 }

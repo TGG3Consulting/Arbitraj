@@ -74,7 +74,13 @@ async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c
                 "{}: затрата {} {} не переведена в USDT ({e}) — итог сделки без неё",
                 deal.id, c.amount, c.asset
             );
-            deal.note(t.clone());
+            // Решение 164: в хронологии — коротко; подробности (все площадки и причины) — в журнале.
+            deal.note(format!(
+                "Комиссия {} {} не пересчитана в USDT — нет живой цены {}; итог сделки без неё",
+                crate::notify::human::qty(c.amount),
+                c.asset,
+                c.asset
+            ));
             core.inner
                 .deps
                 .log(Level::Warn, "core.ledger", Some(&venue.0), t, None)

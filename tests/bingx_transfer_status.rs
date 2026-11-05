@@ -99,7 +99,7 @@ fn mass_change_is_one_summary() {
     };
     assert_eq!(
         transfer_status::one("bingx", &c),
-        format!("bingx {} (BEP20): ввод закрыт, вывод открыт", hundred[0])
+        format!("BingX {} (BEP20): ввод закрыт, вывод открыт", hundred[0])
     );
     // Монеты, которой не было в прошлом справочнике, — не смена.
     assert!(transfer_status::diff(&HashMap::new(), &new).is_empty());

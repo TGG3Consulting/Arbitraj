@@ -42,6 +42,8 @@ pub async fn value_now(core: &Core, deal: &Deal) -> Result<Decimal, String> {
 /// Принимает: сделку, стоимость её монет по рынку (Err — причина, почему цены нет).
 /// Возвращает: оценку (сумма, есть ли цена, заметка). Ошибок нет.
 pub fn estimate(deal: &Deal, value: Result<Decimal, String>) -> Estimate {
+    // Решение 164: числа для глаз (деньги — 2 знака, количество — без длинного хвоста), площадка — по имени.
+    use crate::notify::human::{money as m, qty as q, venue as v_name};
     let known = deal.proceeds - deal.invested - deal.spent;
     let t = &deal.direction.asset.ticker;
     if deal.qty <= Decimal::ZERO {
@@ -49,8 +51,11 @@ pub fn estimate(deal: &Deal, value: Result<Decimal, String>) -> Estimate {
             amount: known,
             priced: true,
             note: format!(
-                "монет в сделке нет — итог по известным суммам: выручка {} − вложено {} − затраты {} = {known} USDT",
-                deal.proceeds, deal.invested, deal.spent
+                "монет в сделке нет — итог по известным суммам: выручка {} − вложено {} − затраты {} = {} USDT",
+                m(deal.proceeds),
+                m(deal.invested),
+                m(deal.spent),
+                m(known)
             ),
         };
     }
@@ -62,13 +67,13 @@ pub fn estimate(deal: &Deal, value: Result<Decimal, String>) -> Estimate {
                 priced: true,
                 note: format!(
                     "оценка позиции: {} {t} на {} по рынку стоят {} USDT чистыми; выручка {} − вложено {} − затраты {} → {} USDT",
-                    deal.qty,
-                    deal.at.0,
-                    v.round_dp(6),
-                    deal.proceeds,
-                    deal.invested,
-                    deal.spent,
-                    amount.round_dp(6)
+                    q(deal.qty),
+                    v_name(&deal.at.0),
+                    m(v),
+                    m(deal.proceeds),
+                    m(deal.invested),
+                    m(deal.spent),
+                    m(amount)
                 ),
             }
         }
@@ -77,8 +82,10 @@ pub fn estimate(deal: &Deal, value: Result<Decimal, String>) -> Estimate {
             priced: false,
             note: format!(
                 "цены нет ({why}) — оценка неизвестна, для итога дня и лимита взят худший случай: {} {t} на {} = 0, \
-                 то есть {known} USDT",
-                deal.qty, deal.at.0
+                 то есть {} USDT",
+                q(deal.qty),
+                v_name(&deal.at.0),
+                m(known)
             ),
         },
     }

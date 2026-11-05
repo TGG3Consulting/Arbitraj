@@ -143,8 +143,8 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Option<Strin
     }
     deal.provisional_usd = Some(est.amount);
     deal.note(format!(
-        "В итог дня {today}: {} USDT — {} (решение 152)",
-        est.amount.round_dp(6),
+        "В итог дня {today}: {} USDT — {}",
+        crate::notify::human::money(est.amount),
         est.note
     ));
     commit(core, today, book).await

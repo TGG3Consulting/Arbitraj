@@ -12,8 +12,8 @@
 //! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе.
 
 mod base;
-mod bitget;
 mod binance;
+mod bitget;
 pub mod dex;
 mod gate;
 mod index;

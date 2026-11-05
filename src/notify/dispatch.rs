@@ -95,7 +95,20 @@ impl Notifier {
                 return;
             }
         };
-        let mut body = format!("{}\n{}", def.title, text);
+        // Решение 164: первая строка — значок и что случилось (notify/heads.rs); текст со своим заголовком
+        // (собран notify/human.rs Msg) уходит как есть.
+        let mut body = if super::human::has_head(text) {
+            text.to_string()
+        } else {
+            // Текст ядра «<id сделки>: …» — id уходит вниз; ссылки на номера решений убираются.
+            let (id, rest) = super::human::split_deal(text);
+            let id = id.map(|i| format!("\n\nid {i}")).unwrap_or_default();
+            format!(
+                "{}\n{}{id}",
+                super::heads::head(code, def.title),
+                super::reason::tidy(rest)
+            )
+        };
         let kb = match object.map(|id| callback::keyboard(def, id)) {
             None | Some(Ok(None)) => None,
             Some(Ok(Some(kb))) => Some(kb),

@@ -48,7 +48,12 @@ pub fn buttons(r: &ManualRecord, prefix: &str) -> (Vec<Value>, Vec<String>) {
 /// Принимает: запись. Возвращает: (текст, клавиатура или None — показать нечего).
 pub fn record_message(r: &ManualRecord) -> (String, Option<Value>) {
     let (btns, notes) = buttons(r, "");
-    let mut text = format!("Ручное управление: {}\n{}", r.kind.title(), r.text);
+    // Решение 164: текст записи уже со своим заголовком и значком (core/manual_rows.rs, manual_feed.rs).
+    let mut text = if super::human::has_head(&r.text) {
+        r.text.clone()
+    } else {
+        format!("Ручное управление: {}\n{}", r.kind.title(), r.text)
+    };
     if !notes.is_empty() {
         text.push_str(&format!("\n\n{}", notes.join("\n")));
     }
@@ -72,16 +77,17 @@ pub fn batch_message(recs: &[&ManualRecord], header: &str) -> (String, Option<Va
             String::new()
         };
         let (btns, notes) = buttons(r, &prefix);
-        text.push_str(&format!(
-            "\n\n{}{}\n{}",
-            if many {
-                format!("{n}. ")
-            } else {
-                String::new()
-            },
-            r.kind.title(),
-            r.text
-        ));
+        let num = if many {
+            format!("{n}. ")
+        } else {
+            String::new()
+        };
+        // Решение 164: у записи свой заголовок — вид записи не повторяем.
+        if super::human::has_head(&r.text) {
+            text.push_str(&format!("\n\n{num}{}", r.text));
+        } else {
+            text.push_str(&format!("\n\n{num}{}\n{}", r.kind.title(), r.text));
+        }
         if !notes.is_empty() {
             text.push_str(&format!("\n{}", notes.join("\n")));
         }
@@ -95,13 +101,13 @@ pub fn batch_message(recs: &[&ManualRecord], header: &str) -> (String, Option<Va
 
 /// Заголовок напоминания. Принимает: сколько записей ждут действия.
 pub fn reminder_header(n: usize) -> String {
-    format!("Напоминание: на экране «Ручное управление» ждут действия записей — {n}")
+    format!("⚠️ Напоминание: ждут вашего решения — {n} (экран «Ручное управление»)")
 }
 
 /// Текст сообщения записи после того, как она ушла с экрана. Принимает: прежний текст, итог (None — неизвестен).
 pub fn closed_text(old: &str, outcome: Option<&str>) -> String {
     match outcome {
         Some(o) => format!("{old}\n\nВыполнено: {o}"),
-        None => format!("{old}\n\nЗапись ушла с экрана «Ручное управление» — повторов больше нет."),
+        None => format!("{old}\n\nГотово: запись ушла с экрана «Ручное управление»."),
     }
 }

@@ -43,24 +43,35 @@ pub fn view(core: &Core, day: &DayView) -> Option<LimitView> {
     })
 }
 
-/// Текст «X из Y» (с отметкой сброса, если была). Ошибок нет.
-fn describe(day: &DayView, l: &LimitView) -> String {
+/// Текст лимита для человека (решение 164): «убыток за день 42.43 USDT больше лимита 15 USDT (из них 89.49 USDT —
+/// незакрытые сделки, будут пересчитаны после продажи)», с отметкой сброса, если была. Принимает: итог дня, лимит,
+/// связку («больше лимита», «из лимита»). Ошибок нет.
+fn describe(day: &DayView, l: &LimitView, rel: &str) -> String {
+    use crate::notify::human::{money, usd};
     let reset = day
         .limit_reset
         .as_ref()
         .map(|r| {
             format!(
-                ", после сброса в {} UTC; до сброса итог дня {} USDT",
-                r.at.format("%H:%M:%S"),
-                r.base_usd.round_dp(4)
+                "; лимит сброшен в {} UTC (итог дня тогда {})",
+                r.at.format("%H:%M"),
+                usd(r.base_usd)
             )
         })
         .unwrap_or_default();
+    let prov = -day.provisional_usd;
+    let prov = if prov.is_zero() {
+        String::new()
+    } else {
+        format!(
+            " (из них {} — незакрытые сделки, будут пересчитаны после продажи)",
+            money(prov)
+        )
+    };
     format!(
-        "убыток за день {} USDT из лимита {} (из них оценка позиций {}){reset}",
-        l.loss_usd.round_dp(4),
-        l.max_usd,
-        (-day.provisional_usd).round_dp(4)
+        "убыток за день {} {rel} {}{prov}{reset}",
+        usd(l.loss_usd),
+        usd(l.max_usd)
     )
 }
 
@@ -75,7 +86,7 @@ pub fn check(core: &Core) -> (Option<String>, Option<String>) {
         r.day.limit = l.clone();
         match &l {
             Some(l) if l.exceeded && r.mode != Mode::Stopped => {
-                let t = format!("{} — лимит достигнут", describe(&day, l));
+                let t = describe(&day, l, "больше лимита");
                 r.mode = Mode::Stopped;
                 r.reason = Some(t.clone());
                 r.daily_stop = true;
@@ -85,7 +96,7 @@ pub fn check(core: &Core) -> (Option<String>, Option<String>) {
                 None,
                 Some(format!(
                     "Лимит дня сейчас не превышен: {}. Остановка по лимиту сама не снимается — запуск кнопкой «Старт»",
-                    describe(&day, l)
+                    describe(&day, l, "из лимита")
                 )),
             ),
             _ => (None, None),
@@ -120,10 +131,23 @@ pub async fn reset(core: &Core, who: &str) -> String {
             ""
         }
     );
+    // Решение 164: в Telegram — коротко; подробности — в журнале.
+    let tg = crate::notify::human::Msg::new(crate::notify::human::INFO, "Лимит дня сброшен")
+        .kv("Кто", who)
+        .line(format!(
+            "Дальше лимит считает только убытки после {} UTC; итог дня и сделки не меняются",
+            at.format("%H:%M")
+        ))
+        .line(if stopped {
+            "Торговля остаётся остановленной"
+        } else {
+            ""
+        })
+        .render();
     let deps = &core.inner.deps;
     deps.log(Level::Info, "core.loss_limit_reset", None, &text, None)
         .await;
-    deps.notify("risk.daily_limit_reset", None, &text).await;
+    deps.notify("risk.daily_limit_reset", None, &tg).await;
     text
 }
 

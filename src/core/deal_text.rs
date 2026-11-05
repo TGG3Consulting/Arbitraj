@@ -1,0 +1,126 @@
+//! Файл: core/deal_text.rs
+//! Что делает: человеческие тексты алертов сделки (решение 164): закрытие сделки (формат Тиграна: «✅ Сделка плюсовая» /
+//! «❌ Сделка минусовая», план, факт, итог), остановка сделки, шаг сделки по-русски для хронологии.
+//! Логику не меняет — только то, что видит человек в Telegram и на экранах.
+//! Кто вызывает: ledger.rs (deal.closed), ledger_load.rs, manual_feed.rs, другие места с текстом сделки.
+//! От чего зависит: deal.rs, notify/human.rs (формат чисел, Msg).
+//! Настройки: нет.
+
+use rust_decimal::Decimal;
+
+use crate::notify::human::{self as h, Msg};
+
+use super::deal::{Deal, Step};
+
+/// Шаг сделки по-русски (для хронологии и экранов). Принимает: шаг.
+pub fn step_name(s: Step) -> &'static str {
+    match s {
+        Step::Buying => "покупка",
+        Step::Transfer => "перевод",
+        Step::Selling => "продажа",
+        Step::Stuck => "монета застряла",
+        Step::WaitingHuman => "ждёт решения человека",
+        Step::Closed => "закрыта",
+        Step::Halted => "остановлена",
+        Step::TakenOver => "монеты у человека",
+    }
+}
+
+/// Строка «монета откуда → куда». Принимает: сделку.
+pub fn coin_route(d: &Deal) -> String {
+    let x = &d.direction;
+    format!("{} {}", x.asset.ticker, h::route(&x.buy_on.0, &x.sell_on.0))
+}
+
+/// Строка «монета: количество на площадке». Принимает: сделку.
+pub fn coins_at(d: &Deal) -> String {
+    format!(
+        "{} {} на {}",
+        h::qty(d.qty),
+        d.direction.asset.ticker,
+        h::venue(&d.at.0)
+    )
+}
+
+/// Текст закрытия сделки для Telegram (deal.closed). Закрыта — плюсовая / минусовая по факту; остановлена или
+/// «Беру на себя» — что случилось, где монеты и причина. Принимает: сделку (уже с шагом и итогом), причину.
+pub fn closed(d: &Deal, why: &str) -> String {
+    match d.step {
+        Step::Closed => closed_result(d, why),
+        Step::TakenOver => Msg::new(h::INFO, "Сделка передана человеку")
+            .line(coin_route(d))
+            .kv("Монеты", coins_at(d))
+            .kv("Вложено", h::usd(d.invested))
+            .id(&d.id)
+            .render(),
+        _ => Msg::new(h::STOP, "Сделка остановлена")
+            .line(coin_route(d))
+            .kv("Монеты", coins_at(d))
+            .kv("Вложено", h::usd(d.invested))
+            .reason(why)
+            .todo("разобрать сделку на экране «Ручное управление»")
+            .id(&d.id)
+            .render(),
+    }
+}
+
+/// Закрытая сделка — формат Тиграна (решение 164): заголовок по знаку факта, монета и маршрут, план, факт, итог;
+/// способ закрытия — короткой строкой, если продано вручную или есть продажа. Принимает: сделку, причину.
+fn closed_result(d: &Deal, why: &str) -> String {
+    let fact = d.result_usd.unwrap_or(d.proceeds - d.invested - d.spent);
+    let plus = fact >= Decimal::ZERO;
+    let mut m = if plus {
+        Msg::new(h::OK, "Сделка плюсовая")
+    } else {
+        Msg::new(h::LOSS, "Сделка минусовая")
+    };
+    m = m
+        .line(coin_route(d))
+        .kv("План", h::signed_usd(d.plan_profit_usd))
+        .kv("Факт", h::signed_usd(fact));
+    m = if plus {
+        m.kv("Заработали", h::usd(fact))
+    } else {
+        m.kv("Итого минус", h::usd(fact))
+    };
+    if let Some(how) = how_closed(d, why) {
+        m = m.kv("Закрыта", how);
+    }
+    m.id(&d.id).render()
+}
+
+/// Способ закрытия коротко: «продано вручную» или «продажей на DEX». Нет продажи — None.
+fn how_closed(d: &Deal, why: &str) -> Option<String> {
+    if why.contains("вручную") {
+        return Some("продано вручную".into());
+    }
+    (!d.sells.is_empty()).then(|| format!("продажей на {}", h::venue(&d.at.0)))
+}
+
+/// Остановка торговли по дневному лимиту (risk.daily_loss). Принимает: текст лимита из daily_limit.rs.
+pub fn daily_stop(stop: &str) -> String {
+    Msg::new(h::STOP, "Торговля остановлена")
+        .line(cap(stop))
+        .todo("закрыть сделки на экране «Ручное управление», затем «Сбросить лимит дня»")
+        .render()
+}
+
+/// Сделка прервана перезапуском (risk.stop при запуске). Принимает: сделку (до смены шага на Halted).
+pub fn interrupted(d: &Deal) -> String {
+    Msg::new(h::STOP, "Сделка прервана перезапуском бота")
+        .line(coin_route(d))
+        .kv("Монеты", coins_at(d))
+        .kv("Была на шаге", step_name(d.step))
+        .todo("проверить балансы и разобрать сделку на экране «Ручное управление»")
+        .id(&d.id)
+        .render()
+}
+
+/// Первая буква — заглавная. Принимает: текст.
+pub fn cap(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}

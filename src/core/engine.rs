@@ -1,6 +1,7 @@
 //! Файл: core/engine.rs
 //! Что делает: ядро целиком — создание общего состояния (inner.rs), загрузка учёта и запуск фоновых
-//! задач: приём событий адаптеров, пересборка справочника, обновление сетей бирж, очередь расчёта, сверка.
+//! задач: приём событий адаптеров, пересборка справочника, обновление сетей бирж, делистинги бирж (решение 175),
+//! очередь расчёта, сверка.
 //! Кто вызывает: main.rs (Core::start), api и notify (чтение состояния, живой поток, команды — методы Core).
 //! От чего зависит: deps.rs, inner.rs, tick.rs, rebuild.rs, registry_sync.rs, candidates.rs, reconcile.rs,
 //! ledger.rs, gas_stats.rs, manual.rs.
@@ -81,7 +82,9 @@ impl Core {
         tokio::spawn(super::cycle_watch::run(core.clone()));
         for (id, kind) in kinds {
             if kind == VenueKind::Cex {
-                tokio::spawn(super::registry_sync::run(core.clone(), id));
+                tokio::spawn(super::registry_sync::run(core.clone(), id.clone()));
+                // Решение 175: делистинги биржи — фоном, delist.refresh_s.
+                tokio::spawn(super::delist::run(core.clone(), id));
             }
         }
         core
@@ -101,6 +104,11 @@ impl Core {
     /// Последние строки «Живого экрана» по всем направлениям.
     pub fn spreads(&self) -> Vec<SpreadView> {
         rd(&self.inner.spreads).values().cloned().collect()
+    }
+
+    /// Делистинги бирж (решение 175): по площадке — последний ответ, его время и последняя ошибка (GET /api/delistings).
+    pub fn delistings(&self) -> Vec<(crate::core::types::VenueId, super::delist::VenueDelist)> {
+        self.inner.delist.all()
     }
 
     /// Просит пересобрать справочник (толчки подряд сливаются).

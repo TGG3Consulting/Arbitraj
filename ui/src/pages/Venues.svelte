@@ -7,11 +7,12 @@
     и ссылка на «Маппинг кошельков» (исполнители ArbExecutor — у кошельков, решение 132).
     Секреты площадок, которых ещё нет в шлюзе (например адаптер DEX не зарегистрирован), тоже видны —
     ключ можно ввести заранее. Решение 173: итог дня площадки, её лимит дня, пауза по убытку и «Сбросить лимит дня»
-    площадки (components/DayVenues.svelte). Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
+    площадки (components/DayVenues.svelte). Решение 175: блок «Делистинги» биржи — пары в делистинге или «неизвестно»
+    (components/Delistings.svelte, lib/delist.svelte.js). Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
-    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js).
+    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js).
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -26,6 +27,10 @@
   import PoolDirectory from '../components/PoolDirectory.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import DayVenues from '../components/DayVenues.svelte';
+  import Delistings from '../components/Delistings.svelte';
+  import { startDelist } from '../lib/delist.svelte.js';
+
+  startDelist();
 
   const groups = $derived.by(() => {
     const out = new Map();
@@ -66,6 +71,9 @@
 
     <h3>Итог дня и лимит дня</h3>
     <DayVenues only={id} />
+
+    <h3>Делистинги (решение 175)</h3>
+    <Delistings venue={id} />
 
     <h3>Ключи</h3>
     {#each venueKeys(id) as item (item.name)}

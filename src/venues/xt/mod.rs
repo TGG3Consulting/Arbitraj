@@ -167,6 +167,13 @@ impl Venue for Xt {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /v4/public/symbol только состояние DELISTED (пара уже снята), времени делистинга нет.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /v4/public/symbol только состояние DELISTED (пара уже снята), времени делистинга нет",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

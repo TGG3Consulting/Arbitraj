@@ -32,6 +32,7 @@
 | `fee_rates.rs`, `fees.rs`, `discount_balance.rs` | Ставки `account/commission` (стандартная + налог + специальная; taker + buyer/seller) фоном; скидка BNB по `venue.fee_deduction` и остатку BNB (решение 158) |
 | `book.rs`, `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs` | Стаканы `<symbol>@depth<N>[@100ms]` комбинированным потоком; одинаковый lastUpdateId — без разбора и без отдачи ядру (решение 109); котировка |
 | `wallet.rs`, `networks_parse.rs` | config/getall (вне рабочих потоков, кэш): сеть BSC, contractAddress, флаги, комиссия, пределы, шаг вывода withdrawIntegerMultiple, минимум депозита — решение человека |
+| `delist.rs` | Решение 175: делистинги — GET /sapi/v1/spot/delist-schedule (MARKET_DATA, вес 100, подпись — по спецификации binance-api-swagger): `delistTime` (мс) и список символов; символ → монета по справочнику пар (symbols.rs). Разбор строго по спецификации (`delistTime`, `symbol`); живой ответ — записать и сверить |
 | `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); адрес с tag — отказ |
 | `transfers.rs` | Вывод withdraw/apply (свой withdrawOrderId, walletType), статус по idList, поиск по withdrawOrderId; не чаще `venue.withdraw_history_min_ms` |
 | `deposits.rs` | Депозит по хешу (txId), удержание вывода — статус 6 (решение 150); отказ вывода −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT → WithdrawLocked (решение 166, errors.rs) |

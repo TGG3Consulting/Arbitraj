@@ -58,6 +58,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "venue.rate_limited" => (WARN, "Слишком частые запросы к площадке"),
         "dex.receipts_stuck" => (WARN, "Данные блоков BSC отстают — пулы перечитаны"),
         "venue.transfer_status" => (INFO, "Изменился ввод или вывод монеты"),
+        "venue.delisting" => (WARN, "Монета в делистинге на бирже"),
         "route.quarantine_in" => (WARN, "Направление на паузе (карантин)"),
         "route.quarantine_out" => (OK, "Направление снова торгуется"),
         "coin.check_done" => (INFO, "Проверка монет закончена"),

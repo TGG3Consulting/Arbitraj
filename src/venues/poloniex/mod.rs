@@ -174,6 +174,13 @@ impl Venue for Poloniex {
         all_balances::read(&self.ctx).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /markets нет времени делистинга (delisted у монеты в справочнике валют — уже снята).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /markets нет времени делистинга (delisted у монеты в справочнике валют — уже снята)",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

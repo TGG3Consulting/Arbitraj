@@ -177,6 +177,13 @@ impl Venue for Mexc {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /api/v3/exchangeInfo нет признака или времени делистинга пары (status 1 online, 2 pause, 3 offline).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /api/v3/exchangeInfo нет признака или времени делистинга пары (status 1 online, 2 pause, 3 offline)",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

@@ -9,6 +9,7 @@ pub mod check;
 pub mod coins;
 pub mod control;
 pub mod core_api;
+pub mod delist;
 pub mod dex;
 pub mod dex_dry;
 pub mod dex_executor;

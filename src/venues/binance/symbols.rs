@@ -174,6 +174,15 @@ impl Symbols {
         })
     }
 
+    /// Тикер монеты по символу Binance (решение 175: делистинги приходят символами). None — такой пары с
+    /// venue.quote_asset в справочнике нет. Ошибок нет.
+    pub fn ticker_of(&self, symbol: &str) -> Option<String> {
+        self.all()
+            .iter()
+            .find(|(_, r)| r.symbol == symbol)
+            .map(|(t, _)| t.clone())
+    }
+
     /// Символ Binance пары монеты. None — пары нет. Ошибок нет.
     pub fn symbol_of(&self, ticker: &str) -> Option<String> {
         self.all().get(ticker).map(|r| r.symbol.clone())

@@ -9,9 +9,10 @@
     Причины отсева по площадкам и по пулам — каждая с новой строки; что закрыто у площадки, где монета есть (ввод,
     вывод, покупка или продажа через API — limitsText); проблема оценки (problem).
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
+    Решение 175: отметка «делистинг на X: дата» по каждой площадке монеты (lib/delist.svelte.js).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
-  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, components/ErrorText.svelte,
+  От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, lib/delist.svelte.js, components/ErrorText.svelte,
     components/PoolDepthCell.svelte.
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
@@ -20,6 +21,9 @@
   import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';
   import PoolDepthCell from './PoolDepthCell.svelte';
+  import { startDelist, delistItem, delistLabel } from '../lib/delist.svelte.js';
+
+  startDelist();
 
   /** coin — элемент ответа GET /api/coins. */
   let { coin } = $props();
@@ -49,6 +53,10 @@
     <span class="muted">площадки: {coin.venues.join(', ')}</span>
     {#each coin.via ?? [] as v (v.venue)}
       <span class="tag">{v.venue}: маршрут через {v.via} — пула с USDT нет, допущена по решению 52</span>
+    {/each}
+    {#each coin.venues as v (v)}
+      {@const dl = delistItem(v, coin.asset.ticker)}
+      {#if dl}<span class="err">{delistLabel(v, dl)}</span>{/if}
     {/each}
     {#if coin.block}<span class="err">в чёрном списке: {blockReason(coin.block.reason)} (с {showTime(coin.block.since)})</span>
     {:else}<span class="ok">торгуется</span>{/if}

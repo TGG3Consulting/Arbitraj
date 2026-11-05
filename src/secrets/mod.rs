@@ -100,6 +100,16 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "xt",
         "Секретный ключ XT.com (SecretKey; подпись HmacSHA256)",
     ),
+    (
+        "poloniex.api_key",
+        "poloniex",
+        "API-ключ Poloniex (Spot API Key; заголовок key)",
+    ),
+    (
+        "poloniex.api_secret",
+        "poloniex",
+        "Секретный ключ Poloniex (Secret Key; подпись HmacSHA256)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

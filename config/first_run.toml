@@ -1490,6 +1490,155 @@ method = "решение Тиграна: минимума депозита в AP
 source = "Документация XT: supportedCurrenciesGet.md, depositAddressGet.md"
 rationale = "Урок 21"
 prefill = { kind = "Venue", id = "xt" }
+# --- Биржа Poloniex (решение 169) ---
+[[section]]
+title = "Биржа Poloniex (решение 169)"
+intro = "Значения из официальной документации Poloniex Spot API (api-docs.poloniex.com/spot) и SDK polo-sdk-python. Живых ответов ещё нет (из среды разработки api.poloniex.com закрыт) — имя сети BSC, статусы депозита и вывода, длину clientOrderId сверить на первой записи (tests/README.md, раздел Poloniex). Счёт один — спот, переводов между счетами нет. Права ключа (торговля, вывод) через API не проверяются — включить в кабинете; белый список IP и адресов вывода — в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "https://api.poloniex.com"
+source = "Spot → API: «https://api.poloniex.com»; SDK request.py _default_url"
+rationale = "Основной адрес REST Spot API."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "wss://ws.poloniex.com/ws/public"
+source = "Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public»"
+rationale = "Стаканы — канал book."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Poloniex"
+unit = "URL"
+value = "wss://ws.poloniex.com/ws/private"
+source = "Spot → WebSocket: приватный «wss://ws.poloniex.com/ws/private»"
+rationale = "Поток аккаунта: вход auth, канал balances."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Poloniex"
+unit = "монета"
+value = "USDT"
+source = "Symbol Information: quoteCurrencyName; 21350 «Amount must be greater than 1 USDT»"
+rationale = "Котируемая монета пар (символы BASE_USDT)."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Poloniex"
+unit = "уровней"
+value = "20"
+source = "Market Data → Book: depth 5, 10 или 20, «updates every 100ms»"
+rationale = "Наибольшая глубина канала book для котировки на объём."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Poloniex"
+unit = "штук"
+method = "предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решает Тигран"
+source = "Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение"
+rationale = "Урок 12: число подписок — из документации, а её нет."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Poloniex"
+unit = "в секунду"
+value = "10"
+source = "Spot → WebSocket: «500 requests per second» на соединение"
+rationale = "Подписка — по одному символу в сообщении; с большим запасом до предела 500."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Poloniex"
+unit = "мс"
+value = "20000"
+source = "Spot → WebSocket: «expects a message or a ping every 30 seconds»"
+rationale = "Меньше 30 с с запасом — иначе сервер закрывает сессию без уведомления."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Poloniex"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ pong (например, два интервала ping) — решает Тигран"
+source = "Spot → WebSocket: {\"event\": \"pong\"} на каждый ping"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Poloniex"
+unit = "тип"
+value = "IOC"
+source = "Create Order: timeInForce GTC, IOC, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Poloniex нет — «да» даёт отказ ордера"
+source = "Spot → API → Orders: test order нет"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Poloniex"
+unit = "название"
+method = "значение blockchain сети BSC у CAKE из живого ответа GET /v2/currencies/CAKE"
+source = "Currency Information V2: networkList.blockchain (примеры BTC, ETH, TRX)"
+rationale = "В документации и SDK имени сети BSC нет."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "решает Тигран: минимума депозита в API Poloniex нет — считать 0 (да) или не торговать с переводом на Poloniex"
+source = "Currency Information V2, Deposit Addresses: поля минимума депозита нет"
+rationale = "Урок 21: отсутствие минимума — решение человека."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка Poloniex"
+unit = "с"
+method = "с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран"
+source = "Wallets Activity Records: start и end обязательны, предел промежутка не указан"
+rationale = "Окно поиска статусов депозита и вывода."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Poloniex"
+unit = "мс"
+method = "пауза после HTTP 429: ответ при превышении и Retry-After в документации не описаны, лимиты — «в секунду» (например, 1000–2000); решает Тигран"
+source = "Spot → API → Rate Limits: по UID и IP, ответ не описан"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "poloniex" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Poloniex"
+unit = "да/нет"
+method = "«да» — поток аккаунта (канал balances); transfer.credit_by_event у Poloniex не включать до живой записи (хеша в уведомлении нет)"
+source = "Websocket → Balance: available, hold, eventType, version"
+rationale = "Изменения баланса без опроса (решение 76)."
+prefill = { kind = "Venue", id = "poloniex" }
+
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

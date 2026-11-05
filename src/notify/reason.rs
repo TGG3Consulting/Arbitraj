@@ -24,12 +24,13 @@ pub struct Reason {
 }
 
 /// Как площадки подписывают ошибку с кодом (venues/*/errors.rs): «<имя>, код <код>: <msg>».
-const CODE_PREFIXES: [(&str, &str); 5] = [
+const CODE_PREFIXES: &[(&str, &str)] = &[
     ("BingX, код ", "bingx"),
     ("MEXC, код ", "mexc"),
     ("Bybit, код ", "bybit"),
     ("KuCoin, код ", "kucoin"),
     ("XT, код ", "xt"),
+    ("Poloniex, код ", "poloniex"),
 ];
 /// Gate: «Gate, HTTP <статус>, <label>: <message>» (venues/gate/errors.rs, from_label).
 const GATE_PREFIX: &str = "Gate, HTTP ";
@@ -102,7 +103,7 @@ pub fn tidy(raw: &str) -> String {
 
 /// Ищет ошибку биржи с кодом. Возвращает: (позиция начала, id площадки, код, msg) или None.
 fn find_code(s: &str) -> Option<(usize, &'static str, String, String)> {
-    for (p, v) in CODE_PREFIXES {
+    for &(p, v) in CODE_PREFIXES {
         if let Some(pos) = s.find(p) {
             let rest = &s[pos + p.len()..];
             let (code, msg) = rest.split_once(':').unwrap_or((rest, ""));

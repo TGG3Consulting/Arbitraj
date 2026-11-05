@@ -291,6 +291,28 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.rate_limit_pause_ms | площадка XT | `60000` | После 429 XT блокирует IP/ключ; Retry-After нет | limitRules.md |
 | venue.history_window_s | площадка XT | `86400` | Окно поиска депозита по хешу (до 200 записей) | historyDepositGet.md |
 | venue.deposit_min_absent_ok | площадка XT | *метод:* решение Тиграна: минимума депозита в API XT нет; до него не задавать | Урок 21 | supportedCurrenciesGet.md, depositAddressGet.md |
+## Биржа Poloniex (решение 169)
+
+Значения из официальной документации Poloniex Spot API (api-docs.poloniex.com/spot) и SDK polo-sdk-python. Живых ответов ещё нет (из среды разработки api.poloniex.com закрыт) — имя сети BSC, статусы депозита и вывода, длину clientOrderId сверить на первой записи (tests/README.md, раздел Poloniex). Счёт один — спот, переводов между счетами нет. Права ключа (торговля, вывод) через API не проверяются — включить в кабинете; белый список IP и адресов вывода — в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Poloniex | `https://api.poloniex.com` | Основной адрес REST Spot API. | Spot → API: «https://api.poloniex.com»; SDK request.py _default_url |
+| venue.ws_url | площадка Poloniex | `wss://ws.poloniex.com/ws/public` | Стаканы — канал book. | Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public» |
+| venue.ws_private_url | площадка Poloniex | `wss://ws.poloniex.com/ws/private` | Поток аккаунта: вход auth, канал balances. | Spot → WebSocket: приватный «wss://ws.poloniex.com/ws/private» |
+| venue.quote_asset | площадка Poloniex | `USDT` | Котируемая монета пар (символы BASE_USDT). | Symbol Information: quoteCurrencyName; 21350 «Amount must be greater than 1 USDT» |
+| venue.depth_levels | площадка Poloniex | `20` | Наибольшая глубина канала book для котировки на объём. | Market Data → Book: depth 5, 10 или 20, «updates every 100ms» |
+| venue.ws_symbols_per_conn | площадка Poloniex | *метод:* предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решает Тигран | Урок 12: число подписок — из документации, а её нет. | Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение |
+| venue.ws_subs_per_sec | площадка Poloniex | `10` | Подписка — по одному символу в сообщении; с большим запасом до предела 500. | Spot → WebSocket: «500 requests per second» на соединение |
+| venue.ws_ping_ms | площадка Poloniex | `20000` | Меньше 30 с с запасом — иначе сервер закрывает сессию без уведомления. | Spot → WebSocket: «expects a message or a ping every 30 seconds» |
+| venue.ws_silence_ms | площадка Poloniex | *метод:* больше venue.ws_ping_ms с запасом на ответ pong (например, два интервала ping) — решает Тигран | Без кадров дольше — соединение оборвано. | Spot → WebSocket: {"event": "pong"} на каждый ping |
+| venue.order_time_in_force | площадка Poloniex | `IOC` | Правило Тиграна: неисполненный остаток снимает биржа. | Create Order: timeInForce GTC, IOC, FOK |
+| venue.order_test_first | площадка Poloniex | *метод:* не задавать (или «нет»): пробного ордера у Poloniex нет — «да» даёт отказ ордера | Правила ордера проверяет order_rules::ready. | Spot → API → Orders: test order нет |
+| venue.bsc_network | площадка Poloniex | *метод:* значение blockchain сети BSC у CAKE из живого ответа GET /v2/currencies/CAKE | В документации и SDK имени сети BSC нет. | Currency Information V2: networkList.blockchain (примеры BTC, ETH, TRX) |
+| venue.deposit_min_absent_ok | площадка Poloniex | *метод:* решает Тигран: минимума депозита в API Poloniex нет — считать 0 (да) или не торговать с переводом на Poloniex | Урок 21: отсутствие минимума — решение человека. | Currency Information V2, Deposit Addresses: поля минимума депозита нет |
+| venue.history_window_s | площадка Poloniex | *метод:* с запасом больше самого долгого ожидания вывода и зачисления (например, сутки — 86400); решает Тигран | Окно поиска статусов депозита и вывода. | Wallets Activity Records: start и end обязательны, предел промежутка не указан |
+| venue.rate_limit_pause_ms | площадка Poloniex | *метод:* пауза после HTTP 429: ответ при превышении и Retry-After в документации не описаны, лимиты — «в секунду» (например, 1000–2000); решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Spot → API → Rate Limits: по UID и IP, ответ не описан |
+| venue.balance_events | площадка Poloniex | *метод:* «да» — поток аккаунта (канал balances); transfer.credit_by_event у Poloniex не включать до живой записи (хеша в уведомлении нет) | Изменения баланса без опроса (решение 76). | Websocket → Balance: available, hold, eventType, version |
 
 ## Зачисление по блокчейну (решение 151)
 

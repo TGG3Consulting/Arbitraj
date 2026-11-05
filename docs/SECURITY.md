@@ -16,6 +16,11 @@
   тоже). Права: Read, Trade, Withdraw; ключ основного счёта (не субсчёта). Ключ привязать к IP сервера (без IP ключ с
   правами trade/withdraw OKX отключает после 14 дней простоя). Вывод — только на проверенные адреса, заданные в
   кабинете OKX (код 58207).
+- Poloniex (решение 169): API-ключ `poloniex.api_key` и секрет `poloniex.api_secret` (passphrase нет; подпись
+  HmacSHA256). Права ключа через Spot API не читаются (эндпоинта нет): в кабинете включить торговлю спотом и вывод
+  («withdrawal privilege must be enabled for your API key»), без фьючерсов (у фьючерсов — отдельные ключи). Белый список
+  IP и адресов вывода — только в кабинете (https://poloniex.com/profile/settings/spot-api-key); вывод через API — без
+  подтверждения по почте.
 - Binance (решение 160): API-ключ `binance.api_key` и секрет `binance.api_secret`, тип ключа — HMAC (passphrase нет).
   Права (GET /sapi/v1/account/apiRestrictions, «Проверить подключение» читает права ТЕКУЩЕГО ключа): Enable Reading,
   Enable Spot & Margin Trading (у Binance спот и маржа — один флаг), Enable Withdrawals (Binance включает вывод только

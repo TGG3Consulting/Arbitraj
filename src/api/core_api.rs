@@ -2,7 +2,7 @@
 //! Что делает: экраны «Живой экран», «Сделки», «Управление» — данные и команды ядра.
 //! Кто вызывает: интерфейс.
 //! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue,
-//! release_quarantine, reset_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
+//! release_quarantine, reset_daily_limit, reset_venue_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
 //! Настройки: нет.
 //!
 //! GET  /api/spreads                               — [SpreadView]: спред направления, состояние, причина
@@ -88,5 +88,16 @@ pub async fn release(State(st): State<AppState>, Path(id): Path<String>) -> Json
 /// risk.daily_limit_reset. Ошибок нет.
 pub async fn reset_daily_limit(State(st): State<AppState>) -> Json<Risk> {
     st.core.reset_daily_limit("интерфейс").await;
+    Json(st.core.control())
+}
+
+/// «Сбросить лимит дня» одной площадки (решение 173): отметка её итога дня; её пауза по убытку дня снимается;
+/// остальные площадки и общий лимит не меняются. Журнал core.loss_limit_reset, уведомление risk.daily_limit_reset.
+/// Ошибок нет.
+pub async fn reset_venue_daily_limit(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<Risk> {
+    st.core.reset_venue_daily_limit(&id, "интерфейс").await;
     Json(st.core.control())
 }

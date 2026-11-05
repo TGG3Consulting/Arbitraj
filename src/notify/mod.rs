@@ -13,6 +13,7 @@ pub mod heads;
 pub mod human;
 pub mod human_msg;
 pub mod menu;
+pub mod menu_day;
 pub mod menu_press;
 pub mod mirror;
 pub mod mirror_send;

@@ -97,11 +97,25 @@ fn how_closed(d: &Deal, why: &str) -> Option<String> {
     (!d.sells.is_empty()).then(|| format!("продажей на {}", h::venue(&d.at.0)))
 }
 
-/// Остановка торговли по дневному лимиту (risk.daily_loss). Принимает: текст лимита из daily_limit.rs.
+/// Остановка всей торговли по общему дневному лимиту (risk.daily_loss, risk.max_daily_loss_total_usd).
+/// Принимает: текст лимита из daily_limit.rs.
 pub fn daily_stop(stop: &str) -> String {
     Msg::new(h::STOP, "Торговля остановлена")
         .line(cap(stop))
         .todo("закрыть сделки на экране «Ручное управление», затем «Сбросить лимит дня»")
+        .render()
+}
+
+/// Решение 173: пауза одной площадки по её дневному лимиту (risk.venue_daily_loss). Принимает: id площадки, причину
+/// паузы из daily_venue_limit.rs («MEXC: убыток за день … больше лимита …»).
+pub fn venue_daily_stop(venue: &str, why: &str) -> String {
+    let v = h::venue(venue);
+    Msg::new(h::STOP, format!("Торговля на {v} на паузе: дневной лимит убытка"))
+        .line(why)
+        .line("Остальные площадки торгуют; идущие сделки доводятся")
+        .todo(format!(
+            "разобрать сделки {v} на экране «Ручное управление», затем «Снять паузу» или «Сбросить лимит дня» по {v}"
+        ))
         .render()
 }
 

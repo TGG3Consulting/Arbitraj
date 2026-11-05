@@ -4,11 +4,13 @@
 //! «Ручное управление» (записи с кнопками, core/manual_feed.rs). Доступность кнопок — как на плашке:
 //! «Старт» — если не «В работе», «Пауза» — только из «В работе», «Стоп» — если не «Стоп». Настроек из Telegram нет.
 //! Кто вызывает: notify/menu_press.rs, notify/tg_commands.rs.
-//! От чего зависит: core/risk.rs (Risk, Mode), core/commands_control.rs (label), notify/mirror_view.rs.
+//! От чего зависит: core/risk.rs (Risk, Mode), core/commands_control.rs (label), notify/mirror_view.rs,
+//! notify/menu_day.rs (лимит дня — общий и по площадкам, решение 173).
 //! Настройки: нет.
 //!
 //! callback_data: «m:<экран>» — переход (root, st, man, mode, ven, day); «c:<что>» — кнопка плашки
-//! (mode.Running|Paused|Stopped, vr.<площадка>, qr.<id монеты>, dr.x) — подтверждение в menu_press.rs.
+//! (mode.Running|Paused|Stopped, vr.<площадка>, qr.<id монеты>, dr.x — общий сброс лимита дня, dv.<площадка> — сброс
+//! лимита дня площадки, решение 173) — подтверждение в menu_press.rs.
 
 use serde_json::{Value, json};
 
@@ -42,30 +44,6 @@ pub fn root() -> (String, Value) {
     )
 }
 
-/// Строка лимита дня — как на плашке. Принимает: Risk.
-fn limit_line(r: &Risk) -> String {
-    match &r.day.limit {
-        Some(l) => format!(
-            "Лимит дня: {} из {} USDT{}{}",
-            l.loss_usd,
-            l.max_usd,
-            r.day
-                .limit_reset
-                .as_ref()
-                .map(|x| format!(" (сброшен {} — {})", x.at.format("%H:%M:%S UTC"), x.by))
-                .unwrap_or_default(),
-            if l.exceeded {
-                " — достигнут"
-            } else {
-                ""
-            }
-        ),
-        None => {
-            "Лимит дня не задан (risk.max_daily_loss_usd) — остановки по убытку за день нет".into()
-        }
-    }
-}
-
 /// «Состояние» — всё, что показывает плашка режима. Принимает: Risk, сколько записей ждут на «Ручном управлении».
 pub fn state(r: &Risk, manual: usize) -> (String, Value) {
     let mut t = format!("Режим: {}", label(r.mode));
@@ -79,8 +57,12 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
         d.result_usd,
         d.final_usd,
         d.provisional_usd,
-        limit_line(r)
+        super::menu_day::limit_line(r)
     ));
+    // Решение 173: итог дня и лимит по площадкам.
+    for line in super::menu_day::venue_lines(r) {
+        t.push_str(&format!("\n{line}"));
+    }
     if r.daily_stop && d.limit.as_ref().is_some_and(|l| !l.exceeded) {
         t.push_str("\nЛимит сейчас не превышен — остановка по лимиту сама не снимается, можно нажать «Старт».");
     }
@@ -165,18 +147,11 @@ pub fn venues(r: &Risk) -> (String, Value) {
     (t, with_back(rows))
 }
 
-/// «Лимит дня» и кнопка «Сбросить лимит дня» (решение 153). Принимает: Risk.
+/// «Лимит дня»: итог дня, общий лимит и лимиты площадок, кнопки «Сбросить лимит дня» — общий и по площадке
+/// (решения 153, 173; notify/menu_day.rs). Принимает: Risk.
 pub fn day(r: &Risk) -> (String, Value) {
-    let d = &r.day;
-    let t = format!(
-        "Итог дня {}: {} USDT (факт {}, оценка позиций {})\n{}",
-        d.date,
-        d.result_usd,
-        d.final_usd,
-        d.provisional_usd,
-        limit_line(r)
-    );
-    (t, with_back(vec![b("Сбросить лимит дня", "c:dr.x")]))
+    let (t, rows) = super::menu_day::day(r);
+    (t, with_back(rows))
 }
 
 /// «Ручное управление»: ждущие записи с их кнопками (как напоминание) и «Назад». Принимает: записи.

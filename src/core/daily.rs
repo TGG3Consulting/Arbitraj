@@ -1,5 +1,5 @@
 //! Файл: core/daily.rs
-//! Что делает: итог дня (решения 53, 152). Итог дня = факт закрытых сегодня сделок (result_usd) + оценка позиций, которые
+//! Что делает: итог дня (решения 53, 152, 173). Итог дня = факт закрытых сегодня сделок (result_usd) + оценка позиций, которые
 //! бот сам не довёл: остановленная сделка (Halted) и «Беру на себя». Оценка позиции — стоимость её монет по рынку
 //! площадки, где они лежат, − вложено − затраты (daily_value.rs); цены нет — худший случай (вся сумма) с пометкой
 //! (DayView.unpriced). У сделки запоминается учтённая оценка и день. Разбор («Продать сейчас», «Продать и перегнать»,
@@ -8,24 +8,27 @@
 //! Итог дня — таблица daily_result (storage/db.rs), строка на дату; после перезапуска восстанавливается; неразобранные
 //! оценки переносятся в новый день (в его итог не входят). Там же — отметка сброса лимита дня (решение 153,
 //! daily_limit.rs): действует только в свой день.
-//! Кто вызывает: ledger.rs (finish), ledger_load.rs, manual_return.rs (перенос доли), engine.rs (load), daily_limit.rs.
-//! От чего зависит: daily_value.rs (оценка), daily_limit.rs (лимит), day_view.rs, deal.rs, storage/db.rs.
-//! Настройки: risk.max_daily_loss_usd (через daily_limit.rs).
+//! Решение 173: у итога дня — разбивка по площадкам (daily_venue.rs): факт сделки и её оценка идут каждой её площадке
+//! (CEX ↔ DEX — бирже, CEX ↔ CEX — обеим биржам, DEX ↔ DEX — DEX); общий итог — по-прежнему сумма сделок.
+//! Пересчёт, запись в базу и проверка лимитов — daily_commit.rs.
+//! Кто вызывает: ledger.rs (finish), ledger_load.rs, manual_return.rs (перенос доли), engine.rs (load), daily_limit.rs,
+//! daily_venue.rs.
+//! От чего зависит: daily_value.rs (оценка), daily_commit.rs, daily_venue.rs, day_view.rs, deal.rs.
+//! Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (через daily_venue.rs, daily_limit.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{NaiveDate, Utc};
-use rusqlite::params;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::storage::journal::Level;
-
+use super::daily_commit::Trip;
 use super::daily_value::Estimate;
 use super::day_view::LimitReset;
 use super::deal::Deal;
 use super::engine::{Core, lk};
 
+pub(super) use super::daily_commit::commit;
 pub use super::daily_load::{load, transfer};
 
 /// Строка таблицы daily_result.
@@ -37,9 +40,19 @@ pub(super) struct Book {
     /// Сделки, чья оценка — худший случай (цены не было; решение 152).
     #[serde(default)]
     pub(super) unpriced: BTreeSet<String>,
-    /// Сброс лимита дня (решение 153) — только этого дня.
+    /// Сброс общего лимита дня (решение 153) — только этого дня.
     #[serde(default)]
     pub(super) limit_reset: Option<LimitReset>,
+    /// Решение 173: факт дня по площадкам (id площадки → сумма). Нет поля в старой записи — разнесение при загрузке
+    /// (daily_migrate.rs).
+    #[serde(default)]
+    pub(super) venue_final: BTreeMap<String, Decimal>,
+    /// Решение 173: площадки неразобранных оценок (сделка → id площадок).
+    #[serde(default)]
+    pub(super) deal_venues: BTreeMap<String, Vec<String>>,
+    /// Решение 173: сброс лимита дня площадки (id → отметка) — только этого дня.
+    #[serde(default)]
+    pub(super) venue_resets: BTreeMap<String, LimitReset>,
 }
 
 /// Сумма оценок, учтённых в день `date`. Ошибок нет.
@@ -49,52 +62,6 @@ pub(super) fn prov_on(book: &Book, date: NaiveDate) -> Decimal {
         .filter(|(_, d)| *d == date)
         .map(|(a, _)| *a)
         .sum()
-}
-
-/// Пересчитывает DayView из книги дня, сохраняет и проверяет лимит. Возвращает: Some(текст) — сработал стоп.
-pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Option<String> {
-    let prov = prov_on(&book, date);
-    {
-        let mut r = lk(&core.inner.risk);
-        r.day.date = date;
-        r.day.final_usd = book.final_usd;
-        r.day.provisional_usd = prov;
-        r.day.result_usd = book.final_usd + prov;
-        r.day.provisional = book.provisional.clone();
-        r.day.unpriced = book.unpriced.clone();
-        r.day.limit_reset = book.limit_reset.clone();
-    }
-    let body = serde_json::to_string(&book).unwrap_or_default();
-    let day = date.to_string();
-    let res = core
-        .inner
-        .deps
-        .db
-        .call(move |c| {
-            c.execute(
-                "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
-                params![day, body, Utc::now().to_rfc3339()],
-            )
-            .map(|_| ())
-        })
-        .await;
-    if let Err(e) = res {
-        let m = format!("Итог дня не сохранён: {e}");
-        core.inner
-            .deps
-            .log(Level::Error, "core.daily", None, m, None)
-            .await;
-    }
-    let (stop, cleared) = super::daily_limit::check(core);
-    // Решение 152: факт пришёл, лимит больше не превышен — остановку снимает человек, но он должен это видеть.
-    if let Some(t) = cleared {
-        core.inner
-            .deps
-            .log(Level::Info, "core.daily_loss", None, t, None)
-            .await;
-    }
-    stop
 }
 
 /// Книга на сегодня: смена даты — факт с нуля, сброса лимита нет; неразобранные оценки — переносятся.
@@ -113,29 +80,43 @@ pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
             } else {
                 None
             },
+            venue_final: if same {
+                super::daily_venue::finals(&r.day)
+            } else {
+                BTreeMap::new()
+            },
+            deal_venues: r.day.deal_venues.clone(),
+            venue_resets: if same {
+                super::daily_venue::resets(&r.day)
+            } else {
+                BTreeMap::new()
+            },
         },
     )
 }
 
 /// Оценка позиции остановленной сделки или «Беру на себя» (решение 152): стоимость монет по рынку площадки, где они
-/// лежат; цены нет — худший случай с пометкой. Принимает: сделку. Возвращает: Some(текст) — сработал стоп.
-pub async fn provisional(core: &Core, deal: &mut Deal) -> Option<String> {
+/// лежат; цены нет — худший случай с пометкой. Принимает: сделку. Возвращает: что сработало (лимиты, Trip).
+pub async fn provisional(core: &Core, deal: &mut Deal) -> Trip {
     let value = super::daily_value::value_now(core, deal).await;
     let est = super::daily_value::estimate(deal, value);
     record(core, deal, est).await
 }
 
 /// Записывает оценку позиции в итог дня (повторный учёт той же сделки заменяет прежний). Принимает: сделку (у неё
-/// запоминается сумма), оценку (daily_value::estimate). Возвращает: Some(текст) — сработал стоп.
-pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Option<String> {
+/// запоминается сумма), оценку (daily_value::estimate). Возвращает: что сработало (лимиты, Trip).
+pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
     let (today, mut book) = today_book(core);
+    let venues = super::daily_venue::of_deal(core, &book, deal);
     if let Some((old, day)) = book.provisional.remove(&deal.id)
         && day != today
     {
         book.final_usd -= old;
+        super::daily_venue::add_final(&mut book, &venues, -old);
     }
     book.provisional
         .insert(deal.id.clone(), (est.amount, today));
+    book.deal_venues.insert(deal.id.clone(), venues);
     if est.priced {
         book.unpriced.remove(&deal.id);
     } else {
@@ -151,14 +132,19 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Option<Strin
 }
 
 /// Факт закрытой сделки: снимает её оценку (если была) и добавляет факт; разбор в другой день — коррекция в итог дня
-/// разбора. Принимает: сделку, факт. Возвращает: Some(текст) — сработал стоп.
-pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Option<String> {
+/// разбора. Решение 173: та же сумма — каждой площадке сделки. Принимает: сделку, факт.
+/// Возвращает: что сработало (лимиты, Trip).
+pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Trip {
     let (today, mut book) = today_book(core);
-    match book.provisional.remove(&deal.id) {
-        Some((_, day)) if day == today => book.final_usd += fact,
-        Some((old, _)) => book.final_usd += fact - old,
-        None => book.final_usd += fact,
-    }
+    let venues = super::daily_venue::of_deal(core, &book, deal);
+    let delta = match book.provisional.remove(&deal.id) {
+        Some((_, day)) if day == today => fact,
+        Some((old, _)) => fact - old,
+        None => fact,
+    };
+    book.final_usd += delta;
+    super::daily_venue::add_final(&mut book, &venues, delta);
+    book.deal_venues.remove(&deal.id);
     book.unpriced.remove(&deal.id);
     deal.provisional_usd = None;
     commit(core, today, book).await

@@ -2,7 +2,7 @@
 //! Что делает: нажатия в меню управления Telegram (решение 157): «m:<экран>» — экран меню правится на месте
 //! (editMessageText с новыми кнопками, https://core.telegram.org/bots/api#editmessagetext); «c:<что>» — кнопка
 //! плашки режима: проверка доступности (как на плашке) и вопрос подтверждения «Да, …» (press_confirm.rs) — дальше
-//! та же команда ядра, что у кнопок плашки (ManualAction::SetMode / ResumeVenue / ReleaseQuarantine / ResetDailyLimit).
+//! та же команда ядра, что у кнопок плашки (ManualAction::SetMode / ResumeVenue / ReleaseQuarantine / ResetDailyLimit / ResetVenueLimit).
 //! Кто вызывает: notify/press.rs, notify/tg_commands.rs (send_screen).
 //! От чего зависит: notify/menu.rs, press_confirm.rs, core (control, manual_records), mirror_state.rs.
 //! Настройки: нет.
@@ -59,10 +59,18 @@ pub fn control_action(r: &Risk, object: &str) -> Result<Pending, String> {
                 ""
             };
             let q = format!(
-                "Сбросить лимит дня?\nДальше лимит считает только убытки после этой отметки. Итог дня, история и сделки не меняются.{stop}"
+                "Сбросить лимит дня — вся система и все площадки?\nДальше лимиты считают только убытки после этой отметки; паузы площадок по убытку дня снимаются. Итог дня, история и сделки не меняются.{stop}"
             );
             (ManualAction::ResetDailyLimit, q)
         }
+        // Решение 173: сброс лимита дня одной площадки — её пауза по убытку снимается, остальные не меняются.
+        "dv" => (
+            ManualAction::ResetVenueLimit { venue: arg.into() },
+            format!(
+                "Сбросить лимит дня площадки {}?\nДальше её лимит считает только убытки после отметки; пауза площадки по убытку дня снимается. Итог дня и сделки не меняются.",
+                super::human::venue(arg)
+            ),
+        ),
         _ => return Err("неизвестная кнопка".into()),
     };
     Ok(Pending {

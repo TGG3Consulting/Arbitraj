@@ -14,6 +14,7 @@
 | `mirror_state.rs` | Память дубля (отправленные, ушедшие, выполненные, ожидания «Да», вопросы суммы) — чистые функции, тесты tests/notify_mirror.rs |
 | `mirror_view.rs` | Текст и кнопки записи и напоминания — из записей экрана (core/manual_feed.rs) |
 | `menu.rs`, `menu_press.rs` | Меню /menu (/dev): Состояние, Ручное управление, Режим системы, Площадки и карантин, Лимит дня — как плашка режима; навигация editMessageText, «Назад» (решение 157) |
+| `menu_day.rs` | Экран «Лимит дня» и строки лимита для «Состояния»: общий лимит, итог и лимит дня по площадкам, кнопки «Сбросить лимит дня (все)» (c:dr.x) и по площадке (c:dv.<площадка>) — решение 173 |
 | `tg_commands.rs` | Сообщения: /help, /menu, /dev, /status, /manual, /start, /resume, /pause, /stop; ответ на вопрос суммы |
 | `tg_methods.rs` | Bot API: sendMessage с разметкой (message_id), editMessageText с кнопками, editMessageReplyMarkup, setMyCommands, ForceReply |
 | `updates_idle.rs` | Ожидание приёма после сбоев (retry_after, notify.updates_retry_ms, wake) |

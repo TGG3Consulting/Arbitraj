@@ -1,9 +1,10 @@
 //! Файл: core/commands_control.rs
 //! Что делает: команды плашки режима (решение 157) через общий путь команд ядра (Core::command): «Старт» / «Пауза» /
-//! «Стоп», «Снять паузу» площадки, «Снять карантин» монеты, «Сбросить лимит дня» — те же методы ядра, что вызывает
-//! интерфейс (api/core_api.rs: set_mode, resume_venue, release_quarantine, reset_daily_limit), второй логики нет.
+//! «Стоп», «Снять паузу» площадки, «Снять карантин» монеты, «Сбросить лимит дня» — общий и по площадке (решение 173) —
+//! те же методы ядра, что вызывает интерфейс (api/core_api.rs: set_mode, resume_venue, release_quarantine,
+//! reset_daily_limit, reset_venue_daily_limit), второй логики нет.
 //! Кто вызывает: core/commands.rs (run_command) — для команд из Telegram (меню /menu и короткие /start /stop …).
-//! От чего зависит: commands.rs, daily_limit.rs, engine.rs.
+//! От чего зависит: commands.rs, daily_limit.rs, daily_venue_limit.rs, engine.rs.
 //! Настройки: нет.
 
 use crate::core::types::{ManualAction, VenueId};
@@ -37,6 +38,9 @@ pub async fn run(core: &Core, action: &ManualAction, who: &str) -> Result<String
             Ok(format!("карантин {id} снят"))
         }
         ManualAction::ResetDailyLimit => Ok(core.reset_daily_limit(who).await),
+        ManualAction::ResetVenueLimit { venue } => {
+            Ok(core.reset_venue_daily_limit(venue, who).await)
+        }
         other => Err(format!("{other:?} — не команда плашки режима")),
     }
 }

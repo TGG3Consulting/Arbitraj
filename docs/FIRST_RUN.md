@@ -342,6 +342,37 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.deposit_to_spot | площадка Phemex | *метод:* не задавать; «да» — только если первый живой депозит пришёл на Contract (поле depositTo / accountType записи) | На какой счёт зачисляется депозит, в документации не сказано. | Query deposit history records: depositTo SPOT или Contract; у адреса депозита параметра счёта нет |
 | venue.balance_events | площадка Phemex | *метод:* не включать до записи кадров wallet-order при сделке и депозите: в сообщении нет причины изменения | Вид изменения выводится из событий ордеров в том же сообщении — проверить. | Wallet-Order message: wallets (весь баланс), orders; причины и хеша нет |
 | venue.futures_balance_currencies | площадка Phemex | `USDT` | Панель «Балансы»: фьючерсы USDT-M и UTA по USDT. | Query Account Positions (USDT-M) и Query asset (UTA): currency обязателен |
+## Биржа Kraken (решение 172)
+
+Из официальной документации Kraken (спот REST, Funding (Beta), WebSocket v2); живых ответов ещё нет — из среды
+разработки Kraken закрыт: сверить на сервере бота (tests/README.md, раздел Kraken). Сначала — одна живая запись методов
+Funding: есть ли сеть BSC и contract_address. Перед торговлей — замер нагрузки при «Стопе» (решение 109). Ключ без 2FA
+(OTP), без права «Add withdrawal addresses»; адреса вывода — заранее в адресной книге Kraken; ключ бота не использовать
+в других программах (nonce).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Kraken | `https://api.kraken.com` | Без /0: пути /0/… (спот) и /funding/… (Funding Beta) бот добавляет сам. | OpenAPI spot-rest.yaml: servers https://api.kraken.com/0 и у операций Funding — https://api.kraken.com |
+| venue.ws_url | площадка Kraken | `wss://ws.kraken.com/v2` | Публичный WebSocket v2 — стаканы book. | Spot WebSocket API: wss://ws.kraken.com/v2 |
+| venue.ws_private_url | площадка Kraken | `wss://ws-auth.kraken.com/v2` | Канал balances с токеном (venue.balance_events). | spot-websocket-v2/balances: «ws-auth.kraken.com/v2» |
+| venue.balance_events | площадка Kraken | `да` | Депозиты и выводы событием, а не только опросом статуса. | spot-websocket-v2/balances |
+| venue.quote_asset | площадка Kraken | *метод:* Имя котируемого актива в AssetPairs (поле quote) пар к USDT — ожидается USDT; сверить на живом AssetPairs. | Котировка и торговля — к USDT. | OpenAPI: AssetPairs base / quote — имена активов Kraken |
+| venue.bsc_network | площадка Kraken | *метод:* network_name метода сети BSC в живом ответе GET /funding/v1/methods/withdraw?asset[class]=currency&asset[name]=CAKE (в документации примера BSC нет). | Без него ни одна монета Kraken не сопоставится с DEX. | list-funding-methods: network.network_name |
+| venue.deposit_min_absent_ok | площадка Kraken | *метод:* По живому ответу методов deposit: minimum_amount у монет BSC приходит — не задавать; пустой — решение Тиграна. | Решение 143: «0» и пустое у биржи могут значить разное. | list-funding-methods: minimum_amount (необязательное поле) |
+| venue.depth_levels | площадка Kraken | `25` | Глубина для котировки на объём; чек-сумма — по верхним 10 при любой глубине. | spot-websocket-v2/book: depth 10, 25, 100, 500, 1000 |
+| venue.ws_ping_ms | площадка Kraken | `30000` | Сервер закрывает молчащее соединение примерно через минуту. | Spot WebSocket: ping «at least every 60 seconds» |
+| venue.ws_silence_ms | площадка Kraken | `45000` | Пинг через 30 с тишины + 15 с на pong (heartbeat приходит раз в секунду). | Spot WebSocket: «within approximately one minute of inactivity» |
+| venue.ws_streams_per_msg | площадка Kraken | *метод:* Начать с 50; отказы подписки (success false) — уменьшить. | Предела символов в запросе в документации нет. | spot-websocket-v2/book: «multiple symbols in one request» |
+| venue.ws_subs_per_sec | площадка Kraken | `1` | Темп запросов подписки (предел в документации не описан). | spot-websocket-v2/book |
+| venue.ws_symbols_per_conn | площадка Kraken | *метод:* Начать со 100 пар на соединение и проверить замером (решение 109). | Предела на соединение в документации нет; подключения ~150 за 10 минут на IP. | guides/websockets/introduction: Cloudflare |
+| venue.order_time_in_force | площадка Kraken | `IOC` | Правило Тиграна: неисполненный остаток снимает биржа. | OpenAPI add: timeinforce GTC, IOC, GTD, FOK |
+| venue.order_test_first | площадка Kraken | `да` | Проверка ордера продажи до покупки пробным ордером без исполнения. | OpenAPI add: validate — «will not trade in the matching engine» |
+| venue.fee_pairs_per_request | площадка Kraken | *метод:* Все пары подписки одной-двумя пачками (например 100): каждый запрос +1 к счётчику ключа. | Предела пар в TradeVolume в документации нет. | OpenAPI TradeVolume: pair — список через запятую |
+| venue.fee_requests_per_sec | площадка Kraken | `1` | Пачки ставок не чаще одной в секунду. | guides/rest/ratelimits: +1 за вызов |
+| venue.rate_limit_pause_ms | площадка Kraken | `10000` | После «Rate limit exceeded» — не слать: ограничение «a few seconds», дольше при продолжении. | guides/rest/ratelimits |
+| venue.funding_list_limit | площадка Kraken | `100` | Бот выводит и вводит единицы в день — 100 последних хватает для поиска статуса. | OpenAPI Funding: limit ≤ 500 |
+| venue.deposit_address_claim | площадка Kraken | *метод:* Не задавать: адреса депозита CAKE/USDT на BSC создать в кабинете Kraken (Deposit); «да» — бот создаст сам (предел неиспользованных обычно 5). | Не плодить адреса. | guides/rest/funding: address_generation limited, TooManyDepositAddresses |
+| venue.api_ip_bound | площадка Kraken | `да` | Ключ с правом вывода — только с IP сервера бота. | GetApiKeyInfo: ip_allowlist |
 
 ## Зачисление по блокчейну (решение 151)
 

@@ -10,6 +10,7 @@ pub mod bitget;
 pub mod bsc_dex;
 pub mod bybit;
 pub mod gate;
+pub mod kraken;
 pub mod kucoin;
 pub mod kyberswap;
 pub mod mexc;

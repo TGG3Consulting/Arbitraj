@@ -6,6 +6,7 @@
 //! «без потолка» — решение 141), window.rs (окна —
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, phemex.rs (настройки только Gate, только OKX, только Phemex).
+//! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -18,6 +19,7 @@ mod bitget;
 pub mod dex;
 mod gate;
 mod index;
+mod kraken;
 mod kyber;
 mod okx;
 mod phemex;
@@ -97,6 +99,7 @@ static PARTS: &[&[SettingDef]] = &[
     binance::BINANCE,
     xt::XT,
     phemex::PHEMEX,
+    kraken::KRAKEN,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

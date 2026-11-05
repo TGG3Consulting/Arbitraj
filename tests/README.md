@@ -416,6 +416,17 @@ message»; X фьючерсов), HMAC SHA256 на векторе RFC 4231 (по
 
 ### XT — команды записи (на сервере бота)
 
+## Kraken (решение 172) — tests/kraken_real_data.rs
+
+Без сети: подпись спот REST на официальном проверочном примере гида
+https://docs.kraken.com/exchange/guides/rest/authentication.md (AddOrder, nonce `1616492376594`, API-Sign
+`4/dpxb3iT4…ndwLUQ==`), подпись Funding (Beta) по формуле помощника гида
+https://docs.kraken.com/exchange/guides/rest/funding.md (значения посчитаны стандартными hmac / hashlib / base64 /
+urllib.parse.urlencode Python), CRC32 на проверочном «123456789» → `0xCBF43926`, формат уровня чек-суммы на примере гида
+book-checksum-v2 (`45285.2` / `0.00100000` → `452852` + `100000`), тексты ошибок для человека (решение 164). Живых
+ответов Kraken нет (из среды разработки docs.kraken.com и api.kraken.com закрыты прокси) — тесты на записях `#[ignore]`,
+пока не записаны файлы `tests/data/cex_samples_2026_11_05/kraken_*`. Записывать на сервере бота.
+
 Публичные (без ключа):
 
 ```bash
@@ -535,3 +546,69 @@ GET /wallets/addresses?currency=<coin сети BSC> (ключ ответа), п�
 COMPLETE, вывода PROCESSING или PENDING, есть ли txid в status; входит ли комиссия в amount вывода), ответ POST
 /v2/wallets/withdraw (withdrawalRequestsId), ответы 429 / неверной подписи / ключа без права вывода (коды — в
 errors.rs), `poloniex_ws_balances.jsonl` — кадры приватного WebSocket (auth, balances после депозита, вывода и ордера).
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D; R=https://api.kraken.com
+curl -sS --compressed "$R/0/public/AssetPairs" -o $D/kraken_asset_pairs.json
+curl -sS --compressed "$R/0/public/Assets" -o $D/kraken_assets.json
+curl -sS --compressed "$R/0/public/Depth?pair=CAKEUSDT&count=100" -o $D/kraken_depth_CAKEUSDT.json   # имя пары — из AssetPairs
+(echo '{"method":"subscribe","params":{"channel":"book","symbol":["CAKE/USDT"],"depth":10,"snapshot":true},"req_id":1}'; sleep 120) \
+  | websocat -t wss://ws.kraken.com/v2 > $D/kraken_book.jsonl                                       # wsname — из AssetPairs
+```
+
+Приватные (ключ бота; `KRAKEN_KEY`, `KRAKEN_SECRET` — только в оболочке, в файлы не писать; ключом в это время не
+торговать — nonce общий). Помощник — та же подпись, что sign.rs / rest.rs:
+
+```bash
+cat > /tmp/kr.py <<'EOF'
+import base64,hashlib,hmac,os,sys,time,urllib.error,urllib.parse,urllib.request
+K,S,R=os.environ["KRAKEN_KEY"],os.environ["KRAKEN_SECRET"],"https://api.kraken.com"
+def sig(p,n,d): return base64.b64encode(hmac.new(base64.b64decode(S),p.encode()+hashlib.sha256(n.encode()+d).digest(),hashlib.sha512).digest()).decode()
+kind,path,n=sys.argv[1],sys.argv[2],str(int(time.time()*1000))
+if kind=="spot":   # spot /0/private/<Метод> [k=v ...]
+    b=urllib.parse.urlencode([("nonce",n)]+[tuple(a.split("=",1)) for a in sys.argv[3:]]).encode()
+    rq=urllib.request.Request(R+path,b,{"API-Key":K,"API-Sign":sig(path,n,b)})
+else:              # GET|PUT|POST /funding/...?<строка запроса как urlencode> [тело JSON без пробелов]
+    b=sys.argv[3].encode() if len(sys.argv)>3 else b""
+    h={"api-key":K,"api-sign":sig(path,n,b),"api-nonce":n}
+    if b: h["content-type"]="application/json"
+    rq=urllib.request.Request(R+path,b or None,h,method=kind)
+try: print(urllib.request.urlopen(rq).read().decode())
+except urllib.error.HTTPError as e: print(e.code,e.read().decode())
+EOF
+kr() { python3 -I /tmp/kr.py "$@"; sleep 3; }     # пауза — счётчик REST ключа (Starter: 15, −0,33 в с)
+Q='asset%5Bclass%5D=currency&asset%5Bname%5D'
+kr GET "/funding/v1/methods/withdraw?$Q=CAKE" > $D/kraken_methods_withdraw_CAKE.json   # ГЛАВНОЕ: есть ли сеть BSC, contract_address
+kr GET "/funding/v1/methods/deposit?$Q=CAKE"  > $D/kraken_methods_deposit_CAKE.json
+kr GET "/funding/v1/methods/withdraw?$Q=USDT" > $D/kraken_methods_withdraw_USDT.json
+kr GET "/funding/v1/methods/withdraw" > $D/kraken_methods_withdraw.json                 # все (размер, урок 9; next_cursor)
+kr GET "/funding/v1/methods/deposit"  > $D/kraken_methods_deposit.json
+kr GET "/funding/v1/networks" > $D/kraken_networks.json
+kr spot /0/private/GetApiKeyInfo > $D/kraken_api_key_info.json    # перед коммитом заменить api_key_name, ip_allowlist
+kr spot /0/private/BalanceEx > $D/kraken_balance_ex.json
+kr spot /0/private/TradeVolume pair=CAKEUSDT > $D/kraken_trade_volume.json
+kr spot /0/private/DepositStatus > $D/kraken_deposit_status.json
+kr GET "/funding/v1/deposits?$Q=CAKE&limit=100" > $D/kraken_deposits.json
+kr GET "/funding/v1/withdrawals?limit=100" > $D/kraken_withdrawals.json
+M=<method_id вывода CAKE на BSC из записи>; MD=<method_id ввода CAKE на BSC>
+kr GET "/funding/v1/addresses?scope%5Bmethod_id%5D=$M&limit=100" > $D/kraken_addresses.json
+kr GET "/funding/v2/deposit/addresses?scope%5Bmethod_id%5D=$MD&$Q=CAKE&limit=100" > $D/kraken_deposit_addresses.json
+kr GET "/funding/v1/fees/$M?amount=10&fee_included=true" > $D/kraken_fees_quote.json
+kr spot /0/private/AddOrder ordertype=limit type=sell pair=CAKEUSDT price=1000 volume=1 timeinforce=IOC oflags=fciq \
+  cl_ord_id=t1 validate=true > $D/kraken_add_order_validate.json   # пробный: проверяет ли баланс (CAKE на счёте нет)
+```
+
+С живого бота (сырой журнал `data/raw/kraken`, без ключей): соединение «account» — кадры balances
+(`kraken_balances.jsonl`: депозит и вывод), «rest /0/private/AddOrder» и «rest /0/private/QueryOrders» — первый ордер IOC
+покупкой и продажей (`kraken_query_orders.json`: vol_exec, price, fee, cl_ord_id, status expired у остатка), «rest
+/funding/v1/withdrawals» по шагам status и «rest /funding/v1/deposits» депозита BSC по шагам (initial → … → success).
+Затем `KRAKEN_BSC='<network_name>' KRAKEN_WD_ADDR=<адрес из книги> cargo test --test kraken_real_data -- --ignored` и
+снять `#[ignore]` с записанных.
+
+Что проверить на записях (документация прочитана пересказчиком): есть ли сеть BSC у CAKE/USDT и её `network_name`
+(→ `venue.bsc_network`); заполнен ли `contract_address` и пуст ли у BNB (решение 62); имена активов Funding совпадают ли
+с `base` AssetPairs и ключами BalanceEx (`CAKE`, `USDT`); `wsname` AssetPairs = символ WebSocket v2; чек-сумма стакана
+совпадает при формате `pair_decimals` / `lot_decimals` (иначе — постоянные пересподписки в журнале); нужна ли обрезка
+стакана до глубины; поля GetApiKeyInfo — snake_case или camelCase, имена прав; в ответе QueryOrders / ClosedOrders есть
+ли `cl_ord_id`; остаток IOC — `expired`; `onchain_transaction` у депозитов и выводов — строка или объект; статусы
+депозита BSC по шагам (когда `settled`, когда `success`) и есть ли `EarlyConfirmed` в DepositStatus; вид тела ошибки
+Funding (не 2xx); `approval_request_id` у вывода — кто одобряет; знак `amount` у вывода в balances; проверяет ли
+`validate=true` баланс.

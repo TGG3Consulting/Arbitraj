@@ -108,11 +108,23 @@ pub fn daily_stop(stop: &str) -> String {
 
 /// Решение 173: пауза одной площадки по её дневному лимиту (risk.venue_daily_loss). Принимает: id площадки, причину
 /// паузы из daily_venue_limit.rs («MEXC: убыток за день … больше лимита …»).
-pub fn venue_daily_stop(venue: &str, why: &str) -> String {
+/// cycles — это DEX: на паузе только циклы DEX ↔ DEX, направления бирж с DEX торгуют.
+pub fn venue_daily_stop(venue: &str, why: &str, cycles: bool) -> String {
     let v = h::venue(venue);
-    Msg::new(h::STOP, format!("Торговля на {v} на паузе: дневной лимит убытка"))
+    let (head, rest) = if cycles {
+        (
+            format!("Циклы {v} ↔ {v} на паузе: дневной лимит убытка"),
+            "Биржи ↔ DEX и остальные площадки торгуют; идущие сделки доводятся",
+        )
+    } else {
+        (
+            format!("Торговля на {v} на паузе: дневной лимит убытка"),
+            "Остальные площадки торгуют; идущие сделки доводятся",
+        )
+    };
+    Msg::new(h::STOP, head)
         .line(why)
-        .line("Остальные площадки торгуют; идущие сделки доводятся")
+        .line(rest)
         .todo(format!(
             "разобрать сделки {v} на экране «Ручное управление», затем «Снять паузу» или «Сбросить лимит дня» по {v}"
         ))

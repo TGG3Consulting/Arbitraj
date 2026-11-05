@@ -33,7 +33,8 @@ pub async fn announce(core: &Core, trip: &Trip) {
     for (v, why) in &trip.paused {
         deps.log(Level::Warn, "core.venue_daily_loss", Some(&v.0), why, None)
             .await;
-        let tg = super::deal_text::venue_daily_stop(&v.0, why);
+        let cycles = super::daily_venue::is_dex(core, &v.0);
+        let tg = super::deal_text::venue_daily_stop(&v.0, why, cycles);
         deps.notify("risk.venue_daily_loss", Some(&v.0), &tg).await;
     }
     if let Some(stop) = &trip.stop {

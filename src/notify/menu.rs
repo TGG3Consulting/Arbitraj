@@ -69,6 +69,9 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
     for (v, why) in &r.venue_paused {
         t.push_str(&format!("\nПлощадка {} на паузе: {why}", v.0));
     }
+    for why in r.cycle_paused.values() {
+        t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+    }
     for (deal, (usd, day)) in &d.provisional {
         let unpriced = if d.unpriced.contains(deal) {
             " — цены нет, взят худший случай (вся сумма)"
@@ -133,6 +136,11 @@ pub fn venues(r: &Risk) -> (String, Value) {
     for (v, why) in paused {
         t.push_str(&format!("\nПлощадка {} на паузе: {why}", v.0));
         rows.push(b(&format!("Снять паузу {}", v.0), &format!("c:vr.{}", v.0)));
+    }
+    // Решение 173: пауза только циклов DEX ↔ DEX по убытку дня DEX.
+    for (v, why) in &r.cycle_paused {
+        t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+        rows.push(b("Снять паузу циклов DEX ↔ DEX", &format!("c:vr.{v}")));
     }
     for q in super::menu_press::quarantine(r) {
         t.push_str(&format!("\nМонета {} в карантине: {}", q.label, q.reason));

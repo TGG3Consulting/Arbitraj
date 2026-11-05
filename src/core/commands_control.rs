@@ -21,10 +21,10 @@ pub async fn run(core: &Core, action: &ManualAction, who: &str) -> Result<String
             Ok(format!("режим {}: {t}", label(*mode)))
         }
         ManualAction::ResumeVenue { venue } => {
-            let paused = core
-                .control()
-                .venue_paused
-                .contains_key(&VenueId(venue.clone()));
+            let r = core.control();
+            // Решение 173: у DEX может стоять пауза только циклов DEX ↔ DEX (cycle_paused).
+            let paused = r.venue_paused.contains_key(&VenueId(venue.clone()))
+                || r.cycle_paused.contains_key(venue);
             if !paused {
                 return Ok(format!(
                     "площадка {venue} не на паузе — команда проигнорирована"

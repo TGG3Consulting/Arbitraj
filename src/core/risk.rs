@@ -5,7 +5,8 @@
 //! групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
 //! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
-//! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Необязательные настройки (optional) не
+//! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
+//! Risk.cycle_paused: отказ только направлениям, чей учёт дня у DEX (DEX ↔ DEX). Необязательные настройки (optional) не
 //! требуются для включения торговли.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
@@ -56,6 +57,9 @@ pub struct Risk {
     /// «Сбросить лимит дня» (по площадке или общий).
     #[serde(skip)]
     pub loss_paused: BTreeSet<String>,
+    /// Решение 173: циклы DEX ↔ DEX на паузе по убытку дня DEX (id DEX → причина); направления CEX ↔ DEX этой
+    /// паузой не останавливаются. Снимает «Снять паузу» DEX или «Сбросить лимит дня».
+    pub cycle_paused: BTreeMap<String, String>,
     /// Решение 173: убыток площадки для лимита при прошлом пересчёте — пауза ставится при переходе через лимит или
     /// при росте убытка (daily_venue_limit.rs). Новый день — с нуля.
     #[serde(skip)]
@@ -73,6 +77,7 @@ impl Default for Risk {
             day: DayView::default(),
             daily_stop: false,
             loss_paused: BTreeSet::new(),
+            cycle_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
         }
     }
@@ -106,6 +111,12 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     for v in [&d.buy_on, &d.sell_on] {
         if let Some(why) = r.venue_paused.get(v) {
             return Err(format!("площадка {} на паузе: {why}", v.0));
+        }
+    }
+    // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений, чей учёт дня у DEX (DEX ↔ DEX).
+    for v in super::daily_venue::of_direction(core, d) {
+        if let Some(why) = r.cycle_paused.get(&v) {
+            return Err(format!("циклы DEX ↔ DEX на паузе: {why}"));
         }
     }
     if let Some(q) = r.quarantine.get(&super::coin_key::CoinKey::of(&d.asset)) {
@@ -169,6 +180,7 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     r.errors_in_row.remove(venue);
     // Решение 173: пауза по убытку дня тоже снята; новая — только если убыток площадки вырастет.
     r.loss_paused.remove(&venue.0);
+    r.cycle_paused.remove(&venue.0);
     drop(r);
     publish(core);
 }

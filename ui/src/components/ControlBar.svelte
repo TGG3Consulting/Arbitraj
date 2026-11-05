@@ -58,6 +58,9 @@
     {#if r.daily_stop && lim && !lim.exceeded}
       <div><strong>Лимит сейчас не превышен:</strong> {lim.loss_usd} из {lim.max_usd} USDT — остановка по лимиту сама не снимается, можно нажать «Старт».</div>
     {/if}
+    {#each Object.entries(r.cycle_paused ?? {}) as [v, why] (v)}
+      <div>Циклы DEX ↔ DEX (<code>{v}</code>) на паузе: {why} — направления бирж с DEX торгуют <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+    {/each}
     {#each Object.entries(r.venue_paused) as [v, why] (v)}
       <div>Площадка <code>{v}</code> на паузе: {why} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
     {/each}

@@ -3,7 +3,9 @@
 //! если его нет — значение «вся система» (лимит по умолчанию для каждой площадки). Убыток площадки =
 //! −(её итог дня − её итог в момент сброса); без сброса — −итог (итог — daily_venue.rs). Достигнут — ПАУЗА ТОЛЬКО этой
 //! площадки (тот же Risk.venue_paused, что у ошибок подряд: новые сделки с её участием не начинаются, идущие
-//! доводятся); остальные торгуют. Причина паузы: «MEXC: убыток за день X больше лимита Y».
+//! доводятся); остальные торгуют. Причина паузы: «MEXC: убыток за день X больше лимита Y». У DEX убыток копят только
+//! циклы DEX ↔ DEX — пауза только циклов (Risk.cycle_paused, «DEX ↔ DEX: убыток за день X больше лимита Y»), а не
+//! площадки DEX целиком: направления BingX ↔ DEX и другие CEX ↔ DEX торгуют.
 //! Повторная пауза: после «Снять паузу» без сброса площадка торгует, пока её убыток не вырастет — новый минус при
 //! превышенном лимите снова ставит паузу; плюсовая сделка или чужая площадка паузу не возвращают.
 //! Снятие: «Снять паузу» площадки (risk.rs) или «Сбросить лимит дня» по ней (reset; общий сброс — daily_limit.rs).
@@ -43,10 +45,10 @@ pub fn view(core: &Core, venue: &str, x: &VenueDay, date: NaiveDate) -> Option<L
     ))
 }
 
-/// Текст лимита площадки: «MEXC: убыток за день 20 USDT больше лимита 15 USDT (…)». Ошибок нет.
-fn describe(venue: &str, x: &VenueDay, l: &LimitView, rel: &str) -> String {
+/// Текст лимита: «MEXC: убыток за день 20 USDT больше лимита 15 USDT (…)», у DEX — «DEX ↔ DEX: …». Ошибок нет.
+fn describe(core: &Core, venue: &str, x: &VenueDay, l: &LimitView, rel: &str) -> String {
     let t = super::daily_limit::describe(x.limit_reset.as_ref(), x.provisional_usd, l, rel);
-    format!("{}: {t}", name(venue))
+    format!("{}: {t}", super::daily_venue::label(core, venue))
 }
 
 /// Что делает: лимиты площадок после пересчёта итога дня; достигнут — пауза площадки.
@@ -61,6 +63,8 @@ pub(super) fn check(core: &Core) -> (Vec<(VenueId, String)>, Vec<String>) {
         let x = r.day.venues[&v].clone();
         let l = view(core, &v, &x, date);
         let id = VenueId(v.clone());
+        // DEX: пауза только циклов DEX ↔ DEX (Risk.cycle_paused), направления CEX ↔ DEX торгуют.
+        let dex = super::daily_venue::is_dex(core, &v);
         let on = r.loss_paused.contains(&v);
         let seen = r.loss_seen.get(&v).copied();
         match &l {
@@ -68,9 +72,18 @@ pub(super) fn check(core: &Core) -> (Vec<(VenueId, String)>, Vec<String>) {
                 r.loss_seen.insert(v.clone(), l.loss_usd);
                 // Пауза — при переходе через лимит или при росте убытка (после «Снять паузу» без сброса).
                 let grew = seen.is_none_or(|p| p < l.max_usd || l.loss_usd > p);
-                if l.exceeded && grew && !on && !r.venue_paused.contains_key(&id) {
-                    let t = describe(&v, &x, l, "больше лимита");
-                    r.venue_paused.insert(id.clone(), t.clone());
+                let busy = if dex {
+                    r.cycle_paused.contains_key(&v)
+                } else {
+                    r.venue_paused.contains_key(&id)
+                };
+                if l.exceeded && grew && !on && !busy {
+                    let t = describe(core, &v, &x, l, "больше лимита");
+                    if dex {
+                        r.cycle_paused.insert(v.clone(), t.clone());
+                    } else {
+                        r.venue_paused.insert(id.clone(), t.clone());
+                    }
                     r.loss_paused.insert(v.clone());
                     paused.push((id, t));
                 } else if !l.exceeded && on && seen.is_some_and(|p| p >= l.max_usd) {
@@ -83,7 +96,7 @@ pub(super) fn check(core: &Core) -> (Vec<(VenueId, String)>, Vec<String>) {
                     cleared.push(format!(
                         "{}: лимит дня сейчас не превышен: {t}. Пауза площадки сама не снимается — «Снять паузу» \
                          или «Сбросить лимит дня» по площадке",
-                        name(&v)
+                        super::daily_venue::label(core, &v)
                     ));
                 }
             }
@@ -166,6 +179,7 @@ pub(super) fn lift(core: &Core, venue: &str) -> bool {
     let on = r.loss_paused.remove(venue);
     if on {
         r.venue_paused.remove(&VenueId(venue.to_string()));
+        r.cycle_paused.remove(venue);
     }
     on
 }

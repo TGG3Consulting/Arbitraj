@@ -3,7 +3,8 @@
 //! Сделка относится к своим площадкам: CEX ↔ DEX — к бирже (CEX) сделки; CEX ↔ CEX — к обеим биржам (каждой —
 //! весь итог сделки); DEX ↔ DEX — к DEX. Факт закрытой сделки и оценка позиции (решения 53, 152) идут каждой её
 //! площадке; общий итог дня — по-прежнему сумма сделок без двойного счёта (daily.rs). Площадка без записи в реестре
-//! шлюза (вид неизвестен) считается биржей — у неё свой учёт, а не общий с DEX.
+//! шлюза (вид неизвестен) считается биржей — у неё свой учёт, а не общий с DEX. Убыток DEX копят только циклы
+//! DEX ↔ DEX — поэтому его лимит останавливает только циклы (Risk.cycle_paused), а не направления CEX ↔ DEX.
 //! Лимит и пауза площадки — daily_venue_limit.rs.
 //! Кто вызывает: daily.rs (record, settle, today_book), daily_commit.rs (days), daily_load.rs, daily_migrate.rs,
 //! daily_venue_limit.rs, daily_limit.rs (общий сброс), risk.rs (can_open — у каждой площадки сделки свой лимит).
@@ -41,6 +42,24 @@ pub fn of_direction(core: &Core, d: &Direction) -> Vec<String> {
         all.into_iter().map(|v| v.0).collect()
     } else {
         cex
+    }
+}
+
+/// Площадка — DEX (по виду в реестре шлюза). Принимает: ядро, id. Ошибок нет.
+pub fn is_dex(core: &Core, v: &str) -> bool {
+    rd(&core.inner.kinds)
+        .iter()
+        .any(|(id, k)| id.0 == v && *k == VenueKind::Dex)
+}
+
+/// Чей это учёт дня для человека: у биржи — её имя («MEXC»), у DEX — «DEX ↔ DEX» (убыток DEX копят только циклы
+/// DEX ↔ DEX — сделки CEX ↔ DEX идут бирже). Принимает: ядро, id. Ошибок нет.
+pub fn label(core: &Core, v: &str) -> String {
+    let n = crate::notify::human::venue(v);
+    if is_dex(core, v) {
+        format!("{n} ↔ {n}")
+    } else {
+        n
     }
 }
 

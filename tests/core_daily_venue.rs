@@ -6,7 +6,8 @@
 //! только MEXC, направление BingX ↔ DEX открывается; (2) сделка CEX ↔ CEX считается обеим биржам, общий итог — без
 //! двойного счёта; (3) «Сбросить лимит дня» по площадке снимает её паузу, другие не трогает; (4) общий «Стоп» —
 //! только при заданной risk.max_daily_loss_total_usd; (5) перезапуск сохраняет разбивку; старая запись итога дня
-//! (без разбивки) разносится по площадкам сделок без потери общего итога.
+//! (без разбивки) разносится по площадкам сделок без потери общего итога; (6) убыток DEX ↔ DEX выше лимита — пауза
+//! только циклов DEX ↔ DEX, BingX → DEX и MEXC → DEX открываются.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets.
 
@@ -277,4 +278,31 @@ async fn restart_keeps_split_and_old_record_is_split() {
     assert_eq!(r.day.result_usd, Decimal::from(-16));
     assert_eq!(venue_result(&core, "mexc"), Decimal::from(-16));
     assert_eq!(venue_result(&core, "bingx"), Decimal::from(-3));
+}
+
+#[tokio::test]
+async fn dex_loss_pauses_only_dex_cycles() {
+    let (core, _) = start(&dir("cycles")).await;
+    closed(&core, "c1", "bsc_dex", "bsc_dex", -16).await;
+    let r = core.control();
+    // Площадка DEX целиком не на паузе — только циклы DEX ↔ DEX.
+    assert!(!r.venue_paused.contains_key(&v("bsc_dex")));
+    assert!(
+        r.cycle_paused["bsc_dex"]
+            .starts_with("DEX ↔ DEX: убыток за день 16.00 USDT больше лимита 15.00 USDT")
+    );
+    assert!(r.day.venues["bsc_dex"].paused);
+    let why = can_open(&core, &dir_of("bsc_dex", "bsc_dex")).unwrap_err();
+    assert!(why.contains("циклы DEX ↔ DEX на паузе"), "{why}");
+    assert_eq!(can_open(&core, &dir_of("bingx", "bsc_dex")), Ok(()));
+    assert_eq!(can_open(&core, &dir_of("mexc", "bsc_dex")), Ok(()));
+    // Сброс лимита DEX снимает паузу циклов.
+    core.reset_venue_daily_limit("bsc_dex", "тест").await;
+    assert!(core.control().cycle_paused.is_empty());
+    assert_eq!(can_open(&core, &dir_of("bsc_dex", "bsc_dex")), Ok(()));
+    // «Снять паузу» DEX тоже снимает паузу циклов.
+    closed(&core, "c2", "bsc_dex", "bsc_dex", -16).await;
+    assert!(!core.control().cycle_paused.is_empty());
+    core.resume_venue(&v("bsc_dex")).await;
+    assert!(core.control().cycle_paused.is_empty());
 }

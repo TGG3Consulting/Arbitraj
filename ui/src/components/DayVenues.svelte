@@ -40,7 +40,7 @@
     {:else}
       · лимит не задан (risk.max_daily_loss_usd) — торговля с этой площадкой не включается
     {/if}
-    {#if x.paused}<strong> · на паузе по убытку дня</strong>{/if}
+    {#if x.paused}<strong> · {control.data?.cycle_paused?.[v] ? 'циклы DEX ↔ DEX на паузе по убытку дня (биржи ↔ DEX торгуют)' : 'на паузе по убытку дня'}</strong>{/if}
     <button class="quiet" disabled={control.busy} onclick={() => askReset(v, x)}>Сбросить лимит дня {v}</button>
   </div>
 {/each}

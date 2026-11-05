@@ -14,3 +14,4 @@ pub mod kucoin;
 pub mod kyberswap;
 pub mod mexc;
 pub mod okx;
+pub mod phemex;

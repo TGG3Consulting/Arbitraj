@@ -1288,6 +1288,217 @@ source = "Wallet «Withdraw»: walletType по умолчанию — счёт, 
 rationale = "Торговля только на споте."
 prefill = { kind = "Venue", id = "binance" }
 
+# --- Биржа Phemex (решение 168) ---
+[[section]]
+title = "Биржа Phemex (решение 168)"
+intro = "Значения из официальной документации Phemex (phemex-docs.github.io). Живых ответов ещё нет — имя сети BSC, статус пары, счёт зачисления депозита задаёт Тигран по живым ответам. Ключ «Read & Trade & Withdraw» — с привязкой IP сервера; адреса вывода (кошелёк бота, адреса других бирж) — заранее в «withdrawal address list» кабинета Phemex. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Phemex"
+unit = "URL"
+value = "https://api.phemex.com"
+source = "General API information: public user endpoints — Rest API «https://api.phemex.com»"
+rationale = "Основной адрес REST (vapi.phemex.com — только для IP из белого списка Phemex)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Phemex"
+unit = "URL"
+value = "wss://ws.phemex.com"
+source = "General API information: Websocket «wss://ws.phemex.com (further URI or querystring not allowed)»"
+rationale = "Стаканы и поток аккаунта — один адрес."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Phemex"
+unit = "монета"
+value = "USDT"
+source = "Query product information: спот-пары sXXXUSDT; fee-rate по quoteCurrency"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.pair_status_listed"
+area = "площадка Phemex"
+unit = "значение"
+method = "значение поля status пары CAKE из живого ответа GET /public/products (в примерах CCXT — «Listed»; в официальной документации поле не описано)"
+source = "Query product information: перечня полей нет"
+rationale = "Без него справочник пар не загружается (торгуемость не угадываем)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Phemex"
+unit = "уровней"
+value = "30"
+source = "Subscribe orderBook: «depth = 30 and interval = 20ms»"
+rationale = "Вся глубина канала для котировки на объём."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Phemex"
+unit = "штук"
+value = "20"
+source = "API Rate Limits: «Each connection has subscription limit to 20 in maximum»"
+rationale = "Предел документации."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_max_conns"
+area = "площадка Phemex"
+unit = "соединений"
+value = "5"
+source = "API Rate Limits: «Each Client has concurrent connection limit to 5 in maximum»"
+rationale = "Потолок документации; при venue.balance_events = да одно соединение — поток аккаунта."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Phemex"
+unit = "в секунду"
+value = "10"
+source = "API Rate Limits: «Each connection has throttle limit to 20 request/s»"
+rationale = "Половина предела — запас на server.ping."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "5000"
+source = "Heartbeat: «interval less than 30 seconds», «recommended to be set as 5 seconds»"
+rationale = "Совет документации."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "15000"
+source = "Heartbeat: «reconnect … if don't receive messages in 3 heartbeat intervals»"
+rationale = "Три интервала ping."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Phemex"
+unit = "мс"
+value = "60000"
+source = "REST request header: expiry «normally it should be (Now() + 1 minute)»; user.auth — не больше 2 минут"
+rationale = "Совет документации; тот же срок у входа WebSocket."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Phemex"
+unit = "тип"
+value = "ImmediateOrCancel"
+source = "Place order: timeInForce GoodTillCancel, PostOnly, ImmediateOrCancel, FillOrKill"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у Phemex нет — «да» даёт отказ ордера"
+source = "Spot REST API: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Phemex"
+unit = "название"
+method = "значение chainName сети BSC из живого ответа chainCfg?currency=CAKE (в документации примеры только BTC, ETH, TRX, EOS)"
+source = "Query deposit chain settings: chainName"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "решает Тигран после живого ответа: у монет с minAmountRv «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Phemex"
+source = "Query deposit chain settings: minAmountRv необязателен, в примере «0»"
+rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.networks_requests_per_min"
+area = "площадка Phemex"
+unit = "запросов/мин"
+method = "с запасом от предела группы Others 100/мин (её делят балансы, вывод, история, ставки) — например 30; решает Тигран"
+source = "Rate limits: Others «100/minute»; сети — по одной монете (chainCfg + asset/info)"
+rationale = "Круг ~300 монет × 2 запроса при 30/мин — около 20 минут."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.history_rows"
+area = "площадка Phemex"
+unit = "записей"
+method = "больше числа депозитов и выводов монеты за время ожидания перевода (например 50); решает Тигран"
+source = "Query deposit/withdraw history records: limit «default 20», максимум не указан"
+rationale = "Поиска по хешу и id нет — ищем в последних записях."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Phemex"
+unit = "мс"
+method = "окно лимита пользователя — минута, IP-блок — 5 минут; например 60000; решает Тигран"
+source = "Rate limits: 429 + x-ratelimit-retry-after-<group> (транспорт не читает); IP 5000/5 мин — блок 5 мин"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.book_seq_strict"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать до записи кадров: «да» — только если в записи sequence изменений пары идёт ровно +1"
+source = "OrderBook message: sequence «Latest message sequence» — правило номеров не описано"
+rationale = "Без записи строгая проверка могла бы рвать стакан на каждом кадре."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.book_stale_ms"
+area = "площадка Phemex"
+unit = "мс"
+method = "больше 60000 (контрольный снимок раз в 60 с) — например 90000; решает Тигран"
+source = "OrderBook message: «Snapshot messages are published with 60-second interval»"
+rationale = "Тихая пара не должна считаться устаревшей."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не задавать; «да» — только если первый живой депозит пришёл на Contract (поле depositTo / accountType записи)"
+source = "Query deposit history records: depositTo SPOT или Contract; у адреса депозита параметра счёта нет"
+rationale = "На какой счёт зачисляется депозит, в документации не сказано."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Phemex"
+unit = "да/нет"
+method = "не включать до записи кадров wallet-order при сделке и депозите: в сообщении нет причины изменения"
+source = "Wallet-Order message: wallets (весь баланс), orders; причины и хеша нет"
+rationale = "Вид изменения выводится из событий ордеров в том же сообщении — проверить."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
+name = "venue.futures_balance_currencies"
+area = "площадка Phemex"
+unit = "монеты, список"
+value = "USDT"
+source = "Query Account Positions (USDT-M) и Query asset (UTA): currency обязателен"
+rationale = "Панель «Балансы»: фьючерсы USDT-M и UTA по USDT."
+prefill = { kind = "Venue", id = "phemex" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

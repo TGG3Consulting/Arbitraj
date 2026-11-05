@@ -16,6 +16,7 @@
 | `kucoin/` | KuCoin (спот, Classic API, решение 137) |
 | `bitget/` | Bitget (спот, Classic API v2, решение 162) |
 | `okx/` | OKX (спот, API v5, решение 161) |
+| `phemex/` | Phemex (спот, решение 168) — README.md папки |
 | `binance/` | Binance (спот API + Wallet SAPI, решение 160) — README.md папки |
 | `bsc_dex/` | DEX в сети BSC |
 | `kyberswap/` | Исполнение через агрегатор KyberSwap (внутри bsc_dex, решение 91) |

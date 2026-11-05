@@ -121,10 +121,16 @@ async fn retry_button_makes_one_attempt() {
     .await;
     assert!(matches!(s, Some(UsdtReturn::NotReturned { .. })), "{s:?}");
     assert!(core.manual_records().iter().any(|r| r.key == "u.m3DOGE"));
-    assert_eq!(
-        entries(&j, "core.usdt_not_returned", "m3DOGE").await.len(),
-        1
-    );
+    // Страховка пишется в журнал после смены состояния — ждём запись (гонка, изредка падал 05.11).
+    let mut n = 0;
+    for _ in 0..100 {
+        n = entries(&j, "core.usdt_not_returned", "m3DOGE").await.len();
+        if n > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(n, 1);
 }
 
 #[tokio::test]

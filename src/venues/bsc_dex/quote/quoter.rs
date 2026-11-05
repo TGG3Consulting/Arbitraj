@@ -11,7 +11,8 @@
 //! Кто вызывает: check/quoter_cycle.rs (цикл dex.quoter_check_s), check/hooks_probe.rs, exec/precheck.rs (перед сделкой),
 //! quote/mixed_quoter.rs (less_hook, diff_pct).
 //! От чего зависит: node/rpc.rs, quote/quoter_calls.rs, pools/registry.rs, quote/pool_quote.rs, quote/emptiness.rs.
-//! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула], dex.quoter_max_diff_pct [bsc_dex].
+//! Решение 186: dex.quoter_virtual [DEX] = да — квотер DEX не нужен, выход считает код самого пула (virtual_quoter.rs).
+//! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула], dex.quoter_virtual [DEX], dex.quoter_max_diff_pct [bsc_dex].
 //!
 //! Источники: шапка node/abi_dex.rs; «When to use quoter: сверка локального расчёта, финальная проверка» —
 //! research/flow/bsc_dex.md, раздел 3, bsc_v4.md, раздел 5.
@@ -30,6 +31,10 @@ use super::{emptiness, pool_quote, quoter_calls, quoter_revert};
 /// Выход по квотеру на точный вход (eth_call). Ошибки: NotConfigured (адрес), узел (откат квотера — его текст),
 /// BadResponse (ответ не по ABI).
 pub async fn out(ctx: &Ctx, e: &Entry, token_in: Address, amount: U256) -> GatewayResult<U256> {
+    // Решение 186: DEX без своего квотера — выход по коду самого пула (quote/virtual_quoter.rs).
+    if super::virtual_quoter::on(ctx, e.family.id, e.family.proto) {
+        return super::virtual_quoter::out(ctx, e, token_in, amount).await;
+    }
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let raw: Bytes = rpc::call(
         ctx,

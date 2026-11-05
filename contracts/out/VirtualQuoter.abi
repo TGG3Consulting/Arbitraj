@@ -1,0 +1,105 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "d0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "d1",
+        "type": "int256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "algebraSwapCallback",
+    "outputs": [],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "d0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "d1",
+        "type": "int256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "pancakeV3SwapCallback",
+    "outputs": [],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pool",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "zeroForOne",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "name": "quoteExactIn",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "used",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "out",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "d0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "d1",
+        "type": "int256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "uniswapV3SwapCallback",
+    "outputs": [],
+    "stateMutability": "pure",
+    "type": "function"
+  }
+]

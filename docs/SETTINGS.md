@@ -448,6 +448,7 @@ Universal Router, его формат и Permit2). Вид или адреса м
 | dex.universal_router | Universal Router этой DEX — прямой обмен в её пуле любого вида (решение 40: проверка баланса в той же транзакции). Universal Router знает только свою фабрику — адрес с официальной страницы той же DEX. Не задан — DEX не подключена. Совпадает со smart.universal_router — пулы DEX идут и в умный маршрут | адрес | все |
 | dex.universal_router_version | Формат команд Universal Router: `pancakeswap_infinity` — PancakeSwap Infinity; `2.0` / `2.1.1` / `2.1.2` — Universal Router Uniswap (официальный SDK) | выбор | все |
 | dex.permit2 | Permit2 своей DEX (у PancakeSwap и Uniswap разные) | адрес | все |
+| dex.quoter_virtual | Решение 186: виртуальный квотер для DEX без своего квотера (форки V3, Algebra, Slipstream): выход считает код самого пула через eth_call с подменой кода (contracts/VirtualQuoter.sol), dex.quoter не нужен. Не задано — как раньше | да/нет | DEX |
 | dex.v2_fee_source | Откуда комиссия пары: `fixed` — одна на DEX (dex.v2_fee_pct); `pool` — своя у каждой пары, читается с пары при проверке (dex.v2_fee_method / dex.v2_fee_denominator), например Biswap | выбор | V2 |
 | dex.v2_fee_pct | Комиссия пары при `fixed` (из кода пары своей DEX) | % | V2 |
 | dex.v2_fee_method | При `pool`: view-метод пары без аргументов, возвращающий целое, — сигнатура из кода пары (Biswap: `swapFee()`, BiswapPair.sol) | сигнатура | V2 |

@@ -5,7 +5,8 @@
 //   подставляет «Сухая сделка DEX»), ArbExecutor.abi (ABI JSON — из него alloy sol! в Rust), ArbExecutor.layout.json
 //   (раскладка хранилища — слот владельца), ArbExecutor.sha256 (хеши артефактов и версия компилятора).
 // Кто вызывает: contracts/build.sh.
-// От чего зависит: npm solc (версия — package.json), contracts/ArbExecutor.sol, contracts/IPools.sol.
+// От чего зависит: npm solc (версия — package.json), contracts/ArbExecutor.sol, contracts/IPools.sol,
+//   contracts/VirtualQuoter.sol (решение 186 — отдельная сборка, out/VirtualQuoter.*).
 // Настройки: нет (параметры сборки — здесь и в README.md; меняются только вместе с пересборкой и коммитом out/).
 //
 // Формат входа/выхода — https://docs.soliditylang.org/en/v0.8.37/using-the-compiler.html#compiler-input-and-output-json-description
@@ -57,3 +58,32 @@ for (const [name, text] of Object.entries(files)) {
 }
 writeFileSync(join(out, 'ArbExecutor.sha256'), lines.join('\n') + '\n');
 console.log(lines.join('\n'));
+
+// Решение 186: виртуальный квотер — ОТДЕЛЬНОЙ сборкой (своё задание solc), чтобы артефакты ArbExecutor не менялись.
+// В сети не разворачивается: бот подставляет его код в eth_call (src/venues/bsc_dex/quote/virtual_quoter.rs).
+const vqInput = {
+  language: 'Solidity',
+  sources: { 'VirtualQuoter.sol': { content: readFileSync(join(here, 'VirtualQuoter.sol'), 'utf8') } },
+  settings: {
+    optimizer: { enabled: true, runs: 200 },
+    evmVersion: 'cancun',
+    outputSelection: { 'VirtualQuoter.sol': { VirtualQuoter: ['abi', 'evm.deployedBytecode.object'] } },
+  },
+};
+const vq = JSON.parse(solc.compile(JSON.stringify(vqInput)));
+for (const e of vq.errors ?? []) {
+  console.error(e.formattedMessage);
+  if (e.severity === 'error') process.exit(1);
+}
+const v = vq.contracts['VirtualQuoter.sol'].VirtualQuoter;
+const vqFiles = {
+  'VirtualQuoter.bin-runtime': v.evm.deployedBytecode.object + '\n',
+  'VirtualQuoter.abi': JSON.stringify(v.abi, null, 2) + '\n',
+};
+const vqLines = [`solc ${solc.version()}`];
+for (const [name, text] of Object.entries(vqFiles)) {
+  writeFileSync(join(out, name), text);
+  vqLines.push(`${createHash('sha256').update(text).digest('hex')}  ${name}`);
+}
+writeFileSync(join(out, 'VirtualQuoter.sha256'), vqLines.join('\n') + '\n');
+console.log(vqLines.join('\n'));

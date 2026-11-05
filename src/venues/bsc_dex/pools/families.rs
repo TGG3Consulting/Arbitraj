@@ -435,6 +435,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.quoter",
         ]),
     }
+    // Решение 186: виртуальный квотер — квотер DEX не нужен (quote/virtual_quoter.rs).
+    if super::super::quote::virtual_quoter::on(ctx, f.id, f.proto) {
+        list.retain(|n| *n != "dex.quoter");
+    }
     list
 }
 

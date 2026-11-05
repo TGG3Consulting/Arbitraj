@@ -419,3 +419,4 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 | 2026-11-05 | Решение 183: подписки бирж стартуют по разблокировке | src/core/engine.rs (secrets_changed), core/registry_sync.rs, src/api/secrets.rs, api/settings_io.rs | новых нет | «Разблокировка» |
 | 2026-11-05 | Решение 184: XT — справочник монет в живом виде (result.currencies) | src/venues/xt/networks_parse.rs, tests/xt_currencies_live.rs, tests/data/xt_live_2026-11-05 | новых нет | — |
 | 2026-11-05 | Решение 185: перегон биржа ↔ биржа на DEX — кошельком биржи, где монета | src/core/relay.rs, core/dex_account.rs (for_relay) | новых нет | «Маппинг кошельков» |
+| 2026-11-05 | Решение 186: виртуальный квотер | contracts/VirtualQuoter.sol, contracts/out/VirtualQuoter.*, src/venues/bsc_dex/quote/virtual_quoter.rs, quote/{quoter,quoter_revert}.rs, pools/families.rs (required) | dex.quoter_virtual [DEX] | «Настройки» → «Контракты DEX» |

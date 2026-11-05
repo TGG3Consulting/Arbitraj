@@ -48,6 +48,12 @@ pub fn classify(message: &str, data: Option<&[u8]>) -> Option<&'static str> {
     if let Some(why) = data.and_then(from_data) {
         return Some(why);
     }
+    // Решение 186: виртуальный квотер — пул взял не весь вход (virtual_quoter.rs).
+    if message.contains(super::virtual_quoter::SHORT) {
+        return Some(
+            "пул взял не весь вход — ликвидности до предела цены не хватает (виртуальный квотер)",
+        );
+    }
     if message.ends_with("execution reverted: SPL") {
         return Some("цена пула у границы диапазона (откат SPL)");
     }

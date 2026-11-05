@@ -325,3 +325,68 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 `ctAddr` в currencies; `canDep` / `canWd` — boolean или строка; пустой ли `minDep`; `to` адреса депозита — «6» / «18»;
 знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
 (seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.
+
+## Poloniex (решение 169) — tests/poloniex_real_data.rs
+
+Без записей (идут всегда): подпись REST (GET с сортировкой параметров и signTimestamp, POST с requestBody, DELETE без
+тела) и входа в приватный WebSocket — значения функций официального SDK github.com/poloniex/polo-sdk-python
+(`polosdk/spot/rest/request.py`: `encode_uri_component`, `_get_sig_header`; `polosdk/spot/ws/client_authenticated.py`:
+`_get_signature`), кодирование параметров как в SDK, свой id ордера (17 цифр — проходит и «64, A-Za-z0-9_-» Create Order,
+и «17 digits» кода 21315), сообщение подписки book. `#[ignore]` — до записи в `data/cex_samples_2026_11_05/` (из среды
+разработки api.poloniex.com закрыт прокси).
+
+Вектор подписи пересчитать (функции SDK перенесены дословно; секрет `test_api_secret`, метка 1631018760000):
+
+```bash
+python3 -I -c "
+import base64,hashlib,hmac,urllib.parse
+q=lambda v: urllib.parse.quote(str(v), safe='~()*!\'')
+p={'signTimestamp':'1631018760000','symbol':'ETH_USDT','limit':'5'}
+s='GET\n/orders\n'+'&'.join(f'{k}={q(v)}' for k,v in sorted(p.items()))
+print(base64.b64encode(hmac.new(b'test_api_secret', s.encode(), hashlib.sha256).digest()).decode())"
+# ep4qy3PmWRo/09xmVAjPvq42WD4zsJ+zCsvRs57s1tg=
+```
+
+Публичные (ключ не нужен; монеты CAKE и USDT; адреса и параметры — по официальной документации Spot API):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+# Symbol Information — все пары и одна (CAKE_USDT)
+curl -sS --compressed 'https://api.poloniex.com/markets' > $D/poloniex_markets.json
+curl -sS --compressed 'https://api.poloniex.com/markets/CAKE_USDT' > $D/poloniex_markets_CAKE_USDT.json
+# Currency Information V2 — весь справочник (замерить размер: wc -c; отдаёт ли gzip — заголовок ответа), CAKE и USDT
+curl -sS --compressed -D $D/poloniex_currencies_v2.headers 'https://api.poloniex.com/v2/currencies' > $D/poloniex_currencies_v2.json
+curl -sS --compressed 'https://api.poloniex.com/v2/currencies/CAKE' > $D/poloniex_currencies_v2_CAKE.json
+curl -sS --compressed 'https://api.poloniex.com/v2/currencies/USDT' > $D/poloniex_currencies_v2_USDT.json
+# Неизвестная монета — какой код ошибки (нужно для coin_networks_of)
+curl -sS -w ' HTTP %{http_code}\n' 'https://api.poloniex.com/v2/currencies/NOSUCHCOIN0' > $D/poloniex_currencies_v2_unknown.txt
+# Справочник v1 с сетевыми именами (USDTBSC?) — для сверки имени монеты в сети и адреса депозита
+curl -sS --compressed 'https://api.poloniex.com/currencies?includeMultiChainCurrencies=true' > $D/poloniex_currencies_v1_multichain.json
+# Имя сети BSC (blockchain у CAKE) — одной строкой в $D/poloniex_bsc_network.txt (его же — в venue.bsc_network)
+python3 -I -c "import json; d=json.load(open('$D/poloniex_currencies_v2_CAKE.json')); print([(n['blockchain'], n['coin'], n.get('contractAddress')) for n in d['networkList']])"
+# Стакан REST, время сервера
+curl -sS --compressed 'https://api.poloniex.com/markets/CAKE_USDT/orderBook?limit=20' > $D/poloniex_orderbook_CAKE_USDT.json
+curl -sS 'https://api.poloniex.com/timestamp' > $D/poloniex_timestamp.json
+# WebSocket book depth 20 (CAKE_USDT и USDC_USDT) — по строке на кадр, ping раз в 20 с, ~65 секунд
+( echo '{"event":"subscribe","channel":["book"],"symbols":["CAKE_USDT"],"depth":20}'; \
+  echo '{"event":"subscribe","channel":["book"],"symbols":["USDC_USDT"],"depth":20}'; \
+  for i in 1 2 3; do sleep 20; echo '{"event":"ping"}'; done ) | timeout 65 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book.jsonl
+# Подписка на несуществующий символ — формат ошибки
+( echo '{"event":"subscribe","channel":["book"],"symbols":["NOSUCH_USDT"]}'; sleep 5 ) | timeout 8 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book_error.jsonl
+```
+
+Что проверить по записи: имя сети BSC (`blockchain`) и `coin` сети (имя монеты для /wallets/addresses); есть ли
+`contractAddress` у сети BSC CAKE (0x0E09…cE82); `withdrawFee`, `withdrawMin`, `decimals` (точность вывода или
+десятичные токена); `currencyType`; `priceScale` / `quantityScale`, `minQuantity`, `minAmount`, `highestBid` / `lowestAsk`
+CAKE_USDT (бывает ли 0); шлёт ли book одинаковые снимки (тот же `id`) без изменений рынка; порядок уровней; ответ на
+подписку и формат ошибки; формат тела ошибки REST (`code`, `message` — по SDK).
+
+Приватные — на живом боте (ключ и подпись в файлы не попадают; из сырого журнала data/raw/poloniex, записи «rest <путь>»
+и соединение «account»): `poloniex_feeinfo.json` (GET /feeinfo), GET /accounts, GET /accounts/balances?accountType=SPOT,
+GET /margin/accountMargin?accountType=SPOT и /margin/borrowStatus (что отвечает счёт без маржи — урок 27),
+GET /wallets/addresses?currency=<coin сети BSC> (ключ ответа), первый IOC-ордер: ответ POST /orders (принят ли IOC,
+длина clientOrderId 17), GET /orders/{id} (state), `poloniex_order_trades.json` (GET /orders/{id}/trades — feeCurrency
+покупки: базовая монета или TRX), `poloniex_wallets_activity.json` (GET /wallets/activity: статус депозита COMPLETED или
+COMPLETE, вывода PROCESSING или PENDING, есть ли txid в status; входит ли комиссия в amount вывода), ответ POST
+/v2/wallets/withdraw (withdrawalRequestsId), ответы 429 / неверной подписи / ключа без права вывода (коды — в
+errors.rs), `poloniex_ws_balances.jsonl` — кадры приватного WebSocket (auth, balances после депозита, вывода и ордера).

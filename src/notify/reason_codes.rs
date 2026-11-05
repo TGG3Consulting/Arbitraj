@@ -15,6 +15,7 @@ pub fn lookup(venue: &str, code: &str) -> Option<&'static str> {
         "gate" => gate(code),
         "bybit" => bybit(code),
         "kucoin" => kucoin(code),
+        "htx" => htx(code),
         _ => None,
     }
 }
@@ -125,6 +126,25 @@ fn kucoin(code: &str) -> Option<&'static str> {
         "110003" => "превышен суточный предел вывода",
         "500000" => "ошибка на стороне KuCoin",
         "230005" => "система KuCoin занята",
+        _ => return None,
+    })
+}
+
+/// HTX — venues/htx/errors.rs (Spot API: Trading → Error Code, Wallet → Error Code).
+fn htx(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "login-required" | "api-signature-not-valid" | "1002" | "1003" => {
+            "ключ API или подпись не приняты"
+        }
+        "order-accountbalance-error" => "не хватает средств",
+        "order-value-min-error" => "сумма ордера меньше минимума HTX",
+        "order-orderprice-precision-error" => "неверная точность цены",
+        "order-orderamount-precision-error" => "неверная точность количества",
+        "order-invalid-price" => "цена ордера слишком далеко от последней сделки",
+        "invalid-client-order-id" => "повтор своего ID ордера",
+        "base-symbol-trade-disabled" | "order-disabled" => "торговля парой на HTX закрыта",
+        "base-system-error" | "500" => "система HTX занята — итог запроса нужно проверить",
+        "2002" | "2003" => "HTX не принял параметр запроса",
         _ => return None,
     })
 }

@@ -1288,6 +1288,172 @@ source = "Wallet «Withdraw»: walletType по умолчанию — счёт, 
 rationale = "Торговля только на споте."
 prefill = { kind = "Venue", id = "binance" }
 
+# --- Биржа HTX (решение 171) ---
+[[section]]
+title = "Биржа HTX (решение 171)"
+intro = "Значения из официальной документации HTX Spot API (huobiapi.github.io/docs/spot/v1/en) и SDK huobi_Golang. Живых ответов ещё нет (из среды разработки api.huobi.pro закрыт): имя сети BSC и поле адреса контракта задаёт Тигран по живым ответам; без venue.contract_field монеты HTX не сопоставляются. Ключ — права Read, Trade, Withdraw, привязан к IP сервера. Адреса вывода (кошелёк бота, адреса депозита других бирж) — заранее в список адресов вывода в веб-интерфейсе HTX. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка HTX"
+unit = "URL"
+value = "https://api.huobi.pro"
+source = "Quick Start → Access URLs: «https://api.huobi.pro», «https://api-aws.huobi.pro»"
+rationale = "Основной адрес REST спота."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка HTX"
+unit = "URL"
+value = "https://api-aws.huobi.pro"
+source = "Quick Start → Access URLs (api-aws — рекомендован для серверов AWS Japan)"
+rationale = "Резерв только при сбое сети основного адреса."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка HTX"
+unit = "URL"
+value = "wss://api.huobi.pro/ws"
+source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, бот их не использует)"
+rationale = "Снимки стакана mbp.refresh."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка HTX"
+unit = "URL"
+value = "wss://api.huobi.pro/ws/v2"
+source = "Websocket Account and Order: «wss://api.huobi.pro/ws/v2»"
+rationale = "Поток аккаунта (accounts.update#2)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка HTX"
+unit = "монета"
+value = "USDT"
+source = "Get Market Symbols Setting: qc"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка HTX"
+unit = "уровней"
+value = "20"
+source = "market.$symbol.mbp.refresh.$levels: 5, 10, 20, «around 100ms»"
+rationale = "Глубина для котировки на объём."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка HTX"
+unit = "тип"
+value = "ioc"
+source = "Place a New Order: type buy-ioc / sell-ioc (или buy-limit-fok / sell-limit-fok)"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка HTX"
+unit = "да/нет"
+value = "да"
+source = "Websocket Account and Order: accounts.update#2"
+rationale = "Зачисление депозита без опроса."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка HTX"
+unit = "мс"
+method = "Больше 20000 (ping потока аккаунта ~20 с; рыночный ping ~5 с), например 30000 — решает Тигран"
+source = "Market WS: ping ~5 с; Account WS: ping ~20 с"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка HTX"
+unit = "пар"
+method = "Предела тем на соединение документация не называет — начать с небольшого (например, 50) и замерить нагрузку (решение 109); решает Тигран"
+source = "Websocket Market Data: предел не указан"
+rationale = "Урок 12: подписки на соединение — по замеру."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+method = "Темп подписок не описан (у req — 1 на 100 мс на соединение): например 10 — решает Тигран"
+source = "Websocket Market Data: «The limitation of single connection is 100 ms» (req)"
+rationale = "Не перегружать соединение подписками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка HTX"
+unit = "да/нет"
+method = "Не задавать (или «нет»): пробного ордера у HTX нет — «да» даёт отказ ордера"
+source = "Раздел Trading: test order нет"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка HTX"
+unit = "название"
+method = "Значение baseChainProtocol сети BSC из живого ответа GET /v2/reference/currencies?currency=cake (ожидается BEP20 — не угадывать)"
+source = "APIv2 Currency & Chains: baseChainProtocol (в примерах ERC20, TRC20)"
+rationale = "В документации имени сети BSC нет; chain у HTX своё у каждой монеты."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.contract_field"
+area = "площадка HTX"
+unit = "поле"
+method = "Поле (ac или ca) ответа GET /v1/settings/common/chains?currency=cake, равное адресу CAKE 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82; ни одно не равно — не задавать (HTX не подключать)"
+source = "Get Chains Information: ac «address of chain»; SDK getchainsresponse.go: ca"
+rationale = "Без адреса контракта монеты не сопоставляются (CLAUDE.md)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка HTX"
+unit = "да/нет"
+method = "Решает Тигран после живого ответа: у монет с minDepositAmt «0» или пусто — считать минимум 0 (да) или не торговать с переводом на HTX"
+source = "APIv2 Currency & Chains: minDepositAmt; Get Chains: dma — меньше минимума может не зачислиться никогда"
+rationale = "Урок 21."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fee_symbols_per_req"
+area = "площадка HTX"
+unit = "символов"
+method = "Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран"
+source = "Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан"
+rationale = "Ставки комиссии пачками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+method = "Лимит не указан: 1–2 запроса в секунду — решает Тигран"
+source = "Get Current Fee Rate: лимит не указан; правило лимитов — «N times/2s» по UID на эндпоинт"
+rationale = "Не упереться в лимит UID."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка HTX"
+unit = "мс"
+method = "Окно лимитов HTX — 2 с («N times/2s»): пауза 2000–4000 мс — решает Тигран"
+source = "API Access → New Version Rate limit Rule; ответ на превышение не описан"
+rationale = "Урок 15: после «слишком часто» не слать дальше."
+prefill = { kind = "Venue", id = "htx" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

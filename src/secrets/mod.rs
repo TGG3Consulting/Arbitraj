@@ -73,6 +73,16 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "bitget",
         "Passphrase ключа Bitget (задаётся при создании ключа; заголовок ACCESS-PASSPHRASE)",
     ),
+    (
+        "htx.api_key",
+        "htx",
+        "API-ключ HTX (Access Key; права Read, Trade, Withdraw)",
+    ),
+    (
+        "htx.api_secret",
+        "htx",
+        "Секретный ключ HTX (Secret Key, подпись HmacSHA256)",
+    ),
     ("okx.api_key", "okx", "API-ключ OKX (API key, API v5)"),
     ("okx.api_secret", "okx", "Секретный ключ OKX (Secret key)"),
     (

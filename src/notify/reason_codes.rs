@@ -15,8 +15,31 @@ pub fn lookup(venue: &str, code: &str) -> Option<&'static str> {
         "gate" => gate(code),
         "bybit" => bybit(code),
         "kucoin" => kucoin(code),
+        "kraken" => kraken(code),
         _ => None,
     }
+}
+
+/// Kraken — строки «категория:текст» из venues/kraken/errors.rs (OpenAPI spot-rest.yaml, гиды лимитов и подписи).
+fn kraken(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "EAPI:Invalid key" | "EAPI:Invalid signature" => "ключ API или подпись не приняты",
+        "EAPI:Invalid nonce" => {
+            "nonce не принят — запросы одним ключом пришли не по порядку (ключ занят другой программой?)"
+        }
+        "EGeneral:Permission denied" => "у ключа API нет нужного права",
+        "EAPI:Rate limit exceeded"
+        | "EOrder:Rate limit exceeded"
+        | "EOrder:Orders limit exceeded" => "слишком частые запросы — сработал лимит Kraken",
+        "EService:Throttled" => "слишком много одновременных запросов — Kraken просит подождать",
+        "EOrder:Insufficient funds" => "не хватает средств",
+        "EFunding:Max fee exceeded" => "комиссия вывода Kraken выше допустимой",
+        "EGeneral:Invalid arguments" => "Kraken не принял параметры запроса",
+        "EService:Unavailable" | "EService:Busy" => {
+            "сервер Kraken занят — итог запроса нужно проверить"
+        }
+        _ => return None,
+    })
 }
 
 /// BingX — venues/bingx/errors.rs (Error Code Reference).

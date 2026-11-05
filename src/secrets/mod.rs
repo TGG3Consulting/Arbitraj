@@ -90,6 +90,16 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "binance",
         "Секретный ключ Binance (Secret Key; подпись HMAC SHA256)",
     ),
+    (
+        "kraken.api_key",
+        "kraken",
+        "API-ключ Kraken (API Key, спот)",
+    ),
+    (
+        "kraken.api_secret",
+        "kraken",
+        "Приватный ключ Kraken (Private Key, Base64; подпись HMAC-SHA512)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

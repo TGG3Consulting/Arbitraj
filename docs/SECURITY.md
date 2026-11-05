@@ -16,6 +16,13 @@
   тоже). Права: Read, Trade, Withdraw; ключ основного счёта (не субсчёта). Ключ привязать к IP сервера (без IP ключ с
   правами trade/withdraw OKX отключает после 14 дней простоя). Вывод — только на проверенные адреса, заданные в
   кабинете OKX (код 58207).
+- Kraken (решение 172): API-ключ `kraken.api_key` и приватный ключ `kraken.api_secret` (Base64; в запрос уходит только
+  HMAC-SHA512, passphrase нет). Ключ без 2FA (OTP — бот его не вводит). Права (GetApiKeyInfo, «Проверить подключение»):
+  query-funds, withdraw-funds, query-open-trades, query-closed-trades, modify-trades, close-trades, create-ws-token;
+  без add-withdraw-address / update-withdraw-address (адреса вывода — только в кабинете Kraken; бот выводит лишь на
+  address_id из адресной книги). Маржа отдельным правом не выключается — бот не шлёт leverage. Ключ привязать к IP
+  сервера; ключ бота не использовать в других программах: nonce общий, запросы не по порядку — «EAPI:Invalid nonce» и
+  временный бан. Токен WebSocket (GetWebSocketsToken) — секрет сессии: в журнал и сырой журнал не пишется.
 - Binance (решение 160): API-ключ `binance.api_key` и секрет `binance.api_secret`, тип ключа — HMAC (passphrase нет).
   Права (GET /sapi/v1/account/apiRestrictions, «Проверить подключение» читает права ТЕКУЩЕГО ключа): Enable Reading,
   Enable Spot & Margin Trading (у Binance спот и маржа — один флаг), Enable Withdrawals (Binance включает вывод только

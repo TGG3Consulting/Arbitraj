@@ -1288,6 +1288,199 @@ source = "Wallet «Withdraw»: walletType по умолчанию — счёт, 
 rationale = "Торговля только на споте."
 prefill = { kind = "Venue", id = "binance" }
 
+# --- Биржа Kraken (решение 172) ---
+[[section]]
+title = "Биржа Kraken (решение 172)"
+intro = "Из официальной документации Kraken (спот REST, Funding (Beta), WebSocket v2); живых ответов ещё нет — из среды разработки Kraken закрыт: сверить на сервере бота (tests/README.md, раздел Kraken). Сначала — одна живая запись методов Funding: есть ли сеть BSC и contract_address (вердикт анализа). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Ключ без 2FA (OTP) с правами Query Funds, Withdraw Funds, Query Open/Closed Orders, Create & Modify Orders, Cancel/Close Orders, WebSocket interface; без «Add withdrawal addresses». Адреса вывода (кошельки DEX, депозиты других бирж) — заранее в адресной книге Kraken. Ключ бота не использовать в других программах (nonce)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "https://api.kraken.com"
+source = "OpenAPI spot-rest.yaml: servers https://api.kraken.com/0 и у операций Funding — https://api.kraken.com"
+rationale = "Без /0: пути /0/… (спот) и /funding/… (Funding Beta) бот добавляет сам."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "wss://ws.kraken.com/v2"
+source = "Spot WebSocket API: wss://ws.kraken.com/v2"
+rationale = "Публичный WebSocket v2 — стаканы book."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Kraken"
+unit = "URL"
+value = "wss://ws-auth.kraken.com/v2"
+source = "spot-websocket-v2/balances: «ws-auth.kraken.com/v2»"
+rationale = "Канал balances с токеном (venue.balance_events)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.balance_events"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "spot-websocket-v2/balances"
+rationale = "Депозиты и выводы событием, а не только опросом статуса."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка Kraken"
+unit = "монета"
+method = "Имя котируемого актива в AssetPairs (поле quote) пар к USDT — ожидается USDT; сверить на живом AssetPairs."
+source = "OpenAPI: AssetPairs base / quote — имена активов Kraken"
+rationale = "Котировка и торговля — к USDT."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Kraken"
+unit = "название"
+method = "network_name метода сети BSC в живом ответе GET /funding/v1/methods/withdraw?asset[class]=currency&asset[name]=CAKE (в документации примера BSC нет)."
+source = "list-funding-methods: network.network_name"
+rationale = "Без него ни одна монета Kraken не сопоставится с DEX."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка Kraken"
+unit = "да/нет"
+method = "По живому ответу методов deposit: minimum_amount у монет BSC приходит — не задавать; пустой — решение Тиграна."
+source = "list-funding-methods: minimum_amount (необязательное поле)"
+rationale = "Решение 143: «0» и пустое у биржи могут значить разное."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Kraken"
+unit = "уровней"
+value = "25"
+source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000"
+rationale = "Глубина для котировки на объём; чек-сумма — по верхним 10 при любой глубине."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "30000"
+source = "Spot WebSocket: ping «at least every 60 seconds»"
+rationale = "Сервер закрывает молчащее соединение примерно через минуту."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "45000"
+source = "Spot WebSocket: «within approximately one minute of inactivity»"
+rationale = "Пинг через 30 с тишины + 15 с на pong (heartbeat приходит раз в секунду)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка Kraken"
+unit = "символов"
+method = "Начать с 50; отказы подписки (success false) — уменьшить."
+source = "spot-websocket-v2/book: «multiple symbols in one request»"
+rationale = "Предела символов в запросе в документации нет."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Kraken"
+unit = "в секунду"
+value = "1"
+source = "spot-websocket-v2/book"
+rationale = "Темп запросов подписки (предел в документации не описан)."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Kraken"
+unit = "штук"
+method = "Начать со 100 пар на соединение и проверить замером (решение 109)."
+source = "guides/websockets/introduction: Cloudflare"
+rationale = "Предела на соединение в документации нет; подключения ~150 за 10 минут на IP."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Kraken"
+unit = "тип"
+value = "IOC"
+source = "OpenAPI add: timeinforce GTC, IOC, GTD, FOK"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "OpenAPI add: validate — «will not trade in the matching engine»"
+rationale = "Проверка ордера продажи до покупки пробным ордером без исполнения."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.fee_pairs_per_request"
+area = "площадка Kraken"
+unit = "пар"
+method = "Все пары подписки одной-двумя пачками (например 100): каждый запрос +1 к счётчику ключа."
+source = "OpenAPI TradeVolume: pair — список через запятую"
+rationale = "Предела пар в TradeVolume в документации нет."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Kraken"
+unit = "в секунду"
+value = "1"
+source = "guides/rest/ratelimits: +1 за вызов"
+rationale = "Пачки ставок не чаще одной в секунду."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Kraken"
+unit = "мс"
+value = "10000"
+source = "guides/rest/ratelimits"
+rationale = "После «Rate limit exceeded» — не слать: ограничение «a few seconds», дольше при продолжении."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.funding_list_limit"
+area = "площадка Kraken"
+unit = "записей"
+value = "100"
+source = "OpenAPI Funding: limit ≤ 500"
+rationale = "Бот выводит и вводит единицы в день — 100 последних хватает для поиска статуса."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.deposit_address_claim"
+area = "площадка Kraken"
+unit = "да/нет"
+method = "Не задавать: адреса депозита CAKE/USDT на BSC создать в кабинете Kraken (Deposit); «да» — бот создаст сам (предел неиспользованных обычно 5)."
+source = "guides/rest/funding: address_generation limited, TooManyDepositAddresses"
+rationale = "Не плодить адреса."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.api_ip_bound"
+area = "площадка Kraken"
+unit = "да/нет"
+value = "да"
+source = "GetApiKeyInfo: ip_allowlist"
+rationale = "Ключ с правом вывода — только с IP сервера бота."
+prefill = { kind = "Venue", id = "kraken" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

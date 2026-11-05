@@ -180,6 +180,20 @@ async fn run() -> Result<(), String> {
     registry
         .register(std::sync::Arc::new(arb::venues::okx::Okx::new(okx_ctx)))
         .await;
+    // Биржа Kraken (решение 172): спот REST /0 + Funding (Beta) + WebSocket v2, только спот; свои настройки venue.*
+    // [kraken] и секреты kraken.*; подписанные запросы ключа — по одному (nonce).
+    let kraken_ctx = arb::venues::kraken::ctx::Ctx::new(
+        settings.clone(),
+        vault.clone(),
+        http.clone(),
+        journal.clone(),
+        raw.clone(),
+    );
+    registry
+        .register(std::sync::Arc::new(arb::venues::kraken::Kraken::new(
+            kraken_ctx,
+        )))
+        .await;
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.

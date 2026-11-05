@@ -32,6 +32,9 @@ const CODE_PREFIXES: [(&str, &str); 4] = [
 ];
 /// Gate: «Gate, HTTP <статус>, <label>: <message>» (venues/gate/errors.rs, from_label).
 const GATE_PREFIX: &str = "Gate, HTTP ";
+/// Kraken: «Kraken, ошибка <категория>:<текст>[:<подробность>]» (venues/kraken/errors.rs, PREFIX): код — категория и
+/// текст строки Kraken, подробность — msg; несколько строк — через «; » (берётся первая).
+const KRAKEN_PREFIX: &str = "Kraken, ошибка ";
 
 /// Служебные приставки в начале текста: Step в Debug-виде (старые записи хронологии) и приставки хронологии сделки
 /// «Сделка остановлена: » (core/ledger.rs) — в причине они лишние.
@@ -107,6 +110,18 @@ fn find_code(s: &str) -> Option<(usize, &'static str, String, String)> {
             let (code, msg) = rest.split_once(':').unwrap_or((rest, ""));
             return Some((pos, v, code.trim().to_string(), msg.trim().to_string()));
         }
+    }
+    if let Some(pos) = s.find(KRAKEN_PREFIX) {
+        let rest = &s[pos + KRAKEN_PREFIX.len()..];
+        let first = rest.split("; ").next().unwrap_or(rest);
+        let mut parts = first.splitn(3, ':').map(str::trim);
+        let code = match (parts.next(), parts.next()) {
+            (Some(cat), Some(text)) => format!("{cat}:{text}"),
+            (Some(cat), None) => cat.to_string(),
+            _ => String::new(),
+        };
+        let msg = parts.next().unwrap_or_default().to_string();
+        return Some((pos, "kraken", code, msg));
     }
     let pos = s.find(GATE_PREFIX)?;
     let rest = &s[pos + GATE_PREFIX.len()..];

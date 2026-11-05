@@ -1288,6 +1288,182 @@ source = "Wallet «Withdraw»: walletType по умолчанию — счёт, 
 rationale = "Торговля только на споте."
 prefill = { kind = "Venue", id = "binance" }
 
+# --- Биржа CoinEx (решение 170) ---
+[[section]]
+title = "Биржа CoinEx (решение 170)"
+intro = "Из официальной документации CoinEx API v2 (docs.coinex.com/api/v2); живых ответов ещё нет (из среды разработки api.coinex.com закрыт) — имена сети BSC в двух справочниках, единицы ставки комиссии и вид сжатия кадров WS задаёт Тигран по живым ответам (tests/README.md, раздел CoinEx). Счёт — спот (funding-счёта нет). Адреса вывода (кошелёк DEX, адреса других бирж) — заранее в белый список API-ключа; ключ — с привязкой IP. Права ключа основного аккаунта API не отдаёт — проверить в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109)."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка CoinEx"
+unit = "URL"
+value = "https://api.coinex.com"
+source = "Integration Guide: «https://api.coinex.com/v2»; Authentication: подписывается путь «/v2/spot/…»"
+rationale = "Основной адрес REST; «/v2» — в пути запроса (входит в подпись)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка CoinEx"
+unit = "URL"
+value = "wss://socket.coinex.com/v2/spot"
+source = "Integration Guide: спот «wss://socket.coinex.com/v2/spot»"
+rationale = "Стаканы depth.update."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка CoinEx"
+unit = "монета"
+value = "USDT"
+source = "Get Market Status: quote_ccy"
+rationale = "Котируемая монета пар."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка CoinEx"
+unit = "уровней"
+value = "20"
+source = "WS Market Depth: limit 5, 10, 20, 50; if_full — полный снимок"
+rationale = "Глубина для котировки на объём; 50 — больше нагрузки (каждый кадр сжат)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка CoinEx"
+unit = "штук"
+method = "предела рынков на соединение в документации нет — начать с небольшого числа (например 20) и смотреть ошибки 23002 и нагрузку; решает Тигран"
+source = "WS Market Depth; Error Handling: 23002 «Requests submitted too frequently»"
+rationale = "Один запрос depth.subscribe на соединение."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "интервал server.ping в документации не указан — по живому подключению (например 20000–30000); решает Тигран"
+source = "Ping: server.ping → «pong», интервал и таймаут не описаны"
+rationale = "Свой ping держит соединение и даёт кадр-ответ."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "больше venue.ws_ping_ms с запасом на ответ (например два интервала ping); решает Тигран"
+source = "Ping: ответ на каждый server.ping"
+rationale = "Без кадров дольше — соединение оборвано."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.book_stale_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "не меньше 60000 с запасом (пуш только при изменении, полный — раз в минуту) или не задавать; решает Тигран"
+source = "WS Market Depth: «No push occurs without an update», «full … every 1 minute»"
+rationale = "Иначе тихая пара ложно «устарела»."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка CoinEx"
+unit = "тип"
+value = "ioc"
+source = "Place Order: type; enum order_type — ioc, fok"
+rationale = "Правило Тиграна: неисполненный остаток снимает биржа."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "не задавать (или «нет»): пробного ордера у CoinEx нет — «да» даёт отказ ордера"
+source = "Spot → Order: среди эндпоинтов нет test order"
+rationale = "Правила ордера проверяет order_rules::ready."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка CoinEx"
+unit = "название"
+method = "значение поля chain сети BSC из живого ответа GET /v2/assets/deposit-withdraw-config?ccy=CAKE"
+source = "Get Deposit and Withdrawal Configuration: chains[n].chain"
+rationale = "В документации имени сети BSC нет."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.bsc_contract_chain"
+area = "площадка CoinEx"
+unit = "название"
+method = "значение chain_info.chain_name той же сети из живого ответа GET /v2/assets/info?ccy=CAKE (где identity = 0x0E09…cE82)"
+source = "Get Coin/Token Information: chain_info.chain_name, identity"
+rationale = "Адрес контракта — только в /assets/info; имена цепей в двух справочниках разные."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.fee_rate_percent"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "по живому ответу trade-fee-rate («Проверить подключение» показывает ставку как пришла): сравнить с taker_fee_rate пары и комиссией первого ордера; решает Тигран"
+source = "Get Account Trading Fee Rate: пример taker_rate «0.03»; Get Market Status: «0.002»"
+rationale = "Единицы ставки не описаны."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка CoinEx"
+unit = "в секунду"
+method = "ставка — по одной паре на запрос, группа «Query spot accounts» 10 запросов/с делится с балансами и справочниками — держать низким (например 2); решает Тигран"
+source = "Rate Limit: Query spot accounts (10r/1s) — /account/trade-fee-rate"
+rationale = "Не задевать лимит группы."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка CoinEx"
+unit = "штук"
+method = "сделок на страницу user-deals: по умолчанию 10, максимум не указан — например 100, по живому ответу; решает Тигран"
+source = "List User Deals: limit, pagination.has_next"
+rationale = "Сделки ордера, если ордер IOC без исполнения не сохранён."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.history_page_limit"
+area = "площадка CoinEx"
+unit = "штук"
+method = "сколько последних выводов монеты читать при поиске по remark (по умолчанию 10, максимум не указан) — например 50; решает Тигран"
+source = "Get Withdrawal History: limit"
+rationale = "Найти свой вывод при неизвестном итоге."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "пауза после 4213 / 3008 / 4001 — Retry-After не описан, окно лимитов — секунда (например 1000–2000); решает Тигран"
+source = "Rate Limit: коды 3008, 4001, 4213; HTTP-статус не описан"
+rationale = "Не слать дальше после «слишком часто» (урок 15)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка CoinEx"
+unit = "мс"
+method = "не задавать — действует окно CoinEx 5000 мс; задавать, только если часы сервера расходятся"
+source = "Integration Guide: X-COINEX-WINDOWTIME, по умолчанию 5000 мс"
+rationale = "Окно действия подписанного запроса."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка CoinEx"
+unit = "да/нет"
+method = "решает Тигран после живого ответа: у монет с min_deposit_amount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на CoinEx"
+source = "Deposit and Withdrawal Configuration: min_deposit_amount; ниже минимума — too_small"
+rationale = "Урок 21: «0» и пусто могут значить разное."
+prefill = { kind = "Venue", id = "coinex" }
+
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

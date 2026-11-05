@@ -261,6 +261,32 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.deposit_dust_as_min | площадка Binance | *метод:* решение Тиграна; до него не задавать | Смысл depositDust не описан | All Coins' Information |
 | venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
 
+## Биржа CoinEx (решение 170)
+
+Из официальной документации CoinEx API v2 (docs.coinex.com/api/v2); живых ответов ещё нет (из среды разработки api.coinex.com закрыт) — имена сети BSC в двух справочниках, единицы ставки комиссии и вид сжатия кадров WS задаёт Тигран по живым ответам (tests/README.md, раздел CoinEx). Счёт — спот (funding-счёта нет). Адреса вывода (кошелёк DEX, адреса других бирж) — заранее в белый список API-ключа; ключ — с привязкой IP. Права ключа основного аккаунта API не отдаёт — проверить в кабинете. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка CoinEx | `https://api.coinex.com` | Основной адрес REST; «/v2» — в пути запроса (входит в подпись). | Integration Guide: «https://api.coinex.com/v2»; Authentication: подписывается путь «/v2/spot/…» |
+| venue.ws_url | площадка CoinEx | `wss://socket.coinex.com/v2/spot` | Стаканы depth.update. | Integration Guide: спот «wss://socket.coinex.com/v2/spot» |
+| venue.quote_asset | площадка CoinEx | `USDT` | Котируемая монета пар. | Get Market Status: quote_ccy |
+| venue.depth_levels | площадка CoinEx | `20` | Глубина для котировки на объём; 50 — больше нагрузки (каждый кадр сжат). | WS Market Depth: limit 5, 10, 20, 50; if_full — полный снимок |
+| venue.ws_symbols_per_conn | площадка CoinEx | *метод:* предела рынков на соединение в документации нет — начать с небольшого числа (например 20) и смотреть ошибки 23002 и нагрузку; решает Тигран | Один запрос depth.subscribe на соединение. | WS Market Depth; Error Handling: 23002 «Requests submitted too frequently» |
+| venue.ws_ping_ms | площадка CoinEx | *метод:* интервал server.ping в документации не указан — по живому подключению (например 20000–30000); решает Тигран | Свой ping держит соединение и даёт кадр-ответ. | Ping: server.ping → «pong», интервал и таймаут не описаны |
+| venue.ws_silence_ms | площадка CoinEx | *метод:* больше venue.ws_ping_ms с запасом на ответ (например два интервала ping); решает Тигран | Без кадров дольше — соединение оборвано. | Ping: ответ на каждый server.ping |
+| venue.book_stale_ms | площадка CoinEx | *метод:* не меньше 60000 с запасом (пуш только при изменении, полный — раз в минуту) или не задавать; решает Тигран | Иначе тихая пара ложно «устарела». | WS Market Depth: «No push occurs without an update», «full … every 1 minute» |
+| venue.order_time_in_force | площадка CoinEx | `ioc` | Правило Тиграна: неисполненный остаток снимает биржа. | Place Order: type; enum order_type — ioc, fok |
+| venue.order_test_first | площадка CoinEx | *метод:* не задавать (или «нет»): пробного ордера у CoinEx нет — «да» даёт отказ ордера | Правила ордера проверяет order_rules::ready. | Spot → Order: среди эндпоинтов нет test order |
+| venue.bsc_network | площадка CoinEx | *метод:* значение поля chain сети BSC из живого ответа GET /v2/assets/deposit-withdraw-config?ccy=CAKE | В документации имени сети BSC нет. | Get Deposit and Withdrawal Configuration: chains[n].chain |
+| venue.bsc_contract_chain | площадка CoinEx | *метод:* значение chain_info.chain_name той же сети из живого ответа GET /v2/assets/info?ccy=CAKE (где identity = 0x0E09…cE82) | Адрес контракта — только в /assets/info; имена цепей в двух справочниках разные. | Get Coin/Token Information: chain_info.chain_name, identity |
+| venue.fee_rate_percent | площадка CoinEx | *метод:* по живому ответу trade-fee-rate («Проверить подключение» показывает ставку как пришла): сравнить с taker_fee_rate пары и комиссией первого ордера; решает Тигран | Единицы ставки не описаны. | Get Account Trading Fee Rate: пример taker_rate «0.03»; Get Market Status: «0.002» |
+| venue.fee_requests_per_sec | площадка CoinEx | *метод:* ставка — по одной паре на запрос, группа «Query spot accounts» 10 запросов/с делится с балансами и справочниками — держать низким (например 2); решает Тигран | Не задевать лимит группы. | Rate Limit: Query spot accounts (10r/1s) — /account/trade-fee-rate |
+| venue.my_trades_limit | площадка CoinEx | *метод:* сделок на страницу user-deals: по умолчанию 10, максимум не указан — например 100, по живому ответу; решает Тигран | Сделки ордера, если ордер IOC без исполнения не сохранён. | List User Deals: limit, pagination.has_next |
+| venue.history_page_limit | площадка CoinEx | *метод:* сколько последних выводов монеты читать при поиске по remark (по умолчанию 10, максимум не указан) — например 50; решает Тигран | Найти свой вывод при неизвестном итоге. | Get Withdrawal History: limit |
+| venue.rate_limit_pause_ms | площадка CoinEx | *метод:* пауза после 4213 / 3008 / 4001 — Retry-After не описан, окно лимитов — секунда (например 1000–2000); решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Rate Limit: коды 3008, 4001, 4213; HTTP-статус не описан |
+| venue.recv_window_ms | площадка CoinEx | *метод:* не задавать — действует окно CoinEx 5000 мс; задавать, только если часы сервера расходятся | Окно действия подписанного запроса. | Integration Guide: X-COINEX-WINDOWTIME, по умолчанию 5000 мс |
+| venue.deposit_min_absent_ok | площадка CoinEx | *метод:* решает Тигран после живого ответа: у монет с min_deposit_amount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на CoinEx | Урок 21: «0» и пусто могут значить разное. | Deposit and Withdrawal Configuration: min_deposit_amount; ниже минимума — too_small |
+
 ## Зачисление по блокчейну (решение 151)
 
 Перевод сделки на кошелёк DEX засчитывается по приходу монеты в блокчейне, не дожидаясь API биржи-отправителя. Работает при заданных venue.balance_events и transfer.credit_amount_tolerance_pct у площадки DEX.

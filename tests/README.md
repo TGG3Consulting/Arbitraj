@@ -325,3 +325,58 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 `ctAddr` в currencies; `canDep` / `canWd` — boolean или строка; пустой ли `minDep`; `to` адреса депозита — «6» / «18»;
 знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
 (seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.
+
+## CoinEx (решение 170) — tests/coinex_real_data.rs
+
+Всегда выполняются: строка для подписи — пример страницы Authentication (`GET` + `/v2/spot/pending-order?…` +
+`1700490703564`; у POST — тело между путём и временем); HMAC-SHA256 → hex строчными — официальный вектор RFC 4231 Test
+Case 2 (готовой подписи с ключом в документации CoinEx нет — ключи «XXXXXXXXXX»); строка запроса (порядок, запрет знаков,
+требующих кодирования); правило client_id (≤ 32 байт, буквы, цифры, «-», «_»); запрос depth.subscribe; вид сжатия кадра
+по заголовку (RFC 1950 / 1952). Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude
+`api.coinex.com` закрыт прокси).
+
+### CoinEx — команды записи (на сервере бота; монеты CAKE и USDT)
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+# Get Market Status — все пары и CAKEUSDT
+curl -sS --compressed 'https://api.coinex.com/v2/spot/market' > $D/coinex_market.json
+curl -sS --compressed 'https://api.coinex.com/v2/spot/market?market=CAKEUSDT' > $D/coinex_market_CAKEUSDT.json
+# Стакан REST (сверка с WS)
+curl -sS --compressed 'https://api.coinex.com/v2/spot/depth?market=CAKEUSDT&limit=50&interval=0' > $D/coinex_depth_CAKEUSDT.json
+# Справочники монет: сначала без подписи — записать и код ответа (нужна ли подпись — в документации не сказано)
+curl -sS --compressed -w '\nHTTP %{http_code}\n' 'https://api.coinex.com/v2/assets/info?ccy=CAKE' > $D/coinex_assets_info_CAKE.json
+curl -sS --compressed -w '\nHTTP %{http_code}\n' 'https://api.coinex.com/v2/assets/info?ccy=USDT' > $D/coinex_assets_info_USDT.json
+curl -sS --compressed -w '\nHTTP %{http_code}\n' 'https://api.coinex.com/v2/assets/deposit-withdraw-config?ccy=CAKE' > $D/coinex_dw_config_CAKE.json
+curl -sS --compressed -o $D/coinex_dw_config_all.json -w 'HTTP %{http_code}, %{size_download} байт\n' 'https://api.coinex.com/v2/assets/all-deposit-withdraw-config'
+curl -sS --compressed -o $D/coinex_assets_info_all.json -w 'HTTP %{http_code}, %{size_download} байт\n' 'https://api.coinex.com/v2/assets/info'
+# (строку «HTTP …» в конце файлов *_CAKE/*_USDT убрать перед тестом; если ответ — ошибка подписи, взять те же ответы из
+#  сырого журнала бота data/raw/coinex, записи «rest /v2/assets/…» — бот шлёт их подписанными)
+# Имена сети BSC: chain в dw_config и chain_name в assets/info (где identity = 0x0e09…ce82) — по строке в файлы
+python3 -c "import json; d=json.load(open('$D/coinex_dw_config_CAKE.json'))['data']; print([c['chain'] for c in d['chains']])"
+python3 -c "import json; d=json.load(open('$D/coinex_assets_info_CAKE.json'))['data'][0]; print([(c['chain_name'], c['identity']) for c in d['chain_info']])"
+#   → $D/coinex_bsc_network.txt (его же — в venue.bsc_network) и $D/coinex_bsc_contract_chain.txt (→ venue.bsc_contract_chain)
+# WebSocket: подписка CAKEUSDT limit 20 if_full, server.ping через 30 с; кадры сжаты — base64 по строке, ~70 секунд
+( echo '{"method":"depth.subscribe","params":{"market_list":[["CAKEUSDT",20,"0",true]]},"id":1}'; sleep 30; \
+  echo '{"method":"server.ping","params":{},"id":2}'; sleep 35 ) | timeout 70 websocat --base64 wss://socket.coinex.com/v2/spot > $D/coinex_ws_depth.b64
+# Вид сжатия (первые байты кадра): 1f8b — gzip, 78.. — zlib, иначе deflate
+head -1 $D/coinex_ws_depth.b64 | base64 -d | head -c 2 | xxd -p
+```
+
+Что проверить по записи: какое имя у сети BSC в `chain` и в `chain_name` и есть ли `identity` у CAKE (0x0E09…cE82);
+нужна ли подпись справочникам `/assets/*`; размер полных справочников; `min_deposit_amount` («0» или пусто?),
+`withdrawal_precision`, `deflation_rate`, `deposit_delay_minutes`, `is_memo_required_for_deposit` (строка или boolean);
+`base_ccy_precision` / `quote_ccy_precision` и `min_amount` CAKEUSDT (в базовой монете?); вид сжатия WS; ответ на подписку
+(`{"id":1,"code":0,…}`); все ли пуши `is_full = true`; порядок уровней; шлёт ли сервер кадры без изменений рынка; через
+сколько молчания сервер рвёт соединение без ping.
+
+Приватные — на живом боте (без ключей в файлах; из сырого журнала data/raw/coinex, записи «rest <путь>»):
+`coinex_trade_fee_rate.json` (GET /v2/account/trade-fee-rate?market_type=SPOT&market=CAKEUSDT — единицы ставки:
+сравнить с taker_fee_rate пары и комиссией ордера → venue.fee_rate_percent), /v2/account/info, /v2/assets/spot/balance,
+/v2/assets/margin/balance, /v2/assets/futures/balance, /v2/assets/financial/balance (что отвечает неоткрытый счёт),
+/v2/assets/deposit-address?ccy=CAKE&chain=<сеть BSC>. Первый IOC-ордер на минимальную сумму: ответ POST /v2/spot/order
+(есть ли окончательный итог), `coinex_order_status.json` (GET /v2/spot/order-status — status part_canceled / filled, знак
+и поля комиссии), `coinex_user_deals.json` (GET /v2/spot/user-deals того же рынка — fee_ccy, порядок записей); IOC без
+исполнения — что отвечает order-status (код «не найден») и отмена; с включённой и выключенной скидкой CET — discount_fee и
+fee_ccy. Депозит и вывод: GET /v2/assets/deposit-history?ccy=&tx_id= (finish или finished), POST /v2/assets/withdraw
+(статус в ответе, входит ли комиссия в amount — amount против actual_amount), GET /v2/assets/withdraw?withdraw_id=.

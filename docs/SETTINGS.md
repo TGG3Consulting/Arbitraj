@@ -163,6 +163,23 @@ money.min_profit_* проверяются только после. Каждая 
 | venue.ws_connects_per_sec | Решение 161, только OKX: сколько WebSocket-соединений стаканов открывать в секунду (официально «3 requests per second (based on IP)» — не больше 3). Не задана — стаканы OKX не подписываются | в секунду | по площадке |
 | venue.transfer_poll_ms | Решение 161, только OKX: как часто спрашивать итог перевода Funding ↔ Trading (GET /api/v5/asset/transfer-state). Не задана — перевод не отправляется | мс | по площадке |
 | venue.transfer_wait_ms | Решение 161, только OKX: сколько ждать итог перевода Funding ↔ Trading; не дождались — «итог неизвестен», без повторов. Не задана — перевод не отправляется | мс | по площадке |
+| venue.book_stream | Только XT (решение 167): канал стакана — `depth` (снимки depth@{symbol},{levels}, уровни 5/10/20/50, раз в 1000 мс) или `depth_update` (изменения раз в 100 мс + снимок REST `/v4/public/depth` в начале и после разрыва номеров; ядру — venue.depth_levels верхних уровней). Не задана — стаканы XT не подписываются | канал | по площадке (xt) |
+| venue.depth_snapshot_per_sec | Только XT (решение 167), при `depth_update`: снимков REST в секунду — одна очередь на все соединения (официально «10/s/ip», не больше 10). Не задана — локальный стакан не собирается | в секунду | по площадке (xt) |
+| venue.depth_snapshot_limit | Только XT (решение 167), при `depth_update`: limit снимка REST (1–500; «Orderbook manage» советует 500). Не задана — локальный стакан не собирается | уровней | по площадке (xt) |
+| venue.futures_coin_rest_url | Только XT (решение 167), панель «Балансы»: адрес фьючерсов Coin-M (https://dapi.xt.com); USDT-M — venue.futures_rest_url (https://fapi.xt.com). Необязательна | URL | по площадке (xt) |
+| venue.user_center_url | Только XT (решение 167): адрес user-center (https://api.xt.com) — «Проверить подключение» читает свою запись ключа (isLock, roleScopes, bindIps; секрет из ответа не пишется). Необязательна | URL | по площадке (xt) |
+
+**XT (решение 167) — общие настройки площадки, как их понимает адаптер `venues/xt`:** venue.rest_url
+(`https://sapi.xt.com`), venue.ws_url (`wss://stream.xt.com/public`), venue.recv_window_ms (≤ 60000; документация
+противоречива — 5000 «не больше», пример 60000), venue.rate_limit_pause_ms (после 429 и `GATEWAY_*`: Retry-After у XT
+нет), venue.order_time_in_force (`IOC` или `FOK`, и должно быть в timeInForces пары), venue.order_test_first (у XT
+пробного ордера нет — «да» даёт ошибку настройки), venue.depth_levels (у `depth` — 5, 10, 20, 50), venue.ws_ping_ms
+(текст «ping», меньше 60000 — без ping минуту сервер рвёт соединение), venue.ws_streams_per_msg (тем в одном
+subscribe — предела в документации нет), venue.ws_subs_per_sec и venue.ws_symbols_per_conn (пределов в документации
+нет — живой замер), venue.history_window_s (окно поиска депозита по хешу в истории — фильтра по хешу у XT нет),
+venue.bsc_network (поле chain — в документации не названо), venue.deposit_min_absent_ok (минимума депозита в API нет),
+venue.futures_rest_url (USDT-M, панель «Балансы»). venue.balance_events у XT не действует: тема balance не сообщает
+причину изменения.
 
 ## Налоги и крючки (решения 30, 32)
 

@@ -1288,6 +1288,208 @@ source = "Wallet «Withdraw»: walletType по умолчанию — счёт, 
 rationale = "Торговля только на споте."
 prefill = { kind = "Venue", id = "binance" }
 
+# --- Биржа XT.com (решение 167) ---
+[[section]]
+title = "Биржа XT.com (решение 167)"
+intro = "Значения из официальной документации XT (doc.xt.com, исходник github.com/xt-com/xt4-api). Живых ответов ещё нет — сверить на первой записи (tests/README.md, раздел XT). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Права ключа: QUERY, TRADE, WITHDRAW; привязка к IP сервера."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://sapi.xt.com"
+source = "Документация XT: restApi.md"
+rationale = "Спот REST API v4"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка XT"
+unit = "URL"
+value = "wss://stream.xt.com/public"
+source = "Документация XT: _websocket_public/base.md"
+rationale = "Публичный WebSocket"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.futures_rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://fapi.xt.com"
+source = "Документация XT: _futures_documentation/restApi.md"
+rationale = "Панель «Балансы»: фьючерсы USDT-M"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.futures_coin_rest_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://dapi.xt.com"
+source = "Документация XT: _futures_documentation/restApi.md"
+rationale = "Панель «Балансы»: фьючерсы Coin-M"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.user_center_url"
+area = "площадка XT"
+unit = "URL"
+value = "https://api.xt.com"
+source = "Документация XT: _user_center_documentation/restApi.md"
+rationale = "«Проверить подключение»: своя запись ключа"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "площадка XT"
+unit = "монета"
+value = "USDT"
+source = "Документация XT: _market/2symbol.md"
+rationale = "Пары *_usdt"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка XT"
+unit = "мс"
+method = "начать с 5000 («longer than 5 seconds is not recommended»); AUTH_105 — проверить часы сервера"
+source = "Документация XT: signStatement.md, FAQ.md"
+rationale = "Документация противоречива (5000 и пример 60000) — решение Тиграна"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка XT"
+unit = "название"
+method = "из живого справочника support/currency (поле chain у CAKE); в документации не названо"
+source = "Документация XT: supportedCurrenciesGet.md"
+rationale = "Название сети вывода и депозита"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка XT"
+unit = "тип"
+value = "IOC"
+source = "Документация XT: publicModule.md «Time in force»"
+rationale = "Остаток снимает биржа"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка XT"
+unit = "да/нет"
+value = "нет"
+source = "Документация XT: orderPost.md; SDK pyxt"
+rationale = "Пробного ордера у XT нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.book_stream"
+area = "площадка XT"
+unit = "канал"
+value = "depth_update"
+source = "Документация XT: increDepth.md, limitDepth.md"
+rationale = "Изменения раз в 100 мс; depth — раз в 1000 мс"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка XT"
+unit = "уровней"
+value = "20"
+source = "Документация XT: limitDepth.md"
+rationale = "Верхние уровни локального стакана (у depth — 5, 10, 20, 50)"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_snapshot_per_sec"
+area = "площадка XT"
+unit = "в секунду"
+value = "5"
+source = "Документация XT: _market/3depth.md"
+rationale = "Половина лимита 10/с на IP — запас для остальных публичных запросов"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.depth_snapshot_limit"
+area = "площадка XT"
+unit = "уровней"
+value = "500"
+source = "Документация XT: orderBook.md"
+rationale = "Совет «Orderbook manage»"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_ping_ms"
+area = "площадка XT"
+unit = "мс"
+value = "20000"
+source = "Документация XT: heartBeat.md"
+rationale = "Сервер рвёт без ping дольше минуты"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_silence_ms"
+area = "площадка XT"
+unit = "мс"
+value = "30000"
+source = "Документация XT: heartBeat.md"
+rationale = "Больше ping: ждём pong и кадры"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка XT"
+unit = "тем"
+method = "начать с 20; отказ subscribe (code 1) — уменьшить"
+source = "Документация XT: requestFormat.md"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка XT"
+unit = "в секунду"
+method = "начать с 2; живой замер (решение 109)"
+source = "Документация XT: —"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка XT"
+unit = "монет"
+method = "начать с 50; живой замер нагрузки (решение 109)"
+source = "Документация XT: —"
+rationale = "Предела в документации нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка XT"
+unit = "мс"
+value = "60000"
+source = "Документация XT: limitRules.md"
+rationale = "После 429 XT блокирует IP/ключ; Retry-After нет"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.history_window_s"
+area = "площадка XT"
+unit = "с"
+value = "86400"
+source = "Документация XT: historyDepositGet.md"
+rationale = "Окно поиска депозита по хешу (до 200 записей)"
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "venue.deposit_min_absent_ok"
+area = "площадка XT"
+unit = "да/нет"
+method = "решение Тиграна: минимума депозита в API XT нет; до него не задавать"
+source = "Документация XT: supportedCurrenciesGet.md, depositAddressGet.md"
+rationale = "Урок 21"
+prefill = { kind = "Venue", id = "xt" }
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

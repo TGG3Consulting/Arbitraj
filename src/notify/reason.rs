@@ -24,11 +24,12 @@ pub struct Reason {
 }
 
 /// Как площадки подписывают ошибку с кодом (venues/*/errors.rs): «<имя>, код <код>: <msg>».
-const CODE_PREFIXES: [(&str, &str); 4] = [
+const CODE_PREFIXES: [(&str, &str); 5] = [
     ("BingX, код ", "bingx"),
     ("MEXC, код ", "mexc"),
     ("Bybit, код ", "bybit"),
     ("KuCoin, код ", "kucoin"),
+    ("XT, код ", "xt"),
 ];
 /// Gate: «Gate, HTTP <статус>, <label>: <message>» (venues/gate/errors.rs, from_label).
 const GATE_PREFIX: &str = "Gate, HTTP ";

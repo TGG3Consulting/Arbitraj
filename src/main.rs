@@ -169,6 +169,17 @@ async fn run() -> Result<(), String> {
             bitget_ctx,
         )))
         .await;
+    // Биржа XT.com (решение 167): спот API v4; свои настройки venue.* [xt] и секреты xt.*.
+    let xt_ctx = arb::venues::xt::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: http.clone(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    registry
+        .register(std::sync::Arc::new(arb::venues::xt::Xt::new(xt_ctx)))
+        .await;
     // Биржа OKX (решение 161): API v5, только спот; свои настройки venue.* [okx] и секреты okx.*.
     let okx_ctx = arb::venues::okx::ctx::Ctx {
         settings: settings.clone(),

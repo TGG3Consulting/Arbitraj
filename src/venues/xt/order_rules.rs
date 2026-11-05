@@ -1,0 +1,171 @@
+//! Файл: venues/xt/order_rules.rs
+//! Что делает: правила ордера XT.com — ОДНА функция для настоящего ордера (trade.rs) и для проверки без исполнения
+//! (mod.rs → check_order, решение 134): пара ONLINE и торгуется через API (tradingEnabled, openapiEnabled), тип LIMIT
+//! есть в orderTypes, timeInForce IOC или FOK (venue.order_time_in_force) и есть в timeInForces пары, количество вниз
+//! до шага QUANTITY, цена до шага PRICE в безопасную сторону (шаг — от минимума, как в документации), пределы цены и
+//! количества, минимум суммы QUOTE_QTY; настройки ожидания итога. Пробного ордера у XT нет — venue.order_test_first =
+//! да для XT — ошибка настройки.
+//! Кто вызывает: trade.rs, mod.rs (check_order).
+//! От чего зависит: symbols.rs, order_state.rs, ctx.rs.
+//! Настройки: venue.order_time_in_force [xt], venue.order_test_first [xt]; через order_state.rs — venue.order_poll_ms,
+//! venue.order_final_wait_ms.
+//!
+//! Официально:
+//! - POST /v4/order https://doc.xt.com/#orderorderPost (`_order/orderPost.md`): symbol, side BUY/SELL, type LIMIT,
+//!   timeInForce (обязателен: GTC, FOK, IOC, GTX), bizType SPOT (обязателен), price и quantity (type number),
+//!   clientOrderId «^[a-zA-Z0-9_]{4,32}$»; 20/s/apikey. IOC — «Cancel the part that cannot be transacted immediately».
+//! - фильтры https://doc.xt.com/#marketsymbol: PRICE, QUANTITY (min, max, tickSize; null — без ограничения; шаг от min),
+//!   QUOTE_QTY («For orders of the LIMIT type … price*quantity>=min»). PROTECTION_LIMIT / PROTECTION_ONLINE зависят от
+//!   последней цены сделки и цены открытия — не проверяются (отказ ORDER_F04xx/F05xx — до движения денег).
+//! - Пробного ордера (test order) в документации и SDK pyxt нет.
+
+use std::str::FromStr;
+
+use rust_decimal::{Decimal, RoundingStrategy};
+use serde_json::{Number, Value, json};
+
+use crate::core::types::{Side, TradeRequest};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+
+use super::ctx::Ctx;
+use super::order_state;
+use super::symbols::{SymbolRules, Symbols};
+
+/// Длина своего ID — из документации: «^[a-zA-Z0-9_]{4,32}$».
+const MAX_CLIENT_ID: usize = 32;
+/// Допустимые timeInForce для правила Тиграна «не исполнился — отменяем» (publicModule.md: IOC, FOK снимают остаток сами).
+const TIME_IN_FORCE: [&str; 2] = ["IOC", "FOK"];
+
+/// Ордер, прошедший правила: что уйдёт на биржу.
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub symbol: String,
+    /// Количество и цена после округления.
+    pub qty: Decimal,
+    pub price: Decimal,
+    /// Свой ID ордера (clientOrderId) — новый на каждую попытку (решение 114).
+    pub client_id: String,
+    /// Тело POST /v4/order.
+    pub body: Value,
+}
+
+/// Что делает: правила пары без сети. Принимает: правила, сторону, количество, худшую цену, timeInForce.
+/// Возвращает: (количество, цена) после округления. Ошибки: текст причины (ордер не будет принят).
+pub fn check_rules(
+    r: &SymbolRules,
+    side: Side,
+    qty: Decimal,
+    worst: Decimal,
+    tif: &str,
+) -> Result<(Decimal, Decimal), String> {
+    let buy = side == Side::Buy;
+    let s = &r.symbol;
+    if !r.tradable(buy) {
+        return Err(format!(
+            "{s}: пара не торгуется через API (state {}, tradingEnabled {}, openapiEnabled {})",
+            r.state_text, r.trading_enabled, r.openapi_enabled
+        ));
+    }
+    if !TIME_IN_FORCE.contains(&tif) {
+        return Err(format!(
+            "venue.order_time_in_force = {tif}: у XT для правила «не исполнился — отменяем» только IOC или FOK"
+        ));
+    }
+    let lacks =
+        |l: &Option<Vec<String>>, v: &str| l.as_ref().is_some_and(|l| !l.iter().any(|x| x == v));
+    if lacks(&r.order_types, "LIMIT") {
+        return Err(format!("{s}: типа LIMIT нет в orderTypes пары"));
+    }
+    if lacks(&r.time_in_forces, tif) {
+        return Err(format!("{s}: {tif} нет в timeInForces пары"));
+    }
+    let qty = r.qty.round(qty, RoundingStrategy::ToZero);
+    let how = if buy {
+        RoundingStrategy::ToZero
+    } else {
+        RoundingStrategy::AwayFromZero
+    };
+    let price = r.price.round(worst, how);
+    if qty <= Decimal::ZERO || price <= Decimal::ZERO {
+        return Err(format!(
+            "{s}: после округления количество {qty} или цена {price} не больше нуля"
+        ));
+    }
+    if r.price.outside(price) {
+        return Err(format!(
+            "{s}: цена {price} вне фильтра PRICE ({:?} … {:?})",
+            r.price.min, r.price.max
+        ));
+    }
+    if r.qty.outside(qty) {
+        return Err(format!(
+            "{s}: количество {qty} вне фильтра QUANTITY ({:?} … {:?})",
+            r.qty.min, r.qty.max
+        ));
+    }
+    let notional = qty * price;
+    if r.quote_min.is_some_and(|m| notional < m) {
+        return Err(format!(
+            "{s}: сумма {notional} меньше QUOTE_QTY.min {:?}",
+            r.quote_min
+        ));
+    }
+    Ok((qty, price))
+}
+
+/// Что делает: всё, что проходит ордер до постановки (правила, настройки итога). Вызывают И ордер, И проверка без
+/// исполнения. Принимает: окружение, справочник пар (свежесть — у вызывающего), запрос.
+/// Возвращает: Prepared. Ошибки: OrderRejected (правила), NotConfigured, BadResponse (пары нет).
+pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<Prepared> {
+    let rules = symbols.get(ctx, &req.asset.ticker)?;
+    let tif = ctx.text("venue.order_time_in_force")?;
+    if ctx.flag("venue.order_test_first").unwrap_or(false) {
+        return Err(ctx.tag(GatewayError::not_set(
+            None,
+            "venue.order_test_first",
+            "venue.order_test_first = да, но пробного ордера у XT нет (документация, SDK pyxt) — поставьте «нет»",
+        )));
+    }
+    let (qty, price) = check_rules(&rules, req.side, req.qty, req.worst_price, &tif)
+        .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::OrderRejected, None, m)))?;
+    order_state::times(ctx)?;
+    let buy = req.side == Side::Buy;
+    let client_id = client_id(buy, &req.deal_id);
+    let body = json!({
+        "symbol": rules.symbol,
+        "side": if buy { "BUY" } else { "SELL" },
+        "type": "LIMIT",
+        "timeInForce": tif,
+        "bizType": "SPOT",
+        "price": number(price),
+        "quantity": number(qty),
+        "clientOrderId": client_id,
+    });
+    Ok(Prepared {
+        symbol: rules.symbol,
+        qty,
+        price,
+        client_id,
+        body,
+    })
+}
+
+/// Decimal → число JSON без потери точности (serde_json с arbitrary_precision). Ошибок нет (Decimal всегда число).
+pub fn number(d: Decimal) -> Value {
+    Number::from_str(&d.normalize().to_string())
+        .map(Value::Number)
+        .unwrap_or_else(|_| Value::String(d.normalize().to_string()))
+}
+
+/// Свой ID ордера (решение 114): метка попытки (мс, 9 цифр) в начале, номер сделки — для поиска. Принимает: покупка
+/// ли, ID сделки. Возвращает: буквы, цифры и «_», от 4 до 32 знаков. Ошибок нет.
+pub fn client_id(buy: bool, deal_id: &str) -> String {
+    let attempt = chrono::Utc::now()
+        .timestamp_millis()
+        .rem_euclid(1_000_000_000);
+    format!("{}{attempt:09}_{deal_id}", if buy { "b" } else { "s" })
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .take(MAX_CLIENT_ID)
+        .collect()
+}

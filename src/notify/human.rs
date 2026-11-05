@@ -41,6 +41,7 @@ pub fn venue(id: &str) -> String {
         "bybit" => "Bybit",
         "bsc_dex" => "DEX",
         "kyberswap" => "KyberSwap",
+        "xt" => "XT",
         other => other,
     }
     .to_string()

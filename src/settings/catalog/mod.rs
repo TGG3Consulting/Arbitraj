@@ -4,7 +4,7 @@
 //! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), index.rs (справочник пулов от индексатора, решение 58),
 //! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
 //! «без потолка» — решение 141), window.rs (окна —
-//! решение 125), gate.rs и okx.rs (настройки только Gate и только OKX).
+//! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -24,6 +24,7 @@ mod signals;
 mod trade;
 mod uncapped;
 mod window;
+mod xt;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
 
@@ -92,6 +93,7 @@ static PARTS: &[&[SettingDef]] = &[
     bitget::BITGET,
     okx::OKX,
     binance::BINANCE,
+    xt::XT,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

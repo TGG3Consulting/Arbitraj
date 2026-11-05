@@ -261,6 +261,37 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.deposit_dust_as_min | площадка Binance | *метод:* решение Тиграна; до него не задавать | Смысл depositDust не описан | All Coins' Information |
 | venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
 
+## Биржа XT.com (решение 167)
+
+Из официальной документации XT (doc.xt.com, исходник github.com/xt-com/xt4-api); живых ответов ещё нет — сверить на
+первой записи (tests/README.md, раздел «XT»). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Права ключа:
+QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адрес кошелька DEX (BSC), вероятно, добавить в адресную книгу XT.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка XT | `https://sapi.xt.com` | Спот REST API v4 | restApi.md |
+| venue.ws_url | площадка XT | `wss://stream.xt.com/public` | Публичный WebSocket | _websocket_public/base.md |
+| venue.futures_rest_url | площадка XT | `https://fapi.xt.com` | Панель «Балансы»: фьючерсы USDT-M | _futures_documentation/restApi.md |
+| venue.futures_coin_rest_url | площадка XT | `https://dapi.xt.com` | Панель «Балансы»: фьючерсы Coin-M | _futures_documentation/restApi.md |
+| venue.user_center_url | площадка XT | `https://api.xt.com` | «Проверить подключение»: своя запись ключа | _user_center_documentation/restApi.md |
+| venue.quote_asset | площадка XT | `USDT` | Пары *_usdt | _market/2symbol.md |
+| venue.recv_window_ms | площадка XT | *метод:* начать с 5000 («longer than 5 seconds is not recommended»); AUTH_105 — проверить часы сервера | Документация противоречива (5000 и пример 60000) — решение Тиграна | signStatement.md, FAQ.md |
+| venue.bsc_network | площадка XT | *метод:* из живого справочника support/currency (поле chain у CAKE); в документации не названо | Название сети вывода и депозита | supportedCurrenciesGet.md |
+| venue.order_time_in_force | площадка XT | `IOC` | Остаток снимает биржа | publicModule.md «Time in force» |
+| venue.order_test_first | площадка XT | `нет` | Пробного ордера у XT нет | orderPost.md; SDK pyxt |
+| venue.book_stream | площадка XT | `depth_update` | Изменения раз в 100 мс; depth — раз в 1000 мс | increDepth.md, limitDepth.md |
+| venue.depth_levels | площадка XT | `20` | Верхние уровни локального стакана (у depth — 5, 10, 20, 50) | limitDepth.md |
+| venue.depth_snapshot_per_sec | площадка XT | `5` | Половина лимита 10/с на IP — запас для остальных публичных запросов | _market/3depth.md |
+| venue.depth_snapshot_limit | площадка XT | `500` | Совет «Orderbook manage» | orderBook.md |
+| venue.ws_ping_ms | площадка XT | `20000` | Сервер рвёт без ping дольше минуты | heartBeat.md |
+| venue.ws_silence_ms | площадка XT | `30000` | Больше ping: ждём pong и кадры | heartBeat.md |
+| venue.ws_streams_per_msg | площадка XT | *метод:* начать с 20; отказ subscribe (code 1) — уменьшить | Предела в документации нет | requestFormat.md |
+| venue.ws_subs_per_sec | площадка XT | *метод:* начать с 2; живой замер (решение 109) | Предела в документации нет | — |
+| venue.ws_symbols_per_conn | площадка XT | *метод:* начать с 50; живой замер нагрузки (решение 109) | Предела в документации нет | — |
+| venue.rate_limit_pause_ms | площадка XT | `60000` | После 429 XT блокирует IP/ключ; Retry-After нет | limitRules.md |
+| venue.history_window_s | площадка XT | `86400` | Окно поиска депозита по хешу (до 200 записей) | historyDepositGet.md |
+| venue.deposit_min_absent_ok | площадка XT | *метод:* решение Тиграна: минимума депозита в API XT нет; до него не задавать | Урок 21 | supportedCurrenciesGet.md, depositAddressGet.md |
+
 ## Зачисление по блокчейну (решение 151)
 
 Перевод сделки на кошелёк DEX засчитывается по приходу монеты в блокчейне, не дожидаясь API биржи-отправителя. Работает при заданных venue.balance_events и transfer.credit_amount_tolerance_pct у площадки DEX.

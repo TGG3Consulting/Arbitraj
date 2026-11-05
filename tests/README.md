@@ -325,3 +325,68 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 `ctAddr` в currencies; `canDep` / `canWd` — boolean или строка; пустой ли `minDep`; `to` адреса депозита — «6» / «18»;
 знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
 (seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.
+
+## XT (решение 167) — tests/xt_real_data.rs
+
+Всегда выполняются: сборка строки подписи на примере документации (signSteps.md, «sample of original signature
+message»; X фьючерсов), HMAC SHA256 на векторе RFC 4231 (подписи из примеров XT не воспроизводятся — секрет второго
+примера не опубликован, тело первого не JSON), человеческая причина кода `AUTH_103` (решение 164). Остальное —
+`#[ignore]` до записи в `data/cex_samples_2026_11_05/xt_*` (из среды Claude `sapi.xt.com` закрыт прокси).
+
+### XT — команды записи (на сервере бота)
+
+Публичные (без ключа):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+curl -sS 'https://sapi.xt.com/v4/public/symbol?symbol=cake_usdt' -o $D/xt_symbol_cake_usdt.json
+curl -sS 'https://sapi.xt.com/v4/public/symbol' -o $D/xt_symbol_all.json      # размер, version
+V=$(python3 -c "import json;print(json.load(open('$D/xt_symbol_all.json'))['result']['version'])")
+curl -sS "https://sapi.xt.com/v4/public/symbol?version=$V" -o $D/xt_symbol_same_version.json  # что приходит без изменений
+curl -sS 'https://sapi.xt.com/v4/public/wallet/support/currency' -o $D/xt_support_currency.json
+curl -sS 'https://sapi.xt.com/v4/public/currencies' -o $D/xt_currencies.json
+curl -sS 'https://sapi.xt.com/v4/public/depth?symbol=cake_usdt&limit=500' -o $D/xt_depth_cake_usdt.json
+# WebSocket: python websockets сам договаривается о permessage-deflate (pip install websockets)
+python3 - <<'PY' > $D/xt_ws_depth_update.jsonl
+import asyncio, json, websockets
+async def main():
+    async with websockets.connect("wss://stream.xt.com/public") as ws:
+        await ws.send(json.dumps({"method":"subscribe","params":["depth_update@cake_usdt"],"id":"1"}))
+        end = asyncio.get_event_loop().time() + 20
+        while asyncio.get_event_loop().time() < end:
+            print(await ws.recv(), flush=True)
+asyncio.run(main())
+PY
+# сразу после — снимок REST ещё раз (для local_book_from_live_frames нужен снимок в середине потока):
+curl -sS 'https://sapi.xt.com/v4/public/depth?symbol=cake_usdt&limit=500' -o $D/xt_depth_cake_usdt.json
+# снимки depth@cake_usdt,20 — тем же скриптом с params ["depth@cake_usdt,20"] → $D/xt_ws_depth.jsonl
+# без сжатия (так подключается бот: tokio-tungstenite не умеет deflate) — принимает ли сервер:
+{ echo '{"method":"subscribe","params":["depth@cake_usdt,20"],"id":"1"}'; sleep 10; } \
+  | websocat -t 'wss://stream.xt.com/public' > $D/xt_ws_depth_no_deflate.jsonl
+```
+
+Приватные (ключ XT; ключ и подпись в файлы не попадают — только тела ответов):
+
+```bash
+K='<AppKey>'; S='<SecretKey>'; B=https://sapi.xt.com
+xsig() { # $1 метод, $2 путь, $3 строка запроса (ключи по алфавиту, может быть пусто), $4 тело JSON (может быть пусто)
+  local ts=$(date +%s%3N) y="#$1#$2${3:+#$3}${4:+#$4}"
+  local x="validate-algorithms=HmacSHA256&validate-appkey=$K&validate-recvwindow=5000&validate-timestamp=$ts"
+  local s=$(printf '%s' "$x$y" | openssl dgst -sha256 -hmac "$S" | sed 's/^.* //')
+  curl -sS -X "$1" -H 'Content-Type: application/json' -H "validate-algorithms: HmacSHA256" -H "validate-appkey: $K" \
+    -H "validate-recvwindow: 5000" -H "validate-timestamp: $ts" -H "validate-signature: $s" \
+    ${4:+--data-raw "$4"} "$B$2${3:+?$3}"; }
+xsig GET /v4/balances ''                                   > $D/xt_balances.json   # AUTH_103 — попробовать xt-validate-* (SDK)
+xsig GET /v4/balance 'currency=usdt'                       > $D/xt_balance_usdt.json
+xsig GET /v4/deposit/address "chain=<сеть BSC>&currency=cake" > $D/xt_deposit_address_cake.json
+xsig GET /v4/deposit/history "chain=<сеть BSC>&currency=usdt&limit=200" > $D/xt_deposit_history.json
+xsig GET /v4/withdraw/history "chain=<сеть BSC>&currency=usdt&limit=200" > $D/xt_withdraw_history.json
+# первый IOC-ордер (маленький, цена ниже рынка — не исполнится): ответ, затем состояние
+xsig POST /v4/order '' '{"symbol":"cake_usdt","side":"BUY","type":"LIMIT","timeInForce":"IOC","bizType":"SPOT","price":0.5,"quantity":10,"clientOrderId":"b123456789_test"}' > $D/xt_order_post.json
+xsig GET /v4/order 'clientOrderId=b123456789_test'         > $D/xt_order.json     # state IOC: CANCELED или EXPIRED
+B=https://api.xt.com xsig GET /v4/user/account/api-key ''  | python3 -c "import json,sys;d=json.load(sys.stdin);[r.pop('secretKey',None) for r in (d.get('result') or [])];print(json.dumps(d))" > $D/xt_api_key.json
+```
+
+Фьючерсы (своя подпись: X = `validate-appkey=…&validate-timestamp=…`, Y = `#path`) — `xt_futures_balance.json` с
+`https://fapi.xt.com/future/user/v1/balance/list`. Исполненный ордер с комиссией (deductServices) — `xt_order.json` после
+первой живой сделки, из сырого журнала data/raw/xt («rest /v4/order/<id>»).

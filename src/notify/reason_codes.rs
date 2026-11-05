@@ -15,6 +15,7 @@ pub fn lookup(venue: &str, code: &str) -> Option<&'static str> {
         "gate" => gate(code),
         "bybit" => bybit(code),
         "kucoin" => kucoin(code),
+        "xt" => xt(code),
         _ => None,
     }
 }
@@ -125,6 +126,30 @@ fn kucoin(code: &str) -> Option<&'static str> {
         "110003" => "превышен суточный предел вывода",
         "500000" => "ошибка на стороне KuCoin",
         "230005" => "система KuCoin занята",
+        _ => return None,
+    })
+}
+
+/// XT.com — venues/xt/errors.rs (errorCode.md, коды mc).
+fn xt(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "AUTH_001" | "AUTH_002" | "AUTH_003" | "AUTH_004" | "AUTH_005" | "AUTH_006"
+        | "AUTH_007" | "AUTH_101" | "AUTH_102" | "AUTH_103" => "ключ API или подпись не приняты",
+        "AUTH_104" => "IP сервера не привязан к ключу",
+        "AUTH_105" => "запрос устарел — проверьте часы сервера",
+        "AUTH_106" => "у ключа API нет нужного права",
+        "ORDER_002" | "WITHDRAW_011" | "FUND_002" | "TRANSFER_002" => "не хватает средств",
+        "ORDER_005" => "ордер не найден",
+        "SYMBOL_005" => "пара не торгуется через API",
+        "SYMBOL_011" => "пара повышенного риска — торговля закрыта до одобрения поддержкой XT",
+        "WITHDRAW_004" => "адрес вывода не добавлен в адресную книгу XT",
+        "WITHDRAW_009" => "часть монет под удержанием вывода T+1",
+        "WITHDRAW_010" => "неверная точность суммы вывода",
+        "DEPOSIT_007" => "XT ещё создаёт адрес депозита — повторите позже",
+        "COMMON_002" => "система XT занята — итог запроса нужно проверить",
+        "GATEWAY_0001" | "GATEWAY_0002" | "GATEWAY_0003" | "GATEWAY_0004" => {
+            "сработал риск-контроль шлюза XT"
+        }
         _ => return None,
     })
 }

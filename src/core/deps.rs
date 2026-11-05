@@ -60,6 +60,18 @@ impl Deps {
         self.notifier.send(code, venue, text).await;
     }
 
+    /// То же, что notify, и ещё в чаты ролей по таблице notify/routes.rs (решение 176: закрытие сделки — «Сделки» или
+    /// «Неудачные» по знаку итога). Принимает: код, площадку, текст, признак. Ошибок нет.
+    pub async fn notify_tagged(
+        &self,
+        code: &str,
+        venue: Option<&str>,
+        text: &str,
+        tag: crate::notify::routes::Tag,
+    ) {
+        self.notifier.send_tagged(code, venue, text, tag).await;
+    }
+
     /// Подписка на изменения настроек с нужными префиксами имён. Пустой список — все изменения.
     pub fn watch(&self, prefixes: &[&str]) -> Watch {
         Watch::new(

@@ -65,7 +65,8 @@ pub enum TgError {
     BadResponse(String),
 }
 
-/// Клиент Bot API.
+/// Клиент Bot API. Клонируется (задача хода перевода USDT, notify/ctl/progress.rs).
+#[derive(Clone)]
 pub struct Telegram {
     http: reqwest::Client,
     base_url: String,

@@ -13,17 +13,15 @@
 //! только после ответа предыдущего, без наложения); кнопка ⟳ у биржи — запрос сразу, вне очереди.
 //! Кто вызывает: api/server.rs; интерфейс ui/src/components/BalancesPanel.svelte.
 //! От чего зависит: api/state.rs, gateway (реестр, контракт account_balances), settings/read.rs,
-//! core/balance_sell_check.rs (кнопка «Продать», решение 174).
+//! core/balances_cache.rs (ответ и кнопка «Продать», решение 174; память для Telegram, решение 176).
 //! Настройки: ui.balances_refresh_ms (не задана — автообновления нет, только кнопки ⟳; причина видна в панели).
 
 use axum::Json;
 use axum::extract::{Path, State};
-use chrono::Utc;
 use serde_json::{Value, json};
 
-use crate::core::balance_sell_check;
-use crate::core::types::{AccountBalances, VenueId};
-use crate::gateway::contract::{Venue, VenueKind};
+use crate::core::types::VenueId;
+use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
 use super::state::{ApiError, AppState};
@@ -50,8 +48,9 @@ pub async fn list(State(st): State<AppState>) -> Json<Value> {
     Json(json!({ "refresh_ms": ms, "refresh_error": err, "venues": venues }))
 }
 
-/// Балансы всех счетов одной биржи — свежим запросом к бирже. Ошибки: 404 — нет такой площадки, 400 — это не биржа;
-/// сбой чтения — в поле error (панель показывает причину и прежние значения).
+/// Балансы всех счетов одной биржи — свежим запросом к бирже (ответ кладётся в память ядра — её читает Telegram,
+/// решение 176, core/balances_cache.rs). Ошибки: 404 — нет такой площадки, 400 — это не биржа; сбой чтения — в поле
+/// error (панель показывает причину и прежние значения).
 pub async fn venue(
     State(st): State<AppState>,
     Path(id): Path<String>,
@@ -66,35 +65,6 @@ pub async fn venue(
             "{id} — не биржа; балансы кошельков DEX — /api/wallets/{{id}}/balances"
         )));
     }
-    let res = v.account_balances().await;
-    let at = Utc::now();
-    Ok(Json(match res {
-        Ok(accounts) => {
-            let accounts = with_sell(&st, v.as_ref(), &accounts).await;
-            json!({ "venue": id, "at": at, "accounts": accounts, "error": null })
-        }
-        Err(e) => json!({ "venue": id, "at": at, "accounts": [], "error": e.message }),
-    }))
-}
-
-/// Решение 174: счета с состоянием кнопки «Продать» у каждой строки (поле sell). Принимает: состояние, адаптер, счета.
-/// Возвращает: JSON счетов. Ошибок нет: причина недоступности — в sell.why.
-async fn with_sell(st: &AppState, v: &dyn Venue, accounts: &[AccountBalances]) -> Vec<Value> {
-    let mut out = Vec::with_capacity(accounts.len());
-    for a in accounts {
-        let mut rows = Vec::with_capacity(a.balances.len());
-        for b in &a.balances {
-            let sell =
-                match balance_sell_check::state(&st.core, v, &a.account, &b.asset, b.free).await {
-                    None => Value::Null,
-                    Some(Ok(())) => json!({ "ok": true }),
-                    Some(Err(why)) => json!({ "ok": false, "why": why }),
-                };
-            rows.push(json!({ "venue": b.venue, "asset": b.asset, "free": b.free, "locked": b.locked, "sell": sell }));
-        }
-        out.push(
-            json!({ "account": a.account, "balances": rows, "error": a.error, "note": a.note }),
-        );
-    }
-    out
+    let res = st.core.venue_balances(&VenueId(id), None).await;
+    res.map(|b| Json(b.to_json())).map_err(ApiError::bad)
 }

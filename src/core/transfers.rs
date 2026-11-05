@@ -210,6 +210,8 @@ async fn go(
             },
         }
     };
+    // Решение 176: ход ручного перевода USDT для экрана (usdt_transfer.rs; не ручной — ничего).
+    super::usdt_transfer::stage(core, deal, super::usdt_transfer::Stage::Sent);
     let quiet = Notify::new();
     // 1. Ждём хеш транзакции вывода.
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
@@ -263,6 +265,11 @@ async fn go(
         pacer.pause(deps, kick).await;
     };
     let tx = sent.tx_hash.clone().unwrap_or_default();
+    super::usdt_transfer::stage(
+        core,
+        deal,
+        super::usdt_transfer::Stage::OnChain { tx: tx.clone() },
+    );
     // Хеш отправителя известен: события с другим хешем — не этого перевода, это внешние изменения баланса.
     if let Some(t) = &ticket {
         for b in t.set_tx(&tx) {

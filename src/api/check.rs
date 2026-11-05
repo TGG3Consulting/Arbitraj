@@ -7,6 +7,7 @@
 //! Настройки: те, что нужны проверяемому подключению.
 //!
 //! POST /api/check/telegram
+//! POST /api/check/telegram/{роль}  — чат роли (решение 176: control, general, deals, failures), с тестовым сообщением
 //! POST /api/check/venue/{id}
 //! POST /api/check/channel/{venue}/{id}
 //! POST /api/check/executor/{venue}  — свой исполнитель ArbExecutor DEX (ревью 122)
@@ -24,6 +25,23 @@ use super::state::AppState;
 /// Проверка Telegram. Ошибок нет: причина сбоя — в details.
 pub async fn telegram(State(st): State<AppState>) -> Json<ConnectionCheck> {
     let res = notify::check::telegram(&st.http, &st.settings, &st.vault).await;
+    log(&st, None, "Telegram", &res).await;
+    Json(res)
+}
+
+/// Решение 176: проверка чата роли (control, general, deals, failures): getMe, getChat и тестовое сообщение в чат роли.
+/// Ошибок нет: неизвестная роль и причина сбоя — в details.
+pub async fn telegram_role(
+    State(st): State<AppState>,
+    Path(role): Path<String>,
+) -> Json<ConnectionCheck> {
+    let res = match notify::roles::Role::from_code(&role) {
+        Some(r) => notify::check::role(&st.http, &st.settings, &st.vault, r, true).await,
+        None => ConnectionCheck {
+            ok: false,
+            details: format!("Неизвестная роль чата «{role}»"),
+        },
+    };
     log(&st, None, "Telegram", &res).await;
     Json(res)
 }

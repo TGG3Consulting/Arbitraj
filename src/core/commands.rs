@@ -2,18 +2,17 @@
 //! Что делает: команды человека ядру — из интерфейса и кнопок Telegram (ManualCommand, core/types/control.rs):
 //! «Продать сейчас», «Беру на себя», «Вернуть боту»; для остановленной сделки — «Продать сейчас» и «Продано вручную»
 //! (manual_halted.rs, решение 100); «Продать и перегнать» — у алерта и остановленной сделки (решение 101); «Перегнать» и
-//! «Перегнано вручную» у записи «USDT не вернулись» (manual_usdt.rs, решение 163). Кнопка Telegram принимается только из настроенного
-//! чата notify.telegram_chat (решение 37). Каждая команда — в журнал с источником. Плюс команды экрана
+//! «Перегнано вручную» у записи «USDT не вернулись» (manual_usdt.rs, решение 163). Кнопка Telegram принимается только из чатов ролей
+//! (решения 37, 176). Каждая команда — в журнал с источником. Плюс команды экрана
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
 //! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
 //! От чего зависит: manual.rs, commands_control.rs, risk.rs, settings, deps.rs, view.rs.
-//! Настройки: notify.telegram_chat.
+//! Настройки: ID чатов ролей Telegram (notify.telegram_chat, notify.control_chat, notify.failures_chat …, решение 176).
 
 use serde_json::json;
 
 use crate::core::types::{CommandSource, ManualAction, ManualCommand, VenueId};
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
@@ -62,17 +61,16 @@ impl Core {
     /// Проверка источника и выполнение.
     async fn run_command(&self, cmd: &ManualCommand) -> Result<String, String> {
         if let CommandSource::Telegram { chat } = &cmd.source {
-            let ours = self
-                .inner
-                .deps
-                .settings
-                .text("notify.telegram_chat", At::default())
-                .map_err(|e| e.message)?;
-            // Настройка может быть @username чата — тогда совпадение уже проверил notify (press::chat_matches),
+            // Решение 176: чат — один из чатов ролей (notify/roles.rs); какая кнопка из какой роли — проверил notify.
+            // Настройка может быть @username чата — тогда совпадение уже проверил notify (roles::chat_matches),
             // у ядра есть только числовой id.
-            if chat != &ours && !ours.starts_with('@') {
+            if !crate::notify::roles::is_role_chat(&self.inner.deps.settings, chat) {
                 return Err(format!("чат {chat} — не настроенный чат уведомлений"));
             }
+        }
+        // Решение 176: «Перевести USDT» (Telegram «Управление» и интерфейс) — usdt_transfer.rs.
+        if let Some(r) = super::usdt_transfer::command(self, &cmd.action, &who(cmd)).await {
+            return r;
         }
         // Решение 174: «Продать» панели «Балансы» — balance_sell.rs.
         if let Some(r) = super::balance_sell::command(self, &cmd.action, &who(cmd)).await {

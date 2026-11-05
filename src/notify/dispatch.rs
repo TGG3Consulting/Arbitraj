@@ -4,7 +4,8 @@
 //! и площадка события есть в списке notify.event.venues (пустой список или не задан — все площадки).
 //! Результат отправки (или причина, почему не ушло) пишется в журнал.
 //! Кто вызывает: любые компоненты через Notifier::send (и send_with_buttons — для событий с кнопками,
-//! например stuck.loss_alert); notify/settings_watch.rs.
+//! например stuck.loss_alert; send_tagged — событие ещё и в чаты ролей, dispatch_role.rs); notify/settings_watch.rs.
+//! Это чат «Общий» (решение 176, notify/roles.rs): его поведение не меняется.
 //! От чего зависит: notify/client.rs, notify/catalog.rs, notify/callback.rs, notify/tg_buttons.rs,
 //! settings, secrets, storage/journal.
 //! Настройки: notify.event.enabled / venues / condition (область «событие»), notify.telegram_*.
@@ -20,6 +21,22 @@ use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 
 use super::{callback, catalog, client};
+
+/// Текст сообщения события. Решение 164: первая строка — значок и что случилось (notify/heads.rs); текст со своим
+/// заголовком (собран notify/human.rs Msg) уходит как есть; текст ядра «<id сделки>: …» — id уходит вниз, ссылки на
+/// номера решений убираются. Принимает: код, событие каталога, текст. Возвращает: текст сообщения. Ошибок нет.
+pub(super) fn body(code: &str, def: &catalog::EventDef, text: &str) -> String {
+    if super::human::has_head(text) {
+        return text.to_string();
+    }
+    let (id, rest) = super::human::split_deal(text);
+    let id = id.map(|i| format!("\n\nid {i}")).unwrap_or_default();
+    format!(
+        "{}\n{}{id}",
+        super::heads::head(code, def.title),
+        super::reason::tidy(rest)
+    )
+}
 
 /// Отправитель уведомлений. Дешёво клонируется.
 #[derive(Clone)]
@@ -95,20 +112,7 @@ impl Notifier {
                 return;
             }
         };
-        // Решение 164: первая строка — значок и что случилось (notify/heads.rs); текст со своим заголовком
-        // (собран notify/human.rs Msg) уходит как есть.
-        let mut body = if super::human::has_head(text) {
-            text.to_string()
-        } else {
-            // Текст ядра «<id сделки>: …» — id уходит вниз; ссылки на номера решений убираются.
-            let (id, rest) = super::human::split_deal(text);
-            let id = id.map(|i| format!("\n\nid {i}")).unwrap_or_default();
-            format!(
-                "{}\n{}{id}",
-                super::heads::head(code, def.title),
-                super::reason::tidy(rest)
-            )
-        };
+        let mut body = body(code, def, text);
         let kb = match object.map(|id| callback::keyboard(def, id)) {
             None | Some(Ok(None)) => None,
             Some(Ok(Some(kb))) => Some(kb),
@@ -180,7 +184,7 @@ impl Notifier {
     }
 
     /// Запись в журнал от имени уведомлений. Ошибка журнала уже выведена в лог процесса.
-    async fn log(&self, level: Level, venue: Option<&str>, message: String) {
+    pub(super) async fn log(&self, level: Level, venue: Option<&str>, message: String) {
         let _ = self
             .journal
             .write(level, "notify", venue, message, Some(json!({})))

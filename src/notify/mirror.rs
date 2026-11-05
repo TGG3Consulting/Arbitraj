@@ -7,6 +7,7 @@
 //! Лимиты Telegram: в устоявшемся режиме — не больше двух запросов (одно новое сообщение и одна правка) за интервал
 //! повтора, сколько бы ни было записей; ответ 429 — пауза ровно на parameters.retry_after
 //! (ResponseParameters, https://core.telegram.org/bots/api#responseparameters).
+//! Решение 176: чат зеркала — «Неудачные» (notify.failures_chat), если задан, иначе «Общий» (как раньше, roles.rs).
 //! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs.
 //! От чего зависит: core (Core::manual_records, Core::subscribe), notify/mirror_state.rs, mirror_view.rs,
 //! tg_methods.rs, client.rs, dispatch.rs (allows), settings, storage/journal.
@@ -27,7 +28,7 @@ use crate::storage::journal::Level;
 use super::client;
 use super::dispatch::Notifier;
 use super::mirror_state::{Shared, lock};
-use super::mirror_view::{closed_text, record_message};
+use super::mirror_view::{closed_text, record_message_for};
 
 /// Код события дубля в notify/catalog.rs.
 pub const EVENT: &str = "manual.record";
@@ -90,10 +91,12 @@ impl Mirror {
     async fn reconcile(&self) {
         let recs = self.core.manual_records();
         let diff = lock(&self.state).apply(&recs);
-        let ready = match client::build(
+        let role = super::roles::mirror_role(&self.notifier.settings);
+        let ready = match client::build_role(
             &self.notifier.http,
             &self.notifier.settings,
             &self.notifier.vault,
+            role,
         ) {
             Ok(r) => r,
             Err(e) => {
@@ -117,6 +120,17 @@ impl Mirror {
             }
         };
         let (tg, chat) = (&ready.tg, ready.chat.as_str());
+        let all = role == super::roles::Role::Failures;
+        if lock(&self.state).switch_chat(chat) {
+            self.log(
+                Level::Info,
+                format!(
+                    "Ручное управление: записи — теперь в чат «{}»",
+                    role.title()
+                ),
+            )
+            .await;
+        }
         for (_, sent) in &diff.gone {
             for id in &sent.msgs {
                 let t = closed_text(&sent.text, None);
@@ -146,13 +160,13 @@ impl Mirror {
                 .collect()
         };
         for r in &unsent {
-            let (text, kb) = record_message(r);
+            let (text, kb) = record_message_for(r, all);
             match tg.send_markup(chat, &text, kb, None).await {
                 Ok(id) => lock(&self.state).mark_sent(&r.key, text, id, Instant::now()),
                 Err(e) => return self.tg_error(e, "сообщение записи").await,
             }
         }
-        self.remind(tg, chat, &recs, &allowed).await;
+        self.remind(tg, (chat, all), &recs, &allowed).await;
         lock(&self.state).last_error = None;
     }
 }

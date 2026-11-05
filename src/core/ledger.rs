@@ -116,7 +116,14 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
     if deal.buy.is_some() || !deal.invested.is_zero() {
         let tg = super::deal_text::closed(deal, why);
-        deps.notify("deal.closed", Some(&d.buy_on.0), &tg).await;
+        // Решение 176: закрытая плюсовая — ещё в чат «Сделки», минусовая — в «Неудачные» (notify/routes.rs).
+        let tag = match super::deal_text::outcome(deal) {
+            Some(true) => crate::notify::routes::Tag::Profit,
+            Some(false) => crate::notify::routes::Tag::Loss,
+            None => crate::notify::routes::Tag::Plain,
+        };
+        deps.notify_tagged("deal.closed", Some(&d.buy_on.0), &tg, tag)
+            .await;
     }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;

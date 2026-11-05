@@ -1,7 +1,9 @@
 //! Файл: api/secrets.rs
 //! Что делает: REST секретов — состояние, создание файла, разблокировка, блокировка,
 //! добавление/замена/удаление секрета, смена пароля. Значения секретов наружу не отдаются никогда.
-//! Каждое действие (без значений) пишется в журнал; разблокировка — событие system.secrets_unlocked.
+//! Каждое действие (без значений) пишется в журнал; разблокировка — событие system.secrets_unlocked. Решение 183:
+//! после разблокировки и любого изменения секретов — толчок ядру (Core::secrets_changed): справочники сетей бирж
+//! перечитываются сразу, неудавшиеся подписки повторяются.
 //! Кто вызывает: интерфейс (экран «Разблокировка» и поля ключей на экранах площадок и уведомлений).
 //! От чего зависит: api/state.rs, secrets/vault.rs, settings (параметры Argon2id и длина пароля).
 //! Настройки: security.kdf_memory_kib, security.kdf_iterations, security.kdf_parallelism, security.password_min_len.
@@ -69,6 +71,8 @@ pub async fn create(
     log(&st, Level::Info, "Создан файл секретов").await;
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Ok(Json(st.vault.status()))
 }
 
@@ -97,6 +101,8 @@ pub async fn unlock(
     });
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Ok(Json(st.vault.status()))
 }
 
@@ -105,6 +111,8 @@ pub async fn lock(State(st): State<AppState>) -> Json<Status> {
     st.vault.lock();
     log(&st, Level::Info, "Секреты заблокированы").await;
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Json(st.vault.status())
 }
 
@@ -132,6 +140,8 @@ pub async fn put(
     super::wallets_migrate::after_unlock(&st).await;
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Ok(Json(st.vault.status()))
 }
 
@@ -149,6 +159,8 @@ pub async fn delete(
     log(&st, Level::Info, &format!("Секрет {name} удалён")).await;
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Ok(Json(st.vault.status()))
 }
 
@@ -166,6 +178,8 @@ pub async fn password(
     log(&st, Level::Info, "Пароль секретов изменён").await;
     // Приём кнопок Telegram начинает заново с актуальным токеном (notify/updates.rs, wake).
     st.secrets_wake.notify_one();
+    // Решение 183: подписки и справочники бирж — сразу, без перезапуска и смены настроек.
+    st.core.secrets_changed();
     Ok(Json(st.vault.status()))
 }
 

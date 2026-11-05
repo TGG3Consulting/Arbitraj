@@ -59,13 +59,16 @@ pub async fn run(core: Core, venue: VenueId) {
             if let Some(wait) = fresh_left(&core, &venue, fetched) {
                 tokio::time::sleep(wait).await;
             }
-            fetched = Some(Instant::now());
+            // Решение 183: окно свежести — только от удачного получения; сбой (например, секреты ещё закрыты) не
+            // задерживает толчок после разблокировки.
+            let started = Instant::now();
             let res = match deps.gw.get(&venue).await {
                 Ok(v) => v.coin_networks().await,
                 Err(e) => Err(e),
             };
             match res {
                 Ok(list) => {
+                    fetched = Some(started);
                     last_err = None;
                     // Нативная монета (BNB без адреса) ↔ обёртка WBNB по настройке DEX — решение 62 (native.rs).
                     let list = super::native::map(&core, &venue, list);

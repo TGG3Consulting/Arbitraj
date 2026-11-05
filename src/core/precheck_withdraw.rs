@@ -8,15 +8,24 @@
 //! Проверка — только если A биржа (после покупки будет вывод с неё). Удержаний нет — ничего не меняет; у бирж без
 //! такого механизма контракт отвечает пусто без запросов. Сбой запроса удержаний или нет цены удержания — сделки нет.
 //! Сумма покупки — Calc::spend_max (наибольшее списание плана, не больше бюджета сделки; решение 66).
+//! Решение 166 (Тигран, 05.11.2026): «механизм должен быть в ядре для всех бирж». Каждая сделка в предпроверке
+//! спрашивает у биржи A (контракт withdraw_hold с котируемой монетой): MEXC, Binance, OKX — удержания депозитов; Gate —
+//! депозиты DEP_CREDITED; KuCoin — lockedAmount квоты вывода; Bybit — доступно минус «можно вывести». Биржа без
+//! официального источника (BingX, Bitget) отвечает «неизвестно» — проверка не блокирует, одна запись в журнал на
+//! площадку (core.precheck_withdraw); дальше страхует повтор вывода (core/transfer_locked.rs).
 //! Кто вызывает: core/precheck.rs (после пересчёта с финальной котировкой).
 //! От чего зависит: trade_ops.rs (вид площадки), limits.rs (free_now), convert.rs (price_of), deps.rs (шлюз).
 //! Настройки: venue.quote_asset (по площадке A); новых нет.
+
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Direction, VenueId, WithdrawHold};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
+use crate::storage::journal::Level;
 
 use super::costs::Calc;
 use super::engine::{Core, rd};
@@ -29,16 +38,6 @@ pub async fn check(core: &Core, d: &Direction, plan: &Calc) -> Result<(), String
     if super::trade_ops::kind(core, a)? != VenueKind::Cex {
         return Ok(());
     }
-    let gw = core.inner.deps.gw.get(a).await.map_err(|e| e.message)?;
-    let hold = gw.withdraw_hold().await.map_err(|e| {
-        format!(
-            "{}: удержания вывода не получены (история депозитов): {} — не торгуем вслепую",
-            a.0, e.message
-        )
-    })?;
-    if hold.is_empty() {
-        return Ok(());
-    }
     let at = At {
         venue: Some(&a.0),
         coin: None,
@@ -49,6 +48,20 @@ pub async fn check(core: &Core, d: &Direction, plan: &Calc) -> Result<(), String
         .settings
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
+    let gw = core.inner.deps.gw.get(a).await.map_err(|e| e.message)?;
+    let hold = gw.withdraw_hold(&quote).await.map_err(|e| {
+        format!(
+            "{}: сколько можно вывести — не получено: {} — не торгуем вслепую",
+            a.0, e.message
+        )
+    })?;
+    if let Some(why) = &hold.unknown {
+        unknown_once(core, a, why).await;
+        return Ok(());
+    }
+    if hold.is_empty() {
+        return Ok(());
+    }
     let held = held_usdt(core, a, &quote, &hold).await?;
     let free = super::limits::free_now(core, a, None, &quote).await?;
     verdict(&a.0, &quote, free, held, plan.spend_max, &reasons(&hold))
@@ -87,6 +100,36 @@ async fn held_usdt(
         sum += h.amount * p;
     }
     Ok(sum)
+}
+
+/// Площадки, о которых уже записано «неизвестно» (одна запись на площадку за запуск).
+static UNKNOWN_LOGGED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+
+/// Решение 166: биржа не может сказать, сколько можно вывести, — одна запись в журнал на площадку, сделка не
+/// блокируется. Принимает: ядро, площадку, причину от адаптера. Ошибок нет.
+async fn unknown_once(core: &Core, a: &VenueId, why: &str) {
+    let fresh = {
+        let mut g = UNKNOWN_LOGGED.lock().unwrap_or_else(|p| p.into_inner());
+        g.get_or_insert_with(HashSet::new).insert(a.0.clone())
+    };
+    if !fresh {
+        return;
+    }
+    let text = format!(
+        "{}: сколько можно вывести до покупки — неизвестно ({why}); проверка не блокирует, страхует повтор вывода \
+         (transfer.locked_retry_ms, transfer.locked_retries_max)",
+        a.0
+    );
+    core.inner
+        .deps
+        .log(
+            Level::Info,
+            "core.precheck_withdraw",
+            Some(&a.0),
+            text,
+            None,
+        )
+        .await;
 }
 
 /// Тексты удержаний через «; ». Ошибок нет.

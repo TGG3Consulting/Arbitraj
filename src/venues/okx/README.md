@@ -48,7 +48,7 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `fees.rs` | Ставки `GET /api/v5/account/trade-fee` по паре фоном (≤ 2/с; ставка = −taker — у OKX комиссия отрицательна) |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети `GET /api/v5/asset/currencies` (с ключом; весь — вне рабочих потоков; одна — `ccy=`), chain OKX по сети ядра, комиссия вывода |
 | `deposit_addr.rs` | Адрес депозита (кэш; Trading раньше Funding; tag/memo — не поддерживается) |
-| `deposits.rs` | Статус депозита по txId; удержания вывода — депозиты в state 1 «deposit credited» (решение 150) |
+| `deposits.rs` | Статус депозита по txId; удержания вывода — депозиты в state 1 «deposit credited» (решение 150). Решение 166: кода «заблокировано для вывода» в таблице кодов не сверено (сайт документации недоступен из сессии) — WithdrawLocked не выдаётся |
 | `transfers.rs` | Вывод `POST /asset/withdrawal` (dest 4, clientId, amt = сумма − fee), статус и поиск по clientId |
 | `fund_move.rs` | Перевод Funding ↔ Trading с проверкой transfer-state |
 | `account.rs` | Балансы Trading (все и одной монеты), «Проверить подключение» (`/account/config`: perm, acctLv, uid = mainUid, feeType, IP) |

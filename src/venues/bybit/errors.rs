@@ -45,6 +45,9 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         10006 | 429 | 170005 | 170222 => ErrorCode::RateLimited,
         // Баланс: 110004, 110007, 110012 (UTA), 170131 «Balance insufficient», 131212 / 131228 (перевод),
         // 131085 «Withdrawal amount is greater than your availale balance».
+        // Решение 166: 131085 у вывода — «(the deplayed withdrawal is triggered)»: задержка вывода, средства временно
+        // не выводятся (withdrawable.rs, Get Withdrawable Amount) — WithdrawLocked.
+        131085 if op == Op::Withdraw => ErrorCode::WithdrawLocked,
         110004 | 110007 | 110012 | 170131 | 131212 | 131228 | 131085 => {
             ErrorCode::InsufficientBalance
         }

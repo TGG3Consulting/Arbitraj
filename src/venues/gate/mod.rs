@@ -17,6 +17,7 @@ pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
 pub mod deposit_addr;
+pub mod deposit_hold;
 pub mod deposit_info;
 pub mod deposits;
 pub mod depth;
@@ -186,6 +187,11 @@ impl Venue for Gate {
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, None).await
+    }
+
+    /// Решение 166: удержания вывода — депозиты DEP_CREDITED (deposit_hold.rs).
+    async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
+        deposit_hold::withdraw_hold(&self.ctx).await
     }
 
     /// Решение 144: все счета Gate (спот, маржа, фьючерсы, поставочные, опционы, Earn, итог) — all_balances.rs, только чтение.

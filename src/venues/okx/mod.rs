@@ -173,7 +173,7 @@ impl Venue for Okx {
     }
 
     /// Решение 150: депозиты в состоянии 1 «deposit credited» — торговать можно, вывести нельзя (deposits.rs).
-    async fn withdraw_hold(&self) -> GatewayResult<WithdrawHold> {
+    async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<WithdrawHold> {
         deposits::withdraw_hold(&self.ctx).await
     }
 

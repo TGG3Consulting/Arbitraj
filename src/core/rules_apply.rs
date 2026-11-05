@@ -34,7 +34,7 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
     Some(match code {
         ErrorCode::OrderNotFilled | ErrorCode::PartialFill => "exec.order_not_filled",
         ErrorCode::SwapReverted => "exec.swap_reverted",
-        ErrorCode::WithdrawRejected => "exec.withdraw_rejected",
+        ErrorCode::WithdrawRejected | ErrorCode::WithdrawLocked => "exec.withdraw_rejected",
         ErrorCode::DepositNotCredited => "exec.deposit_not_credited",
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",

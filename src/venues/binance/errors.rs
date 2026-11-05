@@ -43,6 +43,10 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         -1006 | -1007 if op != Op::Other => ErrorCode::Timeout,
         -1000 | -1001 | -1006 | -1007 | -1008 | -1016 => ErrorCode::Unreachable,
         -2010 if msg.contains("insufficient balance") => ErrorCode::InsufficientBalance,
+        // Решение 166: −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT «As your deposit has not reached the required block
+        // confirmations, we have temporarily locked {0} asset» (Wallet → Error Code,
+        // https://developers.binance.com/en/dev-docs/products/wallet/error-code) — временно заблокировано для вывода.
+        -4060 if op == Op::Withdraw => ErrorCode::WithdrawLocked,
         // −2011 / −2013: ордера нет (или не отменён) — не отказ денег, вызывающий решает по смыслу.
         -2011 | -2013 => ErrorCode::BadResponse,
         _ => rejected(op),

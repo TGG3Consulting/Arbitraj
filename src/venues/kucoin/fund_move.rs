@@ -55,13 +55,46 @@ pub async fn to_trade(
         .map(Some)
 }
 
-/// Что делает: перед выводом — сумму с trade на main, если включено venue.withdraw_from_trade.
-/// Принимает: тикер, сумму. Возвращает: None — выключено; Some(текст) — переведено. Ошибки: как move_funds.
+/// Что делает: перед выводом — с trade на main столько, сколько на main не хватает до суммы вывода, если включено
+/// venue.withdraw_from_trade. Решение 166: повтор вывода после 115008 (core/transfer_locked.rs) — сумма уже на main с
+/// прошлой попытки, второй перевод не нужен (иначе — отказ «не хватает» на trade).
+/// Принимает: тикер, сумму. Возвращает: None — выключено или на main уже хватает; Some(текст) — переведено.
+/// Ошибки: баланс main, как move_funds.
 pub async fn to_main(ctx: &Ctx, ticker: &str, amount: Decimal) -> GatewayResult<Option<String>> {
     if !ctx.flag("venue.withdraw_from_trade").unwrap_or(false) {
         return Ok(None);
     }
-    move_funds(ctx, ticker, amount, TRADE, MAIN).await.map(Some)
+    let need = amount - main_available(ctx, ticker).await?;
+    if need <= Decimal::ZERO {
+        return Ok(None);
+    }
+    move_funds(ctx, ticker, need, TRADE, MAIN).await.map(Some)
+}
+
+/// Доступно на main по монете — Get Account List - Spot GET /api/v1/accounts?currency=&type=main
+/// (https://www.kucoin.com/docs-new/api-3470125, поле available). Нет записи — 0. Ошибки: ключи, связь, ответ KuCoin.
+async fn main_available(ctx: &Ctx, ticker: &str) -> GatewayResult<Decimal> {
+    let q = vec![
+        ("currency", ticker.to_string()),
+        ("type", MAIN.to_lowercase()),
+    ];
+    let data = rest::signed(
+        ctx,
+        Method::GET,
+        "/api/v1/accounts",
+        q,
+        None,
+        Op::Other,
+        Pool::Management,
+    )
+    .await?;
+    let mut sum = Decimal::ZERO;
+    for b in data.as_array().into_iter().flatten() {
+        if num::text_opt(b, "currency").as_deref() == Some(ticker) {
+            sum += num::dec(b, "available")?;
+        }
+    }
+    Ok(sum)
 }
 
 /// Что делает: один перевод INTERNAL между счетами.

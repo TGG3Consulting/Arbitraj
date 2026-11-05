@@ -9,7 +9,7 @@
 | `trade.rs` | Side, Quote (котировка на объём + затраты + маршрут DEX), TradeRequest, TradeStatus, TradeResult |
 | `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене, шаг маршрута), RouteStep (номер шага и пара токенов, решение 52), RouteMode, RouteHop, RouteLeg, DexRoute |
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
-| `hold.rs` | HoldItem, WithdrawHold — что биржа сейчас держит от вывода (решение 150: у MEXC — предварительно зачисленные депозиты, статус 9 PRE_SUCCESS); пусто — ничего или механизма нет |
+| `hold.rs` | HoldItem, WithdrawHold — что биржа сейчас держит от вывода (решение 150: у MEXC — предварительно зачисленные депозиты, статус 9 PRE_SUCCESS); пусто — ничего не держится. Решение 166: unknown — у площадки нет официального источника («неизвестно», не «удержаний нет») |
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
 | `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken (note — «индексатор не знает пулов», решение 121), PoolDirectory, FactoryScan (поиск по фабрикам на своём узле, решение 121) — справочник пулов (решение 58) |

@@ -55,6 +55,10 @@ pub fn codes() -> Vec<CodeMeta> {
         c(C::PartialFill, "Ордер исполнился частично"),
         c(C::WithdrawRejected, "Вывод отклонён площадкой"),
         c(
+            C::WithdrawLocked,
+            "Вывод отклонён: средства временно заблокированы для вывода (удержание депозита)",
+        ),
+        c(
             C::DepositNotCredited,
             "Депозит не зачислен за отведённое время",
         ),
@@ -94,6 +98,6 @@ const _: fn(C) = |code| match code {
     C::StaleData | C::VenueNotConnected | C::BadResponse | C::Internal => {}
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
-    C::NonceConflict => {}
+    C::NonceConflict | C::WithdrawLocked => {}
     C::OutcomeUnknown => {}
 };

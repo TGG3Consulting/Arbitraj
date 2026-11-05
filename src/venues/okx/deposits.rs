@@ -127,5 +127,5 @@ pub fn hold(data: &Value) -> GatewayResult<WithdrawHold> {
             reason,
         });
     }
-    Ok(WithdrawHold { items })
+    Ok(WithdrawHold::of(items))
 }

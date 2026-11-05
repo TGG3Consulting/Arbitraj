@@ -45,6 +45,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod user_stream_conn;
 pub mod wallet;
+pub mod withdraw_quota;
 pub mod ws;
 pub mod ws_conn;
 
@@ -175,6 +176,11 @@ impl Venue for Kucoin {
 
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer> {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
+    }
+
+    /// Решение 166: удержание вывода котируемой монеты — квота вывода (lockedAmount), withdraw_quota.rs.
+    async fn withdraw_hold(&self, quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
+        withdraw_quota::withdraw_hold(&self.ctx, quote).await
     }
 
     /// Решение 144: все счета KuCoin для панели «Балансы» — all_balances.rs (только чтение).

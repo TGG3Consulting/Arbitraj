@@ -74,6 +74,10 @@ impl Core {
                 return Err(format!("чат {chat} — не настроенный чат уведомлений"));
             }
         }
+        // Решение 174: «Продать» панели «Балансы» — balance_sell.rs.
+        if let Some(r) = super::balance_sell::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
         // Решение 163: «Перегнать» / «Перегнано вручную» записи «USDT не вернулись» — manual_usdt.rs.
         if let Some(r) = super::manual_usdt::command(self, &cmd.action, &who(cmd)).await {
             return r;

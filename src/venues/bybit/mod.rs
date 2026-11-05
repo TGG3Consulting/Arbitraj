@@ -57,7 +57,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
@@ -197,6 +197,20 @@ impl Venue for Bybit {
 
     /// Решение 102 для Bybit: запасной вариант — депозит на FUND → перевод на UNIFIED (venue.deposit_to_spot; по решению
     /// Тиграна 04.11 не задаётся: в кабинете депозит назначен на UNIFIED).
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances_parse.rs: единый торговый (UNIFIED) и «Фонд (Funding)» (FUND); deposit_to_trading — FUND → UNIFIED (fund_move.rs).
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            a if a == all_balances_parse::UNIFIED => AccountRole::Trading,
+            a if a == all_balances_parse::FUND => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::transfer(&self.ctx, asset, amount).await
+    }
+
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

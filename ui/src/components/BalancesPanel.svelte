@@ -6,14 +6,18 @@
     — как отдаёт адаптер) и кошельки DEX (BNB и USDT). Пока панель открыта, каждая биржа и каждый кошелёк обновляются
     раз в ui.balances_refresh_ms (следующий запрос — только после ответа предыдущего); кнопка ⟳ — обновить сразу, вне
     очереди. Сбой — причина и прежние значения.
+    Решение 174: у каждой монеты биржи (кроме котируемой) — кнопка «Продать»: подтверждение, затем команда ядру
+    SellBalance (всё свободное по рынку в USDT; не со спота — сначала перевод на торговый счёт; выручка — на споте).
+    Недоступна — disabled, причина по наведению (поле sell ответа). Итог — над балансами биржи; баланс обновляется сразу.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js (GET /api/balances, /api/balances/{id}, /api/wallets, /api/wallets/{id}/balances),
+  От чего зависит: lib/api.js (GET /api/balances, /api/balances/{id}, /api/wallets, /api/wallets/{id}/balances,
+    POST /api/manual/command),
     lib/prefs.js, lib/fmt.js.
   Настройки: ui.balances_refresh_ms (не задана — только кнопки ⟳, причина видна в панели).
 -->
 <script>
   import { onDestroy, untrack } from 'svelte';
-  import { get, seg } from '../lib/api.js';
+  import { get, post, seg } from '../lib/api.js';
   import { load, save } from '../lib/prefs.js';
 
   let open = $state(load('balances.open') === '1');
@@ -97,7 +101,7 @@
       const old = new Map(rows.map((r) => [r.key, r]));
       const keep = (key, init) => old.get(key) ?? init;
       rows = [
-        ...b.venues.map((id) => keep(`cex:${id}`, { key: `cex:${id}`, kind: 'cex', id, title: id, data: null, error: '', at: null, busy: false, again: false })),
+        ...b.venues.map((id) => keep(`cex:${id}`, { key: `cex:${id}`, kind: 'cex', id, title: id, data: null, error: '', at: null, busy: false, again: false, sold: null, selling: '' })),
         ...(w.wallets ?? []).map((x) =>
           keep(`dex:${x.id}`, { key: `dex:${x.id}`, kind: 'dex', id: x.id, title: `Кошелёк DEX «${x.name}»`, data: null, error: '', at: null, busy: false, again: false }),
         ),
@@ -120,6 +124,25 @@
     gen++;
     for (const f of wake.values()) f();
   });
+
+  /**
+   * «Продать» (решение 174): подтверждение, команда ядру, итог в строке биржи, затем обновление баланса.
+   * Принимает: строку биржи, счёт, строку баланса. Ошибки: текст отказа — в r.sold.
+   */
+  async function sell(r, a, b) {
+    if (!confirm(`Продать ${num(b.free)} ${b.asset} на ${r.id} по рынку? Выручка USDT — на спот.`)) return;
+    r.selling = `${a.account}|${b.asset}`;
+    try {
+      r.sold = await post('/api/manual/command', {
+        action: { SellBalance: { venue: r.id, account: a.account, asset: b.asset } },
+      });
+    } catch (e) {
+      r.sold = { ok: false, details: e.message };
+    } finally {
+      r.selling = '';
+    }
+    refresh(r);
+  }
 
   const time = (d) => (d ? d.toLocaleTimeString() : '—');
   /** Число без лишних нулей. */
@@ -148,6 +171,7 @@
           <button class="re" class:spin={r.busy} title="Обновить сейчас" onclick={() => refresh(r)}>⟳</button>
         </div>
         {#if r.error}<p class="err small">{r.error}</p>{/if}
+        {#if r.sold}<p class="small" class:err={!r.sold.ok} class:ok={r.sold.ok}>{r.sold.details}</p>{/if}
         {#if r.kind === 'cex' && r.data}
           {#each r.data as a (a.account)}
             <div class="acc">
@@ -162,6 +186,16 @@
                         <td>{b.asset}</td>
                         <td class="n">{num(b.free)}</td>
                         <td class="n muted">{Number(b.locked) ? `заморожено ${num(b.locked)}` : ''}</td>
+                        <td class="s">
+                          {#if b.sell}
+                            <button
+                              class="sell"
+                              disabled={!b.sell.ok || !!r.selling}
+                              title={b.sell.ok ? `Продать всё свободное ${b.asset} по рынку в USDT` : b.sell.why}
+                              onclick={() => sell(r, a, b)}
+                            >{r.selling === `${a.account}|${b.asset}` ? 'Продаётся…' : 'Продать'}</button>
+                          {/if}
+                        </td>
                       </tr>
                     {/each}
                   </tbody>
@@ -263,6 +297,19 @@
   }
   .small {
     font-size: 0.8rem;
+  }
+  .s {
+    text-align: right;
+    width: 1%;
+    white-space: nowrap;
+  }
+  .sell {
+    padding: 0 0.4rem;
+    font-size: 0.8rem;
+  }
+  .ok {
+    color: var(--ok, inherit);
+    margin: 0.15rem 0;
   }
   .muted {
     color: var(--muted);

@@ -56,7 +56,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawHold, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapInfo, TapSink, TapStream};
@@ -193,6 +193,20 @@ impl Venue for Binance {
     }
 
     /// Решение 102: депозит, зачисленный на Funding, — на спот (fund_move.rs, venue.deposit_to_spot).
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Спот» и «Фонд» (Funding); deposit_to_trading — Funding → Spot (fund_move.rs).
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Спот" => AccountRole::Trading,
+            "Фонд" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::transfer(&self.ctx, asset, amount).await
+    }
+
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

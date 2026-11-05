@@ -40,6 +40,13 @@ pub async fn to_trading(
     if !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
         return Ok(None);
     }
+    transfer(ctx, asset, amount).await.map(Some)
+}
+
+/// Решение 174: тот же перевод без условия venue.deposit_to_spot — для явного действия человека (кнопка «Продать»
+/// панели «Балансы», «Продать сейчас» по монете на фонде; контракт move_to_trading). Принимает: монету, сумму.
+/// Возвращает: текст перевода. Ошибки: как у to_trading.
+pub async fn transfer(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
     if amount <= Decimal::ZERO {
         return Err(ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
@@ -67,8 +74,8 @@ pub async fn to_trading(
         asset.ticker
     );
     match status.as_str() {
-        "SUCCESS" => Ok(Some(format!("Bybit: {what} переведено"))),
-        "PENDING" => Ok(Some(format!("Bybit: {what} принято, статус PENDING"))),
+        "SUCCESS" => Ok(format!("Bybit: {what} переведено")),
+        "PENDING" => Ok(format!("Bybit: {what} принято, статус PENDING")),
         "FAILED" => Err(ctx.tag(
             GatewayError::new(
                 ErrorCode::BadResponse,

@@ -109,6 +109,9 @@ pub struct Inner {
     pub deals: Mutex<HashMap<String, Deal>>,
     /// Монеты, по которым сейчас идёт сделка (решение 118, Я-2: одна сделка на монету — ключ по адресу контракта).
     pub active: Mutex<HashSet<super::coin_key::CoinKey>>,
+    /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
+    /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
+    pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
     /// Статистика газа по монете (gas_stats.rs).
     pub gas: Mutex<HashMap<Asset, CoinGasStats>>,
     /// Алерты «убыток выше порога» и их сделки (manual.rs).
@@ -210,6 +213,7 @@ impl Inner {
             risk: Mutex::default(),
             deals: Mutex::default(),
             active: Mutex::default(),
+            balance_sells: Mutex::default(),
             gas: Mutex::default(),
             alerts: Mutex::default(),
             holdings: Mutex::default(),

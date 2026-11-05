@@ -57,7 +57,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapInfo, TapSink, TapStream};
@@ -201,6 +201,27 @@ impl Venue for Kucoin {
     }
 
     /// Решение 102: депозит приходит на main — перевод на trade (venue.deposit_to_spot), fund_move.rs.
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Спот» (trade) и «Фонд (Funding)» (main); deposit_to_trading — main → trade (fund_move.rs), только если адрес депозита BSC зачисляет на main.
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Спот" => AccountRole::Trading,
+            "Фонд (Funding)" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::move_funds(
+            &self.ctx,
+            &asset.ticker,
+            amount,
+            fund_move::MAIN,
+            fund_move::TRADE,
+        )
+        .await
+    }
+
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

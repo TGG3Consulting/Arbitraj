@@ -31,6 +31,17 @@ pub enum VenueKind {
     Dex,
 }
 
+/// Решение 174: роль счёта биржи из account_balances для кнопки «Продать» панели «Балансы».
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccountRole {
+    /// Счёт, на котором биржа торгует (balances/balance контракта, ордер trade): монета продаётся прямо отсюда.
+    Trading,
+    /// Счёт, с которого move_to_trading адаптера перекладывает монету на торговый (у BingX — фонд → спот).
+    ToTrading,
+    /// Перевода с этого счёта на торговый в адаптере нет (фьючерсы, earn, сводные строки и т.п.).
+    Other,
+}
+
 /// Результат кнопки «Проверить подключение».
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionCheck {
@@ -157,6 +168,18 @@ pub trait Venue: Send + Sync {
             error: None,
             note: None,
         }])
+    }
+
+    /// Решение 174 (Тигран, 05.11.2026): роль счёта `account` (название — как его отдаёт account_balances) для кнопки
+    /// «Продать» панели «Балансы»: торговый, перекладываемый на торговый методом deposit_to_trading, или ни тот, ни
+    /// другой. По умолчанию — «Спот» торговый, прочие — Other (перевода нет). Адаптер с другим названием торгового счёта
+    /// или с переводом фонд → торговый переопределяет. Ошибок нет.
+    fn account_role(&self, account: &str) -> AccountRole {
+        if account == "Спот" {
+            AccountRole::Trading
+        } else {
+            AccountRole::Other
+        }
     }
 
     /// Баланс одного актива (решение 113): на пути сделки нужна одна монета (BNB на газ, USDT перед покупкой), а не
@@ -432,6 +455,21 @@ pub trait Venue: Send + Sync {
     async fn deposit_abandoned(&self, asset: &Asset) -> GatewayResult<()> {
         let _ = asset;
         Ok(())
+    }
+
+    /// Решение 174: переложить монету со счёта роли ToTrading (account_role: фонд / main / Funding) на торговый — по
+    /// явному действию человека (кнопка «Продать» панели «Балансы», «Продать сейчас» / «Продать и перегнать» по монете,
+    /// лежащей не на торговом счёте). Тот же запрос перевода, что у deposit_to_trading, но без его условий (настройка
+    /// venue.deposit_to_spot, вид адреса депозита): человек сам указал, что монета там. Принимает: монету, сумму.
+    /// Возвращает: текст перевода от площадки. Ошибки: отказ площадки, OutcomeUnknown; по умолчанию NotApplicable —
+    /// у площадки перевода на торговый счёт нет.
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        let _ = (asset, amount);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет перевода на торговый счёт",
+        ))
     }
 
     /// Зачисленный перевод переложить туда, где площадка торгует (решение 102: у BingX депозит приходит на фондовый

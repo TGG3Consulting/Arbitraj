@@ -3,10 +3,11 @@
 //! «Продать сейчас» для остановленной сделки (Halted) — бот продаёт по рынку то, что реально лежит на площадке
 //! (не больше количества сделки); «Продано вручную» — человек продал сам и вводит полученные USDT: сделка
 //! закрывается этим фактом (вместо предварительного убытка, решение 53). Плюс «сколько монет реально на площадке»
-//! (on_hand) — общий для «Продать сейчас» по алерту, по остановленной сделке и «Вернуть боту».
+//! (on_hand) — общий для «Продать сейчас» по алерту, по остановленной сделке и «Вернуть боту»; у продаж — on_hand_sell:
+//! монеты не на торговом счёте биржи сначала переводятся на него (to_trading.rs, решение 174).
 //! «Продать и перегнать» (решение 101) — то же, плюс выручка USDT на площадку покупки (deal.return_usdt).
 //! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
-//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, deps.rs (шлюз — балансы).
+//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы).
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
 use std::str::FromStr;
@@ -44,6 +45,33 @@ pub async fn on_hand(
         ));
     }
     Ok((free.min(cap), note))
+}
+
+/// «Продать сейчас» / «Продать и перегнать» (решение 174, живой случай ION 05.11): монеты сделки, лежащие на бирже не
+/// на торговом счёте (фонд / main / Funding), сначала переводятся на торговый общим шагом to_trading::top_up (тот же, что у
+/// кнопки «Продать» панели «Балансы»), не больше количества сделки; затем — on_hand по торговому счёту.
+/// Принимает и возвращает — как on_hand (заметка — с текстом перевода). Ошибки: как on_hand и сбой перевода.
+pub async fn on_hand_sell(
+    core: &Core,
+    deal: &Deal,
+    venue: &VenueId,
+    asset: &Asset,
+    cap: Decimal,
+) -> Result<(Decimal, Option<String>), String> {
+    let gw = super::dex_account::venue_of(core, deal, venue).await?;
+    let moved = super::to_trading::top_up(gw.as_ref(), asset, cap).await?;
+    match (on_hand(core, deal, venue, asset, cap).await, moved) {
+        (Ok((q, note)), Some(m)) => Ok((
+            q,
+            Some(match note {
+                Some(n) => format!("{m}; {n}"),
+                None => m,
+            }),
+        )),
+        (Ok(x), None) => Ok(x),
+        (Err(e), Some(m)) => Err(format!("{m}; {e}")),
+        (Err(e), None) => Err(e),
+    }
 }
 
 /// Ставит количество сделки по реальному балансу (заметка, если меньше). Ошибок нет.
@@ -93,7 +121,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
             deal.direction.asset.ticker
         ));
     }
-    match on_hand(core, &deal, &deal.at, &deal.direction.asset, deal.qty).await {
+    match on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, deal.qty).await {
         Ok((qty, note)) => set_qty(&mut deal, qty, note),
         Err(e) => {
             deal.step = Step::Halted;

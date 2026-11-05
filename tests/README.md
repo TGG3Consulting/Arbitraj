@@ -153,6 +153,7 @@ CAKEUSDT и есть ли `maxLimitOrderValue`; шлёт ли books15 одина
 и вывод в deposit-records / withdrawal-records (на какой счёт пришёл депозит; входит ли комиссия в size вывода), перевод
 /api/v2/spot/wallet/transfer. Приватный WebSocket: единица времени входа (мс по тексту документации или секунды по примеру
 Java и SDK) и кадры канала баланса спота (страница канала не прочитана — поток аккаунта Bitget не подключён).
+- `htx_real_data.rs` — адаптер HTX (решение 171, спот API v1/v2): подпись на векторах тестов официального SDK huobi_Golang, свои ID; записи — `#[ignore]`, раздел «HTX» ниже.
 - `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
   официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
   Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
@@ -666,3 +667,72 @@ head -1 $D/coinex_ws_depth.b64 | base64 -d | head -c 2 | xxd -p
 исполнения — что отвечает order-status (код «не найден») и отмена; с включённой и выключенной скидкой CET — discount_fee и
 fee_ccy. Депозит и вывод: GET /v2/assets/deposit-history?ccy=&tx_id= (finish или finished), POST /v2/assets/withdraw
 (статус в ответе, входит ли комиссия в amount — amount против actual_amount), GET /v2/assets/withdraw?withdraw_id=.
+## HTX (решение 171) — tests/htx_real_data.rs
+
+Без сети (идут всегда): подпись — векторы тестов официального SDK github.com/HuobiRDCenter/huobi_Golang
+(`internal/requestbuilder/signer_test.go`: `HUP3n78n…hmA=`; `privateurlbuilder_test.go`: строки запроса
+`/v1/account/accounts` и `/v1/account/history?account-id=123&currency=btc` целиком, с кодированием `%3A`, `%2F`, `%2B`;
+`websocketv2requestbuilder_test.go`: вход WebSocket v2 `1/d+cUIE…T0E=`), тип ордера по сроку действия, свой ID ордера
+(≤ 64) и вывода (≤ 32). Живых ответов HTX нет (из среды разработки api.huobi.pro закрыт прокси) — тесты на записях
+`#[ignore]`, пока не записаны файлы `tests/data/cex_samples_2026_11_05/htx_*`. Записывать на сервере бота.
+
+Публичные (без ключа; монеты CAKE и USDT; адреса и параметры — по официальной документации):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D; R=https://api.huobi.pro
+curl -sS --compressed "$R/v1/settings/common/market-symbols" > $D/htx_market_symbols.json     # все пары (wc -c)
+curl -sS --compressed "$R/v1/settings/common/market-symbols?symbols=cakeusdt" > $D/htx_market_symbols_cakeusdt.json
+curl -sS --compressed "$R/v2/reference/currencies?currency=cake" > $D/htx_currencies_cake.json
+curl -sS --compressed "$R/v2/reference/currencies?currency=usdt" > $D/htx_currencies_usdt.json
+curl -sS --compressed "$R/v2/reference/currencies" > $D/htx_currencies_all.json                # размер (урок 9)
+curl -sS --compressed "$R/v1/settings/common/chains?currency=cake" > $D/htx_chains_cake.json
+curl -sS --compressed "$R/v1/settings/common/chains?currency=usdt" > $D/htx_chains_usdt.json
+curl -sS --compressed "$R/market/depth?symbol=cakeusdt&type=step0&depth=20" > $D/htx_depth_cakeusdt.json
+# Сеть BSC у CAKE: baseChainProtocol и chain каждой сети — значение baseChainProtocol сети BSC записать одной строкой
+python3 -c "import json; d=json.load(open('$D/htx_currencies_cake.json'))['data'][0]; print([(c['chain'], c.get('baseChain'), c.get('baseChainProtocol')) for c in d['chains']])"
+# Адрес контракта: какое поле (ac или ca) у сети BSC равно 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82
+python3 -c "import json; print([(c['chain'], c.get('ac'), c.get('ca')) for c in json.load(open('$D/htx_chains_cake.json'))['data']])"
+echo BEP20 > $D/htx_bsc_network.txt      # ← значение из вывода выше, не это (пример)
+echo ca > $D/htx_contract_field.txt      # ← поле из вывода выше (ac или ca); ни одно не равно адресу — HTX не подключать
+```
+
+Кадры рыночного WebSocket сжаты GZIP (двоичные) — пишет сам бот: `raw.enabled` = да, `raw.book_frames` [htx] = да,
+подписка на CAKE при «Стопе» ~1 минута; распакованные кадры соединения «market-1» лежат в сыром журнале:
+
+```bash
+zstdcat data/raw/htx/*.zst | jq -r 'select(.c=="market-1") | .m' > $D/htx_ws_mbp.jsonl   # ping, subbed, mbp.refresh.20
+```
+
+Приватные (ключ бота; переменные `HTX_KEY`, `HTX_SECRET` — только в оболочке, в файлы не писать). Подпись — как sign.rs:
+
+```bash
+htx() { python3 -I - "$1" "$2" <<'PY'
+import sys, os, hmac, hashlib, base64, datetime, urllib.parse, urllib.request
+path, q = sys.argv[1], sys.argv[2]
+p = dict(urllib.parse.parse_qsl(q)) if q else {}
+p.update(AccessKeyId=os.environ['HTX_KEY'], SignatureMethod='HmacSHA256', SignatureVersion='2',
+         Timestamp=datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'))
+s = '&'.join(f"{urllib.parse.quote(k, safe='-_.~')}={urllib.parse.quote(v, safe='-_.~')}" for k, v in sorted(p.items()))
+sig = base64.b64encode(hmac.new(os.environ['HTX_SECRET'].encode(), f"GET\napi.huobi.pro\n{path}\n{s}".encode(), hashlib.sha256).digest()).decode()
+print(urllib.request.urlopen(f"https://api.huobi.pro{path}?{s}&Signature={urllib.parse.quote(sig, safe='')}").read().decode())
+PY
+}
+htx /v1/account/accounts '' > $D/htx_accounts.json                     # перед коммитом заменить id счетов
+htx /v2/user/uid '' > $D/htx_uid.json                                   # не коммитить (UID)
+htx /v2/reference/transact-fee-rate 'symbols=cakeusdt,btcusdt' > $D/htx_fee_rate.json
+htx /v2/account/deposit/address 'currency=cake' > $D/htx_deposit_address_cake.json   # адрес — заменить перед коммитом
+htx /v1/query/deposit-withdraw 'type=deposit&size=500&direct=next' > $D/htx_deposits.json
+htx /v1/query/deposit-withdraw 'type=withdraw&size=500&direct=next' > $D/htx_withdraws.json
+htx /v2/account/withdraw/address 'currency=usdt' > $D/htx_withdraw_address_usdt.json
+```
+
+С живого бота (сырой журнал `data/raw/htx`, без ключей): «rest /v1/order/orders/place» и деталь первого ордера buy-ioc /
+sell-ioc CAKE (`filled-amount` или `field-amount`?), «rest /v1/order/orders/<id>/matchresults» → `htx_matchresults.json`
+(fee-currency, fee-deduct-currency при скидке HT и без), соединение «account» → `htx_accounts_update.jsonl` (снимок с
+changeType null и изменения deposit / order-match / withdraw) и `htx_spot_account_id.txt` (id спот-счёта), вывод
+«rest /v1/dw/withdraw/api/create» и client-order-id по шагам state. Затем `cargo test --test htx_real_data -- --ignored`.
+
+Что проверить на записях: имя сети BSC (baseChainProtocol) и поле адреса контракта (ac / ca); `minDepositAmt` «0» или
+пусто; `withdrawFeeType` у CAKE/USDT в BSC (fixed?); значения поля `at` пар; шлёт ли mbp.refresh одинаковые снимки (тот
+же seqNum); с какой записи начинает deposit-withdraw `direct=next` без `from`; что отвечает REST на превышение лимита;
+формат `ipAddresses` и `permission` в /v2/user/api-key; входит ли `fee` в `amount` вывода; на какой счёт пришёл депозит.

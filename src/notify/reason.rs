@@ -32,6 +32,7 @@ const CODE_PREFIXES: &[(&str, &str)] = &[
     ("XT, код ", "xt"),
     ("Poloniex, код ", "poloniex"),
     ("CoinEx, код ", "coinex"),
+    ("HTX, код ", "htx"),
 ];
 /// Gate: «Gate, HTTP <статус>, <label>: <message>» (venues/gate/errors.rs, from_label).
 const GATE_PREFIX: &str = "Gate, HTTP ";

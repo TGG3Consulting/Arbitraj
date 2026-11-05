@@ -398,6 +398,30 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | venue.rate_limit_pause_ms | площадка CoinEx | *метод:* пауза после 4213 / 3008 / 4001 — Retry-After не описан, окно лимитов — секунда (например 1000–2000); решает Тигран | Не слать дальше после «слишком часто» (урок 15). | Rate Limit: коды 3008, 4001, 4213; HTTP-статус не описан |
 | venue.recv_window_ms | площадка CoinEx | *метод:* не задавать — действует окно CoinEx 5000 мс; задавать, только если часы сервера расходятся | Окно действия подписанного запроса. | Integration Guide: X-COINEX-WINDOWTIME, по умолчанию 5000 мс |
 | venue.deposit_min_absent_ok | площадка CoinEx | *метод:* решает Тигран после живого ответа: у монет с min_deposit_amount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на CoinEx | Урок 21: «0» и пусто могут значить разное. | Deposit and Withdrawal Configuration: min_deposit_amount; ниже минимума — too_small |
+## Биржа HTX (решение 171)
+
+Значения из официальной документации HTX Spot API (huobiapi.github.io/docs/spot/v1/en) и SDK huobi_Golang. Живых ответов ещё нет (из среды разработки api.huobi.pro закрыт): имя сети BSC и поле адреса контракта задаёт Тигран по живым ответам; без venue.contract_field монеты HTX не сопоставляются. Ключ — права Read, Trade, Withdraw, привязан к IP сервера. Адреса вывода (кошелёк бота, адреса депозита других бирж) — заранее в список адресов вывода в веб-интерфейсе HTX. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка HTX | `https://api.huobi.pro` | Основной адрес REST спота. | Quick Start → Access URLs: «https://api.huobi.pro», «https://api-aws.huobi.pro» |
+| venue.rest_fallback_url | площадка HTX | `https://api-aws.huobi.pro` | Резерв только при сбое сети основного адреса. | Quick Start → Access URLs (api-aws — рекомендован для серверов AWS Japan) |
+| venue.ws_url | площадка HTX | `wss://api.huobi.pro/ws` | Снимки стакана mbp.refresh. | Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, бот их не использует) |
+| venue.ws_private_url | площадка HTX | `wss://api.huobi.pro/ws/v2` | Поток аккаунта (accounts.update#2). | Websocket Account and Order: «wss://api.huobi.pro/ws/v2» |
+| venue.quote_asset | площадка HTX | `USDT` | Котируемая монета пар. | Get Market Symbols Setting: qc |
+| venue.depth_levels | площадка HTX | `20` | Глубина для котировки на объём. | market.$symbol.mbp.refresh.$levels: 5, 10, 20, «around 100ms» |
+| venue.order_time_in_force | площадка HTX | `ioc` | Правило Тиграна: неисполненный остаток снимает биржа. | Place a New Order: type buy-ioc / sell-ioc (или buy-limit-fok / sell-limit-fok) |
+| venue.balance_events | площадка HTX | `да` | Зачисление депозита без опроса. | Websocket Account and Order: accounts.update#2 |
+| venue.ws_silence_ms | площадка HTX | *метод:* Больше 20000 (ping потока аккаунта ~20 с; рыночный ping ~5 с), например 30000 — решает Тигран | Без кадров дольше — соединение оборвано. | Market WS: ping ~5 с; Account WS: ping ~20 с |
+| venue.ws_symbols_per_conn | площадка HTX | *метод:* Предела тем на соединение документация не называет — начать с небольшого (например, 50) и замерить нагрузку (решение 109); решает Тигран | Урок 12: подписки на соединение — по замеру. | Websocket Market Data: предел не указан |
+| venue.ws_subs_per_sec | площадка HTX | *метод:* Темп подписок не описан (у req — 1 на 100 мс на соединение): например 10 — решает Тигран | Не перегружать соединение подписками. | Websocket Market Data: «The limitation of single connection is 100 ms» (req) |
+| venue.order_test_first | площадка HTX | *метод:* Не задавать (или «нет»): пробного ордера у HTX нет — «да» даёт отказ ордера | Правила ордера проверяет order_rules::ready. | Раздел Trading: test order нет |
+| venue.bsc_network | площадка HTX | *метод:* Значение baseChainProtocol сети BSC из живого ответа GET /v2/reference/currencies?currency=cake (ожидается BEP20 — не угадывать) | В документации имени сети BSC нет; chain у HTX своё у каждой монеты. | APIv2 Currency & Chains: baseChainProtocol (в примерах ERC20, TRC20) |
+| venue.contract_field | площадка HTX | *метод:* Поле (ac или ca) ответа GET /v1/settings/common/chains?currency=cake, равное адресу CAKE 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82; ни одно не равно — не задавать (HTX не подключать) | Без адреса контракта монеты не сопоставляются (CLAUDE.md). | Get Chains Information: ac «address of chain»; SDK getchainsresponse.go: ca |
+| venue.deposit_min_absent_ok | площадка HTX | *метод:* Решает Тигран после живого ответа: у монет с minDepositAmt «0» или пусто — считать минимум 0 (да) или не торговать с переводом на HTX | Урок 21. | APIv2 Currency & Chains: minDepositAmt; Get Chains: dma — меньше минимума может не зачислиться никогда |
+| venue.fee_symbols_per_req | площадка HTX | *метод:* Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран | Ставки комиссии пачками. | Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан |
+| venue.fee_requests_per_sec | площадка HTX | *метод:* Лимит не указан: 1–2 запроса в секунду — решает Тигран | Не упереться в лимит UID. | Get Current Fee Rate: лимит не указан; правило лимитов — «N times/2s» по UID на эндпоинт |
+| venue.rate_limit_pause_ms | площадка HTX | *метод:* Окно лимитов HTX — 2 с («N times/2s»): пауза 2000–4000 мс — решает Тигран | Урок 15: после «слишком часто» не слать дальше. | API Access → New Version Rate limit Rule; ответ на превышение не описан |
 
 ## Зачисление по блокчейну (решение 151)
 

@@ -4,6 +4,12 @@
 
 ## Какие секреты есть
 - API-ключ и секрет BingX — с правом торговли и вывода.
+- HTX (решение 171): Access Key `htx.api_key` и Secret Key `htx.api_secret` (passphrase нет; подпись HmacSHA256 в
+  строке запроса, Signature V2). Права ключа — Read, Trade, Withdraw; ключ привязать к IP сервера (без IP ключ истекает
+  через 90 дней — validDays видно в «Проверить подключение»). Право Trade у HTX общее (в том числе переводы спот ↔
+  фьючерсы) — фьючерсы бот не вызывает кодом. Адреса вывода — только из списка адресов вывода, добавляются в
+  веб-интерфейсе HTX (через API нельзя); бот проверяет адрес по списку до вывода. Подпись входа потока аккаунта в
+  журнал не пишется.
 - KuCoin (решение 137): API-ключ `kucoin.api_key`, секрет `kucoin.api_secret` и passphrase `kucoin.api_passphrase`
 - Bitget (решение 162): API-ключ `bitget.api_key`, секрет `bitget.api_secret` и passphrase `bitget.api_passphrase`;
   права ключа — спот-торговля (stow), вывод (wwow, только с привязкой IP), перевод (wtow — если включены переводы

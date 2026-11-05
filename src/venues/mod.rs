@@ -9,6 +9,7 @@ pub mod bingx;
 pub mod bitget;
 pub mod bsc_dex;
 pub mod bybit;
+pub mod coinex;
 pub mod gate;
 pub mod kraken;
 pub mod kucoin;

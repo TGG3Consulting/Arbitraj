@@ -21,5 +21,6 @@
 | `binance/` | Binance (спот API + Wallet SAPI, решение 160) — README.md папки |
 | `xt/` | XT.com (спот, API v4, решение 167) — README.md папки |
 | `kraken/` | Kraken (спот REST + Funding (Beta) + WebSocket v2, решение 172) — README.md папки |
+| `coinex/` | CoinEx (спот, API v2, решение 170) — README.md папки |
 | `bsc_dex/` | DEX в сети BSC |
 | `kyberswap/` | Исполнение через агрегатор KyberSwap (внутри bsc_dex, решение 91) |

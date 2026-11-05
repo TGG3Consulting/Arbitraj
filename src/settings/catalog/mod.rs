@@ -7,6 +7,7 @@
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, phemex.rs (настройки только Gate, только OKX, только Phemex).
 //! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
+//! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -16,6 +17,7 @@
 mod base;
 mod binance;
 mod bitget;
+mod coinex;
 pub mod dex;
 mod gate;
 mod index;
@@ -100,6 +102,7 @@ static PARTS: &[&[SettingDef]] = &[
     xt::XT,
     phemex::PHEMEX,
     kraken::KRAKEN,
+    coinex::COINEX,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

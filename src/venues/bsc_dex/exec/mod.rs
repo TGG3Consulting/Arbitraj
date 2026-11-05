@@ -31,6 +31,7 @@ pub mod dry_sim;
 pub mod dry_size;
 pub mod dry_swap;
 pub mod executor;
+pub mod exit_quote;
 pub mod fill;
 pub mod fork_swap;
 pub mod leg_min;

@@ -3,6 +3,7 @@
 //! и для измерения влияния крючка: V2 — Router.getAmountsOut; V3 — QuoterV2; Infinity CL/Bin — CLQuoter/BinQuoter;
 //! Uniswap V4 — V4Quoter. Квотер исполняет настоящий обмен (с крючками) и откатывается — research/flow/bsc_v4.md, раздел 5.
 //! Сверка: |локально − квотер| / квотер · 100 > dex.quoter_max_diff_pct → пул исключается до следующей сверки.
+//! Решение 177: judge отдаёт цифры расхождения (Judged::Diff) — продажа выхода продаёт по выходу квотера (exec/exit_quote.rs).
 //! У пула с крючком B/C квотер исполняет крючок, а математика — нет: локальный выход берётся за вычетом измеренного
 //! влияния крючка (check/hooks_probe.rs) — так сверяются и математика пула, и то, что крючок ведёт себя как при пробе.
 //! Infinity Stable (решение «122 (Infinity Stable, ответы)»): основной квотер — CLQuoter, дополнительный — get_dy крючка
@@ -87,6 +88,40 @@ pub async fn compare(
     within(ctx, local.amount_out, remote, hook_pct)
 }
 
+/// Итог сверки на одной сумме (решение 177 — чтобы продажа выхода знала цифры расхождения).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Judged {
+    /// В пределах dex.quoter_max_diff_pct.
+    Within,
+    /// Расхождение больше допуска: локальный выход за вычетом крючка, выход квотера, расхождение %, допуск %.
+    Diff {
+        local: U256,
+        remote: U256,
+        pct: Decimal,
+        limit: Decimal,
+    },
+    /// Сравнить нельзя (влияние крючка не считается, квотер 0, числа не помещаются) — причина.
+    Bad(String),
+}
+
+impl Judged {
+    /// Причина «не в допуске» — тот же текст, что был у within до решения 177. None — в допуске. Ошибок нет.
+    pub fn reason(&self) -> Option<String> {
+        match self {
+            Judged::Within => None,
+            Judged::Diff {
+                local,
+                remote,
+                pct,
+                limit,
+            } => Some(format!(
+                "расчёт {local} против квотера {remote}: расхождение {pct}% > {limit}% (dex.quoter_max_diff_pct)"
+            )),
+            Judged::Bad(why) => Some(why.clone()),
+        }
+    }
+}
+
 /// Локальный выход (за вычетом крючка) против выхода квотера: в пределах dex.quoter_max_diff_pct?
 /// Возвращает: Ok(()) или Err(причина с цифрами). Ошибки: NotConfigured (допуск).
 pub fn within(
@@ -95,16 +130,30 @@ pub fn within(
     remote: U256,
     hook_pct: Decimal,
 ) -> GatewayResult<Result<(), String>> {
+    Ok(match judge(ctx, local, remote, hook_pct)?.reason() {
+        None => Ok(()),
+        Some(why) => Err(why),
+    })
+}
+
+/// Сверка с цифрами (within — её краткая форма). Принимает: локальный выход (до вычета крючка), выход квотера,
+/// влияние крючка %. Возвращает: Judged. Ошибки: NotConfigured (допуск).
+pub fn judge(ctx: &Ctx, local: U256, remote: U256, hook_pct: Decimal) -> GatewayResult<Judged> {
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
     let Some(local) = less_hook(local, hook_pct) else {
-        return Ok(Err(format!("влияние крючка {hook_pct}% не считается")));
+        return Ok(Judged::Bad(format!(
+            "влияние крючка {hook_pct}% не считается"
+        )));
     };
     Ok(match diff_pct(local, remote) {
-        Some(d) if d <= limit => Ok(()),
-        Some(d) => Err(format!(
-            "расчёт {local} против квотера {remote}: расхождение {d}% > {limit}% (dex.quoter_max_diff_pct)"
-        )),
-        None => Err(format!(
+        Some(d) if d <= limit => Judged::Within,
+        Some(pct) => Judged::Diff {
+            local,
+            remote,
+            pct,
+            limit,
+        },
+        None => Judged::Bad(format!(
             "расчёт {local} против квотера {remote}: сравнить нельзя"
         )),
     })

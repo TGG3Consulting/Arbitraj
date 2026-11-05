@@ -9,8 +9,11 @@
 //! подтвердил, что транзакции нет, — решение 154) — повтор через режим застрявшей монеты, не больше
 //! stuck.unsent_retries_max раз (sell_unsent.rs); исход продажи неизвестен — сделка остановлена до ручной проверки.
 //! Решение 148: сделка закрыта продажей — сверка средней цены продажи с планом (sell_slip.rs).
+//! Решение 177: продажа кнопкой человека — итог отдельным событием (manual_outcome.rs); остаток после частичной продажи
+//! и застрявшая BNB уходят в режим застрявшей монеты уже как автоматика (risk_count::auto).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs.
+//! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
+//! manual_outcome.rs, risk_count.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154).
 
 use rust_decimal::Decimal;
@@ -47,13 +50,9 @@ pub async fn market(core: &Core, deal: Deal, why: &str) {
         Ok((_, q)) => sell(core, deal, q, why).await,
         Err(e) => {
             let mut deal = deal;
-            super::ledger::finish(
-                core,
-                &mut deal,
-                Step::Halted,
-                &format!("продажа по рынку ({why}) невозможна: {e}"),
-            )
-            .await;
+            let text = format!("продажа по рынку ({why}) невозможна: {e}");
+            super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
+            super::manual_outcome::failed(core, &deal, why, &text).await;
         }
     }
 }
@@ -77,6 +76,8 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         Ok(r) => {
             super::fills::trade(core, &mut deal, &r).await;
             deal.sells.push(r.clone());
+            // Решение 177: продано — запись, с которой продавали, больше не нужна.
+            deal.alert_was = None;
             let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Продано")
                 .line(format!(
                     "{} {} на {} по {}",
@@ -97,10 +98,12 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 .await;
             // Решение 66: остаток меньше шага или минимума ордера — пыль, а не застрявшая монета.
             super::dust::settle(core, &mut deal, r.avg_price).await;
+            super::manual_outcome::sold(core, &deal, why, &r, deal.qty).await;
             if deal.qty > Decimal::ZERO {
                 deal.note(format!("Продано не всё, остаток {}", deal.qty));
                 super::ledger::save(core, &deal).await;
-                return Box::pin(super::stuck::handle(core, deal)).await;
+                // Решение 177: остаток продаёт автоматика (режим застрявшей монеты), не ручная команда.
+                return Box::pin(super::risk_count::auto(super::stuck::handle(core, deal))).await;
             }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
@@ -115,17 +118,16 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         {
             deal.note(format!("продажа не прошла: {e} — застрявшая монета"));
             super::ledger::save(core, &deal).await;
-            Box::pin(super::stuck::handle(core, deal)).await
+            let why_not =
+                format!("{e} — газ продажи не помещается сверх резерва, режим застрявшей монеты");
+            super::manual_outcome::failed(core, &deal, why, &why_not).await;
+            Box::pin(super::risk_count::auto(super::stuck::handle(core, deal))).await
         }
         // Исход продажи неизвестен (транзакция могла исполниться) — ни продавать, ни перегонять: ручная проверка.
         Err(e) if e.outcome_unknown() => {
-            super::ledger::finish(
-                core,
-                &mut deal,
-                Step::Halted,
-                &format!("исход продажи неизвестен: {e} — проверьте вручную"),
-            )
-            .await;
+            let text = format!("исход продажи неизвестен: {e} — проверьте вручную");
+            super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
+            super::manual_outcome::failed(core, &deal, why, &text).await;
         }
         // Решение 100: продажа не прошла (откат, не попала в блок, цена хуже допустимой, отказ площадки) — монеты на
         // месте; бот сам не повторяет (стартовое правило), а ставит алерт человеку: «Продать сейчас» (по реальному
@@ -138,7 +140,12 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             super::sell_unsent::Retry::Go { pause_ms } => {
                 super::sell_unsent::retry(core, deal, &e, pause_ms).await
             }
-            r => super::sell_unsent::alert(core, deal, &e, &r).await,
+            r => {
+                // Решение 177: итог кнопки — после алерта (запись уже обновлена или поставлена).
+                let d = deal.clone();
+                super::sell_unsent::alert(core, deal, &e, &r).await;
+                super::manual_outcome::failed(core, &d, why, &e.message).await;
+            }
         },
     }
 }

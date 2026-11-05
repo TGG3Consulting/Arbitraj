@@ -71,7 +71,7 @@ pub async fn trade(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
-    let legs = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+    let (legs, mut note) = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
@@ -81,7 +81,8 @@ pub async fn trade(
     if send_approvals(env, &slot, &need).await? {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
-        let legs = prepare(&v, &req, route, &mins, decs).await?;
+        let (legs, fresh) = prepare(&v, &req, route, &mins, decs).await?;
+        note = fresh;
         (c, at) = build(q, &legs, executor).await?;
         if !approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
             .await?
@@ -95,18 +96,25 @@ pub async fn trade(
     sim::check(ctx, &req, &c, wallet, at, decs).await?;
     let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None).await?;
     drop(slot);
-    fact::result(
+    let mut r = fact::result(
         ctx,
         req,
         d,
         (wallet, executor),
         (c.token_in, c.token_out),
         decs,
-    )
+    )?;
+    // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
+    if note.is_some() {
+        r.executor = note;
+    }
+    Ok(r)
 }
 
 /// Доли по живому состоянию: пути, сверка средней цены с худшей, шаги exec/chain.rs и минимум каждой доли из
-/// верификации. Принимает: расчёт путей, запрос, маршрут, минимумы долей, (decimals монеты, USDT).
+/// верификации. Решение 177: продажа выхода с расхождением хопа Maverick — доля по квотеру, минимум верификации — тем
+/// же множителем. Принимает: расчёт путей, запрос, маршрут, минимумы долей, (decimals монеты, USDT).
+/// Возвращает: шаги долей и строку «— продажа по квотеру» (None — по расчёту).
 /// Ошибки: NoRoute, QuoteMismatch (цена, число долей), CoinNotChecked, BadResponse, узел.
 pub async fn prepare(
     v: &Via<'_>,
@@ -114,11 +122,11 @@ pub async fn prepare(
     route: &DexRoute,
     mins: &[Decimal],
     decs: (u8, u8),
-) -> GatewayResult<Vec<Vec<Step>>> {
+) -> GatewayResult<(Vec<Vec<Step>>, Option<String>)> {
     let ctx = &v.q.ctx;
-    let paths = live_paths(v, req, route, false).await?;
+    let mut paths = live_paths(v, req, route, false).await?;
     // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером на своём узле.
-    super::super::precheck_quoter::hops(ctx, &paths).await?;
+    let (ratios, note) = super::super::precheck_quoter::hops_exit(ctx, req, &mut paths).await?;
     let (coins, paid) = paths
         .iter()
         .fold((Decimal::ZERO, Decimal::ZERO), |(c, u), (p, _)| {
@@ -135,12 +143,12 @@ pub async fn prepare(
         decs.1
     };
     let mut legs = Vec::with_capacity(paths.len());
-    for ((p, qty), min) in paths.iter().zip(mins) {
+    for (((p, qty), min), r) in paths.iter().zip(mins).zip(&ratios) {
         let mut steps = chain::steps(ctx, req, p, *qty, decs)?;
-        verify_gate::apply_leg_min(ctx, &mut steps, *min, out_dec)?;
+        verify_gate::apply_leg_min(ctx, &mut steps, *min * *r, out_dec)?;
         legs.push(steps);
     }
-    Ok(legs)
+    Ok((legs, note))
 }
 
 /// Вызов execute на текущем блоке. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как

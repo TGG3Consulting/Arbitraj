@@ -34,11 +34,15 @@ pub const BY_EXECUTOR: &str = "свой сборщик: исполнитель";
 
 /// Итог сделки с подписью исполнителя (решение 121 B7): успех — поле executor; ошибка (откат, не попала в блок, отказ
 /// до отправки) — подпись в начале текста «[свой сборщик: …] …», код и факт транзакции не меняются. Принимает: итог,
-/// подпись. Возвращает: тот же итог с подписью. Ошибок своих нет.
+/// подпись. Решение 177: пометка исполнения, уже стоящая в executor («… — продажа по квотеру», exec/exit_quote.rs),
+/// остаётся после подписи через «; ». Возвращает: тот же итог с подписью. Ошибок своих нет.
 pub fn by(r: GatewayResult<TradeResult>, who: &str) -> GatewayResult<TradeResult> {
     match r {
         Ok(mut t) => {
-            t.executor = Some(who.to_string());
+            t.executor = Some(match t.executor.take() {
+                Some(note) => format!("{who}; {note}"),
+                None => who.to_string(),
+            });
             Ok(t)
         }
         Err(mut e) => {

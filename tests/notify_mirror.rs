@@ -45,6 +45,8 @@ fn alert() -> StuckAlert {
         loss_pct: Some(Decimal::new(-35, 1)),
         reason: Some("убыток 3.5% выше порога 2%".into()),
         at: Utc::now(),
+        error: None,
+        attempts: 1,
     }
 }
 

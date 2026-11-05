@@ -8,6 +8,7 @@
 //! Худшая цена — worst.rs (та же у расчёта, решение 66).
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
+//! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset.
 
 use std::time::Duration;
@@ -81,6 +82,10 @@ pub async fn trade(
             worst_price: worst,
             deal_id: deal.to_string(),
             route: route.clone(),
+            // Решение 177: каждая продажа отсюда — выход из позиции: монета уже куплена (продажа сделки — sell.rs, в
+            // том числе продажа на DEX в сделке CEX → DEX; застрявшая монета; кнопки человека; «Продать» в «Балансах»).
+            // Покупка — нет. Циклы DEX ↔ DEX сюда не ходят (cycle_deal.rs, свой запрос) — у них сверка с квотером — стоп.
+            exit_position: side == Side::Sell,
         };
         // Решение 132: DEX — кошелёк сделки.
         let res = match super::dex_account::venue_deal(core, deal, v).await {

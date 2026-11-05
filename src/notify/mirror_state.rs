@@ -4,6 +4,7 @@
 //! «выполнено: кто, что, итог»), какие выполнены из Telegram (второе нажатие — «уже выполнено»), ожидающие
 //! подтверждения «Да, …» и вопросы суммы (ForceReply), последнее напоминание и пауза по retry_after.
 //! Логика решений — чистые функции без сети (проверяются тестами tests/notify_mirror.rs).
+//! Решение 177: правка сообщения изменившейся или вернувшейся записи и итог продажи кнопкой — notify/mirror_track.rs.
 //! Кто вызывает: notify/mirror.rs, notify/press.rs, notify/press_record.rs, notify/press_confirm.rs, notify/tg_commands.rs.
 //! От чего зависит: core/types (ManualRecord, ManualAction).
 //! Настройки: нет (интервал повтора notify.manual_repeat_s передаёт mirror.rs).
@@ -48,6 +49,9 @@ pub struct Prompt {
 pub struct Diff {
     /// Ушли с экрана: запись и её сообщения.
     pub gone: Vec<(ManualRecord, Sent)>,
+    /// Решение 177: уже отправленные записи, чей текст сменился (тот же отказ — причина и попытка), и вернувшиеся с
+    /// тем же ключом (продажа кнопкой не прошла) — их сообщение правится, нового нет (notify/mirror_track.rs).
+    pub changed: Vec<ManualRecord>,
 }
 
 /// Память дубля.
@@ -59,6 +63,9 @@ pub struct MirrorState {
     pub sent: HashMap<String, Sent>,
     /// Ушли с экрана, а итог команды ещё не пришёл: запись и её сообщения.
     pub closed: HashMap<String, (ManualRecord, Sent)>,
+    /// Решение 177: ушли по команде продажи («выполнено: … запущена»), итог продажи ещё не пришёл — запись и её
+    /// сообщения (notify/mirror_track.rs: правка «Выполнено: продано …» / «Не продано: …» или возврат записи).
+    pub finished: HashMap<String, (ManualRecord, Sent)>,
     /// Выполнены из Telegram и ещё на экране — второе нажатие получает «уже выполнено».
     pub done: HashSet<String>,
     pub pending: HashMap<u64, Pending>,
@@ -113,6 +120,8 @@ impl MirrorState {
                 diff.gone.push((rec, s));
             }
         }
+        // Решение 177: сменившиеся и вернувшиеся записи — правка их сообщения (notify/mirror_track.rs).
+        diff.changed = self.track(recs);
         for r in recs {
             self.known.insert(r.key.clone(), r.clone());
         }
@@ -134,6 +143,7 @@ impl MirrorState {
         if !first {
             self.sent.clear();
             self.closed.clear();
+            self.finished.clear();
             self.reminder = None;
             self.last_reminder = None;
         }

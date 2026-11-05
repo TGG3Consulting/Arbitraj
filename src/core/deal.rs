@@ -86,6 +86,10 @@ pub struct Deal {
     /// причина; при закрытии вместо перегона — страховка «USDT не вернулись». None — обычный путь.
     #[serde(default)]
     pub usdt_return_skip: Option<String>,
+    /// Решение 177: алерт, с которого человек запустил продажу («Продать сейчас», «Продать и перегнать»); тот же отказ —
+    /// эта запись обновляется (core/manual_repeat.rs), а не ставится новая. None — продажа не с алерта.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alert_was: Option<crate::core::types::StuckAlert>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
     pub started_at: DateTime<Utc>,
@@ -119,6 +123,7 @@ impl Deal {
             dex_account: None,
             usdt_return: None,
             usdt_return_skip: None,
+            alert_was: None,
             timeline: vec![],
             started_at: now,
             updated_at: now,

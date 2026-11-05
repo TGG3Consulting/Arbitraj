@@ -8,6 +8,8 @@
 //! повтора, сколько бы ни было записей; ответ 429 — пауза ровно на parameters.retry_after
 //! (ResponseParameters, https://core.telegram.org/bots/api#responseparameters).
 //! Решение 176: чат зеркала — «Неудачные» (notify.failures_chat), если задан, иначе «Общий» (как раньше, roles.rs).
+//! Решение 177: запись сменилась или вернулась с тем же ключом — её сообщение правится, нового нет; итог продажи
+//! кнопкой — ещё одна правка сообщения ушедшей записи (mirror_track.rs, mirror_send.rs).
 //! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs.
 //! От чего зависит: core (Core::manual_records, Core::subscribe), notify/mirror_state.rs, mirror_view.rs,
 //! tg_methods.rs, client.rs, dispatch.rs (allows), settings, storage/journal.
@@ -143,6 +145,8 @@ impl Mirror {
                 }
             }
         }
+        // Решение 177: сменившиеся и вернувшиеся записи — правка их сообщения, не новое (mirror_track.rs).
+        self.update_changed(tg, (chat, all), &diff.changed).await;
         let now = Instant::now();
         if lock(&self.state).pause_until.is_some_and(|p| now < p) {
             return;

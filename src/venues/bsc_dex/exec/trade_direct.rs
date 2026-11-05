@@ -9,9 +9,12 @@
 //! верификация); свежей сборке нужно новое разрешение — своп не отправляется (QuoteMismatch), второго approve нет.
 //! Выходной токен не должен ждать поступлений во время обмена (wallet/inflows.rs); чаевые — только к обмену.
 //! Итог и ошибку подписывает исполнителем «свой сборщик: прямой» вызывающий (exec/trade.rs, решение 121 B7). Повторов нет (стартовое правило Тиграна).
+//! Решение 177: продажа выхода (TradeRequest.exit_position) при расхождении с квотером — продажа по квотеру
+//! (exec/exit_quote.rs): ожидаемое, худшая цена и минимумы — от квотера; строка «— продажа по квотеру» — в журнал и в
+//! TradeResult.executor (хронология сделки). Покупка — сверка с квотером, как раньше, стоп.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
-//! exec/precheck.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
+//! exec/precheck.rs, exec/exit_quote.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 
@@ -34,13 +37,15 @@ use super::trade::{
     check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
 };
 use super::txs::Env;
-use super::{chain, live, precheck, precheck_sim, result, verify_gate};
+use super::{chain, exit_quote, live, precheck_sim, result, verify_gate};
 
-/// Подготовленная доля: путь по живому состоянию, шаги с минимумами и нативная обёртка.
+/// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
+/// (решение 177; None — по расчёту).
 struct Prep {
     path: Path,
     steps: Vec<Step>,
     wrap: Wrap,
+    note: Option<String>,
 }
 
 /// Сделка прямого маршрута. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса, его долю,
@@ -101,7 +106,7 @@ pub async fn trade(
     let d = send_swap(env, &slot, p, guard).await?;
     drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
-    result::result(
+    let mut r = result::result(
         ctx,
         req,
         d,
@@ -109,11 +114,19 @@ pub async fn trade(
         (tin, out_token),
         decs,
         router.as_slice(),
-    )
+    )?;
+    // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
+    if prep.note.is_some() {
+        r.executor = prep.note;
+    }
+    Ok(r)
 }
 
 /// Доля по живому состоянию: путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs), свежий
 /// минимум графовой верификации последнему шагу, нативная обёртка, сверка каждого хопа с квотером (решение 32).
+/// Решение 177: продажа выхода с расхождением — путь пересчитан по квотеру (exec/exit_quote.rs), затем снова проверка
+/// худшей цены, шаги, минимумы (свежий минимум графа — тем же множителем) и обёртка; у покупки и без расхождения — как
+/// раньше (тот же порядок, сверка — отказ).
 /// Принимает: расчёт путей, запрос, долю, минимумы верификации, decimals, нативная ли монета. Ошибки: NoRoute,
 /// QuoteMismatch, BadResponse, узел.
 async fn prepare(
@@ -126,9 +139,44 @@ async fn prepare(
 ) -> GatewayResult<Prep> {
     let ctx = &v.q.ctx;
     // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
-    let path = live::path(v, &leg.hops, req.qty, true).await?;
+    let mut path = live::path(v, &leg.hops, req.qty, true).await?;
     check_price(ctx, req, path.coins, path.usdt)?;
-    let mut legs = vec![chain::steps(ctx, req, &path, req.qty, decs)?];
+    let (mut steps, mut wrap) = legs(ctx, req, &path, mins, decs, is_native)?;
+    let fixes = exit_quote::check(ctx, &path, exit_quote::exit_of(req), |_| true).await?;
+    if fixes.is_empty() {
+        return Ok(Prep {
+            path,
+            steps,
+            wrap,
+            note: None,
+        });
+    }
+    // Решение 177: ожидаемое — по квотеру; худшая цена и минимумы — заново от него.
+    let r = exit_quote::rescale(ctx, &mut path, req.side, &fixes)?;
+    check_price(ctx, req, path.coins, path.usdt)?;
+    let mins = mins.map(|m| exit_quote::scale_mins(m, r));
+    (steps, wrap) = legs(ctx, req, &path, mins.as_deref(), decs, is_native)?;
+    let note = exit_quote::report(ctx, req, &fixes).await;
+    Ok(Prep {
+        path,
+        steps,
+        wrap,
+        note,
+    })
+}
+
+/// Шаги доли с минимумами (exec/chain.rs), свежий минимум графовой верификации последнему шагу, нативная обёртка.
+/// Принимает: окружение, запрос, путь, минимумы верификации, decimals, нативная ли монета. Возвращает: шаги и обёртку.
+/// Ошибки: NoRoute, QuoteMismatch, BadResponse, NotConfigured.
+fn legs(
+    ctx: &super::super::ctx::Ctx,
+    req: &TradeRequest,
+    path: &Path,
+    mins: Option<&[Decimal]>,
+    decs: (u8, u8),
+    is_native: bool,
+) -> GatewayResult<(Vec<Step>, Wrap)> {
+    let mut legs = vec![chain::steps(ctx, req, path, req.qty, decs)?];
     // Графовый маршрут (решение 83): свежий минимум выхода доли из верификации — последнему шагу (он отдаёт выход).
     if let Some(mins) = mins {
         let out_dec = if req.side == Side::Buy {
@@ -146,11 +194,7 @@ async fn prepare(
     } else {
         Wrap::None
     };
-    for h in &path.hops {
-        precheck::quoter_now(ctx, &h.entry, h.token_in, &h.swapped, h.usable.hook_pct).await?;
-    }
-    let steps = legs.pop().unwrap_or_default();
-    Ok(Prep { path, steps, wrap })
+    Ok((legs.pop().unwrap_or_default(), wrap))
 }
 
 /// План обмена на текущем блоке: время блока и разрешения, которых не хватает сейчас (exec/plan.rs). Принимает:

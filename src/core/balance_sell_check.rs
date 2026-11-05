@@ -125,6 +125,8 @@ pub fn request(
         worst_price: worst,
         deal_id: id.to_string(),
         route: None,
+        // Решение 177: продаётся монета, которая уже есть, — продажа выхода (как у trade_ops.rs).
+        exit_position: true,
     })
 }
 

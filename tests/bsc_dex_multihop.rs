@@ -139,6 +139,7 @@ async fn three_hop_steps_chain_on_router() {
         worst_price: path.usdt * Decimal::TWO,
         deal_id: "t".into(),
         route: None,
+        exit_position: false,
     };
     let steps = chain::steps(&q.ctx, &req, &path, Decimal::ONE, (18, 18)).expect("шаги");
     assert_eq!(steps.len(), 3);

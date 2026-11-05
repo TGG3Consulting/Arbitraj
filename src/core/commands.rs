@@ -6,8 +6,9 @@
 //! (решения 37, 176). Каждая команда — в журнал с источником. Плюс команды экрана
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
 //! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
+//! Решение 177: команда выполняется с признаком «ручная» (risk_count.rs) — не считается ошибкой площадки подряд.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
-//! От чего зависит: manual.rs, commands_control.rs, risk.rs, settings, deps.rs, view.rs.
+//! От чего зависит: manual.rs, commands_control.rs, risk.rs, risk_count.rs, settings, deps.rs, view.rs.
 //! Настройки: ID чатов ролей Telegram (notify.telegram_chat, notify.control_chat, notify.failures_chat …, решение 176).
 
 use serde_json::json;
@@ -35,7 +36,10 @@ impl Core {
 
     /// Выполнение команды и запись в журнал (см. command).
     async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
-        let res = self.run_command(&cmd).await;
+        // Решение 177: команда человека — ручная: её сбои не «ошибки площадки подряд», паузу ставит только автоматика
+        // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
+        // manual_usdt.rs).
+        let res = super::risk_count::manual(self.run_command(&cmd)).await;
         // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
         self.inner.live.send(super::view::CoreEvent::Command(json!({
             "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),

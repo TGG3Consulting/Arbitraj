@@ -4,6 +4,7 @@
 //! От чего зависит: gateway, settings, secrets, storage.
 //! Настройки: venue.* по каждой площадке.
 
+pub mod binance;
 pub mod bingx;
 pub mod bitget;
 pub mod bsc_dex;

@@ -80,6 +80,16 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "okx",
         "Passphrase ключа OKX (задаётся при создании ключа; в запросе — заголовок OK-ACCESS-PASSPHRASE)",
     ),
+    (
+        "binance.api_key",
+        "binance",
+        "API-ключ Binance (API Key, тип HMAC)",
+    ),
+    (
+        "binance.api_secret",
+        "binance",
+        "Секретный ключ Binance (Secret Key; подпись HMAC SHA256)",
+    ),
     // DEX в сети BSC (адаптер bsc_dex). Узел: у провайдеров ключ стоит в адресе
     // (NodeReal: wss://bsc-mainnet.nodereal.io/ws/v1/{apiKey}, Infura: /ws/v3/<KEY> — research/flow/bsc_node.md),
     // поэтому в настройке адреса пишется {key}, а сам ключ хранится здесь.

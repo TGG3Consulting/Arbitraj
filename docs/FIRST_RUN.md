@@ -229,6 +229,37 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.transfer_poll_ms | площадка OKX | `1000` | Опрос итога перевода без упора в лимит. | Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state |
 | venue.transfer_wait_ms | площадка OKX | `30000` | Не дождались — итог неизвестен, ручная проверка. | Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result» |
 | venue.order_test_first | площадка OKX | *метод:* Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки. | check_order — только правила пары. | Документация OKX v5, Order precheck |
+## Биржа Binance (решение 160)
+
+Из официальной документации Binance (спот API, WebSocket Streams, WebSocket API, Wallet SAPI); живых ответов ещё нет —
+сверить на первой записи (tests/README.md, раздел «Binance»). Перед торговлей — замер нагрузки при «Стопе» (решение 109).
+Ключ — HMAC; вывод Binance разрешает только ключу с ограничением по IP; адрес кошелька DEX (BSC) — заранее в белый список.
+По желанию: `venue.balance_events` = да (поток аккаунта через WebSocket API).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.rest_url | площадка Binance | `https://api.binance.com` | Спот и Wallet SAPI | rest-api «General API Information» |
+| venue.rest_fallback_url | площадка Binance | `https://api-gcp.binance.com` | Резерв только при сбое сети | rest-api «General API Information» |
+| venue.ws_url | площадка Binance | `wss://stream.binance.com:9443` | Без пути: бот добавляет /stream и /ws/<поток> | web-socket-streams |
+| venue.ws_private_url | площадка Binance | `wss://ws-api.binance.com:443/ws-api/v3` | Поток аккаунта (listenKey устарел) | websocket-api, CHANGELOG 2025-04-07 |
+| venue.bsc_network | площадка Binance | `BSC` | Код сети вывода и депозита — сверить на живом getall | Wallet «All Coins' Information» (пример) |
+| venue.recv_window_ms | площадка Binance | `5000` | Совет документации | rest-api «Request Security» |
+| venue.order_time_in_force | площадка Binance | `IOC` | Остаток снимает биржа | enums.md «Time in force» |
+| venue.order_test_first | площадка Binance | `да` | Ловит PERCENT_PRICE_BY_SIDE и PRICE_RANGE | rest-api «Test new order» |
+| venue.depth_levels | площадка Binance | `20` | Наибольшая глубина частичного стакана | Partial Book Depth: 5, 10, 20 |
+| venue.book_interval | площадка Binance | `100ms` | Самый частый снимок (одинаковые ядру не отдаются) | Partial Book Depth: 1000ms или 100ms |
+| venue.ws_subs_per_sec | площадка Binance | `2` | Лимит 5 сообщений/с включая pong | WebSocket Limits |
+| venue.ws_streams_per_msg | площадка Binance | *метод:* начать с 50; отказ SUBSCRIBE — уменьшить | Предела в документации нет | SUBSCRIBE |
+| venue.ws_symbols_per_conn | площадка Binance | `200` | Мало соединений (300 подключений за 5 мин с IP) | WebSocket Limits: 1024 потока |
+| venue.my_trades_limit | площадка Binance | `1000` | Все сделки ордера одним запросом | myTrades: max 1000 |
+| venue.fee_requests_per_sec | площадка Binance | `1` | Вес 20 — 1200 в минуту; сверить с rateLimits | Query Commission Rates |
+| venue.fee_deduction | площадка Binance | *метод:* `coin` — скидки BNB нет; `bnb` — включена и BNB держится | Расчёт по выбранной ставке, факт — из fills | faqs/commission_faq; решение 158 |
+| venue.rate_limit_pause_ms | площадка Binance | `60000` | Если Retry-After не пришёл (SAPI) | rest-api «LIMITS» |
+| venue.withdraw_wallet | площадка Binance | `spot` | Торговля на споте | Withdraw: walletType |
+| venue.withdraw_history_min_ms | площадка Binance | `6000` | Вес 18000 из 180000 UID в минуту | Withdraw History; General Info |
+| venue.window_depth_limit | площадка Binance | `1000` | Снимок для изменений стакана окна | Order book: limit ≤ 5000 |
+| venue.deposit_dust_as_min | площадка Binance | *метод:* решение Тиграна; до него не задавать | Смысл depositDust не описан | All Coins' Information |
+| venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
 
 ## Зачисление по блокчейну (решение 151)
 

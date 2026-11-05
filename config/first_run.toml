@@ -1085,6 +1085,209 @@ method = "Не задавать: пробного ордера для спота
 source = "Документация OKX v5, Order precheck"
 rationale = "check_order — только правила пары."
 prefill = { kind = "Venue", id = "okx" }
+# --- Биржа Binance (решение 160) ---
+[[section]]
+title = "Биржа Binance (решение 160)"
+intro = "Значения из официальной документации Binance (спот API, WebSocket Streams, WebSocket API, Wallet SAPI). Живых ответов ещё нет — каждую цифру сверить на первой записи (tests/README.md, раздел Binance). Перед торговлей — замер нагрузки при «Стопе» (решение 109). Ключ — HMAC; вывод Binance разрешает только ключу с ограничением по IP."
+
+[[section.rec]]
+name = "venue.rest_url"
+area = "площадка Binance"
+unit = "URL"
+value = "https://api.binance.com"
+source = "Документация Binance, rest-api «General API Information»"
+rationale = "Основной адрес REST спота и Wallet SAPI."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.rest_fallback_url"
+area = "площадка Binance"
+unit = "URL"
+value = "https://api-gcp.binance.com"
+source = "rest-api «General API Information»: api-gcp, api1…api4 — «better performance but less stability»"
+rationale = "Резерв только при сбое сети основного адреса."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://stream.binance.com:9443"
+source = "web-socket-streams «General WSS information»"
+rationale = "Без пути: бот сам добавляет /stream (стаканы) и /ws/<поток> (окна)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_private_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://ws-api.binance.com:443/ws-api/v3"
+source = "websocket-api «General API Information»; userDataStream.subscribe.signature"
+rationale = "Поток аккаунта: listenKey устарел (CHANGELOG 2025-04-07)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "площадка Binance"
+unit = "название"
+value = "BSC"
+source = "Wallet «All Coins' Information»: пример network «BSC», name «BNB Smart Chain (BEP20)»"
+rationale = "Код сети, который принимают вывод и адрес депозита; сверить на живом config/getall."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.recv_window_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "5000"
+source = "rest-api «Request Security»: по умолчанию 5000, максимум 60000, советуют 5000 или меньше"
+rationale = "Как советует документация."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.order_time_in_force"
+area = "площадка Binance"
+unit = "тип"
+value = "IOC"
+source = "enums.md «Time in force»: IOC — остаток снимает биржа (EXPIRED)"
+rationale = "Правило Тиграна «не исполнился — отменяем»."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.order_test_first"
+area = "площадка Binance"
+unit = "да/нет"
+value = "да"
+source = "rest-api «Test new order»: POST /api/v3/order/test, вес 1"
+rationale = "Ловит PERCENT_PRICE_BY_SIDE и PRICE_RANGE, которые правила адаптера не проверяют."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.depth_levels"
+area = "площадка Binance"
+unit = "уровней"
+value = "20"
+source = "web-socket-streams «Partial Book Depth Streams»: 5, 10, 20"
+rationale = "Наибольшая глубина частичного стакана."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.book_interval"
+area = "площадка Binance"
+unit = "интервал"
+value = "100ms"
+source = "web-socket-streams: «Update Speed: 1000ms or 100ms»"
+rationale = "Самый частый снимок; одинаковые снимки ядру не отдаются (решение 109)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_subs_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+value = "2"
+source = "web-socket-streams «WebSocket Limits»: 5 входящих сообщений/с, включая PING/PONG и SUBSCRIBE"
+rationale = "С запасом под pong; бот не пустит 5 и больше."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_streams_per_msg"
+area = "площадка Binance"
+unit = "потоков"
+method = "Начать с 50; предела в документации нет — при отказе SUBSCRIBE (журнал venue.ws) уменьшить."
+source = "web-socket-streams: SUBSCRIBE с массивом params; предел не указан"
+rationale = "Меньше сообщений при лимите 5/с."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.ws_symbols_per_conn"
+area = "площадка Binance"
+unit = "штук"
+value = "200"
+source = "web-socket-streams «WebSocket Limits»: до 1024 потоков на соединение, 300 подключений за 5 минут с IP"
+rationale = "Мало соединений и быстрая подписка (200 потоков при 2 × 50 в секунду — 2 с)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.my_trades_limit"
+area = "площадка Binance"
+unit = "штук"
+value = "1000"
+source = "rest-api «Account trade list»: limit «Default 500; max 1000»"
+rationale = "Все сделки ордера одним запросом."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.fee_requests_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+value = "1"
+source = "rest-api «Query Commission Rates»: вес 20; REQUEST_WEIGHT — из rateLimits exchangeInfo (в примере 6000/мин)"
+rationale = "1200 веса в минуту из общего лимита IP — сверить с живым rateLimits."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.fee_deduction"
+area = "площадка Binance"
+unit = "вариант"
+method = "coin — скидка BNB в кабинете выключена или BNB на споте нет; bnb — включена (POST /sapi/v1/bnbBurn) и BNB держится не меньше venue.discount_min_balance."
+source = "faqs/commission_faq; GET /api/v3/account/commission (discount); решение 158"
+rationale = "Расчёт по выбранной ставке, факт — из fills ордера."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.rate_limit_pause_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "60000"
+source = "rest-api «LIMITS»: Retry-After у 418/429; у SAPI — не сказано"
+rationale = "Минута тишины, если Retry-After не пришёл (лимиты считаются за минуту)."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.withdraw_wallet"
+area = "площадка Binance"
+unit = "счёт"
+value = "spot"
+source = "Wallet «Withdraw»: walletType 0 — спот, 1 — фонд"
+rationale = "Бот торгует на споте — выводит оттуда же."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.withdraw_history_min_ms"
+area = "площадка Binance"
+unit = "мс"
+value = "6000"
+source = "Wallet «Withdraw History»: вес UID 18000; Wallet «General Info»: UID 180000 в минуту"
+rationale = "Не больше 10 запросов в минуту."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.window_depth_limit"
+area = "площадка Binance"
+unit = "уровней"
+value = "1000"
+source = "rest-api «Order book»: limit до 5000, вес 5/25/50/250 по limit"
+rationale = "Глубокий снимок для окна умеренным весом."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.deposit_dust_as_min"
+area = "площадка Binance"
+unit = "да/нет"
+method = "Решение Тиграна: depositDust — минимум депозита? Смысл поля в документации не описан. До решения — не задавать (минимум по venue.deposit_min_absent_ok)."
+source = "Wallet «All Coins' Information»: depositDust без описания"
+rationale = "Урок 21: «0» и «нет данных» не путать."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.deposit_to_spot"
+area = "площадка Binance"
+unit = "да/нет"
+method = "да — если в кабинете депозит зачисляется на Фонд (Funding); нужно право ключа Permits Universal Transfer. Проще — выставить зачисление на Спот и не задавать."
+source = "Wallet «Withdraw»: walletType по умолчанию — счёт, выбранный в кабинете; User Universal Transfer FUNDING_MAIN"
+rationale = "Торговля только на споте."
+prefill = { kind = "Venue", id = "binance" }
+
 # --- Зачисление по блокчейну (решение 151) ---
 [[section]]
 title = "Зачисление по блокчейну (решение 151)"

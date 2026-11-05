@@ -151,6 +151,54 @@ CAKEUSDT и есть ли `maxLimitOrderValue`; шлёт ли books15 одина
 и вывод в deposit-records / withdrawal-records (на какой счёт пришёл депозит; входит ли комиссия в size вывода), перевод
 /api/v2/spot/wallet/transfer. Приватный WebSocket: единица времени входа (мс по тексту документации или секунды по примеру
 Java и SDK) и кадры канала баланса спота (страница канала не прочитана — поток аккаунта Bitget не подключён).
+- `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
+  официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
+  Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
+
+### Binance — команды записи (на сервере бота)
+
+Публичные (без ключа):
+
+```bash
+D=tests/data/cex_samples_2026_11_05; mkdir -p $D
+curl -sS 'https://api.binance.com/api/v3/exchangeInfo?symbol=CAKEUSDT' -o $D/binance_exchange_info_CAKEUSDT.json
+curl -sS 'https://api.binance.com/api/v3/exchangeInfo' -o $D/binance_exchange_info.json   # весь справочник: размер и rateLimits
+curl -sS 'https://api.binance.com/api/v3/depth?symbol=CAKEUSDT&limit=100' -o $D/binance_depth_CAKEUSDT_100.json
+# частичный стакан через комбинированный поток (как у бота): ответ {"result":null,"id":1} и кадры {"stream","data"}
+{ echo '{"method":"SUBSCRIBE","params":["cakeusdt@depth20@100ms"],"id":1}'; sleep 15; } \
+  | websocat -t 'wss://stream.binance.com:9443/stream' > $D/binance_ws_depth20.jsonl
+# окна: сделки и изменения стакана — сырые потоки /ws/<stream> (минуту: CAKE торгуется не каждую секунду)
+timeout 60 websocat -t 'wss://stream.binance.com:9443/ws/cakeusdt@trade' > $D/binance_ws_trade.jsonl
+timeout 20 websocat -t 'wss://stream.binance.com:9443/ws/cakeusdt@depth@100ms' > $D/binance_ws_diff.jsonl
+```
+
+Приватные (ключ Binance; ключ и подпись в файлы не попадают — только тела ответов):
+
+```bash
+K='<API key>'; S='<Secret key>'
+bsig() { # $1 метод, $2 путь, $3 параметры без timestamp (может быть пусто)
+  local q="${3:+$3&}recvWindow=5000&timestamp=$(date +%s%3N)"
+  local s=$(printf '%s' "$q" | openssl dgst -sha256 -hmac "$S" | sed 's/^.* //')
+  curl -sS -X "$1" -H "X-MBX-APIKEY: $K" "https://api.binance.com$2?$q&signature=$s"; }
+bsig GET  /api/v3/account 'omitZeroBalances=true'          > $D/binance_account.json
+bsig GET  /api/v3/account/commission 'symbol=CAKEUSDT'     > $D/binance_account_commission_CAKEUSDT.json
+bsig GET  /sapi/v1/capital/config/getall ''                > $D/binance_config_getall.json
+bsig GET  /sapi/v1/capital/deposit/address 'coin=CAKE&network=BSC' > $D/binance_deposit_address_CAKE.json
+bsig GET  /sapi/v1/capital/deposit/hisrec ''               > $D/binance_deposit_hisrec.json
+bsig GET  /sapi/v1/capital/withdraw/history ''             > $D/binance_withdraw_history.json   # вес 18000 — один раз
+bsig GET  /sapi/v1/account/apiRestrictions ''              > $D/binance_api_restrictions.json
+bsig GET  /sapi/v1/localentity/questionnaire-requirements '' > $D/binance_questionnaire.json
+bsig POST /sapi/v1/asset/get-funding-asset ''              > $D/binance_funding_asset.json
+bsig GET  /sapi/v1/asset/wallet/balance ''                 > $D/binance_wallet_balance.json
+bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IOC&quantity=5&price=1&newClientOrderId=b123456789_test' > $D/binance_order_test.json
+bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IOC&quantity=5&price=1&newClientOrderId=b123456789_test&computeCommissionRates=true' > $D/binance_order_test_rates.json
+bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IOC&quantity=5&price=1&newClientOrderId=a%23b' > $D/binance_order_test_bad_id.json  # −1100: допустимый алфавит id
+```
+
+Поток аккаунта (`binance_user_stream.jsonl`) — с включённым `venue.balance_events` из сырого журнала `data/raw/binance`,
+соединение «account», после депозита/вывода/перевода (кадры `{"subscriptionId", "event": {"e": "balanceUpdate"…}}`).
+Первый живой ордер IOC — ответ FULL (`fills`, `commissionAsset`) из сырого журнала (`rest /api/v3/order`).
+Затем `cargo test --test binance_real_data -- --ignored` и снять `#[ignore]` с прошедших.
 
 Семейство Solidly V1 — THENA V1 (решение 122, часть F) — tests/bsc_dex_solidly_v1_family.rs: вид solidly_v1 (Proto::SolidlyV1, в графе, без своего пути, шаг SOLIDLY исполнителя, только dex.factory; без exec.executor_address — сигнал), данные вызовов реестра фабрик (getPair(address,address,bool), getPool(…,bool), poolByPair, getDODOPoolBidirection) по официальным сигнатурам. Сверка своей математики Pair.sol с ответом пула getAmountOut — `thena_v1_math_matches_live_get_amount_out`, помечен #[ignore] до записи. **Запись (на сервере, свой узел, ОДИН блок N для всех вызовов, eth_call с тегом N):** по 1 стабильному и 1 волатильному пулу THENA V1 (адрес фабрики — dex.factory DEX THENA V1): `pool.metadata()` (селектор 0x392f37e9), `factory.getFee(bool stable)` (0x512b45ea, stable — из metadata), `pool.getAmountOut(uint256 amountIn, address tokenIn)` (0xf140a35a) — по 3 суммы в обе стороны (малая, ~1% резерва, ~10% резерва). Сохранить в tests/data/thena_v1/responses.json: `{block, pools: [{pool, metadata: "<result>", fee: "<result>", quotes: [{amount_in: "<десятичное>", token_in: "0x…", out: "<result>"}]}]}`; затем `cargo test --test bsc_dex_solidly_v1_family -- --ignored` и снять #[ignore].
 Пути проб у пулов без своего Universal Router (решение «122 X (проба через исполнитель)») — tests/bsc_dex_probe_paths.rs: причина пробы налога (шаг исполнителя без exec.executor_address — настройка, вида шага нет — не настройка) на пуле записи CAKE (route_common), откат исполнителя «deadline» — помеха, проба BNB только у видов со своим Universal Router (форк V2, THENA, Topaz — причина без dex.universal_router).

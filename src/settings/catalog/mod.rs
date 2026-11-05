@@ -13,6 +13,7 @@
 
 mod base;
 mod bitget;
+mod binance;
 pub mod dex;
 mod gate;
 mod index;
@@ -90,6 +91,7 @@ static PARTS: &[&[SettingDef]] = &[
     gate::GATE,
     bitget::BITGET,
     okx::OKX,
+    binance::BINANCE,
     dex::DEX,
     index::INDEX,
     kyber::KYBER,

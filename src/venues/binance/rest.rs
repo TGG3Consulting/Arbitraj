@@ -111,7 +111,7 @@ async fn send(
         } else {
             format!("{base}{path}?{query}")
         };
-        let mut req = ctx.http.request(m.clone(), url);
+        let mut req = ctx.client()?.request(m.clone(), url);
         if let Some(key) = key {
             req = req.header("X-MBX-APIKEY", key);
         }

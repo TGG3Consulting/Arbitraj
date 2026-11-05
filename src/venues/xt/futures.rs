@@ -32,7 +32,7 @@ pub async fn futures_get(ctx: &Ctx, base: &str, path: &str) -> GatewayResult<Val
     let lim = ctx.limits()?;
     let url = format!("{}{path}", base.trim_end_matches('/'));
     let req = ctx
-        .http
+        .client()?
         .get(url)
         .header("validate-appkey", key.as_str())
         .header("validate-timestamp", ts.to_string())

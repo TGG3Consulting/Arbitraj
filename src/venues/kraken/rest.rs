@@ -67,7 +67,7 @@ pub async fn public(ctx: &Ctx, method: &str, query: Params) -> GatewayResult<Val
     let lim = ctx.limits()?;
     let mut last = None;
     for base in ctx.rest_urls()? {
-        let req = ctx.http.get(format!("{base}{path_q}"));
+        let req = ctx.client()?.get(format!("{base}{path_q}"));
         match crate::gateway::http::exchange_full(req, lim).await {
             Ok(r) => return reply::parse_spot(ctx, &path, &path, &r, Op::Other),
             Err(f) if f.not_sent() || f.is_timeout() => last = Some(errors::from_fail(&f, &lim)),
@@ -103,7 +103,7 @@ pub async fn private(ctx: &Ctx, method: &str, form: Params, op: Op) -> GatewayRe
         let s =
             sign::api_sign(&path, &nonce, body.as_bytes(), &keys.secret).map_err(|e| ctx.tag(e))?;
         let req = ctx
-            .http
+            .client()?
             .post(format!("{base}{path}"))
             .header("API-Key", keys.key.as_str())
             .header("API-Sign", s)
@@ -152,7 +152,7 @@ pub async fn funding(
         let s = sign::api_sign(&signed_path, &nonce, body.as_bytes(), &keys.secret)
             .map_err(|e| ctx.tag(e))?;
         let mut req = ctx
-            .http
+            .client()?
             .request(method.clone(), format!("{base}{signed_path}"))
             .header("api-key", keys.key.as_str())
             .header("api-sign", s)

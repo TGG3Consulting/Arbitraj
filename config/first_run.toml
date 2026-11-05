@@ -1348,6 +1348,15 @@ rationale = "Пары *_usdt"
 prefill = { kind = "Venue", id = "xt" }
 
 [[section.rec]]
+name = "venue.local_ip"
+area = "площадка XT"
+unit = "IP"
+value = "37.59.21.151"
+source = "Живая проверка 05.11: ключ XT привязывается только к IPv4; по умолчанию сервер идёт к sapi.xt.com по IPv6 — AUTH_104 «Unbound IP request»"
+rationale = "IPv4 сервера OVH, привязанный к ключу XT (решение 178)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
 name = "venue.recv_window_ms"
 area = "площадка XT"
 unit = "мс"

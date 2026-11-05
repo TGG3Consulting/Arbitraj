@@ -132,7 +132,7 @@ async fn send(
         } else {
             format!("{base}{path}?{query}")
         };
-        let mut req = ctx.http.request(m.clone(), url);
+        let mut req = ctx.client()?.request(m.clone(), url);
         if let Some((key, body)) = &auth {
             req = req.header("X-BX-APIKEY", *key);
             if !body.is_empty() {

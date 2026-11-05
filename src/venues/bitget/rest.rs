@@ -96,7 +96,7 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
     let mut last = None;
     for base in &urls {
         let mut req = ctx
-            .http
+            .client()?
             .request(r.method.clone(), format!("{base}{path_q}"))
             .header("locale", LOCALE);
         if r.method == Method::POST {

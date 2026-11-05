@@ -74,7 +74,7 @@ pub async fn get(ctx: &Ctx, path: &str) -> GatewayResult<Value> {
     let signature = hex::encode(mac.finalize().into_bytes());
     let url = format!("{}{path}", base.trim_end_matches('/'));
     let req = ctx
-        .http
+        .client()?
         .get(url)
         .header("ApiKey", key.as_str())
         .header("Request-Time", ts)

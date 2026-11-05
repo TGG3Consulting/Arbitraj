@@ -96,7 +96,7 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
         } else {
             format!("{base}{}?{q}", r.path)
         };
-        let mut req = ctx.http.request(r.method.clone(), url);
+        let mut req = ctx.client()?.request(r.method.clone(), url);
         if r.method == Method::POST {
             req = req
                 .header("Content-Type", "application/json")

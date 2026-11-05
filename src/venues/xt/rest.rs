@@ -173,7 +173,7 @@ async fn send(ctx: &Ctx, c: Call<'_>) -> GatewayResult<Value> {
         format!("{}{}?{}", c.base, c.path, c.query)
     };
     let mut req = ctx
-        .http
+        .client()?
         .request(c.method.clone(), url)
         .header("Content-Type", "application/json");
     for (k, v) in &c.headers {

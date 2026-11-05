@@ -140,7 +140,7 @@ async fn send(
         } else {
             format!("{base}{path}?{q}")
         };
-        let mut req = ctx.http.request(m.clone(), url);
+        let mut req = ctx.client()?.request(m.clone(), url);
         if let Some(a) = &auth {
             req = req
                 .header("X-BAPI-API-KEY", &a.key)

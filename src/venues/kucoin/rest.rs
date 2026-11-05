@@ -108,7 +108,7 @@ pub async fn send_at(ctx: &Ctx, urls: &[String], r: Req<'_>) -> GatewayResult<Va
             format!("{base}{}?{enc_q}", r.path)
         };
         let mut req = ctx
-            .http
+            .client()?
             .request(r.method.clone(), url)
             .header("Content-Type", "application/json");
         if r.signed {

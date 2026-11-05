@@ -141,3 +141,11 @@ pub fn ticker(currency: &str) -> String {
 pub fn currency(ticker: &str) -> String {
     ticker.to_ascii_lowercase()
 }
+
+impl Ctx {
+    /// Решение 178: HTTP-клиент REST площадки — с исходящего адреса venue.local_ip, если он задан
+    /// (gateway/http_bind.rs); иначе общий. Ошибки: NotConfigured — не IP-адрес; Internal — клиент не собран.
+    pub fn client(&self) -> Result<reqwest::Client, crate::gateway::errors::GatewayError> {
+        crate::gateway::http_bind::client(&self.http, &self.settings, ID).map_err(|e| self.tag(e))
+    }
+}

@@ -57,9 +57,8 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
-    let http = reqwest::Client::builder()
-        // Редиректы выключены: в адресе запроса может быть токен, его нельзя отдавать другому адресу.
-        .redirect(reqwest::redirect::Policy::none())
+    // Редиректы выключены (gateway/http_bind.rs builder — одно место для всех клиентов, решение 178).
+    let http = arb::gateway::http_bind::builder()
         .build()
         .map_err(|e| e.to_string())?;
     let notifier = Notifier {

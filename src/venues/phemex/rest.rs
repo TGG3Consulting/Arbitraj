@@ -99,7 +99,7 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
     let mut last = None;
     for base in &urls {
         let mut req = ctx
-            .http
+            .client()?
             .request(r.method.clone(), format!("{base}{path_q}"));
         if r.signed {
             let keys = ctx.keys()?;

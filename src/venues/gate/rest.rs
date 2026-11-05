@@ -153,7 +153,7 @@ async fn send(
                 ))
             })?;
         let mut req = ctx
-            .http
+            .client()?
             .request(m.clone(), url)
             .header("Accept", "application/json");
         if !body.is_empty() {

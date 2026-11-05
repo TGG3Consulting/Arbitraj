@@ -272,6 +272,7 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.rest_url | площадка XT | `https://sapi.xt.com` | Спот REST API v4 | restApi.md |
 | venue.ws_url | площадка XT | `wss://stream.xt.com/public` | Публичный WebSocket | _websocket_public/base.md |
 | venue.futures_rest_url | площадка XT | `https://fapi.xt.com` | Панель «Балансы»: фьючерсы USDT-M | _futures_documentation/restApi.md |
+| venue.local_ip | площадка XT | `37.59.21.151` | IPv4 сервера, привязанный к ключу XT (решение 178) | Живая проверка 05.11: по умолчанию IPv6 — AUTH_104 «Unbound IP request» |
 | venue.futures_coin_rest_url | площадка XT | `https://dapi.xt.com` | Панель «Балансы»: фьючерсы Coin-M | _futures_documentation/restApi.md |
 | venue.user_center_url | площадка XT | `https://api.xt.com` | «Проверить подключение»: своя запись ключа | _user_center_documentation/restApi.md |
 | venue.quote_asset | площадка XT | `USDT` | Пары *_usdt | _market/2symbol.md |

@@ -68,6 +68,10 @@ fn known_codes_are_human() {
         gate::errors::Op::Withdraw,
         "",
     );
+    // Решение 179: у вывода TOO_FAST — «временно нельзя вывести» (повтор вывода), у прочего — лимит запросов.
+    assert_eq!(e.code, arb::gateway::errors::ErrorCode::WithdrawLocked);
+    let other = gate::errors::from_label(400, "TOO_FAST", "x", gate::errors::Op::Other, "");
+    assert_eq!(other.code, arb::gateway::errors::ErrorCode::RateLimited);
     let r = reason::human(&format!("перегон не состоялся: {}", e.message));
     assert!(
         r.text

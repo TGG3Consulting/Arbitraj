@@ -43,6 +43,10 @@ pub fn from_label(status: u16, label: &str, msg: &str, op: Op, raw: &str) -> Gat
         "READ_ONLY" | "FORBIDDEN" | "ACCOUNT_LOCKED" | "API_WITHDRAW_DISABLED" => {
             ErrorCode::InsufficientPermissions
         }
+        // Решение 179 (живой случай 05.11, сделка 20261105151153495ACH): у вывода TOO_FAST — «Withdrawal frequency is
+        // limited to 10s», вывод не принят — повтор того же вывода (core/transfer_locked.rs, transfer.locked_retry_ms
+        // по площадке gate не меньше 10000), как «временно нельзя вывести».
+        "TOO_FAST" if op == Op::Withdraw => ErrorCode::WithdrawLocked,
         "TOO_MANY_REQUESTS" | "TOO_FAST" => ErrorCode::RateLimited,
         "BALANCE_NOT_ENOUGH" | "QUANTITY_NOT_ENOUGH" => ErrorCode::InsufficientBalance,
         // Адрес вывода не из списка кабинета: «ADDRESS_NOT_USED — address not used in web console».

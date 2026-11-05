@@ -65,7 +65,7 @@ pub fn parse(data: &Value) -> GatewayResult<WithdrawHold> {
             amount,
         });
     }
-    Ok(WithdrawHold { items })
+    Ok(WithdrawHold::of(items))
 }
 
 /// Текст для человека: «предварительно зачислено 45 USDT (подтверждений 12, нужно для вывода 20, сеть BSC)».

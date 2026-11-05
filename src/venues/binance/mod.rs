@@ -188,7 +188,7 @@ impl Venue for Binance {
     }
 
     /// Решение 150: депозиты со статусом 6 «credited but cannot withdraw» (deposits.rs).
-    async fn withdraw_hold(&self) -> GatewayResult<WithdrawHold> {
+    async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<WithdrawHold> {
         deposits::withdraw_hold(&self.ctx).await
     }
 

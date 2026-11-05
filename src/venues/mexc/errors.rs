@@ -43,6 +43,10 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         429 => ErrorCode::RateLimited,
         // Баланс (10101 «does not have enough available balance», 30004 «Insufficient position», 30005 «Oversold»).
         10101 | 30004 | 30005 => ErrorCode::InsufficientBalance,
+        // Решение 166: 16021 «Some pre-crediting assets are temporarily unavailable for withdrawal» — средства
+        // временно заблокированы для вывода (предварительно зачисленный депозит, deposit_hold.rs). В таблице Error Code
+        // кода нет — по живому ответу MEXC на вывод 04.11.2026 (сделка 20261104173851521BABYDOGE).
+        16021 if op == Op::Withdraw => ErrorCode::WithdrawLocked,
         // 11444 «This feature is temporarily unavailable…» — однозначный отказ (решение 118, А-🟡3): у ордера и вывода
         // — отказ, а не «итог неизвестен».
         11444 if op == Op::Trade => ErrorCode::OrderRejected,

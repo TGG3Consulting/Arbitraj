@@ -138,6 +138,7 @@ pub mod touched;
 pub mod trade_ops;
 pub mod transfer_chain;
 pub mod transfer_credit;
+pub mod transfer_locked;
 pub mod transfer_status;
 pub mod transfer_tax;
 pub mod transfer_watch;

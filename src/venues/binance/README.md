@@ -34,7 +34,7 @@
 | `wallet.rs`, `networks_parse.rs` | config/getall (вне рабочих потоков, кэш): сеть BSC, contractAddress, флаги, комиссия, пределы, шаг вывода withdrawIntegerMultiple, минимум депозита — решение человека |
 | `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); адрес с tag — отказ |
 | `transfers.rs` | Вывод withdraw/apply (свой withdrawOrderId, walletType), статус по idList, поиск по withdrawOrderId; не чаще `venue.withdraw_history_min_ms` |
-| `deposits.rs` | Депозит по хешу (txId), удержание вывода — статус 6 (решение 150) |
+| `deposits.rs` | Депозит по хешу (txId), удержание вывода — статус 6 (решение 150); отказ вывода −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT → WithdrawLocked (решение 166, errors.rs) |
 | `fund_move.rs` | Funding → Spot после зачисления (`venue.deposit_to_spot`) |
 | `account.rs`, `all_balances.rs`, `key_check.rs` | Баланс спота; панель «Балансы» (Спот, Фонд, Все кошельки); «Проверить подключение» (apiRestrictions, canTrade/…, travel rule) |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта WebSocket API (`userDataStream.subscribe.signature`), balanceUpdate → MarketEvent::Balance |

@@ -41,6 +41,10 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         "200004" | "102421" | "115007" => ErrorCode::InsufficientBalance,
         // Вывод закрыт по монете/сети или аккаунт заморожен (260210), суточный предел (110003).
         "260210" | "110003" => ErrorCode::WithdrawRejected,
+        // Решение 166: 115008 «Insufficient withdrawable assets: Assets equivalent to … USDT (… ION) are currently locked
+        // from withdrawal» — средства временно заблокированы для вывода (квота вывода, withdraw_quota.rs). Смысл — по
+        // живому ответу KuCoin на вывод 05.11.2026 (сделка 20261105020010981ION); с таблицей Classic Spot сверить.
+        "115008" if op == Op::Withdraw => ErrorCode::WithdrawLocked,
         // Сервер (500000 «Internal server error», 230005 «System busy»): у денег итог неизвестен.
         "500000" | "230005" if op != Op::Other => ErrorCode::Timeout,
         "500000" | "230005" => ErrorCode::Unreachable,

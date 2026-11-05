@@ -45,6 +45,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod user_stream_conn;
 pub mod wallet;
+pub mod withdrawable;
 pub mod ws;
 pub mod ws_conn;
 
@@ -182,6 +183,11 @@ impl Venue for Bybit {
     /// Решение 113: у Bybit есть запрос баланса одной монеты (wallet-balance&coin=).
     async fn balance(&self, asset: &str) -> GatewayResult<Option<Balance>> {
         account::balance(&self.ctx, asset).await
+    }
+
+    /// Решение 166: удержание вывода — доступно минус «можно вывести» по счетам вывода, withdrawable.rs.
+    async fn withdraw_hold(&self, quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
+        withdrawable::withdraw_hold(&self.ctx, quote).await
     }
 
     /// Решение 144: все счета Bybit (UNIFIED, FUND, прочие из Asset Overview) — all_balances.rs, только чтение.

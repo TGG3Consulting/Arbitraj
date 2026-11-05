@@ -182,7 +182,7 @@ impl Venue for Mexc {
     }
 
     /// Решение 150: предварительно зачисленные депозиты (deposit/hisrec, статус 9) — их нельзя вывести.
-    async fn withdraw_hold(&self) -> GatewayResult<crate::core::types::WithdrawHold> {
+    async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
         deposit_hold::withdraw_hold(&self.ctx).await
     }
 

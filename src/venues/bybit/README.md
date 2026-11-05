@@ -38,6 +38,7 @@
 | `deposits.rs` | Статус депозита по txID |
 | `transfers.rs` | Вывод (forceChain=1, feeType=1, requestId, accountType = venue.withdraw_account), статус, поиск при неизвестном итоге |
 | `fund_move.rs` | FUND → UNIFIED после зачисления (venue.deposit_to_spot) |
+| `withdrawable.rs` | Решение 166: удержание вывода — `GET /v5/asset/withdraw/withdrawable-amount` (availableBalance − withdrawableAmount по счетам venue.withdraw_account); 131085 у вывода («delayed withdrawal») → WithdrawLocked (errors.rs) |
 | `account.rs` | Балансы UNIFIED, баланс одной монеты, «Проверить подключение» (права, master, UTA, IP) |
 | `all_balances.rs`, `all_balances_parse.rs` | Решение 144: панель «Балансы» — UNIFIED (wallet-balance), FUND (query-account-coins-balance), прочие счета (asset-overview: Earn, боты, копитрейдинг, займы…), параллельно, только чтение |
 | `order_rules.rs` | Правила ордера — одни у ордера и check_order; предел цены price-limit (venue.price_limit_check) |

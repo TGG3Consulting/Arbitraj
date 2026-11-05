@@ -33,7 +33,8 @@ fn mexc_16021() -> OpError {
 #[test]
 fn which_failures_are_safe_to_retry() {
     let e = mexc_16021();
-    assert_eq!(e.code, Some(ErrorCode::WithdrawRejected));
+    // Решение 166: 16021 — единый код «временно заблокировано для вывода».
+    assert_eq!(e.code, Some(ErrorCode::WithdrawLocked));
     assert!(retry_safe(&e), "16021 — вывод отказан, денег не ушло");
     // Ошибка до вывода (своя, без кода) — повтор безопасен.
     assert!(retry_safe(&OpError::from(

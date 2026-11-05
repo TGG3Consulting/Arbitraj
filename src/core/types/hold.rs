@@ -1,8 +1,12 @@
 //! Файл: core/types/hold.rs
-//! Что делает: удержания вывода (решение 150, Тигран 04.11.2026) — что биржа сейчас держит от вывода, хотя на балансе
-//! это видно как свободное (например, у MEXC предварительно зачисленные депозиты «can be used for trading but cannot be
-//! withdrawn» до полного числа подтверждений). Ядро по этому списку решает до покупки, пройдёт ли вывод (core/precheck_withdraw.rs).
-//! Кто вызывает: gateway/contract.rs (withdraw_hold), адаптеры бирж (venues/mexc/deposit_hold.rs), core/precheck_withdraw.rs.
+//! Что делает: удержания вывода (решение 150, Тигран 04.11.2026; решение 166, Тигран 05.11.2026) — что биржа сейчас
+//! держит от вывода, хотя на балансе это видно как свободное (MEXC — предварительно зачисленные депозиты «can be used
+//! for trading but cannot be withdrawn»; KuCoin — lockedAmount квоты вывода; Bybit — доступно минус «можно вывести»).
+//! Ядро по этому списку решает до покупки, пройдёт ли вывод (core/precheck_withdraw.rs).
+//! Решение 166: у площадки может не быть официального способа это узнать — тогда ответ «неизвестно» (unknown), а НЕ
+//! «удержаний нет»: ядро такую проверку не считает пройденной по фактам, а только пишет в журнал и не блокирует.
+//! Кто вызывает: gateway/contract.rs (withdraw_hold), адаптеры бирж (venues/*/deposit_hold.rs, withdraw_quota.rs …),
+//! core/precheck_withdraw.rs.
 //! От чего зависит: rust_decimal, serde.
 //! Настройки: нет.
 
@@ -20,15 +24,40 @@ pub struct HoldItem {
     pub reason: String,
 }
 
-/// Удержания вывода площадки сейчас. Пусто — ничего не держится (или у площадки такого механизма нет / он не описан).
+/// Удержания вывода площадки сейчас. Пусто и unknown = None — площадка по своему API сообщила, что ничего не держит.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WithdrawHold {
     pub items: Vec<HoldItem>,
+    /// Решение 166: Some(почему) — у площадки нет официального способа узнать, сколько можно вывести (или он не описан
+    /// в её документации); items тогда пуст. None — ответ по фактам API.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unknown: Option<String>,
 }
 
 impl WithdrawHold {
-    /// Нет ни одного удержания. Ошибок нет.
+    /// Ответ по фактам API: список удержаний (пустой — ничего не держится). Ошибок нет.
+    pub fn of(items: Vec<HoldItem>) -> Self {
+        Self {
+            items,
+            unknown: None,
+        }
+    }
+
+    /// Решение 166: «неизвестно» с причиной (нет в документации площадки). Ошибок нет.
+    pub fn unknown(why: impl Into<String>) -> Self {
+        Self {
+            items: vec![],
+            unknown: Some(why.into()),
+        }
+    }
+
+    /// Нет ни одного удержания (в том числе при «неизвестно»). Ошибок нет.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    /// Площадка не может сказать, сколько можно вывести (решение 166). Ошибок нет.
+    pub fn is_unknown(&self) -> bool {
+        self.unknown.is_some()
     }
 }

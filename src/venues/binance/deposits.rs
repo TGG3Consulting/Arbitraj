@@ -111,5 +111,5 @@ pub fn parse_hold(data: &Value) -> GatewayResult<WithdrawHold> {
             amount,
         });
     }
-    Ok(WithdrawHold { items })
+    Ok(WithdrawHold::of(items))
 }

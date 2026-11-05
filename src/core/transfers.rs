@@ -12,7 +12,10 @@
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
-//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network.
+//! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
+//! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
+//! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
+//! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs).
 
 use std::time::Duration;
 
@@ -183,10 +186,13 @@ async fn go(
         super::credit_chain::arm(core, ticket.as_ref(), to, acc.is_some(), started);
     }
     let mut attempt = 0;
+    // Решение 166: повторы после «средства временно заблокированы для вывода» (transfer_locked.rs).
+    let mut locked = 0;
     let created = loop {
         attempt += 1;
         match gw_from.withdraw(req.clone()).await {
             Ok(t) => break t,
+            Err(e) if super::transfer_locked::again(core, deal, from, &e, &mut locked).await => {}
             Err(e) => match rules_apply::on_error(core, "Вывод", from, Some(deal), &e, attempt)
                 .await
             {

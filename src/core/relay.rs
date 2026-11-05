@@ -6,6 +6,8 @@
 //! продажа по рынку здесь.
 //! Кто вызывает: stuck.rs.
 //! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, registry (площадки монеты).
+//! Решение 185: сделка биржа ↔ биржа без счёта DEX перегоняется на DEX только кошельком строки биржи, где лежит монета
+//! (dex_account::for_relay; строки нет — DEX не цель), счёт записывается в сделку до перевода.
 //! Настройки: stuck.max_relays, venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -34,6 +36,8 @@ fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
         .iter()
         .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
         .filter(|p| !paused.contains_key(&p.venue))
+        // Решение 185: на DEX — только если есть кошелёк (сделки или строки биржи, где монета).
+        .filter(|p| super::dex_account::for_relay(core, deal, &p.venue).is_ok())
         .map(|p| p.venue.clone())
         .collect()
 }
@@ -81,6 +85,17 @@ pub async fn run(core: &Core, mut deal: Deal) {
         return super::stuck::sold_by_market(core, deal, "перегон не выгоднее продажи здесь").await;
     };
     let from = deal.at.clone();
+    // Решение 185: сделка биржа ↔ биржа перегоняется на DEX — дальше она ведётся кошельком строки биржи, где монета
+    // (перевод, продажа на DEX, возврат USDT): счёт записывается в сделку до перевода.
+    if deal.dex_account.is_none()
+        && let Ok(Some(acc)) = super::dex_account::for_relay(core, &deal, &to)
+    {
+        deal.note(format!(
+            "Перегон на DEX — кошелёк {} (строка {} в маппинге)",
+            acc.0, from.0
+        ));
+        deal.dex_account = Some(acc);
+    }
     deal.step = Step::Transfer;
     deal.note(format!(
         "Перегон на {} (ожидается {})",

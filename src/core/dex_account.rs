@@ -124,3 +124,26 @@ pub fn open_deals_of(core: &Core, wallet: &str) -> Vec<String> {
         .filter(|id| matches!(of_deal(core, id), Ok(Some(a)) if a.0 == wallet))
         .collect()
 }
+
+/// Решение 185 (Тигран, 05.11.2026, живой случай 20261105184401098DEFI kucoin → mexc): перегон застрявшей монеты
+/// сделки биржа ↔ биржа (счёта DEX у сделки нет) на DEX шёл без кошелька — «Кошелёк DEX не выбран», сделка
+/// останавливалась. Счёт для перегона на `to`: у сделки уже есть счёт — он; `to` не DEX — не нужен (None); `to` — DEX,
+/// монета на бирже — кошелёк строки этой биржи в маппинге (решение 132: у каждой биржи свой кошелёк); строки нет —
+/// Err (на DEX не перегонять). Принимает: ядро, сделку, площадку-цель. Ошибок сверх Err нет.
+pub fn for_relay(core: &Core, d: &Deal, to: &VenueId) -> Result<Option<DexAccountId>, String> {
+    if let Some(a) = &d.dex_account {
+        return Ok(Some(a.clone()));
+    }
+    let kinds = rd(&core.inner.kinds);
+    let kind = |v: &VenueId| kinds.iter().find(|(id, _)| id == v).map(|(_, k)| *k);
+    if kind(to) != Some(VenueKind::Dex) {
+        return Ok(None);
+    }
+    if kind(&d.at) != Some(VenueKind::Cex) {
+        return Err(format!("перегон {} → {}: {NO_WALLET}", d.at.0, to.0));
+    }
+    match core.inner.deps.settings.accounts().row(&d.at.0) {
+        Some(id) => Ok(Some(DexAccountId(id))),
+        None => Err(format!("{}: {NO_WALLET}", d.at.0)),
+    }
+}

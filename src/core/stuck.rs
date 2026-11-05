@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
+use crate::notify::human::{self as h, Msg};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -38,9 +39,16 @@ pub async fn handle(core: &Core, mut deal: Deal) {
         .deps
         .log(Level::Warn, "core.stuck", Some(&deal.at.0), &text, None)
         .await;
+    // Решение 164: в Telegram — по-человечески (режим — словами, числа округлены).
+    let tg = Msg::new(h::WARN, "Монета застряла: продавать сейчас невыгодно")
+        .line(super::deal_text::coin_route(&deal))
+        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .kv("Что бот делает", mode_name(&mode))
+        .id(&deal.id)
+        .render();
     core.inner
         .deps
-        .notify("stuck.detected", Some(&deal.at.0), &text)
+        .notify("stuck.detected", Some(&deal.at.0), &tg)
         .await;
     // Варианты настройки — wait / loss_limit / relay (settings/catalog/trade.rs).
     match mode.as_str() {
@@ -100,7 +108,7 @@ async fn wait(core: &Core, mut deal: Deal) {
             return super::sell::market(core, deal, "ожидание: стало выгодно").await;
         }
     }
-    sold_by_market(core, deal, &format!("ожидание {ms} мс истекло")).await;
+    sold_by_market(core, deal, &format!("ждали {ms} мс — выгодно не стало")).await;
 }
 
 /// «Порог убытка»: убыток не больше stuck.max_loss_pct — по рынку; больше — алерт человеку.
@@ -127,23 +135,34 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
         return sold_by_market(
             core,
             deal,
-            &format!("убыток {}% ≤ порога {max}%", loss.round_dp(4)),
+            &format!("убыток {} не больше порога {}", h::pct(loss), h::pct(max)),
         )
         .await;
     }
-    let why = format!("убыток {}% выше порога {max}%", loss.round_dp(4));
+    let why = format!("убыток {} выше порога {}", h::pct(loss), h::pct(max));
     super::manual::raise_alert(core, deal, Some(loss), why).await;
 }
 
 /// Продажа по рынку с уведомлением stuck.market_sold.
 pub async fn sold_by_market(core: &Core, deal: Deal, why: &str) {
-    let text = format!(
-        "{}: {} {} на {} — продажа по рынку: {why}",
-        deal.id, deal.qty, deal.direction.asset.ticker, deal.at.0
-    );
+    let text = Msg::new(h::WARN, "Застрявшая монета продаётся по рынку")
+        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .reason(why)
+        .id(&deal.id)
+        .render();
     core.inner
         .deps
         .notify("stuck.market_sold", Some(&deal.at.0), &text)
         .await;
     super::sell::market(core, deal, why).await;
+}
+
+/// Режим застрявшей монеты словами (варианты stuck.mode — settings/catalog/trade.rs). Принимает: значение настройки.
+fn mode_name(mode: &str) -> String {
+    match mode {
+        "wait" => "ждёт, пока станет выгодно".into(),
+        "loss_limit" => "продаст, если убыток не выше порога, иначе спросит вас".into(),
+        "relay" => "ищет площадку, где продать выгоднее".into(),
+        other => other.to_string(),
+    }
 }

@@ -72,7 +72,16 @@ pub(super) async fn relay(
             );
             deps.log(Level::Info, "core.usdt_return", Some(&from.0), &text, None)
                 .await;
-            deps.notify("usdt.relayed", Some(&from.0), &text).await;
+            let tg = crate::notify::human::Msg::new(crate::notify::human::OK, "USDT перегнаны")
+                .line(format!(
+                    "{} {}",
+                    crate::notify::human::usd(amount),
+                    crate::notify::human::route(&from.0, &to.0)
+                ))
+                .kv("Зачислено", crate::notify::human::usd(t.amount))
+                .id(id)
+                .render();
+            deps.notify("usdt.relayed", Some(&from.0), &tg).await;
             Ok(t.amount)
         }
         Err(e) => {
@@ -83,7 +92,23 @@ pub(super) async fn relay(
             deps.log(Level::Error, "core.usdt_return", Some(&from.0), &text, None)
                 .await;
             // Решение 108: раньше — только журнал; деньги молча оставались не на той площадке.
-            deps.notify("usdt.relay_failed", Some(&from.0), &text).await;
+            let tg = crate::notify::human::Msg::new(
+                crate::notify::human::STOP,
+                "Перегон USDT не состоялся",
+            )
+            .line(format!(
+                "{} {}",
+                crate::notify::human::usd(amount),
+                crate::notify::human::route(&from.0, &to.0)
+            ))
+            .reason(&e.to_string())
+            .todo(format!(
+                "деньги остались на {} — перегнать вручную",
+                crate::notify::human::venue(&from.0)
+            ))
+            .id(id)
+            .render();
+            deps.notify("usdt.relay_failed", Some(&from.0), &tg).await;
             Err(e)
         }
     }

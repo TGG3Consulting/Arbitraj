@@ -109,8 +109,14 @@ pub async fn bnb_ok(core: &Core, d: &Direction, v: &VenueId, need: Decimal) -> R
 /// полученным балансам, без второго запроса).
 pub fn bnb_enough(who: &str, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
     if have < min + need {
+        // Решение 164: числа для глаз (количество BNB — 4 значащие цифры).
+        use crate::notify::human::qty;
         return Err(format!(
-            "{who}: BNB на газ {have} меньше минимума {min} + газ сделки {need}"
+            "{who}: BNB на газ {} — меньше нужного {} (запас {} + газ сделки {})",
+            qty(have),
+            qty(min + need),
+            qty(min),
+            qty(need)
         ));
     }
     Ok(())

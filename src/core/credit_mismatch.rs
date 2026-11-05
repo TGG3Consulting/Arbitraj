@@ -113,8 +113,9 @@ pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ti
             Ok(t) if t.status == TransferStatus::Credited => return,
             Ok(t) if t.status == TransferStatus::Rejected => {
                 let text = format!(
-                    "{}: зачислено по событию, а статус депозита {} — «отклонён»",
-                    o.deal, o.tx
+                    "{}: монеты пришли, а биржа показывает депозит {} «отклонён»",
+                    o.deal,
+                    crate::notify::human::addr(&o.tx)
                 );
                 report(&core, &o.to, text).await;
                 return;
@@ -125,10 +126,10 @@ pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ti
         if let Some(max) = max.filter(|m| !told && begun.elapsed() >= *m) {
             told = true;
             let text = format!(
-                "{}: зачислено по событию, а статус депозита {} — не «зачислен» за transfer.credit_mismatch_s ({} с): {status}",
+                "{}: монеты пришли, а биржа {} с не подтверждает депозит {} (статус: {status})",
                 o.deal,
-                o.tx,
-                max.as_secs()
+                max.as_secs(),
+                crate::notify::human::addr(&o.tx)
             );
             report(&core, &o.to, text).await;
         }
@@ -162,9 +163,9 @@ pub async fn no_event(core: Core, o: Owned, ticket: Ticket) {
         return;
     }
     let text = format!(
-        "{}: статус депозита {} «зачислен», а события зачисления {} нет за transfer.credit_mismatch_s ({} с)",
+        "{}: биржа показывает депозит {} «зачислен», а поступления {} на балансе нет {} с",
         o.deal,
-        o.tx,
+        crate::notify::human::addr(&o.tx),
         o.asset.ticker,
         max.as_secs()
     );
@@ -182,6 +183,6 @@ pub async fn report(core: &Core, to: &VenueId, text: String) {
         None,
     )
     .await;
-    deps.notify("exec.credit_mismatch", Some(&to.0), &text)
-        .await;
+    let tg = crate::notify::human::from_core("exec.credit_mismatch", Some(&to.0), &text);
+    deps.notify("exec.credit_mismatch", Some(&to.0), &tg).await;
 }

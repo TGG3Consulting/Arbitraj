@@ -275,8 +275,17 @@ async fn go(
         None,
     )
     .await;
-    deps.notify("deal.transfer_sent", Some(&from.0), &text)
-        .await;
+    let tg = crate::notify::human::Msg::new(crate::notify::human::INFO, "Перевод отправлен")
+        .line(format!(
+            "{} {} {}",
+            crate::notify::human::qty(qty),
+            asset.ticker,
+            crate::notify::human::route(&from.0, &to.0)
+        ))
+        .kv("Транзакция", crate::notify::human::addr(&tx))
+        .id(deal)
+        .render();
+    deps.notify("deal.transfer_sent", Some(&from.0), &tg).await;
     // 2. Ждём зачисления на получателе: событие или опрос (transfer_credit.rs).
     let leg = super::transfer_credit::Leg {
         deal,

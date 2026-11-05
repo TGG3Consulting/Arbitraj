@@ -8,6 +8,8 @@
 
 use rust_decimal::Decimal;
 
+use crate::notify::human::{self as hu, Msg};
+
 use crate::core::types::{
     ManualAction as A, ManualButton, ManualHolding, ManualRecord, RecordKind, StuckAlert,
 };
@@ -59,22 +61,24 @@ pub fn sold(deal_id: &str, ticker: &str, qty: Decimal) -> ManualButton {
 pub fn alert_record(a: &StuckAlert) -> ManualRecord {
     let (t, v, q) = (&a.asset.ticker, &a.venue.0, a.qty);
     let id = a.id.clone();
-    let loss = a
-        .loss_pct
-        .map(|l| l.to_string())
-        .unwrap_or_else(|| "—".into());
+    let loss = a.loss_pct.map(hu::pct).unwrap_or_else(|| "—".into());
+    let full = a.reason.clone().unwrap_or_default();
+    let coins = format!("{} {t} на {}", hu::qty(q), hu::venue(v));
     ManualRecord {
         key: ManualRecord::key_of(RecordKind::Alert, &a.id),
         kind: RecordKind::Alert,
         object_id: a.id.clone(),
         deal_id: a.deal_id.clone(),
         venue: v.clone(),
-        text: format!(
-            "{t} на {v}: {q}, убыток {loss}%\nПричина: {}\nСделка {}, {}",
-            a.reason.clone().unwrap_or_default(),
-            a.deal_id,
-            when(a.at)
-        ),
+        text: Msg::new(hu::STOP, "Застрявшая монета — нужно решение")
+            .kv("Монеты", &coins)
+            .kv("Убыток при продаже сейчас", &loss)
+            .reason(&full)
+            .kv("Когда", when(a.at))
+            .id(&a.deal_id)
+            .render(),
+        reason: crate::notify::reason::short(&full),
+        reason_full: full.clone(),
         buttons: vec![
             btn(
                 "sell_now",
@@ -120,13 +124,17 @@ pub fn holding_record(h: &ManualHolding) -> ManualRecord {
         object_id: h.id.clone(),
         deal_id: h.deal_id.clone(),
         venue: v.clone(),
-        text: format!(
-            "{t} на {v}: {}\nПричина: {}\nСделка {}, взяты {}",
-            h.qty,
-            h.reason,
-            h.deal_id,
-            when(h.taken_at)
-        ),
+        text: Msg::new(hu::INFO, "Монеты у вас («Беру на себя»)")
+            .kv(
+                "Монеты",
+                format!("{} {t} на {}", hu::qty(h.qty), hu::venue(v)),
+            )
+            .reason(&h.reason)
+            .kv("Взяты", when(h.taken_at))
+            .id(&h.deal_id)
+            .render(),
+        reason: crate::notify::reason::short(&h.reason),
+        reason_full: h.reason.clone(),
         buttons: vec![
             btn(
                 "return_bot",

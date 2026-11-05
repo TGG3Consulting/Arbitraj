@@ -236,10 +236,24 @@ async fn run(core: &Core, d: Direction) {
     deal.buy = Some(r.clone());
     // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт).
     super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts);
-    let text = format!(
-        "{}: куплено {} {} на {} по {}",
-        deal.id, r.filled_qty, d.asset.ticker, d.buy_on.0, r.avg_price
-    );
+    let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Куплено")
+        .line(format!(
+            "{} {} на {} по {}",
+            crate::notify::human::qty(r.filled_qty),
+            d.asset.ticker,
+            crate::notify::human::venue(&d.buy_on.0),
+            crate::notify::human::qty(r.avg_price)
+        ))
+        .kv(
+            "Сумма",
+            crate::notify::human::usd(r.filled_qty * r.avg_price),
+        )
+        .kv(
+            "План",
+            crate::notify::human::signed_usd(deal.plan_profit_usd),
+        )
+        .id(&deal.id)
+        .render();
     deps.notify("deal.buy_filled", Some(&d.buy_on.0), &text)
         .await;
     if r.filled_qty < plan.qty {

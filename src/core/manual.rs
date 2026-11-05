@@ -11,6 +11,7 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 
 use crate::core::types::{ManualHolding, StuckAlert};
+use crate::notify::human::{self as hu, Msg};
 use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
@@ -104,7 +105,7 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>,
         at: Utc::now(),
     };
     let loss = loss_pct
-        .map(|l| format!("{}%", l.round_dp(4)))
+        .map(hu::pct)
         .unwrap_or_else(|| "не известен (нет котировки)".into());
     deal.step = Step::WaitingHuman;
     deal.note(format!(
@@ -112,10 +113,15 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>,
         alert.id
     ));
     super::ledger::save(core, &deal).await;
-    let text = format!(
-        "{}: {} {} на {} — {reason}. Убыток при продаже сейчас {loss}. Алерт {}",
-        deal.id, deal.qty, alert.asset.ticker, alert.venue.0, alert.id
-    );
+    // Решение 164: коротко и по-человечески; кнопки — в сообщении manual.record.
+    let text = Msg::new(hu::STOP, "Нужно ваше решение: монета застряла с убытком")
+        .line(super::deal_text::coin_route(&deal))
+        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .kv("Убыток при продаже сейчас", &loss)
+        .reason(&reason)
+        .todo("«Продать сейчас», «Продать и перегнать» или «Беру на себя» — в сообщении ниже или на экране «Ручное управление»")
+        .id(&deal.id)
+        .render();
     lk(&core.inner.alerts).insert(alert.id.clone(), (alert.clone(), deal));
     persist(core).await;
     core.inner.live.send(CoreEvent::StuckAlert(alert.clone()));
@@ -171,11 +177,10 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
         asset: alert.asset.clone(),
         qty: deal.qty,
         reason: format!(
-            "алерт {}: {} ({who})",
-            alert.id,
+            "{} (взял: {who})",
             alert.reason.clone().unwrap_or_else(|| alert
                 .loss_pct
-                .map(|l| format!("убыток {}%", l.round_dp(4)))
+                .map(|l| format!("убыток {}", hu::pct(l)))
                 .unwrap_or_default())
         ),
         taken_at: Utc::now(),
@@ -190,12 +195,29 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
     lk(&core.inner.holdings).insert(h.id.clone(), (h.clone(), deal));
     persist(core).await;
     let text = format!(
-        "{} {} на {} — у человека ({})",
-        h.qty, h.asset.ticker, h.venue.0, h.reason
+        "{} {} на {} — у вас ({})",
+        hu::qty(h.qty),
+        h.asset.ticker,
+        hu::venue(&h.venue.0),
+        h.reason
     );
+    let tg = Msg::new(hu::INFO, "Монеты взяты на себя — бот их больше не ведёт")
+        .kv(
+            "Монеты",
+            format!(
+                "{} {} на {}",
+                hu::qty(h.qty),
+                h.asset.ticker,
+                hu::venue(&h.venue.0)
+            ),
+        )
+        .reason(&h.reason)
+        .todo("продать самому и нажать «Продано вручную» или «Вернуть боту»")
+        .id(&h.deal_id)
+        .render();
     core.inner
         .deps
-        .notify("manual.taken", Some(&h.venue.0), &text)
+        .notify("manual.taken", Some(&h.venue.0), &tg)
         .await;
     Ok(text)
 }

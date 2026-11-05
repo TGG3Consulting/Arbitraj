@@ -11,17 +11,20 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{ManualAction as A, ManualHolding, ManualRecord, RecordKind, StuckAlert};
 
+use crate::notify::human::{Msg, STOP, usd};
+
 use super::deal::Deal;
+use super::deal_text;
 use super::engine::{Core, lk};
 use super::manual_rows::{alert_record, btn, holding_record, sold};
 
-/// Последняя запись хронологии сделки без «Предварительный убыток» — причина остановки (как lastNote экрана).
+/// Последняя запись хронологии сделки без «Предварительный убыток» и «В итог дня» — причина остановки.
 fn last_note(d: &Deal) -> String {
     d.timeline
         .iter()
         .rev()
         .map(|(_, x)| x)
-        .find(|x| !x.starts_with("Предварительный убыток"))
+        .find(|x| !x.starts_with("Предварительный убыток") && !x.starts_with("В итог дня"))
         .cloned()
         .unwrap_or_default()
 }
@@ -35,21 +38,25 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
     let same = (v == buy).then(|| format!("монеты уже на площадке покупки {buy}"));
     let est = d
         .provisional_usd
-        .map(|x| x.to_string())
+        .map(crate::notify::human::signed_usd)
         .unwrap_or_else(|| "—".into());
+    let full = last_note(d);
     ManualRecord {
         key: ManualRecord::key_of(RecordKind::Halted, &d.id),
         kind: RecordKind::Halted,
         object_id: d.id.clone(),
         deal_id: d.id.clone(),
         venue: v.clone(),
-        text: format!(
-            "{t} на {v}: {}, вложено {}, оценка в итоге дня {est}\nПричина: {}\nСделка {}",
-            d.qty,
-            d.invested,
-            last_note(d),
-            d.id
-        ),
+        text: Msg::new(STOP, "Сделка остановлена — ждёт разбора")
+            .line(deal_text::coin_route(d))
+            .kv("Монеты", deal_text::coins_at(d))
+            .kv("Вложено", usd(d.invested))
+            .kv("В итоге дня", &est)
+            .reason(&full)
+            .id(&d.id)
+            .render(),
+        reason: crate::notify::reason::short(&full),
+        reason_full: full.clone(),
         buttons: vec![
             btn(
                 "sell_now",

@@ -41,8 +41,30 @@ pub async fn slow(
     let deps = &core.inner.deps;
     deps.log(Level::Warn, "core.transfer_slow", Some(&to.0), &text, None)
         .await;
-    deps.notify("exec.transfer_slow", Some(&to.0), &text).await;
-    deps.notify("route.quarantine_in", Some(&to.0), &text).await;
+    let tg = |head: &str| {
+        crate::notify::human::Msg::new(crate::notify::human::WARN, head)
+            .line(format!(
+                "{} → {}",
+                asset.ticker,
+                crate::notify::human::venue(&to.0)
+            ))
+            .kv("В пути", format!("{secs} с — норма {max} с"))
+            .line("Монета на паузе (карантин), пока перевод не дойдёт")
+            .id(deal)
+            .render()
+    };
+    deps.notify(
+        "exec.transfer_slow",
+        Some(&to.0),
+        &tg("Перевод идёт дольше нормы"),
+    )
+    .await;
+    deps.notify(
+        "route.quarantine_in",
+        Some(&to.0),
+        &tg("Монета на паузе: перевод идёт дольше нормы"),
+    )
+    .await;
 }
 
 /// Перевод дошёл: если монета была в карантине из-за медленного перевода — снять и уведомить.
@@ -60,6 +82,16 @@ pub async fn release(core: &Core, asset: &Asset, to: &VenueId) {
         .await;
     core.inner
         .deps
-        .notify("route.quarantine_out", Some(&to.0), &text)
+        .notify(
+            "route.quarantine_out",
+            Some(&to.0),
+            &crate::notify::human::Msg::new(crate::notify::human::OK, "Монета снова торгуется")
+                .line(format!(
+                    "{}: перевод на {} дошёл",
+                    asset.ticker,
+                    crate::notify::human::venue(&to.0)
+                ))
+                .render(),
+        )
         .await;
 }

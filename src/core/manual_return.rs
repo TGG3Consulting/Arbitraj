@@ -78,7 +78,19 @@ async fn return_locked(
     lk(&core.inner.holdings).remove(holding_id);
     super::manual::persist(core).await;
     super::ledger::save(core, &deal).await;
-    let text = format!("{qty} {} на {} возвращены боту", h.asset.ticker, h.venue.0);
+    let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Монеты возвращены боту")
+        .kv(
+            "Монеты",
+            format!(
+                "{} {} на {}",
+                crate::notify::human::qty(qty),
+                h.asset.ticker,
+                crate::notify::human::venue(&h.venue.0)
+            ),
+        )
+        .line("Бот продаст их по общим правилам")
+        .id(&deal.id)
+        .render();
     core.inner
         .deps
         .notify("manual.returned", Some(&h.venue.0), &text)

@@ -83,9 +83,9 @@ pub async fn run(core: &Core, mut deal: Deal) {
     let from = deal.at.clone();
     deal.step = Step::Transfer;
     deal.note(format!(
-        "Перегон на {} (ожидается {} USDT)",
-        to.0,
-        v.round_dp(4)
+        "Перегон на {} (ожидается {})",
+        crate::notify::human::venue(&to.0),
+        crate::notify::human::usd(v)
     ));
     super::ledger::save(core, &deal).await;
     let price = deal.buy.as_ref().map(|b| b.avg_price).unwrap_or_default();
@@ -93,10 +93,19 @@ pub async fn run(core: &Core, mut deal: Deal) {
         Ok((sent, credited)) => {
             super::fills::transfer(core, &mut deal, &sent, &credited, &to, price).await;
             deal.relays += 1;
-            let text = format!(
-                "{}: {} {} перегнаны {} → {} ({}-й раз)",
-                deal.id, deal.qty, a.ticker, from.0, to.0, deal.relays
-            );
+            let text = crate::notify::human::Msg::new(
+                crate::notify::human::INFO,
+                "Застрявшая монета перегнана",
+            )
+            .line(format!(
+                "{} {} {}",
+                crate::notify::human::qty(deal.qty),
+                a.ticker,
+                crate::notify::human::route(&from.0, &to.0)
+            ))
+            .kv("Перегон", format!("{}-й", deal.relays))
+            .id(&deal.id)
+            .render();
             core.inner
                 .deps
                 .notify("stuck.relayed", Some(&to.0), &text)

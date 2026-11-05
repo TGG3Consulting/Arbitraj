@@ -113,7 +113,16 @@ pub async fn check(
         let t = format!("{label}: свободно {free} {quote} — не больше порога алерта {min}");
         deps.log(Level::Warn, "core.low_usdt", Some(&venue.0), &t, None)
             .await;
-        deps.notify("risk.low_usdt", Some(&venue.0), &t).await;
+        let tg =
+            crate::notify::human::Msg::new(crate::notify::human::WARN, "Мало USDT для покупок")
+                .line(format!(
+                    "{label}: свободно {} {quote}, порог {}",
+                    crate::notify::human::money(free),
+                    crate::notify::human::money(min)
+                ))
+                .todo("пополнить площадку")
+                .render();
+        deps.notify("risk.low_usdt", Some(&venue.0), &tg).await;
     } else if was.is_some() {
         let t = format!("{label}: свободно {free} {quote} — снова выше порога алерта {min}");
         deps.log(Level::Info, "core.low_usdt", Some(&venue.0), t, None)

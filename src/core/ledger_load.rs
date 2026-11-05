@@ -33,9 +33,11 @@ pub async fn load(core: &Core) {
         // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
         if d.is_open() && d.step != Step::WaitingHuman {
             let text = format!(
-                "Сделка {} ({}, шаг {:?}, {} монет на {}) прервана перезапуском — проверьте вручную",
-                d.id, d.direction.asset.ticker, d.step, d.qty, d.at.0
+                "Сделка прервана перезапуском (шаг: {}, {}) — проверьте вручную",
+                super::deal_text::step_name(d.step),
+                super::deal_text::coins_at(&d)
             );
+            let tg = super::deal_text::interrupted(&d);
             d.step = Step::Halted;
             d.note(text.clone());
             // Решения 53, 152: остановленная сделка — оценка позиции в итог дня (цены ещё нет — худший случай).
@@ -44,11 +46,16 @@ pub async fn load(core: &Core) {
             let est =
                 super::daily_value::estimate(&d, Err("перезапуск: рыночных данных ещё нет".into()));
             if let Some(stop) = super::daily::record(core, &mut d, est).await {
-                deps.notify("risk.daily_loss", None, &stop).await;
+                deps.notify(
+                    "risk.daily_loss",
+                    None,
+                    &super::deal_text::daily_stop(&stop),
+                )
+                .await;
             }
             deps.log(Level::Warn, "core.ledger", Some(&d.at.0), &text, None)
                 .await;
-            deps.notify("risk.stop", Some(&d.at.0), &text).await;
+            deps.notify("risk.stop", Some(&d.at.0), &tg).await;
             save(core, &d).await;
         } else if super::usdt_return_state::on_restart(core, &mut d).await {
             // Решение 138: возврат USDT закрытой сделки прерван перезапуском — «не вернулись», страховка.

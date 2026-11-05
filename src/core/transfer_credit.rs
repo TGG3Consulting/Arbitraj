@@ -125,7 +125,17 @@ pub(super) async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<
         None,
     )
     .await;
-    deps.notify("deal.transfer_credited", Some(&leg.to.0), &text)
+    let tg = crate::notify::human::Msg::new(crate::notify::human::OK, "Перевод зачислен")
+        .line(format!(
+            "{} {} {}",
+            crate::notify::human::qty(t.amount),
+            leg.asset.ticker,
+            crate::notify::human::route(&leg.from.0, &leg.to.0)
+        ))
+        .kv("В пути", format!("{} с", secs.round_dp(1)))
+        .id(leg.deal)
+        .render();
+    deps.notify("deal.transfer_credited", Some(&leg.to.0), &tg)
         .await;
 }
 
@@ -181,7 +191,21 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
                             None,
                         )
                         .await;
-                        deps.notify("transfer.to_trading_failed", Some(&leg.to.0), &text)
+                        let tg = crate::notify::human::Msg::new(
+                            crate::notify::human::WARN,
+                            "Зачислено, но не переведено на торговый счёт",
+                        )
+                        .line(format!(
+                            "{} {} на {}",
+                            crate::notify::human::qty(t.amount),
+                            leg.asset.ticker,
+                            crate::notify::human::venue(&leg.to.0)
+                        ))
+                        .reason(&e.message)
+                        .todo("перевести на торговый (спот) счёт вручную")
+                        .id(leg.deal)
+                        .render();
+                        deps.notify("transfer.to_trading_failed", Some(&leg.to.0), &tg)
                             .await;
                         return;
                     }

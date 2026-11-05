@@ -184,8 +184,24 @@ pub async fn external(core: &Core, b: &BalanceChange) {
     )
     .await;
     if !dust {
-        deps.notify("balance.external", Some(&b.venue.0), &text)
-            .await;
+        let tg =
+            crate::notify::human::Msg::new(crate::notify::human::WARN, "Баланс изменился не ботом")
+                .line(format!(
+                    "{} {}{} на {}",
+                    b.asset.ticker,
+                    if b.delta.is_sign_negative() { "" } else { "+" },
+                    crate::notify::human::qty(b.delta),
+                    crate::notify::human::venue(&b.venue.0)
+                ))
+                .line(
+                    b.tx_hash
+                        .as_deref()
+                        .map(|h| format!("Транзакция: {}", crate::notify::human::addr(h)))
+                        .unwrap_or_default(),
+                )
+                .todo("если это не вы — проверьте площадку")
+                .render();
+        deps.notify("balance.external", Some(&b.venue.0), &tg).await;
     }
 }
 

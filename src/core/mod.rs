@@ -46,6 +46,7 @@ pub mod daily_load;
 pub mod daily_value;
 pub mod day_view;
 pub mod deal;
+pub mod deal_text;
 pub mod deps;
 pub mod dex_account;
 pub mod dirctx;

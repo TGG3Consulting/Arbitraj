@@ -44,9 +44,9 @@ pub enum UsdtReturn {
 /// Текст страховки «USDT не вернулись». Принимает: id сделки, сумму, где лежат, причину. Ошибок нет.
 pub fn not_returned_text(deal: &str, amount: Decimal, at: &VenueId, why: &str) -> String {
     format!(
-        "USDT не вернулись: сделка {deal}, сумма {} USDT, лежат на {} — {why}. Перегоните на площадку покупки вручную",
-        amount.round_dp(4),
-        at.0
+        "USDT не вернулись: сделка {deal}, {} лежат на {} — {why}. Перегоните на площадку покупки вручную",
+        crate::notify::human::usd(amount),
+        crate::notify::human::venue(&at.0)
     )
 }
 
@@ -63,7 +63,24 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
         None,
     )
     .await;
-    deps.notify("usdt.not_returned", Some(&at.0), &text).await;
+    // Решение 164: в Telegram — по-человечески, id сделки внизу.
+    let tg = crate::notify::human::Msg::new(
+        crate::notify::human::WARN,
+        "USDT не вернулись на площадку покупки",
+    )
+    .kv(
+        "Сумма",
+        format!(
+            "{} — лежат на {}",
+            crate::notify::human::usd(amount),
+            crate::notify::human::venue(&at.0)
+        ),
+    )
+    .reason(why)
+    .todo("перегнать USDT на площадку покупки вручную")
+    .id(deal)
+    .render();
+    deps.notify("usdt.not_returned", Some(&at.0), &tg).await;
 }
 
 /// Ставит состояние возврата закрытой сделке в учёте (память, SQLite, интерфейс) с записью в хронологию.

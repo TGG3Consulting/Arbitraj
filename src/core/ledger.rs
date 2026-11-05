@@ -68,7 +68,10 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     if step == Step::Closed {
         deal.result_usd = Some(result);
     }
-    deal.note(format!("{step:?}: {why}"));
+    deal.note(format!(
+        "Сделка {}: {why}",
+        super::deal_text::step_name(step)
+    ));
     // Итог дня (решения 53, 152): закрыта — факт (снимает оценку этой сделки); остановлена или «Беру на себя» —
     // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
     let stop = match step {
@@ -111,7 +114,8 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
     // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
     if deal.buy.is_some() || !deal.invested.is_zero() {
-        deps.notify("deal.closed", Some(&d.buy_on.0), &text).await;
+        let tg = super::deal_text::closed(deal, why);
+        deps.notify("deal.closed", Some(&d.buy_on.0), &tg).await;
     }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
@@ -119,7 +123,12 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     if let Some(stop) = stop {
         deps.log(Level::Warn, "core.daily_loss", None, &stop, None)
             .await;
-        deps.notify("risk.daily_loss", None, &stop).await;
+        deps.notify(
+            "risk.daily_loss",
+            None,
+            &super::deal_text::daily_stop(&stop),
+        )
+        .await;
     }
     let cooldown = deps
         .settings

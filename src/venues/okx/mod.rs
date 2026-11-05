@@ -52,7 +52,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawHold, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
@@ -195,6 +195,27 @@ impl Venue for Okx {
     }
 
     /// Решение 102: депозит на Funding — перевод на Trading (venue.deposit_to_spot), fund_move.rs.
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Торговый (Trading)» (18) и «Фонд (Funding)» (6); deposit_to_trading — 6 → 18 (fund_move.rs), только если адрес депозита BSC зачисляет на Funding.
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Торговый (Trading)" => AccountRole::Trading,
+            "Фонд (Funding)" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::move_funds(
+            &self.ctx,
+            &asset.ticker,
+            amount,
+            deposit_addr::FUNDING,
+            deposit_addr::TRADING,
+        )
+        .await
+    }
+
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

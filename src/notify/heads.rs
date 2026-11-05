@@ -73,6 +73,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "manual.record" => (WARN, "Ручное управление: нужно действие"),
         "manual.taken" => (INFO, "Монеты взяты на себя"),
         "manual.returned" => (OK, "Монеты возвращены боту"),
+        "balance.sell" => (INFO, "Продажа из панели «Балансы»"),
         "send.channel_rejected" => (WARN, "Канал отправки не принял транзакцию"),
         "send.tx_not_included" => (WARN, "Транзакция не попала в блок"),
         "send.tx_reverted" => (STOP, "Транзакция откатилась — газ потрачен"),

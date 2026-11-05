@@ -50,7 +50,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
@@ -188,6 +188,27 @@ impl Venue for Bitget {
     }
 
     /// Решение 102: депозит на фонд — перевод на спот (venue.deposit_to_spot), fund_move.rs.
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Спот» и «Фонд (Funding/P2P)»; deposit_to_trading — p2p → spot (fund_move.rs).
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Спот" => AccountRole::Trading,
+            "Фонд (Funding/P2P)" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::move_funds(
+            &self.ctx,
+            &asset.ticker,
+            amount,
+            fund_move::FUNDING,
+            fund_move::SPOT,
+        )
+        .await
+    }
+
     async fn deposit_to_trading(
         &self,
         asset: &Asset,

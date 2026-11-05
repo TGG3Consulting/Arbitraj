@@ -7,6 +7,9 @@
 //!
 //! Карта файлов — core/README.md и ARCHITECTURE.md («Карта ядра»).
 
+pub mod balance_sell;
+pub mod balance_sell_check;
+pub mod balance_sell_report;
 pub mod blacklist;
 pub mod calc_report;
 pub mod calc_timing;
@@ -134,6 +137,7 @@ pub mod subscribe;
 pub mod tick;
 pub mod tick_slow;
 pub mod ticker_index;
+pub mod to_trading;
 pub mod touched;
 pub mod trade_ops;
 pub mod transfer_chain;

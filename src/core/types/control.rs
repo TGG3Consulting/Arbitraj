@@ -101,6 +101,13 @@ pub enum ManualAction {
     ReleaseQuarantine { id: String },
     /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset).
     ResetDailyLimit,
+    /// Решение 174: «Продать» в панели «Балансы» — всё свободное количество монеты `asset` со счёта `account` биржи
+    /// `venue` по рынку в котируемую монету (venue.quote_asset); не на торговом счёте — сначала перевод на него.
+    SellBalance {
+        venue: String,
+        account: String,
+        asset: String,
+    },
 }
 
 impl ManualAction {
@@ -126,6 +133,7 @@ impl ManualAction {
             Self::ResumeVenue { .. } => "Снять паузу",
             Self::ReleaseQuarantine { .. } => "Снять карантин",
             Self::ResetDailyLimit => "Сбросить лимит дня",
+            Self::SellBalance { .. } => "Продать",
         }
     }
 }

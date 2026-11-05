@@ -36,6 +36,13 @@ pub async fn to_spot(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResult
     if !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
         return Ok(None);
     }
+    transfer(ctx, asset, amount).await.map(Some)
+}
+
+/// Решение 174: тот же перевод без условия venue.deposit_to_spot — для явного действия человека (кнопка «Продать»
+/// панели «Балансы», «Продать сейчас» по монете на фонде; контракт move_to_trading). Принимает: монету, сумму.
+/// Возвращает: текст перевода. Ошибки: как у to_spot.
+pub async fn transfer(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
     if amount <= Decimal::ZERO {
         return Err(ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
@@ -62,9 +69,9 @@ pub async fn to_spot(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResult
     )
     .await?;
     let id = num::text_opt(&data, "tranId").unwrap_or_else(|| "—".into());
-    Ok(Some(format!(
+    Ok(format!(
         "BingX: {} {} переведено с фондового счёта на спот (tranId {id})",
         amount.normalize(),
         asset.ticker
-    )))
+    ))
 }

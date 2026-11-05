@@ -48,7 +48,7 @@ use crate::core::types::{
     AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, Quote, SendChannelInfo, Side,
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
-use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
@@ -82,6 +82,12 @@ impl Bingx {
             fees: Fees::default(),
             addrs: DepositAddrs::default(),
         }
+    }
+
+    /// Справочник пар адаптера (общий: клон делит те же данные). Тесты кладут в него записанный ответ common/symbols
+    /// (Symbols::load) — проверка ордера check_order идёт по нему без сети. Ошибок нет.
+    pub fn symbols(&self) -> Symbols {
+        self.symbols.clone()
     }
 
     /// Ответ «не применимо» для функций контракта, которых у биржи нет (они только у DEX).
@@ -172,6 +178,20 @@ impl Venue for Bingx {
     /// Решение 144: все счета BingX (спот, фонд, фьючерсы USDT-M / COIN-M / стандартные, обзор) — all_balances.rs.
     async fn account_balances(&self) -> GatewayResult<Vec<AccountBalances>> {
         all_balances::read(&self.ctx).await
+    }
+
+    /// Решение 174: роль счёта панели «Балансы» для кнопки «Продать» — названия те же, что в all_balances.rs: «Спот» и «Фонд (Funding)»; deposit_to_trading — fund → spot (fund_move.rs).
+    fn account_role(&self, account: &str) -> AccountRole {
+        match account {
+            "Спот" => AccountRole::Trading,
+            "Фонд (Funding)" => AccountRole::ToTrading,
+            _ => AccountRole::Other,
+        }
+    }
+
+    /// Решение 174: перевод со счёта ToTrading на торговый без условий deposit_to_trading (fund_move.rs).
+    async fn move_to_trading(&self, asset: &Asset, amount: Decimal) -> GatewayResult<String> {
+        fund_move::transfer(&self.ctx, asset, amount).await
     }
 
     async fn deposit_to_trading(

@@ -14,6 +14,7 @@ pub mod account_update;
 pub mod all_balances;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -190,6 +191,11 @@ impl Venue for Binance {
     /// Решение 150: депозиты со статусом 6 «credited but cannot withdraw» (deposits.rs).
     async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<WithdrawHold> {
         deposits::withdraw_hold(&self.ctx).await
+    }
+
+    /// Решение 175: делистинги — график делистинга спота GET /sapi/v1/spot/delist-schedule (delist.rs).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        delist::delistings(&self.ctx, &self.symbols).await
     }
 
     /// Решение 102: депозит, зачисленный на Funding, — на спот (fund_move.rs, venue.deposit_to_spot).

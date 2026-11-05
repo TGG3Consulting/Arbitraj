@@ -185,6 +185,13 @@ impl Venue for Kraken {
         all_balances::read(&self.ctx).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /0/public/AssetPairs только status (online, cancel_only, post_only, limit_only, reduce_only), времени делистинга нет.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /0/public/AssetPairs только status (online, cancel_only, post_only, limit_only, reduce_only), времени делистинга нет",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

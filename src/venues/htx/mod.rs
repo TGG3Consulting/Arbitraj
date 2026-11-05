@@ -181,6 +181,13 @@ impl Venue for Htx {
         all_balances::read(&self.ctx).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /v2/settings/common/symbols нет времени делистинга (state offline — пара уже снята).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /v2/settings/common/symbols нет времени делистинга (state offline — пара уже снята)",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, &self.spot).await
     }

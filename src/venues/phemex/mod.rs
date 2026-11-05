@@ -179,6 +179,13 @@ impl Venue for Phemex {
         all_balances::read(&self.ctx, &self.symbols).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: даты делистинга (timeline в GET /public/products-plus) не сверены с официальной документацией (поля не прочитаны в сессии решения 175) — до проверки не используются.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "даты делистинга (timeline в GET /public/products-plus) не сверены с официальной документацией (поля не прочитаны в сессии решения 175) — до проверки не используются",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, &self.symbols, None).await
     }

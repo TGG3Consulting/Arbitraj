@@ -176,6 +176,13 @@ impl Venue for Bybit {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: в GET /v5/market/instruments-info (спот) нет времени делистинга (status у спота — только Trading); объявления GET /v5/announcements/index — монета и время только текстом, текст не разбирается.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "в GET /v5/market/instruments-info (спот) нет времени делистинга (status у спота — только Trading); объявления GET /v5/announcements/index — монета и время только текстом, текст не разбирается",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

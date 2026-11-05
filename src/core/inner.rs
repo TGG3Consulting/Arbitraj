@@ -155,6 +155,8 @@ pub struct Inner {
     pub cycles: super::cycle_state::CycleState,
     /// Фоновая очередь расчёта «без потолка» (решение 141, uncapped_state.rs).
     pub uncapped: super::uncapped_state::State,
+    /// Делистинги бирж (решение 175, delist.rs).
+    pub delist: super::delist::DelistState,
 }
 
 impl Inner {
@@ -236,6 +238,7 @@ impl Inner {
             card_jobs: Mutex::default(),
             cycles: Default::default(),
             uncapped: Default::default(),
+            delist: Default::default(),
         }
     }
 }

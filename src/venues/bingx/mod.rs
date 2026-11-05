@@ -14,6 +14,7 @@ pub mod all_balances;
 pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod depth;
 pub mod errors;
@@ -117,6 +118,11 @@ impl Venue for Bingx {
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
         wallet::coin_networks(&self.ctx).await
+    }
+
+    /// Решение 175: делистинги — пары в статусе 29 «pre-delisted» справочника пар (delist.rs).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        delist::delistings(&self.ctx, &self.symbols).await
     }
 
     /// Одна монета — config/getall?coin= (решение 113, wallet.rs).

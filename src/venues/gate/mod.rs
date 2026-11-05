@@ -16,6 +16,7 @@ pub mod all_balances;
 pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposit_hold;
 pub mod deposit_info;
@@ -192,6 +193,11 @@ impl Venue for Gate {
     /// Решение 166: удержания вывода — депозиты DEP_CREDITED (deposit_hold.rs).
     async fn withdraw_hold(&self, _quote: &str) -> GatewayResult<crate::core::types::WithdrawHold> {
         deposit_hold::withdraw_hold(&self.ctx).await
+    }
+
+    /// Решение 175: делистинги — delisting_time пар справочника (delist.rs).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        delist::delistings(&self.ctx).await
     }
 
     /// Решение 144: все счета Gate (спот, маржа, фьючерсы, поставочные, опционы, Earn, итог) — all_balances.rs, только чтение.

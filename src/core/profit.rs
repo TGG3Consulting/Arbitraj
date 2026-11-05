@@ -11,6 +11,7 @@
 //! отказ кандидата с причиной. Решение 111: исполнитель даёт маршрут не на весь объём — пересчёт на исполнимый объём.
 //! Решение 129: этапы расчёта замеряются (calc_timing.rs): контекст направления, бюджет, подбор объёма, финальная
 //! котировка — по ним отказ по сроку называет, где расчёт стоял.
+//! Решение 175: сначала — делистинг монеты на сторонах направления (delist_check.rs, delist.block_hours).
 //! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
@@ -54,6 +55,10 @@ pub async fn decide_capped(
     // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
     if let super::dry::Mode::Dry(Err(e)) = mode {
         return reject(e.clone(), None);
+    }
+    // Решение 175: монета в делистинге на любой стороне ближе delist.block_hours — сделки нет (до любого расчёта).
+    if let Err(e) = super::delist_check::check(core, d, chrono::Utc::now()).await {
+        return reject(e, None);
     }
     let cx = match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
     {

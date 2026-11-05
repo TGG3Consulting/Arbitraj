@@ -175,6 +175,13 @@ impl Venue for Bitget {
         all_balances::read(&self.ctx).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: поле offTime справочника GET /api/v2/spot/public/symbols не сверено с официальной документацией (описание поля не прочитано в сессии решения 175) — до проверки не используется.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "поле offTime справочника GET /api/v2/spot/public/symbols не сверено с официальной документацией (описание поля не прочитано в сессии решения 175) — до проверки не используется",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, None).await
     }

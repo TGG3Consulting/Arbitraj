@@ -188,6 +188,13 @@ impl Venue for Kucoin {
         all_balances::read(&self.ctx).await
     }
 
+    /// Решение 175: делистинги — «неизвестно»: у пары в GET /api/v2/symbols нет признака или времени делистинга; есть только объявления GET /api/v3/announcements (annType delistings) — монета и время в них только текстом, текст не разбирается.
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        Ok(crate::core::types::Delistings::unknown(
+            "у пары в GET /api/v2/symbols нет признака или времени делистинга; есть только объявления GET /api/v3/announcements (annType delistings) — монета и время в них только текстом, текст не разбирается",
+        ))
+    }
+
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx, None).await
     }

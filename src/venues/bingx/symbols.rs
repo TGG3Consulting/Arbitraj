@@ -138,6 +138,12 @@ impl Symbols {
         map.get(ticker).map(|r| r.symbol.clone())
     }
 
+    /// Тикер и символ пар с этим статусом (решение 175: статус 29 «pre-delisted» — делистинги, delist.rs). Ошибок нет.
+    pub fn with_status(&self, status: i64) -> Vec<(String, String)> {
+        let map = self.map.read().unwrap_or_else(|p| p.into_inner());
+        with_status(&map, status)
+    }
+
     /// Все тикеры, которые сейчас торгуются (статус online).
     pub fn online(&self) -> Vec<String> {
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
@@ -160,6 +166,17 @@ pub fn parse_list(data: &Value, quote: &str) -> GatewayResult<HashMap<String, Sy
         }
     }
     Ok(map)
+}
+
+/// Тикер и символ пар разобранного справочника с этим статусом, по тикеру. Ошибок нет.
+pub fn with_status(map: &HashMap<String, SymbolRules>, status: i64) -> Vec<(String, String)> {
+    let mut v: Vec<_> = map
+        .iter()
+        .filter(|(_, r)| r.status == status)
+        .map(|(t, r)| (t.clone(), r.symbol.clone()))
+        .collect();
+    v.sort();
+    v
 }
 
 /// Разбор одной пары. Ошибка BadResponse — нет обязательных полей.

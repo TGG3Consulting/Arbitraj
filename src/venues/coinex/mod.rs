@@ -16,6 +16,7 @@ pub mod book;
 pub mod contracts;
 pub mod ctx;
 pub mod deals;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -117,6 +118,11 @@ impl Venue for CoinEx {
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
         wallet::coin_networks(&self.ctx, &self.nets).await
+    }
+
+    /// Решение 175: делистинги — delisted_at пар справочника (delist.rs).
+    async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
+        delist::delistings(&self.ctx).await
     }
 
     /// Решение 113: у CoinEx есть запрос одной монеты (deposit-withdraw-config?ccy=, assets/info?ccy=).

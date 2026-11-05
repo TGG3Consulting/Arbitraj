@@ -17,6 +17,7 @@
     в режиме «лучший из двух» (решение 123) — кто дал финальную котировку DEX и на сколько USDT (Quote.pick).
   Решение 74: вверху — плашка режима (сухой / обычный / не задан, DryBanner); у прошедшего — метка «сухой» и
     раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
+  Решение 175: у кандидата — отметка «делистинг на X: дата» по сторонам направления (lib/delist.svelte.js).
   Решение 141: у кандидата — строка «без потолка: вложить X → прибыль Y; плюс от Z» (UncappedLine, поле uncapped).
 -->
 <script>
@@ -32,6 +33,9 @@
   import DexCycles from '../components/DexCycles.svelte';
   import UncappedLine from '../components/UncappedLine.svelte';
   import CalcTiming from '../components/CalcTiming.svelte';
+  import { startDelist, delistMarks } from '../lib/delist.svelte.js';
+
+  startDelist();
 
   let spreads = $state({});
   let cands = $state({});
@@ -90,6 +94,7 @@
       {#if acc}<span class="ok">прошёл: прибыль {acc.profit_usd} USDT ({acc.profit_pct}%), объём {acc.qty}</span>
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
+      {#each delistMarks(c.direction) as m (m)}<span class="err">{m}</span>{/each}
     </header>
     {#if c.start}
       <!-- Решение 147: расчёт прошёл, а исполнитель отказал на входе — точная причина. -->

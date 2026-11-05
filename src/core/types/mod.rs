@@ -1,7 +1,7 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: account.rs (id счёта DEX, решение 132), balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs.
+//! От чего зависит: account.rs (id счёта DEX, решение 132), balance.rs, market.rs, pool.rs, trade.rs, cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs.
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
@@ -12,6 +12,7 @@ pub mod check;
 pub mod control;
 pub mod cost;
 pub mod cycle_trade;
+pub mod delist;
 pub mod dex_cycle;
 pub mod directory;
 pub mod dry_swap;
@@ -37,6 +38,7 @@ pub use control::{
 };
 pub use cost::{Cost, CostKind, DexRoute, RouteHop, RouteLeg, RouteMode, RouteStep};
 pub use cycle_trade::{CycleQuote, CycleTradeRequest, CycleTradeResult};
+pub use delist::{DelistItem, Delistings};
 pub use dex_cycle::{DexCycle, DexCycleHop};
 pub use directory::{
     DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, IndexerDex, PoolDirectory,

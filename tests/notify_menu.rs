@@ -81,7 +81,16 @@ fn mode_buttons_as_control_bar() {
     assert_eq!(yes_title(&p.title), "Да, старт");
     let p = control_action(&r, "dr.x").unwrap();
     assert_eq!(p.action, ManualAction::ResetDailyLimit);
-    assert!(p.question.starts_with("Сбросить лимит дня?"));
+    assert!(p.question.starts_with("Сбросить лимит дня — вся система"));
+    // Решение 173: сброс лимита дня одной площадки.
+    let p = control_action(&r, "dv.mexc").unwrap();
+    assert_eq!(
+        p.action,
+        ManualAction::ResetVenueLimit {
+            venue: "mexc".into()
+        }
+    );
+    assert!(p.question.starts_with("Сбросить лимит дня площадки MEXC?"));
     assert_eq!(
         control_action(&r, "vr.bingx").unwrap().action,
         ManualAction::ResumeVenue {

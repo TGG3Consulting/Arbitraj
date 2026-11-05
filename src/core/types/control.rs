@@ -99,8 +99,11 @@ pub enum ManualAction {
     ResumeVenue { venue: String },
     /// Решение 157: «Снять карантин» монеты (как POST /api/control/quarantine/{id}/release); id — адрес или тикер.
     ReleaseQuarantine { id: String },
-    /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset).
+    /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset) — общий: вся система
+    /// и все площадки (решение 173).
     ResetDailyLimit,
+    /// Решение 173: «Сбросить лимит дня» одной площадки (как POST /api/control/venue/{id}/daily-limit/reset).
+    ResetVenueLimit { venue: String },
 }
 
 impl ManualAction {
@@ -126,6 +129,7 @@ impl ManualAction {
             Self::ResumeVenue { .. } => "Снять паузу",
             Self::ReleaseQuarantine { .. } => "Снять карантин",
             Self::ResetDailyLimit => "Сбросить лимит дня",
+            Self::ResetVenueLimit { .. } => "Сбросить лимит дня площадки",
         }
     }
 }

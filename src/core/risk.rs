@@ -4,18 +4,23 @@
 //! остановка новых сделок при расхождении сверки. Торговля не включается, пока не заданы все настройки
 //! групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
-//! Лимит убытка за день — daily_limit.rs (решения 53, 152, 153).
+//! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
+//! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
+//! Risk.cycle_paused: отказ только направлениям, чей учёт дня у DEX (DEX ↔ DEX). Необязательные настройки (optional) не
+//! требуются для включения торговли.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs.
-//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd, все money.* и risk.*.
+//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой площадки учёта
+//! сделки), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+use rust_decimal::Decimal;
 
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{Direction, VenueId};
-use crate::settings::catalog;
 use crate::settings::read::At;
 
 pub use super::day_view::DayView;
@@ -46,8 +51,19 @@ pub struct Risk {
     pub quarantine: super::quarantine::Map,
     /// Итог дня (решения 53, 152, daily.rs): дата, всего, из них факт и оценка позиций; лимит дня (daily_limit.rs).
     pub day: DayView,
-    /// Система остановлена именно по лимиту дня (daily_limit.rs); любая смена режима снимает отметку.
+    /// Система остановлена именно по общему лимиту дня (daily_limit.rs); любая смена режима снимает отметку.
     pub daily_stop: bool,
+    /// Решение 173: площадки на паузе по убытку дня (их причина — в venue_paused). Снимает «Снять паузу» или
+    /// «Сбросить лимит дня» (по площадке или общий).
+    #[serde(skip)]
+    pub loss_paused: BTreeSet<String>,
+    /// Решение 173: циклы DEX ↔ DEX на паузе по убытку дня DEX (id DEX → причина); направления CEX ↔ DEX этой
+    /// паузой не останавливаются. Снимает «Снять паузу» DEX или «Сбросить лимит дня».
+    pub cycle_paused: BTreeMap<String, String>,
+    /// Решение 173: убыток площадки для лимита при прошлом пересчёте — пауза ставится при переходе через лимит или
+    /// при росте убытка (daily_venue_limit.rs). Новый день — с нуля.
+    #[serde(skip)]
+    pub loss_seen: BTreeMap<String, Decimal>,
 }
 
 impl Default for Risk {
@@ -60,6 +76,9 @@ impl Default for Risk {
             quarantine: HashMap::new(),
             day: DayView::default(),
             daily_stop: false,
+            loss_paused: BTreeSet::new(),
+            cycle_paused: BTreeMap::new(),
+            loss_seen: BTreeMap::new(),
         }
     }
 }
@@ -74,26 +93,7 @@ pub fn publish(core: &Core) {
 
 /// Можно ли открыть новую сделку по направлению. Ошибки: текст причины.
 pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
-    let s = &core.inner.deps.settings;
-    for def in
-        catalog::all().filter(|d| d.name.starts_with("money.") || d.name.starts_with("risk."))
-    {
-        if s.resolve(def.name, Some(&d.buy_on.0), None).is_none() {
-            return Err(format!(
-                "торговля не включается: не задана настройка {}",
-                def.name
-            ));
-        }
-    }
-    // Решение 118 (Я-10): у биржи продажи — своя пауза после ошибок подряд; без неё B на сбое не встанет на паузу.
-    if s.resolve("risk.max_errors_in_row", Some(&d.sell_on.0), None)
-        .is_none()
-    {
-        return Err(format!(
-            "торговля не включается: не задана настройка risk.max_errors_in_row [venue:{}]",
-            d.sell_on.0
-        ));
-    }
+    super::risk_ready::settings_ready(core, d)?;
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
         // Решение 164: режим по-русски («Стоп», «Пауза»), а не внутреннее имя.
@@ -111,6 +111,12 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     for v in [&d.buy_on, &d.sell_on] {
         if let Some(why) = r.venue_paused.get(v) {
             return Err(format!("площадка {} на паузе: {why}", v.0));
+        }
+    }
+    // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений, чей учёт дня у DEX (DEX ↔ DEX).
+    for v in super::daily_venue::of_direction(core, d) {
+        if let Some(why) = r.cycle_paused.get(&v) {
+            return Err(format!("циклы DEX ↔ DEX на паузе: {why}"));
         }
     }
     if let Some(q) = r.quarantine.get(&super::coin_key::CoinKey::of(&d.asset)) {
@@ -172,15 +178,23 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     let mut r = lk(&core.inner.risk);
     r.venue_paused.remove(venue);
     r.errors_in_row.remove(venue);
+    // Решение 173: пауза по убытку дня тоже снята; новая — только если убыток площадки вырастет.
+    r.loss_paused.remove(&venue.0);
+    r.cycle_paused.remove(&venue.0);
     drop(r);
     publish(core);
 }
 
 // Проверка дневного лимита убытка и «Сбросить лимит дня» — core/daily_limit.rs (решения 53, 152, 153).
 
-/// Состояние для экрана «Управление»; лимит дня — по текущей настройке (daily_limit::view).
+/// Состояние для экрана «Управление»; лимиты дня — по текущим настройкам (daily_limit::view, daily_venue_limit::view).
 pub fn snapshot(core: &Core) -> Risk {
     let mut r = lk(&core.inner.risk).clone();
     r.day.limit = super::daily_limit::view(core, &r.day);
+    let date = r.day.date;
+    for (v, x) in r.day.venues.iter_mut() {
+        x.limit = super::daily_venue_limit::view(core, v, x, date);
+        x.paused = r.loss_paused.contains(v);
+    }
     r
 }

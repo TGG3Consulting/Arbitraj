@@ -9,6 +9,8 @@
 //! сделку, оценка снимается ровно на неё; (2) цены нет — худший случай с пометкой, стоп по лимиту; после факта —
 //! «лимит сейчас не превышен», режим остаётся «Стоп»; (3) «Сбросить лимит дня»: итог дня и сделки не меняются, лимит
 //! считает только после отметки, отметка переживает перезапуск, режим сам не меняется; вчерашняя отметка не действует.
+//! Решение 173: лимит 6 — по площадке (risk.max_daily_loss_usd «вся система» = лимит каждой площадки): превышение
+//! ставит паузу только MEXC; общий «Стоп» — только при заданной risk.max_daily_loss_total_usd (тесты сброса).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets.
 
@@ -21,6 +23,7 @@ use arb::core::deal::{Deal, Step};
 use arb::core::deps::Deps;
 use arb::core::risk::Mode;
 use arb::core::types::{Asset, Direction, VenueId};
+use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -79,8 +82,33 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
         )
         .await
         .unwrap();
+    // Виды площадок реестра (решение 173: сделка mexc → bsc_dex считается бирже MEXC).
+    *core.inner.kinds.write().unwrap() = vec![
+        (VenueId("bsc_dex".into()), VenueKind::Dex),
+        (VenueId("mexc".into()), VenueKind::Cex),
+    ];
     core.set_mode(Mode::Running).await;
     (core, settings)
+}
+
+/// Задаёт общий лимит дня всей системы (решение 173: «Стоп» всей системы). Ошибок нет.
+async fn total(settings: &Store, v: &str) {
+    settings
+        .set(
+            "risk.max_daily_loss_total_usd",
+            Scope::Global,
+            Some(json!(v)),
+            "тест",
+        )
+        .await
+        .unwrap();
+}
+
+/// MEXC на паузе. Ошибок нет.
+fn mexc_paused(core: &Core) -> bool {
+    core.control()
+        .venue_paused
+        .contains_key(&VenueId("mexc".into()))
 }
 
 /// Сделка направления mexc → bsc_dex на монете (монеты на MEXC).
@@ -139,7 +167,8 @@ async fn babydoge_estimate_by_market_not_whole_order() {
     assert!(day.unpriced.is_empty());
     // Позиция стоит ≈ вложенному — лимит не срабатывает.
     assert_eq!(core.control().mode, Mode::Running);
-    assert!(!day.limit.unwrap().exceeded);
+    assert!(!day.venues["mexc"].limit.as_ref().unwrap().exceeded);
+    assert!(!mexc_paused(&core));
     // «Продать сейчас»: факт продажи пишется в ту же сделку (fills), итог = выручка − вложено − затраты.
     x.proceeds = d("44.86");
     x.spent += d("0.036");
@@ -169,9 +198,20 @@ async fn no_price_worst_case_then_fact_shows_limit_not_exceeded() {
     assert_eq!(r.day.provisional_usd, d("-45.036"));
     assert!(r.day.unpriced.contains(&x.id));
     assert!(x.timeline.iter().any(|(_, t)| t.contains("цены нет")));
-    assert_eq!(r.mode, Mode::Stopped);
-    assert!(r.daily_stop);
-    assert_eq!(r.day.limit.as_ref().unwrap().loss_usd, d("12.948"));
+    // Решение 173: пауза только MEXC, система в работе.
+    assert_eq!(r.mode, Mode::Running);
+    assert!(!r.daily_stop);
+    assert!(mexc_paused(&core));
+    assert!(r.day.venues["mexc"].paused);
+    assert_eq!(
+        r.day.venues["mexc"].limit.as_ref().unwrap().loss_usd,
+        d("12.948")
+    );
+    assert!(
+        r.venue_paused[&VenueId("mexc".into())]
+            .starts_with("MEXC: убыток за день 12.95 USDT больше лимита 6.00 USDT")
+    );
+    assert_eq!(journal(&core, "core.venue_daily_loss").await.len(), 1);
     // Факт пришёл — лимит не превышен, но остановка сама не снимается; в журнале — подсказка.
     x.proceeds = d("44.86");
     x.spent += d("0.036");
@@ -187,21 +227,26 @@ async fn no_price_worst_case_then_fact_shows_limit_not_exceeded() {
     assert_eq!(x.result_usd, Some(d("-0.212")));
     assert_eq!(r.day.result_usd, d("31.876"));
     assert!(r.day.unpriced.is_empty());
-    assert_eq!(r.mode, Mode::Stopped);
-    assert!(r.daily_stop);
-    assert!(!r.day.limit.unwrap().exceeded);
+    // Лимит не превышен, но пауза сама не снимается; в журнале — подсказка.
+    assert!(mexc_paused(&core));
+    assert!(!r.day.venues["mexc"].limit.as_ref().unwrap().exceeded);
     let j = journal(&core, "core.daily_loss").await;
-    assert!(j.iter().any(|m| m.contains("Лимит дня сейчас не превышен")));
-    // «Старт» — решение человека: отметка «остановлена по лимиту» снимается.
-    core.set_mode(Mode::Running).await;
-    assert!(!core.control().daily_stop);
+    assert!(
+        j.iter()
+            .any(|m| m.contains("MEXC: лимит дня сейчас не превышен"))
+    );
+    // «Снять паузу» — решение человека.
+    core.resume_venue(&VenueId("mexc".into())).await;
+    assert!(!mexc_paused(&core));
+    assert!(!core.control().day.venues["mexc"].paused);
 }
 
 #[tokio::test]
 async fn reset_counts_only_after_mark_and_survives_restart() {
     let d0 = dir("limit-reset");
     {
-        let (core, _) = start(&d0).await;
+        let (core, settings) = start(&d0).await;
+        total(&settings, "6").await;
         closed(&core, "a", d("-5")).await;
         closed(&core, "b", d("-2")).await;
         assert_eq!(core.control().mode, Mode::Stopped);
@@ -223,7 +268,8 @@ async fn reset_counts_only_after_mark_and_survives_restart() {
         assert_eq!(r.day.result_usd, d("-10"));
     }
     // Перезапуск: отметка сброса восстановлена, лимит считает после неё.
-    let (core, _) = start(&d0).await;
+    let (core, settings) = start(&d0).await;
+    total(&settings, "6").await;
     let r = core.control();
     assert_eq!(r.day.result_usd, d("-10"));
     assert_eq!(r.day.limit.unwrap().loss_usd, d("3"));
@@ -252,7 +298,8 @@ async fn yesterday_reset_has_no_force() {
         .await
         .unwrap();
     }
-    let (core, _) = start(&d0).await;
+    let (core, settings) = start(&d0).await;
+    total(&settings, "6").await;
     let r = core.control();
     assert_eq!(r.day.result_usd, Decimal::ZERO);
     assert!(r.day.limit_reset.is_none());

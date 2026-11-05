@@ -83,6 +83,10 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/control/daily-limit/reset",
             post(core_api::reset_daily_limit),
         )
+        .route(
+            "/api/control/venue/{id}/daily-limit/reset",
+            post(core_api::reset_venue_daily_limit),
+        )
         .route("/api/episodes", get(episodes::list))
         .route("/api/episodes/{id}", get(episodes::get))
         .route("/api/episodes/{id}/file", get(episodes::file))

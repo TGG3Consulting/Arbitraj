@@ -6,11 +6,12 @@
     по группам; у DEX — блоки «Справочник пулов (индексатор)», «DEX и виды пулов», «Каналы отправки» (lib/dex.svelte.js)
     и ссылка на «Маппинг кошельков» (исполнители ArbExecutor — у кошельков, решение 132).
     Секреты площадок, которых ещё нет в шлюзе (например адаптер DEX не зарегистрирован), тоже видны —
-    ключ можно ввести заранее. Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
+    ключ можно ввести заранее. Решение 173: итог дня площадки, её лимит дня, пауза по убытку и «Сбросить лимит дня»
+    площадки (components/DayVenues.svelte). Статусы соединений, задержки и разрывы появятся, когда бэкенд начнёт их отдавать.
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
-    ErrorText.svelte.
+    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js).
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -24,6 +25,7 @@
   import VenueChannels from '../components/VenueChannels.svelte';
   import PoolDirectory from '../components/PoolDirectory.svelte';
   import ErrorText from '../components/ErrorText.svelte';
+  import DayVenues from '../components/DayVenues.svelte';
 
   const groups = $derived.by(() => {
     const out = new Map();
@@ -61,6 +63,9 @@
   <section class="card venue">
     <h2>{id}</h2>
     <CheckConnection url={`/api/check/venue/${encodeURIComponent(id)}`} />
+
+    <h3>Итог дня и лимит дня</h3>
+    <DayVenues only={id} />
 
     <h3>Ключи</h3>
     {#each venueKeys(id) as item (item.name)}

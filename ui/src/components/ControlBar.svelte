@@ -5,15 +5,19 @@
     с кнопками снятия; итог дня — всего, факт и оценка позиций, неразобранные оценки сделок (решения 53, 152: стоимость
     монет по рынку − вложено; «цены нет» — худший случай, вся сумма); лимит дня «X из Y» и кнопка «Сбросить лимит дня»
     с подтверждением (решение 153); остановлена по лимиту, а лимит уже не превышен — подсказка «можно нажать «Старт»».
+    Решение 173: итог дня по площадкам (факт / оценка / лимит / пауза, «Сбросить лимит дня» площадки —
+    DayVenues.svelte); общий лимит — «Стоп» всей системы (risk.max_daily_loss_total_usd), его «Сбросить лимит дня»
+    сбрасывает всю систему и все площадки.
     Команды уходят ядру (POST /api/control…) и пишутся в журнал.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/control.svelte.js, lib/coreLabels.js, lib/labels.js.
-  Настройки: risk.max_daily_loss_usd (только показ; задаётся на экране «Настройки»).
+  От чего зависит: lib/control.svelte.js, lib/coreLabels.js, lib/labels.js, components/DayVenues.svelte.
+  Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (только показ; задаются на экране «Настройки»).
 -->
 <script>
   import { control, setMode, resumeVenue, releaseCoin, resetDailyLimit } from '../lib/control.svelte.js';
   import { modeLabel } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
+  import DayVenues from './DayVenues.svelte';
 
   const r = $derived(control.data);
   const cls = $derived(r?.mode === 'Running' ? 'run' : r?.mode === 'Paused' ? 'warn' : 'stop');
@@ -25,7 +29,7 @@
   /** «Сбросить лимит дня» — только после подтверждения. */
   function askReset() {
     const stopNote = r?.daily_stop ? '\nСистема остановлена по лимиту — после сброса она останется в «Стоп», запуск — кнопкой «Старт».' : '';
-    const q = `Сбросить лимит дня?\nДальше лимит считает только убытки после этой отметки. Итог дня, история и сделки не меняются.${stopNote}`;
+    const q = `Сбросить лимит дня — вся система и все площадки?\nДальше лимиты считают только убытки после этой отметки; паузы площадок по убытку дня снимаются. Итог дня, история и сделки не меняются.${stopNote}`;
     if (confirm(q)) resetDailyLimit();
   }
 </script>
@@ -44,20 +48,24 @@
     </span>
     <div class={lim?.exceeded ? 'err' : 'muted'}>
       {#if lim}
-        Лимит дня: {lim.loss_usd} из {lim.max_usd} USDT{#if reset} (сброшен в {showTime(reset.at)}, до сброса {before >= 0 ? `проиграно ${before}` : `итог +${-before}`} USDT){/if}{#if lim.exceeded} — достигнут{/if}
+        Общий лимит дня (Стоп всей системы): {lim.loss_usd} из {lim.max_usd} USDT{#if reset} (сброшен в {showTime(reset.at)}, до сброса {before >= 0 ? `проиграно ${before}` : `итог +${-before}`} USDT){/if}{#if lim.exceeded} — достигнут{/if}
       {:else}
-        Лимит дня не задан (risk.max_daily_loss_usd) — остановки по убытку за день нет
+        Общий лимит дня не задан (risk.max_daily_loss_total_usd) — общего стопа по убытку нет, действуют лимиты площадок
       {/if}
-      <button class="quiet" disabled={control.busy} onclick={askReset}>Сбросить лимит дня</button>
+      <button class="quiet" disabled={control.busy} onclick={askReset}>Сбросить лимит дня (все)</button>
     </div>
+    <DayVenues />
     {#if r.daily_stop && lim && !lim.exceeded}
       <div><strong>Лимит сейчас не превышен:</strong> {lim.loss_usd} из {lim.max_usd} USDT — остановка по лимиту сама не снимается, можно нажать «Старт».</div>
     {/if}
+    {#each Object.entries(r.cycle_paused ?? {}) as [v, why] (v)}
+      <div>Циклы DEX ↔ DEX (<code>{v}</code>) на паузе: {why} — направления бирж с DEX торгуют <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+    {/each}
     {#each Object.entries(r.venue_paused) as [v, why] (v)}
       <div>Площадка <code>{v}</code> на паузе: {why} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
     {/each}
     {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
-      <div class="muted">Оценка позиции сделки <code>{deal}</code>: {usd} USDT (учтена {day}){#if r.day.unpriced?.includes(deal)} — <span class="err">цены нет, взят худший случай (вся сумма)</span>{/if} — ждёт разбора</div>
+      <div class="muted">Оценка позиции сделки <code>{deal}</code>{#if r.day.deal_venues?.[deal]} ({r.day.deal_venues[deal].join(', ')}){/if}: {usd} USDT (учтена {day}){#if r.day.unpriced?.includes(deal)} — <span class="err">цены нет, взят худший случай (вся сумма)</span>{/if} — ждёт разбора</div>
     {/each}
     {#each r.quarantine as q (q.id)}
       <div>Монета <code title={q.id}>{q.label}</code> в карантине: {q.reason} <button class="quiet" onclick={() => releaseCoin(q.id)}>Снять карантин</button></div>

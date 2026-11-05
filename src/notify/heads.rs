@@ -48,6 +48,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "balance.external" => (WARN, "Баланс изменился не ботом"),
         "risk.stop" => (STOP, "Торговля остановлена"),
         "risk.daily_loss" => (STOP, "Торговля остановлена: дневной лимит убытка"),
+        "risk.venue_daily_loss" => (STOP, "Площадка на паузе: дневной лимит убытка"),
         "risk.daily_limit_reset" => (INFO, "Лимит дня сброшен"),
         "risk.reconcile_mismatch" => (WARN, "Балансы не сходятся с учётом бота"),
         "risk.low_bnb" => (WARN, "Мало BNB на газ"),

@@ -74,10 +74,11 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     ));
     // Итог дня (решения 53, 152): закрыта — факт (снимает оценку этой сделки); остановлена или «Беру на себя» —
     // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
-    let stop = match step {
+    // Решение 173: итог идёт и площадкам сделки — лимит площадки ставит паузу только ей.
+    let trip = match step {
         Step::Closed => super::daily::settle(core, deal, result).await,
         Step::Halted | Step::TakenOver => super::daily::provisional(core, deal).await,
-        _ => None,
+        _ => Default::default(),
     };
     // Решение 138: общий шаг после закрытия — возврат выручки USDT на площадку покупки (для всех путей закрытия).
     let ret = match step {
@@ -120,16 +121,7 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;
     }
-    if let Some(stop) = stop {
-        deps.log(Level::Warn, "core.daily_loss", None, &stop, None)
-            .await;
-        deps.notify(
-            "risk.daily_loss",
-            None,
-            &super::deal_text::daily_stop(&stop),
-        )
-        .await;
-    }
+    super::daily_commit::announce(core, &trip).await;
     let cooldown = deps
         .settings
         .integer("signal.route_cooldown_s", At::default());

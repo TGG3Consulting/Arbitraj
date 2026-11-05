@@ -3,8 +3,9 @@
 //! пачкой (одно сообщение со списком ждущих записей и их кнопками, у прежнего напоминания кнопки снимаются,
 //! editMessageReplyMarkup — https://core.telegram.org/bots/api#editmessagereplymarkup), итог команды
 //! «Выполнено: кто, что, итог» в сообщениях ушедших записей, ошибки Telegram (429 — пауза retry_after) и журнал.
+//! Решение 177: правка сообщения сменившейся записи (update_changed) и итог продажи кнопкой (sale_final).
 //! Кто вызывает: notify/mirror.rs.
-//! От чего зависит: notify/mirror_state.rs, mirror_view.rs, tg_methods.rs, client.rs, settings, storage/journal.
+//! От чего зависит: notify/mirror_state.rs, mirror_track.rs, mirror_view.rs, tg_methods.rs, client.rs, settings, storage/journal.
 //! Настройки: notify.manual_repeat_s (через Mirror::every), notify.updates_retry_ms (пауза после ошибки Telegram).
 
 use std::time::{Duration, Instant};
@@ -15,7 +16,8 @@ use crate::storage::journal::Level;
 
 use super::mirror::Mirror;
 use super::mirror_state::lock;
-use super::mirror_view::{batch_message_for, closed_text, reminder_header};
+use super::mirror_track::{final_text, is_sale};
+use super::mirror_view::{batch_message_for, closed_text, record_message_for, reminder_header};
 use super::telegram::{Telegram, TgError};
 use super::{client, tg_methods};
 
@@ -70,8 +72,43 @@ impl Mirror {
         }
     }
 
+    /// Решение 177: сменившиеся и вернувшиеся записи (Diff.changed) — правка текста и кнопок первого сообщения записи.
+    /// Принимает: клиента, (чат, показывать ли недоступные кнопки), записи. Ошибки — в журнал.
+    pub(super) async fn update_changed(
+        &self,
+        tg: &Telegram,
+        (chat, all): (&str, bool),
+        recs: &[ManualRecord],
+    ) {
+        for r in recs {
+            let Some(id) = lock(&self.state)
+                .sent
+                .get(&r.key)
+                .and_then(|s| s.msgs.first().copied())
+            else {
+                continue;
+            };
+            let (text, kb) = record_message_for(r, all);
+            match tg.edit_text_markup(chat, id, &text, kb).await {
+                Ok(()) => lock(&self.state).set_text(&r.key, text),
+                Err(e) => {
+                    self.log(
+                        Level::Warn,
+                        format!("Ручное управление: сообщение {id} не обновлено: {e}"),
+                    )
+                    .await
+                }
+            }
+        }
+    }
+
     /// Итог команды ({action, who, ok, text} из Core::command): сообщения ушедших записей — «Выполнено: …».
+    /// Решение 177: итог продажи кнопкой ({final: true, deal, ok, text}, core/manual_outcome.rs) — ещё одна правка тех же
+    /// сообщений («Выполнено: продано …» / «Не продано: …»); запись вернулась на экран — её уже правит update_changed.
     pub(super) async fn outcome(&self, v: &serde_json::Value) {
+        if v["final"].as_bool() == Some(true) {
+            return self.sale_final(v).await;
+        }
         let Ok(action) = serde_json::from_value::<ManualAction>(v["action"].clone()) else {
             return;
         };
@@ -94,11 +131,46 @@ impl Mirror {
         let who = v["who"].as_str().unwrap_or_default();
         let res = v["text"].as_str().unwrap_or_default();
         let o = format!("{who}: «{}» — {res}", action.title());
-        for (_, sent) in closed {
+        let sale = is_sale(&action);
+        for (rec, mut sent) in closed {
+            let text = closed_text(&sent.text, Some(&o));
             for id in &sent.msgs {
                 let _ = ready
                     .tg
-                    .edit_text_markup(&ready.chat, *id, &closed_text(&sent.text, Some(&o)), None)
+                    .edit_text_markup(&ready.chat, *id, &text, None)
+                    .await;
+            }
+            if sale {
+                sent.text = text;
+                lock(&self.state).keep_finished(rec, sent);
+            }
+        }
+    }
+
+    /// Итог продажи кнопкой: сообщения записей сделки, ждавших его, — «… \n\nВыполнено: продано …» / «Не продано: …».
+    async fn sale_final(&self, v: &serde_json::Value) {
+        let (Some(deal), Some(res)) = (v["deal"].as_str(), v["text"].as_str()) else {
+            return;
+        };
+        let list = lock(&self.state).take_finished(deal);
+        if list.is_empty() {
+            return;
+        }
+        let role = super::roles::mirror_role(&self.notifier.settings);
+        let Ok(ready) = client::build_role(
+            &self.notifier.http,
+            &self.notifier.settings,
+            &self.notifier.vault,
+            role,
+        ) else {
+            return;
+        };
+        for (_, sent) in list {
+            let text = final_text(&sent.text, res);
+            for id in &sent.msgs {
+                let _ = ready
+                    .tg
+                    .edit_text_markup(&ready.chat, *id, &text, None)
                     .await;
             }
         }

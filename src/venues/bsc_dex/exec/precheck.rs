@@ -3,8 +3,8 @@
 //! „получить не меньше“»), общие для прямого и умного режима: повторное измерение влияния крючка B/C пула пробным
 //! обменом квотером (итог — в состояние проверок, и по нему же пул проходит или не проходит допуск quote/select.rs);
 //! сверка обмена с квотером своей DEX на реальной сумме сделки (прямой режим; умный сверяет доли MixedQuoter —
-//! quote/mixed_quoter.rs).
-//! Кто вызывает: exec/trade.rs, exec/trade_smart.rs.
+//! quote/mixed_quoter.rs). Решение 177: у продажи выхода расхождение — не отказ, а продажа по квотеру (quoter_hop).
+//! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/exit_quote.rs.
 //! От чего зависит: check/hooks_probe.rs, check/state.rs, quote/quoter.rs, quote/emptiness.rs, pools/registry.rs.
 //! Настройки: через вызываемые — check.probe_usdt, dex.quoter [вид пула], dex.router (V2), dex.quoter_max_diff_pct.
 //!
@@ -22,7 +22,9 @@ use super::super::check::hooks_probe;
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::Swapped;
 use super::super::pools::registry::Entry;
+use super::super::quote::quoter::Judged;
 use super::super::quote::{Quoting, emptiness, quoter, quoter_revert};
+use super::exit_quote::ExitFix;
 
 /// Повторная пробная проверка крючка пула группы B/C (у пула без крючка B/C — ничего). Итог пишется в состояние
 /// проверок: допуск пула (quote/select.rs) считается уже по нему. Ошибки: NoRoute — проба не прошла.
@@ -67,6 +69,23 @@ pub async fn quoter_now(
     local: &Swapped,
     hook_pct: Decimal,
 ) -> GatewayResult<()> {
+    quoter_hop(ctx, e, token_in, local, hook_pct, false)
+        .await
+        .map(|_| ())
+}
+
+/// Как quoter_now, но продажа выхода (решение 177, exit = true): расхождение больше допуска с цифрами (Judged::Diff) —
+/// не отказ, а Some(ExitFix) — продать по выходу квотера (exec/exit_quote.rs). Пустой пул, неполный расчёт, откат
+/// квотера, «сравнить нельзя» — отказ, как у quoter_now. exit = false — ровно quoter_now. Возвращает: None — в допуске.
+/// Ошибки: как у quoter_now.
+pub async fn quoter_hop(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    local: &Swapped,
+    hook_pct: Decimal,
+    exit: bool,
+) -> GatewayResult<Option<ExitFix>> {
     let short = if emptiness::empty(e) {
         Some(emptiness::EMPTY.to_string())
     } else if !local.complete {
@@ -92,10 +111,36 @@ pub async fn quoter_now(
             });
         }
     };
-    quoter::within(ctx, local.amount_out, remote, hook_pct)?.map_err(|why| {
-        ctx.err(
+    verdict(
+        ctx,
+        e,
+        quoter::judge(ctx, local.amount_out, remote, hook_pct)?,
+        exit,
+    )
+}
+
+/// Решение по итогу сверки (без узла — проверяется тестами на цифрах живого случая): в допуске — None; расхождение
+/// у продажи выхода — Some(ExitFix); иначе — отказ QuoteMismatch с тем же текстом, что до решения 177.
+/// Принимает: окружение, пул, итог сверки, продажа ли выхода. Ошибки: QuoteMismatch.
+pub fn verdict(ctx: &Ctx, e: &Entry, j: Judged, exit: bool) -> GatewayResult<Option<ExitFix>> {
+    match j {
+        Judged::Within => Ok(None),
+        Judged::Diff {
+            local, remote, pct, ..
+        } if exit => Ok(Some(ExitFix {
+            pool: format!("{} {}", e.family.title, e.ticker),
+            local,
+            remote,
+            pct,
+        })),
+        j => Err(ctx.err(
             ErrorCode::QuoteMismatch,
-            format!("{} {}: перед сделкой {why}", e.family.title, e.ticker),
-        )
-    })
+            format!(
+                "{} {}: перед сделкой {}",
+                e.family.title,
+                e.ticker,
+                j.reason().unwrap_or_default()
+            ),
+        )),
+    }
 }

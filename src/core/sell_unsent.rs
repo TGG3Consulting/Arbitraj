@@ -132,7 +132,7 @@ pub async fn alert(core: &Core, deal: Deal, e: &OpError, r: &Retry) {
     // Хронологию пишет raise_alert («… — ждём решения человека»): своей строки здесь нет — без дубля (решение 154).
     let value = super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await;
     let loss = value.ok().map(|(x, _)| deal.loss_pct_if(x));
-    super::manual::raise_alert(core, deal, loss, why).await;
+    super::manual::raise_alert(core, deal, loss, why, Some(e.message.clone())).await;
 }
 
 /// Предел повторов продажи, не ушедшей в сеть (stuck.unsent_retries_max). Не задано — 0: без повторов, сразу алерт.

@@ -329,6 +329,7 @@ async fn buy_and_sell_through_wbnb() {
             worst_price: worst,
             deal_id: "т".into(),
             route: None,
+            exit_position: false,
         };
         let st = chain::steps(&q.ctx, &req, &path, qty, (18, 18)).unwrap();
         assert_eq!(st.len(), 2);

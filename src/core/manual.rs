@@ -3,8 +3,11 @@
 //! и «Беру на себя»; «Беру на себя» — монеты списываются из учёта бота, бот работает дальше; «Вернуть
 //! боту» — монеты возвращаются в учёт по реальному балансу площадки и продаются по общим правилам
 //! (выгодно — сразу, иначе режим застрявшей монеты). Алерты и монеты человека хранятся в учёте ядра.
+//! Решение 177: продажа кнопкой — ручная команда (risk_count.rs, не «ошибка площадки подряд»); тот же отказ по той же
+//! записи — обновление алерта, а не новый (manual_repeat.rs); итог продажи — отдельным событием (manual_outcome.rs).
 //! Кто вызывает: stuck.rs (raise_alert), commands.rs (команды), engine.rs (load при запуске).
-//! От чего зависит: deal.rs, ledger.rs, sell.rs, persist.rs, view.rs, deps.rs (шлюз — балансы).
+//! От чего зависит: deal.rs, ledger.rs, sell.rs, persist.rs, view.rs, deps.rs (шлюз — балансы), manual_repeat.rs,
+//! risk_count.rs.
 //! Настройки: нет.
 
 use chrono::Utc;
@@ -85,11 +88,22 @@ pub async fn load(core: &Core) {
 
 /// Алерт: сделка ждёт решения человека — «убыток выше порога» (stuck.rs) или «продажа не прошла» (sell.rs,
 /// решение 100). Уведомление stuck.loss_alert — текст; кнопки — запись manual.record (решение 156).
-/// Принимает: сделку, убыток % (None — котировки нет), причину. Ошибок нет.
-pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>, reason: String) {
-    let id = match super::ids::uuid_v4() {
-        Ok(id) => id,
-        Err(e) => {
+/// Решение 177: тот же отказ (error) по записи, с которой человек запустил продажу, — та же запись обновляется
+/// (причина, попытка), уведомления и события алерта нет (manual_repeat.rs).
+/// Принимает: сделку, убыток % (None — котировки нет), причину, текст отказа продажи (None — алерт по убытку).
+/// Ошибок нет.
+pub async fn raise_alert(
+    core: &Core,
+    mut deal: Deal,
+    loss_pct: Option<Decimal>,
+    reason: String,
+    error: Option<String>,
+) {
+    let prev = super::manual_repeat::prior(&mut deal, error.as_deref());
+    let id = match (&prev, super::ids::uuid_v4()) {
+        (Some(p), _) => p.id.clone(),
+        (None, Ok(id)) => id,
+        (None, Err(e)) => {
             let why = format!("алерт не создан ({e}) — монеты на месте, нужна ручная проверка");
             return super::ledger::finish(core, &mut deal, Step::Halted, &why).await;
         }
@@ -102,17 +116,32 @@ pub async fn raise_alert(core: &Core, mut deal: Deal, loss_pct: Option<Decimal>,
         qty: deal.qty,
         loss_pct,
         reason: Some(reason.clone()),
-        at: Utc::now(),
+        at: prev.as_ref().map_or_else(Utc::now, |p| p.at),
+        error,
+        attempts: prev.as_ref().map_or(1, super::manual_repeat::next_attempt),
     };
     let loss = loss_pct
         .map(hu::pct)
         .unwrap_or_else(|| "не известен (нет котировки)".into());
     deal.step = Step::WaitingHuman;
-    deal.note(format!(
-        "{reason} — ждём решения человека (алерт {})",
-        alert.id
-    ));
+    if prev.is_some() {
+        deal.note(super::manual_repeat::note(
+            &reason,
+            alert.attempts,
+            &alert.id,
+        ));
+    } else {
+        deal.note(format!(
+            "{reason} — ждём решения человека (алерт {})",
+            alert.id
+        ));
+    }
     super::ledger::save(core, &deal).await;
+    if prev.is_some() {
+        // Решение 177: запись та же — экран и сообщение Telegram обновятся по ней (notify/mirror*.rs), без дубля.
+        lk(&core.inner.alerts).insert(alert.id.clone(), (alert, deal));
+        return persist(core).await;
+    }
     // Решение 164: коротко и по-человечески; кнопки — в сообщении manual.record.
     let text = Msg::new(hu::STOP, "Нужно ваше решение: монета застряла с убытком")
         .line(super::deal_text::coin_route(&deal))
@@ -152,6 +181,8 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
         }
     }
     deal.step = Step::Selling;
+    // Решение 177: тот же отказ — эта запись обновится, а не появится новая (raise_alert, manual_repeat.rs).
+    deal.alert_was = Some(alert);
     // Решение 101: «Продать и перегнать» — после продажи выручка на площадку покупки.
     if ret {
         deal.return_usdt = true;
@@ -161,8 +192,14 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     persist(core).await;
     let id = deal.id.clone();
     let c = core.clone();
-    tokio::spawn(async move { super::sell::market(&c, deal, super::sell::BUTTON).await });
-    Ok(format!("Сделка {id}: продажа по рынку запущена"))
+    // Решение 177: ручная команда — её сбой не «ошибка площадки подряд» (risk_count.rs); итог продажи — отдельным
+    // событием (manual_outcome.rs: правка сообщения записи в Telegram).
+    tokio::spawn(super::risk_count::manual(async move {
+        super::sell::market(&c, deal, super::sell::BUTTON).await
+    }));
+    Ok(format!(
+        "Сделка {id}: продажа по рынку запущена — итог придёт отдельно"
+    ))
 }
 
 /// «Беру на себя»: монеты списываются из учёта бота. Возвращает: текст. Ошибка: алерта нет.

@@ -323,6 +323,7 @@ async fn plan_price_reconstructed_from_worst() {
         worst_price: Decimal::new(201, 2), // 2.01
         deal_id: "t".into(),
         route: Some(route.clone()),
+        exit_position: false,
     };
     let plan =
         verify_gate::plan_quote(&p.ctx, &req, &route, slip()).expect("цена плана восстановлена");

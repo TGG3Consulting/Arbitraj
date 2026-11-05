@@ -20,6 +20,7 @@ pub mod menu_press;
 pub mod mirror;
 pub mod mirror_send;
 pub mod mirror_state;
+pub mod mirror_track;
 pub mod mirror_view;
 pub mod press;
 pub mod press_confirm;

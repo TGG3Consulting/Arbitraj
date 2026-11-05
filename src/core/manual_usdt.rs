@@ -172,31 +172,35 @@ fn start(core: &Core, deal: &str, cap: Decimal, at: VenueId, to: VenueId, who: &
         "m{}",
         chrono::Utc::now().timestamp_millis().rem_euclid(1_000_000)
     );
-    tokio::spawn(urgency::scope(Urgency::Trade, async move {
-        match super::usdt_return_attempt::attempt(&c, &d, cap, (&at, &to), &tag).await {
-            Ok((sent, credited)) => {
-                let t = format!(
-                    "USDT вернулись («Перегнать», {who}): {sent} {} → {}, зачислено {credited}",
-                    at.0, to.0
-                );
-                let state = UsdtReturn::Done {
-                    amount: sent,
-                    credited,
-                    from: at,
-                    to,
-                };
-                st::set(&c, &d, state, &t).await;
+    // Решение 177: ручная команда — сбой перегона не «ошибка площадки подряд» (risk_count.rs).
+    tokio::spawn(urgency::scope(
+        Urgency::Trade,
+        super::risk_count::manual(async move {
+            match super::usdt_return_attempt::attempt(&c, &d, cap, (&at, &to), &tag).await {
+                Ok((sent, credited)) => {
+                    let t = format!(
+                        "USDT вернулись («Перегнать», {who}): {sent} {} → {}, зачислено {credited}",
+                        at.0, to.0
+                    );
+                    let state = UsdtReturn::Done {
+                        amount: sent,
+                        credited,
+                        from: at,
+                        to,
+                    };
+                    st::set(&c, &d, state, &t).await;
+                }
+                Err(e) => {
+                    let why = if e.outcome_unknown() {
+                        format!(
+                            "«Перегнать»: исход перегона неизвестен ({e}) — проверьте обе площадки, перевод мог уйти"
+                        )
+                    } else {
+                        format!("«Перегнать»: перегон не состоялся: {e}")
+                    };
+                    st::mark_not_returned(&c, &d, cap, &at, &why).await;
+                }
             }
-            Err(e) => {
-                let why = if e.outcome_unknown() {
-                    format!(
-                        "«Перегнать»: исход перегона неизвестен ({e}) — проверьте обе площадки, перевод мог уйти"
-                    )
-                } else {
-                    format!("«Перегнать»: перегон не состоялся: {e}")
-                };
-                st::mark_not_returned(&c, &d, cap, &at, &why).await;
-            }
-        }
-    }));
+        }),
+    ));
 }

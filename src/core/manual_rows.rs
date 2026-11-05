@@ -74,6 +74,12 @@ pub fn alert_record(a: &StuckAlert) -> ManualRecord {
             .kv("Монеты", &coins)
             .kv("Убыток при продаже сейчас", &loss)
             .reason(&full)
+            // Решение 177: тот же отказ по этой записи — счётчик попыток вместо нового алерта (manual_repeat.rs).
+            .line(if a.attempts > 1 {
+                format!("Попыток с этим отказом: {}", a.attempts)
+            } else {
+                String::new()
+            })
             .kv("Когда", when(a.at))
             .id(&a.deal_id)
             .render(),

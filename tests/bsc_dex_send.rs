@@ -136,6 +136,7 @@ fn req(worst: Decimal) -> TradeRequest {
         worst_price: worst,
         deal_id: "т".into(),
         route: None,
+        exit_position: false,
     }
 }
 

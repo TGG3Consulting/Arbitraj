@@ -6,6 +6,7 @@
 //! (on_hand) — общий для «Продать сейчас» по алерту, по остановленной сделке и «Вернуть боту»; у продаж — on_hand_sell:
 //! монеты не на торговом счёте биржи сначала переводятся на него (to_trading.rs, решение 174).
 //! «Продать и перегнать» (решение 101) — то же, плюс выручка USDT на площадку покупки (deal.return_usdt).
+//! Решение 177: продажа кнопкой — ручная команда (risk_count.rs), итог отдельным событием (manual_outcome.rs).
 //! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
 //! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы).
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
@@ -140,14 +141,15 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
     }
     super::ledger::save(core, &deal).await;
     let text = format!(
-        "Сделка {deal_id}: продажа {} {} на {} по рынку запущена",
+        "Сделка {deal_id}: продажа {} {} на {} по рынку запущена — итог придёт отдельно",
         deal.qty, deal.direction.asset.ticker, deal.at.0
     );
     let c = core.clone();
-    tokio::spawn(async move {
+    // Решение 177: ручная команда — не «ошибка площадки подряд» (risk_count.rs); итог — manual_outcome.rs.
+    tokio::spawn(super::risk_count::manual(async move {
         super::sell::market(&c, deal, super::sell::BUTTON).await;
         lk(&c.inner.active).remove(&key);
-    });
+    }));
     Ok(text)
 }
 

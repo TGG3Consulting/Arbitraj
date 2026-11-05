@@ -140,7 +140,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
         .await;
     }
     let why = format!("убыток {} выше порога {}", h::pct(loss), h::pct(max));
-    super::manual::raise_alert(core, deal, Some(loss), why).await;
+    super::manual::raise_alert(core, deal, Some(loss), why, None).await;
 }
 
 /// Продажа по рынку с уведомлением stuck.market_sold.

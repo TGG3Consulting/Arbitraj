@@ -69,5 +69,7 @@ pub fn request(core: &Core, d: &Direction, plan: &Calc) -> Result<TradeRequest, 
         // Сделки ещё нет (ID выдаёт учёт после предпроверки): для своего ID пробного ордера — метка «precheck».
         deal_id: "precheck".into(),
         route: None,
+        // Решение 177: та же продажа выхода, что поставит исполнение (trade_ops.rs).
+        exit_position: true,
     })
 }

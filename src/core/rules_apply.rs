@@ -4,8 +4,11 @@
 //! Стартовое правило Тиграна «ордер не исполнился — отменяем, больше не пробуем» — это CancelNoRetry.
 //! Правила нет — операция останавливается и уведомление уходит (gateway/README.md).
 //! Каждая ошибка — в журнал и в уведомление своего события; ошибки подряд считает risk.rs.
+//! Решение 177 (risk_count.rs): отказ до отправки (деньги и газ не тронуты) ошибкой площадки подряд не считается; ручная
+//! команда человека не считается совсем, и правило StopVenue паузу по ней не ставит — паузу ставит только автоматика.
+//! «Исход неизвестен» ставит паузу и у ручной команды: очередь кошелька остановлена, транзакция могла исполниться.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
-//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, deps.rs.
+//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, deps.rs.
 //! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs).
 
 use serde_json::json;
@@ -96,7 +99,12 @@ pub async fn on_error(
         let tg = tg_error(code, op, venue, deal, err).render();
         deps.notify(code, Some(&venue.0), &tg).await;
     }
-    if let Some(paused) = risk::on_error(core, venue) {
+    // Решение 177: ручная команда и отказ до отправки — не «ошибка площадки подряд» (risk_count.rs).
+    let manual = super::risk_count::is_manual();
+    if !manual
+        && super::risk_count::counts(err)
+        && let Some(paused) = risk::on_error(core, venue)
+    {
         deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &paused))
             .await;
     }
@@ -129,6 +137,21 @@ pub async fn on_error(
         RuleAction::Retry { attempts, pause_ms } if attempt <= *attempts => Next::Retry {
             pause_ms: *pause_ms,
         },
+        RuleAction::StopVenue if manual => {
+            // Решение 177: паузу площадки ставит только автоматика — ручная команда просто останавливается.
+            deps.log(
+                Level::Warn,
+                "core.rules",
+                Some(&venue.0),
+                format!(
+                    "Правило шлюза №{} ({:?}) — пауза площадки: ручная команда «{op}», паузу ставит только автоматика (решение 177)",
+                    rule.id, err.code
+                ),
+                None,
+            )
+            .await;
+            Next::Stop
+        }
         RuleAction::StopVenue => {
             let why = format!("правило шлюза №{}: {:?}", rule.id, err.code);
             risk::on_error(core, venue);

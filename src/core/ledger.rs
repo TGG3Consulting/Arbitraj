@@ -63,6 +63,8 @@ pub async fn save(core: &Core, deal: &Deal) {
 /// Закрывает сделку: итог, план против факта, итог дня, статистика монеты, уведомление, пауза направления.
 /// Принимает: ядро, сделку, конечный шаг (Closed, Halted, TakenOver), причину.
 pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
+    // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
+    super::withdraw_limit::release(core, &deal.id);
     deal.step = step;
     let result = deal.proceeds - deal.invested - deal.spent;
     if step == Step::Closed {

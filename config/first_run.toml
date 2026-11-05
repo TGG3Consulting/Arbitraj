@@ -2565,6 +2565,209 @@ source = "Тигран, 05.11.2026 (решение 163)"
 rationale = "Тигран: «5 попыток; если все 5 неудачные — алерт в Telegram с кнопками „Перегнать“ и „Перегнано вручную“». 5 повторов по 10 с — меньше минуты до решения человека."
 prefill = { kind = "Global" }
 
+# --- Лимит выводов по бирже (решение 180) ---
+[[section]]
+title = "Лимит выводов по бирже (решение 180)"
+intro = "Бот считает свои выводы с каждой биржи скользящим окном в памяти: окно занято — сигнал на сделку пропускается, возврат USDT ждёт. Значения — только из официальной документации или живого ответа биржи. Не задано у биржи — для неё всё как раньше. BingX, MEXC, KuCoin, Binance, Kraken, Phemex, Poloniex: лимита частоты выводов в документации нет (есть только вес запроса или он не описан) — не задавать."
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Gate"
+unit = "мс"
+value = "10000"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Gate"
+unit = "выводов"
+value = "1"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Gate"
+unit = "вариант"
+value = "venue"
+source = "Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Bybit"
+unit = "мс"
+value = "10000"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Bybit"
+unit = "выводов"
+value = "1"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Bybit"
+unit = "вариант"
+value = "coin"
+source = "Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка Bitget"
+unit = "мс"
+value = "1000"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка Bitget"
+unit = "выводов"
+value = "5"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка Bitget"
+unit = "вариант"
+value = "venue"
+source = "Документация Bitget Withdraw: «5 req/sec/UID»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "bitget" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка OKX"
+unit = "мс"
+value = "1000"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка OKX"
+unit = "выводов"
+value = "6"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка OKX"
+unit = "вариант"
+value = "venue"
+source = "Документация OKX Withdrawal: 6 запросов/с (User ID)"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка HTX"
+unit = "мс"
+value = "2000"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка HTX"
+unit = "выводов"
+value = "20"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка HTX"
+unit = "вариант"
+value = "venue"
+source = "Документация HTX Create a Withdraw Request: «20times/2s»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка XT"
+unit = "мс"
+value = "1000"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка XT"
+unit = "выводов"
+value = "1"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка XT"
+unit = "вариант"
+value = "venue"
+source = "Документация XT POST /v4/withdraw: «1/s/apikey»"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "xt" }
+
+[[section.rec]]
+name = "transfer.withdraw_window_ms"
+area = "площадка CoinEx"
+unit = "мс"
+value = "1000"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "transfer.withdraw_max_in_window"
+area = "площадка CoinEx"
+unit = "выводов"
+value = "10"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "transfer.withdraw_limit_scope"
+area = "площадка CoinEx"
+unit = "вариант"
+value = "venue"
+source = "Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s"
+rationale = "Лимит выводов биржи (решение 180)."
+prefill = { kind = "Venue", id = "coinex" }
+
+[[section.rec]]
+name = "venue.price_assets"
+area = "площадка Gate"
+unit = "тикеры"
+value = "GT"
+source = "Решение 181: комиссия со скидкой GT (venue.fee_deduction = gt) приходит в GT (ордер, gt_fee)"
+rationale = "Цена GT для пересчёта комиссии в USDT — иначе комиссия не входит в итог сделки."
+prefill = { kind = "Venue", id = "gate" }
+
 # --- Повтор вывода после «заблокировано для вывода» (решение 166) ---
 [[section]]
 title = "Повтор вывода после «заблокировано для вывода» (решение 166)"

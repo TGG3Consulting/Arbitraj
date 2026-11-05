@@ -190,6 +190,8 @@ async fn go(
     let mut locked = 0;
     let created = loop {
         attempt += 1;
+        // Решение 180: лимит выводов биржи-отправителя (withdraw_limit.rs; не задан — сразу, как раньше).
+        super::withdraw_limit::take(core, deal, from, &asset.ticker).await;
         match gw_from.withdraw(req.clone()).await {
             Ok(t) => break t,
             Err(e) if super::transfer_locked::again(core, deal, from, &e, &mut locked).await => {}

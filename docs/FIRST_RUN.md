@@ -487,13 +487,42 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | usdt.return_retry_s | вся система, можно по площадке | `10` | Тигран: «через каждые 10 секунд пытаемся перевести обратно, 5 попыток». Удержание MEXC 16021 снимается, когда депозит набирает подтверждения сети, — повтор через короткую паузу успевает за ним | Тигран, 05.11.2026 (решение 163) |
 | usdt.return_retries_max | вся система, можно по площадке | `5` | Тигран: «5 попыток; если все 5 неудачные — алерт в Telegram с кнопками „Перегнать“ и „Перегнано вручную“». 5 повторов по 10 с — меньше минуты до решения человека | Тигран, 05.11.2026 (решение 163) |
 
+## Лимит выводов по бирже (решение 180)
+
+Бот считает свои выводы с каждой биржи скользящим окном в памяти: окно занято — сигнал на сделку пропускается, возврат USDT ждёт. Не задано у биржи — для неё всё как раньше. BingX, MEXC, KuCoin, Binance, Kraken, Phemex, Poloniex: лимита частоты выводов в документации нет (есть только вес запроса или он не описан) — не задавать.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| transfer.withdraw_window_ms | площадка Gate | `10000` | Лимит выводов биржи | Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже) |
+| transfer.withdraw_max_in_window | площадка Gate | `1` | Лимит выводов биржи | Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже) |
+| transfer.withdraw_limit_scope | площадка Gate | `venue` | Лимит выводов биржи | Живой ответ Gate 05.11: «TOO_FAST: Withdrawal frequency is limited to 10s». Документация API v4 (Frequency limit rule, Wallet): «Withdrawal(POST /withdrawals) : 1r/3s», «counted against each sub-account or main account» — противоречие; берётся живой ответ (строже) |
+| transfer.withdraw_window_ms | площадка Bybit | `10000` | Лимит выводов биржи | Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s» |
+| transfer.withdraw_max_in_window | площадка Bybit | `1` | Лимит выводов биржи | Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s» |
+| transfer.withdraw_limit_scope | площадка Bybit | `coin` | Лимит выводов биржи | Документация Bybit v5 Withdraw: «you can only withdraw once every 10 seconds per chain/coin combination»; запрос — «5 req/s» |
+| transfer.withdraw_window_ms | площадка Bitget | `1000` | Лимит выводов биржи | Документация Bitget Withdraw: «5 req/sec/UID» |
+| transfer.withdraw_max_in_window | площадка Bitget | `5` | Лимит выводов биржи | Документация Bitget Withdraw: «5 req/sec/UID» |
+| transfer.withdraw_limit_scope | площадка Bitget | `venue` | Лимит выводов биржи | Документация Bitget Withdraw: «5 req/sec/UID» |
+| transfer.withdraw_window_ms | площадка OKX | `1000` | Лимит выводов биржи | Документация OKX Withdrawal: 6 запросов/с (User ID) |
+| transfer.withdraw_max_in_window | площадка OKX | `6` | Лимит выводов биржи | Документация OKX Withdrawal: 6 запросов/с (User ID) |
+| transfer.withdraw_limit_scope | площадка OKX | `venue` | Лимит выводов биржи | Документация OKX Withdrawal: 6 запросов/с (User ID) |
+| transfer.withdraw_window_ms | площадка HTX | `2000` | Лимит выводов биржи | Документация HTX Create a Withdraw Request: «20times/2s» |
+| transfer.withdraw_max_in_window | площадка HTX | `20` | Лимит выводов биржи | Документация HTX Create a Withdraw Request: «20times/2s» |
+| transfer.withdraw_limit_scope | площадка HTX | `venue` | Лимит выводов биржи | Документация HTX Create a Withdraw Request: «20times/2s» |
+| transfer.withdraw_window_ms | площадка XT | `1000` | Лимит выводов биржи | Документация XT POST /v4/withdraw: «1/s/apikey» |
+| transfer.withdraw_max_in_window | площадка XT | `1` | Лимит выводов биржи | Документация XT POST /v4/withdraw: «1/s/apikey» |
+| transfer.withdraw_limit_scope | площадка XT | `venue` | Лимит выводов биржи | Документация XT POST /v4/withdraw: «1/s/apikey» |
+| transfer.withdraw_window_ms | площадка CoinEx | `1000` | Лимит выводов биржи | Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s |
+| transfer.withdraw_max_in_window | площадка CoinEx | `10` | Лимит выводов биржи | Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s |
+| transfer.withdraw_limit_scope | площадка CoinEx | `venue` | Лимит выводов биржи | Документация CoinEx Rate Limit: вывод — группа «现货账户改动» 10r/1s |
+| venue.price_assets | площадка Gate | `GT` | Цена GT для пересчёта комиссии в USDT (решение 181) | Ордер Gate: gt_fee — комиссия в GT |
+
 ## Повтор вывода после «заблокировано для вывода» (решение 166)
 
 Покупка прошла, а вывод монеты с биржи отклонён ответом «средства временно заблокированы для вывода» (MEXC 16021, KuCoin 115008, Binance −4060, Bybit 131085 — удержание недавнего депозита), и прежний вывод точно не ушёл — бот повторяет тот же вывод. Успех — сделка идёт дальше; все повторы неудачны — как раньше (остановка / перегон) с понятной причиной. Не задано — без повторов.
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
-| transfer.locked_retry_ms | вся система, можно по площадке | `1000` | Тигран: «каждые 1000 мс». Удержание снимается, когда депозит набирает подтверждения сети BSC (блок ≈ 1–3 с), — секундный шаг ловит снятие без лишней задержки; запрос вывода — один в секунду. Исключение — Bybit: в документации вывода «you can only withdraw once every 10 seconds per chain/coin combination», поэтому у площадки bybit задать 10000 (считается ли отказ попыткой — в документации не сказано) | Тигран, 05.11.2026 (решение 166) |
+| transfer.locked_retry_ms | вся система, можно по площадке | `1000` | Тигран: «каждые 1000 мс». Удержание снимается, когда депозит набирает подтверждения сети BSC (блок ≈ 1–3 с), — секундный шаг ловит снятие без лишней задержки; запрос вывода — один в секунду. Исключения — Bybit (в документации вывода «you can only withdraw once every 10 seconds per chain/coin combination») и Gate (живой ответ «Withdrawal frequency is limited to 10s», решение 179): у площадок bybit и gate задать 10000 (считается ли отказ попыткой — в документации не сказано) | Тигран, 05.11.2026 (решение 166) |
 | transfer.locked_retries_max | вся система, можно по площадке | `10` | Тигран: «не больше 10 раз». 10 повторов по 1 с — около 10 с ожидания: за это время монета на бирже почти не дешевеет, а если удержание держится дольше — человек решает сам | Тигран, 05.11.2026 (решение 166) |
 
 ## Делистинги (решение 175)

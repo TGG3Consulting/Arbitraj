@@ -178,6 +178,7 @@ pub mod usdt_return_retry;
 pub mod usdt_return_state;
 pub mod usdt_sources;
 pub mod usdt_transfer;
+pub mod withdraw_limit;
 pub mod usdt_transfer_check;
 pub mod usdt_transfer_plan;
 pub mod view;

@@ -95,18 +95,20 @@ async fn run(core: &Core, d: Direction) {
     let deps = &core.inner.deps;
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
     let pre = async {
+        // Решение 180: лимит выводов биржи A — место занимается в момент решения; окно занято — сигнал пропускается.
+        let slot = super::withdraw_limit::reserve(core, &d.buy_on, &d.asset.ticker)?;
         let acc = super::dex_account::of_direction(deps, &d).await?;
         let plan = super::precheck::run(core, &d).await?;
         // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.
         if super::dex_account::of_direction(deps, &d).await? != acc {
             return Err("маппинг кошельков изменился во время предпроверки".to_string());
         }
-        Ok((acc, plan))
+        Ok((acc, plan, slot))
     };
     // Решение 155: отказ предпроверки повторяется на каждый прошедший расчёт (в тексте — новые миллисекунды) — одна
     // строка журнала на вид причины со счётчиком, как у core.candidate_rejected; прошла — строка закрывается.
     let key = format!("precheck|{}", super::candidates::reject_key(&d));
-    let (acc, plan) = match pre.await {
+    let (acc, plan, slot) = match pre.await {
         Ok(x) => {
             core.inner.last_reject.close(&deps.journal, &key).await;
             x
@@ -143,6 +145,10 @@ async fn run(core: &Core, d: Direction) {
         plan.profit_usd,
         acc.clone(),
     );
+    // Решение 180: место в окне выводов — за сделкой до её вывода (transfers.rs) или конца (ledger.rs).
+    if let Some(s) = slot {
+        super::withdraw_limit::bind(core, &deal.id, s);
+    }
     // Решение 123: выбор исполнителя DEX по финальной котировке («лучший из двух») — в хронологию.
     deal.note(format!(
         "План: объём {}, прибыль {} USDT{}",

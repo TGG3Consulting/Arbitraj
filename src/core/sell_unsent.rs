@@ -9,6 +9,8 @@
 //! Настройки: stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154).
 //!
 //! Когда повтор:
+//! - решение 182: продажа на бирже не исполнилась совсем (OrderNotFilled, монеты на месте) — сразу в режим застрявшей
+//!   монеты (свежий стакан); покупки — без изменений (правило «не исполнился — отменяем»);
 //! - решение 110: отказ ДО отправки (цена сборки хуже допустимой, лимит или очередь запросов, нет маршрута, данные
 //!   устарели, налоги не проверены, откат при пробном вызове — OpError::retry_safe) — сразу в режим застрявшей монеты;
 //! - решение 154 (живой случай 04.11, ASTER: «Ни один канал не принял транзакцию», 4 минуты до кнопки человека): все
@@ -46,7 +48,7 @@ pub fn decide(core: &Core, deal: &Deal, e: &OpError, why: &str) -> Retry {
     if why == super::sell::BUTTON {
         return Retry::No;
     }
-    let pause_ms = if e.retry_safe() {
+    let pause_ms = if e.retry_safe() || not_filled_cex(core, deal, e) {
         0
     } else if e.rejected_unsent() {
         match setting(core, "stuck.reject_retry_pause_ms") {
@@ -71,6 +73,20 @@ pub fn decide(core: &Core, deal: &Deal, e: &OpError, why: &str) -> Retry {
         return Retry::Exhausted { max };
     }
     Retry::Go { pause_ms }
+}
+
+/// Решение 182 (Тигран, 05.11.2026, живой случай GENIUS bsc_dex → gate): продажа на бирже не исполнилась совсем
+/// (OrderNotFilled: ордер IOC/FOK по худшей цене снят биржей, монеты на месте, денег не стоило) — монета уже на бирже,
+/// бросить её нельзя: повтор через режим застрявшей монеты (свежий стакан, порог убытка застрявшей монеты), как отказ до
+/// отправки. Только биржа (у DEX отказ свопа — свои коды). Покупки сюда не ходят — у них прежнее правило «не
+/// исполнился — отменяем, не пробуем». Ошибок нет.
+fn not_filled_cex(core: &Core, deal: &Deal, e: &OpError) -> bool {
+    !e.sent
+        && e.code == Some(crate::gateway::errors::ErrorCode::OrderNotFilled)
+        && matches!(
+            super::trade_ops::kind(core, &deal.at),
+            Ok(crate::gateway::contract::VenueKind::Cex)
+        )
 }
 
 /// Повтор: счётчик сделки, запись в хронологию и журнал, пауза, затем режим застрявшей монеты (новая котировка и

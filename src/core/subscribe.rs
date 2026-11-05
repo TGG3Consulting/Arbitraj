@@ -9,10 +9,11 @@
 //! Порядок запуска: до первого SpotPairs список DEX пуст и подписки DEX нет; SpotPairs приходит из подписки биржи
 //! и толкает пересборку — DEX подписывается один раз. Стаканы список DEX не меняют (ни первый стакан, ни
 //! «недостоверно»), поэтому подписка DEX не дёргается при запуске и разрывах связи биржи.
-//! Бирже также — стакан BNB (цена газа, convert.rs) и стаканы промежуточных монет (решение 52). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список.
+//! Бирже также — стакан BNB (цена газа, convert.rs), стаканы промежуточных монет (решение 52) и монет venue.price_assets
+//! (решение 181: комиссия Gate в GT — пересчёт в USDT по живой цене). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список.
 //! Кто вызывает: core/rebuild.rs после каждой пересборки; подписка площадки — отдельной задачей (sub_state.rs).
 //! От чего зависит: engine.rs, gateway (subscribe_market).
-//! Настройки: нет своих.
+//! Настройки: venue.price_assets [биржа] (необязательная).
 
 use super::market_state::MarketState;
 use super::registry::{CoinEntry, Presence};
@@ -64,6 +65,8 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         out.push(super::convert::gas_asset());
         // Живые цены промежуточных монет (решение 52) — тикер по адресу из справочника бирж.
         out.extend(intermediate_assets(core));
+        // Решение 181: монеты для пересчёта затрат в USDT (комиссия Gate в GT) — venue.price_assets биржи.
+        out.extend(price_assets(core, venue));
     }
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     out.dedup();
@@ -74,6 +77,27 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         out.dedup_by(|a, b| a.ticker == n && b.ticker == n);
     }
     out
+}
+
+/// Решение 181: монеты из venue.price_assets биржи — только цена (стакан), без адреса контракта, как BNB газа.
+/// Не задана — ничего (как раньше). Ошибок нет.
+fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
+    let at = crate::settings::read::At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    core.inner
+        .deps
+        .settings
+        .list("venue.price_assets", at)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|t| Asset {
+            ticker: t.trim().to_uppercase(),
+            bsc_contract: None,
+        })
+        .filter(|a| !a.ticker.is_empty())
+        .collect()
 }
 
 /// Нужна ли монета подписке DEX: есть адрес контракта в BSC, и хотя бы у одной биржи у монеты есть сеть BSC

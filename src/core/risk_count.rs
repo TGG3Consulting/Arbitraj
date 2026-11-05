@@ -46,6 +46,8 @@ pub fn counts(e: &GatewayError) -> bool {
             | ErrorCode::SecretsLocked
             | ErrorCode::InsufficientBalance
             | ErrorCode::OrderRejected
+            // Решение 182: ордер биржи снят без исполнения (IOC/FOK) — деньги не тронуты, это движение рынка.
+            | ErrorCode::OrderNotFilled
             | ErrorCode::NotApplicable
             | ErrorCode::SwapReverted
     )

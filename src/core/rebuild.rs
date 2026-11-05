@@ -33,7 +33,7 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 9] = [
+const REGISTRY: [&str; 10] = [
     "coin.",
     "cex_cex.",
     "tax.",
@@ -43,6 +43,8 @@ const REGISTRY: [&str; 9] = [
     "venue.bsc_network",
     "venue.symbols_stale_s",
     "dex.intermediate_",
+    // Решение 181: монеты для цены затрат — в подписке биржи (subscribe.rs).
+    "venue.price_assets",
 ];
 
 /// Задача: изменение настроек справочника — толчок пересборки. Пока подписка какой-то площадки не удалась

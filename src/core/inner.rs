@@ -161,6 +161,8 @@ pub struct Inner {
     pub uncapped: super::uncapped_state::State,
     /// Делистинги бирж (решение 175, delist.rs).
     pub delist: super::delist::DelistState,
+    /// Лимит выводов по бирже (решение 180, withdraw_limit.rs).
+    pub withdraw_limit: super::withdraw_limit::State,
 }
 
 impl Inner {
@@ -245,6 +247,7 @@ impl Inner {
             cycles: Default::default(),
             uncapped: Default::default(),
             delist: Default::default(),
+            withdraw_limit: Default::default(),
         }
     }
 }

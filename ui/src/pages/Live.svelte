@@ -19,10 +19,16 @@
     раскрываемая карточка сигнала (SignalCard: стакан и пул в полосе, максимальный объём и прибыль, ссылки).
   Решение 175: у кандидата — отметка «делистинг на X: дата» по сторонам направления (lib/delist.svelte.js).
   Решение 141: у кандидата — строка «без потолка: вложить X → прибыль Y; плюс от Z» (UncappedLine, поле uncapped).
+  Решение 198 (06.11.2026: таблица застывала, время «Обновлено» отставало на минуты, таймер страницы опаздывал на 8 с):
+    живые сообщения spread / candidate копятся в буфере (последнее по направлению) и применяются одной пачкой в кадре
+    браузера (requestAnimationFrame), не чаще live.spread_min_interval_ms (то же значение, с которым сервер шлёт
+    строку направления; не задана — каждый кадр). Раньше каждое из тысяч сообщений в секунду пересчитывало всю
+    таблицу монет (~3700 направлений) — страница не успевала, данные на экране старели при свежих на сервере.
 -->
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { store, valueKey } from '../lib/settings.svelte.js';
   import { dirText, dirKey, pickLines } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
@@ -37,8 +43,14 @@
 
   startDelist();
 
-  let spreads = $state({});
-  let cands = $state({});
+  // $state.raw: объект заменяется целиком пачкой (решение 198), без глубокого отслеживания тысяч строк.
+  let spreads = $state.raw({});
+  let cands = $state.raw({});
+  /** Буфер живых сообщений до следующей пачки: направление → последнее сообщение. */
+  let pendS = new Map();
+  let pendC = new Map();
+  let frame = 0;
+  let lastFlush = 0;
   let error = $state('');
   let filter = $state('');
   let onlyActive = $state(false);
@@ -55,13 +67,47 @@
     }
   }
 
+  /** Наименьший промежуток между пачками, мс: live.spread_min_interval_ms (глобальная); не задана — 0. */
+  const minGap = () => Number(store.values[valueKey('live.spread_min_interval_ms', { kind: 'Global' })] ?? 0);
+
+  /** Применяет накопленные сообщения одной заменой объектов (решение 198). Ошибок нет. */
+  function flush(now) {
+    frame = 0;
+    if (now - lastFlush < minGap()) {
+      frame = requestAnimationFrame(flush);
+      return;
+    }
+    lastFlush = now;
+    if (pendS.size) {
+      spreads = Object.assign({ ...spreads }, Object.fromEntries(pendS));
+      pendS = new Map();
+    }
+    if (pendC.size) {
+      cands = Object.assign({ ...cands }, Object.fromEntries(pendC));
+      pendC = new Map();
+    }
+  }
+
+  /** Ставит пачку в ближайший кадр, если ещё не стоит. Ошибок нет. */
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(flush);
+  };
+
   $effect(() => {
     reload();
-    return onLive((msg) => {
-      if (msg.type === 'spread') spreads[dirKey(msg.data.direction)] = msg.data;
-      else if (msg.type === 'candidate') cands[dirKey(msg.data.direction)] = msg.data;
-      else if (lagFor(msg, 'core') || msg.type === 'coins') reload();
+    const off = onLive((msg) => {
+      if (msg.type === 'spread') {
+        pendS.set(dirKey(msg.data.direction), msg.data);
+        schedule();
+      } else if (msg.type === 'candidate') {
+        pendC.set(dirKey(msg.data.direction), msg.data);
+        schedule();
+      } else if (lagFor(msg, 'core') || msg.type === 'coins') reload();
     });
+    return () => {
+      off();
+      if (frame) cancelAnimationFrame(frame);
+    };
   });
 
   /** Фильтр по тикеру монеты (Asset). */

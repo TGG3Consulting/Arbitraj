@@ -7,6 +7,9 @@
 //! 3. Наша математика (math/swap_algebra.rs) на этой карте и комиссии fee() пула даёт тот же выход, что виртуальный
 //!    квотер (настоящий swap пула с плагином, решение 186) — на 1, 100 и 10000 долларов, в обе стороны.
 //!
+//! 4. Решение 205: глубина в полосе (quote/depth_band_algebra.rs) на тех же пулах — обе стороны не нулевые, и обмен
+//!    найденного входа без предела цены (без комиссии) даёт тот же выход (полоса — честный предел обмена).
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{ticks, load_algebra_integral}}, serde_json.
 
@@ -141,6 +144,49 @@ fn local_math_equals_virtual_quoter() {
                 r.amount_out, out,
                 "{} zeroForOne={zfo} ${}: наша математика ≠ виртуальный квотер",
                 p["pool"], q["usd"]
+            );
+        }
+    }
+}
+
+#[test]
+fn band_depth_algebra_on_live_pools() {
+    let d = probe();
+    for p in d["pools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["dex_id"] == "thena-v3")
+    {
+        let (sqrt, tick, liq, _, m) = pool_state(p);
+        let s = AlgebraState {
+            sqrt_price: sqrt,
+            tick,
+            liquidity: liq,
+            fee: 0,
+            ticks: &m,
+        };
+        for zfo in [true, false] {
+            let (a_in, a_out, _) =
+                arb::venues::bsc_dex::quote::depth_band_algebra::algebra(&s, zfo, 0.02, !zfo)
+                    .expect("глубина Algebra");
+            assert!(
+                !a_in.is_zero() && !a_out.is_zero(),
+                "{} {zfo}: глубина 0",
+                p["pool"]
+            );
+            let r = swap_algebra::swap(&s, zfo, true, a_in).expect("обмен");
+            let diff = if r.amount_out > a_out {
+                r.amount_out - a_out
+            } else {
+                a_out - r.amount_out
+            };
+            assert!(
+                diff <= a_out / U256::from(1_000_000u32) + U256::from(1u8),
+                "{} {zfo}: обмен {} ≠ глубина {}",
+                p["pool"],
+                r.amount_out,
+                a_out
             );
         }
     }

@@ -9,7 +9,8 @@
 //! Список найденных промежуточных монет хранится в памяти (Mids) — котировка и сделка читают его.
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
-//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker [bsc_dex]; dex.router [вид пула V2] (WETH()).
+//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
+//! 205: известная обёртка, если WETH() роутеров не прочитан); dex.router [вид пула V2] (WETH()).
 //!
 //! WETH() — IUniswapV2Router01.sol#L5 (v2-periphery ed249913), IPancakeRouter01.sol#L5 (pancake-swap-periphery
 //! d769a6d1); «WBNB 1:1 к BNB по контракту обёртки» — ответ ядра в PR #25.
@@ -81,7 +82,15 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
             "dex.intermediate_enabled = да, а список dex.intermediate_tokens пуст",
         ));
     }
-    let wrapped = wrapped_native(ctx).await;
+    // Решение 205: обёртка — WETH() роутеров V2 и dex.native_wrapped (решение 62). У части форков (mdex_bsc, julswap,
+    // журнал 06.11: «WETH() роутера не прочитан: execution reverted») WETH() нет — без настройки обёртка терялась бы,
+    // и промежуточная WBNB выпадала, если остальные роутеры не ответили.
+    let mut wrapped = wrapped_native(ctx).await;
+    if let Ok(w) = ctx.addr("dex.native_wrapped")
+        && !wrapped.contains(&w)
+    {
+        wrapped.push(w);
+    }
     let native = ctx.text("dex.native_ticker");
     let mut out = Vec::new();
     for address in list {
@@ -89,7 +98,7 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
             Some(t) => Ok(t),
             None if wrapped.contains(&address) => native.clone().map_err(|e| e.message),
             None => Err(
-                "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2)"
+                "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2, dex.native_wrapped)"
                     .to_string(),
             ),
         };
@@ -124,8 +133,20 @@ pub async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
         match res {
             Ok(a) => out.push(a),
             Err(e) => {
-                let msg = format!("{}: WETH() роутера не прочитан: {}", f.title, e.message);
-                ctx.log(Level::Warn, "dex.intermediate", msg, None).await;
+                // Решение 205: у роутера нет WETH() (форк без этой функции) — не помеха маршруту: обёртка известна из
+                // других роутеров и dex.native_wrapped (read). Предупреждение — только если настройка не задана.
+                let (level, tail) = match ctx.addr("dex.native_wrapped") {
+                    Ok(_) => (Level::Info, "обёртка берётся из dex.native_wrapped"),
+                    Err(_) => (
+                        Level::Warn,
+                        "dex.native_wrapped не задана — обёртка только из других роутеров",
+                    ),
+                };
+                let msg = format!(
+                    "{}: WETH() роутера не прочитан: {} — {tail}",
+                    f.title, e.message
+                );
+                ctx.log(level, "dex.intermediate", msg, None).await;
             }
         }
     }

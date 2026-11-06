@@ -23,6 +23,7 @@ pub mod cycle_opt;
 pub mod cycle_scan;
 pub mod cycle_view;
 pub mod depth_band;
+pub mod depth_band_algebra;
 pub mod direct;
 pub mod direct_route;
 pub mod emptiness;

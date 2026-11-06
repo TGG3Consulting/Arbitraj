@@ -11,7 +11,7 @@
 -->
 <script>
   import { get, seg } from '../lib/api.js';
-  import { limitedLabel, money } from '../lib/uncappedLabels.js';
+  import { limitedLabel, money, duration, windowSec } from '../lib/uncappedLabels.js';
   import UncappedLine from './UncappedLine.svelte';
 
   /** id — id сделки; fact — её итог (USDT) или null; initial — запись из GET /api/uncapped/deals (null — нет);
@@ -41,6 +41,7 @@
       <strong>{money(Number(rec.opt_passes ? rec.opt.profit : 0) - Number(fact))} USDT</strong>{/if}
   </p>
   <UncappedLine u={rec} />
+  {#if rec.battle?.window_from}<p class="muted">Окно (решение 197): спред выше порога с {new Date(rec.battle.window_from).toLocaleString()}, до входа {duration(windowSec(rec))}</p>{/if}
 {:else}
   <p class="muted">
     Без потолка: {#if why}{why}{:else if loaded}для сделки {id} расчёта без потолка нет{:else}загрузка…{/if}

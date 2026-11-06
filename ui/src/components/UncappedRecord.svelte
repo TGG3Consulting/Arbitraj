@@ -1,6 +1,6 @@
 <!--
   Файл: ui/src/components/UncappedRecord.svelte
-  Что делает: подробности записи «без потолка» (решение 141): бой (вердикт, причина, бюджет и его составляющие,
+  Что делает: подробности записи «без потолка» (решение 141): расчёт на нашем бюджете (вердикт, причина, бюджет и его составляющие,
     свободный остаток у сделки), оптимум без потолка (объём, вложение, прибыль, %, средние цены, выручка, затраты, время в
     пути), минимум до плюса, на нашем бюджете, таблица потолков записи, край поиска и расчётов, состав затрат на оптимуме
     (CostLines).
@@ -11,7 +11,7 @@
 <script>
   import CostLines from './CostLines.svelte';
   import UncappedLine from './UncappedLine.svelte';
-  import { money } from '../lib/uncappedLabels.js';
+  import { money, verdictLabel } from '../lib/uncappedLabels.js';
 
   /** rec — Record ядра (core/uncapped_types.rs) как JSON. */
   let { rec } = $props();
@@ -20,7 +20,7 @@
 
 <UncappedLine u={rec} />
 <p>
-  Бой: {rec.battle.verdict}{#if rec.battle.reason} — {rec.battle.reason}{/if}{#if rec.battle.dry} <span class="tag">сухой</span>{/if};
+  На нашем бюджете: {verdictLabel(rec.battle.verdict)}{#if rec.battle.reason} — {rec.battle.reason}{/if}{#if rec.battle.dry} <span class="tag">сухой</span>{/if};
   бюджет {money(rec.budget)}{#if p} (на сделку {money(p.per_trade)}, остаток на монету {money(p.coin_left)}, в пути {money(p.transit_left)}{#if p.dry != null}, сухой {money(p.dry)}{/if}){:else if rec.limits_error} <span class="muted">({rec.limits_error})</span>{/if}
   {#if rec.battle.free != null}; перед покупкой предел {money(rec.battle.free)} при бюджете плана {money(rec.battle.plan_budget)}{/if}
 </p>

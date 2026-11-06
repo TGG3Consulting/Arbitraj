@@ -5,7 +5,7 @@
 //! расчётом (прибыль ниже порога, фильтр финальной котировки, сбой финальной котировки). Отказы до расчёта (нет цены,
 //! пула, налоги не проверены, срок) — не ставятся. Сделка: после исполнения покупки — с id сделки.
 //! Кто вызывает: core/candidates.rs (cand), core/executor.rs (deal).
-//! От чего зависит: uncapped_queue.rs, uncapped_types.rs, limits_parts.rs, costs.rs (Calc), dry.rs, settings.
+//! От чего зависит: uncapped_queue.rs, inner.spreads (начало окна, решение 197), uncapped_types.rs, limits_parts.rs, costs.rs (Calc), dry.rs, settings.
 //! Настройки: uncapped.enabled.
 
 use rust_decimal::Decimal;
@@ -30,6 +30,14 @@ pub fn enabled(core: &Core) -> bool {
         .unwrap_or(false)
 }
 
+/// Решение 197: начало окна — с какого момента грубый спред направления выше порога (core/signal.rs above_since; у
+/// сделки пауза направления ставится только при закрытии, поэтому после покупки время ещё на месте). Ошибок нет.
+fn window_from(core: &Core, d: &Direction) -> Option<chrono::DateTime<chrono::Utc>> {
+    super::engine::rd(&core.inner.spreads)
+        .get(d)
+        .and_then(|v| v.above_since)
+}
+
 /// Кандидат посчитан: прошёл (`reason` None) или отклонён с расчётом. Составляющие бюджета — сейчас, в режиме расчёта.
 /// Принимает: ядро, направление, расчёт (у отказа — лучший), причину отказа, режим. Ошибок нет.
 pub fn cand(core: &Core, d: &Direction, calc: &Calc, reason: Option<&str>, mode: &Mode) {
@@ -48,6 +56,7 @@ pub fn cand(core: &Core, d: &Direction, calc: &Calc, reason: Option<&str>, mode:
         plan_budget: None,
         free: None,
         parts: super::limits_parts::parts(core, d, mode).ok(),
+        window_from: window_from(core, d),
     };
     submit(core, Key::Cand(d.clone()), d, battle);
 }
@@ -77,6 +86,7 @@ pub fn deal(
         plan_budget: Some(plan_budget),
         free,
         parts,
+        window_from: window_from(core, &plan.direction),
     };
     submit(core, Key::Deal(id.to_string()), &plan.direction, battle);
 }

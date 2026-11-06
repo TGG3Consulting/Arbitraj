@@ -8,6 +8,11 @@
 //! Срок хранения — uncapped.keep_days: строки, начатые раньше, удаляются при каждой новой строке. Строка «Кандидатов»
 //! направления получает поле uncapped («без потолка: вложить X → прибыль Y; плюс от Z»). Сбой — счётчик и причина
 //! (экран), в журнал — на 1-й, 2-й, 4-й… сбой.
+//! Решение 197 (Тигран, 06.11.2026): окно — измеритель упущенной прибыли, поэтому кандидат пишется в базу, только если
+//! потолок реально помешал — упущено > 0 (без потолка проходит пороги прибыли, а на нашем бюджете — нет или меньше);
+//! упущено 0 — только счётчик no_missed и поле строки «Кандидатов». Эпизод продолжают только такие расчёты: его первый и
+//! последний расчёт — окно, пока упущенное было (промежутки не длиннее uncapped.episode_gap_ms). Сделка пишется всегда
+//! (и с упущено 0 — «потолок не мешал» тоже знание).
 //! Кто вызывает: core/uncapped_queue.rs.
 //! От чего зависит: uncapped_state.rs, uncapped_types.rs, storage/uncapped_db.rs, view.rs, settings.
 //! Настройки: uncapped.episode_gap_ms, uncapped.keep_days.
@@ -72,6 +77,10 @@ pub async fn save(core: &Core, key: &Key, mut rec: Record) {
         Key::Deal(id) => ("deal", Some(id.clone()), None),
         Key::Cand(d) => {
             publish(core, d, &rec);
+            if rec.missed <= rust_decimal::Decimal::ZERO {
+                lk(&core.inner.uncapped.stats).no_missed += 1;
+                return;
+            }
             ("candidate", None, Some(d.clone()))
         }
     };

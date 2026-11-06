@@ -19,12 +19,14 @@ pub struct Row {
     pub body: String,
 }
 
-/// Выборка: период [from, to) по началу (RFC 3339), вид (None — все).
+/// Выборка: период [from, to) по началу (RFC 3339), вид (None — все); missed_only — решение 197: сделки все,
+/// кандидаты только с упущено > 0 (старые записи кандидатов с упущено 0 скрыты, не удалены).
 #[derive(Debug, Default, Clone)]
 pub struct Filter {
     pub from: Option<String>,
     pub to: Option<String>,
     pub kind: Option<String>,
+    pub missed_only: bool,
 }
 
 /// Добавляет строку. Возвращает: id. Ошибки: база.
@@ -125,6 +127,10 @@ fn where_of(f: &Filter) -> (String, Vec<Value>) {
     if let Some(v) = &f.kind {
         cond.push("kind = ?");
         args.push(Value::Text(v.clone()));
+    }
+    if f.missed_only {
+        // missed — десятичная строка JSON записи (core/uncapped_types.rs Record), сравнение — числом.
+        cond.push("(kind = 'deal' OR CAST(json_extract(body, '$.missed') AS REAL) > 0)");
     }
     if cond.is_empty() {
         return (String::new(), args);

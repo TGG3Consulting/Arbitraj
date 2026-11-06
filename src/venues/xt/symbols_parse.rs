@@ -13,6 +13,9 @@
 //! it means that this item is no longer restricted». Шаг — от минимума: «price must be equal to minPrice+(integer
 //! multiple of tickSize)», то же у количества. PROTECTION_LIMIT считается от последней цены сделки — её у адаптера нет
 //! (лента сделок не слушается): не проверяется, ловится отказом ORDER_F05xx (отчёт решения 167).
+//! Решение 190: верхний предел (max) больше, чем помещается в Decimal (~7.9·10^28), — «без ограничения», как null по
+//! документации. Живой ответ 06.11.2026: pepe_usdt QUANTITY max = "1000000000000000000000000000000" (10^30) ронял
+//! разбор ВСЕГО справочника — подписка XT не поднималась (tests/data/xt_live_2026-11-06).
 
 use std::collections::HashMap;
 
@@ -99,10 +102,31 @@ fn range(f: Option<&Value>, precision: Option<u32>) -> GatewayResult<Range> {
     };
     Ok(Range {
         min: get("min")?,
-        max: get("max")?,
+        max: match f {
+            Some(f) => max_or_unbounded(f)?,
+            None => None,
+        },
         tick: get("tickSize")?.filter(|t| *t > Decimal::ZERO),
         precision,
     })
+}
+
+/// Верхний предел фильтра (решение 190): целое больше предела Decimal — без ограничения (None), как null по
+/// документации. Ошибка BadResponse — поле не число (в т.ч. дробь или знак, не помещающиеся в Decimal).
+fn max_or_unbounded(f: &Value) -> GatewayResult<Option<rust_decimal::Decimal>> {
+    match num::dec_opt(f, "max") {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            let raw = num::text_opt(f, "max").unwrap_or_default();
+            let digits = raw.trim();
+            if !digits.is_empty() && digits.len() > 28 && digits.bytes().all(|b| b.is_ascii_digit())
+            {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 
 /// Фильтр пары по полю filter. None — фильтра нет. Ошибок нет.

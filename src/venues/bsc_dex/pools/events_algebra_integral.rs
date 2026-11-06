@@ -6,6 +6,9 @@
 //!   fee = overrideFee + pluginFee). overrideFee ≠ 0 — берём эту сумму как текущую комиссию (факт последнего обмена);
 //!   overrideFee = 0, pluginFee ≠ 0 — сумма зависит от lastFee, которой в событии нет: пул перечитывается (Refresh);
 //!   оба нуля — комиссия = lastFee, не меняется.
+//! - Версия 1.2.0/1.2.1 (THENA V3 — живые логи 06.11.2026, tests/data/algebra_integral_2026-11-06): отдельного SwapFee
+//!   нет — overrideFee и pluginFee приходят в самом Swap (9 полей, IAlgebraIntegral12Pool): цена/ликвидность/тик
+//!   применяются как у Swap V1.9, комиссия — по тем же правилам, что SwapFee; Burn с полем pluginFee — перечитать пул.
 //! - Fee(uint16 fee) — новая lastFee: пул перечитывается (у плагина с DYNAMIC_FEE комиссию определяет fee() плагина,
 //!   а не lastFee — load_algebra_integral.rs).
 //!
@@ -15,19 +18,25 @@
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
-use alloy_primitives::B256;
+use alloy_primitives::{B256, U256};
 
 use crate::core::types::PoolState;
 
-use super::abi_algebra_integral::IAlgebraIntegralPool as P;
+use super::abi_algebra_integral::{IAlgebraIntegral12Pool as P12, IAlgebraIntegralPool as P};
 use super::events::Applied;
 use super::events_algebra;
 use super::registry::Entry;
 
-/// topic0 всех событий пула Integral: Swap/Mint/Burn (как V1.9) + SwapFee + Fee. Ошибок нет.
+/// topic0 всех событий пула Integral: Swap/Mint/Burn (как V1.9) + SwapFee + Fee (1.2.2+) и Swap/Burn версии
+/// 1.2.0/1.2.1. Ошибок нет.
 pub fn topics() -> Vec<B256> {
     let mut t = events_algebra::topics();
-    t.extend([P::SwapFee::SIGNATURE_HASH, P::Fee::SIGNATURE_HASH]);
+    t.extend([
+        P::SwapFee::SIGNATURE_HASH,
+        P::Fee::SIGNATURE_HASH,
+        P12::Swap::SIGNATURE_HASH,
+        P12::Burn::SIGNATURE_HASH,
+    ]);
     t
 }
 
@@ -43,6 +52,23 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     };
     if t0 == P::Fee::SIGNATURE_HASH {
         return Applied::Refresh("Algebra Integral Fee: перечитать комиссию пула".into());
+    }
+    if t0 == P12::Burn::SIGNATURE_HASH {
+        return Applied::Refresh(
+            "Algebra Integral Burn: перечитать ликвидность и карту тиков".into(),
+        );
+    }
+    if t0 == P12::Swap::SIGNATURE_HASH {
+        return match P12::Swap::decode_log_data(&log.inner.data) {
+            Ok(s) => swap12(
+                e,
+                U256::from(s.price),
+                s.liquidity,
+                s.tick.as_i32(),
+                fee_after(s.overrideFee.to::<u32>(), s.pluginFee.to::<u32>()),
+            ),
+            Err(err) => Applied::Refresh(format!("Swap (Integral 1.2.0/1.2.1) не по ABI: {err}")),
+        };
     }
     if t0 != P::SwapFee::SIGNATURE_HASH {
         return events_algebra::apply(e, log);
@@ -64,6 +90,32 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
             }
             _ => Applied::Refresh("состояние пула не Algebra".into()),
         },
+    }
+}
+
+/// Swap версии 1.2.0/1.2.1: цена, ликвидность, тик после обмена и комиссия по правилам SwapFee. Ошибок нет.
+fn swap12(e: &mut Entry, sqrt: U256, liq: u128, t: i32, f: Swapfee) -> Applied {
+    let PoolState::Algebra {
+        sqrt_price_x96,
+        tick,
+        liquidity,
+        fee,
+    } = &mut e.pool.state
+    else {
+        return Applied::Refresh("состояние пула не Algebra".into());
+    };
+    *sqrt_price_x96 = sqrt;
+    *tick = t;
+    *liquidity = liq;
+    match f {
+        Swapfee::Keep => Applied::Updated,
+        Swapfee::Set(v) => {
+            *fee = v;
+            Applied::Updated
+        }
+        Swapfee::Reload => Applied::Refresh(
+            "Algebra Integral Swap: добавка плагина к lastFee — перечитать комиссию".into(),
+        ),
     }
 }
 

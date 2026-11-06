@@ -18,6 +18,7 @@
 //! - IAlgebraPoolEvents.sol: Fee(uint16 fee) (L122) — новая lastFee; SwapFee(address indexed sender, uint24
 //!   overrideFee, uint24 pluginFee) (L86) — комиссия, с которой прошёл обмен (SwapCalculation.sol: overrideFee ≠ 0 →
 //!   fee = overrideFee + pluginFee, иначе lastFee + pluginFee).
+//! - Версия 1.2.0/1.2.1 (THENA V3): Swap с 9 полями и Burn с pluginFee — интерфейс IAlgebraIntegral12Pool ниже.
 //! - Plugins.sol L26: DYNAMIC_FEE = 1 << 7 (флаг в globalState.pluginConfig).
 
 alloy::sol! {
@@ -31,6 +32,27 @@ alloy::sol! {
         function prevTickGlobal() external view returns (int24);
         function nextTickGlobal() external view returns (int24);
         function ticks(int24 tick) external view returns (uint256 liquidityTotal, int128 liquidityDelta, int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token);
+    }
+}
+
+// Integral 1.2.0 / 1.2.1 (теги v1.2-integral, v1.2.1-integral; так развёрнут THENA V3 — живые логи 06.11.2026,
+// tests/data/algebra_integral_2026-11-06): Swap несёт комиссию обмена (overrideFee, pluginFee) — 9 полей, отдельного
+// SwapFee нет; Burn несёт pluginFee. IAlgebraPoolEvents.sol тега v1.2.1-integral L50-L58, L70-L80. Отдельный интерфейс:
+// имена событий те же, что у 1.2.10, подписи другие.
+alloy::sol! {
+    #[allow(missing_docs, clippy::too_many_arguments)]
+    interface IAlgebraIntegral12Pool {
+        event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick, uint24 overrideFee, uint24 pluginFee);
+        event Burn(address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1, uint24 pluginFee);
+    }
+}
+
+// Фабрика Integral: кастомные пулы — по адресу деплоера (IAlgebraFactory.sol тега v1.2.1-integral L137, L36).
+alloy::sol! {
+    #[allow(missing_docs)]
+    interface IAlgebraIntegralFactory {
+        event CustomPool(address indexed deployer, address indexed token0, address indexed token1, address pool);
+        function customPoolByPair(address customDeployer, address tokenA, address tokenB) external view returns (address customPool);
     }
 }
 

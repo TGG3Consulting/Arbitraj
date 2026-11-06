@@ -28,6 +28,8 @@ pub enum View {
     /// Балансы кошелька DEX по id.
     Wallet(String),
     Manual,
+    /// Решение 192: карточка проблемной сделки — позиция в списке ждущих и ключ записи.
+    Card(usize, String),
     /// Диалог перевода USDT.
     Transfer,
 }

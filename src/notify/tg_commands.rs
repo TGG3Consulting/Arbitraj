@@ -109,9 +109,6 @@ impl Ctx<'_> {
                 .await;
         }
         let text = m.text.clone().unwrap_or_default();
-        if self.role == Role::Control {
-            return self.ctl_message(&m, &text, &who).await;
-        }
         let prompt = m
             .reply_to_message
             .as_ref()
@@ -120,6 +117,10 @@ impl Ctx<'_> {
             return self
                 .amount(&p.key, &p.code, &text, m.message_id, &who)
                 .await;
+        }
+        // Решение 192: в «Управлении» вопрос суммы записи (карточка проблемной сделки) — выше; остальное — его диалоги.
+        if self.role == Role::Control {
+            return self.ctl_message(&m, &text, &who).await;
         }
         // «Неудачные» — только ответы на вопрос суммы; команды меню — у «Общего» (как раньше) и «Управления».
         if self.role != Role::General {

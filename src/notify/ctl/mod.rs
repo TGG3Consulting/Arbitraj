@@ -8,6 +8,7 @@
 //! Настройки: notify.live_refresh_s, notify.live_idle_s, notify.dialog_ttl_s, notify.transfer_pct, notify.control_*.
 
 pub mod balances;
+pub mod card;
 pub mod kb;
 pub mod live;
 pub mod press;

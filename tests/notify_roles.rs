@@ -33,7 +33,8 @@ use tokio::sync::broadcast;
 #[test]
 fn outgoing_routes_by_role() {
     assert_eq!(extra("deal.closed", Tag::Profit), &[Role::Deals]);
-    assert_eq!(extra("deal.closed", Tag::Loss), &[Role::Failures]);
+    // Решение 191: минусовая — тоже в «Сделки».
+    assert_eq!(extra("deal.closed", Tag::Loss), &[Role::Deals]);
     assert!(extra("deal.closed", Tag::Plain).is_empty());
     assert!(extra("usdt.relayed", Tag::Plain).is_empty());
     assert!(extra("manual.record", Tag::Plain).is_empty());
@@ -69,9 +70,11 @@ fn buttons_only_from_own_chat() {
     for c in ["k", "s", "t", "c", "y", "n"] {
         assert!(accepts(Role::Control, c), "{c}");
     }
-    for c in ["sell_now", "sold_man", "m"] {
-        assert!(!accepts(Role::Control, c), "{c}");
+    // Решение 192: кнопки записей — и с карточки проблемной сделки в «Управлении»; меню /menu «Общего» — нет.
+    for c in ["sell_now", "sold_man", "usdt_retry"] {
+        assert!(accepts(Role::Control, c), "{c}");
     }
+    assert!(!accepts(Role::Control, "m"));
     for c in ["sell_now", "sold_man", "usdt_retry", "y", "n"] {
         assert!(accepts(Role::Failures, c), "{c}");
     }

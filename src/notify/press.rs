@@ -47,7 +47,8 @@ pub struct Ctx<'a> {
 pub fn accepts(role: Role, code: &str) -> bool {
     match role {
         Role::Deals => false,
-        Role::Control => matches!(code, "y" | "n" | "c" | "k" | "s" | "t"),
+        // Решение 192: и кнопки записей «Ручного управления» — с карточки проблемной сделки (ctl/card.rs).
+        Role::Control => code != "m",
         Role::General => !matches!(code, "k" | "s" | "t"),
         Role::Failures => !matches!(code, "m" | "c" | "k" | "s" | "t"),
     }

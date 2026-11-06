@@ -1,7 +1,8 @@
 //! Файл: notify/ctl/view.rs
 //! Что делает: собирает экран чата «Управление» (решение 176) по тому, что на нём (View), из данных ядра: «Состояние» —
 //! из памяти ядра (Core::control), «Балансы» — из памяти панели «Балансы» (Core::venue_balances / wallet_balances с
-//! допустимым возрастом ответа), «Ручное управление» — из записей экрана и памяти зеркала. Общая сборка у нажатий
+//! допустимым возрастом ответа), «Ручное управление» и карточка проблемной сделки (решение 192) — из записей экрана и
+//! памяти зеркала. Общая сборка у нажатий
 //! (ctl/press.rs) и лайв-обновления (ctl/live.rs) — одна логика.
 //! Кто вызывает: notify/ctl/press.rs, notify/ctl/live.rs.
 //! От чего зависит: core (control, manual_records, venue_balances, wallet_balances, cex_ids), notify/mirror_state.rs,
@@ -18,7 +19,7 @@ use super::super::mirror_state::{Shared, lock};
 use super::super::roles;
 use super::kb::Screen;
 use super::sessions::{Ref, View};
-use super::{balances, screens};
+use super::{balances, card, screens};
 
 /// Экран по виду. Принимает: ядро, настройки, память зеркала, вид, номер отрисовки (для денежных кнопок), допустимый
 /// возраст балансов (None — спросить площадку сейчас). Возвращает: (экран, денежные кнопки). Ошибок нет: сбой — в тексте.
@@ -64,6 +65,12 @@ pub async fn render(
             }
         }
         View::Manual => (manual(core, settings, mirror), vec![]),
+        // Решение 192: карточка проблемной сделки — по ждущим записям (как у экрана «Ручное управление»).
+        View::Card(idx, key) => {
+            let recs = core.manual_records();
+            let st = lock(mirror);
+            (card::card(&st.waiting(&recs), *idx, key), vec![])
+        }
     }
 }
 
@@ -88,6 +95,10 @@ pub fn parse(code: &str) -> Option<View> {
     Some(match code.split_once('.') {
         Some(("bv", v)) if !v.is_empty() => View::Venue(v.into()),
         Some(("bw", w)) if !w.is_empty() => View::Wallet(w.into()),
+        Some(("mc", rest)) => {
+            let (i, k) = card::parse(rest)?;
+            View::Card(i, k)
+        }
         Some(_) => return None,
         None => match code {
             "root" => View::Root,

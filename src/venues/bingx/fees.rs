@@ -2,8 +2,10 @@
 //! Что делает: ставки торговой комиссии нашего аккаунта по паре (taker/maker).
 //! Ставки обновляются фоновой задачей (не в момент котировки — чтобы не упираться в лимит
 //! запросов и не задерживать расчёт); котировка берёт ставку только из памяти.
+//! Решение 204: код 100410 (эндпоинт заблокирован до метки в ответе) — пауза запросов ставок до разблокировки
+//! (fees_pause.rs), одна запись в журнал на паузу; ставки, полученные раньше, остаются в памяти.
 //! Кто вызывает: market.rs (запускает фоновое обновление для подписанных пар), book.rs (читает ставку).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, settings/wait.rs.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, settings/wait.rs, fees_pause.rs.
 //! Настройки: venue.fee_cache_s (как часто обновлять), venue.fee_requests_per_sec (частота запросов).
 //!
 //! Официальная документация: «Query Trading Commission Rate» GET /openApi/spot/v1/user/commissionRate
@@ -77,13 +79,23 @@ impl Fees {
             // Решение 149: круг со сбоями (например, секреты ещё не разблокированы при старте) — повтор через
             // venue.fee_retry_s, а не через полный venue.fee_cache_s (пары без ставки иначе стоят без котировки весь срок).
             let mut failed = false;
-            for s in &symbols {
+            let mut i = 0;
+            while let Some(s) = symbols.get(i) {
                 match fetch(&ctx, s).await {
                     Ok(r) => {
                         self.cache
                             .write()
                             .unwrap_or_else(|p| p.into_inner())
                             .insert(s.clone(), r);
+                    }
+                    // Решение 204: эндпоинт заблокирован — ждать разблокировки и повторить ту же пару.
+                    // Метки нет и venue.fee_retry_s не задана — круг прерывается, повтор — через venue.fee_cache_s.
+                    Err(e) if e.code == ErrorCode::RateLimited => {
+                        if pause(&ctx, &e.message).await {
+                            continue;
+                        }
+                        failed = true;
+                        break;
                     }
                     Err(e) => {
                         failed = true;
@@ -95,10 +107,54 @@ impl Fees {
                     }
                 }
                 tokio::time::sleep(gap).await;
+                i += 1;
             }
             let retry = failed.then(|| ctx.int("venue.fee_retry_s").ok()).flatten();
             tokio::time::sleep(Duration::from_secs(retry.unwrap_or(period))).await;
         }
+    }
+}
+
+/// Решение 204: пауза запросов ставок после 100410 — до момента разблокировки из ответа; метки нет — на
+/// venue.fee_retry_s. Одна запись в журнал на паузу. Принимает: окружение, текст ошибки. Возвращает: true — подождали
+/// (повторить ту же пару), false — ждать нечем (метки нет, venue.fee_retry_s не задана — круг прерывается). Ошибок нет.
+async fn pause(ctx: &Ctx, msg: &str) -> bool {
+    let now = chrono::Utc::now();
+    let got = match super::fees_pause::unblock_at(msg).filter(|t| *t > now) {
+        Some(t) => Some((
+            (t - now).to_std().unwrap_or_default(),
+            format!(
+                "до {} UTC (метка разблокировки из ответа)",
+                t.format("%H:%M:%S")
+            ),
+        )),
+        None => ctx.int("venue.fee_retry_s").ok().map(|s| {
+            (
+                Duration::from_secs(s),
+                format!("на venue.fee_retry_s = {s} с (метки в ответе нет)"),
+            )
+        }),
+    };
+    let m = match &got {
+        Some((_, why)) => format!(
+            "Ставки комиссии: эндпоинт commissionRate на паузе {why} — запросы ставок остановлены, полученные \
+             ставки действуют. Ответ: {msg}"
+        ),
+        None => format!(
+            "Ставки комиссии: лимит частоты, метки разблокировки нет и venue.fee_retry_s не задана — круг \
+             прерван до venue.fee_cache_s. Ответ: {msg}"
+        ),
+    };
+    let _ = ctx
+        .journal
+        .write(Level::Warn, "venue.fees", Some(super::ctx::ID), m, None)
+        .await;
+    match got {
+        Some((wait, _)) => {
+            tokio::time::sleep(wait).await;
+            true
+        }
+        None => false,
     }
 }
 

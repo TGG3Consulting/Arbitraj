@@ -94,6 +94,12 @@ pub struct Symbols {
     st: Arc<RwLock<State>>,
 }
 
+/// Пустой список при той же версии, что у прежнего справочника, — «без изменений». Принимает: число пар ответа,
+/// версию ответа, прежнюю версию. Ошибок нет.
+pub fn unchanged_empty(n: usize, got: &Option<String>, had: &Option<String>) -> bool {
+    n == 0 && got.is_some() && got == had
+}
+
 impl Symbols {
     /// Загружает пары с котируемой монетой venue.quote_asset (с версией прежнего ответа). Возвращает: число пар.
     /// Ошибки: связь, ответ XT, настройки.
@@ -118,9 +124,15 @@ impl Symbols {
                 ))
             })??;
         let mut st = self.st.write().unwrap_or_else(|p| p.into_inner());
-        match parsed.map {
+        // 06.11.2026 (живой бот, 21:05:55): ответ с той же версией дал «нет пары ONLINE» у всех 282 монет — XT прислал
+        // пустой список symbols, а не убрал поле. Документация («the list will not be returned») не говорит, как именно.
+        // Пустой список при той же версии, что у прежнего справочника, — «без изменений», как отсутствие поля.
+        let map = parsed
+            .map
+            .filter(|m| !unchanged_empty(m.len(), &parsed.version, &st.version));
+        match map {
             Some(map) => st.map = Arc::new(map),
-            // Список не прислан: версия та же — прежний справочник верен. Его ещё не было — ошибка.
+            // Список не прислан (или пуст при той же версии): прежний справочник верен. Его ещё не было — ошибка.
             None if st.loaded.is_some() => {}
             None => {
                 return Err(super::errors::bad(
@@ -204,5 +216,22 @@ impl Symbols {
     /// Символ XT пары монеты. None — пары нет. Ошибок нет.
     pub fn symbol_of(&self, ticker: &str) -> Option<String> {
         self.all().get(ticker).map(|r| r.symbol.clone())
+    }
+}
+
+#[cfg(test)]
+mod same_version_tests {
+    use super::unchanged_empty;
+
+    #[test]
+    fn empty_list_same_version_is_unchanged() {
+        let v = Some("123".to_string());
+        assert!(unchanged_empty(0, &v, &v));
+        assert!(
+            !unchanged_empty(0, &Some("124".into()), &v),
+            "новая версия и пусто — честно пусто"
+        );
+        assert!(!unchanged_empty(5, &v, &v));
+        assert!(!unchanged_empty(0, &None, &None));
     }
 }

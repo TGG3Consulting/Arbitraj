@@ -136,3 +136,48 @@ async fn sell_with_best_selection() {
     assert_eq!(got.fillable_qty, Decimal::from(1_000u32));
     assert!(got.avg_price > Decimal::ZERO);
 }
+
+/// Решение 189: набор путей из кэша (dex.route_paths_ttl_ms) даёт ту же котировку, что граф и перебор на каждой
+/// котировке; состояние пулов при этом свежее — пул, уснувший после записи набора в кэш, выпадает так же, как при
+/// полном перестроении графа.
+#[tokio::test]
+async fn paths_cache_same_quote_and_fresh_state() {
+    let p = route_common::parts().await;
+    set(&p, "dex.route_search_max_paths", json!(100)).await;
+    let base = quote(&p, Side::Buy, 20_000).await;
+    set(&p, "dex.route_paths_ttl_ms", json!(60_000)).await;
+    let miss = quote(&p, Side::Buy, 20_000).await;
+    let hit = quote(&p, Side::Buy, 20_000).await;
+    for q in [&miss, &hit] {
+        assert_eq!(q.avg_price, base.avg_price);
+        assert_eq!(q.fillable_qty, base.fillable_qty);
+    }
+    // Усыпить один прямой пул CAKE-USDT: кэш набора путей жив, но путь через спящий пул должен выпасть.
+    let q = p.quoting();
+    let sleepy = q
+        .reg
+        .all()
+        .into_iter()
+        .find(|e| e.coin == CAKE && e.usdt == USDT)
+        .expect("прямой пул CAKE-USDT")
+        .pool
+        .reference;
+    q.reg.update(&sleepy, |e| e.asleep = true);
+    let cached = quote(&p, Side::Buy, 20_000).await;
+    p.ctx
+        .settings
+        .set(
+            "dex.route_paths_ttl_ms",
+            Scope::Venue("bsc_dex".into()),
+            None,
+            "тест",
+        )
+        .await
+        .unwrap();
+    let rebuilt = quote(&p, Side::Buy, 20_000).await;
+    assert_eq!(
+        cached.avg_price, rebuilt.avg_price,
+        "кэш набора путей ≠ полное перестроение"
+    );
+    assert_eq!(cached.fillable_qty, rebuilt.fillable_qty);
+}

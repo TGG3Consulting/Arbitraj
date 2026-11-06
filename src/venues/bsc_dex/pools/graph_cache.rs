@@ -2,14 +2,22 @@
 //! Что делает: кэш графа маршрутов (решение 129): граф строится один раз на состояние реестра (версия реестра), блок
 //! головы и настройки графа; все котировки и поиск циклов этого состояния берут готовый снимок (Arc). Одно построение
 //! за раз (решение 131): параллельные котировки при новой версии реестра не строят один и тот же граф каждая сама.
+//! Решение 189: здесь же — кэш НАБОРА путей графа (скелеты: какие пулы и в какой стороне, без состояния) по монете на
+//! dex.route_paths_ttl_ms: граф по версии реестра пересобирается почти на каждой котировке (каждый своп любого пула
+//! меняет версию), а набор путей за секунды подбора объёма не меняется. Состояние пулов котировка берёт свежим из
+//! реестра (quote/route_cache.rs).
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (через graph::cached); pools/registry.rs (хранит Cache).
 //! От чего зависит: graph.rs (build), registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct
 //! [bsc_dex] — часть ключа кэша.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use alloy_primitives::Address;
+
+use crate::core::types::PoolRef;
 
 use crate::gateway::errors::GatewayResult;
 
@@ -35,6 +43,34 @@ struct Stamp {
 pub struct Cache {
     slot: Arc<Mutex<Option<Built>>>,
     building: Arc<Mutex<()>>,
+    /// Решение 189: наборы путей по ключу (USDT, монета, настройки перебора) и время их построения.
+    paths: Arc<Mutex<HashMap<PathsKey, Stored>>>,
+}
+
+/// Скелет пути (решение 189): по шагам — пул, токен входа, токен выхода. Без состояния пула.
+pub type Skeleton = Vec<(PoolRef, Address, Address)>;
+
+/// Набор путей и когда построен.
+type Stored = (Instant, Arc<Vec<Skeleton>>);
+
+/// Ключ набора путей: USDT, монета, настройки перебора текстом.
+pub type PathsKey = (Address, Address, String);
+
+impl Cache {
+    /// Набор путей, если построен не раньше `ttl` назад. Ошибок нет.
+    pub fn paths_get(&self, key: &PathsKey, ttl: Duration) -> Option<Arc<Vec<Skeleton>>> {
+        let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
+        m.get(key)
+            .filter(|(at, _)| at.elapsed() <= ttl)
+            .map(|(_, v)| v.clone())
+    }
+
+    /// Запомнить набор путей; заодно выбросить устаревшие (старше `ttl`). Ошибок нет.
+    pub fn paths_put(&self, key: PathsKey, v: Vec<Skeleton>, ttl: Duration) {
+        let mut m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
+        m.retain(|_, (at, _)| at.elapsed() <= ttl);
+        m.insert(key, (Instant::now(), Arc::new(v)));
+    }
 }
 
 /// Построенный граф и на чём он построен.

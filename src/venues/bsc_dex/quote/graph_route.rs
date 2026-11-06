@@ -3,6 +3,7 @@
 //! пути USDT ↔ монета (quote/route_paths.rs), оценивает каждый путь нашей математикой (quote/route_calc.rs),
 //! делит объём между путями/пулами (сплит, quote/graph_split.rs — решения 38, 80) и собирает котировку ядру через
 //! quote/costs.rs с маршрутом по долям (RouteMode::Graph). Фаза 80, PR 80.4 — оценка и сплит; PR 80.5a — врезка.
+//! Решение 189: набор путей — quote/route_cache.rs (кэш на dex.route_paths_ttl_ms, записи пулов свежие).
 //! Решение 187: при заданной dex.route_search_max_paths перебор идёт короткими путями первыми, а в сплит попадают
 //! dex.route_max_paths ЛУЧШИХ путей по расчёту (quote/route_best.rs), а не первые найденные.
 //! Решение 122 R1: при dex.route_gas_aware = да сплит выбирает доли и пути по чистому выходу (газ пути в USDT —
@@ -27,13 +28,12 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::exec::native;
-use super::super::pools::graph;
 use super::graph_split::{self, Cand};
 use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
-use super::{Quoting, costs, graph_exec, graph_legs, pick, route_best, route_paths};
+use super::{Quoting, costs, graph_exec, graph_legs, pick, route_best, route_cache, route_paths};
 
 pub use super::graph_exec::{GraphForm, graph_form};
 
@@ -51,16 +51,22 @@ pub async fn quote(
     // Решение 129: граф — один на состояние реестра и блок (pools/graph.rs cached), а не новый на каждую котировку.
     // Свежесть головы проверяет вызывающий (quote/mod.rs); здесь номер блока — только ключ кэша (нет головы — 0).
     let head = v.q.heads.latest().map_or(0, |h| h.number);
-    let g = graph::cached(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, head)?;
     let allowed: HashSet<Address> = v.q.mids.active(ctx).iter().map(|m| m.address).collect();
     let (max_hops, max_paths) = route_paths::limits(ctx)?;
     // Решение 187: задан предел перебора — короткие пути первыми, затем отбор max_paths лучших (route_best.rs);
     // не задан — как раньше: первые max_paths путей обхода.
     let cap = route_best::search_cap(ctx)?;
-    let mut paths = match cap {
-        Some(c) => route_best::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, c),
-        None => route_paths::enumerate(&g, v.usdt, v.coin, &allowed, max_hops, max_paths),
+    // Решение 189: набор путей — из кэша на dex.route_paths_ttl_ms (записи пулов свежие из реестра); не задана —
+    // граф (pools/graph.rs cached) и перебор на каждой котировке, как раньше.
+    let search = route_cache::Search {
+        usdt: v.usdt,
+        coin: v.coin,
+        allowed: &allowed,
+        max_hops,
+        max_paths,
+        cap,
     };
+    let mut paths = route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, head, &search)?;
     // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
     // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
     if native::is_native(ctx, asset) {

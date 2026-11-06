@@ -64,6 +64,8 @@ pub async fn subscribe(
         .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
     let ok = snap.books.clone();
+    // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
+    books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in ok.chunks(per_conn as usize).enumerate() {
         let name = format!("market-{}", i + 1);

@@ -20,6 +20,7 @@ mod binance;
 mod bitget;
 mod coinex;
 pub mod dex;
+mod feed_watch;
 mod gate;
 mod htx;
 mod index;
@@ -97,6 +98,7 @@ static PARTS: &[&[SettingDef]] = &[
     signals::SIGNALS,
     uncapped::UNCAPPED,
     window::WINDOW,
+    feed_watch::FEED_WATCH,
     gate::GATE,
     bitget::BITGET,
     okx::OKX,

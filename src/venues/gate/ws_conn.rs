@@ -12,6 +12,10 @@
 //! — устаревший, пропускается. Время кадра пары обновляется в обоих случаях (book.rs, touch; решение 118, А-🟠8).
 //! Сравнение по номеру, а не по уровням: без копий уровней на каждый кадр (решения 130, 131).
 //! Решение 125: каждый кадр стакана монеты с открытым окном — в приёмник окна как есть (текст).
+//! Решение 202: каждый кадр отмечается в учёте свежести (gateway/feed_health.rs) — кадр стакана по паре; команды
+//! сторожа ядра: «переподписать пару» — unsubscribe + subscribe этой пары (тот же id = номер пары; Spot WebSocket v4:
+//! event subscribe | unsubscribe, https://www.gate.com/docs/developers/apiv4/ws/en/), соседи не трогаются;
+//! «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -32,6 +36,14 @@ use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, BOOK_CHANNEL, Msg};
 use super::ws::{Cfg, End, invalidate};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Канал стакана для показа на странице окна: «spot.order_book CAKE_USDT 20 100ms». Ошибок нет.
 pub fn channel(symbol: &str, levels: u64, interval: &str) -> String {
@@ -46,6 +58,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -58,6 +71,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     // Номер запроса подписки = номер пары в соединении (по нему ответ-отказ находит пару).
@@ -79,6 +93,21 @@ pub async fn session(
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some(i) = assets.iter().position(|(a, _)| a.ticker == ticker) else { continue };
+                    let p = json!([assets[i].1, cfg.levels.to_string(), cfg.interval]);
+                    for ev in ["unsubscribe", "subscribe"] {
+                        let req = depth::request(BOOK_CHANNEL, ev, p.clone(), i as i64);
+                        if let Err(e) = sink.send(Message::Text(req.into())).await {
+                            return End::Broken(format!("отправка {ev} (сторож пар): {e}"));
+                        }
+                    }
+                    last.remove(&assets[i].1);
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             _ = ping.tick() => {
                 if let Err(e) = sink.send(Message::Text(depth::ping().into())).await {
                     return End::Broken(format!("отправка spot.ping: {e}"));
@@ -96,6 +125,7 @@ pub async fn session(
                 let rx_ns = now_ns();
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let t = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -115,6 +145,7 @@ pub async fn session(
                 match m {
                     Msg::Depth { symbol, update_id, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        w.feed.frame(&asset.ticker);
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
                         if last.get(&symbol).is_some_and(|&id| update_id <= id) {
                             books.touch(&asset.ticker);

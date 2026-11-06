@@ -9,6 +9,8 @@ pub mod calc_meter;
 pub mod contract;
 pub mod errors;
 pub mod events;
+pub mod feed_health;
+pub mod feed_reg;
 pub mod http;
 pub mod http_bind;
 pub mod quote_stage;

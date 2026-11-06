@@ -68,6 +68,8 @@ pub struct Inner {
     pub spreads: RwLock<HashMap<Direction, SpreadView>>,
     /// Подписки площадок: на что подписана, идёт ли подписка, причина сбоя (sub_state.rs).
     pub subs: Mutex<super::sub_state::SubState>,
+    /// Решение 196: время последнего события рынка (стакан, пул) по площадке — живость потока (feed_live.rs).
+    pub feed_seen: super::feed_live::Seen,
     /// Монеты, по которым идёт пересчёт тика: значение — площадки, приславшие тик во время пересчёта (пусто — нового
     /// тика не было). Решение 109: повтор пересчитывает направления всех этих площадок, а не только первой.
     pub ticking: Mutex<HashMap<Asset, HashSet<VenueId>>>,
@@ -202,6 +204,7 @@ impl Inner {
             vol: Mutex::default(),
             spreads: RwLock::default(),
             subs: Mutex::default(),
+            feed_seen: Default::default(),
             ticking: Mutex::default(),
             quote_cache: Mutex::default(),
             spread_sent: Mutex::default(),

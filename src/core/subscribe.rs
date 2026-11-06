@@ -10,7 +10,8 @@
 //! и толкает пересборку — DEX подписывается один раз. Стаканы список DEX не меняют (ни первый стакан, ни
 //! «недостоверно»), поэтому подписка DEX не дёргается при запуске и разрывах связи биржи.
 //! Бирже также — стакан BNB (цена газа, convert.rs), стаканы промежуточных монет (решение 52) и монет venue.price_assets
-//! (решение 181: комиссия Gate в GT — пересчёт в USDT по живой цене). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список.
+//! (решение 181: комиссия Gate в GT — пересчёт в USDT по живой цене). Подписка меняется, только когда меняется список; выключенная площадка получает пустой список,
+//! а с идущими сделками — держит поток до их закрытия (решение 196, feed_hold.rs).
 //! Кто вызывает: core/rebuild.rs после каждой пересборки; подписка площадки — отдельной задачей (sub_state.rs).
 //! От чего зависит: engine.rs, gateway (subscribe_market).
 //! Настройки: venue.price_assets [биржа] (необязательная).
@@ -134,9 +135,13 @@ pub async fn sync(core: &Core, enabled: &[(VenueId, VenueKind)]) {
     let all = rd(&core.inner.kinds).clone();
     for (venue, kind) in all {
         let want = if enabled.iter().any(|(v, _)| v == &venue) {
+            lk(&core.inner.subs).hold(&venue, false);
             wanted(core, &venue, kind)
         } else {
-            vec![]
+            // Решение 196: выключенная площадка с идущими сделками держит поток до их закрытия (feed_hold.rs).
+            let (want, held) = super::feed_hold::want_disabled(core, &venue);
+            super::feed_hold::mark(core, &venue, held).await;
+            want
         };
         if !lk(&core.inner.subs).begin(&venue, &want) {
             continue;

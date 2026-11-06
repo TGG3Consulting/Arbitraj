@@ -55,6 +55,8 @@ pub async fn watch_settings(core: Core) {
     while let Some(c) = w.next().await {
         // Нативная монета ↔ обёртка (решение 62, native.rs): справочник сетей бирж — перечитать сразу.
         super::coin_book::on_setting(&c.name);
+        // Решение 196: биржу включили — поднять поток, если молчит; выключили — держать до закрытия сделок.
+        super::feed_live::on_setting(&core, &c);
         if super::native::affects(&c.name) {
             core.inner.kick_networks.notify_waiters();
         }

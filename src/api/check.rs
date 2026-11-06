@@ -3,12 +3,12 @@
 //! Ответ всегда {ok, details}: «Подключено …» или точная причина сбоя.
 //! Каждая проверка пишется в журнал.
 //! Кто вызывает: интерфейс (экраны «Уведомления», «Площадки», «Каналы отправки»).
-//! От чего зависит: api/state.rs, notify/check.rs, gateway/registry.rs.
+//! От чего зависит: api/state.rs, notify/check.rs, gateway/registry.rs, core/feed_live.rs (revive_feed).
 //! Настройки: те, что нужны проверяемому подключению.
 //!
 //! POST /api/check/telegram
 //! POST /api/check/telegram/{роль}  — чат роли (решение 176: control, general, deals, failures), с тестовым сообщением
-//! POST /api/check/venue/{id}
+//! POST /api/check/venue/{id}       — плюс проверка потока рынка и подъём подписки, если молчит (решение 196)
 //! POST /api/check/channel/{venue}/{id}
 //! POST /api/check/executor/{venue}  — свой исполнитель ArbExecutor DEX (ревью 122)
 
@@ -49,7 +49,7 @@ pub async fn telegram_role(
 /// Проверка площадки. Пока адаптеров нет — ответ «площадка не подключена».
 /// Ошибок нет: причина сбоя — в details.
 pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<ConnectionCheck> {
-    let res = match st.registry.get(&VenueId(id.clone())).await {
+    let mut res = match st.registry.get(&VenueId(id.clone())).await {
         Ok(v) => v
             .check_connection()
             .await
@@ -63,6 +63,12 @@ pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<C
         },
     };
     log(&st, Some(&id), &id, &res).await;
+    // Решение 196: поток рынка молчит или подписки нет — поднять подписку без перезапуска (core/feed_live.rs).
+    let feed = st
+        .core
+        .revive_feed(&VenueId(id), "Проверка подключения")
+        .await;
+    res.details = format!("{} · {feed}", res.details);
     Json(res)
 }
 

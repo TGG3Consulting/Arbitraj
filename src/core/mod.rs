@@ -75,6 +75,8 @@ pub mod episode_view;
 pub mod episode_worker;
 pub mod evaluate;
 pub mod executor;
+pub mod feed_hold;
+pub mod feed_live;
 pub mod fills;
 pub mod first_pass;
 pub mod gas_stats;

@@ -58,6 +58,7 @@ pub async fn save(core: &Core, deal: &Deal) {
     if let Ok(v) = serde_json::to_value(deal) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
+    super::feed_hold::on_saved(core, deal); // Решение 196: сделка закрылась — снять поток выключенной площадки.
 }
 
 /// Закрывает сделку: итог, план против факта, итог дня, статистика монеты, уведомление, пауза направления.

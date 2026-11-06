@@ -79,6 +79,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
             ExecKind::V3
         }
         "thena_fusion" => ExecKind::Algebra,
+        // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
+        // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
+        "algebra_integral" => ExecKind::Algebra,
         "solidly_v2" | "solidly_v1" => ExecKind::Solidly,
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         "curve_stableswap" => ExecKind::Curve,

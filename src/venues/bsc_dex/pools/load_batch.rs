@@ -84,6 +84,7 @@ pub async fn states(
             || w.family.proto == Proto::KyberElastic
             || w.family.proto.is_dodo()
             || w.family.proto == Proto::Algebra
+            || w.family.proto == Proto::AlgebraIntegral
             || w.family.proto.is_solidly()
             || w.family.proto == Proto::Slipstream
             || w.family.proto.is_stable()

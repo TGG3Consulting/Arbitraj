@@ -54,6 +54,12 @@ pub enum Proto {
     /// динамическая комиссия (globalState.fee), СЫРОЙ битмап тиков (tickTable). Свои геттеры/события/квотер (QuoterV2
     /// без параметра fee), своя фабрика (poolByPair — один пул на пару). Математика — math/swap_algebra.rs.
     Algebra,
+    /// Algebra Integral (THENA V3, DexSwap; решение 188): тот же обмен, события Swap/Mint/Burn и фабрика, что у
+    /// Algebra V1.9, но тики связаны списком (prevTick/nextTick, без чтения битмапа), комиссия — fee() плагина при
+    /// DYNAMIC_FEE и добавка плагина (SwapFee). Состояние — PoolState::Algebra, математика — math/swap_algebra.rs.
+    /// Чтение — load_algebra_integral.rs, события — events_algebra_integral.rs. Квотер — только виртуальный
+    /// (dex.quoter_virtual = да, решение 186): официальный квотер Integral в код не подключён.
+    AlgebraIntegral,
     /// Solidly (ve(3,3)-форки: Topaz v2, THENA V1; решения 80, 85): пул с резервами и флагом `stable` (volatile `x·y=k`
     /// → math/v2.rs; stable `x³y+xy³=k` → math/swap_solidly.rs). Свой Pair-интерфейс (Sync с резервами uint256,
     /// getAmountOut и metadata в самом пуле) — не обычный V2-форк. Чтение — load_solidly.rs, события — events_solidly.rs,
@@ -210,6 +216,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как DODO 86b — в графе и для
         // сигналов, но guard executable (quote/graph_route.rs) в авто-сделку не пускает. Вид ядра — Cl.
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
+        // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
+        // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
+        "algebra_integral" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
         // Solidly ve(3,3)-форки (Topaz v2, THENA V1; решения 80, 85): в графе (своя математика — volatile math/v2,
         // stable math/swap_solidly), НО tradable=false — исполнения пока нет (роутер Solidly — следующая фаза).
         // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
@@ -397,6 +406,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // читателя тиков нет — сырой битмап tickTable читается прямо у пула (load_algebra.rs). Роутера нет
         // (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Algebra => list.extend(["dex.factory", "dex.quoter"]),
+        // Algebra Integral (решение 188): фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный
+        // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
+        Proto::AlgebraIntegral => list.extend(["dex.factory", "dex.quoter"]),
         // Solidly (Topaz v2, THENA V1; решения 80, 85): только фабрика — ею проверяется пул (getPool(coin, quote,
         // stable), решение 59), читается комиссия (getFee(pool, stable), load_solidly.rs) и слушается событие создания
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.

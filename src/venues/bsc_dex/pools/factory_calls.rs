@@ -70,7 +70,7 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
                     .map(|stable| Q::Solidly { v1, stable })
                     .to_vec()
             }
-            Proto::Algebra => vec![Q::Algebra],
+            Proto::Algebra | Proto::AlgebraIntegral => vec![Q::Algebra],
             Proto::Slipstream => Vec::new(),
             Proto::Maverick => Vec::new(),
             p if p.is_dodo() => vec![Q::Dodo],

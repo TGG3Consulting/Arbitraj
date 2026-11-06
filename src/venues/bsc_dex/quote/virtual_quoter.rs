@@ -49,7 +49,11 @@ pub const SHORT: &str =
 pub fn supports(p: Proto) -> bool {
     matches!(
         p,
-        Proto::UniswapV3 | Proto::PancakeV3 | Proto::Algebra | Proto::Slipstream
+        Proto::UniswapV3
+            | Proto::PancakeV3
+            | Proto::Algebra
+            | Proto::AlgebraIntegral
+            | Proto::Slipstream
     )
 }
 

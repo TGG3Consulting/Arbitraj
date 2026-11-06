@@ -51,6 +51,14 @@ pub fn request(
     if e.family.proto == Proto::Maverick {
         return super::quoter_maverick::request(ctx, e, token_in, amount);
     }
+    // Algebra Integral (решение 188): официальный квотер Integral в код не подключён — только виртуальный квотер
+    // (dex.quoter_virtual = да, quote/virtual_quoter.rs; сюда тогда не доходит).
+    if e.family.proto == Proto::AlgebraIntegral {
+        return Err(ctx.not_set(
+            "dex.quoter_virtual",
+            format!("{}: Algebra Integral сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
+        ));
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает

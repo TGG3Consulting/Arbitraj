@@ -90,6 +90,9 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
     let body = r.body.as_ref().map(Value::to_string).unwrap_or_default();
     let lim = ctx.limits()?;
     // Путь на паузе после «слишком часто» — запрос не отправляется вовсе.
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(r.path)).await;
+
     reply::gate(r.path).map_err(|e| ctx.tag(e))?;
     let mut last = None;
     for base in &urls {

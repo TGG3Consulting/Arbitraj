@@ -166,6 +166,8 @@ async fn send(ctx: &Ctx, c: Call<'_>) -> GatewayResult<Value> {
     let lim = ctx.limits()?;
     let spot = c.raw == Raw::Write;
     // Пауза после 429: запрос не отправляется вовсе (продолжение — блокировка IP или ключа).
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(spot)).await;
     reply::gate(spot, c.path)?;
     let url = if c.query.is_empty() {
         format!("{}{}", c.base, c.path)

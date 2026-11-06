@@ -103,6 +103,9 @@ async fn send(
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
     // Пауза после 418/429: запрос не отправляется вовсе (продолжение после 429 — бан IP).
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(path)).await;
+
     reply::gate(path)?;
     let mut last = None;
     for base in &urls {

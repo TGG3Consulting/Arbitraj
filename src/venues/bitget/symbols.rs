@@ -142,6 +142,20 @@ impl Symbols {
         })
     }
 
+    /// Правила пары для исполнения (решение 201): пары нет, а справочник ещё не загружен или устарел (сразу после
+    /// включения биржи — «Пары RWA нет в справочнике Bitget» 06.11) — у котировки исполнения (gateway/patience.rs
+    /// is_exec) справочник догружается (ensure_fresh, GET /api/v2/spot/public/symbols) и пара ищется ещё раз.
+    /// Ошибки: как get и ensure_fresh.
+    pub async fn get_exec(&self, ctx: &Ctx, ticker: &str) -> GatewayResult<SymbolRules> {
+        match self.get(ctx, ticker) {
+            Err(_) if crate::gateway::patience::is_exec() => {
+                self.ensure_fresh(ctx).await?;
+                self.get(ctx, ticker)
+            }
+            r => r,
+        }
+    }
+
     /// Символ Bitget пары монеты. None — пары нет. Ошибок нет.
     pub fn symbol_of(&self, ticker: &str) -> Option<String> {
         self.all().get(ticker).map(|r| r.symbol.clone())

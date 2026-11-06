@@ -132,6 +132,9 @@ async fn send(
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(path)).await;
+
     reply::gate(path)?;
     let mut last = None;
     for base in &urls {

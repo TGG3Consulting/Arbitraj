@@ -35,6 +35,18 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
+/// Что делает: остаток паузы, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201, gateway/patience.rs).
+/// Принимает: то же, что gate. Ошибок нет.
+pub fn pause_left_ms(path: &str) -> i64 {
+    PAUSE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .and_then(|m| m.get(path).copied())
+        .unwrap_or(0)
+        - now_ms()
+}
+
 /// Что делает: не пускает запрос, пока путь на паузе после «слишком часто».
 /// Принимает: путь эндпоинта. Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate(path: &str) -> GatewayResult<()> {

@@ -27,6 +27,12 @@ use super::errors::{self, LIMIT_CODES, Op};
 /// До какого момента (unix мс) запросы к CoinEx не отправляются. Один адаптер CoinEx на процесс. 0 — паузы нет.
 static PAUSE_UNTIL_MS: AtomicI64 = AtomicI64::new(0);
 
+/// Что делает: остаток паузы после 429, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201,
+/// gateway/patience.rs). Ошибок нет.
+pub fn pause_left_ms() -> i64 {
+    PAUSE_UNTIL_MS.load(Ordering::Relaxed) - chrono::Utc::now().timestamp_millis()
+}
+
 /// Что делает: не пускает запрос, пока идёт пауза после лимита.
 /// Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate() -> GatewayResult<()> {

@@ -1,7 +1,8 @@
 //! Файл: venues/bitget/book.rs
 //! Что делает: последние стаканы Bitget в памяти и котировка на объём по уровням стакана
 //! (сколько заплатим или получим за Q монет, с комиссией taker нашего аккаунта).
-//! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра).
+//! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; решение 201 — exec_needs_rest и priced для
+//! снимка REST котировки исполнения, rest_book.rs).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [bitget] (необязательна) — кадр стакана этой пары старше — котировки нет.
@@ -47,6 +48,20 @@ impl Books {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
         let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
         m.insert(book.asset.ticker.clone(), (book, alive, seen));
+    }
+
+    /// Решение 201: стакан пары из снимка REST (котировка исполнения): заменяет стакан и время кадра пары, живость
+    /// соединения — прежняя. Пары в памяти нет (подписки нет) — ничего. Возвращает: заменён ли. Ошибок нет.
+    pub fn put_rest(&self, book: OrderBook) -> bool {
+        let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
+        match m.get(&book.asset.ticker).map(|(_, alive, _)| alive.clone()) {
+            Some(alive) => {
+                let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
+                m.insert(book.asset.ticker.clone(), (book, alive, seen));
+                true
+            }
+            None => false,
+        }
     }
 
     /// Кадр стакана пары пришёл, но снимок тот же (решение 109): только время кадра пары. Ошибок нет.
@@ -107,37 +122,65 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms})"),
             ));
         }
-        let levels = match side {
-            Side::Buy => &book.asks,
-            Side::Sell => &book.bids,
-        };
-        let (filled, notional) = walk(levels, qty);
-        let rates = fees.get(ctx, symbol)?;
-        let avg = if filled.is_zero() {
-            Decimal::ZERO
-        } else {
-            notional / filled
-        };
-        Ok(Quote {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            qty,
-            fillable_qty: filled,
-            avg_price: avg,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
-            costs: vec![Cost::new(
-                CostKind::TradeFee,
-                notional * rates.taker,
-                "USDT",
-                false,
-            )],
-            route: None,
-            signal_route: None,
-            pick: None,
-            at: book.received_at,
-        })
+        priced(ctx, fees, symbol, asset, side, qty, &book)
     }
+
+    /// Решение 201: нужен ли котировке ИСПОЛНЕНИЯ свежий снимок REST вместо стакана потока: стакана пары нет (поток ещё
+    /// не пришёл, площадка без подписки) или кадр пары старше venue.book_stale_ms (неликвидная пара не получает
+    /// кадров без изменений — RWA 06.11: 45–55 с при живом соединении). Принимает: окружение, тикер.
+    /// Возвращает: да / нет. Ошибок нет.
+    pub fn exec_needs_rest(&self, ctx: &Ctx, ticker: &str) -> bool {
+        let m = self.map.read().unwrap_or_else(|p| p.into_inner());
+        let Some((_, _, seen)) = m.get(ticker) else {
+            return true;
+        };
+        let age = now_ms() - seen.load(Ordering::Relaxed);
+        ctx.int("venue.book_stale_ms")
+            .is_ok_and(|pair_ms| age > pair_ms as i64)
+    }
+}
+
+/// Котировка на объём по данному стакану (поток или снимок REST): проход по уровням, комиссия taker.
+/// Принимает: окружение, кэш комиссий, символ, монету, сторону, количество, стакан. Ошибки: комиссия.
+pub fn priced(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    asset: &Asset,
+    side: Side,
+    qty: Decimal,
+    book: &OrderBook,
+) -> GatewayResult<Quote> {
+    let levels = match side {
+        Side::Buy => &book.asks,
+        Side::Sell => &book.bids,
+    };
+    let (filled, notional) = walk(levels, qty);
+    let rates = fees.get(ctx, symbol)?;
+    let avg = if filled.is_zero() {
+        Decimal::ZERO
+    } else {
+        notional / filled
+    };
+    Ok(Quote {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        qty,
+        fillable_qty: filled,
+        avg_price: avg,
+        // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+        costs: vec![Cost::new(
+            CostKind::TradeFee,
+            notional * rates.taker,
+            "USDT",
+            false,
+        )],
+        route: None,
+        signal_route: None,
+        pick: None,
+        at: book.received_at,
+    })
 }
 
 /// Проход по уровням от лучшего: сколько монет набрано и на какую сумму.

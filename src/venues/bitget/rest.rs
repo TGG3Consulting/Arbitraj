@@ -91,8 +91,10 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
     };
     let body = r.body.as_ref().map(Value::to_string).unwrap_or_default();
     let lim = ctx.limits()?;
-    // Пауза после 429 — запрос не отправляется вовсе.
-    reply::gate().map_err(|e| ctx.tag(e))?;
+    // Пауза эндпоинта после 429 — запрос не отправляется вовсе. Решение 201: пауза по эндпоинту; ручная работа ждёт
+    // её конец (gateway/patience.rs), автоматика — отказ сразу.
+    crate::gateway::patience::wait(reply::pause_left_ms(r.path)).await;
+    reply::gate(r.path).map_err(|e| ctx.tag(e))?;
     let mut last = None;
     for base in &urls {
         let mut req = ctx

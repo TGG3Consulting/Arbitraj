@@ -32,6 +32,7 @@ pub mod pairs_watch;
 pub mod records;
 pub mod reply;
 pub mod rest;
+pub mod rest_book;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -135,7 +136,26 @@ impl Venue for Bitget {
     }
 
     async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
-        let symbol = self.symbols.get(&self.ctx, &asset.ticker)?.symbol;
+        // Решение 201: у котировки исполнения справочник догружается, если пары ещё нет (symbols.rs get_exec).
+        let symbol = self
+            .symbols
+            .get_exec(&self.ctx, &asset.ticker)
+            .await?
+            .symbol;
+        // Решение 201: котировке исполнения при тихом или ещё не пришедшем стакане потока — снимок REST (rest_book.rs).
+        if crate::gateway::patience::is_exec()
+            && self.books.exec_needs_rest(&self.ctx, &asset.ticker)
+        {
+            let book = rest_book::snapshot(&self.ctx, &symbol, asset).await?;
+            // Снимок — и в память адаптера, и ядру (худшая цена ордера core/worst.rs берёт стакан ядра). Ядро
+            // принимает событие асинхронно: если ордер успеет раньше — худшая цена по прежнему стакану ядра.
+            if self.books.put_rest(book.clone())
+                && let Some(tx) = self.subs.sender()
+            {
+                let _ = tx.try_send(MarketEvent::Book(book.clone()));
+            }
+            return book::priced(&self.ctx, &self.fees, &symbol, asset, side, qty, &book);
+        }
         self.books
             .quote(&self.ctx, &self.fees, &symbol, asset, side, qty)
             .await

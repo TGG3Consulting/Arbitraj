@@ -39,7 +39,10 @@ impl Core {
         // Решение 177: команда человека — ручная: её сбои не «ошибки площадки подряд», паузу ставит только автоматика
         // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
         // manual_usdt.rs).
-        let res = super::risk_count::manual(self.run_command(&cmd)).await;
+        // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
+        let res =
+            super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd)))
+                .await;
         // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
         self.inner.live.send(super::view::CoreEvent::Command(json!({
             "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),

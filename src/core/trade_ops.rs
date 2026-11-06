@@ -134,8 +134,9 @@ pub async fn sell_value(
     qty: Decimal,
 ) -> Result<(Decimal, Quote), String> {
     let x = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
-    let q = x
-        .quote(a, Side::Sell, qty)
+    // Решение 201: котировка для исполнения (gateway/patience.rs exec_scope) — адаптер может взять тихий стакан пары
+    // при живом соединении (ордер IOC по худшей цене хуже не исполнится).
+    let q = crate::gateway::patience::exec_scope(x.quote(a, Side::Sell, qty))
         .await
         .map_err(|e| format!("{}: {}", v.0, e.message))?;
     if q.fillable_qty < qty {

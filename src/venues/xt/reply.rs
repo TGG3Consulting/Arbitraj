@@ -41,6 +41,12 @@ fn slot(spot: bool) -> &'static AtomicI64 {
     }
 }
 
+/// Что делает: остаток паузы вида адреса, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201,
+/// gateway/patience.rs). Принимает: спот ли. Ошибок нет.
+pub fn pause_left_ms(spot: bool) -> i64 {
+    slot(spot).load(Ordering::Relaxed) - chrono::Utc::now().timestamp_millis()
+}
+
 /// Что делает: не пускает запрос, пока идёт пауза. Принимает: спот ли, путь (для текста).
 /// Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate(spot: bool, path: &str) -> GatewayResult<()> {

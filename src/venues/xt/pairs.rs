@@ -3,7 +3,7 @@
 //! каких пар нет, какие монеты торгуются (для подписки DEX в ядре) и состояние каждой пары (статус, покупка и
 //! продажа через API) — событие ядру MarketEvent::SpotPairs.
 //! Кто вызывает: market.rs (при подписке), pairs_watch.rs (при обновлении справочника пар).
-//! От чего зависит: symbols.rs, gateway/events, core/types.
+//! От чего зависит: symbols.rs, sign.rs (value_ok), gateway/events, core/types.
 //! Настройки: нет.
 //!
 //! Официально: GET /v4/public/symbol (state — перечень «Symbol state» publicModule.md, tradingEnabled, openapiEnabled)
@@ -24,6 +24,10 @@ pub struct Snapshot {
     pub books: Vec<(Asset, String)>,
     /// Монеты без пары в состоянии ONLINE (для журнала).
     pub missing: Vec<String>,
+    /// Символы пар ONLINE со знаками, которые нельзя поставить в запрос XT (sign::value_ok; 06.11.2026 — «牛来_usdt»,
+    /// «龙虾_usdt»): снимок стакана REST и ордер для них не отправить, поэтому стакан не подписывается и через API
+    /// монета не торгуется (для журнала — один раз при подписке, вместо отказа снимка каждую секунду).
+    pub bad_symbols: Vec<String>,
     /// Монеты, которыми можно торговать через API хотя бы в одну сторону (онлайн и разрешена ключу в одну из сторон).
     pub tickers: Vec<String>,
     /// Состояние пары каждой монеты, у которой пара есть в справочнике.
@@ -37,16 +41,24 @@ impl Snapshot {
         let mut s = Snapshot {
             books: vec![],
             missing: vec![],
+            bad_symbols: vec![],
             tickers: vec![],
             pairs: vec![],
         };
         for a in assets {
-            let Some(p) = symbols.state(&a.ticker) else {
+            let Some(mut p) = symbols.state(&a.ticker) else {
                 s.missing.push(a.ticker.clone());
                 continue;
             };
             if p.online {
-                if let Some(sym) = symbols.symbol_of(&a.ticker) {
+                let sym = symbols.symbol_of(&a.ticker);
+                if let Some(bad) = sym.as_ref().filter(|x| !super::sign::value_ok(x)) {
+                    s.bad_symbols.push(bad.clone());
+                    (p.api_buy, p.api_sell) = (false, false);
+                    s.pairs.push(p);
+                    continue;
+                }
+                if let Some(sym) = sym {
                     s.books.push((a.clone(), sym));
                 }
                 if p.api_buy || p.api_sell {

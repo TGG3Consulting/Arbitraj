@@ -74,6 +74,14 @@ async fn note(ctx: &Ctx, snap: &Snapshot) {
         );
         ctx.log(Level::Warn, "venue.subscribe", m).await;
     }
+    if !snap.bad_symbols.is_empty() {
+        let m = format!(
+            "XT: символ пары с недопустимыми для запроса XT знаками (разрешены буквы, цифры, «_ . , -») у {} пар — стакан не подписан, через API не торгуются: {}",
+            snap.bad_symbols.len(),
+            snap.bad_symbols.join(", ")
+        );
+        ctx.log(Level::Warn, "venue.subscribe", m).await;
+    }
     let closed = snap.api_closed();
     if !closed.is_empty() {
         let m = format!(

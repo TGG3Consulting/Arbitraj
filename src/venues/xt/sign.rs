@@ -61,10 +61,7 @@ pub fn query(params: &[(&str, String)]) -> Result<String, String> {
     sorted.sort_by(|a, b| a.0.cmp(b.0));
     let mut out = Vec::with_capacity(sorted.len());
     for (k, v) in sorted {
-        let ok = v
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b',' | b'-'));
-        if !ok {
+        if !value_ok(v) {
             return Err(format!(
                 "параметр {k} = «{v}»: недопустимый символ для подписи XT"
             ));
@@ -72,6 +69,13 @@ pub fn query(params: &[(&str, String)]) -> Result<String, String> {
         out.push(format!("{k}={v}"));
     }
     Ok(out.join("&"))
+}
+
+/// Что делает: значение можно поставить в строку запроса XT — только буквы, цифры и «_ . , -» (см. query).
+/// Принимает: значение. Возвращает: да / нет. Ошибок нет.
+pub fn value_ok(v: &str) -> bool {
+    v.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b',' | b'-'))
 }
 
 /// Что делает: HMAC SHA256 строки секретом, результат — hex строчными (hmacSha256Hex документации).
@@ -84,4 +88,19 @@ pub fn hmac_hex(secret: &str, original: &str) -> Result<String, String> {
         .map_err(|e| format!("секретный ключ XT не принят HMAC: {e}"))?;
     mac.update(original.as_bytes());
     Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Символы живого справочника XT 06.11.2026: иероглифы в запрос не ставятся, обычные — ставятся.
+    #[test]
+    fn value_ok_live_symbols() {
+        assert!(value_ok("btc_usdt"));
+        assert!(value_ok("1000000hvi_usdt"));
+        assert!(!value_ok("牛来_usdt"));
+        assert!(!value_ok("龙虾_usdt"));
+        assert!(!value_ok("币安底裤_usdt"));
+    }
 }

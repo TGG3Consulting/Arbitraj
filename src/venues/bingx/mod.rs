@@ -20,6 +20,7 @@ pub mod depth;
 pub mod errors;
 pub mod feed;
 pub mod fees;
+pub mod fees_pause;
 pub mod fund_move;
 pub mod market;
 pub mod num;

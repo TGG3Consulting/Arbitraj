@@ -53,6 +53,8 @@
 
 <h1>Сделки</h1>
 <ErrorText text={error} />
+<!-- Решение 193: отчёт «Итоги сделок» (xlsx) 1 в 1 как отчёт 05.11.2026, на сделках на момент скачивания. -->
+<p><a href="/api/report/results.xlsx" download>Скачать отчёт «Итоги сделок» (xlsx)</a></p>
 <label class="inline"><input type="checkbox" bind:checked={onlyOpen} /> только идущие</label>
 {#each rows as d (d.id)}
   <article class="card">

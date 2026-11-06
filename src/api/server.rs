@@ -19,8 +19,8 @@ use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
     balances, check, coins, control, core_api, delist, dex, dex_dry, dex_executor, episodes,
-    first_run, journal, rules, rules_meta, secrets, settings, settings_io, static_ui, uncapped,
-    usdt_transfer, venues, wallet_queue, wallets, wallets_dex, windows, ws,
+    first_run, journal, report, rules, rules_meta, secrets, settings, settings_io, static_ui,
+    uncapped, usdt_transfer, venues, wallet_queue, wallets, wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -64,6 +64,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/gas-stats", get(control::gas_stats))
         .route("/api/spreads", get(core_api::spreads))
         .route("/api/candidates", get(core_api::candidates))
+        .route("/api/report/results.xlsx", get(report::results))
         .route("/api/delistings", get(delist::list))
         .route("/api/deals", get(core_api::deals))
         .route("/api/dry", get(core_api::dry))

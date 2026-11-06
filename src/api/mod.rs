@@ -17,6 +17,7 @@ pub mod episodes;
 pub mod first_run;
 pub mod guard;
 pub mod journal;
+pub mod report;
 pub mod rules;
 pub mod rules_codes;
 pub mod rules_meta;

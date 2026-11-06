@@ -12,6 +12,7 @@ pub mod cli;
 pub mod core;
 pub mod gateway;
 pub mod notify;
+pub mod report;
 pub mod secrets;
 pub mod settings;
 pub mod storage;

@@ -35,11 +35,7 @@ pub fn parse(rest: &str) -> Option<(usize, String)> {
 /// Соседи карточки: (предыдущая, следующая) как (позиция, ключ). Запись в списке — её соседи; ушла из списка — на её
 /// позиции теперь следующая запись, предыдущая — перед ней. Принимает: ключи ждущих по порядку, позицию, ключ.
 /// Ошибок нет.
-pub fn neighbours(
-    keys: &[String],
-    idx: usize,
-    key: &str,
-) -> (Near, Near) {
+pub fn neighbours(keys: &[String], idx: usize, key: &str) -> (Near, Near) {
     let at = |i: usize| keys.get(i).map(|k| (i, k.clone()));
     match keys.iter().position(|k| k == key) {
         Some(p) => (p.checked_sub(1).and_then(at), at(p + 1)),

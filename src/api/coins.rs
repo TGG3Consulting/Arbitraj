@@ -7,6 +7,7 @@
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
 //! POST /api/coins/recheck  — {venue, assets: [Asset]} → {ok, details}
+//! GET  /api/coins/ticker-splits — решение 200: [{address, venues: [[биржа, тикер]]}] — один адрес, разные тикеры
 //!
 //! Справочник, налоги, проверки пулов и чёрный список держит ядро (core/coins_view.rs → Core::coins_json).
 //! Монета для перепроверки — Asset целиком (тикер + адрес контракта): одинаковый тикер может быть
@@ -115,4 +116,9 @@ pub async fn recheck(
         .write(level, "coins.recheck", Some(&b.venue.0), msg, None)
         .await;
     Ok(Json(res))
+}
+
+/// Решение 200: расхождения тикеров одного адреса (core/ticker_index.rs) — для кнопки «Считать одной монетой». Ошибок нет.
+pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
 }

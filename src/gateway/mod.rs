@@ -5,6 +5,10 @@
 //! От чего зависит: core/types. Никогда — venues (адаптеры регистрируются из main.rs).
 //! Настройки: правила шлюза (хранятся в SQLite, меняются из интерфейса).
 
+pub mod alias_map;
+pub mod aliased;
+pub mod aliased_tr;
+pub mod aliased_venue;
 pub mod calc_meter;
 pub mod contract;
 pub mod errors;
@@ -12,6 +16,7 @@ pub mod events;
 pub mod http;
 pub mod http_bind;
 pub mod patience;
+pub mod network_hint;
 pub mod quote_stage;
 pub mod registry;
 pub mod rules;

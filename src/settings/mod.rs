@@ -6,6 +6,7 @@
 
 pub mod accounts;
 pub mod catalog;
+pub mod hint;
 pub mod history;
 pub mod live;
 pub mod read;

@@ -4,7 +4,9 @@
 //! токена с тем же тикером на другой бирже. Плюс журнал Я-8: у одного адреса контракта на разных биржах разные
 //! тикеры — справочник делит монету на записи по тикеру (registry_build.rs), направлений между ними нет; запись в
 //! журнал — одна на изменение. Решение 129: ещё адрес → монеты (by_tokens) для события пула.
-//! Кто вызывает: core/rebuild.rs (после сборки справочника), core/tick.rs (поиск монеты по событию).
+//! Решение 200: расхождения тикеров отдаются интерфейсу (ticker_splits → GET /api/coins/ticker-splits) — у каждого
+//! кнопка «Считать одной монетой» (склейка coin.ticker_alias делается в шлюзе, gateway/aliased.rs).
+//! Кто вызывает: core/rebuild.rs (после сборки справочника), core/tick.rs (поиск монеты по событию), api/coins.rs.
 //! От чего зависит: registry.rs (CoinEntry), core/types, deps.rs (журнал).
 //! Настройки: нет.
 
@@ -31,6 +33,30 @@ pub struct TickerIndex {
     pub pos: HashMap<Asset, usize>,
     /// Адрес → текст уже записанного расхождения тикеров (чтобы не повторять).
     told: HashMap<Address, String>,
+    /// Решение 200: текущие расхождения тикеров по адресу — (биржа, тикер) — для интерфейса.
+    splits: BTreeMap<Address, BTreeSet<(String, String)>>,
+}
+
+/// Расхождение тикеров одного адреса для интерфейса (решение 200).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TickerSplit {
+    pub address: Address,
+    /// (биржа, тикер) по порядку.
+    pub venues: Vec<(String, String)>,
+}
+
+impl Core {
+    /// Текущие расхождения тикеров одного адреса (решение 200). Ошибок нет.
+    pub fn ticker_splits(&self) -> Vec<TickerSplit> {
+        super::engine::rd(&self.inner.tickers)
+            .splits
+            .iter()
+            .map(|(a, v)| TickerSplit {
+                address: *a,
+                venues: v.iter().cloned().collect(),
+            })
+            .collect()
+    }
 }
 
 impl TickerIndex {
@@ -82,15 +108,18 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
             }
         }
     }
-    let conflicts: HashMap<Address, String> = by_addr
+    let splits: BTreeMap<Address, BTreeSet<(String, String)>> = by_addr
         .into_iter()
         .filter(|(_, v)| {
             let first = v.iter().next().map(|(_, t)| t);
             v.iter().any(|(_, t)| Some(t) != first)
         })
+        .collect();
+    let conflicts: HashMap<Address, String> = splits
+        .iter()
         .map(|(a, v)| {
             let list: Vec<String> = v.iter().map(|(venue, t)| format!("{venue}={t}")).collect();
-            (a, list.join(", "))
+            (*a, list.join(", "))
         })
         .collect();
     let fresh: Vec<(Address, String)> = {
@@ -98,6 +127,7 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
         idx.map = map;
         idx.by_token = by_token;
         idx.pos = pos;
+        idx.splits = splits;
         let new = conflicts
             .iter()
             .filter(|(a, t)| idx.told.get(*a) != Some(*t))
@@ -108,7 +138,7 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
     };
     for (a, t) in fresh {
         let text = format!(
-            "У адреса {a} разные тикеры: {t} — монета разделена по тикеру, направлений между ними нет"
+            "У адреса {a} разные тикеры: {t} — монета разделена по тикеру, направлений между ними нет (склеить — «Монеты» → «Считать одной монетой», coin.ticker_alias)"
         );
         core.inner
             .deps

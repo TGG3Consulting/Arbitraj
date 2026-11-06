@@ -97,6 +97,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/windows/{id}/file", get(windows::file))
         .route("/api/uncapped", get(uncapped::list))
         .route("/api/uncapped/summary", get(uncapped::summary))
+        .route("/api/uncapped/deals", get(uncapped::deals))
         .route("/api/uncapped/deal/{id}", get(uncapped::deal))
         .route("/api/uncapped/{id}", get(uncapped::get))
         .route("/api/journal", get(journal::list))

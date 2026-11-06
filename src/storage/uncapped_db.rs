@@ -96,6 +96,20 @@ pub async fn by_deal(db: &Db, deal_id: String) -> Result<Option<(i64, String)>, 
     .await
 }
 
+/// Последняя запись каждой сделки, у которой она есть: (id сделки, id записи, JSON) — одним запросом для экрана
+/// «Сделки» (вместо запроса на каждую сделку). Ошибки: база.
+pub async fn by_deals(db: &Db) -> Result<Vec<(String, i64, String)>, DbError> {
+    db.call(|c| {
+        let mut st = c.prepare(
+            "SELECT u.deal_id, u.id, u.body FROM uncapped u JOIN \
+             (SELECT MAX(id) AS m FROM uncapped WHERE deal_id IS NOT NULL GROUP BY deal_id) t ON u.id = t.m",
+        )?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        rows.collect()
+    })
+    .await
+}
+
 /// Условие WHERE и параметры. Ошибок нет.
 fn where_of(f: &Filter) -> (String, Vec<Value>) {
     let mut cond = vec![];

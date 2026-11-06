@@ -165,6 +165,21 @@ impl Core {
         Ok(r.map(|(id, b)| json!({"id": id, "body": serde_json::from_str::<Value>(&b).unwrap_or_default()})))
     }
 
+    /// Последние записи всех сделок: {id сделки: {id, body}} — одним запросом (экран «Сделки»). Ошибки: база (текст).
+    pub async fn uncapped_deals(&self) -> Result<Value, String> {
+        let rows = uncapped_db::by_deals(&self.inner.deps.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let map: serde_json::Map<String, Value> = rows
+            .into_iter()
+            .map(|(deal, id, b)| {
+                let body = serde_json::from_str::<Value>(&b).unwrap_or_default();
+                (deal, json!({"id": id, "body": body}))
+            })
+            .collect();
+        Ok(Value::Object(map))
+    }
+
     /// Почему расчёт без потолка не идёт (None — включён). Ошибок нет.
     fn uncapped_off(&self) -> Option<String> {
         match self

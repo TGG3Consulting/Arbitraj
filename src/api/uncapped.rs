@@ -9,6 +9,7 @@
 //! GET /api/uncapped/summary?from=ISO&to=ISO&top=N — {off, deals, candidates, ladder, ladder_error, uncapped, top, stats}
 //! GET /api/uncapped?limit=N&offset=M&from=ISO&to=ISO&kind=deal|candidate — {rows: [{id, body}], total}
 //! GET /api/uncapped/{id}                — запись (JSON core/uncapped_types.rs Record); 404 — нет
+//! GET /api/uncapped/deals               — {id сделки: {id, body}} последних записей всех сделок (экран «Сделки»)
 //! GET /api/uncapped/deal/{deal_id}      — {id, body} последней записи сделки; 404 — не посчитана
 
 use axum::Json;
@@ -112,4 +113,13 @@ pub async fn deal(
         )),
         Err(e) => Err(ApiError::internal(e)),
     }
+}
+
+/// Последние записи всех сделок одним ответом. Ошибки: 500 — база.
+pub async fn deals(State(st): State<AppState>) -> Result<Json<Value>, ApiError> {
+    st.core
+        .uncapped_deals()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
 }

@@ -22,6 +22,8 @@
   import DealUncapped from '../components/DealUncapped.svelte';
 
   let deals = $state({});
+  /** Записи «без потолка» всех сделок одним запросом: {id сделки: {id, body}}; null — ещё не получены. */
+  let uncapped = $state(null);
   let error = $state('');
   let onlyOpen = $state(false);
   const OPEN = ['Buying', 'Transfer', 'Selling', 'Stuck', 'WaitingHuman'];
@@ -31,6 +33,7 @@
     try {
       deals = Object.fromEntries((await get('/api/deals')).map((d) => [d.id, d]));
       error = '';
+      uncapped = await get('/api/uncapped/deals');
     } catch (e) {
       error = e.message;
     }
@@ -85,7 +88,7 @@
     {:else if d.usdt_return?.state === 'not_returned'}
       <p class="err">USDT не вернулись: {d.usdt_return.amount} USDT лежат на <code>{d.usdt_return.at}</code> — {d.usdt_return.why}. Перегоните на площадку покупки — кнопки «Перегнать» и «Перегнано вручную» на экране «Ручное управление»</p>
     {/if}
-    {#if d.buy}<DealUncapped id={d.id} fact={d.result_usd} />{/if}
+    {#if d.buy}<DealUncapped id={d.id} fact={d.result_usd} initial={uncapped?.[d.id]?.body ?? null} loaded={uncapped != null} />{/if}
     <details>
       <summary>Хронология ({d.timeline.length})</summary>
       <table><tbody>

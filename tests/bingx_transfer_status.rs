@@ -47,6 +47,7 @@ fn net(ticker: &str, open: bool) -> CoinNetworkInfo {
         deposit_enabled: open,
         withdraw_enabled: open,
         withdraw_fee: None,
+        withdraw_fee_pct: None,
         withdraw_min: None,
         withdraw_max: None,
         deposit_min: None,

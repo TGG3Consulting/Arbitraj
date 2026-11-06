@@ -227,9 +227,10 @@ impl Venue for Gate {
         &self,
         asset: &Asset,
         network: &str,
-        _amount: Decimal,
+        amount: Decimal,
     ) -> GatewayResult<Vec<Cost>> {
-        wallet_cost::withdraw_cost(&self.ctx, &self.nets, &self.symbols, asset, network).await
+        wallet_cost::withdraw_cost(&self.ctx, &self.nets, &self.symbols, asset, network, amount)
+            .await
     }
 
     async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {

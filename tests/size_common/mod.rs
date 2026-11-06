@@ -128,6 +128,7 @@ impl Rec {
             deposit_enabled: true,
             withdraw_enabled: true,
             withdraw_fee: num(&n["withdrawFee"]),
+            withdraw_fee_pct: None,
             withdraw_min: num(&n["withdrawMin"]),
             withdraw_max: num(&n["withdrawMax"]),
             deposit_min: num(&n["depositMin"]),

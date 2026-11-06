@@ -4,7 +4,7 @@
 //! DirCtx.usdt_b у B): в расчёте нет ни одного запроса к бирже (решение 66 — подбор объёма считает десятки объёмов,
 //! а config/getall BingX подписанный и с лимитом). У DEX — через шлюз (газ перевода из кошелька, налог перевода).
 //! Сумма вывода биржи — вниз до точности вывода (withdrawPrecision) и до кратного шагу вывода (withdraw_step, решение
-//! 119). Вывод биржи — ещё и налог перевода токена (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
+//! 119). Решение 199: комиссия вывода биржи — фиксированная + доля суммы (CoinNetworkInfo::fee_for). Вывод биржи — ещё и налог перевода токена (решение 118, Я-3: DirCtx.transfer_tax, transfer_tax.rs).
 //! Кто вызывает: core/costs.rs.
 //! От чего зависит: dirctx.rs, deps.rs (шлюз), size.rs (Fail), core/types.
 //! Настройки: нет.
@@ -30,9 +30,10 @@ pub fn floor_precision(qty: Decimal, info: Option<&CoinNetworkInfo>) -> Decimal 
     }
 }
 
-/// Комиссия вывода биржи из справочника. Принимает: сеть монеты, тикер (для текста). Ошибки: Stop — не сообщена.
-fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
-    let fee = info.withdraw_fee.ok_or_else(|| {
+/// Комиссия вывода биржи из справочника: фиксированная + доля суммы (решение 199, CoinNetworkInfo::fee_for —
+/// от реальной суммы этой точки подбора объёма). Принимает: сеть монеты, сумму вывода. Ошибки: Stop — не сообщена.
+fn fee_line(info: &CoinNetworkInfo, amount: Decimal) -> Result<Cost, Fail> {
+    let fee = info.fee_for(amount).ok_or_else(|| {
         Fail::Stop(format!(
             "{}: комиссия вывода {} в сети {} неизвестна",
             info.venue.0, info.asset.ticker, info.network
@@ -51,7 +52,7 @@ fn fee_line(info: &CoinNetworkInfo) -> Result<Cost, Fail> {
 /// Ошибки: Stop — комиссия неизвестна, сбой шлюза DEX.
 pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
     if let Some(info) = &cx.a.info {
-        let fee = fee_line(info)?;
+        let fee = fee_line(info, amount)?;
         // Решение 118 (Я-3): вывод биржи — перевод токена в сети, налог перевода снимается с того, что ушло в сеть
         // (вывод минус комиссия) — так же считает ожидание зачисления (credit_expect.rs).
         let pct = cx.transfer_tax.unwrap_or_default();
@@ -102,7 +103,7 @@ pub async fn return_b(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec<C
                 cx.usdt.ticker, d.sell_on.0
             )));
         }
-        return Ok(vec![fee_line(info)?]);
+        return Ok(vec![fee_line(info, amount)?]);
     }
     let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
     b.withdraw_cost(&cx.usdt, &cx.net_b, amount)

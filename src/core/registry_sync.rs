@@ -194,6 +194,7 @@ pub fn same_lists(a: &[CoinNetworkInfo], b: &[CoinNetworkInfo]) -> bool {
                 && x.deposit_enabled == y.deposit_enabled
                 && x.withdraw_enabled == y.withdraw_enabled
                 && x.withdraw_fee == y.withdraw_fee
+                && x.withdraw_fee_pct == y.withdraw_fee_pct
                 && x.withdraw_min == y.withdraw_min
                 && x.withdraw_max == y.withdraw_max
                 && x.deposit_min == y.deposit_min

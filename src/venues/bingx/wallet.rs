@@ -88,6 +88,7 @@ pub fn parse_networks(
                 deposit_enabled: flag(n, "depositEnable", &ticker)?,
                 withdraw_enabled: flag(n, "withdrawEnable", &ticker)?,
                 withdraw_fee: num::dec_opt(n, "withdrawFee")?,
+                withdraw_fee_pct: None,
                 withdraw_min: num::dec_opt(n, "withdrawMin")?,
                 withdraw_max: num::dec_opt(n, "withdrawMax")?,
                 // depositMin есть в официальном примере ответа config/getall (docs-v3), но его нет

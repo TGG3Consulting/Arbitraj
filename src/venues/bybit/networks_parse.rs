@@ -10,8 +10,9 @@
 //! empty, It means that this coin does not support withdrawal»), depositMin, withdrawMin, minAccuracy («The precision
 //! of withdraw or deposit»), chainDeposit / chainWithdraw («0: suspend. 1: normal»), withdrawPercentageFee («e.g., 0.022
 //! means 2.2%»), contractAddress («"" means no contract address»), withdrawMax («-1 indicates no limit»).
-//! Процентная комиссия вывода (withdrawPercentageFee ≠ 0) в ядре не учитывается (там комиссия — число монет): у такой
-//! сети комиссия вывода — «неизвестна» (None), ядро сделку с выводом по ней не делает; список — в журнал (вопрос Тиграну).
+//! Решение 199: процентная комиссия вывода withdrawPercentageFee — ДОЛЯ суммы («0.022 means 2.2%») —
+//! CoinNetworkInfo.withdraw_fee_pct как есть; полная комиссия = withdrawFee + доля × сумма (ядро, fee_for; из суммы или
+//! сверху — в документации нет, допущение — из суммы). Сети BSC с процентом — в журнал списком (для сверки).
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -89,7 +90,8 @@ fn one(
         deposit_enabled: flag(n, "chainDeposit")?,
         // Пустая комиссия вывода — монета вывод не поддерживает (документация).
         withdraw_enabled: flag(n, "chainWithdraw")? && fee.is_some(),
-        withdraw_fee: if pct.is_some() { None } else { fee },
+        withdraw_fee: fee,
+        withdraw_fee_pct: pct,
         withdraw_min: num::dec_opt(n, "withdrawMin")?,
         withdraw_max: max,
         deposit_min: num::dec_opt(n, "depositMin")?,

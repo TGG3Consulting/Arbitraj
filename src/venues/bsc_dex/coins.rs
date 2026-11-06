@@ -42,6 +42,7 @@ pub fn networks(ctx: &Ctx, reg: &Registry) -> GatewayResult<Vec<CoinNetworkInfo>
             deposit_enabled: true,
             withdraw_enabled: true,
             withdraw_fee: None,
+            withdraw_fee_pct: None,
             withdraw_min: None,
             withdraw_max: None,
             deposit_min: None,

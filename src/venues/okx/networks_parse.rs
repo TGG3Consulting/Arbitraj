@@ -108,6 +108,7 @@ fn network(
         deposit_enabled: num::flag(r, "canDep")?,
         withdraw_enabled: num::flag(r, "canWd")?,
         withdraw_fee: num::dec_opt(r, "fee")?,
+        withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(r, "minWd")?,
         withdraw_max: num::dec_opt(r, "maxWd")?,
         deposit_min,

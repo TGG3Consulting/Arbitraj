@@ -127,6 +127,7 @@ pub fn parse(
             deposit_enabled: dep_on,
             withdraw_enabled: wd_ok && wm.is_some(),
             withdraw_fee: fee,
+            withdraw_fee_pct: None,
             withdraw_min: wm.and_then(|m| m.min),
             withdraw_max: wm.and_then(|m| m.max),
             deposit_min: dm.and_then(|m| m.min).or(min_ok.then_some(Decimal::ZERO)),

@@ -228,9 +228,9 @@ impl Venue for Bitget {
         &self,
         asset: &Asset,
         network: &str,
-        _amount: Decimal,
+        amount: Decimal,
     ) -> GatewayResult<Vec<Cost>> {
-        wallet::withdraw_cost(&self.ctx, asset, network).await
+        wallet::withdraw_cost(&self.ctx, asset, network, amount).await
     }
 
     async fn recheck_coins(&self, _assets: Vec<Asset>) -> GatewayResult<()> {

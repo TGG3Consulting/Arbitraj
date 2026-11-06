@@ -28,6 +28,8 @@ pub async fn futures_get(ctx: &Ctx, base: &str, path: &str) -> GatewayResult<Val
     );
     let signature = sign::hmac_hex(&secret, &original)
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::InvalidCredentials, None, m)))?;
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(super::reply::pause_left_ms(false)).await;
     super::reply::gate(false, path)?;
     let lim = ctx.limits()?;
     let url = format!("{}{path}", base.trim_end_matches('/'));

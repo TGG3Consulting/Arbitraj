@@ -49,9 +49,20 @@ struct Inner {
     watch: Mutex<Option<JoinHandle<()>>>,
     /// Обновление ставок комиссии и его список символов (решение 131): тот же список — задача не перезапускается.
     fees: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
+    /// Канал событий ядру текущей подписки (решение 201: снимок REST котировки исполнения уходит ядру как стакан).
+    out: Mutex<Option<mpsc::Sender<MarketEvent>>>,
 }
 
 impl Subs {
+    /// Канал событий ядру текущей подписки. None — подписки ещё не было. Ошибок нет.
+    pub fn sender(&self) -> Option<mpsc::Sender<MarketEvent>> {
+        self.inner
+            .out
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Подписка из ядра: подписывается заново на список монет, останавливает старые задачи и прежнее обновление
     /// справочника пар, запускает новое (pairs_watch.rs) для этого списка. Ошибка — прежняя подписка остаётся.
     /// Принимает: части адаптера, монеты, канал событий. Ошибки: market::subscribe (настройки, справочник пар).
@@ -63,6 +74,7 @@ impl Subs {
     ) -> GatewayResult<()> {
         let _g = self.inner.gate.lock().await;
         let snap = self.start(p, assets.clone(), out.clone()).await?;
+        *self.inner.out.lock().unwrap_or_else(|e| e.into_inner()) = Some(out.clone());
         let mut watch = self.inner.watch.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = watch.take() {
             old.abort();

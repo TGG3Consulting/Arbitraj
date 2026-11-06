@@ -63,6 +63,9 @@ pub async fn public(ctx: &Ctx, method: &str, query: Params) -> GatewayResult<Val
     } else {
         format!("{path}?{q}")
     };
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(&path)).await;
+
     reply::gate(&path).map_err(|e| ctx.tag(e))?;
     let lim = ctx.limits()?;
     let mut last = None;
@@ -86,7 +89,13 @@ pub async fn private(ctx: &Ctx, method: &str, form: Params, op: Op) -> GatewayRe
     } else {
         reply::PRIVATE
     };
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(reply::PRIVATE)).await;
+
     reply::gate(reply::PRIVATE).map_err(|e| ctx.tag(e))?;
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(key)).await;
+
     reply::gate(key).map_err(|e| ctx.tag(e))?;
     let keys = ctx.keys()?;
     sign::check(&keys).map_err(|e| ctx.tag(e))?;
@@ -131,6 +140,9 @@ pub async fn funding(
     body: Option<Value>,
     op: Op,
 ) -> GatewayResult<Value> {
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(reply::PRIVATE)).await;
+
     reply::gate(reply::PRIVATE).map_err(|e| ctx.tag(e))?;
     let keys = ctx.keys()?;
     sign::check(&keys).map_err(|e| ctx.tag(e))?;

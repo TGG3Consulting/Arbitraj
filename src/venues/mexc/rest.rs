@@ -136,6 +136,8 @@ async fn send(
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
     // Пауза по Retry-After после 418/429: запрос не отправляется вовсе (решение 118, А-🔴3).
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs), автоматика — отказ сразу.
+    crate::gateway::patience::wait(reply::pause_left_ms()).await;
     reply::gate()?;
     let mut last = None;
     for base in &urls {

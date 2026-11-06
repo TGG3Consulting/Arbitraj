@@ -40,6 +40,20 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
+/// Что делает: остаток паузы, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201, gateway/patience.rs).
+/// Принимает: то же, что gate. Ошибок нет.
+pub fn pause_left_ms(path: &str) -> i64 {
+    let now = now_ms();
+    let ip = IP_PAUSE_UNTIL_MS.load(Ordering::Relaxed);
+    let p = PATH_PAUSE
+        .read()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(path)
+        .copied()
+        .unwrap_or(0);
+    ip.max(p) - now
+}
+
 /// Что делает: не пускает запрос, пока идёт пауза (вся площадка после 403 или этот эндпоинт по лимиту UID).
 /// Принимает: путь. Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate(path: &str) -> GatewayResult<()> {

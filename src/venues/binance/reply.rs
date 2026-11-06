@@ -40,6 +40,12 @@ fn slot(path: &str) -> &'static AtomicI64 {
     }
 }
 
+/// Что делает: остаток паузы, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201, gateway/patience.rs).
+/// Принимает: то же, что gate. Ошибок нет.
+pub fn pause_left_ms(path: &str) -> i64 {
+    slot(path).load(Ordering::Relaxed) - chrono::Utc::now().timestamp_millis()
+}
+
 /// Что делает: не пускает запрос, пока идёт пауза его семейства.
 /// Принимает: путь. Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate(path: &str) -> GatewayResult<()> {

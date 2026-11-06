@@ -11,6 +11,7 @@ pub mod errors;
 pub mod events;
 pub mod http;
 pub mod http_bind;
+pub mod patience;
 pub mod quote_stage;
 pub mod registry;
 pub mod rules;

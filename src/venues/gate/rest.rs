@@ -133,6 +133,8 @@ async fn send(
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs), автоматика — отказ сразу.
+    crate::gateway::patience::wait(reply::pause_left_ms()).await;
     reply::gate()?;
     let body = body.map(Value::to_string).unwrap_or_default();
     let (raw_q, enc_q) = (query(params, false)?, query(params, true)?);

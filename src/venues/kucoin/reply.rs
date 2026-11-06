@@ -63,6 +63,12 @@ fn slot(p: Pool) -> usize {
     }
 }
 
+/// Что делает: остаток паузы, мс (≤ 0 — паузы нет) — для терпения ручной работы (решение 201, gateway/patience.rs).
+/// Принимает: то же, что gate. Ошибок нет.
+pub fn pause_left_ms(p: Pool) -> i64 {
+    PAUSE[slot(p)].load(Ordering::Relaxed) - chrono::Utc::now().timestamp_millis()
+}
+
 /// Что делает: не пускает запрос, пока пул на паузе после 429000.
 /// Возвращает: Ok — можно слать. Ошибки: RateLimited — сколько ещё ждать.
 pub fn gate(p: Pool) -> GatewayResult<()> {

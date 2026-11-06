@@ -46,15 +46,19 @@ pub async fn sell_or_stuck(core: &Core, deal: Deal) {
 /// Продажа по рынку (по текущей котировке; худшая цена — trade_ops). Ошибок нет: не вышло —
 /// сделка остановлена, монеты остаются на площадке (видно на экране «Сделки»).
 pub async fn market(core: &Core, deal: Deal, why: &str) {
-    match super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await {
-        Ok((_, q)) => sell(core, deal, q, why).await,
-        Err(e) => {
-            let mut deal = deal;
-            let text = format!("продажа по рынку ({why}) невозможна: {e}");
-            super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
-            super::manual_outcome::failed(core, &deal, why, &text).await;
+    // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
+    super::patience_scope::with(core, async {
+        match super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await {
+            Ok((_, q)) => sell(core, deal, q, why).await,
+            Err(e) => {
+                let mut deal = deal;
+                let text = format!("продажа по рынку ({why}) невозможна: {e}");
+                super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
+                super::manual_outcome::failed(core, &deal, why, &text).await;
+            }
         }
-    }
+    })
+    .await
 }
 
 /// Продажа всего количества по котировке q. Принимает: сделку, котировку, причину (для хронологии).

@@ -99,6 +99,9 @@ pub async fn send_at(ctx: &Ctx, urls: &[String], r: Req<'_>) -> GatewayResult<Va
     let body = r.body.as_ref().map(Value::to_string).unwrap_or_default();
     let lim = ctx.limits()?;
     // Пул на паузе после 429000 — запрос не отправляется вовсе.
+    // Решение 201: ручная работа ждёт конец паузы (gateway/patience.rs).
+    crate::gateway::patience::wait(reply::pause_left_ms(r.pool)).await;
+
     reply::gate(r.pool).map_err(|e| ctx.tag(e))?;
     let mut last = None;
     for base in urls {

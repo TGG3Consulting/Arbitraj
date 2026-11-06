@@ -176,7 +176,13 @@ fn start(core: &Core, deal: &str, cap: Decimal, at: VenueId, to: VenueId, who: &
     tokio::spawn(urgency::scope(
         Urgency::Trade,
         super::risk_count::manual(async move {
-            match super::usdt_return_attempt::attempt(&c, &d, cap, (&at, &to), &tag).await {
+            // Решение 201: ждать конец паузы площадки после 429 (patience_scope.rs).
+            let res = super::patience_scope::with(
+                &c,
+                super::usdt_return_attempt::attempt(&c, &d, cap, (&at, &to), &tag),
+            )
+            .await;
+            match res {
                 Ok((sent, credited)) => {
                     let t = format!(
                         "USDT вернулись («Перегнать», {who}): {sent} {} → {}, зачислено {credited}",

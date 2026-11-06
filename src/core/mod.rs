@@ -102,6 +102,7 @@ pub mod native;
 pub mod op_error;
 pub mod pairs_fresh;
 pub mod partial;
+pub mod patience_scope;
 pub mod persist;
 pub mod precheck;
 pub mod precheck_deposit;

@@ -10,9 +10,10 @@
     Решение 116: таблица — по страницам (поле «Монет на странице», запоминается в браузере; без значения таблица
     не рисуется и просит его задать). С MEXC в справочнике >11 тыс. монет — все строки разом тормозили экран.
     Смена фильтров — снова первая страница.
+    Решение 200: блок «Один адрес — разные тикеры» (TickerAlias) — кнопка «Считать одной монетой» (coin.ticker_alias).
   Кто вызывает: App.svelte.
   От чего зависит: lib/remote.svelte.js, lib/coinFilter.js, components/CoinFilters.svelte, CoinTable.svelte,
-    CoinModal.svelte, ManualBlacklist.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
+    CoinModal.svelte, ManualBlacklist.svelte, TickerAlias.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
   Настройки: coin.blocked, coin.blocked_note (через ManualBlacklist); пороги tax.*, hooks.* — экран «Настройки».
 -->
 <script>
@@ -22,6 +23,7 @@
   import CoinTable from '../components/CoinTable.svelte';
   import CoinModal from '../components/CoinModal.svelte';
   import ManualBlacklist from '../components/ManualBlacklist.svelte';
+  import TickerAlias from '../components/TickerAlias.svelte';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import PageSize from '../components/PageSize.svelte';
@@ -56,6 +58,7 @@
 
 <h1>Монеты</h1>
 <ManualBlacklist />
+<TickerAlias />
 
 <h2>Справочник, налоги и пулы</h2>
 <NoData text={coins.noData} />

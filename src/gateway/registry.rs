@@ -1,9 +1,11 @@
 //! Файл: gateway/registry.rs
 //! Что делает: реестр подключённых адаптеров — единая точка, через которую ядро
 //! обращается к площадкам по их идентификатору.
+//! Решение 200: реестр, созданный with_aliases, оборачивает каждую биржу в gateway/aliased.rs (склейка тикеров
+//! одного адреса, coin.ticker_alias) — ядро и адаптеры об этом не знают.
 //! Кто вызывает: main.rs (регистрирует адаптеры), ядро и API (получают адаптер).
-//! От чего зависит: gateway/contract, gateway/errors, core/types.
-//! Настройки: нет.
+//! От чего зависит: gateway/contract, gateway/errors, gateway/aliased.rs, core/types, settings, storage/journal.
+//! Настройки: coin.ticker_alias (через aliased.rs).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,6 +21,11 @@ use super::errors::{ErrorCode, GatewayError, GatewayResult};
 #[derive(Clone, Default)]
 pub struct Registry {
     venues: Arc<RwLock<HashMap<VenueId, Arc<dyn Venue>>>>,
+    /// Решение 200: настройки и журнал для обёртки бирж (склейка тикеров); None — без обёртки (тесты).
+    alias: Option<(
+        crate::settings::store::Store,
+        crate::storage::journal::Journal,
+    )>,
 }
 
 impl Registry {
@@ -27,9 +34,26 @@ impl Registry {
         Self::default()
     }
 
-    /// Регистрирует адаптер (повторная регистрация заменяет старый).
-    /// Принимает: адаптер. Ошибок нет.
+    /// Реестр, который оборачивает биржи склейкой тикеров (решение 200, gateway/aliased.rs). Ошибок нет.
+    pub fn with_aliases(
+        settings: crate::settings::store::Store,
+        journal: crate::storage::journal::Journal,
+    ) -> Self {
+        Self {
+            venues: Default::default(),
+            alias: Some((settings, journal)),
+        }
+    }
+
+    /// Регистрирует адаптер (повторная регистрация заменяет старый); биржа — в обёртке склейки тикеров, если реестр
+    /// создан with_aliases. Принимает: адаптер. Ошибок нет.
     pub async fn register(&self, venue: Arc<dyn Venue>) {
+        let venue: Arc<dyn Venue> = match &self.alias {
+            Some((s, j)) if venue.kind() == VenueKind::Cex => {
+                Arc::new(super::aliased::Aliased::new(venue, s.clone(), j.clone()))
+            }
+            _ => venue,
+        };
         self.venues.write().await.insert(venue.id(), venue);
     }
 

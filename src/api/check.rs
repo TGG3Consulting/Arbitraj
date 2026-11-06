@@ -8,7 +8,8 @@
 //!
 //! POST /api/check/telegram
 //! POST /api/check/telegram/{роль}  — чат роли (решение 176: control, general, deals, failures), с тестовым сообщением
-//! POST /api/check/venue/{id}       — плюс проверка потока рынка и подъём подписки, если молчит (решение 196)
+//! POST /api/check/venue/{id}       — плюс проверка потока рынка и подъём подписки, если молчит (решение 196); биржа без
+//!                                    venue.bsc_network — имена сетей котируемой монеты из её справочника (решение 200)
 //! POST /api/check/channel/{venue}/{id}
 //! POST /api/check/executor/{venue}  — свой исполнитель ArbExecutor DEX (ревью 122)
 
@@ -62,6 +63,9 @@ pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<C
             details: e.message,
         },
     };
+    if let Some(hint) = network_hint(&st, &id).await {
+        res.details = format!("{} · {hint}", res.details);
+    }
     log(&st, Some(&id), &id, &res).await;
     // Решение 196: поток рынка молчит или подписки нет — поднять подписку без перезапуска (core/feed_live.rs).
     let feed = st
@@ -70,6 +74,23 @@ pub async fn venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<C
         .await;
     res.details = format!("{} · {feed}", res.details);
     Json(res)
+}
+
+/// Решение 200: у биржи не задана venue.bsc_network — имена сетей котируемой монеты (venue.quote_asset, у неё есть
+/// сеть BSC на каждой бирже) из живого справочника биржи, чтобы выбрать имя BSC. None — задана, площадка не биржа или
+/// не подключена. Ошибок нет: сбой — текстом подсказки.
+async fn network_hint(st: &AppState, id: &str) -> Option<String> {
+    use crate::gateway::contract::VenueKind;
+    use crate::settings::read::At;
+    let at = At {
+        venue: Some(id),
+        coin: None,
+    };
+    let v = st.registry.get(&VenueId(id.to_string())).await.ok()?;
+    if v.kind() != VenueKind::Cex || st.settings.text("venue.bsc_network", at).is_ok() {
+        return None;
+    }
+    Some(crate::gateway::network_hint::text(v.as_ref(), &st.settings).await)
 }
 
 /// Проверка одного канала отправки площадки DEX (шлюз `check_send_channel`).

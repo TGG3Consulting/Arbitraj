@@ -58,7 +58,9 @@ pub async fn watch_settings(core: Core) {
         // Решение 196: биржу включили — поднять поток, если молчит; выключили — держать до закрытия сделок.
         super::feed_live::on_setting(&core, &c);
         // Решение 200: склейку тикеров считает шлюз при получении справочника сетей — перечитать его сразу.
-        if super::native::affects(&c.name) || c.name == crate::gateway::aliased::SETTING {
+        if super::native::affects(&c.name)
+            || crate::gateway::aliased::SETTINGS.contains(&c.name.as_str())
+        {
             core.inner.kick_networks.notify_waiters();
         }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {

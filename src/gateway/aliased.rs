@@ -8,7 +8,10 @@
 //! Кто вызывает: gateway/registry.rs (register оборачивает биржи, если реестр создан с with_aliases).
 //! От чего зависит: gateway/contract.rs, alias_map.rs, aliased_tr.rs, settings, storage/journal.
 //! Ошибка «не задана venue.bsc_network» из coin_networks — с подсказкой имён сетей (gateway/network_hint.rs).
-//! Настройки: coin.ticker_alias (глобальная, необязательная).
+//! Решение 206: справочник каждой биржи пишется в общую книгу (gateway/alias_auto.rs); при coin.ticker_alias_auto = да
+//! к ручным группам добавляются автоматические — все адреса, у которых биржи зовут монету по-разному, кроме адресов
+//! ручной склейки и coin.ticker_alias_off.
+//! Настройки: coin.ticker_alias, coin.ticker_alias_auto, coin.ticker_alias_off (глобальные, необязательные).
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -17,11 +20,19 @@ use crate::settings::read::At;
 use crate::settings::store::Store;
 use crate::storage::journal::{Journal, Level};
 
-use super::alias_map::{self, VenueMap};
+use super::alias_auto::AutoBook;
+use super::alias_map::{self, Group, VenueMap};
 use super::contract::Venue;
 
 /// Имя настройки склейки.
 pub const SETTING: &str = "coin.ticker_alias";
+/// Решение 206: автоматическая склейка всех тикеров одного адреса (да / нет).
+pub const AUTO: &str = "coin.ticker_alias_auto";
+/// Решение 206: адреса, которые не склеивать («Разделить»).
+pub const OFF: &str = "coin.ticker_alias_off";
+
+/// Все настройки склейки (их изменение — перечитать справочник сетей бирж, core/rebuild.rs).
+pub const SETTINGS: [&str; 3] = [SETTING, AUTO, OFF];
 
 /// Обёртка биржи.
 pub struct Aliased {
@@ -34,11 +45,18 @@ pub struct Aliased {
     /// Подсказка имён сетей к ошибке «не задана venue.bsc_network» (gateway/network_hint.rs): считается один раз, пока
     /// ошибка держится (справочник не качается на каждом опросе); справочник получен — сбрасывается.
     pub(super) bsc_hint: Mutex<Option<String>>,
+    /// Решение 206: общая книга тикеров по адресам (одна на реестр).
+    book: Arc<Mutex<AutoBook>>,
 }
 
 impl Aliased {
     /// Оборачивает адаптер. Ошибок нет.
-    pub fn new(inner: Arc<dyn Venue>, settings: Store, journal: Journal) -> Self {
+    pub fn new(
+        inner: Arc<dyn Venue>,
+        settings: Store,
+        journal: Journal,
+        book: Arc<Mutex<AutoBook>>,
+    ) -> Self {
         Self {
             inner,
             settings,
@@ -46,6 +64,7 @@ impl Aliased {
             map: RwLock::new(VenueMap::default()),
             told: Mutex::new(String::new()),
             bsc_hint: Mutex::new(None),
+            book,
         }
     }
 
@@ -86,7 +105,15 @@ impl Aliased {
             .settings
             .list(SETTING, At::default())
             .unwrap_or_default();
-        let (groups, bad) = alias_map::parse(&items);
+        let (manual, mut bad) = alias_map::parse(&items);
+        let groups = all_groups(
+            &self.settings,
+            &self.book,
+            &self.inner.id().0,
+            raw,
+            manual,
+            &mut bad,
+        );
         let (map, conflicts) = alias_map::venue_map(&groups, raw);
         let mut lines: Vec<String> = map
             .renames
@@ -120,4 +147,31 @@ impl Aliased {
                 .await;
         }
     }
+}
+
+/// Решение 206: группы склейки — ручные (coin.ticker_alias) и, при coin.ticker_alias_auto = да, автоматические из
+/// общей книги (справочник этой биржи пишется в книгу здесь же). Адреса ручных групп и coin.ticker_alias_off
+/// автоматически не склеиваются; неверный адрес в coin.ticker_alias_off — в `bad`. Ошибок нет.
+pub fn all_groups(
+    settings: &Store,
+    book: &Mutex<AutoBook>,
+    venue: &str,
+    raw: &[CoinNetworkInfo],
+    mut groups: Vec<Group>,
+    bad: &mut Vec<String>,
+) -> Vec<Group> {
+    let mut b = book.lock().unwrap_or_else(|e| e.into_inner());
+    b.record(venue, raw);
+    if !matches!(settings.flag(AUTO, At::default()), Ok(true)) {
+        return groups;
+    }
+    let mut skip: Vec<alloy_primitives::Address> = groups.iter().map(|g| g.address).collect();
+    for x in settings.list(OFF, At::default()).unwrap_or_default() {
+        match x.trim().parse() {
+            Ok(a) => skip.push(a),
+            Err(_) => bad.push(format!("«{x}» в {OFF} — не адрес контракта")),
+        }
+    }
+    groups.extend(b.groups(&skip));
+    groups
 }

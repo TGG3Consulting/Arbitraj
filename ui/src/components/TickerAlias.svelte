@@ -5,9 +5,12 @@
     у каждого — кнопки «Считать одной монетой — основной X» (по каждому тикеру), подтверждение «Да, …» с адресом
     и тикерами → элемент «адрес=ОСНОВНОЙ,ДРУГИЕ» в coin.ticker_alias (PUT /api/settings, история настроек).
     Текущие склейки — с кнопкой «Убрать». После изменения шлюз сразу перечитывает справочник сетей бирж.
+    Решение 206: переключатель coin.ticker_alias_auto «склеивать автоматически все тикеры одного адреса»; список
+    склеенного автоматически (GET /api/coins/ticker-aliases-auto) с кнопкой «Разделить» (адрес → coin.ticker_alias_off,
+    подтверждение «Да, …»); разделённые — с кнопкой «Вернуть».
   Кто вызывает: pages/Coins.svelte.
   От чего зависит: lib/api.js, lib/settings.svelte.js, components/ErrorText.svelte.
-  Настройки: coin.ticker_alias (src/settings/catalog/trade.rs).
+  Настройки: coin.ticker_alias, coin.ticker_alias_auto, coin.ticker_alias_off (src/settings/catalog/trade.rs).
 -->
 <script>
   import { get } from '../lib/api.js';
@@ -15,19 +18,26 @@
   import ErrorText from './ErrorText.svelte';
 
   const NAME = 'coin.ticker_alias';
+  const AUTO = 'coin.ticker_alias_auto';
+  const OFF = 'coin.ticker_alias_off';
   const SCOPE = { kind: 'Global' };
 
   let splits = $state([]);
+  let autos = $state([]);
+  /** Адрес, ждущий подтверждения «Разделить»; null — нет. */
+  let askOff = $state(null);
   let error = $state('');
   /** Ждущее подтверждения: {address, main, others}; null — нет. */
   let ask = $state(null);
 
   const current = $derived(store.values[valueKey(NAME, SCOPE)] ?? []);
+  const auto = $derived(store.values[valueKey(AUTO, SCOPE)]);
+  const off = $derived(store.values[valueKey(OFF, SCOPE)] ?? []);
 
   /** Перечитывает расхождения. Ошибка — в error. */
   async function load() {
     try {
-      splits = await get('/api/coins/ticker-splits');
+      [splits, autos] = await Promise.all([get('/api/coins/ticker-splits'), get('/api/coins/ticker-aliases-auto')]);
       error = '';
     } catch (e) {
       error = e.message;
@@ -52,6 +62,29 @@
     }
   }
 
+  /** Решение 206: включает или выключает автоматическую склейку. Ошибка — в error. */
+  async function setAuto(v) {
+    try {
+      await setValue(AUTO, SCOPE, v);
+      await load();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  /** Решение 206: «Разделить» (после «Да») или «Вернуть» адрес. Ошибка — в error. */
+  async function setOff(address, on) {
+    try {
+      const rest = off.filter((x) => x.toLowerCase() !== address.toLowerCase());
+      const next = on ? [...rest, address] : rest;
+      await setValue(OFF, SCOPE, next.length ? next : null);
+      askOff = null;
+      await load();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
   /** Убирает элемент склейки. Ошибка — в error. */
   async function remove(item) {
     try {
@@ -66,6 +99,34 @@
 
 <h2>Один адрес — разные тикеры</h2>
 <ErrorText text={error} />
+<p>
+  Склеивать автоматически все тикеры одного адреса ({AUTO}):
+  <strong>{auto === true ? 'да' : auto === false ? 'нет' : 'не задано'}</strong>
+  <button type="button" onclick={() => setAuto(auto !== true)}>{auto === true ? 'Выключить' : 'Включить'}</button>
+</p>
+{#if autos.length}
+  <p class="muted">Склеено автоматически ({autos.length}):</p>
+  {#each autos as a (a.address)}
+    <p>
+      <strong>{a.main}</strong> <code>{a.address}</code>: {a.venues.map((v) => `${v[0]}=${v[1]}`).join(', ')}
+      <button type="button" class="quiet" onclick={() => (askOff = a)}>Разделить</button>
+    </p>
+  {/each}
+{/if}
+{#if askOff}
+  <p>
+    Адрес <code>{askOff.address}</code>: не склеивать автоматически (биржи снова увидят разные монеты, направлений
+    между ними не будет)?
+    <button type="button" onclick={() => setOff(askOff.address, true)}>Да, разделить</button>
+    <button type="button" class="quiet" onclick={() => (askOff = null)}>Отмена</button>
+  </p>
+{/if}
+{#if off.length}
+  <p class="muted">Разделено ({OFF}):</p>
+  {#each off as x (x)}
+    <p><code>{x}</code> <button type="button" class="quiet" onclick={() => setOff(x, false)}>Вернуть</button></p>
+  {/each}
+{/if}
 {#if splits.length === 0}
   <p class="muted">Расхождений тикеров нет.</p>
 {/if}

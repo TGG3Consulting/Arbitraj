@@ -11,6 +11,8 @@
 //!
 //! Глубина для порога — БЕЗ комиссии пула в обе стороны (решение Тиграна к решению 73): чистый объём пула в полосе.
 //! Комиссия — в котировке и прибыли (quote/pool_quote.rs), их этот файл не трогает.
+//! Algebra (THENA Fusion, Algebra Integral) — quote/depth_band_algebra.rs (решение 205); пустая пара V2 / Solidly — глубина 0
+//! (решение 205), а не ошибка.
 //! Кто вызывает: pools/depth_book.rs.
 //! От чего зависит: math/swap_cl.rs, math/tick_math.rs, math/v2.rs, quote/pool_quote.rs, quote/rate.rs, num.rs.
 //! Настройки: полосу dex.depth_band_pct [bsc_dex] даёт вызывающий.
@@ -126,9 +128,7 @@ fn side(
             let f = U256::from((grow * SCALE) as u128);
             let eff =
                 r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
-            let none = (U256::from(1u8), U256::from(1u8));
-            let out = v2::amount_out(eff, r_in, r_out, none).ok_or("расчёт пары V2 невозможен")?;
-            Ok((pick(eff, out), true))
+            Ok(pair_depth(eff, r_in, r_out, buy))
         }
         (
             PoolState::V3 {
@@ -191,6 +191,26 @@ fn side(
             };
             elastic(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
         }
+        // Algebra (THENA Fusion, Algebra Integral; решение 205): обмен до границы полосы (quote/depth_band_algebra.rs).
+        (
+            PoolState::Algebra {
+                sqrt_price_x96,
+                tick,
+                liquidity,
+                ..
+            },
+            _,
+        ) => {
+            let ticks = e.ticks.as_ref().ok_or("карта тиков не прочитана")?;
+            let s = super::super::math::swap_algebra::AlgebraState {
+                sqrt_price: *sqrt_price_x96,
+                tick: *tick,
+                liquidity: *liquidity,
+                fee: NO_FEE,
+                ticks,
+            };
+            super::depth_band_algebra::algebra(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
+        }
         // DODO PMM (решение 86b): глубина по средней цене исполнения в полосе (quote/pmm_depth.rs), без комиссии.
         (PoolState::Pmm(d), PoolKind::Pmm) => {
             let state = super::super::math::swap_dodo::PmmState {
@@ -251,10 +271,7 @@ fn side(
                 let f = U256::from((grow * SCALE) as u128);
                 let eff =
                     r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
-                let none = (U256::from(1u8), U256::from(1u8));
-                let out = v2::amount_out(eff, r_in, r_out, none)
-                    .ok_or("расчёт пары Solidly невозможен")?;
-                Ok((pick(eff, out), true))
+                Ok(pair_depth(eff, r_in, r_out, buy))
             }
         }
         // StableSwap (решение 122 F): средняя цена исполнения в полосе (quote/stable_depth.rs), без комиссии.
@@ -317,6 +334,22 @@ fn side(
         }
         _ => Err("вид пула и состояние не совпадают".into()),
     }
+}
+
+/// Пара x·y=k (V2, Solidly volatile) без комиссии: (сумма во встречном токене, true). Решение 205: пустой пул
+/// (резерв 0) или резерв так мал, что сдвиг цены на полосу меньше единицы токена (eff = 0), — глубина 0, а не
+/// ошибка: раньше «расчёт пары V2 / Solidly невозможен» исключал сторону с записью Warn в журнал (06.11 —
+/// uniswap-v2-bsc, mdex_bsc, pancakeswap_v2, thena), хотя такой пул просто пуст и порог глубины его и так не пустит.
+/// Ошибок нет.
+fn pair_depth(eff: U256, r_in: U256, r_out: U256, buy: bool) -> (U256, bool) {
+    let none = (U256::from(1u8), U256::from(1u8));
+    let out = v2::amount_out(eff, r_in, r_out, none).unwrap_or(U256::ZERO);
+    let (i, o) = if out.is_zero() {
+        (U256::ZERO, U256::ZERO)
+    } else {
+        (eff, out)
+    };
+    (if buy { i } else { o }, true)
 }
 
 /// CL: обмен до цены на границе полосы. Возвращает: (отдано, получено, дошли до границы). Ошибки (текст): расчёт.

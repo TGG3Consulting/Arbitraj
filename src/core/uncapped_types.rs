@@ -39,6 +39,11 @@ pub struct Battle {
     pub free: Option<Decimal>,
     /// Составляющие бюджета на момент решения (у сделки — до её открытия: своя сделка ещё не в учёте лимитов).
     pub parts: Option<Parts>,
+    /// Решение 197: с какого момента грубый спред направления держится выше порога (core/signal.rs above_since,
+    /// «Живой экран») на момент постановки — начало окна. У сделки — окно до входа: от него до исполнения покупки.
+    /// None — спред сейчас не выше порога или записи до решения 197.
+    #[serde(default)]
+    pub window_from: Option<DateTime<Utc>>,
 }
 
 /// Эпизод: серия расчётов одного направления подряд (промежутки не длиннее uncapped.episode_gap_ms).
@@ -100,6 +105,8 @@ pub struct Record {
 /// Часть записи для итогов экрана (читается обратно из JSON).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Brief {
+    /// Время расчёта (у сделки — после исполнения покупки).
+    pub at: DateTime<Utc>,
     pub direction: Direction,
     pub battle: Battle,
     pub limited_by: String,

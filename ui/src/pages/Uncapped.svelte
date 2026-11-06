@@ -6,7 +6,10 @@
     таблица «потолок → прибыль» (значения — uncapped.ladder_usdt) и строка «без потолка»; топ направлений; счётчики
     фоновой очереди (посчитано, слито, не посчитано: очередь полна, сбои и последняя причина, мс на расчёт); записи
     периода страницей (сервер), по строке — подробности: состав затрат на оптимуме без потолка, минимум до плюса,
-    таблица потолков записи, эпизод.
+    таблица потолков записи, эпизод. Решение 197: окно — измеритель упущенной прибыли: сделки — все (зашли на X, почему
+    не больше, без потолка вложить Y → прибыль Z, упущено, факт из учёта, окно от спреда выше порога до входа);
+    кандидаты — только с упущено > 0 (по умолчанию; старые записи с упущено 0 скрыты, итог их не считает), окно —
+    первый → последний расчёт с упущенным. Слова «бой» нет: «на нашем бюджете».
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
@@ -17,7 +20,7 @@
 <script>
   import { get } from '../lib/api.js';
   import { showTime } from '../lib/labels.js';
-  import { limitedLabel, budgetBound, money, period } from '../lib/uncappedLabels.js';
+  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import UncappedRecord from '../components/UncappedRecord.svelte';
@@ -28,6 +31,8 @@
   let top = $state(null);
   let limit = $state(null);
   let only = $state('');
+  /** Решение 197: только записи с упущенным (сделки — все). */
+  let missedOnly = $state(true);
   let page = $state(1);
   let sum = $state(null);
   let rows = $state([]);
@@ -49,6 +54,7 @@
         l.set('limit', limit);
         l.set('offset', (page - 1) * limit);
         if (only) l.set('kind', only);
+        if (missedOnly) l.set('missed_only', 'true');
         const r = await get(`/api/uncapped?${l}`);
         rows = r.rows;
         total = r.total;
@@ -60,11 +66,11 @@
   }
 
   $effect(() => {
-    void [kind, fromLocal, toLocal, only, limit];
+    void [kind, fromLocal, toLocal, only, limit, missedOnly];
     page = 1;
   });
   $effect(() => {
-    void [kind, fromLocal, toLocal, only, limit, top, page];
+    void [kind, fromLocal, toLocal, only, limit, top, page, missedOnly];
     reload();
   });
   const dirText = (d) => `${d.asset.ticker} ${d.buy_on} → ${d.sell_on}`;
@@ -91,17 +97,20 @@
 {#if sum}
   {#if sum.off}<p class="warn-text">Расчёт без потолка не идёт: {sum.off}</p>{/if}
   <table>
-    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план (бой)</th><th>факт</th><th>на нашем бюджете</th><th>без потолка</th><th>упущено</th></tr></thead>
+    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель на нашем бюджете</th><th>без потолка</th><th>упущено</th><th>окна</th></tr></thead>
     <tbody>
       <tr><td>Исполненные сделки</td><td>{sum.deals.count}</td><td>{sum.deals.budget_bound}</td><td>{money(sum.deals.battle_profit)}</td>
         <td>{money(sum.deals.fact)} <span class="muted">({sum.deals.fact_count} с итогом)</span></td><td>{money(sum.deals.at_budget_profit)}</td>
-        <td><strong>{money(sum.deals.potential_profit)}</strong></td><td><strong>{money(sum.deals.missed)}</strong></td></tr>
-      <tr><td>Не исполненные кандидаты (эпизоды)</td><td>{sum.candidates.count}</td><td>{sum.candidates.budget_bound}</td><td>{money(sum.candidates.battle_profit)}</td>
+        <td><strong>{money(sum.deals.potential_profit)}</strong></td><td><strong>{money(sum.deals.missed)}</strong></td>
+        <td>{sum.deals.windows}: {duration(sum.deals.window_s)}</td></tr>
+      <tr><td>Не исполненные: стали бы плюсовыми или больше без потолка (эпизоды)</td><td>{sum.candidates.count}</td><td>{sum.candidates.budget_bound}</td><td>{money(sum.candidates.battle_profit)}</td>
         <td class="muted">—</td><td>{money(sum.candidates.at_budget_profit)}</td>
         <td><strong>{money(sum.candidates.potential_profit)}</strong></td><td><strong>{money(sum.candidates.missed)}</strong>
-          <span class="muted">(отклонённых, плюсовых без потолка: {sum.candidates.plus_uncapped})</span></td></tr>
+          <span class="muted">(отклонённых, плюсовых без потолка: {sum.candidates.plus_uncapped})</span></td>
+        <td>{sum.candidates.windows}: {duration(sum.candidates.window_s)}</td></tr>
     </tbody>
   </table>
+  {#if sum.hidden_zero}<p class="muted">Старых записей кандидатов с упущено 0 (до решения 197) в итог не входит: {sum.hidden_zero}.</p>{/if}
   <h2>Потолок → прибыль («взяли бы»: лучший объём со списанием не больше потолка, если проходит пороги)</h2>
   {#if sum.ladder_error}<p class="warn-text">{sum.ladder_error}</p>{/if}
   <table>
@@ -116,7 +125,8 @@
     {#each sum.top as t (t.direction)}<tr><td>{t.direction}</td><td>{money(t.missed)} USDT</td><td class="muted">записей {t.count}</td></tr>{/each}
   </tbody></table>
   <p class="muted">
-    Очередь: посчитано {sum.stats.counters.done}, слито повторов {sum.stats.counters.merged},
+    Очередь: посчитано {sum.stats.counters.done} (кандидатов без упущенного, не записаны: {sum.stats.counters.no_missed}),
+    слито повторов {sum.stats.counters.merged}, сделок ждут {sum.stats.counters.deals_waiting} (сделки — вне очереди кандидатов),
     <strong>не посчитано (очередь полна) {sum.stats.counters.skipped_full}</strong>, сбоев {sum.stats.counters.failed},
     в работе {sum.stats.counters.running}, ждут {sum.stats.counters.waiting}; расчёт в среднем {money(sum.stats.mean_ms)} мс,
     наибольший {money(sum.stats.counters.max_ms)} мс
@@ -129,6 +139,7 @@
   <label class="inline">Вид
     <select bind:value={only}><option value="">все</option><option value="deal">сделки</option><option value="candidate">кандидаты</option></select>
   </label>
+  <label class="inline"><input type="checkbox" bind:checked={missedOnly} /> только с упущенным (сделки — все)</label>
   <PageSize key="uncapped.rows" bind:value={limit} label="Строк на странице" />
   {#if limit}
     <button type="button" disabled={page <= 1} onclick={() => (page -= 1)}>←</button>
@@ -138,18 +149,32 @@
 </div>
 {#each rows as r (r.id)}
   {@const b = r.body}
+  {@const deal = b.battle.verdict === 'deal'}
   <article class="card">
     <header>
       <strong>{dirText(b.direction)}</strong>
-      <span class="tag">{b.battle.verdict === 'deal' ? `сделка ${b.battle.deal_id}` : b.battle.verdict === 'accept' ? 'прошёл' : 'отказ'}</span>
-      <span class="muted">{showTime(b.ep.first_at)}{#if b.ep.count > 1} — {showTime(b.ep.last_at)}, расчётов {b.ep.count}, пик {showTime(b.ep.peak_at)}{/if}</span>
+      <span class="tag">{deal ? `сделка ${b.battle.deal_id}` : verdictLabel(b.battle.verdict)}</span>
+      {#if !deal && b.battle.reason}<span class="muted">{b.battle.reason}</span>{/if}
+      <span class="muted">{showTime(deal ? b.at : b.ep.first_at)}</span>
     </header>
     <p>
-      Бой: вложено {money(b.battle.invested)}, прибыль {money(b.battle.profit)} USDT (бюджет {money(b.budget)});
-      без потолка: вложить <strong>{money(b.opt.invested)}</strong> → <strong>{money(b.opt.profit)}</strong> USDT;
-      упущено <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)}</strong>;
+      {#if deal}
+        Зашли на <strong>{money(b.battle.invested)} USDT</strong> (бюджет {money(b.budget)}), план {money(b.battle.profit)} USDT{#if r.fact}, факт
+          {#if r.fact.result_usd != null}<strong class={Number(r.fact.result_usd) < 0 ? 'err' : 'ok'}>{money(r.fact.result_usd)} USDT</strong>{:else}<span class="muted">ещё нет</span>{/if}{/if};
+      {:else}
+        На нашем бюджете {money(b.budget)} USDT: {#if b.at_budget?.at}вложить {money(b.at_budget.at.invested)} → прибыль {money(b.at_budget.at.profit)} USDT{#if !b.at_budget.passes} <span class="warn-text">— ниже порогов, сделки нет</span>{/if}{:else}<span class="muted">объёма нет</span>{/if};
+      {/if}
+      без потолка: вложить <strong>{money(b.opt.invested)}</strong> → прибыль <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
+      упущено <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
       ограничило: <span class={budgetBound(b.limited_by) ? 'warn-text' : ''}>{limitedLabel(b.limited_by)}</span>
       <button type="button" onclick={() => (open = open === r.id ? null : r.id)}>{open === r.id ? 'Скрыть' : 'Подробнее'}</button>
+    </p>
+    <p class="muted">
+      {#if deal}
+        Окно: {#if b.battle.window_from}спред выше порога с {showTime(b.battle.window_from)}, до входа {duration(windowSec(b))}{:else}начало окна не записано (спред не был выше порога или запись до решения 197){/if}
+      {:else}
+        Окно: {showTime(b.ep.first_at)} — {showTime(b.ep.last_at)} ({duration(windowSec(b))}), расчётов с упущенным {b.ep.count}, пик {showTime(b.ep.peak_at)}{#if b.battle.window_from}; спред выше порога с {showTime(b.battle.window_from)}{/if}
+      {/if}
     </p>
     {#if open === r.id}<UncappedRecord rec={b} />{/if}
   </article>

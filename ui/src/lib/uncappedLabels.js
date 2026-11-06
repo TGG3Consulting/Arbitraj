@@ -1,7 +1,9 @@
 // Файл: ui/src/lib/uncappedLabels.js
 // Что делает: подписи расчёта «без потолка» (решение 141): что ограничило объём (коды core/uncapped_types.rs
 //   Record.limited_by), округление денег для экрана, период «сутки / 7 дней / свой» в RFC 3339.
-// Кто вызывает: pages/Uncapped.svelte, components/UncappedLine.svelte, components/DealUncapped.svelte.
+// Решение 197: вердикт расчёта на нашем бюджете по-русски (слова «бой» на экране нет), длительность окна.
+// Кто вызывает: pages/Uncapped.svelte, components/UncappedLine.svelte, components/UncappedRecord.svelte,
+//   components/DealUncapped.svelte.
 // От чего зависит: ничего.
 // Настройки: нет.
 
@@ -38,4 +40,27 @@ export function period(kind, fromLocal, toLocal) {
   if (kind === 'week') return { from: new Date(now - 7 * 864e5).toISOString(), to: '' };
   const iso = (v) => (v ? new Date(v).toISOString() : '');
   return { from: iso(fromLocal), to: iso(toLocal) };
+}
+
+const VERDICT = { deal: 'сделка', accept: 'прошёл, сделка не запущена', reject: 'отказ' };
+
+/** Вердикт расчёта на нашем бюджете (Battle.verdict) — по-русски. */
+export const verdictLabel = (v) => VERDICT[v] ?? v;
+
+/** Длительность в секундах — «N с», «M мин S с», «H ч M мин»; null — «—». */
+export function duration(sec) {
+  if (sec == null || !Number.isFinite(Number(sec))) return '—';
+  const s = Math.max(0, Math.round(Number(sec)));
+  if (s < 60) return `${s} с`;
+  if (s < 3600) return `${Math.floor(s / 60)} мин ${s % 60} с`;
+  return `${Math.floor(s / 3600)} ч ${Math.floor((s % 3600) / 60)} мин`;
+}
+
+/** Окно записи, с: сделка — от начала окна (battle.window_from) до расчёта после покупки (at); кандидат — эпизод
+ *  (ep.first_at → ep.last_at). null — у сделки начала окна нет. */
+export function windowSec(b) {
+  if (b.battle?.verdict === 'deal') {
+    return b.battle.window_from ? (Date.parse(b.at) - Date.parse(b.battle.window_from)) / 1000 : null;
+  }
+  return b.ep ? (Date.parse(b.ep.last_at) - Date.parse(b.ep.first_at)) / 1000 : null;
 }

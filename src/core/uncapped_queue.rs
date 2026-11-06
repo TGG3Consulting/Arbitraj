@@ -6,17 +6,17 @@
 //! Правила: uncapped.enabled = нет / не задана — ничего не ставится; одновременно — не больше uncapped.max_concurrent;
 //! кандидат по направлению — не чаще раза в uncapped.min_interval_ms (от начала прошлого расчёта), повтор в это время
 //! или пока идёт расчёт сливается — ждёт только последний; сделка (id) — без интервала; ждущих (ожидающие и ждущие
-//! места) больше uncapped.queue_max — пропуск со счётчиком «не посчитано: очередь полна». Итог — uncapped_store.rs
+//! места) больше uncapped.queue_max — пропуск со счётчиком «не посчитано: очередь полна». Решение 197 (Тигран, 06.11.2026:
+//! «это окно наш измеритель упущенной прибыли»; живой бот: очередь всегда полна, у 24 из 25 сделок записи нет): сделка
+//! не выбрасывается и не входит в uncapped.queue_max (свой счётчик deals_waiting), а свободное место расчёта сначала
+//! получает ждущая сделка — кандидат, получив место, пока ждут сделки, отдаёт его и ждёт (turn). Итог — uncapped_store.rs
 //! (SQLite) и строка «Кандидатов» (поле uncapped). Не задана настройка — сбой со счётчиком и причиной на экране.
 //! Кто вызывает: core/uncapped_entry.rs (submit).
-//! От чего зависит: uncapped.rs (compute), uncapped_state.rs, uncapped_store.rs, gateway/urgency.rs, settings.
+//! От чего зависит: uncapped_permit.rs (место расчёта), uncapped.rs (compute), uncapped_state.rs, uncapped_store.rs, gateway/urgency.rs, settings.
 //! Настройки: uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max.
 
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::core::types::Direction;
 use crate::gateway::urgency::{self, Urgency};
@@ -52,7 +52,9 @@ pub fn submit(core: &Core, key: Key, d: &Direction, battle: Battle) {
         dir: d.clone(),
         battle,
     };
-    let full = || st.waiting.load(Ordering::Acquire) as u64 >= queue_max;
+    let deal = matches!(key, Key::Deal(_));
+    // Решение 197: сделку очередь не выбрасывает.
+    let full = || !deal && st.waiting.load(Ordering::Acquire) as u64 >= queue_max;
     let mut slots = lk(&st.slots);
     let slot = slots.entry(key.clone()).or_default();
     let wait = match (&key, slot.last) {
@@ -70,7 +72,7 @@ pub fn submit(core: &Core, key: Key, d: &Direction, battle: Battle) {
             return;
         }
         slot.pending = Some(job);
-        st.waiting.fetch_add(1, Ordering::AcqRel);
+        counter(st, deal).fetch_add(1, Ordering::AcqRel);
         if !slot.running {
             later(core, key, wait);
         }
@@ -82,9 +84,14 @@ pub fn submit(core: &Core, key: Key, d: &Direction, battle: Battle) {
     }
     slot.running = true;
     slot.last = Some(Instant::now());
-    st.waiting.fetch_add(1, Ordering::AcqRel);
+    counter(st, deal).fetch_add(1, Ordering::AcqRel);
     drop(slots);
     tokio::spawn(run(core.clone(), key, job));
+}
+
+/// Счётчик ждущих: сделки — deals_waiting (без предела), кандидаты — waiting (uncapped.queue_max). Ошибок нет.
+fn counter(st: &super::uncapped_state::State, deal: bool) -> &AtomicUsize {
+    if deal { &st.deals_waiting } else { &st.waiting }
 }
 
 /// Запуск ожидающей работы ключа через `wait`. Ошибок нет.
@@ -111,31 +118,15 @@ fn later(core: &Core, key: Key, wait: Duration) {
     });
 }
 
-/// Место под расчёт по uncapped.max_concurrent. Ошибки: текст — не задана или 0.
-async fn permit(core: &Core) -> Result<OwnedSemaphorePermit, String> {
-    let n = int(core, "uncapped.max_concurrent")?;
-    if n == 0 {
-        return Err("uncapped.max_concurrent = 0: расчёты без потолка не идут".into());
-    }
-    let sem = {
-        let mut g = lk(&core.inner.uncapped.sem);
-        match g.as_ref() {
-            Some((k, s)) if *k == n => s.clone(),
-            _ => {
-                let s = Arc::new(Semaphore::new(usize::try_from(n).unwrap_or(usize::MAX)));
-                *g = Some((n, s.clone()));
-                s
-            }
-        }
-    };
-    sem.acquire_owned().await.map_err(|e| e.to_string())
-}
-
 /// Расчёт работы в потоке блокирующих задач, итог — в хранилище; затем ожидающая работа ключа. Ошибок нет.
 async fn run(core: Core, key: Key, job: Job) {
     let st = &core.inner.uncapped;
-    let held = permit(&core).await;
-    st.waiting.fetch_sub(1, Ordering::AcqRel);
+    let deal = matches!(key, Key::Deal(_));
+    let held = super::uncapped_permit::permit(&core, deal).await;
+    if counter(st, deal).fetch_sub(1, Ordering::AcqRel) == 1 && deal {
+        // Ждущих сделок не осталось — кандидаты снова могут брать место.
+        st.turn.notify_waiters();
+    }
     match held {
         Ok(held) => {
             let rt = tokio::runtime::Handle::current();

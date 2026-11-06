@@ -6,8 +6,10 @@
 //! «взяли бы» = прибыль лучшего объёма в потолке, если она проходит пороги, иначе 0) и строка «без потолка»; топ
 //! направлений по упущенному; счётчики очереди (посчитано, слито, не посчитано, сбои, мс на расчёт). Список записей
 //! периода страницей, одна запись, запись сделки по её id.
+//! Решение 197: кандидаты с упущено 0 (старые записи) в итог не входят — число скрытых hidden_zero; у записи сделки в
+//! списке — факт из учёта.
 //! Кто вызывает: api/uncapped.rs.
-//! От чего зависит: storage/uncapped_db.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
+//! От чего зависит: storage/uncapped_db.rs, uncapped_sum.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (только показ и причина).
 
 use std::collections::HashMap;
@@ -19,49 +21,8 @@ use serde_json::{Value, json};
 use crate::storage::uncapped_db::{self, Filter};
 
 use super::engine::{Core, lk};
-use super::uncapped_types::{Brief, budget_bound, take};
-
-/// Сумма по группе записей.
-#[derive(Default)]
-struct Sum {
-    count: u64,
-    bound: u64,
-    battle: Decimal,
-    at_budget: Decimal,
-    potential: Decimal,
-    missed: Decimal,
-    fact: Decimal,
-    fact_count: u64,
-    plus_uncapped: u64,
-}
-
-impl Sum {
-    /// Добавляет запись (fact — итог сделки, если известен). Ошибок нет.
-    fn add(&mut self, b: &Brief, fact: Option<Decimal>) {
-        self.count += 1;
-        self.bound += u64::from(budget_bound(&b.limited_by));
-        self.battle += b.battle.profit;
-        self.at_budget += take(&b.at_budget);
-        if b.opt_passes {
-            self.potential += b.opt.profit;
-        }
-        self.missed += b.missed;
-        if let Some(f) = fact {
-            self.fact += f;
-            self.fact_count += 1;
-        }
-        self.plus_uncapped += u64::from(b.battle.verdict == "reject" && b.opt_passes);
-    }
-
-    /// JSON для экрана. Ошибок нет.
-    fn json(&self) -> Value {
-        json!({
-            "count": self.count, "budget_bound": self.bound, "battle_profit": self.battle,
-            "at_budget_profit": self.at_budget, "potential_profit": self.potential, "missed": self.missed,
-            "fact": self.fact, "fact_count": self.fact_count, "plus_uncapped": self.plus_uncapped,
-        })
-    }
-}
+use super::uncapped_sum::Sum;
+use super::uncapped_types::{Brief, take};
 
 impl Core {
     /// Что делает: итоги за период [from, to) (RFC 3339; None — без границы), топ `top` направлений.
@@ -76,6 +37,7 @@ impl Core {
             from,
             to,
             kind: None,
+            missed_only: false,
         };
         let rows = uncapped_db::all(&self.inner.deps.db, f)
             .await
@@ -88,11 +50,17 @@ impl Core {
         let mut lad = vec![[Decimal::ZERO; 2]; ladder.len()];
         let mut by_dir: HashMap<String, (Decimal, u64)> = HashMap::new();
         let facts = lk(&self.inner.deals);
+        // Решение 197: кандидаты с упущено 0 (записаны до решения) в итог не идут — только счётчик скрытых.
+        let mut hidden = 0u64;
         for (_, body) in &rows {
             let Ok(b) = serde_json::from_str::<Brief>(body) else {
                 continue;
             };
             let g = usize::from(b.battle.verdict != "deal");
+            if g == 1 && b.missed <= Decimal::ZERO {
+                hidden += 1;
+                continue;
+            }
             match b.battle.deal_id.as_ref() {
                 Some(id) if g == 0 => deals.add(&b, facts.get(id).and_then(|d| d.result_usd)),
                 _ => cands.add(&b, None),
@@ -119,6 +87,7 @@ impl Core {
             .collect();
         Ok(json!({
             "off": self.uncapped_off(),
+            "hidden_zero": hidden,
             "deals": deals.json(),
             "candidates": cands.json(),
             "ladder": ladder_rows,
@@ -140,12 +109,20 @@ impl Core {
             .await
             .map_err(|e| e.to_string())?;
         let total = rows.len();
+        let facts = lk(&self.inner.deals);
+        // Решение 197: у записи сделки — её факт из учёта (итог, вложено), чтобы окно показывало план против факта.
         let page: Vec<Value> = rows
             .into_iter()
             .skip(offset)
             .take(limit)
-            .map(|(id, b)| json!({"id": id, "body": serde_json::from_str::<Value>(&b).unwrap_or_default()}))
+            .map(|(id, b)| {
+                let body = serde_json::from_str::<Value>(&b).unwrap_or_default();
+                let deal = body["battle"]["deal_id"].as_str().and_then(|d| facts.get(d));
+                let fact = deal.map(|d| json!({"result_usd": d.result_usd, "invested": d.invested, "started_at": d.started_at}));
+                json!({"id": id, "body": body, "fact": fact})
+            })
             .collect();
+        drop(facts);
         Ok(json!({"rows": page, "total": total}))
     }
 
@@ -199,6 +176,7 @@ impl Core {
         let st = &self.inner.uncapped;
         let mut s = lk(&st.stats).clone();
         s.waiting = st.waiting.load(Ordering::Acquire) as u64;
+        s.deals_waiting = st.deals_waiting.load(Ordering::Acquire) as u64;
         s.running = lk(&st.slots).values().filter(|x| x.running).count() as u64;
         let mean = if s.done > 0 {
             s.total_ms / s.done as f64

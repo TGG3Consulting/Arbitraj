@@ -6,8 +6,10 @@
 //! От чего зависит: api/state.rs, core (uncapped_view.rs), storage/uncapped_db.rs (Filter).
 //! Настройки: нет (uncapped.* — экран «Настройки»). Период, сколько строк и топ — параметры запроса (задаёт зритель).
 //!
-//! GET /api/uncapped/summary?from=ISO&to=ISO&top=N — {off, deals, candidates, ladder, ladder_error, uncapped, top, stats}
-//! GET /api/uncapped?limit=N&offset=M&from=ISO&to=ISO&kind=deal|candidate — {rows: [{id, body}], total}
+//! GET /api/uncapped/summary?from=ISO&to=ISO&top=N — {off, hidden_zero, deals, candidates, ladder, ladder_error, uncapped,
+//!   top, stats}
+//! GET /api/uncapped?limit=N&offset=M&from=ISO&to=ISO&kind=deal|candidate&missed_only=true — {rows: [{id, body, fact}],
+//!   total}; fact — итог сделки из учёта (у записи сделки), missed_only — решение 197
 //! GET /api/uncapped/{id}                — запись (JSON core/uncapped_types.rs Record); 404 — нет
 //! GET /api/uncapped/deals               — {id сделки: {id, body}} последних записей всех сделок (экран «Сделки»)
 //! GET /api/uncapped/deal/{deal_id}      — {id, body} последней записи сделки; 404 — не посчитана
@@ -41,6 +43,9 @@ pub struct ListQ {
     from: Option<String>,
     to: Option<String>,
     kind: Option<String>,
+    /// Решение 197: true — сделки все, кандидаты только с упущено > 0. Не задан — все записи.
+    #[serde(default)]
+    missed_only: bool,
 }
 
 /// Время запроса (RFC 3339 с поясом) → вид столбца базы. Пусто — без границы. Ошибки: 400 — не время.
@@ -83,6 +88,7 @@ pub async fn list(
         from: time(q.from)?,
         to: time(q.to)?,
         kind,
+        missed_only: q.missed_only,
     };
     st.core
         .uncapped_list(f, q.limit, q.offset)

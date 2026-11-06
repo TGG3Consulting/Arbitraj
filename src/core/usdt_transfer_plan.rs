@@ -141,6 +141,8 @@ pub async fn quote(
     };
     let amount =
         super::costs_withdraw::floor_precision(amount.unwrap_or(withdrawable), fi.as_ref());
+    // Решение 199: процентная часть комиссии — от суммы этого перевода (фиксированная проверена выше).
+    let fee = fee.and(fi.as_ref().and_then(|i| i.fee_for(amount)));
     let lim = Limits {
         withdrawable,
         min: wmin,

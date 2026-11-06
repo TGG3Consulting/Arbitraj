@@ -175,7 +175,7 @@ pub(super) async fn shared(
     };
     if new && !unclear.is_empty() {
         let m = format!(
-            "withdraw_percent_on_chains не ноль в сети BSC ({unclear}): формат процента не описан — комиссия вывода неизвестна, по этим монетам сделок нет"
+            "withdraw_percent_on_chains в сети BSC без знака «%» (сырые значения: {unclear}): формат не описан — комиссия вывода неизвестна, по этим монетам сделок нет (решение 199: «X%» учитывается как доля X/100)"
         );
         log(ctx, m).await;
     }

@@ -48,7 +48,8 @@ fn cex_costs(
     {
         return Err(format!("вывод {qty} больше максимума {max}"));
     }
-    let fee = info.withdraw_fee.ok_or_else(|| {
+    // Решение 199: фиксированная + доля суммы вывода.
+    let fee = info.fee_for(qty).ok_or_else(|| {
         format!(
             "{}: комиссия вывода {} в сети {net} неизвестна",
             from.0, a.ticker

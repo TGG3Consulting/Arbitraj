@@ -17,6 +17,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 use reqwest::Method;
+use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -125,7 +126,7 @@ async fn note(ctx: &Ctx, nets: Option<&Networks>, p: &Parsed) {
     );
     add(
         &p.extra_fee,
-        "сети BSC с extraWithdrawFee (доля от суммы; как считать — в документации нет: комиссия неизвестна, вывода нет)",
+        "сети BSC с extraWithdrawFee (доля суммы, «0.1 means 10%»; решение 199: комиссия = withdrawFee + доля × сумма, допущение — из суммы)",
     );
     add(
         &p.congested,
@@ -145,9 +146,14 @@ async fn note(ctx: &Ctx, nets: Option<&Networks>, p: &Parsed) {
     }
 }
 
-/// Стоимость вывода: withdrawFee сети (в монетах; сети с extraWithdrawFee — комиссия неизвестна).
-/// Принимает: монету, сеть (chain). Ошибки: монеты или сети нет, комиссия неизвестна, связь.
-pub async fn withdraw_cost(ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<Vec<Cost>> {
+/// Стоимость вывода: withdrawFee сети + доля extraWithdrawFee × сумма (решение 199, CoinNetworkInfo::fee_for).
+/// Принимает: монету, сеть (chain), сумму вывода. Ошибки: монеты или сети нет, комиссия неизвестна, связь.
+pub async fn withdraw_cost(
+    ctx: &Ctx,
+    asset: &Asset,
+    network: &str,
+    amount: Decimal,
+) -> GatewayResult<Vec<Cost>> {
     let list = coin_networks_of(ctx, &asset.ticker).await?;
     let info = list.iter().find(|c| c.network == network).ok_or_else(|| {
         ctx.tag(GatewayError::new(
@@ -156,12 +162,12 @@ pub async fn withdraw_cost(ctx: &Ctx, asset: &Asset, network: &str) -> GatewayRe
             format!("У {} нет сети {network} в справочнике Bitget", asset.ticker),
         ))
     })?;
-    let fee = info.withdraw_fee.ok_or_else(|| {
+    let fee = info.fee_for(amount).ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
             None,
             format!(
-                "Bitget: комиссия вывода {} в сети {network} неизвестна (нет withdrawFee или ненулевой extraWithdrawFee)",
+                "Bitget: комиссия вывода {} в сети {network} неизвестна (нет withdrawFee)",
                 asset.ticker
             ),
         ))

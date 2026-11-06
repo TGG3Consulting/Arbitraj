@@ -5,6 +5,8 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 199 (06.11.2026), процентная комиссия вывода:** допущение «процент вычитается из суммы вывода» — подтвердить на первой живой сделке (сверка зачисления). Gate: прислать сырое значение withdraw_percent_on_chains из журнала (есть ли «%»); KuCoin withdrawFeeRate и HTX ratio/circulated — формат по сырому значению в журнале.
+
 - **Решение 188 (Algebra Integral, 06.11):** ABI и математика сверены на живых ответах (тест bsc_dex_algebra_integral_live). Ждём от сервера деплоеров кастомных пулов THENA V3 (события CustomPool фабрики 0x30055f87…) → dex.custom_deployers; затем в интерфейсе: dex.kind = algebra_integral, dex.factory (из factory() пула), dex.quoter_virtual = да, dex.pool_enabled = да, dex.integral_tick_steps.
 - **Решение 187 (граф, 06.11), после деплоя:** (1) данные справочника пулов (запрос серверу, только чтение SQLite) — какие встречные монеты реально хабы (сколько монет и $ ликвидности на каждую) → Тиграну список кандидатов в dex.intermediate_tokens (у каждой нужен тикер на бирже и нет налога); (2) задать dex.route_search_max_paths (совет 200), dex.route_gas_aware = да, dex.route_max_hops по решению Тиграна (3–5); (3) dex.router_mode = graph — только по слову Тиграна; проверка — «Сухая сделка DEX» и журнал dex.router_graph.
 - **Решение 176 (Telegram, 4 чата):** Тигран даст ID чатов и токены ботов → задать notify.control_chat / deals_chat / failures_chat, секреты telegram.control_token / deals_token / failures_token, notify.live_refresh_s = 5, notify.live_idle_s = 120, notify.dialog_ttl_s = 600, notify.transfer_pct = 25, 50; проверить «Проверить подключение» у каждой роли.

@@ -122,8 +122,8 @@ async fn note(ctx: &Ctx, nets: Option<&Networks>, p: &Parsed) {
     }
     if !p.fee_rate.is_empty() {
         lines.push(format!(
-            "сети BSC с долей комиссии вывода withdrawFeeRate (формулы в документации нет — комиссия неизвестна, вывода \
-             нет): {}",
+            "сети BSC с ненулевой withdrawFeeRate (сырые значения; формата и формулы в документации нет — комиссия \
+             неизвестна, вывода нет; решение 199): {}",
             p.fee_rate.join(", ")
         ));
     }

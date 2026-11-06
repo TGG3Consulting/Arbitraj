@@ -160,6 +160,7 @@ fn network(
         deposit_enabled: coin_dep && num::flag(n, "deposit_enabled")?,
         withdraw_enabled: coin_wd && num::flag(n, "withdraw_enabled")?,
         withdraw_fee: if deflation.is_some() { None } else { fee },
+        withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "min_withdraw_amount")?,
         withdraw_max: None,
         deposit_min,

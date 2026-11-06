@@ -12,8 +12,10 @@
 //!   withdraw_disabled / deposit_disabled помечены «(deprecated)» — берутся флаги сети.
 //! - GET /wallet/withdraw_status (модель WithdrawStatus): withdraw_fix_on_chains («Fixed withdrawal fee on multiple
 //!   chains», словарь сеть → сумма), withdraw_percent_on_chains («Percentage withdrawal fee»), withdraw_amount_mini,
-//!   withdraw_eachtime_limit. Формат процента (с «%» или долей) не описан: процент не ноль — комиссия неизвестна,
-//!   сеть без комиссии (ядро по ней не торгует), монета — в список «неясно» (вопрос Тиграну).
+//!   withdraw_eachtime_limit. Решение 199: процент со знаком «%» («0.1%» — пример статьи Gate «Gate Withdrawal Fees by
+//!   Coin and Network») — доля = число / 100 в CoinNetworkInfo.withdraw_fee_pct (полная комиссия = фикс + доля × сумма,
+//!   допущение — из суммы). Ненулевое значение БЕЗ «%» — формат не описан: комиссия неизвестна (ядро по сети не
+//!   торгует), монета и СЫРОЕ значение — в список «неясно» (журнал, вопрос Тиграну).
 //! - GET /wallet/currency_chains?currency= (модель CurrencyChain): decimal («Withdrawal precision»), is_tag; адрес
 //!   депозита (DepositAddress): min_deposit_amount, multichain_addresses[].min_confirms.
 
@@ -93,11 +95,10 @@ pub fn parse_networks(
                 .flatten();
             let off = |f: &str| matches!(n.get(f), Some(Value::Bool(true)));
             let fee = w.and_then(|w| on_chain(w, "withdraw_fix_on_chains", &chain));
-            let pct = w.and_then(|w| on_chain(w, "withdraw_percent_on_chains", &chain));
-            let pct_unclear = pct.is_some_and(|v| !v.is_zero());
-            if is_bsc && pct_unclear {
-                p.unclear_fee
-                    .push(format!("{ticker}={}", pct.unwrap_or_default()));
+            let pct = w.map(|w| percent(w, &chain)).unwrap_or(Pct::None);
+            let pct_unclear = matches!(pct, Pct::Unclear(_));
+            if let (true, Pct::Unclear(raw)) = (is_bsc, &pct) {
+                p.unclear_fee.push(format!("{ticker}={raw}"));
             }
             p.list.push(CoinNetworkInfo {
                 venue: venue.clone(),
@@ -111,6 +112,10 @@ pub fn parse_networks(
                     && !off("withdraw_disabled")
                     && !off("withdraw_delayed"),
                 withdraw_fee: if pct_unclear { None } else { fee },
+                withdraw_fee_pct: match pct {
+                    Pct::Share(v) => Some(v),
+                    _ => None,
+                },
                 withdraw_min: w
                     .and_then(|w| num::dec_opt(w, "withdraw_amount_mini").ok().flatten()),
                 withdraw_max: w
@@ -129,6 +134,38 @@ pub fn parse_networks(
         }
     }
     Ok(p)
+}
+
+/// Процентная комиссия сети (решение 199): нет / ноль — None; «X%» — доля X / 100; иное ненулевое — неясно (сырое).
+#[derive(Debug, Clone, PartialEq)]
+enum Pct {
+    None,
+    Share(Decimal),
+    Unclear(String),
+}
+
+/// withdraw_percent_on_chains сети как есть. Принимает: запись withdraw_status, сеть. Ошибок нет: неразборчивое — Unclear.
+fn percent(w: &Value, chain: &str) -> Pct {
+    let Some(v) = w
+        .get("withdraw_percent_on_chains")
+        .and_then(|m| m.get(chain))
+    else {
+        return Pct::None;
+    };
+    let raw = v
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| v.to_string());
+    let t = raw.trim();
+    let (body, has_pct) = match t.strip_suffix('%') {
+        Some(b) => (b.trim(), true),
+        None => (t, false),
+    };
+    match (num::to_dec(&Value::String(body.to_string())), has_pct) {
+        (Some(d), _) if d.is_zero() => Pct::None,
+        (Some(d), true) if d > Decimal::ZERO => Pct::Share(d / Decimal::ONE_HUNDRED),
+        _ => Pct::Unclear(raw),
+    }
 }
 
 /// Записи withdraw_status по монете. Ошибка BadResponse — ответ не массив.
@@ -173,4 +210,21 @@ pub fn chains_extra(data: &Value, mut ex: Extra) -> GatewayResult<(Extra, Vec<St
         }
     }
     Ok((ex, tagged))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Решение 199: «0.1%» — доля 0.001; «0%» и нет — нет; «10» без знака — неясно (сырое значение).
+    #[test]
+    fn percent_forms() {
+        let w = json!({"withdraw_percent_on_chains": {"A": "0.1%", "B": "0%", "C": "10", "D": 10}});
+        assert_eq!(percent(&w, "A"), Pct::Share("0.001".parse().unwrap()));
+        assert_eq!(percent(&w, "B"), Pct::None);
+        assert_eq!(percent(&w, "C"), Pct::Unclear("10".into()));
+        assert_eq!(percent(&w, "D"), Pct::Unclear("10".into()));
+        assert_eq!(percent(&w, "E"), Pct::None);
+    }
 }

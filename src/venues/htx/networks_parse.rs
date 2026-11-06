@@ -101,8 +101,15 @@ pub fn parse(
             match network(n, &t, &net, contract, delisted, venue, min_ok) {
                 Ok(info) => {
                     if is_bsc && info.withdraw_fee.is_none() {
+                        // Решение 199: сырые поля комиссии как пришли — формула circulated / ratio не описана.
                         let kind = num::text_opt(n, "withdrawFeeType").unwrap_or_default();
-                        p.fee_unknown.push(format!("{t}={kind}"));
+                        let raw = |f: &str| n.get(f).map(|v| v.to_string()).unwrap_or_default();
+                        p.fee_unknown.push(format!(
+                            "{t}={kind} (rate {}, min {}, max {})",
+                            raw("transactFeeRateWithdraw"),
+                            raw("minTransactFeeWithdraw"),
+                            raw("maxTransactFeeWithdraw")
+                        ));
                     }
                     p.chains.push((t.clone(), net, chain));
                     p.list.push(info);
@@ -144,6 +151,7 @@ fn network(
         deposit_enabled: allowed("depositStatus"),
         withdraw_enabled: allowed("withdrawStatus"),
         withdraw_fee: fee,
+        withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "minWithdrawAmt")?,
         withdraw_max: num::dec_opt(n, "maxWithdrawAmt")?,
         deposit_min,

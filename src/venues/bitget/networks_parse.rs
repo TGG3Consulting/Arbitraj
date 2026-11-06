@@ -13,9 +13,9 @@
 //! «coin contract address», withdrawStep «If the value is not 0, … withdrawal size should be multiple of the value»,
 //! withdrawMinScale «Decimal places of withdrawal amount», congestion (normal / congested).
 //!
-//! Комиссия вывода: ненулевой extraWithdrawFee — доля от суммы, списывается ли она из суммы или сверху, не описано →
-//! комиссия неизвестна (None: ядро не торгует с выводом по ней), такие сети BSC — в журнал (вопрос Тиграну, как KuCoin
-//! withdrawFeeRate). Минимум депозита: значение «0» или пусто — смысл не описан → None, а при
+//! Комиссия вывода (решение 199): ненулевой extraWithdrawFee — ДОЛЯ суммы («0.1 means 10%») — в
+//! CoinNetworkInfo.withdraw_fee_pct как есть; полная комиссия = withdrawFee + доля × сумма (ядро, fee_for). Из суммы она
+//! или сверху — не описано, допущение — из суммы (сверка зачисления ловит иное); такие сети BSC — в журнал. Минимум депозита: значение «0» или пусто — смысл не описан → None, а при
 //! venue.deposit_min_absent_ok = да — 0 (урок 21).
 
 use chrono::Utc;
@@ -35,7 +35,7 @@ pub struct Parsed {
     pub need_tag: Vec<String>,
     /// Пропущенные сети: «монета/сеть: причина».
     pub skipped: Vec<String>,
-    /// Сети BSC с ненулевым extraWithdrawFee: «монета=доля» (комиссия неизвестна).
+    /// Сети BSC с ненулевым extraWithdrawFee: «монета=доля» (учтена в комиссии, решение 199).
     pub extra_fee: Vec<String>,
     /// Сети BSC в перегрузке (congestion = congested): «монета».
     pub congested: Vec<String>,
@@ -108,7 +108,8 @@ fn network(
         network: chain.to_string(),
         deposit_enabled: num::flag(n, "rechargeable")?,
         withdraw_enabled: num::flag(n, "withdrawable")?,
-        withdraw_fee: if extra.is_some() { None } else { fee },
+        withdraw_fee: fee,
+        withdraw_fee_pct: extra,
         withdraw_min: num::dec_opt(n, "minWithdrawAmount")?,
         withdraw_max: None,
         deposit_min,

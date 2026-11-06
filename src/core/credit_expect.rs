@@ -76,7 +76,8 @@ pub async fn arrival(
 ) -> Result<Decimal, String> {
     let costs = match super::dirctx_venue::network(core, from, &asset.ticker, net) {
         Some(info) => {
-            let fee = info.withdraw_fee.ok_or_else(|| {
+            // Решение 199: фиксированная + доля суммы вывода (допущение — из суммы; сверка зачисления ловит иное).
+            let fee = info.fee_for(qty).ok_or_else(|| {
                 format!(
                     "{}: комиссия вывода {} в сети {net} неизвестна",
                     from.0, asset.ticker

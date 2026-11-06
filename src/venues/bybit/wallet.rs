@@ -105,8 +105,8 @@ async fn warn(ctx: &Ctx, nets: &Networks, p: &Parsed) {
     }
     if !p.percent_fee.is_empty() {
         lines.push(format!(
-            "coin/query-info: у сетей BSC процентная комиссия вывода (withdrawPercentageFee) — {}; ядро считает \
-             комиссию числом монет, поэтому комиссия вывода этих монет «неизвестна» и сделок с выводом по ним нет",
+            "coin/query-info: у сетей BSC процентная комиссия вывода (withdrawPercentageFee, доля суммы) — {}; \
+             решение 199: комиссия = withdrawFee + доля × сумма вывода (допущение — из суммы; проверяет сверка зачисления)",
             p.percent_fee.join(", ")
         ));
     }
@@ -126,13 +126,15 @@ async fn warn(ctx: &Ctx, nets: &Networks, p: &Parsed) {
     }
 }
 
-/// Стоимость вывода: withdrawFee из coin/query-info (в монетах). Принимает: монету, сеть (chain).
-/// Возвращает: [WithdrawFee]. Ошибки: монеты или сети нет, комиссия не сообщена (или процентная), связь.
+/// Стоимость вывода: withdrawFee + доля withdrawPercentageFee × сумма (решение 199, CoinNetworkInfo::fee_for).
+/// Принимает: монету, сеть (chain), сумму вывода. Возвращает: [WithdrawFee]. Ошибки: монеты или сети нет, комиссия не
+/// сообщена, связь.
 pub async fn withdraw_cost(
     ctx: &Ctx,
     nets: &Networks,
     asset: &Asset,
     network: &str,
+    amount: Decimal,
 ) -> GatewayResult<Vec<Cost>> {
     let all = shared(ctx, nets).await?;
     let info = all
@@ -145,12 +147,12 @@ pub async fn withdraw_cost(
                 format!("У {} нет сети {network} в справочнике Bybit", asset.ticker),
             ))
         })?;
-    let fee: Decimal = info.withdraw_fee.ok_or_else(|| {
+    let fee: Decimal = info.fee_for(amount).ok_or_else(|| {
         ctx.tag(GatewayError::new(
             ErrorCode::BadResponse,
             None,
             format!(
-                "Bybit не сообщил комиссию вывода {} в сети {network} числом (пусто или процентная)",
+                "Bybit не сообщил комиссию вывода {} в сети {network} (withdrawFee пусто)",
                 asset.ticker
             ),
         ))

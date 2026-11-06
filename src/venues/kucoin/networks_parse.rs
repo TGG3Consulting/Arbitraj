@@ -14,9 +14,10 @@
 //! contractAddress, withdrawPrecision («maximum supported length after the decimal point of the withdrawal amount»),
 //! maxWithdraw, needTag («Need for memo/tag or not»).
 //!
-//! Комиссия вывода: формулы «минимальная комиссия + доля от суммы» в документации нет. Сеть с withdrawFeeRate = 0 —
-//! комиссия = withdrawalMinFee; с ненулевой долей — комиссия неизвестна (None: ядро не торгует с выводом по ней),
-//! такие сети BSC — в журнал и вопрос Тиграну (docs/TASKS.md).
+//! Комиссия вывода: формулы «минимальная комиссия + доля от суммы» в документации нет (страница Get All Currencies —
+//! только пример со значением "0", описаний полей нет; проверено 06.11.2026, решение 199). Сеть с withdrawFeeRate = 0 —
+//! комиссия = withdrawalMinFee; с ненулевой долей — комиссия неизвестна (None: ядро не торгует с выводом по ней), такие
+//! сети BSC — в журнал с СЫРЫМ значением (для разбора формата по живому ответу) и вопрос Тиграну (docs/TASKS.md).
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -66,8 +67,13 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
                     if is_bsc && matches!(n.get("needTag"), Some(Value::Bool(true))) {
                         p.need_tag.push(ticker.clone());
                     }
-                    if is_bsc && let Some(r) = rate {
-                        p.fee_rate.push(format!("{ticker}={r}"));
+                    if is_bsc && rate.is_some() {
+                        // Решение 199: сырое значение как пришло — формат и формула в документации не описаны.
+                        let raw = n
+                            .get("withdrawFeeRate")
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        p.fee_rate.push(format!("{ticker}={raw}"));
                     }
                     p.list.push(info);
                 }
@@ -105,6 +111,7 @@ fn network(
         deposit_enabled: num::flag(n, "isDepositEnabled")?,
         withdraw_enabled: num::flag(n, "isWithdrawEnabled")?,
         withdraw_fee: if rate.is_some() { None } else { min_fee },
+        withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "withdrawalMinSize")?,
         withdraw_max: num::dec_opt(n, "maxWithdraw")?,
         deposit_min,

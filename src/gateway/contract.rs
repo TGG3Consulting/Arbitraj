@@ -537,4 +537,33 @@ pub trait Venue: Send + Sync {
             "у площадки нет стакана и ленты сделок",
         ))
     }
+
+    /// Решение 202: свежесть потока стаканов по соединениям (пачкам пар) для сторожа ядра (core/feed_watch.rs).
+    /// None — адаптер сторожа не поддерживает (сторож для площадки выключен). Ошибок нет.
+    fn feed_health(&self) -> Option<super::feed_health::FeedHealth> {
+        None
+    }
+
+    /// Решение 202: переподписать одну пару соединения (отписка + подписка), соседей не трогая.
+    /// Принимает: имя соединения, тикер ядра. Ошибки: NotApplicable — не поддерживается; BadResponse — команда не
+    /// доставлена (соединение остановлено).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        let _ = (conn, ticker);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "переподписка одной пары не поддерживается",
+        ))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (другие соединения не трогаются).
+    /// Принимает: имя соединения. Ошибки: NotApplicable — не поддерживается; BadResponse — команда не доставлена.
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        let _ = conn;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "переподключение одного соединения не поддерживается",
+        ))
+    }
 }

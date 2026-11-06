@@ -77,6 +77,11 @@ pub mod evaluate;
 pub mod executor;
 pub mod feed_hold;
 pub mod feed_live;
+pub mod feed_watch;
+pub mod feed_watch_conn;
+pub mod feed_watch_logic;
+#[cfg(test)]
+mod feed_watch_tests;
 pub mod fills;
 pub mod first_pass;
 pub mod gas_stats;

@@ -215,4 +215,24 @@ impl Venue for Aliased {
     ) -> GatewayResult<crate::core::types::TapDecoded> {
         self.inner.decode_tap(stream, data)
     }
+    // Решение 202 через обёртку склейки тикеров (решение 200): тикеры пар — обратно в имена ядра, команды — в имя
+    // биржи; без этих методов обёртка подставила бы реализацию по умолчанию «не умею» и выключила сторож.
+    fn feed_health(&self) -> Option<super::feed_health::FeedHealth> {
+        let mut h = self.inner.feed_health()?;
+        let m = self.m();
+        for c in &mut h.conns {
+            for p in &mut c.pairs {
+                p.ticker = tr::back_str(&m, &p.ticker);
+            }
+        }
+        Some(h)
+    }
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        self.inner
+            .resubscribe_pair(conn, &tr::out_str(&self.m(), ticker))
+            .await
+    }
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        self.inner.reconnect_conn(conn).await
+    }
 }

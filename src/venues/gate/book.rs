@@ -40,6 +40,8 @@ type Entry = (OrderBook, Alive, Alive);
 #[derive(Clone, Default)]
 pub struct Books {
     map: Arc<RwLock<HashMap<String, Entry>>>,
+    /// Решение 202: свежесть соединений и пар для сторожа ядра (gateway/feed_health.rs).
+    pub feed: crate::gateway::feed_reg::FeedReg,
 }
 
 /// Сейчас, unix мс.

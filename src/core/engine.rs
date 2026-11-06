@@ -83,6 +83,8 @@ impl Core {
         for (id, kind) in kinds {
             if kind == VenueKind::Cex {
                 tokio::spawn(super::registry_sync::run(core.clone(), id.clone()));
+                // Решение 202: сторож пар и соединений стаканов биржи.
+                tokio::spawn(super::feed_watch::run(core.clone(), id.clone()));
                 // Решение 175: делистинги биржи — фоном, delist.refresh_s.
                 tokio::spawn(super::delist::run(core.clone(), id));
             }

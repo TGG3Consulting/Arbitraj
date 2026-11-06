@@ -270,4 +270,22 @@ impl Venue for Gate {
     ) -> GatewayResult<crate::core::types::TapDecoded> {
         tap::decode(stream, data)
     }
+
+    /// Решение 202: у Gate spot.order_book шлёт снимок раз в интервал (venue.book_interval) и без изменений —
+    /// тишина пары = мёртвая подписка; отписка одной пары есть (event unsubscribe), см. ws_conn.rs.
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(true, true))
+    }
+
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
+    }
 }

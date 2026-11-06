@@ -8,6 +8,7 @@
 //!   оба нуля — комиссия = lastFee, не меняется.
 //! - Fee(uint16 fee) — новая lastFee: пул перечитывается (у плагина с DYNAMIC_FEE комиссию определяет fee() плагина,
 //!   а не lastFee — load_algebra_integral.rs).
+//!
 //! Кто вызывает: pools/events.rs.
 //! От чего зависит: pools/abi_algebra_integral.rs, pools/events_algebra.rs, registry.rs.
 //! Настройки: нет.

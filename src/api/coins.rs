@@ -7,6 +7,7 @@
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
 //! POST /api/coins/recheck  — {venue, assets: [Asset]} → {ok, details}
+//! GET  /api/coins/ticker-aliases-auto — решение 206: [{address, main, venues: [[биржа, тикер]]}] — склеено автоматически
 //! GET  /api/coins/ticker-splits — решение 200: [{address, venues: [[биржа, тикер]]}] — один адрес, разные тикеры
 //!
 //! Справочник, налоги, проверки пулов и чёрный список держит ядро (core/coins_view.rs → Core::coins_json).
@@ -121,4 +122,9 @@ pub async fn recheck(
 /// Решение 200: расхождения тикеров одного адреса (core/ticker_index.rs) — для кнопки «Считать одной монетой». Ошибок нет.
 pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
+}
+
+/// Решение 206: склейки тикеров, сделанные автоматически (coin.ticker_alias_auto). Ошибок нет.
+pub async fn ticker_aliases_auto(State(st): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::to_value(st.registry.auto_aliases()).unwrap_or_default())
 }

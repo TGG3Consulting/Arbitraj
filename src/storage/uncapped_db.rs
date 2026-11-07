@@ -3,7 +3,10 @@
 //! candidate — кандидат-эпизод), id сделки, тикер, начало (эпизода или расчёта сделки), обновлено, JSON записи (тип —
 //! core/uncapped_types.rs Record). Начало и вид — отдельными столбцами для выборки за период и уборки по сроку.
 //! Решение 211: адрес контракта монеты — столбец address (0x… в нижнем регистре; у старых строк NULL).
-//! Кто вызывает: core/uncapped_store.rs (запись, обновление эпизода, уборка), core/uncapped_view.rs (выборки).
+//! Решение 218: deal_rows и insert_all — пересчёт старых записей сделок по окнам (бинарник uncapped_recompute):
+//! старые строки не меняются, новые дописываются одной транзакцией.
+//! Кто вызывает: core/uncapped_store.rs (запись, обновление эпизода, уборка), core/uncapped_view.rs (выборки),
+//! core/uncapped_recompute.rs и src/bin/uncapped_recompute.rs (решение 218).
 //! От чего зависит: storage/db.rs.
 //! Настройки: нет (срок хранения uncapped.keep_days читает core/uncapped_store.rs).
 
@@ -111,6 +114,54 @@ pub async fn by_deals(db: &Db) -> Result<Vec<(String, i64, String)>, DbError> {
         )?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
         rows.collect()
+    })
+    .await
+}
+
+/// Строка записи сделки для пересчёта по окнам (решение 218).
+#[derive(Debug, Clone)]
+pub struct DealRow {
+    pub id: i64,
+    pub deal_id: String,
+    pub started_at: String,
+    pub body: String,
+}
+
+/// Решение 218: все записи сделок (вид deal), старые сверху по id. Ошибки: база.
+pub async fn deal_rows(db: &Db) -> Result<Vec<DealRow>, DbError> {
+    db.call(|c| {
+        let mut st = c.prepare(
+            "SELECT id, deal_id, started_at, body FROM uncapped \
+             WHERE kind = 'deal' AND deal_id IS NOT NULL ORDER BY id",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok(DealRow {
+                id: r.get(0)?,
+                deal_id: r.get(1)?,
+                started_at: r.get(2)?,
+                body: r.get(3)?,
+            })
+        })?;
+        rows.collect()
+    })
+    .await
+}
+
+/// Решение 218: добавляет строки одной транзакцией (все или ни одной). Возвращает: id новых строк. Ошибки: база.
+pub async fn insert_all(db: &Db, rows: Vec<Row>) -> Result<Vec<i64>, DbError> {
+    db.call(move |c| {
+        let tx = c.transaction()?;
+        let mut ids = Vec::with_capacity(rows.len());
+        for r in rows {
+            tx.execute(
+                "INSERT INTO uncapped (kind, deal_id, ticker, started_at, updated_at, body, address)
+                 VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6)",
+                params![r.kind, r.deal_id, r.ticker, r.started_at, r.body, r.address],
+            )?;
+            ids.push(tx.last_insert_rowid());
+        }
+        tx.commit()?;
+        Ok(ids)
     })
     .await
 }

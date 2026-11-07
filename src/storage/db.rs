@@ -177,6 +177,31 @@ impl Db {
         })
     }
 
+    /// Что делает: решение 218 — открывает УЖЕ СУЩЕСТВУЮЩУЮ базу бота для внешнего инструмента (src/bin/
+    /// uncapped_recompute.rs), без создания таблиц и миграций. exclusive = false — только чтение (бот может работать).
+    /// exclusive = true — чтение и запись с исключительной блокировкой файла (PRAGMA locking_mode = EXCLUSIVE и сразу
+    /// BEGIN EXCLUSIVE, ожидание 0): база в WAL, и пока бот запущен, его соединение держит разделяемую блокировку — тогда
+    /// отказ «база занята»; взятая блокировка держится до закрытия инструмента — бот, запущенный в это время, базу не
+    /// откроет (проверено: python sqlite3, два процесса, 07.11.2026).
+    /// Принимает: путь, режим. Ошибки: файла нет, база занята (Sqlite Busy), повреждённая база.
+    pub fn open_existing(path: &Path, exclusive: bool) -> Result<Self, DbError> {
+        use rusqlite::OpenFlags;
+        let flags = if exclusive {
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+        } else {
+            OpenFlags::SQLITE_OPEN_READ_ONLY
+        } | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI;
+        let conn = Connection::open_with_flags(path, flags)?;
+        if exclusive {
+            conn.busy_timeout(std::time::Duration::ZERO)?;
+            conn.execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;")?;
+        }
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
+    }
+
     /// Выполняет функцию с соединением в отдельном потоке.
     /// Принимает: функцию над &mut Connection. Возвращает: её результат.
     /// Ошибки: ошибка SQLite из функции, сбой потока.

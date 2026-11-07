@@ -11,6 +11,8 @@
 //! Решение 215: итоги периода (uncapped_totals) — общие у экрана и отчёта Excel «Упущено» (core/uncapped_report.rs).
 //! Решение 217: итог deals_old — записи сделок, посчитанные после покупки (занижено), отдельно; у тел записей без поля
 //! basis (старые) оно дописывается как «live_after_buy».
+//! Решение 218: у сделки в итогах и списке — одна, последняя запись (uncapped_sum.rs latest_per_deal): пересчёт старой
+//! записи по окну (basis recomputed_window*) — основной для сделки, старая остаётся в базе.
 //! Кто вызывает: api/uncapped.rs, core/uncapped_report.rs.
 //! От чего зависит: storage/uncapped_db.rs, uncapped_sum.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (только показ и причина).
@@ -22,7 +24,7 @@ use serde_json::{Value, json};
 use crate::storage::uncapped_db::{self, Filter};
 
 use super::engine::{Core, lk};
-use super::uncapped_sum::{Totals, totals};
+use super::uncapped_sum::{Totals, latest_per_deal, totals};
 use super::uncapped_types::Brief;
 
 impl Core {
@@ -40,9 +42,12 @@ impl Core {
             kind: None,
             missed_only: false,
         };
-        let rows = uncapped_db::all(&self.inner.deps.db, f)
-            .await
-            .map_err(|e| e.to_string())?;
+        // Решение 218: у сделки — только последняя запись (пересчёт по окну заменяет старую).
+        let rows = latest_per_deal(
+            uncapped_db::all(&self.inner.deps.db, f)
+                .await
+                .map_err(|e| e.to_string())?,
+        );
         let (ladder, ladder_err) = match super::uncapped::ladder(self) {
             Ok(l) => (l, None),
             Err(e) => (vec![], Some(e)),
@@ -104,9 +109,11 @@ impl Core {
         limit: usize,
         offset: usize,
     ) -> Result<Value, String> {
-        let rows = uncapped_db::all(&self.inner.deps.db, f)
-            .await
-            .map_err(|e| e.to_string())?;
+        let rows = latest_per_deal(
+            uncapped_db::all(&self.inner.deps.db, f)
+                .await
+                .map_err(|e| e.to_string())?,
+        );
         let total = rows.len();
         let facts = lk(&self.inner.deals);
         // Решение 197: у записи сделки — её факт из учёта (итог, вложено), чтобы окно показывало план против факта.

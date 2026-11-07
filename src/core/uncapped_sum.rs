@@ -8,6 +8,8 @@
 //! записи) — одна функция totals у экрана (uncapped_view.rs) и отчёта Excel «Упущено» (report/missed_*.rs).
 //! Решение 217: записи сделок, посчитанные после нашей покупки (до решения 217, Brief::understated), — отдельный итог
 //! deals_old: их цифры занижены и с остальными не складываются (в таблицу потолков и топ не входят).
+//! Решение 218: старая запись, пересчитанная по окну сделки, уступает новой — у сделки в итогах и списке одна запись,
+//! последняя (latest_per_deal).
 //! Кто вызывает: core/uncapped_view.rs, core/uncapped_report.rs.
 //! От чего зависит: uncapped_types.rs, core/types (Direction).
 //! Настройки: нет.
@@ -118,6 +120,37 @@ pub struct Totals {
     pub hidden: u64,
     /// Вошедшие записи в порядке выборки (новые сверху).
     pub items: Vec<Item>,
+}
+
+/// Решение 218: у сделки основная запись — последняя (наибольший id строки; пересчёт старой записи по окну дописывает
+/// новую, старая остаётся в базе). Принимает: строки (id, JSON) в любом порядке. Возвращает: те же строки в том же
+/// порядке без прежних записей тех же сделок (записи кандидатов — все). Ошибок нет.
+pub fn latest_per_deal(rows: Vec<(i64, String)>) -> Vec<(i64, String)> {
+    let deal_of = |body: &str| -> Option<String> {
+        let v: Value = serde_json::from_str(body).ok()?;
+        let b = &v["battle"];
+        (b["verdict"] == "deal")
+            .then(|| b["deal_id"].as_str().map(String::from))
+            .flatten()
+    };
+    let keyed: Vec<(Option<String>, (i64, String))> =
+        rows.into_iter().map(|r| (deal_of(&r.1), r)).collect();
+    let mut last: HashMap<&str, i64> = HashMap::new();
+    for (deal, (id, _)) in &keyed {
+        if let Some(d) = deal {
+            let e = last.entry(d.as_str()).or_insert(*id);
+            *e = (*e).max(*id);
+        }
+    }
+    let keep: Vec<bool> = keyed
+        .iter()
+        .map(|(deal, (id, _))| deal.as_deref().is_none_or(|d| last.get(d) == Some(id)))
+        .collect();
+    keyed
+        .into_iter()
+        .zip(keep)
+        .filter_map(|((_, r), k)| k.then_some(r))
+        .collect()
 }
 
 /// Итоги по записям периода. Принимает: записи (новые сверху), таблицу потолков, факт сделки по её id из учёта.

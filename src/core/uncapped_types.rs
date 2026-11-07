@@ -103,7 +103,8 @@ pub struct Record {
     pub ep: Episode,
     /// Решение 217: на каких данных посчитано — BASIS_SNAPSHOT (сделка: снимок рынка момента решения, до ордера
     /// покупки), BASIS_LIVE (кандидат: живые котировки в момент расчёта), BASIS_LIVE_AFTER_BUY (сделка до решения 217:
-    /// живые котировки ПОСЛЕ нашей покупки — занижено; так читаются старые записи).
+    /// живые котировки ПОСЛЕ нашей покупки — занижено; так читаются старые записи); решение 218 — BASIS_RECOMPUTED и
+    /// BASIS_RECOMPUTED_DEX_PLAN: старая запись пересчитана по окну сделки (новая запись, последняя по сделке).
     pub basis: String,
     /// Решение 217: когда снят рынок (момент решения, перед ордером покупки) и что снято по сторонам; без снимка — None.
     pub decided_at: Option<DateTime<Utc>>,
@@ -116,6 +117,16 @@ pub const BASIS_SNAPSHOT: &str = "decision_snapshot";
 pub const BASIS_LIVE: &str = "live";
 /// Решение 217: старая запись сделки — живые котировки после нашей покупки (занижено).
 pub const BASIS_LIVE_AFTER_BUY: &str = "live_after_buy";
+
+/// Решение 218: старая запись сделки пересчитана по окну сделки — обе стороны по стаканам бирж окна на момент решения.
+pub const BASIS_RECOMPUTED: &str = "recomputed_window";
+/// Решение 218: старая запись сделки биржа → DEX пересчитана: биржа — по стакану окна, DEX — из плана (приблизительно).
+pub const BASIS_RECOMPUTED_DEX_PLAN: &str = "recomputed_window_dex_plan";
+
+/// Решение 218: запись — пересчёт старой записи по окну (новая запись сделки, старая не удалена). Ошибок нет.
+pub fn recomputed(basis: &str) -> bool {
+    basis == BASIS_RECOMPUTED || basis == BASIS_RECOMPUTED_DEX_PLAN
+}
 
 /// Источник данных записи без поля basis (записи до решения 217) — «после покупки» (serde default). Ошибок нет.
 pub fn old_basis() -> String {

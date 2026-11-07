@@ -7,7 +7,8 @@
 //! посчитано» и причина, если она известна в момент закрытия (выключено, цикл DEX ↔ DEX, ещё считается / ждёт в
 //! очереди, сбой чтения базы, решение 217 — сбой расчёта по сделке и «нет снимка рынка» по id сделки). Решение 217:
 //! запись без поля basis (посчитана после нашей покупки, до решения 217) — строка «⚠️ … посчитано после покупки —
-//! занижено» перед цифрами.
+//! занижено» перед цифрами. Решение 218: запись, пересчитанная по окну сделки (основная — последняя по сделке), —
+//! строка «♻️ Без потолка пересчитано по окну сделки…» перед цифрами.
 //! Чтение — ОДИН запрос к SQLite (storage/uncapped_db.rs by_deal, последняя запись сделки по её id); очередь расчёта
 //! не ждётся — уведомление не задерживается.
 //! Кто вызывает: core/ledger.rs (finish: of_closed → deal_text::closed), tests/notify_human.rs.
@@ -26,7 +27,7 @@ use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 use super::size_uncapped::At;
 use super::uncapped_state::Key;
-use super::uncapped_types::{old_basis, understated};
+use super::uncapped_types::{BASIS_RECOMPUTED, BASIS_RECOMPUTED_DEX_PLAN, old_basis, understated};
 
 /// Часть записи «без потолка» (core/uncapped_types.rs Record, JSON в SQLite), нужная сообщению.
 #[derive(Debug, Clone, Deserialize)]
@@ -51,6 +52,8 @@ pub enum Ceiling {
         missed: Decimal,
         /// Решение 217: посчитано после нашей покупки (старая запись) — цифры занижены, в сообщении пометка.
         understated: bool,
+        /// Решение 218: запись пересчитана по окну сделки — строка-пометка источника; None — обычная запись.
+        recomputed: Option<String>,
     },
     /// Записи нет (или не читается): причина, если известна.
     Unknown(Option<String>),
@@ -65,6 +68,7 @@ pub fn parse(body: &str) -> Ceiling {
             passes: p.opt_passes,
             missed: p.missed,
             understated: understated("deal", &p.basis),
+            recomputed: recomputed_note(&p.basis),
         },
         Err(e) => Ceiling::Unknown(Some(format!("запись не читается: {e}"))),
     }
@@ -124,14 +128,22 @@ fn why_none(core: &Core, d: &Deal) -> Option<String> {
 /// Строки «без потолка» в сообщение закрытой сделки. Принимает: сообщение, сделку, её факт (итог, USDT), знак
 /// (плюсовая — итог ≥ 0), расчёт. Возвращает: сообщение со строками. Ошибок нет.
 pub fn lines(m: Msg, d: &Deal, fact: Decimal, plus: bool, c: &Ceiling) -> Msg {
-    let (invested, profit, passes, missed, low) = match c {
+    let (invested, profit, passes, missed, low, again) = match c {
         Ceiling::Known {
             invested,
             profit,
             passes,
             missed,
             understated,
-        } => (*invested, *profit, *passes, *missed, *understated),
+            recomputed,
+        } => (
+            *invested,
+            *profit,
+            *passes,
+            *missed,
+            *understated,
+            recomputed,
+        ),
         Ceiling::Unknown(why) => {
             let tail = why.as_ref().map(|w| format!(" ({w})")).unwrap_or_default();
             return m.line(format!("Без потолка: не посчитано{tail}"));
@@ -142,6 +154,11 @@ pub fn lines(m: Msg, d: &Deal, fact: Decimal, plus: bool, c: &Ceiling) -> Msg {
         m.line("⚠️ Без потолка посчитано после покупки — занижено")
     } else {
         m
+    };
+    // Решение 218: пересчёт старой записи по окну сделки — пометка источника.
+    let m = match again {
+        Some(n) => m.line(n.clone()),
+        None => m,
     };
     let cap = format!("🔝 Потолок: {}", h::usd(invested));
     if plus {
@@ -158,6 +175,19 @@ pub fn lines(m: Msg, d: &Deal, fact: Decimal, plus: bool, c: &Ceiling) -> Msg {
     match loss_at(fact, d.invested, invested) {
         Some(x) => m.line(format!("💥 Через потолок потеряли бы ≈ {}", h::usd(x))),
         None => m,
+    }
+}
+
+/// Решение 218: пометка записи, пересчитанной по окну сделки (uncapped_types BASIS_RECOMPUTED*); иначе None.
+/// Ошибок нет.
+fn recomputed_note(basis: &str) -> Option<String> {
+    match basis {
+        BASIS_RECOMPUTED => Some("♻️ Без потолка пересчитано по окну сделки (рынок до входа)".into()),
+        BASIS_RECOMPUTED_DEX_PLAN => Some(
+            "♻️ Без потолка пересчитано по окну сделки: биржа — стакан до входа, DEX — из плана (приблизительно)"
+                .into(),
+        ),
+        _ => None,
     }
 }
 

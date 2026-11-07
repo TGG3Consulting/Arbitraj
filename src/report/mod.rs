@@ -4,7 +4,8 @@
 //! (from/to по времени старта сделки; без них — за всё время, как раньше) и отчёт «Упущено» (arb_missed_<дата>.xlsx)
 //! по данным экрана «Упущено из-за потолка»; файлы отчётов одной функцией на отчёт — для api/report.rs и кнопки
 //! «📊 Отчёты» чата «Управление» (notify/ctl/report.rs).
-//! Кто вызывает: api/report.rs, notify/ctl/report.rs.
+//! Решение 218 — отчёт пересчёта старых записей «без потолка» по окнам (recompute.rs: CSV и итоги для stdout).
+//! Кто вызывает: api/report.rs, notify/ctl/report.rs, src/bin/uncapped_recompute.rs (recompute.rs).
 //! От чего зависит: core (deals, uncapped_report), report/rows.rs, results_xlsx.rs, results_sheet.rs, missed_rows.rs,
 //! missed_xlsx.rs, missed_total.rs.
 //! Настройки: нет.
@@ -13,6 +14,7 @@ pub mod missed_labels;
 pub mod missed_rows;
 pub mod missed_total;
 pub mod missed_xlsx;
+pub mod recompute;
 pub mod results_sheet;
 pub mod results_xlsx;
 pub mod rows;

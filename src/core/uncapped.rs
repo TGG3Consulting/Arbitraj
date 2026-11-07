@@ -14,8 +14,11 @@
 //! худшие цены и изломы обеих сторон — по снимку, а не по живым данным, где наша покупка уже съела стакан или сдвинула
 //! пул (живыми остаются σ, время в пути, правила пар, комиссии вывода, курсы затрат и газ — их наша сделка не двигает).
 //! Снимка нет — расчёта нет (причина), живые данные не подставляются. Кандидат — на живых данных (сделки не было).
+//! Сборка записи (упущено, что ограничило) и таблица потолков — uncapped_record.rs (общие с пересчётом старых записей
+//! по окнам, решение 218).
 //! Кто вызывает: core/uncapped_queue.rs (в потоке фоновой задачи).
-//! От чего зависит: frozen.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, limits_parts.rs, dry.rs, card_max.rs (passes), settings.
+//! От чего зависит: frozen.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, uncapped_record.rs, limits_parts.rs, dry.rs,
+//! card_max.rs (passes), settings.
 //! Настройки: card.max_search_usdt (предел поиска), uncapped.max_evals (предел расчётов), uncapped.ladder_usdt (таблица
 //! потолков), money.min_profit_usd, money.min_profit_pct, size.* (через size_curve::params).
 
@@ -32,8 +35,9 @@ use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
 use super::frozen::Frozen;
 use super::size_curve::{CoreCurve, params};
-use super::size_uncapped::{At, uncapped};
-use super::uncapped_types::{BASIS_LIVE, BASIS_SNAPSHOT, Battle, Episode, Record, missed};
+use super::size_uncapped::uncapped;
+use super::uncapped_record::{Inputs, ladder_in, record};
+use super::uncapped_types::{BASIS_LIVE, BASIS_SNAPSHOT, Battle, Record};
 
 /// Что делает: расчёт без потолка (см. шапку). Принимает: ядро, направление, бой, источник котировок (решение 217:
 /// None — живые, кандидат; Some(Ok) — снимок рынка момента решения, сделка; Some(Err) — снимка нет).
@@ -99,48 +103,15 @@ pub async fn compute(
     })
     .await
     .map_err(|e| e.to_string())?;
-    let missed = missed(&battle.verdict, u.opt_passes, u.opt.profit, &u.at_budget);
-    let limited_by = limited_by(&battle, &u, parts.as_ref(), budget);
-    let c = &u.opt.data;
-    let now = Utc::now();
-    Ok(Record {
-        at: now,
-        direction: d.clone(),
+    let inputs = Inputs {
         battle,
         parts,
         limits_error,
         budget,
-        limited_by,
-        min_profit_usd: min_usd,
-        min_profit_pct: min_pct,
-        opt: At::of(&u.opt),
-        opt_passes: u.opt_passes,
-        opt_profit_pct: c.profit_pct,
-        opt_buy_avg: c.buy_avg,
-        opt_sell_avg: c.sell_avg,
-        opt_proceeds: c.proceeds,
-        opt_costs_usdt: c.costs_usdt,
-        opt_transit_s: c.transit_s,
-        opt_costs: c.costs.clone(),
-        min_plus: u.min_plus.as_ref().map(At::of),
-        at_budget: u.at_budget,
-        levels: u.levels,
-        missed,
-        upper_qty: u.upper_qty,
+        min_usd,
+        min_pct,
         search_cap,
-        cap_reached: u.cap_reached,
-        limit: u.limit,
-        evals: u.evals,
-        peaks: u.peaks,
-        capped: u.capped,
         ms: t0.elapsed().as_secs_f64() * 1000.0,
-        ep: Episode {
-            first_at: now,
-            last_at: now,
-            count: 1,
-            capped_count: 0,
-            peak_at: now,
-        },
         basis: if fz.is_some() {
             BASIS_SNAPSHOT
         } else {
@@ -149,52 +120,12 @@ pub async fn compute(
         .into(),
         decided_at: fz.map(|f| f.at),
         snapshot: fz.map(Frozen::describe),
-    })
+    };
+    Ok(record(inputs, u, Utc::now()))
 }
 
-/// Значения таблицы потолков (uncapped.ladder_usdt — список чисел USDT). Ошибки: не задана, не число, не больше 0.
+/// Значения таблицы потолков (uncapped.ladder_usdt — список чисел USDT; uncapped_record.rs ladder_in).
+/// Ошибки: не задана, не число, не больше 0.
 pub fn ladder(core: &Core) -> Result<Vec<Decimal>, String> {
-    let raw = core
-        .inner
-        .deps
-        .settings
-        .list("uncapped.ladder_usdt", SAt::default())
-        .map_err(|e| e.message)?;
-    let mut v = raw
-        .iter()
-        .map(|x| match x.trim().parse::<Decimal>() {
-            Ok(n) if n > Decimal::ZERO => Ok(n),
-            _ => Err(format!(
-                "uncapped.ladder_usdt: «{x}» — нужно число USDT больше 0"
-            )),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    v.sort_unstable();
-    v.dedup();
-    Ok(v)
-}
-
-/// Что ограничило (коды — uncapped_types.rs Record.limited_by). Ошибок нет.
-fn limited_by<T>(
-    b: &Battle,
-    u: &super::size_uncapped::Uncapped<T>,
-    parts: Option<&super::limits_parts::Parts>,
-    budget: Decimal,
-) -> String {
-    if u.opt.invested <= budget {
-        let edge = u.opt.qty >= u.upper_qty;
-        return match (edge, u.cap_reached) {
-            (false, _) => "optimum",
-            (true, true) => "search_cap",
-            (true, false) => "liquidity",
-        }
-        .into();
-    }
-    // Сделка: свободный остаток перед покупкой меньше бюджета плана — объём подбирался под остаток (решение 103).
-    if let (Some(free), Some(plan)) = (b.free, b.plan_budget)
-        && free < plan
-    {
-        return "free".into();
-    }
-    parts.map_or("budget", |p| p.binding()).into()
+    ladder_in(&core.inner.deps.settings)
 }

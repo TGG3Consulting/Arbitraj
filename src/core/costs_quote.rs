@@ -11,7 +11,8 @@
 //!
 //! Сбой шлюза — расчёт невозможен. Решение 217: со снимком рынка момента решения (core/frozen.rs) котировка и худшая
 //! цена — по снимку стороны, не по живым данным (расчёт «без потолка» по сделке).
-//! Кто вызывает: core/costs.rs.
+//! Кто вызывает: core/costs.rs (enough, floor_step, order_limits), core/costs_source.rs (fetch, worst — источник Live),
+//! core/uncapped_replay.rs (пересчёт по окнам, решение 218: enough, floor_step).
 //! От чего зависит: core/types, core/size.rs (Fail), deps.rs (шлюз), trade_ops.rs, frozen.rs, gateway/events.rs (SpotPairState),
 //! gateway/frozen.rs (deepest).
 //! Настройки: через trade_ops.rs — exec.dex_slippage_pct (худшая цена DEX).
@@ -26,10 +27,10 @@ use super::engine::Core;
 use super::frozen::Frozen;
 use super::size::Fail;
 
-/// Котировка с проверкой глубины. Принимает: ядро, направление, сторону (true — продажа на B), количество, снимок
-/// рынка момента решения (решение 217; None — живая котировка площадки). Ошибки: TooLarge — глубины не хватает или
-/// NoRoute у площадки; Stop — прочие сбои шлюза.
-pub async fn quote(
+/// Котировка стороны (источник Live, costs_source.rs; глубину проверяет enough). Принимает: ядро, направление, сторону
+/// (true — продажа на B), количество, снимок рынка момента решения (решение 217; None — живая котировка площадки).
+/// Ошибки: TooLarge — NoRoute у площадки; Stop — прочие сбои шлюза.
+pub async fn fetch(
     core: &Core,
     d: &Direction,
     sell: bool,
@@ -55,11 +56,16 @@ pub async fn quote(
         }
     }
     .map_err(|e| classify(&venue.0, &e))?;
-    let q = super::venue_ticker::quote_back(core, &d.asset, venue, q);
+    Ok(super::venue_ticker::quote_back(core, &d.asset, venue, q))
+}
+
+/// Проверка глубины котировки (общая для всех источников, costs.rs). Принимает: площадку (текст), котировку,
+/// запрошенное количество. Возвращает: ту же котировку. Ошибки: TooLarge — глубины хватает не на всё количество.
+pub fn enough(venue: &str, q: Quote, qty: Decimal) -> Result<Quote, Fail> {
     if q.fillable_qty < qty {
         return Err(Fail::TooLarge(format!(
-            "{}: глубины хватает на {} из {qty}",
-            venue.0, q.fillable_qty
+            "{venue}: глубины хватает на {} из {qty}",
+            q.fillable_qty
         )));
     }
     Ok(q)

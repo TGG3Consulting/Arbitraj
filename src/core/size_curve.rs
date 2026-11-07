@@ -3,8 +3,10 @@
 //! расчёт costs.rs (все затраты); параметры поиска: шаг количества пары биржи (stepSize; A, если A — биржа, иначе
 //! B), изломы — накопленные объёмы уровней стакана A (asks) и B (bids), настройки size.*.
 //! Решение 217: src — снимок рынка момента решения (расчёт «без потолка» по сделке, core/frozen.rs).
-//! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs.
-//! От чего зависит: costs.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
+//! Решение 218: SourceCurve — та же кривая над любым источником данных (costs_source.rs; пересчёт старых записей «без
+//! потолка» по окнам), search_params — параметры поиска из настроек size.* при известных шаге и изломах.
+//! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs, uncapped_recompute.rs (SourceCurve, search_params).
+//! От чего зависит: costs.rs, costs_source.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
 //! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет).
@@ -14,8 +16,9 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{OrderBook, PriceLevel};
 use crate::settings::read::At;
+use crate::settings::store::Store;
 
-use super::costs::{self, Calc};
+use super::costs::{self, Calc, Source};
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
 use super::frozen::Frozen;
@@ -36,14 +39,36 @@ impl Curve for CoreCurve<'_> {
     /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
         let c = costs::evaluate_on(self.core, self.cx, qty, self.src).await?;
-        Ok(Point {
-            qty,
-            // Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
-            invested: c.spend_max,
-            arrive: c.arrive,
-            profit: c.profit_usd,
-            data: c,
-        })
+        Ok(point(qty, c))
+    }
+}
+
+/// Кривая по полному расчёту над источником данных (решение 218, costs_source.rs) — та же модель, что CoreCurve.
+pub struct SourceCurve<'a, S> {
+    pub cx: &'a DirCtx,
+    pub src: &'a S,
+}
+
+#[async_trait]
+impl<S: Source> Curve for SourceCurve<'_, S> {
+    type Data = Calc;
+
+    /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate_with.
+    async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        let c = costs::evaluate_with(self.cx, qty, self.src).await?;
+        Ok(point(qty, c))
+    }
+}
+
+/// Точка кривой из расчёта. Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
+/// Ошибок нет.
+fn point(qty: Decimal, c: Calc) -> Point<Calc> {
+    Point {
+        qty,
+        invested: c.spend_max,
+        arrive: c.arrive,
+        profit: c.profit_usd,
+        data: c,
     }
 }
 
@@ -57,14 +82,6 @@ pub fn params(
     price: Decimal,
     src: Option<&Frozen>,
 ) -> Result<Params, String> {
-    let s = &core.inner.deps.settings;
-    let int = |name: &str| -> Result<u32, String> {
-        let v = s.integer(name, At::default()).map_err(|e| e.message)?;
-        u32::try_from(v).map_err(|_| format!("{name} = {v}: вне пределов"))
-    };
-    let tolerance_pct = s
-        .decimal("size.tolerance_pct", At::default())
-        .map_err(|e| e.message)?;
     let step = cx
         .pair_a
         .as_ref()
@@ -74,23 +91,48 @@ pub fn params(
     let d = &cx.dir;
     // Решение 211: стаканы — по тикеру площадки (Presence::ticker стороны направления).
     let (ta, tb) = (&cx.a.ticker, &cx.b.ticker);
-    let market = rd(&core.inner.market);
     let cum = |b: Option<&OrderBook>, buy: bool| -> Vec<Decimal> {
         b.map(|b| cumulative(if buy { &b.asks } else { &b.bids }))
             .unwrap_or_default()
     };
+    let (buy_breaks, sell_breaks) = {
+        let market = rd(&core.inner.market);
+        match src {
+            Some(f) => (cum(f.book(false), true), cum(f.book(true), false)),
+            None => (
+                cum(market.book(&d.buy_on, ta), true),
+                cum(market.book(&d.sell_on, tb), false),
+            ),
+        }
+    };
+    let s = &core.inner.deps.settings;
+    search_params(s, step, budget, price, buy_breaks, sell_breaks)
+}
+
+/// Что делает: параметры поиска при известных шаге количества и изломах (решение 218: общий кусок params и пересчёта
+/// по окнам). Принимает: настройки, шаг, бюджет, оценку цены покупки (> 0), изломы покупки и продажи.
+/// Возвращает: Params. Ошибки: текст — не задана настройка size.*.
+pub fn search_params(
+    s: &Store,
+    step: Decimal,
+    budget: Decimal,
+    price: Decimal,
+    buy_breaks: Vec<Decimal>,
+    sell_breaks: Vec<Decimal>,
+) -> Result<Params, String> {
+    let int = |name: &str| -> Result<u32, String> {
+        let v = s.integer(name, At::default()).map_err(|e| e.message)?;
+        u32::try_from(v).map_err(|_| format!("{name} = {v}: вне пределов"))
+    };
+    let tolerance_pct = s
+        .decimal("size.tolerance_pct", At::default())
+        .map_err(|e| e.message)?;
     Ok(Params {
         step,
         budget,
         guess: budget / price,
-        buy_breaks: match src {
-            Some(f) => cum(f.book(false), true),
-            None => cum(market.book(&d.buy_on, ta), true),
-        },
-        sell_breaks: match src {
-            Some(f) => cum(f.book(true), false),
-            None => cum(market.book(&d.sell_on, tb), false),
-        },
+        buy_breaks,
+        sell_breaks,
         bisect_steps: int("size.bisect_steps")?,
         grid_points: int("size.grid_points")?,
         refine_steps: int("size.refine_steps")?,

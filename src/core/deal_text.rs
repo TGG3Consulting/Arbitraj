@@ -1,9 +1,10 @@
 //! Файл: core/deal_text.rs
 //! Что делает: человеческие тексты алертов сделки (решение 164): закрытие сделки (формат Тиграна: «✅ Сделка плюсовая» /
-//! «❌ Сделка минусовая», план, факт, итог), остановка сделки, шаг сделки по-русски для хронологии.
+//! «❌ Сделка минусовая», план, факт, итог; решение 216 — строки расчёта «без потолка», deal_ceiling.rs), остановка
+//! сделки, шаг сделки по-русски для хронологии.
 //! Логику не меняет — только то, что видит человек в Telegram и на экранах.
 //! Кто вызывает: ledger.rs (deal.closed), ledger_load.rs, manual_feed.rs, другие места с текстом сделки.
-//! От чего зависит: deal.rs, notify/human.rs (формат чисел, Msg).
+//! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), notify/human.rs (формат чисел, Msg).
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -11,6 +12,7 @@ use rust_decimal::Decimal;
 use crate::notify::human::{self as h, Msg};
 
 use super::deal::{Deal, Step};
+use super::deal_ceiling::Ceiling;
 
 /// Шаг сделки по-русски (для хронологии и экранов). Принимает: шаг.
 pub fn step_name(s: Step) -> &'static str {
@@ -43,10 +45,12 @@ pub fn coins_at(d: &Deal) -> String {
 }
 
 /// Текст закрытия сделки для Telegram (deal.closed). Закрыта — плюсовая / минусовая по факту; остановлена или
-/// «Беру на себя» — что случилось, где монеты и причина. Принимает: сделку (уже с шагом и итогом), причину.
-pub fn closed(d: &Deal, why: &str) -> String {
+/// «Беру на себя» — что случилось, где монеты и причина. Принимает: сделку (уже с шагом и итогом), причину, расчёт
+/// «без потолка» этой сделки (решение 216, deal_ceiling::read; None — строк «без потолка» нет; у остановленной и
+/// переданной человеку не показывается).
+pub fn closed(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     match d.step {
-        Step::Closed => closed_result(d, why),
+        Step::Closed => closed_result(d, why, ceil),
         Step::TakenOver => Msg::new(h::INFO, "Сделка передана человеку")
             .line(coin_route(d))
             .kv("Монеты", coins_at(d))
@@ -66,8 +70,9 @@ pub fn closed(d: &Deal, why: &str) -> String {
 
 /// Закрытая сделка — формат Тиграна (решение 164): заголовок по знаку факта, монета и маршрут, размер ордера (решение
 /// 191), план, факт, итог;
-/// способ закрытия — короткой строкой, если продано вручную или есть продажа. Принимает: сделку, причину.
-fn closed_result(d: &Deal, why: &str) -> String {
+/// способ закрытия — короткой строкой, если продано вручную или есть продажа; строки «без потолка» (решение 216).
+/// Принимает: сделку, причину, расчёт «без потолка» (None — без этих строк).
+fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     let fact = fact(d);
     let plus = fact >= Decimal::ZERO;
     let mut m = if plus {
@@ -88,6 +93,9 @@ fn closed_result(d: &Deal, why: &str) -> String {
     };
     if let Some(how) = how_closed(d, why) {
         m = m.kv("Закрыта", how);
+    }
+    if let Some(c) = ceil {
+        m = super::deal_ceiling::lines(m, d, fact, plus, c);
     }
     m.id(&d.id).render()
 }

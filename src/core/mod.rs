@@ -58,6 +58,7 @@ pub mod daily_venue;
 pub mod daily_venue_limit;
 pub mod day_view;
 pub mod deal;
+pub mod deal_ceiling;
 pub mod deal_text;
 pub mod delist;
 pub mod delist_check;

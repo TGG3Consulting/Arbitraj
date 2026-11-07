@@ -6,7 +6,7 @@
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
 //! Закрытие (Closed) — общий шаг возврата USDT на площадку покупки (решение 138, usdt_return_deal.rs).
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
-//! От чего зависит: deal.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! От чего зависит: deal.rs, deal_text.rs, deal_ceiling.rs (строки «без потолка» в deal.closed, решение 216), persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -118,7 +118,9 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
     // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
     if deal.buy.is_some() || !deal.invested.is_zero() {
-        let tg = super::deal_text::closed(deal, why);
+        // Решение 216: у закрытой — строки расчёта «без потолка» (одно чтение SQLite по id сделки, очередь не ждётся).
+        let ceil = super::deal_ceiling::of_closed(core, deal).await;
+        let tg = super::deal_text::closed(deal, why, ceil.as_ref());
         // Решение 176: закрытая плюсовая — ещё в чат «Сделки», минусовая — в «Неудачные» (notify/routes.rs).
         let tag = match super::deal_text::outcome(deal) {
             Some(true) => crate::notify::routes::Tag::Profit,

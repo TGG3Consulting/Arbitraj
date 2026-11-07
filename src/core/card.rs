@@ -141,13 +141,15 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
     ] {
         match kind(v) {
             Some(VenueKind::Cex) => {
-                let book = rd(&core.inner.market).book(v, &d.asset.ticker).cloned();
+                // Решение 211: стакан и ссылка на пару — по тикеру площадки.
+                let t = super::venue_ticker::ticker_on(core, &d.asset, v);
+                let book = rd(&core.inner.market).book(v, &t).cloned();
                 let levels = book.as_ref().map(|b| match side {
                     Side::Buy => b.asks.as_slice(),
                     Side::Sell => b.bids.as_slice(),
                 });
                 books.push(card_book::side(&v.0, side, levels, band()));
-                links.push(card_links::pair(s, &v.0, &d.asset.ticker));
+                links.push(card_links::pair(s, &v.0, &t));
             }
             Some(VenueKind::Dex) => {
                 let got = route_pools(core, v, side, route.as_ref()).await;

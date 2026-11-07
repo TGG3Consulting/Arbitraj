@@ -61,6 +61,8 @@ pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Resu
         .map(|p| p.step_size)
         .ok_or("шаг количества неизвестен: ни одна сторона сделки не биржа")?;
     let d = &cx.dir;
+    // Решение 211: стаканы — по тикеру площадки (Presence::ticker стороны направления).
+    let (ta, tb) = (&cx.a.ticker, &cx.b.ticker);
     let market = rd(&core.inner.market);
     let cum = |b: Option<&OrderBook>, buy: bool| -> Vec<Decimal> {
         b.map(|b| cumulative(if buy { &b.asks } else { &b.bids }))
@@ -70,8 +72,8 @@ pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Resu
         step,
         budget,
         guess: budget / price,
-        buy_breaks: cum(market.book(&d.buy_on, &d.asset.ticker), true),
-        sell_breaks: cum(market.book(&d.sell_on, &d.asset.ticker), false),
+        buy_breaks: cum(market.book(&d.buy_on, ta), true),
+        sell_breaks: cum(market.book(&d.sell_on, tb), false),
         bisect_steps: int("size.bisect_steps")?,
         grid_points: int("size.grid_points")?,
         refine_steps: int("size.refine_steps")?,

@@ -30,7 +30,7 @@ pub async fn compute(core: &Core, calc: &Calc) -> Result<MaxVolume, String> {
     let d = &calc.direction;
     let cx = DirCtx::build(core, d)?;
     let price = rd(&core.inner.market)
-        .best(&d.buy_on, &d.asset.ticker, Side::Buy)
+        .best(&d.buy_on, &cx.a.ticker, Side::Buy)
         .filter(|p| !p.is_zero())
         .unwrap_or(calc.buy_avg);
     if price.is_zero() {

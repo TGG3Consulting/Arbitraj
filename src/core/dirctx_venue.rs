@@ -11,7 +11,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::core::types::{CoinNetworkInfo, VenueId};
+use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::gateway::events::SpotPairState;
 use crate::settings::read::At;
@@ -41,8 +41,20 @@ pub fn pair_rules(core: &Core, v: &VenueId, ticker: &str) -> Result<Option<SpotP
     }
 }
 
-/// Сеть монеты у площадки из справочника сетей ядра. Принимает: площадку, тикер, сеть. None — нет. Ошибок нет.
-pub fn network(core: &Core, v: &VenueId, ticker: &str, net: &str) -> Option<CoinNetworkInfo> {
+/// Сеть монеты у площадки из справочника сетей ядра. Решение 211: монета ищется по адресу (Asset == по адресу;
+/// у монеты без адреса — по тикеру), тикер площадки может отличаться от имени ядра. Принимает: площадку, монету,
+/// сеть. None — нет. Ошибок нет.
+pub fn network(core: &Core, v: &VenueId, asset: &Asset, net: &str) -> Option<CoinNetworkInfo> {
+    rd(&core.inner.networks).get(v).and_then(|all| {
+        all.iter()
+            .find(|n| &n.asset == asset && n.network == net)
+            .cloned()
+    })
+}
+
+/// Сеть котируемой монеты (USDT) у площадки — по тикеру venue.quote_asset (котируемая монета у площадки одна, её
+/// адрес ядро не сопоставляет — решение 211 этого не меняет). Принимает: площадку, тикер, сеть. Ошибок нет.
+pub fn quote_network(core: &Core, v: &VenueId, ticker: &str, net: &str) -> Option<CoinNetworkInfo> {
     rd(&core.inner.networks).get(v).and_then(|all| {
         all.iter()
             .find(|n| n.asset.ticker == ticker && n.network == net)

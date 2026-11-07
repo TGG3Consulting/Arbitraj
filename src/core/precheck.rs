@@ -29,19 +29,17 @@ async fn transfer_open(
     let gw = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
     // Решение 113: справочник одной монеты (BingX — config/getall?coin=; у кого запроса одной монеты нет — весь
     // справочник с фильтром, как раньше).
+    // Решение 211: справочник площадки — по её тикеру монеты; сеть ищется по адресу.
+    let on = super::venue_ticker::ticker_on(core, &d.asset, v);
     let list = gw
-        .coin_networks_of(&d.asset.ticker)
+        .coin_networks_of(&on)
         .await
         .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
     // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
     let list = super::native::map(core, v, list);
     let open = list
         .iter()
-        .find(|i| {
-            i.asset.ticker == d.asset.ticker
-                && i.asset.bsc_contract.is_some()
-                && i.asset.bsc_contract == d.asset.bsc_contract
-        })
+        .find(|i| i.asset.bsc_contract.is_some() && i.asset.bsc_contract == d.asset.bsc_contract)
         .map(|i| {
             if withdraw {
                 i.withdraw_enabled
@@ -55,7 +53,12 @@ async fn transfer_open(
     {
         let mut nets = wr(&core.inner.networks);
         if let Some(all) = nets.get_mut(v).map(std::sync::Arc::make_mut) {
-            all.retain(|i| i.asset.ticker != d.asset.ticker);
+            // Решение 211: записи этой монеты площадки — по её тикеру (и именам из свежего ответа после native::map);
+            // показное имя ядра у этой биржи может быть другой монетой — по нему не чистим.
+            let mut gone: std::collections::HashSet<String> =
+                list.iter().map(|i| i.asset.ticker.clone()).collect();
+            gone.insert(on.clone());
+            all.retain(|i| !gone.contains(&i.asset.ticker));
             all.extend(list);
         }
     }
@@ -80,8 +83,9 @@ async fn transfer_open(
 /// здесь оно отсекается до ордера. Ошибка — текст причины.
 fn pair_side(core: &Core, v: &VenueId, d: &Direction, buy: bool) -> Result<(), String> {
     let limit = super::pairs_fresh::limit(&core.inner.deps.settings, v);
+    let t = super::venue_ticker::ticker_on(core, &d.asset, v);
     let market = super::engine::rd(&core.inner.market);
-    super::pairs_fresh::side(&market, v, &d.asset.ticker, buy, &limit, chrono::Utc::now())
+    super::pairs_fresh::side(&market, v, &t, buy, &limit, chrono::Utc::now())
 }
 
 /// BNB на газ у DEX-площадки: свободный нативный BNB ≥ резерв risk.min_bnb_balance + газ транзакций сделки на ней

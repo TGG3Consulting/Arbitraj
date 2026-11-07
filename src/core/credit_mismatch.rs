@@ -109,7 +109,9 @@ pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ti
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(o.to.0.clone()));
     let mut told = false;
     while tokio::time::Instant::now() < end {
-        let status = match gw.deposit_status(&o.asset, &o.tx).await {
+        // Решение 211: площадке — её тикер монеты.
+        let on = super::venue_ticker::on_venue(&core, &o.asset, &o.to);
+        let status = match gw.deposit_status(&on, &o.tx).await {
             Ok(t) if t.status == TransferStatus::Credited => return,
             Ok(t) if t.status == TransferStatus::Rejected => {
                 let text = format!(

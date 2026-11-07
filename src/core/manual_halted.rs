@@ -32,12 +32,14 @@ pub async fn on_hand(
 ) -> Result<(Decimal, Option<String>), String> {
     let gw = super::dex_account::venue_of(core, deal, venue).await?;
     // Решение 113: баланс одной монеты (у DEX — 1–2 запроса к узлу, а не по каждому токену кошелька).
+    // Решение 211: баланс площадки — у биржи по её тикеру, у DEX по адресу (balance_key); резерв BNB — по тикеру.
+    let on = super::venue_ticker::ticker_on(core, asset, venue);
     let free = gw
-        .balance(&asset.ticker)
+        .balance(&super::venue_ticker::balance_key(core, asset, venue))
         .await
         .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
         .map_or(Decimal::ZERO, |x| x.free);
-    let free = super::native::spendable(core, venue, &asset.ticker, free)?;
+    let free = super::native::spendable(core, venue, &on, free)?;
     let (free, note) = super::native::minus_sell_gas(core, &gw, venue, asset, free).await;
     if free <= Decimal::ZERO {
         return Err(format!(
@@ -60,7 +62,9 @@ pub async fn on_hand_sell(
     cap: Decimal,
 ) -> Result<(Decimal, Option<String>), String> {
     let gw = super::dex_account::venue_of(core, deal, venue).await?;
-    let moved = super::to_trading::top_up(gw.as_ref(), asset, cap).await?;
+    // Решение 211: площадке — её тикер монеты.
+    let on = super::venue_ticker::on_venue(core, asset, venue);
+    let moved = super::to_trading::top_up(gw.as_ref(), &on, cap).await?;
     match (on_hand(core, deal, venue, asset, cap).await, moved) {
         (Ok((q, note)), Some(m)) => Ok((
             q,

@@ -68,8 +68,8 @@ pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
             Step::Halted => d.qty > Decimal::ZERO,
             _ => true,
         };
-        live && d.at == *v
-            && (CoinKey::of(&d.direction.asset) == key || d.direction.asset.ticker == a.ticker)
+        // Решение 211: монета сделки — по ключу монеты (адрес; без адреса — тикер), не по тикеру площадки.
+        live && d.at == *v && CoinKey::of(&d.direction.asset) == key
     });
     open.then_some(IN_DEAL)
 }
@@ -99,27 +99,30 @@ pub fn request(
     id: &str,
 ) -> Result<TradeRequest, String> {
     let quote = quote_of(core, v)?;
+    // Решение 211: стакан, пара и ордер площадки — по её тикеру монеты.
+    let on = super::venue_ticker::on_venue(core, a, v);
+    let t = &on.ticker;
     let worst = {
         let m = rd(&core.inner.market);
-        if m.book(v, &a.ticker).is_none() {
-            return Err(if m.pair(v, &a.ticker).is_none() {
+        if m.book(v, t).is_none() {
+            return Err(if m.pair(v, t).is_none() {
                 format!(
-                    "нет пары {}/{quote} на {} (или монета не в подписке бота)",
-                    a.ticker, v.0
+                    "нет пары {t}/{quote} на {} (или монета не в подписке бота)",
+                    v.0
                 )
             } else {
                 format!(
-                    "нет стакана {}/{quote} на {}: монета не в подписке бота — продать по рынку нельзя",
-                    a.ticker, v.0
+                    "нет стакана {t}/{quote} на {}: монета не в подписке бота — продать по рынку нельзя",
+                    v.0
                 )
             });
         }
-        m.deepest_price(v, &a.ticker, Side::Sell, qty)
-            .ok_or_else(|| format!("глубины стакана {}/{quote} не хватает на {qty}", a.ticker))?
+        m.deepest_price(v, t, Side::Sell, qty)
+            .ok_or_else(|| format!("глубины стакана {t}/{quote} не хватает на {qty}"))?
     };
     Ok(TradeRequest {
         venue: v.clone(),
-        asset: a.clone(),
+        asset: on.clone(),
         side: Side::Sell,
         qty,
         worst_price: worst,

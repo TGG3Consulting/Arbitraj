@@ -78,7 +78,7 @@ pub async fn decide_capped(
         Ok(b) => cap.map_or(b, |c| b.min(c)),
         Err(e) => return reject(e, None),
     };
-    let price = rd(&core.inner.market).best(&d.buy_on, &d.asset.ticker, Side::Buy);
+    let price = rd(&core.inner.market).best(&d.buy_on, &cx.a.ticker, Side::Buy);
     let price = match price.or(rd(&core.inner.spreads)
         .get(d)
         .and_then(|v| v.prices.as_ref().map(|p| p.buy)))
@@ -251,10 +251,12 @@ async fn final_fillable(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Decima
     let deps = &core.inner.deps;
     let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
     let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
+    // Решение 211: каждой площадке — её тикер монеты (Presence::ticker в DirCtx).
+    let (on_a, on_b) = (cx.on_a(), cx.on_b());
     let (qa, qb) = crate::gateway::quote_stage::final_scope(async {
         tokio::join!(
-            a.quote(&d.asset, Side::Buy, qty),
-            b.quote(&d.asset, Side::Sell, qty)
+            a.quote(&on_a, Side::Buy, qty),
+            b.quote(&on_b, Side::Sell, qty)
         )
     })
     .await;

@@ -165,13 +165,19 @@ fn stream(s: TapStream) -> &'static str {
 /// Возвращает: что включил адаптер или причина. Ошибок нет.
 pub async fn tap(core: &Core, v: &VenueId, a: &Asset, sink: TapSink) -> Result<TapInfo, String> {
     let venue = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    // Решение 211: площадке — её тикер монеты.
+    let a = &super::venue_ticker::on_venue(core, a, v);
     venue.window_tap(a, sink).await.map_err(|e| e.message)
 }
 
 /// Что делает: выключает запись монеты на бирже. Возвращает: выключена ли. Ошибок нет — сбой в журнал.
 pub async fn untap(core: &Core, v: &VenueId, a: &Asset) -> bool {
     let r = match core.inner.deps.gw.get(v).await {
-        Ok(venue) => venue.window_untap(a).await,
+        Ok(venue) => {
+            venue
+                .window_untap(&super::venue_ticker::on_venue(core, a, v))
+                .await
+        }
         Err(e) => Err(e),
     };
     let Err(e) = r else { return true };

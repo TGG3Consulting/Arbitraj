@@ -76,7 +76,8 @@ pub async fn trade(
         }
         let req = TradeRequest {
             venue: v.clone(),
-            asset: a.clone(),
+            // Решение 211: ордер площадки — с её тикером монеты; результат — обратно в монету ядра (ниже).
+            asset: super::venue_ticker::on_venue(core, a, v),
             side,
             qty,
             worst_price: worst,
@@ -96,6 +97,11 @@ pub async fn trade(
                 e,
             )),
         };
+        let res = res.map(|mut r| {
+            r.fee_asset = super::venue_ticker::name_back(core, a, v, &r.fee_asset);
+            r.request.asset = a.clone();
+            r
+        });
         let err = match res {
             Ok(r) => {
                 if let Some(tx) = &r.chain {
@@ -136,9 +142,12 @@ pub async fn sell_value(
     let x = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
     // Решение 201: котировка для исполнения (gateway/patience.rs exec_scope) — адаптер может взять тихий стакан пары
     // при живом соединении (ордер IOC по худшей цене хуже не исполнится).
-    let q = crate::gateway::patience::exec_scope(x.quote(a, Side::Sell, qty))
+    // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
+    let on = super::venue_ticker::on_venue(core, a, v);
+    let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
         .await
         .map_err(|e| format!("{}: {}", v.0, e.message))?;
+    let q = super::venue_ticker::quote_back(core, a, v, q);
     if q.fillable_qty < qty {
         return Err(format!(
             "{}: глубины хватает на {} из {qty}",

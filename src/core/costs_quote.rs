@@ -35,10 +35,13 @@ pub async fn quote(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resu
     let v = super::dex_account::venue_dir(&core.inner.deps, d, venue)
         .await
         .map_err(Fail::Stop)?;
+    // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
+    let on = super::venue_ticker::on_venue(core, &d.asset, venue);
     let q = v
-        .quote(&d.asset, side, qty)
+        .quote(&on, side, qty)
         .await
         .map_err(|e| classify(&venue.0, &e))?;
+    let q = super::venue_ticker::quote_back(core, &d.asset, venue, q);
     if q.fillable_qty < qty {
         return Err(Fail::TooLarge(format!(
             "{}: глубины хватает на {} из {qty}",

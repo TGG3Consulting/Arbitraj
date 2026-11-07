@@ -50,7 +50,9 @@ pub async fn settle(core: &Core, deal: &mut Deal, price: Decimal) {
         deal.direction.asset.ticker.clone(),
         deal.qty,
     );
-    if qty <= Decimal::ZERO || !is_dust(core, &v, &t, qty, price) {
+    // Решение 211: пара в справочнике — по тикеру площадки; в тексте — имя монеты ядра.
+    let on = super::venue_ticker::ticker_on(core, &deal.direction.asset, &v);
+    if qty <= Decimal::ZERO || !is_dust(core, &v, &on, qty, price) {
         return;
     }
     let text = format!(
@@ -62,7 +64,7 @@ pub async fn settle(core: &Core, deal: &mut Deal, price: Decimal) {
     deal.note(text.clone());
     deal.dust += qty;
     deal.qty = Decimal::ZERO;
-    if above_step(core, &v, &t, qty) {
+    if above_step(core, &v, &on, qty) {
         let deps = &core.inner.deps;
         deps.log(Level::Info, "deal.dust", Some(&v.0), &text, None)
             .await;

@@ -62,7 +62,8 @@ pub fn request(core: &Core, d: &Direction, plan: &Calc) -> Result<TradeRequest, 
     )?;
     Ok(TradeRequest {
         venue: d.sell_on.clone(),
-        asset: d.asset.clone(),
+        // Решение 211: ордер площадки — с её тикером монеты.
+        asset: super::venue_ticker::on_venue(core, &d.asset, &d.sell_on),
         side: Side::Sell,
         qty,
         worst_price: worst,

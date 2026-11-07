@@ -26,7 +26,7 @@ use super::engine::{Core, lk};
 /// Отпечаток сделки для сравнения «до» и «после» запроса балансов: ID, шаг, объём, время последнего события.
 type Print = (String, Step, Decimal, DateTime<Utc>);
 
-/// Учёт площадки: монета → (сколько монет бота там должно быть, отпечатки сделок).
+/// Учёт площадки: тикер монеты на площадке (решение 211) → (сколько монет бота там должно быть, отпечатки сделок).
 pub type Expected = HashMap<String, (Decimal, Vec<Print>)>;
 
 /// Учёт площадки сейчас: открытые сделки не в пути (не покупка и не перевод), монеты которых лежат на площадке.
@@ -54,7 +54,9 @@ pub fn expected(
         {
             continue;
         }
-        let e = out.entry(d.direction.asset.ticker.clone()).or_default();
+        // Решение 211: балансы площадки — по её тикеру монеты.
+        let t = super::venue_ticker::ticker_on(core, &d.direction.asset, venue);
+        let e = out.entry(t).or_default();
         e.0 += d.qty;
         e.1.push((d.id.clone(), d.step, d.qty, d.updated_at));
     }

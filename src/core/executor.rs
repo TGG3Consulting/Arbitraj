@@ -96,7 +96,9 @@ async fn run(core: &Core, d: Direction) {
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
     let pre = async {
         // Решение 180: лимит выводов биржи A — место занимается в момент решения; окно занято — сигнал пропускается.
-        let slot = super::withdraw_limit::reserve(core, &d.buy_on, &d.asset.ticker)?;
+        // Решение 211: ключ лимита «биржа и монета» — тикер этой биржи (так же, как в transfers.rs take).
+        let on = super::venue_ticker::ticker_on(core, &d.asset, &d.buy_on);
+        let slot = super::withdraw_limit::reserve(core, &d.buy_on, &on)?;
         let acc = super::dex_account::of_direction(deps, &d).await?;
         let plan = super::precheck::run(core, &d).await?;
         // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.

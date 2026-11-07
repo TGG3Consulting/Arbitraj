@@ -29,7 +29,9 @@ use super::credit_watch::{State, lock, norm, same_asset};
 use super::engine::{Core, rd};
 
 /// Событие изменения баланса от адаптера. Ошибок нет: итог — в журнал.
-pub async fn on_change(core: &Core, b: BalanceChange) {
+pub async fn on_change(core: &Core, mut b: BalanceChange) {
+    // Решение 211: монета события — тикер площадки; в монету ядра (адрес, показное имя) — до сверки с ожиданиями.
+    b.asset = super::venue_ticker::asset_back(core, &b.venue, b.asset);
     let at = At {
         venue: Some(&b.venue.0),
         coin: Some(&b.asset.ticker),
@@ -169,9 +171,14 @@ pub async fn external(core: &Core, b: &BalanceChange) {
         },
     );
     let dust = match min {
-        Ok(min) => usd(core, &b.venue, &b.asset.ticker, b.delta.abs())
-            .await
-            .is_some_and(|v| v < min),
+        Ok(min) => usd(
+            core,
+            &b.venue,
+            &super::venue_ticker::ticker_on(core, &b.asset, &b.venue),
+            b.delta.abs(),
+        )
+        .await
+        .is_some_and(|v| v < min),
         Err(_) => false,
     };
     let level = if dust { Level::Info } else { Level::Warn };

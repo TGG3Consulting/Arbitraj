@@ -73,8 +73,20 @@ fn currencies_bsc_network() {
     let all =
         networks_parse::parse(&data("kucoin_currencies_v3.json"), "bsc", &venue, false).unwrap();
     assert!(all.skipped.is_empty(), "{:?}", all.skipped);
-    // Одна сеть bsc с ненулевой долей комиссии в записи — комиссия неизвестна.
+    // Одна сеть bsc с ненулевой долей комиссии в записи. Решение 209: комиссия = withdrawalMinFee + доля × сумма
+    // (факт экрана вывода KuCoin 07.11: LUNC 1 → 8 000,03 при minFee 8000 и rate 0.03).
     assert_eq!(all.fee_rate.len(), 1, "{:?}", all.fee_rate);
+    let (tk, raw) = all.fee_rate[0].split_once('=').unwrap();
+    let net = all
+        .list
+        .iter()
+        .find(|n| n.asset.ticker == tk && n.network == "bsc")
+        .unwrap();
+    assert_eq!(net.withdraw_fee_pct, Some(d(raw.trim_matches('"'))));
+    assert!(
+        net.withdraw_fee.is_some(),
+        "фиксированная часть — withdrawalMinFee"
+    );
     let one =
         networks_parse::parse(&data("kucoin_currency_CAKE_v3.json"), "bsc", &venue, false).unwrap();
     assert_eq!(one.list.len(), 1);

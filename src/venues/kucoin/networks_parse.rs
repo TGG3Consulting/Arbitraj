@@ -14,10 +14,12 @@
 //! contractAddress, withdrawPrecision («maximum supported length after the decimal point of the withdrawal amount»),
 //! maxWithdraw, needTag («Need for memo/tag or not»).
 //!
-//! Комиссия вывода: формулы «минимальная комиссия + доля от суммы» в документации нет (страница Get All Currencies —
-//! только пример со значением "0", описаний полей нет; проверено 06.11.2026, решение 199). Сеть с withdrawFeeRate = 0 —
-//! комиссия = withdrawalMinFee; с ненулевой долей — комиссия неизвестна (None: ядро не торгует с выводом по ней), такие
-//! сети BSC — в журнал с СЫРЫМ значением (для разбора формата по живому ответу) и вопрос Тиграну (docs/TASKS.md).
+//! Комиссия вывода (решение 209): в документации и официальном SDK у withdrawFeeRate нет единицы («Withdraw fee
+//! rate»). Факт с экрана вывода KuCoin 07.11.2026 (Тигран): LUNC, withdrawalMinFee 8000, withdrawFeeRate "0.03",
+//! вывод 1 LUNC — «Комиссия 8 000,03 LUNC», «Сумма к получению 0». Значит: комиссия = withdrawalMinFee +
+//! withdrawFeeRate × сумма (доля: 0.03 = 3%), вычитается из суммы вывода — та же модель ядра, что решение 199
+//! (withdraw_fee + withdraw_fee_pct). withdrawMaxFee (потолок, у части монет) ядро не учитывает: без потолка комиссия
+//! оценивается не ниже настоящей (осторожно). Сети BSC с ненулевой долей — в журнал (сырое значение, для контроля).
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -36,7 +38,7 @@ pub struct Parsed {
     pub need_tag: Vec<String>,
     /// Пропущенные сети: «монета/сеть: причина».
     pub skipped: Vec<String>,
-    /// Сети BSC с ненулевой долей комиссии вывода: «монета=доля» (комиссия неизвестна).
+    /// Сети BSC с ненулевой долей комиссии вывода: «монета=доля» (для журнала, решение 209).
     pub fee_rate: Vec<String>,
 }
 
@@ -68,7 +70,7 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
                         p.need_tag.push(ticker.clone());
                     }
                     if is_bsc && rate.is_some() {
-                        // Решение 199: сырое значение как пришло — формат и формула в документации не описаны.
+                        // Решение 209: сырое значение как пришло — для контроля в журнале.
                         let raw = n
                             .get("withdrawFeeRate")
                             .map(|v| v.to_string())
@@ -110,8 +112,8 @@ fn network(
         network: chain.to_string(),
         deposit_enabled: num::flag(n, "isDepositEnabled")?,
         withdraw_enabled: num::flag(n, "isWithdrawEnabled")?,
-        withdraw_fee: if rate.is_some() { None } else { min_fee },
-        withdraw_fee_pct: None,
+        withdraw_fee: min_fee,
+        withdraw_fee_pct: rate,
         withdraw_min: num::dec_opt(n, "withdrawalMinSize")?,
         withdraw_max: num::dec_opt(n, "maxWithdraw")?,
         deposit_min,

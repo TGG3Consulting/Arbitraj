@@ -40,6 +40,8 @@ pub struct Inputs<'a> {
     pub pool_ok: &'a dyn Fn(&Pool) -> Result<(), String>,
     /// Промежуточные монеты по каждой площадке DEX (intermediate.rs, решение 52).
     pub intermediate: &'a HashMap<VenueId, super::intermediate::Intermediate>,
+    /// Решение 211 (ревью К1): нативная монета сети и её обёртка (native.rs, решение 62); None — не задана.
+    pub native: Option<&'a super::native::Native>,
 }
 
 /// Адрес USDT в BSC: из справочника бирж (котируемая монета в сети BSC).
@@ -132,8 +134,11 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
         .map(|(contract, presence)| {
             // Решение 211: один тикер на биржу (правило выбора — registry_merge.rs) и показное имя монеты.
             let mut presence = super::registry_merge::one_per_venue(presence);
+            // Ревью К1: нативная монета биржи (адрес обёртки по решению 62) и BEP20-токен обёртки другой биржи — разные
+            // активы; токен исключается, показное имя — тикер нативной (registry_native.rs).
+            let native = super::registry_native::split(&mut presence, contract, inp.native);
             let asset = Asset {
-                ticker: super::registry_merge::display_ticker(&presence),
+                ticker: native.unwrap_or_else(|| super::registry_merge::display_ticker(&presence)),
                 bsc_contract: contract,
             };
             // DEX ищет пулы только монет своей подписки (core/subscribe.rs: то же условие, cex_pair) — у остальных

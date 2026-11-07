@@ -41,13 +41,14 @@ pub fn pair_rules(core: &Core, v: &VenueId, ticker: &str) -> Result<Option<SpotP
     }
 }
 
-/// Сеть монеты у площадки из справочника сетей ядра. Решение 211: монета ищется по адресу (Asset == по адресу;
-/// у монеты без адреса — по тикеру), тикер площадки может отличаться от имени ядра. Принимает: площадку, монету,
-/// сеть. None — нет. Ошибок нет.
+/// Сеть монеты у площадки из справочника сетей ядра. Решение 211 (ревью В1): запись ищется по адресу (Asset ==) И
+/// тикеру этой площадки (venue_ticker::ticker_on): у одного адреса на бирже бывает несколько тикеров (X и XOLD) — берётся
+/// запись того тикера, который выбрал справочник. Принимает: площадку, монету ядра, сеть. None — нет. Ошибок нет.
 pub fn network(core: &Core, v: &VenueId, asset: &Asset, net: &str) -> Option<CoinNetworkInfo> {
+    let on = super::venue_ticker::ticker_on(core, asset, v);
     rd(&core.inner.networks).get(v).and_then(|all| {
         all.iter()
-            .find(|n| &n.asset == asset && n.network == net)
+            .find(|n| &n.asset == asset && n.asset.ticker == on && n.network == net)
             .cloned()
     })
 }

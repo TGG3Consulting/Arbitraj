@@ -22,6 +22,8 @@ pub fn send(p: &Pools, coin: alloy_primitives::Address, fallback: String) {
     let ev = MarketEvent::Invalidated {
         venue: p.ctx.venue(),
         ticker: ticker.clone(),
+        // Решение 211 (ревью В2): ядро находит монету по адресу, тикер — только для показа.
+        address: Some(coin),
     };
     let lost = |ctx: super::super::ctx::Ctx, ticker: String| async move {
         let msg =

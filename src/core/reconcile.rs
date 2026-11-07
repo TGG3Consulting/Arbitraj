@@ -13,7 +13,8 @@
 //! Решение 132: у DEX сверяется каждый кошелёк отдельно (reconcile_holders.rs): свои балансы, учёт сделок кошелька,
 //! «мало USDT» и «мало BNB»; на «Балансах» — строка «площадка «кошелёк»».
 //! Кто вызывает: core/engine.rs (задача run).
-//! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs, reconcile_confirm.rs.
+//! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs, reconcile_confirm.rs,
+//! reconcile_key.rs (ключ монеты: биржа — тикер, DEX — адрес; решение 211, ревью В2).
 //! Настройки: ledger.reconcile_interval_s, ledger.reconcile_confirm_rounds, alert.min_usdt (через low_usdt.rs),
 //! risk.min_bnb_balance, venue.quote_asset.
 
@@ -119,9 +120,10 @@ async fn once(core: &Core) -> Vec<Found> {
         // Учёт площадки до и после запроса балансов (решение 112): сверяются только монеты, по которым сделки за это
         // время не сдвинулись.
         let before = expected(core, &v, acc.as_ref());
-        let b = match deps.gw.get_as(&v, acc.as_ref()).await {
+        let g = deps.gw.get_as(&v, acc.as_ref()).await;
+        let b = match &g {
             Ok(x) => x.balances().await,
-            Err(e) => Err(e),
+            Err(e) => Err(e.clone()),
         };
         let held = stable(&before, &expected(core, &v, acc.as_ref()));
         let b = match b {
@@ -162,13 +164,20 @@ async fn once(core: &Core) -> Vec<Found> {
                 out.push(("risk.low_bnb", Some(v.0.clone()), e, None));
             }
         }
-        for (ticker, need) in &held {
+        let Ok(gw) = &g else { continue };
+        for (key, need) in &held {
             let ev = &v;
-            let total: Decimal = b
-                .iter()
-                .filter(|x| &x.asset == ticker)
-                .map(|x| x.free + x.locked)
-                .sum();
+            // Решение 211 (ревью В2): у кошелька DEX — остаток по адресу (reconcile_key.rs), у биржи — строки по тикеру.
+            let ticker = &super::reconcile_key::name(core, key);
+            let total = match super::reconcile_key::total(kind, gw.as_ref(), &b, key).await {
+                Ok(t) => t,
+                Err(e) => {
+                    let text = format!("{label}: {ticker}: {e}");
+                    let k = Some(format!("{label}/{ticker}"));
+                    out.push(("risk.reconcile_mismatch", Some(ev.0.clone()), text, k));
+                    continue;
+                }
+            };
             // BNB на DEX (решение 62): нативный + WBNB (адаптер отдаёт WBNB в locked строки BNB) минус резерв на газ —
             // резерв монетами сделки не считается; резерв не задан — сверить нельзя, это и есть причина.
             let have = match super::native::spendable(core, ev, ticker, total) {

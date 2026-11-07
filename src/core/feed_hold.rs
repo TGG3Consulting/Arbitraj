@@ -9,7 +9,7 @@
 //! «Продать сейчас»), и площадка — её покупка, продажа или место монет сейчас.
 //! Кто вызывает: core/subscribe.rs (sync — список выключенной площадки), core/feed_live.rs (on_disabled), core/ledger.rs
 //! (on_saved).
-//! От чего зависит: engine.rs, deal.rs, sub_state.rs.
+//! От чего зависит: engine.rs, deal.rs, sub_state.rs, venue_ticker.rs (тикер площадки, решение 211).
 //! Настройки: нет (venue.enabled — через вызывающих).
 
 use crate::core::types::{Asset, VenueId};
@@ -48,9 +48,16 @@ pub fn want_disabled(core: &Core, venue: &VenueId) -> (Vec<Asset>, bool) {
         .have(venue)
         .map(|h| h.to_vec())
         .unwrap_or_default();
-    out.extend(deals.into_iter().map(|(_, a)| a));
+    // Решение 211 (ревью В3): монета сделки — монета ядра; площадке — с её тикером (on_venue), как в subscribe::wanted.
+    out.extend(
+        deals
+            .into_iter()
+            .map(|(_, a)| super::venue_ticker::on_venue(core, &a, venue)),
+    );
+    // Одна монета — один раз (Asset == по адресу; без адреса — по тикеру): сортировка по тикеру не ставит дубли рядом.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|a| seen.insert(a.clone()));
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
-    out.dedup();
     (out, true)
 }
 

@@ -86,6 +86,7 @@ fn market_state_books() {
     m.apply(MarketEvent::Invalidated {
         venue: bx.clone(),
         ticker: "CAKE".into(),
+        address: None,
     });
     assert!(m.book(&bx, "CAKE").is_none());
     assert!(m.book(&bx, "TWT").is_some());

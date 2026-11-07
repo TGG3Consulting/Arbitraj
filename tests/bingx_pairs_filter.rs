@@ -121,6 +121,7 @@ fn coins(market: &MarketState, n: Vec<CoinNetworkInfo>, limit: u64) -> Vec<CoinE
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
+        native: None,
     })
 }
 

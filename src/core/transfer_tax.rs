@@ -52,7 +52,8 @@ pub fn untaxed_ok(s: &Store) -> bool {
 /// Ошибки: текст — нет адреса контракта; налог не измерен (получатель DEX — проверка не закончена; биржа ↔ биржа —
 /// cex_cex.untaxed_ok не «да»).
 pub fn pct(core: &Core, to: &VenueId, asset: &Asset) -> Result<Decimal, String> {
-    if super::native::ticker(core).as_deref() == Some(asset.ticker.as_str()) {
+    // Решение 211 (ревью К1): нативная — по тикеру И адресу обёртки (native::is_native), не любой токен с этим тикером.
+    if super::native::is_native(core, asset) {
         return Ok(Decimal::ZERO);
     }
     let token = asset.bsc_contract.ok_or_else(|| {

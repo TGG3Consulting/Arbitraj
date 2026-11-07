@@ -99,6 +99,7 @@ pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, tic
     let _ = out.try_send(MarketEvent::Invalidated {
         venue: ctx.venue(),
         ticker: ticker.to_string(),
+        address: None,
     });
 }
 

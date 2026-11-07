@@ -14,7 +14,7 @@
 //! официального источника (BingX, Bitget) отвечает «неизвестно» — проверка не блокирует, одна запись в журнал на
 //! площадку (core.precheck_withdraw); дальше страхует повтор вывода (core/transfer_locked.rs).
 //! Кто вызывает: core/precheck.rs (после пересчёта с финальной котировкой).
-//! От чего зависит: trade_ops.rs (вид площадки), limits.rs (free_now), convert.rs (price_of), deps.rs (шлюз).
+//! От чего зависит: trade_ops.rs (вид площадки), limits.rs (free_now), convert_at.rs (price_at), deps.rs (шлюз).
 //! Настройки: venue.quote_asset (по площадке A); новых нет.
 
 use std::collections::HashSet;
@@ -95,7 +95,8 @@ pub async fn held(core: &Core, a: &VenueId, quote: &str) -> Result<Held, String>
 }
 
 /// Что делает: стоимость всех удержаний в USDT. Котируемая монета A — как есть; другая — по живому стакану биржи
-/// (convert::price_of — как у оценки монет в USDT, credit_event.rs): сначала A, затем остальные биржи.
+/// (convert_at::price_at — как у оценки монет в USDT, credit_event.rs): сначала A, затем остальные биржи по их тикеру
+/// того же адреса (решение 211, ревью В7).
 /// Ошибки: текст — у удержания нет живой цены (неизвестная стоимость = сделки нет).
 async fn held_usdt(
     core: &Core,
@@ -116,7 +117,8 @@ async fn held_usdt(
             sum += h.amount;
             continue;
         }
-        let p = super::convert::price_of(&core.inner.deps, &cex, &h.asset, h.amount)
+        // Решение 211 (ревью В7): удержание — в тикере биржи A; на других биржах — по их тикеру того же адреса.
+        let p = super::convert_at::price_at(core, &cex, a, &h.asset, h.amount)
             .await
             .map_err(|e| {
                 format!(

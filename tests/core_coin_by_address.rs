@@ -115,6 +115,7 @@ fn one_coin_per_address_venue_tickers_kept() {
         market: &market,
         pool_ok: &pool_ok,
         intermediate: &inter,
+        native: None,
     });
     let addr = by_address(&n);
     // Одна запись справочника на адрес.

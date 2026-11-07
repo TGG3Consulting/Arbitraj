@@ -31,7 +31,8 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             .presence
             .iter()
             .filter(|p| p.info.is_some())
-            .find_map(|p| market.best(&p.venue, &asset.ticker, Side::Buy));
+            // Решение 211 (ревью В5): стакан биржи — по её тикеру монеты (Presence::ticker).
+            .find_map(|p| market.best(&p.venue, &p.ticker, Side::Buy));
         let dirs: Vec<_> = entry
             .shown_directions()
             .into_iter()

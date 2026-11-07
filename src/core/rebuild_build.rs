@@ -49,6 +49,13 @@ pub fn build(
         .filter(|(_, k)| *k == VenueKind::Dex)
         .map(|(v, _)| (v.clone(), super::intermediate::read(s, v)))
         .collect();
+    // Ревью К1 (решение 211): нативная монета и обёртка — общая настройка площадок DEX (native.rs).
+    let dex: Vec<VenueId> = venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| v.clone())
+        .collect();
+    let native = super::native::read(s, &dex).ok().flatten();
     super::registry_build::build_part(
         &Inputs {
             venues,
@@ -60,6 +67,7 @@ pub fn build(
             market,
             pool_ok: &pool_ok,
             intermediate: &intermediate,
+            native: native.as_ref(),
         },
         part,
     )

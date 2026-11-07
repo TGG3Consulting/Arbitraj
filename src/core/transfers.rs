@@ -41,12 +41,14 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
     let entry = asset
         .bsc_contract
         .and_then(|t| super::ticker_index::find_by_token(core, &coins, t));
+    // Решение 211 (ревью В1): по адресу И тикеру этой площадки — у адреса на бирже бывает несколько тикеров.
+    let on = super::venue_ticker::ticker_on(core, asset, venue);
     let any = rd(&core.inner.networks)
         .get(venue)
         .and_then(|l| {
-            l.iter()
-                // Решение 211: по адресу (Asset == по адресу), тикер площадки может отличаться от имени ядра.
-                .find(|i| &i.asset == asset && i.asset.bsc_contract.is_some())
+            l.iter().find(|i| {
+                &i.asset == asset && i.asset.bsc_contract.is_some() && i.asset.ticker == on
+            })
         })
         .map(|i| i.network.clone());
     let own = entry.and_then(|e| {
@@ -159,12 +161,9 @@ async fn go(
     // расчёт, costs_withdraw::floor_precision). Без этого хвост вида 14.425559999999999999 (комиссия покупки в монете
     // пришла числом с плавающей точкой) — отказ BingX 100400 «decimal precision … Precision: 8».
     let qty = {
-        let nets = rd(&core.inner.networks);
-        let info = nets.get(from).and_then(|l| {
-            l.iter()
-                .find(|i| &i.asset == asset && i.network == net_from)
-        });
-        super::costs_withdraw::floor_precision(qty, info)
+        // Решение 211 (ревью В1): запись сети — по адресу и тикеру биржи (dirctx_venue::network).
+        let info = super::dirctx_venue::network(core, from, asset, &net_from);
+        super::costs_withdraw::floor_precision(qty, info.as_ref())
     };
     if qty <= Decimal::ZERO {
         return Err(OpError::from(format!(

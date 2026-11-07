@@ -99,6 +99,7 @@ fn coins(fx: &Value, market: &MarketState, kinds: &[(VenueId, VenueKind)]) -> Ve
         market,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
+        native: None,
     })
 }
 
@@ -169,6 +170,7 @@ fn coin_without_bingx_pair_is_not_in_dex_subscription() {
     m.apply(MarketEvent::Invalidated {
         venue: bingx(),
         ticker: "CAKE".into(),
+        address: None,
     });
     assert_eq!(dex_list(&fx, &m, &kinds), vec!["CAKE", "TWT"]);
     // Биржа выключена — её подписка пустая, пар нет: DEX слушать незачем.

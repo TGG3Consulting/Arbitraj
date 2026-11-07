@@ -92,7 +92,9 @@ pub fn bnb_total(costs: &[Cost]) -> Decimal {
         .sum()
 }
 
-/// Цена валюты в USDT по живому стакану биржи: средняя цена покупки нужного количества.
+/// Цена валюты в USDT по живому стакану биржи: средняя цена покупки нужного количества. Тикер — один на все биржи:
+/// только для валют, у которых площадка возникновения неизвестна (затраты сделки — BNB газа, промежуточные монеты);
+/// площадка известна — convert_at::price_at (решение 211, ревью В7).
 /// Принимает: зависимости, биржи (по порядку — первая ответившая), тикер, количество.
 /// Возвращает: цену. Ошибки: ни одна биржа не дала свежую котировку (причины перечислены).
 pub async fn price_of(
@@ -107,20 +109,34 @@ pub async fn price_of(
     };
     let mut why = vec![];
     for v in cex {
-        let q = match deps.gw.get(v).await {
-            Ok(a) => a.quote(&asset, Side::Buy, qty).await,
-            Err(e) => Err(e),
-        };
-        match q {
-            Ok(q) if q.fillable_qty >= qty && !q.avg_price.is_zero() => return Ok(q.avg_price),
-            Ok(q) => why.push(format!(
-                "{}: глубины {ticker} {} < {qty}",
-                v.0, q.fillable_qty
-            )),
-            Err(e) => why.push(format!("{}: {}", v.0, e.message)),
+        match quote_one(deps, v, &asset, qty).await {
+            Ok(p) => return Ok(p),
+            Err(e) => why.push(e),
         }
     }
     Err(format!("нет живой цены {ticker}: {}", why.join("; ")))
+}
+
+/// Котировка одной биржи: средняя цена покупки qty по живому стакану. Принимает: зависимости, биржу, монету с тикером
+/// этой биржи, количество. Ошибки: текст «биржа: причина» — шлюз, мало глубины, нулевая цена.
+pub async fn quote_one(
+    deps: &Deps,
+    v: &VenueId,
+    asset: &Asset,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    let q = match deps.gw.get(v).await {
+        Ok(a) => a.quote(asset, Side::Buy, qty).await,
+        Err(e) => Err(e),
+    };
+    match q {
+        Ok(q) if q.fillable_qty >= qty && !q.avg_price.is_zero() => Ok(q.avg_price),
+        Ok(q) => Err(format!(
+            "{}: глубины {} {} < {qty}",
+            v.0, asset.ticker, q.fillable_qty
+        )),
+        Err(e) => Err(format!("{}: {}", v.0, e.message)),
+    }
 }
 
 /// Цена BNB в USDT по живому стакану биржи (газ). Ошибки: как у price_of.

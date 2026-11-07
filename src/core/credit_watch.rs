@@ -190,11 +190,13 @@ pub fn register(
     }
 }
 
-/// Тот же актив (решение 211): адреса известны у обоих — по адресу; иначе — по тикеру (событие площадки без адреса
-/// уже переведено в монету ядра — credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
+/// Тот же актив (решение 211, ревью К2) — как Asset::eq: адреса у обоих — по адресу; адреса нет у обоих — по тикеру;
+/// адрес только у одного — разные активы (событие площадки без адреса уже переведено в монету ядра —
+/// credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
 pub fn same_asset(a: &Asset, b: &Asset) -> bool {
     match (a.bsc_contract, b.bsc_contract) {
         (Some(x), Some(y)) => x == y,
-        _ => a.ticker == b.ticker,
+        (None, None) => a.ticker == b.ticker,
+        _ => false,
     }
 }

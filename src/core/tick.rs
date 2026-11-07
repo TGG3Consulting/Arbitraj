@@ -77,11 +77,17 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                     schedule(&core, a, venue.clone());
                 }
             }
-            Touched::Invalidated { venue, ticker } => {
-                // У DEX данные монеты — её пулы: удаляем их по адресу контракта.
-                if let Some(token) =
+            Touched::Invalidated {
+                venue,
+                ticker,
+                address,
+            } => {
+                // У DEX данные монеты — её пулы: удаляем их по адресу контракта. Решение 211 (ревью В2): адрес из
+                // события (DEX) — сразу; нет — монета по (площадка, тикер площадки).
+                let token = address.or_else(|| {
                     asset_by_ticker(&core, &venue, &ticker).and_then(|a| a.bsc_contract)
-                {
+                });
+                if let Some(token) = token {
                     lk(&core.inner.quote_cache).bump(&venue, token);
                     wr(&core.inner.market).drop_pools_of(&venue, token);
                     // Пулы сняты до перечитывания, а не исчезли: решение по чёрному списку держится (решение 71).

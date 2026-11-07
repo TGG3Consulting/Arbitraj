@@ -2,8 +2,9 @@
 //! Что делает: решение 211 (Тигран, 07.11.2026: «метчить монеты только по адресам») — правила записи справочника,
 //! собранной по адресу контракта: (1) один тикер на биржу — у одного адреса на ОДНОЙ бирже бывает несколько тикеров
 //! (старый и новый токен: «X» и «XOLD» с одним адресом в справочнике сетей); берётся тот, на котором монета на бирже
-//! годна (пара торгуется, стакан есть, ввод и вывод открыты); годных нет или больше одного — выбрать нельзя: остаётся
-//! одна запись с причиной TickerConflict (монета на этой бирже не торгуется); (2) показное имя монеты — тикер
+//! годна (пара торгуется, стакан есть, ввод и вывод открыты); годных больше одного — выбрать нельзя: остаётся одна
+//! запись с причиной TickerConflict (монета на этой бирже не торгуется); годных нет — первая по алфавиту со своими
+//! причинами (ревью М4: не конфликт); (2) показное имя монеты — тикер
 //! большинства бирж монеты, при равенстве — по алфавиту (детерминированно; у DEX своего тикера нет).
 //! Кто вызывает: core/registry_build.rs.
 //! От чего зависит: registry.rs (Presence, Exclusion).
@@ -31,20 +32,27 @@ pub fn one_per_venue(list: Vec<Presence>) -> Vec<Presence> {
         .collect()
 }
 
-/// Выбор тикера одной биржи. Ошибок нет.
+/// Выбор тикера одной биржи. Годен ровно один — он. Годных нет — первый по алфавиту со СВОИМИ причинами (ревью М4:
+/// это не конфликт, монета на бирже не торгуется по этим причинам — их и видно). Годных больше одного — конфликт:
+/// первый годный с TickerConflict (выбрать нельзя). Ошибок нет.
 fn pick(mut same: Vec<Presence>) -> Presence {
     if same.len() == 1 {
         return same.remove(0);
     }
     same.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     let good: Vec<usize> = (0..same.len()).filter(|&i| usable(&same[i])).collect();
-    if good.len() == 1 {
-        return same.swap_remove(good[0]);
+    match good.len() {
+        0 => same.remove(0),
+        1 => same.swap_remove(good[0]),
+        _ => {
+            let names: Vec<String> = same.iter().map(|p| p.ticker.clone()).collect();
+            let mut first = same.swap_remove(good[0]);
+            first
+                .excluded
+                .push(Exclusion::TickerConflict(names.join(", ")));
+            first
+        }
     }
-    let names: Vec<String> = same.iter().map(|p| p.ticker.clone()).collect();
-    let mut first = same.remove(0);
-    first.excluded = vec![Exclusion::TickerConflict(names.join(", "))];
-    first
 }
 
 /// Годна ли запись: причин нет, ввод и вывод открыты. Ошибок нет.
@@ -109,6 +117,16 @@ mod tests {
         assert_eq!(
             both[0].excluded,
             vec![Exclusion::TickerConflict("A, B".into())]
+        );
+        // Годных нет — не конфликт: первая по алфавиту со своими причинами (ревью М4).
+        let none = one_per_venue(vec![p("gate", "Y", false), p("gate", "X", false)]);
+        assert_eq!(
+            (
+                none.len(),
+                none[0].ticker.as_str(),
+                none[0].excluded.clone()
+            ),
+            (1, "X", vec![Exclusion::NoSpotBook])
         );
         // Равенство голосов — по алфавиту.
         assert_eq!(display_ticker(&[p("a", "Z", true), p("b", "Y", true)]), "Y");

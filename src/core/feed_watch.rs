@@ -89,7 +89,9 @@ pub async fn run(core: Core, venue: VenueId) {
         let deals: HashMap<String, Vec<String>> = super::feed_hold::holders(&core, &venue)
             .into_iter()
             .fold(HashMap::new(), |mut m, (id, a)| {
-                m.entry(a.ticker).or_default().push(id);
+                // Решение 211 (ревью В4): здоровье потока площадки — по её тикеру монеты, не по показному имени.
+                let t = super::venue_ticker::ticker_on(&core, &a, &venue);
+                m.entry(t).or_default().push(id);
                 m
             });
         let now = chrono::Utc::now().timestamp_millis();

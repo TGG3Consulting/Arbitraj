@@ -85,6 +85,7 @@ export function exclusionText(e) {
   if (e?.PairsStale !== undefined) return `справочнику пар не верим: ${e.PairsStale}`;
   if (e?.PairNotTrading !== undefined) return `пара не торгуется (status ${e.PairNotTrading})`;
   if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
+  if (e?.NativeVsToken) return `нативная монета и токен обёртки — разные активы: ${e.NativeVsToken}`;
   if (e?.TickerConflict) return `у адреса на бирже несколько тикеров, выбрать нельзя: ${e.TickerConflict}`;
   if (e?.IntermediateNotConfigured) return `промежуточные монеты (решение 52) не заданы: ${e.IntermediateNotConfigured}`;
   return JSON.stringify(e);

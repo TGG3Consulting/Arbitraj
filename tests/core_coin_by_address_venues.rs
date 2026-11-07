@@ -127,6 +127,7 @@ fn coins() -> Vec<arb::core::registry::CoinEntry> {
         market: &market,
         pool_ok: &pool_ok,
         intermediate: &inter,
+        native: None,
     })
 }
 

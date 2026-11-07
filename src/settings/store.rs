@@ -48,6 +48,8 @@ pub struct Store {
     writer: Arc<Mutex<()>>,
     /// Кошельки DEX и маппинг «биржа → кошелёк» (решение 132, settings/accounts/) — свои таблицы и история.
     accounts: super::accounts::Accounts,
+    /// Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение области «монета» (coin_alias.rs).
+    aliases: super::coin_alias::CoinAliases,
 }
 
 impl Store {
@@ -91,6 +93,7 @@ impl Store {
             journal,
             writer: Arc::new(Mutex::new(())),
             accounts,
+            aliases: Default::default(),
         })
     }
 
@@ -106,9 +109,27 @@ impl Store {
         cache.get(&(name.to_string(), scope.clone())).cloned()
     }
 
-    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы.
+    /// Тикеры монет по адресу для запасного чтения области «монета» (решение 211, ревью В9; coin_alias.rs).
+    pub fn coin_aliases(&self) -> &super::coin_alias::CoinAliases {
+        &self.aliases
+    }
+
+    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы. Решение 211 (ревью В9): монета —
+    /// адрес; значения по адресу нет — значение по тикеру монеты (показной и тикеры площадок, coin_alias.rs), одна
+    /// запись в журнал на настройку и монету; только потом площадка и вся система.
     /// Принимает: имя, площадку и монету (если применимо). Возвращает: значение или None.
     pub fn resolve(&self, name: &str, venue: Option<&str>, coin: Option<&str>) -> Option<Value> {
+        if let Some(c) = coin {
+            if let Some(v) = self.get_exact(name, &Scope::Coin(c.to_string())) {
+                return Some(v);
+            }
+            for t in self.aliases.tickers(c) {
+                if let Some(v) = self.get_exact(name, &Scope::Coin(t.clone())) {
+                    self.aliases.report(&self.journal, name, c, &t);
+                    return Some(v);
+                }
+            }
+        }
         let order = [
             coin.map(|c| Scope::Coin(c.to_string())),
             venue.map(|v| Scope::Venue(v.to_string())),

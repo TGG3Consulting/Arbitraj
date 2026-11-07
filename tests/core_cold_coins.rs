@@ -168,6 +168,7 @@ fn parts_together_equal_whole() {
         market: &m,
         pool_ok: &pool_ok,
         intermediate: &intermediate,
+        native: None,
     };
     let whole = registry::build(&inp);
     let live = build_part(&inp, Part::Live);

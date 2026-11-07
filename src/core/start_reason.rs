@@ -123,6 +123,9 @@ fn exclusion_text(e: &Exclusion) -> String {
         Exclusion::TickerConflict(t) => {
             format!("у адреса на бирже несколько тикеров, выбрать нельзя: {t}")
         }
+        Exclusion::NativeVsToken(t) => {
+            format!("нативная монета и токен обёртки — разные активы: {t}")
+        }
     }
 }
 

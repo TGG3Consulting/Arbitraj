@@ -130,6 +130,8 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
                 .send(MarketEvent::Invalidated {
                     venue: ctx.venue(),
                     ticker: a.ticker.clone(),
+                    // Решение 211 (ревью В2): ядро находит монету по адресу.
+                    address: Some(token),
                 })
                 .await;
         }

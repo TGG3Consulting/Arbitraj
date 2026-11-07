@@ -26,8 +26,11 @@ async function load() {
   }
 }
 
-/** Запускает загрузку и подписку один раз за страницу. Вызывается при первом обращении. */
-function ensure() {
+/**
+ * Запускает загрузку и подписку один раз за страницу. Вызывается при первом обращении через функции ниже; экран,
+ * который читает names.map напрямую (ManualBlacklist, SettingCard), вызывает его сам (ревью М1).
+ */
+export function ensure() {
   if (started) return;
   started = true;
   load();
@@ -63,3 +66,30 @@ export const assetMatches = (a, q) => {
   if (!s) return true;
   return tickersOf(a).some((t) => t.toLowerCase().includes(s)) || (a.bsc_contract ?? '').toLowerCase().includes(s);
 };
+
+/** Адрес контракта BSC: 0x и 40 шестнадцатеричных знаков (как settings/scope.rs is_address_id). */
+export const ADDR = /^0x[0-9a-fA-F]{40}$/;
+
+/** Адреса монет справочника с этим тикером (показной или любой площадки), без повторов. Принимает: тикер. */
+export function addressesOf(t) {
+  ensure();
+  const u = t.toUpperCase();
+  const list = Object.values(names.map)
+    .filter((c) => c.ticker.toUpperCase() === u || Object.values(c.venues).some((x) => x.toUpperCase() === u))
+    .map((c) => c.address.toLowerCase());
+  return [...new Set(list)];
+}
+
+/**
+ * Область «монета» по вводу человека (решение 211: монета = адрес): адрес — как есть, в нижнем регистре; тикер — его
+ * единственный адрес по справочнику имён. Принимает: строку. Возвращает: id области (адрес). Ошибки: у тикера
+ * несколько адресов или ни одного — текст с просьбой ввести адрес.
+ */
+export function coinIdOf(v) {
+  const s = v.trim();
+  if (ADDR.test(s)) return s.toLowerCase();
+  const a = addressesOf(s);
+  if (a.length === 1) return a[0];
+  if (a.length > 1) throw new Error(`У тикера ${s} несколько адресов (${a.join(', ')}) — введите адрес монеты.`);
+  throw new Error(`Монеты с адресом под тикером ${s} в справочнике нет — введите адрес монеты (0x…).`);
+}

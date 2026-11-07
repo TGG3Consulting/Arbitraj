@@ -15,14 +15,15 @@
 -->
 <script>
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
-  import { names, coinName } from '../lib/coinNames.svelte.js';
+  import { names, coinName, ensure, ADDR, coinIdOf } from '../lib/coinNames.svelte.js';
   import ErrorText from './ErrorText.svelte';
+
+  // Справочник имён читается здесь напрямую (names.map) — загрузить его сразу (ревью М1).
+  ensure();
 
   // Имена — из каталога бэкенда и контракта экрана «Монеты» (src/api/README.md).
   const BLOCKED = 'coin.blocked';
   const NOTE = 'coin.blocked_note';
-  /** Адрес контракта BSC: 0x и 40 шестнадцатеричных знаков (как settings/scope.rs is_address_id). */
-  const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
   let input = $state('');
   let note = $state('');
@@ -41,14 +42,6 @@
   const list = $derived(all.filter((c) => c.addr));
   const legacy = $derived(all.filter((c) => !c.addr));
 
-  /** Адреса монет справочника с этим тикером (показной или любой площадки). Принимает: тикер. */
-  const addressesOf = (t) => {
-    const u = t.toUpperCase();
-    return Object.values(names.map)
-      .filter((c) => c.ticker.toUpperCase() === u || Object.values(c.venues).some((x) => x.toUpperCase() === u))
-      .map((c) => c.address.toLowerCase());
-  };
-
   /** Выполняет изменения по очереди; ошибка бэкенда — под формой. Принимает: функцию. */
   async function run(fn) {
     busy = true;
@@ -63,11 +56,7 @@
 
   /** Область отметки по вводу: адрес — как есть (нижний регистр); тикер — единственный адрес. Ошибка — текстом. */
   function scopeOf(v) {
-    if (ADDR.test(v)) return { kind: 'Coin', id: v.toLowerCase() };
-    const a = [...new Set(addressesOf(v))];
-    if (a.length === 1) return { kind: 'Coin', id: a[0] };
-    if (a.length > 1) throw new Error(`У тикера ${v} несколько адресов (${a.join(', ')}) — введите адрес монеты.`);
-    throw new Error(`Монеты с адресом под тикером ${v} в справочнике нет — введите адрес монеты (0x…).`);
+    return { kind: 'Coin', id: coinIdOf(v) };
   }
 
   const add = () =>

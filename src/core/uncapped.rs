@@ -58,8 +58,10 @@ pub async fn compute(core: &Core, d: &Direction, battle: Battle) -> Result<Recor
             "нет боевого бюджета: ни подбора объёма в расчёте, ни прочитанных лимитов money.*",
         )?;
     let cx = DirCtx::build(core, d)?;
+    // Решение 211 (ревью В6): стакан A — по тикеру монеты на A (venue_ticker::ticker_on).
+    let on_a = super::venue_ticker::ticker_on(core, &d.asset, &d.buy_on);
     let price = rd(&core.inner.market)
-        .best(&d.buy_on, &d.asset.ticker, Side::Buy)
+        .best(&d.buy_on, &on_a, Side::Buy)
         .filter(|p| !p.is_zero())
         .or((battle.qty > Decimal::ZERO).then(|| battle.invested / battle.qty))
         .filter(|p| !p.is_zero())

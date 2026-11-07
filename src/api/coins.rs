@@ -121,7 +121,6 @@ pub async fn recheck(
     Ok(Json(res))
 }
 
-/// Решение 211: конфликты «один адрес — два тикера на одной бирже» (core/ticker_index.rs), для показа. Ошибок нет.
 /// Решение 211: имена монет с адресом — показной тикер и тикер каждой площадки (Presence.ticker). Монеты без адреса
 /// не входят (не торгуются). Принимает: состояние. Возвращает: JSON-массив. Ошибок нет: справочника нет — пустой массив.
 pub async fn names(State(st): State<AppState>) -> Json<serde_json::Value> {
@@ -141,6 +140,7 @@ pub async fn names(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::Value::Array(list))
 }
 
+/// Решение 211: конфликты «один адрес — два тикера на одной бирже» (core/ticker_index.rs), для показа. Ошибок нет.
 pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
 }

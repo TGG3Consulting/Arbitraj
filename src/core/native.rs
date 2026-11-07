@@ -110,7 +110,9 @@ pub async fn minus_sell_gas(
     asset: &Asset,
     qty: Decimal,
 ) -> (Decimal, Option<String>) {
+    // Решение 211 (ревью К1): монета газа — нативная по тикеру И адресу обёртки, не любой токен с тикером BNB.
     if asset.ticker != super::convert::GAS_TICKER
+        || !is_native(core, asset)
         || super::trade_ops::kind(core, venue).ok() != Some(VenueKind::Dex)
     {
         return (qty, None);
@@ -149,6 +151,20 @@ pub fn ticker(core: &Core) -> Option<String> {
         .ok()
         .flatten()
         .map(|n| n.ticker)
+}
+
+/// Нативная ли это монета сети (решение 211, ревью К1): тикер dex.native_ticker И адрес обёртки dex.native_wrapped —
+/// токен с тем же тикером под другим адресом нативной монетой не считается. Ошибок нет: настройка не задана — нет.
+pub fn is_native(core: &Core, asset: &Asset) -> bool {
+    let dex: Vec<VenueId> = rd(&core.inner.kinds)
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| v.clone())
+        .collect();
+    read(&core.inner.deps.settings, &dex)
+        .ok()
+        .flatten()
+        .is_some_and(|n| asset.ticker == n.ticker && asset.bsc_contract == Some(n.wrapped))
 }
 
 /// Меняет ли настройка сопоставление (тогда справочник сетей бирж перечитывается сразу). Ошибок нет.

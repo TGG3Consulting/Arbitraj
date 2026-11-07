@@ -29,6 +29,8 @@ pub enum Touched {
     Invalidated {
         venue: VenueId,
         ticker: String,
+        /// Адрес монеты от DEX (решение 211, ревью В2); биржа — None.
+        address: Option<Address>,
     },
     CoinCheck(CoinCheck),
     PoolCheck(PoolCheck),

@@ -39,17 +39,29 @@ impl TaxLimits {
 }
 
 /// Ручной чёрный список: Some(заметка) — монета исключена вручную. Решение 211: отметка — по адресу монеты
-/// (область «coin:0x…»). Старая отметка по тикеру, которую миграция не перенесла (тикер неоднозначен — несколько
-/// адресов, core/coin_scope_migrate.rs), продолжает действовать на монеты с этим тикером, пока человек не задаст её по
-/// адресу: снять блок молча нельзя. Принимает: хранилище, монету, тикеры площадок монеты. Ошибок нет.
+/// (область «coin:0x…»). Ревью В8: значение по адресу, заданное явно (да ИЛИ нет), главнее записи по тикеру — человек
+/// снял блок по адресу, и старая отметка по тикеру его больше не держит. Значения по адресу нет — старая отметка по
+/// тикеру, которую миграция не перенесла (тикер неоднозначен — несколько адресов, core/coin_scope_migrate.rs),
+/// продолжает действовать на монеты с этим тикером: снять блок молча нельзя. Монета без адреса — область по тикеру,
+/// общая для её записей на разных биржах (ревью М3: только показ — такие монеты не торгуются). Принимает: хранилище,
+/// монету, тикеры площадок монеты. Ошибок нет.
 pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<String>> {
-    let own = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
-    let mut ids = vec![own];
-    if asset.bsc_contract.is_some() {
-        ids.push(asset.ticker.clone());
-        ids.extend(tickers.iter().map(|t| t.to_string()));
+    let own = Scope::Coin(crate::settings::scope::coin_id(
+        &asset.ticker,
+        asset.bsc_contract.as_ref(),
+    ));
+    if s.get_exact("coin.blocked", &own)
+        .and_then(|v| v.as_bool())
+        .is_some()
+    {
+        return marked(s, &own);
     }
-    ids.dedup();
+    // Монета без адреса: её область и есть тикер — уже проверена выше.
+    asset.bsc_contract?;
+    let mut ids = vec![asset.ticker.clone()];
+    ids.extend(tickers.iter().map(|t| t.to_string()));
+    let mut seen = std::collections::HashSet::new();
+    ids.retain(|t| seen.insert(t.clone()));
     ids.into_iter().find_map(|id| marked(s, &Scope::Coin(id)))
 }
 

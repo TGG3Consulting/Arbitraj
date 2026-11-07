@@ -3,8 +3,8 @@
   Что делает: карточка одной настройки на экране «Настройки»: имя, описание, единица, вид значения,
     ограничение, допустимые области и значения по областям:
     вся система; каждая площадка из GET /api/venues (у настроек времени в пути — подпись направлением
-    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод адреса контракта (решение 211: область «монета» — адрес 0x… в нижнем
-    регистре; подпись — имя монеты из lib/coinNames.svelte.js; старые области по тикеру показываются как есть);
+    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод адреса контракта или тикера с единственным адресом (решение 211, ревью М2:
+    область «монета» — адрес 0x… в нижнем регистре; подпись — имя монеты из lib/coinNames.svelte.js; старые области по тикеру показываются как есть);
     события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
     (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Решение 128: адаптер даёт
     DEX с видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит
@@ -13,7 +13,7 @@
     появляется в этой карточке; после первого сохранения адаптер сообщает id сам — он во всех карточках области «DEX».
     Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
   Кто вызывает: pages/Settings.svelte.
-  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, components/SettingEditor.svelte, SettingHistory.svelte.
+  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte.
   Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
 -->
 <script>
@@ -21,15 +21,20 @@
   import { store, venueScopeLabel } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
-  import { names, coinName } from '../lib/coinNames.svelte.js';
+  import { names, coinName, ensure, coinIdOf } from '../lib/coinNames.svelte.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
+
+  // Справочник имён читается здесь напрямую (names.map) — загрузить его сразу (ревью М1).
+  ensure();
 
   /** def — описание настройки из схемы. */
   let { def } = $props();
   let showHistory = $state(false);
   let added = $state({ Coin: [], Event: [], Dex: [] });
   let coinInput = $state('');
+  /** Почему введённую монету нельзя добавить (ревью М2: тикер без единственного адреса); '' — можно. */
+  let coinError = $state('');
   let eventInput = $state('');
   let dexInput = $state('');
   /** Причина, по которой введённый id DEX не подходит (решение 128); '' — подходит или поле пустое. */
@@ -45,9 +50,23 @@
 
   /** Добавляет область для ввода значения (значение появится только после «Сохранить»). */
   function add(kind, id) {
-    // Решение 211: адрес монеты — в нижнем регистре, как ключ бэкенда (settings/scope.rs coin_id).
-    const v = /^0x[0-9a-fA-F]{40}$/.test(id.trim()) ? id.trim().toLowerCase() : id.trim();
+    const v = id.trim();
     if (v && !added[kind].includes(v)) added[kind] = [...added[kind], v];
+  }
+
+  /**
+   * Добавляет монету (решение 211, ревью М2): адрес — в нижнем регистре, как ключ бэкенда (settings/scope.rs coin_id);
+   * тикер — его единственный адрес по справочнику имён, иначе подсказка ввести адрес. Возвращает: true — добавлена.
+   */
+  function addCoin(v) {
+    try {
+      add('Coin', coinIdOf(v));
+      coinError = '';
+      return true;
+    } catch (e) {
+      coinError = e.message;
+      return false;
+    }
   }
 
   /**
@@ -102,11 +121,12 @@
       <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={names.map[c] ? `монета ${coinName({ ticker: names.map[c].ticker, bsc_contract: c })} (${c})` : `монета ${c}`} />
     {/each}
     <div class="adder">
-      <input bind:value={coinInput} placeholder="адрес монеты 0x…" />
-      <button disabled={!coinInput.trim()} onclick={() => { add('Coin', coinInput); coinInput = ''; }}>
+      <input bind:value={coinInput} placeholder="адрес монеты 0x… или тикер" />
+      <button disabled={!coinInput.trim()} onclick={() => { if (addCoin(coinInput)) coinInput = ''; }}>
         Задать для монеты
       </button>
     </div>
+    {#if coinError}<p class="err">{coinError}</p>{/if}
   {/if}
   {#if def.scopes.includes('Event')}
     {#each uniq(idsOf('Event')) as e (e)}

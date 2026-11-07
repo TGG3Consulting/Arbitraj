@@ -165,6 +165,9 @@ pub async fn rebuild(core: &Core) {
     *wr(&inner.usdt) = usdt;
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;
+    // Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение настроек по старому тикеру.
+    let names = super::coin_alias_sync::aliases(coins.iter().chain(inert.iter()));
+    inner.deps.settings.coin_aliases().set(names);
     *wr(&inner.coins) = CoinBook {
         live: Arc::new(coins),
         inert,

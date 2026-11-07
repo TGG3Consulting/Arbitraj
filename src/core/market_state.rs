@@ -90,9 +90,17 @@ impl MarketState {
                     first,
                 }
             }
-            MarketEvent::Invalidated { venue, ticker } => {
+            MarketEvent::Invalidated {
+                venue,
+                ticker,
+                address,
+            } => {
                 self.books.remove(&(venue.clone(), ticker.clone()));
-                Touched::Invalidated { venue, ticker }
+                Touched::Invalidated {
+                    venue,
+                    ticker,
+                    address,
+                }
             }
             MarketEvent::CoinCheck(c) => {
                 if let Some(addr) = c.asset.bsc_contract {

@@ -35,7 +35,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each coins as c (key(c))}
+      {#each uniqBy(coins, key) as c (key(c))}
         {@const rs = reasons(c)}
         {@const tx = taxShort(c.taxes)}
         <tr class="click" onclick={() => onopen(c)} title="Подробно: пулы, налоги, причины по площадкам">

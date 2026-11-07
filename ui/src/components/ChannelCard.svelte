@@ -40,7 +40,7 @@
     <strong>{info.title}</strong> <code>{info.id}</code>
     <span class="tag">{info.private ? 'закрытый' : 'открытая отправка'}</span>
     <span class="muted">способы: {info.methods.map(methodLabel).join(', ') || '—'}; чаевые: {info.tips ? 'есть' : 'нет'}</span>
-    {#each info.docs as url (url)}<a href={url} target="_blank" rel="noreferrer noopener">документация</a>{/each}
+    {#each uniq(info.docs) as url (url)}<a href={url} target="_blank" rel="noreferrer noopener">документация</a>{/each}
   </header>
 
   {#if stats}

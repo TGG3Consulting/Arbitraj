@@ -116,13 +116,13 @@
   <table>
     <thead><tr><th>потолок, USDT</th><th>сделки</th><th>кандидаты</th></tr></thead>
     <tbody>
-      {#each sum.ladder as l (l.cap)}<tr><td>{l.cap}</td><td>{money(l.deals)}</td><td>{money(l.candidates)}</td></tr>{/each}
+      {#each sum.ladder as l, li (`${l.cap}|${li}`)}<tr><td>{l.cap}</td><td>{money(l.deals)}</td><td>{money(l.candidates)}</td></tr>{/each}
       <tr><td><strong>без потолка</strong></td><td><strong>{money(sum.uncapped.deals)}</strong></td><td><strong>{money(sum.uncapped.candidates)}</strong></td></tr>
     </tbody>
   </table>
   <h2>Топ направлений по упущенному</h2>
   <table><tbody>
-    {#each sum.top as t (t.direction)}<tr><td>{t.direction}</td><td>{money(t.missed)} USDT</td><td class="muted">записей {t.count}</td></tr>{/each}
+    {#each sum.top as t, ti (`${t.direction}|${ti}`)}<tr><td>{t.direction}</td><td>{money(t.missed)} USDT</td><td class="muted">записей {t.count}</td></tr>{/each}
   </tbody></table>
   <p class="muted">
     Очередь: посчитано {sum.stats.counters.done} (кандидатов без упущенного, не записаны: {sum.stats.counters.no_missed}),
@@ -147,7 +147,7 @@
     <button type="button" disabled={page >= pages} onclick={() => (page += 1)}>→</button>
   {/if}
 </div>
-{#each rows as r (r.id)}
+{#each uniqBy(rows, (r) => r.id) as r (r.id)}
   {@const b = r.body}
   {@const deal = b.battle.verdict === 'deal'}
   <article class="card">

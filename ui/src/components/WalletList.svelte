@@ -58,7 +58,7 @@
 {#if !view.dex}
   <p class="err">Площадка DEX не подключена — кошельков нет.</p>
 {/if}
-{#each view.wallets as w (w.id)}
+{#each uniqBy(view.wallets, (w) => w.id) as w (w.id)}
   <WalletRow {w} dex={view.dex} unlocked={view.unlocked} {onchange} />
 {:else}
   <p class="muted">Кошельков нет. Прежний кошелёк бота переносится сам после разблокировки секретов (кошелёк «BingX»).</p>

@@ -76,7 +76,7 @@
     <table>
       <thead><tr><th>№</th><th>Событие</th><th>Область</th><th>Действие</th><th>Условие</th><th>Состояние</th><th></th></tr></thead>
       <tbody>
-        {#each rules as r (r.id)}
+        {#each uniqBy(rules, (r) => r.id) as r (r.id)}
           <tr class:off={!r.enabled}>
             <td>{r.id}</td>
             <td><code>{r.event}</code><br /><span class="muted">{codeTitle(r.event)}</span></td>

@@ -32,7 +32,7 @@
 {#if only && !control.data}
   <p class="muted">Итог дня площадки неизвестен — нет данных ядра.</p>
 {/if}
-{#each rows as [v, x] (v)}
+{#each rows as [v, x], vi (`${v}|${vi}`)}
   <div class={x.limit?.exceeded || x.paused ? 'err' : 'muted'}>
     <code>{v}</code>: итог дня {x.result_usd} USDT (факт {x.final_usd}, оценка позиций {x.provisional_usd})
     {#if x.limit}

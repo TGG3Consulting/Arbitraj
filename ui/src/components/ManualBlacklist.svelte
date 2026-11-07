@@ -66,7 +66,7 @@
     <p class="err">Настроек {BLOCKED} / {NOTE} нет в схеме бэкенда.</p>
   {:else}
     <p class="muted">{defOf(BLOCKED).description}</p>
-    {#each list as c (c.ticker)}
+    {#each list as c, ci (`${c.ticker}|${ci}`)}
       <div class="row">
         <strong>{c.ticker}</strong>
         <span class={c.note ? '' : 'muted'}>{c.note ?? 'причина не указана'}</span>

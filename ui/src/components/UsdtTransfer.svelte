@@ -89,13 +89,13 @@
   <label>Откуда
     <select bind:value={from} onchange={() => { to = ''; quote = null; }}>
       <option value="">—</option>
-      {#each froms as s (s.key)}<option value={s.key}>{s.label} — {s.usdt} USDT</option>{/each}
+      {#each uniqBy(froms, (s) => s.key) as s (s.key)}<option value={s.key}>{s.label} — {s.usdt} USDT</option>{/each}
     </select>
   </label>
   <label>Куда
     <select bind:value={to} onchange={() => (quote = null)} disabled={!from}>
       <option value="">—</option>
-      {#each tos as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
+      {#each uniqBy(tos, (s) => s.key) as s (s.key)}<option value={s.key}>{s.label}</option>{/each}
     </select>
   </label>
   <label>Сколько USDT <input bind:value={amount} inputmode="decimal" oninput={() => (quote = null)} /></label>

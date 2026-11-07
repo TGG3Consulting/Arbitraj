@@ -51,7 +51,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each rows as r (r.key)}
+      {#each uniqBy(rows, (r) => r.key) as r (r.key)}
         {@const n = Object.keys(r.legs).length}
         <tr class="click" onclick={() => toggle(r.key)} title="Все направления монеты">
           <td class="muted">{expanded[r.key] ? '▾' : '▸'}</td>
@@ -68,7 +68,7 @@
           <td><button class="quiet" onclick={(e) => { e.stopPropagation(); openKey = r.key; }}>подробно</button></td>
         </tr>
         {#if expanded[r.key]}
-          {#each rowLegs(r) as leg (leg.key)}
+          {#each uniqBy(rowLegs(r), (leg) => leg.key) as leg (leg.key)}
             <tr class="sub">
               <td></td><td></td>
               <td>{leg.buy} → {leg.sell}</td>

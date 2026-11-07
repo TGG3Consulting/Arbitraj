@@ -38,7 +38,7 @@
   <table>
     <thead><tr><th>потолок</th><th>объём</th><th>вложение</th><th>прибыль</th><th>проходит пороги</th></tr></thead>
     <tbody>
-      {#each rec.levels as l (l.cap)}
+      {#each rec.levels as l, li (`${l.cap}|${li}`)}
         <tr><td>{l.cap}</td><td>{l.at?.qty ?? '—'}</td><td>{money(l.at?.invested)}</td><td>{money(l.at?.profit)}</td><td>{l.passes ? 'да' : 'нет'}</td></tr>
       {/each}
     </tbody>

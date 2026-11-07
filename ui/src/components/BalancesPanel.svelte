@@ -104,7 +104,7 @@
       const old = new Map(rows.map((r) => [r.key, r]));
       const keep = (key, init) => old.get(key) ?? init;
       rows = [
-        ...b.venues.map((id) => keep(`cex:${id}`, { key: `cex:${id}`, kind: 'cex', id, title: id, data: null, error: '', at: null, busy: false, again: false, sold: null, selling: '' })),
+        ...uniq(b.venues).map((id) => keep(`cex:${id}`, { key: `cex:${id}`, kind: 'cex', id, title: id, data: null, error: '', at: null, busy: false, again: false, sold: null, selling: '' })),
         ...(w.wallets ?? []).map((x) =>
           keep(`dex:${x.id}`, { key: `dex:${x.id}`, kind: 'dex', id: x.id, title: `Кошелёк DEX «${x.name}»`, data: null, error: '', at: null, busy: false, again: false }),
         ),
@@ -178,7 +178,7 @@
         {#if r.error}<p class="err small">{r.error}</p>{/if}
         {#if r.sold}<p class="small" class:err={!r.sold.ok} class:ok={r.sold.ok}>{r.sold.details}</p>{/if}
         {#if r.kind === 'cex' && r.data}
-          {#each r.data as a (a.account)}
+          {#each r.data as a, ai (`${a.account}|${ai}`)}
             <div class="acc">
               <div class="acc-name">{a.account}</div>
               {#if a.error}<div class="err small">{a.error}</div>{/if}
@@ -186,7 +186,7 @@
               {#if a.balances.length}
                 <table>
                   <tbody>
-                    {#each a.balances as b (b.asset)}
+                    {#each a.balances as b, bi (`${b.asset}|${bi}`)}
                       <tr>
                         <td>{b.asset}</td>
                         <td class="n">{num(b.free)}</td>

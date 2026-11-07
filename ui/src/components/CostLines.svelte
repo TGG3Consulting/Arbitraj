@@ -29,7 +29,7 @@
 
 <table>
   <thead><tr><th>Затрата</th><th>Где</th><th class="num">Сумма</th><th class="num">USDT</th><th>Учёт</th></tr></thead>
-  {#each groups as g (g.key)}
+  {#each groups as g, gi (`${g.key}|${gi}`)}
     <tbody>
       <tr><th colspan="5">{g.title}</th></tr>
       {#each g.rows as l, i (i)}

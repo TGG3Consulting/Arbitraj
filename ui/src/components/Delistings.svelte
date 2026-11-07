@@ -28,7 +28,7 @@
       <table>
         <thead><tr><th>Монета</th><th>Пара</th><th>Торги до</th><th>Вывод до</th><th>Источник</th></tr></thead>
         <tbody>
-          {#each row.got.items as i (i.symbol)}
+          {#each row.got.items as i, ii (`${i.symbol}|${ii}`)}
             <tr>
               <td><strong>{i.ticker}</strong></td>
               <td><code>{i.symbol}</code></td>

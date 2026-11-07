@@ -44,12 +44,12 @@
 {:else}
   {#each withChannels as [venue, channels] (venue)}
     <h2>{venue}</h2>
-    {#each wallets as w (w.id)}
+    {#each uniqBy(wallets, (w) => w.id) as w (w.id)}
       <WalletQueue {venue} wallet={w.id} name={w.name} />
     {:else}
       <p class="muted">Кошельков DEX нет — очереди появятся на экране «Маппинг кошельков» (#/wallets).</p>
     {/each}
-    {#each channels as channel (channel.info.id)}
+    {#each uniqBy(channels, (c) => c.info.id) as channel (channel.info.id)}
       <ChannelCard {venue} {channel} />
     {:else}
       <p class="muted">Адаптер сообщил пустой список каналов.</p>

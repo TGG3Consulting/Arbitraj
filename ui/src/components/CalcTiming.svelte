@@ -28,14 +28,14 @@
   <table>
     <thead><tr><th>Этап</th><th class="num">мс</th><th class="num">раз</th><th>Запросы</th></tr></thead>
     <tbody>
-      {#each timing.stages as s (s.name)}
+      {#each timing.stages as s, si (`${s.name}|${si}`)}
         <tr>
           <th>{s.name}{#if s.open} <span class="err">идёт</span>{/if}</th>
           <td class="num">{s.ms}</td>
           <td class="num">{s.count}</td>
           <td>{calls(s)}</td>
         </tr>
-        {#each s.parts as p (p.name)}
+        {#each s.parts as p, pi (`${p.name}|${pi}`)}
           <tr>
             <td class="part">{p.name}{#if p.open} <span class="err">идёт</span>{/if}</td>
             <td class="num">{p.ms}</td>

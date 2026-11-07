@@ -16,6 +16,7 @@
   Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
 -->
 <script>
+  import { uniq, uniqBy } from '../lib/uniq.js';
   import { store, venueScopeLabel } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
@@ -87,14 +88,14 @@
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />
   {/if}
   {#if def.scopes.includes('Venue')}
-    {#each store.venues as v (v)}
+    {#each uniq(store.venues) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
     {:else}
       <p class="muted">Площадок в шлюзе нет — значение по площадке задать не для чего.</p>
     {/each}
   {/if}
   {#if def.scopes.includes('Coin')}
-    {#each idsOf('Coin') as c (c)}
+    {#each uniq(idsOf('Coin')) as c (c)}
       <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={`монета ${c}`} />
     {/each}
     <div class="adder">
@@ -105,13 +106,13 @@
     </div>
   {/if}
   {#if def.scopes.includes('Event')}
-    {#each idsOf('Event') as e (e)}
+    {#each uniq(idsOf('Event')) as e (e)}
       <SettingEditor {def} scope={{ kind: 'Event', id: e }} label={eventTitle(e)} />
     {/each}
     <div class="adder">
       <select bind:value={eventInput}>
         <option value="">— событие —</option>
-        {#each store.schema.events as ev (ev.code)}<option value={ev.code}>{ev.group}: {ev.title}</option>{/each}
+        {#each uniqBy(store.schema.events, (ev) => ev.code) as ev (ev.code)}<option value={ev.code}>{ev.group}: {ev.title}</option>{/each}
       </select>
       <button disabled={!eventInput} onclick={() => { add('Event', eventInput); eventInput = ''; }}>
         Задать для события
@@ -120,7 +121,7 @@
   {/if}
 
   {#each ['Dex', 'Channel'].filter((k) => def.scopes.includes(k)) as kind (kind)}
-    {#each adapterScopes(kind) as sc (sc.id)}
+    {#each uniqBy(adapterScopes(kind), (sc) => sc.id) as sc (sc.id)}
       <SettingEditor {def} scope={{ kind, id: sc.id }} label={scopeTitle(kind, sc)} />
     {:else}
       <p class="nodata">

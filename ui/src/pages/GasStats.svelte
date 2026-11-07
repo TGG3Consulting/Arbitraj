@@ -64,7 +64,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each rows as s (`${s.asset.ticker}|${s.asset.bsc_contract}`)}
+      {#each rows as s, si (`${s.asset.ticker}|${s.asset.bsc_contract}|${si}`)}
         <tr>
           <td>{assetLabel(s.asset)}</td>
           {#each COLS as [field] (field)}

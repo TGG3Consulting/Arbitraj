@@ -57,11 +57,11 @@
     </span>
   </div>
 
-  {#each fr.data.section as s (s.title)}
+  {#each fr.data.section as s, si (`${s.title}|${si}`)}
     <section class="block">
       <h2>{s.title}</h2>
       <p class="muted">{s.intro}</p>
-      {#each s.rec as r (r.name)}
+      {#each s.rec as r, ri (`${r.name}|${ri}`)}
         <article class="card">
           <header>
             <a href={href('settings')}><code>{r.name}</code></a>

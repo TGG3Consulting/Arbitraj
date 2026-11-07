@@ -34,7 +34,7 @@
     busy = true;
     try {
       const page = await get(`/api/journal?limit=${limit}${before ? `&before=${before}` : ''}`);
-      entries = before ? [...entries, ...page] : page;
+      entries = uniqBy(before ? [...entries, ...page] : page, (e) => e.id);
       more = page.length === limit;
       error = '';
     } catch (e) {
@@ -93,7 +93,7 @@
   <table>
     <thead><tr><th>№</th><th>Когда</th><th>Уровень</th><th>Вид</th><th>Площадка</th><th>Что</th></tr></thead>
     <tbody>
-      {#each shown as e (e.id)}
+      {#each uniqBy(shown, (e) => e.id) as e (e.id)}
         <tr class={`lvl-${e.level}`}>
           <td>{e.id}</td><td>{showTime(e.at)}</td><td>{levelLabel(e.level)}</td>
           <td><code>{e.kind}</code></td><td>{e.venue ?? '—'}</td>

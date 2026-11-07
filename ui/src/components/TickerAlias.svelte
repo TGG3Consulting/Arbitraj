@@ -13,6 +13,7 @@
   Настройки: coin.ticker_alias, coin.ticker_alias_auto, coin.ticker_alias_off (src/settings/catalog/trade.rs).
 -->
 <script>
+  import { uniq, uniqBy } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
   import { store, setValue, valueKey } from '../lib/settings.svelte.js';
   import ErrorText from './ErrorText.svelte';
@@ -106,7 +107,7 @@
 </p>
 {#if autos.length}
   <p class="muted">Склеено автоматически ({autos.length}):</p>
-  {#each autos as a (a.address)}
+  {#each uniqBy(autos, (a) => a.address) as a (a.address)}
     <p>
       <strong>{a.main}</strong> <code>{a.address}</code>: {a.venues.map((v) => `${v[0]}=${v[1]}`).join(', ')}
       <button type="button" class="quiet" onclick={() => (askOff = a)}>Разделить</button>
@@ -123,14 +124,14 @@
 {/if}
 {#if off.length}
   <p class="muted">Разделено ({OFF}):</p>
-  {#each off as x (x)}
+  {#each uniq(off) as x (x)}
     <p><code>{x}</code> <button type="button" class="quiet" onclick={() => setOff(x, false)}>Вернуть</button></p>
   {/each}
 {/if}
 {#if splits.length === 0}
   <p class="muted">Расхождений тикеров нет.</p>
 {/if}
-{#each splits as s (s.address)}
+{#each uniqBy(splits, (s) => s.address) as s (s.address)}
   <p>
     <code>{s.address}</code>: {s.venues.map((v) => `${v[0]}=${v[1]}`).join(', ')}
     {#each tickers(s) as t (t)}
@@ -152,7 +153,7 @@
 {/if}
 {#if current.length}
   <p class="muted">Склеено ({NAME}):</p>
-  {#each current as item (item)}
+  {#each uniq(current) as item (item)}
     <p><code>{item}</code> <button type="button" class="quiet" onclick={() => remove(item)}>Убрать</button></p>
   {/each}
 {/if}

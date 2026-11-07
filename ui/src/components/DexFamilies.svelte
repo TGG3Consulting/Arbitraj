@@ -112,7 +112,7 @@
 <ErrorText text={copyError} />
 <table class="map">
   <tbody>
-    {#each rows as r (r.id)}
+    {#each uniqBy(rows, (r) => r.id) as r (r.id)}
       <tr>
         <td>
           <strong>{r.name || r.id}</strong><br /><code>{r.id}</code>
@@ -154,7 +154,7 @@
 
 {#if orphans.length}
   <h4>Устаревшие настройки DEX (нет в каталоге — код их больше не читает)</h4>
-  {#each orphans as o (o.name + o.id)}
+  {#each orphans as o, oi (`${o.name}|${o.id}|${oi}`)}
     <div class="setting-line">
       <code>{o.name}</code> [<code>{o.id}</code>] = <code>{JSON.stringify(o.value)}</code>
       <span class="tag">устарела</span>

@@ -67,7 +67,7 @@
     {#if mark}<span class={`tag ${mark.cls}`}>{mark.text}</span>{/if}
     · <a href={`/api/windows/${seg(win.id)}/file`} download>Скачать файл</a>
   </p>
-  {#each info.venues as v (v.venue)}
+  {#each info.venues as v, vi (`${v.venue}|${vi}`)}
     <div class="muted">
       <code>{v.venue}</code> с {msTime(Date.parse(v.since))}:
       {#if v.tap?.Ok}стакан <code>{v.tap.Ok.book_channel}</code>;

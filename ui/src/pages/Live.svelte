@@ -140,7 +140,7 @@
       {#if acc}<span class="ok">прошёл: прибыль {acc.profit_usd} USDT ({acc.profit_pct}%), объём {acc.qty}</span>
       {:else}<span class="err">отказ: {rej.reason}</span>{/if}
       <span class="muted">{showTime(c.at)}</span>
-      {#each delistMarks(c.direction) as m (m)}<span class="err">{m}</span>{/each}
+      {#each uniq(delistMarks(c.direction)) as m (m)}<span class="err">{m}</span>{/each}
     </header>
     {#if c.start}
       <!-- Решение 147: расчёт прошёл, а исполнитель отказал на входе — точная причина. -->

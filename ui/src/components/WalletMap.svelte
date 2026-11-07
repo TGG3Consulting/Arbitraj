@@ -58,20 +58,20 @@
   });
 </script>
 
-{#each view.shared as s (s.wallet)}
+{#each uniqBy(view.shared, (s) => s.wallet) as s (s.wallet)}
   <p class="err" role="alert">Деньги смешиваются: кошелёк «{s.name}» привязан к {s.rows.join(', ')}.</p>
 {/each}
 
 <table>
   <thead><tr><th>Строка</th><th>Кошелёк</th><th></th></tr></thead>
   <tbody>
-    {#each view.rows as r (r.row)}
+    {#each uniqBy(view.rows, (r) => r.row) as r (r.row)}
       <tr>
         <td>{title(r)}</td>
         <td>
           <select value={r.wallet ?? ''} onchange={(e) => bind(r.row, e.currentTarget.value)}>
             <option value="">— нет кошелька —</option>
-            {#each view.wallets as w (w.id)}<option value={w.id}>{w.name}</option>{/each}
+            {#each uniqBy(view.wallets, (w) => w.id) as w (w.id)}<option value={w.id}>{w.name}</option>{/each}
           </select>
         </td>
         <td class="muted">

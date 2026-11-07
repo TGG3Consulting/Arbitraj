@@ -51,10 +51,10 @@
   <header>
     <strong>{assetLabel(coin.asset)}</strong>
     <span class="muted">площадки: {coin.venues.join(', ')}</span>
-    {#each coin.via ?? [] as v (v.venue)}
+    {#each coin.via ?? [] as v, i (`${v.venue}|${i}`)}
       <span class="tag">{v.venue}: маршрут через {v.via} — пула с USDT нет, допущена по решению 52</span>
     {/each}
-    {#each coin.venues as v (v)}
+    {#each uniq(coin.venues) as v (v)}
       {@const dl = delistItem(v, coin.asset.ticker)}
       {#if dl}<span class="err">{delistLabel(v, dl)}</span>{/if}
     {/each}
@@ -63,7 +63,7 @@
   </header>
   {#if coin.problem}<p class="err">Не оценить: {coin.problem}</p>{/if}
   {#if coin.cex_cex}<p class="warn-text">Биржа ↔ биржа: {coin.cex_cex}</p>{/if}
-  {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p (p.venue)}
+  {#each (coin.presence ?? []).filter((p) => p.excluded.length) as p, i (`${p.venue}|${p.info?.network ?? ""}|${i}`)}
     <div class="muted">Не участвует на {p.venue}:</div>
     <ul class="why">
       {#each p.excluded as e, i (i)}
@@ -73,7 +73,7 @@
       {/each}
     </ul>
   {/each}
-  {#each (coin.presence ?? []).filter((p) => !p.excluded.length && limitsText(p).length) as p (p.venue)}
+  {#each (coin.presence ?? []).filter((p) => !p.excluded.length && limitsText(p).length) as p, i (`${p.venue}|${p.info?.network ?? ""}|${i}`)}
     <div class="muted">На {p.venue} закрыто (направления через эту сторону не считаются): {limitsText(p).join(', ')}</div>
   {/each}
   <p>
@@ -109,7 +109,7 @@
     <p class="muted">Пулов у монеты нет.</p>
   {/if}
   <div class="row">
-    {#each dexVenues as v (v)}
+    {#each uniq(dexVenues) as v (v)}
       <button class="quiet" disabled={busy} onclick={() => recheck(v)}>Перепроверить на {v}</button>
     {/each}
     {#if result}<span class={result.ok ? 'ok' : 'err'} role="status">{result.details}</span>{/if}

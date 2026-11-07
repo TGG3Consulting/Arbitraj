@@ -103,7 +103,7 @@
     <label>Площадка
       <select bind:value={venue}>
         <option value="">— выберите —</option>
-        {#each store.venues as v (v)}<option value={v}>{v}</option>{/each}
+        {#each uniq(store.venues) as v (v)}<option value={v}>{v}</option>{/each}
       </select>
     </label>
   {/if}

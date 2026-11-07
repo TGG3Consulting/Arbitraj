@@ -82,7 +82,7 @@
         <th class="num">Макс. прибыль</th><th class="num">Без бюджета</th><th class="num">Записей</th><th>Итог</th><th></th></tr>
     </thead>
     <tbody>
-      {#each rows as e (e.id)}
+      {#each uniqBy(rows, (e) => e.id) as e (e.id)}
         <tr>
           <td>{dirText(e.direction)}</td>
           <td>{#if e.dry}<span class="tag">сухой</span>{:else}обычный{/if}</td>

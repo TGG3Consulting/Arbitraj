@@ -51,7 +51,7 @@
 {#if unknown.length}
   <details>
     <summary>Индексатор не знает пулов монет: {unknown.length} (не ошибка)</summary>
-    {#each unknown as t (t.token)}<p class="muted">{t.ticker}: {t.note}</p>{/each}
+    {#each unknown as t, ti (`${t.token}|${ti}`)}<p class="muted">{t.ticker}: {t.note}</p>{/each}
   </details>
 {/if}
 <h4>Поиск пулов по фабрикам на своём узле (index.factory_scan)</h4>
@@ -77,7 +77,7 @@
 {#if failed.length}
   <details>
     <summary>Ошибки по монетам</summary>
-    {#each failed as t (t.token)}<p class="err">{t.ticker}: {t.error}</p>{/each}
+    {#each failed as t, ti (`${t.token}|${ti}`)}<p class="err">{t.ticker}: {t.error}</p>{/each}
   </details>
 {/if}
 <details>

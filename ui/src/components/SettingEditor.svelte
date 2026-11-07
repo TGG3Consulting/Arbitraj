@@ -111,11 +111,11 @@
   {:else if def.kind === 'Choice'}
     <select value={draft ?? current ?? ''} onchange={(e) => (draft = e.currentTarget.value)}>
       <option value="" disabled>— выбрать —</option>
-      {#each def.choices.filter((c) => !only || only.includes(c)) as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
+      {#each uniq(def.choices.filter((c) => !only || only.includes(c))) as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
     </select>
     <button disabled={busy || draft === null || draft === current} onclick={() => save(draft)}>Сохранить</button>
   {:else if def.kind === 'TextList' && options}
-    {#each options as opt (opt)}
+    {#each uniq(options) as opt (opt)}
       <label class="inline"><input type="checkbox" checked={chosen.includes(opt)} onchange={() => toggle(opt)} />{opt}</label>
     {:else}
       <span class="muted">нет вариантов</span>

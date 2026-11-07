@@ -84,7 +84,7 @@
 </script>
 
 {#snippet buttons(key)}
-  {#each buttonsOf(key) as b (b.code)}
+  {#each buttonsOf(key) as b, bi (`${b.code}|${bi}`)}
     <button class={b.quiet ? 'quiet' : ''} disabled={busy || !!b.disabled} title={b.disabled ?? ''} onclick={() => press(b)}>{b.title}</button>
   {/each}
 {/snippet}
@@ -101,7 +101,7 @@
   <table>
     <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th class="num">Убыток, %</th><th>Причина</th><th>Сделка</th><th>Когда</th><th></th></tr></thead>
     <tbody>
-      {#each manual.data.alerts as a (a.id)}
+      {#each uniqBy(manual.data.alerts, (a) => a.id) as a (a.id)}
         <tr>
           <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num" title={a.qty}>{fmtQty(a.qty)}</td><td class="num err" title={a.loss_pct ?? ''}>{a.loss_pct == null ? '—' : Number(a.loss_pct).toFixed(2)}</td>
           <td title={recordOf('a.' + a.id).reason_full ?? a.reason ?? ''}>{recordOf('a.' + a.id).reason ?? a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
@@ -117,7 +117,7 @@
   <table>
     <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th>Причина</th><th>Сделка</th><th>Взяты</th><th></th></tr></thead>
     <tbody>
-      {#each manual.data.holdings as h (h.id)}
+      {#each uniqBy(manual.data.holdings, (h) => h.id) as h (h.id)}
         <tr>
           <td>{assetLabel(h.asset)}</td><td>{h.venue}</td><td class="num" title={h.qty}>{fmtQty(h.qty)}</td><td title={recordOf('h.' + h.id).reason_full ?? h.reason}>{recordOf('h.' + h.id).reason ?? h.reason}</td>
           <td><code>{h.deal_id}</code></td><td>{showTime(h.taken_at)}</td>
@@ -134,7 +134,7 @@
   <table>
     <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th class="num">Вложено</th><th class="num">Оценка в итоге дня</th><th>Причина</th><th>Сделка</th><th></th></tr></thead>
     <tbody>
-      {#each manual.data.halted ?? [] as d (d.id)}
+      {#each uniqBy(manual.data.halted, (d) => d.id) as d (d.id)}
         <tr>
           <td>{assetLabel(d.direction.asset)}</td><td>{d.at}</td><td class="num" title={d.qty}>{fmtQty(d.qty)}</td><td class="num" title={d.invested}>{fmtUsd(d.invested)}</td>
           <td class="num err" title={d.provisional_usd ?? ''}>{fmtUsd(d.provisional_usd)}</td><td title={recordOf('d.' + d.id).reason_full ?? ''}>{recordOf('d.' + d.id).reason ?? ''}</td><td><code>{d.id}</code></td>
@@ -151,7 +151,7 @@
   <table>
     <thead><tr><th>Сделка</th><th class="num">Сумма, USDT</th><th>Где лежат</th><th>Куда должны</th><th>Причина</th><th></th></tr></thead>
     <tbody>
-      {#each manual.data.usdt ?? [] as d (d.id)}
+      {#each uniqBy(manual.data.usdt, (d) => d.id) as d (d.id)}
         <tr>
           <td><code>{d.id}</code></td><td class="num">{d.usdt_return.amount}</td><td>{d.usdt_return.at}</td>
           <td>{d.direction.buy_on}</td><td class="err">{d.usdt_return.why}</td>

@@ -25,7 +25,7 @@
   <CopyAddr addr={coin.asset.bsc_contract} />
   <h4>Итог отбора</h4>
   <ul class="res">
-    {#each rs as k (k)}<li class={k === 'passed' ? 'ok' : 'err'}>{resultLabel(k)}</li>{/each}
+    {#each uniq(rs) as k (k)}<li class={k === 'passed' ? 'ok' : 'err'}>{resultLabel(k)}</li>{/each}
   </ul>
   {#if rs[0] === 'passed'}
     <p class="muted">Направлений: {coin.directions.length} — {coin.directions.map((d) => `${d.buy_on} → ${d.sell_on}`).join(', ')}</p>

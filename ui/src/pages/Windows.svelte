@@ -105,7 +105,7 @@
         <th class="num">Без бюджета</th><th>Отметки</th><th class="num">Кадров</th><th class="num">Размер</th><th></th></tr>
     </thead>
     <tbody>
-      {#each rows as w (w.id)}
+      {#each uniqBy(rows, (w) => w.id) as w (w.id)}
         {@const m = outcomeMark(w.outcome)}
         <tr>
           <td>{showTime(w.started_at)}</td>

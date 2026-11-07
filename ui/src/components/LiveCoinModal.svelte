@@ -27,7 +27,7 @@
   <h4>Адрес контракта в BSC</h4>
   <CopyAddr addr={row.asset.bsc_contract} />
 
-  {#each legs as leg (leg.key)}
+  {#each uniqBy(legs, (leg) => leg.key) as leg (leg.key)}
     {@const v = row.legs[leg.key]}
     <section class="card">
       <h3>Купить на {leg.buy} → продать на {leg.sell}</h3>

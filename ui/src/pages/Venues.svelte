@@ -16,6 +16,7 @@
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
+  import { uniq, uniqBy } from '../lib/uniq.js';
   import { store } from '../lib/settings.svelte.js';
   import { secrets, TELEGRAM_TOKEN } from '../lib/secrets.svelte.js';
   import { dex } from '../lib/dex.svelte.js';
@@ -63,7 +64,7 @@
 <h1>Площадки</h1>
 <ErrorText text={store.error} />
 <ErrorText text={secrets.error} />
-{#each store.venues as id (id)}
+{#each uniq(store.venues) as id (id)}
   {@const d = dex.byVenue[id]}
   <section class="card venue">
     <h2>{id}</h2>
@@ -76,7 +77,7 @@
     <Delistings venue={id} />
 
     <h3>Ключи</h3>
-    {#each venueKeys(id) as item (item.name)}
+    {#each uniqBy(venueKeys(id), (item) => item.name) as item (item.name)}
       <SecretRow {item} />
     {:else}
       <p class="muted">У площадки нет секретов в списке бэкенда.</p>
@@ -116,6 +117,6 @@
     </p>
     <CheckConnection url={`/api/check/venue/${encodeURIComponent(scope)}`} />
     <h3>Ключи</h3>
-    {#each items as item (item.name)}<SecretRow {item} />{/each}
+    {#each uniqBy(items, (item) => item.name) as item (item.name)}<SecretRow {item} />{/each}
   </section>
 {/each}

@@ -41,7 +41,7 @@
         уровней загружено {b.levels}){#if b.beyond}<span class="warn-text"> — полоса шире загруженных уровней (venue.depth_levels)</span>{/if}{/if}
     </p>
   {/each}
-  {#each card.pools as p (p.pool)}
+  {#each card.pools as p, pi (`${p.pool}|${pi}`)}
     <p>
       Пул <code>{p.venue}</code> {poolKindLabel(p.kind)} <code>{p.pool}</code>, {sideText(p.side)}:
       {#if p.depth_usd != null}глубина <strong>{p.depth_usd} USDT</strong> в полосе ±{p.band_pct}%

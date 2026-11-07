@@ -67,7 +67,7 @@
     {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
       <div class="muted">Оценка позиции сделки <code>{deal}</code>{#if r.day.deal_venues?.[deal]} ({r.day.deal_venues[deal].join(', ')}){/if}: {usd} USDT (учтена {day}){#if r.day.unpriced?.includes(deal)} — <span class="err">цены нет, взят худший случай (вся сумма)</span>{/if} — ждёт разбора</div>
     {/each}
-    {#each r.quarantine as q (q.id)}
+    {#each r.quarantine as q, qi (`${q.id}|${qi}`)}
       <div>Монета <code title={q.id}>{q.label}</code> в карантине: {q.reason} <button class="quiet" onclick={() => releaseCoin(q.id)}>Снять карантин</button></div>
     {/each}
   {:else}

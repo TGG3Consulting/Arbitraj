@@ -33,7 +33,7 @@
   </button>
   {#if open}
     <div class="menu" role="menu">
-      {#each items as it (it.href)}
+      {#each uniqBy(items, (it) => it.href) as it (it.href)}
         <a role="menuitem" href={it.href} class:active={it.active} onclick={() => (open = false)}>
           <span>{it.label}</span>{#if it.note}<span class="note">{it.note}</span>{/if}
         </a>

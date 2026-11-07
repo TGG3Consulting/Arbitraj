@@ -554,6 +554,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "mimalloc",
+ "percent-encoding",
  "prost",
  "reqwest",
  "rusqlite",

@@ -71,6 +71,45 @@ pub fn query(params: &[(&str, String)]) -> Result<String, String> {
     Ok(out.join("&"))
 }
 
+/// Решение 207: как подписывать строку запроса со значением, которое нельзя поставить в адрес как есть (пробел в имени
+/// сети «BNB Smart Chain» — живой отказ 07.11.2026 при запросе адреса депозита). Документация XT («Sort all key=value
+/// according to the lexicographical order of the key») не говорит, кодируется ли значение до подписи; поэтому в адрес
+/// значение уходит закодированным (RFC 3986, пробел — %20), а подписывается — закодированная строка (Encoded) или
+/// исходная (Raw). Какую принимает XT, выясняется по живому ответу (rest.rs: отказ подписи AUTH_103 — второй вариант).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignForm {
+    Encoded,
+    Raw,
+}
+
+/// Знаки, которые кодируются в значении: всё, кроме букв, цифр и «- . _ ~» (RFC 3986, unreserved).
+const ENC: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
+/// Что делает: строки запроса для адреса и для подписи. Все значения «простые» (value_ok) — обе строки одинаковы,
+/// как раньше. Иначе в адрес — закодированные значения, в подпись — по `form`.
+/// Принимает: пары, вариант подписи. Возвращает: (строка в адрес, строка в подпись, были ли «непростые» значения).
+/// Ошибок нет.
+pub fn query_forms(params: &[(&str, String)], form: SignForm) -> (String, String, bool) {
+    let mut sorted: Vec<&(&str, String)> = params.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    let mut special = false;
+    let (mut url, mut sig) = (Vec::new(), Vec::new());
+    for (k, v) in sorted {
+        let enc = percent_encoding::utf8_percent_encode(v, ENC).to_string();
+        special |= !value_ok(v);
+        url.push(format!("{k}={enc}"));
+        sig.push(match form {
+            SignForm::Encoded => format!("{k}={enc}"),
+            SignForm::Raw => format!("{k}={v}"),
+        });
+    }
+    (url.join("&"), sig.join("&"), special)
+}
+
 /// Что делает: значение можно поставить в строку запроса XT — только буквы, цифры и «_ . , -» (см. query).
 /// Принимает: значение. Возвращает: да / нет. Ошибок нет.
 pub fn value_ok(v: &str) -> bool {
@@ -102,5 +141,26 @@ mod tests {
         assert!(!value_ok("牛来_usdt"));
         assert!(!value_ok("龙虾_usdt"));
         assert!(!value_ok("币安底裤_usdt"));
+    }
+
+    /// Решение 207: «BNB Smart Chain» — в адрес с %20, в подпись — закодированная или исходная строка.
+    #[test]
+    fn query_forms_space() {
+        let p = vec![
+            ("currency", "usdt".to_string()),
+            ("chain", "BNB Smart Chain".to_string()),
+        ];
+        let (url, sig, sp) = query_forms(&p, SignForm::Encoded);
+        assert_eq!(url, "chain=BNB%20Smart%20Chain&currency=usdt");
+        assert_eq!(sig, url);
+        assert!(sp);
+        let (_, raw, _) = query_forms(&p, SignForm::Raw);
+        assert_eq!(raw, "chain=BNB Smart Chain&currency=usdt");
+        let plain = vec![("symbol", "btc_usdt".to_string())];
+        let (u, s, sp) = query_forms(&plain, SignForm::Raw);
+        assert_eq!(
+            (u.as_str(), s.as_str(), sp),
+            ("symbol=btc_usdt", "symbol=btc_usdt", false)
+        );
     }
 }

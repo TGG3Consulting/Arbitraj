@@ -13,15 +13,18 @@
 //! противоречив («between 2 to 60 seconds», «older than 5,000 milliseconds is invalid», «longer than 5 seconds is not
 //! recommended», пример — 60000): предел 60000 мс, значение — решение Тиграна (venue.recv_window_ms).
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use reqwest::Method;
 use serde_json::Value;
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
 use super::reply::{self, Raw};
-use super::sign;
+use super::sign::{self, SignForm};
 
 /// Предел recvWindow — верхняя граница из документации («between 2 to 60 seconds»).
 const MAX_RECV_WINDOW_MS: u64 = 60_000;
@@ -116,15 +119,91 @@ async fn signed_at(
     op: Op,
     raw: Raw,
 ) -> GatewayResult<Value> {
+    // Решение 207: значение, которое нельзя поставить в адрес как есть (пробел в «BNB Smart Chain»), — только в GET
+    // (адрес депозита, история); вариант подписи — запомненный, иначе сначала закодированная строка, при отказе подписи
+    // (AUTH_103) — исходная. Простые значения — как раньше (одна строка в адрес и в подпись).
+    let (_, _, special) = sign::query_forms(&params, SignForm::Encoded);
+    if !special {
+        let query = sign::query(&params).map_err(|m| internal(ctx, m))?;
+        return signed_once(
+            ctx,
+            &base,
+            &method,
+            path,
+            (query.clone(), query),
+            &body,
+            op,
+            raw,
+        )
+        .await;
+    }
+    if method != Method::GET {
+        sign::query(&params).map_err(|m| internal(ctx, m))?;
+    }
+    let known = form_known();
+    let order = match known {
+        Some(f) => vec![f],
+        None => vec![SignForm::Encoded, SignForm::Raw],
+    };
+    let mut last = None;
+    for form in order {
+        let (url, sig, _) = sign::query_forms(&params, form);
+        match signed_once(ctx, &base, &method, path, (url, sig), &body, op, raw).await {
+            Ok(v) => {
+                if known.is_none() {
+                    remember(form);
+                    let m = format!(
+                        "XT принял подпись строки запроса с пробелом: вариант {form:?} (решение 207)"
+                    );
+                    ctx.log(Level::Info, "venue.sign", m).await;
+                }
+                return Ok(v);
+            }
+            Err(e) if known.is_none() && e.message.contains("AUTH_103") => last = Some(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| internal(ctx, "подпись XT не принята".into())))
+}
+
+/// Запомненный вариант подписи (0 — не выяснен, 1 — Encoded, 2 — Raw). На время процесса.
+static FORM: AtomicU8 = AtomicU8::new(0);
+
+fn form_known() -> Option<SignForm> {
+    match FORM.load(Ordering::Relaxed) {
+        1 => Some(SignForm::Encoded),
+        2 => Some(SignForm::Raw),
+        _ => None,
+    }
+}
+
+fn remember(f: SignForm) {
+    FORM.store(
+        if f == SignForm::Encoded { 1 } else { 2 },
+        Ordering::Relaxed,
+    );
+}
+
+/// Один подписанный запрос. Принимает: (строка в адрес, строка в подпись). Ошибки: как у send.
+#[allow(clippy::too_many_arguments)]
+async fn signed_once(
+    ctx: &Ctx,
+    base: &str,
+    method: &Method,
+    path: &str,
+    (query, signed_query): (String, String),
+    body: &Option<Value>,
+    op: Op,
+    raw: Raw,
+) -> GatewayResult<Value> {
     let (key, secret) = ctx.keys()?;
     let recv = recv_window(ctx)?;
     let ts = chrono::Utc::now().timestamp_millis();
-    let query = sign::query(&params).map_err(|m| internal(ctx, m))?;
-    let body = body.map(|b| b.to_string()).unwrap_or_default();
+    let body = body.as_ref().map(|b| b.to_string()).unwrap_or_default();
     let original = format!(
         "{}{}",
         sign::spot_headers(&key, recv, ts),
-        sign::data(method.as_str(), path, &query, &body)
+        sign::data(method.as_str(), path, &signed_query, &body)
     );
     let signature = sign::hmac_hex(&secret, &original)
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::InvalidCredentials, None, m)))?;
@@ -136,8 +215,8 @@ async fn signed_at(
         ("validate-signature", signature),
     ];
     let call = Call {
-        base,
-        method,
+        base: base.to_string(),
+        method: method.clone(),
         path,
         query,
         body,

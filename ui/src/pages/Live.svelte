@@ -26,6 +26,7 @@
     таблицу монет (~3700 направлений) — страница не успевала, данные на экране старели при свежих на сервере.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { store, valueKey } from '../lib/settings.svelte.js';

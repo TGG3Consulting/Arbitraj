@@ -12,6 +12,7 @@
   Настройки: нет (episode.* — экран «Настройки», категория «Сигналы и эпизоды»). Сколько строк — задаёт зритель.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { dirText } from '../lib/coreLabels.js';

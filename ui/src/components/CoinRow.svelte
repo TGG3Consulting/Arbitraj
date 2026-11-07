@@ -18,6 +18,7 @@
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { post } from '../lib/api.js';
   import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';

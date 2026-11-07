@@ -14,6 +14,7 @@
   Настройки: coin.blocked, coin.blocked_note (src/settings/catalog/trade.rs; контракт — src/api/README.md).
 -->
 <script>
+  import { addressesOf } from '../lib/coinNames.svelte.js';
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { names, coinName, ensure, ADDR, coinIdOf } from '../lib/coinNames.svelte.js';
   import ErrorText from './ErrorText.svelte';

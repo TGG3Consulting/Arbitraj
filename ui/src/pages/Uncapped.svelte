@@ -18,6 +18,7 @@
     задаёт зритель.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';

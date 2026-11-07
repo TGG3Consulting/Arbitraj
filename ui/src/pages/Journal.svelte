@@ -12,6 +12,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { levelLabel, showTime } from '../lib/labels.js';

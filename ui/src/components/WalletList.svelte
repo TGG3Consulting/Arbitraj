@@ -9,6 +9,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { post } from '../lib/api.js';
   import WalletRow from './WalletRow.svelte';
   import ErrorText from './ErrorText.svelte';

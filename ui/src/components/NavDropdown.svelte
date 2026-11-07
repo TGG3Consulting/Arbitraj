@@ -7,6 +7,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   /**
    * title — подпись пункта; active — подсветить пункт (открыт один из его экранов);
    * items — [{href, label, note?, active?}]: note — приглушённая приписка (например «не задано 2»).

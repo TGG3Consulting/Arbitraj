@@ -10,6 +10,7 @@
   Настройки: security.* проверяет бэкенд; не заданы — он вернёт причину, она показывается как есть.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { tick } from 'svelte';
   import { post } from '../lib/api.js';
   import { secrets, refresh } from '../lib/secrets.svelte.js';

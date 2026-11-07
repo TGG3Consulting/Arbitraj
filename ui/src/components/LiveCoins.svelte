@@ -11,6 +11,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { coinRows, byBestSpread, rowLegs } from '../lib/liveGrid.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { clock } from '../lib/fmt.js';

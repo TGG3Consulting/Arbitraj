@@ -13,6 +13,7 @@
     с областью Dex.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { dirStatus } from '../lib/directory.js';
   import SettingEditor from './SettingEditor.svelte';

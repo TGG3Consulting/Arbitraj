@@ -13,6 +13,7 @@
   Настройки: нет (window.* — экран «Настройки», категория «Окна»). Сколько строк на странице — задаёт зритель.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { showTime } from '../lib/labels.js';

@@ -7,7 +7,7 @@
 ## Сборка и запуск
 
 ```sh
-cd ui && npm ci && npm run build          # → ui/dist
+cd ui && npm ci && npm run build          # → ui/dist (сначала eslint: имя без импорта — ошибка, решение 212)
 cargo run -- --data-dir <папка> --listen 127.0.0.1:8080 --live-buffer 1024 --ui-dir ui/dist
 # открыть http://127.0.0.1:8080
 ```

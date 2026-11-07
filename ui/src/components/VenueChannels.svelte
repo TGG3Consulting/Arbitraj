@@ -10,6 +10,7 @@
   Настройки: нет (channel.* — экран «Каналы отправки»); секреты channel.<id>.key.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { secrets } from '../lib/secrets.svelte.js';
   import { href } from '../lib/router.svelte.js';
   import { methodLabel } from '../lib/labels.js';

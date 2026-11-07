@@ -8,6 +8,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { RESULTS } from '../lib/coinFilter.js';
   import { poolKindLabel } from '../lib/labels.js';
 

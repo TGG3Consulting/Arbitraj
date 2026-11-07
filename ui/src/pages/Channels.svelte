@@ -12,6 +12,7 @@
   Настройки: channel.* (через ChannelCard).
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { dex, whyNoDex } from '../lib/dex.svelte.js';
   import ChannelCard from '../components/ChannelCard.svelte';
   import WalletQueue from '../components/WalletQueue.svelte';

@@ -10,6 +10,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { spreadState, spreadShort, spreadReason } from '../lib/coreLabels.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { reasonLines, fmtPrice } from '../lib/fmt.js';

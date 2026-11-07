@@ -10,6 +10,7 @@
   Настройки: нет (правила — данные из интерфейса, src/gateway/rules.rs).
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { untrack } from 'svelte';
   import { post, put } from '../lib/api.js';
   import { store } from '../lib/settings.svelte.js';

@@ -9,6 +9,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { coinTitle, reasons, resultLabel } from '../lib/coinFilter.js';
   import Modal from './Modal.svelte';
   import CopyAddr from './CopyAddr.svelte';

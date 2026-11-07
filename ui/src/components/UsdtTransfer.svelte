@@ -11,6 +11,7 @@
   Настройки: нет (балансы — из памяти панели, ui.balances_refresh_ms).
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get, post } from '../lib/api.js';
 
   /** onDone — после отправки (панель обновит балансы). */

@@ -9,6 +9,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { get, put } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import RuleForm from '../components/RuleForm.svelte';

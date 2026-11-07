@@ -9,6 +9,7 @@
   Настройки: нет.
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { coinRowKey, coinTitle, reasons, resultLabel, taxState } from '../lib/coinFilter.js';
   import { shortAddr } from '../lib/fmt.js';
 

@@ -26,6 +26,7 @@
   Настройки: нет (режим и пороги — stuck.*, экран «Настройки»).
 -->
 <script>
+  import { uniqBy } from '../lib/uniq.js';
   import { post } from '../lib/api.js';
   import { remote } from '../lib/remote.svelte.js';
   import { assetLabel } from '../lib/coinLabels.js';

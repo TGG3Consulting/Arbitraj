@@ -21,6 +21,7 @@
   import { get, post, seg } from '../lib/api.js';
   import { load, save } from '../lib/prefs.js';
   import UsdtTransfer from './UsdtTransfer.svelte';
+  import { uniq } from '../lib/uniq.js';
 
   let open = $state(load('balances.open') === '1');
   let refreshMs = $state(null);

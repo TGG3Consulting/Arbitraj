@@ -10,6 +10,7 @@
   Настройки: все с областью Channel (channel.*, src/settings/catalog/send.rs); секрет из SendChannelInfo.secret.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { store } from '../lib/settings.svelte.js';
   import { secrets } from '../lib/secrets.svelte.js';
   import { methodLabel, channelState, showTime } from '../lib/labels.js';

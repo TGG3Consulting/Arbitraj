@@ -13,6 +13,7 @@
   Настройки: любая — по описанию из схемы.
 -->
 <script>
+  import { uniq } from '../lib/uniq.js';
   import { store, valueKey, setValue } from '../lib/settings.svelte.js';
   import { takePrefill } from '../lib/firstRun.svelte.js';
   import { showValue, choiceLabel } from '../lib/labels.js';

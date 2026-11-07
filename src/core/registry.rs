@@ -90,6 +90,9 @@ pub struct CoinEntry {
     /// Почему нет направлений биржа ↔ биржа (решение 118, Я-3): налог перевода не измерен, а cex_cex.untaxed_ok не
     /// «да» (заполняет rebuild_blacklist.rs). None — направления биржа ↔ биржа строятся.
     pub cex_cex: Option<String>,
+    /// Решение 214: биржи монеты, у которых venue.cex_cex = «нет» — с другими биржами направлений нет (только с DEX).
+    /// Заполняет rebuild_blacklist.rs. Пусто — запретов нет.
+    pub cex_cex_off: Vec<VenueId>,
 }
 
 impl CoinEntry {
@@ -122,6 +125,13 @@ impl CoinEntry {
             {
                 // Решение 118 (Я-3): обе стороны — биржи (у DEX нет данных сети биржи), налог перевода не измерен.
                 if a.info.is_some() && b.info.is_some() && self.cex_cex.is_some() {
+                    continue;
+                }
+                // Решение 214: биржа ↔ биржа запрещена у одной из сторон (venue.cex_cex = нет).
+                if a.info.is_some()
+                    && b.info.is_some()
+                    && (self.cex_cex_off.contains(&a.venue) || self.cex_cex_off.contains(&b.venue))
+                {
                     continue;
                 }
                 out.push(Direction {

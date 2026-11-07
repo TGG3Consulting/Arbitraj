@@ -107,6 +107,7 @@ fn entry(rec: &Rec) -> CoinEntry {
         problem: None,
         wait: None,
         cex_cex: None,
+        cex_cex_off: vec![],
     }
 }
 
@@ -314,4 +315,45 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
     sell_slip::after_close(&core, &x).await;
     assert!(blacklist::manual(&s, &coin, &[]).is_none());
     assert_eq!(kinds(&j, "core.sell_slip_block").await.len(), 1);
+}
+
+/// Решение 214: биржа с venue.cex_cex = нет (поле cex_cex_off) не торгует с другими биржами, с DEX — торгует.
+#[tokio::test]
+async fn cex_cex_off_keeps_only_dex_directions() {
+    let rec = Rec::load("guard-reason").await;
+    let mut c = entry(&rec);
+    let mut gate = c.presence[0].clone();
+    gate.venue = VenueId("gate".into());
+    c.presence.push(gate);
+    let pairs = |c: &CoinEntry| -> Vec<(String, String)> {
+        let mut v: Vec<_> = c
+            .directions()
+            .into_iter()
+            .map(|d| (d.buy_on.0, d.sell_on.0))
+            .collect();
+        v.sort();
+        v
+    };
+    assert!(
+        pairs(&c).contains(&("bingx".into(), "gate".into())),
+        "без запрета биржа ↔ биржа есть"
+    );
+    c.cex_cex_off = vec![VenueId("bingx".into())];
+    let got = pairs(&c);
+    assert!(
+        !got.iter()
+            .any(|(a, b)| (a == "bingx" && b == "gate") || (a == "gate" && b == "bingx")),
+        "{got:?}"
+    );
+    for want in [
+        ("bingx", "bsc_dex"),
+        ("bsc_dex", "bingx"),
+        ("gate", "bsc_dex"),
+        ("bsc_dex", "gate"),
+    ] {
+        assert!(
+            got.contains(&(want.0.into(), want.1.into())),
+            "нет {want:?}: {got:?}"
+        );
+    }
 }

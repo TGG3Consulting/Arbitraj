@@ -33,12 +33,14 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 10] = [
+const REGISTRY: [&str; 11] = [
     "coin.",
     "cex_cex.",
     "tax.",
     "hooks.",
     "venue.enabled",
+    // Решение 214: биржа ↔ биржа у площадки.
+    "venue.cex_cex",
     "venue.quote_asset",
     "venue.bsc_network",
     "venue.symbols_stale_s",

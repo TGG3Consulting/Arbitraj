@@ -7,7 +7,8 @@
 //! CoinEntry.cex_cex с причиной, таких направлений нет.
 //! Кто вызывает: core/rebuild.rs.
 //! От чего зависит: blacklist.rs, registry.rs, market_state.rs, engine.rs, settings.
-//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs.
+//! Решение 214: биржи с venue.cex_cex = нет — поле CoinEntry.cex_cex_off, направлений биржа ↔ биржа с ними нет.
+//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs; venue.cex_cex.
 
 use chrono::Utc;
 
@@ -16,6 +17,19 @@ use super::engine::{Core, rd, wr};
 use super::market_state::MarketState;
 use super::rebuild::has_pool;
 use super::registry::CoinEntry;
+
+/// Решение 214: разрешено ли бирже торговать с другими биржами (venue.cex_cex). Не задана — да (Тигран, 07.11.2026).
+/// Принимает: настройки, площадку. Возвращает: true — разрешено. Ошибок нет.
+fn cex_cex_allowed(s: &crate::settings::store::Store, venue: &str) -> bool {
+    s.flag(
+        "venue.cex_cex",
+        crate::settings::read::At {
+            venue: Some(venue),
+            coin: None,
+        },
+    )
+    .unwrap_or(true)
+}
 
 /// Чёрный список по справочнику: ручная отметка, проверки налогов со всех DEX, где у монеты есть
 /// пул с USDT. Заполняет block / problem у монет. Возвращает: изменения для уведомлений.
@@ -40,6 +54,13 @@ pub fn apply_blacklist(
             .and_then(|t| super::transfer_tax::measured(market, &kinds, t));
         c.cex_cex = (cexes >= 2 && measured.is_none() && !untaxed_ok)
             .then(|| super::transfer_tax::UNMEASURED.to_string());
+        // Решение 214: биржи с venue.cex_cex = нет (не задана — да) — без направлений биржа ↔ биржа.
+        c.cex_cex_off = c
+            .presence
+            .iter()
+            .filter(|p| p.info.is_some() && !cex_cex_allowed(s, &p.venue.0))
+            .map(|p| p.venue.clone())
+            .collect();
         let checks: Vec<_> = match c.asset.bsc_contract {
             Some(token) => c
                 .presence

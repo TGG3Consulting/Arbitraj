@@ -2,7 +2,8 @@
 //! Что делает: кривая «прибыль от объёма» ядра для подбора объёма (решение 66) — каждый объём считает полный
 //! расчёт costs.rs (все затраты); параметры поиска: шаг количества пары биржи (stepSize; A, если A — биржа, иначе
 //! B), изломы — накопленные объёмы уровней стакана A (asks) и B (bids), настройки size.*.
-//! Кто вызывает: core/profit.rs.
+//! Решение 217: src — снимок рынка момента решения (расчёт «без потолка» по сделке, core/frozen.rs).
+//! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs.
 //! От чего зависит: costs.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
 //! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
@@ -17,12 +18,15 @@ use crate::settings::read::At;
 use super::costs::{self, Calc};
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
+use super::frozen::Frozen;
 use super::size::{Curve, Fail, Params, Point};
 
 /// Кривая по полному расчёту направления.
 pub struct CoreCurve<'a> {
     pub core: &'a Core,
     pub cx: &'a DirCtx,
+    /// Решение 217: снимок рынка момента решения (расчёт «без потолка» по сделке); None — живые котировки.
+    pub src: Option<&'a Frozen>,
 }
 
 #[async_trait]
@@ -31,7 +35,7 @@ impl Curve for CoreCurve<'_> {
 
     /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
-        let c = costs::evaluate(self.core, self.cx, qty).await?;
+        let c = costs::evaluate_on(self.core, self.cx, qty, self.src).await?;
         Ok(Point {
             qty,
             // Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
@@ -43,9 +47,16 @@ impl Curve for CoreCurve<'_> {
     }
 }
 
-/// Параметры поиска. Принимает: ядро, контекст направления, бюджет, оценку цены покупки (> 0).
+/// Параметры поиска. Принимает: ядро, контекст направления, бюджет, оценку цены покупки (> 0), снимок рынка (решение
+/// 217: изломы — по стаканам снимка; None — живые стаканы ядра).
 /// Ошибки: текст — не задана настройка size.*, шаг количества неизвестен (ни одна сторона не биржа).
-pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Result<Params, String> {
+pub fn params(
+    core: &Core,
+    cx: &DirCtx,
+    budget: Decimal,
+    price: Decimal,
+    src: Option<&Frozen>,
+) -> Result<Params, String> {
     let s = &core.inner.deps.settings;
     let int = |name: &str| -> Result<u32, String> {
         let v = s.integer(name, At::default()).map_err(|e| e.message)?;
@@ -72,8 +83,14 @@ pub fn params(core: &Core, cx: &DirCtx, budget: Decimal, price: Decimal) -> Resu
         step,
         budget,
         guess: budget / price,
-        buy_breaks: cum(market.book(&d.buy_on, ta), true),
-        sell_breaks: cum(market.book(&d.sell_on, tb), false),
+        buy_breaks: match src {
+            Some(f) => cum(f.book(false), true),
+            None => cum(market.book(&d.buy_on, ta), true),
+        },
+        sell_breaks: match src {
+            Some(f) => cum(f.book(true), false),
+            None => cum(market.book(&d.sell_on, tb), false),
+        },
         bisect_steps: int("size.bisect_steps")?,
         grid_points: int("size.grid_points")?,
         refine_steps: int("size.refine_steps")?,

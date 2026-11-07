@@ -9,9 +9,11 @@
 //!   Тиграну, решение 66); 0 у минимума — ограничения нет;
 //! - количество — вниз до шага количества пары (stepSize).
 //!
-//! Сбой шлюза — расчёт невозможен.
+//! Сбой шлюза — расчёт невозможен. Решение 217: со снимком рынка момента решения (core/frozen.rs) котировка и худшая
+//! цена — по снимку стороны, не по живым данным (расчёт «без потолка» по сделке).
 //! Кто вызывает: core/costs.rs.
-//! От чего зависит: core/types, core/size.rs (Fail), deps.rs (шлюз), trade_ops.rs, gateway/events.rs (SpotPairState).
+//! От чего зависит: core/types, core/size.rs (Fail), deps.rs (шлюз), trade_ops.rs, frozen.rs, gateway/events.rs (SpotPairState),
+//! gateway/frozen.rs (deepest).
 //! Настройки: через trade_ops.rs — exec.dex_slippage_pct (худшая цена DEX).
 
 use rust_decimal::Decimal;
@@ -21,26 +23,38 @@ use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::gateway::events::SpotPairState;
 
 use super::engine::Core;
+use super::frozen::Frozen;
 use super::size::Fail;
 
-/// Котировка с проверкой глубины. Принимает: ядро, направление, сторону (true — продажа на B), количество.
-/// Ошибки: TooLarge — глубины не хватает или NoRoute у площадки; Stop — прочие сбои шлюза.
-pub async fn quote(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
+/// Котировка с проверкой глубины. Принимает: ядро, направление, сторону (true — продажа на B), количество, снимок
+/// рынка момента решения (решение 217; None — живая котировка площадки). Ошибки: TooLarge — глубины не хватает или
+/// NoRoute у площадки; Stop — прочие сбои шлюза.
+pub async fn quote(
+    core: &Core,
+    d: &Direction,
+    sell: bool,
+    qty: Decimal,
+    src: Option<&Frozen>,
+) -> Result<Quote, Fail> {
     let (venue, side) = if sell {
         (&d.sell_on, Side::Sell)
     } else {
         (&d.buy_on, Side::Buy)
     };
-    // Решение 132: DEX — кошелёк строки маппинга направления (его разрешения и исполнитель); нет строки — отказ.
-    let v = super::dex_account::venue_dir(&core.inner.deps, d, venue)
-        .await
-        .map_err(Fail::Stop)?;
-    // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
-    let on = super::venue_ticker::on_venue(core, &d.asset, venue);
-    let q = v
-        .quote(&on, side, qty)
-        .await
-        .map_err(|e| classify(&venue.0, &e))?;
+    let q = match src {
+        // Решение 217: по снимку стороны (у биржи — её стакан, у DEX — пулы на момент решения).
+        Some(f) => f.side(sell).quote(qty).await,
+        None => {
+            // Решение 132: DEX — кошелёк строки маппинга направления (его разрешения и исполнитель); нет строки — отказ.
+            let v = super::dex_account::venue_dir(&core.inner.deps, d, venue)
+                .await
+                .map_err(Fail::Stop)?;
+            // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
+            let on = super::venue_ticker::on_venue(core, &d.asset, venue);
+            v.quote(&on, side, qty).await
+        }
+    }
+    .map_err(|e| classify(&venue.0, &e))?;
     let q = super::venue_ticker::quote_back(core, &d.asset, venue, q);
     if q.fillable_qty < qty {
         return Err(Fail::TooLarge(format!(
@@ -62,7 +76,9 @@ pub fn classify(venue: &str, e: &GatewayError) -> Fail {
     }
 }
 
-/// Худшая цена ордера, как её поставит исполнение (trade_ops::worst_price). Ошибки: Stop — нет стакана или допуска.
+/// Худшая цена ордера, как её поставит исполнение (trade_ops::worst_price). Решение 217: со снимком у биржи — самый
+/// глубокий нужный уровень стакана снимка (у DEX — та же формула допуска). Принимает: ядро, площадку, монету, сторону,
+/// количество, среднюю цену, снимок (None — живой стакан ядра). Ошибки: Stop — нет стакана, глубины или допуска.
 pub fn worst(
     core: &Core,
     v: &VenueId,
@@ -70,7 +86,16 @@ pub fn worst(
     side: Side,
     qty: Decimal,
     avg: Decimal,
+    src: Option<&Frozen>,
 ) -> Result<Decimal, Fail> {
+    if let Some(book) = src.and_then(|f| f.book(side == Side::Sell)) {
+        return crate::gateway::frozen::deepest(book, side, qty).ok_or_else(|| {
+            Fail::Stop(format!(
+                "{}: глубины стакана снимка не хватает на {qty}",
+                v.0
+            ))
+        });
+    }
     super::trade_ops::worst_price(core, v, a, side, qty, avg).map_err(Fail::Stop)
 }
 

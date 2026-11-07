@@ -50,7 +50,10 @@ pub async fn quote(
     let ctx = &v.q.ctx;
     // Решение 129: граф — один на состояние реестра и блок (pools/graph.rs cached), а не новый на каждую котировку.
     // Свежесть головы проверяет вызывающий (quote/mod.rs); здесь номер блока — только ключ кэша (нет головы — 0).
-    let head = v.q.heads.latest().map_or(0, |h| h.number);
+    // Решение 217: у замороженного реестра — блок момента снимка (frozen.rs).
+    let head =
+        v.q.frozen_head
+            .unwrap_or_else(|| v.q.heads.latest().map_or(0, |h| h.number));
     let allowed: HashSet<Address> = v.q.mids.active(ctx).iter().map(|m| m.address).collect();
     let (max_hops, max_paths) = route_paths::limits(ctx)?;
     // Решение 187: задан предел перебора — короткие пути первыми, затем отбор max_paths лучших (route_best.rs);

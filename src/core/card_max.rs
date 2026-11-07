@@ -36,8 +36,12 @@ pub async fn compute(core: &Core, calc: &Calc) -> Result<MaxVolume, String> {
     if price.is_zero() {
         return Err("нет цены покупки на A".into());
     }
-    let p = params(core, &cx, cap, price)?;
-    let mut curve = CoreCurve { core, cx: &cx };
+    let p = params(core, &cx, cap, price, None)?;
+    let mut curve = CoreCurve {
+        core,
+        cx: &cx,
+        src: None,
+    };
     max_volume(&mut curve, &p, calc.qty, |pt| {
         passes(&pt.data, min_usd, min_pct)
     })

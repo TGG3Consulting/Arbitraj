@@ -12,6 +12,8 @@
 //! биржи — из справочника сетей ядра, без запросов к бирже (costs_withdraw.rs).
 //! Типы расчёта (Calc, CostLine) — costs_types.rs. Решение 129: каждый запрос к шлюзу — часть замера этапа
 //! (calc_timing.rs): котировка A / B с id площадки, стоимость вывода и возврата, курсы затрат.
+//! Решение 217: evaluate_on — тот же расчёт по снимку рынка момента решения (core/frozen.rs: котировки и худшие цены
+//! обеих сторон по снимку) для расчёта «без потолка» по сделке.
 //! Кто вызывает: core/size_curve.rs (подбор объёма), core/partial.rs.
 //! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_withdraw.rs, dirctx.rs, size.rs, engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
@@ -28,21 +30,33 @@ pub use super::costs_types::{Calc, CostLine};
 use super::costs_withdraw::{floor_precision, return_b, withdraw_a};
 use super::dirctx::DirCtx;
 use super::engine::Core;
+use super::frozen::Frozen;
 use super::size::Fail;
 
 /// Полный расчёт на объём qty. Принимает: ядро (шлюз, стаканы для худшей цены), контекст направления, объём.
 /// Ошибки: Fail с видом и текстом причины (виден на «Живом экране» и в журнале).
 pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fail> {
+    evaluate_on(core, cx, qty, None).await
+}
+
+/// То же, что evaluate, по снимку рынка момента решения (решение 217, core/frozen.rs): котировки и худшие цены обеих
+/// сторон — по снимку; src None — живые. Принимает: ядро, контекст, объём, снимок. Ошибки: как у evaluate.
+pub async fn evaluate_on(
+    core: &Core,
+    cx: &DirCtx,
+    qty: Decimal,
+    src: Option<&Frozen>,
+) -> Result<Calc, Fail> {
     let deps = &core.inner.deps;
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
     let qa = stage(
         || format!("котировка A {}", d.buy_on.0),
-        quote(core, d, false, qty),
+        quote(core, d, false, qty, src),
     )
     .await?;
     // Списание по бюджету — по худшей цене покупки (лимит биржи, допуск DEX): столько может уйти или замёрзнуть.
-    let worst_a = worst(core, &d.buy_on, &d.asset, Side::Buy, qty, qa.avg_price)?;
+    let worst_a = worst(core, &d.buy_on, &d.asset, Side::Buy, qty, qa.avg_price, src)?;
     order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst_a)?;
     // Затраты покупки в монете (комиссия биржи в монете) уменьшают выводимое количество.
     let mut lines: Vec<(Cost, &'static str)> = qa.costs.iter().map(|c| (c.clone(), "A")).collect();
@@ -70,13 +84,13 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
     }
     // Изменение ликвидности к моменту продажи: используем только долю h глубины B.
     let name_b = || format!("котировка B {}", d.sell_on.0);
-    stage(name_b, quote(core, d, true, sell_qty / cx.h))
+    stage(name_b, quote(core, d, true, sell_qty / cx.h, src))
         .await
         .map_err(|e| match e {
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,
         })?;
-    let qb = stage(name_b, quote(core, d, true, sell_qty)).await?;
+    let qb = stage(name_b, quote(core, d, true, sell_qty, src)).await?;
     let worst_b = worst(
         core,
         &d.sell_on,
@@ -84,6 +98,7 @@ pub async fn evaluate(core: &Core, cx: &DirCtx, qty: Decimal) -> Result<Calc, Fa
         Side::Sell,
         sell_qty,
         qb.avg_price,
+        src,
     )?;
     order_limits(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty, worst_b)?;
     lines.extend(qb.costs.iter().map(|c| (c.clone(), "B")));

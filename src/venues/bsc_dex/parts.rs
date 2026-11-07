@@ -85,6 +85,7 @@ impl Parts {
             mids: self.mids.clone(),
             allow: self.allow.clone(),
             lag: self.lag.clone(),
+            frozen_head: None,
         }
     }
 

@@ -1,6 +1,8 @@
 //! Файл: venues/gate/book.rs
 //! Что делает: последние стаканы Gate в памяти и котировка на объём по уровням стакана
 //! (сколько заплатим или получим за Q монет, с комиссией taker нашего аккаунта).
+//! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
+//! живая котировка — тот же снимок на один вызов (одна формула).
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
@@ -29,8 +31,9 @@ use std::sync::{Arc, RwLock};
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Cost, CostKind, OrderBook, PriceLevel, Quote, Side};
+use crate::core::types::{Asset, OrderBook, Quote, Side};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::frozen::{BookFee, FrozenBook};
 
 use super::ctx::Ctx;
 use super::fees::Fees;
@@ -89,11 +92,9 @@ impl Books {
             .remove(ticker);
     }
 
-    /// Котировка на объём.
-    /// Принимает: окружение, кэш комиссий, монету, сторону, количество монет.
-    /// Возвращает: Quote (fillable_qty меньше qty, если глубины не хватает).
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или кадра пары нет дольше
-    /// venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured — настройка не задана; комиссия.
+    /// Котировка на объём (снимок на один вызов — та же формула, что у снимка решения 217).
+    /// Принимает: окружение, данные комиссии, монету, сторону, количество монет.
+    /// Возвращает: Quote (fillable_qty меньше qty, если глубины не хватает). Ошибки: как у freeze.
     pub async fn quote(
         &self,
         ctx: &Ctx,
@@ -102,6 +103,20 @@ impl Books {
         side: Side,
         qty: Decimal,
     ) -> GatewayResult<Quote> {
+        Ok(self.freeze(ctx, fees, asset, side)?.price(qty))
+    }
+
+    /// Решение 217: снимок стакана монеты и плана комиссии на этот момент (копия стакана из памяти).
+    /// Принимает: то же, что quote, без количества. Возвращает: FrozenBook.
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или кадра пары нет дольше
+    /// venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured — настройка не задана; комиссия.
+    pub fn freeze(
+        &self,
+        ctx: &Ctx,
+        fees: &Fees,
+        asset: &Asset,
+        side: Side,
+    ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
         let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
@@ -135,11 +150,6 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let levels = match side {
-            Side::Buy => &book.asks,
-            Side::Sell => &book.bids,
-        };
-        let (filled, notional) = walk(levels, qty);
         let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
         let mode = ctx.text("venue.fee_deduction")?;
         // Решение 158: скидка GT — только если GT хватает (память gt_balance.rs), иначе обычная ставка.
@@ -147,47 +157,34 @@ impl Books {
         let (rate, in_gt, _why) = rates
             .plan(&mode, gt_ok)
             .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
-        let avg = if filled.is_zero() {
-            Decimal::ZERO
+        // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — USDT по сумме.
+        let fee = if side == Side::Buy && !in_gt {
+            BookFee {
+                rate,
+                per_coin: true,
+                asset: asset.ticker.clone(),
+            }
         } else {
-            notional / filled
+            BookFee {
+                rate,
+                per_coin: false,
+                asset: "USDT".into(),
+            }
         };
-        Ok(Quote {
+        Ok(FrozenBook {
             venue: ctx.venue(),
             asset: asset.clone(),
             side,
-            qty,
-            fillable_qty: filled,
-            avg_price: avg,
-            // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — USDT по сумме.
-            costs: vec![if side == Side::Buy && !in_gt {
-                Cost::new(CostKind::TradeFee, filled * rate, &asset.ticker, false)
-            } else {
-                Cost::new(CostKind::TradeFee, notional * rate, "USDT", false)
-            }],
-            route: None,
-            signal_route: None,
-            pick: None,
-            at: book.received_at,
+            book,
+            // Комиссия тейкера — не входит в avg_price.
+            fee,
+            taken_at: chrono::Utc::now(),
         })
     }
 }
 
-/// Проход по уровням от лучшего: сколько монет набрано и на какую сумму.
-/// Уровни уже отсортированы от лучшей цены к худшей (market.rs).
-pub fn walk(levels: &[PriceLevel], qty: Decimal) -> (Decimal, Decimal) {
-    let (mut left, mut filled, mut notional) = (qty, Decimal::ZERO, Decimal::ZERO);
-    for l in levels {
-        if left <= Decimal::ZERO {
-            break;
-        }
-        let take = left.min(l.qty);
-        filled += take;
-        notional += take * l.price;
-        left -= take;
-    }
-    (filled, notional)
-}
+/// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).
+pub use crate::gateway::frozen::walk;
 
 /// Ошибка «данные устарели».
 fn stale(ctx: &Ctx, ticker: &str, why: &str) -> GatewayError {

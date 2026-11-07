@@ -3,7 +3,8 @@
 //! id сделки), итог расчёта (Record — оптимум без денежных ограничений, минимальное вложение до плюса, лучшее на боевом
 //! бюджете той же моделью, таблица потолков, упущено, что ограничило, состав затрат на оптимуме) и эпизод серии
 //! одинаковых расчётов направления. Record пишется в SQLite (storage/uncapped_db.rs) JSON-ом; Brief — его часть для
-//! итогов экрана (читается обратно).
+//! итогов экрана (читается обратно). Решение 217: источник данных записи (basis) — снимок рынка момента решения у
+//! сделки, живые котировки у кандидата; старые записи сделок без поля — «после покупки» (занижено).
 //! Кто вызывает: core/uncapped.rs (собирает), uncapped_queue.rs, uncapped_store.rs, uncapped_view.rs, candidates.rs,
 //! executor.rs (Battle), uncapped_sum.rs и report/missed_rows.rs (Brief, решение 215).
 //! От чего зависит: core/types, costs_types.rs (CostLine), limits_parts.rs, size_uncapped.rs (At, Level).
@@ -100,12 +101,37 @@ pub struct Record {
     /// Сколько длился расчёт, мс.
     pub ms: f64,
     pub ep: Episode,
+    /// Решение 217: на каких данных посчитано — BASIS_SNAPSHOT (сделка: снимок рынка момента решения, до ордера
+    /// покупки), BASIS_LIVE (кандидат: живые котировки в момент расчёта), BASIS_LIVE_AFTER_BUY (сделка до решения 217:
+    /// живые котировки ПОСЛЕ нашей покупки — занижено; так читаются старые записи).
+    pub basis: String,
+    /// Решение 217: когда снят рынок (момент решения, перед ордером покупки) и что снято по сторонам; без снимка — None.
+    pub decided_at: Option<DateTime<Utc>>,
+    pub snapshot: Option<String>,
+}
+
+/// Решение 217: сделка посчитана по снимку рынка момента решения.
+pub const BASIS_SNAPSHOT: &str = "decision_snapshot";
+/// Решение 217: живые котировки в момент расчёта (кандидаты: нашей сделки не было).
+pub const BASIS_LIVE: &str = "live";
+/// Решение 217: старая запись сделки — живые котировки после нашей покупки (занижено).
+pub const BASIS_LIVE_AFTER_BUY: &str = "live_after_buy";
+
+/// Источник данных записи без поля basis (записи до решения 217) — «после покупки» (serde default). Ошибок нет.
+pub fn old_basis() -> String {
+    BASIS_LIVE_AFTER_BUY.into()
+}
+
+/// Решение 217: запись сделки посчитана после нашей покупки — занижена (её цифры нельзя смешивать с остальными).
+/// Принимает: вердикт боя, источник. Ошибок нет.
+pub fn understated(verdict: &str, basis: &str) -> bool {
+    verdict == "deal" && basis == BASIS_LIVE_AFTER_BUY
 }
 
 /// Часть записи для итогов экрана (читается обратно из JSON).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Brief {
-    /// Время расчёта (у сделки — после исполнения покупки).
+    /// Время расчёта (у сделки — после исполнения покупки; рынок — на decided_at, решение 217).
     pub at: DateTime<Utc>,
     pub direction: Direction,
     pub battle: Battle,
@@ -120,6 +146,19 @@ pub struct Brief {
     /// Решение 215 (отчёт «Упущено», лист «Кандидаты»): бюджет «на нашем бюджете» (Record::budget).
     #[serde(default)]
     pub budget: Decimal,
+    /// Решение 217: источник данных (Record::basis); старые записи — «после покупки».
+    #[serde(default = "old_basis")]
+    pub basis: String,
+    /// Решение 217: момент решения о входе (снимок рынка); старые записи — None.
+    #[serde(default)]
+    pub decided_at: Option<DateTime<Utc>>,
+}
+
+impl Brief {
+    /// Решение 217: запись сделки посчитана после нашей покупки — занижена. Ошибок нет.
+    pub fn understated(&self) -> bool {
+        understated(&self.battle.verdict, &self.basis)
+    }
 }
 
 /// Бюджет срезал оптимум (а не оптимум внутри, не край площадок или поиска). Ошибок нет.

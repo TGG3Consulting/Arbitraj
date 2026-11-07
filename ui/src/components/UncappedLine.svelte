@@ -2,17 +2,25 @@
   Файл: ui/src/components/UncappedLine.svelte
   Что делает: одна строка расчёта «без потолка» (решение 141) — «без потолка: вложить X → прибыль Y; плюс от Z USDT;
     на нашем бюджете B — P; упущено M; ограничило: …». Для строки кандидата (поле uncapped) и карточки сделки.
+    Решение 217: у записи сделки — на каких данных посчитано: «по рынку на момент решения» (снимок до ордера покупки) или
+    «посчитано после покупки — занижено» (старые записи).
   Кто вызывает: pages/Live.svelte, components/DealUncapped.svelte.
-  От чего зависит: lib/uncappedLabels.js.
+  От чего зависит: lib/uncappedLabels.js, lib/labels.js (showTime).
   Настройки: нет (uncapped.* — экран «Настройки», категория «Упущено из-за потолка»).
 -->
 <script>
-  import { limitedLabel, money } from '../lib/uncappedLabels.js';
+  import { limitedLabel, money, understated } from '../lib/uncappedLabels.js';
+  import { showTime } from '../lib/labels.js';
 
   /** u — {opt, opt_passes, min_plus, at_budget, budget, missed, limited_by, limit, at?}. */
   let { u } = $props();
 </script>
 
+{#if understated(u)}
+  <p class="warn-text">Посчитано после нашей покупки — занижено (запись до решения 217: стакан уже съеден нашей покупкой).</p>
+{:else if u.decided_at}
+  <p class="muted">По рынку на момент решения о входе (до ордера покупки): {showTime(u.decided_at)}</p>
+{/if}
 <p class="uncapped">
   Без потолка: вложить <strong>{money(u.opt.invested)} USDT</strong> → прибыль <strong>{money(u.opt.profit)} USDT</strong>
   ({u.opt.qty} монет){#if !u.opt_passes} <span class="warn-text">— ниже порогов прибыли</span>{/if};

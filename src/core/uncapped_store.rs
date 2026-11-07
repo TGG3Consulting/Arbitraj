@@ -58,6 +58,30 @@ pub fn failed(core: &Core, e: String) {
     }
 }
 
+/// Решение 217: сбой расчёта по сделке — как failed (счётчик, причина экрана) и причина по id сделки для сообщения о
+/// закрытии (deal_ceiling.rs: «не посчитано: …»); причины старше uncapped.keep_days убираются. Ошибок нет.
+pub fn deal_failed(core: &Core, id: &str, e: String) {
+    let now = Utc::now();
+    let keep = core
+        .inner
+        .deps
+        .settings
+        .integer("uncapped.keep_days", At::default())
+        .ok();
+    {
+        let mut m = lk(&core.inner.uncapped.deal_errors);
+        let from = keep
+            .and_then(|k| i64::try_from(k).ok())
+            .and_then(chrono::Duration::try_days)
+            .and_then(|d| now.checked_sub_signed(d));
+        if let Some(from) = from {
+            m.retain(|_, (t, _)| *t >= from);
+        }
+        m.insert(id.to_string(), (now, e.clone()));
+    }
+    failed(core, e);
+}
+
 /// Сохраняет итог (см. шапку). Принимает: ядро, ключ работы, запись. Ошибок нет — сбой в failed.
 pub async fn save(core: &Core, key: &Key, mut rec: Record) {
     let int = |n: &str| core.inner.deps.settings.integer(n, At::default());

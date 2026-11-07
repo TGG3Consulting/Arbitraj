@@ -1,5 +1,5 @@
 //! Файл: core/uncapped.rs
-//! Что делает: расчёт «без потолка» одного направления на живых данных ядра (решение 141) — «если бы денег было
+//! Что делает: расчёт «без потолка» одного направления (решение 141) — «если бы денег было
 //! немерено». Сняты ВСЕ денежные ограничения: money.max_per_trade_usd, остаток лимита на монету, остаток лимита в пути,
 //! свободный остаток площадки покупки (подбор под остаток, refit.rs), виртуальный бюджет сухого режима. Остаются только
 //! ликвидность (стакан по уровням, пулы DEX — Fail::TooLarge котировок) и предел поиска card.max_search_usdt.
@@ -10,8 +10,12 @@
 //! искажается разницей финальной котировки (боевая финальная прибыль хранится отдельно, Battle.profit).
 //! Упущено — uncapped_types::missed: прошёл / сделка — (прибыль без потолка, если проходит пороги, иначе 0) − (то же на боевом бюджете), не
 //! меньше 0; отказ — прибыль без потолка, если она проходит пороги, иначе 0 (в бою взяли 0).
+//! Решение 217: сделка считается по снимку рынка момента решения (core/frozen.rs, взят перед ордером покупки): котировки,
+//! худшие цены и изломы обеих сторон — по снимку, а не по живым данным, где наша покупка уже съела стакан или сдвинула
+//! пул (живыми остаются σ, время в пути, правила пар, комиссии вывода, курсы затрат и газ — их наша сделка не двигает).
+//! Снимка нет — расчёта нет (причина), живые данные не подставляются. Кандидат — на живых данных (сделки не было).
 //! Кто вызывает: core/uncapped_queue.rs (в потоке фоновой задачи).
-//! От чего зависит: dirctx.rs, size_curve.rs, size_uncapped.rs, limits_parts.rs, dry.rs, card_max.rs (passes), settings.
+//! От чего зависит: frozen.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, limits_parts.rs, dry.rs, card_max.rs (passes), settings.
 //! Настройки: card.max_search_usdt (предел поиска), uncapped.max_evals (предел расчётов), uncapped.ladder_usdt (таблица
 //! потолков), money.min_profit_usd, money.min_profit_pct, size.* (через size_curve::params).
 
@@ -26,14 +30,27 @@ use crate::settings::read::At as SAt;
 use super::card_max::passes;
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
+use super::frozen::Frozen;
 use super::size_curve::{CoreCurve, params};
 use super::size_uncapped::{At, uncapped};
-use super::uncapped_types::{Battle, Episode, Record, missed};
+use super::uncapped_types::{BASIS_LIVE, BASIS_SNAPSHOT, Battle, Episode, Record, missed};
 
-/// Что делает: расчёт без потолка (см. шапку). Принимает: ядро, направление, бой. Возвращает: Record (эпизод — из одного
-/// расчёта). Ошибки: текст — не задана настройка, контекст направления, нет цены, расчёт невозможен.
-pub async fn compute(core: &Core, d: &Direction, battle: Battle) -> Result<Record, String> {
+/// Что делает: расчёт без потолка (см. шапку). Принимает: ядро, направление, бой, источник котировок (решение 217:
+/// None — живые, кандидат; Some(Ok) — снимок рынка момента решения, сделка; Some(Err) — снимка нет).
+/// Возвращает: Record (эпизод — из одного расчёта). Ошибки: текст — нет снимка, не задана настройка, контекст
+/// направления, нет цены, расчёт невозможен.
+pub async fn compute(
+    core: &Core,
+    d: &Direction,
+    battle: Battle,
+    src: Option<Result<Frozen, String>>,
+) -> Result<Record, String> {
     let t0 = Instant::now();
+    // Решение 217: снимка нет — не считаем (живые данные после нашей покупки занизили бы потенциал).
+    let frozen = src
+        .transpose()
+        .map_err(|e| format!("не посчитано: нет снимка рынка на момент решения — {e}"))?;
+    let fz = frozen.as_ref();
     let s = &core.inner.deps.settings;
     let dec = |name: &str| s.decimal(name, SAt::default()).map_err(|e| e.message);
     let search_cap = dec("card.max_search_usdt")?;
@@ -60,15 +77,23 @@ pub async fn compute(core: &Core, d: &Direction, battle: Battle) -> Result<Recor
     let cx = DirCtx::build(core, d)?;
     // Решение 211 (ревью В6): стакан A — по тикеру монеты на A (venue_ticker::ticker_on).
     let on_a = super::venue_ticker::ticker_on(core, &d.asset, &d.buy_on);
-    let price = rd(&core.inner.market)
-        .best(&d.buy_on, &on_a, Side::Buy)
+    // Решение 217: со снимком — лучший ask стакана снимка (у DEX — цена боя), без живого стакана.
+    let best = match fz {
+        Some(f) => f.book(false).and_then(|b| b.asks.first()).map(|l| l.price),
+        None => rd(&core.inner.market).best(&d.buy_on, &on_a, Side::Buy),
+    };
+    let price = best
         .filter(|p| !p.is_zero())
         .or((battle.qty > Decimal::ZERO).then(|| battle.invested / battle.qty))
         .filter(|p| !p.is_zero())
         .ok_or("нет цены покупки на A")?;
-    let mut p = params(core, &cx, search_cap, price)?;
+    let mut p = params(core, &cx, search_cap, price, fz)?;
     p.max_evals = u32::try_from(max_evals).map_err(|_| "uncapped.max_evals вне пределов")?;
-    let mut curve = CoreCurve { core, cx: &cx };
+    let mut curve = CoreCurve {
+        core,
+        cx: &cx,
+        src: fz,
+    };
     let u = uncapped(&mut curve, &p, budget, &ladder, |pt| {
         passes(&pt.data, min_usd, min_pct)
     })
@@ -116,6 +141,14 @@ pub async fn compute(core: &Core, d: &Direction, battle: Battle) -> Result<Recor
             capped_count: 0,
             peak_at: now,
         },
+        basis: if fz.is_some() {
+            BASIS_SNAPSHOT
+        } else {
+            BASIS_LIVE
+        }
+        .into(),
+        decided_at: fz.map(|f| f.at),
+        snapshot: fz.map(Frozen::describe),
     })
 }
 

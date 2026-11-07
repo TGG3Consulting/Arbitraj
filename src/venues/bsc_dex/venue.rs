@@ -102,6 +102,20 @@ impl Venue for BscDex {
         scope(class, self.p.quoting().quote(asset, side, qty)).await
     }
 
+    /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
+    /// память. Ошибки: StaleData (блок, лента событий), NotConfigured (тикер USDT), NoRoute (нет адреса монеты).
+    async fn quote_snapshot(
+        &self,
+        asset: &Asset,
+        side: Side,
+    ) -> GatewayResult<crate::gateway::frozen::QuoteSnapshot> {
+        Ok(std::sync::Arc::new(super::frozen::take(
+            self.p.quoting(),
+            asset,
+            side,
+        )?))
+    }
+
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {

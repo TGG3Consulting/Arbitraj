@@ -11,6 +11,8 @@
 //! не выбрасывается и не входит в uncapped.queue_max (свой счётчик deals_waiting), а свободное место расчёта сначала
 //! получает ждущая сделка — кандидат, получив место, пока ждут сделки, отдаёт его и ждёт (turn). Итог — uncapped_store.rs
 //! (SQLite) и строка «Кандидатов» (поле uncapped). Не задана настройка — сбой со счётчиком и причиной на экране.
+//! Решение 217: работа сделки несёт снимок рынка момента решения (core/frozen.rs) — расчёт идёт по нему; сбой расчёта
+//! сделки запоминается по её id (uncapped_store::deal_failed) для сообщения о закрытии.
 //! Кто вызывает: core/uncapped_entry.rs (submit).
 //! От чего зависит: uncapped_permit.rs (место расчёта), uncapped.rs (compute), uncapped_state.rs, uncapped_store.rs, gateway/urgency.rs, settings.
 //! Настройки: uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max.
@@ -23,6 +25,7 @@ use crate::gateway::urgency::{self, Urgency};
 use crate::settings::read::At;
 
 use super::engine::{Core, lk};
+use super::frozen::Frozen;
 use super::uncapped_state::{Job, Key};
 use super::uncapped_types::Battle;
 
@@ -35,8 +38,15 @@ fn int(core: &Core, name: &str) -> Result<u64, String> {
         .map_err(|e| e.message)
 }
 
-/// Постановка (правила — в шапке). Ошибок нет: сбой настройки — в счётчик и причину.
-pub fn submit(core: &Core, key: Key, d: &Direction, battle: Battle) {
+/// Постановка (правила — в шапке). Принимает: ядро, ключ, направление, бой, источник котировок (решение 217: None —
+/// живые, у сделки — снимок момента решения или причина, почему его нет). Ошибок нет: сбой настройки — в счётчик и причину.
+pub fn submit(
+    core: &Core,
+    key: Key,
+    d: &Direction,
+    battle: Battle,
+    src: Option<Result<Frozen, String>>,
+) {
     if !super::uncapped_entry::enabled(core) {
         return;
     }
@@ -51,6 +61,7 @@ pub fn submit(core: &Core, key: Key, d: &Direction, battle: Battle) {
     let job = Job {
         dir: d.clone(),
         battle,
+        src,
     };
     let deal = matches!(key, Key::Deal(_));
     // Решение 197: сделку очередь не выбрасывает.
@@ -131,23 +142,27 @@ async fn run(core: Core, key: Key, job: Job) {
         Ok(held) => {
             let rt = tokio::runtime::Handle::current();
             let c = core.clone();
-            let (d, battle) = (job.dir.clone(), job.battle);
+            let (d, battle, src) = (job.dir.clone(), job.battle, job.src);
             let r = tokio::task::spawn_blocking(move || {
                 let _held = held;
                 rt.block_on(urgency::scope(
                     Urgency::Background,
-                    super::uncapped::compute(&c, &d, battle),
+                    super::uncapped::compute(&c, &d, battle, src),
                 ))
             })
             .await
             .map_err(|e| format!("поток расчёта без потолка прерван: {e}"))
             .and_then(|r| r);
-            match r {
-                Ok(rec) => super::uncapped_store::save(&core, &key, rec).await,
-                Err(e) => super::uncapped_store::failed(&core, e),
+            match (r, &key) {
+                (Ok(rec), _) => super::uncapped_store::save(&core, &key, rec).await,
+                (Err(e), Key::Deal(id)) => super::uncapped_store::deal_failed(&core, id, e),
+                (Err(e), Key::Cand(_)) => super::uncapped_store::failed(&core, e),
             }
         }
-        Err(e) => super::uncapped_store::failed(&core, e),
+        Err(e) => match &key {
+            Key::Deal(id) => super::uncapped_store::deal_failed(&core, id, e),
+            Key::Cand(_) => super::uncapped_store::failed(&core, e),
+        },
     }
     let mut slots = lk(&st.slots);
     let Some(slot) = slots.get_mut(&key) else {

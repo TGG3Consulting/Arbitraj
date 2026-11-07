@@ -9,6 +9,7 @@
 //! по индексам (registry_index.rs): by_pair / by_coin / pair_marks не проходят весь реестр; карты тиков и бинов
 //! общие при копии записи (ticks.rs, bins.rs); snapshot — все записи без копирования (граф маршрутов). Блокировка
 //! держится только на чтение индекса и копию нужных записей — счёт котировки идёт без неё.
+//! Решение 217: замороженный реестр из снимка записей (снимок и сборка — registry_frozen.rs).
 //! Настройки: нет.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -59,13 +60,13 @@ pub struct Entry {
 #[derive(Clone, Default)]
 pub struct Registry {
     /// Записи за `Arc` и индексы по паре и тикеру (registry_index.rs, решение 129).
-    inner: Arc<RwLock<Pools>>,
+    pub(super) inner: Arc<RwLock<Pools>>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
-    depth: super::depth_book::Book,
+    pub(super) depth: super::depth_book::Book,
     /// Версия: растёт при любой записи (решение 129).
-    version: Arc<AtomicU64>,
+    pub(super) version: Arc<AtomicU64>,
     /// Граф маршрутов последней версии (решение 129, graph.rs cached).
-    graph: super::graph::Cache,
+    pub(super) graph: super::graph::Cache,
 }
 
 impl Entry {

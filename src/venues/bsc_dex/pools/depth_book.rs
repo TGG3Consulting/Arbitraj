@@ -12,6 +12,7 @@
 //! - курс промежуточной монеты (пул с BNB, решение 52) — часть ключа: сменился пул «промежуточная — USDT» —
 //!   глубина пересчитывается.
 //!
+//! Решение 217: seeded — книга замороженного реестра (registry_frozen.rs).
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
 //! pools/depth_facts.rs (экран «Монеты»).
 //! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs.
@@ -60,6 +61,8 @@ pub(super) struct Slot {
 pub struct Book {
     pub(super) m: Arc<Mutex<HashMap<PoolRef, Slot>>>,
     wake: Arc<Mutex<Vec<Weak<Notify>>>>,
+    /// Решение 217: книга замороженного реестра — прошлый вердикт из живой книги, без журнала и сигналов.
+    seed: Option<Box<Book>>,
 }
 
 /// Какая настройка глубины не задана (её имя из ошибки хранилища — GatewayError.setting, не текст): для перепроверки
@@ -89,6 +92,15 @@ impl Book {
         let mut w = self.wake.lock().unwrap_or_else(|p| p.into_inner());
         w.retain(|x| x.strong_count() > 0);
         w.push(Arc::downgrade(&n));
+    }
+
+    /// Решение 217: книга для замороженного реестра (registry_frozen.rs): пуста, прошлый вердикт гистерезиса — из
+    /// этой (живой) книги, смены не пишутся в журнал и «пул готов» не подаётся. Ошибок нет.
+    pub fn seeded(&self) -> Book {
+        Book {
+            seed: Some(Box::new(self.clone())),
+            ..Book::default()
+        }
     }
 
     /// Последняя посчитанная глубина пула (без пересчёта). Ошибок нет.
@@ -144,7 +156,11 @@ impl Book {
         let prev = match self.lock().get(r) {
             Some(s) if s.key == key => return Ok(s.depth.clone()),
             Some(s) => Some((s.depth.deep_buy, s.depth.deep_sell)),
-            None => None,
+            None => self
+                .seed
+                .as_ref()
+                .and_then(|b| b.last(r))
+                .map(|d| (d.deep_buy, d.deep_sell)),
         };
         let band = depth_band::band_depth(ctx, reg, tokens, e, usdt_dec, band_pct)?;
         let deep_buy = next_deep(prev.map(|p| p.0), band.buy, min, hyst);
@@ -177,9 +193,11 @@ impl Book {
                 },
             );
         }
-        depth_log::after(self, ctx, r);
-        if rose {
-            self.rise();
+        if self.seed.is_none() {
+            depth_log::after(self, ctx, r);
+            if rose {
+                self.rise();
+            }
         }
         Ok(depth)
     }

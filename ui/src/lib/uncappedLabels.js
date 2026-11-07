@@ -2,6 +2,7 @@
 // Что делает: подписи расчёта «без потолка» (решение 141): что ограничило объём (коды core/uncapped_types.rs
 //   Record.limited_by), округление денег для экрана, период «сутки / 7 дней / свой» в RFC 3339.
 // Решение 197: вердикт расчёта на нашем бюджете по-русски (слова «бой» на экране нет), длительность окна.
+// Решение 217: источник данных записи (basis) и признак «посчитано после покупки — занижено» у старых записей сделок.
 // Кто вызывает: pages/Uncapped.svelte, components/UncappedLine.svelte, components/UncappedRecord.svelte,
 //   components/DealUncapped.svelte.
 // От чего зависит: ничего.
@@ -56,11 +57,26 @@ export function duration(sec) {
   return `${Math.floor(s / 3600)} ч ${Math.floor((s % 3600) / 60)} мин`;
 }
 
-/** Окно записи, с: сделка — от начала окна (battle.window_from) до расчёта после покупки (at); кандидат — эпизод
- *  (ep.first_at → ep.last_at). null — у сделки начала окна нет. */
+/** Окно записи, с: сделка — от начала окна (battle.window_from) до момента решения о входе (decided_at, решение 217;
+ *  у старых записей — до расчёта после покупки, at); кандидат — эпизод (ep.first_at → ep.last_at). null — у сделки
+ *  начала окна нет. */
 export function windowSec(b) {
   if (b.battle?.verdict === 'deal') {
-    return b.battle.window_from ? (Date.parse(b.at) - Date.parse(b.battle.window_from)) / 1000 : null;
+    const end = b.decided_at ?? b.at;
+    return b.battle.window_from ? (Date.parse(end) - Date.parse(b.battle.window_from)) / 1000 : null;
   }
   return b.ep ? (Date.parse(b.ep.last_at) - Date.parse(b.ep.first_at)) / 1000 : null;
 }
+
+/** Решение 217: запись сделки посчитана после нашей покупки (старая запись без снимка рынка) — цифры занижены.
+ *  Поле basis нет — запись до решения 217 («после покупки»; сервер дописывает basis сам, это запас). */
+export const understated = (b) => b?.battle?.verdict === 'deal' && (b.basis ?? 'live_after_buy') === 'live_after_buy';
+
+const BASIS = {
+  decision_snapshot: 'рынок на момент решения (до покупки)',
+  live_after_buy: 'посчитано после покупки — занижено',
+  live: 'живые котировки',
+};
+
+/** Решение 217: на каких данных посчитано (Record.basis) — по-русски. */
+export const basisLabel = (k) => BASIS[k] ?? k;

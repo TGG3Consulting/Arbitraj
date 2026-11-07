@@ -6,7 +6,7 @@
 //! очищается (exec/txs.rs), следующее чтение — с узла. Сделка и проба читают разрешения с узла всегда (plan.rs).
 //! Решение 122 (часть X): так же в памяти — ERC-20 allowance кошелька исполнителю ArbExecutor (erc20), чтобы котировка
 //! маршрута через исполнитель не спрашивала узел на каждом тике; сделка читает разрешение с узла всегда.
-//! Кто вызывает: quote/approve_gas.rs (read, erc20), exec/txs.rs (clear).
+//! Кто вызывает: quote/approve_gas.rs (read, erc20), exec/txs.rs (clear), frozen.rs (snapshot, решение 217).
 //! От чего зависит: wallet/approve.rs (Read, read), wallet/approve_executor.rs (allowance).
 //! Настройки: нет.
 
@@ -78,6 +78,20 @@ impl Allowances {
             .unwrap_or_else(|p| p.into_inner())
             .insert(key, v);
         Ok(v)
+    }
+
+    /// Решение 217: копия разрешений из памяти на этот момент (замороженная котировка, venues/bsc_dex/frozen.rs) —
+    /// своя память, не очищается транзакциями кошелька (наша же покупка не убирает газ разрешений из расчёта по
+    /// сделке). Чего в памяти не было — котировка прочтёт с узла (живое). Ошибок нет.
+    pub fn snapshot(&self) -> Allowances {
+        Allowances {
+            map: Arc::new(Mutex::new(
+                self.map.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+            )),
+            erc20: Arc::new(Mutex::new(
+                self.erc20.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+            )),
+        }
     }
 
     /// Транзакция кошелька ушла или завершилась — разрешения могли измениться. Ошибок нет.

@@ -4,7 +4,8 @@
 //! (кандидаты)» (записей, упёрлись в бюджет, план на нашем бюджете, факт, без потолка, упущено — суммы экрана,
 //! core/uncapped_sum.rs Sum), ниже таблица «Потолок → прибыль» (потолок | сделки | кандидаты и строка «без потолка»);
 //! «Сделки» — строка на сделку; «Кандидаты» — строка на эпизод; «Топ направлений» — монета, направление, сколько раз,
-//! упущено всего, по убыванию. Внизу «Сделок» и «Кандидатов» — строка «Итого» формулами SUM по столбцам денег и
+//! упущено всего, по убыванию; «Сделки — занижено» (решение 217) — сделки, посчитанные после нашей покупки (старые
+//! записи), отдельно от остальных; у сделок столбец «Данные» — на каких данных посчитано. Внизу «Сделок» и «Кандидатов» — строка «Итого» формулами SUM по столбцам денег и
 //! счётчиков. Оформление — как «Итоги сделок» (report/results_sheet.rs): Arial, шапка белым по 1F4E78, высота 31.5,
 //! закрепление первой строки, фильтр, форматы денег 2 и 4 знака, красный / зелёный факт, примечания курсивом.
 //! Кто вызывает: report/mod.rs (missed).
@@ -24,9 +25,15 @@ use crate::core::uncapped_report::MissedData;
 pub fn workbook(data: &MissedData, period: &str, now: DateTime<Utc>) -> Result<Vec<u8>, XlsxError> {
     let mut wb = Workbook::new();
     total(wb.add_worksheet(), data, period, now)?;
-    deals(wb.add_worksheet(), &mr::deals(data))?;
+    deals(wb.add_worksheet(), &mr::deals(data, false), "Сделки")?;
     candidates(wb.add_worksheet(), &mr::candidates(data))?;
     top(wb.add_worksheet(), &mr::top(data))?;
+    // Решение 217: сделки, посчитанные после нашей покупки (занижено), — свой лист и своя строка «Итого».
+    deals(
+        wb.add_worksheet(),
+        &mr::deals(data, true),
+        "Сделки — занижено",
+    )?;
     wb.save_to_buffer()
 }
 
@@ -52,9 +59,9 @@ fn sum_row(ws: &mut Worksheet, row: u32, cols: &[(u16, Format)]) -> Result<(), X
     Ok(())
 }
 
-/// Лист «Сделки». Ошибки: XlsxError.
-fn deals(ws: &mut Worksheet, rows: &[mr::DealRow]) -> Result<(), XlsxError> {
-    ws.set_name("Сделки")?;
+/// Лист сделок («Сделки» или «Сделки — занижено», решение 217). Принимает: лист, строки, имя листа. Ошибки: XlsxError.
+fn deals(ws: &mut Worksheet, rows: &[mr::DealRow], name: &str) -> Result<(), XlsxError> {
+    ws.set_name(name)?;
     let hdr = [
         "Время (UTC)",
         "Монета",
@@ -67,11 +74,12 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow]) -> Result<(), XlsxError> {
         "Без потолка: прибыль, USDT",
         "Упущено, USDT",
         "Окно с (UTC)",
+        "Данные",
     ];
     header(
         ws,
         &hdr,
-        &[19., 14., 16., 12., 34., 11., 11., 14., 14., 12., 36.],
+        &[19., 14., 16., 12., 34., 11., 11., 14., 14., 12., 36., 30.],
     )?;
     let (p, m, m4) = (plain(), money(), money4());
     for (k, r) in rows.iter().enumerate() {
@@ -90,9 +98,10 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow]) -> Result<(), XlsxError> {
         ws.write_number_with_format(row, 8, r.opt_profit, &m4)?;
         ws.write_number_with_format(row, 9, r.missed, &m4)?;
         ws.write_string_with_format(row, 10, &r.window, &p)?;
+        ws.write_string_with_format(row, 11, &r.basis, &p)?;
     }
     let tr = rows.len() as u32 + 1;
-    ws.autofilter(0, 0, tr - 1, 10)?;
+    ws.autofilter(0, 0, tr - 1, 11)?;
     red_green(ws, 1, 6, tr, 6)?;
     sum_row(
         ws,

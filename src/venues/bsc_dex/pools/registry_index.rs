@@ -73,6 +73,18 @@ impl Pools {
             .filter_map(|r| self.map.get(r))
     }
 
+    /// Решение 217: содержимое замороженного реестра из снимка записей (те же `Arc`, без копирования записей).
+    /// Принимает: записи снимка. Возвращает: записи с индексами. Ошибок нет.
+    pub fn from_arcs(v: Vec<Arc<Entry>>) -> Pools {
+        let mut p = Pools::default();
+        for e in v {
+            let r = e.pool.reference.clone();
+            p.index(&r, &e);
+            p.map.insert(r, e);
+        }
+        p
+    }
+
     /// Добавляет или заменяет запись. Ошибок нет.
     pub fn insert(&mut self, e: Entry) {
         let r = e.pool.reference.clone();

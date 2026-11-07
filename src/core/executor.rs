@@ -214,6 +214,8 @@ async fn run(core: &Core, d: Direction) {
     } else {
         plan
     };
+    // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
+    let frozen = super::uncapped_entry::freeze(core, &d).await;
     // Покупка на A.
     let bought = super::trade_ops::trade(
         core,
@@ -242,8 +244,8 @@ async fn run(core: &Core, d: Direction) {
     };
     super::fills::trade(core, &mut deal, &r).await;
     deal.buy = Some(r.clone());
-    // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт).
-    super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts);
+    // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт); решение 217 — по снимку.
+    super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts, frozen);
     let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Куплено")
         .line(format!(
             "{} {} на {} по {}",

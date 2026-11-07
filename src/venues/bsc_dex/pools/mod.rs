@@ -101,6 +101,7 @@ pub mod order;
 pub mod per_block;
 pub mod progress;
 pub mod registry;
+pub mod registry_frozen;
 pub mod registry_index;
 pub mod reload;
 pub mod reload_many;

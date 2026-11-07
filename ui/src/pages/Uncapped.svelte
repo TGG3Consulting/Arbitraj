@@ -11,6 +11,8 @@
     кандидаты — только с упущено > 0 (по умолчанию; старые записи с упущено 0 скрыты, итог их не считает), окно —
     первый → последний расчёт с упущенным. Слова «бой» нет: «на нашем бюджете».
     Решение 215: «Скачать отчёт» — Excel «Упущено» за ТОТ ЖЕ период, что выбран (GET /api/report/missed.xlsx?from=&to=).
+    Решение 217: сделки считаются по рынку на момент решения (снимок до ордера покупки); старые записи сделок, посчитанные
+    после нашей покупки, — пометка «посчитано после покупки — занижено» и отдельная строка итога (deals_old).
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
@@ -23,7 +25,7 @@
   import { get, download } from '../lib/api.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
-  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec } from '../lib/uncappedLabels.js';
+  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import UncappedRecord from '../components/UncappedRecord.svelte';
@@ -127,6 +129,12 @@
         <td>{money(sum.deals.fact)} <span class="muted">({sum.deals.fact_count} с итогом)</span></td><td>{money(sum.deals.at_budget_profit)}</td>
         <td><strong>{money(sum.deals.potential_profit)}</strong></td><td><strong>{money(sum.deals.missed)}</strong></td>
         <td>{sum.deals.windows}: {duration(sum.deals.window_s)}</td></tr>
+      {#if sum.deals_old?.count}
+        <tr class="warn-text"><td>Сделки: посчитано после покупки — занижено (до решения 217, в суммы и таблицу ниже не входят)</td><td>{sum.deals_old.count}</td><td>{sum.deals_old.budget_bound}</td><td>{money(sum.deals_old.battle_profit)}</td>
+          <td>{money(sum.deals_old.fact)} <span class="muted">({sum.deals_old.fact_count} с итогом)</span></td><td>{money(sum.deals_old.at_budget_profit)}</td>
+          <td>{money(sum.deals_old.potential_profit)}</td><td>{money(sum.deals_old.missed)}</td>
+          <td>{sum.deals_old.windows}: {duration(sum.deals_old.window_s)}</td></tr>
+      {/if}
       <tr><td>Не исполненные: стали бы плюсовыми или больше без потолка (эпизоды)</td><td>{sum.candidates.count}</td><td>{sum.candidates.budget_bound}</td><td>{money(sum.candidates.battle_profit)}</td>
         <td class="muted">—</td><td>{money(sum.candidates.at_budget_profit)}</td>
         <td><strong>{money(sum.candidates.potential_profit)}</strong></td><td><strong>{money(sum.candidates.missed)}</strong>
@@ -178,8 +186,9 @@
     <header>
       <strong>{dirText(b.direction)}</strong>
       <span class="tag">{deal ? `сделка ${b.battle.deal_id}` : verdictLabel(b.battle.verdict)}</span>
+      {#if understated(b)}<span class="tag warn-text">посчитано после покупки — занижено</span>{/if}
       {#if !deal && b.battle.reason}<span class="muted">{b.battle.reason}</span>{/if}
-      <span class="muted">{showTime(deal ? b.at : b.ep.first_at)}</span>
+      <span class="muted">{showTime(deal ? (b.decided_at ?? b.at) : b.ep.first_at)}</span>
     </header>
     <p>
       {#if deal}

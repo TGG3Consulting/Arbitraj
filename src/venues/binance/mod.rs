@@ -60,6 +60,7 @@ use crate::core::types::{
 use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
+use crate::gateway::frozen::QuoteSnapshot;
 use crate::gateway::tap::{TapData, TapInfo, TapSink, TapStream};
 
 use book::Books;
@@ -148,6 +149,13 @@ impl Venue for Binance {
         self.books
             .quote(&self.ctx, &self.fees, asset, side, qty)
             .await
+    }
+
+    /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze — копия стакана из памяти, без запросов).
+    /// Ошибки: как у котировки до прохода по уровням (стакана нет, устарел, комиссия, настройка).
+    async fn quote_snapshot(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let f = self.books.freeze(&self.ctx, &self.fees, asset, side)?;
+        Ok(std::sync::Arc::new(f))
     }
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {

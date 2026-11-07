@@ -86,11 +86,15 @@ pub async fn decide_capped(
         Some(p) if !p.is_zero() => p,
         _ => return reject("нет цены покупки на A".into(), None),
     };
-    let p = match params(core, &cx, budget, price) {
+    let p = match params(core, &cx, budget, price, None) {
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
-    let mut curve = CoreCurve { core, cx: &cx };
+    let mut curve = CoreCurve {
+        core,
+        cx: &cx,
+        src: None,
+    };
     let found = match stage(
         || "подбор объёма".into(),
         super::size_search::search(&mut curve, &p),

@@ -6,6 +6,8 @@
 //! выше порога, Battle::window_from) до расчёта после покупки.
 //! Решение 215: итоги периода целиком (Totals: обе группы, таблица «потолок → прибыль», топ направлений, вошедшие
 //! записи) — одна функция totals у экрана (uncapped_view.rs) и отчёта Excel «Упущено» (report/missed_*.rs).
+//! Решение 217: записи сделок, посчитанные после нашей покупки (до решения 217, Brief::understated), — отдельный итог
+//! deals_old: их цифры занижены и с остальными не складываются (в таблицу потолков и топ не входят).
 //! Кто вызывает: core/uncapped_view.rs, core/uncapped_report.rs.
 //! От чего зависит: uncapped_types.rs, core/types (Direction).
 //! Настройки: нет.
@@ -69,16 +71,21 @@ impl Sum {
     }
 }
 
-/// Длительность окна записи, с: сделка — от начала окна (Battle::window_from) до расчёта после покупки; кандидат —
-/// эпизод (первый → последний расчёт с упущенным). None — у сделки начала окна нет. Ошибок нет.
+/// Длительность окна записи, с: сделка — от начала окна (Battle::window_from) до момента решения о входе (решение 217:
+/// decided_at; старые записи — до расчёта после покупки); кандидат — эпизод (первый → последний расчёт с упущенным).
+/// None — у сделки начала окна нет. Ошибок нет.
 pub fn window_s(b: &Brief) -> Option<i64> {
     if b.battle.verdict == "deal" {
-        b.battle
-            .window_from
-            .map(|f| (b.at - f).num_seconds().max(0))
+        let end = deal_end(b);
+        b.battle.window_from.map(|f| (end - f).num_seconds().max(0))
     } else {
         Some((b.ep.last_at - b.ep.first_at).num_seconds().max(0))
     }
+}
+
+/// Конец окна сделки: момент решения о входе (decided_at, решение 217); старые записи — время расчёта. Ошибок нет.
+pub fn deal_end(b: &Brief) -> chrono::DateTime<chrono::Utc> {
+    b.decided_at.unwrap_or(b.at)
 }
 
 /// Направление топа: монета (по адресу, решение 211) и площадки, сумма упущенного, сколько записей.
@@ -100,6 +107,9 @@ pub struct Item {
 pub struct Totals {
     pub deals: Sum,
     pub cands: Sum,
+    /// Решение 217: сделки, посчитанные до решения 217 ПОСЛЕ нашей покупки (занижено) — отдельно, не смешиваются с
+    /// deals; в таблицу потолков и топ не входят.
+    pub deals_old: Sum,
     /// Потолок uncapped.ladder_usdt → «взяли бы» [сделки, кандидаты].
     pub ladder: Vec<(Decimal, [Decimal; 2])>,
     /// Все направления по убыванию упущенного (равные — больше записей выше).
@@ -133,6 +143,12 @@ pub fn totals(
             Some(id) if g == 0 => (true, fact(id)),
             _ => (false, None),
         };
+        // Решение 217: старая запись сделки (посчитана после покупки — занижена) — свой итог, без таблицы и топа.
+        if deal && b.understated() {
+            t.deals_old.add(&b, f);
+            t.items.push(Item { b, fact: f, deal });
+            continue;
+        }
         if deal {
             t.deals.add(&b, f);
         } else {

@@ -9,6 +9,8 @@
 //! Решение 197: кандидаты с упущено 0 (старые записи) в итог не входят — число скрытых hidden_zero; у записи сделки в
 //! списке — факт из учёта.
 //! Решение 215: итоги периода (uncapped_totals) — общие у экрана и отчёта Excel «Упущено» (core/uncapped_report.rs).
+//! Решение 217: итог deals_old — записи сделок, посчитанные после покупки (занижено), отдельно; у тел записей без поля
+//! basis (старые) оно дописывается как «live_after_buy».
 //! Кто вызывает: api/uncapped.rs, core/uncapped_report.rs.
 //! От чего зависит: storage/uncapped_db.rs, uncapped_sum.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (только показ и причина).
@@ -85,6 +87,7 @@ impl Core {
             "off": self.uncapped_off(),
             "hidden_zero": t.hidden,
             "deals": t.deals.json(),
+            "deals_old": t.deals_old.json(),
             "candidates": t.cands.json(),
             "ladder": ladder_rows,
             "ladder_error": ladder_err,
@@ -112,7 +115,7 @@ impl Core {
             .skip(offset)
             .take(limit)
             .map(|(id, b)| {
-                let body = serde_json::from_str::<Value>(&b).unwrap_or_default();
+                let body = basis(serde_json::from_str::<Value>(&b).unwrap_or_default());
                 let deal = body["battle"]["deal_id"].as_str().and_then(|d| facts.get(d));
                 let fact = deal.map(|d| json!({"result_usd": d.result_usd, "invested": d.invested, "started_at": d.started_at}));
                 json!({"id": id, "body": body, "fact": fact})
@@ -127,7 +130,7 @@ impl Core {
         let b = uncapped_db::get(&self.inner.deps.db, id)
             .await
             .map_err(|e| e.to_string())?;
-        Ok(b.map(|b| serde_json::from_str(&b).unwrap_or_default()))
+        Ok(b.map(|b| basis(serde_json::from_str(&b).unwrap_or_default())))
     }
 
     /// Запись сделки по её id (None — не посчитана или фича выключена). Ошибки: текст сбоя базы.
@@ -135,7 +138,7 @@ impl Core {
         let r = uncapped_db::by_deal(&self.inner.deps.db, deal_id.to_string())
             .await
             .map_err(|e| e.to_string())?;
-        Ok(r.map(|(id, b)| json!({"id": id, "body": serde_json::from_str::<Value>(&b).unwrap_or_default()})))
+        Ok(r.map(|(id, b)| json!({"id": id, "body": basis(serde_json::from_str::<Value>(&b).unwrap_or_default())})))
     }
 
     /// Последние записи всех сделок: {id сделки: {id, body}} — одним запросом (экран «Сделки»). Ошибки: база (текст).
@@ -146,7 +149,7 @@ impl Core {
         let map: serde_json::Map<String, Value> = rows
             .into_iter()
             .map(|(deal, id, b)| {
-                let body = serde_json::from_str::<Value>(&b).unwrap_or_default();
+                let body = basis(serde_json::from_str::<Value>(&b).unwrap_or_default());
                 (deal, json!({"id": id, "body": body}))
             })
             .collect();
@@ -181,4 +184,18 @@ impl Core {
         };
         json!({"counters": s, "mean_ms": mean})
     }
+}
+
+/// Решение 217: у записи без поля basis (до решения 217) — источник «после покупки» (uncapped_types::old_basis), чтобы
+/// экран отличал занижённые записи сделок. Принимает: тело записи. Возвращает: его же с basis. Ошибок нет.
+fn basis(mut body: Value) -> Value {
+    if let Some(o) = body.as_object_mut()
+        && !o.contains_key("basis")
+    {
+        o.insert(
+            "basis".into(),
+            Value::String(super::uncapped_types::old_basis()),
+        );
+    }
+    body
 }

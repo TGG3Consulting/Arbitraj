@@ -9,6 +9,7 @@
 //! missed_xlsx.rs, missed_total.rs.
 //! Настройки: нет.
 
+pub mod missed_labels;
 pub mod missed_rows;
 pub mod missed_total;
 pub mod missed_xlsx;

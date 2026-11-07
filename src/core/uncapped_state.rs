@@ -6,7 +6,7 @@
 //! направлений (uncapped_store.rs). Решение 197: сделки ждут отдельно (deals_waiting, не входят в uncapped.queue_max) и
 //! получают место расчёта раньше кандидатов (turn — будит кандидатов, когда ждущих сделок не осталось).
 //! Кто вызывает: core/inner.rs (поле Inner::uncapped), uncapped_queue.rs, uncapped_store.rs, uncapped_view.rs.
-//! От чего зависит: uncapped_types.rs, tokio (Semaphore).
+//! От чего зависит: uncapped_types.rs, frozen.rs (снимок рынка сделки, решение 217), tokio (Semaphore).
 //! Настройки: нет (значения читает uncapped_queue.rs).
 
 use std::collections::HashMap;
@@ -19,6 +19,7 @@ use tokio::sync::Semaphore;
 
 use crate::core::types::Direction;
 
+use super::frozen::Frozen;
 use super::uncapped_types::Battle;
 
 /// Ключ работы: кандидат — по направлению (не чаще uncapped.min_interval_ms), сделка — по id (всегда).
@@ -28,11 +29,14 @@ pub enum Key {
     Deal(String),
 }
 
-/// Работа: направление и бой.
+/// Работа: направление, бой и источник котировок.
 #[derive(Debug, Clone)]
 pub struct Job {
     pub dir: Direction,
     pub battle: Battle,
+    /// Решение 217: None — живые котировки (кандидат); Some(Ok) — снимок рынка момента решения (сделка); Some(Err) —
+    /// снимка нет (причина): расчёт по сделке не идёт, живые данные не подставляются.
+    pub src: Option<Result<Frozen, String>>,
 }
 
 /// Состояние ключа.
@@ -91,4 +95,7 @@ pub struct State {
     pub sem: Mutex<Option<(u64, Arc<Semaphore>)>>,
     pub stats: Mutex<Stats>,
     pub episodes: Mutex<HashMap<Direction, OpenEp>>,
+    /// Решение 217: почему по сделке нет записи (сбой расчёта, нет снимка) — id сделки → (когда, причина); читает
+    /// сообщение о закрытии (deal_ceiling.rs), старше uncapped.keep_days — убирается (uncapped_store.rs deal_failed).
+    pub deal_errors: Mutex<HashMap<String, (chrono::DateTime<chrono::Utc>, String)>>,
 }

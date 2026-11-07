@@ -101,6 +101,8 @@ pub struct Quoting {
     pub allow: super::wallet::allow_cache::Allowances,
     /// «Данные пулов отстают» (решение 72): котировки нет, пока лента квитанций не догнала.
     pub lag: super::node::events_lag::EventsLag,
+    /// Решение 217: блок головы на момент снимка (замороженный реестр, frozen.rs) — ключ кэша графа; живая — None.
+    pub frozen_head: Option<u64>,
 }
 
 impl Quoting {
@@ -108,6 +110,14 @@ impl Quoting {
     /// Ошибки: NotConfigured (режим, тикер USDT), StaleData (нет свежего блока), CoinNotChecked / CoinCheckFailed,
     /// NoRoute (нет допустимого пула — причины по пулам), узел (decimals, цена газа).
     pub async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        self.heads.fresh(&self.ctx)?;
+        self.lag.check(&self.ctx)?;
+        self.priced(asset, side, qty).await
+    }
+
+    /// Котировка без проверки свежести блока и ленты событий: у живой её делает quote, у замороженной (решение 217,
+    /// frozen.rs) — снимок в момент решения. Принимает и ошибки: как quote (кроме свежести).
+    pub async fn priced(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
         let ctx = &self.ctx;
         let mode = ctx.text("dex.swap_mode")?;
         if mode != "direct" && mode != "smart" {
@@ -116,8 +126,6 @@ impl Quoting {
                 format!("dex.swap_mode = «{mode}»: известны «direct» и «smart»"),
             ));
         }
-        self.heads.fresh(ctx)?;
-        self.lag.check(ctx)?;
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
         let taxes = direct::taxes(self, asset)?;
         let usdt = self.tokens.usdt(ctx)?;

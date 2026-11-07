@@ -93,6 +93,7 @@ pub mod feed_watch_logic;
 mod feed_watch_tests;
 pub mod fills;
 pub mod first_pass;
+pub mod frozen;
 pub mod gas_stats;
 pub mod ids;
 pub mod inner;

@@ -2,7 +2,8 @@
 //! Что проверяет: решение 216 — строки расчёта «без потолка» в сообщении Telegram о закрытой сделке (deal.closed):
 //! плюсовая с записью («💸 Упустили», «🔝 Потолок: вложить → прибыль»), плюсовая с оптимумом, не проходящим пороги
 //! («(не проходит пороги)»), минусовая с записью («🔝 Потолок», «💥 Через потолок потеряли бы ≈» — тот же процент
-//! убытка на объёме потолка), без записи («Без потолка: не посчитано» и причина).
+//! убытка на объёме потолка), без записи («Без потолка: не посчитано» и причина); решение 217 — запись без поля basis
+//! (посчитана после покупки) с пометкой «занижено».
 //! Данные: запись «без потолка» считается настоящим расчётом ядра (core/size_uncapped.rs) на записанных данных CAKE
 //! (tests/size_common: стакан BingX ws_spot_2026-10-23, пул CAKE/USDT V2 на блоке 0x7b936ae), упущено — uncapped_types::
 //! missed; запись проходит настоящую SQLite (storage/uncapped_db.rs insert → by_deal по id сделки) и разбор
@@ -17,7 +18,7 @@ use arb::core::deal_ceiling::{self, Ceiling};
 use arb::core::deal_text::closed;
 use arb::core::size_uncapped::{At, uncapped};
 use arb::core::types::{Asset, Direction, VenueId};
-use arb::core::uncapped_types::missed;
+use arb::core::uncapped_types::{BASIS_SNAPSHOT, missed};
 use arb::storage::db::Db;
 use arb::storage::uncapped_db::{self, Row};
 use rust_decimal::Decimal;
@@ -49,7 +50,8 @@ fn deal(plan: Decimal, invested: Decimal, proceeds: Decimal) -> Deal {
 /// Запись «без потолка» сделки на записанном CAKE (боевой бюджет 100 USDT) через настоящую SQLite. Принимает: проверку
 /// порогов точки, метку папки базы (тесты идут параллельно). Возвращает: (расчёт из базы, лучшее на боевом бюджете).
 async fn record(pass: fn(Decimal) -> bool, tag: &str) -> (Ceiling, At) {
-    let rec = Rec::load("deal-ceiling").await;
+    // Своя папка SQLite адаптера на каждый тест (тесты идут параллельно — общая папка портила базу).
+    let rec = Rec::load(&format!("deal-ceiling-{tag}")).await;
     let mut c = RecCurve {
         rec: &rec,
         dir: Dir::DexToBingx,
@@ -64,6 +66,7 @@ async fn record(pass: fn(Decimal) -> bool, tag: &str) -> (Ceiling, At) {
         "opt": opt,
         "opt_passes": u.opt_passes,
         "missed": missed("deal", u.opt_passes, opt.profit, &u.at_budget),
+        "basis": BASIS_SNAPSHOT,
     });
     let dir = std::env::temp_dir().join(format!("arb_deal_ceiling_{tag}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -173,6 +176,30 @@ fn without_record() {
     let msg = closed(&deal(d("0.02"), d("45"), d("44.9")), "продано", Some(&why));
     assert!(
         msg.contains("\nБез потолка: не посчитано (ждёт в очереди расчёта)\n"),
+        "{msg}"
+    );
+    // Решение 217: запись без поля basis (посчитана после нашей покупки) — пометка «занижено» перед цифрами.
+    let body = serde_json::json!({
+        "opt": {"qty": "10", "invested": "100", "profit": "2"},
+        "opt_passes": true,
+        "missed": "1",
+    });
+    let old = deal_ceiling::parse(&body.to_string());
+    assert!(
+        matches!(
+            old,
+            Ceiling::Known {
+                understated: true,
+                ..
+            }
+        ),
+        "{old:?}"
+    );
+    let msg = closed(&deal(d("0.13"), d("45"), d("45.1")), "продано", Some(&old));
+    assert!(
+        msg.contains(
+            "\n⚠️ Без потолка посчитано после покупки — занижено\n💸 Упустили: 1.00 USDT\n"
+        ),
         "{msg}"
     );
     // Непонятный JSON — тоже «не посчитано» с причиной.

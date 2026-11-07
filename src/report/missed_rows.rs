@@ -6,8 +6,9 @@
 //! план, факт из учёта, без потолка вложить → прибыль, упущено, окно от спреда выше порога до входа; кандидат — эпизод
 //! (первый → последний расчёт с упущенным), вердикт и причина, расчётов, упёрлись в бюджет, наш бюджет, без потолка,
 //! минимум до плюса, упущено. Подписи «что ограничило» и вердикта — как ui/src/lib/uncappedLabels.js (LIMITED,
-//! VERDICT); площадки — человеческие имена (notify/human.rs venue); монета — показное имя по адресу (решение 211).
+//! VERDICT; report/missed_labels.rs); площадки — человеческие имена (notify/human.rs venue); монета — показное имя по адресу (решение 211).
 //! Порядок строк — по времени, старые сверху (как «Итоги сделок»). Время — UTC.
+//! Решение 217: сделки, посчитанные после нашей покупки (старые записи, занижено), — отдельными строками (deals old).
 //! Кто вызывает: report/missed_xlsx.rs.
 //! От чего зависит: core/uncapped_report.rs (MissedData), uncapped_sum.rs (Item), uncapped_types.rs (Brief),
 //! notify/human.rs (venue).
@@ -19,8 +20,10 @@ use rust_decimal::prelude::ToPrimitive;
 
 use crate::core::types::Direction;
 use crate::core::uncapped_report::MissedData;
-use crate::core::uncapped_sum::window_s;
+use crate::core::uncapped_sum::{deal_end, window_s};
 use crate::notify::human::venue;
+
+pub use super::missed_labels::{basis_label, limited_label, verdict_label};
 
 /// Строка листа «Сделки».
 #[derive(Debug, Clone, PartialEq)]
@@ -36,8 +39,10 @@ pub struct DealRow {
     pub opt_invested: f64,
     pub opt_profit: f64,
     pub missed: f64,
-    /// «начало окна → расчёт после покупки (N с)»; пусто — начала окна нет.
+    /// «начало окна → момент решения о входе (N с)» (старые записи — расчёт после покупки); пусто — начала окна нет.
     pub window: String,
+    /// Решение 217: на каких данных посчитано (basis_label).
+    pub basis: String,
 }
 
 /// Строка листа «Кандидаты».
@@ -77,34 +82,6 @@ pub fn when(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-/// Что ограничило объём — по коду Record::limited_by (как ui/src/lib/uncappedLabels.js LIMITED). Ошибок нет.
-pub fn limited_label(k: &str) -> String {
-    match k {
-        "per_trade" => "лимит на сделку money.max_per_trade_usd",
-        "per_coin" => "лимит на монету money.max_per_coin_usd",
-        "in_transit" => "лимит в пути money.max_in_transit_usd",
-        "dry" => "виртуальный бюджет dry.budget_usdt",
-        "free" => "свободный остаток на площадке покупки",
-        "budget" => "бюджет (составляющие не прочитаны)",
-        "optimum" => "ничего: оптимум внутри бюджета",
-        "liquidity" => "ликвидность площадок",
-        "search_cap" => "предел поиска card.max_search_usdt",
-        other => other,
-    }
-    .to_string()
-}
-
-/// Вердикт расчёта на нашем бюджете (Battle::verdict) — как uncappedLabels.js VERDICT. Ошибок нет.
-pub fn verdict_label(v: &str) -> String {
-    match v {
-        "deal" => "сделка",
-        "accept" => "прошёл, сделка не запущена",
-        "reject" => "отказ",
-        other => other,
-    }
-    .to_string()
-}
-
 /// «BingX → DEX». Ошибок нет.
 fn dir_text(d: &Direction) -> String {
     format!("{} → {}", venue(&d.buy_on.0), venue(&d.sell_on.0))
@@ -118,18 +95,21 @@ fn coin(data: &MissedData, d: &Direction) -> String {
         .unwrap_or_else(|| d.asset.ticker.clone())
 }
 
-/// Строки листа «Сделки» (старые сверху). Ошибок нет.
-pub fn deals(data: &MissedData) -> Vec<DealRow> {
+/// Строки листа «Сделки» (old = false) или «Сделки — занижено» (old = true: посчитаны после покупки, решение 217),
+/// старые сверху. Ошибок нет.
+pub fn deals(data: &MissedData, old: bool) -> Vec<DealRow> {
     let mut v: Vec<DealRow> = data
         .totals
         .items
         .iter()
         .rev()
-        .filter(|i| i.deal)
+        .filter(|i| i.deal && i.b.understated() == old)
         .map(|i| {
             let b = &i.b;
             let window = match (b.battle.window_from, window_s(b)) {
-                (Some(f), Some(s)) => format!("{} → {} ({s} с)", when(f), b.at.format("%H:%M:%S")),
+                (Some(f), Some(s)) => {
+                    format!("{} → {} ({s} с)", when(f), deal_end(b).format("%H:%M:%S"))
+                }
                 _ => String::new(),
             };
             DealRow {
@@ -144,6 +124,7 @@ pub fn deals(data: &MissedData) -> Vec<DealRow> {
                 opt_profit: num(b.opt.profit, 4),
                 missed: num(b.missed, 4),
                 window,
+                basis: basis_label(&b.basis),
             }
         })
         .collect();

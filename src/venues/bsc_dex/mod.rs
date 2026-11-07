@@ -22,6 +22,7 @@ pub mod ctx_wallet;
 pub mod directory;
 pub mod errors;
 pub mod exec;
+pub mod frozen;
 pub mod math;
 pub mod node;
 pub mod num;

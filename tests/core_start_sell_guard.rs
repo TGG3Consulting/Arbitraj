@@ -90,6 +90,7 @@ async fn kinds(j: &Journal, kind: &str) -> Vec<String> {
 fn entry(rec: &Rec) -> CoinEntry {
     let p = |v: &str, info| Presence {
         venue: VenueId(v.into()),
+        ticker: "CAKE".into(),
         network: None,
         can_receive: true,
         can_send: true,

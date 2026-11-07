@@ -1,11 +1,9 @@
 //! Файл: core/ticker_index.rs
-//! Что делает: карта (площадка, тикер) → монета справочника для тика стакана (решение 118, Я-9): событие стакана
-//! находит монету своей площадки за O(1), без перебора всего справочника (с MEXC — ~11 тыс. записей) и без чужого
-//! токена с тем же тикером на другой бирже. Плюс журнал Я-8: у одного адреса контракта на разных биржах разные
-//! тикеры — справочник делит монету на записи по тикеру (registry_build.rs), направлений между ними нет; запись в
-//! журнал — одна на изменение. Решение 129: ещё адрес → монеты (by_tokens) для события пула.
-//! Решение 200: расхождения тикеров отдаются интерфейсу (ticker_splits → GET /api/coins/ticker-splits) — у каждого
-//! кнопка «Считать одной монетой» (склейка coin.ticker_alias делается в шлюзе, gateway/aliased.rs).
+//! Что делает: карты для тика и перевода тикеров (решение 118, Я-9; решение 211 — монета = адрес): (площадка, тикер
+//! площадки) → монета справочника — событие стакана находит монету своей площадки за O(1) без чужого токена с тем
+//! же тикером на другой бирже; (площадка, адрес) → тикер площадки (core/venue_ticker.rs); адрес → монеты
+//! (by_tokens, решение 129) для события пула. Журнал: у адреса на ОДНОЙ бирже несколько тикеров и выбрать нельзя
+//! (registry_merge.rs) — одна запись на изменение; эти конфликты отдаются интерфейсу (ticker_splits).
 //! Кто вызывает: core/rebuild.rs (после сборки справочника), core/tick.rs (поиск монеты по событию), api/coins.rs.
 //! От чего зависит: registry.rs (CoinEntry), core/types, deps.rs (журнал).
 //! Настройки: нет.
@@ -23,17 +21,20 @@ use super::registry::CoinEntry;
 /// Карта тикеров и последние сообщённые расхождения тикеров по адресу.
 #[derive(Default)]
 pub struct TickerIndex {
-    /// (площадка, тикер) → монета (у монеты есть адрес контракта; монеты без адреса не торгуются и не ищутся).
+    /// (площадка, ТИКЕР ПЛОЩАДКИ) → монета ядра (решение 211; у монеты есть адрес контракта; монеты без адреса не
+    /// торгуются и не ищутся).
     pub map: HashMap<(VenueId, String), Asset>,
+    /// Решение 211: (площадка, адрес) → тикер этой площадки (core/venue_ticker.rs).
+    pub venue_ticker: HashMap<(VenueId, Address), String>,
     /// Адрес контракта → монеты справочника с этим адресом (решение 129: событие пула находит монеты своих токенов
     /// без прохода всего справочника — у MEXC тысячи монет на каждое событие пула).
     pub by_token: HashMap<Address, Vec<Asset>>,
     /// Монета → её место в справочнике (inner.coins) на момент сборки (решение 131: пересчёт монеты на тике находит
     /// запись без прохода справочника; место сверяется с монетой — справочник мог смениться).
     pub pos: HashMap<Asset, usize>,
-    /// Адрес → текст уже записанного расхождения тикеров (чтобы не повторять).
+    /// Адрес → текст уже записанного конфликта тикеров (чтобы не повторять).
     told: HashMap<Address, String>,
-    /// Решение 200: текущие расхождения тикеров по адресу — (биржа, тикер) — для интерфейса.
+    /// Решение 211: конфликты тикеров по адресу — (биржа, тикеры в конфликте) — для интерфейса.
     splits: BTreeMap<Address, BTreeSet<(String, String)>>,
 }
 
@@ -75,56 +76,29 @@ impl TickerIndex {
     }
 }
 
-/// Пересобирает карту по справочнику и пишет в журнал новые расхождения тикеров одного адреса (решение 118, Я-8).
-/// Принимает: ядро, справочник. Ошибок нет.
+/// Пересобирает карты по справочнику (решение 211: монета — адрес; тикер у каждой площадки свой — Presence::ticker) и
+/// пишет в журнал новые конфликты тикеров (у адреса на одной бирже несколько тикеров, выбрать нельзя —
+/// registry_merge.rs). Принимает: ядро, справочник. Ошибок нет.
 pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
-    let mut map = HashMap::new();
-    let mut by_token: HashMap<Address, Vec<Asset>> = HashMap::new();
-    let pos: HashMap<Asset, usize> = coins
-        .iter()
-        .enumerate()
-        .map(|(i, c)| (c.asset.clone(), i))
-        .collect();
-    for c in coins {
-        if let Some(addr) = c.asset.bsc_contract {
-            by_token.entry(addr).or_default().push(c.asset.clone());
-        }
-    }
-    // адрес → (биржа, тикер)
-    let mut by_addr: BTreeMap<Address, BTreeSet<(String, String)>> = BTreeMap::new();
-    for c in coins {
-        let Some(addr) = c.asset.bsc_contract else {
-            continue;
-        };
-        for p in &c.presence {
-            // Тикер у DEX — тот, что передан в подписку (тикер записи); при совпадении — первая запись.
-            map.entry((p.venue.clone(), c.asset.ticker.clone()))
-                .or_insert_with(|| c.asset.clone());
-            if p.info.is_some() {
-                by_addr
-                    .entry(addr)
-                    .or_default()
-                    .insert((p.venue.0.clone(), c.asset.ticker.clone()));
-            }
-        }
-    }
-    let splits: BTreeMap<Address, BTreeSet<(String, String)>> = by_addr
-        .into_iter()
-        .filter(|(_, v)| {
-            let first = v.iter().next().map(|(_, t)| t);
-            v.iter().any(|(_, t)| Some(t) != first)
-        })
-        .collect();
+    let TickerIndex {
+        map,
+        venue_ticker,
+        by_token,
+        pos,
+        splits,
+        ..
+    } = index_of(coins);
     let conflicts: HashMap<Address, String> = splits
         .iter()
         .map(|(a, v)| {
-            let list: Vec<String> = v.iter().map(|(venue, t)| format!("{venue}={t}")).collect();
-            (*a, list.join(", "))
+            let list: Vec<String> = v.iter().map(|(venue, t)| format!("{venue}: {t}")).collect();
+            (*a, list.join("; "))
         })
         .collect();
     let fresh: Vec<(Address, String)> = {
         let mut idx = wr(&core.inner.tickers);
         idx.map = map;
+        idx.venue_ticker = venue_ticker;
         idx.by_token = by_token;
         idx.pos = pos;
         idx.splits = splits;
@@ -138,13 +112,50 @@ pub async fn rebuild(core: &Core, coins: &[CoinEntry]) {
     };
     for (a, t) in fresh {
         let text = format!(
-            "У адреса {a} разные тикеры: {t} — монета разделена по тикеру, направлений между ними нет (склеить — «Монеты» → «Считать одной монетой», coin.ticker_alias)"
+            "У адреса {a} на бирже несколько тикеров, выбрать нельзя ({t}) — монета на этой бирже не торгуется (решение 211)"
         );
         core.inner
             .deps
-            .log(Level::Warn, "core.ticker_split", None, text, None)
+            .log(Level::Warn, "core.ticker_conflict", None, text, None)
             .await;
     }
+}
+
+/// Карты по справочнику без журнала (решение 211) — чистая сборка: (площадка, тикер площадки) → монета, (площадка,
+/// адрес) → тикер площадки, адрес → монеты, место монеты, конфликты тикеров. Принимает: справочник. Ошибок нет.
+pub fn index_of(coins: &[CoinEntry]) -> TickerIndex {
+    let mut idx = TickerIndex {
+        pos: coins
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (c.asset.clone(), i))
+            .collect(),
+        ..TickerIndex::default()
+    };
+    for c in coins {
+        let Some(addr) = c.asset.bsc_contract else {
+            continue;
+        };
+        idx.by_token.entry(addr).or_default().push(c.asset.clone());
+        for p in &c.presence {
+            // Тикер ЭТОЙ площадки → монета ядра (у DEX — показное имя, его и передаёт подписка).
+            idx.map
+                .entry((p.venue.clone(), p.ticker.clone()))
+                .or_insert_with(|| c.asset.clone());
+            idx.venue_ticker
+                .entry((p.venue.clone(), addr))
+                .or_insert_with(|| p.ticker.clone());
+            for e in &p.excluded {
+                if let super::registry::Exclusion::TickerConflict(t) = e {
+                    idx.splits
+                        .entry(addr)
+                        .or_default()
+                        .insert((p.venue.0.clone(), t.clone()));
+                }
+            }
+        }
+    }
+    idx
 }
 
 /// Запись монеты среди рабочих монет справочника (решение 131): по карте места, без прохода справочника; карта от

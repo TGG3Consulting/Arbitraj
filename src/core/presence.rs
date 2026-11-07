@@ -48,6 +48,7 @@ pub fn cex(
     };
     Presence {
         venue: venue.clone(),
+        ticker: ticker.to_string(),
         network: net.map(|i| i.network.clone()),
         can_receive: net.is_some_and(|i| i.deposit_enabled),
         can_send: net.is_some_and(|i| i.withdraw_enabled),
@@ -62,7 +63,8 @@ pub fn cex(
 /// Монета на DEX: допущенный пул с USDT для этого адреса контракта; если его нет и промежуточные монеты
 /// включены (решение 52) — допущенный пул с промежуточной монетой, у которой самой есть допущенный пул
 /// с USDT (иначе маршрут «USDT → промежуточная → монета» не собрать). Ошибок нет.
-pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
+/// Принимает: DEX, адрес монеты, показное имя монеты (решение 211 — у DEX своего тикера нет), входные данные.
+pub fn dex(venue: &VenueId, token: Address, ticker: &str, inp: &Inputs) -> Presence {
     let mut via = None;
     let excluded = match inp.usdt {
         None => vec![Exclusion::NoUsdtAddress],
@@ -91,6 +93,7 @@ pub fn dex(venue: &VenueId, token: Address, inp: &Inputs) -> Presence {
     };
     Presence {
         venue: venue.clone(),
+        ticker: ticker.to_string(),
         network: None,
         can_receive: true,
         can_send: true,

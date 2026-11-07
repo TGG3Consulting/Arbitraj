@@ -31,12 +31,16 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     let mut out: Vec<Asset> = match kind {
         VenueKind::Cex => coins
             .iter()
-            .filter(|c| {
+            // Решение 211: бирже — монета с ЕЁ тикером (пара и стакан площадки — по её имени), адрес тот же.
+            .filter_map(|c| {
                 c.presence
                     .iter()
-                    .any(|p| &p.venue == venue && p.info.is_some())
+                    .find(|p| &p.venue == venue && p.info.is_some())
+                    .map(|p| Asset {
+                        ticker: p.ticker.clone(),
+                        bsc_contract: c.asset.bsc_contract,
+                    })
             })
-            .map(|c| c.asset.clone())
             .collect(),
         // DEX — только монеты, которыми можно торговать хотя бы на одной бирже (dex_tradable). Флаги ввода и вывода
         // сюда не входят: биржа меняет их на время работ, а каждая смена списка — полная пересборка подписки DEX
@@ -59,18 +63,20 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         }
         // Промежуточные монеты (решение 52) — их пулы с USDT нужны маршруту «USDT → промежуточная → монета»;
         // тикер промежуточной адаптер берёт из этого же списка (venues/bsc_dex/pools/mids.rs).
-        out.extend(intermediate_assets(core));
+        out.extend(intermediate_assets(core, None));
     }
     if kind == VenueKind::Cex && !out.is_empty() {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
         out.push(super::convert::gas_asset());
-        // Живые цены промежуточных монет (решение 52) — тикер по адресу из справочника бирж.
-        out.extend(intermediate_assets(core));
+        // Живые цены промежуточных монет (решение 52) — тикер ЭТОЙ биржи по адресу (решение 211).
+        out.extend(intermediate_assets(core, Some(venue)));
         // Решение 181: монеты для пересчёта затрат в USDT (комиссия Gate в GT) — venue.price_assets биржи.
         out.extend(price_assets(core, venue));
     }
+    // Решение 211: одна монета (адрес) — один раз; первой идёт монета справочника с тикером площадки.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|a| seen.insert(a.clone()));
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));
-    out.dedup();
     if kind == VenueKind::Cex
         && let Some(n) = super::native::ticker(core)
     {
@@ -106,15 +112,15 @@ fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
 /// Монета, известная бирже только по адресу (сеть BSC есть, пары нет — например BITLIGHT), не нужна.
 /// Принимает: монету справочника, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
 pub fn dex_tradable(c: &CoinEntry, kinds: &[(VenueId, VenueKind)], market: &MarketState) -> bool {
-    c.asset.bsc_contract.is_some() && cex_pair(&c.presence, &c.asset.ticker, kinds, market)
+    c.asset.bsc_contract.is_some() && cex_pair(&c.presence, kinds, market)
 }
 
 /// Есть ли у монеты на какой-либо бирже сеть BSC (данные сети — Presence::info) и торгуемая спот-пара — то же
 /// условие подписки DEX (dex_tradable), и по нему же справочник ставит монете DEX-присутствие (registry_build.rs).
-/// Принимает: присутствия монеты, тикер, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
+/// Решение 211: пара ищется по тикеру ЭТОЙ биржи (Presence::ticker).
+/// Принимает: присутствия монеты, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
 pub fn cex_pair(
     presence: &[Presence],
-    ticker: &str,
     kinds: &[(VenueId, VenueKind)],
     market: &MarketState,
 ) -> bool {
@@ -123,7 +129,7 @@ pub fn cex_pair(
             .iter()
             .any(|(v, k)| v == &p.venue && *k == VenueKind::Cex)
             && p.info.is_some()
-            && market.spot_pair(&p.venue, ticker)
+            && market.spot_pair(&p.venue, &p.ticker)
     })
 }
 
@@ -206,9 +212,19 @@ fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
 }
 
 /// Промежуточные монеты всех площадок DEX, которые биржи знают по адресу (тикер для стакана). Ошибок нет.
-fn intermediate_assets(core: &Core) -> Vec<Asset> {
+fn intermediate_assets(core: &Core, venue: Option<&VenueId>) -> Vec<Asset> {
     let s = &core.inner.deps.settings;
     let nets = rd(&core.inner.networks);
+    // Решение 211: бирже — тикер промежуточной монеты в ЕЁ справочнике сетей (не знает адреса — не подписывается);
+    // DEX — тикер любой биржи (у DEX тикер только показной).
+    let name = |a| match venue {
+        Some(v) => nets.get(v).and_then(|l| {
+            l.iter()
+                .find(|i| i.asset.bsc_contract == Some(a))
+                .map(|i| i.asset.ticker.clone())
+        }),
+        None => super::intermediate::ticker_of(&nets, a),
+    };
     let mut out = vec![];
     for (v, _) in rd(&core.inner.kinds)
         .iter()
@@ -216,7 +232,7 @@ fn intermediate_assets(core: &Core) -> Vec<Asset> {
     {
         if let super::intermediate::Intermediate::On(list) = super::intermediate::read(s, v) {
             for a in list {
-                if let Some(t) = super::intermediate::ticker_of(&nets, a) {
+                if let Some(t) = name(a) {
                     out.push(Asset {
                         ticker: t,
                         bsc_contract: Some(a),

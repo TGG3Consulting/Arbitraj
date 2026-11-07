@@ -120,6 +120,9 @@ fn exclusion_text(e: &Exclusion) -> String {
         Exclusion::IntermediateNotConfigured(why) => {
             format!("промежуточные монеты не настроены: {why}")
         }
+        Exclusion::TickerConflict(t) => {
+            format!("у адреса на бирже несколько тикеров, выбрать нельзя: {t}")
+        }
     }
 }
 

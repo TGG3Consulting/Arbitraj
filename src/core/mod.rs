@@ -129,6 +129,8 @@ pub mod reconcile_holders;
 pub mod refit;
 pub mod registry;
 pub mod registry_build;
+pub mod registry_merge;
+pub mod venue_ticker;
 pub mod registry_sync;
 pub mod reject_log;
 pub mod reject_shape;

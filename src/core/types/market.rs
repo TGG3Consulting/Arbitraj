@@ -16,13 +16,46 @@ use serde::{Deserialize, Serialize};
 pub struct VenueId(pub String);
 
 /// Монета: тикер и адрес контракта токена в сети BSC.
-/// Адрес — главный идентификатор: одинаковый тикер на разных площадках может быть разными токенами.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Решение 211 (Тигран, 07.11.2026: «метчить монеты только по адресам»): монета — это АДРЕС. Равенство и хэш — по
+/// адресу контракта, если он есть; тикер в них не участвует (у разных площадок тикер одного адреса бывает разным:
+/// bingx NMT = gate NETMIND). Монета без адреса (площадка не сообщила; USDT/BNB по настройкам) — по тикеру.
+/// `ticker` у монеты ядра — показное имя (core/registry_build.rs), у монеты в вызове площадки — тикер этой площадки
+/// (core/venue_ticker.rs: on_venue). Формат JSON не изменился.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
-    /// Тикер, как его показывает площадка (например «CAKE»).
+    /// Тикер, как его показывает площадка (например «CAKE»); у монеты ядра — показное имя.
     pub ticker: String,
     /// Адрес контракта в BSC; None — площадка не сообщила адрес.
     pub bsc_contract: Option<Address>,
+}
+
+impl PartialEq for Asset {
+    /// Решение 211: по адресу, если он есть у обеих; адрес только у одной — разные монеты; у обеих нет — по тикеру.
+    fn eq(&self, other: &Self) -> bool {
+        match (self.bsc_contract, other.bsc_contract) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => self.ticker == other.ticker,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Asset {}
+
+impl std::hash::Hash for Asset {
+    /// Решение 211: согласовано с равенством — адрес, а без адреса — тикер.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self.bsc_contract {
+            Some(a) => {
+                0u8.hash(state);
+                a.hash(state);
+            }
+            None => {
+                1u8.hash(state);
+                self.ticker.hash(state);
+            }
+        }
+    }
 }
 
 /// Направление: монета, где покупаем (A) и где продаём (B).

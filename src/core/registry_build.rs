@@ -64,8 +64,9 @@ pub fn usdt_address(
     }
 }
 
-/// Собирает справочник. Монеты бирж группируются по адресу контракта в BSC и тикеру (решение 118); монеты без адреса
-/// остаются в справочнике с причиной (их видно на экране «Монеты»). Ошибок нет.
+/// Собирает справочник. Монеты бирж группируются по адресу контракта в BSC (решение 211: монета — адрес; тикер у
+/// каждой площадки свой — Presence::ticker); монеты без адреса остаются в справочнике с причиной (их видно на экране
+/// «Монеты»), по записи на биржу. Ошибок нет.
 pub fn build(inp: &Inputs) -> Vec<CoinEntry> {
     build_part(inp, Part::All)
 }
@@ -84,8 +85,8 @@ pub enum Part {
 /// Собирает часть справочника (как build, только монеты этой части; у неподвижных монет запись — по бирже, адреса
 /// нет, поэтому части не пересекаются и вместе дают то же, что build). Ошибок нет.
 pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
-    // ключ: адрес контракта или тикер (у монеты без адреса) → (монета, площадка → данные сети)
-    let mut coins: BTreeMap<String, (Asset, Vec<Presence>)> = BTreeMap::new();
+    // ключ: адрес контракта или «тикер@биржа» (у монеты без адреса) → (адрес, присутствия бирж)
+    let mut coins: BTreeMap<String, (Option<Address>, Vec<Presence>)> = BTreeMap::new();
     for (venue, _) in inp.venues.iter().filter(|(_, k)| *k == VenueKind::Cex) {
         let Some(list) = inp.networks.get(venue) else {
             continue;
@@ -111,18 +112,13 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
                 ))
             });
             let p = super::presence::cex(venue, ticker, &nets, bsc, &fresh, inp.market);
-            let asset = Asset {
-                ticker: ticker.to_string(),
-                bsc_contract: p.info.as_ref().and_then(|i| i.asset.bsc_contract),
-            };
-            // Решение 118 (Я-8): ключ — адрес и тикер. У одного адреса на разных биржах разные тикеры — отдельные
-            // записи (направлений между ними нет: бот не торгует то, что не может сопоставить; журнал —
-            // ticker_index.rs). Одинаковый тикер — одна запись, как раньше.
-            let key = asset
-                .bsc_contract
-                .map(|a| format!("{a}|{ticker}"))
+            let contract = p.info.as_ref().and_then(|i| i.asset.bsc_contract);
+            // Решение 211: ключ — только адрес. Один адрес под разными тикерами у разных бирж — одна монета (у каждой
+            // биржи свой тикер в Presence); один тикер с разными адресами — разные монеты.
+            let key = contract
+                .map(|a| a.to_string())
                 .unwrap_or_else(|| format!("{}@{}", ticker, venue.0));
-            coins.entry(key).or_insert((asset, vec![])).1.push(p);
+            coins.entry(key).or_insert((contract, vec![])).1.push(p);
         }
     }
     let dex: Vec<&VenueId> = inp
@@ -133,14 +129,19 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
         .collect();
     coins
         .into_values()
-        .map(|(asset, mut presence)| {
+        .map(|(contract, presence)| {
+            // Решение 211: один тикер на биржу (правило выбора — registry_merge.rs) и показное имя монеты.
+            let mut presence = super::registry_merge::one_per_venue(presence);
+            let asset = Asset {
+                ticker: super::registry_merge::display_ticker(&presence),
+                bsc_contract: contract,
+            };
             // DEX ищет пулы только монет своей подписки (core/subscribe.rs: то же условие, cex_pair) — у остальных
             // DEX-присутствия нет: «нет пула с USDT» им не ставится (решение 61).
-            let searched =
-                super::subscribe::cex_pair(&presence, &asset.ticker, inp.venues, inp.market);
+            let searched = super::subscribe::cex_pair(&presence, inp.venues, inp.market);
             if let Some(token) = asset.bsc_contract.filter(|_| searched) {
                 for v in &dex {
-                    presence.push(super::presence::dex(v, token, inp));
+                    presence.push(super::presence::dex(v, token, &asset.ticker, inp));
                 }
             }
             CoinEntry {

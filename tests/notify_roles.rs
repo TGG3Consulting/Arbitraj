@@ -67,7 +67,8 @@ fn closed_deal_outcome_picks_chat() {
 
 #[test]
 fn buttons_only_from_own_chat() {
-    for c in ["k", "s", "t", "c", "y", "n"] {
+    // Решение 215: «r» — «📊 Отчёты», только «Управление».
+    for c in ["k", "s", "t", "c", "y", "n", "r"] {
         assert!(accepts(Role::Control, c), "{c}");
     }
     // Решение 192: кнопки записей — и с карточки проблемной сделки в «Управлении»; меню /menu «Общего» — нет.
@@ -78,14 +79,14 @@ fn buttons_only_from_own_chat() {
     for c in ["sell_now", "sold_man", "usdt_retry", "y", "n"] {
         assert!(accepts(Role::Failures, c), "{c}");
     }
-    for c in ["k", "s", "t", "m", "c"] {
+    for c in ["k", "s", "t", "m", "c", "r"] {
         assert!(!accepts(Role::Failures, c), "{c}");
     }
     // «Общий» — как раньше: меню /menu, плашка, записи, подтверждения; кнопок «Управления» нет.
     for c in ["m", "c", "y", "sell_now"] {
         assert!(accepts(Role::General, c), "{c}");
     }
-    for c in ["k", "s", "t"] {
+    for c in ["k", "s", "t", "r"] {
         assert!(!accepts(Role::General, c), "{c}");
     }
     assert!(!accepts(Role::Deals, "y"));

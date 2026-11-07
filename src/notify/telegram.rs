@@ -13,6 +13,7 @@
 //! - getMe: https://core.telegram.org/bots/api#getme
 //! - getChat: https://core.telegram.org/bots/api#getchat
 //! - sendMessage: https://core.telegram.org/bots/api#sendmessage
+//! - Отправка файлов (multipart/form-data): https://core.telegram.org/bots/api#sending-files (решение 215)
 //!
 //! Токен никогда не попадает в журнал и ошибки: из ошибок reqwest адрес удаляется (without_url).
 
@@ -124,21 +125,33 @@ impl Telegram {
             .send()
             .await
             .map_err(net_error)?;
-        // Bot API отдаёт JSON и при ошибках (4xx), поэтому статус не проверяем отдельно.
-        let body: ApiResponse = resp
-            .json()
+        parse(resp).await
+    }
+
+    /// Вызывает метод Bot API формой multipart/form-data — так передаются файлы (раздел «Sending files»,
+    /// https://core.telegram.org/bots/api#sending-files: «Post the file using multipart/form-data»; решение 215 —
+    /// sendDocument отчёта). Принимает: имя метода, форму, таймаут. Возвращает: поле result. Ошибки: TgError.
+    pub(super) async fn call_form(
+        &self,
+        method: &str,
+        form: reqwest::multipart::Form,
+        timeout: Duration,
+    ) -> Result<Value, TgError> {
+        let url = Zeroizing::new(format!(
+            "{}/bot{}/{}",
+            self.base_url,
+            self.token.as_str(),
+            method
+        ));
+        let resp = self
+            .http
+            .post(url.as_str())
+            .timeout(timeout)
+            .multipart(form)
+            .send()
             .await
-            .map_err(|e| TgError::BadResponse(e.without_url().to_string()))?;
-        if body.ok {
-            body.result
-                .ok_or_else(|| TgError::BadResponse("нет поля result".into()))
-        } else {
-            Err(TgError::Api {
-                description: body.description.unwrap_or_else(|| "без описания".into()),
-                details: details(body.error_code, body.parameters.as_ref()),
-                retry_after: body.parameters.as_ref().and_then(|p| p.retry_after),
-            })
-        }
+            .map_err(net_error)?;
+        parse(resp).await
     }
 
     /// getMe — проверка токена. Возвращает: имя пользователя бота. Ошибки: TgError.
@@ -166,6 +179,25 @@ impl Telegram {
         self.call("sendMessage", json!({ "chat_id": chat_id, "text": text }))
             .await
             .map(|_| ())
+    }
+}
+
+/// Разбирает ответ Bot API: ok — поле result, иначе причина из description. Bot API отдаёт JSON и при ошибках (4xx),
+/// поэтому статус не проверяем отдельно. Ошибки: TgError.
+async fn parse(resp: reqwest::Response) -> Result<Value, TgError> {
+    let body: ApiResponse = resp
+        .json()
+        .await
+        .map_err(|e| TgError::BadResponse(e.without_url().to_string()))?;
+    if body.ok {
+        body.result
+            .ok_or_else(|| TgError::BadResponse("нет поля result".into()))
+    } else {
+        Err(TgError::Api {
+            description: body.description.unwrap_or_else(|| "без описания".into()),
+            details: details(body.error_code, body.parameters.as_ref()),
+            retry_after: body.parameters.as_ref().and_then(|p| p.retry_after),
+        })
     }
 }
 

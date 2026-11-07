@@ -10,6 +10,7 @@
     не больше, без потолка вложить Y → прибыль Z, упущено, факт из учёта, окно от спреда выше порога до входа);
     кандидаты — только с упущено > 0 (по умолчанию; старые записи с упущено 0 скрыты, итог их не считает), окно —
     первый → последний расчёт с упущенным. Слова «бой» нет: «на нашем бюджете».
+    Решение 215: «Скачать отчёт» — Excel «Упущено» за ТОТ ЖЕ период, что выбран (GET /api/report/missed.xlsx?from=&to=).
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
@@ -19,7 +20,7 @@
 -->
 <script>
   import { uniqBy } from '../lib/uniq.js';
-  import { get } from '../lib/api.js';
+  import { get, download } from '../lib/api.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec } from '../lib/uncappedLabels.js';
@@ -43,12 +44,18 @@
   let error = $state('');
   const pages = $derived(limit ? Math.max(1, Math.ceil(total / limit)) : 1);
 
-  /** Перечитывает итоги и страницу. Ошибка — в error. */
-  async function reload() {
+  /** Период экрана параметрами запроса from/to (пустые — без границы). */
+  function periodQuery() {
     const p = period(kind, fromLocal, toLocal);
     const q = new URLSearchParams();
     if (p.from) q.set('from', p.from);
     if (p.to) q.set('to', p.to);
+    return q;
+  }
+
+  /** Перечитывает итоги и страницу. Ошибка — в error. */
+  async function reload() {
+    const q = periodQuery();
     try {
       if (top) sum = await get(`/api/uncapped/summary?${q}&top=${top}`);
       if (limit) {
@@ -64,6 +71,20 @@
       error = '';
     } catch (e) {
       error = e.message;
+    }
+  }
+
+  let downloading = $state(false);
+  /** Решение 215: отчёт Excel «Упущено» за выбранный период. Ошибка — в error. */
+  async function report() {
+    downloading = true;
+    try {
+      await download(`/api/report/missed.xlsx?${periodQuery()}`, 'arb_missed.xlsx');
+      error = '';
+    } catch (e) {
+      error = `Отчёт не скачан: ${e.message}`;
+    } finally {
+      downloading = false;
     }
   }
 
@@ -94,6 +115,7 @@
   {/if}
   <PageSize key="uncapped.top" bind:value={top} label="Топ направлений" />
   <button type="button" onclick={reload}>Обновить</button>
+  <button type="button" onclick={report} disabled={downloading}>{downloading ? 'Готовлю отчёт…' : 'Скачать отчёт'}</button>
 </div>
 {#if !top}<p class="muted">Задайте «Топ направлений», чтобы увидеть итоги.</p>{/if}
 {#if sum}

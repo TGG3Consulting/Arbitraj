@@ -4,30 +4,36 @@
 //! потенциал без потолка, упущено, факт сделок из учёта, отклонённые плюсовые без потолка и (решение 197) суммарная
 //! длительность окон: у кандидата — эпизод (первый → последний расчёт с упущенным), у сделки — от начала окна (спред
 //! выше порога, Battle::window_from) до расчёта после покупки.
-//! Кто вызывает: core/uncapped_view.rs.
-//! От чего зависит: uncapped_types.rs.
+//! Решение 215: итоги периода целиком (Totals: обе группы, таблица «потолок → прибыль», топ направлений, вошедшие
+//! записи) — одна функция totals у экрана (uncapped_view.rs) и отчёта Excel «Упущено» (report/missed_*.rs).
+//! Кто вызывает: core/uncapped_view.rs, core/uncapped_report.rs.
+//! От чего зависит: uncapped_types.rs, core/types (Direction).
 //! Настройки: нет.
+
+use std::collections::HashMap;
 
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
+
+use crate::core::types::Direction;
 
 use super::uncapped_types::{Brief, budget_bound, take};
 
 /// Сумма по группе записей.
 #[derive(Default)]
 pub struct Sum {
-    count: u64,
-    bound: u64,
-    battle: Decimal,
-    at_budget: Decimal,
+    pub count: u64,
+    pub bound: u64,
+    pub battle: Decimal,
+    pub at_budget: Decimal,
     pub potential: Decimal,
-    missed: Decimal,
-    fact: Decimal,
-    fact_count: u64,
-    plus_uncapped: u64,
+    pub missed: Decimal,
+    pub fact: Decimal,
+    pub fact_count: u64,
+    pub plus_uncapped: u64,
     /// Решение 197: окон с известной длительностью и их сумма, с.
-    windows: u64,
-    window_s: i64,
+    pub windows: u64,
+    pub window_s: i64,
 }
 
 impl Sum {
@@ -73,4 +79,80 @@ pub fn window_s(b: &Brief) -> Option<i64> {
     } else {
         Some((b.ep.last_at - b.ep.first_at).num_seconds().max(0))
     }
+}
+
+/// Направление топа: монета (по адресу, решение 211) и площадки, сумма упущенного, сколько записей.
+pub struct TopDir {
+    pub dir: Direction,
+    pub missed: Decimal,
+    pub count: u64,
+}
+
+/// Запись, вошедшая в итог: тело, факт сделки из учёта (если известен), исполненная ли это сделка (группа «сделки»).
+pub struct Item {
+    pub b: Brief,
+    pub fact: Option<Decimal>,
+    pub deal: bool,
+}
+
+/// Итоги периода (решение 215: общие у экрана и отчёта «Упущено»).
+#[derive(Default)]
+pub struct Totals {
+    pub deals: Sum,
+    pub cands: Sum,
+    /// Потолок uncapped.ladder_usdt → «взяли бы» [сделки, кандидаты].
+    pub ladder: Vec<(Decimal, [Decimal; 2])>,
+    /// Все направления по убыванию упущенного (равные — больше записей выше).
+    pub top: Vec<TopDir>,
+    /// Решение 197: кандидаты с упущено 0 (старые записи) — в итог не входят, только счётчик.
+    pub hidden: u64,
+    /// Вошедшие записи в порядке выборки (новые сверху).
+    pub items: Vec<Item>,
+}
+
+/// Итоги по записям периода. Принимает: записи (новые сверху), таблицу потолков, факт сделки по её id из учёта.
+/// Возвращает: Totals. Ошибок нет.
+pub fn totals(
+    briefs: Vec<Brief>,
+    ladder: &[Decimal],
+    fact: impl Fn(&str) -> Option<Decimal>,
+) -> Totals {
+    let mut t = Totals {
+        ladder: ladder.iter().map(|c| (*c, [Decimal::ZERO; 2])).collect(),
+        ..Totals::default()
+    };
+    let mut by_dir: HashMap<Direction, (Decimal, u64)> = HashMap::new();
+    for b in briefs {
+        let g = usize::from(b.battle.verdict != "deal");
+        // Решение 197: кандидаты с упущено 0 (записаны до решения) в итог не идут — только счётчик скрытых.
+        if g == 1 && b.missed <= Decimal::ZERO {
+            t.hidden += 1;
+            continue;
+        }
+        let (deal, f) = match b.battle.deal_id.as_deref() {
+            Some(id) if g == 0 => (true, fact(id)),
+            _ => (false, None),
+        };
+        if deal {
+            t.deals.add(&b, f);
+        } else {
+            t.cands.add(&b, None);
+        }
+        for (cap, sum) in t.ladder.iter_mut() {
+            if let Some(l) = b.levels.iter().find(|l| l.cap == *cap) {
+                sum[g] += take(l);
+            }
+        }
+        let e = by_dir.entry(b.direction.clone()).or_default();
+        e.0 += b.missed;
+        e.1 += 1;
+        t.items.push(Item { b, fact: f, deal });
+    }
+    t.top = by_dir
+        .into_iter()
+        .map(|(dir, (missed, count))| TopDir { dir, missed, count })
+        .collect();
+    t.top
+        .sort_by(|a, b| b.missed.cmp(&a.missed).then(b.count.cmp(&a.count)));
+    t
 }

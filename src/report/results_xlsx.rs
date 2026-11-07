@@ -178,7 +178,10 @@ fn deals(ws: &mut Worksheet, rows: &[Row], n: u32) -> Result<(), XlsxError> {
         ws.write_formula_with_format(row, 12, Formula::new(format!("=J{i}-I{i}")), &money4)?;
     }
     ws.autofilter(0, 0, n - 1, 12)?;
-    red_green(ws, 1, 9, n - 1, 9)?;
+    // Решение 215: период без сделок (фильтр from/to) — книга с пустым листом; диапазона цвета нет.
+    if !rows.is_empty() {
+        red_green(ws, 1, 9, n - 1, 9)?;
+    }
     Ok(())
 }
 

@@ -1,7 +1,8 @@
 //! Файл: notify/tg_methods.rs
 //! Что делает: обращения к Telegram Bot API для записей «Ручного управления» и меню (решения 156, 157):
 //! отправка с любой разметкой (inline-кнопки или ForceReply) и номером сообщения в ответе, правка текста
-//! с кнопками, правка только кнопок, регистрация списка команд (подсказка по «/»).
+//! с кнопками, правка только кнопок, регистрация списка команд (подсказка по «/»), отправка файла (sendDocument,
+//! решение 215).
 //! Кто вызывает: notify/mirror.rs, notify/press*.rs, notify/menu_press.rs, notify/tg_commands.rs, notify/updates.rs.
 //! От чего зависит: notify/telegram.rs (call_with), notify/tg_text.rs.
 //! Настройки: таймаут — http.timeout_ms (у клиента).
@@ -13,16 +14,28 @@
 //! - editMessageText: https://core.telegram.org/bots/api#editmessagetext
 //! - editMessageReplyMarkup: https://core.telegram.org/bots/api#editmessagereplymarkup
 //! - BotCommandScopeChat (type «chat», chat_id): https://core.telegram.org/bots/api#botcommandscopechat
+//! - sendDocument (chat_id, document — InputFile, caption 0-1024 символа; решение 215 — отчёты Excel):
+//!   https://core.telegram.org/bots/api#senddocument; файл — multipart/form-data, «50 MB for other files»:
+//!   https://core.telegram.org/bots/api#sending-files, InputFile: https://core.telegram.org/bots/api#inputfile
 //! - setMyCommands / BotCommand (command 1-32 символа: строчные латинские, цифры, «_»; description 1-256):
 //!   https://core.telegram.org/bots/api#setmycommands, https://core.telegram.org/bots/api#botcommand
 //!
 //! Страницы документации в этой сессии разработки открыть не удалось (сеть) — поля взяты по Bot API, проверить на
 //! первом реальном ответе Telegram.
 
+use reqwest::multipart::{Form, Part};
 use serde_json::{Value, json};
 
 use super::telegram::{Telegram, TgError};
 use super::tg_text::fit_text;
+
+/// Предел размера файла, который бот отправляет сам, — константа протокола («50 MB for other files»,
+/// https://core.telegram.org/bots/api#sending-files). «MB» в документации не уточнено (10⁶ или 2²⁰) — берём меньшее,
+/// 50 × 10⁶ байт. Больше — файл не отправляется, причина — человеку.
+pub const DOCUMENT_MAX_BYTES: usize = 50_000_000;
+
+/// Предел подписи к файлу — константа протокола (sendDocument caption «0-1024 characters after entities parsing»).
+const CAPTION_MAX_CHARS: usize = 1024;
 
 /// Пустая inline-клавиатура — убирает кнопки у сообщения (как в tg_buttons.rs::edit_text_drop_keyboard).
 pub fn no_keyboard() -> Value {
@@ -94,6 +107,39 @@ impl Telegram {
         self.call_with("editMessageReplyMarkup", p, self.timeout())
             .await
             .map(|_| ())
+    }
+
+    /// sendDocument — файл в чат формой multipart/form-data (решение 215: отчёты Excel из «📊 Отчёты»).
+    /// Принимает: чат, имя файла, тип файла (MIME), байты, подпись (обрезается до 1024 символов).
+    /// Возвращает: message_id. Ошибки: TgError (в т.ч. BadResponse — файл больше DOCUMENT_MAX_BYTES, не отправлялся).
+    pub async fn send_document(
+        &self,
+        chat: &str,
+        file_name: &str,
+        mime: &str,
+        bytes: Vec<u8>,
+        caption: &str,
+    ) -> Result<i64, TgError> {
+        if bytes.len() > DOCUMENT_MAX_BYTES {
+            return Err(TgError::BadResponse(format!(
+                "файл {} байт больше предела Telegram для ботов {} байт (50 МБ) — не отправлен",
+                bytes.len(),
+                DOCUMENT_MAX_BYTES
+            )));
+        }
+        let part = Part::bytes(bytes)
+            .file_name(file_name.to_string())
+            .mime_str(mime)
+            .map_err(|e| TgError::BadResponse(format!("тип файла {mime}: {e}")))?;
+        let cap: String = caption.chars().take(CAPTION_MAX_CHARS).collect();
+        let form = Form::new()
+            .text("chat_id", chat.to_string())
+            .text("caption", cap)
+            .part("document", part);
+        let r = self.call_form("sendDocument", form, self.timeout()).await?;
+        r.get("message_id")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| TgError::BadResponse("в ответе sendDocument нет message_id".into()))
     }
 
     /// setMyCommands — список команд бота (подсказка по «/»). Принимает: пары (команда без «/», описание), чат —

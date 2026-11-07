@@ -39,7 +39,8 @@ pub async fn on_hand(
         .await
         .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
         .map_or(Decimal::ZERO, |x| x.free);
-    let free = super::native::spendable(core, venue, &on, free)?;
+    let native = super::native::is_native(core, asset);
+    let free = super::native::spendable(core, venue, native, &on, free)?;
     let (free, note) = super::native::minus_sell_gas(core, &gw, venue, asset, free).await;
     if free <= Decimal::ZERO {
         return Err(format!(

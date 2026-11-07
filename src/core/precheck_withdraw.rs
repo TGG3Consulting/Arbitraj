@@ -118,7 +118,7 @@ async fn held_usdt(
             continue;
         }
         // Решение 211 (ревью В7): удержание — в тикере биржи A; на других биржах — по их тикеру того же адреса.
-        let p = super::convert_at::price_at(core, &cex, a, &h.asset, h.amount)
+        let p = super::convert_at::price_at(core, &cex, a, &h.asset, None, h.amount)
             .await
             .map_err(|e| {
                 format!(

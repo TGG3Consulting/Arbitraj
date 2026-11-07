@@ -64,12 +64,38 @@ pub fn balance_key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
 }
 
 /// Монета из события площадки (баланс, перевод) — в монету ядра: тикер площадки известен справочнику и адрес не
-/// противоречит — монета ядра (адрес, показное имя); иначе как есть (USDT, BNB, монета вне справочника). Ошибок нет.
+/// противоречит — монета ядра (адрес, показное имя); котируемая монета площадки (venue.quote_asset, USDT) без адреса —
+/// с адресом USDT ядра (тот же, что в ожиданиях перегона USDT, usdt_return.rs; второе ревью 211, п.1); иначе как есть
+/// (BNB, монета вне справочника). Ошибок нет.
 pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
-    match asset_by_venue_ticker(core, venue, &asset.ticker) {
-        Some(c) if asset.bsc_contract.is_none() || asset.bsc_contract == c.bsc_contract => c,
-        _ => asset,
+    if let Some(c) = asset_by_venue_ticker(core, venue, &asset.ticker)
+        && (asset.bsc_contract.is_none() || asset.bsc_contract == c.bsc_contract)
+    {
+        return c;
     }
+    if asset.bsc_contract.is_none()
+        && is_quote(core, venue, &asset.ticker)
+        && let Ok(a) = rd(&core.inner.usdt).clone()
+    {
+        return Asset {
+            ticker: asset.ticker,
+            bsc_contract: Some(a),
+        };
+    }
+    asset
+}
+
+/// Тикер — котируемая монета площадки (venue.quote_asset). Не задана — нет. Ошибок нет.
+fn is_quote(core: &Core, venue: &VenueId, ticker: &str) -> bool {
+    let at = crate::settings::read::At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    core.inner
+        .deps
+        .settings
+        .text("venue.quote_asset", at)
+        .is_ok_and(|q| q == ticker)
 }
 
 /// Имя в ответе площадки (затрата «в монете», fee_asset, баланс) — в имя ядра: тикер этой монеты на площадке →

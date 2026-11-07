@@ -42,7 +42,19 @@ fn pick(mut same: Vec<Presence>) -> Presence {
     same.sort_by(|a, b| a.ticker.cmp(&b.ticker));
     let good: Vec<usize> = (0..same.len()).filter(|&i| usable(&same[i])).collect();
     match good.len() {
-        0 => same.remove(0),
+        // Годных нет — первая по алфавиту, но не токен обёртки, исключённый в пользу нативной (registry_native.rs):
+        // запись нативной на бирже не теряется (второе ревью 211, п.2).
+        0 => {
+            let i = same
+                .iter()
+                .position(|p| {
+                    !p.excluded
+                        .iter()
+                        .any(|e| matches!(e, Exclusion::NativeVsToken(_)))
+                })
+                .unwrap_or(0);
+            same.remove(i)
+        }
         1 => same.swap_remove(good[0]),
         _ => {
             let names: Vec<String> = same.iter().map(|p| p.ticker.clone()).collect();

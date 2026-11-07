@@ -44,17 +44,21 @@ pub fn want_disabled(core: &Core, venue: &VenueId) -> (Vec<Asset>, bool) {
     if deals.is_empty() {
         return (vec![], false);
     }
-    let mut out: Vec<Asset> = lk(&core.inner.subs)
-        .have(venue)
-        .map(|h| h.to_vec())
-        .unwrap_or_default();
     // Решение 211 (ревью В3): монета сделки — монета ядра; площадке — с её тикером (on_venue), как в subscribe::wanted.
+    // Монеты сделок — первыми (второе ревью 211, п.8): при том же адресе остаётся монета сделки с текущим тикером
+    // площадки, а не запись из прежней подписки (`have`), где тикер мог смениться.
+    let mut out: Vec<Asset> = deals
+        .into_iter()
+        .map(|(_, a)| super::venue_ticker::on_venue(core, &a, venue))
+        .collect();
     out.extend(
-        deals
-            .into_iter()
-            .map(|(_, a)| super::venue_ticker::on_venue(core, &a, venue)),
+        lk(&core.inner.subs)
+            .have(venue)
+            .map(|h| h.to_vec())
+            .unwrap_or_default(),
     );
-    // Одна монета — один раз (Asset == по адресу; без адреса — по тикеру): сортировка по тикеру не ставит дубли рядом.
+    // Одна монета — один раз (Asset == по адресу; без адреса — по тикеру), первая встреченная остаётся: сортировка по
+    // тикеру не ставит дубли рядом.
     let mut seen = std::collections::HashSet::new();
     out.retain(|a| seen.insert(a.clone()));
     out.sort_by(|a, b| a.ticker.cmp(&b.ticker));

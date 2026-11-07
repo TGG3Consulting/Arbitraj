@@ -156,15 +156,17 @@ pub fn ticker(core: &Core) -> Option<String> {
 /// Нативная ли это монета сети (решение 211, ревью К1): тикер dex.native_ticker И адрес обёртки dex.native_wrapped —
 /// токен с тем же тикером под другим адресом нативной монетой не считается. Ошибок нет: настройка не задана — нет.
 pub fn is_native(core: &Core, asset: &Asset) -> bool {
+    current(core).is_some_and(|n| asset.ticker == n.ticker && asset.bsc_contract == Some(n.wrapped))
+}
+
+/// Нативная монета по настройкам DEX ядра (dex.native_ticker, dex.native_wrapped). None — не задана. Ошибок нет.
+pub fn current(core: &Core) -> Option<Native> {
     let dex: Vec<VenueId> = rd(&core.inner.kinds)
         .iter()
         .filter(|(_, k)| *k == VenueKind::Dex)
         .map(|(v, _)| v.clone())
         .collect();
-    read(&core.inner.deps.settings, &dex)
-        .ok()
-        .flatten()
-        .is_some_and(|n| asset.ticker == n.ticker && asset.bsc_contract == Some(n.wrapped))
+    read(&core.inner.deps.settings, &dex).ok().flatten()
 }
 
 /// Меняет ли настройка сопоставление (тогда справочник сетей бирж перечитывается сразу). Ошибок нет.
@@ -173,17 +175,18 @@ pub fn affects(name: &str) -> bool {
 }
 
 /// Сколько монет сделки на площадке можно считать своими: у BNB на DEX (монета газа) — баланс минус резерв на газ
-/// risk.min_bnb_balance (решение 62: резерв сделкой не тратится); у остальных — баланс как есть. Принимает: ядро,
-/// площадку, тикер, баланс. Ошибки: текст — резерв не задан (сверить или вернуть BNB нельзя), площадки нет в реестре.
+/// risk.min_bnb_balance (решение 62: резерв сделкой не тратится); у остальных — баланс как есть. Монета газа — только
+/// нативная по тикеру И адресу обёртки (is_native; второе ревью 211, п.6), не любой токен с тикером BNB — это решает
+/// вызывающий (native). Принимает: ядро, площадку, нативная ли монета, имя монеты для текста, баланс.
+/// Ошибки: текст — резерв не задан (сверить или вернуть BNB нельзя), площадки нет в реестре.
 pub fn spendable(
     core: &Core,
     venue: &VenueId,
+    native: bool,
     ticker: &str,
     balance: Decimal,
 ) -> Result<Decimal, String> {
-    if ticker != super::convert::GAS_TICKER
-        || super::trade_ops::kind(core, venue)? != VenueKind::Dex
-    {
+    if !native || super::trade_ops::kind(core, venue)? != VenueKind::Dex {
         return Ok(balance);
     }
     let reserve = core

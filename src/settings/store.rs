@@ -114,9 +114,10 @@ impl Store {
         &self.aliases
     }
 
-    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы. Решение 211 (ревью В9): монета —
-    /// адрес; значения по адресу нет — значение по тикеру монеты (показной и тикеры площадок, coin_alias.rs), одна
-    /// запись в журнал на настройку и монету; только потом площадка и вся система.
+    /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы. Решение 211 (второе ревью, п.3):
+    /// монета — адрес; значения по адресу нет — из старых значений по тикеру монеты (показной и тикеры площадок,
+    /// coin_alias.rs) применяется ТОЛЬКО coin.blocked = да (безопасно: монета не торгуется); любое другое значение по
+    /// тикеру неоднозначно и НЕ применяется — дальше площадка и вся система, одна запись в журнал на настройку и тикер.
     /// Принимает: имя, площадку и монету (если применимо). Возвращает: значение или None.
     pub fn resolve(&self, name: &str, venue: Option<&str>, coin: Option<&str>) -> Option<Value> {
         if let Some(c) = coin {
@@ -124,10 +125,14 @@ impl Store {
                 return Some(v);
             }
             for t in self.aliases.tickers(c) {
-                if let Some(v) = self.get_exact(name, &Scope::Coin(t.clone())) {
-                    self.aliases.report(&self.journal, name, c, &t);
+                let Some(v) = self.get_exact(name, &Scope::Coin(t.clone())) else {
+                    continue;
+                };
+                if name == "coin.blocked" && v.as_bool() == Some(true) {
+                    self.aliases.report(&self.journal, name, c, &t, true);
                     return Some(v);
                 }
+                self.aliases.report(&self.journal, name, c, &t, false);
             }
         }
         let order = [

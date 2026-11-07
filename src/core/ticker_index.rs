@@ -141,6 +141,14 @@ pub fn index_of(coins: &[CoinEntry]) -> TickerIndex {
         };
         idx.by_token.entry(addr).or_default().push(c.asset.clone());
         for p in &c.presence {
+            // Токен обёртки, исключённый в пользу нативной (registry_native.rs), — другой актив: в карты переводчика
+            // не идёт, его события и стакан не переводятся в монету нативной (второе ревью 211, п.5).
+            if p.excluded
+                .iter()
+                .any(|e| matches!(e, super::registry::Exclusion::NativeVsToken(_)))
+            {
+                continue;
+            }
             // Тикер ЭТОЙ площадки → монета ядра (у DEX — показное имя, его и передаёт подписка).
             idx.map
                 .entry((p.venue.clone(), p.ticker.clone()))

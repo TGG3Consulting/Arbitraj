@@ -169,18 +169,21 @@ async fn once(core: &Core) -> Vec<Found> {
             let ev = &v;
             // Решение 211 (ревью В2): у кошелька DEX — остаток по адресу (reconcile_key.rs), у биржи — строки по тикеру.
             let ticker = &super::reconcile_key::name(core, key);
+            // Ключ уведомления — в прежнем формате «площадка/тикер», адрес только в тексте (второе ревью 211, п.9).
+            let short = super::reconcile_key::short(core, key);
             let total = match super::reconcile_key::total(kind, gw.as_ref(), &b, key).await {
                 Ok(t) => t,
                 Err(e) => {
                     let text = format!("{label}: {ticker}: {e}");
-                    let k = Some(format!("{label}/{ticker}"));
+                    let k = Some(format!("{label}/{short}"));
                     out.push(("risk.reconcile_mismatch", Some(ev.0.clone()), text, k));
                     continue;
                 }
             };
             // BNB на DEX (решение 62): нативный + WBNB (адаптер отдаёт WBNB в locked строки BNB) минус резерв на газ —
             // резерв монетами сделки не считается; резерв не задан — сверить нельзя, это и есть причина.
-            let have = match super::native::spendable(core, ev, ticker, total) {
+            let native = super::reconcile_key::is_native_key(core, key);
+            let have = match super::native::spendable(core, ev, native, ticker, total) {
                 Ok(h) => h,
                 Err(e) => {
                     out.push(("risk.reconcile_mismatch", Some(ev.0.clone()), e, None));
@@ -192,7 +195,7 @@ async fn once(core: &Core) -> Vec<Found> {
                     "risk.reconcile_mismatch",
                     Some(ev.0.clone()),
                     format!("{label}: {ticker} по учёту {need}, на площадке {have}"),
-                    Some(format!("{label}/{ticker}")),
+                    Some(format!("{label}/{short}")),
                 ));
             }
         }

@@ -136,6 +136,10 @@ pub async fn rebuild(core: &Core) {
         &market,
         Part::Live,
     );
+    // Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение настроек по старому тикеру. Ставится ДО чёрного
+    // списка, отчётов и миграции (второе ревью 211, п.4): они читают coin.blocked и прочее уже с этой картой.
+    let names = super::coin_alias_sync::aliases(coins.iter().chain(inert.iter()));
+    inner.deps.settings.coin_aliases().set(names);
     let changes = super::rebuild_blacklist::apply_blacklist(core, &market, &mut coins);
     for ch in changes {
         super::rebuild_report::report_block(core, ch).await;
@@ -165,9 +169,6 @@ pub async fn rebuild(core: &Core) {
     *wr(&inner.usdt) = usdt;
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;
-    // Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение настроек по старому тикеру.
-    let names = super::coin_alias_sync::aliases(coins.iter().chain(inert.iter()));
-    inner.deps.settings.coin_aliases().set(names);
     *wr(&inner.coins) = CoinBook {
         live: Arc::new(coins),
         inert,

@@ -132,11 +132,13 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
     coins
         .into_values()
         .map(|(contract, presence)| {
+            // Ревью К1: нативная монета биржи (адрес обёртки по решению 62) и BEP20-токен обёртки — разные активы;
+            // токен исключается, показное имя — тикер нативной (registry_native.rs). Делится ДО выбора тикера на бирже
+            // (второе ревью 211, п.2): нативная и токен на ОДНОЙ бирже — не конфликт тикеров, торгуется нативная.
+            let mut presence = presence;
+            let native = super::registry_native::split(&mut presence, contract, inp.native);
             // Решение 211: один тикер на биржу (правило выбора — registry_merge.rs) и показное имя монеты.
             let mut presence = super::registry_merge::one_per_venue(presence);
-            // Ревью К1: нативная монета биржи (адрес обёртки по решению 62) и BEP20-токен обёртки другой биржи — разные
-            // активы; токен исключается, показное имя — тикер нативной (registry_native.rs).
-            let native = super::registry_native::split(&mut presence, contract, inp.native);
             let asset = Asset {
                 ticker: native.unwrap_or_else(|| super::registry_merge::display_ticker(&presence)),
                 bsc_contract: contract,

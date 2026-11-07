@@ -177,6 +177,7 @@ pub async fn external(core: &Core, b: &BalanceChange) {
             core,
             &b.venue,
             &super::venue_ticker::ticker_on(core, &b.asset, &b.venue),
+            b.asset.bsc_contract,
             b.delta.abs(),
         )
         .await
@@ -215,8 +216,15 @@ pub async fn external(core: &Core, b: &BalanceChange) {
 }
 
 /// Стоимость в USDT: котируемая монета площадки — как есть; иначе — по живому стакану биржи (convert_at::price_at).
-/// Принимает: ядро, площадку, тикер ЭТОЙ площадки, количество. None — не известна.
-async fn usd(core: &Core, venue: &VenueId, ticker: &str, qty: Decimal) -> Option<Decimal> {
+/// Принимает: ядро, площадку, тикер ЭТОЙ площадки, адрес монеты (если известен — у DEX ищется по нему, второе ревью
+/// 211, п.7), количество. None — не известна.
+async fn usd(
+    core: &Core,
+    venue: &VenueId,
+    ticker: &str,
+    addr: Option<alloy_primitives::Address>,
+    qty: Decimal,
+) -> Option<Decimal> {
     let at = At {
         venue: Some(&venue.0),
         coin: None,
@@ -238,7 +246,7 @@ async fn usd(core: &Core, venue: &VenueId, ticker: &str, qty: Decimal) -> Option
         .map(|(v, _)| v.clone())
         .collect();
     // Решение 211 (ревью В7): тикер — площадки события; другие биржи — по их тикеру того же адреса (convert_at.rs).
-    let p = super::convert_at::price_at(core, &cex, venue, ticker, qty)
+    let p = super::convert_at::price_at(core, &cex, venue, ticker, addr, qty)
         .await
         .ok()?;
     Some(p * qty)

@@ -5,7 +5,7 @@
 //! Остаток монеты по адресу — balance(«0x…») кошелька (контракт Venue::balance, 1–2 запроса к узлу). Нативная монета
 //! (BNB, решение 62) остаётся по тикеру: её строка BNB уже несёт WBNB в locked.
 //! Кто вызывает: core/reconcile.rs, core/reconcile_confirm.rs (expected).
-//! От чего зависит: venue_ticker.rs, ticker_index.rs, convert.rs (GAS_TICKER), gateway/contract.rs.
+//! От чего зависит: venue_ticker.rs, ticker_index.rs, native.rs (is_native, current), gateway/contract.rs.
 //! Настройки: нет.
 
 use alloy_primitives::Address;
@@ -19,10 +19,31 @@ use super::engine::{Core, rd};
 /// Ключ монеты сделки в учёте площадки: DEX и у монеты есть адрес (не монета газа) — «0x…» (venue_ticker::balance_key);
 /// иначе — тикер площадки. Принимает: ядро, монету ядра, площадку. Ошибок нет.
 pub fn key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
-    if asset.ticker == super::convert::GAS_TICKER {
+    // Монета газа — нативная по тикеру И адресу обёртки (второе ревью 211, п.6), не любой токен с тикером BNB.
+    if super::native::is_native(core, asset) {
         return super::venue_ticker::ticker_on(core, asset, venue);
     }
     super::venue_ticker::balance_key(core, asset, venue)
+}
+
+/// Ключ — нативная монета (решение 62): не адрес и равен тикеру нативной (dex.native_ticker). Ключ нативной даёт key()
+/// только для монеты, прошедшей is_native, — токен с тем же тикером ключуется адресом. Ошибок нет.
+pub fn is_native_key(core: &Core, key: &str) -> bool {
+    key.parse::<Address>().is_err() && super::native::current(core).is_some_and(|n| n.ticker == key)
+}
+
+/// Показное имя ключа без адреса — для ключа уведомления (формат до решения 211: «площадка/тикер»; второе ревью 211,
+/// п.9). Адрес — показное имя монеты ядра с этим адресом (нет такой — адрес); тикер — как есть. Ошибок нет.
+pub fn short(core: &Core, key: &str) -> String {
+    match key.parse::<Address>() {
+        Ok(a) => rd(&core.inner.tickers)
+            .by_token
+            .get(&a)
+            .and_then(|v| v.first())
+            .map(|x| x.ticker.clone())
+            .unwrap_or_else(|| key.to_string()),
+        Err(_) => key.to_string(),
+    }
 }
 
 /// Имя ключа для человека: адрес — показное имя монеты ядра с этим адресом (нет такой — адрес); тикер — как есть.

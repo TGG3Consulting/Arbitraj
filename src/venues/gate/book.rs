@@ -13,9 +13,14 @@
 //!
 //! Две проверки свежести (как MEXC, решение 118, А-🟠8): живость соединения (любой кадр, включая spot.pong) и время
 //! последнего кадра стакана самой пары — оно обновляется и тогда, когда снимок не изменился и ядру не отдаётся
-//! (решение 109). Канал spot.order_book присылает снимок раз в интервал (100ms / 1000ms, Spot WebSocket v4
-//! https://www.gate.com/docs/developers/apiv4/ws/en/): пара, по которой Gate перестал присылать кадры (пауза торгов,
-//! сбой подписки), без второй проверки считалась бы свежей бесконечно.
+//! (решение 109). Интервал канала spot.order_book (100ms / 1000ms, Spot WebSocket v4
+//! https://www.gate.com/docs/developers/apiv4/ws/en/) — частота обновлений; что кадр приходит и без изменений книги,
+//! в документации НЕ сказано, и живые данные это опровергают (решение 213: у неликвидных пар кадров нет часами при
+//! живой подписке; в записи 04.11 кадры CAKE_USDT идут только с новым lastUpdateId, промежутки 290–380 мс при
+//! 100ms). Без второй проверки пара со сбойной подпиской считалась бы свежей бесконечно.
+//! Решение 213: тихая пара, у которой сторож ядра подтвердил по REST «книга не менялась с последнего кадра»
+//! (контракт book_confirmed), — свежая до срока подтверждения, даже если кадра нет дольше venue.book_stale_ms.
+//! Живость соединения подтверждение не отменяет. Новый стакан из кадра (put) или снятие стакана — подтверждения нет.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -33,8 +38,9 @@ use super::fees::Fees;
 /// Время последнего сообщения соединения (unix мс) — общее для соединения и его стаканов.
 pub type Alive = Arc<AtomicI64>;
 
-/// Стакан пары, живость его соединения и время последнего кадра стакана пары (unix мс).
-type Entry = (OrderBook, Alive, Alive);
+/// Стакан пары, живость его соединения, время последнего кадра стакана пары и срок подтверждения тихой пары
+/// (решение 213; 0 — нет) (unix мс).
+type Entry = (OrderBook, Alive, Alive, Alive);
 
 /// Стаканы по тикеру. Дешёво клонируется.
 #[derive(Clone, Default)]
@@ -54,13 +60,23 @@ impl Books {
     pub fn put(&self, book: OrderBook, alive: Alive) {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
         let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
-        m.insert(book.asset.ticker.clone(), (book, alive, seen));
+        let until: Alive = Arc::new(AtomicI64::new(0));
+        m.insert(book.asset.ticker.clone(), (book, alive, seen, until));
+    }
+
+    /// Решение 213: сторож ядра подтвердил по REST, что книга пары на бирже не менялась с последнего кадра, —
+    /// стакан в памяти свежий до until_ms (unix мс). Стакана нет — ничего. Ошибок нет.
+    pub fn confirm(&self, ticker: &str, until_ms: i64) {
+        let m = self.map.read().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, _, _, until)) = m.get(ticker) {
+            until.fetch_max(until_ms, Ordering::Relaxed);
+        }
     }
 
     /// Кадр стакана пары пришёл, но снимок тот же (решение 109): только время кадра пары. Ошибок нет.
     pub fn touch(&self, ticker: &str) {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());
-        if let Some((_, _, seen)) = m.get(ticker) {
+        if let Some((_, _, seen, _)) = m.get(ticker) {
             seen.store(now_ms(), Ordering::Relaxed);
         }
     }
@@ -77,7 +93,7 @@ impl Books {
     /// Принимает: окружение, кэш комиссий, монету, сторону, количество монет.
     /// Возвращает: Quote (fillable_qty меньше qty, если глубины не хватает).
     /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или кадра пары нет дольше
-    /// venue.book_stale_ms; NotConfigured — настройка не задана; комиссия.
+    /// venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured — настройка не задана; комиссия.
     pub async fn quote(
         &self,
         ctx: &Ctx,
@@ -94,7 +110,8 @@ impl Books {
             .unwrap_or_else(|p| p.into_inner())
             .get(&asset.ticker)
             .cloned();
-        let (book, alive, seen) = book.ok_or_else(|| stale(ctx, &asset.ticker, "стакана нет"))?;
+        let (book, alive, seen, until) =
+            book.ok_or_else(|| stale(ctx, &asset.ticker, "стакана нет"))?;
         let silent = now_ms() - alive.load(Ordering::Relaxed);
         if silent > stale_ms {
             return Err(stale(
@@ -103,12 +120,19 @@ impl Books {
                 &format!("соединение молчит {silent} мс"),
             ));
         }
-        let age = now_ms() - seen.load(Ordering::Relaxed);
-        if age > pair_ms {
+        let now = now_ms();
+        let age = now - seen.load(Ordering::Relaxed);
+        let until = until.load(Ordering::Relaxed);
+        if age > pair_ms && now > until {
+            let tail = if until > 0 {
+                format!(", подтверждение биржи истекло {} мс назад", now - until)
+            } else {
+                String::new()
+            };
             return Err(stale(
                 ctx,
                 &asset.ticker,
-                &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms})"),
+                &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
         let levels = match side {

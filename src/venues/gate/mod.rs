@@ -15,6 +15,7 @@ pub mod account_update;
 pub mod all_balances;
 pub mod all_balances_parse;
 pub mod book;
+pub mod book_version;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
@@ -271,10 +272,26 @@ impl Venue for Gate {
         tap::decode(stream, data)
     }
 
-    /// Решение 202: у Gate spot.order_book шлёт снимок раз в интервал (venue.book_interval) и без изменений —
-    /// тишина пары = мёртвая подписка; отписка одной пары есть (event unsubscribe), см. ws_conn.rs.
+    /// Решение 202: отписка одной пары есть (event unsubscribe), см. ws_conn.rs. Решение 213: scheduled = false —
+    /// документация Gate НЕ говорит, что spot.order_book шлёт кадр без изменений книги (venue.book_interval — частота
+    /// обновлений), а живые данные 07.11 это опровергли: у неликвидных пар (AIL, KILO, PELL, U, XCV) поле update ответа
+    /// GET /spot/order_book старше 1,5–6,5 ч, кадров нет при подписке со status success. Тишина пары подтверждается
+    /// по REST (confirm = true, book_version.rs), вслепую не переподписывается.
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(true, true))
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: версия стакана пары по REST (book_version.rs).
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        book_version::book_version(&self.ctx, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
     }
 
     async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {

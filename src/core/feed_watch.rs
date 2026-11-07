@@ -1,28 +1,38 @@
 //! Файл: core/feed_watch.rs
 //! Что делает: решение 202 (Тигран, 06.11.2026: «переподписка не биржи, а именно пачки») — сторож пар биржи: раз в
 //! venue.pair_resub_interval_ms берёт у адаптера свежесть соединений (контракт feed_health), решает по чистой логике
-//! (feed_watch_logic.rs) и выполняет: переподписать одну пару (resubscribe_pair), переподключить одно соединение
-//! (reconnect_conn — только если по его парам нет идущей сделки, core/feed_hold.rs). Журнал — на каждое действие
-//! (попытка — первая в круге), Telegram — «переподключить нельзя: идёт сделка» и «соединение не оживает, нужен человек».
-//! Не задана любая настройка сторожа — сторож площадки выключен (одна запись в журнал), ждёт изменения настроек.
-//! Адаптер без поддержки или кадры стакана биржи не по расписанию (тишина — норма) — сторож не запускается.
+//! (feed_watch_logic.rs) и выполняет действия (feed_watch_act.rs): переподписать одну пару, переподключить одно
+//! соединение (только если по его парам нет идущей сделки, core/feed_hold.rs), журнал и Telegram.
+//! Решение 213 (Тигран, 07.11.2026: «тишина пары ≠ смерть»): молчащую пару сторож сначала подтверждает у биржи по REST
+//! (контракт book_version; запросы прохода — одновременно, их число ограничивает ведро venue.quiet_confirm_max_per_s),
+//! ответ сравнивает со СВЕЖИМ снимком feed_health (кадр мог прийти, пока шёл запрос) — feed_confirm.rs::apply;
+//! подтверждённая пара: book_confirmed адаптеру (стакан свежий в котировке до следующей проверки).
+//! Сторож работает у любой площадки, чей адаптер отдаёт feed_health (поле scheduled больше его не выключает).
+//! Не задана любая настройка решения 202 — сторож площадки выключен (одна запись в журнал), ждёт изменения настроек;
+//! не задана настройка подтверждения — подтверждения нет (причина — в журнале вместе с тихими парами).
 //! Кто вызывает: core/engine.rs (задача на каждую биржу).
-//! От чего зависит: feed_watch_logic.rs, feed_hold.rs, engine.rs, gateway (feed_health), settings.
+//! От чего зависит: feed_watch_logic.rs, feed_confirm.rs, feed_watch_act.rs, feed_hold.rs, venue_ticker.rs, engine.rs,
+//! gateway (feed_health, book_version), settings.
 //! Настройки: venue.book_stale_ms, venue.pair_dead_mult, feed.stale_after_ms, venue.feed_warmup_ms,
 //! venue.pair_resub_attempts, venue.pair_resub_interval_ms, venue.pair_resub_pause_ms, venue.conn_dead_pct,
-//! venue.conn_reconnect_min_ms, venue.conn_reconnect_max_per_hour (по площадке).
+//! venue.conn_reconnect_min_ms, venue.conn_reconnect_max_per_hour; решение 213 — venue.quiet_confirm_min_ms,
+//! venue.quiet_confirm_max_per_s (по площадке).
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::core::types::VenueId;
+use crate::gateway::contract::Venue;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::Core;
+use super::feed_confirm::QuietCfg;
+use super::feed_watch_act::{act, log};
 use super::feed_watch_logic::{self as logic, Action, Cfg, State};
 
-/// Настройки сторожа площадки. Ошибка — текст: какая не задана.
+/// Настройки сторожа площадки. Ошибка — текст: какая не задана (решение 202). Настройки подтверждения (решение 213)
+/// не обязательны: не заданы — QuietCfg::Off с причиной.
 fn cfg(core: &Core, venue: &VenueId) -> Result<Cfg, String> {
     let at = At {
         venue: Some(&venue.0),
@@ -30,6 +40,16 @@ fn cfg(core: &Core, venue: &VenueId) -> Result<Cfg, String> {
     };
     let s = &core.inner.deps.settings;
     let i = |n: &str| s.integer(n, at).map_err(|e| e.message);
+    let quiet = match (
+        i("venue.quiet_confirm_min_ms"),
+        i("venue.quiet_confirm_max_per_s"),
+    ) {
+        (Ok(min_ms), Ok(per_s)) => QuietCfg::Confirm {
+            min_ms: min_ms as i64,
+            max_per_s: per_s as i64,
+        },
+        (Err(e), _) | (_, Err(e)) => QuietCfg::Off(e),
+    };
     Ok(Cfg {
         book_stale_ms: i("venue.book_stale_ms")? as i64,
         dead_mult: i("venue.pair_dead_mult")? as i64,
@@ -41,15 +61,13 @@ fn cfg(core: &Core, venue: &VenueId) -> Result<Cfg, String> {
         dead_pct: i("venue.conn_dead_pct")? as i64,
         reconnect_min_ms: i("venue.conn_reconnect_min_ms")? as i64,
         reconnect_max_per_hour: i("venue.conn_reconnect_max_per_hour")? as usize,
+        quiet,
     })
 }
 
-/// Журнал сторожа. Ошибок нет.
-async fn log(core: &Core, venue: &VenueId, level: Level, msg: String) {
-    core.inner
-        .deps
-        .log(level, "core.feed_watch", Some(&venue.0), msg, None)
-        .await;
+/// Сейчас, unix мс.
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
 }
 
 /// Задача сторожа одной биржи. Работает, пока жива система. Ошибок не возвращает.
@@ -62,13 +80,8 @@ pub async fn run(core: Core, venue: VenueId) {
             Ok(c) => c,
             Err(why) => {
                 if told.as_deref() != Some(why.as_str()) {
-                    log(
-                        &core,
-                        &venue,
-                        Level::Info,
-                        format!("Сторож пар выключен: {why}"),
-                    )
-                    .await;
+                    let m = format!("Сторож пар выключен: {why}");
+                    log(&core, &venue, Level::Info, m).await;
                     told = Some(why);
                 }
                 if watch.next().await.is_none() {
@@ -83,9 +96,6 @@ pub async fn run(core: Core, venue: VenueId) {
             continue;
         };
         let Some(h) = v.feed_health() else { return };
-        if !h.scheduled {
-            return;
-        }
         let deals: HashMap<String, Vec<String>> = super::feed_hold::holders(&core, &venue)
             .into_iter()
             .fold(HashMap::new(), |mut m, (id, a)| {
@@ -94,100 +104,40 @@ pub async fn run(core: Core, venue: VenueId) {
                 m.entry(t).or_default().push(id);
                 m
             });
-        let now = chrono::Utc::now().timestamp_millis();
-        for a in logic::decide(&h, now, &c, &deals, &mut st) {
-            act(&core, &venue, v.as_ref(), a, &c).await;
+        let mut checks = vec![];
+        for a in logic::decide(&h, now_ms(), &c, &deals, &mut st) {
+            match a {
+                Action::Check { conn, ticker } => checks.push((conn, ticker)),
+                a => act(&core, &venue, v.as_ref(), a, &c).await,
+            }
         }
+        confirm(&core, &venue, v.as_ref(), checks, &c, &mut st).await;
         tokio::time::sleep(Duration::from_millis(c.interval_ms.max(1) as u64)).await;
     }
 }
 
-/// Выполняет действие: команда адаптеру, журнал, Telegram. Ошибок нет: сбой команды — в журнал.
-async fn act(
+/// Решение 213: проверки тихих пар прохода — запросы book_version одновременно (их число уже ограничено ведром),
+/// ответы — по свежему снимку feed_health. Тикер — площадки (PairHealth.ticker, решение 211). Ошибок нет: сбой
+/// запроса — действие CheckFailed (журнал).
+async fn confirm(
     core: &Core,
     venue: &VenueId,
-    v: &dyn crate::gateway::contract::Venue,
-    a: Action,
+    v: &dyn Venue,
+    checks: Vec<(String, String)>,
     c: &Cfg,
+    st: &mut State,
 ) {
-    let mult = c.book_stale_ms * c.dead_mult;
-    match a {
-        Action::Resub {
-            conn,
-            ticker,
-            attempt,
-            round,
-        } => {
-            let r = v.resubscribe_pair(&conn, &ticker).await;
-            if attempt == 1 || r.is_err() {
-                let tail = r
-                    .err()
-                    .map(|e| format!(" — не отправлено: {}", e.message))
-                    .unwrap_or_default();
-                let m = format!(
-                    "{conn}: пара {ticker} молчит дольше {mult} мс при живом соединении — переподписка (круг {round}, \
-                     попыток в круге {}){tail}",
-                    c.attempts
-                );
-                log(core, venue, Level::Warn, m).await;
-            }
-        }
-        Action::Recovered { conn, ticker } => {
-            log(
-                core,
-                venue,
-                Level::Info,
-                format!("{conn}: пара {ticker} ожила после переподписки"),
-            )
-            .await;
-        }
-        Action::Reconnect { conn, dead, total } => {
-            let r = v.reconnect_conn(&conn).await;
-            let tail = r
-                .err()
-                .map(|e| format!(" — не выполнено: {}", e.message))
-                .unwrap_or_default();
-            let m = format!(
-                "{conn}: мёртвых пар {dead} из {total} (больше {}%), идущих сделок по ним нет — переподключение только этого \
-                 соединения{tail}",
-                c.dead_pct
-            );
-            log(core, venue, Level::Warn, m).await;
-        }
-        Action::Blocked {
-            conn,
-            dead,
-            total,
-            deals,
-        } => {
-            let m = format!(
-                "{conn}: мёртвых пар {dead} из {total} (больше {}%), но по парам соединения идут сделки {} — соединение не \
-                 переподключаю, переподписка по парам продолжается",
-                c.dead_pct,
-                deals.join(", ")
-            );
-            log(core, venue, Level::Warn, m.clone()).await;
-            core.inner
-                .deps
-                .notify("venue.feed_conn_blocked", Some(&venue.0), &m)
-                .await;
-        }
-        Action::GiveUp {
-            conn,
-            dead,
-            total,
-            count,
-        } => {
-            let m = format!(
-                "Соединение {conn} биржи {} не оживает: мёртвых пар {dead} из {total}, переподключений за час {count} \
-                 (venue.conn_reconnect_max_per_hour) — больше не переподключаю, нужен человек",
-                venue.0
-            );
-            log(core, venue, Level::Error, m.clone()).await;
-            core.inner
-                .deps
-                .notify("venue.feed_conn_giveup", Some(&venue.0), &m)
-                .await;
+    if checks.is_empty() {
+        return;
+    }
+    let sent = now_ms();
+    let res = futures_util::future::join_all(checks.iter().map(|(_, t)| v.book_version(t))).await;
+    let recv = now_ms();
+    let Some(h) = v.feed_health() else { return };
+    for ((conn, ticker), r) in checks.into_iter().zip(res) {
+        let r = r.map_err(|e| e.message);
+        for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
+            act(core, venue, v, a, c).await;
         }
     }
 }

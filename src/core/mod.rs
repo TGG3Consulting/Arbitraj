@@ -78,9 +78,14 @@ pub mod episode_view;
 pub mod episode_worker;
 pub mod evaluate;
 pub mod executor;
+pub mod feed_confirm;
+#[cfg(test)]
+mod feed_confirm_tests;
 pub mod feed_hold;
 pub mod feed_live;
 pub mod feed_watch;
+pub mod feed_watch_act;
+pub mod feed_watch_action;
 pub mod feed_watch_conn;
 pub mod feed_watch_logic;
 #[cfg(test)]

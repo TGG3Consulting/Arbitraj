@@ -84,11 +84,20 @@ pub async fn run(core: Core, venue: VenueId) {
                     }
                 }
                 Err(e) if last_err.as_deref() != Some(e.message.as_str()) => {
+                    // Решение 200 Б (перенесено из убранной обёртки, решение 211): «не задана venue.bsc_network» —
+                    // с именами сетей из живого справочника биржи (gateway/network_hint.rs), раз на смену ошибки.
+                    let hint = match deps.gw.get(&venue).await {
+                        Ok(v) if crate::gateway::network_hint::bsc_unset(&e) => format!(
+                            " — {}",
+                            crate::gateway::network_hint::text(v.as_ref(), &deps.settings).await
+                        ),
+                        _ => String::new(),
+                    };
                     deps.log(
                         Level::Warn,
                         "core.registry",
                         Some(&venue.0),
-                        format!("Справочник сетей не обновлён: {}", e.message),
+                        format!("Справочник сетей не обновлён: {}{hint}", e.message),
                         None,
                     )
                     .await;

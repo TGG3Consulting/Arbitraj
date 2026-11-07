@@ -49,9 +49,10 @@ pub fn owned(leg: &Leg<'_>) -> Owned {
 
 /// Предел сверки transfer.credit_mismatch_s. None — не задана: сверки нет (журнал один раз на перевод).
 async fn limit(core: &Core, o: &Owned) -> Option<Duration> {
+    let coin = crate::settings::scope::coin_id(&o.asset.ticker, o.asset.bsc_contract.as_ref());
     let at = At {
         venue: Some(&o.to.0),
-        coin: Some(&o.asset.ticker),
+        coin: Some(&coin),
     };
     match core
         .inner
@@ -84,9 +85,10 @@ async fn limit(core: &Core, o: &Owned) -> Option<Duration> {
 pub async fn confirm(core: Core, o: Owned, gw: Arc<dyn Venue>, ticket: Option<Ticket>) {
     drop(ticket);
     let max = limit(&core, &o).await;
+    let coin = crate::settings::scope::coin_id(&o.asset.ticker, o.asset.bsc_contract.as_ref());
     let at = At {
         venue: Some(&o.to.0),
-        coin: Some(&o.asset.ticker),
+        coin: Some(&coin),
     };
     let total = core
         .inner

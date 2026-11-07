@@ -8,7 +8,7 @@
     решение 147); по кандидату раскрывается полный список затрат.
     Данные — GET /api/spreads, /api/candidates; живые сообщения spread и candidate обновляют строки на месте.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/ErrorText.svelte,
+  От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/coinNames.svelte.js, lib/labels.js, components/ErrorText.svelte,
     components/LiveCoins.svelte, components/CostLines.svelte, components/DryBanner.svelte, components/SignalCard.svelte,
     components/DexCycles.svelte (сигнал циклов DEX ↔ DEX, решение 85), components/CalcTiming.svelte (время расчёта по
     этапам, решение 129).
@@ -30,6 +30,7 @@
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { store, valueKey } from '../lib/settings.svelte.js';
   import { dirText, dirKey, pickLines } from '../lib/coreLabels.js';
+  import { assetMatches } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
   import CostLines from '../components/CostLines.svelte';
@@ -111,7 +112,8 @@
   });
 
   /** Фильтр по тикеру монеты (Asset). */
-  const matchAsset = (a) => a.ticker.toLowerCase().includes(filter.trim().toLowerCase());
+  // Решение 211: фильтр — по любому тикеру площадок монеты и по адресу контракта.
+  const matchAsset = (a) => assetMatches(a, filter);
   const match = (d) => matchAsset(d.asset);
   const views = $derived(Object.values(spreads));
   const candRows = $derived(Object.values(cands).filter((c) => match(c.direction)).sort((a, b) => (b.at > a.at ? 1 : -1)));

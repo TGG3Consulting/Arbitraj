@@ -110,7 +110,8 @@ export function options(coins) {
  */
 export function matches(c, f) {
   const q = f.text.trim().toLowerCase();
-  if (q && !c.asset.ticker.toLowerCase().includes(q) && !(c.asset.bsc_contract ?? '').toLowerCase().includes(q)) return false;
+  if (q && !coinTickers(c).some((t) => t.toLowerCase().includes(q)) && !(c.asset.bsc_contract ?? '').toLowerCase().includes(q))
+    return false;
   if (f.result && !reasons(c).includes(f.result)) return false;
   if (f.venue && !(c.presence ?? []).some((p) => p.venue === f.venue)) return false;
   if (f.pools === 'yes' && !c.pools.length) return false;
@@ -130,5 +131,14 @@ export function matches(c, f) {
  */
 export const coinRowKey = (c) =>
   c.asset.bsc_contract
-    ? `${c.asset.ticker}|${c.asset.bsc_contract}`
+    ? c.asset.bsc_contract.toLowerCase()
     : `${c.asset.ticker}@${(c.presence ?? []).map((p) => p.venue).join(',')}`;
+
+/**
+ * Решение 211: тикеры монеты — показной первым, затем уникальные тикеры площадок (Presence.ticker).
+ * Принимает: монету из GET /api/coins. Возвращает: список строк.
+ */
+export const coinTickers = (c) => [...new Set([c.asset.ticker, ...(c.presence ?? []).map((p) => p.ticker).filter(Boolean)])];
+
+/** Имя монеты «NMT / NETMIND» (решение 211). Принимает: монету из GET /api/coins. Возвращает: строку. */
+export const coinTitle = (c) => coinTickers(c).join(' / ');

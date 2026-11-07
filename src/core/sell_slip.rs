@@ -23,7 +23,6 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::settings::read::At;
-use crate::settings::scope::Scope;
 use crate::storage::journal::Level;
 
 use super::coin_key::CoinKey;
@@ -169,12 +168,12 @@ async fn block(core: &Core, deal: &Deal, run: &[Obs]) {
     let note = note(run);
     let s = &deps.settings;
     let label = super::coin_key::label(a);
-    let text = if super::blacklist::manual(s, &a.ticker).is_some() {
+    let text = if super::blacklist::manual(s, a, &[]).is_some() {
         format!(
             "{label}: {note}; монета уже в ручном чёрном списке — отметка и заметка не менялись"
         )
     } else {
-        let scope = Scope::Coin(a.ticker.clone());
+        let scope = super::blacklist::coin_scope(a);
         let set = async {
             s.set(
                 "coin.blocked_note",

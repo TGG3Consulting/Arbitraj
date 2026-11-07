@@ -2,6 +2,7 @@
 //! Что делает: записи расчёта «без потолка» (решение 141) в SQLite — таблица uncapped: id, вид (deal — сделка,
 //! candidate — кандидат-эпизод), id сделки, тикер, начало (эпизода или расчёта сделки), обновлено, JSON записи (тип —
 //! core/uncapped_types.rs Record). Начало и вид — отдельными столбцами для выборки за период и уборки по сроку.
+//! Решение 211: адрес контракта монеты — столбец address (0x… в нижнем регистре; у старых строк NULL).
 //! Кто вызывает: core/uncapped_store.rs (запись, обновление эпизода, уборка), core/uncapped_view.rs (выборки).
 //! От чего зависит: storage/db.rs.
 //! Настройки: нет (срок хранения uncapped.keep_days читает core/uncapped_store.rs).
@@ -15,6 +16,8 @@ pub struct Row {
     pub kind: &'static str,
     pub deal_id: Option<String>,
     pub ticker: String,
+    /// Решение 211: адрес контракта монеты (0x… в нижнем регистре); у монеты без адреса — None.
+    pub address: Option<String>,
     pub started_at: String,
     pub body: String,
 }
@@ -33,9 +36,9 @@ pub struct Filter {
 pub async fn insert(db: &Db, r: Row) -> Result<i64, DbError> {
     db.call(move |c| {
         c.execute(
-            "INSERT INTO uncapped (kind, deal_id, ticker, started_at, updated_at, body)
-             VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
-            params![r.kind, r.deal_id, r.ticker, r.started_at, r.body],
+            "INSERT INTO uncapped (kind, deal_id, ticker, started_at, updated_at, body, address)
+             VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6)",
+            params![r.kind, r.deal_id, r.ticker, r.started_at, r.body, r.address],
         )?;
         Ok(c.last_insert_rowid())
     })

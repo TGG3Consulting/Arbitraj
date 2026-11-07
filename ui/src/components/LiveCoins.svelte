@@ -7,11 +7,12 @@
     окно с ценами и полными причинами (LiveCoinModal.svelte), оно обновляется вживую. Ширина таблицы не растёт
     с числом площадок: новая биржа добавляет направления в раскрытие, а не колонки. Имён площадок в коде нет.
   Кто вызывает: pages/Live.svelte.
-  От чего зависит: lib/liveGrid.js, lib/fmt.js, components/SpreadCell.svelte, LiveCoinModal.svelte.
+  От чего зависит: lib/liveGrid.js, lib/coinNames.svelte.js, lib/fmt.js, components/SpreadCell.svelte, LiveCoinModal.svelte.
   Настройки: нет.
 -->
 <script>
   import { coinRows, byBestSpread, rowLegs } from '../lib/liveGrid.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import { clock } from '../lib/fmt.js';
   import SpreadCell from './SpreadCell.svelte';
   import LiveCoinModal from './LiveCoinModal.svelte';
@@ -29,7 +30,7 @@
 
   /** Причина «—» для направления, которого нет в данных ядра. */
   const missing = (r, leg) =>
-    `${r.asset.ticker}: направления ${leg.buy} → ${leg.sell} нет в данных ядра — монета не прошла первичный фильтр для этой пары площадок (экран «Монеты»)`;
+    `${coinName(r.asset)}: направления ${leg.buy} → ${leg.sell} нет в данных ядра — монета не прошла первичный фильтр для этой пары площадок (экран «Монеты»)`;
 
   /** Раскрыть или свернуть строку монеты. */
   const toggle = (key) => (expanded[key] = !expanded[key]);
@@ -55,7 +56,7 @@
         {@const n = Object.keys(r.legs).length}
         <tr class="click" onclick={() => toggle(r.key)} title="Все направления монеты">
           <td class="muted">{expanded[r.key] ? '▾' : '▸'}</td>
-          <td><strong>{r.asset.ticker}</strong></td>
+          <td><strong>{coinName(r.asset)}</strong></td>
           {#if r.bestKey}
             {@const leg = legOf(r, r.bestKey)}
             <td>{leg.buy} → {leg.sell}</td>

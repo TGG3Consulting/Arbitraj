@@ -104,9 +104,11 @@ impl DirCtx {
             window,
             chrono::Utc::now(),
         )?;
+        let coin =
+            crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.bsc_contract.as_ref());
         let coin_at = At {
             venue: None,
-            coin: Some(&dir.asset.ticker),
+            coin: Some(&coin),
         };
         let k = s
             .decimal("profit.price_move_k", coin_at)

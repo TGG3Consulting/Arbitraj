@@ -12,6 +12,7 @@ fn row(kind: &'static str, deal: Option<&str>, body: &str) -> Row {
         kind,
         deal_id: deal.map(String::from),
         ticker: "CAKE".into(),
+        address: None,
         started_at: "2026-11-06T10:00:00Z".into(),
         body: body.into(),
     }

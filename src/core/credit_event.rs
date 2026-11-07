@@ -30,9 +30,18 @@ use super::engine::{Core, rd};
 
 /// Событие изменения баланса от адаптера. Ошибок нет: итог — в журнал.
 pub async fn on_change(core: &Core, b: BalanceChange) {
+    // Решение 211: настройки монеты — по адресу; событие баланса биржи приходит с её тикером без адреса — адрес по
+    // переводчику (core/venue_ticker.rs); не нашёлся — тикер (как раньше).
+    let coin = match &b.asset.bsc_contract {
+        Some(a) => crate::settings::scope::coin_id(&b.asset.ticker, Some(a)),
+        None => match super::venue_ticker::asset_by_venue_ticker(core, &b.venue, &b.asset.ticker) {
+            Some(x) => crate::settings::scope::coin_id(&x.ticker, x.bsc_contract.as_ref()),
+            None => b.asset.ticker.clone(),
+        },
+    };
     let at = At {
         venue: Some(&b.venue.0),
-        coin: Some(&b.asset.ticker),
+        coin: Some(&coin),
     };
     let s = &core.inner.deps.settings;
     let tol = s.decimal("transfer.credit_amount_tolerance_pct", at);

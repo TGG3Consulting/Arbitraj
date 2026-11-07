@@ -6,12 +6,13 @@
     Данные — GET /api/gas-stats; пока ядро не подключено — «нет данных» (503) с причиной.
     Живое сообщение gas_stats — перечитать.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/remote.svelte.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte.
+  От чего зависит: lib/remote.svelte.js, lib/coinLabels.js, lib/coinNames.svelte.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte.
   Настройки: нет.
 -->
 <script>
   import { remote } from '../lib/remote.svelte.js';
   import { assetLabel } from '../lib/coinLabels.js';
+  import { assetId } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -64,7 +65,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each rows as s, si (`${s.asset.ticker}|${s.asset.bsc_contract}|${si}`)}
+      {#each rows as s, si (`${assetId(s.asset)}|${si}`)}
         <tr>
           <td>{assetLabel(s.asset)}</td>
           {#each COLS as [field] (field)}

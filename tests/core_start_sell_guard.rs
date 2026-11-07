@@ -125,7 +125,8 @@ async fn not_tradable_names_exact_reason() {
     s.set("coin.blocked", sc, Some(json!(true)), "тест")
         .await
         .unwrap();
-    let r = blacklist::reason(blacklist::manual(&s, "CAKE"), &[], &Err("—".into()))
+    // Решение 211: старая отметка по тикеру (не перенесённая миграцией) продолжает блокировать монету.
+    let r = blacklist::reason(blacklist::manual(&s, &c.asset, &[]), &[], &Err("—".into()))
         .unwrap()
         .unwrap();
     c.block = Some(CoinBlock {
@@ -255,6 +256,7 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
     // Защита не задана — выключена, одна запись в журнал.
     let t0 = Utc::now();
     let d1 = deal(&rec, "s1", bad, t0);
+    let coin = d1.direction.asset.clone();
     arb::core::ledger::save(&core, &d1).await;
     sell_slip::after_close(&core, &d1).await;
     sell_slip::after_close(&core, &d1).await;
@@ -283,14 +285,14 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
         sell_slip::after_close(&core, &x).await;
     }
     assert!(
-        blacklist::manual(&s, "CAKE").is_none(),
+        blacklist::manual(&s, &coin, &[]).is_none(),
         "после сброса только два подряд"
     );
     // Третья подряд — монета в ручном чёрном списке с заметкой, журнал Error.
     let x = deal(&rec, "s5", bad, t0 + Duration::seconds(10));
     arb::core::ledger::save(&core, &x).await;
     sell_slip::after_close(&core, &x).await;
-    let note = blacklist::manual(&s, "CAKE").unwrap().unwrap();
+    let note = blacklist::manual(&s, &coin, &[]).unwrap().unwrap();
     assert!(
         note.starts_with("Авто (решение 148): 3 продаж подряд хуже плана: −"),
         "{note}"
@@ -298,9 +300,10 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
     assert!(note.ends_with("(сделки s3, s4, s5)"), "{note}");
     assert_eq!(kinds(&j, "core.sell_slip_block").await.len(), 1);
     // Человек снял отметку — следующая плохая продажа монету снова не блокирует: серия начата заново.
+    // Решение 211: автоблок записан по адресу монеты — снимает его человек там же.
     s.set(
         "coin.blocked",
-        Scope::Coin("CAKE".into()),
+        blacklist::coin_scope(&coin),
         Some(json!(false)),
         "тест",
     )
@@ -309,6 +312,6 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
     let x = deal(&rec, "s6", bad, t0 + Duration::seconds(11));
     arb::core::ledger::save(&core, &x).await;
     sell_slip::after_close(&core, &x).await;
-    assert!(blacklist::manual(&s, "CAKE").is_none());
+    assert!(blacklist::manual(&s, &coin, &[]).is_none());
     assert_eq!(kinds(&j, "core.sell_slip_block").await.len(), 1);
 }

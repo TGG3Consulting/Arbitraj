@@ -24,6 +24,7 @@ pub mod card_max;
 pub mod card_text;
 pub mod coin_book;
 pub mod coin_key;
+pub mod coin_scope_migrate;
 pub mod coins_view;
 pub mod commands;
 pub mod commands_control;

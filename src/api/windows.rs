@@ -6,7 +6,7 @@
 //! storage/windows_db.rs (Filter).
 //! Настройки: нет (window.* — экран «Настройки»). Сколько строк и кадров — параметр limit (обязателен).
 //!
-//! GET /api/windows?limit=N&offset=M&coin=T&deal=yes|no&outcome=plus|minus|zero
+//! GET /api/windows?limit=N&offset=M&coin=T&deal=yes|no&outcome=plus|minus|zero (coin — тикер или адрес 0x…, решение 211)
 //!                                 — {windows: [WindowInfo], total, off: причина | null, used_bytes}
 //! GET /api/windows/{id}?limit=N&offset=M&levels=K — {info, lines, frames (у изменений стакана — book: стакан после кадра,
 //!                                 K верхних уровней), frames_read, truncated, deals}; 404 — нет окна
@@ -65,11 +65,19 @@ pub async fn list(
             )));
         }
     };
+    // Решение 211: монета — адрес контракта (0x…, без учёта регистра) или тикер (как раньше).
+    let coin = q
+        .coin
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
+    let (ticker, address) = match coin {
+        Some(c) if crate::settings::scope::is_address_id(&c) => (None, Some(c.to_lowercase())),
+        Some(c) => (Some(c.to_uppercase()), None),
+        None => (None, None),
+    };
     let f = Filter {
-        ticker: q
-            .coin
-            .filter(|c| !c.trim().is_empty())
-            .map(|c| c.trim().to_uppercase()),
+        ticker,
+        address,
         deal,
         outcome,
     };

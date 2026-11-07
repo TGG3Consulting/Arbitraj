@@ -57,6 +57,7 @@
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |
 | `trade.rs`, `order_state.rs`, `order_fee.rs` | Ордер limit + ioc/fok, итог по orderInfo, отмена остатка, поиск по clientOid, комиссия из feeDetail |
 | `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Стаканы books1/5/15 снимками, отсев по seq (решение 109), ping, котировка |
+| `book_decided.rs` | Решение 217: снимок стакана для `quote_snapshot` — тот же, по которому котировали (поток или снимок REST котировки исполнения у пары без потока, решение 201; не старше feed.stale_after_ms), без запросов |
 
 ## Чего нет и почему (вопросы Тиграну)
 

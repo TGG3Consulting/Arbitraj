@@ -14,6 +14,7 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_decided;
 pub mod ctx;
 pub mod deposit_addr;
 pub mod deposits;
@@ -155,20 +156,21 @@ impl Venue for Bitget {
             {
                 let _ = tx.try_send(MarketEvent::Book(book.clone()));
             }
-            return book::priced(&self.ctx, &self.fees, &symbol, asset, side, qty, &book);
+            return book::priced(&self.ctx, &self.fees, &symbol, asset, side, qty, book);
         }
         self.books
             .quote(&self.ctx, &self.fees, &symbol, asset, side, qty)
             .await
     }
 
-    /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze — копия стакана из памяти, без запросов).
+    /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze_decided — копия того стакана, по которому
+    /// котировали: поток или снимок REST котировки исполнения, решение 201; без запросов в пути сделки).
     /// Ошибки: как у котировки до прохода по уровням (стакана нет, устарел, комиссия, настройка).
     async fn quote_snapshot(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
         let symbol = self.symbols.get(&self.ctx, &asset.ticker)?.symbol;
         let f = self
             .books
-            .freeze(&self.ctx, &self.fees, &symbol, asset, side)?;
+            .freeze_decided(&self.ctx, &self.fees, &symbol, asset, side)?;
         Ok(std::sync::Arc::new(f))
     }
 

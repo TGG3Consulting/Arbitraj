@@ -55,7 +55,13 @@ pub fn submit(
         .and_then(|i| Ok((i, int(core, "uncapped.queue_max")?)));
     let (interval, queue_max) = match cfg {
         Ok(c) => c,
-        Err(e) => return super::uncapped_store::failed(core, e),
+        // Сбой настройки у сделки — причина по её id (сообщение о закрытии), у кандидата — общий счётчик.
+        Err(e) => {
+            return match &key {
+                Key::Deal(id) => super::uncapped_store::deal_failed(core, id, e),
+                Key::Cand(_) => super::uncapped_store::failed(core, e),
+            };
+        }
     };
     let interval = Duration::from_millis(interval);
     let job = Job {

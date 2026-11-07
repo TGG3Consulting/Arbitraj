@@ -6,6 +6,8 @@
 //! dex.route_paths_ttl_ms: граф по версии реестра пересобирается почти на каждой котировке (каждый своп любого пула
 //! меняет версию), а набор путей за секунды подбора объёма не меняется. Состояние пулов котировка берёт свежим из
 //! реестра (quote/route_cache.rs).
+//! Решение 217 (исправление по проверке): у замороженного реестра набор путей закреплён (pinned) — пути, которые
+//! живой кэш нашёл для монеты на момент снимка, без срока.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (через graph::cached); pools/registry.rs (хранит Cache).
 //! От чего зависит: graph.rs (build), registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct
@@ -45,6 +47,9 @@ pub struct Cache {
     building: Arc<Mutex<()>>,
     /// Решение 189: наборы путей по ключу (USDT, монета, настройки перебора) и время их построения.
     paths: Arc<Mutex<HashMap<PathsKey, Stored>>>,
+    /// Решение 217 (исправление по проверке): у замороженного реестра — набор путей монеты из живого кэша на момент
+    /// снимка, без срока (снимок не стареет); граф по реестру снимка не строится, пока ключ совпадает.
+    pinned: Option<Arc<(PathsKey, Arc<Vec<Skeleton>>)>>,
 }
 
 /// Скелет пути (решение 189): по шагам — пул, токен входа, токен выхода. Без состояния пула.
@@ -57,6 +62,22 @@ type Stored = (Instant, Arc<Vec<Skeleton>>);
 pub type PathsKey = (Address, Address, String);
 
 impl Cache {
+    /// Решение 217: кэш замороженного реестра с закреплённым набором путей (см. поле pinned). Ошибок нет.
+    pub fn pinned(key: PathsKey, v: Arc<Vec<Skeleton>>) -> Cache {
+        Cache {
+            pinned: Some(Arc::new((key, v))),
+            ..Cache::default()
+        }
+    }
+
+    /// Закреплённый набор путей (решение 217), если ключ совпадает. Ошибок нет.
+    pub fn paths_pinned(&self, key: &PathsKey) -> Option<Arc<Vec<Skeleton>>> {
+        self.pinned
+            .as_ref()
+            .filter(|p| p.0 == *key)
+            .map(|p| p.1.clone())
+    }
+
     /// Набор путей, если построен не раньше `ttl` назад. Ошибок нет.
     pub fn paths_get(&self, key: &PathsKey, ttl: Duration) -> Option<Arc<Vec<Skeleton>>> {
         let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());

@@ -12,13 +12,16 @@
 //! для всех котировок монеты, включая финальную перед сделкой (её цифры — по свежему состоянию, исполнение — через
 //! предпроверку exec/precheck.rs и симуляцию бандла).
 //! Не задана dex.route_paths_ttl_ms — ТОЧНО как раньше (граф и перебор на каждой котировке).
-//! Кто вызывает: quote/graph_route.rs.
+//! Решение 217 (исправление по проверке): lookup — набор путей монеты из кэша для снимка рынка (frozen.rs); у
+//! замороженного реестра набор закреплён (graph_cache.rs pinned) и берётся без срока.
+//! Кто вызывает: quote/graph_route.rs; venues/bsc_dex/frozen.rs (lookup).
 //! От чего зависит: pools/graph.rs (cached, Cache: paths_get/paths_put), pools/registry.rs, quote/route_paths.rs,
 //! quote/route_best.rs, ctx.rs.
 //! Настройки: dex.route_paths_ttl_ms [bsc_dex] (необязательная); через вызывающего — dex.route_max_hops,
 //! dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.intermediate_tokens.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use alloy_primitives::Address;
@@ -66,8 +69,12 @@ pub fn paths(
     head: u64,
     s: &Search,
 ) -> GatewayResult<Vec<RoutePath>> {
-    let ttl = ttl(ctx)?;
     let key = key(ctx, s);
+    // Решение 217: замороженный реестр — закреплённый набор путей момента снимка (без срока и без графа).
+    if let Some(sk) = reg.graph_cache().paths_pinned(&key) {
+        return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
+    }
+    let ttl = ttl(ctx)?;
     if let Some(t) = ttl
         && let Some(sk) = reg.graph_cache().paths_get(&key, t)
     {
@@ -83,6 +90,22 @@ pub fn paths(
             .paths_put(key, found.iter().map(skeleton).collect(), t);
     }
     Ok(found)
+}
+
+/// Решение 217 (исправление по проверке): набор путей монеты, уже найденный живым кэшем и ещё не устаревший, — для
+/// снимка рынка на момент решения (venues/bsc_dex/frozen.rs). Граф не строится, перебора нет — только чтение кэша.
+/// Принимает: окружение, реестр, что перебирать. Возвращает: ключ и скелеты; None — dex.route_paths_ttl_ms не задана
+/// или набора монеты в кэше нет (устарел). Ошибки: NotConfigured — dex.route_paths_ttl_ms задана нулём.
+pub fn lookup(
+    ctx: &Ctx,
+    reg: &Registry,
+    s: &Search,
+) -> GatewayResult<Option<(PathsKey, Arc<Vec<Skeleton>>)>> {
+    let Some(t) = ttl(ctx)? else {
+        return Ok(None);
+    };
+    let key = key(ctx, s);
+    Ok(reg.graph_cache().paths_get(&key, t).map(|v| (key, v)))
 }
 
 /// Ключ набора: концы и всё, от чего зависит перебор (пределы, ширина ребра, промежуточные — по порядку). Ошибок нет.

@@ -87,7 +87,13 @@ pub async fn save(core: &Core, key: &Key, mut rec: Record) {
     let int = |n: &str| core.inner.deps.settings.integer(n, At::default());
     let (gap, keep) = match (int("uncapped.episode_gap_ms"), int("uncapped.keep_days")) {
         (Ok(g), Ok(k)) => (Duration::from_millis(g), k),
-        (Err(e), _) | (_, Err(e)) => return failed(core, e.message),
+        // Не задана настройка: у сделки — причина по её id (сообщение о закрытии), у кандидата — общий счётчик.
+        (Err(e), _) | (_, Err(e)) => {
+            return match key {
+                Key::Deal(id) => deal_failed(core, id, e.message),
+                Key::Cand(_) => failed(core, e.message),
+            };
+        }
     };
     {
         let mut s = lk(&core.inner.uncapped.stats);

@@ -110,22 +110,31 @@ impl Quoting {
     /// Ошибки: NotConfigured (режим, тикер USDT), StaleData (нет свежего блока), CoinNotChecked / CoinCheckFailed,
     /// NoRoute (нет допустимого пула — причины по пулам), узел (decimals, цена газа).
     pub async fn quote(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        // Порядок проверок как до решения 217: режим, затем свежесть блока и ленты событий.
+        self.swap_mode()?;
         self.heads.fresh(&self.ctx)?;
         self.lag.check(&self.ctx)?;
         self.priced(asset, side, qty).await
+    }
+
+    /// Режим котировки dex.swap_mode. Возвращает: «direct» или «smart».
+    /// Ошибки: NotConfigured — не задан или неизвестное значение.
+    fn swap_mode(&self) -> GatewayResult<String> {
+        let mode = self.ctx.text("dex.swap_mode")?;
+        if mode != "direct" && mode != "smart" {
+            return Err(self.ctx.not_set(
+                "dex.swap_mode",
+                format!("dex.swap_mode = «{mode}»: известны «direct» и «smart»"),
+            ));
+        }
+        Ok(mode)
     }
 
     /// Котировка без проверки свежести блока и ленты событий: у живой её делает quote, у замороженной (решение 217,
     /// frozen.rs) — снимок в момент решения. Принимает и ошибки: как quote (кроме свежести).
     pub async fn priced(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
         let ctx = &self.ctx;
-        let mode = ctx.text("dex.swap_mode")?;
-        if mode != "direct" && mode != "smart" {
-            return Err(ctx.not_set(
-                "dex.swap_mode",
-                format!("dex.swap_mode = «{mode}»: известны «direct» и «smart»"),
-            ));
-        }
+        let mode = self.swap_mode()?;
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
         let taxes = direct::taxes(self, asset)?;
         let usdt = self.tokens.usdt(ctx)?;

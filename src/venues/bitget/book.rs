@@ -2,7 +2,8 @@
 //! Что делает: последние стаканы Bitget в памяти и котировка на объём по уровням стакана
 //! (сколько заплатим или получим за Q монет, с комиссией taker нашего аккаунта).
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
-//! живая котировка — тот же снимок на один вызов (одна формула).
+//! живая котировка — тот же снимок на один вызов (одна формула). freeze_decided (quote_snapshot) — тот же стакан, по
+//! которому котировали, включая снимок REST котировки исполнения у пары без стакана потока (решение 201) — book_decided.rs.
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; решение 201 — exec_needs_rest и priced для
 //! снимка REST котировки исполнения, rest_book.rs).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
@@ -38,10 +39,13 @@ type Entry = (OrderBook, Alive, Alive);
 #[derive(Clone, Default)]
 pub struct Books {
     map: Arc<RwLock<HashMap<String, Entry>>>,
+    /// Решение 217 (исправление по проверке): снимок REST котировки исполнения пары без стакана потока (решение 201,
+    /// put_rest не заменил стакан) и когда получен (unix мс) — для снимка рынка на момент решения (freeze_decided).
+    pub(super) rest: Arc<RwLock<HashMap<String, (OrderBook, i64)>>>,
 }
 
 /// Сейчас, unix мс.
-fn now_ms() -> i64 {
+pub(super) fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
 }
 
@@ -54,7 +58,9 @@ impl Books {
     }
 
     /// Решение 201: стакан пары из снимка REST (котировка исполнения): заменяет стакан и время кадра пары, живость
-    /// соединения — прежняя. Пары в памяти нет (подписки нет) — ничего. Возвращает: заменён ли. Ошибок нет.
+    /// соединения — прежняя. Пары в памяти нет (подписки нет) — стакан потока не появляется, снимок запоминается
+    /// отдельно для снимка рынка на момент решения (решение 217, freeze_decided). Возвращает: заменён ли стакан
+    /// потока. Ошибок нет.
     pub fn put_rest(&self, book: OrderBook) -> bool {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
         match m.get(&book.asset.ticker).map(|(_, alive, _)| alive.clone()) {
@@ -63,7 +69,12 @@ impl Books {
                 m.insert(book.asset.ticker.clone(), (book, alive, seen));
                 true
             }
-            None => false,
+            None => {
+                drop(m);
+                let mut r = self.rest.write().unwrap_or_else(|p| p.into_inner());
+                r.insert(book.asset.ticker.clone(), (book, now_ms()));
+                false
+            }
         }
     }
 
@@ -157,7 +168,8 @@ impl Books {
 }
 
 /// Котировка на объём по данному стакану (поток или снимок REST): проход по уровням, комиссия taker.
-/// Принимает: окружение, кэш комиссий, символ, монету, сторону, количество, стакан. Ошибки: комиссия.
+/// Принимает: окружение, кэш комиссий, символ, монету, сторону, количество, стакан (во владение — без копии).
+/// Ошибки: комиссия.
 pub fn priced(
     ctx: &Ctx,
     fees: &Fees,
@@ -165,9 +177,9 @@ pub fn priced(
     asset: &Asset,
     side: Side,
     qty: Decimal,
-    book: &OrderBook,
+    book: OrderBook,
 ) -> GatewayResult<Quote> {
-    Ok(frozen(ctx, fees, symbol, asset, side, book.clone())?.price(qty))
+    Ok(frozen(ctx, fees, symbol, asset, side, book)?.price(qty))
 }
 
 /// Решение 217: снимок стакана и плана комиссии (та же формула у живой котировки — priced).

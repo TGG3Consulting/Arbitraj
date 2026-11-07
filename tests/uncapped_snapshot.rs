@@ -24,6 +24,7 @@ use arb::core::uncapped_types::{BASIS_LIVE_AFTER_BUY, BASIS_SNAPSHOT, understate
 use arb::gateway::frozen::{BookFee, FrozenBook, FrozenQuote, deepest, walk};
 use arb::venues::bsc_dex::num::to_units;
 use arb::venues::bsc_dex::pools::registry::Registry;
+use arb::venues::bsc_dex::pools::registry_frozen::Want;
 use arb::venues::bsc_dex::quote::pool_quote::swap;
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -104,9 +105,15 @@ async fn dex_snapshot_ignores_our_swap() {
     let rec = Rec::load("snap-dex").await;
     let reg = Registry::default();
     reg.put(rec.pool.clone());
-    let snap = reg.freeze(CAKE, &[], USDT, false);
-    assert_eq!(snap.len(), 1);
-    let fz = reg.frozen_from(snap);
+    let snap = reg.freeze(&Want {
+        coin: CAKE,
+        mids: &[],
+        usdt: USDT,
+        wbnb: None,
+        paths: &[],
+    });
+    assert_eq!(snap.entries.len(), 1);
+    let fz = Registry::frozen_from(&snap, None);
     let r = PoolRef::Contract(PAIR);
     let amount = to_units(d("100"), 18).unwrap();
     let buy = |reg: &Registry| swap(&rec.ctx, &reg.get(&r).unwrap(), USDT, true, amount).unwrap();

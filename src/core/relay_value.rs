@@ -29,7 +29,7 @@ fn cex_costs(
     net: &str,
     qty: Decimal,
 ) -> Result<Vec<Cost>, String> {
-    let info = venue::network(core, from, &a.ticker, net).ok_or_else(|| {
+    let info = venue::network(core, from, a, net).ok_or_else(|| {
         format!(
             "{}: сети {net} у {} нет в справочнике сетей",
             from.0, a.ticker
@@ -70,7 +70,7 @@ fn deposit_ok(core: &Core, to: &VenueId, a: &Asset, arrive: Decimal) -> Result<(
         return Ok(());
     }
     let net = super::transfers::network(core, a, to)?;
-    let info = venue::network(core, to, &a.ticker, &net).ok_or_else(|| {
+    let info = venue::network(core, to, a, &net).ok_or_else(|| {
         format!(
             "{}: сети {net} у {} нет в справочнике сетей",
             to.0, a.ticker
@@ -104,9 +104,13 @@ pub async fn value_at(
     let net = super::transfers::network(core, a, from)?;
     let costs = if is_dex(core, from) {
         let gw = core.inner.deps.gw.get(from).await.map_err(|e| e.message)?;
-        gw.withdraw_cost(a, &net, qty)
+        // Решение 211: площадке — её тикер монеты; затраты — обратно в имя ядра.
+        let on = super::venue_ticker::on_venue(core, a, from);
+        let c = gw
+            .withdraw_cost(&on, &net, qty)
             .await
-            .map_err(|e| e.message)?
+            .map_err(|e| e.message)?;
+        super::venue_ticker::costs_back(core, a, from, c)
     } else {
         cex_costs(core, from, to, a, &net, qty)?
     };

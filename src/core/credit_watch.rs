@@ -190,10 +190,11 @@ pub fn register(
     }
 }
 
-/// Тот же актив: тикер совпадает, и адреса контрактов совпадают, если известны оба. Ошибок нет.
+/// Тот же актив (решение 211): адреса известны у обоих — по адресу; иначе — по тикеру (событие площадки без адреса
+/// уже переведено в монету ядра — credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
 pub fn same_asset(a: &Asset, b: &Asset) -> bool {
-    a.ticker == b.ticker
-        && (a.bsc_contract.is_none()
-            || b.bsc_contract.is_none()
-            || a.bsc_contract == b.bsc_contract)
+    match (a.bsc_contract, b.bsc_contract) {
+        (Some(x), Some(y)) => x == y,
+        _ => a.ticker == b.ticker,
+    }
 }

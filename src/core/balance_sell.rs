@@ -91,7 +91,9 @@ async fn sell(core: &Core, v: &VenueId, account: &str, ticker: &str) -> Result<S
     let _mark = mark(core, v, &a)?;
     let free = row_free(gw.as_ref(), account, ticker).await?;
     let moved = if chk::needs_move(gw.as_ref(), account)? {
-        Some(super::to_trading::move_from(gw.as_ref(), account, &a, free).await?)
+        // Решение 211: площадке — её тикер монеты.
+        let on = super::venue_ticker::on_venue(core, &a, v);
+        Some(super::to_trading::move_from(gw.as_ref(), account, &on, free).await?)
     } else {
         None
     };

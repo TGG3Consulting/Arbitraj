@@ -121,30 +121,40 @@ impl DirCtx {
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
         let transit_s = super::transit::seconds(core, dir)?;
-        let pair_a = venue::pair_rules(core, &dir.buy_on, &dir.asset.ticker)?;
-        let pair_b = venue::pair_rules(core, &dir.sell_on, &dir.asset.ticker)?;
+        // Решение 211: пара площадки — по её тикеру монеты (Presence::ticker).
+        let pair_a = venue::pair_rules(core, &dir.buy_on, &a.ticker)?;
+        let pair_b = venue::pair_rules(core, &dir.sell_on, &b.ticker)?;
         // Решение 66: комиссии вывода и возврата — из последнего справочника сетей ядра (не из копии в справочнике
         // монет); справочник старше venue.networks_stale_s — сделки нет.
-        let latest = |p: &Presence, v: &VenueId, t: &str, n: &str| -> Result<Option<_>, String> {
+        let latest = |p: &Presence, v: &VenueId, n: &str| -> Result<Option<_>, String> {
             match p.info {
                 None => Ok(None),
-                Some(_) => venue::network(core, v, t, n)
-                    .ok_or(format!("{}: сети {n} у {t} нет в справочнике сетей", v.0))
+                Some(_) => venue::network(core, v, &dir.asset, n)
+                    .ok_or(format!(
+                        "{}: сети {n} у {} нет в справочнике сетей",
+                        v.0, p.ticker
+                    ))
                     .and_then(|i| venue::fresh(core, &i).map(|_| Some(i))),
             }
         };
-        let ticker = &dir.asset.ticker;
         let mut a = a;
-        a.info = latest(&a, &dir.buy_on, ticker, &net_a)?;
+        a.info = latest(&a, &dir.buy_on, &net_a)?;
         let mut b = b;
-        b.info = latest(&b, &dir.sell_on, ticker, &net_b)?;
+        b.info = latest(&b, &dir.sell_on, &net_b)?;
         // Решение 118 (Я-3): налог перевода при выводе с биржи; не измерен — расчёта нет (причина в тексте).
         let transfer_tax = match a.info {
             Some(_) => Some(super::transfer_tax::pct(core, &dir.sell_on, &dir.asset)?),
             None => None,
         };
-        let usdt_b = if cx_return(&mode) {
-            latest(&b, &dir.sell_on, &qb, &net_b)?
+        let usdt_b = if cx_return(&mode) && b.info.is_some() {
+            Some(
+                venue::quote_network(core, &dir.sell_on, &qb, &net_b)
+                    .ok_or(format!(
+                        "{}: сети {net_b} у {qb} нет в справочнике сетей",
+                        dir.sell_on.0
+                    ))
+                    .and_then(|i| venue::fresh(core, &i).map(|_| i))?,
+            )
         } else {
             None
         };

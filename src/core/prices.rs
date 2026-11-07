@@ -16,7 +16,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{CostKind, Direction, Quote, Side};
+use crate::core::types::{CostKind, Direction, Quote, Side, VenueId};
 use crate::settings::read::At;
 
 use super::deps::Deps;
@@ -27,17 +27,22 @@ use crate::gateway::contract::VenueKind;
 /// Котировки обеих сторон направления на объём qty.
 /// Принимает: зависимости, направление, объём. Возвращает: (покупка на A, продажа на B).
 /// Ошибки: текст причины (площадка не подключена, нет данных, данные устарели).
-pub async fn quotes(deps: &Deps, dir: &Direction, qty: Decimal) -> Result<(Quote, Quote), String> {
+pub async fn quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote, Quote), String> {
     // Решение 132: DEX — кошелёк строки маппинга направления.
+    let deps = &core.inner.deps;
     let a = super::dex_account::venue_dir(deps, dir, &dir.buy_on).await?;
     let b = super::dex_account::venue_dir(deps, dir, &dir.sell_on).await?;
+    // Решение 211: каждой площадке — её тикер монеты; ответы — обратно в монету ядра.
+    let vt = |v: &VenueId| super::venue_ticker::on_venue(core, &dir.asset, v);
+    let (on_a, on_b) = (vt(&dir.buy_on), vt(&dir.sell_on));
     let (qa, qb) = tokio::join!(
-        a.quote(&dir.asset, Side::Buy, qty),
-        b.quote(&dir.asset, Side::Sell, qty)
+        a.quote(&on_a, Side::Buy, qty),
+        b.quote(&on_b, Side::Sell, qty)
     );
     let qa = qa.map_err(|e| format!("{}: {}", dir.buy_on.0, e.message))?;
     let qb = qb.map_err(|e| format!("{}: {}", dir.sell_on.0, e.message))?;
-    Ok((qa, qb))
+    let back = |v: &VenueId, q| super::venue_ticker::quote_back(core, &dir.asset, v, q);
+    Ok((back(&dir.buy_on, qa), back(&dir.sell_on, qb)))
 }
 
 /// Котировки обеих сторон на тике: сторона DEX — из памяти, если годится (решение 109). Ошибки: как у quotes.
@@ -85,10 +90,13 @@ async fn side_quote(
     };
     // Решение 132: DEX — кошелёк строки маппинга направления; нет строки — «нет кошелька DEX в маппинге».
     let a = super::dex_account::venue_dir(deps, dir, venue).await?;
+    // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
+    let on = super::venue_ticker::on_venue(core, &dir.asset, venue);
     let q = a
-        .quote(&dir.asset, side, qty)
+        .quote(&on, side, qty)
         .await
         .map_err(|e| format!("{}: {}", venue.0, e.message))?;
+    let q = super::venue_ticker::quote_back(core, &dir.asset, venue, q);
     if let Some((key, generation, ttl)) = cached {
         lk(&core.inner.quote_cache).put(key, qty, q.clone(), generation, ttl);
     }

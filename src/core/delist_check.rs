@@ -38,7 +38,8 @@ pub async fn check(core: &Core, d: &Direction, now: DateTime<Utc>) -> Result<(),
         if got.is_unknown() {
             continue;
         }
-        let Some(item) = got.find(&d.asset.ticker) else {
+        // Решение 211: делистинг площадки — по её тикеру монеты.
+        let Some(item) = got.find(&super::venue_ticker::ticker_on(core, &d.asset, v)) else {
             continue;
         };
         let at = At {

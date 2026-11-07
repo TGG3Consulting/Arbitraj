@@ -26,9 +26,13 @@ pub fn worst_price(
     avg: Decimal,
 ) -> Result<Decimal, String> {
     match kind(core, v)? {
-        VenueKind::Cex => rd(&core.inner.market)
-            .deepest_price(v, &a.ticker, side, qty)
-            .ok_or_else(|| format!("{}: глубины стакана {} не хватает на {qty}", v.0, a.ticker)),
+        // Решение 211: стакан площадки — по её тикеру монеты.
+        VenueKind::Cex => {
+            let t = super::venue_ticker::ticker_on(core, a, v);
+            rd(&core.inner.market)
+                .deepest_price(v, &t, side, qty)
+                .ok_or_else(|| format!("{}: глубины стакана {t} не хватает на {qty}", v.0))
+        }
         VenueKind::Dex => {
             let slip = core
                 .inner

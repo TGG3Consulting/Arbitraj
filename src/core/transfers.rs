@@ -45,7 +45,8 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
         .get(venue)
         .and_then(|l| {
             l.iter()
-                .find(|i| i.asset.ticker == asset.ticker && i.asset.bsc_contract.is_some())
+                // Решение 211: по адресу (Asset == по адресу), тикер площадки может отличаться от имени ядра.
+                .find(|i| &i.asset == asset && i.asset.bsc_contract.is_some())
         })
         .map(|i| i.network.clone());
     let own = entry.and_then(|e| {
@@ -145,8 +146,11 @@ async fn go(
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
     let net_to = network(core, asset, to)?;
+    // Решение 211: каждой площадке — её тикер монеты (адрес тот же).
+    let on_from = super::venue_ticker::on_venue(core, asset, from);
+    let on_to = super::venue_ticker::on_venue(core, asset, to);
     let address = gw_to
-        .deposit_address(asset, &net_to)
+        .deposit_address(&on_to, &net_to)
         .await
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
     // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
@@ -158,7 +162,7 @@ async fn go(
         let nets = rd(&core.inner.networks);
         let info = nets.get(from).and_then(|l| {
             l.iter()
-                .find(|i| i.asset.ticker == asset.ticker && i.network == net_from)
+                .find(|i| &i.asset == asset && i.network == net_from)
         });
         super::costs_withdraw::floor_precision(qty, info)
     };
@@ -174,7 +178,7 @@ async fn go(
     }
     let req = WithdrawRequest {
         venue: from.clone(),
-        asset: asset.clone(),
+        asset: on_from.clone(),
         network: net_from.clone(),
         address,
         amount: qty,
@@ -191,7 +195,7 @@ async fn go(
     let created = loop {
         attempt += 1;
         // Решение 180: лимит выводов биржи-отправителя (withdraw_limit.rs; не задан — сразу, как раньше).
-        super::withdraw_limit::take(core, deal, from, &asset.ticker).await;
+        super::withdraw_limit::take(core, deal, from, &on_from.ticker).await;
         match gw_from.withdraw(req.clone()).await {
             Ok(t) => break t,
             Err(e) if super::transfer_locked::again(core, deal, from, &e, &mut locked).await => {}
@@ -205,7 +209,7 @@ async fn go(
                     // Вывода не будет — получатель снимает ожидание поступления (DEX: wallet/inflows.rs). Исход
                     // неизвестен — перевод мог уйти: ожидание остаётся (до ручной проверки или срока).
                     if e.code != ErrorCode::OutcomeUnknown {
-                        let _ = gw_to.deposit_abandoned(asset).await;
+                        let _ = gw_to.deposit_abandoned(&on_to).await;
                     }
                     return Err(OpError::from(&e));
                 }
@@ -246,7 +250,7 @@ async fn go(
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
-                let _ = gw_to.deposit_abandoned(asset).await;
+                let _ = gw_to.deposit_abandoned(&on_to).await;
                 return Err(OpError::from(&e));
             }
             Err(e) if e.message != last => {

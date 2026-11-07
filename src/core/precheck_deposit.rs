@@ -22,7 +22,9 @@ pub async fn ready(core: &Core, d: &Direction) -> Result<(), String> {
         .get(&d.sell_on)
         .await
         .map_err(|e| e.message)?;
-    gw.deposit_address(&d.asset, &net)
+    // Решение 211: площадке — её тикер монеты.
+    let on = super::venue_ticker::on_venue(core, &d.asset, &d.sell_on);
+    gw.deposit_address(&on, &net)
         .await
         .map(|_| ())
         .map_err(|e| {

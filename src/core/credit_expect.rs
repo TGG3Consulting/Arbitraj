@@ -74,7 +74,7 @@ pub async fn arrival(
     net: &str,
     qty: Decimal,
 ) -> Result<Decimal, String> {
-    let costs = match super::dirctx_venue::network(core, from, &asset.ticker, net) {
+    let costs = match super::dirctx_venue::network(core, from, asset, net) {
         Some(info) => {
             // Решение 199: фиксированная + доля суммы вывода (допущение — из суммы; сверка зачисления ловит иное).
             let fee = info.fee_for(qty).ok_or_else(|| {
@@ -92,9 +92,13 @@ pub async fn arrival(
         }
         None => {
             let gw = core.inner.deps.gw.get(from).await.map_err(|e| e.message)?;
-            gw.withdraw_cost(asset, net, qty)
+            // Решение 211: площадке — её тикер монеты; затраты — обратно в имя ядра.
+            let on = super::venue_ticker::on_venue(core, asset, from);
+            let c = gw
+                .withdraw_cost(&on, net, qty)
                 .await
-                .map_err(|e| format!("{}: стоимость вывода: {}", from.0, e.message))?
+                .map_err(|e| format!("{}: стоимость вывода: {}", from.0, e.message))?;
+            super::venue_ticker::costs_back(core, asset, from, c)
         }
     };
     let in_coin: Decimal = costs

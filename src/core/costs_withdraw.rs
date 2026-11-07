@@ -62,13 +62,21 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
             info.asset.ticker.clone(),
             false,
         );
-        return Ok(vec![fee, tax]);
+        // Решение 211: затраты справочника A — в тикере A; ядро сравнивает затраты с именем монеты ядра.
+        let (from, to) = (&cx.a.ticker, &cx.dir.asset.ticker);
+        return Ok(super::venue_ticker::rename_costs(vec![fee, tax], from, to));
     }
     let d = &cx.dir;
     // Решение 132: DEX — кошелёк строки маппинга направления (нет строки — отказ NO_WALLET).
     let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
-    a.withdraw_cost(&d.asset, &cx.net_a, amount)
+    // Решение 211: площадке — монета с её тикером; затраты — обратно в имя ядра.
+    let on = crate::core::types::Asset {
+        ticker: cx.a.ticker.clone(),
+        bsc_contract: d.asset.bsc_contract,
+    };
+    a.withdraw_cost(&on, &cx.net_a, amount)
         .await
+        .map(|c| super::venue_ticker::rename_costs(c, &cx.a.ticker, &d.asset.ticker))
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
 }
 

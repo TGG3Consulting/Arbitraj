@@ -50,3 +50,94 @@ pub fn ticker_on(core: &Core, asset: &Asset, venue: &VenueId) -> String {
 pub fn asset_by_venue_ticker(core: &Core, venue: &VenueId, ticker: &str) -> Option<Asset> {
     rd(&core.inner.tickers).get(venue, ticker)
 }
+
+/// Ключ баланса монеты у площадки (контракт Venue::balance): у DEX — адрес контракта «0x…» (фаза 2b: DEX ищет монету по
+/// адресу; монета без адреса — её тикер), у биржи — её тикер монеты. Ошибок нет.
+pub fn balance_key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
+    let dex = rd(&core.inner.kinds)
+        .iter()
+        .any(|(v, k)| v == venue && *k == crate::gateway::contract::VenueKind::Dex);
+    match asset.bsc_contract {
+        Some(a) if dex => format!("{a:#x}"),
+        _ => ticker_on(core, asset, venue),
+    }
+}
+
+/// Монета из события площадки (баланс, перевод) — в монету ядра: тикер площадки известен справочнику и адрес не
+/// противоречит — монета ядра (адрес, показное имя); иначе как есть (USDT, BNB, монета вне справочника). Ошибок нет.
+pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
+    match asset_by_venue_ticker(core, venue, &asset.ticker) {
+        Some(c) if asset.bsc_contract.is_none() || asset.bsc_contract == c.bsc_contract => c,
+        _ => asset,
+    }
+}
+
+/// Имя в ответе площадки (затрата «в монете», fee_asset, баланс) — в имя ядра: тикер этой монеты на площадке →
+/// показное имя монеты ядра; иное (USDT, BNB, другие монеты) — как есть. Принимает: монету ядра, площадку, имя.
+/// Ошибок нет.
+pub fn name_back(core: &Core, asset: &Asset, venue: &VenueId, name: &str) -> String {
+    let on = ticker_on(core, asset, venue);
+    if name == on {
+        asset.ticker.clone()
+    } else {
+        name.to_string()
+    }
+}
+
+/// Затраты площадки по монете — имена в имена ядра (name_back). Ошибок нет.
+pub fn costs_back(
+    core: &Core,
+    asset: &Asset,
+    venue: &VenueId,
+    costs: Vec<crate::core::types::Cost>,
+) -> Vec<crate::core::types::Cost> {
+    rename_costs(costs, &ticker_on(core, asset, venue), &asset.ticker)
+}
+
+/// Затраты с именем `from` (тикер площадки) — на имя `to` (имя ядра); иные — как есть. Чистая функция (DirCtx уже
+/// знает тикер площадки в Presence::ticker — ядро не нужно). Ошибок нет.
+pub fn rename_costs(
+    costs: Vec<crate::core::types::Cost>,
+    from: &str,
+    to: &str,
+) -> Vec<crate::core::types::Cost> {
+    costs
+        .into_iter()
+        .map(|mut c| {
+            if c.asset == from {
+                c.asset = to.to_string();
+            }
+            c
+        })
+        .collect()
+}
+
+/// Котировка площадки — в монету ядра: Quote.asset — монета ядра, затраты в монете — имя ядра. Ошибок нет.
+pub fn quote_back(
+    core: &Core,
+    asset: &Asset,
+    venue: &VenueId,
+    mut q: crate::core::types::Quote,
+) -> crate::core::types::Quote {
+    q.costs = costs_back(core, asset, venue, std::mem::take(&mut q.costs));
+    q.asset = asset.clone();
+    q
+}
+
+impl super::dirctx::DirCtx {
+    /// Решение 211: монета для вызова площадки A — её тикер (Presence::ticker), адрес монеты ядра. Ошибок нет.
+    pub fn on_a(&self) -> Asset {
+        Asset {
+            ticker: self.a.ticker.clone(),
+            bsc_contract: self.dir.asset.bsc_contract,
+        }
+    }
+
+    /// Решение 211: монета для вызова площадки B (как on_a). Ошибок нет.
+    pub fn on_b(&self) -> Asset {
+        Asset {
+            ticker: self.b.ticker.clone(),
+            bsc_contract: self.dir.asset.bsc_contract,
+        }
+    }
+}

@@ -35,10 +35,15 @@ pub fn capture(core: &Core, calc: &Calc, levels: usize) -> Snap {
         .flat_map(|r| r.legs.iter().flat_map(|l| &l.hops))
         .map(|h| &h.pool)
         .collect();
-    let market = rd(&core.inner.market);
-    let books = [&d.buy_on, &d.sell_on]
+    // Решение 211: стакан биржи — по тикеру площадки (переводчик до блокировки рынка).
+    let on: Vec<_> = [&d.buy_on, &d.sell_on]
         .into_iter()
-        .filter_map(|v| market.book(v, &d.asset.ticker))
+        .map(|v| (v, super::venue_ticker::ticker_on(core, &d.asset, v)))
+        .collect();
+    let market = rd(&core.inner.market);
+    let books = on
+        .iter()
+        .filter_map(|(v, t)| market.book(v, t))
         .map(|b| OrderBook {
             bids: b.bids.iter().take(levels).cloned().collect(),
             asks: b.asks.iter().take(levels).cloned().collect(),

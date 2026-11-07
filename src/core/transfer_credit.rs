@@ -77,7 +77,9 @@ pub async fn wait(
             ));
             return t;
         }
-        match gw.deposit_status(leg.asset, &leg.tx).await {
+        // Решение 211: площадке — её тикер монеты.
+        let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
+        match gw.deposit_status(&on, &leg.tx).await {
             Ok(t) if t.status == TransferStatus::Credited => {
                 done(core, leg, &t, Utc::now(), "статус депозита").await;
                 to_trading(core, leg, &gw, &t).await;
@@ -148,7 +150,8 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
     let mut attempt = 0;
     loop {
         attempt += 1;
-        match gw.deposit_to_trading(leg.asset, t.amount).await {
+        let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
+        match gw.deposit_to_trading(&on, t.amount).await {
             Ok(None) => return,
             Ok(Some(text)) => {
                 let text = format!("{}: {text}", leg.deal);

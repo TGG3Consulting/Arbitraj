@@ -5,6 +5,9 @@
 //! Адрес для перевода на KuCoin (for_deposit) — только с зачислением на TRADE (решение 137, Тигран 04.11: адрес BSC с
 //! зачислением на TRADE создаётся в кабинете; перевод main → trade после депозита по умолчанию не нужен). Адрес MAIN
 //! принимается только при venue.deposit_to_spot = да (запасной вариант: перевод main → trade после зачисления).
+//! Решение 208 (07.11.2026, Тигран: «в офф доках об этом прямо написано»): пустой ответ GET — адрес создаётся
+//! запросом Add Deposit Address V3 (create) с зачислением на TRADE; раньше — отказ «создайте в кабинете» (живые
+//! сделки UMXM и QAIT: перегон на KuCoin не состоялся, у всех монет кроме USDT ответ GET был пустым).
 //! Кто вызывает: mod.rs (deposit_address), fund_move.rs (на какой счёт приходит депозит).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.deposit_to_spot [kucoin] (да — допускается адрес MAIN).
@@ -45,7 +48,7 @@ pub struct DepositAddrs {
 impl DepositAddrs {
     /// Что делает: адрес депозита монеты в сети — из памяти или запросом.
     /// Принимает: окружение, монету, chainId. Возвращает: DepositAddr.
-    /// Ошибки: InvalidAddress — адреса в сети нет (создать в кабинете KuCoin) или он требует memo; связь, коды KuCoin.
+    /// Ошибки: InvalidAddress — адрес не создан (решение 208) или требует memo; связь, коды KuCoin.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<DepositAddr> {
         let key = (asset.ticker.clone(), chain.to_string());
         if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
@@ -66,19 +69,18 @@ impl DepositAddrs {
                     .collect()
             })
             .unwrap_or_default();
-        let pick = list
+        let found = list
             .iter()
             .find(|r| num::text_opt(r, "to").is_some_and(|t| t.eq_ignore_ascii_case("TRADE")))
             .or_else(|| list.first())
-            .ok_or_else(|| {
-                invalid(
-                    ctx,
-                    format!(
-                        "У {} нет адреса депозита KuCoin в сети {chain} — создайте его в кабинете KuCoin (Deposit)",
-                        asset.ticker
-                    ),
-                )
-            })?;
+            .map(|r| (*r).clone());
+        // Решение 208: «If the returned data is empty, you may need to add the deposit address first» — адреса нет,
+        // создаём его официальным запросом (Add Deposit Address V3), с зачислением на торговый счёт.
+        let owned = match found {
+            Some(v) => v,
+            None => create(ctx, asset, chain).await?,
+        };
+        let pick = &owned;
         if let Some(memo) = num::text_opt(pick, "memo").filter(|m| !m.trim().is_empty()) {
             return Err(invalid(
                 ctx,
@@ -122,6 +124,50 @@ pub async fn for_deposit(
         return Err(invalid(ctx, m));
     }
     Ok(a.address)
+}
+
+/// Что делает: решение 208 — создать адрес депозита монеты в сети с зачислением на торговый счёт.
+/// Официально — Add Deposit Address (V3) POST /api/v3/deposit-address/create (право General, пул Management, вес 20)
+/// https://www.kucoin.com/docs-new/rest/account-info/deposit/add-deposit-address-v3: пример тела {"currency": "TON",
+/// "chain": "ton", "to": "trade"}, ответ data {address, memo, chainId, to, currency, chainName}.
+/// Принимает: окружение, монету, chainId. Возвращает: объект адреса из ответа.
+/// Ошибки: InvalidAddress — в ответе нет адреса или сеть другая; связь, коды KuCoin (как у rest::signed).
+async fn create(ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<serde_json::Value> {
+    let body = serde_json::json!({ "currency": asset.ticker, "chain": chain, "to": "trade" });
+    let path = "/api/v3/deposit-address/create";
+    let data = rest::signed(
+        ctx,
+        Method::POST,
+        path,
+        vec![],
+        Some(body),
+        Op::Other,
+        Pool::Management,
+    )
+    .await?;
+    let same_chain = num::text_opt(&data, "chainId").as_deref() == Some(chain);
+    if num::text_opt(&data, "address").is_none() || !same_chain {
+        return Err(invalid(
+            ctx,
+            format!(
+                "KuCoin не создал адрес депозита {} в сети {chain}",
+                asset.ticker
+            ),
+        )
+        .with_raw(data.to_string()));
+    }
+    let m = format!(
+        "Создан адрес депозита KuCoin {} в сети {chain} (зачисление на {})",
+        asset.ticker,
+        num::text_opt(&data, "to").unwrap_or_default()
+    );
+    ctx.log(
+        crate::storage::journal::Level::Info,
+        "venue.deposit_address",
+        m,
+    )
+    .await;
+    Ok(data)
 }
 
 /// Ошибка InvalidAddress с площадкой KuCoin.

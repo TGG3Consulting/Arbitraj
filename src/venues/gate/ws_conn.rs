@@ -16,6 +16,8 @@
 //! сторожа ядра: «переподписать пару» — unsubscribe + subscribe этой пары (тот же id = номер пары; Spot WebSocket v4:
 //! event subscribe | unsubscribe, https://www.gate.com/docs/developers/apiv4/ws/en/), соседи не трогаются;
 //! «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
+//! Решение 213: в учёт свежести с кадром стакана идёт его lastUpdateId (на каждом кадре, и с тем же номером) — ядро
+//! сравнивает его с id ответа GET /spot/order_book?with_id=true (book_version.rs, там же основание «одна шкала»).
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -145,7 +147,7 @@ pub async fn session(
                 match m {
                     Msg::Depth { symbol, update_id, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
-                        w.feed.frame(&asset.ticker);
+                        w.feed.frame_ver(&asset.ticker, Some(update_id), None);
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
                         if last.get(&symbol).is_some_and(|&id| update_id <= id) {
                             books.touch(&asset.ticker);

@@ -37,7 +37,8 @@
 | `order_rules.rs` | Правила ордера — одни у ордера и у check_order (решение 134): сторона через API, ioc/fok, шаги, пределы; свой text «t-…» |
 | `trade.rs`, `order_state.rs` | Ордер limit + ioc или fok (venue.order_time_in_force); итог из полей ордера; опрос, отмена по сроку, поиск по text (ожидающие → отмена → законченные) |
 | `withdraw_notice.rs` | Вывод в статусе FAIL — журнал и событие exec.withdraw_fail_pending, один раз на вывод (вывод не проваливается — ждём) |
-| `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WebSocket стаканов spot.order_book (снимки N уровней, отсев по lastUpdateId — решение 109), spot.ping, котировка, свежесть по соединению и кадру пары |
+| `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WebSocket стаканов spot.order_book (снимки N уровней, отсев по lastUpdateId — решение 109), spot.ping, котировка, свежесть по соединению и кадру пары (решение 213: или подтверждение тихой пары до срока) |
+| `book_version.rs` | Решение 213: версия стакана пары по REST для сторожа ядра — GET /spot/order_book?with_id=true (id, update, current); id и lastUpdateId кадра — одна шкала |
 | `user_stream.rs`, `account_update.rs` | Поток балансов spot.balances с подписью (решение 76) |
 | `tap.rs`, `feed.rs`, `tap_snap.rs` | Окна (решение 125): кадры стакана, spot.trades, spot.order_book_update + снимок REST по U/u |
 

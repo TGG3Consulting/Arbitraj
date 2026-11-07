@@ -345,3 +345,62 @@ fn wallet_fee_gt() {
     // fees::Rates::parse и plan: off — coin даёт taker_fee, gt — отказ; on — gt даёт gt_taker_fee, coin — отказ.
     // И fee_currency / gt_fee ордера при каждом варианте (комиссия покупки в монете при coin).
 }
+
+/// Решение 213: версия стакана по REST (book_version.rs) и сравнение с lastUpdateId кадра (core/feed_confirm.rs) на
+/// живой записи 04.11. Снимок REST CAKE_USDT (id 2065088898, current 1793740713013) сделан за ~27 с до первого кадра
+/// spot.order_book (lastUpdateId 2065089062): книга с кадра не новее — пара тихая, подтверждена; кадр старше снимка
+/// — кадры потеряны. Основание «одна шкала»: lastUpdateId кадра spot.order_book равен u кадра spot.order_book_update
+/// с тем же t (проверяется здесь же), а u по документации сравнивается с id снимка REST.
+#[test]
+fn book_version_vs_frame_id() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::PairHealth;
+    use arb::venues::gate::book_version;
+
+    let v = book_version::parse(&json("gate_spot_order_book_CAKE_USDT.json"));
+    assert_eq!(
+        (v.id, v.server_ms, v.changed_ms),
+        (Some(2065088898), Some(1793740713013), Some(1793740712410))
+    );
+    // lastUpdateId (spot.order_book) == u (spot.order_book_update) при одном t.
+    let (mut ob, mut obu) = (HashMap::new(), HashMap::new());
+    for f in ws_frames() {
+        let m: Value = serde_json::from_str(&f).expect("JSON");
+        let r = &m["result"];
+        match (m["channel"].as_str(), m["event"].as_str()) {
+            (Some("spot.order_book"), Some("update")) => {
+                ob.insert(r["t"].as_i64(), r["lastUpdateId"].as_i64());
+            }
+            (Some("spot.order_book_update"), Some("update")) => {
+                obu.insert(r["t"].as_i64(), r["u"].as_i64());
+            }
+            _ => {}
+        }
+    }
+    let same: Vec<_> = ob.iter().filter(|(t, _)| obu.contains_key(*t)).collect();
+    assert!(same.len() > 50, "общих t: {}", same.len());
+    assert!(same.iter().all(|(t, id)| obu[*t] == **id));
+    let first = ws_frames()
+        .iter()
+        .find_map(|f| match depth::parse(f) {
+            Msg::Depth { update_id, .. } => Some(update_id),
+            _ => None,
+        })
+        .expect("кадр стакана");
+    assert_eq!(first, 2065089062);
+    let p = |id: i64| PairHealth {
+        ticker: "CAKE".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: Some(id),
+        last_changed_ms: None,
+    };
+    assert_eq!(verdict(&p(first), &v, 2), Verdict::Quiet);
+    // Книга менялась за 603 мс до ответа (current − update), подписка — 10 с назад: кадры потеряны.
+    assert!(matches!(
+        verdict(&p(2065088897), &v, 10_000),
+        Verdict::Lost(_)
+    ));
+    // Подписка — 0,5 с назад, книга не менялась 603 мс: менялась до подписки, после — нет.
+    assert_eq!(verdict(&p(2065088897), &v, 500), Verdict::Unchanged);
+}

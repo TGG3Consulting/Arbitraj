@@ -2,11 +2,14 @@
 //! Что проверяет: решение 202 — чистая логика сторожа пар (feed_watch_logic.rs): прогрев, мёртвая пара и круги
 //! переподписки с паузой, «ожила», переподключение только пачки с долей мёртвых выше порога, блок идущей сделкой,
 //! предел переподключений за час, площадка без переподписки одной пары. Без моков: вход — снимок свежести формата
-//! стыка (gateway/feed_health.rs), числа — советы Тиграна (docs/FIRST_RUN.md).
+//! стыка (gateway/feed_health.rs), числа — советы Тиграна (docs/FIRST_RUN.md). Площадка с кадрами по расписанию без
+//! подтверждения по REST (scheduled = true, confirm = false) — поведение решения 202 не изменилось (решение 213).
+//! Подтверждение тихой пары (решение 213) — feed_confirm_tests.rs.
 //! Кто вызывает: cargo test.
 
 use std::collections::HashMap;
 
+use super::feed_confirm::QuietCfg;
 use super::feed_watch_logic::{Action, Cfg, State, decide};
 use crate::gateway::feed_health::{ConnHealth, FeedHealth, PairHealth};
 
@@ -22,6 +25,7 @@ fn cfg() -> Cfg {
         dead_pct: 30,
         reconnect_min_ms: 120_000,
         reconnect_max_per_hour: 3,
+        quiet: QuietCfg::Off("не задана venue.quiet_confirm_min_ms".into()),
     }
 }
 
@@ -37,6 +41,8 @@ fn conn(name: &str, now: i64, pairs: &[(&str, Option<i64>)]) -> ConnHealth {
                 ticker: t.to_string(),
                 last_ms: *l,
                 since_ms: 0,
+                last_id: None,
+                last_changed_ms: None,
             })
             .collect(),
     }
@@ -46,6 +52,7 @@ fn health(per_pair: bool, conns: Vec<ConnHealth>) -> FeedHealth {
     FeedHealth {
         scheduled: true,
         per_pair,
+        confirm: false,
         conns,
     }
 }
@@ -203,6 +210,7 @@ fn hour_limit_and_no_per_pair() {
         let h = FeedHealth {
             scheduled: true,
             per_pair: false,
+            confirm: false,
             conns: vec![conn("m1", n, &[("A", None), ("B", Some(n))])],
         };
         for a in decide(&h, n, &c, &none, &mut st) {

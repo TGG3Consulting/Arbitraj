@@ -12,13 +12,23 @@
 //!   venue.conn_dead_pct % пар соединения и нет идущей сделки по паре этого соединения — переподключить только его;
 //!   не чаще venue.conn_reconnect_min_ms, не больше venue.conn_reconnect_max_per_hour за час, сверх — «нужен человек».
 //!
-//! Кто вызывает: core/feed_watch.rs. Шаг по пачке — feed_watch_conn.rs.
-//! От чего зависит: gateway/feed_health.rs.
+//! Решение 213 (Тигран, 07.11.2026: «тишина пары ≠ смерть») — что делать с молчащей по порогу парой, решает режим:
+//! - адаптер умеет подтверждать по REST (FeedHealth.confirm) и заданы venue.quiet_confirm_* — спросить биржу
+//!   (Action::Check, feed_confirm.rs): книга не менялась — тихая, подтверждена; новее — кадры потеряны → круги
+//!   переподписки как выше (после паузы круга — снова проверка, а не новый круг вслепую);
+//! - иначе, если по документации кадры идут по расписанию (FeedHealth.scheduled) — как в решении 202;
+//! - иначе — только журнал (раз на пару), не переподписывать вслепую.
+//!
+//! Кто вызывает: core/feed_watch.rs. Шаг по пачке — feed_watch_conn.rs; подтверждение — feed_confirm.rs.
+//! От чего зависит: gateway/feed_health.rs, feed_confirm.rs, feed_watch_action.rs (действия).
 //! Настройки: значения приходят в Cfg (читает feed_watch.rs).
 
 use std::collections::{HashMap, HashSet};
 
 use crate::gateway::feed_health::FeedHealth;
+
+use super::feed_confirm::{self as confirm, QuietCfg};
+pub use super::feed_watch_action::Action;
 
 /// Кругов попыток по паре, после которых пара считается в доле мёртвых пачки — из ТЗ Тиграна («после двух неудачных
 /// раундов»), правило, а не порог: число попыток и паузы — настройки.
@@ -37,47 +47,37 @@ pub struct Cfg {
     pub dead_pct: i64,
     pub reconnect_min_ms: i64,
     pub reconnect_max_per_hour: usize,
+    /// Решение 213: подтверждение тихой пары по REST.
+    pub quiet: QuietCfg,
 }
 
-/// Что сделать.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Action {
-    /// Переподписать пару: попытка в круге (с 1) и номер круга (с 1).
-    Resub {
-        conn: String,
-        ticker: String,
-        attempt: u32,
-        round: u32,
-    },
-    /// Пара ожила после попыток.
-    Recovered { conn: String, ticker: String },
-    /// Переподключить соединение: мёртвых пар из всех.
-    Reconnect {
-        conn: String,
-        dead: usize,
-        total: usize,
-    },
-    /// Переподключить нельзя — по паре соединения идёт сделка (id сделок).
-    Blocked {
-        conn: String,
-        dead: usize,
-        total: usize,
-        deals: Vec<String>,
-    },
-    /// Предел переподключений за час исчерпан — нужен человек.
-    GiveUp {
-        conn: String,
-        dead: usize,
-        total: usize,
-        count: usize,
-    },
+/// Что делать с молчащей парой (решение 213).
+enum Mode {
+    /// Спросить биржу: venue.quiet_confirm_min_ms, venue.quiet_confirm_max_per_s.
+    Confirm(i64, i64),
+    /// Кадры по расписанию — переподписка (решение 202).
+    Resub,
+    /// Только журнал — причина.
+    Journal(String),
+}
+
+/// Режим площадки. Ошибок нет.
+fn mode(h: &FeedHealth, c: &Cfg) -> Mode {
+    match (&c.quiet, h.confirm) {
+        (QuietCfg::Confirm { min_ms, max_per_s }, true) => Mode::Confirm(*min_ms, *max_per_s),
+        _ if h.scheduled => Mode::Resub,
+        (QuietCfg::Off(why), true) => Mode::Journal(format!("подтверждение по REST выключено: {why}")),
+        (_, false) => Mode::Journal(
+            "адаптер не подтверждает стакан по REST, а кадры биржи по документации не по расписанию".into(),
+        ),
+    }
 }
 
 #[derive(Debug, Default, Clone)]
 pub(super) struct PairSt {
     attempts: u32,
     rounds: u32,
-    next_at: i64,
+    pub(super) next_at: i64,
 }
 
 /// Состояние сторожа одной площадки между проходами.
@@ -85,6 +85,9 @@ pub(super) struct PairSt {
 pub struct State {
     pub(super) pairs: HashMap<(String, String), PairSt>,
     pub(super) conns: HashMap<String, super::feed_watch_conn::ConnSt>,
+    /// Решение 213: проверки тихих пар и ведро запросов площадки.
+    pub(super) checks: HashMap<(String, String), confirm::CheckSt>,
+    pub(super) bucket: confirm::Bucket,
 }
 
 /// Один проход. Принимает: снимок свежести, сейчас (unix мс), настройки, монеты идущих сделок площадки
@@ -104,6 +107,8 @@ pub fn decide(
         .flat_map(|k| k.pairs.iter().map(|p| (k.conn.clone(), p.ticker.clone())))
         .collect();
     st.pairs.retain(|k, _| present.contains(k));
+    st.checks.retain(|k, _| present.contains(k));
+    let mode = mode(h, c);
     st.conns.retain(|k, _| h.conns.iter().any(|x| &x.conn == k));
     for conn in &h.conns {
         let live = conn.alive_ms.is_some_and(|a| now - a <= c.live_ms);
@@ -112,6 +117,7 @@ pub fn decide(
             continue;
         }
         let mut dead = 0usize;
+        let mut quiet_new = vec![];
         for p in &conn.pairs {
             let key = (conn.conn.clone(), p.ticker.clone());
             let fresh = p.last_ms.is_some_and(|l| now - l <= dead_after);
@@ -126,6 +132,10 @@ pub fn decide(
                         ticker: p.ticker.clone(),
                     });
                 }
+                // Решение 213: замолчит снова — проверка сразу (ведро позволит), прежний срок не держит.
+                if let Some(cs) = st.checks.get_mut(&key) {
+                    cs.next_at = 0;
+                }
                 continue;
             }
             if !h.per_pair {
@@ -137,24 +147,17 @@ pub fn decide(
             // Идёт круг попыток — следующая по расписанию (venue.pair_resub_interval_ms), пока не придёт кадр;
             // вне круга пара должна снова оказаться мёртвой (после прогрева).
             let in_round = st.pairs.get(&key).is_some_and(|s| s.attempts > 0);
-            if in_round || dead_pair(p, now, c, dead_after) {
-                let s = st.pairs.entry(key.clone()).or_default();
-                if now >= s.next_at {
-                    if s.attempts < c.attempts {
-                        s.attempts += 1;
-                        s.next_at = now + c.interval_ms;
-                        out.push(Action::Resub {
-                            conn: conn.conn.clone(),
-                            ticker: p.ticker.clone(),
-                            attempt: s.attempts,
-                            round: s.rounds + 1,
-                        });
-                    } else {
-                        s.rounds += 1;
-                        s.attempts = 0;
-                        s.next_at = now + c.pause_ms;
-                    }
+            let silent = dead_pair(p, now, c, dead_after);
+            match &mode {
+                _ if in_round => round_step(st, &key, now, c, &mut out),
+                Mode::Resub if silent => round_step(st, &key, now, c, &mut out),
+                Mode::Confirm(min_ms, per_s) if silent => {
+                    confirm::want(st, &key, now, *min_ms, *per_s, &mut out)
                 }
+                Mode::Journal(_) if silent && confirm::note_quiet(st, &key) => {
+                    quiet_new.push(p.ticker.clone())
+                }
+                _ => {}
             }
             if st
                 .pairs
@@ -164,9 +167,52 @@ pub fn decide(
                 dead += 1;
             }
         }
+        if let (Mode::Journal(why), false) = (&mode, quiet_new.is_empty()) {
+            out.push(Action::QuietNoConfirm {
+                conn: conn.conn.clone(),
+                why: why.clone(),
+                tickers: quiet_new,
+            });
+        }
         super::feed_watch_conn::step(conn, dead, now, c, deals, st, &mut out);
     }
     out
+}
+
+/// Шаг круга переподписки пары (решение 202): очередная попытка по интервалу или конец круга и пауза. Ошибок нет.
+fn round_step(st: &mut State, key: &(String, String), now: i64, c: &Cfg, out: &mut Vec<Action>) {
+    let s = st.pairs.entry(key.clone()).or_default();
+    if now < s.next_at {
+        return;
+    }
+    if s.attempts < c.attempts {
+        s.attempts += 1;
+        s.next_at = now + c.interval_ms;
+        out.push(Action::Resub {
+            conn: key.0.clone(),
+            ticker: key.1.clone(),
+            attempt: s.attempts,
+            round: s.rounds + 1,
+        });
+    } else {
+        s.rounds += 1;
+        s.attempts = 0;
+        s.next_at = now + c.pause_ms;
+    }
+}
+
+/// Решение 213: кадры потеряны (ответ биржи) — начать круг переподписки, если пара не в круге и не в паузе.
+/// Ошибок нет.
+pub(super) fn start_round(
+    st: &mut State,
+    key: &(String, String),
+    now: i64,
+    c: &Cfg,
+    out: &mut Vec<Action>,
+) {
+    if st.pairs.get(key).is_none_or(|s| s.attempts == 0) {
+        round_step(st, key, now, c, out);
+    }
 }
 
 /// Мёртвая ли пара вне круга попыток: прогрев прошёл и кадра нет дольше порога (от последнего кадра или (пере)подписки —

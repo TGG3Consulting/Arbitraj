@@ -31,7 +31,7 @@ fn coin_with_own_pools_read_is_checked_right_away() {
     ];
     // У A свои пулы дочитаны, у B — нет; у C достоверный пул появился.
     let pending = |a: Address| if a == B { 3 } else { 0 };
-    let valid = |t: &str| t == "C";
+    let valid = |a: Address| a == C;
     // Без сигнала — только дочитавшие свои пулы.
     assert_eq!(due(&waiting, false, pending, valid), vec![(A, "A".into())]);
     // По сигналу «пул готов» — и ждущие пула, у которых он появился; сбой узла — не здесь (tax.retry_s).

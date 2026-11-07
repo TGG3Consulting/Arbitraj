@@ -28,13 +28,13 @@ pub fn due(
     waiting: &[Waiting],
     signal: bool,
     pending: impl Fn(Address) -> usize,
-    has_deep: impl Fn(&str) -> bool,
+    has_deep: impl Fn(Address) -> bool,
 ) -> Vec<(Address, String)> {
     waiting
         .iter()
-        .filter(|(a, t, w)| match w {
+        .filter(|(a, _, w)| match w {
             Why::Loading => pending(*a) == 0,
-            Why::NoPool | Why::Shallow => signal && has_deep(t),
+            Why::NoPool | Why::Shallow => signal && has_deep(*a),
             _ => false,
         })
         .map(|(a, t, _)| (*a, t.clone()))

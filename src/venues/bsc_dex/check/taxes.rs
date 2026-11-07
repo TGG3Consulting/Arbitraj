@@ -68,7 +68,7 @@ pub async fn check_coin(
     usdt: Address,
     heads: &Heads,
 ) -> (CoinCheck, Outcome) {
-    let out = match run(ctx, reg, checks, tokens, sources, ticker, usdt, heads).await {
+    let out = match run(ctx, reg, checks, tokens, sources, coin, usdt, heads).await {
         Ok(o) => o,
         Err(e) if matches!(e.code, ErrorCode::NotConfigured | ErrorCode::SecretsLocked) => {
             Outcome::Config(e.message, e.setting.into_iter().collect())
@@ -112,7 +112,7 @@ async fn run(
     checks: &Checks,
     tokens: &Tokens,
     sources: &Sources,
-    ticker: &str,
+    coin: Address,
     usdt: Address,
     heads: &Heads,
 ) -> GatewayResult<Outcome> {
@@ -125,7 +125,7 @@ async fn run(
         )
     })?;
     let (pools, mut env, shallow) =
-        super::taxes_util::probe_pools(ctx, reg, tokens, ticker, usdt_dec)?;
+        super::taxes_util::probe_pools(ctx, reg, tokens, &coin, usdt_dec)?;
     if pools.is_empty() {
         // Пробовать нечем: причины по каждому пулу — глубина не считается, мелкий (с цифрами), спит (решение 73).
         let mut why = env;
@@ -185,7 +185,7 @@ async fn run(
                     f.gas_approve_sell = m.gas_sell.map(|g| g.1);
                     f.taxes = pt.clone();
                 });
-                checks.set_transfer_gas(ticker, m.gas_transfer);
+                checks.set_transfer_gas(coin, m.gas_transfer);
                 // Нативная монета BNB (решение 62): газ WRAP/UNWRAP и нативного перевода.
                 native_probe::after(ctx, checks, e, (source, wallet), amount, heads, &m).await;
                 match pt {

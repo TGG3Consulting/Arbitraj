@@ -40,7 +40,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
         // площадку выключили и включили). Прежде он сбрасывал ВСЕ монеты в «не проверено» — у монеты в середине сделки
         // продажа падала «налоги ещё не проверены» (RWA 04.11 21:59, сделка в ручное управление). Известный итог (прошла
         // / не прошла) той же монеты по тому же адресу остаётся в памяти и действует, пока новая проверка его не заменит.
-        let kept = p.checks.coin(ticker).is_some_and(|c| {
+        let kept = p.checks.coin(addr).is_some_and(|c| {
             c.asset.bsc_contract == Some(*addr)
                 && matches!(c.taxes, CheckState::Known(_) | CheckState::Failed { .. })
         });
@@ -106,7 +106,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             };
             // Свои пулы дочитались, пока шла прошлая проверка (сигнал мог прийти без ждущего) — сразу.
             let pending = |a: Address| p.loading.pending(&p, a);
-            let mut now = tax_wait::due(&waiting, false, pending, |t| has_deep(&p, t));
+            let mut now = tax_wait::due(&waiting, false, pending, |a| has_deep(&p, &a));
             // Отметка «отстают» уже снята — ждавшие её сразу (сигнал мог прийти до постановки в ожидание).
             now.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
             let list: Vec<(Address, String)> = if !now.is_empty() {
@@ -115,12 +115,12 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                 tokio::select! {
                     _ = tokio::time::sleep_until(next) => break,
                     _ = queue.notified() => {
-                        let (tickers, _) = queue.take();
-                        all.iter().filter(|(_, t)| tickers.contains(t)).cloned().collect()
+                        let (coins, _) = queue.take();
+                        all.iter().filter(|(a, _)| coins.contains(a)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
                     _ = p.signals.ready.notified() => {
-                        let mut list = tax_wait::due(&waiting, true, pending, |t| has_deep(&p, t));
+                        let mut list = tax_wait::due(&waiting, true, pending, |a| has_deep(&p, &a));
                         list.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
                         list
                     }

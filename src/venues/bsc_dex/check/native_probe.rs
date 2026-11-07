@@ -74,7 +74,7 @@ pub async fn after(
     }
     let res = match run(ctx, e, source, wallet, usdt_amount, heads, m).await {
         Ok(Ok((buy, sell, transfer))) => {
-            checks.set_native_transfer_gas(&e.ticker, transfer);
+            checks.set_native_transfer_gas(e.coin, transfer);
             Ok((buy, sell))
         }
         Ok(Err(why)) => Err(why),

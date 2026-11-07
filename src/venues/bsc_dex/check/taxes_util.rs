@@ -109,11 +109,12 @@ pub fn probe_pools(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
-    ticker: &str,
+    coin: &Address,
     usdt_dec: u8,
 ) -> GatewayResult<(Vec<Entry>, Vec<String>, Vec<String>)> {
     let (mut pools, mut env, mut shallow) = (Vec::new(), Vec::new(), Vec::new());
-    for e in reg.by_ticker(ticker).into_iter().filter(|e| e.valid) {
+    // Решение 211: пулы монеты — по адресу контракта.
+    for e in reg.by_coin(coin).into_iter().filter(|e| e.valid) {
         let label = super::super::pools::depth_book::label(&e.pool.reference);
         match select::deep_side(ctx, reg, tokens, &e, usdt_dec, select::Need::Both) {
             Ok(None) => pools.push(e),
@@ -167,7 +168,7 @@ pub async fn note_wait(
     if matches!(prev, Some(CheckState::Known(_) | CheckState::Failed { .. })) {
         return;
     }
-    let old = p.checks.coin(&c.asset.ticker).and_then(|x| x.wait);
+    let old = p.checks.coin_of(&c.asset).and_then(|x| x.wait);
     if old == c.wait {
         return;
     }

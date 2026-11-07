@@ -127,8 +127,21 @@ async fn big_registry_same_quote_no_copy_in_time() {
             "копия записи скопировала тики"
         );
     }
-    assert_eq!(q.reg.by_ticker("BULK7").len(), 1);
-    assert_eq!(q.reg.by_ticker("CAKE").len(), 6);
+    // Решение 211: пулы монеты — по адресу; запись с тем же тикером «CAKE», но другим адресом — другая монета.
+    let mut bulk7 = [0u8; 20];
+    bulk7[0] = 0x10;
+    bulk7[16..20].copy_from_slice(&7u32.to_be_bytes());
+    assert_eq!(q.reg.by_coin(&Address::from(bulk7)).len(), 1);
+    // Пулы CAKE — 3 (route_common: у записей промежуточных монет тоже тикер «CAKE» — по тикеру было 6, по адресу 3).
+    assert_eq!(q.reg.by_coin(&CAKE).len(), 3);
+    let mut twin = p.registry.get(&PoolRef::Contract(CAKE_USDT_PCS)).unwrap();
+    twin.coin = Address::from(bulk7);
+    twin.ticker = "CAKE".into();
+    twin.pool.reference = PoolRef::Contract(Address::repeat_byte(0xa9));
+    twin.pool.token0 = twin.coin;
+    p.registry.put(twin);
+    assert_eq!(q.reg.by_coin(&CAKE).len(), 3, "тикер-двойник попал к CAKE");
+    assert_eq!(q.reg.by_coin(&Address::from(bulk7)).len(), 2);
     // Первая котировка после записи строит граф (один раз на состояние реестра), следующие берут готовый.
     let t0 = Instant::now();
     let big = quote(&q, 5_000).await;

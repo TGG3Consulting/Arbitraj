@@ -114,7 +114,7 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     };
     if let Err(e) = res {
         p.reg.update(&r, |x| x.valid = false);
-        super::invalidated::send(p, entry.ticker.clone());
+        super::invalidated::send(p, entry.coin, entry.ticker.clone());
         return Err(End::Broken(e.message));
     }
     match p.reg.get(&r) {
@@ -175,13 +175,14 @@ pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
 
 /// Пулы пачки недостоверны: отметка в реестре и событие Invalidated по каждой монете.
 pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {
-    let mut tickers = BTreeSet::new();
+    // Решение 211: одна монета — один адрес (раньше — набор тикеров).
+    let mut coins = std::collections::BTreeMap::new();
     for (f, t) in pools {
         p.reg.update(&f.reference, |e| e.valid = false);
-        tickers.insert(t.clone());
+        coins.entry(f.coin).or_insert_with(|| t.clone());
     }
-    for t in tickers {
-        super::invalidated::send(p, t);
+    for (coin, t) in coins {
+        super::invalidated::send(p, coin, t);
     }
 }
 

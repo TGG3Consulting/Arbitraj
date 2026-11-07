@@ -92,7 +92,7 @@ pub async fn check(
             let why = format!("пулы монеты ещё загружаются ({left})");
             super::taxes_util::note_wait(
                 p,
-                &p.checks.coin(ticker).map(|c| c.taxes),
+                &p.checks.coin(addr).map(|c| c.taxes),
                 super::taxes_util::loading_check(p, ticker, *addr, why),
             )
             .await;
@@ -109,7 +109,7 @@ pub async fn check(
             };
             super::taxes_util::note_wait(
                 p,
-                &p.checks.coin(ticker).map(|c| c.taxes),
+                &p.checks.coin(addr).map(|c| c.taxes),
                 super::taxes_util::loading_check(p, ticker, *addr, why),
             )
             .await;
@@ -134,7 +134,7 @@ pub async fn check(
             &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
         )
         .await;
-        let prev = p.checks.coin(ticker).map(|c| c.taxes);
+        let prev = p.checks.coin(addr).map(|c| c.taxes);
         match out {
             Outcome::Known(_) => {
                 pass.ok += 1;
@@ -160,9 +160,9 @@ pub async fn check(
                 // уже известный итог (прошла / не прошла) из-за помехи не меняется.
                 super::taxes_util::note_wait(p, &prev, c).await;
                 // Нет глубокого пула — своя причина (не сбой узла): повтор по «пул готов», не каждые tax.retry_s.
-                let why = if !has_valid(p, ticker) {
+                let why = if !has_valid(p, addr) {
                     Why::NoPool
-                } else if deep(p, ticker) == Deep::No {
+                } else if deep(p, addr) == Deep::No {
                     // Глубина не считается (Deep::Unknown) — помеха, а не «мелкий»: повтор через tax.retry_s (Node).
                     Why::Shallow
                 } else {

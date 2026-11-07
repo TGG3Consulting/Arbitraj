@@ -196,11 +196,12 @@ fn tax_free(
     }
     tokens.remove(base);
     tokens.iter().all(|a| {
-        let Some(t) = tickers.get(a) else {
+        // Решение 211: налоги — по адресу; тикер нужен только чтобы токен был монетой подписки.
+        if !tickers.contains_key(a) {
             return false;
-        };
+        }
         matches!(
-            q.checks.coin(t).map(|c| c.taxes),
+            q.checks.coin(a).map(|c| c.taxes),
             Some(CheckState::Known(tx))
                 if tx.buy_pct.is_zero() && tx.sell_pct.is_zero() && tx.transfer_pct.is_zero()
         )

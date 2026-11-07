@@ -83,10 +83,10 @@ pub async fn run(p: Pools, queue: Queue) {
                 _ = &mut ready => {}
                 _ = queue.notified() => {
                     // «Перепроверить» — только пулы переданных монет; «новые пулы» — пулы без итога (check/recheck.rs).
-                    let (tickers, new_pools) = queue.take();
+                    let (coins, new_pools) = queue.take();
                     for r in p.reg.refs() {
                         let Some(e) = p.reg.get(&r) else { continue };
-                        if tickers.contains(&e.ticker) || (new_pools && p.checks.pool(&r).quoter.none()) {
+                        if coins.contains(&e.coin) || (new_pools && p.checks.pool(&r).quoter.none()) {
                             fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
                     }

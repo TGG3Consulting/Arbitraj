@@ -133,7 +133,8 @@ impl Quoting {
             .reg
             .by_pair(coin, usdt)
             .into_iter()
-            .filter(|e| e.ticker == asset.ticker)
+            // Решение 211: пулы найдены по адресу монеты — фильтр по тикеру не нужен (показное имя монеты ядра может
+            // не совпадать с тикером в реестре пулов).
             // BNB (решение 62) — только пулы V2/V3: путь через V4 / Infinity не проверен живой записью.
             .filter(|e| !native || super::exec::native::pool_ok(e.pool.kind))
             .collect();

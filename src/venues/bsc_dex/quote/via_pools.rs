@@ -82,7 +82,7 @@ impl Via<'_> {
 
     /// Промежуточная монета проверена и без налогов (см. шапку). Возвращает: Ok или причину.
     pub fn mid_ok(&self, m: &Mid) -> Result<(), String> {
-        match self.q.checks.coin(&m.ticker).map(|c| c.taxes) {
+        match self.q.checks.coin(&m.address).map(|c| c.taxes) {
             Some(CheckState::Known(t))
                 if t.buy_pct.is_zero() && t.sell_pct.is_zero() && t.transfer_pct.is_zero() =>
             {

@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/pools/registry_index.rs
 //! Что делает: содержимое реестра пулов (pools/registry.rs) — записи за `Arc` и индексы «пара (монета, встречный
-//! токен) → пулы» и «тикер монеты → пулы». Решение 129 (голодание расчётов): раньше by_pair / by_ticker / pair_marks
+//! токен) → пулы» и «монета (адрес) → пулы» (решение 211: раньше «тикер монеты → пулы»; монета — адрес контракта,
+//! тикер — только подпись). Решение 129 (голодание расчётов): раньше by_pair / by_ticker / pair_marks
 //! проходили ВЕСЬ реестр под блокировкой на каждый вызов (котировка DEX — десятки вызовов, у MEXC тысячи пулов);
 //! теперь — только пулы пары или монеты. Индексы держатся при каждой записи (insert, update, retain).
 //! Кто вызывает: pools/registry.rs (под своей блокировкой).
@@ -24,13 +25,13 @@ pub struct Pools {
     map: HashMap<PoolRef, Arc<Entry>>,
     /// (монета, встречный токен) → пулы.
     pairs: HashMap<(Address, Address), HashSet<PoolRef>>,
-    /// Тикер монеты → пулы.
-    tickers: HashMap<String, HashSet<PoolRef>>,
+    /// Монета (адрес контракта) → пулы (решение 211).
+    coins: HashMap<Address, HashSet<PoolRef>>,
 }
 
-/// Ключи индексов записи: пара и тикер.
-fn keys(e: &Entry) -> ((Address, Address), String) {
-    ((e.coin, e.usdt), e.ticker.clone())
+/// Ключи индексов записи: пара и монета.
+fn keys(e: &Entry) -> ((Address, Address), Address) {
+    ((e.coin, e.usdt), e.coin)
 }
 
 impl Pools {
@@ -63,10 +64,10 @@ impl Pools {
             .filter_map(|r| self.map.get(r))
     }
 
-    /// Пулы монеты по тикеру (по индексу). Ошибок нет.
-    pub fn ticker(&self, ticker: &str) -> impl Iterator<Item = &Arc<Entry>> {
-        self.tickers
-            .get(ticker)
+    /// Пулы монеты по адресу контракта (по индексу, решение 211). Ошибок нет.
+    pub fn coin(&self, coin: &Address) -> impl Iterator<Item = &Arc<Entry>> {
+        self.coins
+            .get(coin)
             .into_iter()
             .flatten()
             .filter_map(|r| self.map.get(r))
@@ -82,7 +83,7 @@ impl Pools {
         self.map.insert(r, Arc::new(e));
     }
 
-    /// Изменение записи на месте; индексы правятся, если функция сменила монету, встречный токен или тикер.
+    /// Изменение записи на месте; индексы правятся, если функция сменила монету или встречный токен.
     /// Возвращает: результат функции; None — пула нет.
     pub fn update<T>(&mut self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let slot = self.map.get_mut(r)?;
@@ -114,9 +115,9 @@ impl Pools {
 
     /// Ставит пул в индексы. Ошибок нет.
     fn index(&mut self, r: &PoolRef, e: &Entry) {
-        let (pair, ticker) = keys(e);
+        let (pair, coin) = keys(e);
         self.pairs.entry(pair).or_default().insert(r.clone());
-        self.tickers.entry(ticker).or_default().insert(r.clone());
+        self.coins.entry(coin).or_default().insert(r.clone());
     }
 
     /// Снимает пул из индексов по записи. Ошибок нет.
@@ -126,17 +127,17 @@ impl Pools {
     }
 
     /// Снимает пул из индексов по ключам; пустые наборы удаляются. Ошибок нет.
-    fn unkeys(&mut self, r: &PoolRef, (pair, ticker): &((Address, Address), String)) {
+    fn unkeys(&mut self, r: &PoolRef, (pair, coin): &((Address, Address), Address)) {
         if let Some(s) = self.pairs.get_mut(pair) {
             s.remove(r);
             if s.is_empty() {
                 self.pairs.remove(pair);
             }
         }
-        if let Some(s) = self.tickers.get_mut(ticker) {
+        if let Some(s) = self.coins.get_mut(coin) {
             s.remove(r);
             if s.is_empty() {
-                self.tickers.remove(ticker);
+                self.coins.remove(coin);
             }
         }
     }

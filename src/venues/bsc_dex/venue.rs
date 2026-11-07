@@ -237,8 +237,10 @@ impl Venue for BscDex {
     /// Кнопка «Перепроверить»: налоги, крючки и сверка с квотером — только этих монет (check/recheck.rs; итоги —
     /// события CoinCheck / PoolCheck). Ошибок нет.
     async fn recheck_coins(&self, assets: Vec<Asset>) -> GatewayResult<()> {
-        let tickers: Vec<String> = assets.into_iter().map(|a| a.ticker).collect();
-        self.p.wake.coins(&tickers);
+        // Решение 211: монета — адрес контракта (у монеты без адреса пулов на DEX нет — проверять нечего).
+        let coins: Vec<alloy_primitives::Address> =
+            assets.into_iter().filter_map(|a| a.bsc_contract).collect();
+        self.p.wake.coins(&coins);
         Ok(())
     }
 

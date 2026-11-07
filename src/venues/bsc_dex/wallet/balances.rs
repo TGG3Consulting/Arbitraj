@@ -84,7 +84,8 @@ pub async fn all(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Balance>> {
 
 /// Баланс одного актива (решение 113) — та же строка, что дал бы all(), но 1–2 запроса вместо запроса по каждому
 /// токену. BNB: eth_getBalance (free) и, если WBNB нативной монеты в списке токенов, его balanceOf (locked, решение 62).
-/// Токен: его balanceOf. Принимает: тикер. Возвращает: None — актива нет среди известных токенов.
+/// Токен: его balanceOf. Принимает: тикер монеты DEX или адрес её контракта «0x…» (решение 211: монета — адрес; тикер
+/// DEX — показное имя монеты ядра). Возвращает: None — актива нет среди известных токенов.
 /// Ошибки: ключ кошелька, узел, контракт.
 pub async fn single(ctx: &Ctx, tokens: &Tokens, asset: &str) -> GatewayResult<Option<Balance>> {
     let owner = signer::address(ctx)?;
@@ -97,7 +98,12 @@ pub async fn single(ctx: &Ctx, tokens: &Tokens, asset: &str) -> GatewayResult<Op
         }
         return Ok(Some(row));
     }
-    match list.iter().find(|t| t.ticker == asset) {
+    // Решение 211: адрес контракта — главный ключ; тикер — как раньше (контракт шлюза balance(&str)).
+    let by_addr = asset.parse::<Address>().ok();
+    match list
+        .iter()
+        .find(|t| by_addr == Some(t.address) || (by_addr.is_none() && t.ticker == asset))
+    {
         Some(t) => Ok(Some(balance(
             ctx,
             &t.ticker,

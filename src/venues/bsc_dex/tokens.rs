@@ -35,9 +35,11 @@ pub struct Tokens {
 }
 
 impl Tokens {
-    /// Заменяет список токенов монетами из подписки ядра; монеты без адреса в BSC пропускаются.
+    /// Заменяет список токенов монетами из подписки ядра; монеты без адреса в BSC пропускаются. Решение 211: монета —
+    /// адрес контракта, тикер — её показное имя; один адрес — одна запись (первая), даже если ядро прислало его дважды.
     /// Принимает: монеты. Ошибок нет.
     pub fn set(&self, assets: &[Asset]) {
+        let mut seen = std::collections::HashSet::new();
         let list = assets
             .iter()
             .filter_map(|a| {
@@ -46,6 +48,7 @@ impl Tokens {
                     address,
                 })
             })
+            .filter(|t| seen.insert(t.address))
             .collect();
         *self.list.write().unwrap_or_else(|p| p.into_inner()) = list;
     }

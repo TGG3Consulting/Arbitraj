@@ -68,7 +68,8 @@ async fn threshold_change_recomputes_and_wakes_shallow() {
     let d = p.registry.depth().last(&r).unwrap();
     assert!(!d.deep_buy && !d.deep_sell);
     let waiting = vec![(e.coin, "AAVE".to_string(), Why::Shallow)];
-    let deep_now = |t: &str| arb::venues::bsc_dex::check::tax_deep::has_deep(&pools, t);
+    let deep_now =
+        |a: alloy_primitives::Address| arb::venues::bsc_dex::check::tax_deep::has_deep(&pools, &a);
     assert!(due(&waiting, true, |_| 0, deep_now).is_empty());
     // Порог снизили до 200 — событий у пула нет; пачка пересчитывает вердикт по карте (как depth_sync.rs).
     ctx.settings

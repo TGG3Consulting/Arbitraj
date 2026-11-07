@@ -108,10 +108,13 @@ pub async fn run(p: Pools) {
     }
 }
 
-/// Итог в checks под тикером USDT. Сбой перепроверки (429, таймаут, нет источника) прошлый измеренный налог не
+/// Итог в checks под адресом USDT (решение 211; раньше — под тикером). Адреса USDT нет (не задан) — не пишется. Сбой перепроверки (429, таймаут, нет источника) прошлый измеренный налог не
 /// стирает (как check/tax_pass.rs): остаётся Known, меняется только причина ожидания. Ошибок нет.
 fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
-    let prev = p.checks.coin(ticker);
+    let Ok(usdt) = p.tokens.usdt(&p.ctx) else {
+        return;
+    };
+    let prev = p.checks.coin(&usdt);
     let (taxes, checked_at) = match res {
         Ok(t) => (CheckState::Known(t.clone()), Some(Utc::now())),
         Err(_) => match prev {
@@ -123,7 +126,7 @@ fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
         venue: p.ctx.venue(),
         asset: Asset {
             ticker: ticker.to_string(),
-            bsc_contract: p.tokens.usdt(&p.ctx).ok(),
+            bsc_contract: Some(usdt),
         },
         taxes,
         source: SOURCE.into(),
@@ -165,6 +168,6 @@ async fn measure(p: &Pools) -> GatewayResult<Option<TokenTaxes>> {
     let r = simulate::run(ctx, &calls(usdt, source, wallet, amount), at).await?;
     let (taxes, gas) = read(&r, amount, dec)
         .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{ticker}: {why}")))?;
-    p.checks.set_transfer_gas(&ticker, gas);
+    p.checks.set_transfer_gas(usdt, gas);
     Ok(Some(taxes))
 }

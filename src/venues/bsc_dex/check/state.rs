@@ -7,9 +7,14 @@
 //! quote/select.rs (читают).
 //! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side).
 //! Настройки: нет.
+//! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
+//! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
+//! тикерами — одна проверка. Нативная монета (решение 62) — по адресу своей обёртки (dex.native_wrapped).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+
+use alloy_primitives::Address;
 
 use rust_decimal::Decimal;
 
@@ -69,63 +74,72 @@ pub struct PoolFacts {
 /// Хранилище итогов проверок. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Checks {
-    coins: Arc<RwLock<HashMap<String, CoinCheck>>>,
+    coins: Arc<RwLock<HashMap<Address, CoinCheck>>>,
     pools: Arc<RwLock<HashMap<PoolRef, PoolFacts>>>,
     /// Газ перевода монеты из кошелька (gasUsed пробного перевода) — для стоимости вывода.
-    transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
+    transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
     /// Газ нативного перевода BNB из кошелька (решение 62) — пробный перевод с value, check/native_probe.rs.
-    native_transfer_gas: Arc<RwLock<HashMap<String, u64>>>,
+    native_transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
 }
 
 impl Checks {
-    /// Записывает проверку монеты (по тикеру). Ошибок нет.
+    /// Записывает проверку монеты — по адресу контракта (решение 211). Монета без адреса не записывается: налоги
+    /// меряются пробным обменом в пуле, а пул всегда знает адрес токена. Ошибок нет.
     pub fn set_coin(&self, c: CoinCheck) {
+        let Some(a) = c.asset.bsc_contract else {
+            return;
+        };
         self.coins
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(c.asset.ticker.clone(), c);
+            .insert(a, c);
     }
 
-    /// Проверка монеты. None — не было.
-    pub fn coin(&self, ticker: &str) -> Option<CoinCheck> {
+    /// Проверка монеты по адресу контракта. None — не было.
+    pub fn coin(&self, token: &Address) -> Option<CoinCheck> {
         self.coins
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .cloned()
     }
 
-    /// Записывает газ перевода монеты. Ошибок нет.
-    pub fn set_transfer_gas(&self, ticker: &str, gas: u64) {
+    /// Проверка монеты ядра (по её адресу; монета без адреса — None). Ошибок нет.
+    pub fn coin_of(&self, asset: &crate::core::types::Asset) -> Option<CoinCheck> {
+        asset.bsc_contract.and_then(|a| self.coin(&a))
+    }
+
+    /// Записывает газ перевода монеты (по адресу контракта). Ошибок нет.
+    pub fn set_transfer_gas(&self, token: Address, gas: u64) {
         self.transfer_gas
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(ticker.to_string(), gas);
+            .insert(token, gas);
     }
 
-    /// Газ перевода монеты. None — не измерен.
-    pub fn transfer_gas(&self, ticker: &str) -> Option<u64> {
+    /// Газ перевода монеты (по адресу контракта). None — не измерен.
+    pub fn transfer_gas(&self, token: &Address) -> Option<u64> {
         self.transfer_gas
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .copied()
     }
 
-    /// Записывает газ нативного перевода монеты (решение 62). Ошибок нет.
-    pub fn set_native_transfer_gas(&self, ticker: &str, gas: u64) {
+    /// Записывает газ нативного перевода монеты (решение 62; ключ — адрес обёртки). Ошибок нет.
+    pub fn set_native_transfer_gas(&self, token: Address, gas: u64) {
         self.native_transfer_gas
             .write()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(ticker.to_string(), gas);
+            .insert(token, gas);
     }
 
-    /// Газ нативного перевода монеты. None — не измерен.
-    pub fn native_transfer_gas(&self, ticker: &str) -> Option<u64> {
+    /// Газ нативного перевода монеты (по адресу обёртки). None — не измерен.
+    pub fn native_transfer_gas(&self, token: &Address) -> Option<u64> {
         self.native_transfer_gas
             .read()
             .unwrap_or_else(|p| p.into_inner())
-            .get(ticker)
+            .get(token)
             .copied()
     }
 

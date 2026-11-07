@@ -92,11 +92,11 @@ pub async fn hooks(p: Pools, queue: Queue) {
                     }
                 }
                 _ = queue.notified() => {
-                    let (tickers, new_pools) = queue.take();
+                    let (coins, new_pools) = queue.take();
                     for r in p.reg.refs() {
                         let Some(e) = p.reg.get(&r) else { continue };
                         let fresh_pool = new_pools && p.checks.pool(&r).hook.is_none();
-                        if tickers.contains(&e.ticker) || fresh_pool {
+                        if coins.contains(&e.coin) || fresh_pool {
                             fresh.check(&r, one(&p, &r, &mut first)).await;
                         }
                     }

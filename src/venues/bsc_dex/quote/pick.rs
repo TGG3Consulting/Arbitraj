@@ -52,9 +52,11 @@ pub async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
         .filter(|c| c.asset == BNB && !c.in_price)
         .map(|c| c.amount)
         .sum();
+    // Решение 211: пулы BNB — по адресу обёртки нативной монеты (dex.native_wrapped, решение 62), не по тикеру.
+    let wbnb = super::super::exec::native::wrapped(ctx)?.1;
     for e in q
         .reg
-        .by_ticker(BNB)
+        .by_coin(&wbnb)
         .into_iter()
         .filter(|e| e.valid && e.usdt == usdt)
     {

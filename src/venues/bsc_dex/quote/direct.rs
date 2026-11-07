@@ -84,7 +84,8 @@ pub fn best(
 
 /// Налоги монеты из проверки. Ошибки: CoinNotChecked, CoinCheckFailed.
 pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
-    match q.checks.coin(&asset.ticker).map(|c| c.taxes) {
+    // Решение 211: налоги — по адресу контракта монеты.
+    match q.checks.coin_of(asset).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => Ok(t),
         Some(CheckState::Failed { reason }) => Err(q.ctx.err(
             ErrorCode::CoinCheckFailed,

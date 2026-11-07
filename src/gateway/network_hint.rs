@@ -5,9 +5,9 @@
 //! режиме подсказки settings/hint.rs — незаданная venue.bsc_network читается пустой, адаптер отдаёт сети без BSC, и
 //! из них берутся имена (поле network ядра — то, с чем ядро сравнивает venue.bsc_network).
 //! Тот же текст подсказки дописывается к ошибке справочника сетей «не задана venue.bsc_network» (журнал core.registry,
-//! gateway/aliased.rs): Тигран сразу видит, какое имя задать.
+//! core/registry_sync.rs): Тигран сразу видит, какое имя задать.
 //! Монета подсказки — котируемая монета биржи (venue.quote_asset, USDT): у неё сеть BSC есть на каждой бирже.
-//! Кто вызывает: api/check.rs (venue), gateway/aliased.rs (coin_networks).
+//! Кто вызывает: api/check.rs (venue), core/registry_sync.rs (ошибка справочника сетей).
 //! От чего зависит: gateway/contract.rs, gateway/errors.rs, settings/hint.rs, settings/read.rs.
 //! Настройки: venue.bsc_network (только если не задана), venue.quote_asset (по площадке).
 

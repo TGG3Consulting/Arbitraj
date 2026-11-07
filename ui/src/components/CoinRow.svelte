@@ -9,7 +9,8 @@
     Причины отсева по площадкам и по пулам — каждая с новой строки; что закрыто у площадки, где монета есть (ввод,
     вывод, покупка или продажа через API — limitsText); проблема оценки (problem).
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
-    Решение 175: отметка «делистинг на X: дата» по каждой площадке монеты (lib/delist.svelte.js).
+    Решение 175: отметка «делистинг на X: дата» по каждой площадке монеты (lib/delist.svelte.js); решение 211 — по
+    тикеру монеты НА ЭТОЙ площадке (presence[].ticker).
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
   От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, lib/delist.svelte.js, components/ErrorText.svelte,
@@ -55,7 +56,7 @@
       <span class="tag">{v.venue}: маршрут через {v.via} — пула с USDT нет, допущена по решению 52</span>
     {/each}
     {#each uniq(coin.venues) as v (v)}
-      {@const dl = delistItem(v, coin.asset.ticker)}
+      {@const dl = delistItem(v, (coin.presence ?? []).find((p) => p.venue === v)?.ticker ?? coin.asset.ticker)}
       {#if dl}<span class="err">{delistLabel(v, dl)}</span>{/if}
     {/each}
     {#if coin.block}<span class="err">в чёрном списке: {blockReason(coin.block.reason)} (с {showTime(coin.block.since)})</span>
@@ -90,7 +91,7 @@
           {@const chk = p.check ? checkState(p.check.impact, impactText) : null}
           <tr class:off={p.admission}>
             <td>{p.venue}</td>
-            <td>{coin.asset.ticker} / {p.pair ?? 'USDT'}</td>
+            <td>{(coin.presence ?? []).find((x) => x.venue === p.venue)?.ticker ?? coin.asset.ticker} / {p.pair ?? 'USDT'}</td>
             <td><code>{p.family}</code> {poolKindLabel(p.kind)}</td>
             <td><code>{poolRefText(p.pool)}</code></td>
             <td>{p.fee_pips == null ? 'не из пула (V2 — настройка, V4 — динамическая)' : `${p.fee_pips / 10000}%`}</td>

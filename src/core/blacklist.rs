@@ -4,7 +4,7 @@
 //! не прошла; налог выше порога tax.max_*_pct. Прошла перепроверку — выходит из списка сама.
 //! Кто вызывает: core/engine.rs (после событий проверки и изменений настроек), registry.rs (допуск пулов).
 //! От чего зависит: core/types, settings.
-//! Настройки: coin.blocked, coin.blocked_note (по монете), tax.max_buy_pct, tax.max_sell_pct,
+//! Настройки: coin.blocked, coin.blocked_note (по монете — по адресу, решение 211), tax.max_buy_pct, tax.max_sell_pct,
 //! tax.max_transfer_pct, hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct.
 
 use std::collections::HashMap;
@@ -38,17 +38,38 @@ impl TaxLimits {
     }
 }
 
-/// Ручной чёрный список: Some(заметка) — монета исключена вручную. Принимает: хранилище, тикер.
-pub fn manual(s: &Store, ticker: &str) -> Option<Option<String>> {
-    let scope = Scope::Coin(ticker.to_string());
-    let on = s.get_exact("coin.blocked", &scope)?.as_bool()?;
-    if !on {
+/// Ручной чёрный список: Some(заметка) — монета исключена вручную. Решение 211: отметка — по адресу монеты
+/// (область «coin:0x…»). Старая отметка по тикеру, которую миграция не перенесла (тикер неоднозначен — несколько
+/// адресов, core/coin_scope_migrate.rs), продолжает действовать на монеты с этим тикером, пока человек не задаст её по
+/// адресу: снять блок молча нельзя. Принимает: хранилище, монету, тикеры площадок монеты. Ошибок нет.
+pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<String>> {
+    let own = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
+    let mut ids = vec![own];
+    if asset.bsc_contract.is_some() {
+        ids.push(asset.ticker.clone());
+        ids.extend(tickers.iter().map(|t| t.to_string()));
+    }
+    ids.dedup();
+    ids.into_iter().find_map(|id| marked(s, &Scope::Coin(id)))
+}
+
+/// Отметка ручного чёрного списка в одной области. None — не отмечена. Ошибок нет.
+fn marked(s: &Store, scope: &Scope) -> Option<Option<String>> {
+    if !s.get_exact("coin.blocked", scope)?.as_bool()? {
         return None;
     }
-    let note = s
-        .get_exact("coin.blocked_note", &scope)
-        .and_then(|v| v.as_str().map(str::to_string));
-    Some(note)
+    Some(
+        s.get_exact("coin.blocked_note", scope)
+            .and_then(|v| v.as_str().map(str::to_string)),
+    )
+}
+
+/// Область «монета» для записи блокировки (решение 211: по адресу). Ошибок нет.
+pub fn coin_scope(asset: &Asset) -> Scope {
+    Scope::Coin(crate::settings::scope::coin_id(
+        &asset.ticker,
+        asset.bsc_contract.as_ref(),
+    ))
 }
 
 /// Причина блокировки монеты или её отсутствие.
@@ -96,7 +117,7 @@ pub enum BlockChange {
     Same,
 }
 
-/// Чёрный список. Ключ — тикер справочника (у монеты без адреса контракта тоже есть тикер).
+/// Чёрный список. Ключ — монета (решение 211: равенство Asset — по адресу; без адреса — по тикеру).
 #[derive(Default)]
 pub struct Blacklist {
     map: HashMap<Asset, CoinBlock>,

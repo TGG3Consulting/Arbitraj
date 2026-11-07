@@ -55,7 +55,8 @@ pub fn apply_blacklist(
             .flatten()
             .filter(|k| k.taxes == crate::core::types::CheckState::NotChecked)
             .find_map(|k| k.wait.clone());
-        let manual = blacklist::manual(s, &c.asset.ticker);
+        let tickers: Vec<&str> = c.presence.iter().map(|p| p.ticker.as_str()).collect();
+        let manual = blacklist::manual(s, &c.asset, &tickers);
         // Проверок нет, потому что пулов монеты сейчас нет (Invalidated: пулы сняты до перечитывания — обрыв ленты
         // квитанций, решение 71): данных нет — вердикт чёрного списка не меняется (не «вышла» и не «вошла» заново).
         if keep_verdict(

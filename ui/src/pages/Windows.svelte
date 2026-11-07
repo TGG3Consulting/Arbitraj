@@ -6,9 +6,9 @@
     и «плюсовая» / «минусовая», кадров (потеряно), размер файла; «Открыть» — страница окна (WindowView), «Скачать
     файл» — .jsonl.zst как есть. Фильтры: монета, со сделкой / без, плюсовая / минусовая; по страницам (сервер).
     Почему окна не пишутся (window.enabled = нет, не задана window.*) и сколько места занято — над списком.
-    Данные — GET /api/windows?limit&offset&coin&deal&outcome; живое сообщение window обновляет строку на месте.
+    Данные — GET /api/windows?limit&offset&coin&deal&outcome (coin — тикер или адрес, решение 211); живое сообщение window обновляет строку на месте.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/labels.js, lib/windowLabels.js, components/PageSize.svelte,
+  От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/live.svelte.js, lib/labels.js, lib/windowLabels.js, components/PageSize.svelte,
     components/ErrorText.svelte, components/WindowView.svelte.
   Настройки: нет (window.* — экран «Настройки», категория «Окна»). Сколько строк на странице — задаёт зритель.
 -->
@@ -17,6 +17,7 @@
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { showTime } from '../lib/labels.js';
   import { outcomeMark, winSecs, size, winDirs } from '../lib/windowLabels.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import WindowView from '../components/WindowView.svelte';
@@ -84,7 +85,7 @@
   каждая сделка биржи по этой монете, как их прислала биржа, со временем биржи и временем получения.</p>
 <div class="row">
   <PageSize key="windows.limit" bind:value={limit} label="Окон на странице:" />
-  <label class="inline">Монета <input bind:value={coin} placeholder="все" size="8" /></label>
+  <label class="inline">Монета <input bind:value={coin} placeholder="тикер или 0x…" size="12" /></label>
   <label class="inline">Сделка
     <select bind:value={deal}><option value="">все</option><option value="yes">была</option><option value="no">не было</option></select>
   </label>
@@ -109,7 +110,7 @@
         {@const m = outcomeMark(w.outcome)}
         <tr>
           <td>{showTime(w.started_at)}</td>
-          <td><b>{w.asset.ticker}</b> {winDirs(w)}</td>
+          <td><b>{coinName(w.asset)}</b> {winDirs(w)}</td>
           <td class="num">{winSecs(w, now)}</td>
           <td class="num">{w.max_profit}</td>
           <td class="num">{w.max_profit_unbounded ?? '—'}</td>

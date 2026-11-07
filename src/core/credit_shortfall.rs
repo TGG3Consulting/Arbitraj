@@ -15,7 +15,6 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, VenueId};
 use crate::settings::read::At;
-use crate::settings::scope::Scope;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, rd};
@@ -60,7 +59,7 @@ pub async fn check(
         "зачислено меньше на {pct}% — похоже на налог перевода ({deal}: {} → {}, ожидалось {expected}, пришло {credited})",
         from.0, to.0
     );
-    let scope = Scope::Coin(asset.ticker.clone());
+    let scope = super::blacklist::coin_scope(asset);
     let s = &deps.settings;
     let set = async {
         s.set(

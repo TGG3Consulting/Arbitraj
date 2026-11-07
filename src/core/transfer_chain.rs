@@ -99,6 +99,7 @@ pub async fn finish(
             from: c.from.clone(),
             to: c.to.clone(),
             ticker: c.asset.ticker.clone(),
+            coin: crate::settings::scope::coin_id(&c.asset.ticker, c.asset.bsc_contract.as_ref()),
             venue_ref: c.created.venue_ref.clone(),
             hash: hash.clone(),
             started: c.started,
@@ -117,6 +118,8 @@ struct Check {
     from: VenueId,
     to: VenueId,
     ticker: String,
+    /// Решение 211: id области «монета» настроек (адрес; без адреса — тикер).
+    coin: String,
     venue_ref: String,
     /// Хеш пришедшей транзакции.
     hash: String,
@@ -130,7 +133,7 @@ async fn sender_hash(core: Core, c: Check) {
     let deps = &core.inner.deps;
     let at = At {
         venue: Some(&c.to.0),
-        coin: Some(&c.ticker),
+        coin: Some(&c.coin),
     };
     let head = format!(
         "{}: {} зачислено по блокчейну (транзакция {})",

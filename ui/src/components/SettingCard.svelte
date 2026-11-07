@@ -3,7 +3,8 @@
   Что делает: карточка одной настройки на экране «Настройки»: имя, описание, единица, вид значения,
     ограничение, допустимые области и значения по областям:
     вся система; каждая площадка из GET /api/venues (у настроек времени в пути — подпись направлением
-    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод тикера;
+    перевода «bingx → кошелёк» / «кошелёк → биржа», решение 51); монеты — уже заданные + ввод адреса контракта (решение 211: область «монета» — адрес 0x… в нижнем
+    регистре; подпись — имя монеты из lib/coinNames.svelte.js; старые области по тикеру показываются как есть);
     события — уже заданные + выбор кода из схемы; DEX / вид пула и каналы — id от адаптера DEX
     (lib/dex.svelte.js) + уже заданные (такой id адаптер сейчас не сообщает — помечено). Решение 128: адаптер даёт
     DEX с видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит
@@ -20,6 +21,7 @@
   import { store, venueScopeLabel } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
+  import { names, coinName } from '../lib/coinNames.svelte.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
 
@@ -43,7 +45,8 @@
 
   /** Добавляет область для ввода значения (значение появится только после «Сохранить»). */
   function add(kind, id) {
-    const v = id.trim();
+    // Решение 211: адрес монеты — в нижнем регистре, как ключ бэкенда (settings/scope.rs coin_id).
+    const v = /^0x[0-9a-fA-F]{40}$/.test(id.trim()) ? id.trim().toLowerCase() : id.trim();
     if (v && !added[kind].includes(v)) added[kind] = [...added[kind], v];
   }
 
@@ -96,10 +99,10 @@
   {/if}
   {#if def.scopes.includes('Coin')}
     {#each uniq(idsOf('Coin')) as c (c)}
-      <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={`монета ${c}`} />
+      <SettingEditor {def} scope={{ kind: 'Coin', id: c }} label={names.map[c] ? `монета ${coinName({ ticker: names.map[c].ticker, bsc_contract: c })} (${c})` : `монета ${c}`} />
     {/each}
     <div class="adder">
-      <input bind:value={coinInput} placeholder="тикер монеты" />
+      <input bind:value={coinInput} placeholder="адрес монеты 0x…" />
       <button disabled={!coinInput.trim()} onclick={() => { add('Coin', coinInput); coinInput = ''; }}>
         Задать для монеты
       </button>

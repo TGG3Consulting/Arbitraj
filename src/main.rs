@@ -75,8 +75,7 @@ async fn run() -> Result<(), String> {
     ));
 
     // Адаптеры площадок: создаются здесь и регистрируются в шлюзе; ядро видит их только через шлюз.
-    // Решение 200: биржи — в обёртке склейки тикеров одного адреса (coin.ticker_alias).
-    let registry = Registry::with_aliases(settings.clone(), journal.clone());
+    let registry = Registry::new();
     let raw = arb::storage::raw_log::RawLog::start(args.data_dir.clone(), settings.clone());
     let bingx_ctx = arb::venues::bingx::ctx::Ctx {
         settings: settings.clone(),

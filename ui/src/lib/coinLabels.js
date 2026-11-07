@@ -4,14 +4,17 @@
 //   причина чёрного списка (BlockReason), группа крючка (HookGroup). Формат — как их serde (enum: строка
 //   или {вариант: данные}); числа Decimal приходят строками и показываются без пересчёта.
 // Кто вызывает: components/CoinRow.svelte, pages/Manual.svelte, pages/GasStats.svelte.
-// От чего зависит: ничего.
+// От чего зависит: lib/coinNames.svelte.js (имя монеты «NMT / NETMIND», решение 211).
 // Настройки: нет.
 
-/** Монета: «CAKE» и сокращённый адрес. Принимает: Asset. Возвращает: строку. */
+import { coinName } from './coinNames.svelte.js';
+
+/** Монета: имя (решение 211: тикеры площадок «NMT / NETMIND») и сокращённый адрес. Принимает: Asset. Возвращает: строку. */
 export function assetLabel(a) {
   if (!a) return '';
   const c = a.bsc_contract;
-  return c ? `${a.ticker} · ${c.slice(0, 6)}…${c.slice(-4)}` : `${a.ticker} · адрес не сообщён`;
+  const n = coinName(a);
+  return c ? `${n} · ${c.slice(0, 6)}…${c.slice(-4)}` : `${n} · адрес не сообщён`;
 }
 
 /**

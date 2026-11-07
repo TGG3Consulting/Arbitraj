@@ -13,6 +13,7 @@ fn row(kind: &'static str, deal: Option<&str>, missed: &str) -> Row {
         kind,
         deal_id: deal.map(String::from),
         ticker: "CAKE".into(),
+        address: None,
         started_at: "2026-11-06T10:00:00.000Z".into(),
         body: format!("{{\"missed\":\"{missed}\"}}"),
     }

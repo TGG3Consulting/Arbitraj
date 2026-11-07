@@ -7,8 +7,10 @@
 //!
 //! GET  /api/coins          — список монет (контракт — src/api/README.md, «Экран Монеты»)
 //! POST /api/coins/recheck  — {venue, assets: [Asset]} → {ok, details}
-//! GET  /api/coins/ticker-aliases-auto — решение 206: [{address, main, venues: [[биржа, тикер]]}] — склеено автоматически
-//! GET  /api/coins/ticker-splits — решение 200: [{address, venues: [[биржа, тикер]]}] — один адрес, разные тикеры
+//! GET  /api/coins/ticker-splits — решение 211: [{address, venues: [[биржа, тикер]]}] — конфликт: один адрес под двумя
+//!      тикерами на ОДНОЙ бирже (монета там не торгуется, TickerConflict), только для показа
+//! GET  /api/coins/names    — решение 211: [{address, ticker, venues: {биржа: тикер}}] — лёгкий справочник имён монет
+//!      по адресу для «Живого экрана» и других экранов (имя «NMT / NETMIND», делистинг по тикеру своей площадки, фильтр)
 //!
 //! Справочник, налоги, проверки пулов и чёрный список держит ядро (core/coins_view.rs → Core::coins_json).
 //! Монета для перепроверки — Asset целиком (тикер + адрес контракта): одинаковый тикер может быть
@@ -119,12 +121,26 @@ pub async fn recheck(
     Ok(Json(res))
 }
 
-/// Решение 200: расхождения тикеров одного адреса (core/ticker_index.rs) — для кнопки «Считать одной монетой». Ошибок нет.
-pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
+/// Решение 211: конфликты «один адрес — два тикера на одной бирже» (core/ticker_index.rs), для показа. Ошибок нет.
+/// Решение 211: имена монет с адресом — показной тикер и тикер каждой площадки (Presence.ticker). Монеты без адреса
+/// не входят (не торгуются). Принимает: состояние. Возвращает: JSON-массив. Ошибок нет: справочника нет — пустой массив.
+pub async fn names(State(st): State<AppState>) -> Json<serde_json::Value> {
+    let coins = crate::core::engine::rd(&st.core.inner.coins);
+    let list: Vec<serde_json::Value> = coins
+        .all()
+        .filter_map(|c| {
+            let a = c.asset.bsc_contract?;
+            let venues: serde_json::Map<String, serde_json::Value> = c
+                .presence
+                .iter()
+                .map(|p| (p.venue.0.clone(), serde_json::Value::from(p.ticker.clone())))
+                .collect();
+            Some(serde_json::json!({"address": a, "ticker": c.asset.ticker, "venues": venues}))
+        })
+        .collect();
+    Json(serde_json::Value::Array(list))
 }
 
-/// Решение 206: склейки тикеров, сделанные автоматически (coin.ticker_alias_auto). Ошибок нет.
-pub async fn ticker_aliases_auto(State(st): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(st.registry.auto_aliases()).unwrap_or_default())
+pub async fn ticker_splits(State(st): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::to_value(st.core.ticker_splits()).unwrap_or_default())
 }

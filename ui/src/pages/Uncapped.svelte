@@ -12,13 +12,14 @@
     первый → последний расчёт с упущенным. Слова «бой» нет: «на нашем бюджете».
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/api.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
+  От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
     UncappedRecord.svelte.
   Настройки: нет (uncapped.* — экран «Настройки», категория «Упущено из-за потолка»). Период, топ и строки на странице
     задаёт зритель.
 -->
 <script>
   import { get } from '../lib/api.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
@@ -73,7 +74,7 @@
     void [kind, fromLocal, toLocal, only, limit, top, page, missedOnly];
     reload();
   });
-  const dirText = (d) => `${d.asset.ticker} ${d.buy_on} → ${d.sell_on}`;
+  const dirText = (d) => `${coinName(d.asset)} ${d.buy_on} → ${d.sell_on}`;
 </script>
 
 <h1>Упущено из-за потолка</h1>

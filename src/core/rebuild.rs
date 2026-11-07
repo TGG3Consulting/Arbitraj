@@ -57,10 +57,7 @@ pub async fn watch_settings(core: Core) {
         super::coin_book::on_setting(&c.name);
         // Решение 196: биржу включили — поднять поток, если молчит; выключили — держать до закрытия сделок.
         super::feed_live::on_setting(&core, &c);
-        // Решение 200: склейку тикеров считает шлюз при получении справочника сетей — перечитать его сразу.
-        if super::native::affects(&c.name)
-            || crate::gateway::aliased::SETTINGS.contains(&c.name.as_str())
-        {
+        if super::native::affects(&c.name) {
             core.inner.kick_networks.notify_waiters();
         }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {
@@ -145,6 +142,12 @@ pub async fn rebuild(core: &Core) {
     }
     super::rebuild_report::report_pools(core, &coins).await;
     super::rebuild_report::report_check_done(core, &coins).await;
+    // Решение 211: настройки монет со старого ключа по тикеру — на адрес, когда справочники сетей всех бирж получены.
+    let nets_all = venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Cex)
+        .all(|(v, _)| nets.contains_key(v));
+    super::coin_scope_migrate::run(core, &coins, nets_all).await;
     let live_dirs: std::collections::HashSet<_> =
         coins.iter().flat_map(|c| c.shown_directions()).collect();
     let directions = live_dirs.len();

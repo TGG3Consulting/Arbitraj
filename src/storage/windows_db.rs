@@ -1,7 +1,8 @@
 //! Файл: storage/windows_db.rs
 //! Что делает: список окон (решение 125) в SQLite — таблица windows: id, начало, тикер, была ли сделка, итог сделок
 //! («plus» / «minus» / «zero», пусто — сделки не было или итога нет), JSON сводки (тип — core/window.rs). Тикер,
-//! сделка и итог — отдельными столбцами для фильтров экрана «Окна». Сами кадры — в файле окна.
+//! сделка и итог — отдельными столбцами для фильтров экрана «Окна». Сами кадры — в файле окна. Решение 211: адрес
+//! контракта монеты — столбец address (0x… в нижнем регистре; у старых строк NULL — берётся из JSON сводки).
 //! Кто вызывает: core/window_worker.rs (сохранение), core/window_cfg.rs (уборка, закрытие прерванных),
 //! core/window_view.rs (список с фильтрами, одно окно).
 //! От чего зависит: storage/db.rs.
@@ -17,6 +18,8 @@ pub struct Row {
     pub id: String,
     pub started_at: String,
     pub ticker: String,
+    /// Решение 211: адрес контракта монеты (0x… в нижнем регистре); у монеты без адреса — None.
+    pub address: Option<String>,
     pub deal: bool,
     pub outcome: Option<String>,
     pub body: String,
@@ -27,6 +30,8 @@ pub struct Row {
 pub struct Filter {
     /// Тикер монеты (точное совпадение).
     pub ticker: Option<String>,
+    /// Решение 211: адрес контракта монеты (нижний регистр, точное совпадение; у старых строк — из JSON сводки).
+    pub address: Option<String>,
     /// true — только со сделкой, false — только без.
     pub deal: Option<bool>,
     /// «plus» / «minus» / «zero».
@@ -38,11 +43,20 @@ pub async fn save(db: &Db, r: Row) -> Result<(), DbError> {
     let at = Utc::now().to_rfc3339();
     db.call(move |c| {
         c.execute(
-            "INSERT INTO windows (id, started_at, ticker, deal, outcome, body, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO windows (id, started_at, ticker, deal, outcome, body, updated_at, address)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET deal = excluded.deal, outcome = excluded.outcome,
-             body = excluded.body, updated_at = excluded.updated_at",
-            rusqlite::params![r.id, r.started_at, r.ticker, r.deal, r.outcome, r.body, at],
+             body = excluded.body, updated_at = excluded.updated_at, address = excluded.address",
+            rusqlite::params![
+                r.id,
+                r.started_at,
+                r.ticker,
+                r.deal,
+                r.outcome,
+                r.body,
+                at,
+                r.address
+            ],
         )
         .map(|_| ())
     })
@@ -84,6 +98,10 @@ fn where_of(f: &Filter) -> (String, Vec<Value>) {
     if let Some(t) = &f.ticker {
         cond.push("ticker = ?");
         args.push(Value::Text(t.clone()));
+    }
+    if let Some(a) = &f.address {
+        cond.push("lower(coalesce(address, json_extract(body, '$.asset.bsc_contract'))) = ?");
+        args.push(Value::Text(a.clone()));
     }
     if let Some(d) = f.deal {
         cond.push("deal = ?");

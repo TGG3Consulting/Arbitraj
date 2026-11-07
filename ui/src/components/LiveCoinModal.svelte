@@ -6,11 +6,12 @@
     обновлений подряд выше порога, с какого времени и время обновления. Рядом с точной ценой — коротко
     (6 значащих). Данные — те же SpreadView из GET /api/spreads и сообщений spread (без новых полей бэкенда); окно обновляется вживую.
   Кто вызывает: components/LiveCoins.svelte.
-  От чего зависит: lib/coreLabels.js, lib/fmt.js, lib/labels.js, components/Modal.svelte, CopyAddr.svelte.
+  От чего зависит: lib/coreLabels.js, lib/coinNames.svelte.js, lib/fmt.js, lib/labels.js, components/Modal.svelte, CopyAddr.svelte.
   Настройки: нет.
 -->
 <script>
   import { spreadState, spreadShort, spreadReason } from '../lib/coreLabels.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import { reasonLines, fmtPrice } from '../lib/fmt.js';
   import { showTime } from '../lib/labels.js';
   import Modal from './Modal.svelte';
@@ -23,7 +24,7 @@
   let { row, legs, missing, onclose } = $props();
 </script>
 
-<Modal title={row.asset.ticker} {onclose}>
+<Modal title={coinName(row.asset)} {onclose}>
   <h4>Адрес контракта в BSC</h4>
   <CopyAddr addr={row.asset.bsc_contract} />
 

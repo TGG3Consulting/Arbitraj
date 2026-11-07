@@ -7,12 +7,13 @@
     сторона агрессора, ID) вместе с событиями наших сделок окна на одной шкале времени; «Скачать файл». Кадры читаются
     с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере.
   Кто вызывает: pages/Windows.svelte.
-  От чего зависит: lib/api.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
   Настройки: нет.
 -->
 <script>
   import { get, seg } from '../lib/api.js';
   import { msTime, nsTime, outcomeMark } from '../lib/windowLabels.js';
+  import { coinName } from '../lib/coinNames.svelte.js';
   import Modal from './Modal.svelte';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -61,7 +62,7 @@
 
 <Modal title={`Окно ${win.id}`} {onclose}>
   <p>
-    <b>{info.asset.ticker}</b> · {info.directions.map((d) => `${d.buy_on} → ${d.sell_on}`).join(', ')}
+    <b>{coinName(info.asset)}</b> · {info.directions.map((d) => `${d.buy_on} → ${d.sell_on}`).join(', ')}
     · макс. прибыль {info.max_profit}{#if info.max_profit_unbounded != null}, без бюджета {info.max_profit_unbounded}{/if}
     {#if info.deals?.length}<span class="tag"><b>БЫЛА СДЕЛКА</b></span>{/if}
     {#if mark}<span class={`tag ${mark.cls}`}>{mark.text}</span>{/if}

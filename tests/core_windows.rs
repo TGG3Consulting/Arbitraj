@@ -133,14 +133,21 @@ async fn list_filters_and_pages() {
         ("2", "CAKE", false, None),
         ("3", "ETH", true, Some("minus")),
     ];
+    // Решение 211: у w1 адрес в столбце; у w2 столбца нет (старая строка) — адрес только в JSON сводки (смешанный регистр).
+    const CAKE: &str = "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82";
     for (n, t, deal, o) in rows {
         let r = Row {
             id: format!("w{n}"),
             started_at: format!("2026-11-03T10:00:0{n}Z"),
             ticker: t.into(),
+            address: (n == "1").then(|| CAKE.to_string()),
             deal,
             outcome: o.map(str::to_string),
-            body: json!({ "id": format!("w{n}") }).to_string(),
+            body: match n {
+                "2" => json!({ "id": "w2", "asset": { "ticker": "CAKE", "bsc_contract": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82" } }),
+                _ => json!({ "id": format!("w{n}") }),
+            }
+            .to_string(),
         };
         windows_db::save(&db, r).await.unwrap();
     }
@@ -170,6 +177,15 @@ async fn list_filters_and_pages() {
         (ids(p), n),
         (vec!["w1".into()], 2),
         "вторая страница по одной строке"
+    );
+    let by_addr = Filter {
+        address: Some(CAKE.into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        ids(windows_db::page(&db, by_addr, 10, 0).await.unwrap().0),
+        ["w2", "w1"],
+        "фильтр по адресу: столбец и JSON старой строки"
     );
     let with = Filter {
         deal: Some(true),

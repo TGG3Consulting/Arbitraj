@@ -40,7 +40,8 @@ impl Scope {
         }
     }
 
-    /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:CAKE», «event:deal.closed»,
+    /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:0x0e09…» (решение 211; у монеты без адреса —
+    /// «coin:ТИКЕР»), «event:deal.closed»,
     /// «dex:pancakeswap_v3», «channel:club48».
     pub fn to_key(&self) -> String {
         match self {
@@ -73,6 +74,21 @@ impl Scope {
             _ => None,
         }
     }
+}
+
+/// Что делает: решение 211 — id области «монета»: адрес контракта BSC строчными («0x…», монета = адрес), у монеты без
+/// адреса — её тикер (как раньше). Одно правило для чтения и записи настроек монеты (чёрный список, блоки, пороги).
+/// Принимает: тикер, адрес. Возвращает: id. Ошибок нет.
+pub fn coin_id(ticker: &str, contract: Option<&alloy_primitives::Address>) -> String {
+    match contract {
+        Some(a) => format!("{a:#x}"),
+        None => ticker.to_string(),
+    }
+}
+
+/// Что делает: id области «монета» — адрес (решение 211), а не старая запись по тикеру. Ошибок нет.
+pub fn is_address_id(id: &str) -> bool {
+    id.len() == 42 && id.starts_with("0x") && id[2..].bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Что делает: правило записи id области «DEX» (решение 128): непустой, только строчная латиница, цифры, «-» и «_» —

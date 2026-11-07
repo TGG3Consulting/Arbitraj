@@ -9,7 +9,7 @@
   Настройки: нет.
 -->
 <script>
-  import { coinRowKey, reasons, resultLabel, taxState } from '../lib/coinFilter.js';
+  import { coinRowKey, coinTitle, reasons, resultLabel, taxState } from '../lib/coinFilter.js';
   import { shortAddr } from '../lib/fmt.js';
 
   /** coins — монеты после фильтров; onopen(coin) — открыть окно монеты. */
@@ -39,7 +39,7 @@
         {@const rs = reasons(c)}
         {@const tx = taxShort(c.taxes)}
         <tr class="click" onclick={() => onopen(c)} title="Подробно: пулы, налоги, причины по площадкам">
-          <td><strong>{c.asset.ticker}</strong>{#if c.block && c.block.reason !== 'NotChecked'} <span class="err" title="в чёрном списке">⛔</span>{/if}</td>
+          <td><strong>{coinTitle(c)}</strong>{#if c.block && c.block.reason !== 'NotChecked'} <span class="err" title="в чёрном списке">⛔</span>{/if}</td>
           <td><code>{shortAddr(c.asset.bsc_contract) || '—'}</code></td>
           <td class={rs[0] === 'passed' ? 'ok' : 'err'} title={rs.map(resultLabel).join(', ')}>
             {resultLabel(rs[0])}{#if rs.length > 1} <span class="muted">+{rs.length - 1}</span>{/if}

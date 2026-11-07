@@ -22,9 +22,10 @@ pub async fn slow(
     asset: &Asset,
     started: chrono::DateTime<Utc>,
 ) {
+    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
     let at = At {
         venue: Some(&to.0),
-        coin: Some(&asset.ticker),
+        coin: Some(&coin),
     };
     let Ok(max) = core.inner.deps.settings.integer("transfer.max_time_s", at) else {
         return;

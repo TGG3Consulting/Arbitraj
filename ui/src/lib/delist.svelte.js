@@ -4,11 +4,12 @@
 //   «делистинг на X: дата» на «Монетах» и «Живом экране». Данные — GET /api/delistings; перечитываются раз в минуту и
 //   при отставании живого потока ядра (обновление у ядра — delist.refresh_s, обычно раз в час).
 // Кто вызывает: pages/Venues.svelte (components/Delistings.svelte), components/CoinRow.svelte, pages/Live.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js.
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/coinNames.svelte.js (тикер монеты на площадке, решение 211).
 // Настройки: нет (delist.refresh_s, delist.block_hours — экран «Настройки» / «Площадки»).
 
 import { get } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
+import { tickerOn } from './coinNames.svelte.js';
 
 /** Период перечитывания экрана, мс — частота показа, не торговый параметр. */
 const RELOAD_MS = 60000;
@@ -59,9 +60,9 @@ export const delistLabel = (venue, i) => {
   return `делистинг на ${venue}: ${t}${w}`;
 };
 
-/** Отметки направления (обе стороны). Принимает: Direction. Возвращает: список строк. */
+/** Отметки направления (обе стороны; решение 211 — по тикеру монеты на СВОЕЙ площадке). Принимает: Direction. Возвращает: список строк. */
 export const delistMarks = (dir) =>
   [dir.buy_on, dir.sell_on]
-    .map((v) => [v, delistItem(v, dir.asset.ticker)])
+    .map((v) => [v, delistItem(v, tickerOn(dir.asset, v))])
     .filter(([, i]) => i)
     .map(([v, i]) => delistLabel(v, i));

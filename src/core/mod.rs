@@ -185,6 +185,7 @@ pub mod uncapped;
 pub mod uncapped_entry;
 pub mod uncapped_permit;
 pub mod uncapped_queue;
+pub mod uncapped_report;
 pub mod uncapped_state;
 pub mod uncapped_store;
 pub mod uncapped_sum;

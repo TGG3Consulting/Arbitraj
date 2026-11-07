@@ -6,7 +6,8 @@
 //! «y:<n>» / «n:<n>» — «Да, …» / «Отмена» подтверждения (press_confirm.rs); «m:<экран>» — экран меню /menu «Общего»
 //! (menu_press.rs, решение 157); «c:<что>» — кнопка плашки режима (menu_press.rs; «Общий» и «Управление»);
 //! «k:<экран>», «s:<номер>.<строка>», «t:<номер>.<шаг>» — экраны, «Продать» и перевод USDT чата «Управление»
-//! (notify/ctl/*). На каждое нажатие — answerCallbackQuery.
+//! (notify/ctl/*); «r:<что>» — «📊 Отчёты» чата «Управление» (notify/ctl/report.rs, решение 215). На каждое нажатие —
+//! answerCallbackQuery.
 //! Кто вызывает: notify/updates_poll.rs — на каждое Update с callback_query.
 //! От чего зависит: notify/callback.rs (decode), roles.rs, press_record.rs, press_confirm.rs, menu_press.rs, ctl/*, core.
 //! Настройки: разрешённые пользователи ролей (notify.control_users, notify.general_users, notify.failures_users).
@@ -49,8 +50,9 @@ pub fn accepts(role: Role, code: &str) -> bool {
         Role::Deals => false,
         // Решение 192: и кнопки записей «Ручного управления» — с карточки проблемной сделки (ctl/card.rs).
         Role::Control => code != "m",
-        Role::General => !matches!(code, "k" | "s" | "t"),
-        Role::Failures => !matches!(code, "m" | "c" | "k" | "s" | "t"),
+        // Решение 215: «r» — отчёты, только чат «Управление».
+        Role::General => !matches!(code, "k" | "s" | "t" | "r"),
+        Role::Failures => !matches!(code, "m" | "c" | "k" | "s" | "t" | "r"),
     }
 }
 
@@ -115,6 +117,7 @@ impl Ctx<'_> {
             "k" => self.ctl_nav(&q, msg, object).await,
             "s" => self.ctl_sell(&q, msg, object).await,
             "t" => self.ctl_transfer(&q, msg, object).await,
+            "r" => self.ctl_report(&q, msg, object).await,
             _ => self.record_button(&q, msg, code, object).await,
         }
     }

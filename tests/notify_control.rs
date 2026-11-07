@@ -1,5 +1,5 @@
 //! Файл: tests/notify_control.rs
-//! Что делает: проверяет чат «Управление» (решение 176) без обращения к Telegram: экраны и callback_data (≤ 64 байт),
+//! Что делает: проверяет чат «Управление» (решение 176) без обращения к Telegram: экраны (и «📊 Отчёты», решение 215) и callback_data (≤ 64 байт),
 //! диалог перевода USDT от «Откуда» до сводки (списки, проверка суммы: больше нуля, ≤ можно вывести, ≥ минимума вывода,
 //! дойдёт ≥ минимума депозита), «Отправить» — команда ядра TransferUsdt, повторное нажатие по устаревшей отрисовке —
 //! без действия, номера после перезапуска не совпадают со старыми, лайв-обновление не чаще настройки и заморозка.
@@ -229,8 +229,17 @@ fn screens_and_codes() {
     let root = arb::notify::ctl::screens::root(&r);
     assert_eq!(
         datas(&root.rows),
-        ["k:st", "k:bal", "k:tr", "k:man", "k:root"]
+        ["k:st", "k:bal", "k:tr", "k:man", "r:m", "k:root"]
     );
+    // Решение 215: «📊 Отчёты» → отчёт → период; callback_data в пределе 64 байт.
+    let rep = arb::notify::ctl::report::choose();
+    assert_eq!(datas(&rep.rows), ["r:res", "r:mis", "k:root"]);
+    let per = arb::notify::ctl::report::periods("mis").expect("экран периода");
+    assert_eq!(
+        datas(&per.rows),
+        ["r:mis.d", "r:mis.w", "r:mis.m", "r:mis.a", "r:m", "k:root"]
+    );
+    assert!(arb::notify::ctl::report::periods("zz").is_none());
     let st = arb::notify::ctl::screens::state(&r, 0);
     let data = datas(&st.rows);
     // После запуска — «Стоп»: доступен «Старт»; сброс лимита дня; «Обновить», «Назад», «Главное меню».

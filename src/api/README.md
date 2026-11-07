@@ -33,6 +33,7 @@
 | `GET /api/episodes`, `GET /api/episodes/{id}`, `GET /api/episodes/{id}/file` | «Эпизоды» (решение 74): список, записи эпизода, файл .jsonl.zst |
 | `GET /api/windows`, `GET /api/windows/{id}`, `GET /api/windows/{id}/file` | «Окна» (решение 125): страница списка с фильтрами, кадры окна разобранные адаптером, файл .jsonl.zst |
 | `GET /api/uncapped/summary`, `GET /api/uncapped`, `GET /api/uncapped/{id}`, `GET /api/uncapped/deal/{id}`, `GET /api/uncapped/deals` | «Упущено из-за потолка» (решение 141): итоги за период, записи страницей, одна запись, запись сделки, последние записи всех сделок (решение 195); missed_only и факт сделки в списке (решение 197) (api/uncapped.rs) |
+| `GET /api/report/results.xlsx[?from=&to=]`, `GET /api/report/missed.xlsx[?from=&to=]` | Отчёты Excel: «Итоги сделок» (решение 193; период по времени старта сделки — решение 215) и «Упущено» за период экрана «Упущено из-за потолка» (решение 215); без параметров — за всё время (api/report.rs) |
 | `GET /api/deals` | Экран «Сделки»: план и факт по шагам |
 | `GET /api/transits` | История времени в пути (решение 50) |
 | `GET /api/control`, `POST /api/control`, `POST /api/control/venue/{id}/resume`, `POST /api/control/quarantine/{id}/release`, `POST /api/control/daily-limit/reset`, `POST /api/control/venue/{id}/daily-limit/reset` | Управление: режим «Старт/Стоп/Пауза», снятие паузы площадки и карантина монеты, «Сбросить лимит дня» общий (решение 153) и по площадке (решение 173) |

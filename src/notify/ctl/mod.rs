@@ -1,7 +1,7 @@
 //! Файл: notify/ctl/mod.rs
 //! Что делает: чат «Управление» Telegram (решение 176, роль Control, notify/roles.rs) — главное меню кнопками:
 //! «Состояние», «Балансы» (с «Продать»), «Перевести USDT» (диалог по шагам), «Ручное управление»; лайв-обновление
-//! экранов и ход перевода. Каждая кнопка — та же команда ядра, что у интерфейса (Core::command / ManualAction), через
+//! экранов и ход перевода; «📊 Отчёты» — Excel-файлы отчётов в чат (решение 215). Каждая кнопка — та же команда ядра, что у интерфейса (Core::command / ManualAction), через
 //! общий вопрос «Да, …» (notify/press_confirm.rs). Подробности — README.md этой папки.
 //! Кто вызывает: notify/press.rs, notify/tg_commands.rs, notify/press_confirm.rs, notify/updates*.rs, main.rs (live).
 //! От чего зависит: core, notify (press, press_confirm, menu, roles, client, tg_methods), settings.
@@ -13,6 +13,7 @@ pub mod kb;
 pub mod live;
 pub mod press;
 pub mod progress;
+pub mod report;
 pub mod screens;
 pub mod sell;
 pub mod sessions;

@@ -4,7 +4,7 @@
 //! ширины столбцов, форматы чисел, красный / зелёный итог (C00000 / 007A33), сводка по ключу (COUNTIFS / SUMIFS /
 //! _xlfn.MAXIFS / _xlfn.MINIFS по листу «Сделки», строка «Итого» жирным), сводка по биржам (сделка считается и у биржи
 //! покупки, и у биржи продажи; строки не складываются — вместо «Итого» примечание).
-//! Кто вызывает: report/results_xlsx.rs.
+//! Кто вызывает: report/results_xlsx.rs, report/missed_xlsx.rs (решение 215: шапка, форматы, примечание, цвет итога).
 //! От чего зависит: rust_xlsxwriter.
 //! Настройки: нет.
 
@@ -36,16 +36,21 @@ pub fn money4() -> Format {
     base().set_num_format("#,##0.0000;\\-#,##0.0000;0.0000")
 }
 
-/// Шапка листа: заголовки, ширины, высота 31.5, закрепление первой строки. Ошибки: XlsxError.
-pub fn header(ws: &mut Worksheet, hdr: &[&str], widths: &[f64]) -> Result<(), XlsxError> {
-    let h = base()
+/// Формат шапки: жирный белый на 1F4E78, по центру с переносом (решение 215: и шапки таблиц внутри листа «Упущено»).
+pub fn head() -> Format {
+    base()
         .set_bold()
         .set_font_color(Color::White)
         .set_background_color(Color::RGB(0x1F4E78))
         .set_pattern(FormatPattern::Solid)
         .set_align(FormatAlign::Center)
         .set_align(FormatAlign::VerticalCenter)
-        .set_text_wrap();
+        .set_text_wrap()
+}
+
+/// Шапка листа: заголовки, ширины, высота 31.5, закрепление первой строки. Ошибки: XlsxError.
+pub fn header(ws: &mut Worksheet, hdr: &[&str], widths: &[f64]) -> Result<(), XlsxError> {
+    let h = head();
     for (c, t) in hdr.iter().enumerate() {
         ws.write_string_with_format(0, c as u16, *t, &h)?;
         ws.set_column_width(c as u16, widths.get(c).copied().unwrap_or(14.))?;

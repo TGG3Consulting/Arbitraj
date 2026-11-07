@@ -5,7 +5,7 @@
 //! одинаковых расчётов направления. Record пишется в SQLite (storage/uncapped_db.rs) JSON-ом; Brief — его часть для
 //! итогов экрана (читается обратно).
 //! Кто вызывает: core/uncapped.rs (собирает), uncapped_queue.rs, uncapped_store.rs, uncapped_view.rs, candidates.rs,
-//! executor.rs (Battle).
+//! executor.rs (Battle), uncapped_sum.rs и report/missed_rows.rs (Brief, решение 215).
 //! От чего зависит: core/types, costs_types.rs (CostLine), limits_parts.rs, size_uncapped.rs (At, Level).
 //! Настройки: нет.
 
@@ -117,6 +117,9 @@ pub struct Brief {
     pub levels: Vec<Level>,
     pub missed: Decimal,
     pub ep: Episode,
+    /// Решение 215 (отчёт «Упущено», лист «Кандидаты»): бюджет «на нашем бюджете» (Record::budget).
+    #[serde(default)]
+    pub budget: Decimal,
 }
 
 /// Бюджет срезал оптимум (а не оптимум внутри, не край площадок или поиска). Ошибок нет.

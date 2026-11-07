@@ -8,31 +8,30 @@
 //! периода страницей, одна запись, запись сделки по её id.
 //! Решение 197: кандидаты с упущено 0 (старые записи) в итог не входят — число скрытых hidden_zero; у записи сделки в
 //! списке — факт из учёта.
-//! Кто вызывает: api/uncapped.rs.
+//! Решение 215: итоги периода (uncapped_totals) — общие у экрана и отчёта Excel «Упущено» (core/uncapped_report.rs).
+//! Кто вызывает: api/uncapped.rs, core/uncapped_report.rs.
 //! От чего зависит: storage/uncapped_db.rs, uncapped_sum.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (только показ и причина).
 
-use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
-use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
 use crate::storage::uncapped_db::{self, Filter};
 
 use super::engine::{Core, lk};
-use super::uncapped_sum::Sum;
-use super::uncapped_types::{Brief, take};
+use super::uncapped_sum::{Totals, totals};
+use super::uncapped_types::Brief;
 
 impl Core {
-    /// Что делает: итоги за период [from, to) (RFC 3339; None — без границы), топ `top` направлений.
-    /// Возвращает: {off, deals, candidates, ladder, top, stats}. Ошибки: текст сбоя базы.
-    pub async fn uncapped_summary(
+    /// Что делает: итоги периода [from, to) (RFC 3339; None — без границы) — общая часть экрана и отчёта «Упущено»
+    /// (решение 215): записи базы, таблица потолков uncapped.ladder_usdt (не задана — пустая и причина), факт сделок
+    /// из учёта, uncapped_sum.rs totals. Возвращает: (итоги, причина без таблицы потолков). Ошибки: текст сбоя базы.
+    pub async fn uncapped_totals(
         &self,
         from: Option<String>,
         to: Option<String>,
-        top: usize,
-    ) -> Result<Value, String> {
+    ) -> Result<(Totals, Option<String>), String> {
         let f = Filter {
             from,
             to,
@@ -46,54 +45,51 @@ impl Core {
             Ok(l) => (l, None),
             Err(e) => (vec![], Some(e)),
         };
-        let (mut deals, mut cands) = (Sum::default(), Sum::default());
-        let mut lad = vec![[Decimal::ZERO; 2]; ladder.len()];
-        let mut by_dir: HashMap<String, (Decimal, u64)> = HashMap::new();
-        let facts = lk(&self.inner.deals);
-        // Решение 197: кандидаты с упущено 0 (записаны до решения) в итог не идут — только счётчик скрытых.
-        let mut hidden = 0u64;
-        for (_, body) in &rows {
-            let Ok(b) = serde_json::from_str::<Brief>(body) else {
-                continue;
-            };
-            let g = usize::from(b.battle.verdict != "deal");
-            if g == 1 && b.missed <= Decimal::ZERO {
-                hidden += 1;
-                continue;
-            }
-            match b.battle.deal_id.as_ref() {
-                Some(id) if g == 0 => deals.add(&b, facts.get(id).and_then(|d| d.result_usd)),
-                _ => cands.add(&b, None),
-            }
-            for (i, cap) in ladder.iter().enumerate() {
-                if let Some(l) = b.levels.iter().find(|l| l.cap == *cap) {
-                    lad[i][g] += take(l);
-                }
-            }
-            let d = &b.direction;
-            let key = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
-            let e = by_dir.entry(key).or_default();
-            e.0 += b.missed;
-            e.1 += 1;
-        }
-        drop(facts);
-        let mut top_v: Vec<_> = by_dir.into_iter().collect();
-        top_v.sort_by_key(|b| std::cmp::Reverse(b.1.0));
-        top_v.truncate(top);
-        let ladder_rows: Vec<Value> = ladder
+        let briefs: Vec<Brief> = rows
             .iter()
-            .zip(&lad)
+            .filter_map(|(_, body)| serde_json::from_str::<Brief>(body).ok())
+            .collect();
+        let facts = lk(&self.inner.deals);
+        let t = totals(briefs, &ladder, |id| {
+            facts.get(id).and_then(|d| d.result_usd)
+        });
+        drop(facts);
+        Ok((t, ladder_err))
+    }
+
+    /// Что делает: итоги за период [from, to) (RFC 3339; None — без границы), топ `top` направлений.
+    /// Возвращает: {off, deals, candidates, ladder, top, stats}. Ошибки: текст сбоя базы.
+    pub async fn uncapped_summary(
+        &self,
+        from: Option<String>,
+        to: Option<String>,
+        top: usize,
+    ) -> Result<Value, String> {
+        let (t, ladder_err) = self.uncapped_totals(from, to).await?;
+        let ladder_rows: Vec<Value> = t
+            .ladder
+            .iter()
             .map(|(c, s)| json!({"cap": c, "deals": s[0], "candidates": s[1]}))
+            .collect();
+        let top_v: Vec<Value> = t
+            .top
+            .iter()
+            .take(top)
+            .map(|x| {
+                let d = &x.dir;
+                let key = format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0);
+                json!({"direction": key, "missed": x.missed, "count": x.count})
+            })
             .collect();
         Ok(json!({
             "off": self.uncapped_off(),
-            "hidden_zero": hidden,
-            "deals": deals.json(),
-            "candidates": cands.json(),
+            "hidden_zero": t.hidden,
+            "deals": t.deals.json(),
+            "candidates": t.cands.json(),
             "ladder": ladder_rows,
             "ladder_error": ladder_err,
-            "uncapped": {"deals": deals.potential, "candidates": cands.potential},
-            "top": top_v.iter().map(|(k, (m, n))| json!({"direction": k, "missed": m, "count": n})).collect::<Vec<_>>(),
+            "uncapped": {"deals": t.deals.potential, "candidates": t.cands.potential},
+            "top": top_v,
             "stats": self.uncapped_stats(),
         }))
     }
@@ -158,7 +154,7 @@ impl Core {
     }
 
     /// Почему расчёт без потолка не идёт (None — включён). Ошибок нет.
-    fn uncapped_off(&self) -> Option<String> {
+    pub fn uncapped_off(&self) -> Option<String> {
         match self
             .inner
             .deps

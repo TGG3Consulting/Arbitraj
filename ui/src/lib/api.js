@@ -3,7 +3,7 @@
 //   JSON {"error": "..."} → текст error; простой текст (например отказ api/guard.rs) → этот текст.
 //   У ошибки есть поле status — HTTP-код (0 — запрос не дошёл): по нему экраны отличают
 //   «не применимо» (400), «площадка не подключена» (404), «нет данных» (503) — src/api/README.md.
-// Кто вызывает: все экраны и хранилища ui/src/lib/*.svelte.js.
+// Кто вызывает: все экраны и хранилища ui/src/lib/*.svelte.js; download — pages/Uncapped.svelte (решение 215).
 // От чего зависит: fetch браузера.
 // Настройки: нет. Адрес — тот же сервер, что отдал страницу (или proxy vite в разработке).
 
@@ -52,3 +52,37 @@ export const del = (path, body) => request('DELETE', path, body);
 
 /** Кодирует часть пути (имя секрета, id площадки). Принимает: строку. Возвращает: строку. */
 export const seg = (s) => encodeURIComponent(s);
+
+/**
+ * Что делает: скачивает файл ответа (решение 215: отчёт Excel «Упущено») — сохраняет под именем из Content-Disposition.
+ * Принимает: путь (/api/...), запасное имя файла. Возвращает: ничего.
+ * Ошибки: Error с текстом бэкенда и status (как request); «Нет связи с сервером: …» (status 0).
+ */
+export async function download(path, fallbackName) {
+  let res;
+  try {
+    res = await fetch(path);
+  } catch (e) {
+    throw Object.assign(new Error(`Нет связи с сервером: ${e.message}`), { status: 0 });
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let reason = text;
+    try {
+      reason = JSON.parse(text).error ?? text;
+    } catch {
+      // Простой текст — как есть.
+    }
+    throw Object.assign(new Error(reason || `Ошибка ${res.status} ${res.statusText}`), { status: res.status });
+  }
+  const blob = await res.blob();
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

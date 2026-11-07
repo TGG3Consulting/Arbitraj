@@ -67,6 +67,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route("/api/spreads", get(core_api::spreads))
         .route("/api/candidates", get(core_api::candidates))
         .route("/api/report/results.xlsx", get(report::results))
+        .route("/api/report/missed.xlsx", get(report::missed))
         .route("/api/delistings", get(delist::list))
         .route("/api/deals", get(core_api::deals))
         .route("/api/dry", get(core_api::dry))

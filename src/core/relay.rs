@@ -15,6 +15,7 @@
 //! Решение 222: цель, выручка перегона на которую после затрат ≤ 0 (у relay_value приход-пыль на цели = 0 выручки), —
 //! не цель; целей нет, а продажа здесь не считается или ≤ 0 — остаток списывается в пыль (dust::write_off), сделка
 //! закрывается (живой случай PIT 08.11: «Перегон на MEXC (ожидается 0.0039 USDT)» остатка 770 PIT).
+//! Решение 230: кошелёк DEX на паузе от сверки (wallet_pause.rs) — не цель перегона; монета на нём — продажа на месте.
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs).
 
 use rust_decimal::Decimal;
@@ -43,8 +44,14 @@ fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
         .iter()
         .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
         .filter(|p| !paused.contains_key(&p.venue))
-        // Решение 185: на DEX — только если есть кошелёк (сделки или строки биржи, где монета).
-        .filter(|p| super::dex_account::for_relay(core, deal, &p.venue).is_ok())
+        // Решение 185: на DEX — только если есть кошелёк (сделки или строки биржи, где монета); решение 230 — и этот
+        // кошелёк не на паузе от сверки.
+        .filter(
+            |p| match super::dex_account::for_relay(core, deal, &p.venue) {
+                Ok(acc) => super::wallet_pause::paused(core, acc.as_ref()).is_none(),
+                Err(_) => false,
+            },
+        )
         .map(|p| p.venue.clone())
         .collect()
 }
@@ -72,6 +79,15 @@ pub async fn run(core: &Core, mut deal: Deal) {
         let why = format!(
             "площадка {} на паузе ({p}) — перегон с неё не делаем",
             deal.at.0
+        );
+        return super::relay_here::sell_here(core, deal, &why).await;
+    }
+    // Решение 230: монета на кошельке DEX на паузе от сверки — перегона с него нет, как с площадки на паузе.
+    if let Some(p) = super::wallet_pause::paused_at(core, &deal) {
+        let why = format!(
+            "{} на паузе ({}) — перегон с него не делаем",
+            p.who(),
+            p.why
         );
         return super::relay_here::sell_here(core, deal, &why).await;
     }

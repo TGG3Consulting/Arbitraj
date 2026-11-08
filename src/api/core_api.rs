@@ -1,7 +1,7 @@
 //! Файл: api/core_api.rs
 //! Что делает: экраны «Живой экран», «Сделки», «Управление» — данные и команды ядра.
 //! Кто вызывает: интерфейс.
-//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue,
+//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue, resume_wallet,
 //! release_quarantine, reset_daily_limit, reset_venue_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
 //! Настройки: нет.
 //!
@@ -13,6 +13,7 @@
 //! GET  /api/control                               — Risk: режим системы, паузы площадок, карантины, итог дня
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
+//! POST /api/control/wallet/{id}/resume            — снять паузу кошелька DEX от сверки (решение 230) → Risk
 //! POST /api/control/quarantine/{id}/release   — снять карантин монеты (id — адрес контракта или тикер) → Risk
 //! POST /api/control/daily-limit/reset            — «Сбросить лимит дня» (решение 153) → Risk; режим не меняется
 
@@ -73,6 +74,12 @@ pub async fn set_mode(State(st): State<AppState>, Json(b): Json<ModeBody>) -> Js
 /// Снять паузу площадки. Ошибок нет.
 pub async fn resume_venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
     st.core.resume_venue(&VenueId(id)).await;
+    Json(st.core.control())
+}
+
+/// Решение 230: снять паузу кошелька DEX от сверки (id кошелька: w1…). Ошибок нет (паузы нет — ничего не меняется).
+pub async fn resume_wallet(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
+    st.core.resume_wallet(&id).await;
     Json(st.core.control())
 }
 

@@ -81,6 +81,10 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             post(core_api::resume_venue),
         )
         .route(
+            "/api/control/wallet/{id}/resume",
+            post(core_api::resume_wallet),
+        )
+        .route(
             "/api/control/quarantine/{id}/release",
             post(core_api::release),
         )

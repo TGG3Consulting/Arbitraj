@@ -1,9 +1,12 @@
 //! Файл: api/rules_codes.rs
 //! Что делает: коды ошибок шлюза для формы правил (событие правила) — каждый код и его смысл по-русски, порядок как
-//! в gateway/errors.rs; полнота перечня проверяется при сборке (сторож с исчерпывающим match).
+//! в gateway/errors.rs; полнота перечня проверяется при сборке (сторож с исчерпывающим match). Решение 230: у кода —
+//! действия, которые для него не действуют, с причиной (inactive; gateway/rules.rs inactive_reason).
 //! Кто вызывает: api/rules_meta.rs.
 //! От чего зависит: gateway/errors.rs (ErrorCode).
 //! Настройки: нет.
+
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 
@@ -14,17 +17,28 @@ use crate::gateway::errors::ErrorCode as C;
 pub struct CodeMeta {
     pub code: C,
     pub title: &'static str,
-    /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs retry_allowed, решение 64).
+    /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs inactive_reason: решение 64 — «результат
+    /// неизвестен»; решение 230 — отказ вывода).
     pub no_retry: bool,
+    /// Решение 230: действия, которые для этого кода не действуют, — вид действия → причина (форма их не предлагает,
+    /// сохранённое раньше правило помечается «не действует: причина»).
+    pub inactive: BTreeMap<&'static str, &'static str>,
 }
+
+/// Виды действий, которые могут не действовать для кода (gateway/rules.rs inactive_reason).
+const MAYBE_INACTIVE: [&str; 3] = ["Retry", "StopVenue", "StopAll"];
 
 /// Короткая запись кода. Принимает: код и смысл. Возвращает: CodeMeta.
 fn c(code: C, title: &'static str) -> CodeMeta {
-    let no_retry = !crate::gateway::rules::retry_allowed(code);
+    let inactive: BTreeMap<&'static str, &'static str> = MAYBE_INACTIVE
+        .iter()
+        .filter_map(|k| crate::gateway::rules::inactive_reason(code, k).map(|w| (*k, w)))
+        .collect();
     CodeMeta {
         code,
         title,
-        no_retry,
+        no_retry: inactive.contains_key("Retry"),
+        inactive,
     }
 }
 

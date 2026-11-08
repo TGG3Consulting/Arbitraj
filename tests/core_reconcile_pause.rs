@@ -87,6 +87,7 @@ fn coin(venue: &str, text: &str) -> Found {
         Some(venue.into()),
         text.into(),
         Some(format!("{venue}/PORTO")),
+        None,
     )
 }
 
@@ -97,6 +98,7 @@ fn unavailable(venue: &str) -> Found {
         Some(venue.into()),
         format!("{venue}: балансы не получены — таймаут"),
         Some(format!("{venue}{UNAVAILABLE}")),
+        None,
     )
 }
 
@@ -208,7 +210,13 @@ fn lift_counts_in_a_row_per_venue() {
 #[test]
 fn clean_round_per_venue() {
     let checked = set(&["mexc", "bingx"]);
-    let bnb: Found = ("risk.low_bnb", Some("mexc".into()), "мало BNB".into(), None);
+    let bnb: Found = (
+        "risk.low_bnb",
+        Some("mexc".into()),
+        "мало BNB".into(),
+        None,
+        None,
+    );
     assert!(is_clean("mexc", &checked, &[]));
     assert!(
         is_clean("mexc", &checked, &[bnb]),

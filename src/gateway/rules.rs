@@ -88,3 +88,43 @@ pub fn pick_rule<'a>(
 pub fn retry_allowed(code: ErrorCode) -> bool {
     code != ErrorCode::OutcomeUnknown
 }
+
+/// Отказ вывода (решения 220, 225, 230): «вывод отклонён» (WithdrawRejected), «адрес отклонён» (InvalidAddress),
+/// «вывод заблокирован» (WithdrawLocked). По правилу шлюза не повторяется (продажа на месте — core/relay_here.rs; у
+/// WithdrawLocked — только свой повтор по transfer.locked_retry_ms, решение 166), пауза площадки не ставится
+/// (core/auto_pause.rs no_pause). Принимает: код. Ошибок нет.
+pub fn withdraw_refusal(code: ErrorCode) -> bool {
+    matches!(
+        code,
+        ErrorCode::WithdrawRejected | ErrorCode::InvalidAddress | ErrorCode::WithdrawLocked
+    )
+}
+
+/// Решение 230: почему действие правила для этого кода не действует — форма его не предлагает, API не сохраняет
+/// включённым, сохранённое раньше интерфейс помечает «не действует: …». Принимает: код, вид действия («Retry»,
+/// «StopVenue», «StopAll», … — action_kind). Возвращает: None — действует. Ошибок нет.
+pub fn inactive_reason(code: ErrorCode, kind: &str) -> Option<&'static str> {
+    match kind {
+        "Retry" if !retry_allowed(code) => Some(
+            "повтор запрещён: операция могла исполниться — только сверка и ручная проверка (решение 64)",
+        ),
+        "Retry" if withdraw_refusal(code) => Some(
+            "вывод по этому коду не повторяется — продажа на месте или «USDT не вернулись» (решения 220, 230)",
+        ),
+        "StopVenue" | "StopAll" if withdraw_refusal(code) => {
+            Some("паузы по этому коду нет — только предупреждение (решения 225, 230)")
+        }
+        _ => None,
+    }
+}
+
+/// Вид действия — как в JSON правила («Retry», «StopVenue», …). Принимает: действие. Ошибок нет.
+pub fn action_kind(a: &RuleAction) -> &'static str {
+    match a {
+        RuleAction::CancelNoRetry => "CancelNoRetry",
+        RuleAction::Retry { .. } => "Retry",
+        RuleAction::StopVenue => "StopVenue",
+        RuleAction::StopAll => "StopAll",
+        RuleAction::NotifyOnly => "NotifyOnly",
+    }
+}

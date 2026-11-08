@@ -8,7 +8,8 @@
 //! команда человека не считается совсем, и правило StopVenue паузу по ней не ставит — паузу ставит только автоматика.
 //! «Исход неизвестен» ставит паузу и у ручной команды: очередь кошелька остановлена, транзакция могла исполниться.
 //! Решение 220 (Тигран 08.11): «вывод отклонён» (WithdrawRejected) не повторяется при любых правилах — журнал
-//! core.withdraw_rejected «вывод отклонён — не повторяем».
+//! core.withdraw_rejected «вывод отклонён — не повторяем». Решение 230: правило Retry не действует и для InvalidAddress,
+//! WithdrawLocked (gateway/rules.rs withdraw_refusal; у WithdrawLocked — свой повтор, решение 166).
 //! Решение 221: пауза площадки отсюда (StopVenue, «исход неизвестен») снимает отметку сверки — автоснятия сверкой нет
 //! (rules_stop.rs, forget_reconcile).
 //! Решение 225: паузы отсюда — софтовые (auto_pause.rs): «стоп площадка», «стоп всё» и ошибки подряд снимает сам бот
@@ -143,8 +144,10 @@ pub async fn on_error(
         return Next::Stop;
     };
     match &rule.action {
-        // Решение 220: WithdrawRejected не повторяется даже правилом Retry (запись в журнале — выше).
-        RuleAction::Retry { .. } if rejected => Next::Stop,
+        // Решение 220: WithdrawRejected не повторяется даже правилом Retry (запись в журнале — выше). Решение 230: так же
+        // InvalidAddress и WithdrawLocked (у него — только свой повтор, решение 166); форма и API такое правило не
+        // сохраняют, сохранённое раньше помечено «не действует».
+        RuleAction::Retry { .. } if crate::gateway::rules::withdraw_refusal(err.code) => Next::Stop,
         RuleAction::Retry { attempts, pause_ms } if attempt <= *attempts => Next::Retry {
             pause_ms: *pause_ms,
         },

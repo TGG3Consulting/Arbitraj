@@ -4,6 +4,8 @@
     условие, включено ли; создание и изменение (components/RuleForm.svelte); выключение и включение
     (PUT /api/rules/{id} с enabled). Правило площадки сильнее общего (src/gateway/rules.rs).
     Изменения из других вкладок видны сразу: по записям журнала «rules.*» список перечитывается.
+    Решение 230: правило, действие которого для его кода не действует (отказ вывода: повтор, «стоп»; «результат
+    неизвестен»: повтор), помечено «не действует: причина» (GET /api/rules/meta, codes[].inactive).
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, components/RuleForm.svelte, ErrorText.svelte.
   Настройки: нет.
@@ -50,6 +52,12 @@
   }
 
   const codeTitle = (c) => meta?.codes.find((x) => x.code === c)?.title ?? '';
+  /** Решение 230: причина, почему действие сохранённого правила не действует для его кода (meta codes[].inactive);
+   *  пусто — действует. */
+  const inactiveWhy = (r) => {
+    const kind = typeof r.action === 'string' ? r.action : Object.keys(r.action)[0];
+    return meta?.codes.find((x) => x.code === r.event)?.inactive?.[kind] ?? '';
+  };
   /** Действие для показа: название и параметры. */
   function showAction(a) {
     const kind = typeof a === 'string' ? a : Object.keys(a)[0];
@@ -82,7 +90,7 @@
             <td>{r.id}</td>
             <td><code>{r.event}</code><br /><span class="muted">{codeTitle(r.event)}</span></td>
             <td>{r.scope.kind === 'Venue' ? `площадка ${r.scope.venue}` : 'общее'}</td>
-            <td>{showAction(r.action)}</td>
+            <td>{showAction(r.action)}{#if inactiveWhy(r)}<br /><span class="warn-text">не действует: {inactiveWhy(r)}</span>{/if}</td>
             <td>{#if r.condition}<code>{JSON.stringify(r.condition)}</code><br /><span class="warn-text">не применяется до этапа 5</span>{:else}—{/if}</td>
             <td>{r.enabled ? 'включено' : 'выключено'}</td>
             <td class="row">

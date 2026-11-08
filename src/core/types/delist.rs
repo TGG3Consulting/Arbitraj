@@ -5,6 +5,8 @@
 //! меньше delist.block_hours (core/delist_check.rs).
 //! Как у удержаний вывода (решение 166, hold.rs): у площадки может не быть официального способа это узнать — тогда
 //! ответ «неизвестно» (unknown), а НЕ «делистингов нет»: ядро такую площадку не блокирует, а пишет в журнал.
+//! Решение 226: у биржи может быть несколько источников (справочник пар + анонсы делистинга); сбой второстепенного
+//! источника не отменяет основной — он идёт в warnings (видно на экране, журнал core.delist один раз).
 //! Кто вызывает: gateway/contract.rs (delistings), адаптеры бирж (venues/*/delist.rs), core/delist.rs,
 //! core/delist_check.rs, api (GET /api/delistings).
 //! От чего зависит: chrono, serde.
@@ -36,6 +38,10 @@ pub struct Delistings {
     /// items тогда пуст. None — ответ по фактам API.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unknown: Option<String>,
+    /// Решение 226: второстепенный источник не прочитан (например, анонсы делистинга: настройка не задана, сбой
+    /// запроса) — пары из основного источника при этом действуют. Пусто — все источники прочитаны.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Delistings {
@@ -44,6 +50,7 @@ impl Delistings {
         Self {
             items,
             unknown: None,
+            warnings: vec![],
         }
     }
 
@@ -52,6 +59,7 @@ impl Delistings {
         Self {
             items: vec![],
             unknown: Some(why.into()),
+            warnings: vec![],
         }
     }
 
@@ -60,8 +68,13 @@ impl Delistings {
         self.unknown.is_some()
     }
 
-    /// Запись монеты по тикеру площадки. None — монеты в делистинге нет. Ошибок нет.
+    /// Запись монеты по тикеру площадки. None — монеты в делистинге нет. Несколько записей одной монеты (разные
+    /// источники, решение 226) — строже та, где время не сообщено (такая блокирует всегда), иначе — самое раннее
+    /// прекращение торгов. Ошибок нет.
     pub fn find(&self, ticker: &str) -> Option<&DelistItem> {
-        self.items.iter().find(|i| i.ticker == ticker)
+        self.items
+            .iter()
+            .filter(|i| i.ticker == ticker)
+            .min_by_key(|i| i.trading_end.map(|t| (1, t.timestamp())).unwrap_or((0, 0)))
     }
 }

@@ -7,6 +7,7 @@
 
 pub mod calc_meter;
 pub mod contract;
+pub mod delist_ann;
 pub mod errors;
 pub mod events;
 pub mod feed_health;

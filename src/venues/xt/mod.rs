@@ -175,10 +175,10 @@ impl Venue for Xt {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: в GET /v4/public/symbol только состояние DELISTED (пара уже снята), времени делистинга нет.
+    /// Решение 175 / 226: делистинги — «неизвестно»: в GET /v4/public/symbol поля nextState / nextStateTime в документации без описания (в примере null) и пусты у всех 1110 пар в живом ответе 08.11.2026; state DELISTED — пара уже снята (решение 226: не используется, вопрос Тиграну).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
         Ok(crate::core::types::Delistings::unknown(
-            "в GET /v4/public/symbol только состояние DELISTED (пара уже снята), времени делистинга нет",
+            "в GET /v4/public/symbol поля nextState / nextStateTime в документации без описания (в примере null) и пусты у всех 1110 пар в живом ответе 08.11.2026; state DELISTED — пара уже снята (решение 226: не используется, вопрос Тиграну)",
         ))
     }
 

@@ -25,6 +25,7 @@
 | num.rs | масштабированные целые ↔ Decimal | #price-ratio-value-scales |
 | symbols.rs, symbols_parse.rs | пары (шаги Ev/Ep, пределы) и масштабы монет | #query-product-information |
 | pairs.rs, pairs_watch.rs | состояние пар для ядра, обновление справочника | — |
+| delist.rs | решение 226: делистинги — `timeline[3]` спот-пар Listed GET /public/products-plus (мс); `stStatus` в документации нет — не используется | #query-product-information-plus |
 | subs.rs, market.rs, ws.rs, ws_conn.rs | подписка стаканов (≤ 20 на соединение, ≤ 5 соединений), ping | #subscribe-orderbook-2, #heartbeat-2 |
 | depth.rs, local_book.rs, book.rs | кадры стакана, снимок + изменения, котировка | #orderbook-message |
 | fees.rs | ставки комиссии ключа по паре | #query-fee-rate-by-quote-currency |

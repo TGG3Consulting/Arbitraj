@@ -16,6 +16,7 @@ pub mod accounts;
 pub mod all_balances;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -192,11 +193,9 @@ impl Venue for Htx {
         all_balances::read(&self.ctx).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: в GET /v2/settings/common/symbols нет времени делистинга (state offline — пара уже снята).
+    /// Решение 226: делистинги — dl («delist») и tca («trade close at») пар GET /v1/settings/common/symbols (delist.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "в GET /v2/settings/common/symbols нет времени делистинга (state offline — пара уже снята)",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

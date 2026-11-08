@@ -16,6 +16,7 @@ pub mod all_balances;
 pub mod book;
 pub mod book_decided;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -208,11 +209,9 @@ impl Venue for Bitget {
         all_balances::read(&self.ctx).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: поле offTime справочника GET /api/v2/spot/public/symbols не сверено с официальной документацией (описание поля не прочитано в сессии решения 175) — до проверки не используется.
+    /// Решение 226: делистинги — offTime пар GET /api/v2/spot/public/symbols (delist.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "поле offTime справочника GET /api/v2/spot/public/symbols не сверено с официальной документацией (описание поля не прочитано в сессии решения 175) — до проверки не используется",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

@@ -41,6 +41,8 @@
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки площадки, секреты (ключ, секрет, passphrase), HTTP, журнал, сырые сообщения |
+| `delist.rs` | Решение 226: делистинги — метка `st` («Whether it is a Special Treatment symbol») пар GET /api/v2/symbols с venue.quote_asset (запись без времени) + анонсы (delist_ann.rs); сбой анонсов — warnings |
+| `delist_ann.rs` | Решение 226: анонсы GET /api/v3/announcements?annType=delistings&lang=en_US&startTime (вес 20): только «KuCoin Will Delist A and B on …» без типа futures-announcements, тикеры из справочника — блок с момента анонса |
 | `sign.rs` | Подпись: Base64(HMAC-SHA256(timestamp+METHOD+путь?запрос+тело)), passphrase — HMAC-SHA256 секретом, KC-API-KEY-VERSION |
 | `rest.rs` | REST: публичные и подписанные запросы, GET/DELETE — строка запроса (подпись до кодирования), POST — тело JSON; резерв только при сбое сети |
 | `reply.rs` | Разбор ответа {code, data, msg}; 429000/HTTP 429 — пауза ресурсного пула (Public, Spot, Management) на окно 30 с |

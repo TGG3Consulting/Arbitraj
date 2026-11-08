@@ -22,6 +22,8 @@
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки, секреты, HTTP, журнал, сырые сообщения, окна, состояние приватного потока; символ `CAKEUSDT` |
+| `delist.rs` | Решение 226: делистинги — `stTag` = "1" («special treatment label») спот-пар GET /v5/market/instruments-info с venue.quote_asset (метка у ПАРЫ) + анонсы (delist_ann.rs); сбой анонсов — warnings |
+| `delist_ann.rs` | Решение 226: анонсы GET /v5/announcements/index?locale=en-US&type=delistings&tag=Spot: только тег Spot и «Delisting of A, B and C[ on …]», тикеры из справочника — блок с момента анонса |
 | `http.rs` | HTTP-обмен со сроками gateway/http.rs и заголовками X-Bapi-Limit* |
 | `rest.rs` | Подпись HMAC SHA256 (`timestamp+key+recv_window+query|body`), GET/POST, резервный адрес только при сбое сети |
 | `reply.rs` | Разбор ответа; пауза 10 мин после HTTP 403; пауза эндпоинта до X-Bapi-Limit-Reset-Timestamp (Status=0, 10006) |

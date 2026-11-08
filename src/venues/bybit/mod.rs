@@ -16,6 +16,8 @@ pub mod all_balances;
 pub mod all_balances_parse;
 pub mod book;
 pub mod ctx;
+pub mod delist;
+pub mod delist_ann;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -184,11 +186,9 @@ impl Venue for Bybit {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: в GET /v5/market/instruments-info (спот) нет времени делистинга (status у спота — только Trading); объявления GET /v5/announcements/index — монета и время только текстом, текст не разбирается.
+    /// Решение 226: делистинги — метка stTag спот-пар GET /v5/market/instruments-info + анонсы delistings / Spot (delist.rs, delist_ann.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "в GET /v5/market/instruments-info (спот) нет времени делистинга (status у спота — только Trading); объявления GET /v5/announcements/index — монета и время только текстом, текст не разбирается",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

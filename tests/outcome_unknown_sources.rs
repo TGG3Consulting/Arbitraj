@@ -82,16 +82,20 @@ fn order_or_withdraw_without_result_is_outcome_unknown() {
 }
 
 #[test]
-fn retry_is_forbidden_only_for_outcome_unknown() {
+fn retry_is_forbidden_for_outcome_unknown_and_withdraw_refusals() {
     let codes = arb::api::rules_codes::codes();
     for c in &codes {
+        // Решение 230: «Повторить» нельзя и для отказов вывода (WithdrawRejected, InvalidAddress, WithdrawLocked).
+        let refusal = arb::gateway::rules::withdraw_refusal(c.code);
         assert_eq!(
             c.no_retry,
-            c.code == ErrorCode::OutcomeUnknown,
+            c.code == ErrorCode::OutcomeUnknown || refusal,
             "{:?}",
             c.code
         );
-        assert_eq!(retry_allowed(c.code), !c.no_retry);
+        if !refusal {
+            assert_eq!(retry_allowed(c.code), !c.no_retry);
+        }
     }
     assert!(codes.iter().any(|c| c.no_retry));
 }

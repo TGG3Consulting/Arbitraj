@@ -346,10 +346,11 @@ async fn withdraw_rejected_is_never_retried_by_rules() {
     let log = journal.list(50, None).await.unwrap();
     assert!(log.iter().any(|j| j.kind == "core.withdraw_rejected"
         && j.message.contains("вывод отклонён — не повторяем")));
+    // Решение 230: правило Retry не действует и для WithdrawLocked (свой повтор — transfer.locked_retry_ms, решение 166).
     let locked = GatewayError::new(ErrorCode::WithdrawLocked, Some(v.clone()), "locked");
     assert_eq!(
         rules_apply::on_error(&core, "Вывод", &v, Some("d1"), &locked, 1).await,
-        Next::Retry { pause_ms: 1 }
+        Next::Stop
     );
 }
 

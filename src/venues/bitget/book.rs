@@ -42,6 +42,9 @@ pub struct Books {
     /// Решение 217 (исправление по проверке): снимок REST котировки исполнения пары без стакана потока (решение 201,
     /// put_rest не заменил стакан) и когда получен (unix мс) — для снимка рынка на момент решения (freeze_decided).
     pub(super) rest: Arc<RwLock<HashMap<String, (OrderBook, i64)>>>,
+    /// Решение 202 (для всех бирж, 08.11): свежесть соединений и пар потока для сторожа ядра (gateway/feed_health.rs).
+    /// Снимок REST котировки исполнения (put_rest) сюда не попадает — только кадры WebSocket (ws_conn.rs).
+    pub feed: crate::gateway::feed_reg::FeedReg,
 }
 
 /// Сейчас, unix мс.

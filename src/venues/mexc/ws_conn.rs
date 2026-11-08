@@ -4,7 +4,7 @@
 //! (protobuf) → память и ядру, отказ подписки или неразборчивый стакан → стакан этой пары недостоверен.
 //! Ядру стаканы отдаются без ожидания (try_send).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg).
 //!
 //! Тишина считается от последнего кадра (как решение 98 у bsc_dex): любой кадр, включая PONG, — соединение живо.
@@ -13,6 +13,14 @@
 //! Решение 109: снимок стакана, не отличающийся от прежнего (те же уровни), ядру не отдаётся — частичный стакан MEXC
 //! присылается снимками и без изменений; свежесть — по соединению (alive) и по времени кадра пары (book.rs, touch —
 //! и для пропущенного одинакового снимка; решение 118, А-🟠8).
+//! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр стакана по
+//! паре, и одинаковый снимок тоже; версия книги не передаётся (решение 213: поле version частичного стакана в
+//! документации — «Version number», без связи с lastUpdateId REST /api/v3/depth — book_version у MEXC нет, mod.rs).
+//! Команды сторожа ядра: «переподписать пару» — {"method":"UNSUBSCRIPTION","params":[канал]}, затем
+//! {"method":"SUBSCRIPTION","params":[канал]} в этом же соединении (Live Subscription/Unsubscription to Data Streams,
+//! https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/live-subscriptionunsubscription-to-data-streams; тот же
+//! вид отписки — feed.rs), соседи не трогаются; «переподключить соединение» — сессия заканчивается, ws.rs подключается
+//! заново с теми же парами.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
@@ -35,6 +43,14 @@ use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::ws::{Cfg, End, invalidate};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Канал частичного стакана: «spot@public.limit.depth.v3.api.pb@<symbol>@<level>» (официальная документация).
 pub fn channel(symbol: &str, levels: u64) -> String {
@@ -49,6 +65,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -61,6 +78,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let by_channel: HashMap<String, String> = assets
@@ -84,6 +102,22 @@ pub async fn session(
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    let ch = channel(sym, cfg.levels);
+                    for method in ["UNSUBSCRIPTION", "SUBSCRIPTION"] {
+                        let m = json!({ "method": method, "params": [ch] });
+                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                            return End::Broken(format!("отправка {method} (сторож пар): {e}"));
+                        }
+                    }
+                    // Первый снимок после переподписки — ядру, даже если такой же (решение 109).
+                    last.remove(sym);
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             _ = ping.tick() => {
                 let p = json!({ "method": "PING" });
                 if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
@@ -102,6 +136,7 @@ pub async fn session(
                 let rx_ns = now_ns();
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let msg = match frame {
                     Message::Binary(b) => {
                         if matches!(ctx.flag("raw.book_frames"), Ok(true)) {
@@ -131,6 +166,7 @@ pub async fn session(
                 match msg {
                     Msg::Depth { symbol, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        w.feed.frame(&asset.ticker);
                         // Решение 109: тот же снимок — ядру не отдаём (стакан в памяти уже такой); время кадра пары
                         // обновляется (решение 118, А-🟠8).
                         if last.get(&symbol).is_some_and(|(b, a)| *b == bids && *a == asks) {

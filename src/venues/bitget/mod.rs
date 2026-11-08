@@ -300,4 +300,33 @@ impl Venue for Bitget {
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
     }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: Depth Channel (https://www.bitget.com/docs/classic/websocket/spot/public/Depth-Channel) —
+    ///   «Default data push frequency for books, books5, books15 is 200ms», что кадр идёт и без изменений книги — не
+    ///   сказано; живой случай RWA 06.11 (решение 201) — пара молчала 45–55 с при живом соединении;
+    /// - per_pair = true: отписка — op «unsubscribe» (WebSocket intro, https://www.bitget.com/docs/classic/websocket/
+    ///   intro), см. ws_conn.rs;
+    /// - confirm = false (решение 213): book_version нет — номер seq описан только у кадра WebSocket («It increases
+    ///   when the order book is updated»), связи seq с ответом GET /api/v2/spot/market/orderbook в документации нет; в
+    ///   выписке ответа (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) — asks, bids, ts, номера книги нет;
+    ///   ts кадра — «Matching engine timestamp(ms)», не «время изменения книги». Живого ответа REST в tests/data нет.
+    ///   Вопрос Тиграну — docs/TASKS.md. Тихая пара — только журнал сторожа.
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, false))
+    }
+
+    /// Решение 202: переподписать одну пару в её соединении (unsubscribe + subscribe, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
+    }
 }

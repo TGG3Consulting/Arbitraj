@@ -281,4 +281,32 @@ impl Venue for Mexc {
     ) -> GatewayResult<crate::core::types::TapDecoded> {
         tap::decode(stream, data)
     }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: частота частичного стакана spot@public.limit.depth.v3.api.pb в документации не указана
+    ///   (Partial Book Depth Streams, https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/
+    ///   partial-book-depth-streams), что кадр идёт и без изменений книги — не сказано;
+    /// - per_pair = true: отписка одной подписки — {"method":"UNSUBSCRIPTION"} (Live Subscription/Unsubscription to Data
+    ///   Streams), см. ws_conn.rs;
+    /// - confirm = false (решение 213): book_version нет — поле version кадра частичного стакана описано только как
+    ///   «Version number», связи с lastUpdateId ответа GET /api/v3/depth в документации нет (с lastUpdateId связаны
+    ///   только fromVersion / toVersion канала изменений spot@public.aggre.depth — «How to Properly Maintain a Local Copy
+    ///   of the Order Book»). Вопрос Тиграну — docs/TASKS.md. Тихая пара — только журнал сторожа.
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, false))
+    }
+
+    /// Решение 202: переподписать одну пару в её соединении (UNSUBSCRIPTION + SUBSCRIPTION, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
+    }
 }

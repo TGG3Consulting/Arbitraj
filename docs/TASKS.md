@@ -208,6 +208,30 @@
      Нужна ли перед сделкой отдельная свежая проверка версии по REST (плюс ~100–300 мс к сделке)?
   4. *Другие биржи — ЗАДАЧА (Тигран 08.11: механизм для всех бирж).* Подтверждение есть только у Gate. Для остальных 12 адаптеров — book_version по их документации
      (контракт gateway/contract.rs), до этого у них сторож не включается (feed_health = None).
+     - *MEXC (08.11, ветка t36/feed-watch-mexc-bitget):* сторож включён (feed_health, переподписка одной пары
+       UNSUBSCRIPTION + SUBSCRIPTION, переподключение соединения), **book_version НЕ реализован** (confirm = false) —
+       тихая пара только в журнал, не переподписывается. Причина — документация: Partial Book Depth Streams
+       (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/partial-book-depth-streams) описывает поле кадра
+       как «version | string | Version number», частота пушей не указана; связь с REST есть только у канала изменений:
+       «How to Properly Maintain a Local Copy of the Order Book» — «record `lastUpdateId`», «discard all pushes where
+       `toVersion` <= `lastUpdateId`» (канал spot@public.aggre.depth.v3.api.pb). Что version частичного стакана — тот же
+       счётчик, что lastUpdateId GET /api/v3/depth, нигде не сказано. Вопрос Тиграну: (а) спросить поддержку MEXC или
+       (б) записать на сервере бота одновременно кадры limit.depth и aggre.depth одной пары и ответ /api/v3/depth (hex
+       кадров — raw.book_frames = да; tests/README.md) — если version = toVersion при той же книге, реализовать
+       book_version по lastUpdateId с тестом на записи (как tests/gate_real_data.rs book_version_vs_frame_id).
+     - *Bitget (08.11, та же ветка):* сторож включён (feed_health, переподписка одной пары unsubscribe + subscribe,
+       переподключение соединения), **book_version НЕ реализован** (confirm = false) — тихая пара только в журнал.
+       Причина — документация: Depth Channel (https://www.bitget.com/docs/classic/websocket/spot/public/Depth-Channel):
+       seq — «Serial number. It increases when the order book is updated and can be used to determine whether there is
+       out-of-order packets», ts — «Matching engine timestamp(ms)»; о связи seq с REST — ничего; «Default data push
+       frequency for books, books5, books15 is 200ms» (без «и без изменений»). Страница REST «Get OrderBook Depth» в этой
+       работе не открылась (старый адрес api-doc ведёт на обзор UTA, каталог Classic инструменту недоступен); по выписке
+       в коде (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) в ответе asks, bids, ts — номера книги нет;
+       живого ответа в tests/data нет. Вопрос Тиграну: записать на сервере ответ GET /api/v2/spot/market/orderbook и
+       кадры books15 (tests/README.md, раздел Bitget) — есть ли в ответе seq той же шкалы; нет — подтверждение у Bitget
+       невозможно, тихие пары остаются журналом (решение 201 — снимок REST перед исполнением — уже есть).
+       Замечание: в WebSocket intro сейчас лимит сообщений клиента — «subscribe» и «unsubscribe» по 50 сообщений за 5 с,
+       а venues/bitget/ws.rs держит «up to 10 messages per second» (MAX_MSGS_PER_SEC) — сверить формулировку (не правилось).
 
 - **Решение 211, ревью К1 (07.11.2026):** нативный BNB бирж и BEP20-токен WBNB под тем же адресом — разные активы; сейчас токен WBNB биржи не торгуется (причина NativeVsToken на «Монетах»), нативный BNB торгуется как раньше (биржа ↔ биржа и биржа ↔ DEX). Нужна ли торговля самого токена WBNB биржи с DEX? Это две монеты с одним адресом — ядро различает монеты по адресу (Asset ==), понадобится отдельный признак «нативная» в монете. В записанных справочниках BingX/Gate/KuCoin токена WBNB нет.
 - **Решение 211, ревью В9:** настройки «по монете», не перенесённые миграцией (тикер неоднозначен), читаются по старому тикеру с записью settings.coin_ticker_fallback в журнале — задать их по адресу и удалить старые записи по тикеру.

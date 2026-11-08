@@ -106,3 +106,74 @@ fn symbol_rules_and_rounding() {
         d("2.19")
     );
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/bingx/book_print.rs — подтверждение тихой пары по содержимому.
+/// (1) Разбор ответа GET /openApi/spot/v1/market/depth на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (docs-v3, Spot → Market Data →
+/// Order Book; asks в примере по убыванию — сортируются от лучшей цены): живого ответа REST в tests/data нет.
+/// (2) На ЖИВЫХ кадрах записи 2026-10-23: разбор REST (book_print::parse) и разбор кадра (depth.rs) одних и тех же
+/// уровней [цена, количество] дают один отпечаток — сравнение ядра (core/feed_confirm.rs verdict) — Quiet; другой кадр
+/// (другая книга) — Lost. Пары «кадр + ответ REST в один момент» нет — равенство на одной книге ждёт записи
+/// (tests/README.md).
+#[test]
+fn book_print_docs_example_and_frames() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::bingx::book_print;
+    let docs: Value = serde_json::from_str(
+        r#"{"bids":[["42182.22","0.99114"],["42182.19","1.00643"],["42182.17","0.95406"],["42182.10","0.87420"],["42182.08","1.17445"]],"asks":[["42183.23","3.57139"],["42183.22","2.05573"],["42183.20","2.26065"],["42183.19","1.61695"],["42183.17","4.14752"]],"ts":1702720487674}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&docs, 3).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (3, 3));
+    assert_eq!(
+        (p.asks[0].price, p.asks[0].qty),
+        (d("42183.17"), d("4.14752"))
+    );
+    assert_eq!(
+        (p.bids[0].price, p.bids[0].qty),
+        (d("42182.22"), d("0.99114"))
+    );
+    assert_eq!(p.asks[2].price, d("42183.20"));
+    // Живые кадры: data кадра — те же поля bids / asks, что у ответа REST.
+    let frames: Vec<(Value, BookPrint)> = messages()
+        .iter()
+        .filter_map(|m| match depth::parse(m) {
+            Msg::Depth { bids, asks, .. } => {
+                let data = serde_json::from_str::<Value>(m).unwrap()["data"].clone();
+                Some((data, BookPrint::top(&bids, &asks, 5)))
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(frames.len() >= 2, "кадров стакана {}", frames.len());
+    let pair = PairHealth {
+        ticker: "CAKE".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |rest: BookPrint, ours| BookVersion {
+        print: Some(BookPrints {
+            levels: 5,
+            rest,
+            ours,
+        }),
+        ..Default::default()
+    };
+    for (data, ours) in &frames {
+        let rest = book_print::parse(data, 5).unwrap();
+        assert_eq!(&rest, ours);
+        assert_eq!(
+            verdict(&pair, &ver(rest, Some(ours.clone())), 2),
+            Verdict::Quiet
+        );
+    }
+    let other = book_print::parse(&frames[0].0, 5).unwrap();
+    assert!(matches!(
+        verdict(&pair, &ver(other, Some(frames[1].1.clone())), 2),
+        Verdict::Lost(_)
+    ));
+    let bad: Value = serde_json::from_str(r#"{"bids":[],"ts":1}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет asks");
+}

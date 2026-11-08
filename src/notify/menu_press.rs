@@ -2,9 +2,11 @@
 //! Что делает: нажатия в меню управления Telegram (решение 157): «m:<экран>» — экран меню правится на месте
 //! (editMessageText с новыми кнопками, https://core.telegram.org/bots/api#editmessagetext); «c:<что>» — кнопка
 //! плашки режима: проверка доступности (как на плашке) и вопрос подтверждения «Да, …» (press_confirm.rs) — дальше
-//! та же команда ядра, что у кнопок плашки (ManualAction::SetMode / ResumeVenue / ReleaseQuarantine / ResetDailyLimit / ResetVenueLimit).
+//! та же команда ядра, что у кнопок плашки (ManualAction::SetMode / ResumeVenue / ResumeWallet / ReleaseQuarantine /
+//! ResetDailyLimit / ResetVenueLimit). Решение 230: «c:wr.<id кошелька>» — «Снять паузу» кошелька DEX.
 //! Кто вызывает: notify/press.rs, notify/tg_commands.rs (send_screen).
-//! От чего зависит: notify/menu.rs, press_confirm.rs, core (control, manual_records), mirror_state.rs.
+//! От чего зависит: notify/menu.rs, press_confirm.rs, core (control, manual_records, wallet_pause), mirror_state.rs,
+//! notify/human.rs (имя площадки).
 //! Настройки: нет.
 
 use serde_json::Value;
@@ -12,6 +14,7 @@ use serde_json::Value;
 use crate::core::quarantine::Quarantined;
 use crate::core::risk::{Mode, Risk};
 use crate::core::types::{ManualAction, ManualRecord};
+use crate::core::wallet_pause::WalletPause;
 use crate::storage::journal::Level;
 
 use super::menu;
@@ -24,6 +27,17 @@ pub fn quarantine(r: &Risk) -> Vec<&Quarantined> {
     let mut v: Vec<&Quarantined> = r.quarantine.values().collect();
     v.sort_by(|a, b| a.label.cmp(&b.label));
     v
+}
+
+/// Решение 230: строка паузы кошелька DEX — «Кошелёк «имя» (площадка) — на паузе: причина». Принимает: пауза.
+/// Возвращает: текст строки. Ошибок нет.
+pub fn wallet_line(p: &WalletPause) -> String {
+    format!(
+        "Кошелёк «{}» ({}) — на паузе: {}",
+        p.name,
+        super::human::venue(&p.venue),
+        p.why
+    )
 }
 
 /// Команда плашки по «c:<что>». Принимает: Risk, объект. Возвращает: ожидание (вопрос — как на плашке) или причину отказа.
@@ -48,6 +62,17 @@ pub fn control_action(r: &Risk, object: &str) -> Result<Pending, String> {
             ManualAction::ResumeVenue { venue: arg.into() },
             format!("Снять паузу площадки {arg}?"),
         ),
+        // Решение 230: имя кошелька — из паузы; паузы уже нет — вопрос по id, ядро ответит «не на паузе».
+        "wr" => {
+            let who = r.wallet_paused.get(arg).map_or_else(
+                || format!("кошелька {arg}"),
+                |p| format!("кошелька «{}» ({})", p.name, super::human::venue(&p.venue)),
+            );
+            (
+                ManualAction::ResumeWallet { wallet: arg.into() },
+                format!("Снять паузу {who}?"),
+            )
+        }
         "qr" => (
             ManualAction::ReleaseQuarantine { id: arg.into() },
             format!("Снять карантин монеты {arg}?"),

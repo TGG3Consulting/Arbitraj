@@ -10,7 +10,7 @@
 //! Настройки: нет.
 //!
 //! callback_data: «m:<экран>» — переход (root, st, man, mode, ven, day); «c:<что>» — кнопка плашки
-//! (mode.Running|Paused|Stopped, vr.<площадка>, qr.<id монеты>, dr.x — общий сброс лимита дня, dv.<площадка> — сброс
+//! (mode.Running|Paused|Stopped, vr.<площадка>, wr.<id кошелька> — решение 230, qr.<id монеты>, dr.x — общий сброс лимита дня, dv.<площадка> — сброс
 //! лимита дня площадки, решение 173) — подтверждение в menu_press.rs.
 
 use serde_json::{Value, json};
@@ -72,6 +72,9 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
     }
     for why in r.cycle_paused.values() {
         t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+    }
+    for p in r.wallet_paused.values() {
+        t.push_str(&format!("\n{}", super::menu_press::wallet_line(p)));
     }
     for (deal, (usd, day)) in &d.provisional {
         let unpriced = if d.unpriced.contains(deal) {
@@ -135,14 +138,14 @@ pub fn mode_disabled(now: Mode, want: Mode) -> Option<String> {
     off.then(|| format!("сейчас режим «{}»", label(now)))
 }
 
-/// «Площадки и карантин»: паузы площадок и карантины монет с кнопками снятия — как на плашке. Принимает: Risk.
+/// «Площадки и карантин»: паузы площадок и кошельков DEX (решение 230), карантины монет с кнопками снятия — как на плашке. Принимает: Risk.
 pub fn venues(r: &Risk) -> (String, Value) {
     let (t, rows) = venue_buttons(r);
     (t, with_back(rows))
 }
 
-/// Текст и кнопки снятия пауз площадок, циклов и карантина (решение 176: и «Состояние» чата «Управление»).
-/// Принимает: Risk. Возвращает: (текст, кнопки «c:vr.…», «c:qr.…»). Ошибок нет.
+/// Текст и кнопки снятия пауз площадок, циклов, кошельков DEX и карантина (решение 176: и «Состояние» чата «Управление»).
+/// Принимает: Risk. Возвращает: (текст, кнопки «c:vr.…», «c:wr.…», «c:qr.…»). Ошибок нет.
 pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
     let mut t = String::from("Площадки и карантин");
     let mut rows = Vec::new();
@@ -157,6 +160,14 @@ pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
         t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
         rows.push(b("Снять паузу циклов DEX ↔ DEX", &format!("c:vr.{v}")));
     }
+    // Решение 230: пауза кошелька DEX от сверки — та же команда ядра, что «Снять паузу» на плашке (resume_wallet).
+    for (id, p) in &r.wallet_paused {
+        t.push_str(&format!("\n{}", super::menu_press::wallet_line(p)));
+        rows.push(b(
+            &format!("Снять паузу кошелька «{}»", p.name),
+            &format!("c:wr.{id}"),
+        ));
+    }
     for q in super::menu_press::quarantine(r) {
         t.push_str(&format!("\nМонета {} в карантине: {}", q.label, q.reason));
         rows.push(b(
@@ -165,7 +176,7 @@ pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
         ));
     }
     if rows.is_empty() {
-        t.push_str("\nПлощадок на паузе и монет в карантине нет.");
+        t.push_str("\nПлощадок и кошельков на паузе, монет в карантине нет.");
     }
     (t, rows)
 }

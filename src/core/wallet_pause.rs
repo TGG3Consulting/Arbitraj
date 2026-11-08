@@ -11,7 +11,8 @@
 //!   вручную — «Снять паузу» кошелька (POST /api/control/wallet/{id}/resume → Core::resume_wallet), журнал
 //!   core.control с именем кошелька.
 //!
-//! Кто вызывает: risk.rs (can_open), relay.rs, reconcile_wallet.rs, api/core_api.rs (resume_wallet).
+//! Кто вызывает: risk.rs (can_open), relay.rs, reconcile_wallet.rs, api/core_api.rs (resume_wallet), commands_control.rs
+//! (resume_wallet — кнопка Telegram «Снять паузу кошелька», ManualAction::ResumeWallet).
 //! От чего зависит: engine.rs, risk.rs, dex_account.rs, trade_ops.rs (вид площадки), deal.rs.
 //! Настройки: нет.
 

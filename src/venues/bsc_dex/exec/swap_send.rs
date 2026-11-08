@@ -3,7 +3,7 @@
 //! новом разрешении после пересборки (решение 121 B1), уведомление dex.rebuilt_after_approve и сам обмен (база
 //! проверки баланса — прямо перед подписью, чаевые — к обмену, резерв BNB у нативной продажи).
 //! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs (через реэкспорт exec/trade.rs).
-//! От чего зависит: exec/txs.rs, exec/plan.rs, exec/native.rs, wallet/approve.rs, wallet/balances.rs,
+//! От чего зависит: exec/txs.rs, exec/swap_ctx.rs (отметка approve в «чем найти», решение 231), exec/plan.rs, exec/native.rs, wallet/approve.rs, wallet/balances.rs,
 //! wallet/inflows.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — send.*, channel.*, risk.min_bnb_balance.
 
@@ -28,15 +28,19 @@ use super::txs::{self, Env};
 /// Ошибки: каналы, OutcomeUnknown (nonce занят, квитанции нет), SwapReverted (разрешение не прошло — с фактом).
 pub async fn send_approvals(env: &Env, slot: &Slot, approvals: &[Approval]) -> GatewayResult<bool> {
     for (to, data) in approvals {
-        let d = txs::send(env, slot, *to, data.clone(), U256::ZERO, false, None).await?;
+        // Решение 231 (дополнение): исход разрешения неизвестен — отметка approve в «чем найти» (обмен не отправлялся).
+        let d = txs::send(env, slot, *to, data.clone(), U256::ZERO, false, None)
+            .await
+            .map_err(super::swap_ctx::approve)?;
         if d.chain.outcome == TxOutcome::Replaced {
-            return Err(env
-                .ctx
-                .err(
-                    ErrorCode::OutcomeUnknown,
-                    "Исход разрешения (approve) неизвестен — nonce занят, квитанции нет",
-                )
-                .with_tx(d.chain));
+            return Err(super::swap_ctx::approve(
+                env.ctx
+                    .err(
+                        ErrorCode::OutcomeUnknown,
+                        "Исход разрешения (approve) неизвестен — nonce занят, квитанции нет",
+                    )
+                    .with_tx(d.chain),
+            ));
         }
         if d.chain.outcome != TxOutcome::Included {
             return Err(env

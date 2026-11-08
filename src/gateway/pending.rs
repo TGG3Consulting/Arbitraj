@@ -6,6 +6,9 @@
 //! ядро знало лишь номер сделки, а свой ID у каждой попытки свой (метка миллисекунд, решение 114): восстановить его
 //! нельзя. Ядро (core/outcome_resolve.rs) отдаёт PendingRef обратно той же площадке — Venue::resolve_trade /
 //! Venue::resolve_withdraw.
+//! Дополнение решения 231 (Тигран, 08.11): поле parse — контекст разбора итога, который площадка кладёт сама и сама же
+//! читает при выяснении (DEX: маршрут, токены, decimals, нативная BNB, исполнитель, подписи — venues/bsc_dex/exec/
+//! swap_ctx.rs). Ядро его не разбирает — только хранит и отдаёт обратно той же площадке.
 //! Кто вызывает: адаптеры (создают и прикладывают; created — найденный вывод), core/outcome_resolve.rs (читает),
 //! gateway/contract.rs (тип).
 //! От чего зависит: gateway/errors.rs, core/types (Transfer, WithdrawRequest).
@@ -44,6 +47,10 @@ pub struct PendingRef {
     /// Nonce транзакции DEX.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nonce: Option<u64>,
+    /// Контекст разбора итога — собственность площадки (кладёт и читает только её адаптер; ядро не разбирает). None —
+    /// площадке он не нужен или его нет (операция до дополнения решения 231 — тогда выясняет человек).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parse: Option<serde_json::Value>,
 }
 
 impl PendingRef {

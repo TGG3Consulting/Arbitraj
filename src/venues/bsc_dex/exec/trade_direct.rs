@@ -14,7 +14,7 @@
 //! (exec/exit_quote.rs): ожидаемое, худшая цена и минимумы — от квотера; строка «— продажа по квотеру» — в журнал и в
 //! TradeResult.executor (хронология сделки). Покупка — сверка с квотером, как раньше, стоп.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
-//! От чего зависит: exec/trade.rs (общие шаги), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
+//! От чего зависит: exec/trade.rs (общие шаги), exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
 //! exec/precheck.rs, exec/exit_quote.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
@@ -34,6 +34,7 @@ use super::super::wallet::nonce::Nonces;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::plan::{self, Plan};
+use super::swap_ctx::SwapCtx;
 use super::trade::{
     check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
 };
@@ -104,9 +105,24 @@ pub async fn trade(
     let router = is_native.then_some(p.router);
     let entries: Vec<&Entry> = prep.path.hops.iter().map(|h| &h.entry).collect();
     precheck_sim::emitters(ctx, &p, &entries, at).await?;
-    let d = send_swap(env, &slot, p, guard).await?;
-    drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
+    // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
+    let sc = SwapCtx::swap(
+        wallet,
+        (tin, out_token),
+        decs,
+        router.as_slice(),
+        None,
+        prep.note.clone(),
+    );
+    let d = send_swap(env, &slot, p, guard)
+        .await
+        .map_err(|e| sc.attach(e))?;
+    drop(slot);
+    let sc = SwapCtx {
+        tip_bnb: d.tip_bnb,
+        ..sc
+    };
     let mut r = result::result(
         ctx,
         req,
@@ -115,7 +131,8 @@ pub async fn trade(
         (tin, out_token),
         decs,
         router.as_slice(),
-    )?;
+    )
+    .map_err(|e| sc.attach(e))?;
     // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
     if prep.note.is_some() {
         r.executor = prep.note;

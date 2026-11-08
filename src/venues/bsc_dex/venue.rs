@@ -149,15 +149,24 @@ impl Venue for BscDex {
         scope(Class::Trade, work).await
     }
 
-    /// Решение 231: своп с неизвестным исходом — квитанция по хешу; очередь кошелька снимается, итог свопа — человек
-    /// (resolve.rs).
+    /// Решение 231: своп с неизвестным исходом — квитанция по хешу; очередь кошелька снимается, итог свопа — по
+    /// контексту разбора из «чем найти» (resolve.rs, exec/swap_rebuild.rs; нет контекста — человек); монета сделки — по
+    /// балансу кошелька на блоке свопа (решение 222, как у trade).
     async fn resolve_trade(
         &self,
         req: TradeRequest,
         p: &crate::gateway::pending::PendingRef,
     ) -> GatewayResult<Option<TradeResult>> {
         self.p.ctx.bound()?;
-        scope(Class::Trade, resolve::trade(&self.p, req, p)).await
+        let work = async {
+            match resolve::trade(&self.p, req, p).await? {
+                Some(t) => exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, Ok(t))
+                    .await
+                    .map(Some),
+                None => Ok(None),
+            }
+        };
+        scope(Class::Trade, work).await
     }
 
     /// Решение 231: перевод из кошелька с неизвестным исходом — квитанция по хешу (resolve.rs).

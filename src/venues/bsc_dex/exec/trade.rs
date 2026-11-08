@@ -14,7 +14,7 @@
 //! решение 122, часть X).
 //! Кто вызывает: venue.rs (контракт trade); общие шаги — exec/trade_direct.rs, exec/trade_smart.rs,
 //! exec/bundle_trade.rs, exec/verify_gate.rs.
-//! От чего зависит: exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/executor/*, exec/verify_gate.rs, exec/order.rs,
+//! От чего зависит: exec/swap_ctx.rs (подпись в «чем найти», решение 231), exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/executor/*, exec/verify_gate.rs, exec/order.rs,
 //! exec/plan.rs, exec/txs.rs, exec/native.rs, quote/graph_route.rs, wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs.
 //! Настройки: exec.dex_slippage_pct, exec.executor_address [bsc_dex] (допуск; исполнитель); через вызываемые — dex.*, send.*, channel.*.
 //! Уведомление: dex.rebuilt_after_approve (маршрут собран заново после разрешений, решение 121 B1).
@@ -51,7 +51,8 @@ pub async fn trade(
     let who = req.route.as_ref().map_or(result::BY_DIRECT, |r| {
         by_whom(&q.ctx, r, super::native::is_native(&q.ctx, &req.asset))
     });
-    result::by(run(q, env, nonces, req).await, who)
+    // Решение 231 (дополнение): подпись — и в «чем найти» ошибки «исход неизвестен» (позднее выяснение подпишет так же).
+    result::by(run(q, env, nonces, req).await, who).map_err(|e| super::swap_ctx::who(e, who))
 }
 
 /// Кто исполнит маршрут — по тем же правилам, что выбор пути в run: умный режим — умный; граф — по форме

@@ -15,7 +15,7 @@
 //! Внутри шага STABLE_U256_BNB (пулы с меткой 0xEeee…) BNB есть — контракт разворачивает/заворачивает WBNB сам.
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
 //! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
-//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, leg_min, native, order, precheck_quoter, swap_send, txs,
+//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{swap_ctx,chain, dry_paths, leg_min, native, order, precheck_quoter, swap_send, txs,
 //! verify_gate}.rs, quote/{via, direct}.rs, wallet/{approve, nonce}.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited,
 //! exec.dex_slippage_pct, verify.*, send.*, channel.*.
@@ -36,6 +36,7 @@ use super::super::dry_paths::live_paths;
 use super::super::leg_min;
 use super::super::native;
 use super::super::order::{check_price, worst_positive};
+use super::super::swap_ctx::SwapCtx;
 use super::super::swap_send::{rebuilt_notice, send_approvals};
 use super::super::trade::sides;
 use super::super::txs::{self, Env};
@@ -96,16 +97,19 @@ pub async fn trade(
         rebuilt_notice(env, &req);
     }
     sim::check(ctx, &req, &c, wallet, at, decs).await?;
-    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None).await?;
+    // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
+    let tokens = (c.token_in, c.token_out);
+    let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
+    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None)
+        .await
+        .map_err(|e| sc.attach(e))?;
     drop(slot);
-    let mut r = fact::result(
-        ctx,
-        req,
-        d,
-        (wallet, executor),
-        (c.token_in, c.token_out),
-        decs,
-    )?;
+    let sc = SwapCtx {
+        tip_bnb: d.tip_bnb,
+        ..sc
+    };
+    let mut r =
+        fact::result(ctx, req, d, (wallet, executor), tokens, decs).map_err(|e| sc.attach(e))?;
     // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
     if note.is_some() {
         r.executor = note;

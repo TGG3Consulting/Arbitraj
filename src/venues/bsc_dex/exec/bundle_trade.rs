@@ -184,6 +184,7 @@ pub fn bundle_result(
         chain,
         receipt,
         cancel: None,
+        tip_bnb: None,
     };
     result::result(ctx, req, done, wallet, (tin, tout), decs, native_routers)
 }

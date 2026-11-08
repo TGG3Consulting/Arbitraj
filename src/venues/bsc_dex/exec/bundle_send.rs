@@ -17,7 +17,8 @@
 //! Классику/одиночную отправку не трогает.
 //! Решение 233: итог не установлен за send.queue_max_wait_s (Pending: узел молчал, квитанции не читались — бандл мог
 //! попасть позже) — очередь остановлена, а вызывающий получает «исход неизвестен» с «чем найти» (exec/bundle_ref.rs:
-//! хеши всех транзакций, первый nonce, maxBlockNumber — Sent.max_block), не «не попал в блок».
+//! хеши всех транзакций, первый nonce, maxBlockNumber — Sent.max_block), не «не попал в блок». Так же — если задача
+//! трекера упала (паника) или отменена: очередь остановлена (send/settle.rs guarded / joined), итог — Pending с причиной.
 //! Кто вызывает: exec/bundle_trade.rs; тесты.
 //! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/bundle_notify.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
 //! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
@@ -67,8 +68,9 @@ pub struct Sent {
 /// Шаги: симуляция всего бандла (газ + кумулятивные базы BALANCE_CHECK + проверка «кто меняет», решение 59) → подпись
 /// по очереди → очередь «ждёт итога» (settle::busy) → отправка одним eth_sendBundle через бандл-каналы → ожидание блока
 /// и settle очереди в отдельной задаче-трекере (держит Hold). Принимает: окружение, место в очереди, бандл, пулы
-/// маршрута (для решения 59). Возвращает: итог с квитанциями. Ошибки: NotConfigured (настройки/каналы), NoRoute/StaleData
-/// (симуляция откатилась / чужой пул), ChannelRejected, узел, Internal (подпись / задача трекера упала).
+/// маршрута (для решения 59). Возвращает: итог с квитанциями; слежение прервано (паника / отмена задачи трекера) —
+/// итог Pending с причиной, очередь остановлена (send/settle.rs guarded / joined). Ошибки: NotConfigured
+/// (настройки/каналы), NoRoute/StaleData (симуляция откатилась / чужой пул), ChannelRejected, узел, Internal (подпись).
 pub async fn send(
     env: &Env,
     slot: &Slot,
@@ -139,25 +141,10 @@ pub async fn send(
     // очереди не освобождается, пока итог не установлен, даже если вызывающий прерван.
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let task_hashes = hashes.clone();
+    // Удержание вызывающего: задача упала мимо своей защиты или отменена — очередь останавливает он (settle::joined).
+    let hold_out = hold.clone();
     let class = priority::current();
     let job = tokio::spawn(priority::scope(class, async move {
-        let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
-        // Уведомления жизненного цикла (только отображение, итог/очередь не меняем): включён / не попал в блок.
-        match tracked.outcome {
-            TxOutcome::Included => {
-                let block = tracked.receipt.as_ref().map(|r| r.block_number.to::<u64>());
-                bundle_notify::included(&task_stats, &task_ctx, &task_hashes, block);
-            }
-            TxOutcome::NotIncluded => {
-                bundle_notify::not_included(&task_stats, &task_ctx, max_block);
-            }
-            _ => {}
-        }
-        let receipts = if tracked.outcome == TxOutcome::Included {
-            all_receipts(&task_ctx, &task_hashes).await
-        } else {
-            Vec::new()
-        };
         let a = After {
             ctx: &task_ctx,
             heads: &task_heads,
@@ -167,15 +154,35 @@ pub async fn send(
             nonce: last_nonce,
             hash: repr,
         };
-        settle::settle_bundle(&a, &hold, &tracked).await;
-        (tracked, receipts)
+        // Паника внутри слежения — очередь остановлена здесь же, удержанием задачи (send/settle.rs guarded).
+        settle::guarded(&a, &hold, async {
+            let tracked = confirm(&task_ctx, &task_heads, &cfg, &task_hashes, max_block).await;
+            // Уведомления жизненного цикла (только отображение, итог/очередь не меняем): включён / не попал в блок.
+            match tracked.outcome {
+                TxOutcome::Included => {
+                    let block = tracked.receipt.as_ref().map(|r| r.block_number.to::<u64>());
+                    bundle_notify::included(&task_stats, &task_ctx, &task_hashes, block);
+                }
+                TxOutcome::NotIncluded => {
+                    bundle_notify::not_included(&task_stats, &task_ctx, max_block);
+                }
+                _ => {}
+            }
+            let receipts = if tracked.outcome == TxOutcome::Included {
+                all_receipts(&task_ctx, &task_hashes).await
+            } else {
+                Vec::new()
+            };
+            settle::settle_bundle(&a, &hold, &tracked).await;
+            (tracked, receipts)
+        })
+        .await
     }));
-    let (tracked, receipts) = job.await.map_err(|e| {
-        ctx.err(
-            ErrorCode::Internal,
-            format!("задача трекера бандла {repr} упала: {e}"),
-        )
-    })?;
+    // Слежение прервано (паника, отмена) — исход не установлен, очередь уже остановлена последней транзакцией бандла:
+    // дальше как при Pending — «исход неизвестен» с «чем найти» бандла (exec/bundle_ref.rs, решение 233).
+    let (tracked, receipts) = settle::joined(&after, &hold_out, job)
+        .await
+        .unwrap_or_else(|why| (Tracked::bare(TxOutcome::Pending, Some(why)), Vec::new()));
     Ok(Sent {
         hashes,
         channels: dispatched.all(),

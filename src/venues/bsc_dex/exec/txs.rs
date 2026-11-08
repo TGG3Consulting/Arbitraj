@@ -4,7 +4,9 @@
 //! плюс запас), подпись (EIP-155, legacy), чаевые (только по просьбе вызывающего — один раз на сделку, к транзакции
 //! обмена; и только один канал и бандл), отправка, ожидание итога своим узлом до занятия nonce в блоке.
 //! Ожидание идёт в отдельной задаче, которая держит место в очереди кошелька (wallet/nonce.rs, Hold): даже если
-//! вызывающий прерван, следующая транзакция кошелька не возьмёт nonce, пока этот не занят (решение 45).
+//! вызывающий прерван, следующая транзакция кошелька не возьмёт nonce, пока этот не занят (решение 45). Задача трекера
+//! упала (паника) или отменена — очередь ОСТАНОВЛЕНА (send/settle.rs guarded / joined), вызывающий получает «исход
+//! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро.
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
 //! От чего зависит: exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
@@ -13,7 +15,7 @@
 
 use alloy_primitives::{B256, Bytes, TxKind, U256};
 
-use crate::core::types::{ChainTx, SendMethod};
+use crate::core::types::{ChainTx, SendMethod, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
@@ -22,7 +24,7 @@ use super::super::num;
 use super::super::quote::gas::GasPrice;
 use super::super::send::settle::{self, After};
 use super::super::send::stats::Stats;
-use super::super::send::track::{self, Receipt, Watch};
+use super::super::send::track::{self, Receipt, Tracked, Watch};
 use super::super::send::tx::{self, SendCfg};
 use super::super::send::{self};
 use super::super::wallet::inflows::{Inflows, SwapGuard};
@@ -60,7 +62,8 @@ pub struct Done {
 /// снимается вместе с местом в очереди, когда nonce занят).
 /// Возвращает: Done (итог может быть «откат» / «не попала» / «вытеснена» — решает вызывающий).
 /// Ошибки (транзакция не ушла ни в один канал): настройки, нет каналов, eth_estimateGas откатился (текст узла),
-/// все каналы ответили отказом; Internal — задача трекера упала.
+/// все каналы ответили отказом. После отправки: OutcomeUnknown с фактом транзакции и «чем найти» — исход не установлен
+/// (Pending трекера или слежение прервано паникой / отменой задачи: очередь кошелька остановлена, send/settle.rs).
 pub async fn send(
     env: &Env,
     slot: &Slot,
@@ -135,11 +138,12 @@ pub async fn send(
     env.allow.clear();
     let (task_ctx, task_heads, task_stats) = (ctx.clone(), env.heads.clone(), env.stats.clone());
     let hash = signed.hash;
+    // Удержание вызывающего: если задача трекера упадёт мимо своей защиты или будет отменена, очередь остановит он
+    // (send/settle.rs joined), пока место ещё держится.
+    let hold_out = hold.clone();
     // Слежение за транзакцией — тем же классом срочности, что и отправка (gateway/urgency.rs: задача tokio класс не наследует).
     let class = priority::current();
     let job = tokio::spawn(priority::scope(class, async move {
-        let t = track::resolve(watch).await;
-        drop(keep);
         let a = After {
             ctx: &task_ctx,
             heads: &task_heads,
@@ -149,17 +153,21 @@ pub async fn send(
             nonce,
             hash,
         };
-        settle::settle(&a, &hold, &t).await;
-        t
+        // Паника внутри слежения — очередь остановлена здесь же, удержанием задачи (send/settle.rs guarded): даже если
+        // вызывающий уже прерван, следующая транзакция поверх не уйдёт.
+        settle::guarded(&a, &hold, async {
+            let t = track::resolve(watch).await;
+            drop(keep);
+            settle::settle(&a, &hold, &t).await;
+            t
+        })
+        .await
     }));
-    let joined = job.await;
+    let joined = settle::joined(&after, &hold_out, job).await;
     env.allow.clear();
-    let t = joined.map_err(|e| {
-        ctx.err(
-            ErrorCode::Internal,
-            format!("задача трекера {} упала: {e}", signed.hash),
-        )
-    })?;
+    // Слежение прервано (паника, отмена) — исход не установлен, очередь уже остановлена: дальше как при Pending —
+    // «исход неизвестен» с «чем найти» (хеш, nonce, чаевые), исход выясняет ядро (решение 231).
+    let t = joined.unwrap_or_else(|why| Tracked::bare(TxOutcome::Pending, Some(why)));
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
     if let Some(why) = &t.unresolved {
         let chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);

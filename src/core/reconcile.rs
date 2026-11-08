@@ -1,19 +1,21 @@
 //! Файл: core/reconcile.rs
 //! Что делает: сверка балансов (шаг 6 ТЗ) раз в ledger.reconcile_interval_s: балансы всех включённых
 //! площадок через шлюз → экран «Балансы»; монеты, которые по учёту бота лежат на площадке (открытые
-//! сделки не в пути), должны там быть — меньше — расхождение: новые сделки останавливаются (пауза)
-//! и уведомление risk.reconcile_mismatch. Плюс: мало BNB на газ у DEX (risk.low_bnb), мало USDT
+//! сделки не в пути), должны там быть — меньше — расхождение: новые сделки с этой площадкой останавливаются (пауза
+//! площадки, решение 221) и уведомление risk.reconcile_mismatch. Плюс: мало BNB на газ у DEX (risk.low_bnb), мало USDT
 //! (risk.low_usdt по порогу alert.min_usdt площадки — low_usdt.rs, решение 54), возврат USDT «отдельно».
 //! Решение 112 (reconcile_confirm.rs): учёт площадки снимается до и после запроса её балансов — монета, по которой
 //! сделка за это время сдвинулась, в круге не сверяется; расхождение по монете ставит паузу и уведомляет, только если
 //! держится ledger.reconcile_confirm_rounds кругов подряд.
 //! Решение 118 (Я-11): балансы одной площадки не получены (подтверждено теми же кругами) — пауза этой площадки
-//! (venue_paused), а не системы; системная пауза — только при расхождении монет по учёту. Я-21: «вложено по монетам»
+//! (venue_paused), а не системы; с решения 221 и расхождение монет — тоже пауза площадки. Я-21: «вложено по монетам»
 //! на «Балансах» — по «тикер (адрес коротко)».
 //! Решение 132: у DEX сверяется каждый кошелёк отдельно (reconcile_holders.rs): свои балансы, учёт сделок кошелька,
 //! «мало USDT» и «мало BNB»; на «Балансах» — строка «площадка «кошелёк»».
-//! Решение 221 (reconcile_pause.rs): пауза от сверки пишется в журнал (core.control) с расхождениями и снимается сама
-//! после ledger.reconcile_confirm_rounds кругов подряд без расхождений, если режим за это время не меняли.
+//! Решение 221 (reconcile_pause.rs, Тигран 08.11): подтверждённая проблема сверки (расхождение монет или «балансы не
+//! получены») ставит паузу только ЭТОЙ площадке (у DEX — площадке целиком), системный режим не меняется; журнал
+//! core.control; пауза снимается сама после ledger.reconcile_confirm_rounds чистых кругов подряд ЭТОЙ площадки, если
+//! её не ставил и не снимал человек или другой модуль.
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, reconcile_pause.rs, usdt_return.rs, precheck.rs (BNB), deal.rs,
 //! reconcile_confirm.rs, reconcile_key.rs (ключ монеты: биржа — тикер, DEX — адрес; решение 211, ревью В2).
@@ -32,9 +34,7 @@ use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk, rd};
-use super::reconcile_confirm::{
-    Streak, UNAVAILABLE, expected, is_unavailable, pause_venue, stable,
-};
+use super::reconcile_confirm::{Streak, UNAVAILABLE, expected, stable};
 use super::view::CoreEvent;
 use super::wait::{Pacer, Unit};
 
@@ -51,9 +51,10 @@ pub async fn run(core: Core) {
     let mut lift = super::reconcile_pause::Lift::default();
     loop {
         pacer.pause(&core.inner.deps, &quiet).await;
-        let all = once(&core).await;
-        // Решение 221: пауза сверки снимается сама после ledger.reconcile_confirm_rounds чистых кругов подряд.
-        super::reconcile_pause::maybe_lift(&core, &mut lift, &all).await;
+        let (all, checked) = once(&core).await;
+        // Решение 221: пауза площадки от сверки снимается сама после ledger.reconcile_confirm_rounds чистых кругов
+        // подряд этой площадки.
+        super::reconcile_pause::maybe_lift(&core, &mut lift, &checked, &all).await;
         let keys: Vec<String> = all.iter().filter_map(|f| f.3.clone()).collect();
         let (confirmed, waiting) = streak.mark(&core, &keys);
         for (key, n, need) in waiting {
@@ -74,13 +75,8 @@ pub async fn run(core: Core) {
             .into_iter()
             .filter(|f| f.3.as_ref().is_none_or(|k| confirmed.contains(k)))
             .collect();
-        // Решение 118 (Я-11): балансы площадки не получены — пауза этой площадки, а не всей системы.
-        for (_, venue, text, _) in found.iter().filter(|f| is_unavailable(f)) {
-            if let Some(v) = venue {
-                pause_venue(&core, VenueId(v.clone()), text);
-            }
-        }
-        // Решение 221: пауза от сверки — с записью в журнал и автоснятием (reconcile_pause.rs).
+        // Решения 118 (Я-11) и 221: расхождение или «балансы не получены» — пауза только этой площадки, с записью в
+        // журнал и автоснятием (reconcile_pause.rs).
         super::reconcile_pause::pause(&core, &found).await;
         for (code, venue, text, _) in &found {
             if active.insert(format!("{code}{text}")) {
@@ -95,8 +91,9 @@ pub async fn run(core: Core) {
     }
 }
 
-/// Один круг сверки. Возвращает: найденные проблемы (Found). Пауза — в run (после подтверждения).
-async fn once(core: &Core) -> Vec<Found> {
+/// Один круг сверки. Возвращает: найденные проблемы (Found) и площадки, которые сверялись в круге (решение 221: круг
+/// чистый только у сверенной площадки). Пауза — в run (после подтверждения).
+async fn once(core: &Core) -> (Vec<Found>, HashSet<String>) {
     let deps = &core.inner.deps;
     let venues: Vec<(VenueId, VenueKind)> = rd(&core.inner.kinds)
         .iter()
@@ -104,10 +101,12 @@ async fn once(core: &Core) -> Vec<Found> {
         .cloned()
         .collect();
     let mut out = vec![];
+    let mut checked = HashSet::new();
     let mut all = serde_json::Map::new();
     let mut free_usdt = HashMap::new();
     // Решение 132: у DEX — каждый кошелёк отдельно (свои балансы, учёт, «мало USDT/BNB»); подпись — «площадка «кошелёк»».
     for (v, kind, acc, label) in super::reconcile_holders::list(core, venues) {
+        checked.insert(v.0.clone());
         let at = At {
             venue: Some(&v.0),
             coin: None,
@@ -206,5 +205,5 @@ async fn once(core: &Core) -> Vec<Found> {
         json!({ "venues": all, "in_transit_usd": ex.in_transit, "per_coin_usd": per_coin }),
     ));
     super::usdt_return::separate(core, &free_usdt).await;
-    out
+    (out, checked)
 }

@@ -1,5 +1,5 @@
 //! Файл: tests/feed_watch_venues.rs
-//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit, KuCoin, BingX на
+//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit, KuCoin, BingX, OKX на
 //! настоящих адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
 //! (core/feed_watch_logic.rs decide):
 //! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждение по REST
@@ -14,7 +14,7 @@
 //! кадров в учёте свежести на живых кадрах ждёт записи (tests/README.md; tests/mexc_window_tap.rs,
 //! tests/bitget_real_data.rs recorded_ws_frames). Моков нет.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
+//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx, okx}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 
-/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX на хранилище во временной папке (без сети и секретов).
+/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX, OKX на хранилище во временной папке (без сети и секретов).
 async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
     let d = std::env::temp_dir().join(format!("arb-feed-watch-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -74,12 +74,19 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         taps: Default::default(),
     };
     let bx = arb::venues::bingx::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: reqwest::Client::new(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    let ok = arb::venues::okx::ctx::Ctx {
         settings,
         vault,
         http: reqwest::Client::new(),
         journal,
         raw,
-        taps: Default::default(),
     };
     vec![
         Arc::new(arb::venues::mexc::Mexc::new(mx)),
@@ -87,6 +94,7 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         Arc::new(arb::venues::bybit::Bybit::new(by)),
         Arc::new(arb::venues::kucoin::Kucoin::new(kc)),
         Arc::new(arb::venues::bingx::Bingx::new(bx)),
+        Arc::new(arb::venues::okx::Okx::new(ok)),
     ]
 }
 

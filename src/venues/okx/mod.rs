@@ -13,6 +13,7 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_print;
 pub mod ctx;
 pub mod delist;
 pub mod delist_ann;
@@ -265,5 +266,46 @@ impl Venue for Okx {
 
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: «Snapshot data will be pushed every 100 ms when there are changes» (books5), без изменений —
+    ///   повтор «Around 60 seconds» («Order book channel»; «Around» — не расписание); при confirm = true поле не влияет;
+    /// - per_pair = true: «Overview → WebSocket → Unsubscribe» — отписка канала пары ({"op":"unsubscribe"}), ws_conn.rs;
+    /// - confirm = true (решение 213, по содержимому): связь seqId кадра books5 / books с seqId ответа GET
+    ///   /api/v5/market/books в документации не описана (описана только у books-rpi и SBE) — сравниваются первые
+    ///   venue.depth_levels уровней ответа и стакана в памяти (book_print.rs, core/feed_print.rs).
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). instId — из
+    /// справочника пар (symbols.rs). Ошибки: пары нет в справочнике, как у book_print::book_version.
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        let inst = self.symbols.get(&self.ctx, ticker)?.symbol;
+        book_print::book_version(&self.ctx, &self.books, &inst, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm; действует, если
+    /// задана venue.book_stale_ms).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 202: переподписать одну пару в её соединении (unsubscribe + subscribe, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
     }
 }

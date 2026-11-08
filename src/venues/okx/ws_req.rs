@@ -1,18 +1,23 @@
 //! Файл: venues/okx/ws_req.rs
 //! Что делает: подключение WebSocket OKX и запросы подписки (op = subscribe / unsubscribe) пачками не длиннее 64 КБ —
-//! общие для соединений стаканов (ws_conn.rs) и потока аккаунта (user_stream_conn.rs).
+//! общие для соединений стаканов (ws_conn.rs) и потока аккаунта (user_stream_conn.rs); переподписка одной пары
+//! (unsubscribe + subscribe — разрыв prevSeqId и команда сторожа пар, решение 202).
 //! Кто вызывает: ws_conn.rs, user_stream_conn.rs, тесты.
 //! От чего зависит: tokio-tungstenite, serde_json.
 //! Настройки: нет (адрес и срок передаёт вызывающий).
 //!
 //! Официально (https://www.okx.com/docs-v5/en/, «Overview → WebSocket»): «the total length of multiple channels cannot
 //! exceed 64 KB»; «The total number of 'subscribe'/'unsubscribe'/'login' requests per connection is limited to 480 times
-//! per hour».
+//! per hour»; «Overview → WebSocket → Unsubscribe»: «{"op": "unsubscribe", "args": ["<SubscriptionTopic>"]}», пример
+//! {"op":"unsubscribe","args":[{"channel":"tickers","instId":"BTC-USDT"}]}.
 
 use std::time::Duration;
 
+use futures_util::SinkExt;
+use futures_util::stream::SplitSink;
 use serde_json::json;
 use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 /// Предел длины одного запроса подписки — официально «cannot exceed 64 KB».
@@ -53,4 +58,25 @@ pub fn requests(op: &str, channel: &str, insts: &[&str]) -> Vec<String> {
         out.push(json!({"op": op, "args": args}).to_string());
     }
     out
+}
+
+/// Разъём на запись соединения.
+pub type Sink = SplitSink<Ws, Message>;
+
+/// Переподписка одной пары: unsubscribe, затем subscribe канала пары в этом же соединении (оба — в счёт «480 times per
+/// hour»). Принимает: разъём, канал, instId, счётчик запросов сессии. Ошибка — текст (запрос не отправлен).
+pub async fn resub(
+    sink: &mut Sink,
+    channel: &str,
+    inst: &str,
+    ops: &mut usize,
+) -> Result<(), String> {
+    for op in ["unsubscribe", "subscribe"] {
+        *ops += 1;
+        let r = requests(op, channel, &[inst]).concat();
+        sink.send(Message::Text(r.into()))
+            .await
+            .map_err(|e| format!("отправка {op}: {e}"))?;
+    }
+    Ok(())
 }

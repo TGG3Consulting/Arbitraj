@@ -120,6 +120,12 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   /openApi/spot/v1/market/depth на **примере из документации** (docs-v3, Order Book; живого ответа REST нет) и на живых
   кадрах @depth 2026-10-23: разбор ответа REST и кадра одних уровней даёт один отпечаток (verdict ядра — Quiet), другой
   кадр — Lost. Записать на сервере бота подряд кадры `<SYM>@depth20` и `GET /openApi/spot/v1/market/depth?symbol=<SYM>&limit=20`.
+- `okx_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET /api/v5/market/books на
+  **примере из документации** («Order Book Trading → Market Data → GET / Order book», Response Example; живого ответа и
+  кадров books5 нет — www.okx.com закрыт прокси), verdict ядра: тот же отпечаток — Quiet, стакана нет / другой — Lost.
+  Записать на сервере бота подряд кадры books5 пары (raw.book_frames = да) и сразу
+  `GET /api/v5/market/books?instId=<SYM>&sz=5`: (1) равенство отпечатков на одной книге; (2) seqId ответа против seqId
+  последнего кадра books5 / books — одна ли шкала (вопрос «по номеру» — docs/TASKS.md).
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:

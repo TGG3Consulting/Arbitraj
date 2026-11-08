@@ -8,7 +8,10 @@
 //! с новой котировкой (здесь площадки нет — новая котировка честно «невозможна», сделка остановлена, но путь пройден);
 //! (3) исчерпан stuck.unsent_retries_max → журнал Error core.sell_unsent_exhausted и алерт человеку, строка об отказе в
 //! хронологии — одна; (5) решение 220: продажа здесь в режиме «Перегон» — порог stuck.relay_max_loss_pct (живой
-//! случай BRIC: −30 %, −11 USDT по рынку без порога), не задан — алерт; нет котировки — алерт; (4) адаптер: где транзакция по ответу eth_getTransactionByHash (запись узла BSC 2026-10-25).
+//! случай BRIC: −30 %, −11 USDT по рынку без порога), не задан — алерт; нет котировки — алерт; (4) адаптер: где транзакция по ответу eth_getTransactionByHash (запись узла BSC 2026-10-25);
+//! (6) ответы Тиграна 08.11 к решению 220: «вывод отклонён» (WithdrawRejected, текст Bitget 40938 из живых сделок CHEEMS,
+//! AVA, RWA) не повторяется даже правилом Retry и в повторах возврата USDT; перевод не состоялся — монеты на месте:
+//! продажа здесь, нет — остановка; нет котировки — ждём цену монеты до первого тика, не дольше stuck.no_quote_wait_ms.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets, arb::venues::bsc_dex::send.
 
@@ -299,6 +302,193 @@ async fn relay_exhausted_without_threshold_alerts_human() {
             .iter()
             .any(|(_, t)| t.contains("перегонов 1 — исчерпаны")
                 && t.contains("не задана настройка stuck.relay_max_loss_pct")),
+        "{:?}",
+        y.timeline
+    );
+}
+
+/// Живой отказ Bitget 40938 (сделки CHEEMS, AVA, RWA; venues/bitget/errors.rs).
+const BITGET_40938: &str = "Your account can only withdraw to addresses in the address book";
+
+/// Решение 220 (Г1): WithdrawRejected не повторяется даже правилом Retry — журнал «вывод отклонён — не повторяем»;
+/// то же правило Retry на другой код (WithdrawLocked) действует как раньше.
+#[tokio::test]
+async fn withdraw_rejected_is_never_retried_by_rules() {
+    use arb::core::rules_apply::{self, Next};
+    use arb::gateway::errors::GatewayError;
+    use arb::gateway::rules::{Rule, RuleAction, RuleScope};
+    let d = dir("rejected");
+    let (core, _, journal) = start(&d).await;
+    let v = VenueId("bitget".into());
+    for event in [ErrorCode::WithdrawRejected, ErrorCode::WithdrawLocked] {
+        let rule = Rule {
+            id: 0,
+            event,
+            condition: None,
+            action: RuleAction::Retry {
+                attempts: 5,
+                pause_ms: 1,
+            },
+            scope: RuleScope::All,
+            enabled: true,
+        };
+        arb::storage::rules::create(&core.inner.deps.db, rule)
+            .await
+            .unwrap();
+    }
+    let e = GatewayError::new(ErrorCode::WithdrawRejected, Some(v.clone()), BITGET_40938);
+    assert_eq!(
+        rules_apply::on_error(&core, "Вывод", &v, Some("d1"), &e, 1).await,
+        Next::Stop
+    );
+    let log = journal.list(50, None).await.unwrap();
+    assert!(log.iter().any(|j| j.kind == "core.withdraw_rejected"
+        && j.message.contains("вывод отклонён — не повторяем")));
+    let locked = GatewayError::new(ErrorCode::WithdrawLocked, Some(v.clone()), "locked");
+    assert_eq!(
+        rules_apply::on_error(&core, "Вывод", &v, Some("d1"), &locked, 1).await,
+        Next::Retry { pause_ms: 1 }
+    );
+}
+
+/// Решение 220 (Г1): возврат USDT после WithdrawRejected не повторяется даже при заданных повторах (решение 163) —
+/// сразу «USDT не вернулись» на площадке; отказ «заблокировано» (WithdrawLocked) — повтор, как раньше.
+#[tokio::test]
+async fn usdt_return_not_retried_after_withdraw_rejected() {
+    use arb::core::usdt_return_state::UsdtReturn;
+    let d = dir("usdt");
+    let (core, s, journal) = start(&d).await;
+    set(&s, "usdt.return_retry_s", json!(1)).await;
+    set(&s, "usdt.return_retries_max", json!(3)).await;
+    let x = aster();
+    arb::core::ledger::save(&core, &x).await;
+    let (from, to) = (VenueId("bitget".into()), VenueId("bingx".into()));
+    let e = OpError {
+        code: Some(ErrorCode::WithdrawRejected),
+        message: BITGET_40938.into(),
+        sent: false,
+    };
+    let amount = Decimal::from(83);
+    let again = arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &e).await;
+    assert!(!again, "повтора нет");
+    let y = deal_of(&core, &x.id);
+    assert!(
+        matches!(&y.usdt_return, Some(UsdtReturn::NotReturned { at, why, .. }) if at == &from && why.contains("не повторяем")),
+        "{:?}",
+        y.usdt_return
+    );
+    let log = journal.list(50, None).await.unwrap();
+    assert!(
+        log.iter()
+            .any(|j| j.message.contains("вывод отклонён — не повторяем"))
+    );
+    let locked = OpError {
+        code: Some(ErrorCode::WithdrawLocked),
+        message: "locked".into(),
+        sent: false,
+    };
+    assert!(
+        arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &locked).await
+    );
+}
+
+/// Решение 220 (Г2): перевод не состоялся — монеты на месте → продажа здесь (количество — по балансу); нет монет или
+/// баланс не получен → остановка с причиной.
+#[test]
+fn transfer_failed_sells_here_only_with_coins() {
+    use arb::core::relay_here::{Place, place};
+    let why = format!("перегон не состоялся: {BITGET_40938}");
+    let q = Decimal::from_str("143.6").unwrap();
+    assert_eq!(place(&why, Ok((q, None))), Place::SellHere(q, None));
+    assert!(
+        matches!(place(&why, Ok((Decimal::ZERO, None))), Place::Halt(t) if t.contains("монет на месте нет"))
+    );
+    assert!(matches!(
+        place(&why, Err("на bitget нет свободных ASTER".into())),
+        Place::Halt(t) if t.contains(BITGET_40938) && t.contains("нет свободных")
+    ));
+}
+
+/// Решение 220 (Г2): перевод не состоялся, баланс площадки не получить (площадки в реестре нет) — сделка остановлена,
+/// без режима застрявшей монеты и без повтора вывода.
+#[tokio::test]
+async fn transfer_failed_without_coins_halts() {
+    let d = dir("tfail");
+    let (core, s, _) = start(&d).await;
+    set(&s, "stuck.relay_max_loss_pct", json!(20)).await;
+    let why = format!("перевод не состоялся: {BITGET_40938}");
+    arb::core::relay_here::transfer_failed(&core, aster(), &why).await;
+    let y = deal_of(&core, "20261104120743802ASTER");
+    assert_eq!(y.step, Step::Halted, "{:?}", y.timeline);
+    assert!(
+        y.timeline
+            .iter()
+            .any(|(_, t)| t.contains(BITGET_40938) && t.contains("монет на месте нет")),
+        "{:?}",
+        y.timeline
+    );
+}
+
+/// Решение 220 (Г3): котировки нет — ждём цену монеты; первый же тик с котировкой кончает ожидание (не ждём предела);
+/// без настройки — сразу; предел вышел — причина с тем, сколько ждали.
+#[tokio::test]
+async fn no_quote_waits_for_tick_or_timeout() {
+    use arb::core::relay_here::quote_or_wait;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    let d = dir("wait");
+    let (core, _, _) = start(&d).await;
+    let deal = aster();
+    let calls = AtomicU32::new(0);
+    // Первая котировка — нет стакана, после тика — есть.
+    let c = &calls;
+    let quote = move || async move {
+        match c.fetch_add(1, Ordering::SeqCst) {
+            0 => Err("нет стакана".to_string()),
+            _ => Ok(Decimal::from(30)),
+        }
+    };
+    let ticks = core.inner.coin_ticks.clone();
+    let asset = deal.direction.asset.clone();
+    tokio::spawn(async move {
+        for _ in 0..50 {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            let _ = ticks.send(asset.clone());
+        }
+    });
+    let t0 = std::time::Instant::now();
+    assert_eq!(
+        quote_or_wait(&core, &deal, Some(60_000), quote).await,
+        Ok(Decimal::from(30))
+    );
+    assert!(
+        t0.elapsed() < std::time::Duration::from_secs(5),
+        "кончилось на тике, а не на пределе"
+    );
+    let none = || async { Err::<Decimal, _>("нет стакана".to_string()) };
+    let r = quote_or_wait(&core, &deal, None, none).await.unwrap_err();
+    assert!(r.contains("stuck.no_quote_wait_ms не задана"), "{r}");
+    let r = quote_or_wait(&core, &deal, Some(30), none)
+        .await
+        .unwrap_err();
+    assert!(r.contains("ждали цену монеты 30 мс"), "{r}");
+}
+
+/// Решение 220 (Г3): продажа здесь без котировки (площадки нет) — ждали stuck.no_quote_wait_ms, затем алерт с причиной.
+#[tokio::test]
+async fn sell_here_without_quote_alerts_after_wait() {
+    let d = dir("hwait");
+    let (core, s, _) = start(&d).await;
+    set(&s, "stuck.relay_max_loss_pct", json!(20)).await;
+    set(&s, "stuck.no_quote_wait_ms", json!(40)).await;
+    let mut x = aster();
+    x.invested = Decimal::from(36);
+    arb::core::relay_here::sell_here(&core, x, "перегон не выгоднее продажи здесь").await;
+    let y = deal_of(&core, "20261104120743802ASTER");
+    assert_eq!(y.step, Step::WaitingHuman, "{:?}", y.timeline);
+    assert!(
+        y.timeline
+            .iter()
+            .any(|(_, t)| t.contains("нет котировки") && t.contains("ждали цену монеты 40 мс")),
         "{:?}",
         y.timeline
     );

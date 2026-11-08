@@ -8,7 +8,7 @@
 //! Решение 220: причина входа (stuck_reason.rs) — настоящая, от вызывающего; в журнале и Telegram.
 //! Решение 222: перед режимом остаток сверяется с балансом площадки (remain_fact.rs) — min(учёт, факт); после
 //! несостоявшегося перевода — без сверки (handle_as_is).
-//! Кто вызывает: executor.rs, sell.rs, sell_unsent.rs, relay.rs.
+//! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 

@@ -14,6 +14,8 @@
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
 //! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
+//! Решение 220: «вывод отклонён» (WithdrawRejected) не повторяется при любых правилах шлюза (rules_apply.rs) — ошибка
+//! уходит вызывающему (продажа на месте — relay_here.rs, возврат USDT — usdt_return_retry.rs).
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs).
 

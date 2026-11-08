@@ -99,6 +99,7 @@ fn bot_part_counts_only_bot_sells_at_proceeds_venue() {
     let fee = Fee {
         asset: "USDT".into(),
         amount: d("0.1"),
+        usd: None,
     };
     x.sells.push(sell("mexc", d("100"), d("0.5"), vec![fee]));
     // Продажа на другой площадке — её выручка не на mexc, в возврат с mexc не входит.

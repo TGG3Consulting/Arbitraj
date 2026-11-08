@@ -95,11 +95,13 @@ fn bitget_two_coins_live_xter() {
         vec![
             Fee {
                 asset: "BGB".into(),
-                amount: d("0.0000197")
+                amount: d("0.0000197"),
+                usd: None,
             },
             Fee {
                 asset: "XTER".into(),
-                amount: d("5.32956")
+                amount: d("5.32956"),
+                usd: None,
             },
         ]
     );
@@ -118,7 +120,8 @@ fn gate_fee_parts() {
         f,
         vec![Fee {
             asset: "GT".into(),
-            amount: d("0.0003")
+            amount: d("0.0003"),
+            usd: None,
         }]
     );
     let pts = json!({"fee": "0", "fee_currency": "CAKE", "gt_fee": "0", "point_fee": "0.1"});

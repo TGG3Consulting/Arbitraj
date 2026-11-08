@@ -166,7 +166,8 @@ fn poloniex_two_coins_is_list() {
         fees[1],
         Fee {
             asset: "TRX".into(),
-            amount: d("0.05")
+            amount: d("0.05"),
+            usd: None,
         }
     );
 }
@@ -187,11 +188,13 @@ fn htx_two_coins_is_list() {
         vec![
             Fee {
                 asset: "HT".into(),
-                amount: d("0.0123")
+                amount: d("0.0123"),
+                usd: None,
             },
             Fee {
                 asset: "CAKE".into(),
-                amount: d("0.1")
+                amount: d("0.1"),
+                usd: None,
             }
         ]
     );
@@ -209,11 +212,13 @@ fn xt_deduct_two_coins_is_list() {
         vec![
             Fee {
                 asset: "XT".into(),
-                amount: d("0.01")
+                amount: d("0.01"),
+                usd: None,
             },
             Fee {
                 asset: "WIN".into(),
-                amount: d("5")
+                amount: d("5"),
+                usd: None,
             }
         ]
     );

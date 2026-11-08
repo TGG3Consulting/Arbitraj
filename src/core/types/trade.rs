@@ -1,7 +1,8 @@
 //! Файл: core/types/trade.rs
 //! Что делает: типы торговли — сторона сделки, котировка на объём, запрос и результат покупки/продажи.
 //! Кто вызывает: ядро (расчёт, исполнение), шлюз и адаптеры через контракт.
-//! От чего зависит: core/types/market.rs, cost.rs (затраты, маршрут DEX), send.rs (транзакция в сети).
+//! От чего зависит: core/types/market.rs, cost.rs (затраты, маршрут DEX), send.rs (транзакция в сети), fee.rs (часть
+//! комиссии ордера).
 //! Настройки: нет.
 //!
 //! Покупка и продажа описываются одинаково для биржи и DEX:
@@ -14,6 +15,9 @@ use serde::{Deserialize, Serialize};
 use super::cost::{Cost, DexRoute};
 use super::market::{Asset, VenueId};
 use super::send::ChainTx;
+
+/// Часть фактической комиссии — core/types/fee.rs (вынесена: файл вырос; путь types::trade::Fee сохранён).
+pub use super::fee::Fee;
 
 /// Сторона сделки.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,57 +87,6 @@ pub enum TradeStatus {
     Filled,
     PartiallyFilled,
     NotFilled,
-}
-
-/// Одна часть фактической комиссии ордера: сколько и в какой монете (решение 219).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Fee {
-    /// В чём взята: тикер монеты сделки, котируемая монета (USDT), монета скидки биржи (BGB, GT, MX, BNB, KCS),
-    /// BNB за газ у DEX.
-    pub asset: String,
-    /// Сумма в единицах `asset`, неотрицательная.
-    pub amount: Decimal,
-}
-
-impl Fee {
-    /// Что делает: список из одной части комиссии (у площадки, что сообщает одну монету). Ноль — пустой список.
-    /// Принимает: сумму, монету. Возвращает: Vec<Fee>. Ошибок нет.
-    pub fn single(amount: Decimal, asset: impl Into<String>) -> Vec<Fee> {
-        if amount.is_zero() {
-            return vec![];
-        }
-        vec![Fee {
-            asset: asset.into(),
-            amount,
-        }]
-    }
-
-    /// Что делает: добавляет часть комиссии, суммируя по монете (несколько сделок ордера с разными монетами).
-    /// Нулевая сумма не добавляется (пустая монета при ненулевой сумме — добавляется: факт виден, пересчёт в USDT
-    /// не пройдёт и это пишется в хронологию). Принимает: список, монету, сумму. Ошибок нет.
-    pub fn add(list: &mut Vec<Fee>, asset: &str, amount: Decimal) {
-        if amount.is_zero() {
-            return;
-        }
-        match list.iter_mut().find(|f| f.asset == asset) {
-            Some(f) => f.amount += amount,
-            None => list.push(Fee {
-                asset: asset.to_string(),
-                amount,
-            }),
-        }
-    }
-
-    /// Что делает: текст «0.1 USDT + 0.00002 BGB»; пусто — «0». Принимает: список. Ошибок нет.
-    pub fn text(list: &[Fee]) -> String {
-        if list.is_empty() {
-            return "0".into();
-        }
-        list.iter()
-            .map(|f| format!("{} {}", f.amount, f.asset))
-            .collect::<Vec<_>>()
-            .join(" + ")
-    }
 }
 
 /// Фактический результат покупки или продажи.

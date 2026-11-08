@@ -75,6 +75,7 @@ fn jct(id: &str, cex: &str) -> Deal {
     let fee = Fee {
         asset: "USDT".into(),
         amount: d("0.1371"),
+        usd: None,
     };
     let a = sell(cex, d("21943.3"), d("0.006248"), vec![fee]);
     let b = sell("bsc_dex", d("54783.8"), d("0.00624800"), vec![]);

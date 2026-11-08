@@ -182,9 +182,9 @@ fn halted_buttons_match_screen_and_disabled() {
     );
     assert!(r.buttons.iter().all(|b| b.disabled.is_none()));
     same_as_screen(&r);
-    // Монеты уже на площадке покупки — «Продать и перегнать» недоступна (как на экране).
+    // Решение 235: монеты на площадке покупки — «Продать и перегнать» доступна (лучшая площадка может быть другой).
     let r = halted_record(&halted("bingx", Decimal::TEN));
-    assert!(r.button("sell_ret").unwrap().disabled.is_some());
+    assert!(r.button("sell_ret").unwrap().disabled.is_none());
     assert!(r.button("sell_now").unwrap().disabled.is_none());
     same_as_screen(&r);
     // Монет нет — обе продажи недоступны, остаётся «Продано вручную».

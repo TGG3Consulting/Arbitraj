@@ -5,7 +5,8 @@
 //! закрывается этим фактом (вместо предварительного убытка, решение 53). Плюс «сколько монет реально на площадке»
 //! (on_hand) — общий для «Продать сейчас» по алерту, по остановленной сделке и «Вернуть боту»; у продаж — on_hand_sell:
 //! монеты не на торговом счёте биржи сначала переводятся на него (to_trading.rs, решение 174).
-//! «Продать и перегнать» (решение 101) — то же, плюс выручка USDT на площадку покупки (deal.return_usdt).
+//! «Продать и перегнать» (решение 101) — то же, плюс выручка USDT на площадку покупки (deal.return_usdt); решение 235 —
+//! продажа на площадке, где больше после всех затрат перевода (manual_relay.rs), без порогов убытка.
 //! Решение 177: продажа кнопкой — ручная команда (risk_count.rs), итог отдельным событием (manual_outcome.rs).
 //! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
 //! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы).
@@ -150,21 +151,34 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
         }
     }
     if ret {
-        // Решение 101: после продажи выручка USDT — на площадку покупки (usdt_return.rs).
+        // Решения 101 и 235: лучшая площадка после затрат перевода (manual_relay.rs), затем выручка USDT — на площадку
+        // покупки (usdt_return.rs).
         deal.return_usdt = true;
-        deal.note("«Продать и перегнать» (интерфейс): продажа по рынку, затем выручка на площадку покупки");
+        deal.note("«Продать и перегнать»: оценка всех площадок, продажа там, где больше после затрат, затем выручка на площадку покупки");
     } else {
-        deal.note("«Продать сейчас» (интерфейс): продажа по рынку");
+        deal.note("«Продать сейчас»: продажа по рынку без порогов убытка (решение 235)");
     }
     super::ledger::save(core, &deal).await;
-    let text = format!(
-        "Сделка {deal_id}: продажа {} {} на {} по рынку запущена — итог придёт отдельно",
-        deal.qty, deal.direction.asset.ticker, deal.at.0
-    );
+    let text = if ret {
+        format!(
+            "Сделка {deal_id}: оценка площадок для {} {} (сейчас на {}) и продажа по рынку запущены — итог придёт отдельно",
+            deal.qty, deal.direction.asset.ticker, deal.at.0
+        )
+    } else {
+        format!(
+            "Сделка {deal_id}: продажа {} {} на {} по рынку запущена — итог придёт отдельно",
+            deal.qty, deal.direction.asset.ticker, deal.at.0
+        )
+    };
     let c = core.clone();
     // Решение 177: ручная команда — не «ошибка площадки подряд» (risk_count.rs); итог — manual_outcome.rs.
+    // Решение 235: кнопка — без порогов убытка на всём пути (manual_sell.rs); «Продать и перегнать» — manual_relay.rs.
     tokio::spawn(super::risk_count::manual(async move {
-        super::sell::market(&c, deal, super::sell::BUTTON).await;
+        if ret {
+            super::manual_relay::run(&c, deal).await;
+        } else {
+            super::sell::market(&c, deal, super::sell::BUTTON).await;
+        }
         lk(&c.inner.active).remove(&key);
     }));
     Ok(text)

@@ -170,11 +170,44 @@ impl Venue for Bitget {
     /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze_decided — копия того стакана, по которому
     /// котировали: поток или снимок REST котировки исполнения, решение 201; без запросов в пути сделки).
     /// Ошибки: как у котировки до прохода по уровням (стакана нет, устарел, комиссия, настройка).
+    /// Решение 237: на пути ордера (gateway/patience.rs is_exec — core/exec_book.rs) — только стакан потока (book.rs
+    /// freeze, мера venue.book_stale_ms) со справочником исполнения (symbols.rs get_exec, решение 201); устарел — ядро
+    /// берёт снимок REST (quote_rest), а не снимок прошлой котировки по сроку feed.stale_after_ms (одна мера свежести).
     async fn quote_snapshot(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        if crate::gateway::patience::is_exec() {
+            let symbol = self
+                .symbols
+                .get_exec(&self.ctx, &asset.ticker)
+                .await?
+                .symbol;
+            let f = self
+                .books
+                .freeze(&self.ctx, &self.fees, &symbol, asset, side)?;
+            return Ok(std::sync::Arc::new(f));
+        }
         let symbol = self.symbols.get(&self.ctx, &asset.ticker)?.symbol;
         let f = self
             .books
             .freeze_decided(&self.ctx, &self.fees, &symbol, asset, side)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
+    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — rest_book.rs snapshot (GET
+    /// /api/v2/spot/market/orderbook, «20 times/1s (IP)»), как у котировки исполнения решения 201: снимок — и в память
+    /// адаптера (put_rest), и ядру; комиссия — тот же план (book.rs frozen).
+    async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let symbol = self
+            .symbols
+            .get_exec(&self.ctx, &asset.ticker)
+            .await?
+            .symbol;
+        let book = rest_book::snapshot(&self.ctx, &symbol, asset).await?;
+        if self.books.put_rest(book.clone())
+            && let Some(tx) = self.subs.sender()
+        {
+            let _ = tx.try_send(MarketEvent::Book(book.clone()));
+        }
+        let f = book::frozen(&self.ctx, &self.fees, &symbol, asset, side, book)?;
         Ok(std::sync::Arc::new(f))
     }
 

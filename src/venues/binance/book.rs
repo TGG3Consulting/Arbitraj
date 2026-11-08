@@ -124,7 +124,6 @@ impl Books {
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
         let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
-        let quote_asset = ctx.text("venue.quote_asset")?;
         let entry = self
             .map
             .read()
@@ -151,41 +150,55 @@ impl Books {
                 format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}");
             return Err(stale(ctx, &asset.ticker, &why));
         }
-        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
-        let mode = ctx.text("venue.fee_deduction")?;
-        // Решение 158: скидка — только если монеты скидки хватает (память discount_balance.rs).
-        let (discount_ok, _) = fees.discount.ok(ctx);
-        let (rate, in_discount, _why) = rates
-            .plan(&mode, side, discount_ok)
-            .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
-        // Покупка без скидки — комиссия в монете от количества, иначе — по сумме сделки. Решение 219: со скидкой
-        // комиссия берётся монетой скидки (discountAsset — BNB, faqs/commission_faq): сумма — эквивалент в котируемой
-        // монете по ставке со скидкой, платится монетой скидки (paid_in) — не из котируемой и не из монеты сделки.
-        let fee = if side == Side::Buy && !in_discount {
-            BookFee {
-                rate,
-                per_coin: true,
-                asset: asset.ticker.clone(),
-                paid_in: None,
-            }
-        } else {
-            BookFee {
-                rate,
-                per_coin: false,
-                asset: quote_asset,
-                paid_in: in_discount.then(|| rates.discount_asset.clone()),
-            }
-        };
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия тейкера — не входит в avg_price.
-            fee,
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 237). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let quote_asset = ctx.text("venue.quote_asset")?;
+    let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
+    let mode = ctx.text("venue.fee_deduction")?;
+    // Решение 158: скидка — только если монеты скидки хватает (память discount_balance.rs).
+    let (discount_ok, _) = fees.discount.ok(ctx);
+    let (rate, in_discount, _why) = rates
+        .plan(&mode, side, discount_ok)
+        .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
+    // Покупка без скидки — комиссия в монете от количества, иначе — по сумме сделки. Решение 219: со скидкой
+    // комиссия берётся монетой скидки (discountAsset — BNB, faqs/commission_faq): сумма — эквивалент в котируемой
+    // монете по ставке со скидкой, платится монетой скидки (paid_in) — не из котируемой и не из монеты сделки.
+    let fee = if side == Side::Buy && !in_discount {
+        BookFee {
+            rate,
+            per_coin: true,
+            asset: asset.ticker.clone(),
+            paid_in: None,
+        }
+    } else {
+        BookFee {
+            rate,
+            per_coin: false,
+            asset: quote_asset,
+            paid_in: in_discount.then(|| rates.discount_asset.clone()),
+        }
+    };
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия тейкера — не входит в avg_price.
+        fee,
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

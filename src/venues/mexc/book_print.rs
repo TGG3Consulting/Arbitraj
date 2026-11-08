@@ -5,7 +5,9 @@
 //! после ответа — первые N уровней стакана в памяти (book.rs print — по нему считается котировка). Сравнивает ядро
 //! (core/feed_print.rs). Номер lastUpdateId не используется: связи с полем version частичного стакана в документации
 //! нет (решение «202/213 (MEXC)»).
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор уровней — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда
+//! стакан потока устарел: все уровни ответа (limit = venue.depth_levels — столько, сколько даёт кадр потока).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 418/429 соблюдается там, reply.rs), ctx.rs (символ пары, настройки),
 //! book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [mexc] (N), venue.quote_asset [mexc] (символ пары), адрес REST и прочее — rest.rs.
@@ -25,7 +27,7 @@ use std::str::FromStr;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::PriceLevel;
+use crate::core::types::{Asset, OrderBook, PriceLevel};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -60,6 +62,37 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels;
+/// раздел и лимит — в шапке файла). Принимает: окружение, монету (тикер MEXC). Возвращает: стакан (все уровни ответа,
+/// от лучшей цены; времени биржи в ответе нет). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let p = vec![
+        ("symbol", ctx.symbol(&asset.ticker)?),
+        ("limit", n.to_string()),
+    ];
+    let v = rest::public(ctx, PATH, p).await?;
+    let (bids, asks) = levels(&v).map_err(|why| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("MEXC {PATH} {}: {why}", asset.ticker),
+        ))
+    })?;
+    Ok(crate::gateway::rest_book::book(
+        ctx.venue(),
+        asset.clone(),
+        bids,
+        asks,
+        None,
+    ))
+}
+
+/// Все уровни ответа GET /api/v3/depth (bids, asks). Ошибка — текст причины (как parse).
+pub fn levels(v: &Value) -> Result<(Vec<PriceLevel>, Vec<PriceLevel>), String> {
+    Ok((side(v, "bids")?, side(v, "asks")?))
 }
 
 /// Разбор ответа GET /api/v3/depth: первые n уровней каждой стороны от лучшей цены. Принимает: ответ, n.

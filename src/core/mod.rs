@@ -85,6 +85,7 @@ pub mod episode_snap;
 pub mod episode_view;
 pub mod episode_worker;
 pub mod evaluate;
+pub mod exec_book;
 pub mod executor;
 pub mod feed_confirm;
 #[cfg(test)]

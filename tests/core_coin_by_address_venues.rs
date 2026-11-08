@@ -165,6 +165,8 @@ async fn start(d: &Path) -> Core {
         ("venue.symbols_refresh_s", json!(1_000_000_000)),
         ("venue.order_time_in_force", json!("IOC")),
         ("feed.stale_after_ms", json!(3000)),
+        // Решение 237: обязательна у всех бирж (котировка исполнения — core/exec_book.rs).
+        ("venue.book_stale_ms", json!(3000)),
     ] {
         settings
             .set(n, sv.clone(), Some(val), "тест")

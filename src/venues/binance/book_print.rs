@@ -9,7 +9,9 @@
 //! <symbol>@depth (U, u — «How to manage a local order book correctly»: «discard any event where u is <= lastUpdateId
 //! of the snapshot»). Что lastUpdateId частичного стакана — тот же счётчик, прямо не сказано (решение «202/213
 //! (Binance)», вопрос — docs/TASKS.md); номер ответа не используется.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа (limit = venue.depth_levels, тот же предел 5/10/20, вес «1-100: 5»).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 418/429 по Retry-After соблюдается там), depth.rs (разбор уровней),
 //! ctx.rs (символ пары, настройки), ws.rs (DEPTH_LEVELS), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [binance] (N), venue.quote_asset [binance] (символ пары), адрес REST — rest.rs.
@@ -26,6 +28,7 @@
 
 use serde_json::Value;
 
+use crate::core::types::{Asset, OrderBook};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -70,6 +73,39 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels; раздел,
+/// вес — в шапке файла). Принимает: окружение, монету (тикер Binance). Возвращает: стакан (все уровни ответа, от лучшей
+/// цены; времени биржи в ответе нет). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    if !DEPTH_LEVELS.contains(&n) {
+        return Err(ctx.tag(GatewayError::new(
+            ErrorCode::NotConfigured,
+            None,
+            format!("venue.depth_levels = {n}: частичный стакан Binance — только {DEPTH_LEVELS:?}"),
+        )));
+    }
+    let p = vec![
+        ("symbol", ctx.symbol(&asset.ticker)?),
+        ("limit", n.to_string()),
+    ];
+    let v = rest::public(ctx, PATH, p).await?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Binance {PATH} {}: {why}", asset.ticker),
+        ))
+    };
+    let p: Partial<'_> =
+        serde::Deserialize::deserialize(&v).map_err(|e| bad(format!("ответ не разобран: {e}")))?;
+    let (bids, asks) = depth::levels(&p).map_err(bad)?;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, None,
+    ))
 }
 
 /// Разбор ответа GET /api/v3/depth: первые n уровней каждой стороны от лучшей цены. Ответ того же вида, что данные

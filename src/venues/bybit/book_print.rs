@@ -8,7 +8,9 @@
 //! (совет FIRST_RUN — 50 уровней) — ПО СОДЕРЖИМОМУ (BookVersion.print, как у MEXC и Bitget). seq не используется:
 //! «Cross sequence … for the smaller seq, then it means the data is generated earlier» — порядок генерации данных, не
 //! «книга не менялась» (на записи 04.11 seq кадров одной пары растёт скачками в сотни при u + 1).
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа.
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы после 403/429/10006 соблюдаются там, reply.rs), ctx.rs (символ пары,
 //! настройки), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [bybit] (N), venue.quote_asset [bybit] (символ пары), адрес REST и прочее — rest.rs.
@@ -80,6 +82,35 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /v5/market/orderbook (category spot, symbol, limit = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
+/// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
+pub async fn snapshot(
+    ctx: &Ctx,
+    asset: &crate::core::types::Asset,
+) -> GatewayResult<crate::core::types::OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let p = vec![
+        ("category", "spot".to_string()),
+        ("symbol", ctx.symbol(&asset.ticker)?),
+        ("limit", n.to_string()),
+    ];
+    let v = rest::public(ctx, PATH, p).await?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Bybit {PATH} {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = side(&v, "b").map_err(bad)?;
+    let asks = side(&v, "a").map_err(bad)?;
+    let ts = None;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Номер u ответа (число или строка с числом). Ошибка — текст.

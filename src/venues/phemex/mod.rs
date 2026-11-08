@@ -33,6 +33,7 @@ pub mod pairs;
 pub mod pairs_watch;
 pub mod reply;
 pub mod rest;
+pub mod rest_book;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -154,6 +155,15 @@ impl Venue for Phemex {
         let f = self
             .books
             .freeze(&self.ctx, &self.fees, &symbol, asset, side)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
+    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — rest_book.rs snapshot (GET
+    /// /md/orderbook), комиссия — тот же план, что у стакана потока (book.rs frozen).
+    async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let rules = self.symbols.get(&self.ctx, &asset.ticker)?;
+        let book = rest_book::snapshot(&self.ctx, &rules, asset).await?;
+        let f = book::frozen(&self.ctx, &self.fees, &rules.symbol, asset, side, book)?;
         Ok(std::sync::Arc::new(f))
     }
 

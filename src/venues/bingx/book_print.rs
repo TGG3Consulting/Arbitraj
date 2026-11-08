@@ -5,7 +5,9 @@
 //! bids/asks; после ответа — первые N уровней стакана в памяти (book.rs print — по нему считается котировка).
 //! Сравнивает ядро (core/feed_print.rs). Номер не сравнивается: у кадра @depth<N> есть data.lastUpdateId, а в ответе
 //! REST номера нет (bids, asks, ts) — связать нечем.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа.
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды BingX там), ctx.rs (символ пары, настройки), depth.rs (levels —
 //! разбор уровней, как у кадра), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [bingx] (N), venue.quote_asset [bingx] (символ пары), адрес REST и прочее — rest.rs.
@@ -54,6 +56,34 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /openApi/spot/v1/market/depth (symbol, limit = venue.depth_levels; раздел и лимит — в шапке файла). Принимает: окружение,
+/// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
+pub async fn snapshot(
+    ctx: &Ctx,
+    asset: &crate::core::types::Asset,
+) -> GatewayResult<crate::core::types::OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let p = vec![
+        ("symbol", ctx.symbol(&asset.ticker)?),
+        ("limit", n.to_string()),
+    ];
+    let data = rest::public(ctx, PATH, p).await?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("BingX {PATH} {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = depth::levels(&data, "bids").map_err(bad)?;
+    let asks = depth::levels(&data, "asks").map_err(bad)?;
+    let ts = None;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Разбор data ответа: первые n уровней каждой стороны от лучшей цены (bids по убыванию, asks по возрастанию — как у

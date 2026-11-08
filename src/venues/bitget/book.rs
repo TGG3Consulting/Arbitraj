@@ -8,9 +8,9 @@
 //! снимка REST котировки исполнения, rest_book.rs).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [bitget] (необязательна) — кадр стакана этой пары старше — котировки нет.
+//! устарели; venue.book_stale_ms [bitget] (обязательна — решение 237) — кадр стакана этой пары старше — котировки нет.
 //!
-//! Свежесть: живость соединения (любой кадр, включая "pong" на свой "ping") и, если задана venue.book_stale_ms, время
+//! Свежесть: живость соединения (любой кадр, включая "pong" на свой "ping") и (решение 237 — обязательно) по venue.book_stale_ms время
 //! последнего кадра стакана самой пары (кадр с тем же seq тоже обновляет время — ws_conn.rs, решение 109). Шлёт ли
 //! Bitget снимок books5/books15 без изменений рынка, на странице Depth Channel не сказано («Default data push frequency
 //! for books, books5, books15 is 200ms») — проверить на живой записи; до того venue.book_stale_ms задавать с запасом.
@@ -19,6 +19,9 @@
 //! подтверждения, даже если кадра нет дольше venue.book_stale_ms. Живость соединения подтверждение не отменяет. Новый
 //! стакан (put, put_rest) или снятие стакана — подтверждения нет (как у Gate). Котировка исполнения (решение 201,
 //! exec_needs_rest) по-прежнему берёт снимок REST, если кадр пары старше venue.book_stale_ms.
+//! Решение 237 (Тигран 09.11: «ни одна биржа не идёт в сделку по устаревшему стакану»): venue.book_stale_ms обязательна,
+//! как у MEXC, Binance, Bybit, Gate, XT; тихая пара без изменений свежа только по подтверждению сторожа (решение 213),
+//! ордер при устаревшем стакане — снимок REST (core/exec_book.rs, mod.rs quote_rest).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -129,7 +132,7 @@ impl Books {
     /// Котировка на объём.
     /// Принимает: окружение, кэш комиссий, символ Bitget пары, монету, сторону, количество монет.
     /// Возвращает: Quote (fillable_qty меньше qty, если глубины не хватает).
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или (если задана)
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или
     /// кадра пары нет дольше venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured — feed.stale_after_ms не задана; комиссия.
     pub async fn quote(
         &self,
@@ -154,8 +157,8 @@ impl Books {
         side: Side,
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
-        // Необязательна: см. шапку.
-        let pair_ms = ctx.int("venue.book_stale_ms").ok().map(|v| v as i64);
+        // Решение 237: обязательна у всех бирж (не задана — котировки нет).
+        let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
             .map
             .read()
@@ -175,10 +178,7 @@ impl Books {
         let now = now_ms();
         let age = now - seen.load(Ordering::Relaxed);
         let until = until.load(Ordering::Relaxed);
-        if let Some(pair_ms) = pair_ms
-            && age > pair_ms
-            && now > until
-        {
+        if age > pair_ms && now > until {
             let tail = if until > 0 {
                 format!(", подтверждение биржи истекло {} мс назад", now - until)
             } else {

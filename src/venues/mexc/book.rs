@@ -151,26 +151,39 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price). Решение 219: MEXC берёт комиссию
-            // в валюте рынка (котируемой) — MEXC Learn «Calculation of Fees in Spot Trading»; факт 08.11: покупка 214/214
-            // и продажа 127/127 — USDT; в списание покупки входит (costs_types.rs spend_fee). Не из документации: при
-            // включённом MX Deduction («the system prioritizes using MX tokens to pay fees») комиссия уйдёт в MX —
-            // состояние MX Deduction не читается; расчёт в USDT — худший случай для списания USDT.
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                asset: "USDT".into(),
-                paid_in: None,
-            },
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для ордера —
+/// mod.rs quote_rest, решение 237). Принимает: окружение, данные комиссии, монету, сторону, стакан (во владение).
+/// Ошибки: StaleData — ставка комиссии ещё не получена; NotConfigured — venue.quote_asset.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price). Решение 219: MEXC берёт комиссию
+        // в валюте рынка (котируемой) — MEXC Learn «Calculation of Fees in Spot Trading»; факт 08.11: покупка 214/214
+        // и продажа 127/127 — USDT; в списание покупки входит (costs_types.rs spend_fee). Не из документации: при
+        // включённом MX Deduction («the system prioritizes using MX tokens to pay fees») комиссия уйдёт в MX —
+        // состояние MX Deduction не читается; расчёт в USDT — худший случай для списания USDT.
+        fee: BookFee {
+            rate: rates.taker,
+            per_coin: false,
+            asset: "USDT".into(),
+            paid_in: None,
+        },
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

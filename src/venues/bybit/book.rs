@@ -152,28 +152,41 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия taker аккаунта (не входит в avg_price). Решение 219: «The trading fee unit charged is based on the
-            // purchased cryptocurrency» (Bybit Help Center «Spot Trading: Fees Explained»; факт 08.11: покупка — в монете):
-            // покупка — в монете от количества, продажа — в USDT от суммы.
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: side == Side::Buy,
-                asset: if side == Side::Buy {
-                    asset.ticker.clone()
-                } else {
-                    "USDT".into()
-                },
-                paid_in: None,
-            },
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 237). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия taker аккаунта (не входит в avg_price). Решение 219: «The trading fee unit charged is based on the
+        // purchased cryptocurrency» (Bybit Help Center «Spot Trading: Fees Explained»; факт 08.11: покупка — в монете):
+        // покупка — в монете от количества, продажа — в USDT от суммы.
+        fee: BookFee {
+            rate: rates.taker,
+            per_coin: side == Side::Buy,
+            asset: if side == Side::Buy {
+                asset.ticker.clone()
+            } else {
+                "USDT".into()
+            },
+            paid_in: None,
+        },
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

@@ -8,7 +8,9 @@
 //! millisecond», без слов «время изменения книги»; checksum — «signed 32-bit integer of the full depth data», какие уровни
 //! он покрывает у пуша N уровней, документация однозначно не говорит (venues/coinex/README.md). Ни то, ни другое как
 //! «книга не менялась» не описано — сравниваются сами уровни.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа.
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды CoinEx там), ctx.rs (настройки), depth.rs (levels — разбор уровней, как
 //! у пуша), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [coinex] (N: 5, 10, 20 или 50 — ws.rs), адрес REST и прочее — rest.rs.
@@ -66,6 +68,43 @@ pub async fn book_version(
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /v2/spot/depth (market, limit = venue.depth_levels, interval "0"; раздел и лимит — в шапке). Принимает: окружение,
+/// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
+pub async fn snapshot(
+    ctx: &Ctx,
+    market: &str,
+    asset: &crate::core::types::Asset,
+) -> GatewayResult<crate::core::types::OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let q = vec![
+        ("market", market.to_string()),
+        ("limit", n.to_string()),
+        ("interval", "0".to_string()),
+    ];
+    let data = rest::public(ctx, PATH, q).await?;
+    let d = data.get("depth").ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("CoinEx {PATH} {}: нет data.depth", asset.ticker),
+        ))
+    })?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("CoinEx {PATH} {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = depth::levels(d, "bids").map_err(bad)?;
+    let asks = depth::levels(d, "asks").map_err(bad)?;
+    let ts = None;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Разбор data ответа: data.depth — первые n уровней каждой стороны от лучшей цены (bids по убыванию, asks по

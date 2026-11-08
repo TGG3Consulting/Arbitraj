@@ -29,6 +29,7 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 | `delist.rs` | Решение 226: делистинги — пары V1 GET /v1/settings/common/symbols с venue.quote_asset, state не offline и `dl` = true («delist»), время — `tca` («trade-close-at»); dl = false не учитывается (что значит tca без dl — вопрос Тиграну) |
 | `sign.rs` | Подпись V2: кодирование и сортировка параметров, HMAC-SHA256 → Base64, строка запроса REST, вход WebSocket v2 |
 | `rest.rs` | REST: GET — параметры в подписи; POST — тело JSON, в строке только подпись; резерв адреса только при сбое сети |
+| `rest_book.rs` | Решение 237: снимок стакана для ордера — GET /market/depth (symbol, depth = venue.depth_levels, type step0; tick — reply.rs) |
 | `reply.rs` | Разбор v1 {status, err-code, data} и v2 {code 200, message, data}; HTTP 429 — пауза всех запросов |
 | `errors.rs` | Коды HTX → единые коды («HTX, код …: …» — для человеческих причин, решение 164) |
 | `num.rs` | Числа (строкой или числом JSON) без потери точности |

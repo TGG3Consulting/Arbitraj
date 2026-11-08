@@ -1,7 +1,12 @@
 //! Файл: venues/gate/book_version.rs
 //! Что делает: решение 213 — версия стакана пары Gate по REST для сторожа ядра (контракт book_version): один
 //! публичный запрос GET /spot/order_book?currency_pair=…&with_id=true, из ответа — только id, update, current.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос с уровнями — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: GET /spot/order_book (currency_pair, limit = venue.depth_levels — столько уровней даёт кадр
+//! spot.order_book; limit — «Maximum number of order depth data in asks or bids»), уровни asks / bids [цена, количество]
+//! строками разбираются так же, как кадр (depth.rs levels); живой ответ — tests/data/cex_samples_2026_11_04/
+//! gate_spot_order_book_CAKE_USDT.json.
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 429 соблюдается там), ctx.rs (символ пары), gateway/feed_health.rs.
 //! Настройки: venue.quote_asset [gate] (символ пары), venue.rest_url и прочие настройки REST (rest.rs).
 //!
@@ -28,7 +33,8 @@
 
 use serde_json::Value;
 
-use crate::gateway::errors::GatewayResult;
+use crate::core::types::{Asset, OrderBook};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::BookVersion;
 
 use super::ctx::Ctx;
@@ -43,6 +49,39 @@ pub async fn book_version(ctx: &Ctx, ticker: &str) -> GatewayResult<BookVersion>
     ];
     let v = rest::public(ctx, "/spot/order_book", p).await?;
     Ok(parse(&v))
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — GET /spot/order_book (currency_pair, limit =
+/// venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение, монету (тикер Gate). Возвращает: стакан (все
+/// уровни ответа, от лучшей цены; время биржи — current ответа). Ошибки: NotConfigured (venue.depth_levels,
+/// venue.quote_asset, адрес REST), связь, RateLimited, коды Gate; BadResponse — вид ответа.
+pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let p = vec![
+        ("currency_pair", ctx.symbol(&asset.ticker)?),
+        ("limit", n.to_string()),
+    ];
+    let v = rest::public(ctx, "/spot/order_book", p).await?;
+    rest_book(ctx, &v, asset)
+}
+
+/// Решение 237: стакан из ответа GET /spot/order_book (уровни — depth.rs levels, время биржи — current).
+/// Принимает: окружение, ответ, монету. Ошибки: BadResponse — нет asks / bids или уровень не [цена, количество].
+pub fn rest_book(ctx: &Ctx, v: &Value, asset: &Asset) -> GatewayResult<OrderBook> {
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Gate /spot/order_book {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = super::depth::levels(v, "bids").map_err(bad)?;
+    let asks = super::depth::levels(v, "asks").map_err(bad)?;
+    let ts = crate::gateway::rest_book::ms(v.get("current").and_then(Value::as_i64));
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Разбор ответа GET /spot/order_book (модель OrderBook). Ошибок нет: нет поля — None.

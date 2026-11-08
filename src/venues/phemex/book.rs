@@ -6,12 +6,16 @@
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [phemex] (необязательна) — кадр стакана этой пары старше — котировки нет.
+//! устарели; venue.book_stale_ms [phemex] (обязательна — решение 237) — кадр стакана этой пары старше — котировки нет.
 //!
-//! Свежесть: живость соединения (любой кадр, включая «pong» на свой server.ping) и, если задана venue.book_stale_ms,
+//! Свежесть: живость соединения (любой кадр, включая «pong» на свой server.ping) и (решение 237 — обязательно) по venue.book_stale_ms
 //! время последнего кадра стакана самой пары. Phemex шлёт изменения только при изменении стакана и контрольный снимок
 //! раз в 60 с («Snapshot messages are published with 60-second interval», OrderBook message) — venue.book_stale_ms
 //! задавать больше 60 000 мс, иначе тихая пара будет считаться устаревшей.
+//! Решение 237 (Тигран 09.11: «ни одна биржа не идёт в сделку по устаревшему стакану»): venue.book_stale_ms обязательна,
+//! как у MEXC, Binance, Bybit, Gate, XT. Подтверждения тихой пары (решение 213, book_confirmed) у этой биржи нет: пара
+//! без кадра дольше venue.book_stale_ms не котируется (вход — нет); ордер при устаревшем стакане — снимок REST
+//! (core/exec_book.rs, mod.rs quote_rest).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -77,7 +81,7 @@ impl Books {
 
     /// Решение 217: снимок стакана монеты и плана комиссии на этот момент (копия стакана из памяти).
     /// Принимает: то же, что quote, без количества. Возвращает: FrozenBook.
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или (если задана)
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или
     /// кадра пары нет дольше venue.book_stale_ms; NotConfigured — feed.stale_after_ms не задана; комиссия.
     pub fn freeze(
         &self,
@@ -88,8 +92,8 @@ impl Books {
         side: Side,
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
-        // Необязательна: см. шапку.
-        let pair_ms = ctx.int("venue.book_stale_ms").ok().map(|v| v as i64);
+        // Решение 237: обязательна у всех бирж (не задана — котировки нет).
+        let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
             .map
             .read()
@@ -106,36 +110,48 @@ impl Books {
             ));
         }
         let age = now_ms() - seen.load(Ordering::Relaxed);
-        if let Some(pair_ms) = pair_ms
-            && age > pair_ms
-        {
+        if age > pair_ms {
             return Err(stale(
                 ctx,
                 &asset.ticker,
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms})"),
             ));
         }
-        let rates = fees.get(ctx, symbol)?;
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price). Решение 232: не из
-            // документации — в какой монете Phemex берёт комиссию спота, документация API и справка не говорят (поля
-            // ордера feeCurrency/cumFeeEv, примеры с нулевой комиссией); скидка PT — «20% for Spot trades (API trades
-            // excluded)» (анонс Phemex «Use Phemex Token to Cover Trading Fees») — к боту не применяется. Консервативно:
-            // USDT от суммы и у покупки (входит в списание USDT, spend_fee); факт — feeCurrency ордера (order_state.rs).
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов).
-                asset: ctx.text("venue.quote_asset")?,
-                paid_in: None,
-            },
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, symbol, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 237). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, symbol)?;
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price). Решение 232: не из
+        // документации — в какой монете Phemex берёт комиссию спота, документация API и справка не говорят (поля
+        // ордера feeCurrency/cumFeeEv, примеры с нулевой комиссией); скидка PT — «20% for Spot trades (API trades
+        // excluded)» (анонс Phemex «Use Phemex Token to Cover Trading Fees») — к боту не применяется. Консервативно:
+        // USDT от суммы и у покупки (входит в списание USDT, spend_fee); факт — feeCurrency ордера (order_state.rs).
+        fee: BookFee {
+            rate: rates.taker,
+            per_coin: false,
+            // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов).
+            asset: ctx.text("venue.quote_asset")?,
+            paid_in: None,
+        },
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

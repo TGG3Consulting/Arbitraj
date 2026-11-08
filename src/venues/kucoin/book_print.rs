@@ -6,7 +6,9 @@
 //! уровней стакана в памяти (book.rs print — по нему считается котировка). Сравнивает ядро (core/feed_print.rs).
 //! Номер не сравнивается: у кадра /spotMarket/level2Depth5|50 номера нет (data — asks, bids, timestamp), sequence ответа
 //! REST сравнить не с чем.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа level2_{size} (size — как у отпечатка, не меньше venue.depth_levels).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public, пул Public — пауза после 429000 соблюдается там, reply.rs), depth.rs (levels —
 //! разбор уровней, как у кадра), feed.rs (SNAPSHOT_SIZES), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [kucoin] (N), адрес REST и прочее — rest.rs.
@@ -71,6 +73,42 @@ pub async fn book_version(
         }),
         ..Default::default()
     })
+}
+
+/// Решение 237: снимок стакана пары по REST для ордера — Get Part OrderBook level2_{size} (size — наименьший из 20, 100,
+/// не меньший venue.depth_levels; раздел, пул и вес — в шапке файла). Принимает: окружение, символ KuCoin пары, монету
+/// (тикер KuCoin). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как book_version.
+pub async fn snapshot(
+    ctx: &Ctx,
+    symbol: &str,
+    asset: &crate::core::types::Asset,
+) -> GatewayResult<crate::core::types::OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let size = size_for(n).ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::NotConfigured,
+            None,
+            format!(
+                "venue.depth_levels = {n}: у KuCoin стакан REST только size {SNAPSHOT_SIZES:?}"
+            ),
+        ))
+    })?;
+    let path = format!("/api/v1/market/orderbook/level2_{size}");
+    let q = vec![("symbol", symbol.to_string())];
+    let data = rest::public(ctx, &path, q, Pool::Public).await?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("KuCoin {path} {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = depth::levels(&data, "bids").map_err(bad)?;
+    let asks = depth::levels(&data, "asks").map_err(bad)?;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, None,
+    ))
 }
 
 /// Наименьший документированный size REST, не меньший n. Принимает: N уровней. Возвращает: size; None — больше всех.

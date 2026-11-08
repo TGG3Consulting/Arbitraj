@@ -205,6 +205,8 @@ Java и SDK) и кадры канала баланса спота (страни�
 - `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
   официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
   Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
+- `core_exec_book_237.rs` — решение 237 на живом ядре (SQLite) с настоящим адаптером XT и локальным HTTP-сервером с записанными ответами (справочник пар — живой ответ 06.11, `data/xt_live_2026-11-06/`; стакан — пример ответа документации XT, `data/rest_book_2026-11-09/`): котировка исполнения и худшая цена ордера по одному снимку REST (один запрос), кейс XTER целиком (sell_or_stuck — без пустых повторов), REST не ответил — один повтор через exec.rest_book_retry_ms и ошибка без кода безопасного повтора, старый снимок не используется.
+- `rest_book_237.rs` — решение 237 у адаптеров: вход — стакан MEXC старше venue.book_stale_ms без котировки, с подтверждением тихой пары — с котировкой; BingX без venue.book_stale_ms — котировки нет; разбор снимков REST: Gate (живой ответ 04.11), XT, Phemex, Poloniex (примеры документации).
 - `binance_book_print.rs` — решения 202/213 у Binance: подтверждение тихой пары по содержимому на **примерах из
   документации** (github.com/binance/binance-spot-api-docs: rest-api.md «Order book», web-socket-streams.md «Partial Book
   Depth Streams»), не на живых ответах: живой пары «кадр + ответ REST в тот же момент» нет. Ответ REST с уровнями кадра

@@ -23,6 +23,7 @@ pub mod patience;
 pub mod pending;
 pub mod quote_stage;
 pub mod registry;
+pub mod rest_book;
 pub mod rules;
 pub mod tap;
 pub mod tx_hash;

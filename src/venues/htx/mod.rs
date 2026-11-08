@@ -33,6 +33,7 @@ pub mod pairs_watch;
 pub mod records;
 pub mod reply;
 pub mod rest;
+pub mod rest_book;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -156,6 +157,15 @@ impl Venue for Htx {
         let f = self
             .books
             .freeze(&self.ctx, &self.fees, &symbol, asset, side)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
+    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — rest_book.rs snapshot (GET
+    /// /market/depth), комиссия — тот же план, что у стакана потока (book.rs frozen).
+    async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let symbol = self.symbols.get(&self.ctx, &asset.ticker)?.symbol;
+        let book = rest_book::snapshot(&self.ctx, &symbol, asset).await?;
+        let f = book::frozen(&self.ctx, &self.fees, &symbol, asset, side, book)?;
         Ok(std::sync::Arc::new(f))
     }
 

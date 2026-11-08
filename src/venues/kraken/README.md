@@ -49,6 +49,7 @@
 | `ctx.rs` | Окружение: настройки, секреты (ключ, приватный ключ Base64), HTTP, журнал, сырые сообщения, полоса nonce |
 | `sign.rs` | API-Sign = Base64(HMAC-SHA512(путь + SHA256(nonce + данные), Base64-декод секрета)); следующий nonce |
 | `rest.rs` | Публичные GET /0/public, подписанные POST /0/private (форма), подписанные /funding (строка запроса + JSON) |
+| `rest_book.rs` | Решение 237: снимок стакана для ордера — GET /0/public/Depth (pair, count = venue.depth_levels, не больше 500) |
 | `reply.rs` | Разбор {error, result} и ответов Funding; паузы «private», «trade», путь — после «Rate limit exceeded» / Throttled |
 | `errors.rs` | Строки ошибок Kraken → единые коды; текст «Kraken, ошибка …» (notify/reason.rs, решение 164) |
 | `num.rs` | Числа и поля без потери точности; суммы Funding {asset, amount} / {asset_amount} |

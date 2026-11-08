@@ -37,6 +37,7 @@
 | `ctx.rs` | Окружение: настройки, секреты (ключ, секрет), HTTP, журнал, сырые сообщения |
 | `sign.rs` | Подпись: «METHOD\nпуть\nпараметры» (GET — по имени с signTimestamp, тело — requestBody=…&signTimestamp=…), HmacSHA256 → Base64; вход в WS «GET\n/ws\nsignTimestamp=…» |
 | `rest.rs` | REST: строка запроса та же, что в подписи (кодирование SDK); резерв только при сбое сети |
+| `rest_book.rs` | Решение 237: снимок стакана для ордера — GET /markets/{symbol}/orderBook (limit = venue.depth_levels; плоский список «цена, количество» по примеру документации) |
 | `reply.rs` | 2xx — тело как есть; иначе code и message (как SDK); 429 — пауза на Retry-After или venue.rate_limit_pause_ms |
 | `errors.rs` | Коды Poloniex и HTTP-статусы → единые коды |
 | `num.rs` | Числа (строки или числа JSON) и флаги без потери точности |

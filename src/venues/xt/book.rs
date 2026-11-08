@@ -122,7 +122,6 @@ impl Books {
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
         let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
-        let quote_asset = ctx.text("venue.quote_asset")?;
         let entry = self
             .map
             .read()
@@ -149,38 +148,52 @@ impl Books {
                 format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}");
             return Err(stale(ctx, &asset.ticker, &why));
         }
-        let rate = symbols
-            .taker_fee(&asset.ticker)
-            .ok_or_else(|| stale(ctx, &asset.ticker, "XT не сообщил takerFeeRate пары"))?;
-        // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы. Решение 232: факт живого
-        // бота 08.11 — покупка WIN: fee 1413.932 WIN = 0.002 × 706966 (в монете, 1/1); продаж XT в журнале нет.
-        // Документацию по монете комиссии спота XT не нашёл: продажа в котируемой — не из документации (по получаемой
-        // монете); скидка XT (deductServices) — факт ордера, в расчёте не учитывается.
-        let fee = if side == Side::Buy {
-            BookFee {
-                rate,
-                per_coin: true,
-                asset: asset.ticker.clone(),
-                paid_in: None,
-            }
-        } else {
-            BookFee {
-                rate,
-                per_coin: false,
-                asset: quote_asset,
-                paid_in: None,
-            }
-        };
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия тейкера — не входит в avg_price.
-            fee,
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, symbols, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 237). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    symbols: &Symbols,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let quote_asset = ctx.text("venue.quote_asset")?;
+    let rate = symbols
+        .taker_fee(&asset.ticker)
+        .ok_or_else(|| stale(ctx, &asset.ticker, "XT не сообщил takerFeeRate пары"))?;
+    // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы. Решение 232: факт живого
+    // бота 08.11 — покупка WIN: fee 1413.932 WIN = 0.002 × 706966 (в монете, 1/1); продаж XT в журнале нет.
+    // Документацию по монете комиссии спота XT не нашёл: продажа в котируемой — не из документации (по получаемой
+    // монете); скидка XT (deductServices) — факт ордера, в расчёте не учитывается.
+    let fee = if side == Side::Buy {
+        BookFee {
+            rate,
+            per_coin: true,
+            asset: asset.ticker.clone(),
+            paid_in: None,
+        }
+    } else {
+        BookFee {
+            rate,
+            per_coin: false,
+            asset: quote_asset,
+            paid_in: None,
+        }
+    };
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия тейкера — не входит в avg_price.
+        fee,
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

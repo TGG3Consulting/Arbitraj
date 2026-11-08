@@ -53,6 +53,10 @@ pub struct Risk {
     pub day: DayView,
     /// Система остановлена именно по общему лимиту дня (daily_limit.rs); любая смена режима снимает отметку.
     pub daily_stop: bool,
+    /// Решение 221: «Пауза» поставлена сверкой балансов — режим до неё (reconcile_pause.rs снимет паузу сам, когда
+    /// расхождений нет). Любая смена режима (человек, другой модуль) снимает отметку — такую паузу сверка не трогает.
+    #[serde(skip)]
+    pub reconcile_pause: Option<Mode>,
     /// Решение 173: площадки на паузе по убытку дня (их причина — в venue_paused). Снимает «Снять паузу» или
     /// «Сбросить лимит дня» (по площадке или общий).
     #[serde(skip)]
@@ -76,6 +80,7 @@ impl Default for Risk {
             quarantine: HashMap::new(),
             day: DayView::default(),
             daily_stop: false,
+            reconcile_pause: None,
             loss_paused: BTreeSet::new(),
             cycle_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
@@ -132,6 +137,7 @@ pub fn set_mode(core: &Core, mode: Mode, reason: Option<String>) -> String {
         r.mode = mode;
         r.reason = reason.clone();
         r.daily_stop = false;
+        r.reconcile_pause = None;
     }
     publish(core);
     format!(

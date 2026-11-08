@@ -12,9 +12,11 @@
 //! на «Балансах» — по «тикер (адрес коротко)».
 //! Решение 132: у DEX сверяется каждый кошелёк отдельно (reconcile_holders.rs): свои балансы, учёт сделок кошелька,
 //! «мало USDT» и «мало BNB»; на «Балансах» — строка «площадка «кошелёк»».
+//! Решение 221 (reconcile_pause.rs): пауза от сверки пишется в журнал (core.control) с расхождениями и снимается сама
+//! после ledger.reconcile_confirm_rounds кругов подряд без расхождений, если режим за это время не меняли.
 //! Кто вызывает: core/engine.rs (задача run).
-//! От чего зависит: engine.rs, wait.rs, risk.rs, usdt_return.rs, precheck.rs (BNB), deal.rs, reconcile_confirm.rs,
-//! reconcile_key.rs (ключ монеты: биржа — тикер, DEX — адрес; решение 211, ревью В2).
+//! От чего зависит: engine.rs, wait.rs, reconcile_pause.rs, usdt_return.rs, precheck.rs (BNB), deal.rs,
+//! reconcile_confirm.rs, reconcile_key.rs (ключ монеты: биржа — тикер, DEX — адрес; решение 211, ревью В2).
 //! Настройки: ledger.reconcile_interval_s, ledger.reconcile_confirm_rounds, alert.min_usdt (через low_usdt.rs),
 //! risk.min_bnb_balance, venue.quote_asset.
 
@@ -33,7 +35,6 @@ use super::engine::{Core, lk, rd};
 use super::reconcile_confirm::{
     Streak, UNAVAILABLE, expected, is_unavailable, pause_venue, stable,
 };
-use super::risk::{self, Mode};
 use super::view::CoreEvent;
 use super::wait::{Pacer, Unit};
 
@@ -47,9 +48,12 @@ pub async fn run(core: Core) {
     let quiet = Notify::new();
     let mut active: HashSet<String> = HashSet::new();
     let mut streak = Streak::default();
+    let mut lift = super::reconcile_pause::Lift::default();
     loop {
         pacer.pause(&core.inner.deps, &quiet).await;
         let all = once(&core).await;
+        // Решение 221: пауза сверки снимается сама после ledger.reconcile_confirm_rounds чистых кругов подряд.
+        super::reconcile_pause::maybe_lift(&core, &mut lift, &all).await;
         let keys: Vec<String> = all.iter().filter_map(|f| f.3.clone()).collect();
         let (confirmed, waiting) = streak.mark(&core, &keys);
         for (key, n, need) in waiting {
@@ -76,17 +80,8 @@ pub async fn run(core: Core) {
                 pause_venue(&core, VenueId(v.clone()), text);
             }
         }
-        if found
-            .iter()
-            .any(|f| f.0 == "risk.reconcile_mismatch" && !is_unavailable(f))
-            && risk::snapshot(&core).mode == Mode::Running
-        {
-            risk::set_mode(
-                &core,
-                Mode::Paused,
-                Some("расхождение при сверке балансов".into()),
-            );
-        }
+        // Решение 221: пауза от сверки — с записью в журнал и автоснятием (reconcile_pause.rs).
+        super::reconcile_pause::pause(&core, &found).await;
         for (code, venue, text, _) in &found {
             if active.insert(format!("{code}{text}")) {
                 core.inner

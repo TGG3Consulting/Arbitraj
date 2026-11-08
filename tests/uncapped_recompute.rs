@@ -6,8 +6,10 @@
 //! 2) Пересчёт по окну (источник uncapped_replay.rs, план — расчёт той же модели) даёт тот же итог, что расчёт по
 //!    снимку того же стакана (решение 217: costs_source::Live со снимком core/frozen.rs) — одна модель (costs.rs
 //!    evaluate_with) и один поиск (size_uncapped.rs).
-//! 3) Правила полного стакана: полный по изменениям (BingX @incrDepth «all») — раньше снимка; только изменения без
-//!    полного — нет стакана; снимок, после которого в потоке стакана шли неприменимые изменения, — нет стакана.
+//! 3) Правила полного стакана (решение 221): снимок торгового потока (по нему бот котировал) — раньше полного по
+//!    изменениям (BingX @incrDepth «all»); полный по изменениям — запасной, когда торгового снимка нет или он сброшен;
+//!    только изменения без полного — нет стакана; снимок, после которого шли неприменимые изменения, без полного по
+//!    изменениям — нет стакана.
 //! 4) Сквозной пересчёт (uncapped_recompute.rs one) на SQLite: биржа ↔ биржа и биржа → DEX пересчитываются (basis,
 //!    момент решения, начало как у старой записи), DEX → биржа и сделка без окна — нет (причина); новая запись —
 //!    основная для сделки (by_deal, latest_per_deal); внешняя запись при работающем боте — отказ (open_existing).
@@ -317,11 +319,13 @@ fn full_book_rules() {
     let (before, _) = frames();
     let t = Utc::now();
     let v = [VenueId("bingx".into())];
-    // Полный по изменениям (@incrDepth «all», вид массивом из api-ai-skills) — раньше снимка торгового потока.
+    // Решение 221: снимок торгового потока — раньше полного по изменениям (@incrDepth «all», вид массивом из
+    // api-ai-skills), даже если изменения пришли позже снимка.
     let all = r#"{"code":0,"dataType":"CAKE-USDT@incrDepth","data":{"action":"all","lastUpdateId":7,"T":1,"bids":[["1.5","2"]],"asks":[["1.6","3"]]}}"#;
     let upd = r#"{"code":0,"dataType":"CAKE-USDT@incrDepth","data":{"action":"update","lastUpdateId":8,"T":2,"bids":[],"asks":[["1.7","4"]]}}"#;
+    let snap_ns = ns(t) - 30;
     let rows = vec![
-        line("bingx", "Book", ns(t) - 30, &before),
+        line("bingx", "Book", snap_ns, &before),
         line("bingx", "Diff", ns(t) - 20, all),
         line("bingx", "Diff", ns(t) - 10, upd),
     ];
@@ -329,8 +333,33 @@ fn full_book_rules() {
         .remove(&v[0])
         .unwrap()
         .unwrap();
+    assert!(!r.full_depth, "сначала торговый снимок");
+    assert_eq!(r.recv_ns, snap_ns);
+    assert!(
+        r.describe().contains("торгового потока"),
+        "{}",
+        r.describe()
+    );
+    // Торгового снимка нет — запасной: полный по изменениям.
+    let r = books_before(&rows[1..], &v, &cake(), ns(t), &decode)
+        .remove(&v[0])
+        .unwrap()
+        .unwrap();
     assert!(r.full_depth);
     assert_eq!(r.book.asks.len(), 2, "полный + применённое изменение");
+    assert!(r.describe().contains("запасной"), "{}", r.describe());
+    // Торговый снимок сброшен неприменимым кадром — запасной: полный по изменениям.
+    let other = r#"{"code":0,"msg":"subscribed"}"#;
+    let mut dropped = rows.clone();
+    dropped.insert(1, line("bingx", "Book", ns(t) - 25, other));
+    let r = books_before(&dropped, &v, &cake(), ns(t), &decode)
+        .remove(&v[0])
+        .unwrap()
+        .unwrap();
+    assert!(
+        r.full_depth,
+        "снимок сброшен — запасной стакан всей глубины"
+    );
     // Только изменения без полного — стакана нет.
     let only = vec![line("bingx", "Diff", ns(t) - 10, upd)];
     let e = books_before(&only, &v, &cake(), ns(t), &decode)
@@ -338,8 +367,8 @@ fn full_book_rules() {
         .unwrap()
         .unwrap_err();
     assert!(e.contains("полного стакана"), "{e}");
-    // Снимок, после которого в потоке стакана шло неприменимое (у Bybit — изменения), — стакана нет.
-    let other = r#"{"code":0,"msg":"subscribed"}"#;
+    // Снимок, после которого в потоке стакана шло неприменимое (у Bybit — изменения), и полного по изменениям нет —
+    // стакана нет.
     let rows = vec![
         line("bingx", "Book", ns(t) - 20, &before),
         line("bingx", "Book", ns(t) - 10, other),

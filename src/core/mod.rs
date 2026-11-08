@@ -138,6 +138,7 @@ pub mod reconcile;
 pub mod reconcile_confirm;
 pub mod reconcile_holders;
 pub mod reconcile_key;
+pub mod reconcile_pause;
 pub mod refit;
 pub mod registry;
 pub mod registry_build;

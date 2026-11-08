@@ -93,6 +93,8 @@ pub fn check(core: &Core) -> (Option<String>, Option<String>) {
                 r.mode = Mode::Stopped;
                 r.reason = Some(t.clone());
                 r.daily_stop = true;
+                // Решение 221: «Стоп» по лимиту поверх паузы сверки — сверка его не снимает.
+                r.reconcile_pause = None;
                 (Some(t), None)
             }
             Some(l) if !l.exceeded && was && r.daily_stop => (

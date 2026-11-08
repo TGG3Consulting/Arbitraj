@@ -4,9 +4,11 @@
 //! площадку — ведро запросов), как сравнить версию книги на бирже с версией последнего кадра (verdict) и что сделать
 //! по ответу (apply): подтверждена — стакан свежий до следующей проверки, не переподписывать; кадры потеряны —
 //! переподписка по решению 202; ошибка — журнал (раз на изменение), вслепую не переподписывать.
-//! Без ожиданий и ввода-вывода — проверяется тестами (feed_watch_tests.rs).
+//! Сравнение — по номеру/времени книги (Gate) или по содержимому стакана (первые N уровней REST и своего стакана —
+//! feed_print.rs; MEXC, Bitget; Тигран 08.11).
+//! Без ожиданий и ввода-вывода — проверяется тестами (feed_confirm_tests.rs, feed_print_tests.rs).
 //! Кто вызывает: core/feed_watch_logic.rs (want, note_quiet), core/feed_watch.rs (apply).
-//! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round).
+//! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs.
 //! Настройки: значения приходят в Cfg.quiet (читает feed_watch.rs).
 
 use crate::gateway::feed_health::{BookVersion, FeedHealth, PairHealth};
@@ -87,8 +89,17 @@ pub enum Verdict {
 /// 4) иначе — Unknown.
 ///
 /// Книга новее: если биржа дала возраст книги (server_ms − changed_ms) и он не меньше времени с (пере)подписки до
-/// ответа (по часам бота, без сравнения часов) — Unchanged, иначе Lost. Ошибок нет.
+/// ответа (по часам бота, без сравнения часов) — Unchanged, иначе Lost.
+///
+/// По содержимому (Тигран 08.11): адаптер дал отпечатки (v.print) и сравнения по номеру нет (номера нет у кадра или
+/// у ответа) — feed_print.rs::by_content: равны — Quiet, иначе Lost. Номер, когда он есть у обоих, решает как раньше
+/// (Gate отпечатков не даёт). Ошибок нет.
 pub fn verdict(p: &PairHealth, v: &BookVersion, recv_ms: i64) -> Verdict {
+    if let Some(prints) = &v.print
+        && (p.last_id.is_none() || v.id.is_none())
+    {
+        return super::feed_print::by_content(prints);
+    }
     let why = match (p.last_id, v.id, p.last_changed_ms, v.changed_ms) {
         (Some(ours), Some(theirs), _, _) if theirs <= ours => return Verdict::Quiet,
         (Some(ours), Some(theirs), _, _) => {

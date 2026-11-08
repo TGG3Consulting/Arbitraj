@@ -24,7 +24,7 @@ use super::ctx::Ctx;
 use super::{depth, rest};
 
 /// Путь снимка стакана.
-const PATH: &str = "/api/v2/spot/market/orderbook";
+pub(super) const PATH: &str = "/api/v2/spot/market/orderbook";
 
 /// Снимок стакана пары. Принимает: окружение, символ Bitget, монету. Возвращает: стакан (asks по возрастанию цены, bids
 /// по убыванию). Ошибки: NotConfigured (venue.depth_levels), связь и коды Bitget (rest.rs), BadResponse — вид ответа.

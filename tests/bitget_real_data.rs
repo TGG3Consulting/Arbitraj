@@ -215,3 +215,20 @@ fn code_40938_is_withdraw_rejected() {
         ErrorCode::WithdrawRejected
     );
 }
+
+/// Решение 213, подтверждение тихой пары по содержимому (Тигран 08.11, venues/bitget/book_print.rs): разбор ЖИВОГО
+/// ответа GET /api/v2/spot/market/orderbook (команда записи — tests/README.md, раздел Bitget,
+/// bitget_orderbook_CAKEUSDT.json, limit=150): первые N уровней от лучшей цены, без нулевых количеств. Примера ответа
+/// из документации в этой работе нет (страница не открылась) — тест ждёт записи.
+#[test]
+#[ignore = "записать bitget_orderbook_CAKEUSDT.json — GET /api/v2/spot/market/orderbook (tests/README.md, раздел Bitget)"]
+fn recorded_orderbook_book_print() {
+    use arb::venues::bitget::book_print;
+    let v = data("bitget_orderbook_CAKEUSDT.json");
+    let p = book_print::parse(&v, 15).unwrap();
+    assert!(!p.bids.is_empty() && p.bids.len() <= 15 && p.asks.len() <= 15);
+    assert!(p.bids.windows(2).all(|w| w[0].price > w[1].price));
+    assert!(p.asks.windows(2).all(|w| w[0].price < w[1].price));
+    assert!(p.bids[0].price < p.asks[0].price);
+    assert!(p.bids.iter().chain(&p.asks).all(|l| l.qty > Decimal::ZERO));
+}

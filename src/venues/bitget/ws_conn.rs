@@ -15,7 +15,7 @@
 //! connection, Max 1000 channel subscription/connection» — подписка шлётся только при подключении (урок 14).
 //! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр стакана по
 //! паре, и с тем же seq тоже; версия книги не передаётся (решение 213: связи seq кадра с REST orderbook в документации
-//! нет — book_version у Bitget нет, mod.rs). Команды сторожа ядра: «переподписать пару» — {"op":"unsubscribe","args":[{instType, channel,
+//! нет); тихая пара подтверждается по содержимому — стакан в памяти против ответа REST (book_print.rs, Тигран 08.11). Команды сторожа ядра: «переподписать пару» — {"op":"unsubscribe","args":[{instType, channel,
 //! instId}]}, затем {"op":"subscribe",…} этой пары в этом же соединении (WebSocket intro: op «subscribe unsubscribe»,
 //! пример unsubscribe), соседи не трогаются; каждая переподписка тратит 1 из «240 subscription requests/Hour/
 //! connection» — venue.pair_resub_* задавать с этим запасом. «Переподключить соединение» — сессия заканчивается, ws.rs

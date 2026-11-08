@@ -15,6 +15,7 @@ pub mod account;
 pub mod all_balances;
 pub mod book;
 pub mod book_decided;
+pub mod book_print;
 pub mod ctx;
 pub mod delist;
 pub mod delist_ann;
@@ -307,13 +308,28 @@ impl Venue for Bitget {
     ///   сказано; живой случай RWA 06.11 (решение 201) — пара молчала 45–55 с при живом соединении;
     /// - per_pair = true: отписка — op «unsubscribe» (WebSocket intro, https://www.bitget.com/docs/classic/websocket/
     ///   intro), см. ws_conn.rs;
-    /// - confirm = false (решение 213): book_version нет — номер seq описан только у кадра WebSocket («It increases
-    ///   when the order book is updated»), связи seq с ответом GET /api/v2/spot/market/orderbook в документации нет; в
-    ///   выписке ответа (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) — asks, bids, ts, номера книги нет;
-    ///   ts кадра — «Matching engine timestamp(ms)», не «время изменения книги». Живого ответа REST в tests/data нет.
-    ///   Вопрос Тиграну — docs/TASKS.md. Тихая пара — только журнал сторожа.
+    /// - confirm = true (решение 213, по содержимому — Тигран 08.11): номер не сравнивается — seq описан только у кадра
+    ///   WebSocket («It increases when the order book is updated»), связи seq с ответом GET /api/v2/spot/market/orderbook
+    ///   в документации нет; в выписке ответа (rest_book.rs, docs/notes/bitget-analysis-2026-11-05.md §5) — asks, bids,
+    ///   ts, номера книги нет; сравниваются первые venue.depth_levels уровней ответа REST и стакана в памяти
+    ///   (book_print.rs, core/feed_print.rs).
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, false))
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Символ — из
+    /// справочника пар (symbols.rs). Ошибки: пары нет в справочнике (BadResponse), как у book_print::book_version.
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        let symbol = self.symbols.get(&self.ctx, ticker)?.symbol;
+        book_print::book_version(&self.ctx, &self.books, &symbol, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
     }
 
     /// Решение 202: переподписать одну пару в её соединении (unsubscribe + subscribe, ws_conn.rs).

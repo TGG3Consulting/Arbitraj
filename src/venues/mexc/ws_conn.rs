@@ -15,7 +15,8 @@
 //! и для пропущенного одинакового снимка; решение 118, А-🟠8).
 //! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр стакана по
 //! паре, и одинаковый снимок тоже; версия книги не передаётся (решение 213: поле version частичного стакана в
-//! документации — «Version number», без связи с lastUpdateId REST /api/v3/depth — book_version у MEXC нет, mod.rs).
+//! документации — «Version number», без связи с lastUpdateId REST /api/v3/depth); тихая пара подтверждается по
+//! содержимому — стакан в памяти против ответа REST (book_print.rs, Тигран 08.11).
 //! Команды сторожа ядра: «переподписать пару» — {"method":"UNSUBSCRIPTION","params":[канал]}, затем
 //! {"method":"SUBSCRIPTION","params":[канал]} в этом же соединении (Live Subscription/Unsubscription to Data Streams,
 //! https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/live-subscriptionunsubscription-to-data-streams; тот же

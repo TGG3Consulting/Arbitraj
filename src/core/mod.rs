@@ -87,6 +87,9 @@ pub mod feed_confirm;
 #[cfg(test)]
 mod feed_confirm_tests;
 pub mod feed_hold;
+pub mod feed_print;
+#[cfg(test)]
+mod feed_print_tests;
 pub mod feed_live;
 pub mod feed_watch;
 pub mod feed_watch_act;

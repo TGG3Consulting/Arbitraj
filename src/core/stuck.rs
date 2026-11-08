@@ -6,8 +6,10 @@
 //! лучше с учётом затрат перевода, не больше stuck.max_relays раз, затем продажа здесь с порогом
 //! stuck.relay_max_loss_pct (решение 220, relay_here.rs).
 //! Решение 220: причина входа (stuck_reason.rs) — настоящая, от вызывающего; в журнале и Telegram.
-//! Кто вызывает: executor.rs, sell.rs, sell_unsent.rs.
-//! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs.
+//! Решение 222: перед режимом остаток сверяется с балансом площадки (remain_fact.rs) — min(учёт, факт); после
+//! несостоявшегося перевода — без сверки (handle_as_is).
+//! Кто вызывает: executor.rs, sell.rs, sell_unsent.rs, relay.rs.
+//! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
@@ -23,8 +25,18 @@ use super::engine::Core;
 use super::stuck_reason::StuckReason;
 
 /// Ведёт застрявшую монету по режиму. Принимает: ядро, сделку, настоящую причину, почему монета здесь (решение 220 —
-/// в журнал, хронологию и Telegram). Ошибок нет: не задан режим — сделка остановлена с причиной.
+/// в журнал, хронологию и Telegram). Решение 222: сначала остаток сверяется с балансом площадки (remain_fact.rs) —
+/// дальше min(учёт, факт); на площадке ничего нет — сделка закрыта. Ошибок нет: не задан режим — сделка остановлена.
 pub async fn handle(core: &Core, mut deal: Deal, why: StuckReason) {
+    if !super::remain_fact::reconcile(core, &mut deal).await {
+        return;
+    }
+    handle_as_is(core, deal, why).await
+}
+
+/// Режим застрявшей монеты без сверки с балансом — только после несостоявшегося перевода (executor.rs): монеты могут
+/// быть в возврате вывода, баланс площадки ещё не факт (решение 222). Ошибок нет: не задан режим — сделка остановлена.
+pub async fn handle_as_is(core: &Core, mut deal: Deal, why: StuckReason) {
     let s = &core.inner.deps.settings;
     let mode = match s.text("stuck.mode", At::default()) {
         Ok(m) => m,

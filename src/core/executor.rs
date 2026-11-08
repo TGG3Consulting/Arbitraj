@@ -308,7 +308,8 @@ async fn run(core: &Core, d: Direction) {
             deal.step = Step::Stuck;
             deal.note(format!("Перевод не состоялся: {e}"));
             let why = super::stuck_reason::StuckReason::TransferFailed(e.to_string());
-            return super::stuck::handle(core, deal, why).await;
+            // Решение 222: без сверки с балансом — монеты могут быть в возврате вывода.
+            return super::stuck::handle_as_is(core, deal, why).await;
         }
     }
     deal.step = Step::Selling;

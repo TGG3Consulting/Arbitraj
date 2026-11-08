@@ -119,32 +119,10 @@ impl Venue for BscDex {
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
-        // Решение 132: сделка — только кошельком счёта (Ctx::bound).
-        self.p.ctx.bound()?;
-        // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
-        // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
-        // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
-        if self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
-            // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
-            if super::best_of::enabled(&self.p.ctx) {
-                return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
-            }
-            match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
-                Err(e) if e.code == ErrorCode::NoRoute => {}
-                // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.
-                Err(mut e) => {
-                    e.message = format!("[KyberSwap] {}", e.message);
-                    return Err(e);
-                }
-                other => return other,
-            }
-        }
-        let (q, env) = (self.p.quoting(), self.p.env());
-        scope(
-            Class::Trade,
-            exec::trade::trade(&q, &env, &self.p.nonces, req),
-        )
-        .await
+        // Решение 222: монета сделки — по изменению баланса кошелька на блоке свопа (все пути исполнения ниже).
+        let r = self.trade_logs(req).await;
+        let fact = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, r);
+        scope(Class::Trade, fact).await
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -435,5 +413,38 @@ impl Venue for BscDex {
     /// канала — в шапке его файла). Ошибки: неизвестный id.
     async fn check_send_channel(&self, id: &str) -> GatewayResult<ConnectionCheck> {
         send::check::check(&self.p.ctx, id).await
+    }
+}
+
+impl BscDex {
+    /// Сделка по пути исполнения (свой сборщик, KyberSwap, «лучший из двух»); факт — по событиям Transfer квитанции.
+    /// Ошибки: см. exec/trade.rs (с фактом транзакции).
+    async fn trade_logs(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        // Решение 132: сделка — только кошельком счёта (Ctx::bound).
+        self.p.ctx.bound()?;
+        // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
+        // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
+        // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
+        if self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
+            // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
+            if super::best_of::enabled(&self.p.ctx) {
+                return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
+            }
+            match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
+                Err(e) if e.code == ErrorCode::NoRoute => {}
+                // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.
+                Err(mut e) => {
+                    e.message = format!("[KyberSwap] {}", e.message);
+                    return Err(e);
+                }
+                other => return other,
+            }
+        }
+        let (q, env) = (self.p.quoting(), self.p.env());
+        scope(
+            Class::Trade,
+            exec::trade::trade(&q, &env, &self.p.nonces, req),
+        )
+        .await
     }
 }

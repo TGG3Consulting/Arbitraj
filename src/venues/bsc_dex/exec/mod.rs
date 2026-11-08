@@ -7,6 +7,8 @@
 //! От чего зависит: node/abi_dex.rs, pools/*.
 //! Настройки: dex.router, dex.deadline_s.
 
+pub mod balance_fact;
+pub mod balance_read;
 pub mod bundle;
 pub mod bundle_native;
 pub mod bundle_notify;

@@ -6,10 +6,15 @@
 //! продажа здесь — решение 220: убыток не выше stuck.relay_max_loss_pct — по рынку, иначе алерт (relay_here.rs).
 //! Решение 220 (часть В): площадка, где лежит монета, на паузе — перегона (вывода) с неё нет, продажа здесь по тем же
 //! правилам. Котировки продажи — кошельком сделки (здесь) и кошельком перегона (на цели).
+//! Решение 220 (Тигран 08.11): перегон не состоялся (отказ вывода) — монеты на месте: продажа здесь по тем же правилам,
+//! вывод не повторяется; монет нет или исход неизвестен — сделка остановлена (relay_here::transfer_failed).
 //! Кто вызывает: stuck.rs.
 //! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, registry (площадки монеты).
 //! Решение 185: сделка биржа ↔ биржа без счёта DEX перегоняется на DEX только кошельком строки биржи, где лежит монета
 //! (dex_account::for_relay; строки нет — DEX не цель), счёт записывается в сделку до перевода.
+//! Решение 222: цель, выручка перегона на которую после затрат ≤ 0 (у relay_value приход-пыль на цели = 0 выручки), —
+//! не цель; целей нет, а продажа здесь не считается или ≤ 0 — остаток списывается в пыль (dust::write_off), сделка
+//! закрывается (живой случай PIT 08.11: «Перегон на MEXC (ожидается 0.0039 USDT)» остатка 770 PIT).
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs).
 
 use rust_decimal::Decimal;
@@ -77,12 +82,25 @@ pub async fn run(core: &Core, mut deal: Deal) {
         .map(|x| x.0)
         .ok();
     let mut best: Option<(VenueId, Decimal)> = None;
+    // Решение 222: перегон, выручка которого после затрат ≤ 0 (или приход — пыль на площадке-цели), не делается.
+    let mut tiny = false;
     for to in targets(core, &deal) {
         // Решение 220: продажа на цели котируется кошельком, которым пойдёт (решение 185: for_relay).
         let acc = super::dex_account::for_relay(core, &deal, &to)
             .ok()
             .flatten();
         match super::relay_value::value_at(core, &deal.at, &to, &a, deal.qty, acc.as_ref()).await {
+            Ok(v) if v <= Decimal::ZERO => {
+                tiny = true;
+                let t = format!(
+                    "{}: перегон {} {} на {} не окупается — ожидаемая выручка {v} USDT (меньше затрат перевода или приход — пыль там)",
+                    deal.id, deal.qty, a.ticker, to.0
+                );
+                core.inner
+                    .deps
+                    .log(Level::Info, "core.relay", Some(&to.0), t, None)
+                    .await
+            }
             Ok(v) if best.as_ref().is_none_or(|(_, b)| v > *b) => best = Some((to, v)),
             Ok(_) => {}
             Err(e) => {
@@ -98,6 +116,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
                     .await
             }
         }
+    }
+    // Решение 222: перегонять не во что, а продажа здесь не считается или не окупается — остаток пыль.
+    if super::dust::relay_dust(best.as_ref().map(|b| b.1), tiny, here) {
+        let why =
+            "остаток — пыль: перегон не окупается, продажа здесь не даёт выручки (решение 222)";
+        super::dust::write_off(core, &mut deal, why).await;
+        return super::ledger::finish(core, &mut deal, Step::Closed, why).await;
     }
     let Some((to, v)) = best.filter(|(_, v)| here.is_none_or(|h| *v > h)) else {
         return super::relay_here::sell_here(core, deal, "перегон не выгоднее продажи здесь").await;
@@ -147,7 +172,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
             super::ledger::save(core, &deal).await;
             Box::pin(super::sell::sell_or_stuck(core, deal)).await;
         }
-        Err(e) => {
+        // Исход неизвестен (вывод мог уйти) — ни продажи, ни повтора: ручная проверка.
+        Err(e) if e.outcome_unknown() => {
             super::ledger::finish(
                 core,
                 &mut deal,
@@ -155,6 +181,14 @@ pub async fn run(core: &Core, mut deal: Deal) {
                 &format!("перегон не состоялся: {e}"),
             )
             .await
+        }
+        // Решение 220 (Тигран 08.11, п. 2): отказ вывода — монеты на месте: продажа здесь по порогу, вывод не
+        // повторяем; монет на месте нет — остановка, решает человек (relay_here::transfer_failed).
+        Err(e) => {
+            deal.step = Step::Stuck;
+            let why = format!("перегон не состоялся: {e}");
+            deal.note(format!("{why} — продажа здесь, вывод не повторяем"));
+            super::relay_here::transfer_failed(core, deal, &why).await
         }
     }
 }

@@ -6,6 +6,8 @@
 //! сам: возврат помечается «вручную», в журнал — кто нажал). Кнопки «Продать» нет — уже продано. В Telegram запись
 //! уходит тем же зеркалом экрана (событие manual.record, notify/mirror*.rs, решение 156). Повторное нажатие по уже
 //! решённой записи — «проигнорирована», действие не повторяется.
+//! Решение 224: у «Продано вручную» «Перегнать» доступна, если в сделке были продажи бота (перегон — не больше их
+//! выручки); недоступна — текст записи «Перегнать» не предлагает, только «Перегнано вручную».
 //! Кто вызывает: core/manual_feed.rs (записи), core/commands.rs (команды UsdtRetry, UsdtReturnedManually),
 //! core/manual_return.rs (Core::manual — таблица экрана; список сделок — Core::usdt_not_returned в manual_feed.rs).
 //! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs.
@@ -30,12 +32,15 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
         return None;
     };
     let (id, v, to, sum) = (&d.id, &at.0, &d.direction.buy_on.0, amount.round_dp(4));
-    // «Продано вручную» (решение 100): бот не знает, где USDT, — перегон только человеком.
-    let skip = d
-        .usdt_return_skip
-        .as_ref()
-        .map(|w| format!("бот выручку этой сделки не перегоняет: {w}"));
-    let same = (v == to).then(|| format!("USDT уже на площадке покупки {to}"));
+    // «Продано вручную» (решение 100): выручку человека перегоняет только человек; решение 224 — выручку продаж бота
+    // «Перегнать» перегоняет (retry_block).
+    let block = retry_block(d, at, &d.direction.buy_on);
+    // Решение 224: «Перегнать» недоступна — текст её не предлагает, только доступное.
+    let todo = if block.is_some() {
+        "перевести USDT на площадку покупки самим, затем нажать «Перегнано вручную»"
+    } else {
+        "«Перегнать» или, если перевели сами, «Перегнано вручную»"
+    };
     Some(ManualRecord {
         key: ManualRecord::key_of(RecordKind::UsdtReturn, id),
         kind: RecordKind::UsdtReturn,
@@ -47,7 +52,7 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
             .line(format!("{} {}", hu::usd(*amount), hu::route(v, to)))
             .kv("Лежат на", hu::venue(v))
             .reason(why)
-            .todo("«Перегнать» или, если перевели сами, «Перегнано вручную»")
+            .todo(todo)
             .id(id)
             .render(),
         reason: crate::notify::reason::short(why),
@@ -62,7 +67,7 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
                 format!(
                     "Перегнать USDT сделки {id} с {v} на {to}? Сумма — свободные USDT на {v}, не больше {sum}. Если причина — «исход неизвестен» или «вывод мог уйти», сначала проверьте обе площадки: перевод мог уже уйти."
                 ),
-                skip.or(same),
+                block,
                 false,
             ),
             btn(
@@ -79,6 +84,19 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
             ),
         ],
     })
+}
+
+/// Почему «Перегнать» недоступна. «Продано вручную» (решение 100) без продаж бота на площадке выручки — бот выручку
+/// не перегоняет; с продажами бота — доступна (решение 224, перегон не больше их выручки). USDT уже на площадке
+/// покупки — тоже недоступна. Принимает: сделку, где лежат USDT, площадку покупки. Возвращает: причину или None.
+/// Ошибок нет.
+pub fn retry_block(d: &Deal, at: &VenueId, to: &VenueId) -> Option<String> {
+    if let Some(w) = &d.usdt_return_skip
+        && super::usdt_return_deal::bot_sold(d) <= Decimal::ZERO
+    {
+        return Some(format!("бот выручку этой сделки не перегоняет: {w}"));
+    }
+    (at == to).then(|| format!("USDT уже на площадке покупки {}", to.0))
 }
 
 /// Команды записи «USDT не вернулись». Принимает: ядро, действие, кто (commands::who). Возвращает: None — действие
@@ -106,16 +124,17 @@ async fn take(core: &Core, deal: &str, who: &str, retry: bool) -> Result<Option<
         let Some(d) = deals.get_mut(deal) else {
             return Ok(None);
         };
-        let Some(UsdtReturn::NotReturned { amount, at, .. }) = d.usdt_return.clone() else {
+        let Some(UsdtReturn::NotReturned { mut amount, at, .. }) = d.usdt_return.clone() else {
             return Ok(None);
         };
         let to = d.direction.buy_on.clone();
         if retry {
-            if let Some(w) = &d.usdt_return_skip {
-                return Err(format!("бот выручку этой сделки не перегоняет: {w}"));
+            if let Some(w) = retry_block(d, &at, &to) {
+                return Err(w);
             }
-            if at == to {
-                return Err(format!("USDT уже на площадке покупки {}", to.0));
+            // Решение 224: у «Продано вручную» — не больше выручки продаж бота (выручку человека бот не трогает).
+            if d.usdt_return_skip.is_some() {
+                amount = amount.min(super::usdt_return_deal::bot_amount(core, d));
             }
             d.usdt_return = Some(UsdtReturn::Pending {
                 amount,

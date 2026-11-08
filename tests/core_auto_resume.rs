@@ -10,7 +10,8 @@
 //! 4) «Стоп» от софта: режим до него возвращается, если отметка та же и система в «Стоп»; смена режима человеком
 //!    (отметки нет) — ничего; «Стоп» поверх «Стоп» отметки не ставит;
 //! 5) коды без паузы (WithdrawRejected, InvalidAddress, WithdrawLocked) — паузы нет и ошибкой подряд не считаются;
-//! 6) новый день: паузы по убытку дня (биржа, циклы DEX) и «Стоп» по общему лимиту сняты, «исход неизвестен» остаётся;
+//! 6) пауза сверки (решение 221) под паузой ошибок / «исход неизвестен» — отметка сверки снята, своя поставлена;
+//! 7) новый день: паузы по убытку дня (биржа, циклы DEX) и «Стоп» по общему лимиту сняты, «исход неизвестен» остаётся;
 //!    до полуночи UTC — точное ожидание.
 //!
 //! Кто вызывает: cargo test.
@@ -72,6 +73,38 @@ fn mark_new_stronger_and_foreign_pause() {
         .insert(v.clone(), "MEXC: убыток за день".into());
     ap::pause_venue(&mut r, &v, "3 ошибок подряд".into(), Kind::Errors, t0());
     assert!(!r.venue_auto.contains_key(&v));
+}
+
+#[test]
+fn reconcile_pause_becomes_ours() {
+    // Решение 221 + 225: пауза сверки — софтовая; ошибки поверх неё снимают отметку сверки и ставят свою.
+    let v = mexc();
+    let mut r = Risk::default();
+    r.venue_paused
+        .insert(v.clone(), "сверка: монет меньше, чем по учёту".into());
+    r.reconcile_venues.insert(v.clone());
+    assert!(ap::pause_venue(
+        &mut r,
+        &v,
+        "3 ошибок подряд".into(),
+        Kind::Errors,
+        t0()
+    ));
+    assert!(!r.reconcile_venues.contains(&v));
+    assert_eq!(r.venue_auto[&v].kind, Kind::Errors);
+    // «Исход неизвестен» поверх паузы сверки — «только человек», отметки сверки нет (сверка не снимет).
+    let mut r = Risk::default();
+    r.venue_paused.insert(v.clone(), "сверка".into());
+    r.reconcile_venues.insert(v.clone());
+    assert!(ap::pause_venue(
+        &mut r,
+        &v,
+        "исход неизвестен".into(),
+        Kind::Outcome,
+        t0()
+    ));
+    assert!(!r.reconcile_venues.contains(&v));
+    assert!(ap::human_only(&r, &v));
 }
 
 #[test]

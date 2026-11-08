@@ -1,144 +1,182 @@
 //! Файл: core/reconcile_pause.rs
-//! Что делает: «Пауза» системы от сверки балансов и её автоснятие (решение 221, Тигран 08.11.2026). Случай 08.11:
-//! сверка в 00:46:53 UTC поставила «Паузу» (PORTO по учёту 119.25, на площадке 0 — человек продал вручную до кнопки
-//! «Беру на себя»); в 00:47:18 / 00:48:18 сделки закрыли кнопками, расхождение исчезло, а пауза висела до ручного
-//! «Старт» в 07:31:15, и в журнале не было строки о смене режима. Теперь:
-//! (1) пауза от сверки пишется в журнал (core.control, как остальные смены режима) — режим, причина и сколько и по
-//!     чему расхождение; запоминается режим до паузы (Risk.reconcile_pause);
-//! (2) если на следующих кругах сверки расхождений нет ledger.reconcile_confirm_rounds кругов подряд (та же защита,
-//!     что для постановки; не задано или 0 — один круг) — режим до паузы возвращается, журнал core.control и
-//!     уведомление risk.reconcile_resumed. Паузу человека или другого модуля и паузу, после которой режим меняли
-//!     (любая смена режима снимает отметку — risk::set_mode, daily_limit.rs), сверка не трогает.
-//! «Расхождений нет» — в круге нет ни одной проблемы risk.reconcile_mismatch (ни подтверждённой, ни ждущей кругов, ни
-//! «балансы не получены»): не сверили — не знаем, паузу не снимаем.
+//! Что делает: пауза ПЛОЩАДКИ от сверки балансов и её автоснятие (решение 221, Тигран 08.11.2026). Случай 08.11:
+//! сверка в 00:46:53 UTC поставила «Паузу» всей системы (PORTO по учёту 119.25, на площадке 0 — человек продал вручную
+//! до кнопки «Беру на себя»); расхождение исчезло через минуту, а пауза висела до ручного «Старт» в 07:31:15.
+//! Тигран (08.11): «Пауза ложится всегда только на биржу, где проблема, и сама снимается, если уже всё ок. Но если
+//! паузу поставили вручную — снимается только вручную». Теперь:
+//! (1) подтверждённая проблема сверки площадки (монет меньше, чем по учёту, или балансы не получены — после
+//!     ledger.reconcile_confirm_rounds кругов) ставит паузу только ЭТОЙ площадке (Risk.venue_paused — тот же механизм,
+//!     что у ошибок подряд и правила шлюза StopVenue), если она ещё не на паузе; отметка «паузу поставила сверка» —
+//!     Risk.reconcile_venues; журнал core.control с площадкой, причиной и суммами. Системный режим сверка не меняет.
+//!     У DEX пауза — площадки (например bsc_dex) целиком: пауза по кошельку не поддерживается (venue_paused — по id
+//!     площадки), поэтому расхождение одного кошелька останавливает все кошельки этой DEX;
+//! (2) если по ЭТОЙ площадке ledger.reconcile_confirm_rounds кругов подряд чистые (площадка сверялась в круге — все её
+//!     балансы получены — и нет ни одной её проблемы risk.reconcile_mismatch, ни подтверждённой, ни ждущей кругов;
+//!     не задано / 0 / 1 — один круг) — пауза площадки снимается, журнал core.control и уведомление
+//!     risk.reconcile_resumed. Проблемы и недоступность ДРУГИХ площадок не мешают;
+//! (3) паузу площадки, которую поставил или снял человек (risk::resume_venue) или другой модуль (risk::on_error,
+//!     правило шлюза, «исход неизвестен» — rules_apply.rs, лимит дня — daily_venue_limit.rs), сверка не трогает: каждый
+//!     из них снимает отметку (risk::forget_reconcile), и автоснятия сверкой нет. Решение 225: пауза ошибок подряд,
+//!     правила «стоп площадка» и «исход неизвестен» поверх паузы сверки переходит в отметку auto_pause (Risk.venue_auto,
+//!     auto_pause::pause_venue снимает отметку сверки): дальше её снимает auto_resume.rs, «исход неизвестен» — человек;
+//!     площадку с «исход неизвестен» (auto_pause::human_only) сверка не снимает никогда.
 //! Кто вызывает: core/reconcile.rs (run).
-//! От чего зависит: engine.rs, risk.rs, reconcile.rs (Found), reconcile_confirm.rs (is_unavailable), settings.
+//! От чего зависит: engine.rs, risk.rs, reconcile.rs (Found), settings.
 //! Настройки: ledger.reconcile_confirm_rounds.
 
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+use crate::core::types::VenueId;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
 use super::reconcile::Found;
-use super::reconcile_confirm::is_unavailable;
-use super::risk::Mode;
 
 /// Код события расхождения сверки.
 const MISMATCH: &str = "risk.reconcile_mismatch";
 
-/// Счётчик чистых кругов подряд, пока стоит пауза сверки (чистая логика, без ядра).
+/// Счётчик чистых кругов подряд по площадкам, пока на них стоит пауза сверки (чистая логика, без ядра).
 #[derive(Default)]
 pub struct Lift {
-    clean: u64,
+    clean: HashMap<String, u64>,
 }
 
 impl Lift {
-    /// Отмечает круг. Принимает: стоит ли сейчас пауза, поставленная сверкой; чистый ли круг; сколько чистых кругов
-    /// подряд нужно (меньше 1 — как 1). Возвращает: true — пора снять паузу (счётчик обнуляется). Ошибок нет.
-    pub fn round(&mut self, paused_by_reconcile: bool, clean: bool, need: u64) -> bool {
+    /// Отмечает круг площадки. Принимает: площадку; стоит ли сейчас на ней пауза, поставленная сверкой; чистый ли
+    /// круг этой площадки; сколько чистых кругов подряд нужно (меньше 1 — как 1). Возвращает: true — пора снять паузу
+    /// (счётчик обнуляется). Ошибок нет.
+    pub fn round(
+        &mut self,
+        venue: &str,
+        paused_by_reconcile: bool,
+        clean: bool,
+        need: u64,
+    ) -> bool {
         if !paused_by_reconcile || !clean {
-            self.clean = 0;
+            self.clean.remove(venue);
             return false;
         }
-        self.clean += 1;
-        if self.clean >= need.max(1) {
-            self.clean = 0;
+        let n = self.clean.entry(venue.to_string()).or_default();
+        *n += 1;
+        if *n >= need.max(1) {
+            self.clean.remove(venue);
             return true;
         }
         false
     }
 
-    /// Чистых кругов подряд сейчас. Ошибок нет.
-    pub fn clean(&self) -> u64 {
-        self.clean
+    /// Забывает площадки, на которых паузы сверки больше нет. Принимает: площадки с отметкой. Ошибок нет.
+    pub fn retain(&mut self, marked: &HashSet<String>) {
+        self.clean.retain(|v, _| marked.contains(v));
+    }
+
+    /// Чистых кругов подряд сейчас у площадки. Ошибок нет.
+    pub fn clean(&self, venue: &str) -> u64 {
+        self.clean.get(venue).copied().unwrap_or(0)
     }
 }
 
-/// Круг чистый: ни одной проблемы risk.reconcile_mismatch среди всех найденных (до подтверждения кругами).
-/// Принимает: все проблемы круга. Ошибок нет.
-pub fn is_clean(all: &[Found]) -> bool {
-    !all.iter().any(|f| f.0 == MISMATCH)
+/// Круг площадки чистый: площадка сверялась в этом круге и среди всех проблем круга (до подтверждения кругами) нет
+/// ни одной её проблемы risk.reconcile_mismatch. Принимает: площадку, сверенные в круге площадки, все проблемы круга.
+/// Ошибок нет.
+pub fn is_clean(venue: &str, checked: &HashSet<String>, all: &[Found]) -> bool {
+    checked.contains(venue)
+        && !all
+            .iter()
+            .any(|f| f.0 == MISMATCH && f.1.as_deref() == Some(venue))
 }
 
-/// Расхождения, ставящие системную паузу (подтверждённые, не «балансы не получены»), текстом через «; ».
-/// Пусто — паузы нет. Ошибок нет.
-pub fn mismatch_text(found: &[Found]) -> String {
-    found
-        .iter()
-        .filter(|f| f.0 == MISMATCH && !is_unavailable(f))
-        .map(|f| f.2.as_str())
-        .collect::<Vec<_>>()
-        .join("; ")
-}
-
-/// Ставит «Паузу» от сверки, если система в работе и есть подтверждённое расхождение; журнал core.control.
-/// Принимает: ядро, подтверждённые проблемы круга. Ошибок нет.
-pub async fn pause(core: &Core, found: &[Found]) {
-    let what = mismatch_text(found);
-    if what.is_empty() {
-        return;
-    }
-    let reason = "расхождение при сверке балансов".to_string();
-    let was = {
-        let mut r = lk(&core.inner.risk);
-        if r.mode != Mode::Running {
-            return;
+/// Подтверждённые проблемы сверки по площадкам (ставят паузу площадки): площадка → тексты через «; ».
+/// Принимает: подтверждённые проблемы круга. Ошибок нет.
+pub fn mismatch_by_venue(found: &[Found]) -> BTreeMap<String, String> {
+    let mut out: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+    for f in found.iter().filter(|f| f.0 == MISMATCH) {
+        if let Some(v) = &f.1 {
+            out.entry(v.clone()).or_default().push(f.2.as_str());
         }
-        let was = r.mode;
-        r.mode = Mode::Paused;
-        r.reason = Some(reason.clone());
-        r.daily_stop = false;
-        r.reconcile_pause = Some(was);
-        was
-    };
-    super::risk::publish(core);
-    let text = format!(
-        "Режим системы: {:?} → Paused — {reason}: {what}. Снимется сам, когда расхождений не будет \
-         ledger.reconcile_confirm_rounds кругов сверки подряд (решение 221)",
-        was
-    );
-    core.inner
-        .deps
-        .log(Level::Info, "core.control", None, &text, None)
-        .await;
+    }
+    out.into_iter().map(|(v, t)| (v, t.join("; "))).collect()
 }
 
-/// Круг сверки для автоснятия: чистый круг при паузе сверки считается; набралось кругов — режим до паузы
-/// возвращается (только если пауза всё ещё сверки — отметка не снята сменой режима), журнал и risk.reconcile_resumed.
-/// Принимает: ядро, счётчик, все проблемы круга. Ошибок нет.
-pub async fn maybe_lift(core: &Core, lift: &mut Lift, all: &[Found]) {
-    let ours = lk(&core.inner.risk).reconcile_pause.is_some();
-    let need = core
-        .inner
+/// Ставит паузу площадке с подтверждённой проблемой сверки, если она ещё не на паузе; отметка сверки, журнал
+/// core.control. Площадку на паузе по другой причине не трогает. Принимает: ядро, подтверждённые проблемы круга.
+/// Ошибок нет.
+pub async fn pause(core: &Core, found: &[Found]) {
+    let need = need(core);
+    for (v, what) in mismatch_by_venue(found) {
+        let id = VenueId(v.clone());
+        let fresh = {
+            let mut r = lk(&core.inner.risk);
+            if r.venue_paused.contains_key(&id) {
+                false
+            } else {
+                r.venue_paused
+                    .insert(id.clone(), format!("сверка балансов: {what}"));
+                r.reconcile_venues.insert(id);
+                true
+            }
+        };
+        if !fresh {
+            continue;
+        }
+        super::risk::publish(core);
+        let text = format!(
+            "Пауза площадки {v} — расхождение при сверке балансов: {what}. Снимется сама, когда по площадке \
+             расхождений не будет {need} кругов сверки подряд (решение 221)"
+        );
+        core.inner
+            .deps
+            .log(Level::Info, "core.control", Some(&v), &text, None)
+            .await;
+    }
+}
+
+/// Круг сверки для автоснятия: по каждой площадке с паузой сверки чистый круг считается; набралось кругов подряд —
+/// пауза площадки снимается (только если отметка сверки ещё стоит), журнал core.control и risk.reconcile_resumed.
+/// Принимает: ядро, счётчик, сверенные в круге площадки, все проблемы круга. Ошибок нет.
+pub async fn maybe_lift(core: &Core, lift: &mut Lift, checked: &HashSet<String>, all: &[Found]) {
+    let marked: HashSet<String> = lk(&core.inner.risk)
+        .reconcile_venues
+        .iter()
+        .map(|v| v.0.clone())
+        .collect();
+    lift.retain(&marked);
+    let need = need(core);
+    for v in marked {
+        if !lift.round(&v, true, is_clean(&v, checked, all), need) {
+            continue;
+        }
+        let id = VenueId(v.clone());
+        let lifted = {
+            let mut r = lk(&core.inner.risk);
+            // Решение 225: «исход неизвестен» снимает только человек — сверка такую площадку не снимает (отметка сверки
+            // при этом уже снята auto_pause::pause_venue; проверка — страховка).
+            !super::auto_pause::human_only(&r, &id)
+                && r.reconcile_venues.remove(&id)
+                && r.venue_paused.remove(&id).is_some()
+        };
+        if !lifted {
+            continue;
+        }
+        super::risk::publish(core);
+        let text = format!(
+            "Пауза площадки {v} от сверки балансов снята сама: расхождений нет {need} кругов сверки подряд \
+             (решение 221)"
+        );
+        let deps = &core.inner.deps;
+        deps.log(Level::Info, "core.control", Some(&v), &text, None)
+            .await;
+        deps.notify("risk.reconcile_resumed", Some(&v), &text).await;
+    }
+}
+
+/// Сколько кругов подряд нужно (ledger.reconcile_confirm_rounds; не задано или 0 — 1). Ошибок нет.
+fn need(core: &Core) -> u64 {
+    core.inner
         .deps
         .settings
         .integer("ledger.reconcile_confirm_rounds", At::default())
         .unwrap_or(0)
-        .max(1);
-    if !lift.round(ours, is_clean(all), need) {
-        return;
-    }
-    let back = {
-        let mut r = lk(&core.inner.risk);
-        match r.reconcile_pause.take() {
-            Some(prev) if r.mode == Mode::Paused => {
-                r.mode = prev;
-                r.reason = Some(format!(
-                    "пауза сверки снята сама: расхождений нет {need} кругов подряд"
-                ));
-                Some(prev)
-            }
-            _ => None,
-        }
-    };
-    let Some(prev) = back else { return };
-    super::risk::publish(core);
-    let text = format!(
-        "Режим системы: Paused → {prev:?} — пауза от сверки балансов снята сама: расхождений нет {need} кругов \
-         сверки подряд (решение 221)"
-    );
-    let deps = &core.inner.deps;
-    deps.log(Level::Info, "core.control", None, &text, None)
-        .await;
-    deps.notify("risk.reconcile_resumed", None, &text).await;
+        .max(1)
 }

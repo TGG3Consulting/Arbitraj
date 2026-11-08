@@ -31,14 +31,8 @@ pub async fn on_hand(
     cap: Decimal,
 ) -> Result<(Decimal, Option<String>), String> {
     let gw = super::dex_account::venue_of(core, deal, venue).await?;
-    // Решение 113: баланс одной монеты (у DEX — 1–2 запроса к узлу, а не по каждому токену кошелька).
-    // Решение 211: баланс площадки — у биржи по её тикеру, у DEX по адресу (balance_key); резерв BNB — по тикеру.
     let on = super::venue_ticker::ticker_on(core, asset, venue);
-    let free = gw
-        .balance(&super::venue_ticker::balance_key(core, asset, venue))
-        .await
-        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
-        .map_or(Decimal::ZERO, |x| x.free);
+    let free = free_of(core, gw.as_ref(), venue, asset).await?;
     let native = super::native::is_native(core, asset);
     let free = super::native::spendable(core, venue, native, &on, free)?;
     let (free, note) = super::native::minus_sell_gas(core, &gw, venue, asset, free).await;
@@ -49,6 +43,24 @@ pub async fn on_hand(
         ));
     }
     Ok((free.min(cap), note))
+}
+
+/// Свободный баланс монеты на площадке (торговый счёт биржи; у DEX — кошелёк вида `gw`, решение 132), без резервов.
+/// Общий для on_hand и сверки остатка перед автоматической продажей (core/remain_fact.rs, решение 222).
+/// Принимает: ядро, адаптер (вид на счёт сделки), площадку, монету. Возвращает: free (монеты нет — 0). Ошибки: шлюз.
+pub async fn free_of(
+    core: &Core,
+    gw: &dyn crate::gateway::contract::Venue,
+    venue: &VenueId,
+    asset: &Asset,
+) -> Result<Decimal, String> {
+    // Решение 113: баланс одной монеты (у DEX — 1–2 запроса к узлу, а не по каждому токену кошелька).
+    // Решение 211: баланс площадки — у биржи по её тикеру, у DEX по адресу (balance_key); резерв BNB — по тикеру.
+    Ok(gw
+        .balance(&super::venue_ticker::balance_key(core, asset, venue))
+        .await
+        .map_err(|e| format!("{}: балансы: {}", venue.0, e.message))?
+        .map_or(Decimal::ZERO, |x| x.free))
 }
 
 /// «Продать сейчас» / «Продать и перегнать» (решение 174, живой случай ION 05.11): монеты сделки, лежащие на бирже не
@@ -208,7 +220,8 @@ pub async fn sold_manually(
         deal.qty
     ));
     deal.qty = Decimal::ZERO;
-    // Решение 138: продал человек — бот выручку не двигает (решение 100); не на площадке покупки — страховка.
+    // Решение 138: продал человек — бот его выручку не двигает (решение 100); не на площадке покупки — страховка.
+    // Решение 224: выручку продаж бота в этой же сделке бот перегоняет сам (usdt_return_deal::prepare).
     deal.usdt_return_skip =
         Some("продано вручную человеком — бот выручку не перегоняет (решение 100)".into());
     super::ledger::finish(core, &mut deal, Step::Closed, "продано вручную человеком").await;

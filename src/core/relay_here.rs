@@ -6,20 +6,34 @@
 //! сделка ждёт решения. Настройка не задана — функция не работает: алерт с причиной «не задана настройка» (правило
 //! проекта: стартовых значений нет). Нет котировки — алерт с причиной (убыток неизвестен, вслепую не продаём).
 //! Котировка — кошельком сделки (trade_ops::deal_value, решение 220 часть А).
-//! Кто вызывает: core/relay.rs.
-//! От чего зависит: trade_ops.rs, stuck.rs (sold_by_market), manual.rs (raise_alert), deal.rs.
-//! Настройки: stuck.relay_max_loss_pct.
+//! Ответы Тиграна 08.11.2026 к решению 220: (1) нет котировки — сначала ждём следующей цены монеты (stuck::next_tick:
+//! первый же тик — новая котировка, без лишнего ожидания), не дольше stuck.no_quote_wait_ms; не задана или время
+//! вышло — алерт, как раньше. (2) Перевод не состоялся (отказ вывода в «Перегоне», «перевод не состоялся» после
+//! покупки в executor.rs) — вывод не повторяем: монеты на месте (баланс площадки) — продажа здесь по тем же правилам;
+//! монет нет — сделка остановлена, решает человек (transfer_failed).
+//! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed).
+//! От чего зависит: trade_ops.rs, stuck.rs (sold_by_market, next_tick), manual.rs (raise_alert), manual_halted.rs
+//! (on_hand, set_qty), ledger.rs, deal.rs.
+//! Настройки: stuck.relay_max_loss_pct, stuck.no_quote_wait_ms.
+
+use std::future::Future;
+use std::time::Duration;
 
 use rust_decimal::Decimal;
+use tokio::time::Instant;
 
 use crate::notify::human as h;
 use crate::settings::read::At;
+use crate::storage::journal::Level;
 
-use super::deal::Deal;
+use super::deal::{Deal, Step};
 use super::engine::Core;
 
 /// Имя настройки порога убытка продажи здесь в режиме «Перегон».
 pub const SETTING: &str = "stuck.relay_max_loss_pct";
+
+/// Имя настройки: сколько ждать цену монеты, когда котировки продажи здесь нет (мс).
+pub const WAIT: &str = "stuck.no_quote_wait_ms";
 
 /// Что делать с продажей здесь.
 #[derive(Debug, Clone, PartialEq)]
@@ -71,17 +85,96 @@ pub fn decide(
 /// Продать здесь по рынку, если убыток не выше stuck.relay_max_loss_pct, иначе — алерт человеку. Принимает: ядро,
 /// сделку, почему продаём здесь (для хронологии, журнала и Telegram). Ошибок нет: всё — в алерте или продаже.
 pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
-    let value = super::trade_ops::deal_value(core, &deal)
-        .await
-        .map(|(v, _)| v);
-    let max = core
-        .inner
-        .deps
-        .settings
-        .decimal(SETTING, At::default())
-        .map_err(|e| e.message);
+    let s = &core.inner.deps.settings;
+    let max = s.decimal(SETTING, At::default()).map_err(|e| e.message);
+    // Порог не задан — алерт и так: цену не ждём (ожидание ничего не решит).
+    let wait = max
+        .as_ref()
+        .ok()
+        .and_then(|_| s.integer(WAIT, At::default()).ok());
+    let d = &deal;
+    let value = quote_or_wait(core, d, wait, move || async move {
+        super::trade_ops::deal_value(core, d).await.map(|(v, _)| v)
+    })
+    .await;
     match decide(&deal, why, max, value) {
         Here::Market(text) => super::stuck::sold_by_market(core, deal, &text).await,
         Here::Alert { loss, why } => super::manual::raise_alert(core, deal, loss, why, None).await,
+    }
+}
+
+/// Котировка продажи здесь с ожиданием цены (ответ Тиграна 08.11, п. 3). Есть сразу — сразу; нет — ждём тика монеты
+/// (stuck::next_tick) и котируем снова на каждом тике, не дольше `wait_ms`. Принимает: ядро, сделку (монета тика),
+/// stuck.no_quote_wait_ms (None — не задана: без ожидания), котировку (выручка USDT или текст причины).
+/// Возвращает: выручку; Err — котировки нет (текст с причиной и тем, сколько ждали). Ошибок сверх этого нет.
+pub async fn quote_or_wait<F, Fut>(
+    core: &Core,
+    deal: &Deal,
+    wait_ms: Option<u64>,
+    mut quote: F,
+) -> Result<Decimal, String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<Decimal, String>>,
+{
+    let mut last = match quote().await {
+        Ok(v) => return Ok(v),
+        Err(e) => e,
+    };
+    let Some(ms) = wait_ms else {
+        return Err(format!("{last} ({WAIT} не задана — цену не ждали)"));
+    };
+    let until = Instant::now() + Duration::from_millis(ms);
+    while super::stuck::next_tick(core, deal, Some(until)).await {
+        match quote().await {
+            Ok(v) => return Ok(v),
+            Err(e) => last = e,
+        }
+    }
+    Err(format!("{last} (ждали цену монеты {ms} мс, {WAIT})"))
+}
+
+/// Что делать после несостоявшегося перевода.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Place {
+    /// Монеты на месте: продать здесь это количество (заметка о балансе — в хронологию).
+    SellHere(Decimal, Option<String>),
+    /// Монет на месте нет (или баланс не получен) — остановка с текстом причины.
+    Halt(String),
+}
+
+/// Решение после несостоявшегося перевода (чистая функция). Принимает: почему (текст отказа перевода), баланс
+/// площадки, где сделка (manual_halted::on_hand: количество и заметка; Err — монет нет или баланс не получен).
+/// Возвращает: Place. Ошибок нет.
+pub fn place(why: &str, on_hand: Result<(Decimal, Option<String>), String>) -> Place {
+    match on_hand {
+        Ok((q, note)) if q > Decimal::ZERO => Place::SellHere(q, note),
+        Ok(_) => Place::Halt(format!("{why}; монет на месте нет — нужна ручная проверка")),
+        Err(e) => Place::Halt(format!(
+            "{why}; монет на месте нет ({e}) — нужна ручная проверка"
+        )),
+    }
+}
+
+/// Перевод не состоялся (решение 220, ответ Тиграна 08.11, п. 1–2): вывод не повторяем. Монеты на площадке, где
+/// сделка, — продажа здесь по порогу (sell_here); нет — сделка остановлена (Step::Halted), решает человек.
+/// Принимает: ядро, сделку (исход перевода известен — не OutcomeUnknown), текст отказа. Ошибок нет.
+pub async fn transfer_failed(core: &Core, mut deal: Deal, why: &str) {
+    let (at, a) = (deal.at.clone(), deal.direction.asset.clone());
+    let hand = super::manual_halted::on_hand(core, &deal, &at, &a, deal.qty).await;
+    match place(why, hand) {
+        Place::SellHere(q, note) => {
+            super::manual_halted::set_qty(&mut deal, q, note);
+            let text = format!(
+                "{}: {why} — {q} {} на {}: вывод не повторяем, продажа здесь по порогу {SETTING}",
+                deal.id, a.ticker, at.0
+            );
+            core.inner
+                .deps
+                .log(Level::Warn, "core.relay_here", Some(&at.0), &text, None)
+                .await;
+            sell_here(core, deal, why).await
+        }
+        Place::Halt(text) => super::ledger::finish(core, &mut deal, Step::Halted, &text).await,
     }
 }

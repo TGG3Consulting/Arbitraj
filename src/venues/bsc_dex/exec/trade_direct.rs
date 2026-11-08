@@ -3,7 +3,8 @@
 //! exec/live.rs, exec/chain.rs): пересчёт по живому состоянию пулов, проверка худшей цены, минимум «получить не
 //! меньше», сверка с квотером на сумме сделки (решение 32, exec/precheck.rs), разрешения (Permit2), обмен через
 //! Universal Router с проверкой реально полученного баланса в той же транзакции, ожидание итога своим узлом, факт по
-//! логам. Графовая прямая форма (решение 83) — минимум выхода из предторговой верификации ставится последнему шагу.
+//! логам. Минимум выхода — exec/leg_min.rs (решение 228; одна доля — как раньше); графовая прямая форма (решение 83) —
+//! минимум предторговой верификации нижней границей последнему шагу.
 //! Решение 121 B1 (как решение 99): если разрешения отправлялись (каждое ждёт блока — секунды), маршрут, минимумы и
 //! calldata обмена собираются ЗАНОВО на живом состоянии и снова сверяются с req.worst_price (у графа — повторная
 //! верификация); свежей сборке нужно новое разрешение — своп не отправляется (QuoteMismatch), второго approve нет.
@@ -14,7 +15,7 @@
 //! TradeResult.executor (хронология сделки). Покупка — сверка с квотером, как раньше, стоп.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
-//! exec/precheck.rs, exec/exit_quote.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
+//! exec/precheck.rs, exec/exit_quote.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 
@@ -37,7 +38,7 @@ use super::trade::{
     check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
 };
 use super::txs::Env;
-use super::{chain, exit_quote, live, precheck_sim, result, verify_gate};
+use super::{chain, exit_quote, leg_min, live, precheck_sim, result, verify_gate};
 
 /// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
 /// (решение 177; None — по расчёту).
@@ -177,18 +178,17 @@ fn legs(
     is_native: bool,
 ) -> GatewayResult<(Vec<Step>, Wrap)> {
     let mut legs = vec![chain::steps(ctx, req, path, req.qty, decs)?];
-    // Графовый маршрут (решение 83): свежий минимум выхода доли из верификации — последнему шагу (он отдаёт выход).
-    if let Some(mins) = mins {
-        let out_dec = if req.side == Side::Buy {
-            decs.0
-        } else {
-            decs.1
+    // Решение 228 (exec/leg_min.rs): одна доля — наибольшее из границы сделки и ожидаемого × (1 − допуск), как раньше;
+    // графовый маршрут (решение 83) — свежий минимум верификации нижней границей (выше ожидаемого — отказ).
+    let ver =
+        match mins {
+            Some(mins) => Some(*mins.first().ok_or_else(|| {
+                ctx.err(ErrorCode::NoRoute, "верификация не вернула минимум выхода")
+            })?),
+            None => None,
         };
-        let min = *mins
-            .first()
-            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "верификация не вернула минимум выхода"))?;
-        verify_gate::apply_leg_min(ctx, &mut legs[0], min, out_dec)?;
-    }
+    let ver = ver.as_ref().map(std::slice::from_ref);
+    leg_min::set_leg_mins(ctx, req, [(path, req.qty)], &mut legs, ver, decs)?;
     let wrap = if is_native {
         native::adapt(ctx, req.side, &mut legs)?
     } else {

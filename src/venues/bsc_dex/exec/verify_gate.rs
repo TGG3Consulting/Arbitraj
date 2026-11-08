@@ -6,12 +6,14 @@
 //! если свежая средняя цена хуже неё) и переводит вердикт в решение шлюза: Reject → ошибка (QuoteMismatch — цена
 //! уехала; StaleData — свежесть/чтение/таймаут), ордер НЕ формируется (стартовое правило Тиграна «не исполнился —
 //! отменяем, больше не пробуем»: здесь не отправляем вовсе); Ok → свежие amountOutMin по ногам (решение 84), которые
-//! ставятся последнему шагу каждой доли (apply_leg_min: не ниже минимума по req.worst_price). Итог — в уведомления
+//! ставятся последнему шагу каждой доли нижней границей (exec/leg_min.rs set_leg_mins, решение 228: минимум доли =
+//! E_k × max(1 − допуск, B / E); минимум верификации выше ожидаемого доли — отказ). Итог — в уведомления
 //! (exec.verified / exec.verify_rejected): видно из интерфейса и в Telegram, если событие включено.
 //! Классику (прямой/умный путь без графа) не трогает — вызывается только из exec/trade.rs для RouteMode::Graph.
-//! Кто вызывает: exec/trade.rs (графовый маршрут), exec/trade_smart.rs (apply_leg_min по долям).
-//! От чего зависит: quote/verify.rs, quote/via.rs, quote/steps.rs, quote/direct.rs, exec/trade.rs (sides), exec/chain.rs
-//! (Step), exec/leg_min.rs (apply_leg_min), exec/txs.rs (Env), send/mod.rs (planned_floor), core/types.
+//! Кто вызывает: exec/trade.rs (графовый маршрут); повтор после approve — exec/{trade_direct, trade_smart}.rs,
+//! exec/executor/trade.rs; plan_quote / outcome — exec/dry_paths.rs.
+//! От чего зависит: quote/verify.rs, quote/via.rs, quote/steps.rs, quote/direct.rs, exec/trade.rs (sides),
+//! exec/txs.rs (Env), send/mod.rs (planned_floor), core/types.
 //! Настройки: exec.dex_slippage_pct [bsc_dex] (для восстановления цены плана); verify.* — через quote/verify.rs.
 
 use chrono::Utc;
@@ -28,8 +30,6 @@ use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::send;
 use super::txs::Env;
-
-pub use super::leg_min::apply_leg_min;
 
 /// Итог успешной верификации графового маршрута: свежие минимумы выхода по ногам (решение 84) и блок перечтения.
 #[derive(Debug, Clone)]

@@ -6,7 +6,8 @@
 //! команд одного execute (map(ADDRESS_THIS) = address(this) — pancake-v4-universal-router 1b6d479e
 //! src/base/Dispatcher.sol#L353-L361, universal-router edf19bfd contracts/base/Dispatcher.sol#L332-L340;
 //! CONTRACT_BALANCE во входе V3 — V3SwapRouter.sol#L85 / #L115, V2 через Payments.pay — Payments.sol#L32 / #L30). Минимум выхода — у каждого шага: у промежуточного — ожидаемое после крючка × (1 − exec.dex_slippage_pct)
-//! (SDK ставит 0, но обмен без минимума здесь не отправляется), у последнего — минимум сделки (exec/order.rs).
+//! (SDK ставит 0, но обмен без минимума здесь не отправляется), у последнего — минимум сделки (exec/order.rs;
+//! окончательный по всем долям — exec/leg_min.rs, решение 228).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/plan.rs, exec/universal.rs.
 //! От чего зависит: exec/order.rs, exec/swap_v2v3.rs, exec/swap_v4.rs, exec/ur.rs, quote/path.rs, num.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex].

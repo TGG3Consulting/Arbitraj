@@ -152,25 +152,8 @@ fn elastic_and_singleton_pools_do_not_go_via_executor() {
     assert!(entry::supported(cl, &pool).is_err());
 }
 
-/// Ревью 122, пункт 2: свежий минимум верификации не опускает минимум сделки (по req.worst_price, exec/order.rs),
-/// а более строгий свежий — ставится; сумма минимумов долей — minOut вызова исполнителя.
-#[tokio::test]
-async fn fresh_leg_min_never_below_worst_price_min() {
-    use arb::venues::bsc_dex::exec::verify_gate::apply_leg_min;
-    use rust_decimal::Decimal;
-    let p = route_common::parts().await;
-    let q = p.quoting();
-    let s = |min| vec![step(entry(&q, CAKE_USDT_PCS), (USDT, CAKE), e18(10), min)];
-    let mut leg = s(e18(5));
-    apply_leg_min(&q.ctx, &mut leg, Decimal::from(4), 18).unwrap();
-    assert_eq!(
-        leg[0].order.min_out,
-        e18(5),
-        "минимум по худшей цене остаётся"
-    );
-    apply_leg_min(&q.ctx, &mut leg, Decimal::from(6), 18).unwrap();
-    assert_eq!(leg[0].order.min_out, e18(6), "строже свежий — ставится");
-}
+// Ревью 122, пункт 2 (свежий минимум верификации не опускает минимум по худшей цене, строже — ставится) — теперь в
+// tests/bsc_dex_leg_min.rs вместе с решением 228 (минимум доли считается по всей сделке, exec/leg_min.rs).
 
 /// Ревью стейблсвапов: цикл (вход = выход) из двух долей не собирается — контракт исполняет цикл одной долей («loop»).
 #[tokio::test]

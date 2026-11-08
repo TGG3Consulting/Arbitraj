@@ -159,6 +159,14 @@ impl Venue for Bybit {
         Ok(std::sync::Arc::new(f))
     }
 
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot
+    /// (GET /v5/market/orderbook), комиссия — тот же план, что у стакана потока (book.rs frozen).
+    async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
+        let book = book_print::snapshot(&self.ctx, asset).await?;
+        let f = book::frozen(&self.ctx, &self.fees, asset, side, book)?;
+        Ok(std::sync::Arc::new(f))
+    }
+
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, req).await

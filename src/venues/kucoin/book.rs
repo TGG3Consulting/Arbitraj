@@ -6,16 +6,19 @@
 //! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [kucoin] (необязательна) — кадр стакана этой пары старше — котировки нет.
+//! устарели; venue.book_stale_ms [kucoin] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет.
 //!
-//! Свежесть: живость соединения (любой кадр, включая pong; пинг — по pingInterval токена) и, если задана
-//! venue.book_stale_ms, время последнего кадра стакана самой пары. У KuCoin вторая проверка не обязательна: «If there
+//! Свежесть: живость соединения (любой кадр, включая pong; пинг — по pingInterval токена) и (решение 238 —
+//! обязательно) по venue.book_stale_ms время последнего кадра стакана самой пары. Раньше у KuCoin вторая проверка была необязательна: «If there
 //! is no change in the market, data will not be pushed» (Level5/Level50) — тихая пара без изменений иначе считалась бы
 //! устаревшей (вопрос Тиграну — docs/TASKS.md).
 //! Решение 213 (по содержимому, Тигран 08.11; решения 202/213 для всех бирж): тихая пара, у которой сторож ядра
 //! подтвердил по REST «первые N уровней стакана на бирже совпадают со стаканом в памяти» (book_print.rs, контракт
 //! book_confirmed), — свежая до срока подтверждения, даже если кадра нет дольше venue.book_stale_ms. Живость соединения
 //! подтверждение не отменяет. Новый стакан (put) или снятие стакана — подтверждения нет (как у MEXC, Bitget, Gate).
+//! Решение 238 (Тигран 09.11: «ни одна биржа не идёт в сделку по устаревшему стакану»): venue.book_stale_ms обязательна,
+//! как у MEXC, Binance, Bybit, Gate, XT; тихая пара без изменений свежа только по подтверждению сторожа (решение 213),
+//! ордер при устаревшем стакане — снимок REST (core/exec_book.rs, mod.rs quote_rest).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -110,7 +113,7 @@ impl Books {
 
     /// Решение 217: снимок стакана монеты и плана комиссии на этот момент (копия стакана из памяти).
     /// Принимает: то же, что quote, без количества. Возвращает: FrozenBook.
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или (если задана)
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или
     /// кадра пары нет дольше venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured —
     /// feed.stale_after_ms не задана; комиссия.
     pub fn freeze(
@@ -122,8 +125,8 @@ impl Books {
         side: Side,
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
-        // Необязательна у KuCoin: снимок без изменений рынка не присылается (см. шапку).
-        let pair_ms = ctx.int("venue.book_stale_ms").ok().map(|v| v as i64);
+        // Решение 238: обязательна у всех бирж (не задана — котировки нет).
+        let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
             .map
             .read()
@@ -143,10 +146,7 @@ impl Books {
         let now = now_ms();
         let age = now - seen.load(Ordering::Relaxed);
         let until = until.load(Ordering::Relaxed);
-        if let Some(pair_ms) = pair_ms
-            && age > pair_ms
-            && now > until
-        {
+        if age > pair_ms && now > until {
             let tail = if until > 0 {
                 format!(", подтверждение биржи истекло {} мс назад", now - until)
             } else {
@@ -158,29 +158,43 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, symbol)?;
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price), покупка и продажа. Решение 232:
-            // без скидки KCS — «you'll pay the full fee in the quote currency of the trading pair»; со скидкой —
-            // «trading fees that would have originally been settled in USDT will be charged as KCS after applying a 20%
-            // discount»; «If your KCS balance isn't enough, the 20% discount won't apply» (KuCoin Help «Using KCS to Save
-            // 20% on Trading Fees»). Факт живого бота 08.11: покупка — feeCurrency USDT 42/42 (ставка 0.003 от суммы).
-            // Покупка в USDT входит в списание (costs_types.rs spend_fee). Не из документации — состояние «Pay Fees with
-            // KCS» в классическом API не читается: расчёт в USDT — худший случай для списания USDT (при скидке комиссия
-            // уйдёт в KCS, USDT останется с запасом).
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                asset: "USDT".into(),
-                paid_in: None,
-            },
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, symbol, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 238). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, symbol)?;
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price), покупка и продажа. Решение 232:
+        // без скидки KCS — «you'll pay the full fee in the quote currency of the trading pair»; со скидкой —
+        // «trading fees that would have originally been settled in USDT will be charged as KCS after applying a 20%
+        // discount»; «If your KCS balance isn't enough, the 20% discount won't apply» (KuCoin Help «Using KCS to Save
+        // 20% on Trading Fees»). Факт живого бота 08.11: покупка — feeCurrency USDT 42/42 (ставка 0.003 от суммы).
+        // Покупка в USDT входит в списание (costs_types.rs spend_fee). Не из документации — состояние «Pay Fees with
+        // KCS» в классическом API не читается: расчёт в USDT — худший случай для списания USDT (при скидке комиссия
+        // уйдёт в KCS, USDT останется с запасом).
+        fee: BookFee {
+            rate: rates.taker,
+            per_coin: false,
+            asset: "USDT".into(),
+            paid_in: None,
+        },
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

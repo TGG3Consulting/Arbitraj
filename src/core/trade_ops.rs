@@ -7,6 +7,7 @@
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs; deal_value / sell_value — sell.rs, sell_unsent.rs, relay*.rs,
 //! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
 //! Худшая цена — worst.rs (та же у расчёта, решение 66); у ордера — только по свежему стакану (решение 227).
+//! Решение 238: котировка исполнения биржи (sell_value) и худшая цена ордера — один стакан (exec_book.rs).
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs, outcome_resolve.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
@@ -92,9 +93,10 @@ pub async fn trade_seen(
             Some(r) => (None, r.request.clone(), Ok(r)),
             None => {
                 attempt += 1;
-                // Решение 227: у ордера — стакан ядра не старше venue.book_stale_ms (или подтверждённая тихая пара).
-                // Ревью 08.11: «стакан устарел» приходит с кодом StaleData (worst.rs) — безопасный повтор продажи.
-                let w = super::worst::worst_order(core, v, a, side, qty, avg)?;
+                // Решение 238: у ордера биржи — тот же стакан и та же мера свежести, что у котировки исполнения
+                // (exec_book.rs: стакан адаптера или снимок REST, если поток устарел); REST не ответил после повтора —
+                // ошибка без кода безопасного повтора (алерт, а не повторы по тому же стакану).
+                let w = super::worst::worst_order(core, v, a, side, qty, avg).await?;
                 *seen = Some(w);
                 let worst = w.price;
                 // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
@@ -230,13 +232,24 @@ pub async fn sell_value(
         .get_as(v, acc)
         .await
         .map_err(|e| e.message)?;
-    // Решение 201: котировка для исполнения (gateway/patience.rs exec_scope) — адаптер может взять тихий стакан пары
-    // при живом соединении (ордер IOC по худшей цене хуже не исполнится).
+    // Решение 238: котировка исполнения у биржи — стакан для ордера (exec_book.rs): тот же снимок и та же мера
+    // свежести, что у худшей цены ордера (worst.rs); стакан потока устарел — снимок REST. У DEX — котировка для
+    // исполнения (gateway/patience.rs exec_scope), как раньше.
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
-    let on = super::venue_ticker::on_venue(core, a, v);
-    let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
-        .await
-        .map_err(|e| format!("{}: {}", v.0, e.message))?;
+    let q = if kind(core, v)? == VenueKind::Cex {
+        let b = super::exec_book::book(core, v, a, Side::Sell)
+            .await
+            .map_err(|e| e.message)?;
+        b.snap
+            .quote(qty)
+            .await
+            .map_err(|e| format!("{}: {}", v.0, e.message))?
+    } else {
+        let on = super::venue_ticker::on_venue(core, a, v);
+        crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
+            .await
+            .map_err(|e| format!("{}: {}", v.0, e.message))?
+    };
     let q = super::venue_ticker::quote_back(core, a, v, q);
     if q.fillable_qty < qty {
         return Err(format!(

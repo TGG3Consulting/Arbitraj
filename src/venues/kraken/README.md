@@ -66,7 +66,7 @@
 | `depth.rs` | Разбор кадров WS v2: pong, ответы, heartbeat/status, book, balances |
 | `local_book.rs`, `checksum.rs` | Локальный стакан (снимок + изменения, обрезка до глубины) и CRC32 |
 | `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: ограничитель подключений, подписка пачками, ping, пересподписка, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
-| `book_print.rs` | Решение 213 по содержимому: `GET /0/public/Depth` (count = `venue.depth_levels`, не больше 500) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром |
+| `book_print.rs` | Решение 213 по содержимому: `GET /0/public/Depth` (count = `venue.depth_levels`, не больше 500) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `balance_event.rs` | Приватный поток balances → MarketEvent::Balance |
 
 ## Что важно знать

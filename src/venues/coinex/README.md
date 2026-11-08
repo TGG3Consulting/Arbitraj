@@ -58,7 +58,7 @@
 | `trade.rs`, `order_state.rs`, `order_result.rs`, `order_fee.rs`, `deals.rs` | Ордер ioc/fok, опрос итога, отмена остатка, «не сохранён» → сделки, комиссия и её монета |
 | `inflate.rs`, `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WS: распаковка кадров (буфер соединения), снимки if_full, server.ping, котировка ; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка (depth.unsubscribe всех + depth.subscribe всех рынков соединения) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
 | `ws_msg.rs` | Тексты запросов depth.subscribe (свой id) и depth.unsubscribe всех рынков |
-| `book_print.rs` | Решение 213 по содержимому: `GET /v2/spot/depth` (limit = `venue.depth_levels`, interval "0") — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром |
+| `book_print.rs` | Решение 213 по содержимому: `GET /v2/spot/depth` (limit = `venue.depth_levels`, interval "0") — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 
 ## Чего нет и почему (вопросы Тиграну)
 

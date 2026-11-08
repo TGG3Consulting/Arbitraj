@@ -6,7 +6,9 @@
 //! котировка). Сравнивает ядро (core/feed_print.rs).
 //! Почему не по номеру: у кадра book есть id — «id of the record (SeqId)», а в ответе REST стакана номера нет вовсе
 //! (поля time, scale, asks, bids, ts) — сравнивать нечего.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа (levels_of).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды Poloniex там), ctx.rs (настройки), book.rs (Books::print),
 //! gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [poloniex] (N; у канала book 5, 10 или 20 — ws.rs), адрес REST и прочее — rest.rs.
@@ -28,7 +30,7 @@ use std::str::FromStr;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::PriceLevel;
+use crate::core::types::{Asset, OrderBook, PriceLevel};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -71,11 +73,38 @@ pub async fn book_version(
 /// количеством 0 не берётся — как у кадра (depth.rs levels). Принимает: тело ответа, n. Ошибки: текст — нет asks /
 /// bids, нечётная длина списка, не число.
 pub fn parse(body: &Value, n: usize) -> Result<BookPrint, String> {
+    let (bids, asks) = levels_of(body)?;
+    Ok(BookPrint::top(&bids, &asks, n))
+}
+
+/// Все уровни ответа (bids по убыванию, asks по возрастанию; количество 0 — уровня нет). Ошибки: как parse.
+pub fn levels_of(body: &Value) -> Result<(Vec<PriceLevel>, Vec<PriceLevel>), String> {
     let mut asks = flat(body, "asks")?;
     let mut bids = flat(body, "bids")?;
     asks.sort_by_key(|a| a.price);
     bids.sort_by_key(|b| std::cmp::Reverse(b.price));
-    Ok(BookPrint::top(&bids, &asks, n))
+    Ok((bids, asks))
+}
+
+/// Решение 238: снимок стакана пары по REST для ордера — тот же GET /markets/{symbol}/orderBook (limit =
+/// venue.depth_levels). Принимает: окружение, символ Poloniex, монету (тикер Poloniex). Возвращает: стакан (все уровни;
+/// время биржи — time ответа). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, symbol: &str, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let path = format!("/markets/{symbol}/orderBook");
+    let body = rest::public(ctx, &path, vec![("limit", n.to_string())]).await?;
+    let (bids, asks) = levels_of(&body).map_err(|why| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Poloniex {path}: {why}"),
+        ))
+    })?;
+    let ts = crate::gateway::rest_book::ms(body.get("time").and_then(Value::as_i64));
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Плоский список строк [цена, количество, цена, количество, …] → уровни. Ошибка — текст причины.

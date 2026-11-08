@@ -7,7 +7,9 @@
 //! Почему не по номеру: у канала book номера нет (snapshot / update — symbol, bids, asks, checksum, timestamp), у ответа
 //! REST тоже ([цена, объём, время] по уровням) — сравнивать нечего; checksum кадра («CRC32 checksum for the top 10
 //! bids and asks») ответ REST не даёт.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа (levels_of).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды Kraken там), ctx.rs (настройки), num.rs (to_dec), book.rs
 //! (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [kraken] (N; у канала book 10, 25, 100, 500, 1000 — ws.rs), адрес REST — rest.rs.
@@ -23,7 +25,7 @@
 
 use serde_json::Value;
 
-use crate::core::types::PriceLevel;
+use crate::core::types::{Asset, OrderBook, PriceLevel};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -80,6 +82,12 @@ pub async fn book_version(
 /// локального стакана). Принимает: result, имя пары, n. Ошибки: текст — книги пары нет, нет asks / bids, уровень не
 /// [цена, объём, …].
 pub fn parse(result: &Value, pair: &str, n: usize) -> Result<BookPrint, String> {
+    let (bids, asks) = levels_of(result, pair)?;
+    Ok(BookPrint::top(&bids, &asks, n))
+}
+
+/// Все уровни книги пары из result (bids по убыванию, asks по возрастанию; объём 0 — уровня нет). Ошибки: как parse.
+pub fn levels_of(result: &Value, pair: &str) -> Result<(Vec<PriceLevel>, Vec<PriceLevel>), String> {
     let obj = result.as_object().ok_or("result не объект")?;
     let book = match obj.get(pair) {
         Some(b) => b,
@@ -90,7 +98,27 @@ pub fn parse(result: &Value, pair: &str, n: usize) -> Result<BookPrint, String> 
     let mut bids = side(book, "bids")?;
     asks.sort_by_key(|a| a.price);
     bids.sort_by_key(|b| std::cmp::Reverse(b.price));
-    Ok(BookPrint::top(&bids, &asks, n))
+    Ok((bids, asks))
+}
+
+/// Решение 238: снимок стакана пары по REST для ордера — тот же GET /0/public/Depth (pair, count =
+/// venue.depth_levels, но не больше REST_COUNT_MAX — для ордера хватает лучших уровней). Принимает: окружение, имя пары
+/// REST, монету (тикер Kraken). Возвращает: стакан (все уровни ответа). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, pair: &str, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?.min(REST_COUNT_MAX);
+    let q = vec![rest::p("pair", pair), rest::p("count", n.to_string())];
+    let result = rest::public(ctx, "Depth", q).await?;
+    let (bids, asks) = levels_of(&result, pair).map_err(|why| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Kraken Depth {pair}: {why}"),
+        ))
+    })?;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, None,
+    ))
 }
 
 /// Уровни [цена, объём, время] → PriceLevel (объём 0 — уровня нет). Ошибка — текст причины.

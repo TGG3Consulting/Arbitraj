@@ -7,7 +7,9 @@
 //! Почему не по номеру: у снимка mbp.refresh есть seqNum («Sequence number of the message»), у ответа REST — version
 //! («Internal data»); документация не связывает их (seqNum — у тем MBP, version — у /market/depth и темы
 //! market.$symbol.depth.$type) — номер не сравнивается.
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа (levels_of).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды HTX там; reply.rs отдаёт tick), ctx.rs (настройки), depth.rs
 //! (levels — разбор уровней, как у кадра), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [htx] (N; у mbp.refresh 5, 10 или 20 — ws.rs), адрес REST и прочее — rest.rs.
@@ -22,6 +24,7 @@
 
 use serde_json::Value;
 
+use crate::core::types::{Asset, OrderBook, PriceLevel};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -73,6 +76,12 @@ pub async fn book_version(
 /// количеством 0 не берётся — как у снимка (depth.rs levels). Принимает: tick, n. Ошибки: текст — tick не объект, нет
 /// bids / asks, уровень не [цена, количество].
 pub fn parse(tick: &Value, n: usize) -> Result<BookPrint, String> {
+    let (bids, asks) = levels_of(tick)?;
+    Ok(BookPrint::top(&bids, &asks, n))
+}
+
+/// Все уровни tick (bids по убыванию, asks по возрастанию; количество 0 — уровня нет). Ошибки: как parse.
+pub fn levels_of(tick: &Value) -> Result<(Vec<PriceLevel>, Vec<PriceLevel>), String> {
     if !tick.is_object() {
         return Err("нет tick".into());
     }
@@ -85,5 +94,30 @@ pub fn parse(tick: &Value, n: usize) -> Result<BookPrint, String> {
     let mut bids = depth::levels(tick, "bids")?;
     asks.sort_by_key(|a| a.price);
     bids.sort_by_key(|b| std::cmp::Reverse(b.price));
-    Ok(BookPrint::top(&bids, &asks, n))
+    Ok((bids, asks))
+}
+
+/// Решение 238: снимок стакана пары по REST для ордера — тот же GET /market/depth (symbol, depth = venue.depth_levels,
+/// type step0). Принимает: окружение, символ HTX, монету (тикер HTX). Возвращает: стакан (все уровни; время биржи —
+/// tick.ts). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, symbol: &str, asset: &Asset) -> GatewayResult<OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let q = vec![
+        ("symbol", symbol.to_string()),
+        ("depth", n.to_string()),
+        ("type", STEP.to_string()),
+    ];
+    let tick = rest::public(ctx, PATH, q).await?;
+    let (bids, asks) = levels_of(&tick).map_err(|why| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("HTX {PATH} {symbol}: {why}"),
+        ))
+    })?;
+    let ts = crate::gateway::rest_book::ms(tick.get("ts").and_then(Value::as_i64));
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }

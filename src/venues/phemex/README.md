@@ -28,7 +28,7 @@
 | delist.rs | решение 226: делистинги — `timeline[3]` спот-пар Listed GET /public/products-plus (мс); `stStatus` в документации нет — не используется | #query-product-information-plus |
 | subs.rs, market.rs, ws.rs, ws_conn.rs | подписка стаканов (≤ 20 на соединение, ≤ 5 соединений), ping; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), «переподписать пару» = orderbook.unsubscribe (всех) + orderbook.subscribe всех пар соединения, переподключение одного соединения | #subscribe-orderbook-2, #heartbeat-2, Unsubscribe OrderBook |
 | depth.rs, local_book.rs, book.rs | кадры стакана, снимок + изменения, котировка; решение 213 — срок подтверждения тихой пары (`book_confirmed`) | #orderbook-message |
-| book_print.rs | решение 213 по содержимому: GET /md/orderbook — первые `venue.depth_levels` уровней ответа и стакана в памяти для подтверждения тихой пары ядром | Query Order Book |
+| book_print.rs | решение 213 по содержимому: GET /md/orderbook — первые `venue.depth_levels` уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа | Query Order Book |
 | fees.rs | ставки комиссии ключа по паре | #query-fee-rate-by-quote-currency |
 | order_rules.rs, trade.rs, order_state.rs | ордер Limit + ImmediateOrCancel, свой clOrdID (UUID), итог | #place-order-http-put-prefered, #query-orders-by-order-id-or-client-order-id |
 | wallet.rs, networks_crawl.rs, networks_parse.rs | сети монет по одной (chainCfg + asset/info), фоновый круг | #query-deposit-chain-settings, #query-withdraw-chain-settings |

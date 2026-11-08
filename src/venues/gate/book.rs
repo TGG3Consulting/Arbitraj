@@ -150,41 +150,54 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
-        let mode = ctx.text("venue.fee_deduction")?;
-        // Решение 158: скидка GT — только если GT хватает (память gt_balance.rs), иначе обычная ставка.
-        let (gt_ok, _) = fees.gt.ok(ctx);
-        let (rate, in_gt, _why) = rates
-            .plan(&mode, gt_ok)
-            .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
-        // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — по сумме сделки.
-        // Решение 219: со скидкой GT Gate берёт комиссию в GT (факт 08.11: все 73 ордера — GT; поле gt_fee — «GT used
-        // to deduct fee»): сумма — USDT-эквивалент по gt_taker_fee, платится GT (paid_in) — не из USDT и не из монеты.
-        let fee = if side == Side::Buy && !in_gt {
-            BookFee {
-                rate,
-                per_coin: true,
-                asset: asset.ticker.clone(),
-                paid_in: None,
-            }
-        } else {
-            BookFee {
-                rate,
-                per_coin: false,
-                asset: "USDT".into(),
-                paid_in: in_gt.then(|| super::gt_balance::GT.to_string()),
-            }
-        };
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия тейкера — не входит в avg_price.
-            fee,
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 238). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, &ctx.symbol(&asset.ticker)?)?;
+    let mode = ctx.text("venue.fee_deduction")?;
+    // Решение 158: скидка GT — только если GT хватает (память gt_balance.rs), иначе обычная ставка.
+    let (gt_ok, _) = fees.gt.ok(ctx);
+    let (rate, in_gt, _why) = rates
+        .plan(&mode, gt_ok)
+        .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
+    // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — по сумме сделки.
+    // Решение 219: со скидкой GT Gate берёт комиссию в GT (факт 08.11: все 73 ордера — GT; поле gt_fee — «GT used
+    // to deduct fee»): сумма — USDT-эквивалент по gt_taker_fee, платится GT (paid_in) — не из USDT и не из монеты.
+    let fee = if side == Side::Buy && !in_gt {
+        BookFee {
+            rate,
+            per_coin: true,
+            asset: asset.ticker.clone(),
+            paid_in: None,
+        }
+    } else {
+        BookFee {
+            rate,
+            per_coin: false,
+            asset: "USDT".into(),
+            paid_in: in_gt.then(|| super::gt_balance::GT.to_string()),
+        }
+    };
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия тейкера — не входит в avg_price.
+        fee,
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

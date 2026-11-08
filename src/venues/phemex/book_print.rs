@@ -6,7 +6,9 @@
 //! считается котировка). Сравнивает ядро (core/feed_print.rs).
 //! Почему не по номеру: sequence есть и у ответа REST («current message sequence»), и у кадра WebSocket («Latest
 //! message sequence»), но документация не говорит, что это одна шкала, — номер не сравнивается (вопрос — docs/TASKS.md).
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа (levels_of).
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды Phemex там; reply.rs отдаёт result у /md…), ctx.rs (настройки),
 //! depth.rs (levels — разбор уровней, как у кадра), num.rs (unscale), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [phemex] (N, 1…30 — ws.rs), адрес REST и прочее — rest.rs.
@@ -22,7 +24,7 @@
 
 use serde_json::Value;
 
-use crate::core::types::PriceLevel;
+use crate::core::types::{Asset, OrderBook, PriceLevel};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::feed_health::{BookPrint, BookPrints, BookVersion};
 
@@ -74,6 +76,17 @@ pub fn parse(
     price_scale: u32,
     qty_scale: u32,
 ) -> Result<BookPrint, String> {
+    let (bids, asks) = levels_of(result, price_scale, qty_scale)?;
+    Ok(BookPrint::top(&bids, &asks, n))
+}
+
+/// Все уровни result настоящими числами (bids по убыванию, asks по возрастанию; количество 0 — уровня нет).
+/// Принимает: result, масштаб цены, масштаб количества. Ошибки: как parse.
+pub fn levels_of(
+    result: &Value,
+    price_scale: u32,
+    qty_scale: u32,
+) -> Result<(Vec<PriceLevel>, Vec<PriceLevel>), String> {
     let book = result.get("book").ok_or("нет book")?;
     let side = |name: &str, best_high: bool| -> Result<Vec<PriceLevel>, String> {
         let mut raw: Vec<_> = depth::levels(book, name)?
@@ -82,7 +95,6 @@ pub fn parse(
             .collect();
         raw.sort_by_key(|&(p, _)| if best_high { -p } else { p });
         raw.into_iter()
-            .take(n)
             .map(|(p, q)| {
                 Ok(PriceLevel {
                     price: num::unscale(i128::from(p), price_scale)
@@ -95,5 +107,28 @@ pub fn parse(
     };
     let bids = side("bids", true)?;
     let asks = side("asks", false)?;
-    Ok(BookPrint::top(&bids, &asks, n))
+    Ok((bids, asks))
+}
+
+/// Решение 238: снимок стакана пары по REST для ордера — тот же GET /md/orderbook. Принимает: окружение, правила пары
+/// (символ, priceScale, valueScale базовой), монету (тикер Phemex). Возвращает: стакан (все уровни; время биржи —
+/// timestamp ответа, наносекунды). Ошибки: как book_version.
+pub async fn snapshot(ctx: &Ctx, rules: &SymbolRules, asset: &Asset) -> GatewayResult<OrderBook> {
+    let q = vec![("symbol", rules.symbol.clone())];
+    let result = rest::public(ctx, PATH, q, false).await?;
+    let (bids, asks) = levels_of(&result, rules.price_scale, rules.base_scale).map_err(|why| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("Phemex {PATH} {}: {why}", rules.symbol),
+        ))
+    })?;
+    let ts = result
+        .get("timestamp")
+        .and_then(Value::as_i64)
+        .map(chrono::DateTime::<chrono::Utc>::from_timestamp_nanos);
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }

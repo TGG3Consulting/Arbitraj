@@ -8,7 +8,9 @@
 //! документация связывает их только у других пар «REST + канал»: у GET / RPI order book — «Provides sequencing parity
 //! with the books-rpi WebSocket channel», у SBE — снимок /books-sbe с потоком books-l2-tbt. Для GET / Order book и
 //! каналов books5 / books такой фразы нет — номер не сравнивается (вопрос Тиграну и что записать — docs/TASKS.md).
-//! Кто вызывает: mod.rs (book_version).
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! потока устарел: все уровни ответа.
+//! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды OKX там), ctx.rs (настройки), depth.rs (levels — разбор уровней, как у
 //! кадра), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.depth_levels [okx] (N; у OKX 5 или 400 — ws.rs), адрес REST и прочее — rest.rs.
@@ -62,6 +64,39 @@ pub async fn book_version(
         }),
         ..Default::default()
     })
+}
+
+/// Решение 238: снимок стакана пары по REST для ордера — GET /api/v5/market/books (instId, sz = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
+/// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
+pub async fn snapshot(
+    ctx: &Ctx,
+    inst: &str,
+    asset: &crate::core::types::Asset,
+) -> GatewayResult<crate::core::types::OrderBook> {
+    let n = ctx.int("venue.depth_levels")?;
+    let q = vec![("instId", inst.to_string()), ("sz", n.to_string())];
+    let data = rest::public(ctx, PATH, q).await?;
+    let d = data.as_array().and_then(|a| a.first()).ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("OKX {PATH} {}: data пустой или не массив", asset.ticker),
+        ))
+    })?;
+    let bad = |why: String| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::BadResponse,
+            None,
+            format!("OKX {PATH} {}: {why}", asset.ticker),
+        ))
+    };
+    let bids = depth::levels(d, "bids").map_err(bad)?;
+    let asks = depth::levels(d, "asks").map_err(bad)?;
+    let ts = None;
+    let (venue, asset) = (ctx.venue(), asset.clone());
+    Ok(crate::gateway::rest_book::book(
+        venue, asset, bids, asks, ts,
+    ))
 }
 
 /// Разбор data ответа (массив из одной строки): первые n уровней каждой стороны от лучшей цены (bids по убыванию, asks

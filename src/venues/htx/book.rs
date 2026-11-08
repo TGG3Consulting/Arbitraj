@@ -6,10 +6,10 @@
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [htx] (необязательна) — кадр стакана этой пары старше — котировки нет;
+//! устарели; venue.book_stale_ms [htx] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет;
 //! venue.quote_asset [htx] — монета комиссии продажи.
 //!
-//! Свежесть: живость соединения (любой кадр, включая ping сервера) и, если задана venue.book_stale_ms, время
+//! Свежесть: живость соединения (любой кадр, включая ping сервера) и (решение 238 — обязательно) по venue.book_stale_ms время
 //! последнего кадра стакана самой пары (кадр с тем же seqNum тоже обновляет время — ws_conn.rs, решение 109). Шлёт ли
 //! HTX снимок mbp.refresh без изменений рынка, документация не говорит («The update interval is around 100ms») —
 //! проверить на живой записи; до того venue.book_stale_ms задавать с запасом.
@@ -19,6 +19,9 @@
 //! подтвердил по REST «первые N уровней стакана на бирже совпадают со стаканом в памяти» (book_print.rs, контракт
 //! book_confirmed), — свежая до срока подтверждения, даже если кадра нет дольше venue.book_stale_ms. Живость соединения
 //! подтверждение не отменяет. Новый стакан (put) или снятие стакана — подтверждения нет (как у OKX, Poloniex).
+//! Решение 238 (Тигран 09.11: «ни одна биржа не идёт в сделку по устаревшему стакану»): venue.book_stale_ms обязательна,
+//! как у MEXC, Binance, Bybit, Gate, XT; тихая пара без изменений свежа только по подтверждению сторожа (решение 213),
+//! ордер при устаревшем стакане — снимок REST (core/exec_book.rs, mod.rs quote_rest).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -113,7 +116,7 @@ impl Books {
 
     /// Решение 217: снимок стакана монеты и плана комиссии на этот момент (копия стакана из памяти).
     /// Принимает: то же, что quote, без количества. Возвращает: FrozenBook.
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или (если задана)
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или
     /// кадра пары нет дольше venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured —
     /// feed.stale_after_ms не задана; комиссия.
     pub fn freeze(
@@ -125,8 +128,8 @@ impl Books {
         side: Side,
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
-        // Необязательна: см. шапку.
-        let pair_ms = ctx.int("venue.book_stale_ms").ok().map(|v| v as i64);
+        // Решение 238: обязательна у всех бирж (не задана — котировки нет).
+        let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
             .map
             .read()
@@ -146,10 +149,7 @@ impl Books {
         }
         let age = now - seen.load(Ordering::Relaxed);
         let until = until.load(Ordering::Relaxed);
-        if let Some(pair_ms) = pair_ms
-            && age > pair_ms
-            && now > until
-        {
+        if age > pair_ms && now > until {
             let tail = if until > 0 {
                 format!(", подтверждение биржи истекло {} мс назад", now - until)
             } else {
@@ -161,36 +161,50 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, symbol)?;
-        // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы. Решение 232: fee-currency
-        // matchresults — «transaction fee of buy order is based on base currency, transaction fee of sell order is based
-        // on quote currency»; со скидкой HT / баллами — списание ими (fee-deduct-currency), монета не уменьшается —
-        // расчёт без скидки (fees.rs). Живых ордеров HTX 08.11 нет.
-        let fee = if side == Side::Buy {
-            BookFee {
-                rate: rates.taker,
-                per_coin: true,
-                asset: asset.ticker.clone(),
-                paid_in: None,
-            }
-        } else {
-            BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                asset: ctx.text("venue.quote_asset")?,
-                paid_in: None,
-            }
-        };
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия тейкера — не входит в avg_price.
-            fee,
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, symbol, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 238). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, symbol)?;
+    // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы. Решение 232: fee-currency
+    // matchresults — «transaction fee of buy order is based on base currency, transaction fee of sell order is based
+    // on quote currency»; со скидкой HT / баллами — списание ими (fee-deduct-currency), монета не уменьшается —
+    // расчёт без скидки (fees.rs). Живых ордеров HTX 08.11 нет.
+    let fee = if side == Side::Buy {
+        BookFee {
+            rate: rates.taker,
+            per_coin: true,
+            asset: asset.ticker.clone(),
+            paid_in: None,
+        }
+    } else {
+        BookFee {
+            rate: rates.taker,
+            per_coin: false,
+            asset: ctx.text("venue.quote_asset")?,
+            paid_in: None,
+        }
+    };
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия тейкера — не входит в avg_price.
+        fee,
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

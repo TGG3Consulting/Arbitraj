@@ -6,9 +6,9 @@
 //! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
-//! устарели; venue.book_stale_ms [coinex] (необязательна) — кадр стакана этой пары старше — котировки нет.
+//! устарели; venue.book_stale_ms [coinex] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет.
 //!
-//! Свежесть: живость соединения (любой кадр, включая ответ на свой server.ping) и, если задана venue.book_stale_ms,
+//! Свежесть: живость соединения (любой кадр, включая ответ на свой server.ping) и (решение 238 — обязательно) по venue.book_stale_ms
 //! время последнего кадра стакана самой пары (кадр с тем же updated_at тоже обновляет время — ws_conn.rs, решение 109).
 //! CoinEx шлёт стакан только при изменении («No push occurs without an update») и полный — раз в минуту («A full market
 //! depth push is sent every 1 minute», WS Market Depth): venue.book_stale_ms меньше 60 000 мс у тихой пары даст ложное
@@ -17,6 +17,9 @@
 //! подтвердил по REST «первые N уровней стакана на бирже совпадают со стаканом в памяти» (book_print.rs, контракт
 //! book_confirmed), — свежая до срока подтверждения, даже если кадра нет дольше venue.book_stale_ms. Живость соединения
 //! подтверждение не отменяет. Новый стакан (put) или снятие стакана — подтверждения нет (как у KuCoin, BingX, OKX).
+//! Решение 238 (Тигран 09.11: «ни одна биржа не идёт в сделку по устаревшему стакану»): venue.book_stale_ms обязательна,
+//! как у MEXC, Binance, Bybit, Gate, XT; тихая пара без изменений свежа только по подтверждению сторожа (решение 213),
+//! ордер при устаревшем стакане — снимок REST (core/exec_book.rs, mod.rs quote_rest).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -111,7 +114,7 @@ impl Books {
 
     /// Решение 217: снимок стакана монеты и плана комиссии на этот момент (копия стакана из памяти).
     /// Принимает: то же, что quote, без количества. Возвращает: FrozenBook.
-    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или (если задана)
+    /// Ошибки: StaleData — стакана нет, соединение молчит дольше feed.stale_after_ms или
     /// кадра пары нет дольше venue.book_stale_ms и нет подтверждения тихой пары (решение 213); NotConfigured — feed.stale_after_ms не задана; комиссия.
     pub fn freeze(
         &self,
@@ -122,8 +125,8 @@ impl Books {
         side: Side,
     ) -> GatewayResult<FrozenBook> {
         let stale_ms = ctx.int("feed.stale_after_ms")? as i64;
-        // Необязательна: см. шапку.
-        let pair_ms = ctx.int("venue.book_stale_ms").ok().map(|v| v as i64);
+        // Решение 238: обязательна у всех бирж (не задана — котировки нет).
+        let pair_ms = ctx.int("venue.book_stale_ms")? as i64;
         let book = self
             .map
             .read()
@@ -143,10 +146,7 @@ impl Books {
         }
         let age = now - seen.load(Ordering::Relaxed);
         let until = until.load(Ordering::Relaxed);
-        if let Some(pair_ms) = pair_ms
-            && age > pair_ms
-            && now > until
-        {
+        if age > pair_ms && now > until {
             let tail = if until > 0 {
                 format!(", подтверждение биржи истекло {} мс назад", now - until)
             } else {
@@ -158,24 +158,43 @@ impl Books {
                 &format!("кадра стакана пары нет {age} мс (venue.book_stale_ms = {pair_ms}){tail}"),
             ));
         }
-        let rates = fees.get(ctx, symbol)?;
-        Ok(FrozenBook {
-            venue: ctx.venue(),
-            asset: asset.clone(),
-            side,
-            book,
-            // Комиссия taker аккаунта (не входит в avg_price). Решение 232: поля ордера — base_fee «Trading fee charged in
-            // base currency», quote_fee «… in quote currency», discount_fee «… in deduction currency»; пример
-            // документации (Get Order Status) — покупка CETUSDT: base_fee 11.6582326221, quote_fee 0 — комиссия покупки в
-            // получаемой монете. Продажа — в USDT от суммы: не из документации (пример продажи не дан) — по образцу
-            // получаемой монеты. Скидка CET: «When your CET is insufficient, the trading fees will be charged by default»
-            // (Help «About CET Deduction»); состояние выключателя прочитать нельзя (fees.rs) — расчёт без скидки
-            // (со скидкой комиссия уходит в CET, монеты и USDT остаётся не меньше). Живых ордеров CoinEx 08.11 нет.
-            // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов; ядро ищет комиссию продажи по ней).
-            fee: BookFee::in_received(rates.taker, side, &asset.ticker, &ctx.text("venue.quote_asset")?),
-            taken_at: chrono::Utc::now(),
-        })
+        frozen(ctx, fees, symbol, asset, side, book)
     }
+}
+
+/// Решение 217: снимок стакана и плана комиссии (та же формула у стакана потока — freeze — и у снимка REST для
+/// ордера — mod.rs quote_rest, решение 238). Принимает: окружение, данные комиссии, монету, сторону, стакан (во
+/// владение). Ошибки: комиссия (ставки нет — StaleData), настройка не задана — NotConfigured.
+pub fn frozen(
+    ctx: &Ctx,
+    fees: &Fees,
+    symbol: &str,
+    asset: &Asset,
+    side: Side,
+    book: OrderBook,
+) -> GatewayResult<FrozenBook> {
+    let rates = fees.get(ctx, symbol)?;
+    Ok(FrozenBook {
+        venue: ctx.venue(),
+        asset: asset.clone(),
+        side,
+        book,
+        // Комиссия taker аккаунта (не входит в avg_price). Решение 232: поля ордера — base_fee «Trading fee charged in
+        // base currency», quote_fee «… in quote currency», discount_fee «… in deduction currency»; пример
+        // документации (Get Order Status) — покупка CETUSDT: base_fee 11.6582326221, quote_fee 0 — комиссия покупки в
+        // получаемой монете. Продажа — в USDT от суммы: не из документации (пример продажи не дан) — по образцу
+        // получаемой монеты. Скидка CET: «When your CET is insufficient, the trading fees will be charged by default»
+        // (Help «About CET Deduction»); состояние выключателя прочитать нельзя (fees.rs) — расчёт без скидки
+        // (со скидкой комиссия уходит в CET, монеты и USDT остаётся не меньше). Живых ордеров CoinEx 08.11 нет.
+        // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов; ядро ищет комиссию продажи по ней).
+        fee: BookFee::in_received(
+            rates.taker,
+            side,
+            &asset.ticker,
+            &ctx.text("venue.quote_asset")?,
+        ),
+        taken_at: chrono::Utc::now(),
+    })
 }
 
 /// Проход по уровням от лучшего — общий для бирж (gateway/frozen.rs, решение 217).

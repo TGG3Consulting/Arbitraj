@@ -9,7 +9,9 @@
 //!   котировку графа, что живой до изменений рынка;
 //! - пулы «WBNB — USDT» для цены газа попадают в снимок, даже если WBNB не среди промежуточных;
 //! - порядок ошибок живой котировки DEX как до 217: dex.swap_mode проверяется раньше свежести блока;
-//! - решение 237: цена газа снимка закреплена (quote/gas.rs pinned) — без цены в памяти ошибка, узел не спрашивается.
+//! - решение 237: цена газа снимка закреплена (quote/gas.rs pinned) — без цены в памяти ошибка, узел не спрашивается;
+//! - решение 239: копия проверок токенов и пулов снимка (check/state.rs pinned: налоги монеты и пула, газ разрешений)
+//!   и decimals (tokens.rs pinned) — новые замеры после снимка в неё не попадают, decimals не было — ошибка, без узла.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{frozen, pools::registry_frozen, quote::{graph_route, route_cache}},
@@ -24,7 +26,7 @@ use alloy_primitives::{Address, U256, address};
 use rust_decimal::Decimal;
 use serde_json::json;
 
-use arb::core::types::{Asset, PoolRef, Quote, Side, TokenTaxes};
+use arb::core::types::{Asset, CheckState, CoinCheck, PoolRef, Quote, Side, TokenTaxes, VenueId};
 use arb::gateway::errors::ErrorCode;
 use arb::gateway::frozen::FrozenQuote;
 use arb::settings::scope::Scope;
@@ -37,7 +39,7 @@ use arb::venues::bsc_dex::quote::steps::Names;
 use arb::venues::bsc_dex::quote::via::Via;
 use arb::venues::bsc_dex::quote::{Quoting, graph_route, route_cache, route_paths};
 
-use route_common::{BTCB, CAKE, CAKE_USDT_PCS, USDT, WBNB, WBNB_USDT_V2};
+use route_common::{BTCB, CAKE, CAKE_USDT_PCS, CAKE_USDT_UNI, USDT, WBNB, WBNB_USDT_V2};
 
 const GAS: u64 = 1_000_000_000;
 const BLOCK: u64 = 130_521_896;
@@ -283,4 +285,59 @@ async fn pinned_gas_never_goes_live() {
     let e = q.gas.pinned().wei(&q.ctx, &q.heads).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::StaleData, "{}", e.message);
     assert!(e.message.contains("на момент снимка"), "{}", e.message);
+}
+
+#[tokio::test]
+async fn pinned_checks_and_decimals_at_snapshot() {
+    // Решение 239: снимок котировки DEX держит копию проверок и decimals на момент снимка.
+    let p = graph_parts().await;
+    let q = p.quoting();
+    let taken = PoolRef::Contract(CAKE_USDT_PCS);
+    let pinned = q.checks.pinned(&[CAKE, USDT], [&taken]);
+    // После снимка — новые замеры: налог монеты 5 %, у пула налог покупки 1 % и газ разрешений.
+    let taxed = TokenTaxes {
+        buy_pct: Decimal::from(5),
+        sell_pct: Decimal::from(5),
+        transfer_pct: Decimal::ZERO,
+    };
+    p.checks.set_coin(CoinCheck {
+        venue: VenueId("bsc_dex".into()),
+        asset: cake(),
+        taxes: CheckState::Known(taxed.clone()),
+        source: "тест".into(),
+        checked_at: None,
+        wait: None,
+    });
+    p.checks.update_pool(&taken, |f| {
+        f.gas_approve_buy = Some(99_000);
+        if let Some(t) = f.taxes.as_mut() {
+            t.buy_pct = Decimal::ONE;
+        }
+    });
+    // Живые — новые; копия — как на момент снимка.
+    assert!(matches!(p.checks.coin(&CAKE).unwrap().taxes, CheckState::Known(t) if t == taxed));
+    match pinned.coin(&CAKE).expect("проверка монеты в копии").taxes {
+        CheckState::Known(t) => assert_eq!(t.buy_pct, Decimal::ZERO),
+        other => panic!("{other:?}"),
+    }
+    let f = pinned.pool(&taken);
+    assert_eq!(f.gas_approve_buy, None, "газ разрешений — на момент снимка");
+    assert_eq!(f.taxes.map(|t| t.buy_pct), Some(Decimal::ZERO));
+    assert_eq!(f.gas_buy, Some(120_000));
+    // Пул не из снимка — в копии его нет (котировка по снимку его не использует).
+    assert!(
+        pinned
+            .pool(&PoolRef::Contract(CAKE_USDT_UNI))
+            .taxes
+            .is_none()
+    );
+    // decimals: из памяти момента снимка; чего не было — StaleData без узла, позже узнанные не видны.
+    let tokens = q.tokens.pinned();
+    assert_eq!(tokens.decimals(&q.ctx, CAKE).await.unwrap(), 18);
+    p.tokens.remember_decimals(OTHER, 9);
+    let e = tokens.decimals(&q.ctx, OTHER).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::StaleData, "{}", e.message);
+    assert!(e.message.contains("на момент снимка"), "{}", e.message);
+    // Снимок котировки собирается с копиями.
+    frozen::take(p.quoting(), &cake(), Side::Buy).expect("снимок");
 }

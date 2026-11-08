@@ -10,6 +10,9 @@
 //! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
 //! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
 //! тикерами — одна проверка. Нативная монета (решение 62) — по адресу своей обёртки (dex.native_wrapped).
+//! Решение 239: pinned — копия итогов проверок нужных токенов и пулов на момент снимка котировки
+//! (venues/bsc_dex/frozen.rs): налоги монет и пулов, газ обменов и разрешений, крючки, сверка с квотером — котировка
+//! по снимку читает их такими, какими они были в момент решения, а не после нового замера.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -141,6 +144,44 @@ impl Checks {
             .unwrap_or_else(|p| p.into_inner())
             .get(token)
             .copied()
+    }
+
+    /// Решение 239: копия итогов проверок на этот момент (снимок котировки, frozen.rs) — только переданные токены
+    /// (проверка монеты, газ перевода) и пулы; своя память, новые замеры в неё не попадают. Чего не передали — в копии
+    /// нет (котировка по снимку такой пул или монету не использует: «не проверено»). Принимает: адреса токенов, ссылки
+    /// пулов. Возвращает: Checks. Ошибок нет.
+    pub fn pinned<'a>(
+        &self,
+        tokens: &[Address],
+        pools: impl IntoIterator<Item = &'a PoolRef>,
+    ) -> Checks {
+        let pick = |m: &RwLock<HashMap<Address, u64>>| -> HashMap<Address, u64> {
+            let m = m.read().unwrap_or_else(|p| p.into_inner());
+            tokens
+                .iter()
+                .filter_map(|t| m.get(t).map(|v| (*t, *v)))
+                .collect()
+        };
+        let coins = {
+            let m = self.coins.read().unwrap_or_else(|p| p.into_inner());
+            tokens
+                .iter()
+                .filter_map(|t| m.get(t).map(|c| (*t, c.clone())))
+                .collect()
+        };
+        let pools = {
+            let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
+            pools
+                .into_iter()
+                .filter_map(|r| m.get(r).map(|f| (r.clone(), f.clone())))
+                .collect()
+        };
+        Checks {
+            coins: Arc::new(RwLock::new(coins)),
+            pools: Arc::new(RwLock::new(pools)),
+            transfer_gas: Arc::new(RwLock::new(pick(&self.transfer_gas))),
+            native_transfer_gas: Arc::new(RwLock::new(pick(&self.native_transfer_gas))),
+        }
     }
 
     /// Факты о пуле (пустые, если проверок не было). Ошибок нет.

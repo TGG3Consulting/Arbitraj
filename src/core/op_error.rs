@@ -4,7 +4,8 @@
 //! транзакция могла исполниться) от обычного отказа: такую сделку нельзя ни продавать, ни перегонять — только
 //! ручная проверка (core/executor.rs).
 //! Повтор продажи, не ушедшей в сеть, — retry_safe (решение 110) и rejected_unsent (решение 154), core/sell_unsent.rs.
-//! Повтор возврата USDT — withdraw_unsent (решение 163), core/usdt_return_retry.rs.
+//! Повтор возврата USDT — withdraw_unsent (решение 163), core/usdt_return_retry.rs; решение 220: WithdrawRejected
+//! («вывод точно не ушёл», но площадка откажет снова) там не повторяется — проверка в usdt_return_retry::fail.
 //! Кто вызывает: core/trade_ops.rs, core/transfers.rs (создают), core/executor.rs, core/sell_unsent.rs (читают код).
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.

@@ -7,6 +7,8 @@
 //! Решение 177 (risk_count.rs): отказ до отправки (деньги и газ не тронуты) ошибкой площадки подряд не считается; ручная
 //! команда человека не считается совсем, и правило StopVenue паузу по ней не ставит — паузу ставит только автоматика.
 //! «Исход неизвестен» ставит паузу и у ручной команды: очередь кошелька остановлена, транзакция могла исполниться.
+//! Решение 220 (Тигран 08.11): «вывод отклонён» (WithdrawRejected) не повторяется при любых правилах — журнал
+//! core.withdraw_rejected «вывод отклонён — не повторяем»; StopVenue / StopAll по нему действуют как обычно.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
 //! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, deps.rs.
 //! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs).
@@ -108,6 +110,20 @@ pub async fn on_error(
         deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &paused))
             .await;
     }
+    // Решение 220 (Тигран 08.11): вывод отклонён площадкой (WithdrawRejected: Bitget 40938 «адресная книга» и т. п.) —
+    // тот же вывод не повторяем при любых правилах шлюза (Retry ниже не действует); вместо повтора — продажа на месте
+    // (relay_here.rs) или «USDT не вернулись» (usdt_return_retry.rs).
+    let rejected = err.code == ErrorCode::WithdrawRejected;
+    if rejected {
+        deps.log(
+            Level::Warn,
+            "core.withdraw_rejected",
+            Some(&venue.0),
+            format!("{op} на {}: вывод отклонён — не повторяем", venue.0),
+            Some(json!({ "deal": deal })),
+        )
+        .await;
+    }
     let rules = match crate::storage::rules::list(&deps.db).await {
         Ok(r) => r,
         Err(e) => {
@@ -134,6 +150,8 @@ pub async fn on_error(
         return Next::Stop;
     };
     match &rule.action {
+        // Решение 220: WithdrawRejected не повторяется даже правилом Retry (запись в журнале — выше).
+        RuleAction::Retry { .. } if rejected => Next::Stop,
         RuleAction::Retry { attempts, pause_ms } if attempt <= *attempts => Next::Retry {
             pause_ms: *pause_ms,
         },

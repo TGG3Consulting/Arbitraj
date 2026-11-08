@@ -3,7 +3,8 @@
 //! После каждого шага результат пересчитывается по факту. Не исполнилась покупка — сделка закрыта
 //! без монет (стартовое правило шлюза: отменить, больше не пробовать — повтор только по правилу).
 //! Покупка исполнилась частично — решение 48 (partial.rs): больший итог из «довезти и продать» и
-//! «продать обратно на A». Вывод не состоялся — монеты на A, режим застрявшей монеты. Продажа: выгодно
+//! «продать обратно на A». Вывод не состоялся — монеты на A: продажа здесь по порогу (решение 220, relay_here.rs);
+//! монет на A нет — остановка. Продажа: выгодно
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37).
 //! Решение 118 (Я-2): по одной монете — одна сделка (замок по адресу контракта, coin_key.rs): направления одной монеты
 //! через разные площадки не покупают её параллельно сверх money.max_per_coin_usd.
@@ -20,7 +21,7 @@
 //! Решение 141: покупка исполнилась — фоновый расчёт «без потолка» с id сделки (uncapped_entry.rs; путь не ждёт).
 //! Решение 147: отказ на входе (NotTradable, Busy) несёт точную причину (start_reason.rs) — в «Кандидаты» и журнал.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
-//! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, stuck.rs, sell.rs, deal.rs.
+//! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
 
 use crate::core::types::{Direction, Side};
@@ -306,8 +307,10 @@ async fn run(core: &Core, d: Direction) {
         Err(e) => {
             deal.step = Step::Stuck;
             deal.note(format!("Перевод не состоялся: {e}"));
-            let why = super::stuck_reason::StuckReason::TransferFailed(e.to_string());
-            return super::stuck::handle(core, deal, why).await;
+            // Решение 220 (Тигран 08.11, п. 2): монеты на A — продажа здесь по порогу stuck.relay_max_loss_pct
+            // (relay_here.rs), без повтора вывода; монет на A нет — остановка, решает человек.
+            let why = format!("перевод не состоялся: {e}");
+            return super::relay_here::transfer_failed(core, deal, &why).await;
         }
     }
     deal.step = Step::Selling;

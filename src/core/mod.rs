@@ -131,6 +131,7 @@ pub mod patience_scope;
 pub mod persist;
 pub mod precheck;
 pub mod precheck_deposit;
+pub mod precheck_dex_sell;
 pub mod precheck_sell;
 pub mod precheck_withdraw;
 pub mod presence;

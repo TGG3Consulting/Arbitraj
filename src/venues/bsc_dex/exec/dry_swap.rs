@@ -161,7 +161,7 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
 
 /// Вход и выход сделки: токен входа (None — платит роутер из BNB транзакции), сумма входа кошелька (сумма первых
 /// шагов долей, которые платит кошелёк), токен выхода (None — нативный BNB). Ошибок нет.
-fn io(
+pub fn io(
     r: &Ready,
     side: Side,
     is_native: bool,

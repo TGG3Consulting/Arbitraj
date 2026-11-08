@@ -3,7 +3,8 @@
 //! и депозита на B — перечитываются напрямую из API бирж; покупка через API на A и продажа на B — по свежему справочнику
 //! пар (pairs_fresh.rs); у биржи B — адрес депозита монеты (решение 118, precheck_deposit.rs); BNB на газ у DEX-сторон не ниже
 //! risk.min_bnb_balance; затем полный расчёт заново (profit.rs) по свежим стаканам и пулам; биржа B примет ордер
-//! продажи на объём плана (решение 134, precheck_sell.rs); на бирже A хватит средств, которые можно вывести (решение 150,
+//! продажи на объём плана (решение 134, precheck_sell.rs), продажа DEX B — симуляцией настоящей продажи кошельком сделки
+//! с пересчётом по её выходу (решение 234, precheck_dex_sell.rs); на бирже A хватит средств, которые можно вывести (решение 150,
 //! precheck_withdraw.rs).
 //! Кто вызывает: executor.rs.
 //! От чего зависит: risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
@@ -223,11 +224,12 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),
     };
-    // Решение 134: биржа B примет ордер продажи на объём плана — до покупки (precheck_sell.rs).
+    // Решение 134: биржа B примет ордер продажи на объём плана — до покупки (precheck_sell.rs). Решение 234: у DEX B —
+    // симуляция настоящей продажи кошельком сделки, расчёт — по её выходу (precheck_dex_sell.rs).
     let at = Instant::now();
-    let r = super::precheck_sell::check(core, d, &c).await;
+    let r = super::precheck_sell::check(core, d, c).await;
     t.mark(format!("проверка продажи {}", d.sell_on.0), at);
-    r?;
+    let c = r?;
     // Решение 150: на бирже A хватит выводимого (без предварительно зачисленных депозитов) — до покупки.
     let at = Instant::now();
     let r = super::precheck_withdraw::check(core, d, &c).await;

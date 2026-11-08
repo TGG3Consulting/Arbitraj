@@ -341,6 +341,18 @@ impl Venue for BscDex {
         .await)
     }
 
+    /// Решение 234: симуляция продажи до покупки — тем путём, кошельком счёта и минимумом, что у настоящей продажи
+    /// (exec/presell.rs). Класс — как у котировки ядра (предпроверка сделки), иначе Check. Ничего не отправляет.
+    /// Ошибки: см. exec/presell.rs.
+    async fn dex_presell(
+        &self,
+        req: &TradeRequest,
+    ) -> GatewayResult<crate::core::types::DexPresell> {
+        let q = self.p.quoting();
+        let class = urgency::is_set().unwrap_or(Class::Check);
+        scope(class, exec::presell::run(&q, req.clone())).await
+    }
+
     /// «Сухая сделка DEX» через исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X) —
     /// проверка исполнителя на живой сети до развёртывания. Ничего не отправляет. Ошибок нет: отказ — причиной в итоге.
     async fn dex_dry_swap_executor(

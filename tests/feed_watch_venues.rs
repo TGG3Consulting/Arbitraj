@@ -2,12 +2,13 @@
 //! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC и Bitget на настоящих
 //! адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
 //! (core/feed_watch_logic.rs decide):
-//! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждения по REST
-//!   нет (book_version — NotApplicable: связи номера кадра с REST в документации нет, docs/TASKS.md);
+//! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждение по REST
+//!   есть — по содержимому стакана (Тигран 08.11; book_print.rs адаптеров, core/feed_print.rs): book_version без
+//!   venue.depth_levels / без пары в справочнике отвечает ошибкой с причиной, а не NotApplicable;
 //! - до подписки соединений нет — команда сторожа (переподписать пару, переподключить соединение) отвечает
 //!   BadResponse с причиной, а не молча;
-//! - ядро с такими признаками молчащую пару не переподписывает и биржу не спрашивает даже при заданных
-//!   venue.quiet_confirm_* — только журнал «тихие пары» (QuietNoConfirm).
+//! - ядро с такими признаками молчащую пару вслепую не переподписывает: при заданных venue.quiet_confirm_* — спрашивает
+//!   биржу (Check), без них — только журнал «тихие пары» (QuietNoConfirm) с причиной.
 //!
 //! Кадры стакана WebSocket MEXC (protobuf limit.depth) и Bitget (books15) в tests/data не записаны — проверка отметки
 //! кадров в учёте свежести на живых кадрах ждёт записи (tests/README.md; tests/mexc_window_tap.rs,
@@ -68,15 +69,21 @@ async fn mexc_bitget_feed_contract() {
     for v in venues("contract").await {
         let id = v.id().0;
         let h = v.feed_health().expect("сторож включён");
-        assert!(!h.scheduled && h.per_pair && !h.confirm, "{id}: {h:?}");
+        assert!(!h.scheduled && h.per_pair && h.confirm, "{id}: {h:?}");
         assert!(h.conns.is_empty(), "{id}: до подписки соединений нет");
         let e = v.resubscribe_pair("market-1", "CAKE").await.unwrap_err();
         assert_eq!(e.code, ErrorCode::BadResponse, "{id}");
         assert!(e.message.contains("market-1"), "{id}: {}", e.message);
         let e = v.reconnect_conn("market-1").await.unwrap_err();
         assert_eq!(e.code, ErrorCode::BadResponse, "{id}");
+        // Подтверждение по содержимому есть: без настройки/справочника — ошибка с причиной, без сети.
         let e = v.book_version("CAKE").await.unwrap_err();
-        assert_eq!(e.code, ErrorCode::NotApplicable, "{id}");
+        match id.as_str() {
+            // venue.depth_levels (N уровней) не задана.
+            "mexc" => assert_eq!(e.code, ErrorCode::NotConfigured, "{id}: {}", e.message),
+            // Пары нет в справочнике (подписки не было) — символа нет.
+            _ => assert_eq!(e.code, ErrorCode::BadResponse, "{id}: {}", e.message),
+        }
     }
 }
 
@@ -101,7 +108,7 @@ fn cfg() -> Cfg {
 }
 
 #[tokio::test]
-async fn mexc_bitget_quiet_pair_journal_only() {
+async fn mexc_bitget_quiet_pair_checked_or_journal() {
     for v in venues("quiet").await {
         let id = v.id().0;
         let flags = v.feed_health().expect("сторож включён");
@@ -122,21 +129,31 @@ async fn mexc_bitget_quiet_pair_journal_only() {
             }],
             ..flags
         };
+        // venue.quiet_confirm_* заданы — спросить биржу (book_version), не переподписывать вслепую.
         let mut st = State::default();
         let acts = decide(&h, now, &cfg(), &HashMap::new(), &mut st);
         assert_eq!(
             acts,
-            vec![Action::QuietNoConfirm {
+            vec![Action::Check {
                 conn: "market-1".into(),
-                why: "адаптер не подтверждает стакан по REST, а кадры биржи по документации не по расписанию"
-                    .into(),
-                tickers: vec!["CAKE".into()],
+                ticker: "CAKE".into(),
             }],
             "{id}"
         );
-        // Журнал — раз на пару: следующий проход молчит, переподписки и проверки по REST нет.
+        // Не заданы — только журнал, раз на пару.
+        let off = Cfg {
+            quiet: QuietCfg::Off("не задана venue.quiet_confirm_min_ms".into()),
+            ..cfg()
+        };
+        let mut st = State::default();
+        let acts = decide(&h, now, &off, &HashMap::new(), &mut st);
         assert!(
-            decide(&h, now + 5_000, &cfg(), &HashMap::new(), &mut st).is_empty(),
+            matches!(&acts[..], [Action::QuietNoConfirm { why, tickers, .. }]
+                if why.contains("quiet_confirm_min_ms") && tickers == &vec!["CAKE".to_string()]),
+            "{id}: {acts:?}"
+        );
+        assert!(
+            decide(&h, now + 5_000, &off, &HashMap::new(), &mut st).is_empty(),
             "{id}"
         );
     }

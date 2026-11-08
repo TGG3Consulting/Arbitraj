@@ -52,5 +52,7 @@ pub fn parse(v: &Value) -> BookVersion {
         id: int("id"),
         changed_ms: int("update"),
         server_ms: int("current"),
+        // Gate подтверждает по номеру id (не по содержимому).
+        print: None,
     }
 }

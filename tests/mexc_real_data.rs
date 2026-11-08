@@ -146,3 +146,35 @@ fn tx_hash_same_doc_example() {
     assert!(!same(mexc, &mexc[1..]));
     assert!(!same("", "0x"));
 }
+
+/// Решение 213, подтверждение тихой пары по содержимому (Тигран 08.11, venues/mexc/book_print.rs): разбор ответа
+/// GET /api/v3/depth на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (Market Data → Order Book,
+/// https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/order-book) — не живой ответ: живой записи стакана REST
+/// и кадров limit.depth одной пары в tests/data нет (tests/README.md). Строки «15.00000» и «15» — одно значение
+/// (сравнение ядра точное по десятичным, core/feed_print.rs).
+#[test]
+fn book_print_docs_example() {
+    use arb::core::types::PriceLevel;
+    use arb::gateway::feed_health::BookPrint;
+    use arb::venues::mexc::book_print;
+    let docs: Value = serde_json::from_str(
+        r#"{"lastUpdateId":1112416,"bids":[["15.00000","49999.00000"]],"asks":[["14.0000","1.0000"]]}"#,
+    )
+    .unwrap();
+    let d = |s: &str| s.parse::<Decimal>().unwrap();
+    let lv = |p: &str, q: &str| PriceLevel {
+        price: d(p),
+        qty: d(q),
+    };
+    let p = book_print::parse(&docs, 5).unwrap();
+    assert_eq!(
+        p,
+        BookPrint {
+            bids: vec![lv("15", "49999")],
+            asks: vec![lv("14", "1")]
+        }
+    );
+    // Нет стороны — ошибка с причиной (ответ в сыром журнале rest.rs).
+    let bad: Value = serde_json::from_str(r#"{"lastUpdateId":1,"bids":[]}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет asks");
+}

@@ -12,6 +12,7 @@ pub mod account;
 pub mod account_update;
 pub mod all_balances;
 pub mod book;
+pub mod book_print;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
@@ -288,12 +289,26 @@ impl Venue for Mexc {
     ///   partial-book-depth-streams), что кадр идёт и без изменений книги — не сказано;
     /// - per_pair = true: отписка одной подписки — {"method":"UNSUBSCRIPTION"} (Live Subscription/Unsubscription to Data
     ///   Streams), см. ws_conn.rs;
-    /// - confirm = false (решение 213): book_version нет — поле version кадра частичного стакана описано только как
-    ///   «Version number», связи с lastUpdateId ответа GET /api/v3/depth в документации нет (с lastUpdateId связаны
-    ///   только fromVersion / toVersion канала изменений spot@public.aggre.depth — «How to Properly Maintain a Local Copy
-    ///   of the Order Book»). Вопрос Тиграну — docs/TASKS.md. Тихая пара — только журнал сторожа.
+    /// - confirm = true (решение 213, по содержимому — Тигран 08.11): номер не сравнивается — поле version кадра
+    ///   частичного стакана описано только как «Version number», связи с lastUpdateId ответа GET /api/v3/depth в
+    ///   документации нет (с lastUpdateId связаны только fromVersion / toVersion канала изменений spot@public.aggre.depth
+    ///   — «How to Properly Maintain a Local Copy of the Order Book»); сравниваются первые venue.depth_levels уровней
+    ///   ответа REST и стакана в памяти (book_print.rs, core/feed_print.rs).
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
-        Some(self.books.feed.health(false, true, false))
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs).
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        book_print::book_version(&self.ctx, &self.books, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
     }
 
     /// Решение 202: переподписать одну пару в её соединении (UNSUBSCRIPTION + SUBSCRIPTION, ws_conn.rs).

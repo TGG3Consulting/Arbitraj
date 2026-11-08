@@ -7,9 +7,13 @@
 //! метод контракта book_version) и версия последнего кадра пары (PairHealth.last_id / last_changed_ms) — ядро
 //! сравнивает их и решает: пара тихая и подтверждена (не переподписывать, стакан свежий до следующей проверки) или
 //! кадры потеряны (переподписка по решению 202). Правила сравнения — core/feed_confirm.rs (verdict).
+//! Подтверждение по содержимому (Тигран 08.11, задача 213 п. 4): биржа без связи номеров кадра и REST отдаёт в
+//! BookVersion.print отпечатки — первые N уровней ответа REST и своего стакана в памяти; равны — тихая, подтверждена;
+//! не равны — кадры потеряны (core/feed_print.rs).
 //! Кто вызывает: gateway/contract.rs (методы feed_health, resubscribe_pair, reconnect_conn, book_version,
-//! book_confirmed), gateway/feed_reg.rs, core/feed_watch.rs, core/feed_confirm.rs.
-//! От чего зависит: ничего.
+//! book_confirmed), gateway/feed_reg.rs, core/feed_watch.rs, core/feed_confirm.rs, core/feed_print.rs, адаптеры
+//! (mexc/book_print.rs, bitget/book_print.rs).
+//! От чего зависит: core/types (PriceLevel).
 //! Настройки: нет (пороги сторожа — core/feed_watch.rs).
 
 /// Свежесть одной пары соединения (unix мс, часы бота).
@@ -66,11 +70,51 @@ pub struct FeedHealth {
 /// - `changed_ms` — когда книга последний раз менялась, unix мс по часам биржи. Gate: поле `update`.
 /// - `server_ms` — когда биржа сформировала ответ, unix мс по часам биржи. Gate: поле `current`. Вместе с
 ///   `changed_ms` даёт «возраст книги» без сравнения часов бота и биржи.
+/// - `print` — подтверждение ПО СОДЕРЖИМОМУ (Тигран 08.11: «запросили стакан по REST, сравнили с нашими данными»):
+///   для бирж, у которых документация не связывает номер кадра WebSocket с номером REST (MEXC, Bitget). Адаптер
+///   кладёт сюда первые N уровней ответа REST и первые N уровней своего стакана в памяти (того, по которому считается
+///   котировка), взятые ПОСЛЕ ответа. None — адаптер подтверждает по номеру/времени (Gate).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BookVersion {
     pub id: Option<i64>,
     pub changed_ms: Option<i64>,
     pub server_ms: Option<i64>,
+    pub print: Option<BookPrints>,
+}
+
+/// Отпечаток содержимого стакана: первые N уровней обеих сторон от лучшей цены (цена, количество — десятичные,
+/// сравнение точное, без допусков; rust_decimal сравнивает значения, «1.10» = «1.1»).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BookPrint {
+    pub bids: Vec<crate::core::types::PriceLevel>,
+    pub asks: Vec<crate::core::types::PriceLevel>,
+}
+
+impl BookPrint {
+    /// Первые n уровней каждой стороны (уровни уже от лучшей цены к худшей: покупатели по убыванию, продавцы по
+    /// возрастанию цены). Принимает: уровни, n. Ошибок нет.
+    pub fn top(
+        bids: &[crate::core::types::PriceLevel],
+        asks: &[crate::core::types::PriceLevel],
+        n: usize,
+    ) -> Self {
+        BookPrint {
+            bids: bids.iter().take(n).cloned().collect(),
+            asks: asks.iter().take(n).cloned().collect(),
+        }
+    }
+}
+
+/// Пара отпечатков для сравнения по содержимому (core/feed_print.rs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BookPrints {
+    /// Сколько уровней сравнивается (N — venue.depth_levels площадки: столько даёт кадр стакана и столько запрошено у
+    /// REST).
+    pub levels: usize,
+    /// Первые N уровней ответа REST.
+    pub rest: BookPrint,
+    /// Первые N уровней стакана в памяти адаптера; None — стакана пары в памяти нет.
+    pub ours: Option<BookPrint>,
 }
 
 /// Команда соединению.

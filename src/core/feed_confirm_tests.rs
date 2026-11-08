@@ -65,6 +65,7 @@ fn ver(id: i64, changed: i64, server: i64) -> BookVersion {
         id: Some(id),
         changed_ms: Some(changed),
         server_ms: Some(server),
+        print: None,
     }
 }
 

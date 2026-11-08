@@ -42,6 +42,7 @@
 | `fills.rs` | Комиссия по всем сделкам ордера: `myTrades` с `limit` (`venue.my_trades_limit`), сверка суммы `qty` с `executedQty`; разные `commissionAsset` — сумма по монете (решение 219) |
 | `proto.rs` | Нужные сообщения protobuf (prost) |
 | `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WebSocket стаканов: частичный стакан `spot@public.limit.depth.v3.api.pb@SYM@N`, PING, стаканы в памяти, котировка; свежесть — по соединению и по кадру пары (`venue.book_stale_ms`); решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (`UNSUBSCRIPTION` + `SUBSCRIPTION`) и переподключение одного соединения по команде сторожа |
+| `book_print.rs` | Решение 213 по содержимому (Тигран 08.11): `GET /api/v3/depth` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром (core/feed_print.rs) |
 | `user_key.rs`, `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток баланса по listenKey (`spot@private.account.v3.api.pb`); после обрыва — тот же ключ, пока продление проходит |
 | `tap.rs`, `feed.rs`, `tap_snap.rs` | Запись окна (решение 125): двоичные кадры стакана монеты из ws_conn.rs как есть; свои соединения на монету — лента `spot@public.aggre.deals.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.trades_interval) и изменения всей глубины `spot@public.aggre.depth.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.window_depth_interval) со снимком REST /api/v3/depth (venue.window_depth_limit) после первого кадра и при разрыве версий; отписка UNSUBSCRIPTION; разбор кадров (тела 303, 313, 314, снимок) |
 
@@ -61,8 +62,9 @@
   `venue.book_stale_ms` — без неё котировок нет. Необязательная `venue.networks_fresh_ms` — кэш `config/getall`.
 - `withdrawIntegerMultiple`: в таблице документации — «Withdraw amount increment», в примере — `"18"`. Шагом вывода
   считается только дробное значение (0 < v < 1); целое — в журнал, не применяется (сверить на живом ответе).
-- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = false**:
-  `book_version` нет — у `version` кадра частичного стакана в документации только «Version number», связи с
-  `lastUpdateId` ответа `GET /api/v3/depth` нет (она описана только для `fromVersion`/`toVersion` канала изменений
-  `spot@public.aggre.depth`). Тихая пара — только журнал сторожа; `venue.quiet_confirm_*` не действуют. Вопрос —
-  docs/TASKS.md (решение 213, п. 4).
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true — по
+  содержимому** (Тигран 08.11, `book_print.rs`): номер не сравнивается — у `version` кадра частичного стакана в
+  документации только «Version number», связи с `lastUpdateId` ответа `GET /api/v3/depth` нет (она описана только для
+  `fromVersion`/`toVersion` канала изменений `spot@public.aggre.depth`); сравниваются первые `venue.depth_levels`
+  уровней ответа `GET /api/v3/depth` (limit = `venue.depth_levels`, вес 3) и стакана в памяти: равны — тихая пара
+  подтверждена (`book_confirmed`, book.rs), нет — переподписка пары. Темп — `venue.quiet_confirm_*` (совет — FIRST_RUN).

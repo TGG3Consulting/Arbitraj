@@ -7,8 +7,19 @@
 //! бесконечного круга ресинков). Отказ подписки (event error с
 //! instId) — стакан пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, local_book.rs, book.rs, ws.rs (Cfg, End), ws_req.rs (подключение, подписки), ctx.rs.
+//! От чего зависит: depth.rs, local_book.rs, book.rs, ws.rs (Cfg, End), ws_req.rs (подключение, подписки), ctx.rs,
+//! gateway/feed_reg.rs (решение 202).
 //! Настройки: из ws.rs (Cfg); raw.book_frames [okx].
+//!
+//! Решение 202 (для всех бирж, Тигран 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр
+//! стакана по паре (снимок books5, изменение и пустой кадр «живо» books, кадр с разрывом, неразборчивый с instId);
+//! seqId кадра не передаётся (решение 213: связь seqId кадра с seqId ответа GET /api/v5/market/books в документации не
+//! описана — подтверждение тихой пары по содержимому, book_print.rs). Команды сторожа ядра: «переподписать пару» —
+//! {"op":"unsubscribe","args":[{"channel","instId"}]}, затем {"op":"subscribe",…} в этом же соединении («Overview →
+//! WebSocket → Unsubscribe»: «{"op": "unsubscribe", "args": ["<SubscriptionTopic>"]}», ответ {"event":"unsubscribe",
+//! "arg":{…},"connId"}) — тот же путь, что пересподписка пары при разрыве prevSeqId: изменения books до нового снимка
+//! пропускаются, соседи не трогаются; оба запроса — в счёт «480 times per hour» (не хватает — переподключение).
+//! «Переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
 //!
 //! Официально (https://www.okx.com/docs-v5/en/, «Overview → WebSocket»): подписка {"op":"subscribe","args":[{"channel",
 //! "instId"}, …]}; «the total length of multiple channels cannot exceed 64 KB»; «The total number of 'subscribe'/
@@ -32,7 +43,15 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::local_book::{Applied, LocalBook};
 use super::ws::{Cfg, End, invalidate};
-use super::ws_req::{MAX_OPS_PER_HOUR, open, requests};
+use super::ws_req::{MAX_OPS_PER_HOUR, open, requests, resub};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
 pub async fn session(
@@ -42,12 +61,14 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let ws = match open(&cfg.url, cfg.connect_timeout).await {
         Ok(ws) => ws,
         Err(e) => return End::Broken(e),
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let by_inst: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let insts: Vec<&str> = assets.iter().map(|(_, s)| s.as_str()).collect();
     let mut ops = 0usize;
@@ -73,6 +94,23 @@ pub async fn session(
                     return End::Broken(format!("отправка ping: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, inst)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    if ops + 2 > MAX_OPS_PER_HOUR {
+                        return End::Broken(format!("{inst}: переподписка сторожем, а предел {MAX_OPS_PER_HOUR} запросов исчерпан"));
+                    }
+                    // Изменения books до нового снимка — по старой подписке, пропускаются (как при разрыве).
+                    if cfg.channel == "books" {
+                        resync.insert(inst.clone());
+                    }
+                    if let Err(e) = resub(&mut sink, cfg.channel, inst, &mut ops).await {
+                        return End::Broken(format!("{e} (сторож пар)"));
+                    }
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
                 return End::Broken(format!("нет кадров дольше venue.ws_silence_ms ({} мс)", cfg.silence.as_millis()));
             }
@@ -85,6 +123,7 @@ pub async fn session(
                 last_rx = Instant::now();
                 pinged = false;
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let text = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -105,6 +144,7 @@ pub async fn session(
                     Msg::Depth(d) => d,
                     Msg::Bad { inst, reason } => {
                         if let Some(a) = inst.as_deref().and_then(|s| by_inst.get(s)) {
+                            w.feed.frame(&a.ticker);
                             invalidate(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
@@ -125,6 +165,7 @@ pub async fn session(
                     _ => continue,
                 };
                 let Some(asset) = by_inst.get(d.inst.as_str()) else { continue };
+                w.feed.frame(&asset.ticker);
                 if !resync.is_empty() && resync.contains(&d.inst) {
                     if !d.snapshot {
                         continue;
@@ -148,13 +189,10 @@ pub async fn session(
                             last_gap.insert(d.inst.clone(), Instant::now());
                             resync.insert(d.inst.clone());
                             ctx.log(Level::Warn, "venue.ws", format!("WebSocket {name}: {} — {why}; пересподписка пары", d.inst)).await;
-                            for op in ["unsubscribe", "subscribe"] {
-                                ops += 1;
-                                let r = requests(op, cfg.channel, &[d.inst.as_str()]).concat();
-                                if let Err(e) = sink.send(Message::Text(r.into())).await {
-                                    return End::Broken(format!("отправка {op}: {e}"));
-                                }
+                            if let Err(e) = resub(&mut sink, cfg.channel, &d.inst, &mut ops).await {
+                                return End::Broken(e);
                             }
+                            w.feed.resubscribed(&asset.ticker);
                             continue;
                         }
                     }

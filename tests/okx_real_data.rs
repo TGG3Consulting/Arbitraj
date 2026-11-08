@@ -194,3 +194,57 @@ fn deposit_info_frames() {
         "в записи нет зачисления (state 1 или 2) с txId"
     );
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/okx/book_print.rs — подтверждение тихой пары по содержимому.
+/// Разбор ответа GET /api/v5/market/books на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ («Order Book Trading → Market Data → GET / Order
+/// book», Response Example: asks [["41006.8","0.60038921","0","1"]], bids [["41006.3","0.30178218","0","2"]],
+/// ts "1629966436396", seqId 3235851742) — живого ответа REST и кадров books5 в tests/data нет (www.okx.com закрыт
+/// прокси; что записать — tests/README.md, раздел OKX). Сравнение — живая логика ядра (core/feed_confirm.rs verdict):
+/// тот же отпечаток в памяти — Quiet; стакана в памяти нет или он другой (нет стороны asks) — Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::okx::book_print;
+    let docs: Value = serde_json::from_str(
+        r#"{"code":"0","msg":"","data":[{"asks":[["41006.8","0.60038921","0","1"]],"bids":[["41006.3","0.30178218","0","2"]],"ts":"1629966436396","seqId":3235851742}]}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&docs["data"], 5).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (1, 1));
+    assert_eq!(
+        (p.asks[0].price, p.asks[0].qty),
+        (d("41006.8"), d("0.60038921"))
+    );
+    assert_eq!(
+        (p.bids[0].price, p.bids[0].qty),
+        (d("41006.3"), d("0.30178218"))
+    );
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 5,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(p.clone())), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    let other = BookPrint::top(&p.bids, &[], 5);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(other)), 2),
+        Verdict::Lost(_)
+    ));
+    // Вид ответа: data пустой, нет asks.
+    let empty: Value = serde_json::from_str("[]").unwrap();
+    assert!(book_print::parse(&empty, 5).is_err());
+    let bad: Value = serde_json::from_str(r#"[{"bids":[],"ts":"1"}]"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет asks");
+}

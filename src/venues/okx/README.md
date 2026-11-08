@@ -59,7 +59,8 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `trade.rs`, `order_state.rs` | Ордер limit-цены типа ioc/fok со своим clOrdId, итог по ordId (accFillSz, avgPx, fee, feeCcy), отмена остатка, поиск по clOrdId |
 | `depth.rs` | Разбор кадров WS: pong, event (subscribe/login/error/notice), books5, books, данные каналов |
 | `local_book.rs` | Локальный стакан канала books: снимок + изменения, prevSeqId = прежний seqId, пустой кадр «живо» |
-| `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: подписка запросами ≤ 64 КБ, «ping», разрыв → пересподписка пары, стаканы в памяти и котировка |
+| `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: подписка запросами ≤ 64 КБ, «ping», разрыв → пересподписка пары, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `book_print.rs` | Решение 213 по содержимому: `GET /api/v5/market/books` (sz = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром |
 | `user_stream.rs`, `user_stream_conn.rs`, `deposit_event.rs` | Поток аккаунта на business: вход, deposit-info → MarketEvent::Balance (депозит с txId) |
 
 ## Что важно знать
@@ -77,5 +78,10 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
   отказ с причиной (вопрос Тиграну).
 - Каналы торгового счёта `account` / `balance_and_position` причину «депозит» не сообщают — не используются; зачисления —
   deposit-info. Итог ордера — опросом REST (канал `orders` «Data will not be pushed when first subscribed»).
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true — по
+  содержимому**: seqId ответа REST стакана и seqId кадра в документации не связаны (фраза о связи — только у books-rpi
+  и SBE); сравниваются первые `venue.depth_levels` уровней ответа и стакана в памяти (`book_print.rs`). Запрос — «40
+  requests per 2 seconds» на IP. Без изменений книги кадр пары — раз в ~60 с («Around 60 seconds»: books5 — повтор
+  снимка, books — пустой кадр).
 - Запись окна (решение 125) для OKX не сделана — `window_tap` отвечает NotApplicable (по умолчанию контракта).
 - Функции контракта только для DEX отвечают `NotApplicable`.

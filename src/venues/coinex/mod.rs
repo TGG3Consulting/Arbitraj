@@ -13,6 +13,7 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_print;
 pub mod contracts;
 pub mod ctx;
 pub mod deals;
@@ -43,6 +44,7 @@ pub mod transfers;
 pub mod wallet;
 pub mod ws;
 pub mod ws_conn;
+pub mod ws_msg;
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -223,5 +225,50 @@ impl Venue for CoinEx {
 
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: WS Market Depth — «No push if there is no depth update»; «Full market depth push is delivered
+    ///   every 1 minute» — без слов «и без изменений книги» (как «200ms» у Bitget); при confirm = true поле не влияет.
+    ///   Каждый пуш (и полный раз в минуту с прежним updated_at) отмечается как кадр пары — тишина пары дольше минуты
+    ///   видна сторожу;
+    /// - per_pair = true: переподписка без обрыва соединения — depth.unsubscribe всех рынков + depth.subscribe всех
+    ///   рынков соединения (ws_conn.rs: что делает повторный depth.subscribe, документация не говорит);
+    /// - confirm = true (решение 213, по содержимому): номера у стакана CoinEx нет; updated_at — «Timestamp,
+    ///   millisecond», checksum — «of the full depth data» — не «книга не менялась»; сравниваются первые
+    ///   venue.depth_levels уровней GET /v2/spot/depth и стакана в памяти (book_print.rs, core/feed_print.rs).
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Рынок — из
+    /// справочника пар (symbols.rs). Ошибки: пары нет в справочнике, как у book_print::book_version.
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        let market = self.symbols.get(&self.ctx, ticker)?.symbol;
+        book_print::book_version(&self.ctx, &self.books, &market, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm; действует, если
+    /// задана venue.book_stale_ms).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 202: переподписать пару в её соединении (depth.unsubscribe всех + depth.subscribe всех рынков
+    /// соединения, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
     }
 }

@@ -8,6 +8,8 @@
     Решение 173: итог дня по площадкам (факт / оценка / лимит / пауза, «Сбросить лимит дня» площадки —
     DayVenues.svelte); общий лимит — «Стоп» всей системы (risk.max_daily_loss_total_usd), его «Сбросить лимит дня»
     сбрасывает всю систему и все площадки.
+    Решение 225: у паузы — кто поставил: поставленную ботом (venue_auto, mode_auto, пауза по убытку дня) бот снимает сам —
+    подпись «снимется сама …»; «исход неизвестен» и паузу человека снимает только человек.
     Команды уходят ядру (POST /api/control…) и пишутся в журнал.
   Кто вызывает: App.svelte.
   От чего зависит: lib/control.svelte.js, lib/coreLabels.js, lib/labels.js, components/DayVenues.svelte.
@@ -26,6 +28,20 @@
   // Убыток для лимита до сброса: −итог дня в момент сброса (отрицательное — день был в плюсе).
   const before = $derived(reset ? -Number(reset.base_usd) : 0);
 
+  /** Решение 225: подпись софтовой паузы площадки по виду отметки (Errors / Rule / Outcome). */
+  function autoNote(kind) {
+    if (kind === 'Outcome') return 'исход неизвестен — снимает только человек';
+    if (kind === 'Errors') return 'поставил бот: снимется сама, когда проверка подключения пройдёт (через risk.errors_resume_after_s, дальше каждые risk.auto_resume_check_s)';
+    return 'поставил бот: снимется сама, когда проверка подключения пройдёт (каждые risk.auto_resume_check_s)';
+  }
+
+  /** Решение 225: подпись софтового «Стоп» системы (DailyTotal / Rule). */
+  function modeNote(m) {
+    if (m.kind === 'DailyTotal') return 'поставил бот: снимется сам с новым днём (UTC)';
+    const v = m.kind?.Rule?.venue ?? '';
+    return `поставил бот: снимется сам, когда проверка подключения ${v} пройдёт (каждые risk.auto_resume_check_s)`;
+  }
+
   /** «Сбросить лимит дня» — только после подтверждения. */
   function askReset() {
     const stopNote = r?.daily_stop ? '\nСистема остановлена по лимиту — после сброса она останется в «Стоп», запуск — кнопкой «Старт».' : '';
@@ -38,6 +54,7 @@
   {#if r}
     <strong>Режим: {modeLabel(r.mode)}</strong>
     {#if r.reason}<span>— {r.reason}</span>{/if}
+    {#if r.mode_auto && r.mode === 'Stopped'}<span class="muted">({modeNote(r.mode_auto)})</span>{/if}
     <span class="muted" title="Оценка позиций — остановленные сделки и «Беру на себя»: стоимость монет по рынку площадки, где они лежат, минус вложено (решение 152); цены нет — худший случай (вся сумма). После разбора заменяется фактом">
       · итог дня {r.day.date}: {r.day.result_usd} USDT (факт {r.day.final_usd}, оценка позиций {r.day.provisional_usd})
     </span>
@@ -56,13 +73,13 @@
     </div>
     <DayVenues />
     {#if r.daily_stop && lim && !lim.exceeded}
-      <div><strong>Лимит сейчас не превышен:</strong> {lim.loss_usd} из {lim.max_usd} USDT — остановка по лимиту сама не снимается, можно нажать «Старт».</div>
+      <div><strong>Лимит сейчас не превышен:</strong> {lim.loss_usd} из {lim.max_usd} USDT — остановка по лимиту снимется сама с новым днём (UTC), можно нажать «Старт».</div>
     {/if}
     {#each Object.entries(r.cycle_paused ?? {}) as [v, why] (v)}
-      <div>Циклы DEX ↔ DEX (<code>{v}</code>) на паузе: {why} — направления бирж с DEX торгуют <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+      <div>Циклы DEX ↔ DEX (<code>{v}</code>) на паузе: {why} — направления бирж с DEX торгуют <span class="muted">(снимется сама с новым днём, UTC)</span> <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
     {/each}
     {#each Object.entries(r.venue_paused) as [v, why] (v)}
-      <div>Площадка <code>{v}</code> на паузе: {why} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+      <div>Площадка <code>{v}</code> на паузе: {why}{#if r.venue_auto?.[v]} <span class="muted">({autoNote(r.venue_auto[v].kind)})</span>{:else if r.day?.venues?.[v]?.paused} <span class="muted">(снимется сама с новым днём, UTC)</span>{/if} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
     {/each}
     {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
       <div class="muted">Оценка позиции сделки <code>{deal}</code>{#if r.day.deal_venues?.[deal]} ({r.day.deal_venues[deal].join(', ')}){/if}: {usd} USDT (учтена {day}){#if r.day.unpriced?.includes(deal)} — <span class="err">цены нет, взят худший случай (вся сумма)</span>{/if} — ждёт разбора</div>

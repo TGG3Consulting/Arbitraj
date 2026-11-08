@@ -7,7 +7,8 @@
 //! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
 //! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
 //! Risk.cycle_paused: отказ только направлениям, чей учёт дня у DEX (DEX ↔ DEX). Необязательные настройки (optional) не
-//! требуются для включения торговли.
+//! требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
+//! auto_pause.rs); софтовую снимает сам бот (auto_resume.rs, day_roll.rs), человек — сбрасывает отметку.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs.
@@ -68,6 +69,12 @@ pub struct Risk {
     /// при росте убытка (daily_venue_limit.rs). Новый день — с нуля.
     #[serde(skip)]
     pub loss_seen: BTreeMap<String, Decimal>,
+    /// Решение 225: паузы площадок, поставленные софтом (вид, когда) — их снимает сам бот (auto_resume.rs). Нет записи —
+    /// пауза человека или другого модуля. «Снять паузу» человеком снимает отметку.
+    pub venue_auto: HashMap<VenueId, super::auto_pause::VenueMark>,
+    /// Решение 225: «Стоп» системы поставлен софтом (общий лимит дня, правило «стоп всё») — режим до него; любая смена
+    /// режима (risk::set_mode) снимает отметку.
+    pub mode_auto: Option<super::auto_pause::ModeMark>,
 }
 
 impl Default for Risk {
@@ -84,6 +91,8 @@ impl Default for Risk {
             loss_paused: BTreeSet::new(),
             cycle_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
+            venue_auto: HashMap::new(),
+            mode_auto: None,
         }
     }
 }
@@ -138,6 +147,8 @@ pub fn set_mode(core: &Core, mode: Mode, reason: Option<String>) -> String {
         r.reason = reason.clone();
         r.daily_stop = false;
         r.reconcile_pause = None;
+        // Решение 225: режим сменили — софтовая отметка «Стоп» снята (правило «стоп всё» ставит её после этой смены).
+        r.mode_auto = None;
     }
     publish(core);
     format!(
@@ -164,7 +175,14 @@ pub fn on_error(core: &Core, venue: &VenueId) -> Option<String> {
         match max {
             Ok(m) if n >= m => {
                 let t = format!("{n} ошибок подряд — предел {m}");
-                r.venue_paused.insert(venue.clone(), t.clone());
+                let now = chrono::Utc::now();
+                super::auto_pause::pause_venue(
+                    &mut r,
+                    venue,
+                    t.clone(),
+                    super::auto_pause::Kind::Errors,
+                    now,
+                );
                 Some(t)
             }
             _ => None,
@@ -187,6 +205,8 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     // Решение 173: пауза по убытку дня тоже снята; новая — только если убыток площадки вырастет.
     r.loss_paused.remove(&venue.0);
     r.cycle_paused.remove(&venue.0);
+    // Решение 225: паузу снял человек — софтовая отметка снята.
+    r.venue_auto.remove(venue);
     drop(r);
     publish(core);
 }

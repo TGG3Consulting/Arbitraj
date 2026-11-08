@@ -77,6 +77,9 @@ impl Core {
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));
         tokio::spawn(super::reconcile::run(core.clone()));
+        // Решение 225: софтовые паузы снимает сам бот — проверкой подключения и с новым днём (UTC).
+        tokio::spawn(super::auto_resume::run(core.clone()));
+        tokio::spawn(super::day_roll::run(core.clone()));
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
         // Решение 124: исполнение циклов DEX ↔ DEX — одна задача, толчки событий пулов сливаются.
         tokio::spawn(super::cycle_watch::run(core.clone()));

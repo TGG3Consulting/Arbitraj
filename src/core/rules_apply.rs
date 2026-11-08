@@ -7,9 +7,13 @@
 //! Решение 177 (risk_count.rs): отказ до отправки (деньги и газ не тронуты) ошибкой площадки подряд не считается; ручная
 //! команда человека не считается совсем, и правило StopVenue паузу по ней не ставит — паузу ставит только автоматика.
 //! «Исход неизвестен» ставит паузу и у ручной команды: очередь кошелька остановлена, транзакция могла исполниться.
+//! Решение 225: паузы отсюда — софтовые (auto_pause.rs): «стоп площадка», «стоп всё» и ошибки подряд снимает сам бот
+//! проверкой подключения (auto_resume.rs), «исход неизвестен» — только человек; отказ вывода / неверный адрес / вывод
+//! заблокирован паузу не ставят вовсе. Постановка пауз — rules_stop.rs.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
-//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, deps.rs.
-//! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs).
+//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, rules_stop.rs, deps.rs.
+//! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs), risk.auto_resume_check_s и
+//! risk.errors_resume_after_s (текст уведомления, rules_stop.rs).
 
 use serde_json::json;
 
@@ -20,8 +24,10 @@ use crate::storage::journal::Level;
 
 use crate::notify::human::{self as h, Msg};
 
+use super::auto_pause::Kind;
 use super::engine::Core;
-use super::risk::{self, Mode};
+use super::risk;
+use super::rules_stop::{self as stop, paused_text};
 
 /// Что делать дальше.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +43,10 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
     Some(match code {
         ErrorCode::OrderNotFilled | ErrorCode::PartialFill => "exec.order_not_filled",
         ErrorCode::SwapReverted => "exec.swap_reverted",
-        ErrorCode::WithdrawRejected | ErrorCode::WithdrawLocked => "exec.withdraw_rejected",
+        // Решение 225: паузы по ним нет — только предупреждение (журнал и это событие).
+        ErrorCode::WithdrawRejected | ErrorCode::WithdrawLocked | ErrorCode::InvalidAddress => {
+            "exec.withdraw_rejected"
+        }
         ErrorCode::DepositNotCredited => "exec.deposit_not_credited",
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",
@@ -67,32 +76,9 @@ pub async fn on_error(
     )
     .await;
     // Исход неизвестен (транзакция могла исполниться): повтор — риск двойного вывода или обмена. Не повторяем при
-    // любых правилах шлюза, площадка — на паузу до ручной проверки. Уведомление и пауза — один раз на смену
-    // состояния: остановленная очередь кошелька отвечает так на каждую попытку.
+    // любых правилах шлюза, площадка — на паузу до ручной проверки (rules_stop.rs; снимает только человек).
     if !crate::gateway::rules::retry_allowed(err.code) {
-        let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
-        let fresh = {
-            let mut r = super::engine::lk(&core.inner.risk);
-            if r.venue_paused.contains_key(venue) {
-                false
-            } else {
-                r.venue_paused.insert(venue.clone(), why.clone());
-                true
-            }
-        };
-        if fresh {
-            risk::publish(core);
-            let tg = tg_error("send.outcome_unknown", op, venue, deal, err)
-                .todo(format!(
-                    "проверить на {}, прошла ли операция, затем «Снять паузу» площадки",
-                    h::venue(&venue.0)
-                ))
-                .render();
-            deps.notify("send.outcome_unknown", Some(&venue.0), &tg)
-                .await;
-            deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why))
-                .await;
-        }
+        stop::outcome(core, op, venue, deal, err).await;
         return Next::Stop;
     }
     if let Some(code) = event_of(err.code) {
@@ -105,8 +91,13 @@ pub async fn on_error(
         && super::risk_count::counts(err)
         && let Some(paused) = risk::on_error(core, venue)
     {
-        deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &paused))
-            .await;
+        let note = stop::resume_note(core, venue, Kind::Errors);
+        deps.notify(
+            "risk.stop",
+            Some(&venue.0),
+            &paused_text(venue, &paused, note),
+        )
+        .await;
     }
     let rules = match crate::storage::rules::list(&deps.db).await {
         Ok(r) => r,
@@ -153,25 +144,11 @@ pub async fn on_error(
             Next::Stop
         }
         RuleAction::StopVenue => {
-            let why = format!("правило шлюза №{}: {:?}", rule.id, err.code);
-            risk::on_error(core, venue);
-            super::engine::lk(&core.inner.risk)
-                .venue_paused
-                .insert(venue.clone(), why.clone());
-            deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why))
-                .await;
+            stop::stop_venue(core, rule.id, venue, err).await;
             Next::Stop
         }
         RuleAction::StopAll => {
-            let why = format!("правило шлюза №{}: {:?} на {}", rule.id, err.code, venue.0);
-            risk::set_mode(core, Mode::Stopped, Some(why.clone()));
-            let tg = Msg::new(h::STOP, "Торговля остановлена")
-                .line(format!("Ошибка на {}: {op}", h::venue(&venue.0)))
-                .reason(&err.message)
-                .kv("Сработало", format!("правило шлюза №{}", rule.id))
-                .id(deal.unwrap_or_default())
-                .render();
-            deps.notify("risk.stop", Some(&venue.0), &tg).await;
+            stop::stop_all(core, rule.id, op, venue, deal, err).await;
             Next::Stop
         }
         // CancelNoRetry, NotifyOnly, исчерпанные повторы: результат операции не получен — дальше не идём.
@@ -181,7 +158,13 @@ pub async fn on_error(
 
 /// Решение 164: текст ошибки операции для Telegram — заголовок события, где и что делали, человеческая причина,
 /// неизвестный ответ биржи — последней строкой, id сделки. Принимает: код события, операцию, площадку, сделку, ошибку.
-fn tg_error(code: &str, op: &str, venue: &VenueId, deal: Option<&str>, err: &GatewayError) -> Msg {
+pub(super) fn tg_error(
+    code: &str,
+    op: &str,
+    venue: &VenueId,
+    deal: Option<&str>,
+    err: &GatewayError,
+) -> Msg {
     let head = crate::notify::heads::head(code, "");
     let (icon, title) = head.split_once(' ').unwrap_or((h::WARN, head.as_str()));
     Msg::new(icon, title)
@@ -190,16 +173,8 @@ fn tg_error(code: &str, op: &str, venue: &VenueId, deal: Option<&str>, err: &Gat
         .id(deal.unwrap_or_default())
 }
 
-/// Решение 164: площадка на паузе (risk.stop). Принимает: площадку, причину паузы.
-fn paused_text(venue: &VenueId, why: &str) -> String {
-    Msg::new(h::STOP, format!("Площадка {} на паузе", h::venue(&venue.0)))
-        .reason(why)
-        .todo("разобраться с причиной, затем «Снять паузу» на экране «Управление»")
-        .render()
-}
-
 /// Первая буква — строчная (операция в середине строки). Принимает: текст.
-fn lower(s: &str) -> String {
+pub(super) fn lower(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
         Some(f) => f.to_lowercase().collect::<String>() + c.as_str(),

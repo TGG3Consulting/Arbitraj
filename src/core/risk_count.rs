@@ -13,6 +13,10 @@
 //!    manual_usdt.rs). Продажа остатка через режим застрявшей монеты после частичной ручной продажи — снова автоматика
 //!    (sell.rs, auto). Перегон выручки после «Продать и перегнать» — общий шаг закрытия (своя задача) — автоматика.
 //!
+//! 3. Решение 225: отказ вывода, неверный адрес, вывод заблокирован (WithdrawRejected, InvalidAddress, WithdrawLocked;
+//!    auto_pause::no_pause) — паузу не ставят вовсе, поэтому и ошибкой подряд не считаются (вывод не создан, деньги не
+//!    тронуты; вывод не повторяем, продаём на месте — решение 220б).
+//!
 //! Живой случай 05.11 (сделка 20261105131254836GAIB): нажатия «Продать и перегнать» при отказе по квотеру растили
 //! счётчик ошибок bsc_dex (3 → 6 → 9) и ставили на паузу ВСЮ площадку DEX.
 //! Кто вызывает: core/rules_apply.rs (counts, is_manual), core/commands.rs, manual.rs, manual_halted.rs, manual_usdt.rs,
@@ -50,6 +54,10 @@ pub fn counts(e: &GatewayError) -> bool {
             | ErrorCode::OrderNotFilled
             | ErrorCode::NotApplicable
             | ErrorCode::SwapReverted
+            // Решение 225 (п. 3 шапки): паузы по ним нет вовсе.
+            | ErrorCode::WithdrawRejected
+            | ErrorCode::InvalidAddress
+            | ErrorCode::WithdrawLocked
     )
 }
 

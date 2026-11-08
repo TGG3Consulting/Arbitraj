@@ -52,6 +52,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "risk.daily_limit_reset" => (INFO, "Лимит дня сброшен"),
         "risk.reconcile_mismatch" => (WARN, "Балансы не сходятся с учётом бота"),
         "risk.reconcile_resumed" => (OK, "Балансы сошлись — пауза сверки снята, торговля идёт"),
+        "risk.auto_resumed" => (OK, "Пауза снята сама — причина ушла"),
         "risk.low_bnb" => (WARN, "Мало BNB на газ"),
         "risk.low_usdt" => (WARN, "Мало USDT для покупок"),
         "venue.disconnected" => (WARN, "Связь с площадкой потеряна"),

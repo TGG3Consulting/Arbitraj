@@ -7,6 +7,8 @@
 //!
 //! Карта файлов — core/README.md и ARCHITECTURE.md («Карта ядра»).
 
+pub mod auto_pause;
+pub mod auto_resume;
 pub mod balance_sell;
 pub mod balance_sell_check;
 pub mod balance_sell_report;
@@ -57,6 +59,7 @@ mod daily_migrate;
 pub mod daily_value;
 pub mod daily_venue;
 pub mod daily_venue_limit;
+pub mod day_roll;
 pub mod day_view;
 pub mod deal;
 pub mod deal_ceiling;
@@ -154,6 +157,7 @@ pub mod risk;
 pub mod risk_count;
 mod risk_ready;
 pub mod rules_apply;
+mod rules_stop;
 pub mod sell;
 pub mod sell_slip;
 pub mod sell_unsent;

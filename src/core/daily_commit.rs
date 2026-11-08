@@ -52,7 +52,8 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
     let venues = super::daily_venue::days(core, &book, date);
     {
         let mut r = lk(&core.inner.risk);
-        // Новый день — убыток площадок считается с нуля; паузы прошлого дня снимает человек.
+        // Новый день — убыток площадок считается с нуля; паузы прошлого дня по убытку сняты в полночь UTC (day_roll.rs,
+        // решение 225).
         if r.day.date != date {
             r.loss_seen.clear();
         }

@@ -65,7 +65,7 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
         t.push_str(&format!("\n{line}"));
     }
     if r.daily_stop && d.limit.as_ref().is_some_and(|l| !l.exceeded) {
-        t.push_str("\nЛимит сейчас не превышен — остановка по лимиту сама не снимается, можно нажать «Старт».");
+        t.push_str("\nЛимит сейчас не превышен — остановка по лимиту снимется сама с новым днём (UTC), можно нажать «Старт».");
     }
     for (v, why) in &r.venue_paused {
         t.push_str(&format!("\nПлощадка {} на паузе: {why}", v.0));

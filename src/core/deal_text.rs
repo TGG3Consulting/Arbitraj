@@ -125,7 +125,9 @@ fn how_closed(d: &Deal, why: &str) -> Option<String> {
 pub fn daily_stop(stop: &str) -> String {
     Msg::new(h::STOP, "Торговля остановлена")
         .line(cap(stop))
-        .todo("закрыть сделки на экране «Ручное управление», затем «Сбросить лимит дня»")
+        // Решение 225: софтовый «Стоп» снимается сам с новым днём (day_roll.rs).
+        .line("Снимется сама с новым днём (UTC)")
+        .todo("закрыть сделки на экране «Ручное управление», затем «Сбросить лимит дня» и «Старт»")
         .render()
 }
 
@@ -148,6 +150,7 @@ pub fn venue_daily_stop(venue: &str, why: &str, cycles: bool) -> String {
     Msg::new(h::STOP, head)
         .line(why)
         .line(rest)
+        .line("Снимется сама с новым днём (UTC)")
         .todo(format!(
             "разобрать сделки {v} на экране «Ручное управление», затем «Снять паузу» или «Сбросить лимит дня» по {v}"
         ))

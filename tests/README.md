@@ -133,6 +133,14 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   же объекта даёт тот же отпечаток — verdict ядра Quiet; стакана нет / другой — Lost. `resub_request_shape` —
   depth.unsubscribe всех рынков (пример «All markets» документации) и depth.subscribe со своим id. Записать на сервере
   бота подряд кадры depth.update пары (raw.book_frames = да) и `GET /v2/spot/depth?market=<SYM>&limit=20&interval=0`.
+- `poloniex_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET
+  /markets/{symbol}/orderBook на **примере из документации** (Public Endpoints → Market Data → Order Book: плоские
+  списки asks / bids «цена, количество» подряд); стакан в памяти — кадр book того же вида, что пример документации Market
+  Data → Book, с уровнями примера REST (**собран в тесте, не запись**; живых ответов и кадров нет — api.poloniex.com
+  закрыт прокси): одинаковый отпечаток — verdict ядра Quiet; стакана нет / другой — Lost. `unsubscribe_message_is_official_shape`
+  — отписка одной пары по примеру «Unsubscribe» (Spot → WebSocket). Записать на сервере бота подряд кадры book пары
+  (raw.book_frames = да) и `GET /markets/<SYM>/orderBook?limit=20`: (1) плоский ли список asks / bids (пары «цена,
+  количество»); (2) равенство отпечатков на одной книге.
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:

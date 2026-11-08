@@ -5,7 +5,10 @@
 //! У DEX правил пары нет — остаток пылью не считается (продаётся как обычно).
 //! Пыль не меньше шага (меньше minQty или minNotional — например после частичного исполнения) — событие deal.dust
 //! в журнал и Telegram со стоимостью. Сбор пыли не делается — вопрос Тиграну (решение 66).
-//! Кто вызывает: core/sell.rs.
+//! Решение 222: пыль в режиме «Перегон» (relay_dust, write_off) — остаток, перегон которого не окупается, а продажа
+//! на месте не даёт выручки; у relay_value.rs приход на биржу-цель меньше шага / minQty / minNotional (is_dust) — продать
+//! там нельзя, выручка 0.
+//! Кто вызывает: core/sell.rs, core/relay.rs, core/relay_value.rs.
 //! От чего зависит: engine.rs, market_read.rs (правила пары из SpotPairs).
 //! Настройки: нет (пределы — из справочника пар биржи).
 
@@ -40,6 +43,33 @@ pub fn below_order(p: &SpotPairState, qty: Decimal, price: Decimal) -> bool {
     qty < p.step_size
         || p.min_qty.is_some_and(|x| qty < x)
         || p.min_notional.is_some_and(|x| qty * price < x)
+}
+
+/// Решение 222: остаток в режиме «Перегон» — пыль: годной цели нет (best — лучшая выручка перегона > 0; None — нет),
+/// хотя бы одна цель не окупается (tiny: выручка ≤ 0 или приход — пыль там), а продажа здесь не считается или ≤ 0.
+/// Принимает: лучшую выручку перегона, признак «не окупается», выручку продажи здесь. Ошибок нет.
+pub fn relay_dust(best: Option<Decimal>, tiny: bool, here: Option<Decimal>) -> bool {
+    best.is_none() && tiny && here.is_none_or(|h| h <= Decimal::ZERO)
+}
+
+/// Списать остаток сделки в пыль (Deal.dust, количество 0, строка в хронологии, журнал deal.dust); остаток остаётся
+/// на балансе площадки. Закрытие сделки — у вызывающего. Принимает: ядро, сделку, причину. Ошибок нет.
+pub async fn write_off(core: &Core, deal: &mut Deal, why: &str) {
+    let qty = deal.qty;
+    if qty <= Decimal::ZERO {
+        return;
+    }
+    let text = format!(
+        "{}: остаток {qty} {} на {} — {why}; остаётся на балансе",
+        deal.id, deal.direction.asset.ticker, deal.at.0
+    );
+    deal.note(text.clone());
+    deal.dust += qty;
+    deal.qty = Decimal::ZERO;
+    core.inner
+        .deps
+        .log(Level::Info, "deal.dust", Some(&deal.at.0), &text, None)
+        .await;
 }
 
 /// Остаток сделки после продажи по цене price: пыль — в Deal.dust, количество 0, запись в хронологию; пыль не меньше

@@ -306,7 +306,8 @@ async fn run(core: &Core, d: Direction) {
         Err(e) => {
             deal.step = Step::Stuck;
             deal.note(format!("Перевод не состоялся: {e}"));
-            return super::stuck::handle(core, deal).await;
+            // Решение 222: без сверки с балансом — монеты могут быть в возврате вывода.
+            return super::stuck::handle_as_is(core, deal).await;
         }
     }
     deal.step = Step::Selling;

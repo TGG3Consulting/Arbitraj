@@ -4,6 +4,7 @@
 //! ядра (без запроса к бирже: у MEXC это ~5.6 МБ config/getall на каждую оценку), налог перевода — transfer_tax.rs;
 //! у биржи-получателя — минимальный депозит из справочника (неизвестен — перегона туда нет). У кошелька DEX —
 //! стоимость перевода через шлюз (газ и налог считает кошелёк, к бирже запроса нет).
+//! Решение 222: приход на биржу-цель — пыль по правилам пары (dust.rs) — выручка 0.
 //! Кто вызывает: core/relay.rs.
 //! От чего зависит: dirctx_venue.rs (справочник сетей, свежесть), transfers.rs (сеть BSC), transfer_tax.rs,
 //! costs_withdraw.rs (точность вывода), trade_ops.rs (выручка продажи), convert.rs.
@@ -122,6 +123,14 @@ pub async fn value_at(
     let arrive = qty - coin;
     deposit_ok(core, to, a, arrive)?;
     let (v, q) = super::trade_ops::sell_value(core, to, a, arrive).await?;
+    // Решение 222: приход меньше шага / minQty / minNotional пары цели (dust.rs, решение 66) — продать там нельзя,
+    // выручка 0 (остаются только затраты перевода — перегон не окупается).
+    let on_to = super::venue_ticker::ticker_on(core, a, to);
+    let v = if super::dust::is_dust(core, to, &on_to, arrive, q.avg_price) {
+        Decimal::ZERO
+    } else {
+        v
+    };
     let quote = core
         .inner
         .deps

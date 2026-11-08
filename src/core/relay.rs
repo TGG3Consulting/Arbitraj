@@ -8,6 +8,9 @@
 //! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, registry (площадки монеты).
 //! Решение 185: сделка биржа ↔ биржа без счёта DEX перегоняется на DEX только кошельком строки биржи, где лежит монета
 //! (dex_account::for_relay; строки нет — DEX не цель), счёт записывается в сделку до перевода.
+//! Решение 222: цель, выручка перегона на которую после затрат ≤ 0 (у relay_value приход-пыль на цели = 0 выручки), —
+//! не цель; целей нет, а продажа здесь не считается или ≤ 0 — остаток списывается в пыль (dust::write_off), сделка
+//! закрывается (живой случай PIT 08.11: «Перегон на MEXC (ожидается 0.0039 USDT)» остатка 770 PIT).
 //! Настройки: stuck.max_relays, venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -63,8 +66,21 @@ pub async fn run(core: &Core, mut deal: Deal) {
         .map(|x| x.0)
         .ok();
     let mut best: Option<(VenueId, Decimal)> = None;
+    // Решение 222: перегон, выручка которого после затрат ≤ 0 (или приход — пыль на площадке-цели), не делается.
+    let mut tiny = false;
     for to in targets(core, &deal) {
         match super::relay_value::value_at(core, &deal.at, &to, &a, deal.qty).await {
+            Ok(v) if v <= Decimal::ZERO => {
+                tiny = true;
+                let t = format!(
+                    "{}: перегон {} {} на {} не окупается — ожидаемая выручка {v} USDT (меньше затрат перевода или приход — пыль там)",
+                    deal.id, deal.qty, a.ticker, to.0
+                );
+                core.inner
+                    .deps
+                    .log(Level::Info, "core.relay", Some(&to.0), t, None)
+                    .await
+            }
             Ok(v) if best.as_ref().is_none_or(|(_, b)| v > *b) => best = Some((to, v)),
             Ok(_) => {}
             Err(e) => {
@@ -80,6 +96,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
                     .await
             }
         }
+    }
+    // Решение 222: перегонять не во что, а продажа здесь не считается или не окупается — остаток пыль.
+    if super::dust::relay_dust(best.as_ref().map(|b| b.1), tiny, here) {
+        let why =
+            "остаток — пыль: перегон не окупается, продажа здесь не даёт выручки (решение 222)";
+        super::dust::write_off(core, &mut deal, why).await;
+        return super::ledger::finish(core, &mut deal, Step::Closed, why).await;
     }
     let Some((to, v)) = best.filter(|(_, v)| here.is_none_or(|h| *v > h)) else {
         return super::stuck::sold_by_market(core, deal, "перегон не выгоднее продажи здесь").await;

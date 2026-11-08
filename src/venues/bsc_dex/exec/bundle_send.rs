@@ -15,6 +15,9 @@
 //! Этапы шлют уведомления жизненного цикла (exec/bundle_notify.rs, 80.8c-iii, только отображение): симуляция прошла/
 //! откатилась, отправлен (каналы + maxBlockNumber), включён (блок + хеши) / не попал в блок (истёк — очередь свободна).
 //! Классику/одиночную отправку не трогает.
+//! Решение 233: итог не установлен за send.queue_max_wait_s (Pending: узел молчал, квитанции не читались — бандл мог
+//! попасть позже) — очередь остановлена, а вызывающий получает «исход неизвестен» с «чем найти» (exec/bundle_ref.rs:
+//! хеши всех транзакций, первый nonce, maxBlockNumber — Sent.max_block), не «не попал в блок».
 //! Кто вызывает: exec/bundle_trade.rs; тесты.
 //! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/bundle_notify.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
 //! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
@@ -56,6 +59,8 @@ pub struct Sent {
     pub tracked: Tracked,
     /// Квитанции всех транзакций бандла (только если попал в блок) — для факта сделки (exec/bundle_trade.rs).
     pub receipts: Vec<Receipt>,
+    /// maxBlockNumber бандла — для «чем найти» при неизвестном исходе (exec/bundle_ref.rs, решение 233).
+    pub max_block: u64,
 }
 
 /// Отправляет собранный бандл, занимая очередь кошелька местом `slot` (nonce в бандле уже проставлены от slot.nonce).
@@ -176,6 +181,7 @@ pub async fn send(
         channels: dispatched.all(),
         tracked,
         receipts,
+        max_block,
     })
 }
 
@@ -193,7 +199,9 @@ async fn all_receipts(ctx: &Ctx, hashes: &[B256]) -> Vec<Receipt> {
 
 /// Ждёт попадания бандла в блок своим узлом (решение 42) без отмен: приватный бандл с maxBlockNumber истекает сам —
 /// прошёл предел блока, квитанции нет → NotIncluded (газ не потрачен, решение 40). Принимает: хеши бандла, предел блока.
-/// Возвращает: итог. Ошибок нет — сбои узла повторяются; итог не установлен за send.queue_max_wait_s → Pending.
+/// Возвращает: итог. Ошибок нет — сбои узла повторяются; итог не установлен за send.queue_max_wait_s → Pending
+/// (у вызывающего — «исход неизвестен», решение 233). Сбой чтения квитанции на блоке — проверка предела пропускается:
+/// отсутствие квитанции не подтверждено.
 async fn confirm(
     ctx: &Ctx,
     heads: &Heads,

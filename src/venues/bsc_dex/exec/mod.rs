@@ -12,6 +12,8 @@ pub mod balance_read;
 pub mod bundle;
 pub mod bundle_native;
 pub mod bundle_notify;
+pub mod bundle_rebuild;
+pub mod bundle_ref;
 pub mod bundle_send;
 pub mod bundle_sim;
 pub mod bundle_trade;

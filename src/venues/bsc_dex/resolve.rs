@@ -11,16 +11,18 @@
 //!     контекст разбора (PendingRef.parse — exec/swap_ctx.rs: кошелёк, токены, decimals, роутеры нативной BNB,
 //!     исполнитель, пометки и подписи, чаевые, каналы); итог по квитанции строят те же функции, что обычный путь
 //!     (exec/swap_rebuild.rs), решение 222 (баланс до/после) — venue.rs. Разрешение (approve) в блоке — обмен не
-//!     отправлялся: SwapReverted с фактом разрешения. Контекста нет (операции до дополнения, KyberSwap и «лучший из двух»
-//!     с маршрутом KyberSwap, бандл, цикл DEX ↔ DEX) — NotApplicable: исход свопа выясняет человек (очередь кошелька при
+//!     отправлялся: SwapReverted с фактом разрешения. Бандл (решение 233) — resolve_bundle.rs: квитанции всех транзакций
+//!     и nonce кошелька. Контекста нет (операции до дополнения, KyberSwap и «лучший из двух»
+//!     с маршрутом KyberSwap, цикл DEX ↔ DEX) — NotApplicable: исход свопа выясняет человек (очередь кошелька при
 //!     этом снята, если квитанция есть).
 //!
 //! Nonce занят, а квитанции своей транзакции нет (её место заняла отмена или чужая транзакция) — бот не решает: это
 //! тот же случай «Replaced», что уже дал OutcomeUnknown (exec/result.rs); ждём квитанцию до срока ядра, дальше человек.
 //!
-//! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs.
+//! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs;
+//! resolve_bundle.rs (release_if_ours).
 //! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), wallet/transfer.rs (transfer), parts.rs,
-//! exec/swap_ctx.rs, exec/swap_rebuild.rs.
+//! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! Квитанция — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165
@@ -70,18 +72,22 @@ pub async fn trade(
     req: TradeRequest,
     pend: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
+    // Решение 233: бандл — квитанции ВСЕХ его транзакций и nonce кошелька (resolve_bundle.rs), не одна по хешу.
+    if let Some(c) = SwapCtx::of(pend).filter(|c| c.bundle.is_some()) {
+        return super::resolve_bundle::trade(p, req, &c).await;
+    }
     let (hash, nonce) = keys(p, pend)?;
     let Some(r) = receipt(p, hash).await? else {
         return Ok(None);
     };
-    let queue = release_if_ours(p, hash, nonce).await;
+    let queue = release_if_ours(p, hash, nonce, false).await;
     match SwapCtx::of(pend).filter(SwapCtx::complete) {
         Some(c) => swap_rebuild::rebuild(&p.ctx, req, &c, hash, r).map(Some),
         None => Err(p.ctx.err(
             ErrorCode::NotApplicable,
             format!(
                 "квитанция {hash} найдена (блок {}, статус {}); {queue}; контекста разбора свопа в «чем найти» нет \
-                 (KyberSwap, бандл или операция до дополнения решения 231) — сделку проверяет человек",
+                 (KyberSwap или операция до дополнения решения 231) — сделку проверяет человек",
                 r.block_number, r.status
             ),
         )),
@@ -100,7 +106,7 @@ pub async fn withdraw(
     let Some(r) = receipt(p, hash).await? else {
         return Ok(None);
     };
-    let queue = release_if_ours(p, hash, nonce).await;
+    let queue = release_if_ours(p, hash, nonce, false).await;
     if r.status.to::<u64>() != 1 {
         return Err(p.ctx.err(
             ErrorCode::WithdrawRejected,
@@ -142,9 +148,16 @@ async fn receipt(p: &Parts, hash: B256) -> GatewayResult<Option<Receipt>> {
     rpc::call(&p.ctx, "eth_getTransactionReceipt", json!([hash])).await
 }
 
-/// Снимает очередь кошелька, если она остановлена этой транзакцией (тот же хеш и nonce). Возвращает: строку для
-/// журнала (снята / не остановлена / остановлена другой транзакцией / не снята — причина). Ошибок нет.
-async fn release_if_ours(p: &Parts, hash: B256, nonce: Option<u64>) -> String {
+/// Снимает очередь кошелька, если она остановлена этой транзакцией (тот же хеш и nonce; у бандла — последней его
+/// транзакцией, resolve_bundle.rs). Принимает: хеш, nonce, pending_ok — снимать и при свободном nonce (только бандл,
+/// исход «не исполнено»: он уже не попадёт в блок). Возвращает: строку для журнала (снята / не остановлена /
+/// остановлена другой транзакцией / не снята — причина). Ошибок нет.
+pub(super) async fn release_if_ours(
+    p: &Parts,
+    hash: B256,
+    nonce: Option<u64>,
+    pending_ok: bool,
+) -> String {
     p.nonces.restore(&p.ctx).await;
     match p.nonces.state() {
         WalletQueueState::Halted {
@@ -152,7 +165,7 @@ async fn release_if_ours(p: &Parts, hash: B256, nonce: Option<u64>) -> String {
             nonce: n,
             ..
         } if h == hash && (nonce.is_none() || n == nonce) => {
-            match wallet::deposit::release(p, "ботом по квитанции, решение 231", false).await
+            match wallet::deposit::release(p, "ботом по квитанции, решение 231", pending_ok).await
             {
                 Ok(_) => "очередь кошелька снята".to_string(),
                 Err(e) => format!("очередь кошелька не снята: {}", e.message),

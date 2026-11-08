@@ -10,7 +10,7 @@
 //! 3) разрешение (approve) с неизвестным исходом — в блоке: SwapReverted с фактом разрешения, обмена не было;
 //! 4) «чем найти»: контекст прикладывается только к OutcomeUnknown с фактом транзакции; чаевые из seed (exec/txs.rs)
 //!    сохраняются; подпись и причина дописываются; контекст переживает JSON (ошибка хранится и передаётся ядром);
-//!    без кошелька (KyberSwap, бандл, старые операции) — контекст неполный: выясняет человек.
+//!    без кошелька (KyberSwap, старые операции; бандл — решение 233, tests/bsc_dex_bundle_resolve.rs) — контекст неполный: выясняет человек.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{ctx, exec, send}, arb::gateway::{errors, pending}, настоящая SQLite во
@@ -267,7 +267,7 @@ fn attach_only_outcome_unknown_with_tx() {
 
 #[test]
 fn no_wallet_context_is_incomplete() {
-    // KyberSwap / бандл / старая операция: в «чем найти» только seed (или подпись) — выясняет человек.
+    // KyberSwap / старая операция: в «чем найти» только seed (или подпись) — выясняет человек.
     let chain = unknown_chain(B256::repeat_byte(9));
     let e = GatewayError::new(ErrorCode::OutcomeUnknown, None, "x")
         .with_tx(chain.clone())

@@ -6,7 +6,8 @@
 //! (exec/bundle.rs), занимает очередь кошелька местом Slot (резерв N nonce: первый = slot.nonce, дальше по порядку),
 //! отправляет бандл (exec/bundle_send.rs — симуляция/газ/подпись/отправка/ожидание/settle), по итогу строит факт из
 //! квитанций всех транзакций бандла (reuse exec/result.rs по объединённым логам). Повторов нет (стартовое правило
-//! Тиграна): бандл истекает по maxBlockNumber, nonce свободны. Нативная монета BNB (решение 122 R3) — обёртка/развёртка
+//! Тиграна): бандл истекает по maxBlockNumber, nonce свободны. Решение 233: исход не установлен — OutcomeUnknown с
+//! «чем найти» (exec/bundle_ref.rs, контекст exec/swap_ctx.rs), позднее выяснение — resolve_bundle.rs. Нативная монета BNB (решение 122 R3) — обёртка/развёртка
 //! WBNB командой каждого Universal Router бандла (exec/bundle_native.rs); факт — по WBNB Deposit / Withdrawal роутеров.
 //! После сборки шлёт уведомление bundle.assembled (exec/bundle_notify.rs, 80.8c-iii): роутеров/ног/транзакций/первый nonce.
 //! Решение 121 B1: разрешения здесь — транзакции того же атомарного бандла, что и свопы (exec/bundle.rs), в одном блоке;
@@ -15,7 +16,7 @@
 //! Решение 223: доли с общим пулом пересчитываются по порядку исполнения (quote/graph_seq.rs resequence).
 //! Решение 228: минимум ноги — exec/leg_min.rs (E_k × max(1 − допуск, B / E), минимум верификации — нижней границей).
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
-//! От чего зависит: exec/{bundle,bundle_native,bundle_notify,bundle_send,chain,leg_min,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
+//! От чего зависит: exec/{bundle,bundle_ref,swap_ctx,bundle_native,bundle_notify,bundle_send,chain,leg_min,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
 //! Настройки: dex.bundle_max_routers (исполнимость — quote/graph_route.rs); через вызываемые — send.*, dex.*, channel.*.
 
@@ -31,7 +32,9 @@ use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct, graph_seq};
 use super::super::send::receipt::Receipt;
 use super::super::wallet::nonce::Nonces;
+use super::bundle_ref::{self, BundleRef};
 use super::chain::Step;
+use super::swap_ctx::SwapCtx;
 use super::trade::{check_price, sides, worst_positive};
 use super::txs::{self, Env};
 use super::verify_gate::Verified;
@@ -134,12 +137,18 @@ pub async fn trade(
         Vec::new()
     };
     let nr = (first_nonce, routers.as_slice());
-    bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, nr)
+    // Решение 233: исход не установлен — «чем найти» бандла (хеши всех транзакций, nonce, кошелёк, контекст разбора по
+    // образцу одиночной, exec/swap_ctx.rs) для позднего выяснения своим узлом (resolve_bundle.rs).
+    let mut sc = SwapCtx::swap(wallet, (tin, out_token), decs, &routers, None, None);
+    sc.bundle = Some(BundleRef::of(&sent, first_nonce));
+    bundle_result(ctx, req, &sent, wallet, (tin, out_token), decs, nr).map_err(|e| sc.attach(e))
 }
 
 /// Факт сделки бандла: один синтетический итог транзакции по ОБЪЕДИНЁННЫМ логам всех квитанций бандла и суммарному
 /// газу — и общий разбор exec/result.rs (суммы Transfer монеты/USDT, средняя цена). Ошибки: как у result::result
-/// (SwapReverted / TxNotIncluded / OutcomeUnknown с фактом; Included — факт по логам).
+/// (SwapReverted / TxNotIncluded / OutcomeUnknown с фактом; Included — факт по логам); OutcomeUnknown — исход не
+/// установлен или квитанций меньше, чем транзакций (exec/bundle_ref.rs, решение 233). Зовут также цикл
+/// (exec/cycle_bundle_trade.rs) и позднее выяснение (exec/bundle_rebuild.rs).
 #[allow(clippy::too_many_arguments)]
 pub fn bundle_result(
     ctx: &super::super::ctx::Ctx,
@@ -172,6 +181,10 @@ pub fn bundle_result(
         cancel_hash: None,
         cancel_gas_bnb: None,
     };
+    // Решение 233: исход не установлен (Pending) или квитанции прочитаны не все — «исход неизвестен», а не «не попала».
+    if let Some(e) = bundle_ref::unknown(ctx, sent, &chain) {
+        return Err(e);
+    }
     // Квитанция для разбора — объединённые логи всех транзакций бандла (атомарен: либо все в блоке, либо ни одной).
     let receipt = (outcome == crate::core::types::TxOutcome::Included).then(|| Receipt {
         status: U64::from(1u8),

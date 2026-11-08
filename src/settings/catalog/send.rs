@@ -18,7 +18,7 @@ pub static SEND: &[SettingDef] = &[
     d("Отправка", "send.gas_limit_margin_pct", K::Decimal, L::NonNegative, "%", V, "Запас к оценке газа eth_estimateGas"),
     d("Отправка", "send.gas_price_markup_pct", K::Decimal, L::NonNegative, "%", V, "Надбавка к цене газа eth_gasPrice (не ниже минимума канала)"),
     d("Отправка", "send.max_wait_blocks", K::Integer, L::Positive, "блоков", V, "Сколько блоков ждать квитанции, прежде чем отменить (0 BNB себе с тем же nonce); снова не занят — следующая отмена дороже"),
-    d("Отправка", "send.replaced_confirm_blocks", K::Integer, L::Positive, "блоков", V, "Nonce занят, а своей квитанции нет: сколько ещё блоков искать её (квитанция и eth_getTransactionByHash), прежде чем «вытеснена»"),
+    d("Отправка", "send.replaced_confirm_blocks", K::Integer, L::Positive, "блоков", V, "Nonce занят, а своей квитанции нет: сколько ещё блоков искать её (квитанция и eth_getTransactionByHash), прежде чем «вытеснена»; у бандла — запас блоков после maxBlockNumber при позднем выяснении (решение 233)"),
     d("Отправка", "send.cancel_max_gas_gwei", K::Decimal, L::Positive, "gwei", V, "Потолок цены газа отмены; выше — отмен больше нет, очередь кошелька останавливается до ручной проверки"),
     d("Отправка", "send.cancel_max_attempts", K::Integer, L::Positive, "раз", V, "Сколько отмен одной транзакции; больше — очередь кошелька останавливается до ручной проверки"),
     d("Отправка", "send.queue_max_wait_s", K::Integer, L::Positive, "секунды", V, "Сколько очередь кошелька ждёт итога одной транзакции (узел недоступен, нет BNB на отмену); дольше — остановка до ручной проверки"),

@@ -8,9 +8,10 @@
 //! функциями (exec/result.rs, executor/fact.rs) и даёт тот же TradeResult; решение 222 (баланс до/после) — venue.rs.
 //! Разрешение (approve) с неизвестным исходом — отметка approve: обмен после него не отправлялся.
 //! Ошибки с другим кодом или без факта транзакции не трогаются. Контекста нет (wallet пуст и не approve) — выясняет
-//! человек (операции до дополнения, KyberSwap, бандл — см. resolve.rs).
+//! человек (операции до дополнения, KyberSwap — см. resolve.rs). Бандл (решение 233) — тот же контекст плюс поле
+//! bundle (exec/bundle_ref.rs): выясняет resolve_bundle.rs по квитанциям всех транзакций.
 //! Кто вызывает: exec/txs.rs (seed — чаевые), exec/swap_send.rs (approve), exec/trade_direct.rs, exec/trade_smart.rs,
-//! exec/executor/trade.rs (attach), exec/trade.rs (подпись), best_of/trade.rs (причина), exec/swap_rebuild.rs, resolve.rs.
+//! exec/executor/trade.rs, exec/bundle_trade.rs (attach), exec/trade.rs (подпись), best_of/trade.rs (причина), exec/swap_rebuild.rs, resolve.rs.
 //! От чего зависит: gateway/pending.rs, gateway/errors.rs, core/types (ChainTx).
 //! Настройки: нет.
 
@@ -58,6 +59,9 @@ pub struct SwapCtx {
     /// Факт транзакции на момент ошибки (каналы, способ отправки, хеш, nonce).
     #[serde(default)]
     pub chain: Option<ChainTx>,
+    /// Бандл (решение 233): хеши всех транзакций, первый nonce, maxBlockNumber; None — одиночная транзакция.
+    #[serde(default)]
+    pub bundle: Option<super::bundle_ref::BundleRef>,
 }
 
 impl SwapCtx {

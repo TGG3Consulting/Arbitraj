@@ -5,8 +5,9 @@
 //! - есть — транзакция в блоке, её nonce занят. Очередь кошелька, остановленная ИМЕННО этой транзакцией (тот же хеш и
 //!   nonce в WalletQueueState::Halted), снимается — как кнопкой «Снять очередь после ручной проверки» (wallet/deposit.rs
 //!   release: nonce на «latest» должен быть занят, иначе не снимается). Дальше:
-//!   - вывод (перевод из кошелька): успех (status 1) — перевод найден, ядро ведёт его обычным опросом статуса
-//!     (withdrawal_status по хешу); откат (status 0) — WithdrawRejected: вывода нет;
+//!   - вывод (перевод из кошелька) — resolve_withdraw.rs: успех (status 1) — перевод найден, ядро ведёт его обычным
+//!     опросом статуса (withdrawal_status по хешу); откат (status 0) — WithdrawRejected: вывода нет; хеши отмен известны
+//!     — как у свопа ниже (отмена в блоке — вывода нет; ветка t49/withdraw-cancel);
 //!   - своп (дополнение, Тигран 08.11: «восстанавливать итог полностью»): путь исполнения кладёт в «чем найти»
 //!     контекст разбора (PendingRef.parse — exec/swap_ctx.rs: кошелёк, токены, decimals, роутеры нативной BNB,
 //!     исполнитель, пометки и подписи, чаевые, каналы); итог по квитанции строят те же функции, что обычный путь
@@ -22,9 +23,10 @@
 //! транзакцией, ни отменой → противоречие, человек. Хешей отмен нет («чем найти» до этого поля) — как раньше: nonce занят,
 //! а квитанции своей транзакции нет — бот не решает, ждёт квитанцию до срока ядра, дальше человек.
 //!
-//! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs;
-//! resolve_bundle.rs, resolve_single.rs (release_if_ours, landed); resolve_cycle.rs (trade — цикл DEX ↔ DEX).
-//! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), wallet/transfer.rs (transfer), parts.rs,
+//! Кто вызывает: venue.rs (Venue::resolve_trade) — ядро core/outcome_resolve.rs; resolve_bundle.rs, resolve_single.rs
+//! (release_if_ours, landed); resolve_cycle.rs (trade — цикл DEX ↔ DEX); resolve_withdraw.rs (keys, receipt,
+//! release_if_ours — вывод).
+//! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), parts.rs,
 //! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs, resolve_single.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
@@ -35,9 +37,7 @@
 use alloy_primitives::B256;
 use serde_json::json;
 
-use crate::core::types::{
-    ChainTx, TradeRequest, TradeResult, Transfer, TransferStatus, WalletQueueState, WithdrawRequest,
-};
+use crate::core::types::{ChainTx, TradeRequest, TradeResult, WalletQueueState};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::pending::PendingRef;
 
@@ -114,42 +114,8 @@ pub(super) async fn landed(
     }
 }
 
-/// Что делает: вывод (перевод из кошелька) с неизвестным исходом. Принимает: части адаптера, исходный запрос, «чем
-/// найти». Возвращает: Some(перевод с хешем, Pending — дальше опрос статуса); None — квитанции пока нет.
-/// Ошибки: WithdrawRejected — перевод откатился в блоке; узел; нет хеша (BadResponse).
-pub async fn withdraw(
-    p: &Parts,
-    req: WithdrawRequest,
-    pend: &PendingRef,
-) -> GatewayResult<Option<Transfer>> {
-    let (hash, nonce) = keys(p, pend)?;
-    let Some(r) = receipt(p, hash).await? else {
-        return Ok(None);
-    };
-    let queue = release_if_ours(p, hash, nonce, false).await;
-    if r.status.to::<u64>() != 1 {
-        return Err(p.ctx.err(
-            ErrorCode::WithdrawRejected,
-            format!(
-                "Перевод откатился в блоке {}, tx {hash}; {queue}",
-                r.block_number
-            ),
-        ));
-    }
-    let t = wallet::transfer::transfer(
-        &p.ctx,
-        req.asset,
-        req.network,
-        req.amount,
-        TransferStatus::Pending,
-        hash,
-        None,
-    );
-    Ok(Some(t))
-}
-
 /// Хеш и nonce из «чем найти». Ошибка BadResponse — нет или не 32 байта.
-fn keys(p: &Parts, pend: &PendingRef) -> GatewayResult<(B256, Option<u64>)> {
+pub(super) fn keys(p: &Parts, pend: &PendingRef) -> GatewayResult<(B256, Option<u64>)> {
     let hash = pend
         .venue_ref
         .as_deref()
@@ -164,7 +130,7 @@ fn keys(p: &Parts, pend: &PendingRef) -> GatewayResult<(B256, Option<u64>)> {
 }
 
 /// Квитанция по хешу. None — транзакции нет в блоке. Ошибки: узел.
-async fn receipt(p: &Parts, hash: B256) -> GatewayResult<Option<Receipt>> {
+pub(super) async fn receipt(p: &Parts, hash: B256) -> GatewayResult<Option<Receipt>> {
     rpc::call(&p.ctx, "eth_getTransactionReceipt", json!([hash])).await
 }
 

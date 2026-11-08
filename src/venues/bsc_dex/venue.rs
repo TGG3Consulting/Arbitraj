@@ -21,7 +21,9 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
 use super::BscDex;
-use super::{coins, connection, directory, exec, pools, quote, resolve, send, wallet};
+use super::{
+    coins, connection, directory, exec, pools, quote, resolve, resolve_withdraw, send, wallet,
+};
 use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
@@ -169,14 +171,15 @@ impl Venue for BscDex {
         scope(Class::Trade, work).await
     }
 
-    /// Решение 231: перевод из кошелька с неизвестным исходом — квитанция по хешу (resolve.rs).
+    /// Решение 231: перевод из кошелька с неизвестным исходом — квитанция по хешу; хеши отмен известны — и их квитанции
+    /// и nonce кошелька (resolve_withdraw.rs).
     async fn resolve_withdraw(
         &self,
         req: WithdrawRequest,
         p: &crate::gateway::pending::PendingRef,
     ) -> GatewayResult<Option<Transfer>> {
         self.p.ctx.bound()?;
-        scope(Class::Trade, resolve::withdraw(&self.p, req, p)).await
+        scope(Class::Trade, resolve_withdraw::withdraw(&self.p, req, p)).await
     }
 
     /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —

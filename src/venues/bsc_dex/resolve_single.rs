@@ -14,7 +14,8 @@
 //!
 //! Очередь кошелька, остановленная этой транзакцией (тот же хеш и nonce), снимается при выясненном исходе (resolve.rs
 //! release_if_ours: nonce должен быть занят).
-//! Кто вызывает: resolve.rs (trade — у контекста есть cancels); через него resolve_cycle.rs.
+//! Вывод из кошелька DEX (ветка t49/withdraw-cancel) — тот же вердикт (verdict), итог вывода — resolve_withdraw.rs.
+//! Кто вызывает: resolve.rs (trade — у контекста есть cancels); через него resolve_cycle.rs; resolve_withdraw.rs (verdict).
 //! От чего зависит: exec/{single_rebuild, swap_ctx}.rs, node/{rpc, heads}.rs, send/receipt.rs, wallet/signer.rs (адрес
 //! кошелька, если в контексте его нет — разрешение), parts.rs, resolve.rs (landed, release_if_ours).
 //! Настройки: send.replaced_confirm_blocks, feed.stale_after_ms (свежая голова).
@@ -48,6 +49,38 @@ pub async fn trade(
     c: &SwapCtx,
     (hash, nonce): (B256, Option<u64>),
 ) -> GatewayResult<Option<TradeResult>> {
+    let ctx = &p.ctx;
+    let (n, v) = verdict(p, c, (hash, nonce)).await?;
+    match v {
+        Verdict::Wait(_) => Ok(None),
+        Verdict::Ours(r) => super::resolve::landed(p, req, pend, (hash, Some(n)), r)
+            .await
+            .map(Some),
+        Verdict::Cancelled(h, r) => {
+            let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
+            single_rebuild::cancelled(ctx, c, hash, (h, r), &queue).map(Some)
+        }
+        Verdict::Odd(why) => {
+            let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
+            Err(ctx.err(
+                ErrorCode::NotApplicable,
+                format!("транзакция {hash}: {why}; {queue}; исход проверяет человек"),
+            ))
+        }
+    }
+}
+
+/// Что делает: читает своим узлом то, что нужно вердикту (см. шапку: голова и nonce кошелька на блоке «голова −
+/// send.replaced_confirm_blocks», затем квитанции исходной и отмен, затем — знает ли узел их в блоке), и выносит
+/// вердикт exec/single_rebuild.rs judge. Общая часть свопа / цикла (trade) и вывода (resolve_withdraw.rs).
+/// Принимает: части адаптера, контекст «чем найти» (cancels = Some), (хеш, nonce из «чем найти»).
+/// Возвращает: (nonce транзакции, вердикт). Ошибки: NotApplicable — нет nonce (человек); узел, StaleData, NotConfigured,
+/// ключ (ядро спросит ещё).
+pub(super) async fn verdict(
+    p: &Parts,
+    c: &SwapCtx,
+    (hash, nonce): (B256, Option<u64>),
+) -> GatewayResult<(u64, Verdict)> {
     let ctx = &p.ctx;
     let cancels = c.cancels.clone().unwrap_or_default();
     let Some(n) = nonce.or(c.chain.as_ref().map(|t| t.nonce)) else {
@@ -83,21 +116,5 @@ pub async fn trade(
         head,
         confirm,
     };
-    match single_rebuild::judge(seen, cancels.len()) {
-        Verdict::Wait(_) => Ok(None),
-        Verdict::Ours(r) => super::resolve::landed(p, req, pend, (hash, Some(n)), r)
-            .await
-            .map(Some),
-        Verdict::Cancelled(h, r) => {
-            let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
-            single_rebuild::cancelled(ctx, c, hash, (h, r), &queue).map(Some)
-        }
-        Verdict::Odd(why) => {
-            let queue = super::resolve::release_if_ours(p, hash, Some(n), false).await;
-            Err(ctx.err(
-                ErrorCode::NotApplicable,
-                format!("транзакция {hash}: {why}; {queue}; исход проверяет человек"),
-            ))
-        }
-    }
+    Ok((n, single_rebuild::judge(seen, cancels.len())))
 }

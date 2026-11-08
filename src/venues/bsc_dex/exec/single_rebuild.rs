@@ -17,7 +17,13 @@
 //! TxNotIncluded «nonce занят отменой», факт транзакции с cancel_hash и cancel_gas_bnb — газ отмены в затраты ядра,
 //! решение 229 cancel_confirmed), с подписью исполнителя и причиной «лучший из двух», как обычный путь.
 //!
-//! Кто вызывает: resolve_single.rs; тесты (tests/bsc_dex_single_cancel.rs).
+//! (3) withdraw_cancelled — вывод из кошелька DEX (перевод, wallet/transfer.rs; ветка t49/withdraw-cancel): nonce занят
+//! нашей отменой в блоке — вывода нет: WithdrawRejected («перевод не ушёл»; ядро — окончательный итог, core/outcome_resolve.rs
+//! definitive) с тем же фактом транзакции, что обычный путь даёт при отмене, занявшей nonce (cancel_hash, cancel_gas_bnb
+//! — газ отмены).
+//!
+//! Кто вызывает: resolve_single.rs, resolve_withdraw.rs; тесты (tests/bsc_dex_single_cancel.rs,
+//! tests/bsc_dex_withdraw_cancel.rs).
 //! От чего зависит: exec/{chain_tx, result, swap_ctx, swap_rebuild}.rs, send/{receipt, track_util}.rs, core/types.
 //! Настройки: нет (send.replaced_confirm_blocks читает resolve_single.rs и передаёт в Seen).
 //!
@@ -137,4 +143,48 @@ pub fn cancelled(
         None => Err(e),
     };
     swap_rebuild::tail(out, c.best_of.as_deref())
+}
+
+/// Что делает: итог вывода из кошелька DEX «вывода нет» — nonce перевода занят нашей отменой в блоке (исходный перевод с
+/// этим nonce уже не исполнится). Факт транзакции — тот же, что обычный путь (exec/txs.rs → wallet/transfer.rs) даёт при
+/// отмене, занявшей nonce: исход NotIncluded, cancel_hash и cancel_gas_bnb по квитанции отмены (газ отмены).
+/// Принимает: окружение, контекст из «чем найти» (chain обязателен), хеш исходного перевода, отмену (хеш, квитанция),
+/// строку об очереди кошелька. Возвращает: ошибку WithdrawRejected с фактом транзакции; Internal — в контексте нет
+/// факта транзакции. Ошибок (паник) нет.
+pub fn withdraw_cancelled(
+    ctx: &Ctx,
+    c: &SwapCtx,
+    hash: B256,
+    (h, r): (B256, Receipt),
+    queue: &str,
+) -> GatewayError {
+    let Some(tmpl) = c.chain.as_ref() else {
+        return ctx.err(
+            ErrorCode::Internal,
+            "контекст перевода без факта транзакции",
+        );
+    };
+    let block = r.block_number;
+    let t = Tracked {
+        outcome: TxOutcome::NotIncluded,
+        receipt: None,
+        cancel: Some((h, r)),
+        unresolved: None,
+    };
+    let chain = chain_tx::chain_tx(
+        hash,
+        tmpl.nonce,
+        tmpl.channels.clone(),
+        tmpl.method,
+        &t,
+        c.tip_bnb,
+    );
+    ctx.err(
+        ErrorCode::WithdrawRejected,
+        format!(
+            "Перевод не ушёл, tx {hash} — nonce занят отменой {h} (блок {block}; выяснено ботом по квитанции \
+             отмены): вывода нет; {queue}"
+        ),
+    )
+    .with_tx(chain)
 }

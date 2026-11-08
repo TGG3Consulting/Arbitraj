@@ -18,7 +18,7 @@
 | `allow_cache.rs` | Разрешения кошелька для котировки в памяти до любой его транзакции (решение 61): котировка не читает их с узла на каждом тике; с решения 122 — и ERC-20 allowance исполнителю ArbExecutor (`erc20`) |
 | `approve.rs` | Разрешения ERC-20 → Permit2 и Permit2 → Universal Router: каких не хватает (`dex.approve_unlimited`, `dex.permit2_expiration_s`); прямой ERC-20 approve роутеру форка |
 | `approve_executor.rs` | Решение 122 (часть X): разрешения своему исполнителю ArbExecutor — прямой ERC-20 approve без Permit2 (`missing`, `all`), `allowance` для памяти котировки |
-| `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу); BNB (решение 62) — нативный перевод value, сверх резерва на газ |
+| `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу); BNB (решение 62) — нативный перевод value, сверх резерва на газ; «вытеснена» — OutcomeUnknown с «чем найти» и хешами отмен (выяснение — resolve_withdraw.rs) |
 | `transfer_cost.rs` | Стоимость перевода: газ пробного перевода × цена газа и налог на перевод; BNB — газ пробного нативного перевода, без налога |
 | `native_status.rs` | Статус нативного перевода BNB по самой транзакции (eth_getTransactionByHash: from, to, value) — у него нет события Transfer |
 | `transfer_status.rs` | Статусы вывода и зачисления по квитанции; «Зачислен» — ненулевой Transfer на кошелёк и `send.deposit_confirmations` блоков |

@@ -6,7 +6,7 @@
 //! Ожидание идёт в отдельной задаче, которая держит место в очереди кошелька (wallet/nonce.rs, Hold): даже если
 //! вызывающий прерван, следующая транзакция кошелька не возьмёт nonce, пока этот не занят (решение 45).
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
-//! От чего зависит: send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
+//! От чего зависит: exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
@@ -49,6 +49,9 @@ pub struct Done {
     pub receipt: Option<Receipt>,
     /// Отмена, занявшая nonce (исходная не попала): хеш и квитанция.
     pub cancel: Option<(B256, Receipt)>,
+    /// Чаевые, отправленные вместе с транзакцией (BNB; None — не было). В chain.tip_bnb они попадают только при исходе
+    /// «в блоке» / «откат»; здесь — всегда, для «чем найти» (решение 231, дополнение: exec/swap_ctx.rs).
+    pub tip_bnb: Option<rust_decimal::Decimal>,
 }
 
 /// Отправляет вызов и ждёт, пока его nonce не занят в блоке. Принимает: окружение, место в очереди кошелька, адрес
@@ -160,16 +163,21 @@ pub async fn send(
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
     if let Some(why) = &t.unresolved {
         let chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
+        // Решение 231 (дополнение): чаевые — в «чем найти» (исход неизвестен — в chain.tip_bnb их нет), чтобы итог
+        // свопа по квитанции совпал с обычным путём (exec/swap_ctx.rs, exec/swap_rebuild.rs).
+        let seed = super::swap_ctx::seed(&chain, tip_bnb);
         return Err(ctx
             .err(
                 ErrorCode::OutcomeUnknown,
                 format!("Исход транзакции {} неизвестен ({why}) — очередь кошелька остановлена до ручной проверки", signed.hash),
             )
-            .with_tx(chain));
+            .with_tx(chain)
+            .pending(seed));
     }
     Ok(Done {
         chain: super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
         receipt: t.receipt,
         cancel: t.cancel,
+        tip_bnb,
     })
 }

@@ -1,7 +1,9 @@
 //! Файл: venues/bybit/transfers.rs
 //! Что делает: вывод с Bybit по сети (on-chain) и его статус; при неизвестном итоге — поиск своего вывода в истории
-//! (монета, сеть, адрес и сумма с момента отправки; найден ровно один — его id). Статус депозита — deposits.rs.
-//! Кто вызывает: mod.rs (функции контракта).
+//! (монета, сеть, адрес и сумма с момента отправки; найден ровно один — его id). Не найден — «итог неизвестен» с «чем
+//! найти» (свой requestId и время отправки, решение 231): ядро позже ищет тем же совпадением (resolve.rs, matches).
+//! Статус депозита — deposits.rs.
+//! Кто вызывает: mod.rs (функции контракта), resolve.rs (matches — позднее выяснение вывода).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: venue.withdraw_account [bybit] — с какого счёта выводить (FUND, UTA или FUND,UTA).
 //!
@@ -27,6 +29,7 @@ use serde_json::{Value, json};
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -82,7 +85,13 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => match find(ctx, &req, sent_ms).await {
             Some(id) => id,
-            None => return Err(e),
+            // Решение 231 (Тигран, 08.11): «чем найти» — свой requestId (ключ учёта) и время отправки (начало окна
+            // поиска); ядро позже ищет тем же совпадением «ровно одна запись» (resolve.rs).
+            None => {
+                let mut p = PendingRef::withdraw(&request_id);
+                p.sent_at_s = Some(sent_ms.div_euclid(1000));
+                return Err(e.pending(p));
+            }
         },
         Err(e) => return Err(e),
     };
@@ -102,6 +111,16 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
 /// id своего вывода в истории: та же монета, сеть, адрес и сумма, создан не раньше отправки (startTime работает с
 /// точностью до секунды — документация Deposit Records). Найден не ровно один — None. Ошибок нет (сбой — None).
 async fn find(ctx: &Ctx, req: &WithdrawRequest, sent_ms: i64) -> Option<String> {
+    match matches(ctx, req, sent_ms).await.ok()?.as_slice() {
+        [one] => Some(one.clone()),
+        _ => None,
+    }
+}
+
+/// Что делает: id всех выводов в истории с той же монетой, сетью, адресом и суммой, созданных не раньше sent_ms
+/// (начало окна округляется вниз до секунды). Принимает: окружение, исходный запрос, время отправки (мс).
+/// Возвращает: список withdrawId (пустой — не найдено). Ошибки: запрос к Bybit, нет rows (BadResponse).
+pub async fn matches(ctx: &Ctx, req: &WithdrawRequest, sent_ms: i64) -> GatewayResult<Vec<String>> {
     let p = vec![
         ("coin", req.asset.ticker.clone()),
         (
@@ -110,20 +129,22 @@ async fn find(ctx: &Ctx, req: &WithdrawRequest, sent_ms: i64) -> Option<String> 
         ),
         ("limit", HISTORY_LIMIT.to_string()),
     ];
-    let data = rest::get(ctx, PATH_RECORD, p, Op::Other).await.ok()?;
-    let rows = data.get("rows")?.as_array()?;
-    let same: Vec<&Value> = rows
-        .iter()
+    let data = rest::get(ctx, PATH_RECORD, p, Op::Other).await?;
+    Ok(same_rows(num::arr(&data, "rows")?, req))
+}
+
+/// Что делает: чистый отбор строк истории (без сети, для тестов): та же сеть (chain), адрес (toAddress) и сумма
+/// (amount) — монета и время уже отобраны запросом. Принимает: rows ответа, исходный запрос. Возвращает: withdrawId
+/// совпавших строк (строка без withdrawId пропускается). Ошибок нет.
+pub fn same_rows(rows: &[Value], req: &WithdrawRequest) -> Vec<String> {
+    rows.iter()
         .filter(|r| {
             num::text_opt(r, "chain").as_deref() == Some(req.network.as_str())
                 && num::text_opt(r, "toAddress").as_deref() == Some(req.address.as_str())
                 && num::dec_opt(r, "amount").ok().flatten() == Some(req.amount.normalize())
         })
-        .collect();
-    match same.as_slice() {
-        [one] => num::text_opt(one, "withdrawId"),
-        _ => None,
-    }
+        .filter_map(|r| num::text_opt(r, "withdrawId"))
+        .collect()
 }
 
 /// Статус вывода по id Bybit. SecurityCheck, Pending, MoreInformationRequired, Unknown и прочие промежуточные →

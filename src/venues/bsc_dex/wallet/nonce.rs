@@ -77,7 +77,8 @@ pub struct Hold {
 
 impl Nonces {
     /// Встаёт в очередь (ждёт, пока прошлая транзакция кошелька займёт свой nonce в блоке).
-    /// Возвращает: Slot. Ошибки: OutcomeUnknown — очередь остановлена до ручной проверки (причина в тексте);
+    /// Возвращает: Slot. Ошибки: QueueHalted — очередь остановлена до ручной проверки (причина в тексте; транзакция не
+    /// подписана и не отправлена — решение 231, дополнение: не «исход неизвестен», а окончательно «не отправлено»);
     /// ключ кошелька (SecretsLocked, NotConfigured); NotConfigured — счёт не выбран (решение 132: без счёта не отправляем).
     pub async fn acquire(&self, ctx: &Ctx) -> GatewayResult<Slot> {
         ctx.bound()?;
@@ -85,8 +86,10 @@ impl Nonces {
         self.restore(ctx).await;
         if let WalletQueueState::Halted { reason, .. } = self.state() {
             return Err(ctx.err(
-                ErrorCode::OutcomeUnknown,
-                format!("Очередь кошелька остановлена до ручной проверки: {reason}"),
+                ErrorCode::QueueHalted,
+                format!(
+                    "Не отправлено — очередь кошелька остановлена до ручной проверки: {reason}"
+                ),
             ));
         }
         let from = signer::address(ctx)?;

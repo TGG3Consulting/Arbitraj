@@ -10,7 +10,7 @@
 //! исполним как есть и в пределах худшей цены (решение 123, дополнение). После отправки — повторов нет (стартовое правило
 //! Тиграна). Кто исполнил и почему — TradeResult.executor и начало текста ошибки (хронология сделки), журнал dex.best_of.
 //! Кто вызывает: venue.rs (trade при exec.via_kyber = да и exec.dex_best_of = да).
-//! От чего зависит: kyberswap/{trade, trade_prep}.rs, exec/trade.rs, quote/mod.rs, best_of/{choose, extra}.rs.
+//! От чего зависит: kyberswap/{trade, trade_prep}.rs, exec/trade.rs, exec/{swap_ctx, swap_rebuild}.rs (причина выбора), quote/mod.rs, best_of/{choose, extra}.rs.
 //! Настройки: через вызываемые — kyber.*, exec.*, dex.*, send.*.
 
 use crate::core::types::{Quote, TradeRequest, TradeResult};
@@ -161,19 +161,12 @@ async fn run_kyber(
     })
 }
 
-/// Причина выбора — к подписи исполнителя (успех) или к тексту ошибки. Ошибок своих нет.
+/// Причина выбора — к подписи исполнителя (успех) или к тексту ошибки (exec/swap_rebuild.rs tail — та же функция у
+/// позднего выяснения); у «исход неизвестен» — и в «чем найти» (решение 231, дополнение: exec/swap_ctx.rs). Ошибок
+/// своих нет.
 fn tag(r: GatewayResult<TradeResult>, why: &str) -> GatewayResult<TradeResult> {
-    match r {
-        Ok(mut t) => {
-            let who = t.executor.take().unwrap_or_default();
-            t.executor = Some(format!("{who}; лучший из двух: {why}"));
-            Ok(t)
-        }
-        Err(mut e) => {
-            e.message = format!("{} (лучший из двух: {why})", e.message);
-            Err(e)
-        }
-    }
+    let r = r.map_err(|e| exec::swap_ctx::best_of(e, why));
+    exec::swap_rebuild::tail(r, Some(why))
 }
 
 /// Запись выбора в журнал (вид dex.best_of). Ошибок нет.

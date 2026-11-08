@@ -18,7 +18,7 @@
 use reqwest::Method;
 
 use crate::core::types::{TradeRequest, TradeResult};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
@@ -34,7 +34,8 @@ pub use super::order_rules::round;
 /// Ждёт окончательного состояния ордера; не дождался — отменяет остаток (правило Тиграна:
 /// не исполнился — отменяем, больше не пробуем) и возвращает то, что реально исполнилось.
 /// Ошибки: OrderRejected (пара не торгуется, количество или сумма вне пределов, отказ BingX),
-/// OutcomeUnknown — ордер мог быть принят, итог не получен (ядро не повторяет, решение 64; «чем найти» — решение 231).
+/// OutcomeUnknown — ордер мог быть принят, итог не получен или ответ без orderId (ядро не повторяет, решение 64;
+/// «чем найти» — решение 231).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = order_rules::ready(ctx, symbols, &req)?;
     // Нет ответа на постановку — OutcomeUnknown (rest.rs, решение 64): ядро не повторяет. Решение 231: свой ID у каждой
@@ -50,7 +51,21 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
     )
     .await
     .map_err(|e| e.pending(pending.clone()))?;
-    let order_id = num::text(&placed, "orderId")?;
+    // Решение 231 (Тигран, 08.11): HTTP успешен, а orderId нет — ордер мог быть принят, итог неизвестен (как у MEXC
+    // trade.rs, решение 118): не BadResponse (по нему правила шлюза могли бы повторить — второй ордер), а OutcomeUnknown
+    // с «чем найти» — ядро выяснит ордер по newClientOrderId (resolve.rs).
+    let order_id = num::text_opt(&placed, "orderId").ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::OutcomeUnknown,
+            None,
+            format!(
+                "{}: ордер принят без orderId в ответе — итог неизвестен",
+                p.symbol
+            ),
+        ))
+        .with_raw(placed.to_string())
+        .pending(pending.clone())
+    })?;
     let by_id = pending.with_ref(&order_id);
     let state = order_state::settle(ctx, &p.symbol, &order_id)
         .await

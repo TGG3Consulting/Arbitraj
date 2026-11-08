@@ -47,6 +47,8 @@ pub mod precheck_quoter;
 pub mod precheck_sim;
 pub mod result;
 pub mod smart_legs;
+pub mod swap_ctx;
+pub mod swap_rebuild;
 pub mod swap_send;
 pub mod swap_v2v3;
 pub mod swap_v4;

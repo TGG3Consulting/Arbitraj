@@ -88,6 +88,10 @@ pub fn codes() -> Vec<CodeMeta> {
             C::OutcomeUnknown,
             "Результат неизвестен: ордер, вывод или транзакция отправлены, итог не получен — не повторяется никогда, сверка и ручная проверка",
         ),
+        c(
+            C::QueueHalted,
+            "Не отправлено: очередь кошелька DEX остановлена до ручной проверки — транзакция не подписывалась",
+        ),
         c(C::Internal, "Внутренняя ошибка нашего кода"),
     ]
 }
@@ -101,6 +105,6 @@ const _: fn(C) = |code| match code {
     C::StaleData | C::VenueNotConnected | C::BadResponse | C::Internal => {}
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
-    C::NonceConflict | C::WithdrawLocked => {}
+    C::NonceConflict | C::WithdrawLocked | C::QueueHalted => {}
     C::OutcomeUnknown => {}
 };

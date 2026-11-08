@@ -188,6 +188,15 @@ impl Venue for Bybit {
         resolve::trade(&self.ctx, req, p).await
     }
 
+    /// Решение 231 (дополнение 08.11): вывод с неизвестным исходом — совпадение «ровно одна запись», resolve.rs.
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        resolve::withdraw(&self.ctx, req, p).await
+    }
+
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {
         deposit_addr::deposit_address(&self.ctx, &self.addrs, asset, network).await
     }

@@ -13,7 +13,7 @@
 //! Кто вызывает: exec/trade.rs.
 //! Графовый маршрут (решение 83): вызывающий (exec/trade.rs) передаёт свежие amountOutMin по ногам из предторговой
 //! верификации (exec/verify_gate.rs) — они ставятся последнему шагу каждой доли; умный путь без графа передаёт None.
-//! От чего зависит: check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
+//! От чего зависит: exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
 //! quote/direct.rs, quote/via.rs, quote/mixed_quoter.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 //!
@@ -35,6 +35,7 @@ use super::super::wallet::nonce::Nonces;
 use super::native;
 use super::plan::Plan;
 use super::smart_legs::{Prep, prepare};
+use super::swap_ctx::SwapCtx;
 use super::trade::{
     no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
 };
@@ -100,9 +101,24 @@ pub async fn trade(
         .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
         .collect();
     precheck_sim::emitters(ctx, &plan, &entries, at).await?;
-    let d = send_swap(env, &slot, plan, guard).await?;
-    drop(slot);
     let tin = if req.side == Side::Buy { usdt } else { coin };
+    // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
+    let sc = SwapCtx::swap(
+        wallet,
+        (tin, out_token),
+        decs,
+        router.as_slice(),
+        None,
+        None,
+    );
+    let d = send_swap(env, &slot, plan, guard)
+        .await
+        .map_err(|e| sc.attach(e))?;
+    drop(slot);
+    let sc = SwapCtx {
+        tip_bnb: d.tip_bnb,
+        ..sc
+    };
     result::result(
         ctx,
         req,
@@ -112,6 +128,7 @@ pub async fn trade(
         decs,
         router.as_slice(),
     )
+    .map_err(|e| sc.attach(e))
 }
 
 /// План execute на текущем блоке (exec/universal.rs): разрешения, которых не хватает сейчас. Принимает: котировку,

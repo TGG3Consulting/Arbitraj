@@ -6,13 +6,23 @@
 //! переподключение соединения с паузой (урок 12: без бесконечного круга ресинков). Отказ подписки — стаканы её пачки
 //! недостоверны.
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, local_book.rs, book.rs, ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, local_book.rs, book.rs, book_print.rs (U_LEVELS), ctx.rs, gateway/feed_reg.rs,
+//! tokio-tungstenite.
 //! Настройки: из ws.rs (Cfg); raw.book_frames [bybit] — кадры стаканов в сырой журнал; venue.book_seq_strict — u строго +1.
 //!
 //! Официально (Connect https://bybit-exchange.github.io/docs/v5/ws/connect): «Spot can input up to 10 args for each
 //! subscription request»; ответ подписки спота — {"success", "ret_msg", "req_id", "op":"subscribe"}. Тишина считается от
 //! последнего кадра (как решение 98): pong — тоже кадр. Кадры стаканов в сыром журнале — только при raw.book_frames
 //! (решение 109: поток стаканов нагружает диск); ответы op пишутся всегда.
+//! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр стакана по
+//! паре (снимок, изменение, повтор и кадр с разрывом тоже); номер u кадра передаётся только при глубине
+//! book_print::U_LEVELS (решение 213: u REST связан с u потока только этой глубины), иначе подтверждение тихой пары — по
+//! содержимому (book_print.rs). Команды сторожа ядра: «переподписать пару» — {"op":"unsubscribe","args":[тема]}, затем
+//! {"op":"subscribe","args":[тема]} в этом же соединении (Connect, «Understanding WebSocket Filters: Unsubscription» —
+//! «You can dynamically subscribe and unsubscribe from topics without unsubscribing from the WebSocket»; тот же вид, что у
+//! пересподписки при разрыве u), соседи не трогаются, после подписки Bybit присылает snapshot («Once you have subscribed
+//! successfully, you will receive a snapshot»). «Переподключить соединение» — сессия заканчивается, ws.rs подключается
+//! заново с теми же парами.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
@@ -30,10 +40,19 @@ use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
 
 use super::book::{Alive, Books};
+use super::book_print::U_LEVELS;
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg, channel};
 use super::local_book::{Applied, LocalBook};
 use super::ws::{Cfg, End, invalidate};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Сколько args в одном запросе подписки спота — из официальной документации («up to 10 args for each subscription»).
 pub const SUB_ARGS_MAX: usize = 10;
@@ -46,6 +65,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -58,6 +78,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let topics: Vec<String> = assets.iter().map(|(_, s)| channel(cfg.levels, s)).collect();
@@ -86,6 +107,22 @@ pub async fn session(
                 }
                 sent.insert(id, args);
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    let (topic, id) = (channel(cfg.levels, sym), format!("w-{sym}"));
+                    // Отказ этой подписки — недостоверна только эта пара (ответ op с тем же req_id).
+                    sent.insert(id.clone(), vec![topic.clone()]);
+                    for op in ["unsubscribe", "subscribe"] {
+                        let m = json!({ "op": op, "req_id": id, "args": [topic.clone()] });
+                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                            return End::Broken(format!("отправка {op} (сторож пар): {e}"));
+                        }
+                    }
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             _ = ping.tick() => {
                 let p = json!({ "op": "ping" });
                 if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
@@ -104,6 +141,7 @@ pub async fn session(
                 let rx_ns = now_ns();
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let t = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -118,6 +156,7 @@ pub async fn session(
                 match depth::parse(&t) {
                     Msg::Book { symbol, snapshot, u, ts, bids, asks } => {
                         let Some(asset) = by_symbol.get(symbol) else { continue };
+                        w.feed.frame_ver(&asset.ticker, (cfg.levels == U_LEVELS).then_some(u), None);
                         if matches!(ctx.flag("raw.book_frames"), Ok(true)) {
                             ctx.raw.write(ID, name, &t);
                         }

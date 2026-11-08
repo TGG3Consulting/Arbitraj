@@ -74,6 +74,8 @@ pub async fn subscribe(
         .await;
     let ok = snap.books.clone();
     let chunks = split(&ok, per_conn as usize, levels);
+    // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
+    books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in chunks.iter().enumerate() {
         let name = format!("market-{}", i + 1);

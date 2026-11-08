@@ -1,5 +1,5 @@
 //! Файл: tests/feed_watch_venues.rs
-//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC и Bitget на настоящих
+//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit на настоящих
 //! адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
 //! (core/feed_watch_logic.rs decide):
 //! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждение по REST
@@ -14,7 +14,7 @@
 //! кадров в учёте свежести на живых кадрах ждёт записи (tests/README.md; tests/mexc_window_tap.rs,
 //! tests/bitget_real_data.rs recorded_ws_frames). Моков нет.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::{mexc, bitget}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
+//! От чего зависит: arb::venues::{mexc, bitget, bybit}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 
-/// Адаптеры MEXC и Bitget на хранилище во временной папке (без сети и секретов).
+/// Адаптеры MEXC, Bitget, Bybit на хранилище во временной папке (без сети и секретов).
 async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
     let d = std::env::temp_dir().join(format!("arb-feed-watch-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -52,15 +52,18 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         taps: Default::default(),
     };
     let bg = arb::venues::bitget::ctx::Ctx {
-        settings,
-        vault,
+        settings: settings.clone(),
+        vault: vault.clone(),
         http: reqwest::Client::new(),
-        journal,
-        raw,
+        journal: journal.clone(),
+        raw: raw.clone(),
     };
+    let by =
+        arb::venues::bybit::ctx::Ctx::new(settings, vault, reqwest::Client::new(), journal, raw);
     vec![
         Arc::new(arb::venues::mexc::Mexc::new(mx)),
         Arc::new(arb::venues::bitget::Bitget::new(bg)),
+        Arc::new(arb::venues::bybit::Bybit::new(by)),
     ]
 }
 
@@ -80,7 +83,7 @@ async fn mexc_bitget_feed_contract() {
         let e = v.book_version("CAKE").await.unwrap_err();
         match id.as_str() {
             // venue.depth_levels (N уровней) не задана.
-            "mexc" => assert_eq!(e.code, ErrorCode::NotConfigured, "{id}: {}", e.message),
+            "mexc" | "bybit" => assert_eq!(e.code, ErrorCode::NotConfigured, "{id}: {}", e.message),
             // Пары нет в справочнике (подписки не было) — символа нет.
             _ => assert_eq!(e.code, ErrorCode::BadResponse, "{id}: {}", e.message),
         }

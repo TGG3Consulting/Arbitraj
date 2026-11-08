@@ -33,9 +33,10 @@
 | `symbols.rs`, `symbols_parse.rs` | Спот-пары instruments-info: basePrecision, tickSize, minOrderAmt, maxLimitOrderQty, status |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как MEXC) |
 | `fees.rs` | Ставки taker/maker по паре (`/v5/account/fee-rate`, 5/s) фоном |
-| `market.rs`, `ws.rs`, `ws_conn.rs` | WebSocket стаканов `orderbook.{N}.{SYM}`: пачки ≤10 args, ≤100 на соединение, ping, переподключение |
+| `market.rs`, `ws.rs`, `ws_conn.rs` | WebSocket стаканов `orderbook.{N}.{SYM}`: пачки ≤10 args, ≤100 на соединение, ping, переподключение; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (`unsubscribe` + `subscribe`) и переподключение одного соединения по команде сторожа |
 | `depth.rs`, `local_book.rs` | Разбор кадров (serde со ссылками), локальный стакан snapshot+delta с проверкой `u`, пересинхронизация |
-| `book.rs` | Стаканы в памяти, котировка на объём, свежесть соединения и пары |
+| `book.rs` | Стаканы в памяти, котировка на объём, свежесть соединения и пары; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `book_print.rs` | Решение 213: `GET /v5/market/orderbook` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти (по содержимому) и `u` ответа (по номеру, только при глубине 1000) для подтверждения тихой пары ядром |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети (`/v5/asset/coin/query-info`), запрос одной монеты, стоимость вывода |
 | `deposit_addr.rs` | Адрес депозита (master), tag — «не поддерживается» |
 | `deposits.rs` | Статус депозита по txID |
@@ -64,3 +65,8 @@
 - Изменения баланса ядру (решение 76) не шлются: wallet описывает только UNIFIED и без причины; депозит — опросом статуса.
 - Непрерывность `u` у спота в документации не обещана; на живой записи 04.11 `u` шёл строго +1. Строгая проверка —
   `venue.book_seq_strict` (да — пропуск номера = разрыв → пересинхронизация; не задана — только рост `u`).
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true**: по номеру
+  `u` — только при `venue.depth_levels` = 1000 (Get Orderbook: «For spot, corresponds to u in the 1000-level WebSocket
+  orderbook stream»; ветка main исходника документации пишет «200-level» — расхождение в docs/TASKS.md); иначе — по
+  содержимому (первые N уровней `GET /v5/market/orderbook` против стакана в памяти). `seq` не используется. Лимит
+  REST — 600 запросов за 5 с на IP на все запросы.

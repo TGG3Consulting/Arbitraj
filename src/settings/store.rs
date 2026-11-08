@@ -6,6 +6,8 @@
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
+//! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (кэш — Arc с копией при записи: снимок —
+//! без копирования всех значений, копия делается только при изменении настройки, пока снимок жив).
 //! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
 use std::collections::HashMap;
@@ -41,7 +43,10 @@ type Key = (String, Scope);
 #[derive(Clone)]
 pub struct Store {
     pub(super) db: Db,
-    cache: Arc<RwLock<HashMap<Key, Value>>>,
+    /// Значения в памяти. Решение 239: внутренний Arc — копия при записи (settings/pinned.rs).
+    pub(super) cache: Arc<RwLock<Arc<HashMap<Key, Value>>>>,
+    /// Решение 239: копия на момент входа — только чтение (set отказывает).
+    pub(super) pinned: bool,
     changes: broadcast::Sender<Change>,
     journal: Journal,
     /// Изменения — строго по одному.
@@ -88,7 +93,8 @@ impl Store {
         }
         Ok(Self {
             db,
-            cache: Arc::new(RwLock::new(map)),
+            cache: Arc::new(RwLock::new(Arc::new(map))),
+            pinned: false,
             changes,
             journal,
             writer: Arc::new(Mutex::new(())),
@@ -169,6 +175,12 @@ impl Store {
     ) -> Result<Option<Change>, SetError> {
         // Имени нет в каталоге (настройку удалили из кода, например dex.enabled) — разрешено только очистить
         // оставшееся значение: задать его нельзя (решение 59: устаревшие настройки удаляет человек из интерфейса).
+        // Решение 239: копия настроек на момент входа — только для чтения.
+        if self.pinned {
+            return Err(SetError::Invalid(format!(
+                "«{name}»: это копия настроек на момент входа в сделку — изменить нельзя"
+            )));
+        }
         let new = match (catalog::find(name), value) {
             (Some(def), Some(v)) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
             (_, None)
@@ -225,7 +237,9 @@ impl Store {
             })
             .await?;
         {
-            let mut cache = self.cache.write().unwrap_or_else(|p| p.into_inner());
+            let mut guard = self.cache.write().unwrap_or_else(|p| p.into_inner());
+            // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
+            let cache = Arc::make_mut(&mut *guard);
             let key = (name.to_string(), scope.clone());
             match &new {
                 Some(v) => cache.insert(key, v.clone()),

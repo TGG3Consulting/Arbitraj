@@ -17,6 +17,9 @@
 //! Решение 237: у сделки и все прочие входы — на момент решения (Frozen.decided, снят вместе со стаканами): контекст
 //! направления с σ и T плана сделки, курсы затрат и затраты DEX-стороны из плана; входов нет — расчёта нет. Объём,
 //! на котором вошли (Battle.qty), считается всегда, вне uncapped.max_evals, и он — «на нашем бюджете» у сделки.
+//! Решение 239: настройки модели у сделки (card.max_search_usdt, money.min_profit_*, uncapped.*, size.*) — из копии
+//! на момент решения (Decided.settings); составляющие бюджета — снятые перед покупкой (Battle.parts), не прочитаны —
+//! причина, живые не читаются. Кандидат — живое хранилище.
 //! Сборка записи (упущено, что ограничило) и таблица потолков — uncapped_record.rs (общие с пересчётом старых записей
 //! по окнам, решение 218).
 //! Кто вызывает: core/uncapped_queue.rs (в потоке фоновой задачи).
@@ -58,17 +61,32 @@ pub async fn compute(
         .transpose()
         .map_err(|e| format!("не посчитано: нет снимка рынка на момент решения — {e}"))?;
     let fz = frozen.as_ref();
-    let s = &core.inner.deps.settings;
+    // Решение 237: у сделки — входы момента решения; нет — расчёта нет.
+    let decided = match fz {
+        Some(f) => Some(
+            f.decided
+                .as_deref()
+                .ok_or("не посчитано: входы расчёта на момент решения не сняты")?,
+        ),
+        None => None,
+    };
+    // Решение 239: сделка — настройки на момент решения; кандидат — живые.
+    let s = decided.map_or(&core.inner.deps.settings, |x| &x.settings);
     let dec = |name: &str| s.decimal(name, SAt::default()).map_err(|e| e.message);
     let search_cap = dec("card.max_search_usdt")?;
     let (min_usd, min_pct) = (dec("money.min_profit_usd")?, dec("money.min_profit_pct")?);
     let max_evals = s
         .integer("uncapped.max_evals", SAt::default())
         .map_err(|e| e.message)?;
-    let ladder = ladder(core)?;
-    // Составляющие бюджета — на момент решения (Battle.parts); нет — читаются сейчас.
+    let ladder = ladder_in(s)?;
+    // Составляющие бюджета — на момент решения (Battle.parts); нет — у кандидата читаются сейчас, у сделки — причина
+    // (решение 239: живые после входа не читаются).
     let (parts, limits_error) = match battle.parts {
         Some(p) => (Some(p), None),
+        None if decided.is_some() => (
+            None,
+            Some("составляющие бюджета на момент входа не прочитаны".to_string()),
+        ),
         None => match super::limits_parts::parts(core, d, &super::dry::mode(s)) {
             Ok(p) => (Some(p), None),
             Err(e) => (None, Some(e)),
@@ -83,13 +101,8 @@ pub async fn compute(
         )?;
     // Решение 237: сделка — контекст момента решения (σ и T плана); кандидат — собирается сейчас.
     let built;
-    let cx: &DirCtx = match fz {
-        Some(f) => {
-            &f.decided
-                .as_ref()
-                .ok_or("не посчитано: входы расчёта на момент решения не сняты")?
-                .cx
-        }
+    let cx: &DirCtx = match decided {
+        Some(x) => &x.cx,
         None => {
             built = DirCtx::build(core, d)?;
             &built

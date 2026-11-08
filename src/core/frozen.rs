@@ -9,9 +9,11 @@
 //! (dirctx.rs build_decided — σ и время в пути T из плана сделки, комиссии вывода и возврата из справочника сетей,
 //! налог перевода, правила пар, k, h) и затраты плана (plan_costs.rs: курсы валют затрат, у DEX-стороны — вывод и
 //! возврат USDT). Расчёт «без потолка» по сделке ничего живого после входа не читает.
+//! Решение 239: и копия всех значений настроек на этот момент (settings/pinned.rs) — пороги и параметры модели
+//! (money.*, size.*, uncapped.*, card.max_search_usdt) расчёт по сделке берёт из неё, а не из живого хранилища.
 //! Кто вызывает: core/executor.rs (take), core/uncapped.rs, costs.rs, costs_quote.rs, size_curve.rs (чтение).
 //! От чего зависит: dex_account.rs (площадка DEX на счёт направления), venue_ticker.rs, gateway/frozen.rs, dirctx.rs,
-//! plan_costs.rs, costs_types.rs (Calc плана).
+//! plan_costs.rs, costs_types.rs (Calc плана), settings/pinned.rs.
 //! Настройки: нет.
 
 use std::sync::Arc;
@@ -20,6 +22,8 @@ use chrono::{DateTime, Utc};
 
 use crate::core::types::{Direction, OrderBook, Side, VenueId};
 use crate::gateway::frozen::QuoteSnapshot;
+
+use crate::settings::store::Store;
 
 use super::costs_types::Calc;
 use super::dirctx::DirCtx;
@@ -32,6 +36,8 @@ pub struct Decided {
     pub cx: DirCtx,
     /// Затраты плана: курсы валют затрат, вывод и возврат USDT DEX-стороны.
     pub plan: PlanCosts,
+    /// Решение 239: копия настроек на момент решения (только чтение).
+    pub settings: Store,
 }
 
 /// Снимки сторон направления на момент решения.
@@ -78,6 +84,8 @@ impl Frozen {
 pub async fn take(core: &Core, plan: &Calc) -> Result<Frozen, String> {
     let d = &plan.direction;
     let at = Utc::now();
+    // Решение 239: настройки — копия на этот момент (без копирования значений, settings/pinned.rs).
+    let settings = core.inner.deps.settings.pinned();
     let a = side(core, d, &d.buy_on, Side::Buy).await?;
     let b = side(core, d, &d.sell_on, Side::Sell).await?;
     let cx = DirCtx::build_decided(core, d, plan.sigma, plan.transit_s)
@@ -86,6 +94,7 @@ pub async fn take(core: &Core, plan: &Calc) -> Result<Frozen, String> {
     let decided = Decided {
         cx,
         plan: PlanCosts::new(&d.asset.ticker, &lines, plan.arrive),
+        settings,
     };
     Ok(Frozen {
         a,

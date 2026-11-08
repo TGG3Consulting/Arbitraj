@@ -2,7 +2,8 @@
 //! Что делает: кривая «прибыль от объёма» ядра для подбора объёма (решение 66) — каждый объём считает полный
 //! расчёт costs.rs (все затраты); параметры поиска: шаг количества пары биржи (stepSize; A, если A — биржа, иначе
 //! B), изломы — накопленные объёмы уровней стакана A (asks) и B (bids), настройки size.*.
-//! Решение 217: src — снимок рынка момента решения (расчёт «без потолка» по сделке, core/frozen.rs).
+//! Решение 217: src — снимок рынка момента решения (расчёт «без потолка» по сделке, core/frozen.rs); решение 239 —
+//! настройки size.* тогда из копии на момент решения (Frozen.decided.settings).
 //! Решение 218: SourceCurve — та же кривая над любым источником данных (costs_source.rs; пересчёт старых записей «без
 //! потолка» по окнам), search_params — параметры поиска из настроек size.* при известных шаге и изломах.
 //! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs, uncapped_recompute.rs (SourceCurve, search_params).
@@ -105,7 +106,10 @@ pub fn params(
             ),
         }
     };
-    let s = &core.inner.deps.settings;
+    // Решение 239: у снимка со входами момента решения — настройки на тот момент.
+    let s = src
+        .and_then(|f| f.decided.as_deref())
+        .map_or(&core.inner.deps.settings, |x| &x.settings);
     search_params(s, step, budget, price, buy_breaks, sell_breaks)
 }
 

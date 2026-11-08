@@ -10,6 +10,9 @@
 //!    точка на этом объёме), упущено = прибыль на потолке − на вложенном (одна модель).
 //! 3) Курсы затрат — только из плана сделки: валюты нет в плане — ошибка, живой курс не подставляется.
 //! 4) Снимок без входов момента решения — расчёта по сделке нет (причина).
+//! 5) Решение 239: настройки модели (пороги money.min_profit_*, uncapped.*, size.*, card.max_search_usdt) — из копии на
+//!    момент входа (Decided.settings, settings/pinned.rs): изменение настроек после входа расчёт по сделке не меняет;
+//!    копия только для чтения.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{uncapped, frozen, plan_costs, costs, size_uncapped, size_curve}, tests/size_common.
@@ -183,8 +186,8 @@ fn tmp(name: &str) -> std::path::PathBuf {
     p
 }
 
-/// Снимок с входами момента решения: контекст с σ и затраты плана.
-fn frozen(rec: &Rec, sigma: Decimal, plan: &costs::Calc) -> Frozen {
+/// Снимок с входами момента решения: контекст с σ, затраты плана и копия настроек хранилища `s` на этот момент.
+fn frozen(rec: &Rec, sigma: Decimal, plan: &costs::Calc, s: &Store) -> Frozen {
     let lines = PlanCosts::lines_of(&plan.costs);
     Frozen {
         a: Arc::new(side(&book(rec, "bingx"), Side::Buy)),
@@ -193,6 +196,7 @@ fn frozen(rec: &Rec, sigma: Decimal, plan: &costs::Calc) -> Frozen {
         decided: Some(Arc::new(Decided {
             cx: cx(rec, sigma),
             plan: PlanCosts::new("CAKE", &lines, plan.arrive),
+            settings: s.pinned(),
         })),
     }
 }
@@ -240,7 +244,7 @@ async fn compute_uses_plan_sigma() {
     let rec = Rec::load("decided-sigma").await;
     let sigma = d("0.0005");
     let pl = plan(&core, &rec, sigma, d("3")).await;
-    let fz = frozen(&rec, sigma, &pl);
+    let fz = frozen(&rec, sigma, &pl, &s);
     let r = arb::core::uncapped::compute(&core, &dir(), battle(&pl), Some(Ok(fz.clone())))
         .await
         .unwrap();
@@ -299,7 +303,7 @@ async fn invested_point_beyond_max_evals() {
     let rec = Rec::load("decided-evals").await;
     let sigma = d("0.0005");
     let pl = plan(&core, &rec, sigma, d("3.7")).await;
-    let fz = frozen(&rec, sigma, &pl);
+    let fz = frozen(&rec, sigma, &pl, &s);
     let r = arb::core::uncapped::compute(&core, &dir(), battle(&pl), Some(Ok(fz.clone())))
         .await
         .unwrap();
@@ -333,7 +337,7 @@ async fn no_live_fallback() {
     let rec = Rec::load("decided-live").await;
     let sigma = d("0.0005");
     let pl = plan(&core, &rec, sigma, d("3")).await;
-    let fz = frozen(&rec, sigma, &pl);
+    let fz = frozen(&rec, sigma, &pl, &s);
     // Курс валюты, которой нет в плане (BNB), — ошибка, а не живой курс.
     let live = Live {
         core: &core,
@@ -349,7 +353,7 @@ async fn no_live_fallback() {
     // Снимок без входов момента решения — расчёта по сделке нет.
     let raw = Frozen {
         decided: None,
-        ..frozen(&rec, sigma, &pl)
+        ..frozen(&rec, sigma, &pl, &s)
     };
     let e = arb::core::uncapped::compute(&core, &dir(), battle(&pl), Some(Ok(raw)))
         .await
@@ -359,4 +363,65 @@ async fn no_live_fallback() {
         e.contains("входы расчёта на момент решения не сняты"),
         "{e}"
     );
+}
+
+#[tokio::test]
+async fn settings_at_entry() {
+    let p = tmp("settings");
+    let (core, s) = core(&p).await;
+    settings(&s, 300).await;
+    let rec = Rec::load("decided-settings").await;
+    let sigma = d("0.0005");
+    let pl = plan(&core, &rec, sigma, d("3")).await;
+    let fz = frozen(&rec, sigma, &pl, &s);
+    let before = arb::core::uncapped::compute(&core, &dir(), battle(&pl), Some(Ok(fz.clone())))
+        .await
+        .unwrap();
+    // После входа Тигран меняет настройки модели: порог прибыли недостижимый, другая таблица потолков, меньше
+    // предел поиска и расчётов.
+    for (n, v) in [
+        ("money.min_profit_usd", json!(1_000_000)),
+        ("uncapped.ladder_usdt", json!(["10"])),
+        ("card.max_search_usdt", json!(30)),
+        ("uncapped.max_evals", json!(5)),
+        ("size.grid_points", json!(3)),
+    ] {
+        s.set(n, Scope::Global, Some(v), "тест").await.unwrap();
+    }
+    // Расчёт по сделке — по настройкам момента входа: тот же итог.
+    let after = arb::core::uncapped::compute(&core, &dir(), battle(&pl), Some(Ok(fz.clone())))
+        .await
+        .unwrap();
+    assert_eq!(after.min_profit_usd, d("0.01"));
+    assert_eq!(after.search_cap, d("5000"));
+    assert_eq!(
+        (after.opt.qty, after.opt.profit),
+        (before.opt.qty, before.opt.profit)
+    );
+    assert_eq!(after.opt_passes, before.opt_passes);
+    assert_eq!(after.levels, before.levels);
+    assert_eq!(after.at_budget, before.at_budget);
+    // Снимок, взятый после изменения, — уже по новым настройкам: предел расчётов 5 исчерпан (у снимка момента входа —
+    // 300, расчёт выше прошёл).
+    let late = arb::core::uncapped::compute(
+        &core,
+        &dir(),
+        battle(&pl),
+        Some(Ok(frozen(&rec, sigma, &pl, &s))),
+    )
+    .await
+    .unwrap_err();
+    assert!(late.contains("= 5"), "{late}");
+    // Копия — только для чтения.
+    let pinned = fz.decided.as_ref().unwrap().settings.clone();
+    let e = pinned
+        .set(
+            "money.min_profit_usd",
+            Scope::Global,
+            Some(json!(1)),
+            "тест",
+        )
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("копия настроек"), "{e}");
 }

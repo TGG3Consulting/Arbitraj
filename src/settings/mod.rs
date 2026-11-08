@@ -10,6 +10,7 @@ pub mod coin_alias;
 pub mod hint;
 pub mod history;
 pub mod live;
+pub mod pinned;
 pub mod read;
 pub mod read_scope;
 pub mod schema;

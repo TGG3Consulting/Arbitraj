@@ -19,11 +19,13 @@
 //! Решение 239: в тот же момент снимается копия итогов проверок токенов и пулов снимка (check/state.rs pinned: налоги
 //! монеты и пулов, газ обменов и разрешений из проб, крючки, сверка с квотером) и decimals токенов (tokens.rs pinned —
 //! только память; decimals не было — StaleData, узел не спрашивается): расчёт «без потолка» ничего из этого не читает
-//! живым. Финальная котировка KyberSwap
+//! живым. Решение 239 (п. 3): настройки котировки (dex.*, venue.quote_asset, send.gas_price_markup_pct, channel.* и
+//! прочие, что читает котировка) — копия хранилища на момент снимка (settings/pinned.rs), список промежуточных монет —
+//! копия (pools/mids.rs pinned). Финальная котировка KyberSwap
 //! (решение 95) к снимку не относится: снимок — котировка своей математикой по пулам.
 //! Кто вызывает: venue.rs (quote_snapshot).
 //! От чего зависит: quote/mod.rs (Quoting), pools/registry_frozen.rs, wallet/allow_cache.rs, node/heads.rs, tokens.rs,
-//! check/state.rs (pinned), quote/gas.rs (pinned),
+//! check/state.rs (pinned), quote/gas.rs (pinned), settings/pinned.rs, pools/mids.rs (pinned),
 //! gateway/frozen.rs, gateway/urgency.rs.
 //! Настройки: dex.router_mode [bsc_dex] (снимать ли пути графа); dex.native_wrapped (пулы газа); через
 //! quote/route_cache.rs — dex.route_paths_ttl_ms, dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths,
@@ -107,6 +109,9 @@ pub fn take(q: Quoting, asset: &Asset, side: Side) -> GatewayResult<FrozenDex> {
     base.gas = gas;
     base.checks = checks;
     base.tokens = base.tokens.pinned();
+    // Решение 239: настройки и промежуточные монеты — копия на момент снимка.
+    base.ctx.settings = base.ctx.settings.pinned();
+    base.mids = base.mids.pinned();
     base.allow = base.allow.snapshot();
     base.frozen_head = Some(head);
     Ok(FrozenDex {

@@ -7,6 +7,7 @@
 //! Промежуточная монета с любым налогом (покупки, продажи, перевода) в маршруте не используется — решение техлида
 //! (Issue #7), проверка — quote/via_pools.rs.
 //! Список найденных промежуточных монет хранится в памяти (Mids) — котировка и сделка читают его.
+//! Решение 239: pinned — копия списка на момент снимка котировки (venues/bsc_dex/frozen.rs).
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
 //! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
@@ -43,6 +44,14 @@ impl Mids {
     /// Заменяет список. Ошибок нет.
     pub fn set(&self, v: Vec<Mid>) {
         *self.0.write().unwrap_or_else(|p| p.into_inner()) = v;
+    }
+
+    /// Решение 239: копия списка на этот момент (снимок котировки, frozen.rs) — своя память, пересборка подписки её
+    /// не меняет. Возвращает: Mids. Ошибок нет.
+    pub fn pinned(&self) -> Mids {
+        Mids(Arc::new(RwLock::new(
+            self.0.read().unwrap_or_else(|p| p.into_inner()).clone(),
+        )))
     }
 
     /// Список, если промежуточные монеты сейчас включены (dex.intermediate_enabled = да; выключение действует сразу,

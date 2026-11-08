@@ -7,7 +7,8 @@
 //! транзакции, кнопкой человека или без настройки — нет; (2) повтор уходит в режим застрявшей монеты и продаёт заново
 //! с новой котировкой (здесь площадки нет — новая котировка честно «невозможна», сделка остановлена, но путь пройден);
 //! (3) исчерпан stuck.unsent_retries_max → журнал Error core.sell_unsent_exhausted и алерт человеку, строка об отказе в
-//! хронологии — одна; (4) адаптер: где транзакция по ответу eth_getTransactionByHash (запись узла BSC 2026-10-25).
+//! хронологии — одна; (5) решение 220: продажа здесь в режиме «Перегон» — порог stuck.relay_max_loss_pct (живой
+//! случай BRIC: −30 %, −11 USDT по рынку без порога), не задан — алерт; нет котировки — алерт; (4) адаптер: где транзакция по ответу eth_getTransactionByHash (запись узла BSC 2026-10-25).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets, arb::venues::bsc_dex::send.
 
@@ -179,10 +180,13 @@ async fn retry_goes_to_new_sale_then_exhausted_alerts_once() {
             .iter()
             .any(|t| t.contains("повтор через 1 мс через режим застрявшей монеты (1/1)"))
     );
+    // Решение 220: в хронологии — настоящая причина входа в режим застрявшей монеты, не «невыгодно».
     assert!(
         lines
             .iter()
-            .any(|t| t.contains("Застрявшая монета: режим wait"))
+            .any(|t| t.contains("Застрявшая монета (продажа не ушла в сеть:")
+                && t.contains("режим wait")),
+        "{lines:?}"
     );
     // Площадки в реестре нет — новая котировка невозможна: путь новой продажи пройден, сделка остановлена честно.
     assert!(lines.iter().any(|t| t.contains("продажа по рынку")));
@@ -241,4 +245,61 @@ fn node_says_where_the_tx_is() {
     assert_eq!(absent::located(&pending).as_deref(), Some("в пуле узла"));
     // Узел не знает транзакцию: result = null (execution-apis transaction.yaml) — точно не ушла.
     assert_eq!(absent::located(&Value::Null), None);
+}
+
+/// Решение 220, часть Б: чистое решение продажи здесь по цифрам живого случая BRIC (вложено 36.67, по рынку 25.67 —
+/// −11 USDT, −30 %). Порог 20 % (совет Тиграна) — алерт; убыток 10 % — продажа по рынку; порог не задан — алерт с
+/// причиной «не задана настройка»; нет котировки — алерт, убыток неизвестен.
+#[test]
+fn relay_sell_here_respects_loss_threshold() {
+    use arb::core::relay_here::{Here, decide};
+    let mut bric = aster();
+    bric.invested = Decimal::from_str("36.67").unwrap();
+    let d = |s: &str| Decimal::from_str(s).unwrap();
+    let why = "перегон не выгоднее продажи здесь";
+    match decide(&bric, why, Ok(d("20")), Ok(d("25.67"))) {
+        Here::Alert { loss: Some(l), why } => {
+            assert!(l > d("29.99") && l < d("30.01"), "{l}");
+            assert!(
+                why.contains("выше порога") && why.contains("stuck.relay_max_loss_pct"),
+                "{why}"
+            );
+        }
+        other => panic!("ждали алерт: {other:?}"),
+    }
+    assert!(
+        matches!(decide(&bric, why, Ok(d("20")), Ok(d("33.003"))), Here::Market(t) if t.contains("не больше порога"))
+    );
+    assert!(matches!(
+        decide(&bric, why, Err("не задано".into()), Ok(d("25.67"))),
+        Here::Alert { loss: Some(_), why } if why.contains("не задана настройка stuck.relay_max_loss_pct")
+    ));
+    assert!(matches!(
+        decide(&bric, why, Ok(d("20")), Err("нет стакана".into())),
+        Here::Alert { loss: None, why } if why.contains("нет котировки: нет стакана")
+    ));
+}
+
+/// Решение 220, часть Б: перегоны исчерпаны — раньше «продажа по рынку» без проверки убытка, теперь продажа здесь по
+/// порогу; порог не задан — алерт человеку, сделка ждёт решения (ядро без площадок, моков нет).
+#[tokio::test]
+async fn relay_exhausted_without_threshold_alerts_human() {
+    let d = dir("relay");
+    let (core, s, _) = start(&d).await;
+    set(&s, "stuck.mode", json!("relay")).await;
+    set(&s, "stuck.max_relays", json!(1)).await;
+    let mut x = aster();
+    x.relays = 1;
+    x.invested = Decimal::from(36);
+    arb::core::relay::run(&core, x).await;
+    let y = deal_of(&core, "20261104120743802ASTER");
+    assert_eq!(y.step, Step::WaitingHuman, "{:?}", y.timeline);
+    assert!(
+        y.timeline
+            .iter()
+            .any(|(_, t)| t.contains("перегонов 1 — исчерпаны")
+                && t.contains("не задана настройка stuck.relay_max_loss_pct")),
+        "{:?}",
+        y.timeline
+    );
 }

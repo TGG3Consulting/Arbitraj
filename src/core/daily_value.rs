@@ -33,7 +33,7 @@ pub async fn value_now(core: &Core, deal: &Deal) -> Result<Decimal, String> {
     if deal.qty <= Decimal::ZERO {
         return Err("монет в сделке нет".into());
     }
-    super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty)
+    super::trade_ops::deal_value(core, deal)
         .await
         .map(|(v, _)| v)
 }

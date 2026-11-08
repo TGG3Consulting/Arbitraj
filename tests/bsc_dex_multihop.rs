@@ -7,7 +7,8 @@
 //! роутера → обмен → TAKE роутеру) больше не отвергается; исполнимость графа: нога из 3 хопов одним UR — исполнима,
 //! длиннее dex.route_max_hops — нет; монета с налогом через промежуточную с пулом V3 — неисполнима и в котировке графа
 //! (решение 39); ревью 122, пункт 3 — монета с налогом на входе через исполнитель: только одна доля с первым шагом
-//! «вход переводом в пул» (V2/SOLIDLY), иначе (V3 первым, сплит) — сигнал с причиной.
+//! «вход переводом в пул» (V2/SOLIDLY), иначе (V3 первым, сплит) — сигнал с причиной; решение 220 — межроутерная нога
+//! исполнима только исполнителем кошелька, которым идёт котировка (кошелёк сделки без исполнителя — сигнал).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{exec::{chain, live_hops, swap_v4, ur}, quote::{graph_exec, graph_legs,
 //! route_calc, route_paths, graph_executor}, pools::{graph, families}}, tests/route_common.
@@ -354,4 +355,54 @@ async fn taxed_input_via_executor_only_single_push_first_step() {
         .expect("первый шаг SOLIDLY на весь вход — прямой вход в пул, налог один раз");
     let why = graph_executor::tax(&[sol.clone(), sol]).expect_err("две доли");
     assert!(why.contains("долей"), "{why}");
+}
+
+/// Решение 220, часть А (живые HOLO, PORTO, ATA: «нога маршрута пересекает Universal Router'ы»): межроутерная нога
+/// исполнима только через исполнитель ArbExecutor КОШЕЛЬКА, которым идёт котировка. Кошелёк строки «Пробы» с
+/// исполнителем — маршрут исполним; тот же путь в контексте кошелька сделки без исполнителя (Ctx::with_account — так
+/// котирует шлюз get_as(площадка, счёт сделки)) — неисполним, котировка его не выберет.
+#[tokio::test]
+async fn cross_router_leg_executable_only_with_wallet_executor() {
+    let p = route_common::parts().await;
+    route_common::channel(&p, "club48", "bundle").await;
+    let v = Scope::Venue("bsc_dex".into());
+    p.ctx
+        .settings
+        .set("dex.bundle_max_routers", v, Some(json!(2)), "тест")
+        .await
+        .unwrap();
+    let q = p.quoting();
+    let path = three_hop(&q);
+    // Нога пересекает роутеры: у DEX одного из шагов (не первого) — свой Universal Router.
+    let first = path.hops[0].entry.family.id;
+    let other = path
+        .hops
+        .iter()
+        .map(|h| h.entry.family.id)
+        .find(|id| *id != first)
+        .expect("в пути записи шаги разных DEX");
+    p.ctx
+        .settings
+        .set(
+            "dex.universal_router",
+            Scope::Dex(other.into()),
+            Some(json!("0x0000000000000000000000000000000000000098")),
+            "тест",
+        )
+        .await
+        .unwrap();
+    // Строка «Пробы» — кошелёк с исполнителем: межроутерная нога идёт исполнителем.
+    route_common::executor(&p, "0x00000000000000000000000000000000000000ee").await;
+    graph_exec::executable(&q.ctx, std::slice::from_ref(&path), false)
+        .expect("кошелёк «Проб» с исполнителем — исполнимо");
+    // Кошелёк сделки без исполнителя.
+    let a = p.ctx.settings.accounts();
+    let id = a.reserve_id().await.unwrap();
+    a.add(&id, "сделка", "wallet.deal.key", "bsc_dex", "тест")
+        .await
+        .unwrap();
+    let deal = q.ctx.with_account(&id);
+    let why = graph_exec::executable(&deal, std::slice::from_ref(&path), false)
+        .expect_err("кошелёк сделки без исполнителя — неисполнимо");
+    assert!(why.contains("пересекает роутеры"), "{why}");
 }

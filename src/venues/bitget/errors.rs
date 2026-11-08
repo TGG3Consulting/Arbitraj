@@ -11,7 +11,7 @@
 //! - Коды тела (https://www.bitget.com/docs/api/error-code — страница помечена «Demo error codes», в ней 7 кодов): 429
 //!   «Too many requests», 00001, 00171, 00172, 01001, 01002 (проверка параметров), 11000 «Withdrawal whitelist is
 //!   enabled; your account can only withdraw to address-book addresses»; 43118 — дубль clientOid (примеры batch-orders,
-//!   раздел Spot → Trade). Полного перечня кодов в документации нет: остальные коды переводятся по HTTP-статусу ответа,
+//!   раздел Spot → Trade); 40938 — адресная книга вывода, в таблице нет, по живому ответу (решение 220). Полного перечня кодов в документации нет: остальные коды переводятся по HTTP-статусу ответа,
 //!   а без него — отказом по операции; текст причины — поле msg ответа Bitget как есть.
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -40,6 +40,11 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         (403, _) => ErrorCode::InsufficientPermissions,
         // Белый список адресов вывода включён — адрес не в адресной книге (урок 19).
         (_, "11000") => ErrorCode::WithdrawRejected,
+        // Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — тот же
+        // смысл, что 11000. В официальной таблице кодов (https://www.bitget.com/docs/api/error-code) его НЕТ; основание —
+        // живой ответ Bitget на вывод (сделки CHEEMS, AVA, RWA). Явно — чтобы отказ вывода по адресной книге был
+        // WithdrawRejected при любой операции, а не только через rejected(Op::Withdraw).
+        (_, "40938") => ErrorCode::WithdrawRejected,
         // Сервер: у денег итог неизвестен.
         (500..=599, _) if op != Op::Other => ErrorCode::Timeout,
         (500..=599, _) => ErrorCode::Unreachable,

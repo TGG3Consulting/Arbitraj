@@ -24,6 +24,7 @@ use crate::core::types::{Quote, Side};
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::stuck_reason::StuckReason;
 
 /// Причина продажи кнопкой «Продать сейчас» (manual.rs, manual_halted.rs). Решение 110: продажу, которую нажал
 /// человек, бот не уводит в режим застрявшей монеты — сбой сразу алертом.
@@ -36,10 +37,12 @@ pub fn profitable(deal: &Deal, value: Decimal) -> bool {
 
 /// Продать сейчас, если выгодно, иначе — режим застрявшей монеты. Ошибок нет.
 pub async fn sell_or_stuck(core: &Core, deal: Deal) {
-    let value = super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await;
+    let value = super::trade_ops::deal_value(core, &deal).await;
     match value {
         Ok((v, q)) if profitable(&deal, v) => sell(core, deal, q, "выгодно").await,
-        _ => Box::pin(super::stuck::handle(core, deal)).await,
+        // Решение 220: в режим застрявшей монеты — с настоящей причиной.
+        Ok(_) => Box::pin(super::stuck::handle(core, deal, StuckReason::Unprofitable)).await,
+        Err(e) => Box::pin(super::stuck::handle(core, deal, StuckReason::NoQuote(e))).await,
     }
 }
 
@@ -48,7 +51,7 @@ pub async fn sell_or_stuck(core: &Core, deal: Deal) {
 pub async fn market(core: &Core, deal: Deal, why: &str) {
     // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
     super::patience_scope::with(core, async {
-        match super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await {
+        match super::trade_ops::deal_value(core, &deal).await {
             Ok((_, q)) => sell(core, deal, q, why).await,
             Err(e) => {
                 let mut deal = deal;
@@ -107,7 +110,11 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 deal.note(format!("Продано не всё, остаток {}", deal.qty));
                 super::ledger::save(core, &deal).await;
                 // Решение 177: остаток продаёт автоматика (режим застрявшей монеты), не ручная команда.
-                return Box::pin(super::risk_count::auto(super::stuck::handle(core, deal))).await;
+                let left = StuckReason::Partial(deal.qty);
+                return Box::pin(super::risk_count::auto(super::stuck::handle(
+                    core, deal, left,
+                )))
+                .await;
             }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
@@ -125,7 +132,11 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             let why_not =
                 format!("{e} — газ продажи не помещается сверх резерва, режим застрявшей монеты");
             super::manual_outcome::failed(core, &deal, why, &why_not).await;
-            Box::pin(super::risk_count::auto(super::stuck::handle(core, deal))).await
+            let gas = StuckReason::GasReserve(e.message.clone());
+            Box::pin(super::risk_count::auto(super::stuck::handle(
+                core, deal, gas,
+            )))
+            .await
         }
         // Исход продажи неизвестен (транзакция могла исполниться) — ни продавать, ни перегонять: ручная проверка.
         Err(e) if e.outcome_unknown() => {

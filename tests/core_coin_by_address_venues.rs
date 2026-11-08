@@ -254,7 +254,7 @@ async fn one_address_two_tickers_end_to_end() {
         ticker: GT.into(),
         bsc_contract: Some(addr),
     };
-    let err = arb::core::trade_ops::sell_value(&core, &v("bingx"), &shown, d_qty())
+    let err = arb::core::trade_ops::sell_value(&core, None, &v("bingx"), &shown, d_qty())
         .await
         .unwrap_err();
     assert!(

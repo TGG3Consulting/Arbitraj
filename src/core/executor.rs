@@ -306,7 +306,8 @@ async fn run(core: &Core, d: Direction) {
         Err(e) => {
             deal.step = Step::Stuck;
             deal.note(format!("Перевод не состоялся: {e}"));
-            return super::stuck::handle(core, deal).await;
+            let why = super::stuck_reason::StuckReason::TransferFailed(e.to_string());
+            return super::stuck::handle(core, deal, why).await;
         }
     }
     deal.step = Step::Selling;

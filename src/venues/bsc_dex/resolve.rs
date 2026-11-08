@@ -11,8 +11,10 @@
 //!     баланс кошелька на блоке — exec/result.rs, executor/fact.rs, balance_fact.rs) — этого контекста после ошибки нет,
 //!     восстанавливать его по одной квитанции — гадать. Поэтому своп — NotApplicable (исход свопа выясняет человек),
 //!     но очередь кошелька при этом снята, если квитанция есть.
-//!   Nonce занят, а квитанции своей транзакции нет (её место заняла отмена или чужая транзакция) — бот не решает: это
-//!   тот же случай «Replaced», что уже дал OutcomeUnknown (exec/result.rs); ждём квитанцию до срока ядра, дальше человек.
+//!
+//! Nonce занят, а квитанции своей транзакции нет (её место заняла отмена или чужая транзакция) — бот не решает: это
+//! тот же случай «Replaced», что уже дал OutcomeUnknown (exec/result.rs); ждём квитанцию до срока ядра, дальше человек.
+//!
 //! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs.
 //! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), wallet/transfer.rs (transfer), parts.rs.
 //! Настройки: нет (узел — bsc.node_http_url).

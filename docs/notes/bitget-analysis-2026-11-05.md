@@ -154,7 +154,8 @@ WebSocket Classic, канал «Depth Channel» (https://www.bitget.com/docs/cla
   для окон (решение 125), с пересинхронизацией по REST.
 - Лимиты (WebSocket intro): «300 connection requests/IP/5min, Max 100 connections/IP», «240 subscription
   requests/Hour/connection, Max 1000 channel subscription/connection», рекомендация < 50 каналов на соединение, «up to
-  10 messages per second» → `venue.ws_symbols_per_conn` ≤ 50, `venue.ws_subs_per_sec` ≤ 10. **240 запросов подписки в
+  10 messages per second» (сверка 08.11: теперь на странице — за 5 с на соединение subscribe 50, unsubscribe 50, ping 10,
+  login 2) → `venue.ws_symbols_per_conn` ≤ 50, `venue.ws_subs_per_sec` ≤ 10. **240 запросов подписки в
   час на соединение** — пересподписки ограничены: не дёргать соединения при том же наборе (урок 14).
 - Пинг: строка `"ping"` каждые 30 с, ответ `"pong"`; сервер рвёт без ping 2 минуты.
 - REST снимок: `GET /api/v2/spot/market/orderbook` (`limit` ≤ 150, `type` step0…step5, «20 times/1s (IP)»); с 17.10.2026

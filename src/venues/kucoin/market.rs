@@ -62,6 +62,8 @@ pub async fn subscribe(
     let _ = out
         .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
+    // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
+    books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in snap.books.chunks(per_conn).enumerate() {
         tasks.push(tokio::spawn(ws::run(

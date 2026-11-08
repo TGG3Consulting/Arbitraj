@@ -272,3 +272,82 @@ fn order_and_private_stream_live() {}
 #[test]
 #[ignore = "нет записей депозита, перевода и вывода — записать на живом боте"]
 fn transfers_live() {}
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/bybit/book_print.rs: разбор ЖИВОГО ответа GET /v5/market/orderbook
+/// (bybit_orderbook_CAKEUSDT.json, limit 50) — первые N уровней от лучшей цены, u ответа; живая логика ядра
+/// (core/feed_confirm.rs verdict): ответ против самого себя — Quiet; против локального стакана из записанного потока
+/// orderbook.50 (снимок + изменения через 45–55 с после ответа REST — книга за это время менялась) — Lost.
+/// Почему у глубины 50 не номер: u ответа REST и u кадров orderbook.50 на записи — разные счётчики (документация
+/// связывает u REST только с потоком 1000 уровней). Пары «кадр + ответ REST в один момент» в записи нет — равенство
+/// отпечатков на одной книге ждёт записи (tests/README.md).
+#[test]
+fn book_print_live_orderbook() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::bybit::book_print;
+    let t =
+        std::fs::read_to_string(format!("{DIR}/bybit_orderbook_CAKEUSDT.json")).expect("запись");
+    let v: Value = serde_json::from_str(&t).expect("JSON");
+    let r = &v["result"];
+    let rest = book_print::parse(r, 50).expect("разбор");
+    assert_eq!((rest.bids.len(), rest.asks.len()), (50, 50));
+    assert_eq!(
+        (rest.asks[0].price, rest.asks[0].qty),
+        (dec("1.8938"), dec("6.004"))
+    );
+    assert_eq!(
+        (rest.bids[0].price, rest.bids[0].qty),
+        (dec("1.8934"), dec("6.194"))
+    );
+    assert!(rest.bids.windows(2).all(|w| w[0].price > w[1].price));
+    assert!(rest.asks.windows(2).all(|w| w[0].price < w[1].price));
+    assert_eq!(book_print::parse(r, 5).expect("разбор").asks.len(), 5);
+    let rest_u = book_print::u_of(r).expect("u");
+    assert_eq!(rest_u, 3_200_727);
+    // Локальный стакан из записанного потока orderbook.50 (как ws_conn.rs).
+    let mut book = LocalBook::default();
+    let mut stream_u = vec![];
+    for f in ws_frames() {
+        if let Msg::Book {
+            snapshot,
+            u,
+            bids,
+            asks,
+            ..
+        } = depth::parse(&f)
+        {
+            book.apply(snapshot, u, true, &bids, &asks);
+            stream_u.push(u);
+        }
+    }
+    assert!(
+        !stream_u.is_empty() && stream_u.iter().all(|&u| u < rest_u),
+        "u потока 50 и u REST — разные счётчики"
+    );
+    let (b, a) = book.top(50);
+    let ours = BookPrint::top(&b, &a, 50);
+    let pair = PairHealth {
+        ticker: "CAKE".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours| BookVersion {
+        print: Some(BookPrints {
+            levels: 50,
+            rest: rest.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(rest.clone())), 2), Verdict::Quiet);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(ours)), 2),
+        Verdict::Lost(_)
+    ));
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    // Нет стороны — ошибка с причиной.
+    let bad: Value = serde_json::from_str(r#"{"s":"CAKEUSDT","b":[],"u":1}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет a");
+}

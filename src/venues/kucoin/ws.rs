@@ -3,7 +3,7 @@
 //! (bullet.rs) на каждое подключение, сессия (ws_conn.rs), при обрыве — все стаканы соединения недостоверны, журнал,
 //! пауза, переподключение. Нет нужной настройки — соединение останавливается (без бесконечных повторов).
 //! Кто вызывает: market.rs (по задаче на соединение), feed.rs (config).
-//! От чего зависит: ws_conn.rs, bullet.rs, book.rs, ctx.rs.
+//! От чего зависит: ws_conn.rs, bullet.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_subs_per_sec (≤ 10), venue.ws_reconnect_pause_ms, venue.depth_levels (5 или 50) [kucoin],
 //! http.timeout_ms (время на подключение). Адрес, пинг и срок понга — из ответа bullet (не настройки).
 //!
@@ -54,10 +54,19 @@ pub async fn run(
     books: Books,
     out: mpsc::Sender<MarketEvent>,
 ) {
+    // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
+    let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
+    let (feed, mut cmd) = books.feed.register(&name, &tickers);
     while !out.is_closed() {
         let end = match config(&ctx) {
             Ok(cfg) => match super::bullet::get(&ctx, false).await {
-                Ok(t) => ws_conn::session(&ctx, &name, &assets, &books, &out, cfg, t).await,
+                Ok(t) => {
+                    let w = ws_conn::Watch {
+                        feed: &feed,
+                        cmd: &mut cmd,
+                    };
+                    ws_conn::session(&ctx, &name, &assets, &books, &out, cfg, t, w).await
+                }
                 Err(e) => End::Broken(format!("токен bullet-public не получен: {}", e.message)),
             },
             Err(e) => End::Config(e),

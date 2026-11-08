@@ -77,12 +77,18 @@ pub fn result(
                 .with_tx(d.chain));
         }
         (TxOutcome::Replaced, _) => {
+            // «Чем найти» с хешами отмен (позднее выяснение — resolve_single.rs: чья квитанция заняла nonce).
+            let seed = super::swap_ctx::with_cancels(
+                super::swap_ctx::seed(&d.chain, d.tip_bnb),
+                &d.cancels,
+            );
             return Err(ctx
                 .err(
                     ErrorCode::OutcomeUnknown,
                     format!("Nonce занят, а своей квитанции нет за send.replaced_confirm_blocks — исход обмена tx {} неизвестен, нужна ручная проверка", d.chain.hash),
                 )
-                .with_tx(d.chain));
+                .with_tx(d.chain)
+                .pending(seed));
         }
         _ => {
             return Err(ctx

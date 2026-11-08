@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 
-use crate::core::types::{TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest};
+use crate::core::types::{
+    TradeRequest, TradeResult, Transfer, TxOutcome, VenueId, WithdrawRequest,
+};
 use crate::gateway::contract::Venue;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::notify::human::{self as h, Msg};
@@ -110,13 +112,20 @@ pub async fn withdraw(
     Some(found)
 }
 
-/// Окончательный отказ площадки по найденной операции (ничего не исполнено): ордер отклонён, вывод отклонён или
-/// перевод DEX откатился в блоке. Ошибок нет.
-fn definitive(code: ErrorCode) -> bool {
-    matches!(
-        code,
-        ErrorCode::OrderRejected | ErrorCode::WithdrawRejected | ErrorCode::SwapReverted
-    )
+/// Окончательный отказ площадки по найденной операции (ничего не исполнено): ордер отклонён, вывод отклонён,
+/// перевод DEX откатился в блоке или транзакция DEX не попала, а её nonce занят нашей отменой в блоке (факт транзакции:
+/// исход NotIncluded и хеш отмены — адаптер ставит их только по квитанции отмены; исходная уже не исполнится — как
+/// OpError::cancel_confirmed, решение 229). Ошибок нет.
+pub fn definitive(e: &GatewayError) -> bool {
+    let cancelled = e.code == ErrorCode::TxNotIncluded
+        && e.tx
+            .as_ref()
+            .is_some_and(|t| t.outcome == TxOutcome::NotIncluded && t.cancel_hash.is_some());
+    cancelled
+        || matches!(
+            e.code,
+            ErrorCode::OrderRejected | ErrorCode::WithdrawRejected | ErrorCode::SwapReverted
+        )
 }
 
 /// Опрос площадки до окончательного итога или срока. Операция должна быть на учёте «выясняет бот» (rules_stop.rs
@@ -162,7 +171,7 @@ where
         match ask().await {
             Ok(Some(t)) => return Some(Ok(t)),
             Ok(None) => {}
-            Err(x) if definitive(x.code) => return Some(Err(x)),
+            Err(x) if definitive(&x) => return Some(Err(x)),
             Err(x) if x.code == ErrorCode::NotApplicable => break x.message,
             Err(x) if x.message != last => {
                 let msg = format!(

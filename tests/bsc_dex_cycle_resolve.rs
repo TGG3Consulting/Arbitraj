@@ -180,6 +180,7 @@ fn single(
         receipt: Some(rc.clone()),
         cancel: None,
         tip_bnb: tip,
+        cancels: Vec::new(),
     };
     let t = result::result(c, tr(), d, W1, (B1, B1), (DEC, DEC), &[]);
     let normal = result::by(t, BY_CYCLE_EXECUTOR).map(|t| cycle_steps::finish(t, &rates()));

@@ -7,7 +7,7 @@
 //! risk.outcome_poll_s спрашивает тот же адаптер (кошелёк сделки) — Venue::resolve_cycle, не дольше risk.outcome_max_s.
 //! Найден итог — вызывающий (cycle_deal.rs) закрывает сделку: «в блоке» — как обычный исполненный цикл; «окончательно
 //! не исполнено» (not_executed) — цикл не исполнен, денег не стоил; откат в блоке (SwapReverted) — как обычный откат,
-//! газ в затраты. Не выяснен / человек (NotApplicable, противоречие, срок) — как раньше: сделка Halted, пауза «только
+//! газ в затраты; nonce занят нашей отменой в блоке (TxNotIncluded с хешем отмены) — не исполнен, газ отмены в затраты. Не выяснен / человек (NotApplicable, противоречие, срок) — как раньше: сделка Halted, пауза «только
 //! человек». Очередь кошелька снимает адаптер, когда исход выяснен.
 //! Выяснение идёт в задаче сделки цикла (её ждёт поиск циклов core/cycle_watch.rs; площадка всё это время на паузе
 //! «исход неизвестен», очередь кошелька остановлена — новых циклов этим кошельком и так нет).
@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use crate::core::types::{CycleTradeRequest, CycleTradeResult, TradeStatus, TxOutcome, VenueId};
 use crate::gateway::contract::Venue;
-use crate::gateway::errors::{GatewayError, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::engine::Core;
 use super::outcome_resolve;
@@ -50,7 +50,9 @@ pub async fn resolve(
             "цикл в блоке: вход {} → выход {}, tx {}",
             r.input, r.output, r.trade.venue_ref
         ),
-        Err(x) => format!("откатился в блоке: {}", x.message),
+        // Откат в блоке или nonce занят нашей отменой в блоке (TxNotIncluded, outcome_resolve.rs definitive).
+        Err(x) if x.code == ErrorCode::SwapReverted => format!("откатился в блоке: {}", x.message),
+        Err(x) => format!("не исполнен: {}", x.message),
     };
     outcome_resolve::done(core, OP, deal, v, e, &line).await;
     Some(found)

@@ -77,6 +77,7 @@ pub fn rebuild(
         receipt: Some(r),
         cancel: None,
         tip_bnb: c.tip_bnb,
+        cancels: Vec::new(),
     };
     let out = match c.executor {
         Some(x) => fact::result(ctx, req, d, (wallet, x), tokens, decs),

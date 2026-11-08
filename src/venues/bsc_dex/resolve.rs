@@ -17,13 +17,15 @@
 //!     квитанция есть). Цикл DEX ↔ DEX (решение 233, дополнение, п. 4) — своп «базовая → базовая» с контекстом цикла:
 //!     resolve_cycle.rs зовёт этот же trade и делает из итога свопа итог цикла.
 //!
-//! Nonce занят, а квитанции своей транзакции нет (её место заняла отмена или чужая транзакция) — бот не решает: это
-//! тот же случай «Replaced», что уже дал OutcomeUnknown (exec/result.rs); ждём квитанцию до срока ядра, дальше человек.
+//! Хеши отправленных отмен есть в «чем найти» (exec/swap_ctx.rs cancels; ветка t42/small-fixes) — resolve_single.rs:
+//! квитанция отмены в блоке → «не исполнено» (TxNotIncluded, газ отмены — в факте транзакции); nonce занят ни нашей
+//! транзакцией, ни отменой → противоречие, человек. Хешей отмен нет («чем найти» до этого поля) — как раньше: nonce занят,
+//! а квитанции своей транзакции нет — бот не решает, ждёт квитанцию до срока ядра, дальше человек.
 //!
 //! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs;
-//! resolve_bundle.rs (release_if_ours); resolve_cycle.rs (trade — цикл DEX ↔ DEX).
+//! resolve_bundle.rs, resolve_single.rs (release_if_ours, landed); resolve_cycle.rs (trade — цикл DEX ↔ DEX).
 //! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), wallet/transfer.rs (transfer), parts.rs,
-//! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs.
+//! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs, resolve_single.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! Квитанция — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165
@@ -78,12 +80,29 @@ pub async fn trade(
         return super::resolve_bundle::trade(p, req, &c).await;
     }
     let (hash, nonce) = keys(p, pend)?;
+    // Хеши отмен известны (ветка t42): квитанции отмен и nonce кошелька — resolve_single.rs.
+    if let Some(c) = SwapCtx::of(pend).filter(|c| c.cancels.is_some()) {
+        return super::resolve_single::trade(p, req, pend, &c, (hash, nonce)).await;
+    }
     let Some(r) = receipt(p, hash).await? else {
         return Ok(None);
     };
+    landed(p, req, pend, (hash, nonce), r).await.map(Some)
+}
+
+/// Что делает: своп в блоке (квитанция исходной транзакции найдена): очередь кошелька снята (если остановлена этой
+/// транзакцией), итог по контексту разбора. Принимает: части адаптера, запрос, «чем найти», (хеш, nonce), квитанцию.
+/// Возвращает: итог, как у обычного пути. Ошибки: как у trade (NotApplicable — контекста нет; SwapReverted; OutcomeUnknown).
+pub(super) async fn landed(
+    p: &Parts,
+    req: TradeRequest,
+    pend: &PendingRef,
+    (hash, nonce): (B256, Option<u64>),
+    r: Receipt,
+) -> GatewayResult<TradeResult> {
     let queue = release_if_ours(p, hash, nonce, false).await;
     match SwapCtx::of(pend).filter(SwapCtx::complete) {
-        Some(c) => swap_rebuild::rebuild(&p.ctx, req, &c, hash, r).map(Some),
+        Some(c) => swap_rebuild::rebuild(&p.ctx, req, &c, hash, r),
         None => Err(p.ctx.err(
             ErrorCode::NotApplicable,
             format!(

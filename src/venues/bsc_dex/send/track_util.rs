@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/send/track_util.rs
 //! Что делает: части трекера транзакции (send/track.rs): что отслеживать (Watch), итог (Tracked), итог по найденной
 //! квитанции со счётчиками канала, журнал без спама — одна запись на смену состояния (сбой узла, нет блоков,
-//! отмена не ушла), причина последнего сбоя — для итога «исход неизвестен».
+//! отмена не ушла), причина последнего сбоя — для итога «исход неизвестен»; журнал хешей отправленных отмен (CancelLog —
+//! «чем найти», exec/txs.rs, exec/swap_ctx.rs: позднее выяснение узнаёт, чья квитанция заняла nonce).
 //! Кто вызывает: send/track.rs, exec/txs.rs.
 //! От чего зависит: send/receipt.rs, send/stats.rs, send/ready.rs, send/tx.rs (SendCfg), node/heads.rs, ctx.rs.
 //! Настройки: нет своих.
@@ -19,6 +20,18 @@ use super::ready::Ready;
 use super::receipt::Receipt;
 use super::stats::Stats;
 use super::tx::SendCfg;
+
+/// Хеши отмен, отправленных трекером (send/cancel.rs), по порядку. Общий с вызывающим (exec/txs.rs): виден и после
+/// паники или отмены задачи трекера — «чем найти» не теряет отмены, которые уже могли занять nonce.
+pub type CancelLog = std::sync::Arc<std::sync::Mutex<Vec<B256>>>;
+
+/// Что делает: хеши отмен из журнала (отравленный замок — данные как есть). Принимает: журнал. Ошибок нет.
+pub fn cancels_of(log: &CancelLog) -> Vec<B256> {
+    match log.lock() {
+        Ok(v) => v.clone(),
+        Err(p) => p.into_inner().clone(),
+    }
+}
 
 /// Итог ожидания.
 pub struct Tracked {
@@ -59,6 +72,8 @@ pub struct Watch {
     pub sent_block: u64,
     /// Каналы, принявшие (или не ответившие ясно) — для счётчиков.
     pub channels: Vec<String>,
+    /// Журнал отправленных отмен (каждая принятая каналом отмена — сюда, send/track.rs).
+    pub cancels: CancelLog,
 }
 
 /// Итог по найденной квитанции (индекс 0 — исходная, больше — отмена). Ошибок нет.

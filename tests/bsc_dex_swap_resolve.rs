@@ -130,6 +130,7 @@ fn normal(ctx: &Ctx, hash: B256, r: Receipt, tip: Option<Decimal>) -> GatewayRes
         receipt: Some(r),
         cancel: None,
         tip_bnb: tip,
+        cancels: Vec::new(),
     };
     let out = result::result(ctx, req(), d, WALLET, (COIN, USDT), DECS, &[]).map(|mut t| {
         t.executor = Some("— продажа по квотеру".into());

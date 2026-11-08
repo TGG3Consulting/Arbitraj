@@ -33,13 +33,17 @@ pub async fn send_approvals(env: &Env, slot: &Slot, approvals: &[Approval]) -> G
             .await
             .map_err(super::swap_ctx::approve)?;
         if d.chain.outcome == TxOutcome::Replaced {
+            // «Чем найти» с хешами отмен — позднее выяснение (resolve_single.rs).
+            let seed =
+                super::swap_ctx::with_cancels(super::swap_ctx::seed(&d.chain, None), &d.cancels);
             return Err(super::swap_ctx::approve(
                 env.ctx
                     .err(
                         ErrorCode::OutcomeUnknown,
                         "Исход разрешения (approve) неизвестен — nonce занят, квитанции нет",
                     )
-                    .with_tx(d.chain),
+                    .with_tx(d.chain)
+                    .pending(seed),
             ));
         }
         if d.chain.outcome != TxOutcome::Included {

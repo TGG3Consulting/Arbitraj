@@ -198,6 +198,7 @@ pub fn bundle_result(
         receipt,
         cancel: None,
         tip_bnb: None,
+        cancels: Vec::new(),
     };
     result::result(ctx, req, done, wallet, (tin, tout), decs, native_routers)
 }

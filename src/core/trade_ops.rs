@@ -180,7 +180,13 @@ pub async fn trade_seen(
                             found = Some(r);
                             continue;
                         }
-                        Err(rejected) => return Err(OpError::from(&rejected)),
+                        Err(rejected) => {
+                            // Газ найденного факта (откат, отмена, занявшая nonce) — в статистику, как обычный путь.
+                            if let Some(tx) = &rejected.tx {
+                                super::gas_stats::record_tx(core, a, tx).await;
+                            }
+                            return Err(OpError::from(&rejected));
+                        }
                     }
                 }
                 return Err(OpError::from(&err));

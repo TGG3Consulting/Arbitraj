@@ -6,7 +6,8 @@
 //! Ожидание идёт в отдельной задаче, которая держит место в очереди кошелька (wallet/nonce.rs, Hold): даже если
 //! вызывающий прерван, следующая транзакция кошелька не возьмёт nonce, пока этот не занят (решение 45). Задача трекера
 //! упала (паника) или отменена — очередь ОСТАНОВЛЕНА (send/settle.rs guarded / joined), вызывающий получает «исход
-//! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро.
+//! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро. В «чем найти» — и хеши отправленных
+//! трекером отмен (журнал отмен send/track_util.rs CancelLog): позднее выяснение проверяет и их квитанции.
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
 //! От чего зависит: exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
@@ -25,6 +26,7 @@ use super::super::quote::gas::GasPrice;
 use super::super::send::settle::{self, After};
 use super::super::send::stats::Stats;
 use super::super::send::track::{self, Receipt, Tracked, Watch};
+use super::super::send::track_util::{CancelLog, cancels_of};
 use super::super::send::tx::{self, SendCfg};
 use super::super::send::{self};
 use super::super::wallet::inflows::{Inflows, SwapGuard};
@@ -54,6 +56,9 @@ pub struct Done {
     /// Чаевые, отправленные вместе с транзакцией (BNB; None — не было). В chain.tip_bnb они попадают только при исходе
     /// «в блоке» / «откат»; здесь — всегда, для «чем найти» (решение 231, дополнение: exec/swap_ctx.rs).
     pub tip_bnb: Option<rust_decimal::Decimal>,
+    /// Хеши всех отправленных отмен (send/track.rs) — для «чем найти» при «вытеснена» (exec/result.rs,
+    /// exec/swap_send.rs): позднее выяснение (resolve_single.rs) проверяет и их квитанции.
+    pub cancels: Vec<B256>,
 }
 
 /// Отправляет вызов и ждёт, пока его nonce не занят в блоке. Принимает: окружение, место в очереди кошелька, адрес
@@ -110,6 +115,7 @@ pub async fn send(
         SendMethod::Single
     };
     let channels = d.all();
+    let cancel_log = CancelLog::default();
     let watch = Watch {
         ctx: ctx.clone(),
         heads: env.heads.clone(),
@@ -122,6 +128,7 @@ pub async fn send(
         price,
         sent_block: head.number,
         channels: channels.clone(),
+        cancels: cancel_log.clone(),
     };
     let hold = slot.hold();
     let after = After {
@@ -169,11 +176,12 @@ pub async fn send(
     // «исход неизвестен» с «чем найти» (хеш, nonce, чаевые), исход выясняет ядро (решение 231).
     let t = joined.unwrap_or_else(|why| Tracked::bare(TxOutcome::Pending, Some(why)));
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
+    let cancels = cancels_of(&cancel_log);
     if let Some(why) = &t.unresolved {
         let chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
-        // Решение 231 (дополнение): чаевые — в «чем найти» (исход неизвестен — в chain.tip_bnb их нет), чтобы итог
-        // свопа по квитанции совпал с обычным путём (exec/swap_ctx.rs, exec/swap_rebuild.rs).
-        let seed = super::swap_ctx::seed(&chain, tip_bnb);
+        // Решение 231 (дополнение): чаевые — в «чем найти» (в chain.tip_bnb их нет), чтобы итог свопа по квитанции совпал
+        // с обычным путём (exec/swap_rebuild.rs); хеши отмен — тоже: nonce могла занять отмена (resolve_single.rs).
+        let seed = super::swap_ctx::with_cancels(super::swap_ctx::seed(&chain, tip_bnb), &cancels);
         return Err(ctx
             .err(
                 ErrorCode::OutcomeUnknown,
@@ -187,5 +195,6 @@ pub async fn send(
         receipt: t.receipt,
         cancel: t.cancel,
         tip_bnb,
+        cancels,
     })
 }

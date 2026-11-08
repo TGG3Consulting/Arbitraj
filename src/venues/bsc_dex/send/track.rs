@@ -6,7 +6,8 @@
 //! занят — ещё send.replaced_confirm_blocks блоков ищем свою квитанцию и eth_getTransactionByHash (узел мог ещё не
 //! проиндексировать, балансировщик RPC), только потом «вытеснена». Сбой узла, нет блоков — не ошибка: повтор.
 //! Исход не установлен: лимит отмен (send.cancel_max_attempts), потолок цены газа отмены (send.cancel_max_gas_gwei),
-//! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь).
+//! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь). Хеш каждой
+//! отправленной отмены — в журнал отмен Watch.cancels (для «чем найти», exec/txs.rs).
 //! Кто вызывает: exec/txs.rs (задача трекера держит место в очереди кошелька).
 //! От чего зависит: node/rpc.rs, send/track_util.rs, send/receipt.rs, send/cancel.rs, send/tx.rs (SendCfg), ctx.rs.
 //! Настройки: send.max_wait_blocks, send.replaced_confirm_blocks, send.cancel_*, send.queue_max_wait_s,
@@ -126,6 +127,11 @@ pub async fn resolve(w: Watch) -> Tracked {
         {
             Ok(h) => {
                 ours.push(h);
+                // «Чем найти» (exec/txs.rs): отмена могла занять nonce — её хеш нужен позднему выяснению.
+                match w.cancels.lock() {
+                    Ok(mut v) => v.push(h),
+                    Err(p) => p.into_inner().push(h),
+                }
                 quiet.ok("cancel").await;
                 let msg = format!(
                     "{} не попала за send.max_wait_blocks — отмена {h} (nonce {}, {price} wei)",

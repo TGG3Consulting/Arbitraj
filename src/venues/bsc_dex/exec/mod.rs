@@ -50,6 +50,7 @@ pub mod precheck;
 pub mod precheck_quoter;
 pub mod precheck_sim;
 pub mod result;
+pub mod single_rebuild;
 pub mod smart_legs;
 pub mod swap_ctx;
 pub mod swap_rebuild;

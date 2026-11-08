@@ -11,13 +11,15 @@
 //! человек (операции до дополнения, KyberSwap — см. resolve.rs). Бандл (решение 233) — тот же контекст плюс поле
 //! bundle (exec/bundle_ref.rs): выясняет resolve_bundle.rs по квитанциям всех транзакций. Цикл DEX ↔ DEX (решение
 //! 233, дополнение, п. 4) — тот же контекст («базовая → базовая») плюс поле cycle (курсы сделки, exec/cycle_ref.rs).
+//! Хеши отмен одиночной транзакции (поле cancels; txs.rs, result.rs, swap_send.rs — with_cancels) — позднему выяснению
+//! (resolve_single.rs): чья квитанция заняла nonce.
 //! Кто вызывает: exec/txs.rs (seed — чаевые), exec/swap_send.rs (approve), exec/trade_direct.rs, exec/trade_smart.rs,
 //! exec/executor/trade.rs, exec/bundle_trade.rs, exec/cycle_exec.rs, exec/cycle_bundle_trade.rs (attach), exec/trade.rs,
 //! exec/cycle_trade.rs (подпись), best_of/trade.rs (причина), exec/swap_rebuild.rs, resolve.rs, resolve_cycle.rs.
 //! От чего зависит: gateway/pending.rs, gateway/errors.rs, core/types (ChainTx).
 //! Настройки: нет.
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, B256};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +70,12 @@ pub struct SwapCtx {
     /// (exec/cycle_ref.rs); None — не цикл.
     #[serde(default)]
     pub cycle: Option<super::cycle_ref::CycleRef>,
+    /// Хеши отмен, отправленных трекером одиночной транзакции (send/track.rs, тот же nonce): Some — список известен
+    /// (пустой — отмен не было); None — неизвестен («чем найти» до этого поля, бандл). Позднее выяснение
+    /// (resolve_single.rs): квитанция отмены в блоке — исходная не исполнится; nonce занят ни ею, ни отменой —
+    /// противоречие (только при Some).
+    #[serde(default)]
+    pub cancels: Option<Vec<B256>>,
 }
 
 impl SwapCtx {
@@ -105,14 +113,15 @@ impl SwapCtx {
         }
     }
 
-    /// Прикладывает контекст к ошибке «исход неизвестен» с фактом транзакции (чаевые из прежнего «чем найти» — txs.rs
-    /// seed — сохраняются). Принимает: ошибку. Возвращает: ту же ошибку. Ошибок нет.
+    /// Прикладывает контекст к ошибке «исход неизвестен» с фактом транзакции (чаевые и хеши отмен из прежнего «чем
+    /// найти» — txs.rs seed — сохраняются). Принимает: ошибку. Возвращает: ту же ошибку. Ошибок нет.
     pub fn attach(&self, e: GatewayError) -> GatewayError {
         let mine = self.clone();
         merge(e, move |c| {
-            let tip = c.tip_bnb;
+            let (tip, cancels) = (c.tip_bnb, c.cancels.take());
             *c = mine;
             c.tip_bnb = tip;
+            c.cancels = cancels;
         })
     }
 }
@@ -131,6 +140,15 @@ pub fn seed(chain: &ChainTx, tip_bnb: Option<Decimal>) -> PendingRef {
         parse: serde_json::to_value(c).ok(),
         ..PendingRef::default()
     }
+}
+
+/// «Чем найти» с хешами отправленных отмен (список известен — Some, даже пустой). Принимает: «чем найти» (seed),
+/// хеши отмен. Возвращает: тот же PendingRef с полем cancels в контексте. Ошибок нет.
+pub fn with_cancels(mut p: PendingRef, cancels: &[B256]) -> PendingRef {
+    let mut c = SwapCtx::of(&p).unwrap_or_default();
+    c.cancels = Some(cancels.to_vec());
+    p.parse = serde_json::to_value(c).ok();
+    p
 }
 
 /// Отметка «разрешение (approve)»: обмен после этой транзакции не отправлялся. Ошибок нет.

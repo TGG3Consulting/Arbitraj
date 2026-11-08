@@ -33,6 +33,7 @@ pub mod quote;
 pub mod resolve;
 pub mod resolve_bundle;
 pub mod resolve_cycle;
+pub mod resolve_single;
 pub mod resubscribe;
 pub mod resubscribe_wallets;
 pub mod send;

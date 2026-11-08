@@ -28,10 +28,11 @@ pub fn hours(secs: i64) -> String {
 /// Строка пары: «ION (ION-USDT): торги до 05.11 00:00 UTC, вывод до 07.12 08:00 UTC». Время не сообщено — так и
 /// пишется. Ошибок нет.
 pub fn item(i: &DelistItem) -> String {
-    let trade = i.trading_end.map_or(
-        "время прекращения торгов не сообщено".into(),
-        |t| format!("торги до {}", when(t)),
-    );
+    let trade = match i.trading_end {
+        Some(t) => format!("торги до {}", when(t)),
+        None if i.st => "метка ST (блок — при delist.st_block = да)".into(),
+        None => "время прекращения торгов не сообщено".into(),
+    };
     let wd = i
         .withdraw_end
         .map(|t| format!(", вывод до {}", when(t)))

@@ -1,20 +1,23 @@
 //! Файл: venues/bybit/delist_ann.rs
-//! Что делает: анонсы делистинга Bybit (решение 226) — страницы GET /v5/announcements/index с type delistings и tag
-//! Spot на английском; отбор только анонсов с тегом Spot и заголовком «Delisting of A, B and C» (необязательный
-//! хвост « on Aug 18, 2026» отрезается); «Delisting 11 Spot trading pairs…», «Spot Token Delisting Notice» — монет в
-//! заголовке нет, не разбираются; «Delisting of EPICUSDT Perpetual Contract», «Discontinuation of … as Collateral» —
-//! без тега Spot. Список монет → записи без времени через gateway/delist_ann.rs (только тикеры из справочника Bybit).
-//! Кто вызывает: delist.rs, tests/delist_sources.rs (parse).
-//! От чего зависит: rest.rs, num.rs, errors.rs, ctx.rs, gateway/delist_ann.rs.
-//! Настройки: delist.ann_max_age_h, delist.ann_max_pages.
+//! Что делает: анонсы делистинга Bybit (решение 226, уточнение Тиграна 08.11.2026) — страницы GET
+//! /v5/announcements/index с type delistings на английском (БЕЗ тега Spot: живой ответ 08.11 — спотовые делистинги
+//! с сентября 2026 идут с тегами Delistings, Institutions, VIP; тег Spot был только у старых). Отбор: в заголовке
+//! «delist» («Delisting of A, B and C[ on …]», «Bybit to Delist N Token(s) / Trading Pair(s) on …», «Spot Token
+//! Delisting Notice», «Delisting 11 Spot trading pairs on 2026-07-28 08:00:00 UTC»); анонсы с тегами Derivatives,
+//! WEB3 (Bybit Alpha) и заголовки про фьючерсы, залог, займы, Earn (gateway/delist_html::spot) — не спот.
+//! Монеты — из заголовка, иначе со страницы url (строки «Delisted trading pairs: HFTUSDT»); время делистинга — из
+//! заголовка/description, иначе со страницы («Trading of HFTUSDT pairs … will end after Oct 28, 2026, 8:00AM UTC»).
+//! Кто вызывает: delist.rs, tests/delist_sources.rs, tests/delist_ann.rs (parse).
+//! От чего зависит: rest.rs, num.rs, errors.rs, ctx.rs, gateway/{delist_ann,delist_page,delist_html}.rs.
+//! Настройки: delist.ann_max_age_h, delist.ann_max_pages, delist.ann_html_per_refresh, http.* (страницы анонсов).
 //!
 //! Официальная документация: Get Announcement GET /v5/announcements/index
 //! https://bybit-exchange.github.io/docs/v5/announcement — параметры locale (обязателен), type, tag, page («Default:
 //! 1»), limit («Default: 20»); ответ result = {total, list: [{title, description, type: {title, key}, tags, url,
-//! dateTimestamp, startDataTimestamp, endDataTimestamp, publishTime}]}. Живой ответ 08.11.2026 с type=delistings и
-//! tag=Spot — 59 анонсов по убыванию dateTimestamp: «Delisting of VANRY on Aug 18, 2026», «Delisting of SOLO»,
-//! «Delisting of ELX, ODOS and DMAIL», «Delisting of BTC/BRZ and USDT/BRZ», «Delisting of leveraged token pairs».
-//! Возраст анонса — по publishTime.
+//! dateTimestamp, startDataTimestamp, endDataTimestamp, publishTime}]}. Живой ответ 08.11.2026 (type=delistings,
+//! 4 страницы по 20 = 80 анонсов с 09.06.2026): за 30 дней 11 анонсов (из них спот — «Bybit to Delist 1 Token(s) on
+//! Oct 28, 2026», «… on Oct 13, 2026», «Bybit to Delist 2 Token(s) on Oct 8, 2026»); description у них — общая фраза
+//! без монет и времени, dateTimestamp — время публикации, а не делистинга. Возраст анонса — по publishTime.
 
 use std::collections::HashMap;
 
@@ -22,26 +25,35 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::core::types::DelistItem;
-use crate::gateway::delist_ann::{self, Ann};
+use crate::gateway::delist_ann::{self, Ann, Known};
+use crate::gateway::delist_page::Fetch;
 use crate::gateway::errors::GatewayResult;
 
 use super::ctx::Ctx;
 use super::num;
 
-/// Путь, язык, тип и тег — значения документации и живого ответа Bybit.
+/// Путь, язык и тип — значения документации и живого ответа Bybit.
 const PATH: &str = "/v5/announcements/index";
 const LOCALE: &str = "en-US";
 const ANN_TYPE: &str = "delistings";
-const TAG: &str = "Spot";
+/// Теги не спотовых анонсов (живой ответ: фьючерсы — Derivatives, Bybit Alpha — WEB3).
+const NOT_SPOT: [&str; 2] = ["Derivatives", "WEB3"];
 /// Источник для человека.
 const SOURCE: &str = "Bybit GET /v5/announcements/index";
-/// Начало заголовка и разделитель даты (формат живых анонсов Bybit).
-const HEAD: &str = "Delisting of ";
+/// Признак делистинга в заголовке (без учёта регистра), начало заголовка с перечнем монет и разделитель даты
+/// (формат живых анонсов Bybit).
+const MARK: &str = "delist";
+const HEAD_LIST: &str = "Delisting of ";
 const DATE_SEP: &str = " on ";
 
-/// Что делает: читает страницы анонсов и строит записи. Принимает: окружение, справочник «тикер → символ».
-/// Возвращает: Ok(записи) или Err(причина для warnings).
-pub async fn items(ctx: &Ctx, known: &HashMap<String, String>) -> Result<Vec<DelistItem>, String> {
+/// Что делает: читает страницы анонсов (и, если нужно, страницы самих анонсов) и строит записи. Принимает:
+/// окружение, справочник «тикер → символ», котируемую монету. Возвращает: Ok((записи, предупреждения)) или
+/// Err(причина для warnings — анонсы не прочитаны).
+pub async fn items(
+    ctx: &Ctx,
+    known: &HashMap<String, String>,
+    quote: &str,
+) -> Result<(Vec<DelistItem>, Vec<String>), String> {
     let d = delist_ann::depth(
         ctx.int("delist.ann_max_age_h"),
         ctx.int("delist.ann_max_pages"),
@@ -52,7 +64,6 @@ pub async fn items(ctx: &Ctx, known: &HashMap<String, String>) -> Result<Vec<Del
         let q = vec![
             ("locale", LOCALE.to_string()),
             ("type", ANN_TYPE.to_string()),
-            ("tag", TAG.to_string()),
             ("page", page.to_string()),
         ];
         let data = super::rest::public(ctx, PATH, q)
@@ -64,7 +75,13 @@ pub async fn items(ctx: &Ctx, known: &HashMap<String, String>) -> Result<Vec<Del
             break;
         }
     }
-    Ok(delist_ann::items(&anns, known, d.since, SOURCE))
+    let fetch = Fetch {
+        http: &ctx.http,
+        limits: ctx.limits(),
+        per_refresh: ctx.int("delist.ann_html_per_refresh"),
+    };
+    let k = Known { map: known, quote };
+    Ok(delist_ann::collect(&anns, &k, d.since, SOURCE, &fetch).await)
 }
 
 /// Что делает: разбор result одной страницы. Принимает: result. Возвращает: (спотовые анонсы делистинга, время
@@ -89,20 +106,25 @@ pub fn parse(result: &Value) -> GatewayResult<(Vec<Ann>, Option<DateTime<Utc>>)>
             .get("type")
             .and_then(|t| t.get("key"))
             .and_then(Value::as_str);
-        let spot = a
-            .get("tags")
-            .and_then(Value::as_array)
-            .is_some_and(|t| t.iter().any(|x| x.as_str() == Some(TAG)));
-        if key != Some(ANN_TYPE) || !spot {
+        let other = a.get("tags").and_then(Value::as_array).is_some_and(|t| {
+            t.iter()
+                .any(|x| x.as_str().is_some_and(|s| NOT_SPOT.contains(&s)))
+        });
+        if key != Some(ANN_TYPE) || other || !crate::gateway::delist_html::spot(&title) {
             continue;
         }
-        let Some(rest) = title.strip_prefix(HEAD) else {
+        if !title.to_ascii_lowercase().contains(MARK) {
             continue;
-        };
-        let list = rest.split(DATE_SEP).next().unwrap_or(rest);
+        }
+        // Перечень монет — только в заголовке «Delisting of …»; у остальных — на странице анонса.
+        let list = title
+            .strip_prefix(HEAD_LIST)
+            .map(|rest| rest.split(DATE_SEP).next().unwrap_or(rest).to_string());
         out.push(Ann {
-            list: list.to_string(),
+            list,
             title: title.clone(),
+            desc: num::text_opt(a, "description").unwrap_or_default(),
+            url: num::text_opt(a, "url").filter(|u| !u.is_empty()),
             at,
         });
     }

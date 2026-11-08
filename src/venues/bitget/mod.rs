@@ -17,6 +17,7 @@ pub mod book;
 pub mod book_decided;
 pub mod ctx;
 pub mod delist;
+pub mod delist_ann;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -209,7 +210,7 @@ impl Venue for Bitget {
         all_balances::read(&self.ctx).await
     }
 
-    /// Решение 226: делистинги — offTime пар GET /api/v2/spot/public/symbols (delist.rs).
+    /// Решение 226: делистинги — offTime пар GET /api/v2/spot/public/symbols и анонсы делистинга (delist.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
         delist::delistings(&self.ctx).await
     }

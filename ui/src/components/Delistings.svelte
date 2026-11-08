@@ -6,10 +6,12 @@
     последнего запроса. Порог «не торговать за N часов» — delist.block_hours, частота — delist.refresh_s (настройки
     площадки ниже на том же экране). Решение 226: источник и причина блока — в колонке «Источник» (метка ST, время из
     справочника, анонс делистинга); второстепенный источник не прочитан (например, анонсы: настройка не задана,
-    сбой запроса) — строки «Не прочитано» (пары основного источника при этом действуют).
+    сбой запроса) — строки «Не прочитано» (пары основного источника при этом действуют). Уточнение 08.11: у анонсов
+    время делистинга берётся из анонса; метка ST (поле st) блокирует только при delist.st_block = да.
   Кто вызывает: pages/Venues.svelte.
   От чего зависит: lib/delist.svelte.js, lib/labels.js.
-  Настройки: delist.refresh_s, delist.block_hours, delist.ann_max_age_h, delist.ann_max_pages (только показ имён).
+  Настройки: delist.refresh_s, delist.block_hours, delist.ann_max_age_h, delist.ann_max_pages,
+    delist.ann_html_per_refresh, delist.st_block (только показ имён).
 -->
 <script>
   import { delist, delistOf, delistTime } from '../lib/delist.svelte.js';
@@ -34,7 +36,7 @@
             <tr>
               <td><strong>{i.ticker}</strong></td>
               <td><code>{i.symbol}</code></td>
-              <td>{i.trading_end ? delistTime(i.trading_end) : 'не сообщено'}</td>
+              <td>{i.trading_end ? delistTime(i.trading_end) : i.st ? 'метка ST (блок — при delist.st_block = да)' : 'не сообщено'}</td>
               <td>{i.withdraw_end ? delistTime(i.withdraw_end) : '—'}</td>
               <td class="muted">{i.source}</td>
             </tr>

@@ -10,7 +10,7 @@
 //! Кто вызывает: gateway/contract.rs (delistings), адаптеры бирж (venues/*/delist.rs), core/delist.rs,
 //! core/delist_check.rs, api (GET /api/delistings).
 //! От чего зависит: chrono, serde.
-//! Настройки: нет.
+//! Настройки: нет (delist.st_block читает core/delist_check.rs и передаёт в find).
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,11 @@ pub struct DelistItem {
     pub withdraw_end: Option<DateTime<Utc>>,
     /// Откуда известно — эндпоинт и поле API (для человека), например «GET /spot/currency_pairs: delisting_time».
     pub source: String,
+    /// Решение 226 (уточнение 08.11): запись — метка риска ST (MEXC st, KuCoin st, Bybit stTag), а не делистинг.
+    /// Блокирует, только если у площадки delist.st_block = да (тогда — как делистинг без времени); иначе монета
+    /// торгуется (Тигран: «на супер волатильных монетах и появляются нормальные спреды»).
+    #[serde(default)]
+    pub st: bool,
 }
 
 /// Делистинги площадки сейчас. Пусто и unknown = None — площадка по своему API сообщила, что делистингов нет.
@@ -68,13 +73,14 @@ impl Delistings {
         self.unknown.is_some()
     }
 
-    /// Запись монеты по тикеру площадки. None — монеты в делистинге нет. Несколько записей одной монеты (разные
-    /// источники, решение 226) — строже та, где время не сообщено (такая блокирует всегда), иначе — самое раннее
-    /// прекращение торгов. Ошибок нет.
-    pub fn find(&self, ticker: &str) -> Option<&DelistItem> {
+    /// Запись монеты по тикеру площадки. Принимает: тикер, учитывать ли метки ST (delist.st_block площадки).
+    /// None — монеты в делистинге нет (или есть только метка ST, а st_block = нет). Несколько записей одной монеты
+    /// (разные источники, решение 226) — строже та, где время не сообщено (такая блокирует всегда), иначе — самое
+    /// раннее прекращение торгов. Ошибок нет.
+    pub fn find(&self, ticker: &str, st_block: bool) -> Option<&DelistItem> {
         self.items
             .iter()
-            .filter(|i| i.ticker == ticker)
+            .filter(|i| i.ticker == ticker && (st_block || !i.st))
             .min_by_key(|i| i.trading_end.map(|t| (1, t.timestamp())).unwrap_or((0, 0)))
     }
 }

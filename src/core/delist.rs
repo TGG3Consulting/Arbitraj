@@ -9,7 +9,7 @@
 //! /api/delistings через Core::delistings), тесты (set).
 //! От чего зависит: engine.rs, wait.rs, registry_sync.rs (venue.enabled), delist_text.rs, gateway (delistings).
 //! Настройки: delist.refresh_s (по площадке или вся система; не задана — обновления нет, журнал core.not_configured),
-//! venue.enabled.
+//! venue.enabled, delist.st_block (метки ST в уведомлении — только при «да»).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -147,12 +147,16 @@ async fn announce(core: &Core, venue: &VenueId, old: Option<&Delistings>, new: &
         }
         return;
     }
+    // Решение 226 (08.11): метка ST без delist.st_block = да не блокирует — и не уведомляется как делистинг.
+    let st = super::delist_check::st_block(core, venue);
+    let counts = |i: &&crate::core::types::DelistItem| st || !i.st;
     let fresh: Vec<_> = match old {
-        None => new.items.iter().collect(),
+        None => new.items.iter().filter(counts).collect(),
         Some(o) => {
             let was: HashSet<&str> = o.items.iter().map(|i| i.symbol.as_str()).collect();
             new.items
                 .iter()
+                .filter(counts)
                 .filter(|i| !was.contains(i.symbol.as_str()))
                 .collect()
         }

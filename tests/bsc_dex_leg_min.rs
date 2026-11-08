@@ -25,7 +25,7 @@ use arb::core::types::{Asset, PoolRef, Side, TokenTaxes, TradeRequest, VenueId};
 use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::exec::chain::{self, Step};
-use arb::venues::bsc_dex::exec::executor::call;
+use arb::venues::bsc_dex::exec::executor::{call, sim};
 use arb::venues::bsc_dex::exec::leg_min::set_leg_mins;
 use arb::venues::bsc_dex::num;
 use arb::venues::bsc_dex::parts::Parts;
@@ -307,4 +307,36 @@ async fn verification_min_is_floor_not_above_expected() {
     let r = req(Side::Sell, d("100"), d("739.9"));
     let err = build(&q, &r, &paths, None).1.expect_err("B > E");
     assert_eq!(err.code, ErrorCode::QuoteMismatch);
+}
+
+/// Решение 234 (п. 4): текст отката пробы исполнителя — minOut и ожидаемое каждой доли, модельный налог монеты
+/// (exec/executor/sim.rs legs_text, explain) — на тех же записанных долях 40 + 60 WBNB, что выше.
+#[tokio::test]
+async fn revert_text_has_min_expected_tax_per_leg() {
+    let p = route_common::parts().await;
+    settings(&p, "0.5").await;
+    let q = p.quoting();
+    let paths = shares(&q, Side::Sell, &[d("40"), d("60")]);
+    let r = req(Side::Sell, d("100"), d("739.5"));
+    let legs = build(&q, &r, &paths, None).1.expect("минимумы").0;
+    let exp: Vec<(Decimal, Decimal)> = paths.iter().map(|(p, _)| (p.usdt, Decimal::ZERO)).collect();
+    let text = sim::legs_text(&legs, &exp, &r, DECS);
+    assert_eq!(
+        text,
+        "доля 1: minOut 29645.525116470566368146 USDT, ожидалось 29660.451318 USDT, модельный налог монеты 0%; \
+         доля 2: minOut 44304.474883529433631855 USDT, ожидалось 44326.781707 USDT, модельный налог монеты 0%"
+    );
+    let e = arb::gateway::errors::GatewayError::new(
+        ErrorCode::NoRoute,
+        None,
+        "проба исполнителя откатилась — minOut",
+    );
+    let e = sim::explain(e, &text);
+    assert_eq!(e.code, ErrorCode::NoRoute);
+    assert!(
+        e.message
+            .starts_with("проба исполнителя откатилась — minOut; доля 1: minOut 29645.525116"),
+        "{}",
+        e.message
+    );
 }

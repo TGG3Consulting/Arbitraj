@@ -7,7 +7,8 @@
 //! (решение 45), разрешение ERC-20 исполнителю (один раз на токен; отправленное разрешение ждёт блока — тогда всё
 //! собирается заново на живом состоянии со свежей верификацией, новое разрешение после этого — отказ, решение 121 B1;
 //! до разрешения код и владелец исполнителя сверяются с узлом — onchain.rs),
-//! проба execute перед отправкой со сверкой req.worst_price (sim.rs), одна транзакция существующими каналами
+//! проба execute перед отправкой со сверкой req.worst_price (sim.rs; откат — с minOut, ожидаемым и модельным налогом
+//! каждой доли, решение 234 п. 4), одна транзакция существующими каналами
 //! (exec/txs.rs), факт по событиям Transfer (fact.rs). Повторов нет (стартовое правило Тиграна).
 //! Отметка «идёт обмен» (wallet/inflows.rs) не нужна: минимум проверяет сам исполнитель по приросту баланса кошелька
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
@@ -24,11 +25,12 @@
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{DexRoute, TradeRequest, TradeResult};
+use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::super::quote::path::Path;
 use super::super::super::quote::via::Via;
-use super::super::super::quote::{Quoting, direct};
+use super::super::super::quote::{Quoting, direct, pool_tax};
 use super::super::super::wallet::approve_executor;
 use super::super::super::wallet::nonce::Nonces;
 use super::super::chain::{self, Step};
@@ -74,7 +76,9 @@ pub async fn trade(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
-    let (legs, mut note) = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+    let (legs, mut note, exp) = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+    // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
+    let mut diag = sim::legs_text(&legs, &exp, &req, decs);
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
@@ -84,8 +88,9 @@ pub async fn trade(
     if send_approvals(env, &slot, &need).await? {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
-        let (legs, fresh) = prepare(&v, &req, route, &mins, decs).await?;
+        let (legs, fresh, exp) = prepare(&v, &req, route, &mins, decs).await?;
         note = fresh;
+        diag = sim::legs_text(&legs, &exp, &req, decs);
         (c, at) = build(q, &legs, executor).await?;
         if !approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
             .await?
@@ -96,7 +101,9 @@ pub async fn trade(
         }
         rebuilt_notice(env, &req);
     }
-    sim::check(ctx, &req, &c, wallet, at, decs).await?;
+    sim::check(ctx, &req, &c, wallet, at, decs)
+        .await
+        .map_err(|e| sim::explain(e, &diag))?;
     // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
     let tokens = (c.token_in, c.token_out);
     let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
@@ -120,7 +127,8 @@ pub async fn trade(
 /// Доли по живому состоянию: пути, сверка средней цены с худшей, шаги exec/chain.rs и минимум каждой доли по решению
 /// 228 (exec/leg_min.rs; минимум верификации — нижней границей). Решение 177: продажа выхода с расхождением хопа Maverick — доля по квотеру, минимум верификации — тем
 /// же множителем. Принимает: расчёт путей, запрос, маршрут, минимумы долей, (decimals монеты, USDT).
-/// Возвращает: шаги долей и строку «— продажа по квотеру» (None — по расчёту).
+/// Возвращает: шаги долей, строку «— продажа по квотеру» (None — по расчёту) и по каждой доле (ожидаемый выход,
+/// модельный налог монеты на её шаге, %) — для текста отката пробы (решение 234, п. 4).
 /// Ошибки: NoRoute, QuoteMismatch (цена, число долей), CoinNotChecked, BadResponse, узел.
 pub async fn prepare(
     v: &Via<'_>,
@@ -128,7 +136,7 @@ pub async fn prepare(
     route: &DexRoute,
     mins: &[Decimal],
     decs: (u8, u8),
-) -> GatewayResult<(Vec<Vec<Step>>, Option<String>)> {
+) -> GatewayResult<(Vec<Vec<Step>>, Option<String>, Vec<(Decimal, Decimal)>)> {
     let ctx = &v.q.ctx;
     let mut paths = live_paths(v, req, route, false).await?;
     // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером на своём узле.
@@ -152,7 +160,11 @@ pub async fn prepare(
     let ver: Vec<Decimal> = mins.iter().zip(&ratios).map(|(m, r)| *m * *r).collect();
     let shares = paths.iter().map(|(p, q)| (p, *q));
     leg_min::set_leg_mins(ctx, req, shares, &mut legs, Some(&ver), decs)?;
-    Ok((legs, note))
+    let exp = paths
+        .iter()
+        .map(|(p, _)| (expected(p, req.side), coin_tax(v, p)))
+        .collect();
+    Ok((legs, note, exp))
 }
 
 /// Вызов execute на текущем блоке. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как
@@ -164,4 +176,24 @@ async fn build(
 ) -> GatewayResult<(ExecCall, (u64, u64))> {
     let (at, now) = q.heads.at(&q.ctx).await?;
     Ok((call::build(&q.ctx, legs, executor, now)?, (at, now)))
+}
+
+/// Ожидаемый выход доли по живому пересчёту: продажа — USDT, покупка — монеты. Ошибок нет.
+fn expected(p: &Path, side: Side) -> Decimal {
+    match side {
+        Side::Sell => p.usdt,
+        Side::Buy => p.coins,
+    }
+}
+
+/// Модельный налог монеты сделки на её шаге доли (продажа — первый шаг, покупка — последний), % — тот же, что в
+/// расчёте (quote/pool_tax.rs step_pct). Нет шагов — 0. Ошибок нет.
+fn coin_tax(v: &Via<'_>, p: &Path) -> Decimal {
+    let h = match v.side {
+        Side::Sell => p.hops.first(),
+        Side::Buy => p.hops.last(),
+    };
+    h.map_or(Decimal::ZERO, |h| {
+        pool_tax::step_pct(&h.entry, &h.usable, v.coin, v.side, v.taxes)
+    })
 }

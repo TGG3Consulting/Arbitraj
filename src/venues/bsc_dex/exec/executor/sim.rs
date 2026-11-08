@@ -4,6 +4,9 @@
 //! узла; «deadline» — StaleData с подсказкой про dex.deadline_s); получено (возврат execute = прирост выхода у
 //! кошелька, меряет сам контракт) сверяется с req.worst_price (exec/order.rs::check_price). Проверка «кто меняет»
 //! (решение 59) здесь не нужна: исполнитель вызывает пул ровно по адресу шага, а не ищет его по фабрике.
+//! Решение 234 (п. 4; живой случай ASS 08.11 — откат «minOut» без чисел): к ошибке пробы (откат, срок, цена) —
+//! minOut и ожидаемый выход каждой доли, модельный налог монеты на её шаге (legs_text, explain); текст ошибки продажи
+//! уходит в хронологию сделки (core/sell.rs → manual_outcome / алерт).
 //! Кто вызывает: exec/executor/trade.rs.
 //! От чего зависит: check/simulate.rs, exec/executor/{abi, call}.rs, exec/order.rs, num.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
@@ -12,13 +15,15 @@
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, U256};
+use rust_decimal::Decimal;
 
 use crate::core::types::{Side, TradeRequest};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::super::check::simulate::{self, Call, CallResult};
 use super::super::super::ctx::Ctx;
 use super::super::super::num;
+use super::super::chain::Step;
 use super::super::order::check_price;
 use super::abi::ArbExecutor;
 use super::call::ExecCall;
@@ -99,4 +104,46 @@ fn price(
         ),
     };
     check_price(ctx, req, coins.ok_or_else(bad)?, usdt.ok_or_else(bad)?)
+}
+
+/// Что делает: текст «доля k: minOut M, ожидалось E, модельный налог T%» по долям — для отката пробы (решение 234, п. 4).
+/// Принимает: шаги долей (минимум — у последнего шага, exec/leg_min.rs), по долям (ожидаемый выход, налог %), запрос
+/// (сторона: продажа — USDT, покупка — монеты), (decimals монеты, USDT). Ошибок нет (число не переводится — «?»).
+pub fn legs_text(
+    legs: &[Vec<Step>],
+    exp: &[(Decimal, Decimal)],
+    req: &TradeRequest,
+    (coin_dec, usdt_dec): (u8, u8),
+) -> String {
+    let (dec, unit) = match req.side {
+        Side::Sell => (usdt_dec, "USDT"),
+        Side::Buy => (coin_dec, req.asset.ticker.as_str()),
+    };
+    let parts: Vec<String> = legs
+        .iter()
+        .zip(exp)
+        .enumerate()
+        .map(|(k, (leg, (e, tax)))| {
+            let min = leg
+                .last()
+                .and_then(|s| num::to_decimal(s.order.min_out, dec))
+                .map_or("?".to_string(), |m| m.normalize().to_string());
+            format!(
+                "доля {}: minOut {min} {unit}, ожидалось {} {unit}, модельный налог монеты {}%",
+                k + 1,
+                e.round_dp(6).normalize(),
+                tax.round_dp(4).normalize()
+            )
+        })
+        .collect();
+    parts.join("; ")
+}
+
+/// Что делает: дописывает к ошибке пробы текст по долям (legs_text). Принимает: ошибку, текст. Возвращает: ошибку с
+/// дополненным текстом (код и факт транзакции те же). Ошибок нет.
+pub fn explain(mut e: GatewayError, legs: &str) -> GatewayError {
+    if !legs.is_empty() {
+        e.message = format!("{}; {legs}", e.message);
+    }
+    e
 }

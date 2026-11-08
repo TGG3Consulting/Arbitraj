@@ -12,7 +12,7 @@
 | `onchain.rs` | Ревью 122, пункт 1: до approve и сделки — код по `exec.executor_address` побайтно = `ArbExecutor.bin-runtime` и владелец (слот `owner`) = кошелёк бота; успех помнится по паре (адрес, кошелёк); кнопка «Проверить подключение» исполнителя (`probe`) |
 | `entry.rs` | Шаг исполнителя для пула реестра по пометке части F (`Family.executor_kind`, pools/exec_kind.rs): V2 с комиссией пары, V3, Algebra, Solidly, DODO, Maverick; StableSwap — CURVE (Ellipsis), STABLE_U256 (PancakeSwap Stable, Lista), SADDLE (Nerve): индексы из состояния по токену входа, пул на паузе — нет; нет вида шага (Infinity/V4, KyberSwap Elastic — решение 121 B2) — исполнителем не вызывается |
 | `call.rs` | Вызов `execute` из долей (шаги exec/chain.rs): доли входа в bps от текущего остатка, промежуточный шаг — весь токен, вход и минимум — суммы долей, срок `dex.deadline_s` |
-| `sim.rs` | Проба `execute` перед отправкой (eth_simulateV1) и сверка полученного с `req.worst_price` |
+| `sim.rs` | Проба `execute` перед отправкой (eth_simulateV1) и сверка полученного с `req.worst_price`; откат — с minOut, ожидаемым и модельным налогом каждой доли (решение 234, п. 4) |
 | `trade.rs` | Сделка через исполнитель: доли по живому состоянию, минимумы верификации, approve исполнителю (после него — пересборка, решение 121 B1), проба, одна транзакция, факт |
 | `fact.rs` | Факт по Transfer (exec/result.rs) с учётом возврата неистраченного входа исполнителем |
 | `code.rs` | Артефакты `contracts/out/` со сверкой SHA-256: код создания, код в сети, слот владельца |

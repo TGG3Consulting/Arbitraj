@@ -185,6 +185,7 @@ pub mod stuck;
 pub mod stuck_reason;
 pub mod sub_state;
 pub mod subscribe;
+pub mod tax_age;
 pub mod tick;
 pub mod tick_slow;
 pub mod ticker_index;

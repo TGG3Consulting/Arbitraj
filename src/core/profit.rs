@@ -12,7 +12,8 @@
 //! Решение 129: этапы расчёта замеряются (calc_timing.rs): контекст направления, бюджет, подбор объёма, финальная
 //! котировка — по ним отказ по сроку называет, где расчёт стоял.
 //! Решение 175: сначала — делистинг монеты на сторонах направления (delist_check.rs, delist.block_hours).
-//! Настройки: money.min_profit_usd, money.min_profit_pct, kyber.final_gate_usd (решение 111; только при exec.via_kyber =
+//! Решение 234 (п. 3): затем — свежесть замера налогов на DEX-сторонах (tax_age.rs, tax.max_age_s).
+//! Настройки: money.min_profit_usd, money.min_profit_pct, tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
@@ -58,6 +59,10 @@ pub async fn decide_capped(
     }
     // Решение 175: монета в делистинге на любой стороне ближе delist.block_hours — сделки нет (до любого расчёта).
     if let Err(e) = super::delist_check::check(core, d, chrono::Utc::now()).await {
+        return reject(e, None);
+    }
+    // Решение 234 (п. 3): замер налогов монеты на DEX-сторонах не старше tax.max_age_s (не задана — проверки нет).
+    if let Err(e) = super::tax_age::check(core, d, chrono::Utc::now()) {
         return reject(e, None);
     }
     let cx = match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))

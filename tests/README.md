@@ -281,6 +281,14 @@ bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IO
 
 ### Phemex — tests/phemex_real_data.rs и команды записи (решение 168)
 
+Решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /md/orderbook на **примере из
+документации** («Query Order Book», sBTCUSDT, масштабы 8 / 8); стакан в памяти — локальный стакан из снимка OrderBook
+того же вида, с уровнями примера REST (**собран в тесте, не запись**; живых ответов нет — api.phemex.com закрыт прокси):
+verdict ядра Quiet; стакана нет / другой — Lost. `unsubscribe_message_is_official_shape` — «Unsubscribe OrderBook»
+(params пустой). Записать на сервере бота подряд кадры orderbook пары (raw.book_frames = да) и
+`GET /md/orderbook?symbol=sCAKEUSDT`: (1) равенство отпечатков на одной книге; (2) sequence ответа против sequence
+последнего кадра — одна ли шкала; (3) интервалы контрольных снимков тихой пары (приходят ли раз в 60 с без изменений).
+
 Без записей (идут всегда): строка для подписи — ровно «Signed string» примеров 1–3 документации (General API
 information → Signature example), HMAC SHA256 hex — посчитан теми же вызовами, что официальный пример клиента
 (github.com/phemex/phemex-python-api, client.py: `hmac.new(secret, message, sha256).hexdigest()`); подпись входа

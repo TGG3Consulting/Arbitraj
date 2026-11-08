@@ -13,6 +13,7 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_print;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
@@ -241,5 +242,51 @@ impl Venue for Phemex {
 
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: изменения — при изменении стакана, контрольный снимок — «published with 60-second interval
+    ///   for client self-verification» (OrderBook message); слов «и без изменений» нет (как «every 1 minute» у CoinEx),
+    ///   при confirm = true поле не влияет. Тишина пары дольше 60 с с запасом — признак потери (venue.book_stale_ms ×
+    ///   venue.pair_dead_mult больше 60 000, docs/FIRST_RUN.md);
+    /// - per_pair = true, как у CoinEx: отписки одной пары нет («orderbook.unsubscribe … unsubscribes all orderbook related
+    ///   subscriptions»), поэтому «переподписать пару» = orderbook.unsubscribe + orderbook.subscribe всех пар соединения
+    ///   (ws_conn.rs); соседи получают новый снимок и прогрев;
+    /// - confirm = true (решение 213, по содержимому): связь sequence ответа GET /md/orderbook с sequence кадра в
+    ///   документации не описана — сравниваются первые venue.depth_levels уровней ответа и стакана в памяти
+    ///   (book_print.rs, core/feed_print.rs).
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Символ и масштабы
+    /// — из справочника пар (symbols.rs). Ошибки: пары нет в справочнике, как у book_print::book_version.
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        let rules = self.symbols.get(&self.ctx, ticker)?;
+        book_print::book_version(&self.ctx, &self.books, &rules, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm; действует, если
+    /// задана venue.book_stale_ms).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 202: переподписать пару — у Phemex отписка только всех пар соединения: orderbook.unsubscribe +
+    /// orderbook.subscribe каждой пары соединения (ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
     }
 }

@@ -263,4 +263,13 @@ async fn venue_pause_human_name() {
     let (t2, rows) = menu::venue_buttons(&r);
     assert_eq!(text, t2);
     assert_eq!(rows[0]["callback_data"], "c:vr.bsc_dex");
+    // Вопрос подтверждения «Снять паузу площадки …?» (notify/menu_press.rs) — тем же именем, команда — по id.
+    let p = control_action(&r, "vr.bsc_dex").unwrap();
+    assert_eq!(p.question, "Снять паузу площадки DEX?");
+    assert_eq!(
+        p.action,
+        ManualAction::ResumeVenue {
+            venue: "bsc_dex".into()
+        }
+    );
 }

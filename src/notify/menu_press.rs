@@ -60,7 +60,8 @@ pub fn control_action(r: &Risk, object: &str) -> Result<Pending, String> {
         }
         "vr" => (
             ManualAction::ResumeVenue { venue: arg.into() },
-            format!("Снять паузу площадки {arg}?"),
+            // Подпись площадки — человеческим именем (notify/human.rs venue(): bsc_dex → «DEX»), как на кнопке.
+            format!("Снять паузу площадки {}?", super::human::venue(arg)),
         ),
         // Решение 230: имя кошелька — из паузы; паузы уже нет — вопрос по id, ядро ответит «не на паузе».
         "wr" => {

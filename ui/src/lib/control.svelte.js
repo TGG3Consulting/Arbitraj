@@ -50,6 +50,9 @@ export const setMode = (mode) => command('/api/control', { mode });
 /** Снять паузу площадки. Принимает: id площадки. */
 export const resumeVenue = (id) => command(`/api/control/venue/${seg(id)}/resume`);
 
+/** Решение 230: снять паузу кошелька DEX от сверки. Принимает: id кошелька (w1…). */
+export const resumeWallet = (id) => command(`/api/control/wallet/${seg(id)}/resume`);
+
 /** Снять карантин монеты. Принимает: id — адрес контракта (решение 118) или тикер монеты без адреса. */
 export const releaseCoin = (t) => command(`/api/control/quarantine/${seg(t)}/release`);
 

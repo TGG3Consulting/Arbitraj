@@ -17,9 +17,11 @@ pub const WARN: &str = "⚠️";
 pub const OK: &str = "✅";
 pub const LOSS: &str = "❌";
 pub const INFO: &str = "ℹ️";
+/// Решение 230: пауза площадки или кошелька от сверки (короткое сообщение risk.reconcile_paused).
+pub const PAUSE: &str = "⏸";
 
 /// Все значки уровня (для проверки «заголовок уже есть»).
-pub const ICONS: [&str; 5] = [STOP, WARN, OK, LOSS, INFO];
+pub const ICONS: [&str; 6] = [STOP, WARN, OK, LOSS, INFO, PAUSE];
 
 /// Знаков после запятой у денег и процентов.
 const MONEY_DP: u32 = 2;

@@ -6,7 +6,7 @@
 //! От чего зависит: gateway/errors.rs (ErrorCode), gateway/rules.rs (RuleAction, RuleScope).
 //! Настройки: нет.
 //!
-//! GET /api/rules/meta — {codes:[{code,title}], actions:[{kind,title,params:[{name,title,unit}]}],
+//! GET /api/rules/meta — {codes:[{code,title,no_retry,inactive:{вид действия: причина}}], actions:[{kind,title,params:[{name,title,unit}]}],
 //!                        scopes:[{kind,title}]}
 //!
 //! Полнота перечня проверяется при сборке: в сторожах ниже исчерпывающий match.

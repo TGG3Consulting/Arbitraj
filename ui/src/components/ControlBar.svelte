@@ -10,13 +10,15 @@
     сбрасывает всю систему и все площадки.
     Решение 225: у паузы — кто поставил: поставленную ботом (venue_auto, mode_auto, пауза по убытку дня) бот снимает сам —
     подпись «снимется сама …»; «исход неизвестен» и паузу человека снимает только человек.
+    Решение 230: паузы кошельков DEX от сверки (wallet_paused) — строка кошелька с кнопкой «Снять паузу»
+    (POST /api/control/wallet/{id}/resume); снимается и сама, когда балансы кошелька сойдутся.
     Команды уходят ядру (POST /api/control…) и пишутся в журнал.
   Кто вызывает: App.svelte.
   От чего зависит: lib/control.svelte.js, lib/coreLabels.js, lib/labels.js, components/DayVenues.svelte.
   Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (только показ; задаются на экране «Настройки»).
 -->
 <script>
-  import { control, setMode, resumeVenue, releaseCoin, resetDailyLimit } from '../lib/control.svelte.js';
+  import { control, setMode, resumeVenue, resumeWallet, releaseCoin, resetDailyLimit } from '../lib/control.svelte.js';
   import { modeLabel } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import DayVenues from './DayVenues.svelte';
@@ -80,6 +82,9 @@
     {/each}
     {#each Object.entries(r.venue_paused) as [v, why] (v)}
       <div>Площадка <code>{v}</code> на паузе: {why}{#if r.venue_auto?.[v]} <span class="muted">({autoNote(r.venue_auto[v].kind)})</span>{:else if r.day?.venues?.[v]?.paused} <span class="muted">(снимется сама с новым днём, UTC)</span>{/if} <button class="quiet" onclick={() => resumeVenue(v)}>Снять паузу</button></div>
+    {/each}
+    {#each Object.entries(r.wallet_paused ?? {}) as [id, w] (id)}
+      <div>Кошелёк «{w.name}» (<code>{w.venue}</code>, {id}) на паузе: {w.why} — новые сделки этим кошельком не начинаются, остальные кошельки торгуют <span class="muted">(поставила сверка: снимется сама, когда балансы сойдутся — ledger.reconcile_confirm_rounds чистых кругов подряд)</span> <button class="quiet" onclick={() => resumeWallet(id)}>Снять паузу</button></div>
     {/each}
     {#each Object.entries(r.day.provisional) as [deal, [usd, day]] (deal)}
       <div class="muted">Оценка позиции сделки <code>{deal}</code>{#if r.day.deal_venues?.[deal]} ({r.day.deal_venues[deal].join(', ')}){/if}: {usd} USDT (учтена {day}){#if r.day.unpriced?.includes(deal)} — <span class="err">цены нет, взят худший случай (вся сумма)</span>{/if} — ждёт разбора</div>

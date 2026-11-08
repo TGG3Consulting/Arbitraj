@@ -9,6 +9,7 @@
 //! Risk.cycle_paused: отказ только направлениям, чей учёт дня у DEX (DEX ↔ DEX). Необязательные настройки (optional) не
 //! требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
 //! auto_pause.rs); софтовую снимает сам бот (auto_resume.rs, day_roll.rs), человек — сбрасывает отметку.
+//! Решение 230: пауза кошелька DEX от сверки (Risk.wallet_paused, wallet_pause.rs) — отказ направлениям этого кошелька.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs.
@@ -80,6 +81,10 @@ pub struct Risk {
     /// выяснены им самим. «Снять паузу» человеком снимает учёт.
     #[serde(skip)]
     pub outcome_open: HashMap<VenueId, super::outcome_open::Open>,
+    /// Решение 230: кошельки DEX на паузе от сверки балансов (id кошелька → кто и почему, wallet_pause.rs): новые
+    /// сделки этим кошельком (маппинг, решение 132) не начинаются, остальные кошельки торгуют. Ставит и сама снимает
+    /// сверка (reconcile_wallet.rs), вручную — «Снять паузу» кошелька.
+    pub wallet_paused: BTreeMap<String, super::wallet_pause::WalletPause>,
 }
 
 impl Default for Risk {
@@ -99,6 +104,7 @@ impl Default for Risk {
             venue_auto: HashMap::new(),
             mode_auto: None,
             outcome_open: HashMap::new(),
+            wallet_paused: BTreeMap::new(),
         }
     }
 }
@@ -114,6 +120,8 @@ pub fn publish(core: &Core) {
 /// Можно ли открыть новую сделку по направлению. Ошибки: текст причины.
 pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     super::risk_ready::settings_ready(core, d)?;
+    // Решение 230: кошелёк направления по текущему маппингу — до блокировки риска (свои замки видов и маппинга).
+    let wallet = super::dex_account::of_direction_now(core, d);
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
         // Решение 164: режим по-русски («Стоп», «Пауза»), а не внутреннее имя.
@@ -132,6 +140,10 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
         if let Some(why) = r.venue_paused.get(v) {
             return Err(format!("площадка {} на паузе: {why}", v.0));
         }
+    }
+    // Решение 230: пауза кошелька DEX от сверки — только направлениям, которые пойдут этим кошельком.
+    if let Some(p) = wallet.and_then(|w| r.wallet_paused.get(&w.0)) {
+        return Err(p.refusal());
     }
     // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений, чей учёт дня у DEX (DEX ↔ DEX).
     for v in super::daily_venue::of_direction(core, d) {

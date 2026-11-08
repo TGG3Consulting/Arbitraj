@@ -4,7 +4,9 @@
     и его параметры, необязательное условие (JSON), включено ли. Списки — из GET /api/rules/meta
     и GET /api/venues. Значений по умолчанию нет: всё выбирается и вводится вручную.
     Создание — POST /api/rules, изменение — PUT /api/rules/{id}. Ошибка бэкенда (например, дубль) — как есть.
-    Для кода с no_retry («результат неизвестен», решение 64) «Повторить» в списке действий нет.
+    Для кода с no_retry («результат неизвестен», решение 64) «Повторить» в списке действий нет. Решение 230: для отказа
+    вывода (WithdrawRejected, InvalidAddress, WithdrawLocked) нет «Повторить», «Стоп площадка», «Стоп всё» (meta
+    codes[].inactive) — подпись «только предупреждение»; у старого правила с таким действием — «не действует: …».
   Кто вызывает: pages/Rules.svelte.
   От чего зависит: lib/api.js, lib/settings.svelte.js (площадки), components/ErrorText.svelte.
   Настройки: нет (правила — данные из интерфейса, src/gateway/rules.rs).
@@ -36,9 +38,13 @@
   let busy = $state(false);
 
   const actionMeta = $derived(meta.actions.find((a) => a.kind === action));
-  /** Для «результат неизвестен» (no_retry) «Повторить» не предлагается — операция могла исполниться (решение 64). */
-  const noRetry = $derived(meta.codes.find((c) => c.code === event)?.no_retry === true);
-  const actions = $derived(meta.actions.filter((a) => !(noRetry && a.kind === 'Retry')));
+  /** Решения 64, 230: действия, которые для кода не действуют (вид → причина): для «результат неизвестен» —
+   *  «Повторить»; для отказа вывода (WithdrawRejected, InvalidAddress, WithdrawLocked) — «Повторить», «Стоп площадка»,
+   *  «Стоп всё» (повтора нет, паузы нет — только предупреждение). Их в списке нет. */
+  const inactive = $derived(meta.codes.find((c) => c.code === event)?.inactive ?? {});
+  const actions = $derived(meta.actions.filter((a) => !inactive[a.kind]));
+  /** Для кода отказа вывода «стоп» не действует — честная подпись: только предупреждение. */
+  const warnOnly = $derived(Boolean(inactive.StopVenue || inactive.StopAll));
 
   /** Собирает правило в формате бэкенда. Ошибки: Error с причиной (не выбрано, не число, не JSON). */
   function build() {
@@ -46,7 +52,7 @@
       throw new Error('Выберите событие, область, действие и состояние');
     }
     if (scopeKind === 'Venue' && !venue) throw new Error('Выберите площадку');
-    if (noRetry && action === 'Retry') throw new Error('Для этого события повтор запрещён: операция могла исполниться');
+    if (inactive[action] && enabled === 'true') throw new Error(`Это действие для события не действует: ${inactive[action]}`);
     let act = action;
     if (actionMeta.params.length) {
       const p = {};
@@ -112,8 +118,11 @@
     <select bind:value={action}>
       <option value="">— выберите —</option>
       {#each actions as a (a.kind)}<option value={a.kind}>{a.title}</option>{/each}
+      {#if inactive[action]}<option value={action} disabled>{meta.actions.find((a) => a.kind === action)?.title ?? action} — не действует</option>{/if}
     </select>
   </label>
+  {#if inactive[action]}<p class="err">Сохранённое действие не действует: {inactive[action]}. Выберите другое (или выключите правило).</p>{/if}
+  {#if warnOnly}<p class="muted">Для этого события — только предупреждение: повтора и паузы нет ({inactive.StopVenue ?? inactive.StopAll}).</p>{/if}
   {#each actionMeta?.params ?? [] as p (p.name)}
     <label>{p.title}, {p.unit}<input class="num" inputmode="numeric" bind:value={params[p.name]} /></label>
   {/each}

@@ -72,10 +72,8 @@ pub struct ModeMark {
 /// Коды, по которым пауза не ставится вовсе (решение 225; вывод не повторяем, продаём на месте — решение 220б).
 /// Принимает: код ошибки. Ошибок нет.
 pub fn no_pause(code: ErrorCode) -> bool {
-    matches!(
-        code,
-        ErrorCode::WithdrawRejected | ErrorCode::InvalidAddress | ErrorCode::WithdrawLocked
-    )
+    // Решение 230: тот же перечень — у формы и API правил (gateway/rules.rs withdraw_refusal).
+    crate::gateway::rules::withdraw_refusal(code)
 }
 
 /// Ставит паузу площадки от софта: причина и отметка вида. Правила отметки: площадки не было на паузе — отметка вида

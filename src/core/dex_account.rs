@@ -47,6 +47,25 @@ pub async fn of_direction(deps: &Deps, d: &Direction) -> Result<Option<DexAccoun
     }
 }
 
+/// Решение 230: счёт направления по текущему маппингу без запроса к шлюзу (виды площадок — из справочника ядра) — для
+/// проверки паузы кошелька в risk::can_open. Принимает: ядро, направление. Возвращает: None — DEX не участвует, вид
+/// площадки неизвестен или строки маппинга нет (эти отказы даёт of_direction). Ошибок нет.
+pub fn of_direction_now(core: &Core, d: &Direction) -> Option<DexAccountId> {
+    let kinds = rd(&core.inner.kinds);
+    let kind = |v: &VenueId| kinds.iter().find(|(id, _)| id == v).map(|(_, k)| *k);
+    let r = row(
+        (&d.buy_on, kind(&d.buy_on)?),
+        (&d.sell_on, kind(&d.sell_on)?),
+    )?;
+    drop(kinds);
+    core.inner
+        .deps
+        .settings
+        .accounts()
+        .row(&r)
+        .map(DexAccountId)
+}
+
 /// Площадка для расчёта и предпроверки направления: DEX — на кошелёк строки направления. Принимает: зависимости,
 /// направление, площадку. Ошибки: NO_WALLET, площадка не подключена, нет кошелька.
 pub async fn venue_dir(deps: &Deps, d: &Direction, v: &VenueId) -> Result<Arc<dyn Venue>, String> {

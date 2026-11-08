@@ -9,7 +9,10 @@
 //! POST /api/rules       — создать (id игнорируется)
 //! PUT /api/rules/{id}   — заменить правило
 //! Два включённых правила на одно событие и одну область запрещены. «Повторить» для «результат неизвестен»
-//! (OutcomeUnknown) запрещено (решение 64).
+//! (OutcomeUnknown) запрещено (решение 64). Решение 230: для отказа вывода (WithdrawRejected, InvalidAddress,
+//! WithdrawLocked) включённое правило «Повторить», «Стоп площадка» или «Стоп всё» не сохраняется (ядро их не применяет:
+//! повтора нет, паузы нет — только предупреждение); сохранённые раньше читаются как есть, интерфейс помечает
+//! «не действует: …» (причина — /api/rules/meta, codes[].inactive).
 //! Правило с условием пока не применяется (формат условия — этап 5); интерфейс должен это показывать.
 
 use axum::Json;
@@ -17,7 +20,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde_json::json;
 
-use crate::gateway::rules::{Rule, RuleAction, retry_allowed};
+use crate::gateway::rules::{Rule, action_kind, inactive_reason};
 use crate::storage::journal::Level;
 use crate::storage::rules as store;
 
@@ -36,7 +39,7 @@ pub async fn create(
     State(st): State<AppState>,
     Json(rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
-    no_retry_where_forbidden(&rule)?;
+    only_active_action(&rule)?;
     no_duplicate(&st, &rule).await?;
     let saved = store::create(&st.db, rule)
         .await
@@ -61,7 +64,7 @@ pub async fn update(
     Json(mut rule): Json<Rule>,
 ) -> Result<Json<Rule>, ApiError> {
     rule.id = id;
-    no_retry_where_forbidden(&rule)?;
+    only_active_action(&rule)?;
     no_duplicate(&st, &rule).await?;
     let old = store::list(&st.db)
         .await
@@ -90,19 +93,22 @@ pub async fn update(
     Ok(Json(rule))
 }
 
-/// «Повторить» нельзя для кода, по которому повтор запрещён (gateway/rules.rs retry_allowed: «результат
-/// неизвестен»). Ошибки: 400 — с причиной.
-fn no_retry_where_forbidden(rule: &Rule) -> Result<(), ApiError> {
-    if matches!(rule.action, RuleAction::Retry { .. }) && !retry_allowed(rule.event) {
-        return Err(ApiError(
+/// Действие, которое для этого кода не действует, не сохраняется (gateway/rules.rs inactive_reason): «Повторить» для
+/// «результат неизвестен» (решение 64); решение 230 — «Повторить», «Стоп площадка», «Стоп всё» для отказа вывода
+/// (WithdrawRejected, InvalidAddress, WithdrawLocked). Выключенное такое правило сохранить можно (выключить старое).
+/// Ошибки: 400 — с причиной.
+fn only_active_action(rule: &Rule) -> Result<(), ApiError> {
+    let kind = action_kind(&rule.action);
+    match inactive_reason(rule.event, kind) {
+        Some(why) if rule.enabled => Err(ApiError(
             StatusCode::BAD_REQUEST,
             format!(
-                "Для {:?} повтор запрещён: операция могла исполниться — только сверка и ручная проверка",
+                "Для {:?} действие «{kind}» не действует: {why} — выберите «Отменить и не пробовать» или «Только уведомить»",
                 rule.event
             ),
-        ));
+        )),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// Не даёт завести второе включённое правило на то же событие и ту же область:

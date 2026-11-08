@@ -134,13 +134,13 @@ fn part_keys_and_all_done() {
 fn retry_sends_exactly_the_part_never_more() {
     // JCT: на w7 свободно 387.56 (342.29 выручки + 45.28 оборотных другого направления) — уходит только часть.
     assert_eq!(
-        parts::send_amount(d("387.56"), d("342.29")),
+        parts::send_amount(d("387.56"), d("342.29"), None),
         Ok(d("342.29"))
     );
     // Свободно меньше части — ничего не отправляется (ждать / «не вернулись»), чужое не забирается.
-    let e = parts::send_amount(d("300"), d("342.29")).unwrap_err();
+    let e = parts::send_amount(d("300"), d("342.29"), None).unwrap_err();
     assert!(e.contains("чужие USDT не трогаем"), "{e}");
-    assert!(parts::send_amount(d("10"), Decimal::ZERO).is_err());
+    assert!(parts::send_amount(d("10"), Decimal::ZERO, None).is_err());
 }
 
 #[tokio::test]

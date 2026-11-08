@@ -6,22 +6,27 @@
 //! кошелька w7 — 342.29 выручки этой части и 45.28 оборотных денег другого направления): сумма попытки — РОВНО сумма
 //! части (её выручка минус комиссия), никогда не больше; свободно меньше части — попытка не отправляет ничего
 //! (ошибка «свободно меньше части», вывод точно не ушёл): дальше повтор или «USDT не вернулись» по решению 163.
+//! Допуск (решение 227, допуск; Тигран 08.11): свободно меньше части не больше чем на usdt.return_tolerance_usd —
+//! уходит свободный остаток, в хронологию «отправлено X вместо Y …». Это единственная проверка «свободно ≥ части» на
+//! пути повтора и «Перегнать» (обе идут через attempt).
 //! Кто вызывает: core/usdt_return_retry.rs (повторы), core/manual_usdt.rs («Перегнать»).
 //! От чего зависит: usdt_return.rs (relay_try, usdt), limits.rs (free_now), dex_account.rs, ledger.rs, deal.rs.
-//! Настройки: venue.quote_asset (через usdt_return.rs).
+//! Настройки: venue.quote_asset (через usdt_return.rs), usdt.return_tolerance_usd (площадка, где лежат USDT;
+//! необязательная: не задана — строго, как до допуска).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
 use super::op_error::OpError;
 use super::usdt_return_state::UsdtReturn;
 
-/// Одна попытка возврата части: сумма — ровно сумма части (cap, решение 227), не свободный баланс; кошелёк DEX —
-/// сделки. Принимает: ядро, сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (отправлено,
-/// зачислено). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
+/// Одна попытка возврата части: сумма — ровно сумма части (cap, решение 227), не свободный баланс; при нехватке в
+/// пределах допуска — свободный остаток (меньше части, строка в хронологию); кошелёк DEX — сделки. Принимает: ядро,
+/// сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (отправлено, зачислено). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
 /// перегон не состоялся (OpError).
 pub async fn attempt(
     core: &Core,
@@ -40,11 +45,40 @@ pub async fn attempt(
         .await
         .map_err(|e| OpError::from(format!("{}: свободные {}: {e}", from.0, usdt.ticker)))?;
     // Решение 227: никогда не больше части — остальное на площадке чужое (другие части, оборотные деньги кошелька).
-    let amount = super::usdt_return_parts::send_amount(free, cap)
+    let amount = amount_for(core, from, free, cap)
         .map_err(|e| OpError::from(format!("{} ({}): {e}", from.0, usdt.ticker)))?;
     let id = format!("{deal}{tag}");
     let credited = super::usdt_return::relay_try(core, &id, from, to, acc.as_ref(), amount).await?;
+    if amount < cap {
+        let t = format!(
+            "отправлено {amount} вместо {cap}: на площадке меньше на {} USDT — в пределах допуска usdt.return_tolerance_usd",
+            cap - amount
+        );
+        note(core, deal, &t).await;
+    }
     Ok((amount, credited))
+}
+
+/// Допуск нехватки возврата части на площадке (usdt.return_tolerance_usd, область — площадка, где лежат USDT).
+/// Возвращает: None — не задан (строго). Ошибок нет.
+pub fn tolerance(core: &Core, from: &VenueId) -> Option<Decimal> {
+    let at = At {
+        venue: Some(&from.0),
+        coin: None,
+    };
+    let s = &core.inner.deps.settings;
+    s.decimal("usdt.return_tolerance_usd", at).ok()
+}
+
+/// Сумма попытки части с допуском площадки (usdt_return_parts::send_amount + tolerance). Принимает: ядро, площадку
+/// части, свободно там, сумму части. Возвращает: сумму к отправке (≤ части). Ошибки: как send_amount.
+pub fn amount_for(
+    core: &Core,
+    from: &VenueId,
+    free: Decimal,
+    cap: Decimal,
+) -> Result<Decimal, String> {
+    super::usdt_return_parts::send_amount(free, cap, tolerance(core, from))
 }
 
 /// Состояние части «ждёт повтора» (решение 227: часть — по площадке): (сумма части, откуда, куда, сделано повторов,

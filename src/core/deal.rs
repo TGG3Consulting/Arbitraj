@@ -73,8 +73,17 @@ pub struct Deal {
     /// stuck.relay_max_loss_pct (sell_unsent.rs → relay_here.rs), а не сразу к человеку.
     #[serde(default)]
     pub unsent_here: bool,
-    /// Итог сделки, USDT (когда закрыта).
+    /// Итог сделки, USDT (когда закрыта): выручка − вложено − затраты − затраты возврата USDT (return_cost_usd).
     pub result_usd: Option<Decimal>,
+    /// Решение 236: затраты возврата выручки USDT, уже вычтенные из result_usd, — по частям «вернулись»: отправлено −
+    /// зачислено + газ/комиссия не в USDT (deal_return_cost.rs). None — ещё не считались (старая запись: считаются при
+    /// загрузке в памяти).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_cost_usd: Option<Decimal>,
+    /// Решение 236: уведомление deal.closed ждёт конца возврата USDT (факт — с его затратами); текст — причина
+    /// закрытия. None — не ждёт (отправлено или возврата нет).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closed_notice: Option<String>,
     /// Предварительный убыток, учтённый в итоге дня (решение 53, daily.rs): Halted или «Беру на себя»;
     /// None — не учитывался или уже заменён фактом.
     #[serde(default)]
@@ -134,6 +143,8 @@ impl Deal {
             unsent_retries: 0,
             unsent_here: false,
             result_usd: None,
+            return_cost_usd: None,
+            closed_notice: None,
             provisional_usd: None,
             dex_account: None,
             usdt_return: None,

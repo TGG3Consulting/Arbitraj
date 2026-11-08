@@ -230,17 +230,16 @@ fn start(core: &Core, deal: &str, cap: Decimal, at: VenueId, to: VenueId, who: &
             )
             .await;
             match res {
-                Ok((sent, credited)) => {
+                Ok((sent, r)) => {
                     let t = format!(
-                        "USDT вернулись («Перегнать», {who}): {sent} {} → {}, зачислено {credited}",
-                        at.0, to.0
+                        "USDT вернулись («Перегнать», {who}): {sent} {} → {}, зачислено {}{}",
+                        at.0,
+                        to.0,
+                        r.credited,
+                        r.tail()
                     );
-                    let state = UsdtReturn::Done {
-                        amount: sent,
-                        credited,
-                        from: at,
-                        to,
-                    };
+                    // Решение 236: затраты возврата — в итог сделки (usdt_return_state::set).
+                    let state = r.done(sent, at, to);
                     st::set(&c, &d, state, &t).await;
                 }
                 Err(e) => {

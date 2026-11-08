@@ -197,18 +197,18 @@ async fn run(core: &Core, deal: &str, at: &VenueId) {
             return;
         }
         match attempt(core, deal, amount, (&from, &to), &format!("u{n}")).await {
-            Ok((sent, credited)) => {
+            Ok((sent, r)) => {
                 let t = format!(
-                    "USDT вернулись на попытке {n} из {}: {sent} {} → {}, зачислено {credited}",
-                    p.max, from.0, to.0
+                    "USDT вернулись на попытке {n} из {}: {sent} {} → {}, зачислено {}{}",
+                    p.max,
+                    from.0,
+                    to.0,
+                    r.credited,
+                    r.tail()
                 );
                 log(core, Level::Info, &from, format!("Сделка {deal}: {t}")).await;
-                let state = UsdtReturn::Done {
-                    amount: sent,
-                    credited,
-                    from,
-                    to,
-                };
+                // Решение 236: затраты возврата — в итог сделки (usdt_return_state::set).
+                let state = r.done(sent, from, to);
                 return st::set(core, deal, state, &t).await;
             }
             Err(e) => {

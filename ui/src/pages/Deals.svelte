@@ -71,6 +71,8 @@
       Монеты: {d.qty} на <code>{d.at}</code> · вложено {d.invested} · выручка {d.proceeds} · затраты {d.spent} USDT ·
       план {d.plan_profit_usd} USDT ·
       {#if d.result_usd != null}<span class={String(d.result_usd).startsWith('-') ? 'err' : 'ok'}>итог {d.result_usd} USDT</span>
+        <!-- Решение 236: затраты возврата USDT (комиссия вывода, газ) уже вычтены из итога. -->
+        {#if d.return_cost_usd != null && Number(d.return_cost_usd) !== 0}<span class="muted"> (в т.ч. возврат USDT −{d.return_cost_usd})</span>{/if}
       {:else}<span class="muted">итога ещё нет</span>{/if}
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
       {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
@@ -81,7 +83,7 @@
       {#if r.state === 'pending'}
         <p class="muted">Возврат USDT: идёт — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code></p>
       {:else if r.state === 'done'}
-        <p class="ok">USDT вернулись: {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, зачислено {r.credited}</p>
+        <p class="ok">USDT вернулись: {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>{#if r.sent != null && r.sent !== r.amount}, ушло {r.sent} (остаток округления вывода — на <code>{r.from}</code>){/if}, зачислено {r.credited}{#if r.fee_usd != null}, газ {r.fee_usd} USDT{/if}{#if r.sent == null}<span class="muted"> (запись до решения 236: в затратах возврата — запрошено − зачислено, вместе с остатком округления вывода, который остался на <code>{r.from}</code>; газа в записи нет)</span>{/if}</p>
       {:else if r.state === 'retrying'}
         <!-- Решение 163: ждёт повтора (usdt.return_retry_s, usdt.return_retries_max). -->
         <p class="muted">Возврат USDT: ждёт повтора — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, повторов сделано {r.tries}; последняя причина: {r.why}</p>

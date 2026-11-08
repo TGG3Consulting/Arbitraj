@@ -136,6 +136,24 @@ pub async fn send_as(
     Ok((sent, credited))
 }
 
+/// Сумма вывода вниз до точности и шага вывода площадки-отправителя в сети `net` (решение 104) — столько уходит с
+/// площадки. Принимает: ядро, отправителя, монету, сеть, сумму. Ошибок нет: записи сети нет — сумма как есть.
+fn floored_on(core: &Core, from: &VenueId, asset: &Asset, net: &str, qty: Decimal) -> Decimal {
+    // Решение 211 (ревью В1): запись сети — по адресу и тикеру биржи (dirctx_venue::network).
+    let info = super::dirctx_venue::network(core, from, asset, net);
+    super::costs_withdraw::floor_precision(qty, info.as_ref())
+}
+
+/// Решение 236: сколько уйдёт с площадки при выводе `qty` (как go: сеть монеты у отправителя и округление вывода) —
+/// для затрат возврата USDT (deal_return_cost.rs). Принимает: ядро, отправителя, монету, сумму.
+/// Ошибок нет: сети монеты у площадки нет — сумма как есть (вывод тогда и не состоится).
+pub(super) fn floored(core: &Core, from: &VenueId, asset: &Asset, qty: Decimal) -> Decimal {
+    match network(core, asset, from) {
+        Ok(net) => floored_on(core, from, asset, &net, qty),
+        Err(_) => qty,
+    }
+}
+
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
 /// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send.
 #[allow(clippy::too_many_arguments)]
@@ -166,11 +184,7 @@ async fn go(
     // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает
     // расчёт, costs_withdraw::floor_precision). Без этого хвост вида 14.425559999999999999 (комиссия покупки в монете
     // пришла числом с плавающей точкой) — отказ BingX 100400 «decimal precision … Precision: 8».
-    let qty = {
-        // Решение 211 (ревью В1): запись сети — по адресу и тикеру биржи (dirctx_venue::network).
-        let info = super::dirctx_venue::network(core, from, asset, &net_from);
-        super::costs_withdraw::floor_precision(qty, info.as_ref())
-    };
+    let qty = floored_on(core, from, asset, &net_from, qty);
     if qty <= Decimal::ZERO {
         return Err(OpError::from(format!(
             "{}: сумма вывода {} после округления до точности вывода — ноль",

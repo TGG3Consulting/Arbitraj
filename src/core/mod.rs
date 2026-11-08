@@ -64,6 +64,8 @@ pub mod day_roll;
 pub mod day_view;
 pub mod deal;
 pub mod deal_ceiling;
+pub mod deal_closed;
+pub mod deal_return_cost;
 pub mod deal_text;
 pub mod delist;
 pub mod delist_check;

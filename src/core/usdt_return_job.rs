@@ -16,7 +16,7 @@ use crate::core::types::{DexAccountId, VenueId};
 use crate::gateway::urgency::{self, Urgency};
 
 use super::engine::Core;
-use super::usdt_return_state::{self as st, UsdtReturn};
+use super::usdt_return_state as st;
 
 /// Начатый возврат: запускается после того, как закрытая сделка сохранена в учёте (иначе итог перегона мог бы
 /// записаться в старую копию сделки раньше закрытия).
@@ -51,17 +51,17 @@ impl Job {
             };
             guard.done = true;
             match res {
-                Ok(credited) => {
+                Ok(r) => {
+                    // Решение 236: затраты возврата (ушло − зачислено + газ) — в итог сделки (usdt_return_state::set).
                     let note = format!(
-                        "USDT вернулись: {} {} → {}, зачислено {credited}",
-                        self.amount, self.from.0, self.to.0
+                        "USDT вернулись: {} {} → {}, зачислено {}{}",
+                        self.amount,
+                        self.from.0,
+                        self.to.0,
+                        r.credited,
+                        r.tail()
                     );
-                    let state = UsdtReturn::Done {
-                        amount: self.amount,
-                        credited,
-                        from: self.from,
-                        to: self.to,
-                    };
+                    let state = r.done(self.amount, self.from, self.to);
                     st::set(&c, &self.deal, state, &note).await;
                 }
                 // Решение 163: исход неизвестен, вывод мог уйти, повторов нет — «не вернулись» (usdt_return_retry::fail).

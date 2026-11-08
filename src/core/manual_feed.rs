@@ -42,16 +42,21 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
         .map(crate::notify::human::signed_usd)
         .unwrap_or_else(|| "—".into());
     let full = last_note(d);
+    // Решение 236: выручка продаж бота — видна в записи (ввод «Продано вручную» к ней прибавляется).
+    let mut text = Msg::new(STOP, "Сделка остановлена — ждёт разбора")
+        .line(deal_text::coin_route(d))
+        .kv("Монеты", deal_text::coins_at(d))
+        .kv("Вложено", usd(d.invested));
+    if d.proceeds > Decimal::ZERO {
+        text = text.kv("Выручка бота", usd(d.proceeds));
+    }
     ManualRecord {
         key: ManualRecord::key_of(RecordKind::Halted, &d.id),
         kind: RecordKind::Halted,
         object_id: d.id.clone(),
         deal_id: d.id.clone(),
         venue: v.clone(),
-        text: Msg::new(STOP, "Сделка остановлена — ждёт разбора")
-            .line(deal_text::coin_route(d))
-            .kv("Монеты", deal_text::coins_at(d))
-            .kv("Вложено", usd(d.invested))
+        text: text
             .kv("В итоге дня", &est)
             .reason(&full)
             .id(&d.id)
@@ -85,7 +90,7 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
                 empty,
                 false,
             ),
-            sold(&d.id, t, d.qty),
+            sold(&d.id, t, d.qty, d.proceeds),
         ],
     }
 }
@@ -105,8 +110,17 @@ impl Core {
             .map(|(h, _)| h.clone())
             .collect();
         holdings.sort_by_key(|h| h.taken_at);
-        let mut v: Vec<ManualRecord> = alerts.iter().map(alert_record).collect();
-        v.extend(holdings.iter().map(holding_record));
+        // Решение 236: выручка продаж бота в сделке записи — в вопрос «Продано вручную».
+        let bot = |id: &str| {
+            lk(&self.inner.deals)
+                .get(id)
+                .map_or(Decimal::ZERO, |d| d.proceeds)
+        };
+        let mut v: Vec<ManualRecord> = alerts
+            .iter()
+            .map(|a| alert_record(a, bot(&a.deal_id)))
+            .collect();
+        v.extend(holdings.iter().map(|h| holding_record(h, bot(&h.deal_id))));
         v.extend(self.halted().iter().map(halted_record));
         // Решение 163: «USDT не вернулись» — после остановленных (порядок таблиц экрана).
         // Решение 227: запись на каждую часть возврата «не вернулись».

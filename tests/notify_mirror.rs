@@ -114,7 +114,7 @@ fn same_as_screen(r: &ManualRecord) {
 
 #[test]
 fn alert_buttons_match_screen() {
-    let r = alert_record(&alert());
+    let r = alert_record(&alert(), Decimal::ZERO);
     let titles: Vec<&str> = r.buttons.iter().map(|b| b.title.as_str()).collect();
     assert_eq!(
         titles,
@@ -160,7 +160,7 @@ fn alert_buttons_match_screen() {
 
 #[test]
 fn holding_buttons_match_screen() {
-    let r = holding_record(&holding());
+    let r = holding_record(&holding(), Decimal::ZERO);
     let titles: Vec<&str> = r.buttons.iter().map(|b| b.title.as_str()).collect();
     assert_eq!(titles, ["Вернуть боту", "Продано вручную"]);
     assert_eq!(
@@ -196,7 +196,10 @@ fn halted_buttons_match_screen_and_disabled() {
 
 #[test]
 fn batch_has_buttons_of_every_record() {
-    let recs = [alert_record(&alert()), holding_record(&holding())];
+    let recs = [
+        alert_record(&alert(), Decimal::ZERO),
+        holding_record(&holding(), Decimal::ZERO),
+    ];
     let refs: Vec<&ManualRecord> = recs.iter().collect();
     let (text, kb) = batch_message(&refs, "Напоминание");
     let b = kb_buttons(&kb);
@@ -209,7 +212,7 @@ fn batch_has_buttons_of_every_record() {
 fn repeat_every_n_and_stop_after_action() {
     let every = Some(Duration::from_secs(10));
     let recs = vec![
-        alert_record(&alert()),
+        alert_record(&alert(), Decimal::ZERO),
         halted_record(&halted("bsc_dex", Decimal::TEN)),
     ];
     let mut st = MirrorState::default();
@@ -247,7 +250,7 @@ fn repeat_every_n_and_stop_after_action() {
 
 #[test]
 fn second_confirm_does_not_repeat() {
-    let recs = vec![alert_record(&alert())];
+    let recs = vec![alert_record(&alert(), Decimal::ZERO)];
     let mut st = MirrorState::default();
     st.apply(&recs);
     let b = recs[0].button("sell_now").unwrap();

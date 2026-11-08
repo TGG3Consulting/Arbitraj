@@ -26,7 +26,8 @@ use super::usdt_return_state::UsdtReturn;
 
 /// Одна попытка возврата части: сумма — ровно сумма части (cap, решение 227), не свободный баланс; при нехватке в
 /// пределах допуска — свободный остаток (меньше части, строка в хронологию); кошелёк DEX — сделки. Принимает: ядро,
-/// сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (отправлено, зачислено). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
+/// сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (запрошено к выводу, итог перегона —
+/// решение 236: ушло, зачислено, газ). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
 /// перегон не состоялся (OpError).
 pub async fn attempt(
     core: &Core,
@@ -34,7 +35,7 @@ pub async fn attempt(
     cap: Decimal,
     (from, to): (&VenueId, &VenueId),
     tag: &str,
-) -> Result<(Decimal, Decimal), OpError> {
+) -> Result<(Decimal, super::deal_return_cost::Relayed), OpError> {
     let d = lk(&core.inner.deals)
         .get(deal)
         .cloned()
@@ -48,7 +49,7 @@ pub async fn attempt(
     let amount = amount_for(core, from, free, cap)
         .map_err(|e| OpError::from(format!("{} ({}): {e}", from.0, usdt.ticker)))?;
     let id = format!("{deal}{tag}");
-    let credited = super::usdt_return::relay_try(core, &id, from, to, acc.as_ref(), amount).await?;
+    let r = super::usdt_return::relay_try(core, &id, from, to, acc.as_ref(), amount).await?;
     if amount < cap {
         let t = format!(
             "отправлено {amount} вместо {cap}: на площадке меньше на {} USDT — в пределах допуска usdt.return_tolerance_usd",
@@ -56,7 +57,7 @@ pub async fn attempt(
         );
         note(core, deal, &t).await;
     }
-    Ok((amount, credited))
+    Ok((amount, r))
 }
 
 /// Допуск нехватки возврата части на площадке (usdt.return_tolerance_usd, область — площадка, где лежат USDT).

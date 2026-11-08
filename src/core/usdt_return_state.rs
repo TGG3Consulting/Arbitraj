@@ -6,10 +6,12 @@
 //! core/manual_usdt.rs; в Telegram — событием manual.record).
 //! Решение 227: состояние — у каждой ЧАСТИ возврата (часть = площадка, где лежат USDT; usdt_return_parts.rs): set,
 //! mark_not_returned и on_restart меняют часть по её площадке, остальные части не трогают.
+//! Решение 236: set вносит затраты части «вернулись» в итог сделки (deal_return_cost.rs) и отправляет отложенное
+//! deal.closed, когда возврат закончен (deal_closed.rs).
 //! Кто вызывает: core/usdt_return_deal.rs (шаг после закрытия), core/ledger.rs (load — возврат, прерванный
 //! перезапуском), core/manual_halted.rs («Продано вручную» — возврата нет по решению 100), core/usdt_return_retry.rs
 //! (повторы, решение 163), core/manual_usdt.rs («Перегнать», «Перегнано вручную»).
-//! От чего зависит: deal.rs, engine.rs, ledger.rs (save), deps.rs (журнал, уведомления).
+//! От чего зависит: deal.rs, engine.rs, ledger.rs (save), deps.rs (журнал, уведомления), deal_return_cost.rs, deal_closed.rs.
 //! Настройки: нет (событие включается на экране уведомлений).
 
 use rust_decimal::Decimal;
@@ -31,12 +33,19 @@ pub enum UsdtReturn {
         from: VenueId,
         to: VenueId,
     },
-    /// Вернулись: отправлено amount, на площадке покупки зачислено credited.
+    /// Вернулись: запрошено к выводу amount, на площадке покупки зачислено credited. Решение 236: sent — ушло с
+    /// площадки после округления до точности вывода (остаток amount − sent лежит на площадке-отправителе — не затрата);
+    /// fee_usd — затраты вывода не в USDT (газ BNB кошелька DEX) в USDT; комиссия в USDT уже в sent − credited.
+    /// None у обоих — запись до решения 236 (затраты возврата — amount − credited, газа в записи нет).
     Done {
         amount: Decimal,
         credited: Decimal,
         from: VenueId,
         to: VenueId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sent: Option<Decimal>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fee_usd: Option<Decimal>,
     },
     /// Не вернулись и бот сам не вернёт: сумма, где лежат, почему. Нужен перегон человеком.
     NotReturned {
@@ -107,8 +116,10 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
 
 /// Ставит состояние части возврата (по площадке состояния, решение 227) закрытой сделке в учёте (память, SQLite, интерфейс) с записью в хронологию.
 /// Принимает: ядро, id сделки, состояние, текст для хронологии («» — без записи). Ошибок нет: сделки нет — ничего.
+/// Решение 236: часть стала «вернулись» — её затраты вычитаются из итога сделки (deal_return_cost.rs: итог дня,
+/// статистика монеты, журнал); возврат закончен — уходит отложенное уведомление deal.closed (deal_closed.rs).
 pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
-    let d = {
+    let (d, delta, notice) = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
             return;
@@ -118,9 +129,15 @@ pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
         if !note.is_empty() {
             d.note(note.to_string());
         }
-        d.clone()
+        let delta = super::deal_return_cost::apply(d);
+        let notice = super::deal_closed::take_ready(d);
+        (d.clone(), delta, notice)
     };
     super::ledger::save(core, &d).await;
+    super::deal_return_cost::after(core, &d, delta).await;
+    if let Some(why) = notice {
+        super::deal_closed::send(core, &d, &why).await;
+    }
 }
 
 /// Не вернулись: состояние сделки + страховка. Принимает: ядро, id сделки, сумму, где лежат, причину. Ошибок нет.

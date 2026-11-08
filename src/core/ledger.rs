@@ -5,8 +5,10 @@
 //! пауза направления (signal.route_cooldown_s). Уведомление deal.closed — только если покупка была (решение 105). После перезапуска незакрытые сделки помечаются
 //! «прервана перезапуском» и ждут проверки человека: состояние ордеров и переводов в памяти потеряно.
 //! Закрытие (Closed) — общий шаг возврата USDT на площадку покупки (решение 138, usdt_return_deal.rs).
+//! Решение 236: итог закрытой сделки включает затраты возврата USDT (deal_return_cost.rs); пока возврат идёт,
+//! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
-//! От чего зависит: deal.rs, deal_text.rs, deal_ceiling.rs (строки «без потолка» в deal.closed, решение 216), persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! От чего зависит: deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -67,9 +69,13 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);
     deal.step = step;
-    let result = deal.proceeds - deal.invested - deal.spent;
+    let mut result = deal.proceeds - deal.invested - deal.spent;
     if step == Step::Closed {
         deal.result_usd = Some(result);
+        // Решение 236: затраты возврата USDT, если части уже «вернулись», — в итоге сразу (обычно возврат после).
+        deal.return_cost_usd = None;
+        super::deal_return_cost::apply(deal);
+        result = deal.result_usd.unwrap_or(result);
     }
     deal.note(format!(
         "Сделка {}: {why}",
@@ -89,6 +95,11 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         Step::Closed => super::usdt_return_deal::prepare(core, deal).await,
         _ => vec![],
     };
+    // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
+    // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
+    let wants = deal.buy.is_some() || !deal.invested.is_zero();
+    // Решение 236: возврат USDT идёт — deal.closed ждёт его конца (факт с затратами возврата; usdt_return_state::set).
+    let held = wants && super::deal_closed::hold(deal, step, why);
     save(core, deal).await;
     for job in ret {
         job.start(core);
@@ -116,20 +127,8 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         serde_json::to_value(&*deal).ok(),
     )
     .await;
-    // Решение 105: в Telegram — только сделки, где деньги пошли в дело (покупка была). Попытка, закрытая до ордера
-    // (пересчёт невыгоден, свободного не хватило, цена сборки хуже допустимой), — только в журнал и на «Сделки».
-    if deal.buy.is_some() || !deal.invested.is_zero() {
-        // Решение 216: у закрытой — строки расчёта «без потолка» (одно чтение SQLite по id сделки, очередь не ждётся).
-        let ceil = super::deal_ceiling::of_closed(core, deal).await;
-        let tg = super::deal_text::closed(deal, why, ceil.as_ref());
-        // Решение 176: закрытая плюсовая — ещё в чат «Сделки», минусовая — в «Неудачные» (notify/routes.rs).
-        let tag = match super::deal_text::outcome(deal) {
-            Some(true) => crate::notify::routes::Tag::Profit,
-            Some(false) => crate::notify::routes::Tag::Loss,
-            None => crate::notify::routes::Tag::Plain,
-        };
-        deps.notify_tagged("deal.closed", Some(&d.buy_on.0), &tg, tag)
-            .await;
+    if wants && !held {
+        super::deal_closed::send(core, deal, why).await;
     }
     if let Some(r) = deal.result_usd {
         super::gas_stats::record_result(core, &d.asset, r).await;

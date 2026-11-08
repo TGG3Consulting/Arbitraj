@@ -8,9 +8,10 @@
 //! не перегоняет; «в каждой сделке» — часть начатой сделки, она доводится как обычно.
 //! Кнопка «Продать и перегнать» (решение 101, deal.return_usdt) — перегон выручки этой сделки при любом режиме.
 //! Решение 138: возврат выручки закрытой сделки решает usdt_return_deal.rs (общий шаг ledger::finish), здесь — сам
-//! перегон (relay) и режим «отдельно».
+//! перегон (relay) и режим «отдельно». Решение 236: перегон возвращает итог (Relayed: ушло, зачислено, газ в USDT) —
+//! затраты возврата входят в итог сделки (deal_return_cost.rs).
 //! Кто вызывает: usdt_return_job.rs (relay, relay_try), usdt_return_retry.rs (relay_try, решение 163), reconcile.rs (separate).
-//! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, settings.
+//! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, deal_return_cost.rs (Relayed, газ в USDT), settings.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
 
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ use crate::core::types::{Asset, DexAccountId, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
+use super::deal_return_cost::Relayed;
 use super::engine::{Core, rd};
 use super::op_error::OpError;
 
@@ -49,7 +51,8 @@ pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
 }
 
 /// Перегон USDT с from на to. Принимает: …, счёт DEX перегона (решение 132; None — DEX не участвует).
-/// Возвращает: сколько зачислено на to. Ошибки: перегон не состоялся (OpError; уже в журнале и usdt.relay_failed).
+/// Возвращает: итог перегона (решение 236: ушло, зачислено, газ в USDT). Ошибки: перегон не состоялся (OpError; уже в
+/// журнале и usdt.relay_failed).
 pub(super) async fn relay(
     core: &Core,
     id: &str,
@@ -57,7 +60,7 @@ pub(super) async fn relay(
     to: &VenueId,
     acc: Option<&DexAccountId>,
     amount: Decimal,
-) -> Result<Decimal, OpError> {
+) -> Result<Relayed, OpError> {
     let res = relay_try(core, id, from, to, acc, amount).await;
     if let Err(e) = &res {
         let deps = &core.inner.deps;
@@ -89,7 +92,8 @@ pub(super) async fn relay(
 
 /// Перегон как relay, но сбой не извещается (решение 163: при повторах возврата выручки итог извещает
 /// usdt_return_retry.rs — журнал на каждую попытку, Telegram только когда повторы кончились). Успех — журнал и
-/// usdt.relayed. Возвращает: сколько зачислено на to. Ошибки: перегон не состоялся (OpError).
+/// usdt.relayed. Возвращает: итог перегона (решение 236): ушло с площадки (после округления вывода), зачислено, газ
+/// вывода не в USDT — в USDT (затраты возврата, deal_return_cost.rs). Ошибки: перегон не состоялся (OpError).
 pub(super) async fn relay_try(
     core: &Core,
     id: &str,
@@ -97,11 +101,29 @@ pub(super) async fn relay_try(
     to: &VenueId,
     acc: Option<&DexAccountId>,
     amount: Decimal,
-) -> Result<Decimal, OpError> {
+) -> Result<Relayed, OpError> {
     let deps = &core.inner.deps;
     // Решение 108: ожидание баланса у отправителя и повтор при откате (usdt_relay_retry.rs).
     let a = usdt(core, from)?;
-    let (_, t) = super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await?;
+    let sent_q = super::transfers::floored(core, from, &a, amount);
+    let (sent, t) = super::usdt_relay_retry::send(core, id, from, to, acc, &a, amount).await?;
+    // Решение 236: газ кошелька DEX (BNB) — в USDT по живой цене; комиссия в USDT уже в «ушло − зачислено».
+    let (fee_usd, fee_note) =
+        match super::deal_return_cost::fee_usd(core, from, &a.ticker, sent.fee.as_ref()).await {
+            Ok(v) => (v, None),
+            Err(e) => {
+                let n = format!("газ возврата не пересчитан в USDT ({e}) — в итог не вошёл");
+                deps.log(
+                    Level::Warn,
+                    "core.usdt_return",
+                    Some(&from.0),
+                    format!("{id}: {n}"),
+                    None,
+                )
+                .await;
+                (None, Some(n))
+            }
+        };
     let text = format!(
         "USDT {amount}: {} → {}, зачислено {}",
         from.0, to.0, t.amount
@@ -119,7 +141,12 @@ pub(super) async fn relay_try(
         .id(id)
         .render();
     deps.notify("usdt.relayed", Some(&from.0), &tg).await;
-    Ok(t.amount)
+    Ok(Relayed {
+        sent: sent_q,
+        credited: t.amount,
+        fee_usd,
+        fee_note,
+    })
 }
 
 /// Режим «отдельно»: по свободным USDT площадок (из сверки). Решение 132: у DEX — каждый кошелёк отдельно; перегон

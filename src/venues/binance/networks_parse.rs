@@ -7,8 +7,8 @@
 //!
 //! Официально: GET /sapi/v1/capital/config/getall (Wallet «All Coins' Information», вес IP 10) — монета: coin,
 //! networkList[]: network, name, depositEnable, withdrawEnable, withdrawFee, withdrawMin, withdrawMax,
-//! withdrawIntegerMultiple (ошибка −4021 «сумма вывода должна быть кратна» — это шаг), depositDust (смысл в
-//! документации не описан), minConfirm («for balance credit»), unLockConfirm, withdrawTag («whether the coin requires
+//! withdrawIntegerMultiple (ошибка −4021 «сумма вывода должна быть кратна» — это шаг), depositDust (Changelog Wallet
+//! 2021-09-03: «minimum creditable amount»), minConfirm («for balance credit»), unLockConfirm, withdrawTag («whether the coin requires
 //! a memo to withdraw»), contractAddress, denomination («1 1MBABYDOGE = 1000000 BABYDOGE»), busy.
 //! Монета с denomination ≠ 1 в сети BSC пропускается: количество на бирже и в пуле — в разных единицах (вопрос Тиграну).
 

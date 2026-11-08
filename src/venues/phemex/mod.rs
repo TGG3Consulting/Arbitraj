@@ -14,6 +14,7 @@ pub mod account;
 pub mod all_balances;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -190,11 +191,9 @@ impl Venue for Phemex {
         all_balances::read(&self.ctx, &self.symbols).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: даты делистинга (timeline в GET /public/products-plus) не сверены с официальной документацией (поля не прочитаны в сессии решения 175) — до проверки не используются.
+    /// Решение 226: делистинги — timeline[3] («delist time») спот-пар GET /public/products-plus (delist.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "даты делистинга (timeline в GET /public/products-plus) не сверены с официальной документацией (поля не прочитаны в сессии решения 175) — до проверки не используются",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

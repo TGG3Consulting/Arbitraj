@@ -38,6 +38,8 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки площадки, секреты (ключ, секрет, passphrase), HTTP, журнал, сырые сообщения |
+| `delist.rs` | Решение 226: делистинги — `expTime` спот-инструментов GET /api/v5/public/instruments («instrument offline time when there is … manual offline») + анонсы (delist_ann.rs); сбой анонсов — warnings, справочник действует |
+| `delist_ann.rs` | Решение 226: анонсы GET /api/v5/support/announcements?annType=announcements-delistings (Accept-Language en-US, 20 на странице, 5 запросов / 2 с): только «OKX to delist A, B and C spot trading pairs», тикеры из справочника — блок с момента анонса |
 | `sign.rs` | Подпись Base64(HMAC-SHA256(timestamp+METHOD+путь?запрос+тело)), время ISO 8601 с мс, вход WebSocket |
 | `rest.rs` | REST: публичные и подписанные GET/POST, строка запроса = строка подписи; резерв только при сбое сети |
 | `reply.rs` | Разбор {code, msg, data} и sCode/sMsg; 50011/50013/50040/50061/58102, HTTP 429 — пауза пути (`venue.rate_limit_pause_ms`) |

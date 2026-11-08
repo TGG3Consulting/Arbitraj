@@ -13,6 +13,7 @@ pub mod account_update;
 pub mod all_balances;
 pub mod book;
 pub mod ctx;
+pub mod delist;
 pub mod deposit_addr;
 pub mod deposit_hold;
 pub mod deposits;
@@ -185,11 +186,10 @@ impl Venue for Mexc {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: в GET /api/v3/exchangeInfo нет признака или времени делистинга пары (status 1 online, 2 pause, 3 offline).
+    /// Решение 226: делистинги — признаки риска делистинга пар GET /api/v3/exchangeInfo (st, status, tradeSideType;
+    /// delist.rs), без времени — монета на MEXC не торгуется.
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "в GET /api/v3/exchangeInfo нет признака или времени делистинга пары (status 1 online, 2 pause, 3 offline)",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

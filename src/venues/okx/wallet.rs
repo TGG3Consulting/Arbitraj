@@ -71,6 +71,7 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
         op: Op::Other,
         signed: true,
         heavy: true,
+        lang: None,
     };
     let data = rest::send(ctx, r).await?;
     let (c, venue) = (ctx.clone(), ctx.venue());

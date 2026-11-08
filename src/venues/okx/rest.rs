@@ -37,6 +37,9 @@ pub struct Req<'a> {
     pub signed: bool,
     /// Разбор ответа вне рабочих потоков (большой ответ).
     pub heavy: bool,
+    /// Заголовок Accept-Language (решение 226: анонсы — «When Accept-Language in HTTP header is set to en-US, the
+    /// response will be in English»). None — заголовка нет.
+    pub lang: Option<&'static str>,
 }
 
 /// Публичный GET. Принимает: путь, параметры. Возвращает: data ответа. Ошибки: связь, коды OKX.
@@ -49,6 +52,28 @@ pub async fn public(ctx: &Ctx, path: &str, query: Params) -> GatewayResult<Value
         op: Op::Other,
         signed: false,
         heavy: false,
+        lang: None,
+    };
+    send(ctx, r).await
+}
+
+/// Публичный GET с заголовком Accept-Language (решение 226, анонсы). Принимает: путь, параметры, язык («en-US»).
+/// Возвращает: data ответа. Ошибки: связь, коды OKX.
+pub async fn public_lang(
+    ctx: &Ctx,
+    path: &str,
+    query: Params,
+    lang: &'static str,
+) -> GatewayResult<Value> {
+    let r = Req {
+        method: Method::GET,
+        path,
+        query,
+        body: None,
+        op: Op::Other,
+        signed: false,
+        heavy: false,
+        lang: Some(lang),
     };
     send(ctx, r).await
 }
@@ -63,6 +88,7 @@ pub async fn get(ctx: &Ctx, path: &str, query: Params) -> GatewayResult<Value> {
         op: Op::Other,
         signed: true,
         heavy: false,
+        lang: None,
     };
     send(ctx, r).await
 }
@@ -78,6 +104,7 @@ pub async fn post(ctx: &Ctx, path: &str, body: Value, op: Op) -> GatewayResult<V
         op,
         signed: true,
         heavy: false,
+        lang: None,
     };
     send(ctx, r).await
 }
@@ -100,6 +127,9 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
             .client()?
             .request(r.method.clone(), format!("{base}{path_q}"))
             .header("Content-Type", "application/json");
+        if let Some(lang) = r.lang {
+            req = req.header("Accept-Language", lang);
+        }
         if r.signed {
             let keys = ctx.keys()?;
             let ts = sign::rest_timestamp(chrono::Utc::now());

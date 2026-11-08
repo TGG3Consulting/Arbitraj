@@ -14,6 +14,8 @@ pub mod account;
 pub mod all_balances;
 pub mod book;
 pub mod ctx;
+pub mod delist;
+pub mod delist_ann;
 pub mod deposit_addr;
 pub mod deposit_event;
 pub mod deposits;
@@ -193,11 +195,9 @@ impl Venue for Okx {
         all_balances::read(&self.ctx).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: поле expTime справочника GET /api/v5/public/instruments как время делистинга спота не сверено с официальной документацией (страница недоступна в сессии решения 175) — до проверки не используется.
+    /// Решение 226: делистинги — expTime спот-инструментов + анонсы делистинга спота (delist.rs, delist_ann.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "поле expTime справочника GET /api/v5/public/instruments как время делистинга спота не сверено с официальной документацией (страница недоступна в сессии решения 175) — до проверки не используется",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

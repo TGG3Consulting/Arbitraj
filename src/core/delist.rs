@@ -3,6 +3,8 @@
 //! (контракт delistings) с частотой delist.refresh_s и уведомление venue.delisting, когда на подключённой бирже в
 //! делистинге появляется новая пара (первая загрузка после запуска — одна сводка). Сбой запроса — запись в журнал
 //! (повтор той же ошибки — один раз), прежний список остаётся. Само решение «торговать или нет» — delist_check.rs.
+//! Решение 226: не прочитан второстепенный источник (warnings ответа, например анонсы) — запись в журнал по каждой
+//! новой причине.
 //! Кто вызывает: core/engine.rs (run — одна задача на каждую биржу), core/delist_check.rs (get), api (GET
 //! /api/delistings через Core::delistings), тесты (set).
 //! От чего зависит: engine.rs, wait.rs, registry_sync.rs (venue.enabled), delist_text.rs, gateway (delistings).
@@ -103,6 +105,7 @@ pub async fn refresh(core: &Core, venue: &VenueId) {
     match res {
         Ok(got) => {
             let old = core.inner.delist.set(venue, got.clone(), Utc::now());
+            warn_new(core, venue, old.as_ref(), &got).await;
             announce(core, venue, old.as_ref(), &got).await;
         }
         Err(e) => {
@@ -112,6 +115,21 @@ pub async fn refresh(core: &Core, venue: &VenueId) {
                     .await;
             }
         }
+    }
+}
+
+/// Решение 226: второстепенный источник не прочитан (warnings) — запись core.delist по каждой НОВОЙ причине (та же
+/// причина на следующих кругах не повторяется). Принимает: ядро, площадку, прежний и новый ответ. Ошибок нет.
+async fn warn_new(core: &Core, venue: &VenueId, old: Option<&Delistings>, new: &Delistings) {
+    let was: HashSet<&str> = old
+        .map(|o| o.warnings.iter().map(String::as_str).collect())
+        .unwrap_or_default();
+    for w in new.warnings.iter().filter(|w| !was.contains(w.as_str())) {
+        let text = format!("Делистинги: источник не прочитан — {w} (основной источник действует)");
+        core.inner
+            .deps
+            .log(Level::Warn, "core.delist", Some(&venue.0), text, None)
+            .await;
     }
 }
 

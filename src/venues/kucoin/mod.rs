@@ -18,6 +18,8 @@ pub mod all_balances_parse;
 pub mod book;
 pub mod bullet;
 pub mod ctx;
+pub mod delist;
+pub mod delist_ann;
 pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
@@ -199,11 +201,9 @@ impl Venue for Kucoin {
         all_balances::read(&self.ctx).await
     }
 
-    /// Решение 175: делистинги — «неизвестно»: у пары в GET /api/v2/symbols нет признака или времени делистинга; есть только объявления GET /api/v3/announcements (annType delistings) — монета и время в них только текстом, текст не разбирается.
+    /// Решение 226: делистинги — метка st (Special Treatment) пар GET /api/v2/symbols + анонсы delistings (delist.rs, delist_ann.rs).
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {
-        Ok(crate::core::types::Delistings::unknown(
-            "у пары в GET /api/v2/symbols нет признака или времени делистинга; есть только объявления GET /api/v3/announcements (annType delistings) — монета и время в них только текстом, текст не разбирается",
-        ))
+        delist::delistings(&self.ctx).await
     }
 
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {

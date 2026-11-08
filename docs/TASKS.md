@@ -200,6 +200,17 @@
      Нужна ли перед сделкой отдельная свежая проверка версии по REST (плюс ~100–300 мс к сделке)?
   4. *Другие биржи — ЗАДАЧА (Тигран 08.11: механизм для всех бирж).* Подтверждение есть только у Gate. Для остальных 12 адаптеров — book_version по их документации
      (контракт gateway/contract.rs), до этого у них сторож не включается (feed_health = None).
+     - *MEXC (08.11, ветка t36/feed-watch-mexc-bitget):* сторож включён (feed_health, переподписка одной пары
+       UNSUBSCRIPTION + SUBSCRIPTION, переподключение соединения), **book_version НЕ реализован** (confirm = false) —
+       тихая пара только в журнал, не переподписывается. Причина — документация: Partial Book Depth Streams
+       (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/partial-book-depth-streams) описывает поле кадра
+       как «version | string | Version number», частота пушей не указана; связь с REST есть только у канала изменений:
+       «How to Properly Maintain a Local Copy of the Order Book» — «record `lastUpdateId`», «discard all pushes where
+       `toVersion` <= `lastUpdateId`» (канал spot@public.aggre.depth.v3.api.pb). Что version частичного стакана — тот же
+       счётчик, что lastUpdateId GET /api/v3/depth, нигде не сказано. Вопрос Тиграну: (а) спросить поддержку MEXC или
+       (б) записать на сервере бота одновременно кадры limit.depth и aggre.depth одной пары и ответ /api/v3/depth (hex
+       кадров — raw.book_frames = да; tests/README.md) — если version = toVersion при той же книге, реализовать
+       book_version по lastUpdateId с тестом на записи (как tests/gate_real_data.rs book_version_vs_frame_id).
 
 - **Решение 211, ревью К1 (07.11.2026):** нативный BNB бирж и BEP20-токен WBNB под тем же адресом — разные активы; сейчас токен WBNB биржи не торгуется (причина NativeVsToken на «Монетах»), нативный BNB торгуется как раньше (биржа ↔ биржа и биржа ↔ DEX). Нужна ли торговля самого токена WBNB биржи с DEX? Это две монеты с одним адресом — ядро различает монеты по адресу (Asset ==), понадобится отдельный признак «нативная» в монете. В записанных справочниках BingX/Gate/KuCoin токена WBNB нет.
 - **Решение 211, ревью В9:** настройки «по монете», не перенесённые миграцией (тикер неоднозначен), читаются по старому тикеру с записью settings.coin_ticker_fallback в журнале — задать их по адресу и удалить старые записи по тикеру.

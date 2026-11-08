@@ -7,6 +7,8 @@
 //! Перегон — отдельная задача класса Trade (путь сделки, решение 61: раньше задача шла фоном — классом Background в
 //! очереди узла BSC); итог — в состояние сделки (usdt_return_state.rs). Возврата нет и не будет (сбой, нет кошелька,
 //! задача оборвалась, исключённый путь — Deal.usdt_return_skip) — страховка «USDT не вернулись».
+//! Решение 224: исключённый путь («Продано вручную», решение 100) запрещает перегон только выручки человека — выручку
+//! продаж БОТА в той же сделке (deal.sells на площадке выручки) бот перегоняет сам, как при обычном закрытии.
 //! Кто вызывает: core/ledger.rs (finish).
 //! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, dex_account.rs, deal.rs, settings.
 //! Настройки: usdt_return.mode, venue.quote_asset.
@@ -61,7 +63,7 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Option<Job> {
     }
     // Решение 118 (Я-22): уходит то, что пришло: выручка минус комиссия продажи в котируемой монете площадки.
     let quote = deps.settings.text("venue.quote_asset", at(&deal.at));
-    let amount = match &quote {
+    let mut amount = match &quote {
         Ok(q) => deal.proceeds - sell_fee(deal, q),
         Err(_) => deal.proceeds,
     };
@@ -69,9 +71,21 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Option<Job> {
         return None;
     }
     let from = deal.at.clone();
-    // Исключённый путь (например «Продано вручную», решение 100) — возврата не будет: страховка.
+    // Исключённый путь (например «Продано вручную», решение 100): выручку человека бот не перегоняет. Решение 224:
+    // выручку продаж бота в этой сделке — перегоняет (не больше общей суммы); продаж бота нет — страховка, как раньше.
     if let Some(why) = deal.usdt_return_skip.clone() {
-        return not_returned(core, deal, amount, &from, &why).await;
+        let bot = bot_part(deal, quote.as_deref().ok()).min(amount);
+        if bot <= Decimal::ZERO {
+            return not_returned(core, deal, amount, &from, &why).await;
+        }
+        let human = amount - bot;
+        if human > Decimal::ZERO {
+            deal.note(format!(
+                "Сделка {}: выручку человека {human} USDT бот не перегоняет ({why}); перегоняется выручка продаж бота {bot} USDT (решение 224)",
+                deal.id
+            ));
+        }
+        amount = bot;
     }
     // Решение 132: перегон выручки — кошельком сделки.
     let acc = match super::dex_account::of(core, deal) {
@@ -124,6 +138,42 @@ async fn not_returned(
 /// Комиссия продаж сделки в котируемой монете (её нет в выручке). Принимает: сделку, тикер котируемой. Ошибок нет.
 fn sell_fee(deal: &Deal, quote: &str) -> Decimal {
     deal.sells.iter().map(|r| r.fee_in(quote)).sum()
+}
+
+/// Решение 224: выручка продаж БОТА (deal.sells) на площадке, где лежит выручка (deal.at), до комиссии. Ручной
+/// ввод «Продано вручную» в sells не попадает. Принимает: сделку. Возвращает: сумму USDT (0 — бот здесь не продавал).
+/// Ошибок нет.
+pub fn bot_sold(deal: &Deal) -> Decimal {
+    deal.sells
+        .iter()
+        .filter(|r| r.request.venue == deal.at)
+        .map(|r| r.filled_qty * r.avg_price)
+        .sum()
+}
+
+/// Решение 224: сколько выручки продаж бота можно вернуть — bot_sold минус комиссия этих продаж в котируемой монете.
+/// Принимает: сделку, тикер котируемой (None — не задан: без вычета). Возвращает: сумму (может быть ≤ 0). Ошибок нет.
+pub fn bot_part(deal: &Deal, quote: Option<&str>) -> Decimal {
+    let fee: Decimal = match quote {
+        Some(q) => deal
+            .sells
+            .iter()
+            .filter(|r| r.request.venue == deal.at)
+            .map(|r| r.fee_in(q))
+            .sum(),
+        None => Decimal::ZERO,
+    };
+    bot_sold(deal) - fee
+}
+
+/// bot_part с котируемой монетой площадки выручки из настроек. Принимает: ядро, сделку. Ошибок нет.
+pub fn bot_amount(core: &Core, deal: &Deal) -> Decimal {
+    let q = core
+        .inner
+        .deps
+        .settings
+        .text("venue.quote_asset", at(&deal.at));
+    bot_part(deal, q.ok().as_deref())
 }
 
 /// Область настройки «площадка». Принимает: площадку. Возвращает: At. Ошибок нет.

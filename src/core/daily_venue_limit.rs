@@ -9,6 +9,8 @@
 //! Повторная пауза: после «Снять паузу» без сброса площадка торгует, пока её убыток не вырастет — новый минус при
 //! превышенном лимите снова ставит паузу; плюсовая сделка или чужая площадка паузу не возвращают.
 //! Снятие: «Снять паузу» площадки (risk.rs) или «Сбросить лимит дня» по ней (reset; общий сброс — daily_limit.rs).
+//! Решение 221: площадка на паузе от сверки (Risk.reconcile_venues) — пауза по убытку ставится поверх и снимает отметку
+//! сверки (такая пауза сама не снимается).
 //! Кто вызывает: daily_commit.rs (check), daily_limit.rs (общий сброс), risk.rs (snapshot), commands_control.rs, api.
 //! От чего зависит: daily.rs (today_book, commit), daily_venue.rs, daily_limit.rs (describe), daily_commit.rs (announce),
 //! day_view.rs.
@@ -72,10 +74,11 @@ pub(super) fn check(core: &Core) -> (Vec<(VenueId, String)>, Vec<String>) {
                 r.loss_seen.insert(v.clone(), l.loss_usd);
                 // Пауза — при переходе через лимит или при росте убытка (после «Снять паузу» без сброса).
                 let grew = seen.is_none_or(|p| p < l.max_usd || l.loss_usd > p);
+                // Решение 221: пауза площадки от сверки не мешает паузе по убытку — она её заменяет (сама не снимается).
                 let busy = if dex {
                     r.cycle_paused.contains_key(&v)
                 } else {
-                    r.venue_paused.contains_key(&id)
+                    r.venue_paused.contains_key(&id) && !r.reconcile_venues.contains(&id)
                 };
                 if l.exceeded && grew && !on && !busy {
                     let t = describe(core, &v, &x, l, "больше лимита");
@@ -83,6 +86,7 @@ pub(super) fn check(core: &Core) -> (Vec<(VenueId, String)>, Vec<String>) {
                         r.cycle_paused.insert(v.clone(), t.clone());
                     } else {
                         r.venue_paused.insert(id.clone(), t.clone());
+                        super::risk::forget_reconcile(&mut r, &id);
                     }
                     r.loss_paused.insert(v.clone());
                     paused.push((id, t));
@@ -178,7 +182,9 @@ pub(super) fn lift(core: &Core, venue: &str) -> bool {
     r.loss_seen.remove(venue);
     let on = r.loss_paused.remove(venue);
     if on {
-        r.venue_paused.remove(&VenueId(venue.to_string()));
+        let id = VenueId(venue.to_string());
+        super::risk::forget_reconcile(&mut r, &id);
+        r.venue_paused.remove(&id);
         r.cycle_paused.remove(venue);
     }
     on

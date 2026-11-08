@@ -1,8 +1,8 @@
 //! Файл: core/risk.rs
 //! Что делает: стоп-условия и управление (шаг 6 ТЗ, экран «Управление»): режим системы (старт, стоп,
 //! пауза), пауза площадки после N ошибок подряд, карантин монеты, остановка по убытку за день,
-//! остановка новых сделок при расхождении сверки. Торговля не включается, пока не заданы все настройки
-//! групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
+//! пауза площадки при расхождении сверки (решение 221: Risk.reconcile_venues). Торговля не включается, пока не заданы
+//! все настройки групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
 //! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
 //! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
@@ -14,7 +14,7 @@
 //! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой площадки учёта
 //! сделки), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use rust_decimal::Decimal;
 
@@ -53,10 +53,11 @@ pub struct Risk {
     pub day: DayView,
     /// Система остановлена именно по общему лимиту дня (daily_limit.rs); любая смена режима снимает отметку.
     pub daily_stop: bool,
-    /// Решение 221: «Пауза» поставлена сверкой балансов — режим до неё (reconcile_pause.rs снимет паузу сам, когда
-    /// расхождений нет). Любая смена режима (человек, другой модуль) снимает отметку — такую паузу сверка не трогает.
+    /// Решение 221: площадки, паузу которых (venue_paused) поставила сверка балансов — reconcile_pause.rs снимет её
+    /// сама, когда по площадке расхождений нет. Человек или другой модуль поставил или снял паузу площадки — отметка
+    /// снимается (forget_reconcile), такую паузу снимает только человек.
     #[serde(skip)]
-    pub reconcile_pause: Option<Mode>,
+    pub reconcile_venues: HashSet<VenueId>,
     /// Решение 173: площадки на паузе по убытку дня (их причина — в venue_paused). Снимает «Снять паузу» или
     /// «Сбросить лимит дня» (по площадке или общий).
     #[serde(skip)]
@@ -80,7 +81,7 @@ impl Default for Risk {
             quarantine: HashMap::new(),
             day: DayView::default(),
             daily_stop: false,
-            reconcile_pause: None,
+            reconcile_venues: HashSet::new(),
             loss_paused: BTreeSet::new(),
             cycle_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
@@ -137,7 +138,6 @@ pub fn set_mode(core: &Core, mode: Mode, reason: Option<String>) -> String {
         r.mode = mode;
         r.reason = reason.clone();
         r.daily_stop = false;
-        r.reconcile_pause = None;
     }
     publish(core);
     format!(
@@ -165,6 +165,8 @@ pub fn on_error(core: &Core, venue: &VenueId) -> Option<String> {
             Ok(m) if n >= m => {
                 let t = format!("{n} ошибок подряд — предел {m}");
                 r.venue_paused.insert(venue.clone(), t.clone());
+                // Решение 221: пауза другого модуля поверх паузы сверки — сама уже не снимается.
+                forget_reconcile(&mut r, venue);
                 Some(t)
             }
             _ => None,
@@ -183,12 +185,21 @@ pub fn on_ok(core: &Core, venue: &VenueId) {
 pub fn resume_venue(core: &Core, venue: &VenueId) {
     let mut r = lk(&core.inner.risk);
     r.venue_paused.remove(venue);
+    // Решение 221: паузу снял человек — отметка сверки снята.
+    forget_reconcile(&mut r, venue);
     r.errors_in_row.remove(venue);
     // Решение 173: пауза по убытку дня тоже снята; новая — только если убыток площадки вырастет.
     r.loss_paused.remove(&venue.0);
     r.cycle_paused.remove(&venue.0);
     drop(r);
     publish(core);
+}
+
+/// Решение 221: паузу площадки поставил или снял не сверка (человек, другой модуль) — отметка «паузу поставила
+/// сверка» снимается, автоснятия нет. Вызывать под блокировкой риска. Принимает: состояние риска, площадку.
+/// Возвращает: true — отметка стояла (пауза площадки была от сверки). Ошибок нет.
+pub fn forget_reconcile(r: &mut Risk, venue: &VenueId) -> bool {
+    r.reconcile_venues.remove(venue)
 }
 
 // Проверка дневного лимита убытка и «Сбросить лимит дня» — core/daily_limit.rs (решения 53, 152, 153).

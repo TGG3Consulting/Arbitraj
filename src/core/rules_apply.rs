@@ -9,6 +9,7 @@
 //! «Исход неизвестен» ставит паузу и у ручной команды: очередь кошелька остановлена, транзакция могла исполниться.
 //! Решение 220 (Тигран 08.11): «вывод отклонён» (WithdrawRejected) не повторяется при любых правилах — журнал
 //! core.withdraw_rejected «вывод отклонён — не повторяем»; StopVenue / StopAll по нему действуют как обычно.
+//! Решение 221: пауза площадки отсюда (StopVenue, «исход неизвестен») снимает отметку сверки — автоснятия нет.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
 //! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, deps.rs.
 //! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs).
@@ -75,7 +76,9 @@ pub async fn on_error(
         let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
         let fresh = {
             let mut r = super::engine::lk(&core.inner.risk);
-            if r.venue_paused.contains_key(venue) {
+            // Решение 221: пауза стоит от сверки — заменяется этой (причина, уведомление), сама не снимается.
+            let ours = risk::forget_reconcile(&mut r, venue);
+            if r.venue_paused.contains_key(venue) && !ours {
                 false
             } else {
                 r.venue_paused.insert(venue.clone(), why.clone());
@@ -173,9 +176,12 @@ pub async fn on_error(
         RuleAction::StopVenue => {
             let why = format!("правило шлюза №{}: {:?}", rule.id, err.code);
             risk::on_error(core, venue);
-            super::engine::lk(&core.inner.risk)
-                .venue_paused
-                .insert(venue.clone(), why.clone());
+            {
+                let mut r = super::engine::lk(&core.inner.risk);
+                r.venue_paused.insert(venue.clone(), why.clone());
+                // Решение 221: пауза правила шлюза — сама не снимается.
+                risk::forget_reconcile(&mut r, venue);
+            }
             deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why))
                 .await;
             Next::Stop

@@ -1,7 +1,8 @@
 //! Файл: core/manual_relay_targets.rs
 //! Что делает: решение 235 — цели перегона кнопки «Продать и перегнать» (manual_relay.rs) по настройкам и справочнику
 //! монет: у монеты там рынок, приём по BSC и продажа через API; venue.enabled = да; площадка не на паузе; биржа ↔
-//! биржа — только если у биржи-цели venue.cex_cex не «нет» (не задана — да, как в решении 214); DEX — кошельком по
+//! биржа — только если venue.cex_cex не «нет» у обеих сторон: у биржи, где лежит монета, и у биржи-цели (не задана —
+//! да; «у одной из сторон», как направления решения 214); на DEX и «продать здесь» — без этого условия; DEX — кошельком по
 //! маппингу (dex_account::for_relay, решение 185), кошелёк не на паузе (решение 230). С площадки, где лежит монета,
 //! перегона нет, если вывод с неё по BSC закрыт, она или её кошелёк на паузе, или она уже отказала в выводе в этой
 //! сделке (решения 220, 227, 230). Каждая отсеянная площадка — с причиной (в хронологию сделки).
@@ -64,6 +65,8 @@ pub fn targets(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
     }
     let paused = lk(&core.inner.risk).venue_paused.clone();
     let from_cex = super::trade_ops::kind(core, from).ok() == Some(VenueKind::Cex);
+    // Решение 214 «у одной из сторон»: у биржи, где лежит монета, venue.cex_cex = нет — на другие биржи не перегоняем.
+    let from_cex_cex = !from_cex || cex_cex(core, from);
     let mut out = vec![];
     for p in e
         .presence
@@ -78,6 +81,11 @@ pub fn targets(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
             Some("площадка выключена (venue.enabled)".into())
         } else if let Some(x) = paused.get(to) {
             Some(format!("на паузе ({x})"))
+        } else if from_cex && to_cex && !from_cex_cex {
+            Some(format!(
+                "биржа ↔ биржа выключена у {} (venue.cex_cex = нет), где лежит монета",
+                from.0
+            ))
         } else if from_cex && to_cex && !cex_cex(core, to) {
             Some("биржа ↔ биржа выключена (venue.cex_cex = нет)".into())
         } else {

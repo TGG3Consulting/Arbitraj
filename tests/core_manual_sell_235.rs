@@ -8,7 +8,9 @@
 //! застрявшей монеты: при заданных stuck.mode = relay и stuck.relay_max_loss_pct = 0 в хронологии нет порога, итог кнопки
 //! «Не продано» с точной причиной; (3) продажа кнопкой без котировки — сделка остановлена с причиной и итогом кнопки,
 //! порога нет; (4) выбор «Продать и перегнать» — наибольшая выручка после затрат против «здесь»; (5) проход оценки без
-//! справочника монеты — только «здесь», строка оценки в хронологии; (6) итог кнопки — возврат USDT словами.
+//! справочника монеты — только «здесь», строка оценки в хронологии; (6) итог кнопки — возврат USDT словами;
+//! (7) цели перегона: у биржи, где лежит монета, venue.cex_cex = нет — на другие биржи нельзя, на DEX можно (решение 214
+//! «у одной из сторон»; ветка t42/small-fixes).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::gateway, arb::settings, arb::storage, arb::notify, arb::secrets.
 
@@ -273,4 +275,97 @@ fn outcome_names_usdt_return() {
     // Без «Продать и перегнать» и без частей — ничего.
     y.return_usdt = false;
     assert!(return_text(&y).is_none());
+}
+
+/// Решение 214 «у одной из сторон» для «Продать и перегнать»: монета лежит на mexc; у mexc venue.cex_cex = нет — перегон на
+/// биржу bingx не разрешён (причина в списке отсеянных), на DEX — разрешён; у биржи-цели «нет» — как раньше.
+#[tokio::test]
+async fn relay_targets_respect_cex_cex_of_source() {
+    use arb::core::registry::{CoinEntry, Presence};
+    use arb::core::types::DexAccountId;
+    use arb::gateway::contract::VenueKind;
+    let (core, s) = start("cexcex").await;
+    let mut x = deal("235G");
+    x.at = v("mexc");
+    x.step = Step::WaitingHuman;
+    x.dex_account = Some(DexAccountId("w1".into()));
+    let p = |id: &str| Presence {
+        venue: v(id),
+        ticker: "JCT".into(),
+        network: None,
+        can_receive: true,
+        can_send: true,
+        can_buy: true,
+        can_sell: true,
+        excluded: vec![],
+        info: None,
+        via: None,
+    };
+    let entry = CoinEntry {
+        asset: x.direction.asset.clone(),
+        presence: vec![p("mexc"), p("bingx"), p("bsc_dex")],
+        block: None,
+        problem: None,
+        wait: None,
+        cex_cex: None,
+        cex_cex_off: vec![],
+    };
+    // Виды площадок и справочник кладутся прямо перед расчётом целей, без await между ними: пересборка справочника
+    // (core/rebuild.rs, толчок от venue.* настроек) — задача того же однопоточного рантайма теста и не вклинится.
+    let targets = |x: &Deal| {
+        *core.inner.kinds.write().unwrap() = vec![
+            (v("mexc"), VenueKind::Cex),
+            (v("bingx"), VenueKind::Cex),
+            (v("bsc_dex"), VenueKind::Dex),
+        ];
+        core.inner.coins.write().unwrap().live = std::sync::Arc::new(vec![entry.clone()]);
+        arb::core::manual_relay_targets::targets(&core, x)
+    };
+    for id in ["mexc", "bingx", "bsc_dex"] {
+        s.set(
+            "venue.enabled",
+            Scope::Venue(id.into()),
+            Some(json!(true)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    }
+    let cc = |id: &str, on: bool| {
+        let s = s.clone();
+        let id = id.to_string();
+        async move {
+            s.set("venue.cex_cex", Scope::Venue(id), Some(json!(on)), "тест")
+                .await
+                .unwrap();
+        }
+    };
+    // Не задана — да: обе цели.
+    let (to, skip) = targets(&x);
+    assert_eq!(to, vec![v("bingx"), v("bsc_dex")], "{skip:?}");
+    // У биржи, где лежит монета, «нет» — только DEX.
+    cc("mexc", false).await;
+    let (to, skip) = targets(&x);
+    assert_eq!(to, vec![v("bsc_dex")], "{skip:?}");
+    assert!(
+        skip.iter()
+            .any(|t| t.starts_with("bingx: биржа ↔ биржа выключена у mexc")),
+        "{skip:?}"
+    );
+    // У биржи-цели «нет», у источника «да» — как раньше: цель отсеяна.
+    cc("mexc", true).await;
+    cc("bingx", false).await;
+    let (to, skip) = targets(&x);
+    assert_eq!(to, vec![v("bsc_dex")], "{skip:?}");
+    assert!(
+        skip.iter()
+            .any(|t| t == "bingx: биржа ↔ биржа выключена (venue.cex_cex = нет)"),
+        "{skip:?}"
+    );
+    // Монета на DEX: venue.cex_cex бирж-целей «да» — обе биржи цели (условие только для биржа → биржа).
+    cc("bingx", true).await;
+    x.at = v("bsc_dex");
+    cc("mexc", false).await;
+    let (to, skip) = targets(&x);
+    assert!(to.contains(&v("bingx")), "{skip:?}");
 }

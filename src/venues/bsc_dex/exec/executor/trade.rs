@@ -2,7 +2,8 @@
 //! Что делает: сделка по графовому маршруту ОДНОЙ транзакцией через свой исполнитель ArbExecutor (решение 122, часть X)
 //! — вместо бандла (решение 84), когда задан exec.executor_address. Доли — по живому состоянию пулов (как бандл и
 //! сухая сделка: exec/dry_paths.rs, exec/live.rs — проба крючка и допуск, решение 32), средняя цена против худшей,
-//! минимум каждой доли — из предторговой верификации (решение 83), шаги исполнителя (call.rs), очередь кошелька
+//! минимум каждой доли — решение 228 (exec/leg_min.rs: E_k × max(1 − допуск, B / E), минимум предторговой
+//! верификации, решение 83, — нижней границей; minOut = сумма = max(E × (1 − допуск), B)), шаги исполнителя (call.rs), очередь кошелька
 //! (решение 45), разрешение ERC-20 исполнителю (один раз на токен; отправленное разрешение ждёт блока — тогда всё
 //! собирается заново на живом состоянии со свежей верификацией, новое разрешение после этого — отказ, решение 121 B1;
 //! до разрешения код и владелец исполнителя сверяются с узлом — onchain.rs),
@@ -14,7 +15,7 @@
 //! Внутри шага STABLE_U256_BNB (пулы с меткой 0xEeee…) BNB есть — контракт разворачивает/заворачивает WBNB сам.
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
 //! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
-//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, native, order, precheck_quoter, swap_send, txs,
+//! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{chain, dry_paths, leg_min, native, order, precheck_quoter, swap_send, txs,
 //! verify_gate}.rs, quote/{via, direct}.rs, wallet/{approve, nonce}.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited,
 //! exec.dex_slippage_pct, verify.*, send.*, channel.*.
@@ -23,7 +24,7 @@
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
+use crate::core::types::{DexRoute, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::quote::via::Via;
@@ -32,6 +33,7 @@ use super::super::super::wallet::approve_executor;
 use super::super::super::wallet::nonce::Nonces;
 use super::super::chain::{self, Step};
 use super::super::dry_paths::live_paths;
+use super::super::leg_min;
 use super::super::native;
 use super::super::order::{check_price, worst_positive};
 use super::super::swap_send::{rebuilt_notice, send_approvals};
@@ -111,8 +113,8 @@ pub async fn trade(
     Ok(r)
 }
 
-/// Доли по живому состоянию: пути, сверка средней цены с худшей, шаги exec/chain.rs и минимум каждой доли из
-/// верификации. Решение 177: продажа выхода с расхождением хопа Maverick — доля по квотеру, минимум верификации — тем
+/// Доли по живому состоянию: пути, сверка средней цены с худшей, шаги exec/chain.rs и минимум каждой доли по решению
+/// 228 (exec/leg_min.rs; минимум верификации — нижней границей). Решение 177: продажа выхода с расхождением хопа Maverick — доля по квотеру, минимум верификации — тем
 /// же множителем. Принимает: расчёт путей, запрос, маршрут, минимумы долей, (decimals монеты, USDT).
 /// Возвращает: шаги долей и строку «— продажа по квотеру» (None — по расчёту).
 /// Ошибки: NoRoute, QuoteMismatch (цена, число долей), CoinNotChecked, BadResponse, узел.
@@ -137,17 +139,15 @@ pub async fn prepare(
         let why = "верификация вернула число долей, не равное маршруту";
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));
     }
-    let out_dec = if req.side == Side::Buy {
-        decs.0
-    } else {
-        decs.1
-    };
     let mut legs = Vec::with_capacity(paths.len());
-    for (((p, qty), min), r) in paths.iter().zip(mins).zip(&ratios) {
-        let mut steps = chain::steps(ctx, req, p, *qty, decs)?;
-        verify_gate::apply_leg_min(ctx, &mut steps, *min * *r, out_dec)?;
-        legs.push(steps);
+    for (p, qty) in &paths {
+        legs.push(chain::steps(ctx, req, p, *qty, decs)?);
     }
+    // Решение 228: минимум доли = E_k × max(1 − допуск, B / E); minOut execute = их сумма = max(E × (1 − допуск), B).
+    // Минимум верификации (× множитель квотера, решение 177) — нижняя граница доли, не выше её ожидаемого.
+    let ver: Vec<Decimal> = mins.iter().zip(&ratios).map(|(m, r)| *m * *r).collect();
+    let shares = paths.iter().map(|(p, q)| (p, *q));
+    leg_min::set_leg_mins(ctx, req, shares, &mut legs, Some(&ver), decs)?;
     Ok((legs, note))
 }
 

@@ -2,12 +2,13 @@
 //! Что делает: подготовка долей умного маршрута (решение 38) по живому состоянию: количество каждой доли (продажа —
 //! qty × доля входа; покупка — qty × ожидаемые монеты доли / все; последняя — остаток), путь доли (exec/live.rs),
 //! проверка средней цены против худшей допустимой, сверка с MixedQuoter PancakeSwap, шаги и минимумы (exec/chain.rs),
-//! свежие минимумы графовой верификации (решение 83) последнему шагу каждой доли, нативная обёртка (решение 62).
+//! минимум выхода каждой доли по решению 228 (exec/leg_min.rs: E_k × max(1 − допуск, B / E), свежий минимум графовой
+//! верификации, решение 83, — нижней границей) последнему шагу каждой доли, нативная обёртка (решение 62).
 //! Зовётся дважды, если отправлялись разрешения (решение 121 B1: после approve всё заново).
 //! Решение 223: доли графа с общим пулом — суммы, цена и шаги по порядку исполнения на последовательных состояниях
 //! (quote/graph_seq.rs resequence); MixedQuoter сверяет каждую долю на текущем состоянии — с расчётом доли на нём же.
 //! Кто вызывает: exec/trade_smart.rs.
-//! От чего зависит: exec/live.rs, exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/verify_gate.rs,
+//! От чего зависит: exec/live.rs, exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/leg_min.rs,
 //! quote/mixed_quoter.rs, quote/graph_seq.rs, quote/via.rs, quote/path.rs.
 //! Настройки: через вызываемые — smart.mixed_quoter, dex.quoter_max_diff_pct, exec.dex_slippage_pct, dex.*.
 
@@ -23,7 +24,7 @@ use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::order::check_price;
-use super::{chain, live, verify_gate};
+use super::{chain, leg_min, live};
 
 /// Подготовленные доли: пути по живому состоянию (с количеством доли), шаги с минимумами, нативная обёртка.
 pub struct Prep {
@@ -88,24 +89,10 @@ pub async fn prepare(
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, req, p, *qty, decs)?);
     }
-    // Графовый маршрут (решение 83): свежие минимумы выхода по ногам из верификации — последнему шагу каждой доли
-    // (он отдаёт выход доли). Умный путь без графа передаёт None и ничего не меняет.
-    if let Some(mins) = mins {
-        if mins.len() != steps.len() {
-            return Err(ctx.err(
-                ErrorCode::QuoteMismatch,
-                "верификация вернула число ног, не равное маршруту",
-            ));
-        }
-        let out_dec = if req.side == Side::Buy {
-            decs.0
-        } else {
-            decs.1
-        };
-        for (leg, min) in steps.iter_mut().zip(mins) {
-            verify_gate::apply_leg_min(ctx, leg, *min, out_dec)?;
-        }
-    }
+    // Решение 228: минимум каждой доли = E_k × max(1 − допуск, B / E) последнему шагу (exec/leg_min.rs); графовый
+    // маршрут (решение 83) — свежий минимум верификации нижней границей доли. Умный путь без графа передаёт None.
+    let shares = paths.iter().map(|(p, q)| (p, *q));
+    leg_min::set_leg_mins(ctx, req, shares, &mut steps, mins, decs)?;
     let wrap = if is_native {
         native::adapt(ctx, req.side, &mut steps)?
     } else {

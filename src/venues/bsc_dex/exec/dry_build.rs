@@ -12,7 +12,7 @@
 //! код подставлен в симуляцию) или графовый «бандл» при заданном exec.executor_address (как сделка).
 //! Кто вызывает: exec/dry_swap.rs.
 //! Решение 122 F: в графовой форме хопы через пулы Maverick V2 сверяются с квотером (exec/precheck_quoter.rs).
-//! От чего зависит: exec/{trade (общие шаги), live, chain, precheck, plan, universal, bundle, native, verify_gate}.rs,
+//! От чего зависит: exec/{trade (общие шаги), live, chain, leg_min, precheck, plan, universal, bundle, native}.rs,
 //! quote/{verify, graph_route, mixed_quoter, direct, via, steps}.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, smart.*, verify.*.
 
@@ -33,7 +33,7 @@ use super::executor::dry::{DryMode, ExecTx};
 use super::native::{self, Wrap};
 use super::plan::Plan;
 use super::trade::{check_price, sides, worst_positive};
-use super::{bundle, chain, executor, plan, precheck, universal, verify_gate};
+use super::{bundle, chain, executor, leg_min, plan, precheck, universal};
 
 /// Что собрано: одна транзакция Universal Router (прямой / умный), бандл или вызов исполнителя ArbExecutor (решение 122).
 pub enum Built {
@@ -116,20 +116,9 @@ pub async fn build(
     for (p, qty) in &paths {
         legs.push(chain::steps(ctx, req, p, *qty, decs)?);
     }
-    if let Some(mins) = &mins {
-        if mins.len() != legs.len() {
-            let why = "верификация вернула число ног, не равное маршруту";
-            return Err(ctx.err(ErrorCode::QuoteMismatch, why));
-        }
-        let out_dec = if req.side == Side::Buy {
-            decs.0
-        } else {
-            decs.1
-        };
-        for (leg, min) in legs.iter_mut().zip(mins) {
-            verify_gate::apply_leg_min(ctx, leg, *min, out_dec)?;
-        }
-    }
+    // Решение 228: минимум доли = E_k × max(1 − допуск, B / E), свежий минимум верификации — нижней границей (как сделка).
+    let shares = paths.iter().map(|(p, q)| (p, *q));
+    leg_min::set_leg_mins(ctx, req, shares, &mut legs, mins.as_deref(), decs)?;
     let is_native = native::is_native(ctx, &req.asset);
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).

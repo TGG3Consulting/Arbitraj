@@ -13,8 +13,9 @@
 //! между ними нет ожидания блока, поэтому пересборка после approve (как в прямом и умном пути) не нужна.
 //! Итог и ошибку подписывает исполнителем «свой сборщик: бандл» вызывающий (exec/trade.rs, решение 121 B7). Классику/прямой/умный путь не трогает.
 //! Решение 223: доли с общим пулом пересчитываются по порядку исполнения (quote/graph_seq.rs resequence).
+//! Решение 228: минимум ноги — exec/leg_min.rs (E_k × max(1 − допуск, B / E), минимум верификации — нижней границей).
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
-//! От чего зависит: exec/{bundle,bundle_native,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
+//! От чего зависит: exec/{bundle,bundle_native,bundle_notify,bundle_send,chain,leg_min,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
 //! Настройки: dex.bundle_max_routers (исполнимость — quote/graph_route.rs); через вызываемые — send.*, dex.*, channel.*.
 
@@ -35,7 +36,7 @@ use super::trade::{check_price, sides, worst_positive};
 use super::txs::{self, Env};
 use super::verify_gate::Verified;
 use super::{
-    bundle, bundle_native, bundle_notify, bundle_send, chain, live, native, result, verify_gate,
+    bundle, bundle_native, bundle_notify, bundle_send, chain, leg_min, live, native, result,
 };
 
 /// Сделка мульти-роутерным бандлом. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса,
@@ -69,11 +70,6 @@ pub async fn trade(
     }
     let (coin, usdt, decs) = sides(q, &req).await?;
     let out_token = if req.side == Side::Buy { coin } else { usdt };
-    let out_dec = if req.side == Side::Buy {
-        decs.0
-    } else {
-        decs.1
-    };
     let taxes = direct::taxes(q, &req.asset)?;
     let v = Via {
         q,
@@ -100,20 +96,16 @@ pub async fn trade(
     // Решение 223: доли с общим пулом — по порядку исполнения на состоянии пула после прошлых долей (бандл проводит их
     // по порядку внутри роутер-группы; доли с общим пулом — в одной группе). Без общих пулов — без изменений.
     graph_seq::resequence(ctx, req.side, &taxes, &mut paths)?;
-    for (i, (path, qty)) in paths.iter().enumerate() {
+    for (path, qty) in &paths {
         coins += path.coins;
         paid += path.usdt;
-        let mut steps = chain::steps(ctx, &req, path, *qty, decs)?;
-        let min = verified.amount_out_min.get(i).copied().ok_or_else(|| {
-            ctx.err(
-                ErrorCode::NoRoute,
-                "верификация не дала минимум ноги бандла",
-            )
-        })?;
-        verify_gate::apply_leg_min(ctx, &mut steps, min, out_dec)?;
-        legs.push(steps);
+        legs.push(chain::steps(ctx, &req, path, *qty, decs)?);
     }
     check_price(ctx, &req, coins, paid)?;
+    // Решение 228: минимум ноги = E_k × max(1 − допуск, B / E), свежий минимум верификации — нижней границей.
+    let shares = paths.iter().map(|(p, q)| (p, *q));
+    let ver = Some(verified.amount_out_min.as_slice());
+    leg_min::set_leg_mins(ctx, &req, shares, &mut legs, ver, decs)?;
     // R3 (решение 122): BNB — первый шаг продажи платит роутер (WRAP_ETH), последний шаг покупки отдаёт роутеру.
     if is_native {
         bundle_native::adapt(ctx, req.side, &mut legs)?;

@@ -104,6 +104,8 @@ pub enum ManualAction {
     SetMode { mode: crate::core::risk::Mode },
     /// Решение 157: «Снять паузу» площадки (как POST /api/control/venue/{id}/resume).
     ResumeVenue { venue: String },
+    /// Решение 230: «Снять паузу» кошелька DEX (как POST /api/control/wallet/{id}/resume); wallet — id (w1…w7).
+    ResumeWallet { wallet: String },
     /// Решение 157: «Снять карантин» монеты (как POST /api/control/quarantine/{id}/release); id — адрес или тикер.
     ReleaseQuarantine { id: String },
     /// Решение 157: «Сбросить лимит дня» (решение 153, как POST /api/control/daily-limit/reset) — общий: вся система
@@ -149,7 +151,7 @@ impl ManualAction {
             Self::SetMode {
                 mode: Mode::Stopped,
             } => "Стоп",
-            Self::ResumeVenue { .. } => "Снять паузу",
+            Self::ResumeVenue { .. } | Self::ResumeWallet { .. } => "Снять паузу",
             Self::ReleaseQuarantine { .. } => "Снять карантин",
             Self::ResetDailyLimit => "Сбросить лимит дня",
             Self::ResetVenueLimit { .. } => "Сбросить лимит дня площадки",

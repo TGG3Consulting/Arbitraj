@@ -7,14 +7,16 @@
 //!    свой кошелёк), остальные кошельки торгуют;
 //! 3) автоснятие — ledger.reconcile_confirm_rounds чистых кругов подряд ЭТОГО кошелька: проблема другого кошелька не
 //!    мешает, кошелёк не сверялся или его балансы не получены — круг не чистый;
-//! 4) «Снять паузу» кошелька (Core::resume_wallet);
+//! 4) «Снять паузу» кошелька (Core::resume_wallet); из Telegram (меню «Площадки и карантин», «Состояние»): строка
+//!    кошелька и кнопка «c:wr.<id>» → вопрос «Снять паузу кошелька …?» → та же команда ядра (ManualAction::ResumeWallet,
+//!    Core::command с источником Telegram и «кто»), журнал core.command с нажавшим; повтор — «не на паузе»;
 //! 5) чистая логика: тексты по кошелькам, «чистый круг» кошелька, короткое сообщение о паузе (paused_text), проблемы
 //!    кошельков не входят в паузу площадки.
 //!    Пример расхождения — случай 08.11: «PORTO по учёту 119.25, на площадке 0».
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (reconcile_wallet, reconcile_pause, reconcile::Found, risk, wallet_pause, dex_account),
-//! settings (accounts), storage, notify.
+//! settings (accounts), storage, notify (menu, menu_press).
 
 use std::collections::HashSet;
 
@@ -267,6 +269,71 @@ async fn manual_resume_wallet() {
     let mut lift = Lift::default();
     maybe_lift(&core, &mut lift, &set(&["w2"]), &[]).await;
     assert_eq!(lift.clean("w2"), 0);
+}
+
+/// Решение 230 (дополнение): пауза кошелька видна и снимается в Telegram — как пауза площадки.
+#[tokio::test]
+async fn resume_wallet_from_telegram_menu() {
+    use arb::core::types::{CommandSource, ManualAction, ManualCommand};
+    let core = start("tg").await;
+    let settings = &core.inner.deps.settings;
+    settings
+        .set(
+            "notify.telegram_chat",
+            Scope::Global,
+            Some(json!("100")),
+            "тест",
+        )
+        .await
+        .unwrap();
+    pause(&core, &[wallet_coin("w2", "Второй")]).await;
+    let r = core.control();
+    let line =
+        format!("Кошелёк «Второй» (DEX) — на паузе: сверка балансов: bsc_dex «Второй»: {PORTO}");
+    let (text, kb) = arb::notify::menu::venues(&r);
+    assert!(text.contains(&line), "{text}");
+    let first = &kb["inline_keyboard"][0][0];
+    assert_eq!(first["text"], "Снять паузу кошелька «Второй»");
+    assert_eq!(first["callback_data"], "c:wr.w2");
+    assert!(arb::notify::menu::state(&r, 0).0.contains(&line));
+    let p = arb::notify::menu_press::control_action(&r, "wr.w2").unwrap();
+    let action = ManualAction::ResumeWallet {
+        wallet: "w2".into(),
+    };
+    assert_eq!(p.action, action);
+    assert_eq!(p.question, "Снять паузу кошелька «Второй» (DEX)?");
+    let cmd = ManualCommand {
+        action,
+        source: CommandSource::Telegram { chat: "100".into() },
+        by: Some("@tigran (1)".into()),
+        at: chrono::Utc::now(),
+    };
+    let t = core.command(cmd.clone()).await.unwrap();
+    assert_eq!(t, "пауза кошелька «Второй» снята");
+    assert!(core.control().wallet_paused.is_empty());
+    assert_eq!(can_open(&core, &dir_of("mexc", "bsc_dex")), Ok(()));
+    let (text, kb) = arb::notify::menu::venues(&core.control());
+    assert!(text.contains("Площадок и кошельков на паузе, монет в карантине нет."));
+    assert_eq!(
+        kb["inline_keyboard"].as_array().unwrap().len(),
+        1,
+        "только «Назад»"
+    );
+    let t = core.command(cmd).await.unwrap();
+    assert!(t.contains("не на паузе"), "{t}");
+    // Кто снял — в журнале core.command (как у площадки); снятие — core.control с именем кошелька.
+    let log = core.inner.deps.journal.list(200, None).await.unwrap();
+    assert!(
+        log.iter().any(|e| e.kind == "core.command"
+            && e.message.contains("ResumeWallet")
+            && e.data.as_ref().is_some_and(|d| d["by"] == "@tigran (1)")),
+        "{log:?}"
+    );
+    assert!(
+        log.iter().any(|e| e.kind == "core.control"
+            && e.message.contains("Пауза кошелёк «Второй» снята вручную")),
+        "{log:?}"
+    );
 }
 
 #[tokio::test]

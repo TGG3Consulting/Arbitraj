@@ -8,7 +8,8 @@
 //! - замороженный реестр берёт закреплённые пути момента снимка (без срока и без построения графа) и даёт ту же
 //!   котировку графа, что живой до изменений рынка;
 //! - пулы «WBNB — USDT» для цены газа попадают в снимок, даже если WBNB не среди промежуточных;
-//! - порядок ошибок живой котировки DEX как до 217: dex.swap_mode проверяется раньше свежести блока.
+//! - порядок ошибок живой котировки DEX как до 217: dex.swap_mode проверяется раньше свежести блока;
+//! - решение 236: цена газа снимка закреплена (quote/gas.rs pinned) — без цены в памяти ошибка, узел не спрашивается.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{frozen, pools::registry_frozen, quote::{graph_route, route_cache}},
@@ -271,4 +272,15 @@ async fn frozen_depth_verdict_from_snapshot_moment() {
     let fd = fz.depth().depth(&q.ctx, &fz, &q.tokens, &e, 18).unwrap();
     assert!(fd.deep_buy, "вердикт снимка: глубокий");
     assert!(!live().unwrap().deep_buy, "живой остаётся мелким");
+}
+
+#[tokio::test]
+async fn pinned_gas_never_goes_live() {
+    // Решение 236: цена газа снимка закреплена на момент снимка; её не было в памяти — ошибка StaleData, а не запрос к
+    // узлу и не живая цена позже.
+    let p = graph_parts().await;
+    let q = p.quoting();
+    let e = q.gas.pinned().wei(&q.ctx, &q.heads).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::StaleData, "{}", e.message);
+    assert!(e.message.contains("на момент снимка"), "{}", e.message);
 }

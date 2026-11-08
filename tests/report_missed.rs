@@ -21,7 +21,7 @@ use arb::core::types::{Asset, Direction, VenueId};
 use arb::core::uncapped_report::MissedData;
 use arb::core::uncapped_sum::totals;
 use arb::core::uncapped_types::{
-    BASIS_LIVE_AFTER_BUY, BASIS_SNAPSHOT, Battle, Brief, Episode, missed,
+    BASIS_DECISION, BASIS_LIVE_AFTER_BUY, Battle, Brief, Episode, missed,
 };
 use chrono::{Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
@@ -62,9 +62,16 @@ async fn brief(
     };
     let ladder = [d("20"), d("100"), d("1000")];
     let p = params(rec, dr, d("1000000"));
-    let u = uncapped(&mut c, &p, d(budget), &ladder, |pt| pt.profit >= floor)
-        .await
-        .unwrap();
+    let u = uncapped(
+        &mut c,
+        &p,
+        d(budget),
+        &ladder,
+        |pt| pt.profit >= floor,
+        None,
+    )
+    .await
+    .unwrap();
     let at = Utc.with_ymd_and_hms(2026, 11, 7, 10, 0, 0).unwrap() + Duration::minutes(min);
     let ab = u.at_budget.at.unwrap_or(At {
         qty: Decimal::ZERO,
@@ -104,8 +111,8 @@ async fn brief(
             peak_at: at + Duration::seconds(30),
         },
         budget: d(budget),
-        // Решение 217: сделки теста посчитаны по снимку рынка момента решения.
-        basis: BASIS_SNAPSHOT.into(),
+        // Решение 236: сделки теста посчитаны по данным момента входа.
+        basis: BASIS_DECISION.into(),
         decided_at: deal.map(|_| at),
     }
 }
@@ -194,7 +201,18 @@ async fn missed_workbook_from_recorded_calc() {
     let old = arb::report::missed_rows::deals(&data, true);
     assert_eq!(old.len(), 1);
     assert_eq!(old[0].basis, "посчитано после покупки — занижено");
-    assert_eq!(deals[0].basis, "рынок на момент решения (до покупки)");
+    assert_eq!(
+        deals[0].basis,
+        "все данные на момент входа: стаканы, пулы, σ, время в пути, курсы, газ"
+    );
+    // Решение 236: расчёт на вложенных — точка «на нашем бюджете» записи.
+    let with_point = (data.totals.items.iter())
+        .filter(|i| i.deal && !i.b.understated() && i.b.at_budget.at.is_some())
+        .count();
+    assert_eq!(
+        deals.iter().filter(|r| r.at_invested.is_some()).count(),
+        with_point
+    );
     assert!(deals[0].time < deals[1].time, "старые сверху");
     assert_eq!((deals[0].fact, deals[1].fact), (Some(0.5), None));
     assert_eq!(deals[0].coin, "CAKE / Cake");
@@ -229,10 +247,10 @@ async fn missed_workbook_from_recorded_calc() {
     }
     // Сделки — занижено (лист 5): 1 строка → «Итого» в строке 3.
     let s5 = &files["xl/worksheets/sheet5.xml"];
-    assert!(s5.contains("<f>SUM(J2:J2)</f>"), "Сделки — занижено");
-    // Сделки: 2 строки → «Итого» в строке 4, SUM по деньгам D, F, G, H, I, J.
+    assert!(s5.contains("<f>SUM(K2:K2)</f>"), "Сделки — занижено");
+    // Сделки: 2 строки → «Итого» в строке 4, SUM по деньгам D, F, G, H (расчёт на вложенных, решение 236), I, J, K.
     let s2 = &files["xl/worksheets/sheet2.xml"];
-    for c in ['D', 'F', 'G', 'H', 'I', 'J'] {
+    for c in ['D', 'F', 'G', 'H', 'I', 'J', 'K'] {
         assert!(s2.contains(&format!("<f>SUM({c}2:{c}3)</f>")), "Сделки {c}");
     }
     // Кандидаты: 1 строка → SUM по F, G, I, J, L.
@@ -251,6 +269,8 @@ async fn missed_workbook_from_recorded_calc() {
         "Не исполненные (кандидаты)",
         "лимит на сделку",
         "Сделки: посчитано после покупки — занижено",
+        "Упущено против вложенного, USDT",
+        "Потолок (макс. прибыль без лимита): вложить, USDT",
     ] {
         assert!(shared.contains(t), "строка «{t}»");
     }

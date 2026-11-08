@@ -95,7 +95,7 @@ fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
         m = m.kv("Закрыта", how);
     }
     if let Some(c) = ceil {
-        m = super::deal_ceiling::lines(m, d, fact, plus, c);
+        m = super::deal_ceiling::lines(m, c);
     }
     m.id(&d.id).render()
 }

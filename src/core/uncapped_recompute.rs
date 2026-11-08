@@ -12,6 +12,9 @@
 //!   нет полного стакана — не пересчитывается (причина);
 //! - биржа → DEX: биржа — так же; DEX — из плана сделки (приблизительно, basis recomputed_window_dex_plan);
 //! - DEX → биржа, циклы DEX ↔ DEX, сделки без окна — не пересчитываются (причина в отчёт).
+//! - решение 236: правило «все входы — на момент входа» здесь уже выполнялось (σ, время в пути, курсы затрат, вывод и
+//!   возврат — из плана сделки, uncapped_recompute_ctx.rs, plan_costs.rs); добавлено общее — объём, на котором вошли,
+//!   считается всегда (вне uncapped.max_evals) и он — «на нашем бюджете».
 //!
 //! Итог по сделке — строка отчёта и (если посчитано) новая строка таблицы uncapped: тот же формат Record, basis
 //! recomputed_window / recomputed_window_dex_plan, начало — как у старой записи (тот же период на экране). Старые
@@ -174,9 +177,16 @@ async fn run(
         src: &p.src,
     };
     let (min_usd, min_pct) = (p.cfg.min_usd, p.cfg.min_pct);
-    let u = super::size_uncapped::uncapped(&mut curve, &p.params, p.budget, &p.cfg.ladder, |pt| {
-        super::card_max::passes(&pt.data, min_usd, min_pct)
-    })
+    // Решение 236: объём, на котором вошли (из старой записи), — точка «на нашем бюджете», всегда посчитана.
+    let own = (old.battle.qty > Decimal::ZERO).then_some(old.battle.qty);
+    let u = super::size_uncapped::uncapped(
+        &mut curve,
+        &p.params,
+        p.budget,
+        &p.cfg.ladder,
+        |pt| super::card_max::passes(&pt.data, min_usd, min_pct),
+        own,
+    )
     .await
     .map_err(|e| format!("расчёт невозможен: {e}"))?;
     let inputs = Inputs {

@@ -1,7 +1,7 @@
 <!--
   Файл: ui/src/pages/Uncapped.svelte
   Что делает: экран «Упущено из-за потолка» (решение 141) за период (сутки / 7 дней / свой): два итога — «по
-    исполненным сделкам» (план, факт, та же модель на нашем бюджете, потенциал без потолка, упущено, сколько упёрлось в
+    исполненным сделкам» (план, факт, та же модель на вложенном — решение 236, потенциал без потолка, упущено, сколько упёрлось в
     бюджет) и «по не исполненным кандидатам» (эпизоды: упущено — пиковое, сколько отклонённых стали бы плюсовыми);
     таблица «потолок → прибыль» (значения — uncapped.ladder_usdt) и строка «без потолка»; топ направлений; счётчики
     фоновой очереди (посчитано, слито, не посчитано: очередь полна, сбои и последняя причина, мс на расчёт); записи
@@ -13,6 +13,9 @@
     Решение 215: «Скачать отчёт» — Excel «Упущено» за ТОТ ЖЕ период, что выбран (GET /api/report/missed.xlsx?from=&to=).
     Решение 217: сделки считаются по рынку на момент решения (снимок до ордера покупки); старые записи сделок, посчитанные
     после нашей покупки, — пометка «посчитано после покупки — занижено» и отдельная строка итога (deals_old).
+    Решение 236: у сделки — «по расчёту на вложенных», «потолок» (сколько можно было вложить с максимальной прибылью без
+    лимита) и «на потолке заработали бы / потеряли бы» — расчёт по данным момента входа, «упущено против вложенного»;
+    записи до решения 236 (σ и курсы позже входа) — пометка «несравнимо».
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
@@ -25,7 +28,7 @@
   import { get, download } from '../lib/api.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
-  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated } from '../lib/uncappedLabels.js';
+  import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated, lateInputs, wouldText } from '../lib/uncappedLabels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import UncappedRecord from '../components/UncappedRecord.svelte';
@@ -123,7 +126,7 @@
 {#if sum}
   {#if sum.off}<p class="warn-text">Расчёт без потолка не идёт: {sum.off}</p>{/if}
   <table>
-    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель на нашем бюджете</th><th>без потолка</th><th>упущено</th><th>окна</th></tr></thead>
+    <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель: сделки — на вложенном, кандидаты — на нашем бюджете</th><th>без потолка</th><th>упущено</th><th>окна</th></tr></thead>
     <tbody>
       <tr><td>Исполненные сделки</td><td>{sum.deals.count}</td><td>{sum.deals.budget_bound}</td><td>{money(sum.deals.battle_profit)}</td>
         <td>{money(sum.deals.fact)} <span class="muted">({sum.deals.fact_count} с итогом)</span></td><td>{money(sum.deals.at_budget_profit)}</td>
@@ -187,6 +190,7 @@
       <strong>{dirText(b.direction)}</strong>
       <span class="tag">{deal ? `сделка ${b.battle.deal_id}` : verdictLabel(b.battle.verdict)}</span>
       {#if understated(b)}<span class="tag warn-text">посчитано после покупки — занижено</span>{/if}
+      {#if lateInputs(b)}<span class="tag warn-text">σ и курсы позже входа — несравнимо</span>{/if}
       {#if !deal && b.battle.reason}<span class="muted">{b.battle.reason}</span>{/if}
       <span class="muted">{showTime(deal ? (b.decided_at ?? b.at) : b.ep.first_at)}</span>
     </header>
@@ -197,8 +201,14 @@
       {:else}
         На нашем бюджете {money(b.budget)} USDT: {#if b.at_budget?.at}вложить {money(b.at_budget.at.invested)} → прибыль {money(b.at_budget.at.profit)} USDT{#if !b.at_budget.passes} <span class="warn-text">— ниже порогов, сделки нет</span>{/if}{:else}<span class="muted">объёма нет</span>{/if};
       {/if}
-      без потолка: вложить <strong>{money(b.opt.invested)}</strong> → прибыль <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
-      упущено <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
+      {#if deal}
+        по расчёту на вложенных — {money(b.at_budget?.at?.profit)} USDT;
+        потолок (сколько можно было вложить с максимальной прибылью без лимита) <strong>{money(b.opt.invested)}</strong> USDT — на потолке {wouldText(b.opt.profit)} <strong>{money(Math.abs(Number(b.opt.profit)))}</strong> USDT (расчёт по данным момента входа){#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
+        упущено против вложенного <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
+      {:else}
+        без потолка: вложить <strong>{money(b.opt.invested)}</strong> → прибыль <strong>{money(b.opt.profit)}</strong> USDT{#if !b.opt_passes} <span class="warn-text">(ниже порогов)</span>{/if};
+        упущено <strong class={Number(b.missed) > 0 ? 'err' : ''}>{money(b.missed)} USDT</strong>;
+      {/if}
       ограничило: <span class={budgetBound(b.limited_by) ? 'warn-text' : ''}>{limitedLabel(b.limited_by)}</span>
       <button type="button" onclick={() => (open = open === r.id ? null : r.id)}>{open === r.id ? 'Скрыть' : 'Подробнее'}</button>
     </p>

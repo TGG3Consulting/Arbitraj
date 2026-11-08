@@ -14,8 +14,9 @@
 //! dex.route_paths_ttl_ms кэша путей нет никогда, и расчёт сделок в graph-режиме не работал бы вовсе; строить граф
 //! или перебирать пути в пути сделки нельзя (сотни мс).
 //! Котировка по снимку — та же котировка адаптера (quote/mod.rs priced: маршрут, комиссии пулов, налоги, газ свопов,
-//! approve и чаевые) на замороженном реестре. Живыми остаются цена газа (eth_gasPrice, кэш на блок), decimals токенов,
-//! налоги и газ разрешений, измеренные пробами, настройки — их наша сделка не сдвигает. Финальная котировка KyberSwap
+//! approve и чаевые) на замороженном реестре. Решение 236: цена газа закреплена на момент снимка (quote/gas.rs pinned —
+//! последняя известная из памяти; её не было — котировка по снимку вернёт StaleData, живая не подставляется). Живыми остаются decimals токенов, налоги и газ разрешений,
+//! измеренные пробами (меняются только новым замером), настройки — их наша сделка не сдвигает. Финальная котировка KyberSwap
 //! (решение 95) к снимку не относится: снимок — котировка своей математикой по пулам.
 //! Кто вызывает: venue.rs (quote_snapshot).
 //! От чего зависит: quote/mod.rs (Quoting), pools/registry_frozen.rs, wallet/allow_cache.rs, node/heads.rs, tokens.rs,
@@ -87,7 +88,10 @@ pub fn take(q: Quoting, asset: &Asset, side: Side) -> GatewayResult<FrozenDex> {
         wbnb: ctx.addr("dex.native_wrapped").ok(),
         paths: paths.as_ref().map_or(&[], |p| p.1.as_slice()),
     });
+    // Решение 236: цена газа — закреплена на момент снимка (из памяти, без узла).
+    let gas = q.gas.pinned();
     let mut base = q;
+    base.gas = gas;
     base.allow = base.allow.snapshot();
     base.frozen_head = Some(head);
     Ok(FrozenDex {

@@ -249,6 +249,7 @@ async fn window_recompute_equals_snapshot() {
         a: Arc::new(frozen_side(&a.book, Side::Buy)),
         b: Arc::new(frozen_side(&b.book, Side::Sell)),
         at: t,
+        decided: None,
     };
     let live = Live {
         core: &core,
@@ -269,14 +270,14 @@ async fn window_recompute_equals_snapshot() {
     let ladder = [d("50"), d("200"), d("1000")];
     let pass = |pt: &arb::core::size::Point<costs::Calc>| pt.profit > Decimal::ZERO;
     let mut on_snap = SourceCurve { cx: &c, src: &live };
-    let s = uncapped(&mut on_snap, &p, d("20"), &ladder, pass)
+    let s = uncapped(&mut on_snap, &p, d("20"), &ladder, pass, None)
         .await
         .unwrap();
     let mut on_window = SourceCurve {
         cx: &c,
         src: &replay,
     };
-    let w = uncapped(&mut on_window, &p, d("20"), &ladder, pass)
+    let w = uncapped(&mut on_window, &p, d("20"), &ladder, pass, None)
         .await
         .unwrap();
     let close = |x: Decimal, y: Decimal| (x - y).abs() < d("0.000000001");
@@ -309,6 +310,7 @@ async fn window_recompute_equals_snapshot() {
         d("20"),
         &ladder,
         pass,
+        None,
     )
     .await
     .unwrap();
@@ -446,6 +448,7 @@ async fn recompute_end_to_end() {
         a: Arc::new(frozen_side(&book("bingx"), Side::Buy)),
         b: Arc::new(frozen_side(&book("mexc"), Side::Sell)),
         at: t,
+        decided: None,
     };
     let plan = serde_json::to_value(
         costs::evaluate_with(

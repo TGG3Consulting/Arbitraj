@@ -14,6 +14,9 @@
 //! худшие цены и изломы обеих сторон — по снимку, а не по живым данным, где наша покупка уже съела стакан или сдвинула
 //! пул (живыми остаются σ, время в пути, правила пар, комиссии вывода, курсы затрат и газ — их наша сделка не двигает).
 //! Снимка нет — расчёта нет (причина), живые данные не подставляются. Кандидат — на живых данных (сделки не было).
+//! Решение 236: у сделки и все прочие входы — на момент решения (Frozen.decided, снят вместе со стаканами): контекст
+//! направления с σ и T плана сделки, курсы затрат и затраты DEX-стороны из плана; входов нет — расчёта нет. Объём,
+//! на котором вошли (Battle.qty), считается всегда, вне uncapped.max_evals, и он — «на нашем бюджете» у сделки.
 //! Сборка записи (упущено, что ограничило) и таблица потолков — uncapped_record.rs (общие с пересчётом старых записей
 //! по окнам, решение 218).
 //! Кто вызывает: core/uncapped_queue.rs (в потоке фоновой задачи).
@@ -37,7 +40,7 @@ use super::frozen::Frozen;
 use super::size_curve::{CoreCurve, params};
 use super::size_uncapped::uncapped;
 use super::uncapped_record::{Inputs, ladder_in, record};
-use super::uncapped_types::{BASIS_LIVE, BASIS_SNAPSHOT, Battle, Record};
+use super::uncapped_types::{BASIS_DECISION, BASIS_LIVE, Battle, Record};
 
 /// Что делает: расчёт без потолка (см. шапку). Принимает: ядро, направление, бой, источник котировок (решение 217:
 /// None — живые, кандидат; Some(Ok) — снимок рынка момента решения, сделка; Some(Err) — снимка нет).
@@ -78,7 +81,20 @@ pub async fn compute(
         .ok_or(
             "нет боевого бюджета: ни подбора объёма в расчёте, ни прочитанных лимитов money.*",
         )?;
-    let cx = DirCtx::build(core, d)?;
+    // Решение 236: сделка — контекст момента решения (σ и T плана); кандидат — собирается сейчас.
+    let built;
+    let cx: &DirCtx = match fz {
+        Some(f) => {
+            &f.decided
+                .as_ref()
+                .ok_or("не посчитано: входы расчёта на момент решения не сняты")?
+                .cx
+        }
+        None => {
+            built = DirCtx::build(core, d)?;
+            &built
+        }
+    };
     // Решение 211 (ревью В6): стакан A — по тикеру монеты на A (venue_ticker::ticker_on).
     let on_a = super::venue_ticker::ticker_on(core, &d.asset, &d.buy_on);
     // Решение 217: со снимком — лучший ask стакана снимка (у DEX — цена боя), без живого стакана.
@@ -91,16 +107,19 @@ pub async fn compute(
         .or((battle.qty > Decimal::ZERO).then(|| battle.invested / battle.qty))
         .filter(|p| !p.is_zero())
         .ok_or("нет цены покупки на A")?;
-    let mut p = params(core, &cx, search_cap, price, fz)?;
+    let mut p = params(core, cx, search_cap, price, fz)?;
     p.max_evals = u32::try_from(max_evals).map_err(|_| "uncapped.max_evals вне пределов")?;
-    let mut curve = CoreCurve {
-        core,
-        cx: &cx,
-        src: fz,
-    };
-    let u = uncapped(&mut curve, &p, budget, &ladder, |pt| {
-        passes(&pt.data, min_usd, min_pct)
-    })
+    let mut curve = CoreCurve { core, cx, src: fz };
+    // Решение 236: у сделки объём входа — точка «на нашем бюджете» (всегда посчитана).
+    let own = (battle.verdict == "deal" && battle.qty > Decimal::ZERO).then_some(battle.qty);
+    let u = uncapped(
+        &mut curve,
+        &p,
+        budget,
+        &ladder,
+        |pt| passes(&pt.data, min_usd, min_pct),
+        own,
+    )
     .await
     .map_err(|e| e.to_string())?;
     let inputs = Inputs {
@@ -113,7 +132,7 @@ pub async fn compute(
         search_cap,
         ms: t0.elapsed().as_secs_f64() * 1000.0,
         basis: if fz.is_some() {
-            BASIS_SNAPSHOT
+            BASIS_DECISION
         } else {
             BASIS_LIVE
         }

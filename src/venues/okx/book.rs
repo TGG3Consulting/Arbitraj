@@ -5,7 +5,7 @@
 //! живая котировка — тот же снимок на один вызов (одна формула).
 //! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
-//! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
+//! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [okx] (необязательна) — кадр стакана этой пары старше — котировки нет.
 //!
 //! Свежесть: живость соединения (любой кадр, включая pong на свой «ping») и, если задана venue.book_stale_ms, время
@@ -136,7 +136,8 @@ impl Books {
             // rules as any other currency»). «Проверить подключение» требует feeType 0 — «fee is charged in the currency you
             // receive from the trade» (account.rs; модель была USDT — расходилась с этим). Покупка — в монете от
             // количества, продажа — в USDT от суммы. Факт — feeCcy ордера (order_state.rs). Живых ордеров OKX 08.11 нет.
-            fee: BookFee::in_received(rates.taker, side, &asset.ticker, "USDT"),
+            // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов; ядро ищет комиссию продажи по ней).
+            fee: BookFee::in_received(rates.taker, side, &asset.ticker, &ctx.text("venue.quote_asset")?),
             taken_at: chrono::Utc::now(),
         })
     }

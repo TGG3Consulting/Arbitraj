@@ -157,8 +157,14 @@ async fn decide_retries_only_unsent_channel_reject() {
         sell_unsent::decide(&core, &deal, &quote, "выгодно"),
         Retry::Go { pause_ms: 0 }
     );
+    // Тигран 08.11: исчерпание любой цепочки — продажа здесь по порогу один раз; после неё (счётчик выше) — алерт.
     let mut tired = aster();
     tired.unsent_retries = 2;
+    assert_eq!(
+        sell_unsent::decide(&core, &tired, &e, "выгодно"),
+        Retry::Here { max: 2 }
+    );
+    tired.unsent_retries = 3;
     assert_eq!(
         sell_unsent::decide(&core, &tired, &e, "выгодно"),
         Retry::Exhausted { max: 2 }
@@ -196,9 +202,10 @@ async fn retry_goes_to_new_sale_then_exhausted_alerts_once() {
     // Площадки в реестре нет — новая котировка невозможна: путь новой продажи пройден, сделка остановлена честно.
     assert!(lines.iter().any(|t| t.contains("продажа по рынку")));
 
-    // Второй отказ: предел исчерпан → журнал Error и алерт человеку; строка об отказе — одна.
+    // Предел исчерпан и продажа здесь уже была (счётчик выше предела) → журнал Error и алерт человеку; строка об
+    // отказе — одна.
     let mut y = aster();
-    y.unsent_retries = 1;
+    y.unsent_retries = 2;
     let r = sell_unsent::decide(&core, &y, &e, "выгодно");
     assert_eq!(r, Retry::Exhausted { max: 1 });
     sell_unsent::alert(&core, y, &e, &r).await;

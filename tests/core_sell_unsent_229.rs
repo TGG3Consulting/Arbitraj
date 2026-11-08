@@ -173,12 +173,12 @@ async fn chain_229_sells_here_once_then_alerts() {
     let d = dir("here");
     let (core, s) = start(&d).await;
     set(&s, "stuck.unsent_retries_max", json!(1)).await;
-    // (3) Исчерпание: цепочка не решения 229 — алерт; помеченная или случай 229 — продажа здесь.
+    // (3) Исчерпание: продажа здесь у любой цепочки (Тигран 08.11), не только у помеченной случаем 229.
     let mut x = jct();
     x.unsent_retries = 1;
     assert_eq!(
         sell_unsent::decide(&core, &x, &probe(), "выгодно"),
-        Retry::Exhausted { max: 1 }
+        Retry::Here { max: 1 }
     );
     assert_eq!(
         sell_unsent::decide(&core, &x, &probe(), BUTTON),

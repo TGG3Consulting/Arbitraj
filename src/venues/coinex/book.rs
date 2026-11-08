@@ -5,7 +5,7 @@
 //! живая котировка — тот же снимок на один вызов (одна формула).
 //! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
-//! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
+//! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [coinex] (необязательна) — кадр стакана этой пары старше — котировки нет.
 //!
 //! Свежесть: живость соединения (любой кадр, включая ответ на свой server.ping) и, если задана venue.book_stale_ms,
@@ -137,7 +137,8 @@ impl Books {
             // получаемой монеты. Скидка CET: «When your CET is insufficient, the trading fees will be charged by default»
             // (Help «About CET Deduction»); состояние выключателя прочитать нельзя (fees.rs) — расчёт без скидки
             // (со скидкой комиссия уходит в CET, монеты и USDT остаётся не меньше). Живых ордеров CoinEx 08.11 нет.
-            fee: BookFee::in_received(rates.taker, side, &asset.ticker, "USDT"),
+            // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов; ядро ищет комиссию продажи по ней).
+            fee: BookFee::in_received(rates.taker, side, &asset.ticker, &ctx.text("venue.quote_asset")?),
             taken_at: chrono::Utc::now(),
         })
     }

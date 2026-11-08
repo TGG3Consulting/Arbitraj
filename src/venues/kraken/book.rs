@@ -5,7 +5,7 @@
 //! живая котировка — тот же снимок на один вызов (одна формула).
 //! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
-//! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
+//! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [kraken] (необязательна) — кадр стакана этой пары старше — котировки нет.
 //!
 //! Свежесть: живость соединения (любой кадр, включая heartbeat и pong на свой ping) и, если задана venue.book_stale_ms,
@@ -135,7 +135,8 @@ impl Books {
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,
-                asset: "USDT".into(),
+                // Котируемая монета — из venue.quote_asset (CLAUDE.md: никаких хардкодов).
+                asset: ctx.text("venue.quote_asset")?,
                 paid_in: None,
             },
             taken_at: chrono::Utc::now(),

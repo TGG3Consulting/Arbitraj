@@ -221,7 +221,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
         Err(e) => {
             deal.step = Step::Stuck;
             // Решение 227: отказ вывода площадкой — метка, следующий «Перегон» с неё не пойдёт.
-            super::withdraw_refused::mark(&mut deal, &from, &e);
+            super::withdraw_refused::mark_at(core, &mut deal, &from, &e);
             let why = format!("перегон не состоялся: {e}");
             deal.note(format!("{why} — продажа здесь, вывод не повторяем"));
             super::relay_here::transfer_failed(core, deal, &why).await

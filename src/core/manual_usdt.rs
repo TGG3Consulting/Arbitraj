@@ -155,6 +155,8 @@ async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<S
             if d.usdt_return_skip.is_some() {
                 amount = amount.min(super::usdt_return_deal::amount_of(core, d, &at));
             }
+            // Ревью 08.11: у старых сделок (до 227) — не больше своей выручки на площадке части.
+            amount = super::usdt_return_deal::own_cap(core, d, &at, amount);
             super::usdt_return_parts::put(
                 d,
                 UsdtReturn::Pending {

@@ -203,6 +203,19 @@ pub fn amount_of(core: &Core, deal: &Deal, v: &VenueId) -> Decimal {
     super::usdt_return_parts::amount_at(deal, v, q.ok().as_deref())
 }
 
+/// Ревью 08.11: сумма отправки части не больше своей выручки продаж бота на площадке части, если она там есть. Старые
+/// сделки (до решения 227) хранят всю выручку одной суммой на площадке закрытия — без потолка «Перегнать» и повтор
+/// отправили бы и выручку другой части, и чужие USDT. Продаж бота на площадке нет — сумма как есть. Принимает: ядро,
+/// сделку, площадку части, сумму. Возвращает: сумму с потолком. Ошибок нет.
+pub fn own_cap(core: &Core, deal: &Deal, v: &VenueId, amount: Decimal) -> Decimal {
+    let own = amount_of(core, deal, v);
+    if own > Decimal::ZERO {
+        amount.min(own)
+    } else {
+        amount
+    }
+}
+
 /// Котируемая монета площадки из настроек (None — не задана). Принимает: ядро, площадку. Ошибок нет.
 pub(super) fn quote_of(core: &Core, v: &VenueId) -> Option<String> {
     core.inner

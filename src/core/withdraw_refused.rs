@@ -6,13 +6,15 @@
 //! площадка-источник записывается в сделку (Deal.withdraw_refused, serde default); «Перегон» (relay.rs) перегона,
 //! требующего вывода с этой площадки, не выбирает — сразу продажа на месте по порогу (relay_here.rs).
 //! Кто вызывает: relay.rs (отказ вывода перегона и проверка перед перегоном), executor.rs (отказ вывода сделки).
-//! От чего зависит: deal.rs, op_error.rs, gateway/errors.rs (коды).
+//! От чего зависит: deal.rs, op_error.rs, gateway/errors.rs (коды), trade_ops.rs (вид площадки: у DEX метки нет).
 //! Настройки: нет.
 
 use crate::core::types::VenueId;
+use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::ErrorCode;
 
 use super::deal::Deal;
+use super::engine::Core;
 use super::op_error::OpError;
 
 /// Отказ вывода, после которого вывод с этой площадки в сделке больше не пробуем: WithdrawRejected, InvalidAddress,
@@ -38,6 +40,17 @@ pub fn mark(deal: &mut Deal, from: &VenueId, e: &OpError) -> bool {
         ));
     }
     true
+}
+
+/// Ревью 08.11: как mark, но не для DEX — откат перевода из кошелька (газ, баланс) приходит тем же кодом
+/// WithdrawRejected, а это разовый сбой, не отказ площадки: перегон с DEX в сделке не запрещается. Вид площадки не
+/// известен — метка ставится (как у биржи). Принимает: ядро, сделку, площадку вывода, ошибку. Возвращает: как mark.
+/// Ошибок нет.
+pub fn mark_at(core: &Core, deal: &mut Deal, from: &VenueId, e: &OpError) -> bool {
+    if super::trade_ops::kind(core, from).ok() == Some(VenueKind::Dex) {
+        return false;
+    }
+    mark(deal, from, e)
 }
 
 /// Отказывала ли площадка в выводе в этой сделке. Принимает: сделку, площадку. Ошибок нет.

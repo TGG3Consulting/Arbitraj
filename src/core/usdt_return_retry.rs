@@ -168,6 +168,14 @@ async fn run(core: &Core, deal: &str, at: &VenueId) {
         let Some((amount, from, to, tries, last)) = retrying(core, deal, at) else {
             return;
         };
+        // Ревью 08.11: у старых сделок (до 227) — не больше своей выручки продаж бота на площадке части.
+        let amount = {
+            let deals = lk(&core.inner.deals);
+            match deals.get(super::usdt_return_parts::parse(deal).0) {
+                Some(d) => super::usdt_return_deal::own_cap(core, d, at, amount),
+                None => amount,
+            }
+        };
         // Настройки сменились на лету: повторы выключены или их предел уже исчерпан — «не вернулись».
         let Some(p) = plan(core, &from).filter(|p| tries < p.max) else {
             let why = match plan(core, &from) {

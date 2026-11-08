@@ -8,16 +8,18 @@
 //! старому стакану ядра (снимок доходит до ядра асинхронно, bitget/mod.rs quote). Возраст стакана — в хронологию сделки.
 //! Не задана venue.book_stale_ms (у площадок, где она необязательна) — без проверки, как у их котировки.
 //! Кто вызывает: core/trade_ops.rs, core/costs_quote.rs.
-//! От чего зависит: engine.rs (рынок), trade_ops.rs (вид площадки), settings.
+//! От чего зависит: engine.rs (рынок), trade_ops.rs (вид площадки), op_error.rs, settings.
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.book_stale_ms (по площадке биржи, для ордера).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, Side, VenueId};
 use crate::gateway::contract::VenueKind;
+use crate::gateway::errors::ErrorCode;
 use crate::settings::read::At;
 
 use super::engine::{Core, rd};
+use super::op_error::OpError;
 use super::trade_ops::kind;
 
 /// Худшая цена ордера и по чему посчитана (решение 227: в хронологию сделки).
@@ -31,7 +33,9 @@ pub struct Worst {
 
 /// Худшая цена ОРДЕРА (решение 227): как worst_price, но у биржи стакан ядра не старше venue.book_stale_ms площадки
 /// или подтверждён как тихий (решение 213). Принимает: как worst_price. Возвращает: цену и возраст стакана.
-/// Ошибки: как worst_price; «стакан устарел» (возраст и настройка в тексте).
+/// Ошибки: как worst_price (без кода); «стакан устарел» — код StaleData (ревью 08.11: ордер не ставился — продажа уходит
+/// в безопасный повтор, op_error retry_safe / sell_unsent.rs, а не алертом; у Bitget снимок REST котировки доходит до
+/// ядра асинхронно, venues/bitget/mod.rs, — к повтору стакан ядра уже свежий).
 pub fn worst_order(
     core: &Core,
     v: &VenueId,
@@ -39,7 +43,7 @@ pub fn worst_order(
     side: Side,
     qty: Decimal,
     avg: Decimal,
-) -> Result<Worst, String> {
+) -> Result<Worst, OpError> {
     if kind(core, v)? == VenueKind::Dex {
         let price = worst_price(core, v, a, side, qty, avg)?;
         return Ok(Worst {
@@ -67,10 +71,15 @@ pub fn worst_order(
         && age > max as i64
         && quiet.is_none_or(|u| now > u)
     {
-        return Err(format!(
-            "{}: стакан {t} устарел: {age} мс (venue.book_stale_ms = {max}) — худшая цена ордера не считается",
-            v.0
-        ));
+        return Err(OpError {
+            code: Some(ErrorCode::StaleData),
+            message: format!(
+                "{}: стакан {t} устарел: {age} мс (venue.book_stale_ms = {max}) — худшая цена ордера не считается",
+                v.0
+            ),
+            sent: false,
+            cancelled: false,
+        });
     }
     let price = worst_price(core, v, a, side, qty, avg)?;
     Ok(Worst {

@@ -93,6 +93,7 @@ pub async fn trade_seen(
             None => {
                 attempt += 1;
                 // Решение 227: у ордера — стакан ядра не старше venue.book_stale_ms (или подтверждённая тихая пара).
+                // Ревью 08.11: «стакан устарел» приходит с кодом StaleData (worst.rs) — безопасный повтор продажи.
                 let w = super::worst::worst_order(core, v, a, side, qty, avg)?;
                 *seen = Some(w);
                 let worst = w.price;

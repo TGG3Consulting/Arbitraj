@@ -4,7 +4,8 @@
 //! как tests/core_uncapped.rs): итоги той же функцией, что у экрана (core/uncapped_sum.rs totals — кандидат с упущено 0
 //! скрыт, сделка без итога в учёте — без факта); книга собирается, листы «Итог», «Сделки», «Кандидаты», «Топ
 //! направлений» на месте, строки «Итого» — формулами SUM по столбцам денег; итоги экрана совпадают со строками листов.
-//! Решение 217: старая запись сделки (посчитана после покупки) — отдельный итог deals_old и лист «Сделки — занижено».
+//! Решения 217, 239: записи сделок не по данным момента входа (после покупки, decision_snapshot) — отдельный итог
+//! deals_old («несравнимо») и лист «Сделки — несравнимо»; в итог сделок, таблицу потолков и топ не входят.
 //! «Итоги сделок» с периодом (report::results from/to) — книга собирается и на пустом периоде.
 //! Записывает книгу в REPORT_MISSED_OUT (если задан) для просмотра.
 //! Кто вызывает: cargo test.
@@ -21,7 +22,7 @@ use arb::core::types::{Asset, Direction, VenueId};
 use arb::core::uncapped_report::MissedData;
 use arb::core::uncapped_sum::totals;
 use arb::core::uncapped_types::{
-    BASIS_DECISION, BASIS_LIVE_AFTER_BUY, Battle, Brief, Episode, missed,
+    BASIS_DECISION, BASIS_LIVE_AFTER_BUY, BASIS_SNAPSHOT, Battle, Brief, Episode, missed,
 };
 use chrono::{Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
@@ -173,6 +174,12 @@ async fn missed_workbook_from_recorded_calc() {
             b.decided_at = None;
             b
         },
+        // Решение 239: запись по снимку с σ и курсами позже входа (до решения 237) — тоже «несравнимо».
+        {
+            let mut b = brief(&rec, Dir::DexToBingx, "20", "deal", Some("dS"), 4, zero).await;
+            b.basis = BASIS_SNAPSHOT.into();
+            b
+        },
     ];
     assert_eq!(
         briefs[0].missed, zero,
@@ -184,9 +191,12 @@ async fn missed_workbook_from_recorded_calc() {
     assert_eq!(t.hidden, 1);
     assert_eq!((t.deals.count, t.cands.count), (2, 1));
     assert_eq!(
-        t.deals_old.count, 1,
-        "старая запись сделки — не в итоге сделок"
+        t.deals_old.count, 2,
+        "записи сделок не по данным момента входа — не в итоге сделок"
     );
+    // Таблица потолков и топ — только сравнимые записи (2 сделки decision_inputs и кандидат-отказ).
+    let top_n: u64 = t.top.iter().map(|x| x.count).sum();
+    assert_eq!(top_n, 3, "несравнимые в топ не входят");
     assert_eq!((t.deals.fact, t.deals.fact_count), (d("0.5"), 1));
     assert_eq!(t.top.len(), 2);
     assert!(t.top[0].missed >= t.top[1].missed);
@@ -199,15 +209,16 @@ async fn missed_workbook_from_recorded_calc() {
     let deals = arb::report::missed_rows::deals(&data, false);
     assert_eq!(deals.len(), 2);
     let old = arb::report::missed_rows::deals(&data, true);
-    assert_eq!(old.len(), 1);
-    assert_eq!(old[0].basis, "посчитано после покупки — занижено");
+    assert_eq!(old.len(), 2);
+    assert_eq!(old[1].basis, "посчитано после покупки — занижено");
+    assert!(old[0].basis.contains("несравнимо"), "{}", old[0].basis);
     assert_eq!(
         deals[0].basis,
         "все данные на момент входа: стаканы, пулы, σ, время в пути, курсы, газ"
     );
     // Решение 237: расчёт на вложенных — точка «на нашем бюджете» записи.
     let with_point = (data.totals.items.iter())
-        .filter(|i| i.deal && !i.b.understated() && i.b.at_budget.at.is_some())
+        .filter(|i| i.deal && !i.b.incomparable() && i.b.at_budget.at.is_some())
         .count();
     assert_eq!(
         deals.iter().filter(|r| r.at_invested.is_some()).count(),
@@ -241,13 +252,13 @@ async fn missed_workbook_from_recorded_calc() {
         "Сделки",
         "Кандидаты",
         "Топ направлений",
-        "Сделки — занижено",
+        "Сделки — несравнимо",
     ] {
         assert!(wb.contains(&format!("name=\"{name}\"")), "лист {name}");
     }
-    // Сделки — занижено (лист 5): 1 строка → «Итого» в строке 3.
+    // Сделки — несравнимо (лист 5): 2 строки → «Итого» в строке 4.
     let s5 = &files["xl/worksheets/sheet5.xml"];
-    assert!(s5.contains("<f>SUM(K2:K2)</f>"), "Сделки — занижено");
+    assert!(s5.contains("<f>SUM(K2:K3)</f>"), "Сделки — несравнимо");
     // Сделки: 2 строки → «Итого» в строке 4, SUM по деньгам D, F, G, H (расчёт на вложенных, решение 237), I, J, K.
     let s2 = &files["xl/worksheets/sheet2.xml"];
     for c in ['D', 'F', 'G', 'H', 'I', 'J', 'K'] {
@@ -268,7 +279,7 @@ async fn missed_workbook_from_recorded_calc() {
         "Исполненные сделки",
         "Не исполненные (кандидаты)",
         "лимит на сделку",
-        "Сделки: посчитано после покупки — занижено",
+        "Сделки: несравнимо (посчитано не по данным момента входа)",
         "Упущено против вложенного, USDT",
         "Потолок (макс. прибыль без лимита): вложить, USDT",
     ] {

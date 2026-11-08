@@ -9,6 +9,7 @@
 //! VERDICT; report/missed_labels.rs); площадки — человеческие имена (notify/human.rs venue); монета — показное имя по адресу (решение 211).
 //! Порядок строк — по времени, старые сверху (как «Итоги сделок»). Время — UTC.
 //! Решение 217: сделки, посчитанные после нашей покупки (старые записи, занижено), — отдельными строками (deals old).
+//! Решение 239: отдельно — все записи сделок не по данным момента входа (Brief::incomparable), лист «Сделки — несравнимо».
 //! Кто вызывает: report/missed_xlsx.rs.
 //! От чего зависит: core/uncapped_report.rs (MissedData), uncapped_sum.rs (Item), uncapped_types.rs (Brief),
 //! notify/human.rs (venue).
@@ -97,15 +98,15 @@ fn coin(data: &MissedData, d: &Direction) -> String {
         .unwrap_or_else(|| d.asset.ticker.clone())
 }
 
-/// Строки листа «Сделки» (old = false) или «Сделки — занижено» (old = true: посчитаны после покупки, решение 217),
-/// старые сверху. Ошибок нет.
+/// Строки листа «Сделки» (old = false) или «Сделки — несравнимо» (old = true: посчитаны не по данным момента входа,
+/// решение 239), старые сверху. Ошибок нет.
 pub fn deals(data: &MissedData, old: bool) -> Vec<DealRow> {
     let mut v: Vec<DealRow> = data
         .totals
         .items
         .iter()
         .rev()
-        .filter(|i| i.deal && i.b.understated() == old)
+        .filter(|i| i.deal && i.b.incomparable() == old)
         .map(|i| {
             let b = &i.b;
             let window = match (b.battle.window_from, window_s(b)) {

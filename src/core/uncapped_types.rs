@@ -6,6 +6,8 @@
 //! итогов экрана (читается обратно). Решение 217: источник данных записи (basis) — снимок рынка момента решения у
 //! сделки, живые котировки у кандидата; старые записи сделок без поля — «после покупки» (занижено). Решение 237:
 //! новые записи сделок — BASIS_DECISION (все входы на момент входа); BASIS_SNAPSHOT — записи до него (σ и курсы позже).
+//! Решение 239: в итогах (экран, отчёт «Упущено») сделки складываются только с BASIS_DECISION; любые другие записи
+//! сделок (decision_snapshot, live_after_buy, пересчёт по окну решения 218) — «несравнимо», своей строкой (incomparable).
 //! Кто вызывает: core/uncapped.rs (собирает), uncapped_queue.rs, uncapped_store.rs, uncapped_view.rs, candidates.rs,
 //! executor.rs (Battle), uncapped_sum.rs и report/missed_rows.rs (Brief, решение 215).
 //! От чего зависит: core/types, costs_types.rs (CostLine), limits_parts.rs, size_uncapped.rs (At, Level).
@@ -150,6 +152,14 @@ pub fn understated(verdict: &str, basis: &str) -> bool {
     verdict == "deal" && basis == BASIS_LIVE_AFTER_BUY
 }
 
+/// Решение 239: запись сделки посчитана НЕ по данным момента входа (basis не BASIS_DECISION: decision_snapshot,
+/// live_after_buy, пересчёт по окну решения 218 — там настройки модели текущие, а не на момент сделки) — в итогах
+/// экрана и отчёта «Упущено» с новыми не складывается, своя строка «несравнимо». Принимает: вердикт боя, источник.
+/// Ошибок нет.
+pub fn incomparable(verdict: &str, basis: &str) -> bool {
+    verdict == "deal" && basis != BASIS_DECISION
+}
+
 /// Часть записи для итогов экрана (читается обратно из JSON).
 #[derive(Debug, Clone, Deserialize)]
 pub struct Brief {
@@ -180,6 +190,11 @@ impl Brief {
     /// Решение 217: запись сделки посчитана после нашей покупки — занижена. Ошибок нет.
     pub fn understated(&self) -> bool {
         understated(&self.battle.verdict, &self.basis)
+    }
+
+    /// Решение 239: запись сделки не по данным момента входа — «несравнимо» (incomparable). Ошибок нет.
+    pub fn incomparable(&self) -> bool {
+        incomparable(&self.battle.verdict, &self.basis)
     }
 }
 

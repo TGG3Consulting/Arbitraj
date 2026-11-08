@@ -16,6 +16,8 @@
     Решение 237: у сделки — «по расчёту на вложенных», «потолок» (сколько можно было вложить с максимальной прибылью без
     лимита) и «на потолке заработали бы / потеряли бы» — расчёт по данным момента входа, «упущено против вложенного»;
     записи до решения 237 (σ и курсы позже входа) — пометка «несравнимо».
+    Решение 239: строка итога deals_old — все сделки не по данным момента входа (не decision_inputs) — «несравнимо»,
+    в суммы «Исполненные сделки», таблицу потолков и топ не входят.
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
@@ -133,7 +135,7 @@
         <td><strong>{money(sum.deals.potential_profit)}</strong></td><td><strong>{money(sum.deals.missed)}</strong></td>
         <td>{sum.deals.windows}: {duration(sum.deals.window_s)}</td></tr>
       {#if sum.deals_old?.count}
-        <tr class="warn-text"><td>Сделки: посчитано после покупки — занижено (до решения 217, в суммы и таблицу ниже не входят)</td><td>{sum.deals_old.count}</td><td>{sum.deals_old.budget_bound}</td><td>{money(sum.deals_old.battle_profit)}</td>
+        <tr class="warn-text"><td>Сделки: несравнимо (посчитано не по данным момента входа; в суммы и таблицу ниже не входят)</td><td>{sum.deals_old.count}</td><td>{sum.deals_old.budget_bound}</td><td>{money(sum.deals_old.battle_profit)}</td>
           <td>{money(sum.deals_old.fact)} <span class="muted">({sum.deals_old.fact_count} с итогом)</span></td><td>{money(sum.deals_old.at_budget_profit)}</td>
           <td>{money(sum.deals_old.potential_profit)}</td><td>{money(sum.deals_old.missed)}</td>
           <td>{sum.deals_old.windows}: {duration(sum.deals_old.window_s)}</td></tr>

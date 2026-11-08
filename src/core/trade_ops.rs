@@ -4,7 +4,8 @@
 //! (лимитный ордер по уровням); у DEX — цена котировки с допуском exec.dex_slippage_pct (минимум на выходе).
 //! Ошибка — по правилу шлюза (rules_apply.rs): повтор, только если так задано правилом; «не исполнился» —
 //! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты.
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs.
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs; deal_value / sell_value — sell.rs, sell_unsent.rs, relay*.rs,
+//! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
 //! Худшая цена — worst.rs (та же у расчёта, решение 66).
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
@@ -16,7 +17,7 @@ use std::time::Duration;
 use rust_decimal::Decimal;
 
 use crate::core::types::{
-    Asset, DexRoute, Quote, Side, TradeRequest, TradeResult, TradeStatus, VenueId,
+    Asset, DexAccountId, DexRoute, Quote, Side, TradeRequest, TradeResult, TradeStatus, VenueId,
 };
 use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -131,15 +132,41 @@ pub async fn trade(
     }
 }
 
+/// Решение 220: сколько получим, если продать ВСЕ монеты сделки там, где они лежат (deal.at), — котировка кошельком
+/// СДЕЛКИ (dex_account::of). Так маршрут, который этот кошелёк не соберёт (межроутерный без исполнителя), не выбирается.
+/// Принимает: ядро, сделку. Возвращает: как sell_value. Ошибки: как sell_value; сделка с DEX без счёта (dex_account::of).
+pub async fn deal_value(core: &Core, deal: &super::deal::Deal) -> Result<(Decimal, Quote), String> {
+    let acc = super::dex_account::of(core, deal)?;
+    sell_value(
+        core,
+        acc.as_ref(),
+        &deal.at,
+        &deal.direction.asset,
+        deal.qty,
+    )
+    .await
+}
+
 /// Сколько получим чистыми (USDT), если продать qty сейчас: котировка × количество минус затраты
-/// продажи вне цены. Возвращает: (сумма, котировка). Ошибки: нет котировки или глубины, нет курса затрат.
+/// продажи вне цены. Решение 220: котировка DEX — контекстом кошелька `acc`, которым пойдёт продажа (его исполнитель
+/// решает, исполним ли межроутерный маршрут; без счёта котировал кошелёк строки «Пробы» — живые HOLO, PORTO, ATA:
+/// маршрут выбран под исполнитель «Проб», а продажа кошельком сделки без исполнителя ушла в бандл и отказала).
+/// Принимает: ядро, счёт DEX (None — биржа или DEX не участвует), площадку, монету, количество.
+/// Возвращает: (сумма, котировка). Ошибки: нет котировки или глубины, нет курса затрат, нет кошелька.
 pub async fn sell_value(
     core: &Core,
+    acc: Option<&DexAccountId>,
     v: &VenueId,
     a: &Asset,
     qty: Decimal,
 ) -> Result<(Decimal, Quote), String> {
-    let x = core.inner.deps.gw.get(v).await.map_err(|e| e.message)?;
+    let x = core
+        .inner
+        .deps
+        .gw
+        .get_as(v, acc)
+        .await
+        .map_err(|e| e.message)?;
     // Решение 201: котировка для исполнения (gateway/patience.rs exec_scope) — адаптер может взять тихий стакан пары
     // при живом соединении (ордер IOC по худшей цене хуже не исполнится).
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.

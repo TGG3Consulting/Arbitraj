@@ -118,7 +118,9 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, pause_ms: u64) {
     if pause_ms > 0 {
         tokio::time::sleep(Duration::from_millis(pause_ms)).await;
     }
-    Box::pin(super::stuck::handle(core, deal)).await
+    // Решение 220: причина входа — «не ушла в сеть» или «ордер не исполнился» (решение 182).
+    let why = super::stuck_reason::StuckReason::of_sell(e);
+    Box::pin(super::stuck::handle(core, deal, why)).await
 }
 
 /// Алерт человеку: причина (с пояснением, почему бот сам не повторил), убыток при продаже сейчас, кнопки (manual.rs).
@@ -146,7 +148,7 @@ pub async fn alert(core: &Core, deal: Deal, e: &OpError, r: &Retry) {
         Retry::No | Retry::Go { .. } => format!("продажа не прошла: {e}"),
     };
     // Хронологию пишет raise_alert («… — ждём решения человека»): своей строки здесь нет — без дубля (решение 154).
-    let value = super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await;
+    let value = super::trade_ops::deal_value(core, &deal).await;
     let loss = value.ok().map(|(x, _)| deal.loss_pct_if(x));
     super::manual::raise_alert(core, deal, loss, why, Some(e.message.clone())).await;
 }

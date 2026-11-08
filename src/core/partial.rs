@@ -48,14 +48,19 @@ pub async fn choose(core: &Core, deal: &Deal) -> Choice {
             .map_err(|e| e.to_string()),
         Err(e) => Err(e),
     };
-    let back = super::trade_ops::sell_value(
-        core,
-        &deal.direction.buy_on,
-        &deal.direction.asset,
-        deal.qty,
-    )
-    .await
-    .map(|(v, _)| deal.result_if(v));
+    // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа).
+    let back = match super::dex_account::of(core, deal) {
+        Ok(acc) => super::trade_ops::sell_value(
+            core,
+            acc.as_ref(),
+            &deal.direction.buy_on,
+            &deal.direction.asset,
+            deal.qty,
+        )
+        .await
+        .map(|(v, _)| deal.result_if(v)),
+        Err(e) => Err(e),
+    };
     match (deliver, back) {
         (Ok(d), Ok(b)) if d >= b => Choice::Deliver(d),
         (Ok(_), Ok(b)) => Choice::SellBack(b),

@@ -3,8 +3,10 @@
 //! режима (stuck.mode); «невыгодно» — итог сделки ниже нуля (решение 47): «Ожидание» — на каждый тик монеты проверяем, стало ли выгодно, не дольше
 //! stuck.wait_ms, затем продажа по рынку; «Порог убытка» — убыток ≤ stuck.max_loss_pct — продажа по рынку,
 //! больше — алерт с кнопками «Продать сейчас» и «Беру на себя» (manual.rs); «Перегон» — на площадку, где
-//! лучше с учётом затрат перевода, не больше stuck.max_relays раз, затем продажа по рынку.
-//! Кто вызывает: executor.rs, sell.rs.
+//! лучше с учётом затрат перевода, не больше stuck.max_relays раз, затем продажа здесь с порогом
+//! stuck.relay_max_loss_pct (решение 220, relay_here.rs).
+//! Решение 220: причина входа (stuck_reason.rs) — настоящая, от вызывающего; в журнале и Telegram.
+//! Кто вызывает: executor.rs, sell.rs, sell_unsent.rs.
 //! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
@@ -18,9 +20,11 @@ use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::stuck_reason::StuckReason;
 
-/// Ведёт застрявшую монету по режиму. Ошибок нет: не задан режим — сделка остановлена с причиной.
-pub async fn handle(core: &Core, mut deal: Deal) {
+/// Ведёт застрявшую монету по режиму. Принимает: ядро, сделку, настоящую причину, почему монета здесь (решение 220 —
+/// в журнал, хронологию и Telegram). Ошибок нет: не задан режим — сделка остановлена с причиной.
+pub async fn handle(core: &Core, mut deal: Deal, why: StuckReason) {
     let s = &core.inner.deps.settings;
     let mode = match s.text("stuck.mode", At::default()) {
         Ok(m) => m,
@@ -29,20 +33,29 @@ pub async fn handle(core: &Core, mut deal: Deal) {
         }
     };
     deal.step = Step::Stuck;
-    deal.note(format!("Застрявшая монета: режим {mode}"));
+    deal.note(format!("Застрявшая монета ({}): режим {mode}", why.text()));
     super::ledger::save(core, &deal).await;
     let text = format!(
-        "{}: {} {} на {} — продавать невыгодно, режим {mode}",
-        deal.id, deal.qty, deal.direction.asset.ticker, deal.at.0
+        "{}: {} {} на {} — {}, режим {mode}",
+        deal.id,
+        deal.qty,
+        deal.direction.asset.ticker,
+        deal.at.0,
+        why.text()
     );
     core.inner
         .deps
         .log(Level::Warn, "core.stuck", Some(&deal.at.0), &text, None)
         .await;
     // Решение 164: в Telegram — по-человечески (режим — словами, числа округлены).
-    let tg = Msg::new(h::WARN, "Монета застряла: продавать сейчас невыгодно")
+    // Решение 220: заголовок и причина — настоящие (не всегда «невыгодно»).
+    let mut tg = Msg::new(h::WARN, format!("Монета застряла: {}", why.title()))
         .line(super::deal_text::coin_route(&deal))
-        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .kv("Монеты", super::deal_text::coins_at(&deal));
+    if why != StuckReason::Unprofitable {
+        tg = tg.reason(&why.text());
+    }
+    let tg = tg
         .kv("Что бот делает", mode_name(&mode))
         .id(&deal.id)
         .render();
@@ -100,7 +113,7 @@ async fn wait(core: &Core, mut deal: Deal) {
     };
     let until = Instant::now() + Duration::from_millis(ms);
     while next_tick(core, &deal, Some(until)).await {
-        let v = super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await;
+        let v = super::trade_ops::deal_value(core, &deal).await;
         // Решение 47: выгодно — итог сделки не ниже нуля.
         if let Ok((v, _)) = v
             && super::sell::profitable(&deal, v)
@@ -124,7 +137,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     };
     // Нет котировки — ждём тика монеты: оценивать убыток вслепую нельзя.
     let value = loop {
-        match super::trade_ops::sell_value(core, &deal.at, &deal.direction.asset, deal.qty).await {
+        match super::trade_ops::deal_value(core, &deal).await {
             Ok((v, _)) => break v,
             Err(_) if next_tick(core, &deal, None).await => continue,
             Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e).await,

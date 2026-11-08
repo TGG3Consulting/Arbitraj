@@ -3,12 +3,14 @@
 //! с учётом всех затрат перевода (relay_value.rs: у биржи — справочник сетей ядра, минимумы вывода и депозита, налог
 //! перевода; в USDT по живым ценам); площадки на паузе — не цели (решение 118, Я-14); лучше, чем здесь, —
 //! переводит туда и пробует продать (sell.rs); перегонов больше stuck.max_relays или перегон не лучше —
-//! продажа по рынку здесь.
+//! продажа здесь — решение 220: убыток не выше stuck.relay_max_loss_pct — по рынку, иначе алерт (relay_here.rs).
+//! Решение 220 (часть В): площадка, где лежит монета, на паузе — перегона (вывода) с неё нет, продажа здесь по тем же
+//! правилам. Котировки продажи — кошельком сделки (здесь) и кошельком перегона (на цели).
 //! Кто вызывает: stuck.rs.
 //! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, registry (площадки монеты).
 //! Решение 185: сделка биржа ↔ биржа без счёта DEX перегоняется на DEX только кошельком строки биржи, где лежит монета
 //! (dex_account::for_relay; строки нет — DEX не цель), счёт записывается в сделку до перевода.
-//! Настройки: stuck.max_relays, venue.quote_asset.
+//! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs).
 
 use rust_decimal::Decimal;
 
@@ -53,18 +55,34 @@ pub async fn run(core: &Core, mut deal: Deal) {
         Ok(v) => v,
         Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await,
     };
+    // Решение 220: продажа здесь — с порогом убытка stuck.relay_max_loss_pct (relay_here.rs), не по рынку вслепую.
     if deal.relays >= max {
-        return super::stuck::sold_by_market(core, deal, &format!("перегонов {max} — исчерпаны"))
-            .await;
+        let why = format!("перегонов {max} — исчерпаны");
+        return super::relay_here::sell_here(core, deal, &why).await;
+    }
+    // Решение 220 (часть В): площадка, где лежит монета, на паузе (риск: ошибки подряд, балансы не получены) — вывода
+    // с неё не делаем (живой случай Bitget 40938 — каждый перегон с неё отказывал тем же отказом).
+    let paused = lk(&core.inner.risk).venue_paused.get(&deal.at).cloned();
+    if let Some(p) = paused {
+        let why = format!(
+            "площадка {} на паузе ({p}) — перегон с неё не делаем",
+            deal.at.0
+        );
+        return super::relay_here::sell_here(core, deal, &why).await;
     }
     let a = deal.direction.asset.clone();
-    let here = super::trade_ops::sell_value(core, &deal.at, &a, deal.qty)
+    // Решение 220: котировка — кошельком сделки.
+    let here = super::trade_ops::deal_value(core, &deal)
         .await
         .map(|x| x.0)
         .ok();
     let mut best: Option<(VenueId, Decimal)> = None;
     for to in targets(core, &deal) {
-        match super::relay_value::value_at(core, &deal.at, &to, &a, deal.qty).await {
+        // Решение 220: продажа на цели котируется кошельком, которым пойдёт (решение 185: for_relay).
+        let acc = super::dex_account::for_relay(core, &deal, &to)
+            .ok()
+            .flatten();
+        match super::relay_value::value_at(core, &deal.at, &to, &a, deal.qty, acc.as_ref()).await {
             Ok(v) if best.as_ref().is_none_or(|(_, b)| v > *b) => best = Some((to, v)),
             Ok(_) => {}
             Err(e) => {
@@ -82,7 +100,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
         }
     }
     let Some((to, v)) = best.filter(|(_, v)| here.is_none_or(|h| *v > h)) else {
-        return super::stuck::sold_by_market(core, deal, "перегон не выгоднее продажи здесь").await;
+        return super::relay_here::sell_here(core, deal, "перегон не выгоднее продажи здесь").await;
     };
     let from = deal.at.clone();
     // Решение 185: сделка биржа ↔ биржа перегоняется на DEX — дальше она ведётся кошельком строки биржи, где монета

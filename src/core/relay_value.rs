@@ -11,7 +11,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Cost, CostKind, VenueId};
+use crate::core::types::{Asset, Cost, CostKind, DexAccountId, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
@@ -93,13 +93,15 @@ fn is_dex(core: &Core, v: &VenueId) -> bool {
         .any(|(id, k)| id == v && *k == VenueKind::Dex)
 }
 
-/// Чистая выручка (USDT) при перегоне qty с `from` на `to` и продаже там. Ошибка — текст причины.
+/// Чистая выручка (USDT) при перегоне qty с `from` на `to` и продаже там. Решение 220: продажа на `to` котируется
+/// кошельком, которым она пойдёт (`acc_to` — dex_account::for_relay; None — `to` биржа). Ошибка — текст причины.
 pub async fn value_at(
     core: &Core,
     from: &VenueId,
     to: &VenueId,
     a: &Asset,
     qty: Decimal,
+    acc_to: Option<&DexAccountId>,
 ) -> Result<Decimal, String> {
     let net = super::transfers::network(core, a, from)?;
     let costs = if is_dex(core, from) {
@@ -121,7 +123,7 @@ pub async fn value_at(
         .sum();
     let arrive = qty - coin;
     deposit_ok(core, to, a, arrive)?;
-    let (v, q) = super::trade_ops::sell_value(core, to, a, arrive).await?;
+    let (v, q) = super::trade_ops::sell_value(core, acc_to, to, a, arrive).await?;
     let quote = core
         .inner
         .deps

@@ -234,11 +234,18 @@ fn single_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Fa
     let family = first.entry.family;
     let router = ctx.dex_addr("dex.universal_router", family.id)?;
     for s in leg {
-        if ctx.dex_addr("dex.universal_router", s.entry.family.id)? != router {
+        let other = ctx.dex_addr("dex.universal_router", s.entry.family.id)?;
+        if other != router {
+            // Решение 220: для разбора — какие роутеры пересеклись (семейство и адрес) и кошелёк, которым шла сделка.
             return Err(ctx.err(
                 ErrorCode::NoRoute,
-                "нога маршрута пересекает Universal Router'ы — в v1 бандл такую ногу не собирает \
-                 (нужна межроутерная передача промежуточного токена, отдельная фаза)",
+                format!(
+                    "нога маршрута пересекает Universal Router'ы ({} {router} → {} {other}; кошелёк «{}») — в v1 \
+                     бандл такую ногу не собирает (нужна межроутерная передача промежуточного токена, отдельная фаза)",
+                    family.id,
+                    s.entry.family.id,
+                    ctx.wallet_name()
+                ),
             ));
         }
     }

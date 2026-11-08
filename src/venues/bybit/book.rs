@@ -125,11 +125,18 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            // Комиссия taker аккаунта (не входит в avg_price). Решение 219: «The trading fee unit charged is based on the
+            // purchased cryptocurrency» (Bybit Help Center «Spot Trading: Fees Explained»; факт 08.11: покупка — в монете):
+            // покупка — в монете от количества, продажа — в USDT от суммы.
             fee: BookFee {
                 rate: rates.taker,
-                per_coin: false,
-                asset: "USDT".into(),
+                per_coin: side == Side::Buy,
+                asset: if side == Side::Buy {
+                    asset.ticker.clone()
+                } else {
+                    "USDT".into()
+                },
+                paid_in: None,
             },
             taken_at: chrono::Utc::now(),
         })

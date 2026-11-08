@@ -226,7 +226,8 @@ async fn run(core: &Core, d: Direction) {
         plan.qty,
         plan.buy_quote.route.clone(),
         plan.buy_quote.avg_price,
-        Some(cap),
+        // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
+        Some(plan.order_cap(cap)),
     )
     .await;
     let r = match bought {

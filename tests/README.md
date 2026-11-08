@@ -745,3 +745,5 @@ changeType null и изменения deposit / order-match / withdraw) и `htx_
 пусто; `withdrawFeeType` у CAKE/USDT в BSC (fixed?); значения поля `at` пар; шлёт ли mbp.refresh одинаковые снимки (тот
 же seqNum); с какой записи начинает deposit-withdraw `direct=next` без `from`; что отвечает REST на превышение лимита;
 формат `ipAddresses` и `permission` в /v2/user/api-key; входит ли `fee` в `amount` вывода; на какой счёт пришёл депозит.
+
+Решение 219 — tests/core_fees_219.rs (комиссия по монетам: feeDetail живого ордера Bitget XTER 08.11 — BGB + XTER (tests/data/fees_2026-11-08, строка собрана из значений живого ордера — сырой orderInfo не сохранён), Gate fee + gt_fee, чтение старых записей сделок с fee/fee_asset; модель котировки на записанном стакане Bybit CAKEUSDT 04.11: комиссия в USDT входит в списание spend_fee по худшей цене, в монете и монетой скидки — нет; сценарий MEXC 30004 — подгонка по spend_max с комиссией не выходит за свободный остаток).

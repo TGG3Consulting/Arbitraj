@@ -146,8 +146,8 @@ pub async fn result(
     } else {
         quote / filled
     };
-    let (fee, fee_asset) = if filled.is_zero() {
-        (Decimal::ZERO, String::new())
+    let fees = if filled.is_zero() {
+        vec![]
     } else {
         match fills::from_fills(s, filled)? {
             Some(f) => f,
@@ -159,8 +159,7 @@ pub async fn result(
         status,
         filled_qty: filled,
         avg_price: avg,
-        fee,
-        fee_asset,
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

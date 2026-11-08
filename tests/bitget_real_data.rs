@@ -179,9 +179,11 @@ fn recorded_order_fee() {
     let v = data("bitget_order_info.json");
     let o = &v.as_array().unwrap()[0];
     let coin = o["baseCoin"].as_str().unwrap().to_ascii_uppercase();
-    let (fee, asset) = order_fee::parse(o.get("feeDetail"), &coin).unwrap();
-    assert!(fee >= Decimal::ZERO);
-    assert!(asset == coin || asset == order_fee::BGB);
+    let fees = order_fee::parse(o.get("feeDetail"), &coin).unwrap();
+    for f in &fees {
+        assert!(f.amount > Decimal::ZERO);
+        assert!(f.asset == coin || f.asset == order_fee::BGB);
+    }
 }
 
 /// Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — отказ вывода

@@ -143,10 +143,10 @@ pub fn result(
     let coin = num::text_opt(s, field)
         .map(|c| c.to_ascii_uppercase())
         .unwrap_or_else(|| received.to_string());
-    let (fee, fee_asset) = match order_fee::parse(s.get("feeDetail"), &coin) {
+    let fees = match order_fee::parse(s.get("feeDetail"), &coin) {
         Ok(f) => f,
         Err(why) if !filled.is_zero() => return Err(unknown(ctx, &order_id, &why)),
-        Err(_) => (Decimal::ZERO, coin),
+        Err(_) => vec![],
     };
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
@@ -164,8 +164,7 @@ pub fn result(
         } else {
             funds / filled
         },
-        fee,
-        fee_asset,
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

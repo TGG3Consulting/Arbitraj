@@ -17,8 +17,8 @@ use super::engine::Core;
 /// Текст итога продажи. Принимает: факт ордера, сколько продавали, котируемую монету, текст перевода (если был).
 /// Возвращает: «Продано X T на биржа по P, получено Y USDT» (комиссия не в USDT — отдельно). Ошибок нет.
 pub fn sold_text(r: &TradeResult, qty: Decimal, quote: &str, moved: Option<&str>) -> String {
-    let fee_in_quote = r.fee_asset == quote;
-    let got = r.filled_qty * r.avg_price - if fee_in_quote { r.fee } else { Decimal::ZERO };
+    // Решение 219: комиссия — список по монетам; из выручки вычитается часть в котируемой монете.
+    let got = r.filled_qty * r.avg_price - r.fee_in(quote);
     let mut t = format!(
         "Продано {} {} на {} по {}, получено {} {quote}",
         hu::qty(r.filled_qty),
@@ -34,8 +34,17 @@ pub fn sold_text(r: &TradeResult, qty: Decimal, quote: &str, moved: Option<&str>
             hu::qty(qty)
         ));
     }
-    if !fee_in_quote && !r.fee.is_zero() {
-        t.push_str(&format!("; комиссия {} {}", r.fee, r.fee_asset));
+    let other: Vec<_> = r
+        .fees
+        .iter()
+        .filter(|f| f.asset != quote)
+        .cloned()
+        .collect();
+    if !other.is_empty() {
+        t.push_str(&format!(
+            "; комиссия {}",
+            crate::core::types::Fee::text(&other)
+        ));
     }
     if let Some(m) = moved {
         t.push_str(&format!("; перед продажей: {m}"));

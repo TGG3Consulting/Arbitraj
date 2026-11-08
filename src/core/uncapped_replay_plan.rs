@@ -63,6 +63,7 @@ pub fn fee_of(q: &Quote, coin: &str, quote: &str) -> Result<BookFee, String> {
             rate: Decimal::ZERO,
             per_coin: false,
             asset: quote.to_string(),
+            paid_in: None,
         });
     };
     let per_coin = f.asset == coin;
@@ -81,6 +82,7 @@ pub fn fee_of(q: &Quote, coin: &str, quote: &str) -> Result<BookFee, String> {
         rate: f.amount / base,
         per_coin,
         asset: f.asset.clone(),
+        paid_in: f.paid_in.clone(),
     })
 }
 

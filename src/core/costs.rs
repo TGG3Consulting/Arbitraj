@@ -8,7 +8,8 @@
 //! Решение 66: отказ несёт вид (size.rs Fail: меньше минимума / больше возможного / невозможно) — по нему подбор
 //! объёма двигает границы; продажа на бирже B — количество вниз до шага пары (остаток — строка StepRemainder, в
 //! выручку не входит); пределы ордера биржи (minQty/maxQty, minNotional/maxNotional) — по худшей цене ордера
-//! (costs_quote.rs); списание по бюджету spend_max — количество × худшая цена покупки; комиссии вывода и возврата
+//! (costs_quote.rs); списание по бюджету spend_max — количество × худшая цена покупки плюс комиссия покупки в
+//! котируемой монете по худшей цене (решение 219, costs_types.rs quote_fee_at_worst); комиссии вывода и возврата
 //! биржи — из справочника сетей ядра, без запросов к бирже (costs_withdraw.rs).
 //! Типы расчёта (Calc, CostLine) — costs_types.rs. Решение 129: каждый запрос к шлюзу — часть замера этапа
 //! (calc_timing.rs): котировка A / B с id площадки, стоимость вывода и возврата, курсы затрат.
@@ -126,7 +127,7 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
         let sell_fee: Decimal = qb
             .costs
             .iter()
-            .filter(|c| !c.in_price && c.asset == cx.quote[1])
+            .filter(|c| !c.in_price && c.paid_in.is_none() && c.asset == cx.quote[1])
             .map(|c| c.amount)
             .sum();
         let ret = src.ret(cx, proceeds - sell_fee);
@@ -188,6 +189,8 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
         });
     }
     let invested = qty * qa.avg_price;
+    // Решение 219: комиссия покупки в котируемой монете A по худшей цене — часть списания (MEXC 30004).
+    let spend_fee = super::costs_types::quote_fee_at_worst(&qa, &cx.quote[0], worst_a);
     let profit = proceeds - invested - costs_usdt;
     Ok(Calc {
         direction: d.clone(),
@@ -211,7 +214,8 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
         buy_quote: qa,
         sell_quote: qb,
         at: Utc::now(),
-        spend_max: qty * worst_a,
+        spend_max: qty * worst_a + spend_fee,
+        spend_fee,
         size: None,
     })
 }

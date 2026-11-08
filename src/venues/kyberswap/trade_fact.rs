@@ -11,7 +11,7 @@ use alloy_primitives::{Address, U256};
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Side, TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee, Side, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::abi::IERC20;
@@ -71,8 +71,7 @@ pub fn result(
         } else {
             usdt / coins
         },
-        fee,
-        fee_asset: super::balances::BNB.to_string(),
+        fees: Fee::single(fee, super::balances::BNB),
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),

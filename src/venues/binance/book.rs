@@ -123,18 +123,22 @@ impl Books {
         let (rate, in_discount, _why) = rates
             .plan(&mode, side, discount_ok)
             .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
-        // Покупка без скидки — комиссия в монете от количества, иначе — в котируемой монете от суммы.
+        // Покупка без скидки — комиссия в монете от количества, иначе — по сумме сделки. Решение 219: со скидкой
+        // комиссия берётся монетой скидки (discountAsset — BNB, faqs/commission_faq): сумма — эквивалент в котируемой
+        // монете по ставке со скидкой, платится монетой скидки (paid_in) — не из котируемой и не из монеты сделки.
         let fee = if side == Side::Buy && !in_discount {
             BookFee {
                 rate,
                 per_coin: true,
                 asset: asset.ticker.clone(),
+                paid_in: None,
             }
         } else {
             BookFee {
                 rate,
                 per_coin: false,
                 asset: quote_asset,
+                paid_in: in_discount.then(|| rates.discount_asset.clone()),
             }
         };
         Ok(FrozenBook {

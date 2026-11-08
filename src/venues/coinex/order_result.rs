@@ -16,7 +16,7 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee as CoreFee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -120,8 +120,7 @@ pub fn result(
         status,
         filled_qty: filled,
         avg_price: avg,
-        fee: fee.0,
-        fee_asset: fee.1,
+        fees: CoreFee::single(fee.0, fee.1),
         venue_ref: id,
         chain: None,
         finished_at: Utc::now(),

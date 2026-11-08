@@ -129,11 +129,14 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price). Решение 219: факт 08.11 — покупка
+            // в USDT (входит в списание покупки, costs_types.rs spend_fee); документация KuCoin по монете комиссии
+            // спота при решении 219 не перепроверялась — модель не менялась.
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,
                 asset: "USDT".into(),
+                paid_in: None,
             },
             taken_at: chrono::Utc::now(),
         })

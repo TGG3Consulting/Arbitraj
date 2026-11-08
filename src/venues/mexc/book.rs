@@ -124,11 +124,16 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price). Решение 219: MEXC берёт комиссию
+            // в валюте рынка (котируемой) — MEXC Learn «Calculation of Fees in Spot Trading»; факт 08.11: покупка 214/214
+            // и продажа 127/127 — USDT; в списание покупки входит (costs_types.rs spend_fee). Не из документации: при
+            // включённом MX Deduction («the system prioritizes using MX tokens to pay fees») комиссия уйдёт в MX —
+            // состояние MX Deduction не читается; расчёт в USDT — худший случай для списания USDT.
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,
                 asset: "USDT".into(),
+                paid_in: None,
             },
             taken_at: chrono::Utc::now(),
         })

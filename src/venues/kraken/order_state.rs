@@ -20,7 +20,7 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -145,9 +145,8 @@ pub fn result(ctx: &Ctx, req: TradeRequest, s: &Value, txid: String) -> GatewayR
         status,
         filled_qty: filled,
         avg_price: if filled.is_zero() { Decimal::ZERO } else { avg },
-        fee,
         // «Total fee (quote currency)» и oflags fciq — монета комиссии котируемая.
-        fee_asset: ctx.text("venue.quote_asset")?,
+        fees: Fee::single(fee, ctx.text("venue.quote_asset")?),
         venue_ref: txid,
         chain: None,
         finished_at: Utc::now(),

@@ -125,12 +125,14 @@ impl Books {
                 rate,
                 per_coin: true,
                 asset: asset.ticker.clone(),
+                paid_in: None,
             }
         } else {
             BookFee {
                 rate,
                 per_coin: false,
                 asset: quote_asset,
+                paid_in: None,
             }
         };
         Ok(FrozenBook {

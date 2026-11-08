@@ -179,6 +179,12 @@ Java и SDK) и кадры канала баланса спота (страни�
 - `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
   официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
   Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
+- `binance_book_print.rs` — решения 202/213 у Binance: подтверждение тихой пары по содержимому на **примерах из
+  документации** (github.com/binance/binance-spot-api-docs: rest-api.md «Order book», web-socket-streams.md «Partial Book
+  Depth Streams»), не на живых ответах: живой пары «кадр + ответ REST в тот же момент» нет. Ответ REST с уровнями кадра
+  примера собран для теста и помечен. Записать на сервере бота: кадры `cakeusdt@depth20@100ms` (команда ниже) и в ту же
+  секунду `GET /api/v3/depth?symbol=CAKEUSDT&limit=20` — совпадают ли первые 20 уровней при той же книге (и, для вопроса
+  о номере, — lastUpdateId кадра и ответа).
 
 ### Binance — команды записи (на сервере бота)
 

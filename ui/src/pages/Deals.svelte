@@ -75,18 +75,25 @@
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
       {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
     </p>
-    <!-- Решение 138: возврат выручки USDT на площадку покупки после закрытия (поле сделки usdt_return). -->
-    {#if d.usdt_return?.state === 'pending'}
-      <p class="muted">Возврат USDT: идёт — {d.usdt_return.amount} USDT <code>{d.usdt_return.from}</code> → <code>{d.usdt_return.to}</code></p>
-    {:else if d.usdt_return?.state === 'done'}
-      <p class="ok">USDT вернулись: {d.usdt_return.amount} USDT <code>{d.usdt_return.from}</code> → <code>{d.usdt_return.to}</code>, зачислено {d.usdt_return.credited}</p>
-    {:else if d.usdt_return?.state === 'retrying'}
-      <!-- Решение 163: ждёт повтора (usdt.return_retry_s, usdt.return_retries_max). -->
-      <p class="muted">Возврат USDT: ждёт повтора — {d.usdt_return.amount} USDT <code>{d.usdt_return.from}</code> → <code>{d.usdt_return.to}</code>, повторов сделано {d.usdt_return.tries}; последняя причина: {d.usdt_return.why}</p>
-    {:else if d.usdt_return?.state === 'manual'}
-      <p class="ok">USDT перегнаны вручную: {d.usdt_return.amount} USDT <code>{d.usdt_return.at}</code> → <code>{d.usdt_return.to}</code> ({d.usdt_return.by})</p>
-    {:else if d.usdt_return?.state === 'not_returned'}
-      <p class="err">USDT не вернулись: {d.usdt_return.amount} USDT лежат на <code>{d.usdt_return.at}</code> — {d.usdt_return.why}. Перегоните на площадку покупки — кнопки «Перегнать» и «Перегнано вручную» на экране «Ручное управление»</p>
+    <!-- Решение 138: возврат выручки USDT на площадку покупки после закрытия (поле сделки usdt_return).
+         Решение 227: по частям — usdt_return (первая) и usdt_return_parts (остальные площадки выручки). -->
+    {#each [d.usdt_return, ...(d.usdt_return_parts ?? [])].filter(Boolean) as r, i (i)}
+      {#if r.state === 'pending'}
+        <p class="muted">Возврат USDT: идёт — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code></p>
+      {:else if r.state === 'done'}
+        <p class="ok">USDT вернулись: {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, зачислено {r.credited}</p>
+      {:else if r.state === 'retrying'}
+        <!-- Решение 163: ждёт повтора (usdt.return_retry_s, usdt.return_retries_max). -->
+        <p class="muted">Возврат USDT: ждёт повтора — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, повторов сделано {r.tries}; последняя причина: {r.why}</p>
+      {:else if r.state === 'manual'}
+        <p class="ok">USDT перегнаны вручную: {r.amount} USDT <code>{r.at}</code> → <code>{r.to}</code> ({r.by})</p>
+      {:else if r.state === 'not_returned'}
+        <p class="err">USDT не вернулись: {r.amount} USDT лежат на <code>{r.at}</code> — {r.why}. Перегоните на площадку покупки — кнопки «Перегнать» и «Перегнано вручную» на экране «Ручное управление»</p>
+      {/if}
+    {/each}
+    {#if d.withdraw_refused?.length}
+      <!-- Решение 227: площадки, отказавшие в выводе в этой сделке, — «Перегон» с них не выбирается. -->
+      <p class="muted">Вывод отклонён: {#each d.withdraw_refused as v, i (i)}<code>{v}</code> {/each}— перегон с этих площадок не выбирается</p>
     {/if}
     {#if d.buy}<DealUncapped id={d.id} fact={d.result_usd} initial={uncapped?.[d.id]?.body ?? null} loaded={uncapped != null} />{/if}
     <details>

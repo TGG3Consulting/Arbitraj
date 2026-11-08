@@ -6,7 +6,7 @@
 //! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs; deal_value / sell_value — sell.rs, sell_unsent.rs, relay*.rs,
 //! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
-//! Худшая цена — worst.rs (та же у расчёта, решение 66).
+//! Худшая цена — worst.rs (та же у расчёта, решение 66); у ордера — только по свежему стакану (решение 227).
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
@@ -37,7 +37,7 @@ pub fn kind(core: &Core, v: &VenueId) -> Result<VenueKind, String> {
         .ok_or_else(|| format!("площадки {} нет в реестре", v.0))
 }
 
-pub use super::worst::worst_price;
+pub use super::worst::{Worst, worst_price};
 
 /// Покупка или продажа. Принимает: ядро, id сделки, площадку, монету, сторону, количество,
 /// маршрут DEX из котировки, среднюю цену котировки, бюджет покупки (решение 66: qty × худшая цена не больше его —
@@ -55,6 +55,26 @@ pub async fn trade(
     avg: Decimal,
     cap: Option<Decimal>,
 ) -> Result<TradeResult, OpError> {
+    let mut seen = None;
+    trade_seen(core, deal, v, a, side, qty, route, avg, cap, &mut seen).await
+}
+
+/// Как trade, плюс по чему посчитана худшая цена последней попытки (решение 227: продажа пишет её в хронологию
+/// сделки — sell.rs). Принимает: как trade и место для Worst (None — до расчёта худшей цены не дошло).
+/// Ошибки: как trade; «стакан устарел» (worst.rs worst_order).
+#[allow(clippy::too_many_arguments)]
+pub async fn trade_seen(
+    core: &Core,
+    deal: &str,
+    v: &VenueId,
+    a: &Asset,
+    side: Side,
+    qty: Decimal,
+    route: Option<DexRoute>,
+    avg: Decimal,
+    cap: Option<Decimal>,
+    seen: &mut Option<Worst>,
+) -> Result<TradeResult, OpError> {
     let op = if side == Side::Buy {
         "Покупка"
     } else {
@@ -63,7 +83,10 @@ pub async fn trade(
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let worst = worst_price(core, v, a, side, qty, avg)?;
+        // Решение 227: у ордера — стакан ядра не старше venue.book_stale_ms (или подтверждённая тихая пара).
+        let w = super::worst::worst_order(core, v, a, side, qty, avg)?;
+        *seen = Some(w);
+        let worst = w.price;
         // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
         if let Some(cap) = cap
             && side == Side::Buy

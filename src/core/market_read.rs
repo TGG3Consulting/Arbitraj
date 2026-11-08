@@ -104,6 +104,20 @@ impl MarketState {
         None
     }
 
+    /// Решение 227: тихая пара подтверждена по REST (решение 213, feed_watch_act.rs) — стакан пары считается свежим для
+    /// худшей цены ордера (worst.rs) до until_ms (unix мс), как в котировке адаптера. Ошибок нет.
+    pub fn set_quiet(&mut self, venue: &VenueId, ticker: &str, until_ms: i64) {
+        self.quiet
+            .insert((venue.clone(), ticker.to_string()), until_ms);
+    }
+
+    /// Решение 227: до какого момента (unix мс) стакан тихой пары подтверждён. None — подтверждения не было.
+    pub fn quiet_until(&self, venue: &VenueId, ticker: &str) -> Option<i64> {
+        self.quiet
+            .get(&(venue.clone(), ticker.to_string()))
+            .copied()
+    }
+
     /// Пулы пары токенов на площадке (монета с USDT или с промежуточной монетой, решение 52).
     /// Принимает: площадку, адрес монеты, адрес второго токена.
     /// Решение 129: по индексу пары (market_state.rs pool_pairs), а не проходом всех пулов.

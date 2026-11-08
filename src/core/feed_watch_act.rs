@@ -114,6 +114,9 @@ async fn act_quiet(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, mult:
             log,
         } => {
             v.book_confirmed(&ticker, until_ms);
+            // Решение 227: то же подтверждение — худшей цене ордера ядра (worst.rs: стакан не старше venue.book_stale_ms
+            // или подтверждён), иначе ордер тихой пары отказывал бы при котировке, которая прошла.
+            super::engine::wr(&core.inner.market).set_quiet(venue, &ticker, until_ms);
             if !log {
                 return;
             }

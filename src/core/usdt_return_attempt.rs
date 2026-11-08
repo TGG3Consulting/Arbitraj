@@ -1,7 +1,11 @@
 //! Файл: core/usdt_return_attempt.rs
 //! Что делает: одна попытка возврата выручки USDT закрытой сделки (решение 163; продолжение usdt_return_retry.rs —
-//! размер файла): сумма — свободные USDT площадки, не больше выручки сделки; кошелёк DEX — сделки. Плюс состояние
-//! «ждёт повтора» из учёта, захват попытки (вторая задача по той же сделке не пройдёт), строка в хронологию и журнал.
+//! размер файла): кошелёк DEX — сделки. Плюс состояние «ждёт повтора» части из учёта, захват попытки (вторая задача по
+//! той же части не пройдёт), строка в хронологию и журнал.
+//! Решение 227 (живой случай JCT: повтор с суммой «свободные, не больше всей выручки сделки» отправил 387.56 USDT с
+//! кошелька w7 — 342.29 выручки этой части и 45.28 оборотных денег другого направления): сумма попытки — РОВНО сумма
+//! части (её выручка минус комиссия), никогда не больше; свободно меньше части — попытка не отправляет ничего
+//! (ошибка «свободно меньше части», вывод точно не ушёл): дальше повтор или «USDT не вернулись» по решению 163.
 //! Кто вызывает: core/usdt_return_retry.rs (повторы), core/manual_usdt.rs («Перегнать»).
 //! От чего зависит: usdt_return.rs (relay_try, usdt), limits.rs (free_now), dex_account.rs, ledger.rs, deal.rs.
 //! Настройки: venue.quote_asset (через usdt_return.rs).
@@ -15,9 +19,10 @@ use super::engine::{Core, lk};
 use super::op_error::OpError;
 use super::usdt_return_state::UsdtReturn;
 
-/// Одна попытка возврата: сумма — свободные USDT площадки, не больше выручки сделки (cap); кошелёк DEX — сделки.
-/// Принимает: ядро, сделку, предел, откуда/куда, метку попытки (к ID вывода). Возвращает: (отправлено, зачислено).
-/// Ошибки: сделки нет, кошелька нет, баланс не получен или ноль, перегон не состоялся (OpError).
+/// Одна попытка возврата части: сумма — ровно сумма части (cap, решение 227), не свободный баланс; кошелёк DEX —
+/// сделки. Принимает: ядро, сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (отправлено,
+/// зачислено). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
+/// перегон не состоялся (OpError).
 pub async fn attempt(
     core: &Core,
     deal: &str,
@@ -34,25 +39,23 @@ pub async fn attempt(
     let free = super::limits::free_now(core, from, acc.as_ref(), &usdt.ticker)
         .await
         .map_err(|e| OpError::from(format!("{}: свободные {}: {e}", from.0, usdt.ticker)))?;
-    let amount = free.min(cap);
-    if amount <= Decimal::ZERO {
-        return Err(OpError::from(format!(
-            "на {} нет свободных {}",
-            from.0, usdt.ticker
-        )));
-    }
+    // Решение 227: никогда не больше части — остальное на площадке чужое (другие части, оборотные деньги кошелька).
+    let amount = super::usdt_return_parts::send_amount(free, cap)
+        .map_err(|e| OpError::from(format!("{} ({}): {e}", from.0, usdt.ticker)))?;
     let id = format!("{deal}{tag}");
     let credited = super::usdt_return::relay_try(core, &id, from, to, acc.as_ref(), amount).await?;
     Ok((amount, credited))
 }
 
-/// Состояние «ждёт повтора»: (выручка, откуда, куда, сделано повторов, причина последнего сбоя). None — сделки нет
-/// или состояние другое.
+/// Состояние части «ждёт повтора» (решение 227: часть — по площадке): (сумма части, откуда, куда, сделано повторов,
+/// причина последнего сбоя). None — сделки или части нет, или состояние другое.
 pub(super) fn retrying(
     core: &Core,
     deal: &str,
+    at: &VenueId,
 ) -> Option<(Decimal, VenueId, VenueId, u64, String)> {
-    match lk(&core.inner.deals).get(deal)?.usdt_return.clone()? {
+    let deals = lk(&core.inner.deals);
+    match super::usdt_return_parts::get(deals.get(deal)?, Some(at))?.clone() {
         UsdtReturn::Retrying {
             amount,
             from,
@@ -64,8 +67,8 @@ pub(super) fn retrying(
     }
 }
 
-/// Захват попытки: «ждёт повтора» с тем же счётом → «идёт» (в учёте). Возвращает: true — захвачено. Ошибок нет.
-pub(super) async fn claim(core: &Core, deal: &str, tries: u64) -> bool {
+/// Захват попытки части: «ждёт повтора» с тем же счётом → «идёт» (в учёте). Возвращает: true — захвачено. Ошибок нет.
+pub(super) async fn claim(core: &Core, deal: &str, at: &VenueId, tries: u64) -> bool {
     let d = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
@@ -77,14 +80,14 @@ pub(super) async fn claim(core: &Core, deal: &str, tries: u64) -> bool {
             to,
             tries: t,
             ..
-        }) = d.usdt_return.clone()
+        }) = super::usdt_return_parts::get(d, Some(at)).cloned()
         else {
             return false;
         };
         if t != tries {
             return false;
         }
-        d.usdt_return = Some(UsdtReturn::Pending { amount, from, to });
+        super::usdt_return_parts::put(d, UsdtReturn::Pending { amount, from, to });
         d.clone()
     };
     super::ledger::save(core, &d).await;

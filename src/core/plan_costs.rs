@@ -8,7 +8,9 @@
 //! Правила (как в решении 218): вывод — затраты стадии «перевод» плана: комиссия вывода и газ перевода — как в плане
 //! (постоянные), налог перевода — той же долей от ушедшего в сеть; возврат USDT — затраты стадии «возврат USDT» плана
 //! (как в плане); курс валюты затрат — USDT строки плана / её количество (валюты нет в плане — расчёт на этом объёме
-//! невозможен, причина в тексте; живой курс не подставляется).
+//! невозможен, причина в тексте; живой курс не подставляется). Решение 239: такая точка — «объём недопустим»
+//! (Fail::TooLarge с меткой NOT_IN_PLAN: валюта появилась на большом объёме, например промежуточная монета маршрута
+//! DEX), а не остановка всего расчёта; причина — в записи (core/plan_gap.rs).
 //! Кто вызывает: core/uncapped_replay.rs, core/frozen.rs, core/costs_source.rs.
 //! От чего зависит: uncapped_replay_plan.rs (PlanLine, as_cost), convert.rs (Rates, is_gas), costs_types.rs (CostLine).
 //! Настройки: нет.
@@ -22,7 +24,11 @@ use crate::core::types::{Cost, CostKind};
 use super::convert::{Rates, is_gas};
 use super::costs_types::CostLine;
 use super::dirctx::DirCtx;
+use super::size::Fail;
 use super::uncapped_replay_plan::{PlanLine, as_cost};
+
+/// Решение 239: метка причины «валюты затраты в плане сделки нет» — по ней core/plan_gap.rs узнаёт такие точки.
+pub const NOT_IN_PLAN: &str = "курса в плане сделки нет";
 
 /// Затраты плана сделки (см. шапку).
 #[derive(Debug, Clone)]
@@ -107,24 +113,24 @@ impl PlanCosts {
     }
 
     /// Что делает: курсы валют затрат из плана. Принимает: контекст, тикер монеты, её цену, вычитаемые затраты.
-    /// Возвращает: Rates. Ошибки: текст — валюты затраты в плане нет.
+    /// Возвращает: Rates. Ошибки: TooLarge (решение 239: объём недопустим) — валюты затраты в плане нет.
     pub fn rates(
         &self,
         cx: &DirCtx,
         coin: &str,
         coin_price: Decimal,
         must: &[Cost],
-    ) -> Result<Rates, String> {
+    ) -> Result<Rates, Fail> {
         let mut prices = HashMap::new();
         for c in must
             .iter()
             .filter(|c| !cx.quote.contains(&c.asset) && c.asset != coin && !c.amount.is_zero())
         {
             let p = self.prices.get(&c.asset).ok_or_else(|| {
-                format!(
-                    "затрата {:?} в {} — курса в плане сделки нет",
+                Fail::TooLarge(format!(
+                    "затрата {:?} в {} — {NOT_IN_PLAN} (объём недопустим)",
                     c.kind, c.asset
-                )
+                ))
             })?;
             prices.insert(c.asset.clone(), *p);
         }

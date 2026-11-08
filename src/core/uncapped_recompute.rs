@@ -201,6 +201,7 @@ async fn run(
         basis: p.basis.to_string(),
         decided_at: Some(p.decided_at),
         snapshot: Some(p.source.clone()),
+        plan_gap: None,
     };
     let rec = record(inputs, u, Utc::now());
     let body = serde_json::to_string(&rec).map_err(|e| format!("запись не собирается: {e}"))?;

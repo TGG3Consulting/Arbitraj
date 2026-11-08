@@ -130,14 +130,14 @@ impl Source for Replay {
         Ok(self.plan.ret())
     }
 
-    /// Курсы из плана. Ошибки: текст — валюты затраты в плане нет.
+    /// Курсы из плана. Ошибки: TooLarge — валюты затраты в плане нет (решение 239: объём недопустим).
     async fn rates(
         &self,
         cx: &DirCtx,
         coin: &str,
         coin_price: Decimal,
         must: &[Cost],
-    ) -> Result<Rates, String> {
+    ) -> Result<Rates, Fail> {
         self.plan.rates(cx, coin, coin_price, must)
     }
 }

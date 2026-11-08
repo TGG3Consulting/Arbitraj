@@ -98,6 +98,10 @@ pub struct Record {
     pub search_cap: Decimal,
     pub cap_reached: bool,
     pub limit: String,
+    /// Решение 239: объёмы, недопустимые из-за валюты затрат не из плана сделки (core/plan_gap.rs) — сколько и первая
+    /// причина; None — таких не было.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_gap: Option<String>,
     pub evals: u32,
     pub peaks: u32,
     pub capped: bool,

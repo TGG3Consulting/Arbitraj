@@ -60,14 +60,15 @@ pub trait Source: Sync {
     ) -> impl Future<Output = Result<Vec<Cost>, Fail>> + Send;
 
     /// Что делает: курсы валют затрат в USDT. Принимает: контекст, тикер монеты, её цену, вычитаемые затраты.
-    /// Возвращает: Rates. Ошибки: текст — нет цены валюты затраты.
+    /// Возвращает: Rates. Ошибки: Stop — нет цены валюты затраты; TooLarge — курсы из плана, а валюты в плане нет
+    /// (решение 239: объём недопустим).
     fn rates(
         &self,
         cx: &DirCtx,
         coin: &str,
         coin_price: Decimal,
         must: &[Cost],
-    ) -> impl Future<Output = Result<Rates, String>> + Send;
+    ) -> impl Future<Output = Result<Rates, Fail>> + Send;
 }
 
 /// Источник боя и кандидатов: живые данные ядра; src — снимок рынка момента решения (решение 217) для котировок и
@@ -126,18 +127,20 @@ impl Source for Live<'_> {
     }
 
     /// Живые курсы (convert.rs rates); решение 237 — со входами момента решения: курсы плана сделки.
-    /// Ошибки: как у rates; у плана — валюты затраты в плане нет.
+    /// Ошибки: Stop — как у convert.rs rates; у плана — TooLarge, валюты затраты в плане нет (решение 239).
     async fn rates(
         &self,
         cx: &DirCtx,
         coin: &str,
         coin_price: Decimal,
         must: &[Cost],
-    ) -> Result<Rates, String> {
+    ) -> Result<Rates, Fail> {
         if let Some(p) = self.plan() {
             return p.rates(cx, coin, coin_price, must);
         }
         let deps = &self.core.inner.deps;
-        super::convert::rates(deps, &cx.cex, cx.quote.clone(), coin, coin_price, must).await
+        super::convert::rates(deps, &cx.cex, cx.quote.clone(), coin, coin_price, must)
+            .await
+            .map_err(Fail::Stop)
     }
 }

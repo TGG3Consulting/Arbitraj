@@ -136,6 +136,7 @@ pub mod partial;
 pub mod patience_scope;
 pub mod persist;
 pub mod plan_costs;
+pub mod plan_gap;
 pub mod precheck;
 pub mod precheck_deposit;
 pub mod precheck_dex_sell;

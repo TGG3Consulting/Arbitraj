@@ -8,7 +8,9 @@
 //!    compute совпадает с поиском size_uncapped по той же кривой с σ плана и отличается от поиска с удвоенной σ.
 //! 2) Объём, на котором вошли, посчитан всегда — даже при исчерпанном uncapped.max_evals («на нашем бюджете» у сделки —
 //!    точка на этом объёме), упущено = прибыль на потолке − на вложенном (одна модель).
-//! 3) Курсы затрат — только из плана сделки: валюты нет в плане — ошибка, живой курс не подставляется.
+//! 3) Курсы затрат — только из плана сделки: валюты нет в плане — живой курс не подставляется; решение 239 — это
+//!    «объём недопустим» (Fail::TooLarge с меткой plan_costs::NOT_IN_PLAN), а не остановка расчёта (Stop); у записи без
+//!    таких объёмов plan_gap пуст.
 //! 4) Снимок без входов момента решения — расчёта по сделке нет (причина).
 //! 5) Решение 239: настройки модели (пороги money.min_profit_*, uncapped.*, size.*, card.max_search_usdt) — из копии на
 //!    момент входа (Decided.settings, settings/pinned.rs): изменение настроек после входа расчёт по сделке не меняет;
@@ -26,8 +28,9 @@ use arb::core::costs::{self, Live, Source};
 use arb::core::deps::Deps;
 use arb::core::dirctx::DirCtx;
 use arb::core::frozen::{Decided, Frozen};
-use arb::core::plan_costs::PlanCosts;
+use arb::core::plan_costs::{NOT_IN_PLAN, PlanCosts};
 use arb::core::registry::Presence;
+use arb::core::size::Fail;
 use arb::core::size_curve::{SourceCurve, params};
 use arb::core::size_uncapped::uncapped;
 use arb::core::types::{Asset, Cost, CostKind, Direction, OrderBook, Side, VenueId};
@@ -250,6 +253,7 @@ async fn compute_uses_plan_sigma() {
         .unwrap();
     assert_eq!(r.basis, BASIS_DECISION);
     assert_eq!(r.opt_transit_s, d("120"));
+    assert_eq!(r.plan_gap, None, "все валюты затрат — из плана");
     // Тот же поиск по той же кривой с σ плана (источник Live со снимком и входами) — тот же итог.
     let live = Live {
         core: &core,
@@ -338,7 +342,7 @@ async fn no_live_fallback() {
     let sigma = d("0.0005");
     let pl = plan(&core, &rec, sigma, d("3")).await;
     let fz = frozen(&rec, sigma, &pl, &s);
-    // Курс валюты, которой нет в плане (BNB), — ошибка, а не живой курс.
+    // Курс валюты, которой нет в плане (BNB), — не живой курс, а «объём недопустим» (решение 239).
     let live = Live {
         core: &core,
         src: Some(&fz),
@@ -349,7 +353,10 @@ async fn no_live_fallback() {
         .await
         .err()
         .unwrap();
-    assert!(e.contains("курса в плане сделки нет"), "{e}");
+    assert!(
+        matches!(&e, Fail::TooLarge(t) if t.contains(NOT_IN_PLAN) && t.contains("BNB")),
+        "{e}"
+    );
     // Снимок без входов момента решения — расчёта по сделке нет.
     let raw = Frozen {
         decided: None,

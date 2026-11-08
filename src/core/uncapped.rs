@@ -19,11 +19,13 @@
 //! на котором вошли (Battle.qty), считается всегда, вне uncapped.max_evals, и он — «на нашем бюджете» у сделки.
 //! Решение 239: настройки модели у сделки (card.max_search_usdt, money.min_profit_*, uncapped.*, size.*) — из копии
 //! на момент решения (Decided.settings); составляющие бюджета — снятые перед покупкой (Battle.parts), не прочитаны —
-//! причина, живые не читаются. Кандидат — живое хранилище.
+//! причина, живые не читаются. Кандидат — живое хранилище. Объём, у которого валюты затрат нет в плане сделки
+//! (появилась только на большом объёме), — «объём недопустим», не остановка расчёта; сколько и первая причина — в
+//! записи (plan_gap.rs, Record.plan_gap).
 //! Сборка записи (упущено, что ограничило) и таблица потолков — uncapped_record.rs (общие с пересчётом старых записей
 //! по окнам, решение 218).
 //! Кто вызывает: core/uncapped_queue.rs (в потоке фоновой задачи).
-//! От чего зависит: frozen.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, uncapped_record.rs, limits_parts.rs, dry.rs,
+//! От чего зависит: frozen.rs, plan_gap.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, uncapped_record.rs, limits_parts.rs, dry.rs,
 //! card_max.rs (passes), settings.
 //! Настройки: card.max_search_usdt (предел поиска), uncapped.max_evals (предел расчётов), uncapped.ladder_usdt (таблица
 //! потолков), money.min_profit_usd, money.min_profit_pct, size.* (через size_curve::params).
@@ -40,6 +42,7 @@ use super::card_max::passes;
 use super::dirctx::DirCtx;
 use super::engine::{Core, rd};
 use super::frozen::Frozen;
+use super::plan_gap::PlanGap;
 use super::size_curve::{CoreCurve, params};
 use super::size_uncapped::uncapped;
 use super::uncapped_record::{Inputs, ladder_in, record};
@@ -122,7 +125,8 @@ pub async fn compute(
         .ok_or("нет цены покупки на A")?;
     let mut p = params(core, cx, search_cap, price, fz)?;
     p.max_evals = u32::try_from(max_evals).map_err(|_| "uncapped.max_evals вне пределов")?;
-    let mut curve = CoreCurve { core, cx, src: fz };
+    // Решение 239: объёмы с валютой затрат не из плана — недопустимы, их число и причина — в запись.
+    let mut curve = PlanGap::new(CoreCurve { core, cx, src: fz });
     // Решение 237: у сделки объём входа — точка «на нашем бюджете» (всегда посчитана).
     let own = (battle.verdict == "deal" && battle.qty > Decimal::ZERO).then_some(battle.qty);
     let u = uncapped(
@@ -152,6 +156,7 @@ pub async fn compute(
         .into(),
         decided_at: fz.map(|f| f.at),
         snapshot: fz.map(Frozen::describe),
+        plan_gap: curve.note(),
     };
     Ok(record(inputs, u, Utc::now()))
 }

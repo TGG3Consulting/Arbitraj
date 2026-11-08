@@ -35,6 +35,8 @@ pub struct Inputs {
     pub basis: String,
     pub decided_at: Option<DateTime<Utc>>,
     pub snapshot: Option<String>,
+    /// Решение 239: объёмы, недопустимые из-за валюты затрат не из плана (core/plan_gap.rs); None — не было.
+    pub plan_gap: Option<String>,
 }
 
 /// Что делает: запись из итога поиска. Принимает: входы, итог поиска, время записи. Возвращает: Record (эпизод — из
@@ -70,6 +72,7 @@ pub fn record(i: Inputs, u: Uncapped<Calc>, now: DateTime<Utc>) -> Record {
         search_cap: i.search_cap,
         cap_reached: u.cap_reached,
         limit: u.limit,
+        plan_gap: i.plan_gap,
         evals: u.evals,
         peaks: u.peaks,
         capped: u.capped,

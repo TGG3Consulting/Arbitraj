@@ -236,3 +236,31 @@ async fn control_commands_from_telegram() {
     assert!(core.command(c).await.is_err());
     assert_eq!(core.control().mode, Mode::Stopped);
 }
+
+/// «Площадки и карантин» (notify/menu_venues.rs) и «Состояние»: пауза площадки подписана человеческим именем
+/// (notify/human.rs venue(): bsc_dex → «DEX»), как строка паузы кошелька; callback_data — id площадки.
+#[tokio::test]
+async fn venue_pause_human_name() {
+    let core = start("vname").await;
+    let mut r = core.control();
+    r.venue_paused
+        .insert(VenueId("bsc_dex".into()), "исход неизвестен".into());
+    let (text, kb) = menu::venues(&r);
+    assert!(
+        text.contains("Площадка DEX на паузе: исход неизвестен"),
+        "{text}"
+    );
+    assert!(!text.contains("bsc_dex"), "{text}");
+    let first = &kb["inline_keyboard"][0][0];
+    assert_eq!(first["text"], "Снять паузу DEX");
+    assert_eq!(first["callback_data"], "c:vr.bsc_dex");
+    let (state, _) = menu::state(&r, 0);
+    assert!(
+        state.contains("Площадка DEX на паузе: исход неизвестен"),
+        "{state}"
+    );
+    // Те же текст и кнопки — в «Состоянии» чата «Управление» (notify/ctl/screens.rs через menu::venue_buttons).
+    let (t2, rows) = menu::venue_buttons(&r);
+    assert_eq!(text, t2);
+    assert_eq!(rows[0]["callback_data"], "c:vr.bsc_dex");
+}

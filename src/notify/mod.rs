@@ -17,6 +17,7 @@ pub mod human_msg;
 pub mod menu;
 pub mod menu_day;
 pub mod menu_press;
+pub mod menu_venues;
 pub mod mirror;
 pub mod mirror_send;
 pub mod mirror_state;

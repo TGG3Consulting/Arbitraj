@@ -6,7 +6,8 @@
 //! Кто вызывает: notify/menu_press.rs, notify/tg_commands.rs, notify/ctl/screens.rs (решение 176: «Состояние» чата
 //! «Управление» — те же кнопки).
 //! От чего зависит: core/risk.rs (Risk, Mode), core/commands_control.rs (label), notify/mirror_view.rs,
-//! notify/menu_day.rs (лимит дня — общий и по площадкам, решение 173).
+//! notify/menu_day.rs (лимит дня — общий и по площадкам, решение 173), notify/menu_venues.rs («Площадки и карантин»),
+//! notify/human.rs (имя площадки).
 //! Настройки: нет.
 //!
 //! callback_data: «m:<экран>» — переход (root, st, man, mode, ven, day); «c:<что>» — кнопка плашки
@@ -19,15 +20,17 @@ use crate::core::commands_control::label;
 use crate::core::risk::{Mode, Risk};
 use crate::core::types::ManualRecord;
 
+/// Экран «Площадки и карантин» — notify/menu_venues.rs (вынесен; прежние пути menu::venues / menu::venue_buttons).
+pub use super::menu_venues::{venue_buttons, venues};
 use super::mirror_view::batch_message;
 
 /// Кнопка. Принимает: надпись, callback_data.
-fn b(text: &str, data: &str) -> Value {
+pub(super) fn b(text: &str, data: &str) -> Value {
     json!({ "text": text, "callback_data": data })
 }
 
 /// Клавиатура: по кнопке в ряду, внизу «Назад» в главное меню. Принимает: кнопки.
-fn with_back(rows: Vec<Value>) -> Value {
+pub(super) fn with_back(rows: Vec<Value>) -> Value {
     let mut rows: Vec<Value> = rows.into_iter().map(|x| json!([x])).collect();
     rows.push(json!([b("« Назад", "m:root")]));
     json!({ "inline_keyboard": rows })
@@ -68,7 +71,10 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
         t.push_str("\nЛимит сейчас не превышен — остановка по лимиту снимется сама с новым днём (UTC), можно нажать «Старт».");
     }
     for (v, why) in &r.venue_paused {
-        t.push_str(&format!("\nПлощадка {} на паузе: {why}", v.0));
+        t.push_str(&format!(
+            "\nПлощадка {} на паузе: {why}",
+            super::human::venue(&v.0)
+        ));
     }
     for why in r.cycle_paused.values() {
         t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
@@ -136,49 +142,6 @@ pub fn mode_disabled(now: Mode, want: Mode) -> Option<String> {
         Mode::Stopped => now == Mode::Stopped,
     };
     off.then(|| format!("сейчас режим «{}»", label(now)))
-}
-
-/// «Площадки и карантин»: паузы площадок и кошельков DEX (решение 230), карантины монет с кнопками снятия — как на плашке. Принимает: Risk.
-pub fn venues(r: &Risk) -> (String, Value) {
-    let (t, rows) = venue_buttons(r);
-    (t, with_back(rows))
-}
-
-/// Текст и кнопки снятия пауз площадок, циклов, кошельков DEX и карантина (решение 176: и «Состояние» чата «Управление»).
-/// Принимает: Risk. Возвращает: (текст, кнопки «c:vr.…», «c:wr.…», «c:qr.…»). Ошибок нет.
-pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
-    let mut t = String::from("Площадки и карантин");
-    let mut rows = Vec::new();
-    let mut paused: Vec<_> = r.venue_paused.iter().collect();
-    paused.sort_by(|a, b| a.0.0.cmp(&b.0.0));
-    for (v, why) in paused {
-        t.push_str(&format!("\nПлощадка {} на паузе: {why}", v.0));
-        rows.push(b(&format!("Снять паузу {}", v.0), &format!("c:vr.{}", v.0)));
-    }
-    // Решение 173: пауза только циклов DEX ↔ DEX по убытку дня DEX.
-    for (v, why) in &r.cycle_paused {
-        t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
-        rows.push(b("Снять паузу циклов DEX ↔ DEX", &format!("c:vr.{v}")));
-    }
-    // Решение 230: пауза кошелька DEX от сверки — та же команда ядра, что «Снять паузу» на плашке (resume_wallet).
-    for (id, p) in &r.wallet_paused {
-        t.push_str(&format!("\n{}", super::menu_press::wallet_line(p)));
-        rows.push(b(
-            &format!("Снять паузу кошелька «{}»", p.name),
-            &format!("c:wr.{id}"),
-        ));
-    }
-    for q in super::menu_press::quarantine(r) {
-        t.push_str(&format!("\nМонета {} в карантине: {}", q.label, q.reason));
-        rows.push(b(
-            &format!("Снять карантин {}", q.label),
-            &format!("c:qr.{}", q.id),
-        ));
-    }
-    if rows.is_empty() {
-        t.push_str("\nПлощадок и кошельков на паузе, монет в карантине нет.");
-    }
-    (t, rows)
 }
 
 /// «Лимит дня»: итог дня, общий лимит и лимиты площадок, кнопки «Сбросить лимит дня» — общий и по площадке

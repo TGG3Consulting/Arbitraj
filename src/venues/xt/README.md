@@ -20,6 +20,7 @@
 | `ctx.rs` | Окружение: настройки, секреты `xt.api_key` / `xt.api_secret`, HTTP, журнал; тикер ядра заглавными ↔ имя монеты XT строчными |
 | `sign.rs` | Подпись: X (заголовки `validate-*` по алфавиту) + Y (`#METHOD#path#query#body`), HmacSHA256 hex; фьючерсы — X без алгоритма и окна, Y без метода |
 | `rest.rs`, `reply.rs`, `errors.rs` | REST: ответ `{rc, mc, ma, result}`, recvWindow ≤ 60000, 429 и `GATEWAY_*` — пауза `venue.rate_limit_pause_ms` (отдельно спот и прочие адреса); ответ с секретом ключа (user-center) не пишется в сырой журнал; коды mc → единые («XT, код <mc>: …» — решение 164) |
+| `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |
 | `num.rs` | Числа без потери точности (строки и числа JSON) |
 | `symbols.rs`, `symbols_parse.rs` | `/v4/public/symbol` (вне рабочих потоков, с `version` — без изменений список не приходит): state, tradingEnabled, openapiEnabled, PRICE / QUANTITY (шаг от min, null — без предела), QUOTE_QTY, точности, takerFeeRate, orderTypes, timeInForces |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как Binance) |

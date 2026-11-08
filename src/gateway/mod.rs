@@ -16,6 +16,7 @@ pub mod http;
 pub mod http_bind;
 pub mod network_hint;
 pub mod patience;
+pub mod pending;
 pub mod quote_stage;
 pub mod registry;
 pub mod rules;

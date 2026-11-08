@@ -30,6 +30,7 @@ pub mod parts;
 pub mod parts_wallet;
 pub mod pools;
 pub mod quote;
+pub mod resolve;
 pub mod resubscribe;
 pub mod resubscribe_wallets;
 pub mod send;

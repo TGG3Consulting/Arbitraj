@@ -41,6 +41,8 @@ pub struct Prepared {
     pub price: Decimal,
     /// Параметры запроса POST /openApi/spot/v1/trade/order.
     pub params: Vec<(&'static str, String)>,
+    /// Свой ID ордера (newClientOrderId) — решение 231: по нему ядро ищет ордер с неизвестным итогом.
+    pub client_id: String,
 }
 
 /// Что делает: правила пары без сети — сторона через API, округление, пределы количества и суммы.
@@ -121,6 +123,7 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::OrderRejected, None, m)))?;
     let tif = ctx.text("venue.order_time_in_force")?;
     let buy = req.side == Side::Buy;
+    let client = client_id(buy, &req.deal_id);
     let params = vec![
         ("symbol", rules.symbol.clone()),
         ("side", (if buy { "BUY" } else { "SELL" }).to_string()),
@@ -128,13 +131,14 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
         ("quantity", qty.normalize().to_string()),
         ("price", price.normalize().to_string()),
         ("timeInForce", tif),
-        ("newClientOrderId", client_id(buy, &req.deal_id)),
+        ("newClientOrderId", client.clone()),
     ];
     Ok(Prepared {
         symbol: rules.symbol,
         qty,
         price,
         params,
+        client_id: client,
     })
 }
 

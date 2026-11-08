@@ -1,8 +1,11 @@
 //! Файл: core/rules_stop.rs
 //! Что делает: паузы от ошибок операций (вынесено из rules_apply.rs; решение 225 — у каждой паузы «кто поставил»):
-//! - «исход неизвестен» (OutcomeUnknown) — пауза площадки с отметкой «только человек» (auto_pause::Kind::Outcome):
-//!   сам бот исход такой операции не узнаёт (DECISIONS 225), снимает человек «Снять паузу»; уведомление — один раз на
-//!   смену состояния (остановленная очередь кошелька отвечает так на каждую попытку);
+//! - «исход неизвестен» (OutcomeUnknown) — пауза площадки с отметкой Outcome (auto_pause::Kind::Outcome; автоснятие
+//!   проверкой подключения её не трогает). Решение 231: у ошибки есть «чем найти» (GatewayError.pending) и заданы
+//!   risk.outcome_poll_s / risk.outcome_max_s — операция на учёте «выясняет бот» (outcome_open.rs), её ищет
+//!   outcome_resolve.rs, и пауза снимется, когда выяснены все такие операции площадки; иначе — «только человек»,
+//!   снимает человек «Снять паузу». Уведомление — один раз на смену состояния (остановленная очередь кошелька отвечает
+//!   так на каждую попытку);
 //! - правило шлюза «стоп площадка» — пауза площадки с отметкой Kind::Rule (снимет auto_resume.rs проверкой подключения);
 //! - правило шлюза «стоп всё» — «Стоп» системы с отметкой ModeKind::Rule (площадка ошибки; снимет auto_resume.rs);
 //! - отказ вывода / неверный адрес / вывод заблокирован (auto_pause::no_pause) — «стоп площадка» и «стоп всё» паузу НЕ
@@ -13,8 +16,9 @@
 //!   и у «исход неизвестен», и у «стоп площадка»): сверка такую паузу больше не снимает.
 //!
 //! Кто вызывает: rules_apply.rs.
-//! От чего зависит: auto_pause.rs, risk.rs, rules_apply.rs (tg_error), engine.rs, deps.rs, settings.
-//! Настройки: risk.auto_resume_check_s, risk.errors_resume_after_s (только текст уведомления).
+//! От чего зависит: auto_pause.rs, outcome_open.rs, outcome_resolve.rs (cfg, key_of), risk.rs, rules_apply.rs (tg_error), engine.rs, deps.rs, settings.
+//! Настройки: risk.auto_resume_check_s, risk.errors_resume_after_s, risk.outcome_poll_s, risk.outcome_max_s (только
+//! текст уведомления и учёт «выясняет бот»).
 
 use chrono::Utc;
 
@@ -28,8 +32,9 @@ use super::auto_pause::{self as ap, Kind, ModeKind};
 use super::engine::{Core, lk};
 use super::risk::{self, Mode};
 
-/// «Исход неизвестен»: пауза площадки «только человек»; уведомления send.outcome_unknown и risk.stop — если пауза
-/// новая или стала «только человек». Принимает: ядро, операцию, площадку, сделку, ошибку. Ошибок нет.
+/// «Исход неизвестен»: пауза площадки с отметкой Outcome и учёт операции (решение 231: «выясняет бот» — если есть ключ
+/// и сроки; иначе «только человек»); уведомления send.outcome_unknown и risk.stop — если пауза новая или стала Outcome.
+/// Принимает: ядро, операцию, площадку, сделку, ошибку. Ошибок нет.
 pub(super) async fn outcome(
     core: &Core,
     op: &str,
@@ -37,28 +42,50 @@ pub(super) async fn outcome(
     deal: Option<&str>,
     err: &GatewayError,
 ) {
-    let why = format!("{op}: исход транзакции неизвестен — нужна ручная проверка");
-    let fresh = ap::pause_venue(
-        &mut lk(&core.inner.risk),
-        venue,
-        why.clone(),
-        Kind::Outcome,
-        Utc::now(),
-    );
+    // Решение 231: есть «чем найти» и заданы сроки — исход выясняет сам бот (outcome_resolve.rs), иначе человек.
+    let cfg = super::outcome_resolve::cfg(core, venue);
+    let key = super::outcome_resolve::key_of(err).filter(|_| cfg.is_some());
+    let why = match (&key, cfg) {
+        (Some(_), Some(c)) => format!(
+            "{op}: исход транзакции неизвестен — бот выясняет сам (каждые {} с, до {} с)",
+            c.every.as_secs(),
+            c.max.as_secs()
+        ),
+        _ => format!("{op}: исход транзакции неизвестен — нужна ручная проверка"),
+    };
+    let fresh = {
+        let mut r = lk(&core.inner.risk);
+        let prior = super::outcome_open::prior(&r, venue);
+        let fresh = ap::pause_venue(&mut r, venue, why.clone(), Kind::Outcome, Utc::now());
+        super::outcome_open::register(&mut r, venue, key.as_deref(), prior);
+        fresh
+    };
     if !fresh {
         return;
     }
     risk::publish(core);
     let deps = &core.inner.deps;
-    let tg = super::rules_apply::tg_error("send.outcome_unknown", op, venue, deal, err)
-        .todo(format!(
+    let todo = if key.is_some() {
+        format!(
+            "ничего — бот ищет операцию на {} по её ID; не найдёт за срок — придёт «Исход операции бот не выяснил»",
+            h::venue(&venue.0)
+        )
+    } else {
+        format!(
             "проверить на {}, прошла ли операция, затем «Снять паузу» площадки",
             h::venue(&venue.0)
-        ))
+        )
+    };
+    let tg = super::rules_apply::tg_error("send.outcome_unknown", op, venue, deal, err)
+        .todo(todo)
         .render();
     deps.notify("send.outcome_unknown", Some(&venue.0), &tg)
         .await;
-    deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why, None))
+    let note = key.as_ref().map(|_| {
+        "Снимется сама, когда бот выяснит исход всех таких операций площадки (решение 231)"
+            .to_string()
+    });
+    deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why, note))
         .await;
 }
 

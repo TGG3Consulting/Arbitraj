@@ -20,6 +20,7 @@
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки площадки, секреты, HTTP, журнал, сырые сообщения; символ пары `CAKE_USDT` |
 | `rest.rs` | REST: подпись HMAC-SHA512 (KEY, Timestamp, SIGN; путь с /api/v4, строка запроса без кодирования, SHA512 тела), JSON-тело; резерв — только при сбое сети |
+| `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |
 | `reply.rs` | Разбор ответа: 2xx — JSON; иначе {label, message}; 429 / TOO_MANY_REQUESTS — пауза (Retry-After или venue.rate_limit_pause_ms) |
 | `errors.rs` | Метки Gate → единые коды (INVALID_KEY/SIGNATURE → ключ; REQUEST_EXPIRED → «часы»; IP_FORBIDDEN; READ_ONLY/FORBIDDEN → права; BALANCE_NOT_ENOUGH; ADDRESS_NOT_USED → адрес; 5xx и TOO_BUSY у ордера/вывода → итог неизвестен) |
 | `num.rs` | Числа из ответов без потери точности |

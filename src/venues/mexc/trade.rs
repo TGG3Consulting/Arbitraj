@@ -23,6 +23,7 @@ use reqwest::Method;
 
 use crate::core::types::{TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::Op;
@@ -32,7 +33,7 @@ use super::{num, order_rules, order_state, rest};
 /// Ставит ордер и возвращает фактический результат. Правила, настройки и пробный ордер — order_rules::ready (та же
 /// функция, что у проверки ордера без исполнения перед покупкой, решение 134). Ошибки: OrderRejected (пара не
 /// торгуется, сумма вне пределов, отказ пробного ордера, отказ MEXC), OutcomeUnknown — ордер мог быть принят, итог не
-/// получен (решение 64).
+/// получен (решение 64) — с «чем найти» (свой ID, ID ордера, если был; решение 231).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = order_rules::ready(ctx, symbols, &req).await?;
     let placed = rest::signed(ctx, Method::POST, "/api/v3/order", p.params, Op::Trade).await;
@@ -50,17 +51,24 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
             .with_raw(r.to_string())
         })
     });
+    // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
+    let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
     let order_id = match placed {
         Ok(id) => id,
         // Итог неизвестен — поиск по своему ID; не найден — отмена по нему и снова поиск (А-🟠4).
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
             match order_state::recover(ctx, &p.symbol, &p.client_id).await {
                 Some(id) => id,
-                None => return Err(e),
+                None => return Err(e.pending(pending)),
             }
         }
         Err(e) => return Err(e),
     };
-    let state = order_state::settle(ctx, &p.symbol, &order_id).await?;
-    order_state::result(ctx, &p.symbol, req, &state, order_id, p.qty).await
+    let by_id = pending.with_ref(&order_id);
+    let state = order_state::settle(ctx, &p.symbol, &order_id)
+        .await
+        .map_err(|e| e.pending(by_id.clone()))?;
+    order_state::result(ctx, &p.symbol, req, &state, order_id, p.qty)
+        .await
+        .map_err(|e| e.pending(by_id))
 }

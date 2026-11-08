@@ -15,6 +15,7 @@ use reqwest::Method;
 
 use crate::core::types::{TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::Op;
@@ -40,16 +41,21 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
             .with_raw(r.to_string())
         })
     });
+    // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
+    let pending = PendingRef::order(&p.symbol, &p.client_oid, req.qty).received_coin(&p.received);
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
             match order_state::recover(ctx, &p.symbol, &p.client_oid).await {
                 Some(id) => id,
-                None => return Err(e),
+                None => return Err(e.pending(pending)),
             }
         }
         Err(e) => return Err(e),
     };
-    let state = order_state::settle(ctx, &p.symbol, &order_id).await?;
-    order_state::result(ctx, req, &state, order_id, &p.received)
+    let by_id = pending.with_ref(&order_id);
+    let state = order_state::settle(ctx, &p.symbol, &order_id)
+        .await
+        .map_err(|e| e.pending(by_id.clone()))?;
+    order_state::result(ctx, req, &state, order_id, &p.received).map_err(|e| e.pending(by_id))
 }

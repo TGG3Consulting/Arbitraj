@@ -394,6 +394,18 @@ impl Venue for BscDex {
         .await
     }
 
+    /// Решение 233 (дополнение, п. 4): цикл DEX ↔ DEX с неизвестным исходом — тем же механизмом, что своп (resolve.rs:
+    /// квитанция / бандл — resolve_bundle.rs; очередь кошелька снимается при выясненном исходе), итог цикла — с курсами
+    /// сделки из «чем найти» (resolve_cycle.rs). Решение 222 не применяется — как у dex_cycle_trade.
+    async fn resolve_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<crate::core::types::CycleTradeResult>> {
+        self.p.ctx.bound()?;
+        scope(Class::Trade, super::resolve_cycle::cycle(&self.p, req, p)).await
+    }
+
     /// Сухая сделка цикла (решение 124) — exec/cycle_dry.rs: сборка как у сделки и eth_simulateV1, ничего не уходит.
     /// Ошибок нет: отказ — причиной в итоге.
     async fn dex_dry_cycle(

@@ -9,8 +9,10 @@
 //! чистая прибыль по газу симуляции ≥ dex_dex.min_profit_usd → одна транзакция существующими каналами (exec/txs.rs) →
 //! факт по событиям Transfer базовой монеты кошелька (exec/result.rs: ушло — вход, пришло — выход). Повторов нет.
 //! Разбор exec/executor/fact.rs («возврат неистраченного входа») к циклу не применяется: вход и выход — один токен.
+//! Исход транзакции цикла неизвестен — «исход неизвестен» с «чем найти» цикла (exec/cycle_ref.rs, решение 233,
+//! дополнение, п. 4): ядро выясняет исход само (resolve_cycle.rs).
 //! Кто вызывает: exec/cycle_trade.rs.
-//! От чего зависит: exec/executor/{call, onchain, sim}.rs, exec/{cycle_steps, swap_send, txs, result}.rs,
+//! От чего зависит: exec/executor/{call, onchain, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
 //! Настройки: exec.executor_address; через вызываемые — dex.deadline_s, dex.approve_unlimited, verify.*, send.*,
 //! channel.*, dex_dex.min_profit_usd.
@@ -28,6 +30,7 @@ use super::super::quote::route_calc::Leg;
 use super::super::quote::{Quoting, cycle_legs};
 use super::super::wallet::approve_executor;
 use super::super::wallet::nonce::Nonces;
+use super::cycle_ref;
 use super::cycle_steps::{self, exec_steps, net_check};
 use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, sim};
@@ -73,9 +76,16 @@ pub async fn trade(
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     net_check(ctx, (out, req.input), (gas, cycle_steps::wei(q).await?), &r)?;
-    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None).await?;
+    // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
+    // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
+    // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.
+    let sc = cycle_ref::ctx(wallet, base, dec, &r);
+    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None)
+        .await
+        .map_err(|e| sc.attach(e))?;
     drop(slot);
-    let t = result::result(ctx, tr, d, wallet, (base, base), (dec, dec), &[])?;
+    let t = result::result(ctx, tr, d, wallet, (base, base), (dec, dec), &[])
+        .map_err(|e| sc.attach(e))?;
     Ok(cycle_steps::finish(t, &r))
 }
 

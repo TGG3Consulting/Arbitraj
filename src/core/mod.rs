@@ -48,6 +48,7 @@ pub mod credit_watch;
 pub mod cycle_curve;
 pub mod cycle_deal;
 pub mod cycle_dry;
+pub mod cycle_outcome;
 pub mod cycle_plan;
 pub mod cycle_state;
 pub mod cycle_watch;

@@ -12,7 +12,8 @@
 //! журнал core.outcome_unresolved и уведомление outcome.unresolved.
 //! Выяснение идёт в задаче сделки (она ждёт итог, как ждала бы ответа площадки); перезапуск во время выяснения — как
 //! раньше: сделка на ручной проверке, пауза площадки после перезапуска не восстанавливается (Risk в памяти).
-//! Кто вызывает: trade_ops.rs (trade), transfers.rs (withdraw), rules_stop.rs (cfg — текст уведомления).
+//! Кто вызывает: trade_ops.rs (trade), transfers.rs (withdraw), rules_stop.rs (cfg — текст уведомления), cycle_outcome.rs
+//! (poll, done — цикл DEX ↔ DEX, решение 233, дополнение, п. 4).
 //! От чего зависит: outcome_open.rs, risk.rs, engine.rs, deps.rs, gateway (contract, pending, errors), settings.
 //! Настройки: risk.outcome_poll_s, risk.outcome_max_s (вся система, можно по площадке; без значений по умолчанию).
 
@@ -123,7 +124,7 @@ fn definitive(code: ErrorCode) -> bool {
 /// искал сам). Сроки читаются на каждом круге (меняются на лету); стали не заданы — выясняет человек.
 /// Ошибки площадки — журнал core.outcome_resolve один раз на смену текста и опрос дальше; NotApplicable — сразу человек;
 /// окончательный отказ (definitive) — Some(Err).
-async fn poll<T, F, Fut>(
+pub(super) async fn poll<T, F, Fut>(
     core: &Core,
     op: &str,
     deal: &str,
@@ -209,7 +210,14 @@ where
 
 /// Исход найден: операция снята с учёта, пауза снята, если открытых больше нет; журнал и уведомление. Принимает: ядро,
 /// операцию, сделку, площадку, исходную ошибку, строку итога. Ошибок нет.
-async fn done(core: &Core, op: &str, deal: &str, v: &VenueId, e: &GatewayError, line: &str) {
+pub(super) async fn done(
+    core: &Core,
+    op: &str,
+    deal: &str,
+    v: &VenueId,
+    e: &GatewayError,
+    line: &str,
+) {
     let key = key_of(e).unwrap_or_default();
     let lift = open::resolved(&mut lk(&core.inner.risk), v, &key);
     super::risk::publish(core);

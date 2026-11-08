@@ -11,20 +11,26 @@
 //!   журнал), вызывающий пишет её один раз на смену причины;
 //! - отказ ПОСЛЕ отправки (откат в блоке, не попала в блок): правило шлюза (rules_apply.rs: журнал, exec.*, счётчик
 //!   ошибок, StopVenue/StopAll; повтор не делаем), газ — в затраты, сделка Closed; исход неизвестен (OutcomeUnknown) —
-//!   Halted до ручной проверки, площадка на паузе.
+//!   площадка на паузе, бот выясняет исход сам (cycle_outcome.rs, решение 233, дополнение, п. 4): «в блоке» — учёт по
+//!   факту и Closed, как исполненный; «окончательно не исполнено» — Closed, денег не стоил; откат в блоке — газ в
+//!   затраты, Closed; не выяснен (нет «чем найти», сроки не заданы, человек, срок вышел) — Halted до ручной проверки.
 //!
 //! Кто вызывает: core/cycle_watch.rs.
-//! От чего зависит: core/{cycle_plan, ledger, deal, executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
+//! От чего зависит: core/{cycle_plan, cycle_outcome, ledger, deal, executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
 //! gateway, core/types.
-//! Настройки: через вызываемые (dry.enabled, signal.route_cooldown_s, правила шлюза).
+//! Настройки: через вызываемые (dry.enabled, signal.route_cooldown_s, правила шлюза, risk.outcome_poll_s, risk.outcome_max_s).
+
+use std::sync::Arc;
 
 use rust_decimal::Decimal;
 
-use crate::core::types::CycleTradeRequest;
-use crate::gateway::errors::{ErrorCode, GatewayError};
+use crate::core::types::{CycleTradeRequest, CycleTradeResult};
+use crate::gateway::contract::Venue;
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
+use super::cycle_outcome;
 use super::cycle_plan::{self, CyclePlan};
-use super::deal::Step;
+use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 
 /// Что вышло.
@@ -80,32 +86,17 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
         input: plan.input,
         min_out: plan.min_out,
     };
-    let res = match super::dex_account::venue_deal(core, &deal.id, &v).await {
-        Ok(x) => x.dex_cycle_trade(req).await,
-        Err(e) => Err(crate::gateway::errors::GatewayError::new(
-            crate::gateway::errors::ErrorCode::NotConfigured,
-            Some(v.clone()),
-            e,
-        )),
+    let x = match super::dex_account::venue_deal(core, &deal.id, &v).await {
+        Ok(x) => x,
+        Err(why) => {
+            super::ledger::discard(core, &deal.id);
+            return Outcome::Refused(why);
+        }
     };
-    match res {
+    match x.dex_cycle_trade(req.clone()).await {
         Ok(r) => {
-            if let Some(tx) = &r.trade.chain {
-                super::gas_stats::record_tx(core, &d.asset, tx).await;
-            }
             super::risk::on_ok(core, &v);
-            deal.invested = r.input * r.base_usdt;
-            deal.proceeds = r.output * r.base_usdt;
-            // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
-            let gas = r.trade.fee_in(super::convert::GAS_TICKER);
-            deal.spent += gas * r.bnb_usdt;
-            let by = r.trade.executor.clone().unwrap_or_default();
-            deal.note(format!(
-                "Цикл исполнен: вход {} → выход {} {} (газ {} BNB); исполнил: {by}",
-                r.input, r.output, d.asset.ticker, gas
-            ));
-            deal.buy = Some(r.trade);
-            super::ledger::finish(core, &mut deal, Step::Closed, "цикл DEX ↔ DEX исполнен").await;
+            filled(core, &mut deal, r).await;
             Outcome::Done
         }
         Err(e) if e.tx.is_none() && e.code != ErrorCode::OutcomeUnknown => {
@@ -113,29 +104,101 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
             Outcome::Refused(e.message)
         }
         Err(e) => {
-            sent_failed(core, &mut deal, &plan, e).await;
+            sent_failed(core, &mut deal, &plan, (&x, &req), e).await;
             Outcome::Done
         }
     }
 }
 
-/// Отказ после отправки: правило шлюза (без повтора), газ в затраты, сделка Closed или Halted (исход неизвестен).
-async fn sent_failed(core: &Core, deal: &mut super::deal::Deal, plan: &CyclePlan, e: GatewayError) {
+/// Цикл исполнен: учёт по факту (вложено, выручка, газ — курсами адаптера), сделка Closed. Принимает: ядро, сделку,
+/// итог. Ошибок нет.
+async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
+    if let Some(tx) = &r.trade.chain {
+        super::gas_stats::record_tx(core, &deal.direction.asset, tx).await;
+    }
+    deal.invested = r.input * r.base_usdt;
+    deal.proceeds = r.output * r.base_usdt;
+    // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
+    let gas = r.trade.fee_in(super::convert::GAS_TICKER);
+    deal.spent += gas * r.bnb_usdt;
+    let by = r.trade.executor.clone().unwrap_or_default();
+    deal.note(format!(
+        "Цикл исполнен: вход {} → выход {} {} (газ {} BNB); исполнил: {by}",
+        r.input, r.output, deal.direction.asset.ticker, gas
+    ));
+    deal.buy = Some(r.trade);
+    super::ledger::finish(core, deal, Step::Closed, "цикл DEX ↔ DEX исполнен").await;
+}
+
+/// Отказ после отправки: правило шлюза (без повтора); исход известен (откат, не попала) — газ в затраты, Closed;
+/// исход неизвестен — бот выясняет его сам (cycle_outcome.rs, решение 233, дополнение, п. 4), затем settle_unknown.
+async fn sent_failed(
+    core: &Core,
+    deal: &mut Deal,
+    plan: &CyclePlan,
+    (x, req): (&Arc<dyn Venue>, &CycleTradeRequest),
+    e: GatewayError,
+) {
     let v = deal.direction.buy_on.clone();
-    let _ = super::rules_apply::on_error(core, "Цикл DEX ↔ DEX", &v, Some(&deal.id), &e, 1).await;
+    let _ = super::rules_apply::on_error(core, cycle_outcome::OP, &v, Some(&deal.id), &e, 1).await;
+    if e.code != ErrorCode::OutcomeUnknown {
+        spend(core, deal, plan.quote.bnb_usdt, &e).await;
+        let why = format!("цикл не исполнился: {}", e.message);
+        return super::ledger::finish(core, deal, Step::Closed, &why).await;
+    }
+    let found = cycle_outcome::resolve(core, &deal.id, &v, x, req, &e).await;
+    settle_unknown(core, deal, plan.quote.bnb_usdt, &e, found).await;
+}
+
+/// Что делает: сделка цикла после выяснения исхода (решение 233, дополнение, п. 4). «В блоке» — как обычный исполненный
+/// цикл (filled); «окончательно не исполнено» — цикл не исполнен, денег не стоил, Closed; откат в блоке — газ найденной
+/// транзакции в затраты, Closed; не выяснен — газ из исходной ошибки, Halted (ручная проверка), как раньше. Газ исходной
+/// ошибки при найденном итоге не считается: найденный итог несёт полный факт (иначе газ вошёл бы дважды).
+/// Принимает: ядро, сделку, курс BNB плана, исходную ошибку, итог выяснения. Ошибок нет.
+pub async fn settle_unknown(
+    core: &Core,
+    deal: &mut Deal,
+    bnb_usdt: Decimal,
+    e: &GatewayError,
+    found: Option<GatewayResult<CycleTradeResult>>,
+) {
+    match found {
+        Some(Ok(r)) if cycle_outcome::not_executed(&r) => {
+            let why = r.trade.executor.clone().unwrap_or_default();
+            deal.note(format!(
+                "Исход цикла выяснен ботом: не исполнен, газа нет ({why})"
+            ));
+            deal.buy = Some(r.trade);
+            let step_why = "цикл не исполнен — транзакции не в блоке, денег не стоил";
+            super::ledger::finish(core, deal, Step::Closed, step_why).await;
+        }
+        Some(Ok(r)) => {
+            super::risk::on_ok(core, &deal.direction.buy_on);
+            deal.note(format!(
+                "Исход цикла выяснен ботом: в блоке, tx {}",
+                r.trade.venue_ref
+            ));
+            filled(core, deal, r).await;
+        }
+        Some(Err(x)) => {
+            spend(core, deal, bnb_usdt, &x).await;
+            let why = format!("цикл не исполнился (выяснено ботом): {}", x.message);
+            super::ledger::finish(core, deal, Step::Closed, &why).await;
+        }
+        None => {
+            spend(core, deal, bnb_usdt, e).await;
+            let why = format!("цикл: исход неизвестен — ручная проверка ({})", e.message);
+            super::ledger::finish(core, deal, Step::Halted, &why).await;
+        }
+    }
+}
+
+/// Газ транзакции ошибки (и отмены, занявшей nonce) — в затраты по курсу BNB плана и в статистику газа. Ошибок нет.
+async fn spend(core: &Core, deal: &mut Deal, bnb_usdt: Decimal, e: &GatewayError) {
     if let Some(tx) = &e.tx {
         super::gas_stats::record_tx(core, &deal.direction.asset, tx).await;
         let gas = tx.gas_bnb.unwrap_or(Decimal::ZERO) + tx.cancel_gas_bnb.unwrap_or(Decimal::ZERO);
-        deal.spent += gas * plan.quote.bnb_usdt;
+        deal.spent += gas * bnb_usdt;
         deal.note(format!("Газ транзакции цикла: {gas} BNB"));
     }
-    let (step, why) = if e.code == ErrorCode::OutcomeUnknown {
-        (
-            Step::Halted,
-            format!("цикл: исход неизвестен — ручная проверка ({})", e.message),
-        )
-    } else {
-        (Step::Closed, format!("цикл не исполнился: {}", e.message))
-    };
-    super::ledger::finish(core, deal, step, &why).await;
 }

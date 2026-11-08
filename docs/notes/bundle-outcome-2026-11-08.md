@@ -64,6 +64,10 @@
   Ошибка узла — ядро спросит ещё; не выяснено за risk.outcome_max_s — человек (как 231).
 - **Цикл DEX ↔ DEX** тоже идёт через `bundle_result`: Pending теперь OutcomeUnknown (сделка Halted, человек), а не
   «цикл не исполнился» (Closed). «Чем найти» к циклу не прикладывается — позднее выяснение цикла не делалось.
+  **Дополнение (решение 233, п. 4, ветка t37/tracker-cycle):** сделано — цикл (исполнитель и бандл) кладёт «чем найти»
+  (контекст свопа «базовая → базовая», курсы сделки — exec/cycle_ref.rs), ядро выясняет исход тем же опросом
+  (core/cycle_outcome.rs → Venue::resolve_cycle → resolve_cycle.rs → resolve.rs / resolve_bundle.rs), сделка
+  закрывается по найденному итогу (core/cycle_deal.rs settle_unknown).
 
 ## 4. Срок бандла в каналах (по коду send/ready.rs body)
 

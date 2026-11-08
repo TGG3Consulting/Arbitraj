@@ -8,8 +8,10 @@
 //! баланса 0 и границу не проверяет — поэтому замер здесь). Затем — bundle_send::send (симуляция, «кто меняет»,
 //! подпись, eth_sendBundle, ожидание блока, settle очереди) и факт по объединённым логам (bundle_trade::bundle_result).
 //! Бандл не попал в блок — истекает по maxBlockNumber, газа нет, nonce свободны (решение 84). Повторов нет.
+//! Исход бандла неизвестен — «исход неизвестен» с «чем найти» цикла (exec/cycle_ref.rs + BundleRef, решение 233,
+//! дополнение, п. 4): ядро выясняет исход само (resolve_cycle.rs → resolve_bundle.rs).
 //! Кто вызывает: exec/cycle_trade.rs.
-//! От чего зависит: exec/{cycle_bundle, cycle_steps, bundle_sim, bundle_send, bundle_trade, bundle_notify}.rs,
+//! От чего зависит: exec/{cycle_bundle, cycle_steps, cycle_ref, bundle_ref, bundle_sim, bundle_send, bundle_trade, bundle_notify}.rs,
 //! check/{simulate, sim_base, probe_calls}.rs, wallet/nonce.rs.
 //! Настройки: send.gas_limit_margin_pct [bsc_dex]; через вызываемые — send.*, channel.*, dex.*, dex_dex.min_profit_usd.
 
@@ -30,10 +32,11 @@ use super::super::quote::cycle_cost::Rates;
 use super::super::quote::route_calc::Leg;
 use super::super::wallet::nonce::Nonces;
 use super::bundle::Bundle;
+use super::bundle_ref::BundleRef;
 use super::bundle_sim::{build_sim, collect};
 use super::cycle_steps::{self, net_check, units};
 use super::txs::Env;
-use super::{bundle_notify, bundle_send, bundle_trade, cycle_bundle};
+use super::{bundle_notify, bundle_send, bundle_trade, cycle_bundle, cycle_ref};
 
 /// Сделка бандлом. Принимает: котировку, окружение, очередь кошелька, запрос, свежие ноги, курсы. Ошибки: NoRoute
 /// (хоп не собирается, симуляция откатилась), QuoteMismatch (ниже границы / газ съел прибыль), настройки, каналы, узел,
@@ -65,6 +68,10 @@ pub async fn trade(
     let sent = bundle_send::send(env, &slot, b, &entries).await?;
     drop(slot);
     let tr = cycle_steps::trade_request(req);
+    // Решение 233 (дополнение, п. 4): исход бандла неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая»,
+    // хеши всех транзакций, первый nonce, maxBlockNumber, курсы сделки), позднее выяснение — resolve_cycle.rs.
+    let mut sc = cycle_ref::ctx(wallet, base, dec, &r);
+    sc.bundle = Some(BundleRef::of(&sent, first_nonce));
     let t = bundle_trade::bundle_result(
         ctx,
         tr,
@@ -73,7 +80,8 @@ pub async fn trade(
         (base, base),
         (dec, dec),
         (first_nonce, &[]),
-    )?;
+    )
+    .map_err(|e| sc.attach(e))?;
     Ok(cycle_steps::finish(t, &r))
 }
 

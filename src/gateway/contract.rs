@@ -469,6 +469,24 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Решение 233 (дополнение, п. 4): окончательный итог сделки цикла, чей исход был неизвестен, — по «чем найти» из
+    /// ошибки dex_cycle_trade (хеш(и), nonce, контекст разбора — собственность адаптера). Принимает: исходный запрос,
+    /// PendingRef. Возвращает: Some(итог — как у dex_cycle_trade; «не исполнено окончательно» — нули, статус NotFilled,
+    /// транзакция NotIncluded); None — пока не установлен (ядро спросит ещё). Ошибки: SwapReverted — откатился в блоке
+    /// (окончательно); сбой запроса (ядро спросит ещё); по умолчанию NotApplicable — исход выясняет человек.
+    async fn resolve_cycle(
+        &self,
+        req: crate::core::types::CycleTradeRequest,
+        pending: &super::pending::PendingRef,
+    ) -> GatewayResult<Option<crate::core::types::CycleTradeResult>> {
+        let _ = (req, pending);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет циклов DEX ↔ DEX — исход проверяет человек",
+        ))
+    }
+
     /// «Сухая сделка» цикла (решение 124): та же сборка, что dex_cycle_trade, и eth_simulateV1 от кошелька — ничего не
     /// отправляется; executor = true — через исполнитель с подставленным кодом (решение 122). Ошибки: NotApplicable —
     /// не DEX; остальное — причиной в итоге.

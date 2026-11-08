@@ -73,7 +73,10 @@ pub async fn trade(
             r.trade.executor = Some(by.to_string());
             Ok(r)
         }
-        Err(mut e) => {
+        Err(e) => {
+            // Решение 233 (дополнение, п. 4): подпись — и в «чем найти» (у исхода неизвестен с фактом транзакции), чтобы
+            // итог позднего выяснения подписался так же (exec/swap_rebuild.rs, exec/bundle_rebuild.rs — result::by).
+            let mut e = super::swap_ctx::who(e, by);
             e.message = format!("[{by}] {}", e.message);
             Err(e)
         }

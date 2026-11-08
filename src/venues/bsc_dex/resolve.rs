@@ -13,14 +13,15 @@
 //!     (exec/swap_rebuild.rs), решение 222 (баланс до/после) — venue.rs. Разрешение (approve) в блоке — обмен не
 //!     отправлялся: SwapReverted с фактом разрешения. Бандл (решение 233) — resolve_bundle.rs: квитанции всех транзакций
 //!     и nonce кошелька. Контекста нет (операции до дополнения, KyberSwap и «лучший из двух»
-//!     с маршрутом KyberSwap, цикл DEX ↔ DEX) — NotApplicable: исход свопа выясняет человек (очередь кошелька при
-//!     этом снята, если квитанция есть).
+//!     с маршрутом KyberSwap) — NotApplicable: исход свопа выясняет человек (очередь кошелька при этом снята, если
+//!     квитанция есть). Цикл DEX ↔ DEX (решение 233, дополнение, п. 4) — своп «базовая → базовая» с контекстом цикла:
+//!     resolve_cycle.rs зовёт этот же trade и делает из итога свопа итог цикла.
 //!
 //! Nonce занят, а квитанции своей транзакции нет (её место заняла отмена или чужая транзакция) — бот не решает: это
 //! тот же случай «Replaced», что уже дал OutcomeUnknown (exec/result.rs); ждём квитанцию до срока ядра, дальше человек.
 //!
 //! Кто вызывает: venue.rs (Venue::resolve_trade, Venue::resolve_withdraw) — ядро core/outcome_resolve.rs;
-//! resolve_bundle.rs (release_if_ours).
+//! resolve_bundle.rs (release_if_ours); resolve_cycle.rs (trade — цикл DEX ↔ DEX).
 //! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), wallet/transfer.rs (transfer), parts.rs,
 //! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs.
 //! Настройки: нет (узел — bsc.node_http_url).

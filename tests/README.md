@@ -127,6 +127,10 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   /api/v1/user/api-key (permission, apiVersion), /api/v1/hf/accounts/opened, /api/ua/v2/account/mode (selfAccountMode — тип счёта Classic / UTA), ответы hf/orders/test, hf/orders/sync,
   GET /api/v1/hf/orders/{id} и /api/v1/hf/fills одной сделки, /api/v3/deposit-addresses?chain=bsc, /api/v1/deposits,
   /api/v1/withdrawals/{id}, /api/v3/accounts/universal-transfer, кадры /spotMarket/tradeOrdersV2.
+  Решения 202/213 (Тигран 08.11): `book_print_live_part_orderbook` — разбор живого ответа Get Part OrderBook level2_20
+  (первые N уровней), size REST по venue.depth_levels (5 → 20, 50 → 100), verdict ядра: ответ против себя — Quiet,
+  против последнего кадра Level50 записи (позже на ≈ 84 с) — Lost. Пары «кадр + ответ REST в один момент» нет: записать
+  кадры `/spotMarket/level2Depth50:<SYM>` (raw.book_frames = да) и сразу `GET /api/v1/market/orderbook/level2_100?symbol=<SYM>`.
 - `bitget_real_data.rs` — адаптер Bitget (решение 162, Classic API v2). Без записей (идут всегда): подпись — значения
   функций официального SDK (`bitget-python-sdk-api/bitget/utils.py`: `pre_hash`, `sign`), строка запроса как
   `parse_params_to_str` SDK, правило своего clientOid (≤ 32, Best Practices), подписка пачками ≤ 4096 байт. `#[ignore]` до

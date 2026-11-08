@@ -210,3 +210,69 @@ fn recorded_balance_frames() {
         arb::venues::kucoin::account_update::parse(&data, &VenueId("kucoin".into())).unwrap();
     }
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/kucoin/book_print.rs — подтверждение тихой пары по содержимому:
+/// разбор ЖИВОГО ответа Get Part OrderBook level2_20 (kucoin_orderbook_level2_20_CAKE-USDT.json, 04.11) — первые N
+/// уровней от лучшей цены; size REST по venue.depth_levels (5 → 20, 50 → 100, больше 100 — нет); у кадра
+/// /spotMarket/level2Depth50 номера нет. Живая логика ядра (core/feed_confirm.rs verdict): ответ против себя — Quiet;
+/// против стакана последнего записанного кадра Level50 (через ≈ 84 с после ответа REST, книга менялась) — Lost. Пары
+/// «кадр + ответ REST в один момент» нет — равенство отпечатков на одной книге ждёт записи (tests/README.md).
+#[test]
+fn book_print_live_part_orderbook() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::kucoin::book_print;
+    assert_eq!(book_print::size_for(5), Some(20));
+    assert_eq!(book_print::size_for(20), Some(20));
+    assert_eq!(book_print::size_for(50), Some(100));
+    assert_eq!(book_print::size_for(101), None);
+    let v = data("kucoin_orderbook_level2_20_CAKE-USDT.json");
+    let rest = book_print::parse(&v, 20).unwrap();
+    assert_eq!((rest.bids.len(), rest.asks.len()), (20, 20));
+    assert_eq!(
+        (rest.bids[0].price, rest.bids[0].qty),
+        (d("1.892"), d("330.1572"))
+    );
+    assert_eq!(
+        (rest.asks[0].price, rest.asks[0].qty),
+        (d("1.894"), d("0.1946"))
+    );
+    assert!(rest.bids.windows(2).all(|w| w[0].price > w[1].price));
+    assert!(rest.asks.windows(2).all(|w| w[0].price < w[1].price));
+    assert_eq!(book_print::parse(&v, 5).unwrap().bids.len(), 5);
+    // Последний кадр Level50 записи — стакан, как его кладёт ws_conn.rs (depth.rs).
+    let (mut bids, mut asks) = (vec![], vec![]);
+    for f in ws_frames() {
+        if let depth::Msg::Depth {
+            bids: b, asks: a, ..
+        } = depth::parse(&f)
+        {
+            (bids, asks) = (b, a);
+        }
+    }
+    assert_eq!((bids.len(), asks.len()), (50, 50));
+    let ours = BookPrint::top(&bids, &asks, 20);
+    let pair = PairHealth {
+        ticker: "CAKE".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours| BookVersion {
+        print: Some(BookPrints {
+            levels: 20,
+            rest: rest.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(rest.clone())), 2), Verdict::Quiet);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(ours)), 2),
+        Verdict::Lost(_)
+    ));
+    // Нет стороны — ошибка с причиной.
+    let bad: Value = serde_json::from_str(r#"{"time":1,"sequence":"1","bids":[]}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет asks");
+}

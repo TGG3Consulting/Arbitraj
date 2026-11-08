@@ -16,6 +16,7 @@ pub mod account_update;
 pub mod all_balances;
 pub mod all_balances_parse;
 pub mod book;
+pub mod book_print;
 pub mod bullet;
 pub mod ctx;
 pub mod delist;
@@ -300,5 +301,48 @@ impl Venue for Kucoin {
         data: &TapData,
     ) -> GatewayResult<crate::core::types::TapDecoded> {
         tap::decode(stream, data)
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: Orderbook - Level5 / Level50 (https://www.kucoin.com/docs-new/3470069w0, 3470070w0;
+    ///   спецификация SDK spec/ws/openapi-spot-public.json) — «If there is no change in the market, data will not be
+    ///   pushed»: тишина пары — не смерть;
+    /// - per_pair = true: отписка — type «unsubscribe» (Classic WebSocket introduction; тот же вид — feed.rs) темы, в
+    ///   которой пара подписана (до 100 пар; отписка одной пары из темы в прочитанной документации не описана —
+    ///   docs/TASKS.md), см. ws_conn.rs;
+    /// - confirm = true (решение 213, по содержимому): у кадра Level5/Level50 номера нет (data — asks, bids, timestamp);
+    ///   сравниваются первые venue.depth_levels уровней ответа Get Part OrderBook (level2_20 / level2_100) и стакана в
+    ///   памяти (book_print.rs, core/feed_print.rs).
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: отпечатки стакана пары для подтверждения тихой пары по содержимому (book_print.rs). Символ — из
+    /// справочника пар (symbols.rs). Ошибки: пары нет в справочнике, как у book_print::book_version.
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        let symbol = self.symbols.get(&self.ctx, ticker)?.symbol;
+        book_print::book_version(&self.ctx, &self.books, &symbol, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 202: переподписать пару в её соединении (unsubscribe + subscribe её темы, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
     }
 }

@@ -4,7 +4,7 @@
 //! стакана → память и ядру (без ожидания, try_send); отказ подписки (type error) или неразборчивый снимок → стакан
 //! пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109), в окно — всегда.
 //! Кто вызывает: ws.rs; open() — feed.rs, user_stream_conn.rs.
-//! От чего зависит: depth.rs, book.rs, bullet.rs, ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, bullet.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [kucoin].
 //!
 //! Официально (Classic WebSocket introduction): «The connection is usable only after the welcome message arrives»;
@@ -12,6 +12,14 @@
 //! ping — «at least once every pingInterval». Тема снимка — «/spotMarket/level2Depth{5|50}:{symbol},{symbol}», «a topic
 //! supports up to 100 symbols» (спецификация SDK spec/ws/openapi-spot-public.json, x-topic). Живая запись подписки и
 //! кадров: tests/data/cex_samples_2026_11_04/kucoin_ws.jsonl.
+//! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр стакана по
+//! паре (и неразборчивый тоже); номера в кадре Level5/Level50 нет — подтверждение тихой пары по содержимому
+//! (book_print.rs). Команды сторожа ядра: «переподписать пару» — {"type":"unsubscribe"} и {"type":"subscribe"} ТОЙ ЖЕ
+//! темы, в которой пара подписана (до SYMBOLS_PER_TOPIC пар), в этом же соединении; отписка одной пары из темы с
+//! несколькими символами в прочитанной документации (спецификация SDK, запись 04.11) не описана — переподписывается вся
+//! тема (вопрос — docs/TASKS.md), соседи по теме тоже получают начало прогрева. Отказ подписки (type error с id темы) —
+//! стаканы темы недостоверны, как при подключении. «Переподключить соединение» — сессия заканчивается, ws.rs
+//! подключается заново с теми же парами (новый токен).
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -35,6 +43,14 @@ use super::bullet::Token;
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::ws::{Cfg, End, invalidate};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Символов в одной теме — официально «a topic supports up to 100 symbols».
 pub const SYMBOLS_PER_TOPIC: usize = 100;
@@ -80,6 +96,7 @@ pub async fn open(t: &Token, timeout: Duration) -> Result<Ws, String> {
 }
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
+#[allow(clippy::too_many_arguments)]
 pub async fn session(
     ctx: &Ctx,
     name: &str,
@@ -88,12 +105,14 @@ pub async fn session(
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
     token: Token,
+    w: Watch<'_>,
 ) -> End {
     let ws = match open(&token, cfg.connect_timeout).await {
         Ok(ws) => ws,
         Err(e) => return End::Broken(e),
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let syms: Vec<&str> = assets.iter().map(|(_, s)| s.as_str()).collect();
@@ -118,6 +137,26 @@ pub async fn session(
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    let Some((id, chunk)) = by_id.iter().find(|(_, c)| c.contains(&sym.as_str())) else { continue };
+                    let t = topic(cfg.levels, chunk);
+                    // Отказ подписки — тем же id темы (стаканы темы недостоверны), отписки — своим id.
+                    for (op, rid) in [("unsubscribe", format!("{id}-un")), ("subscribe", id.clone())] {
+                        let m = json!({"id": rid, "type": op, "topic": t, "response": true});
+                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                            return End::Broken(format!("отправка {op} (сторож пар): {e}"));
+                        }
+                    }
+                    for s in chunk {
+                        if let Some(a) = by_symbol.get(s) {
+                            w.feed.resubscribed(&a.ticker);
+                        }
+                    }
+                }
+            },
             _ = ping.tick() => {
                 let p = json!({"id": now_ns().to_string(), "type": "ping"});
                 if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
@@ -136,6 +175,7 @@ pub async fn session(
                 let rx_ns = now_ns();
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let text = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -155,6 +195,7 @@ pub async fn session(
                 match msg {
                     Msg::Depth { symbol, bids, asks, exchange_time } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        w.feed.frame(&asset.ticker);
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(text.to_string()));
                         let book = OrderBook {
                             venue: ctx.venue(),
@@ -173,6 +214,7 @@ pub async fn session(
                     }
                     Msg::Bad { symbol, reason } => {
                         if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
+                            w.feed.frame(&a.ticker);
                             invalidate(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;

@@ -64,7 +64,8 @@
 | `trade.rs`, `order_state.rs` | Ордер `POST /api/v1/hf/orders/sync` limit + IOC/FOK, итог по orderId (dealSize, dealFunds, fee, feeCurrency), отмена остатка, поиск по clientOid |
 | `bullet.rs` | Токен WebSocket (bullet-public / bullet-private): адрес, pingInterval, pingTimeout из ответа |
 | `depth.rs` | Разбор кадров WS: welcome, pong, ack, error, снимок level2Depth5/50 |
-| `ws.rs`, `ws_conn.rs`, `book.rs` | Соединения стаканов (темы по 100 символов, ≤ 400 тем), ping, стаканы в памяти и котировка |
+| `ws.rs`, `ws_conn.rs`, `book.rs` | Соединения стаканов (темы по 100 символов, ≤ 400 тем), ping, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка темы пары (`unsubscribe` + `subscribe`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `book_print.rs` | Решение 213 по содержимому: Get Part OrderBook `level2_20` / `level2_100` (наименьший не меньше `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта: /account/balance → MarketEvent::Balance, /spotMarket/tradeOrdersV2 → сырой журнал |
 | `tap.rs`, `feed.rs`, `tap_decode.rs` | Запись окна (решение 125): снимки стакана, /market/match, /market/level2 + снимок REST level2_20/100 |
 
@@ -78,3 +79,8 @@
 - Лимиты REST: пулы Public (по IP), Spot и Management (по UID), квота за 30 с (VIP0: 2000 / 4000 / 2000). Заголовок
   `gw-ratelimit-reset` шлюзу не виден — пул ставится на паузу на всё окно 30 с.
 - Функции контракта только для DEX отвечают `NotApplicable`.
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true — по
+  содержимому** (у кадра Level5/Level50 номера нет): первые `venue.depth_levels` уровней Get Part OrderBook против
+  стакана в памяти (`book_print.rs`; `venue.depth_levels` > 100 — подтверждения нет, NotConfigured). Переподписка пары —
+  unsubscribe + subscribe ВСЕЙ темы, в которой она подписана (до 100 пар): отписка одной пары из темы с несколькими
+  символами в прочитанной документации не описана — вопрос в docs/TASKS.md. Запрос — вес 2 пула Public (по IP).

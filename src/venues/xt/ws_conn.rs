@@ -3,12 +3,20 @@
 //! с паузой, текст «ping» раз в venue.ws_ping_ms, тишина дольше venue.ws_silence_ms — обрыв; кадры стаканов и итоги
 //! снимков REST — в ws_book.rs (память и ядро); отказ подписки — стаканы её пар недостоверны.
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, ws_book.rs, snapshots.rs, book.rs, ws.rs (Cfg, End), ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, ws_book.rs, snapshots.rs, book.rs, ws.rs (Cfg, End), ctx.rs, gateway/feed_reg.rs,
+//! tokio-tungstenite.
 //! Настройки: из ws.rs (Cfg); raw.book_frames [xt] — писать ли кадры стаканов в сырой журнал.
 //!
 //! Официально (https://doc.xt.com/#websocket_publicrequestFormat, responseFormat, heartBeat):
 //! {"method":"subscribe","params":["depth_update@btc_usdt", …],"id":"<id>"} → {"id","code":0,"msg":"success"};
 //! code 1 — отказ. Клиент шлёт текст «ping», сервер отвечает «pong». Темы — «{topic}@{arg},{arg}» (subscribeParam.md).
+//! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs), кадр стакана — по
+//! паре (и снимок с тем же updateId тоже); depth_update — с номером локального стакана (решение 213, ws_book.rs
+//! version), как и итог снимка REST, ставший стаканом пары. Команды сторожа ядра: «переподписать пару» —
+//! {"method":"unsubscribe","params":[тема],"id"}, затем {"method":"subscribe","params":[тема],"id"} в этом же соединении
+//! (https://doc.xt.com/#websocket_publicrequestFormat, `_websocket_public/requestFormat.md`: unsubscribe), соседи не
+//! трогаются; отказ подписки — стакан пары недостоверен (как у первой подписки); «переподключить соединение» — сессия
+//! заканчивается, ws.rs подключается заново с теми же парами.
 
 use std::collections::HashMap;
 
@@ -27,6 +35,14 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::ws::{Cfg, End, Stream, invalidate};
 use super::ws_book::Conn;
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Имя темы стакана пары: «depth@<symbol>,<levels>» или «depth_update@<symbol>» (символ — как в справочнике). Ошибок нет.
 pub fn topic(symbol: &str, cfg: &Cfg) -> String {
@@ -44,6 +60,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -56,6 +73,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let names: Vec<String> = assets.iter().map(|(_, s)| topic(s, &cfg)).collect();
     let mut batches: Vec<Vec<String>> = names.chunks(cfg.per_msg).map(<[_]>::to_vec).collect();
     batches.reverse();
@@ -86,9 +104,32 @@ pub async fn session(
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
                 return End::Broken(format!("нет кадров дольше venue.ws_silence_ms ({} мс)", cfg.silence.as_millis()));
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    let t = topic(sym, &cfg);
+                    for method in ["unsubscribe", "subscribe"] {
+                        next_id += 1;
+                        let m = json!({ "method": method, "params": [t], "id": next_id.to_string() });
+                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                            return End::Broken(format!("отправка {method} (сторож пар): {e}"));
+                        }
+                    }
+                    // Отказ подписки — стакан пары недостоверен (разбор Msg::Error ниже).
+                    sent.insert(next_id.to_string(), vec![t]);
+                    conn.resub(sym);
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             Some(done) = snap_rx.recv() => {
+                let sym = done.0.clone();
                 if !conn.on_snapshot(done).await {
                     return End::Done;
+                }
+                // Снимок REST стал стаканом пары (решение 213): номер стакана — lastUpdateId снимка.
+                if let (Some(a), Some(v)) = (conn.asset(&sym), conn.version(&sym)) {
+                    w.feed.frame_ver(&a.ticker, Some(v), None);
                 }
             }
             next = stream.next() => {
@@ -99,6 +140,7 @@ pub async fn session(
                 };
                 last_rx = Instant::now();
                 conn.alive();
+                w.feed.alive();
                 let t = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -117,6 +159,9 @@ pub async fn session(
                 }
                 match msg {
                     Msg::Snapshot { symbol, data } => {
+                        if let Some(a) = conn.asset(&symbol) {
+                            w.feed.frame(&a.ticker);
+                        }
                         if !conn.on_depth(&symbol, &data).await {
                             return End::Done;
                         }
@@ -124,6 +169,9 @@ pub async fn session(
                     Msg::Update { symbol, data } => {
                         if !conn.on_update(&symbol, &data).await {
                             return End::Done;
+                        }
+                        if let Some(a) = conn.asset(&symbol) {
+                            w.feed.frame_ver(&a.ticker, conn.version(&symbol), None);
                         }
                     }
                     Msg::Error { code, msg, id } => {

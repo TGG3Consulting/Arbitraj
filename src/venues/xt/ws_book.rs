@@ -84,6 +84,23 @@ impl<'a> Conn<'a> {
             .store(Utc::now().timestamp_millis(), Ordering::Relaxed);
     }
 
+    /// Решение 213: номер стакана пары в памяти для учёта свежести (ConnHandle::frame_ver). Только depth_update —
+    /// номер локального стакана (local_book.rs version: та же шкала, что lastUpdateId REST по «Orderbook manage»);
+    /// снимки depth — None: связи updateId кадра depth@ с lastUpdateId REST в документации нет. Ошибок нет.
+    pub fn version(&self, symbol: &str) -> Option<i64> {
+        self.local.get(symbol).and_then(LocalBook::version)
+    }
+
+    /// Решение 202: пара переподписана — прежнее состояние её потока не продолжается. Снимки depth: первый снимок после
+    /// подписки — ядру, даже с тем же updateId (решение 109); depth_update: локальный стакан сброшен, первое изменение
+    /// новой подписки попросит снимок REST сразу (по «Orderbook manage» — буфер, затем снимок), без паузы разрыва.
+    /// Стакан в памяти не снимается (как у MEXC, Gate): его свежесть — по времени кадра пары. Ошибок нет.
+    pub fn resub(&mut self, symbol: &str) {
+        self.last.remove(symbol);
+        self.local.remove(symbol);
+        self.not_before.remove(symbol);
+    }
+
     /// Монета по символу XT (регистр не важен). Ошибок нет.
     pub fn asset(&self, symbol: &str) -> Option<&'a Asset> {
         self.by_symbol.get(&symbol.to_lowercase()).copied()

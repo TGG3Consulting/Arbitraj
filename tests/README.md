@@ -192,6 +192,12 @@ Java и SDK) и кадры канала баланса спота (страни�
 - `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
   официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
   Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
+- `binance_book_print.rs` — решения 202/213 у Binance: подтверждение тихой пары по содержимому на **примерах из
+  документации** (github.com/binance/binance-spot-api-docs: rest-api.md «Order book», web-socket-streams.md «Partial Book
+  Depth Streams»), не на живых ответах: живой пары «кадр + ответ REST в тот же момент» нет. Ответ REST с уровнями кадра
+  примера собран для теста и помечен. Записать на сервере бота: кадры `cakeusdt@depth20@100ms` (команда ниже) и в ту же
+  секунду `GET /api/v3/depth?symbol=CAKEUSDT&limit=20` — совпадают ли первые 20 уровней при той же книге (и, для вопроса
+  о номере, — lastUpdateId кадра и ответа).
 
 ### Binance — команды записи (на сервере бота)
 
@@ -454,6 +460,15 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 message»; X фьючерсов), HMAC SHA256 на векторе RFC 4231 (подписи из примеров XT не воспроизводятся — секрет второго
 примера не опубликован, тело первого не JSON), человеческая причина кода `AUTH_103` (решение 164). Остальное —
 `#[ignore]` до записи в `data/cex_samples_2026_11_05/xt_*` (из среды Claude `sapi.xt.com` закрыт прокси).
+
+Решения 202/213 у XT — `tests/xt_book_version.rs` на **примерах из документации** (github.com/xt-com/xt4-api:
+`_market/3depth.md`, `_websocket_public/increDepth.md`, `limitDepth.md`), не на живых ответах: живой пары «кадр WebSocket
++ ответ REST в тот же момент» нет. Собрано по правилам документации и помечено в тесте: снимок с lastUpdateId 121 под
+кадр примера (fi 121, i 123) и ответ REST с уровнями кадра примера depth. Стык адаптера (feed_health, команды до
+подписки, book_version без настроек) — `tests/feed_watch_venues.rs`. Записать на сервере бота для теста на живых данных:
+по номеру — кадры `depth_update@cake_usdt` и сразу `GET /v4/public/depth?symbol=cake_usdt&limit=N` (уже есть в командах
+ниже); по содержимому — кадры `depth@cake_usdt,20` и в ту же секунду `GET /v4/public/depth?symbol=cake_usdt&limit=20`
+(совпадают ли первые 20 уровней при той же книге).
 
 ### XT — команды записи (на сервере бота)
 

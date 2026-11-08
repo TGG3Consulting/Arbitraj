@@ -1,9 +1,10 @@
 //! Файл: tests/feed_watch_venues.rs
-//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit, KuCoin, BingX на
-//! настоящих адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
+//! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit, KuCoin, BingX,
+//! XT, Binance на настоящих адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
 //! (core/feed_watch_logic.rs decide):
 //! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждение по REST
-//!   есть — по содержимому стакана (Тигран 08.11; book_print.rs адаптеров, core/feed_print.rs): book_version без
+//!   есть — по содержимому стакана (Тигран 08.11; book_print.rs адаптеров, core/feed_print.rs; XT — по номеру или по
+//!   содержимому в зависимости от venue.book_stream, xt/book_version.rs): book_version без
 //!   venue.depth_levels / без пары в справочнике отвечает ошибкой с причиной, а не NotApplicable;
 //! - до подписки соединений нет — команда сторожа (переподписать пару, переподключить соединение) отвечает
 //!   BadResponse с причиной, а не молча;
@@ -14,7 +15,7 @@
 //! кадров в учёте свежести на живых кадрах ждёт записи (tests/README.md; tests/mexc_window_tap.rs,
 //! tests/bitget_real_data.rs recorded_ws_frames). Моков нет.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
+//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx, xt, binance}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,7 +32,7 @@ use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 
-/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX на хранилище во временной папке (без сети и секретов).
+/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX, XT, Binance на хранилище во временной папке (без сети и секретов).
 async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
     let d = std::env::temp_dir().join(format!("arb-feed-watch-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -73,6 +74,21 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         raw: raw.clone(),
         taps: Default::default(),
     };
+    let xt = arb::venues::xt::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: reqwest::Client::new(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+    };
+    let bn = arb::venues::binance::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: reqwest::Client::new(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
     let bx = arb::venues::bingx::ctx::Ctx {
         settings,
         vault,
@@ -87,6 +103,8 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         Arc::new(arb::venues::bybit::Bybit::new(by)),
         Arc::new(arb::venues::kucoin::Kucoin::new(kc)),
         Arc::new(arb::venues::bingx::Bingx::new(bx)),
+        Arc::new(arb::venues::xt::Xt::new(xt)),
+        Arc::new(arb::venues::binance::Binance::new(bn)),
     ]
 }
 
@@ -105,8 +123,8 @@ async fn mexc_bitget_feed_contract() {
         // Подтверждение по содержимому есть: без настройки/справочника — ошибка с причиной, без сети.
         let e = v.book_version("CAKE").await.unwrap_err();
         match id.as_str() {
-            // venue.depth_levels (N уровней) не задана.
-            "mexc" | "bybit" | "bingx" => {
+            // venue.depth_levels (N уровней) не задана; XT — venue.book_stream (канал решает способ сравнения).
+            "mexc" | "bybit" | "bingx" | "xt" | "binance" => {
                 assert_eq!(e.code, ErrorCode::NotConfigured, "{id}: {}", e.message)
             }
             // Пары нет в справочнике (подписки не было) — символа нет.

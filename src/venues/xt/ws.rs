@@ -3,7 +3,7 @@
 //! документации), сессия (ws_conn.rs), при обрыве — все стаканы соединения недостоверны, журнал, пауза,
 //! переподключение. Нет нужной настройки — соединение останавливается (без бесконечных повторов).
 //! Кто вызывает: market.rs (по задаче на соединение).
-//! От чего зависит: ws_conn.rs, snapshots.rs (config), book.rs, ctx.rs.
+//! От чего зависит: ws_conn.rs, snapshots.rs (config), book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.book_stream, venue.depth_levels, venue.ws_subs_per_sec, venue.ws_streams_per_msg,
 //! venue.ws_ping_ms, venue.ws_silence_ms, venue.ws_reconnect_pause_ms [xt], http.timeout_ms; при depth_update —
 //! venue.depth_snapshot_per_sec, venue.depth_snapshot_limit (snapshots.rs).
@@ -77,9 +77,18 @@ pub async fn run(
     books: Books,
     out: mpsc::Sender<MarketEvent>,
 ) {
+    // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
+    let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
+    let (feed, mut cmd) = books.feed.register(&name, &tickers);
     while !out.is_closed() {
         let end = match config(&ctx) {
-            Ok(cfg) => ws_conn::session(&ctx, &name, &assets, &books, &out, cfg).await,
+            Ok(cfg) => {
+                let w = ws_conn::Watch {
+                    feed: &feed,
+                    cmd: &mut cmd,
+                };
+                ws_conn::session(&ctx, &name, &assets, &books, &out, cfg, w).await
+            }
             Err(e) => End::Config(e),
         };
         for (a, _) in &assets {

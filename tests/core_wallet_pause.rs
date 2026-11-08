@@ -421,3 +421,41 @@ fn paused_event_in_catalog_and_routed_to_failures() {
     );
     assert!(arb::notify::heads::missing().is_empty());
 }
+
+/// Решение 231 (дополнение, п. 4; Тигран 08.11): очередь транзакций кошелька остановлена — сделка «биржа → DEX» этим
+/// кошельком не начинается; «DEX → биржа», другие кошельки и снятая очередь — как обычно.
+#[tokio::test]
+async fn halted_wallet_queue_blocks_cex_to_dex_only() {
+    use arb::core::types::{WalletQueue, WalletQueueState};
+    use arb::gateway::events::MarketEvent;
+    let core = start("queue").await;
+    let q = |state| {
+        MarketEvent::WalletQueue(WalletQueue {
+            venue: v("bsc_dex"),
+            account: Some(DexAccountId("w1".into())),
+            state,
+            nonce_taken: None,
+        })
+    };
+    let halted = WalletQueueState::Halted {
+        reason: "исход транзакции 0x1 неизвестен".into(),
+        nonce: Some(5),
+        hash: None,
+        since: chrono::Utc::now(),
+    };
+    core.inner.market.write().unwrap().apply(q(halted));
+    let why = can_open(&core, &dir_of("bingx", "bsc_dex")).unwrap_err();
+    assert!(why.contains("очередь транзакций кошелька w1"), "{why}");
+    assert!(why.contains("исход транзакции 0x1 неизвестен"), "{why}");
+    // «DEX → биржа» тем же кошельком — не трогаем (упрётся в очередь на первом шаге, ничего не потратив).
+    assert_eq!(can_open(&core, &dir_of("bsc_dex", "bingx")), Ok(()));
+    // Другой кошелёк (w2, строка mexc) — торгует.
+    assert_eq!(can_open(&core, &dir_of("mexc", "bsc_dex")), Ok(()));
+    // Очередь снята — снова можно.
+    core.inner
+        .market
+        .write()
+        .unwrap()
+        .apply(q(WalletQueueState::Free));
+    assert_eq!(can_open(&core, &dir_of("bingx", "bsc_dex")), Ok(()));
+}

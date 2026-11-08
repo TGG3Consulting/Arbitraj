@@ -12,7 +12,7 @@
 //! Решение 230: пауза кошелька DEX от сверки (Risk.wallet_paused, wallet_pause.rs) — отказ направлениям этого кошелька.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
-//! От чего зависит: engine.rs, settings (catalog, read), view.rs.
+//! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
 //! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой площадки учёта
 //! сделки), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
 
@@ -122,6 +122,8 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     super::risk_ready::settings_ready(core, d)?;
     // Решение 230: кошелёк направления по текущему маппингу — до блокировки риска (свои замки видов и маппинга).
     let wallet = super::dex_account::of_direction_now(core, d);
+    // Решение 231 (дополнение, п. 4): очередь кошелька остановлена — «биржа → DEX» не начинается (до замка риска).
+    let queue_halt = super::wallet_queue_gate::halted_for(core, d, wallet.as_ref());
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
         // Решение 164: режим по-русски («Стоп», «Пауза»), а не внутреннее имя.
@@ -144,6 +146,9 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     // Решение 230: пауза кошелька DEX от сверки — только направлениям, которые пойдут этим кошельком.
     if let Some(p) = wallet.and_then(|w| r.wallet_paused.get(&w.0)) {
         return Err(p.refusal());
+    }
+    if let Some(why) = queue_halt {
+        return Err(why);
     }
     // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений, чей учёт дня у DEX (DEX ↔ DEX).
     for v in super::daily_venue::of_direction(core, d) {

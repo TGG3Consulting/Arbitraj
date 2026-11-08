@@ -230,6 +230,7 @@ pub mod view;
 pub mod vol;
 pub mod wait;
 pub mod wallet_pause;
+pub mod wallet_queue_gate;
 pub mod window;
 pub mod window_at;
 pub mod window_book;

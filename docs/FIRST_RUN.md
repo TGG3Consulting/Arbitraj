@@ -240,7 +240,7 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.quote_asset | площадка Bitget | `USDT` | Котируемая монета пар. | Get Symbol Info: quoteCoin; minTradeUSDT — минимум суммы в USDT |
 | venue.depth_levels | площадка Bitget | `15` | Глубина для котировки на объём; 5 — меньше нагрузки. | Depth Channel: books1 (10 мс), books5 и books15 (200 мс) — снимками |
 | venue.ws_symbols_per_conn | площадка Bitget | `49` | Рекомендация документации — меньше 50 каналов на соединение. | WebSocket intro: «less than 50 channels in one connection», «Max 1000 channel subscription/connection» |
-| venue.ws_subs_per_sec | площадка Bitget | `10` | Потолок темпа сообщений; подписка идёт пачками ≤ 4096 байт. | WebSocket intro: до 10 сообщений клиента в секунду (ping, login, subscribe) |
+| venue.ws_subs_per_sec | площадка Bitget | `10` | Потолок темпа подписок (50 за 5 с); подписка идёт пачками ≤ 4096 байт. Переподписка пары сторожем (решение 202) тратит тот же лимит — при большой пачке пар соединения запас: `8` | WebSocket intro (сверка 08.11): лимиты на соединение и на каждый вид сообщения за 5 с — subscribe 50, unsubscribe 50, ping 10, login 2 |
 | venue.ws_ping_ms | площадка Bitget | `30000` | Совет документации — раз в 30 с. | WebSocket intro: строка «ping» каждые 30 с, без ping 2 минуты — разрыв |
 | venue.ws_silence_ms | площадка Bitget | *метод:* больше venue.ws_ping_ms с запасом на ответ «pong» (например, два интервала ping) — решает Тигран | Без кадров дольше — соединение оборвано. | WebSocket intro: ответ «pong» на каждый «ping» |
 | venue.order_time_in_force | площадка Bitget | `ioc` | Правило Тиграна: неисполненный остаток снимает биржа. | Place Order: force gtc / post_only / fok / ioc |

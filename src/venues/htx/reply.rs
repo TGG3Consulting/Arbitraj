@@ -73,7 +73,8 @@ fn on_limit(ctx: &Ctx, retry_after_s: Option<u64>) -> String {
 }
 
 /// Что делает: разбор ответа. Принимает: окружение, путь (для журнала), ответ транспорта, операцию.
-/// Возвращает: поле data (забирается без копии; нет поля — null).
+/// Возвращает: поле data (забирается без копии); нет data — поле tick (рыночные эндпоинты: «Get Market Depth» отвечает
+/// {ch, status, ts, tick}); нет и его — null.
 /// Ошибки: RateLimited (429 — пауза), коды HTX (errors.rs), BadResponse — тело не JSON или без признака успеха.
 pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
     ctx.raw.write(ID, &format!("rest {path}"), &r.text);
@@ -83,7 +84,7 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
         return Ok(v
             .as_mut()
             .and_then(Value::as_object_mut)
-            .and_then(|m| m.remove("data"))
+            .and_then(|m| m.remove("data").or_else(|| m.remove("tick")))
             .unwrap_or(Value::Null));
     }
     let note = (status == 429).then(|| on_limit(ctx, r.retry_after_s));

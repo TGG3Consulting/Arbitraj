@@ -147,6 +147,13 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   ядра: тот же отпечаток — Quiet, стакана нет / обрезанный — Lost. Записать на сервере бота подряд кадры book пары
   (raw.book_frames = да) и `GET /0/public/Depth?pair=<REST-имя>&count=10`: (1) ключ result — то же имя или внутреннее;
   (2) равенство отпечатков на одной книге.
+- `htx_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор tick GET /market/depth на
+  **примере из документации** (Get Market Depth; взяты первые два уровня каждой стороны из пяти, 1.82E-4 — научная
+  запись); стакан в памяти — снимок mbp.refresh того же вида, что в документации, с уровнями примера REST (**собран в
+  тесте, не запись**; живых ответов нет — api.huobi.pro закрыт прокси): verdict ядра Quiet; стакана нет / другой — Lost.
+  `unsubscribe_message_is_official_shape` — {"unsub", "id"} («Websocket Market Data → Unsubscribe»). Записать на
+  сервере бота подряд снимки mbp.refresh.20 пары (raw.book_frames = да) и `GET /market/depth?symbol=<sym>&depth=20&type=step0`:
+  (1) равенство отпечатков на одной книге; (2) version ответа против seqNum снимка — одна ли шкала.
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:

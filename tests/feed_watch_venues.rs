@@ -1,6 +1,6 @@
 //! Файл: tests/feed_watch_venues.rs
 //! Что делает: решения 202/213 «для всех бирж» (Тигран 08.11) — стык сторожа пар у адаптеров MEXC, Bitget, Bybit, KuCoin, BingX,
-//! XT, Binance, OKX, CoinEx, Poloniex, Kraken на настоящих адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
+//! XT, Binance, OKX, CoinEx, Poloniex, Kraken, HTX на настоящих адаптерах (без сети), настоящем хранилище настроек (SQLite во временной папке) и живой логике ядра
 //! (core/feed_watch_logic.rs decide):
 //! - feed_health есть (сторож включён): кадры не по расписанию, переподписка одной пары есть, подтверждение по REST
 //!   есть — по содержимому стакана (Тигран 08.11; book_print.rs адаптеров, core/feed_print.rs; XT — по номеру или по
@@ -15,7 +15,7 @@
 //! кадров в учёте свежести на живых кадрах ждёт записи (tests/README.md; tests/mexc_window_tap.rs,
 //! tests/bitget_real_data.rs recorded_ws_frames). Моков нет.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx, xt, binance, okx, coinex, poloniex, kraken}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
+//! От чего зависит: arb::venues::{mexc, bitget, bybit, kucoin, bingx, xt, binance, okx, coinex, poloniex, kraken, htx}, arb::gateway (contract, feed_health, errors), arb::core::feed_watch_logic.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -32,7 +32,7 @@ use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
 
-/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX, XT, Binance, OKX, CoinEx, Poloniex, Kraken на хранилище во временной папке (без сети и секретов).
+/// Адаптеры MEXC, Bitget, Bybit, KuCoin, BingX, XT, Binance, OKX, CoinEx, Poloniex, Kraken, HTX на хранилище во временной папке (без сети и секретов).
 async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
     let d = std::env::temp_dir().join(format!("arb-feed-watch-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -118,8 +118,20 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         journal: journal.clone(),
         raw: raw.clone(),
     };
-    let kr =
-        arb::venues::kraken::ctx::Ctx::new(settings, vault, reqwest::Client::new(), journal, raw);
+    let kr = arb::venues::kraken::ctx::Ctx::new(
+        settings.clone(),
+        vault.clone(),
+        reqwest::Client::new(),
+        journal.clone(),
+        raw.clone(),
+    );
+    let hx = arb::venues::htx::ctx::Ctx {
+        settings,
+        vault,
+        http: reqwest::Client::new(),
+        journal,
+        raw,
+    };
     vec![
         Arc::new(arb::venues::mexc::Mexc::new(mx)),
         Arc::new(arb::venues::bitget::Bitget::new(bg)),
@@ -132,6 +144,7 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
         Arc::new(arb::venues::coinex::CoinEx::new(cx)),
         Arc::new(arb::venues::poloniex::Poloniex::new(pl)),
         Arc::new(arb::venues::kraken::Kraken::new(kr)),
+        Arc::new(arb::venues::htx::Htx::new(hx)),
     ]
 }
 

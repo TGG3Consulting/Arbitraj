@@ -255,3 +255,75 @@ fn recorded_balance_frames() {
     }
     assert!(!last.is_empty());
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/htx/book_print.rs — подтверждение тихой пары по содержимому.
+/// Разбор tick ответа GET /market/depth на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ («Market Data → Get Market Depth», Response: tick.ts
+/// 1629790438215, version 136107114472, первые два уровня bids [49790.87, 0.779876], [49785.9, 1.82E-4], asks
+/// [49790.88, 2.980472], [49790.89, 0.006613] — в примере по 5 уровней, здесь взяты первые два) — живого ответа и
+/// снимков mbp.refresh в tests/data нет (api.huobi.pro закрыт прокси; что записать — tests/README.md, раздел HTX).
+/// Стакан в памяти — снимок mbp.refresh того же вида, что в документации (ch, ts, tick.seqNum, bids, asks), с уровнями
+/// примера REST (собран здесь, не запись), разобранный depth.rs. Сравнение — живая логика ядра (core/feed_confirm.rs
+/// verdict): тот же отпечаток — Quiet (1.82E-4 = 0.000182 — сравнение значений); стакана нет или он другой — Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::htx::book_print;
+    let tick: Value = serde_json::from_str(
+        r#"{"ts":1629790438215,"version":136107114472,"bids":[[49790.87,0.779876],[49785.9,1.82E-4]],"asks":[[49790.88,2.980472],[49790.89,0.006613]]}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&tick, 5).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (2, 2));
+    assert_eq!(
+        (p.bids[0].price, p.bids[0].qty),
+        (d("49790.87"), d("0.779876"))
+    );
+    assert_eq!(p.bids[1].qty, d("0.000182"));
+    assert_eq!(
+        (p.asks[0].price, p.asks[0].qty),
+        (d("49790.88"), d("2.980472"))
+    );
+    let frame = r#"{"ch":"market.btcusdt.mbp.refresh.5","ts":1629790438215,"tick":{"seqNum":1,"bids":[[49790.87,0.779876],[49785.9,0.000182]],"asks":[[49790.88,2.980472],[49790.89,0.006613]]}}"#;
+    let depth::Msg::Depth { bids, asks, .. } = depth::parse(frame) else {
+        panic!("снимок mbp.refresh не разобран")
+    };
+    let ours = BookPrint::top(&bids, &asks, 5);
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 5,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(ours)), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    let other = BookPrint::top(&p.bids, &p.asks[..1], 5);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(other)), 2),
+        Verdict::Lost(_)
+    ));
+    // Вид ответа: tick нет (null), нет bids.
+    assert!(book_print::parse(&Value::Null, 5).is_err());
+    let bad: Value = serde_json::from_str(r#"{"asks":[]}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет bids");
+}
+
+/// Решение 202: отписка одной пары — вид из «Websocket Market Data → Unsubscribe» ({"unsub": тема, "id"}).
+#[test]
+fn unsubscribe_message_is_official_shape() {
+    let v: Value =
+        serde_json::from_str(&arb::venues::htx::ws_conn::unsub_message("btcusdt", 20)).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({"unsub": "market.btcusdt.mbp.refresh.20", "id": "btcusdt"})
+    );
+}

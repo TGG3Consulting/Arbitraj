@@ -20,8 +20,8 @@ use super::deal::Deal;
 use super::engine::{Core, rd};
 
 /// Затрата в USDT по живым ценам. Ошибка — текст (нет курса): затрата остаётся неучтённой в итоге,
-/// и это пишется в журнал (итог сделки помечается).
-async fn usdt(
+/// и это пишется в журнал (итог сделки помечается). Решение 236: им же — газ возврата USDT (deal_return_cost.rs).
+pub(super) async fn usdt(
     core: &Core,
     venue: &VenueId,
     coin: &str,

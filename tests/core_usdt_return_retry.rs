@@ -145,6 +145,8 @@ async fn success_on_kth_attempt_leaves_no_record() {
         credited: amount,
         from,
         to,
+        sent: None,
+        fee_usd: None,
     };
     st::set(&core, "r2DOGE", done, "USDT вернулись на попытке 3 из 5").await;
     assert!(core.manual_records().iter().all(|r| r.key != "u.r2DOGE"));

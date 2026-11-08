@@ -120,7 +120,8 @@ async fn run(
         .await;
     let got = super::usdt_return::relay(core, &id, &f.venue, &t.venue, acc.as_ref(), q.amount)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .credited;
     Ok(format!(
         "{} {} {} → {}: зачислено {got} {}",
         q.amount,

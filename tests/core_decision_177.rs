@@ -237,7 +237,7 @@ async fn same_refusal_updates_one_record_without_new_alert() {
     assert_eq!(second[0].id, first[0].id);
     assert_eq!(second[0].attempts, 2);
     assert_eq!(second[0].at, first[0].at);
-    let rec = alert_record(&second[0]);
+    let rec = alert_record(&second[0], Decimal::ZERO);
     assert!(rec.text.contains("Попыток с этим отказом: 2"));
     // Событие алерта (всплывающее «новый алерт») — только у первого.
     let mut fresh = 0;
@@ -272,7 +272,7 @@ fn telegram_edits_returned_record_and_final_outcome() {
         error: Some(MISMATCH_1.into()),
         attempts: 1,
     };
-    let rec = alert_record(&a);
+    let rec = alert_record(&a, Decimal::ZERO);
     let mut st = MirrorState::default();
     st.apply(std::slice::from_ref(&rec));
     st.mark_sent(&rec.key, rec.text.clone(), 501, Instant::now());
@@ -289,7 +289,7 @@ fn telegram_edits_returned_record_and_final_outcome() {
     let mut again = a.clone();
     again.attempts = 2;
     again.reason = Some(format!("продажа не прошла: {MISMATCH_2}"));
-    let rec2 = alert_record(&again);
+    let rec2 = alert_record(&again, Decimal::ZERO);
     let diff = st.apply(std::slice::from_ref(&rec2));
     assert_eq!(diff.changed.len(), 1);
     assert_eq!(st.sent[&rec2.key].msgs, vec![501]);

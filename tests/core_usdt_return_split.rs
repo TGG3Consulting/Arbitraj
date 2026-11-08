@@ -122,6 +122,8 @@ fn part_keys_and_all_done() {
         credited: d("1"),
         from: v(at),
         to: v("bingx"),
+        sent: None,
+        fee_usd: None,
     };
     parts::put(&mut x, done("bsc_dex"));
     // Одна часть вернулась — возврат сделки ещё не закончен.

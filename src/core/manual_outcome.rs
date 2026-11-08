@@ -46,6 +46,10 @@ pub async fn sold(core: &Core, deal: &Deal, why: &str, r: &TradeResult, left: De
     }
     if let Some(res) = deal.result_usd {
         text.push_str(&format!("; итог сделки {}", hu::signed_usd(res)));
+        // Решение 236: возврат USDT ещё идёт — его затраты войдут в итог, когда USDT вернутся.
+        if super::deal_return_cost::in_progress(deal) {
+            text.push_str(" (без затрат возврата USDT — войдут по факту возврата)");
+        }
     }
     send(core, deal, why, true, text).await;
 }

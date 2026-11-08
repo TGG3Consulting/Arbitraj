@@ -2,9 +2,10 @@
 //! Что делает: человеческие тексты алертов сделки (решение 164): закрытие сделки (формат Тиграна: «✅ Сделка плюсовая» /
 //! «❌ Сделка минусовая», план, факт, итог; решение 216 — строки расчёта «без потолка», deal_ceiling.rs), остановка
 //! сделки, шаг сделки по-русски для хронологии.
+//! Решение 236: строка «Возврат USDT» — затраты возврата в факте или почему их нет (deal_return_cost.rs).
 //! Логику не меняет — только то, что видит человек в Telegram и на экранах.
 //! Кто вызывает: ledger.rs (deal.closed), ledger_load.rs, manual_feed.rs, другие места с текстом сделки.
-//! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), notify/human.rs (формат чисел, Msg).
+//! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), deal_return_cost.rs, notify/human.rs (формат чисел, Msg).
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -91,6 +92,9 @@ fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     } else {
         m.kv("Итого минус", h::usd(fact))
     };
+    if let Some(r) = return_line(d) {
+        m = m.kv("Возврат USDT", r);
+    }
     if let Some(how) = how_closed(d, why) {
         m = m.kv("Закрыта", how);
     }
@@ -98,6 +102,27 @@ fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
         m = super::deal_ceiling::lines(m, d, fact, plus, c);
     }
     m.id(&d.id).render()
+}
+
+/// Решение 236: строка о затратах возврата USDT в итоге: учтённые затраты («вернулись») и части без известной
+/// стоимости («не вернулись», «перегнано вручную»). Принимает: сделку. Возвращает: None — возврата нет. Ошибок нет.
+pub fn return_line(d: &Deal) -> Option<String> {
+    use super::deal_return_cost as rc;
+    let unknown = rc::unknown_parts(d);
+    let cost = d.return_cost_usd.filter(|c| !c.is_zero());
+    let mut parts = vec![];
+    if let Some(c) = cost {
+        parts.push(format!("−{} (комиссия вывода, газ) — в факте", h::usd(c)));
+    }
+    if rc::in_progress(d) {
+        parts.push("идёт — затраты войдут в итог по факту".into());
+    }
+    if unknown > 0 {
+        parts.push(
+            "не вернулись / перегнано вручную — стоимость неизвестна, в факт не вошла".into(),
+        );
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 /// Факт закрытой сделки: итог из учёта, иначе выручка − вложено − затраты. Принимает: сделку. Ошибок нет.

@@ -40,7 +40,29 @@ pub fn btn(
 }
 
 /// «Продано вручную» — общая для всех видов записей (ввод выручки USDT, как prompt на экране).
-pub fn sold(deal_id: &str, ticker: &str, qty: Decimal) -> ManualButton {
+/// Решение 236 (живой случай 20261108142947740PIT): вопрос «…Сделка закроется этой выручкой» читался как выручка всей
+/// сделки — человек ввёл 44.88 (вся сделка), а ядро прибавляет ввод к выручке продаж бота (44.86): итог +44.78 вместо
+/// −0.10. Теперь вопрос и подтверждение называют выручку бота, уже учтённую в сделке, и просят только свою.
+/// Принимает: id сделки, тикер, количество у человека, выручку продаж бота в сделке (0 — бот не продавал).
+pub fn sold(deal_id: &str, ticker: &str, qty: Decimal, bot: Decimal) -> ManualButton {
+    let (input, confirm) = if bot > Decimal::ZERO {
+        let b = hu::usd(bot);
+        (
+            format!(
+                "Сколько USDT вы сами получили за {qty} {ticker}? Бот уже продал часть монет сделки {deal_id} на {b} — они уже в итоге, их не вводите: только ваша выручка за эти {qty} {ticker}."
+            ),
+            format!(
+                "Закрыть сделку {deal_id}: ваша выручка {{usdt}} USDT за {qty} {ticker} плюс выручка бота {b} (уже в учёте)?"
+            ),
+        )
+    } else {
+        (
+            format!(
+                "Сколько USDT вы получили за {qty} {ticker}? Сделка {deal_id} закроется этой выручкой."
+            ),
+            format!("Закрыть сделку {deal_id}: выручка {{usdt}} USDT?"),
+        )
+    };
     ManualButton {
         code: "sold_man".into(),
         title: "Продано вручную".into(),
@@ -48,17 +70,16 @@ pub fn sold(deal_id: &str, ticker: &str, qty: Decimal) -> ManualButton {
             deal_id: deal_id.into(),
             usdt: String::new(),
         },
-        confirm: format!("Закрыть сделку {deal_id}: выручка {{usdt}} USDT?"),
-        input: Some(format!(
-            "Сколько USDT вы получили за {qty} {ticker}? Сделка {deal_id} закроется этой выручкой."
-        )),
+        confirm,
+        input: Some(input),
         disabled: None,
         quiet: true,
     }
 }
 
-/// Запись алерта: «Продать сейчас», «Продать и перегнать», «Беру на себя», «Продано вручную».
-pub fn alert_record(a: &StuckAlert) -> ManualRecord {
+/// Запись алерта: «Продать сейчас», «Продать и перегнать», «Беру на себя», «Продано вручную». bot — выручка продаж
+/// бота в сделке алерта (решение 236, для вопроса «Продано вручную»; 0 — не продавал или сделки нет).
+pub fn alert_record(a: &StuckAlert, bot: Decimal) -> ManualRecord {
     let (t, v, q) = (&a.asset.ticker, &a.venue.0, a.qty);
     let id = a.id.clone();
     let loss = a.loss_pct.map(hu::pct).unwrap_or_else(|| "—".into());
@@ -116,13 +137,13 @@ pub fn alert_record(a: &StuckAlert) -> ManualRecord {
                 None,
                 true,
             ),
-            sold(&a.deal_id, t, q),
+            sold(&a.deal_id, t, q, bot),
         ],
     }
 }
 
-/// Запись «Беру на себя»: «Вернуть боту», «Продано вручную».
-pub fn holding_record(h: &ManualHolding) -> ManualRecord {
+/// Запись «Беру на себя»: «Вернуть боту», «Продано вручную». bot — выручка продаж бота в сделке (решение 236).
+pub fn holding_record(h: &ManualHolding, bot: Decimal) -> ManualRecord {
     let (t, v) = (&h.asset.ticker, &h.venue.0);
     ManualRecord {
         key: ManualRecord::key_of(RecordKind::Holding, &h.id),
@@ -152,7 +173,7 @@ pub fn holding_record(h: &ManualHolding) -> ManualRecord {
                 None,
                 false,
             ),
-            sold(&h.deal_id, t, h.qty),
+            sold(&h.deal_id, t, h.qty, bot),
         ],
     }
 }

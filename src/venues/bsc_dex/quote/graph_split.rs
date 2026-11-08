@@ -10,8 +10,16 @@
 //! с чистой отдачей ≤ 0 (газ съедает прирост) не открывается, пока шаг принимает открытая доля. Объём сделки
 //! фиксирован (Тигран, 03.11): остаток не теряется — идёт в открытые доли, а если они его уже не принимают, открывается
 //! лучший новый путь. Не задано / «нет» — сплит без газа, как до решения 122.
+//! Решение 223 (живой случай FLUX 08.11): доли, делящие пул, — НЕ независимая ликвидность. Исполнитель и бандл проводят
+//! доли по порядку маршрута (порядок кандидатов), каждая — своим обменом в общем пуле, поэтому шаг пути, у которого есть
+//! общий пул с уже открытой долей, оценивается совместно: все открытые доли и этот путь (с шагом) — по порядку на
+//! последовательных состояниях общих пулов (quote/graph_seq.rs), отдача шага = прирост СУММЫ выходов (чужие доли после
+//! него в общем пуле теряют — это входит в отдачу). Путь без общих пулов с открытыми долями считается как раньше
+//! (побайтно). Общий пул вида без расчёта состояния после обмена (quote/pool_after.rs) — вторая доля через него не
+//! открывается. Итоговые доли с общими пулами — пересчёт по порядку на последовательных состояниях.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: quote/route_calc.rs (Leg, eval), quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs (Path).
+//! От чего зависит: quote/route_calc.rs (Leg, eval), quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs (Path),
+//! quote/graph_seq.rs (общие пулы, решение 223).
 //! Настройки: smart.split_step_pct, smart.max_splits [bsc_dex]; учёт газа включает вызывающий (dex.route_gas_aware).
 
 use rust_decimal::Decimal;
@@ -21,8 +29,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::path::Path;
-use super::pool_tax;
 use super::route_calc;
+use super::{graph_seq, pool_tax};
 
 /// Путь-кандидат сплита: ноги в порядке исполнения, сколько монет ему уже отдано, его расчёт и газ пути в USDT
 /// (0 — учёт газа выключен).
@@ -44,6 +52,9 @@ impl Cand {
         }
     }
 }
+
+/// Шаг-кандидат: путь, новые пути затронутых долей (индекс кандидата, путь), чистая отдача шага.
+type Pick = (usize, Vec<(usize, Path)>, Decimal);
 
 /// Чистая отдача шага: прирост USDT шага (покупка — отдадим больше, продажа — получим больше) с газом нового пути.
 /// Покупка — меньше лучше, продажа — больше лучше. Ошибок нет.
@@ -110,37 +121,108 @@ pub fn split(
         let step = unit.min(left);
         let used = cands.iter().filter(|c| c.got.is_some()).count();
         // Лучшее увеличение уже открытой доли и лучшее открытие нового пути — отдельно (R1: газ — только у нового).
-        let mut open: Option<(usize, Path, Decimal)> = None;
-        let mut new: Option<(usize, Path, Decimal)> = None;
+        // Выбранный шаг несёт новые пути всех затронутых долей (решение 223: общий пул меняет и чужие доли).
+        let mut open: Option<Pick> = None;
+        let mut new: Option<Pick> = None;
         for (i, c) in cands.iter().enumerate() {
             let opens = c.got.is_none();
             if opens && used >= max_splits {
                 continue;
             }
-            let tax_keep = pool_tax::coin_keep(&c.legs, side, t);
-            let Ok(p) = route_calc::eval(ctx, &c.legs, side, c.qty + step, tax_keep) else {
-                continue;
+            let (paths, delta) = if partners(cands, i) {
+                // Решение 223: общий пул с открытой долей — совместно, по порядку исполнения.
+                let Some(j) = joint(ctx, cands, i, step, side, t) else {
+                    continue;
+                };
+                j
+            } else {
+                let tax_keep = pool_tax::coin_keep(&c.legs, side, t);
+                let Ok(p) = route_calc::eval(ctx, &c.legs, side, c.qty + step, tax_keep) else {
+                    continue;
+                };
+                let before = c.got.as_ref().map_or(Decimal::ZERO, |g| g.usdt);
+                let d = p.usdt - before;
+                (vec![(i, p)], d)
             };
-            let before = c.got.as_ref().map_or(Decimal::ZERO, |g| g.usdt);
-            let s = score(side, p.usdt - before, opens, c.gas_usdt);
+            let s = score(side, delta, opens, c.gas_usdt);
             let slot = if opens { &mut new } else { &mut open };
             if slot.as_ref().is_none_or(|(_, _, d)| better(side, s, *d)) {
-                *slot = Some((i, p, s));
+                *slot = Some((i, paths, s));
             }
         }
         let pick = choose(side, gas_aware, open, new);
         // Ни один путь шаг не принял — остаток не отдан: доли меньше qty. Это не теряется молча: costs::quote ставит
         // fillable_qty = сумма монет долей (< qty), ядро такую котировку отвергает (core/costs_quote.rs, trade_ops.rs).
-        let Some((i, p, _)) = pick else { break };
+        let Some((i, paths, _)) = pick else { break };
         cands[i].qty += step;
-        cands[i].got = Some(p);
+        for (j, p) in paths {
+            cands[j].got = Some(p);
+        }
         left -= step;
     }
-    let legs: Vec<Path> = cands.iter_mut().filter_map(|c| c.got.take()).collect();
+    // Решение 223: доли с общими пулами — итог по порядку на последовательных состояниях (тот же расчёт, что в шагах;
+    // явно, чтобы итог был ровно моделью исполнения). Без общих пулов — как раньше.
+    let open: Vec<(&[route_calc::Leg], Decimal)> = cands
+        .iter()
+        .filter(|c| c.got.is_some())
+        .map(|c| (c.legs.as_slice(), c.qty))
+        .collect();
+    let refs: Vec<&[route_calc::Leg]> = open.iter().map(|(l, _)| *l).collect();
+    let legs: Vec<Path> = if graph_seq::shared(&refs).is_empty() {
+        cands.iter_mut().filter_map(|c| c.got.take()).collect()
+    } else {
+        graph_seq::eval(ctx, &open, side, t)?
+    };
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "граф: ни один путь не принял объём"));
     }
     Ok(legs)
+}
+
+/// Есть ли у пути `i` общий пул с другой открытой долей (решение 223). Ошибок нет.
+fn partners(cands: &[Cand], i: usize) -> bool {
+    let mine = &cands[i].legs;
+    cands.iter().enumerate().any(|(j, c)| {
+        j != i
+            && c.got.is_some()
+            && c.legs.iter().any(|a| {
+                mine.iter()
+                    .any(|b| a.entry.pool.reference == b.entry.pool.reference)
+            })
+    })
+}
+
+/// Совместная оценка шага пути `i` (решение 223): открытые доли и путь `i` (его количество + шаг) — по порядку
+/// кандидатов (= порядок исполнения долей) на последовательных состояниях общих пулов (quote/graph_seq.rs).
+/// Возвращает: новые пути этих долей и прирост суммы их USDT против текущих путей открытых долей; None — не считается
+/// (общий пул вида без расчёта состояния после обмена — вторая доля через него не открывается; доля не исполнима на
+/// сдвинутом пуле). Ошибок иных нет.
+fn joint(
+    ctx: &Ctx,
+    cands: &[Cand],
+    i: usize,
+    step: Decimal,
+    side: Side,
+    t: &TokenTaxes,
+) -> Option<(Vec<(usize, Path)>, Decimal)> {
+    let idx: Vec<usize> = (0..cands.len())
+        .filter(|&j| j == i || cands[j].got.is_some())
+        .collect();
+    let shares: Vec<(&[route_calc::Leg], Decimal)> = idx
+        .iter()
+        .map(|&j| {
+            let add = if j == i { step } else { Decimal::ZERO };
+            (cands[j].legs.as_slice(), cands[j].qty + add)
+        })
+        .collect();
+    let paths = graph_seq::eval(ctx, &shares, side, t).ok()?;
+    let now: Decimal = cands
+        .iter()
+        .filter_map(|c| c.got.as_ref())
+        .map(|g| g.usdt)
+        .sum();
+    let next: Decimal = paths.iter().map(|p| p.usdt).sum();
+    Some((idx.into_iter().zip(paths).collect(), next - now))
 }
 
 #[cfg(test)]

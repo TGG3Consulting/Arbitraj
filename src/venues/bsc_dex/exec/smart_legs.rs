@@ -4,9 +4,11 @@
 //! проверка средней цены против худшей допустимой, сверка с MixedQuoter PancakeSwap, шаги и минимумы (exec/chain.rs),
 //! свежие минимумы графовой верификации (решение 83) последнему шагу каждой доли, нативная обёртка (решение 62).
 //! Зовётся дважды, если отправлялись разрешения (решение 121 B1: после approve всё заново).
+//! Решение 223: доли графа с общим пулом — суммы, цена и шаги по порядку исполнения на последовательных состояниях
+//! (quote/graph_seq.rs resequence); MixedQuoter сверяет каждую долю на текущем состоянии — с расчётом доли на нём же.
 //! Кто вызывает: exec/trade_smart.rs.
 //! От чего зависит: exec/live.rs, exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/verify_gate.rs,
-//! quote/mixed_quoter.rs, quote/via.rs, quote/path.rs.
+//! quote/mixed_quoter.rs, quote/graph_seq.rs, quote/via.rs, quote/path.rs.
 //! Настройки: через вызываемые — smart.mixed_quoter, dex.quoter_max_diff_pct, exec.dex_slippage_pct, dex.*.
 
 use rust_decimal::Decimal;
@@ -14,6 +16,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{DexRoute, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::quote::graph_seq;
 use super::super::quote::mixed_quoter::{self, Leg};
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
@@ -67,12 +70,19 @@ pub async fn prepare(
         };
         left -= qty;
         let p = live::path(v, &leg.hops, qty, false).await?;
-        coins += p.coins;
-        paid += p.usdt;
         paths.push((p, qty));
     }
+    // Решение 223: квотер сверяет каждую долю отдельно на текущем состоянии сети — с ним сравнивается расчёт доли на том
+    // же (исходном) состоянии; суммы, цена и шаги — по порядку исполнения на последовательных состояниях общих пулов
+    // (quote/graph_seq.rs; без общих пулов — те же пути).
+    let alone = paths.clone();
+    graph_seq::resequence(ctx, req.side, v.taxes, &mut paths)?;
+    for (p, _) in &paths {
+        coins += p.coins;
+        paid += p.usdt;
+    }
     check_price(ctx, req, coins, paid)?;
-    let legs: Vec<Leg<'_>> = paths.iter().map(|(p, _)| Leg { path: p }).collect();
+    let legs: Vec<Leg<'_>> = alone.iter().map(|(p, _)| Leg { path: p }).collect();
     mixed_quoter::check(ctx, &legs).await?;
     let mut steps = Vec::with_capacity(paths.len());
     for (p, qty) in &paths {

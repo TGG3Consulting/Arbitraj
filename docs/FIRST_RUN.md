@@ -282,7 +282,7 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.withdraw_wallet | площадка Binance | `spot` | Торговля на споте | Withdraw: walletType |
 | venue.withdraw_history_min_ms | площадка Binance | `6000` | Вес 18000 из 180000 UID в минуту | Withdraw History; General Info |
 | venue.window_depth_limit | площадка Binance | `1000` | Снимок для изменений стакана окна | Order book: limit ≤ 5000 |
-| venue.deposit_dust_as_min | площадка Binance | *метод:* решение Тиграна; до него не задавать | Смысл depositDust не описан | All Coins' Information |
+| venue.deposit_dust_as_min | площадка Binance | `да` (задано 08.11.2026) | depositDust — минимальная зачисляемая сумма | официальный Changelog Binance Wallet 2021-09-03: «depositDust means minimum creditable amount» (https://developers.binance.com/docs/wallet/change-log) |
 | venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
 
 ## Биржа XT.com (решение 167)

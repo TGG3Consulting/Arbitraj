@@ -54,7 +54,7 @@
 ## Проверить на живых ответах (вопросы — в отчёте решения 160)
 
 1. `venue.bsc_network` = `BSC`, `contractAddress` у CAKE/USDT, что приходит у BNB (адреса нет — решение 62).
-2. `depositDust` — минимум депозита? (`venue.deposit_dust_as_min`, решение Тиграна); `denomination` у «1M»-монет.
+2. `depositDust` — минимум депозита: да, официальный Changelog Binance Wallet 2021-09-03: «depositDust means minimum creditable amount» (https://developers.binance.com/docs/wallet/change-log) — `venue.deposit_dust_as_min` = да (08.11.2026); `denomination` у «1M»-монет.
 3. Статусы вывода 1 и 5 не описаны — сейчас BadResponse с записью (не угадываем).
 4. Алфавит и длина `newClientOrderId` (ответ −1100 на пробном ордере с «#»); сейчас буквы, цифры, «_» до 32.
 5. `permissionSets` ∩ `permissions` аккаунта — пара CAKEUSDT торгуется через API.

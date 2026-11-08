@@ -14,7 +14,10 @@
 //! и застрявшая BNB уходят в режим застрявшей монеты уже как автоматика (risk_count::auto).
 //! Решение 227: котировка продажи (средняя, исполнимо, возраст) и худшая цена ордера со стаканом (возраст) — строкой в
 //! хронологию сделки; худшая цена — только по свежему стакану (worst.rs worst_order).
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs.
+//! Решение 234: продажа кнопкой (BUTTON) — до конца в режиме кнопки: повтор после отказа до отправки, остаток после
+//! частичной продажи и газ BNB — manual_sell.rs (без порогов убытка и «выгодно»); исчерпание повторов — алерт; итог
+//! кнопки — после закрытия, с возвратом USDT (manual_outcome.rs).
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154).
@@ -29,9 +32,10 @@ use super::deal::{Deal, Step};
 use super::engine::Core;
 use super::stuck_reason::StuckReason;
 
-/// Причина продажи кнопкой «Продать сейчас» (manual.rs, manual_halted.rs). Решение 110: продажу, которую нажал
-/// человек, бот не уводит в режим застрявшей монеты — сбой сразу алертом; решение 229 — кроме отказа ДО отправки
-/// (проба откатилась, нет маршрута …): его бот повторяет сам (sell_unsent.rs).
+/// Причина продажи кнопкой «Продать сейчас» / «Продать и перегнать» (manual.rs, manual_halted.rs, manual_relay.rs).
+/// Решение 110: продажу, которую нажал человек, бот не уводит в режим застрявшей монеты — сбой сразу алертом; решение
+/// 229 — кроме отказа ДО отправки (проба откатилась, нет маршрута …): его бот повторяет сам; решение 234 — повтор,
+/// остаток после частичной продажи и газ BNB у кнопки — в режиме кнопки, без порогов убытка (manual_sell.rs).
 pub const BUTTON: &str = "кнопка «Продать сейчас»";
 
 /// Выгодно ли продать за value (USDT чистыми): итог сделки не ниже нуля (решение 47).
@@ -134,8 +138,12 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
                 .await;
             // Решение 66: остаток меньше шага или минимума ордера — пыль, а не застрявшая монета.
             super::dust::settle(core, &mut deal, r.avg_price).await;
-            super::manual_outcome::sold(core, &deal, why, &r, deal.qty).await;
+            // Решение 234: остаток продажи кнопкой — снова по рынку кнопкой (manual_sell.rs), итог кнопки — в конце.
+            if deal.qty > Decimal::ZERO && why == BUTTON {
+                return Box::pin(super::manual_sell::remainder(core, deal)).await;
+            }
             if deal.qty > Decimal::ZERO {
+                super::manual_outcome::sold(core, &deal, why, &r, deal.qty).await;
                 deal.note(format!("Продано не всё, остаток {}", deal.qty));
                 super::ledger::save(core, &deal).await;
                 // Решение 177: остаток продаёт автоматика (режим застрявшей монеты), не ручная команда.
@@ -147,6 +155,8 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
+            // Решение 234: итог кнопки — после закрытия: в нём и возврат USDT (начат / не нужен / не вернётся).
+            super::manual_outcome::sold(core, &deal, why, &r, Decimal::ZERO).await;
             // Решение 148: факт продажи против плана — серия хуже плана уводит монету в чёрный список.
             super::sell_slip::after_close(core, &deal).await;
         }
@@ -156,6 +166,10 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
             if e.code == Some(ErrorCode::InsufficientBalance)
                 && a.ticker == super::convert::GAS_TICKER =>
         {
+            // Решение 234: у кнопки — алерт с точной причиной, не режим застрявшей монеты (там пороги убытка).
+            if why == BUTTON {
+                return Box::pin(super::manual_sell::gas(core, deal, &e)).await;
+            }
             deal.note(format!("продажа не прошла: {e} — застрявшая монета"));
             super::ledger::save(core, &deal).await;
             let why_not =
@@ -184,6 +198,11 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         // отправки после кнопки человека; исчерпание такой цепочки — продажа здесь по порогу (relay_here.rs). Повтор
         // после кнопки — уже автоматика (risk_count::auto), итог кнопки — «не продано, бот повторит сам».
         Err(e) => match super::sell_unsent::decide(core, &deal, &e, why) {
+            // Решение 234: повтор кнопки — снова продажа по рынку кнопкой (manual_sell.rs), не режим застрявшей
+            // монеты с его порогами; признак задачи остаётся ручным, итог кнопки — один, в конце.
+            super::sell_unsent::Retry::Go { pause_ms } if why == BUTTON => {
+                Box::pin(super::manual_sell::retry(core, deal, &e, pause_ms)).await
+            }
             super::sell_unsent::Retry::Go { pause_ms } => {
                 super::manual_outcome::failed(
                     core,

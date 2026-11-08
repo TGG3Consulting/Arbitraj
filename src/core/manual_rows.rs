@@ -92,7 +92,7 @@ pub fn alert_record(a: &StuckAlert) -> ManualRecord {
                 A::SellNow {
                     alert_id: id.clone(),
                 },
-                format!("Продать {q} {t} на {v} по рынку сейчас?"),
+                format!("Продать {q} {t} на {v} по рынку сейчас? Порог убытка не проверяется."),
                 None,
                 false,
             ),
@@ -103,7 +103,7 @@ pub fn alert_record(a: &StuckAlert) -> ManualRecord {
                     alert_id: id.clone(),
                 },
                 format!(
-                    "Продать {q} {t} на {v} по рынку и перегнать выручку USDT на площадку покупки?"
+                    "Найти площадку, где {t} даст больше всего USDT после всех затрат перевода (или продать здесь, на {v}), перегнать туда {q} {t}, продать по рынку и вернуть USDT на площадку покупки? Порог убытка не проверяется."
                 ),
                 None,
                 false,

@@ -12,6 +12,7 @@
 //! Решение 121 B1: разрешения здесь — транзакции того же атомарного бандла, что и свопы (exec/bundle.rs), в одном блоке;
 //! между ними нет ожидания блока, поэтому пересборка после approve (как в прямом и умном пути) не нужна.
 //! Итог и ошибку подписывает исполнителем «свой сборщик: бандл» вызывающий (exec/trade.rs, решение 121 B7). Классику/прямой/умный путь не трогает.
+//! Решение 223: доли с общим пулом пересчитываются по порядку исполнения (quote/graph_seq.rs resequence).
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
 //! От чего зависит: exec/{bundle,bundle_native,bundle_notify,bundle_send,chain,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
@@ -26,7 +27,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::registry::Entry;
 use super::super::quote::via::Via;
-use super::super::quote::{Quoting, direct};
+use super::super::quote::{Quoting, direct, graph_seq};
 use super::super::send::receipt::Receipt;
 use super::super::wallet::nonce::Nonces;
 use super::chain::Step;
@@ -86,6 +87,7 @@ pub async fn trade(
     // Доли по живому состоянию + свежий amountOutMin ноги (решение 83) в последний шаг; сверка средней цены с худшей.
     let mut legs: Vec<Vec<Step>> = Vec::with_capacity(route.legs.len());
     let (mut coins, mut paid, mut left) = (Decimal::ZERO, Decimal::ZERO, req.qty);
+    let mut paths = Vec::with_capacity(route.legs.len());
     for (i, (leg, w)) in route.legs.iter().zip(&weights).enumerate() {
         let qty = if i + 1 == route.legs.len() {
             left
@@ -93,10 +95,15 @@ pub async fn trade(
             (req.qty * w / total).min(left)
         };
         left -= qty;
-        let path = live::path(&v, &leg.hops, qty, false).await?;
+        paths.push((live::path(&v, &leg.hops, qty, false).await?, qty));
+    }
+    // Решение 223: доли с общим пулом — по порядку исполнения на состоянии пула после прошлых долей (бандл проводит их
+    // по порядку внутри роутер-группы; доли с общим пулом — в одной группе). Без общих пулов — без изменений.
+    graph_seq::resequence(ctx, req.side, &taxes, &mut paths)?;
+    for (i, (path, qty)) in paths.iter().enumerate() {
         coins += path.coins;
         paid += path.usdt;
-        let mut steps = chain::steps(ctx, &req, &path, qty, decs)?;
+        let mut steps = chain::steps(ctx, &req, path, *qty, decs)?;
         let min = verified.amount_out_min.get(i).copied().ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,

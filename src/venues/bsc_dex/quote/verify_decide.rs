@@ -1,14 +1,15 @@
 //! Файл: venues/bsc_dex/quote/verify_decide.rs
 //! Что делает: чистая часть предторговой верификации (quote/verify.rs, решение 83): пересчёт выбранного маршрута на
 //! СВЕЖИХ состояниях пулов нашей математикой и вердикт по дрейфу цены. Без обращений к узлу — тестируется на записях.
-//! Восстанавливает ноги каждой доли из её хопов (порядок исполнения стороны), считает route_calc::eval и собирает
-//! котировку costs::quote. Вердикт (решение 121, часть B4): свежая средняя цена ХУЖЕ границы сделки ядра
+//! Восстанавливает ноги каждой доли из её хопов (порядок исполнения стороны), считает доли по порядку исполнения
+//! (quote/graph_seq.rs: доля с общим пулом — на состоянии пула после прошлых долей, решение 223; без общих пулов —
+//! route_calc::eval как раньше) и собирает котировку costs::quote. Вердикт (решение 121, часть B4): свежая средняя цена ХУЖЕ границы сделки ядра
 //! (req.worst_price: покупка — дороже, продажа — дешевле) → Reject; лучше плана — не повод отменять. Дрейф средней
 //! цены от плана в любую сторону больше verify.max_price_drift_pct — тоже Reject, но это только грубый предохранитель
 //! от битых данных (советуемое 10–20 %). Иначе Ok с amountOutMin по каждой ноге (решение 84 = ожидаемый выход ×
 //! (1 − exec.dex_slippage_pct)). Порог прибыли — ядро.
 //! Кто вызывает: quote/verify.rs (run); тесты.
-//! От чего зависит: quote/verify.rs (Verdict), quote/route_calc.rs, quote/graph_legs.rs, quote/select.rs,
+//! От чего зависит: quote/verify.rs (Verdict), quote/route_calc.rs, quote/graph_seq.rs, quote/graph_legs.rs, quote/select.rs,
 //! quote/costs.rs, quote/steps.rs, quote/via.rs, pools/registry.rs.
 //! Настройки: своих не читает — грубый предохранитель (verify.max_price_drift_pct), допуск проскальзывания
 //! (exec.dex_slippage_pct) и границу сделки (req.worst_price) передаёт вызывающий в Bounds (quote/verify.rs run читает
@@ -22,11 +23,11 @@ use rust_decimal::Decimal;
 use crate::core::types::{PoolRef, Quote, RouteHop, RouteMode, Side};
 
 use super::super::pools::registry::Entry;
-use super::route_calc::{self, Leg};
+use super::route_calc::Leg;
 use super::steps::Names;
 use super::verify::Verdict;
 use super::via::Via;
-use super::{costs, graph_legs, pool_tax, select};
+use super::{costs, graph_legs, graph_seq, select};
 
 /// Пределы вердикта верификации (решение 121, часть B4).
 #[derive(Debug, Clone, Copy)]
@@ -55,7 +56,7 @@ pub fn decide(
     let Some(route) = plan.route.as_ref() else {
         return reject("нет маршрута для верификации".into());
     };
-    let mut paths = Vec::with_capacity(route.legs.len());
+    let mut shares: Vec<(Vec<Leg>, Decimal)> = Vec::with_capacity(route.legs.len());
     for leg in &route.legs {
         let legs = match rebuild(v, &leg.hops, fresh) {
             Ok(l) => l,
@@ -66,13 +67,15 @@ pub fn decide(
             Side::Buy => leg.expected_out,
             Side::Sell => leg.share * plan.qty,
         };
-        // Решение 146: налог монеты — пула шага монеты этой доли (quote/pool_tax.rs).
-        let tax_keep = pool_tax::coin_keep(&legs, v.side, v.taxes);
-        match route_calc::eval(ctx, &legs, v.side, qty, tax_keep) {
-            Ok(p) => paths.push(p),
-            Err(e) => return reject(e.message),
-        }
+        shares.push((legs, qty));
     }
+    // Решение 223: доли по порядку исполнения — общий пул на состоянии после прошлых долей (quote/graph_seq.rs; доля без
+    // общих пулов — route_calc::eval как раньше). Решение 146: налог монеты — пула шага монеты доли (pool_tax::coin_keep).
+    let input: Vec<(&[Leg], Decimal)> = shares.iter().map(|(l, q)| (l.as_slice(), *q)).collect();
+    let paths = match graph_seq::eval(ctx, &input, v.side, v.taxes) {
+        Ok(p) => p,
+        Err(e) => return reject(e.message),
+    };
     let fresh_quote = match costs::quote(
         ctx,
         &plan.asset,

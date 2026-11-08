@@ -4,7 +4,7 @@
 //! exec/verify_gate.rs::gate — quote/verify::run + verify_gate::outcome, но без уведомления exec.verified /
 //! exec.verify_rejected: сухая сделка уведомлений сделки не шлёт).
 //! Кто вызывает: exec/dry_build.rs.
-//! От чего зависит: exec/{live, trade (sides), verify_gate}.rs, quote/{verify, via, steps, path, direct}.rs, send/mod.rs.
+//! От чего зависит: exec/{live, trade (sides), verify_gate}.rs, quote/{verify, via, steps, path, direct, graph_seq}.rs, send/mod.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, venue.quote_asset, verify.*.
 
 use rust_decimal::Decimal;
@@ -16,13 +16,15 @@ use super::super::quote::path::Path;
 use super::super::quote::steps::Names;
 use super::super::quote::verify;
 use super::super::quote::via::Via;
-use super::super::quote::{Quoting, direct};
+use super::super::quote::{Quoting, direct, graph_seq};
 use super::super::send;
 use super::trade::sides;
 use super::{live, verify_gate};
 
 /// Доли по живому состоянию — как в exec/trade_smart.rs: продажа делится по доле входа, покупка — по ожидаемым
-/// монетам доли; последняя доля получает остаток. Возвращает: (путь, монет доли). Ошибки: как у exec/live.rs.
+/// монетам доли; последняя доля получает остаток; доли с общим пулом — по порядку на последовательных состояниях
+/// (решение 223, quote/graph_seq.rs). Возвращает: (путь, монет доли). Ошибки: как у exec/live.rs; NoRoute — общий пул
+/// вида без расчёта состояния после обмена.
 pub async fn live_paths(
     v: &Via<'_>,
     req: &TradeRequest,
@@ -56,6 +58,9 @@ pub async fn live_paths(
         left -= qty;
         out.push((live::path(v, &leg.hops, qty, direct_mode).await?, qty));
     }
+    // Решение 223: доли с общим пулом — по порядку исполнения на состоянии пула после прошлых долей (исполнитель и бандл
+    // проводят доли по порядку маршрута, каждая — своим обменом). Без общих пулов — без изменений.
+    graph_seq::resequence(ctx, v.side, v.taxes, &mut out)?;
     Ok(out)
 }
 

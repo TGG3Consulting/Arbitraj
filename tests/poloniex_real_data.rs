@@ -176,8 +176,8 @@ fn recorded_feeinfo() {
 #[test]
 #[ignore = "записать на живом боте poloniex_order_trades.json — GET /orders/{id}/trades исполненного IOC-ордера"]
 fn recorded_order_trades() {
-    let (qty, fee, coin) = fills::sum(&data("poloniex_order_trades.json"), "CAKE").unwrap();
-    assert!(qty > Decimal::ZERO && fee >= Decimal::ZERO && !coin.is_empty());
+    let (qty, fees) = fills::sum(&data("poloniex_order_trades.json")).unwrap();
+    assert!(qty > Decimal::ZERO && fees.iter().all(|f| !f.asset.is_empty()));
 }
 
 #[test]

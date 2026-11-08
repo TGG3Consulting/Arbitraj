@@ -48,7 +48,7 @@
 | `num.rs` | Числа и поля без потери точности |
 | `symbols.rs`, `symbols_parse.rs` | Справочник пар `GET /api/v2/symbols`: enableTrading, аукцион, шаги baseIncrement/priceIncrement, baseMinSize/baseMaxSize, minFunds, коэффициенты комиссии |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (как у MEXC, решение 131) |
-| `fees.rs` | Ставки комиссии `GET /api/v1/trade-fees` пачками по 10 пар × коэффициент пары |
+| `fees.rs` | Ставки комиссии `GET /api/v1/trade-fees` пачками по 10 пар × коэффициент пары; котировка (решение 232) — комиссия в котируемой монете обеих сторон (Help: «full fee in the quote currency», факт 08.11 — USDT 42/42), KCS не читается |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети `GET /api/v3/currencies` (разбор вне рабочих потоков, кэш за Arc), одна монета `GET /api/v3/currencies/{currency}` (решение 113), комиссия вывода |
 | `deposit_addr.rs` | Адрес депозита `GET /api/v3/deposit-addresses` (кэш; memo — не поддерживается; счёт зачисления MAIN/TRADE) |
 | `deposits.rs` | Статус депозита `GET /api/v1/deposits` по хешу |

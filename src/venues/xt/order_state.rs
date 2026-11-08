@@ -108,47 +108,29 @@ async fn poll_final(
     }
 }
 
-/// Что делает: комиссия ордера и её монета (тикер ядра). deductServices непустой — из него, иначе fee/feeCurrency.
-/// Принимает: состояние ордера. Возвращает: (комиссия, монета; пусто — комиссии нет).
-/// Ошибка BadResponse — комиссия в разных монетах (сверить вручную) или поле не число.
-pub fn fee(s: &Value) -> GatewayResult<(Decimal, String)> {
+/// Что делает: части комиссии ордера по монетам (тикер ядра). deductServices непустой — из него, иначе fee/feeCurrency.
+/// Решение 232 (образец 219): части deductServices в разных монетах — несколько частей, а не ошибка.
+/// Принимает: состояние ордера. Возвращает: список частей (комиссии нет — пустой).
+/// Ошибка BadResponse — поле не число.
+pub fn fee(s: &Value) -> GatewayResult<Vec<Fee>> {
     let list = s
         .get("deductServices")
         .and_then(Value::as_array)
         .filter(|l| !l.is_empty());
-    let Some(list) = list else {
-        let f = num::dec_opt(s, "fee")?.unwrap_or_default().abs();
-        let asset = num::text_opt(s, "feeCurrency")
-            .map(|c| ticker(&c))
-            .unwrap_or_default();
-        return Ok((f, asset));
-    };
-    let (mut total, mut asset) = (Decimal::ZERO, String::new());
-    for d in list {
+    let one = [s.clone()];
+    let mut fees = Vec::new();
+    for d in list.map(|l| l.as_slice()).unwrap_or(&one) {
         let a = num::text_opt(d, "feeCurrency")
             .map(|c| ticker(&c))
             .unwrap_or_default();
         let f = num::dec_opt(d, "fee")?.unwrap_or_default().abs();
-        if f.is_zero() {
-            continue;
-        }
-        if !asset.is_empty() && a != asset {
-            return Err(super::errors::bad(
-                &format!(
-                    "ордер {}: комиссия в разных монетах ({asset}, {a}) — сверить вручную",
-                    num::text_opt(s, "orderId").unwrap_or_default()
-                ),
-                &s.to_string(),
-            ));
-        }
-        asset = a;
-        total += f;
+        Fee::add(&mut fees, &a, f);
     }
-    Ok((total, asset))
+    Ok(fees)
 }
 
 /// Что делает: итог ядра по окончательному состоянию. Принимает: запрос ядра, состояние, orderId, отправленное
-/// количество (если нет origQty). Ошибки: BadResponse — нет полей или комиссия в разных монетах.
+/// количество (если нет origQty). Ошибки: BadResponse — нет полей.
 pub fn result(
     req: TradeRequest,
     s: &Value,
@@ -172,8 +154,8 @@ pub fn result(
             None => num::dec(s, "tradeQuote")? / filled,
         }
     };
-    let (fee, fee_asset) = if filled.is_zero() {
-        (Decimal::ZERO, String::new())
+    let fees = if filled.is_zero() {
+        Vec::new()
     } else {
         fee(s)?
     };
@@ -182,7 +164,7 @@ pub fn result(
         status,
         filled_qty: filled,
         avg_price: avg,
-        fees: Fee::single(fee, fee_asset),
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

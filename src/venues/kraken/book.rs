@@ -129,7 +129,9 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            // Комиссия taker аккаунта — в котируемой монете по сумме сделки (не входит в avg_price). Решение 232: ордер
+            // ставится с oflags fciq — «prefer fee in quote currency (default if buying…)»; без флага продажа была бы в
+            // базовой («fcib prefer fee in base currency (default if selling)», AddOrder). Скидки монетой нет (fees.rs).
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,

@@ -28,7 +28,7 @@ use crate::gateway::errors::GatewayResult;
 
 use super::ctx::Ctx;
 use super::errors::Op;
-use super::order_result::{fee0, from_deals, from_state, result, unknown};
+use super::order_result::{from_deals, from_state, result, unknown};
 use super::order_rules::Prepared;
 use super::{deals, num, rest};
 
@@ -72,10 +72,10 @@ pub async fn settle(
             p.qty,
             Decimal::ZERO,
             Decimal::ZERO,
-            fee0(p),
+            Vec::new(),
             id,
         )),
-        Ok(sum) if sum.count > 0 => from_deals(ctx, req, p, &sum, id),
+        Ok(sum) if sum.count > 0 => from_deals(req, p, &sum, id),
         Ok(_) => Err(unknown(
             ctx,
             &id,

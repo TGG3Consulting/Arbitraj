@@ -10,19 +10,23 @@
 //! negative for a maker rebate» (бот ставит только IOC/FOK — тейкер), fee-currency — монета комиссии,
 //! fee-deduct-currency — пусто: комиссия в исходной монете, «ht» или «hbpoint» — списано ими; filled-points — сколько
 //! списано HT / баллами; FAQ: filled-fees и filled-points не бывают заполнены оба; fee-deduct-state «ongoing» / «done».
-
-use std::collections::BTreeMap;
+//! fee-currency: «transaction fee of buy order is based on base currency, transaction fee of sell order is based on
+//! quote currency» (покупка — в монете, продажа — в котируемой; модель котировки book.rs та же).
+//! Решение 232 (образец 219): сделки ордера в разных монетах (часть — HT, часть — монета сделки) — несколько частей
+//! комиссии списком, а не ошибка.
 
 use rust_decimal::Decimal;
 use serde_json::Value;
 
+use crate::core::types::Fee;
+
 use super::ctx::{Ctx, ticker};
 use super::{num, rest};
 
-/// Что делает: комиссия ордера одной монетой по его сделкам (запрос matchresults).
-/// Принимает: окружение, order-id, получаемую монету сделки (если сделок нет в ответе).
-/// Возвращает: (комиссия ≥ 0, монета). Ошибка — текст причины (запрос не прошёл, ответ не тот, две монеты).
-pub async fn fact(ctx: &Ctx, order_id: &str, received: &str) -> Result<(Decimal, String), String> {
+/// Что делает: комиссия ордера по его сделкам (запрос matchresults), части по монетам.
+/// Принимает: окружение, order-id, получаемую монету сделки (если у сделки нет fee-currency).
+/// Возвращает: список частей комиссии (core/types/trade.rs Fee). Ошибка — текст причины (запрос не прошёл, ответ не тот).
+pub async fn fact(ctx: &Ctx, order_id: &str, received: &str) -> Result<Vec<Fee>, String> {
     let path = format!("/v1/order/orders/{order_id}/matchresults");
     let data = rest::get(ctx, &path, vec![])
         .await
@@ -30,16 +34,16 @@ pub async fn fact(ctx: &Ctx, order_id: &str, received: &str) -> Result<(Decimal,
     parse(&data, received)
 }
 
-/// Что делает: разбор data matchresults в комиссию одной монетой.
-/// Принимает: data (массив сделок), получаемую монету. Возвращает: (комиссия, монета); сделок нет — (0, получаемая).
-/// Ошибки: текст — не массив, поле не число, комиссия в двух монетах (ядро принимает одну монету комиссии).
-pub fn parse(data: &Value, received: &str) -> Result<(Decimal, String), String> {
+/// Что делает: разбор data matchresults в части комиссии по монетам.
+/// Принимает: data (массив сделок), получаемую монету (если у сделки нет fee-currency). Возвращает: список частей
+/// (сделок нет — пустой). Ошибки: текст — не массив, поле не число.
+pub fn parse(data: &Value, received: &str) -> Result<Vec<Fee>, String> {
     let list = match data {
-        Value::Null => return Ok((Decimal::ZERO, received.to_string())),
+        Value::Null => return Ok(Vec::new()),
         Value::Array(a) => a,
         other => return Err(format!("matchresults: data не массив: {other}")),
     };
-    let mut by: BTreeMap<String, Decimal> = BTreeMap::new();
+    let mut fees = Vec::new();
     for m in list {
         let dec = |f: &str| {
             num::dec_opt(m, f)
@@ -53,18 +57,7 @@ pub fn parse(data: &Value, received: &str) -> Result<(Decimal, String), String> 
                 (ticker(&c), dec("filled-fees")?)
             }
         };
-        *by.entry(coin).or_default() += amount.abs();
+        Fee::add(&mut fees, &coin, amount.abs());
     }
-    by.retain(|_, v| !v.is_zero());
-    match by.len() {
-        0 => Ok((Decimal::ZERO, received.to_string())),
-        1 => Ok(by
-            .into_iter()
-            .next()
-            .map(|(c, v)| (v, c))
-            .unwrap_or_default()),
-        _ => Err(format!(
-            "комиссия ордера в нескольких монетах {by:?} — ядро принимает одну монету комиссии"
-        )),
-    }
+    Ok(fees)
 }

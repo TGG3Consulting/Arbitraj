@@ -1,7 +1,8 @@
 //! Файл: venues/coinex/order_result.rs
 //! Что делает: итог ордера CoinEx в формате ядра (TradeResult) — по окончательному состоянию ордера или по его сделкам:
-//! исполнено, средняя цена (сумма / количество), комиссия и её монета (order_fee.rs; со скидкой — fee_ccy сделок,
-//! deals.rs), статус (не исполнен / частично / полностью — против отправленного количества).
+//! исполнено, средняя цена (сумма / количество), комиссия по монетам (order_fee.rs; со скидкой — fee_ccy сделок,
+//! deals.rs; решение 232: несколько монет — несколько частей), статус (не исполнен / частично / полностью — против
+//! отправленного количества).
 //! Кто вызывает: order_state.rs.
 //! От чего зависит: order_fee.rs, deals.rs, order_rules.rs (Prepared), num.rs, ctx.rs.
 //! Настройки: через order_state.rs (venue.order_final_wait_ms — срок чтения сделок).
@@ -48,9 +49,9 @@ pub async fn from_state(
     let value = num::dec_opt(s, "filled_value")?.unwrap_or(Decimal::ZERO);
     let (_, recv) = fee0(p);
     let fee = match order_fee::from_order(s, &p.base, &p.quote, &recv) {
-        Ok(Fee::Known(f, c)) => (f, c),
+        Ok(Fee::Known(f, c)) => CoreFee::single(f, c),
         Err(why) if !filled.is_zero() => return Err(unknown(ctx, &id, &why)),
-        Err(_) => fee0(p),
+        Err(_) => Vec::new(),
         Ok(Fee::FromDeals) => {
             let start = num::int(s, "created_at").ok();
             let sum = deals::of_order(ctx, &p.symbol, &id, start, Instant::now() + wait)
@@ -59,48 +60,40 @@ pub async fn from_state(
                     let why = format!("монета комиссии по сделкам: {}", e.message);
                     unknown(ctx, &id, &why)
                 })?;
-            one_fee(ctx, &sum, &id)?
+            fees_of(&sum)
         }
     };
     Ok(result(req, p.qty, filled, value, fee, id))
 }
 
-/// Итог по сделкам ордера. Ошибки: OutcomeUnknown — комиссия сразу в нескольких монетах.
+/// Итог по сделкам ордера. Ошибок нет (комиссия в нескольких монетах — несколько частей, решение 232).
 pub fn from_deals(
-    ctx: &Ctx,
     req: TradeRequest,
     p: &Prepared,
     sum: &deals::Sum,
     id: String,
 ) -> GatewayResult<TradeResult> {
-    let fee = if sum.fees.is_empty() {
-        fee0(p)
-    } else {
-        one_fee(ctx, sum, &id)?
-    };
-    Ok(result(req, p.qty, sum.filled, sum.value, fee, id))
+    Ok(result(req, p.qty, sum.filled, sum.value, fees_of(sum), id))
 }
 
-/// Одна монета комиссии из сделок. Ошибка OutcomeUnknown — монет несколько (ядро принимает одну) или их нет.
-fn one_fee(ctx: &Ctx, sum: &deals::Sum, id: &str) -> GatewayResult<(Decimal, String)> {
-    match sum.fees.iter().collect::<Vec<_>>().as_slice() {
-        [(c, f)] => Ok((**f, (*c).clone())),
-        other => Err(unknown(
-            ctx,
-            id,
-            &format!("комиссия по сделкам не в одной монете: {other:?}"),
-        )),
+/// Части комиссии из сделок (fee_ccy → Σ fee). Решение 232 (образец 219): монет несколько (например, часть — CET со
+/// скидкой, часть — монета сделки) — несколько частей, а не ошибка. Принимает: итог сделок. Ошибок нет.
+fn fees_of(sum: &deals::Sum) -> Vec<CoreFee> {
+    let mut fees = Vec::new();
+    for (coin, amount) in &sum.fees {
+        CoreFee::add(&mut fees, coin, *amount);
     }
+    fees
 }
 
-/// Результат ядра. Принимает: запрос ядра, отправленное количество (после округления), исполнено, сумму, комиссию,
-/// order_id. Ошибок нет.
+/// Результат ядра. Принимает: запрос ядра, отправленное количество (после округления), исполнено, сумму, части
+/// комиссии, order_id. Ошибок нет.
 pub fn result(
     req: TradeRequest,
     ordered: Decimal,
     filled: Decimal,
     value: Decimal,
-    fee: (Decimal, String),
+    fees: Vec<CoreFee>,
     id: String,
 ) -> TradeResult {
     let status = if filled.is_zero() {
@@ -120,7 +113,7 @@ pub fn result(
         status,
         filled_qty: filled,
         avg_price: avg,
-        fees: CoreFee::single(fee.0, fee.1),
+        fees,
         venue_ref: id,
         chain: None,
         finished_at: Utc::now(),

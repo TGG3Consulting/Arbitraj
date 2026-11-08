@@ -185,8 +185,11 @@ fn depth_snapshots_from_live_frames() {
 fn order_fee_from_live_reply() {
     let s = result("xt_order.json");
     assert!(order_state::is_final(&s));
-    let (fee, asset) = order_state::fee(&s).unwrap();
-    assert!(fee >= Decimal::ZERO && !asset.is_empty());
+    let fees = order_state::fee(&s).unwrap();
+    assert!(
+        fees.iter()
+            .all(|f| f.amount > Decimal::ZERO && !f.asset.is_empty())
+    );
 }
 
 #[test]

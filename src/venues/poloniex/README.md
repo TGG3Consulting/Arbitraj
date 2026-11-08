@@ -61,6 +61,8 @@
 - **Минимум депозита** — нет в API → `venue.deposit_min_absent_ok` (урок 21).
 - **Точность суммы вывода** — `decimals` назван «Decimals of the currency»: смысл не ясен → не используется.
 - **Входит ли комиссия в amount вывода** — не описано (в истории amount «including the fee»).
+- Решение 232: котировка (`book.rs`) — комиссия покупки в монете, продажи в USDT (примеры Spot → Trades: BUY — feeCurrency LINK,
+  SELL — USDT); скидка TRX — без неё. Факт из сделок ордера в нескольких монетах — список частей (`fills.rs`).
 - **Статусы**: депозит COMPLETED (док.) / COMPLETE (SDK); вывод PROCESSING (док.) / PENDING (SDK) — принимаются оба.
   SDK пишет, что в status вывода «optionally the transaction ID» — формат не описан: неизвестное значение — ошибка с сырым
   ответом.

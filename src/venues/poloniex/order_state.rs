@@ -22,7 +22,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -124,22 +124,21 @@ async fn poll_final(
 }
 
 /// Что делает: результат ядра по окончательному состоянию ордера и его сделкам.
-/// Принимает: запрос ядра, состояние, id ордера, получаемую монету сделки.
+/// Принимает: запрос ядра, состояние, id ордера. Комиссия — список частей по монетам сделок (решение 232).
 /// Ошибки: BadResponse — нет полей; OutcomeUnknown — исполнено, а комиссия не подтверждена сделками (fills.rs).
 pub async fn result(
     ctx: &Ctx,
     req: TradeRequest,
     s: &Value,
     order_id: String,
-    received: &str,
 ) -> GatewayResult<TradeResult> {
     let size = num::dec(s, "quantity")?;
     let filled = num::dec_opt(s, "filledQuantity")?.unwrap_or(Decimal::ZERO);
     let funds = num::dec_opt(s, "filledAmount")?.unwrap_or(Decimal::ZERO);
-    let (fee, fee_asset) = if filled.is_zero() {
-        (Decimal::ZERO, received.to_string())
+    let fees = if filled.is_zero() {
+        Vec::new()
     } else {
-        fills::fee(ctx, &order_id, filled, received)
+        fills::fee(ctx, &order_id, filled)
             .await
             .map_err(|why| unknown(ctx, &order_id, &why))?
     };
@@ -159,7 +158,7 @@ pub async fn result(
         } else {
             funds / filled
         },
-        fees: Fee::single(fee, fee_asset),
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

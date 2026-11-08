@@ -121,7 +121,11 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price). Решение 232: не из
+            // документации — в какой монете Phemex берёт комиссию спота, документация API и справка не говорят (поля
+            // ордера feeCurrency/cumFeeEv, примеры с нулевой комиссией); скидка PT — «20% for Spot trades (API trades
+            // excluded)» (анонс Phemex «Use Phemex Token to Cover Trading Fees») — к боту не применяется. Консервативно:
+            // USDT от суммы и у покупки (входит в списание USDT, spend_fee); факт — feeCurrency ордера (order_state.rs).
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,

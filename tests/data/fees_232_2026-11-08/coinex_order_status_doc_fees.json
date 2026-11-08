@@ -1,0 +1,10 @@
+{
+  "market": "CETUSDT",
+  "market_type": "SPOT",
+  "side": "buy",
+  "base_fee": "11.6582326221",
+  "quote_fee": "0",
+  "discount_fee": "0",
+  "maker_fee_rate": "0",
+  "taker_fee_rate": "0.0003"
+}

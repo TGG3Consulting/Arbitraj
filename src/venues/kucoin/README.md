@@ -65,7 +65,7 @@
 | `bullet.rs` | Токен WebSocket (bullet-public / bullet-private): адрес, pingInterval, pingTimeout из ответа |
 | `depth.rs` | Разбор кадров WS: welcome, pong, ack, error, снимок level2Depth5/50 |
 | `ws.rs`, `ws_conn.rs`, `book.rs` | Соединения стаканов (темы по 100 символов, ≤ 400 тем), ping, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка темы пары (`unsubscribe` + `subscribe`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
-| `book_print.rs` | Решение 213 по содержимому: Get Part OrderBook `level2_20` / `level2_100` (наименьший не меньше `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 237: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
+| `book_print.rs` | Решение 213 по содержимому: Get Part OrderBook `level2_20` / `level2_100` (наименьший не меньше `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта: /account/balance → MarketEvent::Balance, /spotMarket/tradeOrdersV2 → сырой журнал |
 | `tap.rs`, `feed.rs`, `tap_decode.rs` | Запись окна (решение 125): снимки стакана, /market/match, /market/level2 + снимок REST level2_20/100 |
 

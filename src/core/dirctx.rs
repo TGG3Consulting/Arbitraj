@@ -4,7 +4,8 @@
 //! режим возврата USDT, налог перевода при выводе с биржи (решение 118), минимумы вывода и минимальный депозит, правила пар бирж (шаг количества, минимальная и
 //! максимальная сумма ордера — решение 66). Собирается один раз на кандидата.
 //! Время в пути — transit.rs (решение 50); σ — по окну profit.sigma_window_min (решение 49, vol.rs).
-//! Кто вызывает: core/profit.rs, позже executor.rs.
+//! Решение 237: build_decided — контекст на момент решения о входе с σ и T из плана сделки (core/frozen.rs take).
+//! Кто вызывает: core/profit.rs, card_max.rs, partial.rs, uncapped.rs (кандидаты), frozen.rs (build_decided).
 //! От чего зависит: engine.rs, registry.rs, vol.rs, settings.
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
@@ -56,6 +57,27 @@ impl DirCtx {
     /// Собирает контекст. Ошибки: текст причины (монеты или площадки нет в справочнике, не задана
     /// настройка, σ ещё не измерена, нет сети BSC ни у одной стороны, нет адреса USDT).
     pub fn build(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
+        Self::build_with(core, dir, None)
+    }
+
+    /// Решение 237: контекст на момент решения о входе (core/frozen.rs take) — σ и время в пути T берутся из плана
+    /// сделки (те же, что у плана входа), а не измеряются заново; всё прочее — как у build, в тот же момент.
+    /// Принимает: ядро, направление, σ и T плана. Ошибки: как у build (кроме σ и T).
+    pub fn build_decided(
+        core: &Core,
+        dir: &Direction,
+        sigma: Decimal,
+        transit_s: Decimal,
+    ) -> Result<DirCtx, String> {
+        Self::build_with(core, dir, Some((sigma, transit_s)))
+    }
+
+    /// Сборка контекста: plan — σ и T плана (None — измерить сейчас: vol.rs, transit.rs). Ошибки: как у build.
+    fn build_with(
+        core: &Core,
+        dir: &Direction,
+        plan: Option<(Decimal, Decimal)>,
+    ) -> Result<DirCtx, String> {
         let s = &core.inner.deps.settings;
         let coins = rd(&core.inner.coins);
         // Решение 131: по карте места, без прохода справочника.
@@ -92,18 +114,23 @@ impl DirCtx {
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
             .map(|(v, _)| v.clone())
             .collect();
-        let window = s
-            .integer("profit.sigma_window_min", At::default())
-            .map_err(|e| e.message)?;
-        // σ продажи на B — ряд этого направления (напарник A, решение 118).
-        let sigma = lk(&core.inner.vol).sigma(
-            &dir.sell_on,
-            &dir.asset,
-            Side::Sell,
-            &dir.buy_on,
-            window,
-            chrono::Utc::now(),
-        )?;
+        // σ продажи на B — ряд этого направления (напарник A, решение 118); решение 237 — у плана сделки своя.
+        let sigma = match plan {
+            Some((sigma, _)) => sigma,
+            None => {
+                let window = s
+                    .integer("profit.sigma_window_min", At::default())
+                    .map_err(|e| e.message)?;
+                lk(&core.inner.vol).sigma(
+                    &dir.sell_on,
+                    &dir.asset,
+                    Side::Sell,
+                    &dir.buy_on,
+                    window,
+                    chrono::Utc::now(),
+                )?
+            }
+        };
         let coin =
             crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.bsc_contract.as_ref());
         let coin_at = At {
@@ -122,7 +149,10 @@ impl DirCtx {
         let mode = s
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
-        let transit_s = super::transit::seconds(core, dir)?;
+        let transit_s = match plan {
+            Some((_, t)) => t,
+            None => super::transit::seconds(core, dir)?,
+        };
         // Решение 211: пара площадки — по её тикеру монеты (Presence::ticker).
         let pair_a = venue::pair_rules(core, &dir.buy_on, &a.ticker)?;
         let pair_b = venue::pair_rules(core, &dir.sell_on, &b.ticker)?;

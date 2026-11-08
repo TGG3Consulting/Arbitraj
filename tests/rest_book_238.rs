@@ -1,10 +1,11 @@
-//! Файл: tests/rest_book_237.rs
-//! Что делает: решение 237 на уровне адаптеров (моков нет):
+//! Файл: tests/rest_book_238.rs
+//! Что делает: решение 238 на уровне адаптеров (моков нет):
 //! - ВХОД: стакан MEXC, кадр пары которого старше venue.book_stale_ms (как XTER 08.11: 32 с при 5000 мс), — котировки
 //!   нет (book.rs freeze: StaleData «кадра стакана пары нет»), действующее подтверждение тихой пары (решение 213) —
 //!   есть; BingX (раньше настройка необязательна) — venue.book_stale_ms не задана: котировки нет (NotConfigured), а не
 //!   «свежесть только по соединению»;
-//! - разбор снимков стакана REST (контракт quote_rest) на записанных ответах: Gate — живой ответ GET /spot/order_book
+//! - разбор снимков стакана REST (контракт quote_rest; у Phemex и Poloniex — book_print.rs levels_of, тот же разбор,
+//!   что у подтверждения тихой пары) на записанных ответах: Gate — живой ответ GET /spot/order_book
 //!   04.11 (tests/data/cex_samples_2026_11_04/gate_spot_order_book_CAKE_USDT.json); XT, Phemex, Poloniex — примеры
 //!   ответов официальной документации (tests/data/rest_book_2026-11-09, README там же).
 //!
@@ -36,7 +37,7 @@ struct Env {
 }
 
 async fn env(name: &str) -> Env {
-    let d = std::env::temp_dir().join(format!("arb-237a-{name}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("arb-238a-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let db = Db::open(&d.join("t.sqlite")).unwrap();
@@ -213,58 +214,24 @@ async fn xt_doc_depth_parses_to_book() {
     assert!(b.asks.is_empty());
 }
 
-#[tokio::test]
-async fn phemex_doc_orderbook_unscaled() {
-    let e = env("phemex").await;
-    let ctx = arb::venues::phemex::ctx::Ctx {
-        settings: e.settings.clone(),
-        vault: e.vault.clone(),
-        http: reqwest::Client::new(),
-        journal: e.journal.clone(),
-        raw: e.raw.clone(),
-    };
+#[test]
+fn phemex_doc_orderbook_unscaled() {
     // Масштабы: цена — «All spot symbols use the same price … scale factors (price scale facor(Ep) = 8» (Public-Spot-
-    // API-en.md); valueScale BTC = 8 — живая запись справочника (tests/phemex_real_data.rs).
-    let rules = arb::venues::phemex::symbols::SymbolRules {
-        symbol: "sBTCUSDT".into(),
-        base: "BTC".into(),
-        quote: "USDT".into(),
-        price_scale: 8,
-        base_scale: 8,
-        quote_scale: 8,
-        tick_ep: 1,
-        step_ev: 1,
-        tick_size: dec("0.00000001"),
-        step_size: dec("0.00000001"),
-        min_notional: None,
-        max_notional: None,
-        max_qty: None,
-        status: 0,
-        status_text: String::new(),
-    };
+    // API-en.md); valueScale BTC = 8 — таблица «All Spot trading products» (tests/phemex_real_data.rs).
     let v = read("tests/data/rest_book_2026-11-09/phemex_orderbook_doc.json");
-    let b =
-        arb::venues::phemex::rest_book::parse(&ctx, &v["result"], &rules, &asset("BTC")).unwrap();
-    assert_eq!(b.asks[0], lv("8770.5", "0.01"));
-    assert_eq!(b.bids[0], lv("8770", "0.02"));
-    assert_eq!(b.bids[1], lv("8769.5", "0.002"));
+    let (bids, asks) = arb::venues::phemex::book_print::levels_of(&v["result"], 8, 8).unwrap();
+    assert_eq!(asks[0], lv("8770.5", "0.01"));
+    assert_eq!(bids[0], lv("8770", "0.02"));
+    assert_eq!(bids[1], lv("8769.5", "0.002"));
 }
 
-#[tokio::test]
-async fn poloniex_doc_orderbook_flat_pairs() {
-    let e = env("poloniex").await;
-    let ctx = arb::venues::poloniex::ctx::Ctx {
-        settings: e.settings.clone(),
-        vault: e.vault.clone(),
-        http: reqwest::Client::new(),
-        journal: e.journal.clone(),
-        raw: e.raw.clone(),
-    };
+#[test]
+fn poloniex_doc_orderbook_flat_pairs() {
     let v = read("tests/data/rest_book_2026-11-09/poloniex_orderbook_doc.json");
-    let b = arb::venues::poloniex::rest_book::parse(&ctx, &v, &asset("TRX")).unwrap();
-    assert_eq!(b.asks, vec![lv("1.91", "47.17277487")]);
-    assert_eq!(b.bids, vec![lv("1.9", "110"), lv("1.889", "10")]);
+    let (bids, asks) = arb::venues::poloniex::book_print::levels_of(&v).unwrap();
+    assert_eq!(asks, vec![lv("1.91", "47.17277487")]);
+    assert_eq!(bids, vec![lv("1.9", "110"), lv("1.889", "10")]);
     // Нечётная длина — не пары: ответ не разбирается по догадке.
     let bad = json!({"asks": ["1.91"], "bids": []});
-    assert!(arb::venues::poloniex::rest_book::parse(&ctx, &bad, &asset("TRX")).is_err());
+    assert!(arb::venues::poloniex::book_print::levels_of(&bad).is_err());
 }

@@ -1,5 +1,5 @@
-//! Файл: tests/core_exec_book_237.rs
-//! Что делает: решение 237 на живом ядре (настоящая SQLite во временной папке) с настоящим адаптером биржи XT.com,
+//! Файл: tests/core_exec_book_238.rs
+//! Что делает: решение 238 на живом ядре (настоящая SQLite во временной папке) с настоящим адаптером биржи XT.com,
 //! который ходит по HTTP в локальный сервер с записанными ответами (моков логики нет):
 //! - справочник пар — живой ответ GET /v4/public/symbol от 06.11.2026 (tests/data/xt_live_2026-11-06/symbol_pepe.json:
 //!   btc_usdt, takerFeeRate — из ответа);
@@ -102,7 +102,7 @@ async fn serve() -> (String, Server) {
 
 /// Папка теста (новая).
 fn dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("arb-237-{name}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("arb-238-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d

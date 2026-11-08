@@ -158,7 +158,7 @@ impl Venue for Mexc {
         Ok(std::sync::Arc::new(f))
     }
 
-    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot (GET
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot (GET
     /// /api/v3/depth, вес 3), комиссия — тот же план, что у стакана потока (book.rs frozen).
     async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
         let book = book_print::snapshot(&self.ctx, asset).await?;

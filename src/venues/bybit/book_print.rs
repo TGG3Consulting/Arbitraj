@@ -8,7 +8,7 @@
 //! (совет FIRST_RUN — 50 уровней) — ПО СОДЕРЖИМОМУ (BookVersion.print, как у MEXC и Bitget). seq не используется:
 //! «Cross sequence … for the smaller seq, then it means the data is generated earlier» — порядок генерации данных, не
 //! «книга не менялась» (на записи 04.11 seq кадров одной пары растёт скачками в сотни при u + 1).
-//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: все уровни ответа.
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы после 403/429/10006 соблюдаются там, reply.rs), ctx.rs (символ пары,
@@ -84,7 +84,7 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /v5/market/orderbook (category spot, symbol, limit = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
+/// Решение 238: снимок стакана пары по REST для ордера — GET /v5/market/orderbook (category spot, symbol, limit = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
 /// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
 pub async fn snapshot(
     ctx: &Ctx,

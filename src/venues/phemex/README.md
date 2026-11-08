@@ -22,13 +22,13 @@
 | ctx.rs | настройки, секреты (ключ и секрет; passphrase нет), журнал | #rest-request-header |
 | sign.rs | HMAC SHA256 hex: путь + строка + expiry + тело; вход WebSocket | #endpoint-security-type, #user-authentication-2 |
 | rest.rs, reply.rs, errors.rs | запросы, ответы {code,msg,data} и /md {error,id,result}, 429 — пауза, коды | #rest-response-format, #rate-limits, #error-codes |
-| rest_book.rs | решение 237: снимок стакана для ордера — GET /md/orderbook (масштабы priceScale / valueScale пары) | #queryorderbook |
 | num.rs | масштабированные целые ↔ Decimal | #price-ratio-value-scales |
 | symbols.rs, symbols_parse.rs | пары (шаги Ev/Ep, пределы) и масштабы монет | #query-product-information |
 | pairs.rs, pairs_watch.rs | состояние пар для ядра, обновление справочника | — |
 | delist.rs | решение 226: делистинги — `timeline[3]` спот-пар Listed GET /public/products-plus (мс); `stStatus` в документации нет — не используется | #query-product-information-plus |
-| subs.rs, market.rs, ws.rs, ws_conn.rs | подписка стаканов (≤ 20 на соединение, ≤ 5 соединений), ping | #subscribe-orderbook-2, #heartbeat-2 |
-| depth.rs, local_book.rs, book.rs | кадры стакана, снимок + изменения, котировка | #orderbook-message |
+| subs.rs, market.rs, ws.rs, ws_conn.rs | подписка стаканов (≤ 20 на соединение, ≤ 5 соединений), ping; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), «переподписать пару» = orderbook.unsubscribe (всех) + orderbook.subscribe всех пар соединения, переподключение одного соединения | #subscribe-orderbook-2, #heartbeat-2, Unsubscribe OrderBook |
+| depth.rs, local_book.rs, book.rs | кадры стакана, снимок + изменения, котировка; решение 213 — срок подтверждения тихой пары (`book_confirmed`) | #orderbook-message |
+| book_print.rs | решение 213 по содержимому: GET /md/orderbook — первые `venue.depth_levels` уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа | Query Order Book |
 | fees.rs | ставки комиссии ключа по паре | #query-fee-rate-by-quote-currency |
 | order_rules.rs, trade.rs, order_state.rs | ордер Limit + ImmediateOrCancel, свой clOrdID (UUID), итог | #place-order-http-put-prefered, #query-orders-by-order-id-or-client-order-id |
 | wallet.rs, networks_crawl.rs, networks_parse.rs | сети монет по одной (chainCfg + asset/info), фоновый круг | #query-deposit-chain-settings, #query-withdraw-chain-settings |
@@ -58,6 +58,10 @@
     наличия событий ордеров в том же сообщении — проверить на живой записи до `venue.balance_events = да`.
 15. Скидки комиссии своей монетой у Phemex в документации нет (урок 23 — обычная ставка, монета комиссии — по факту).
 16. Earn — только поток `wm.subscribe` (REST нет), фьючерсы coin-M — масштаб из справочника контрактов (не читается).
+17. **Сторож пар (решения 202/213, 08.11)**: `feed_health` — scheduled = false, per_pair = true, confirm = true — по
+    содержимому: sequence ответа GET /md/orderbook и sequence кадра документация не связывает. Отписки одной пары нет —
+    «переподписать пару» = orderbook.unsubscribe + orderbook.subscribe всех пар соединения (как у CoinEx), соседи
+    получают новый снимок. Контрольный снимок раз в 60 с — тишина пары дольше 60 с с запасом означает потерю.
 
 ## Ключ и кабинет
 

@@ -165,7 +165,7 @@ pub struct Inner {
     pub delist: super::delist::DelistState,
     /// Лимит выводов по бирже (решение 180, withdraw_limit.rs).
     pub withdraw_limit: super::withdraw_limit::State,
-    /// Решение 237: снимки стакана по REST для ордера (exec_book.rs) — котировка и худшая цена видят один снимок.
+    /// Решение 238: снимки стакана по REST для ордера (exec_book.rs) — котировка и худшая цена видят один снимок.
     pub exec_books: super::exec_book::Cache,
 }
 

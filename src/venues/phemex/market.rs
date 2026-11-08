@@ -94,6 +94,8 @@ pub async fn subscribe(
         ctx.log(Level::Warn, "venue.subscribe", m).await;
     }
     let taken = &snap.books[..snap.books.len().min(cap)];
+    // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
+    books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in taken.chunks(per_conn as usize).enumerate() {
         tasks.push(tokio::spawn(ws::run(

@@ -8,7 +8,7 @@
 //! документация связывает их только у других пар «REST + канал»: у GET / RPI order book — «Provides sequencing parity
 //! with the books-rpi WebSocket channel», у SBE — снимок /books-sbe с потоком books-l2-tbt. Для GET / Order book и
 //! каналов books5 / books такой фразы нет — номер не сравнивается (вопрос Тиграну и что записать — docs/TASKS.md).
-//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: все уровни ответа.
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды OKX там), ctx.rs (настройки), depth.rs (levels — разбор уровней, как у
@@ -66,7 +66,7 @@ pub async fn book_version(
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /api/v5/market/books (instId, sz = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
+/// Решение 238: снимок стакана пары по REST для ордера — GET /api/v5/market/books (instId, sz = venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение,
 /// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
 pub async fn snapshot(
     ctx: &Ctx,

@@ -5,16 +5,34 @@
 //! фоном считается расчёт «без потолка» по сделке (uncapped.rs), чтобы наша же покупка (съеденный уровень стакана,
 //! сдвинутый пул) и наша продажа не занижали потенциал. Нет снимка хоть одной стороны — расчёт по сделке не идёт (запись
 //! «не посчитано: нет снимка» с причиной), живые данные вместо снимка не подставляются.
+//! Решение 237: вместе со стаканами в тот же момент снимаются и все прочие входы расчёта (Decided): контекст направления
+//! (dirctx.rs build_decided — σ и время в пути T из плана сделки, комиссии вывода и возврата из справочника сетей,
+//! налог перевода, правила пар, k, h) и затраты плана (plan_costs.rs: курсы валют затрат, у DEX-стороны — вывод и
+//! возврат USDT). Расчёт «без потолка» по сделке ничего живого после входа не читает.
 //! Кто вызывает: core/executor.rs (take), core/uncapped.rs, costs.rs, costs_quote.rs, size_curve.rs (чтение).
-//! От чего зависит: dex_account.rs (площадка DEX на счёт направления), venue_ticker.rs, gateway/frozen.rs.
+//! От чего зависит: dex_account.rs (площадка DEX на счёт направления), venue_ticker.rs, gateway/frozen.rs, dirctx.rs,
+//! plan_costs.rs, costs_types.rs (Calc плана).
 //! Настройки: нет.
+
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 
 use crate::core::types::{Direction, OrderBook, Side, VenueId};
 use crate::gateway::frozen::QuoteSnapshot;
 
+use super::costs_types::Calc;
+use super::dirctx::DirCtx;
 use super::engine::Core;
+use super::plan_costs::PlanCosts;
+
+/// Решение 237: входы расчёта на момент решения, кроме стаканов и пулов.
+pub struct Decided {
+    /// Контекст направления на момент решения: σ и T — из плана сделки.
+    pub cx: DirCtx,
+    /// Затраты плана: курсы валют затрат, вывод и возврат USDT DEX-стороны.
+    pub plan: PlanCosts,
+}
 
 /// Снимки сторон направления на момент решения.
 #[derive(Clone)]
@@ -24,6 +42,9 @@ pub struct Frozen {
     pub b: QuoteSnapshot,
     /// Когда взят (перед ордером покупки).
     pub at: DateTime<Utc>,
+    /// Решение 237: прочие входы на момент решения; None — не сняты (только тесты модели: расчёт по сделке без них
+    /// не идёт, uncapped.rs).
+    pub decided: Option<Arc<Decided>>,
 }
 
 impl std::fmt::Debug for Frozen {
@@ -50,14 +71,28 @@ impl Frozen {
     }
 }
 
-/// Что делает: снимок обеих сторон направления (см. шапку). Принимает: ядро, направление.
-/// Возвращает: Frozen. Ошибки: текст — нет кошелька DEX в маппинге, площадка не подключена, у площадки нет снимка
-/// (NotApplicable) или нет данных (стакан не пришёл, устарел, блок не свежий).
-pub async fn take(core: &Core, d: &Direction) -> Result<Frozen, String> {
+/// Что делает: снимок обеих сторон направления и прочих входов расчёта (см. шапку). Принимает: ядро, план сделки
+/// (Calc; направление — его). Возвращает: Frozen. Ошибки: текст — нет кошелька DEX в маппинге, площадка не подключена,
+/// у площадки нет снимка (NotApplicable) или нет данных (стакан не пришёл, устарел, блок не свежий); контекст
+/// направления не собирается (как у плана — справочник, настройки).
+pub async fn take(core: &Core, plan: &Calc) -> Result<Frozen, String> {
+    let d = &plan.direction;
     let at = Utc::now();
     let a = side(core, d, &d.buy_on, Side::Buy).await?;
     let b = side(core, d, &d.sell_on, Side::Sell).await?;
-    Ok(Frozen { a, b, at })
+    let cx = DirCtx::build_decided(core, d, plan.sigma, plan.transit_s)
+        .map_err(|e| format!("контекст направления на момент решения: {e}"))?;
+    let lines = PlanCosts::lines_of(&plan.costs);
+    let decided = Decided {
+        cx,
+        plan: PlanCosts::new(&d.asset.ticker, &lines, plan.arrive),
+    };
+    Ok(Frozen {
+        a,
+        b,
+        at,
+        decided: Some(Arc::new(decided)),
+    })
 }
 
 /// Снимок одной стороны: площадка направления (DEX — кошельком строки маппинга, решение 132), монета — тикером

@@ -170,3 +170,75 @@ fn fee_rate_parse_live() {
     let r = fees::parse(&data("phemex_fee_rate.json")).unwrap();
     assert!(r.contains_key("sCAKEUSDT"));
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/phemex/book_print.rs — подтверждение тихой пары по содержимому.
+/// Разбор result GET /md/orderbook на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (Public-Spot-API-en.md, «Query Order Book»: sBTCUSDT,
+/// asks [[877050000000, 1000000], [877100000000, 200000]], bids [[877000000000, 2000000], [876950000000, 200000]],
+/// sequence 455476965) с масштабами 8 / 8 (как в scales_match_official_product_table) — живого ответа и кадров в tests/data
+/// нет (api.phemex.com закрыт прокси; что записать — tests/README.md, раздел Phemex). Стакан в памяти — локальный стакан
+/// из снимка OrderBook WebSocket того же вида, что в документации, с уровнями примера REST (собран здесь, не запись).
+/// Сравнение — живая логика ядра (core/feed_confirm.rs verdict): тот же отпечаток — Quiet; стакана нет или он другой —
+/// Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::phemex::book_print;
+    let result: Value = serde_json::from_str(
+        r#"{"book":{"asks":[[877050000000,1000000],[877100000000,200000]],"bids":[[877000000000,2000000],[876950000000,200000]]},"depth":30,"sequence":455476965,"timestamp":1583555482434235628,"symbol":"sBTCUSDT","type":"snapshot"}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&result, 30, 8, 8).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (2, 2));
+    assert_eq!((p.asks[0].price, p.asks[0].qty), (d("8770.5"), d("0.01")));
+    assert_eq!((p.bids[0].price, p.bids[0].qty), (d("8770"), d("0.02")));
+    assert_eq!(p.bids[1].price, d("8769.5"));
+    // Тот же стакан из снимка WebSocket (локальный стакан, ws_conn.rs).
+    let frame = r#"{"book":{"asks":[[877050000000,1000000],[877100000000,200000]],"bids":[[877000000000,2000000],[876950000000,200000]]},"depth":30,"sequence":455476965,"symbol":"sBTCUSDT","timestamp":1583555482434235628,"type":"snapshot"}"#;
+    let depth::Msg::Book(f) = depth::parse(frame) else {
+        panic!("кадр OrderBook не разобран")
+    };
+    let mut lb = local_book::LocalBook::default();
+    assert_eq!(lb.apply(&f, false), local_book::Applied::Changed);
+    let (bids, asks) = lb.top(30, 8, 8);
+    let ours = BookPrint::top(&bids, &asks, 30);
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 30,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(ours)), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    let one = book_print::parse(&result, 1, 8, 8).unwrap();
+    assert!(matches!(
+        verdict(&pair, &ver(Some(one)), 2),
+        Verdict::Lost(_)
+    ));
+    // Вид ответа: нет book, нет bids.
+    assert_eq!(
+        book_print::parse(&Value::Null, 30, 8, 8).unwrap_err(),
+        "нет book"
+    );
+    let bad: Value = serde_json::from_str(r#"{"book":{"asks":[]}}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 30, 8, 8).unwrap_err(), "нет bids");
+}
+
+/// Решение 202: отписка — вид «Unsubscribe OrderBook» (params пустой — снимает все стаканы соединения).
+#[test]
+fn unsubscribe_message_is_official_shape() {
+    let v: Value = serde_json::from_str(&ws_conn::unsub_message(21)).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({"id": 21, "method": "orderbook.unsubscribe", "params": []})
+    );
+}

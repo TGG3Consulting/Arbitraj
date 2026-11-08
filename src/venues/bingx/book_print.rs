@@ -5,7 +5,7 @@
 //! bids/asks; после ответа — первые N уровней стакана в памяти (book.rs print — по нему считается котировка).
 //! Сравнивает ядро (core/feed_print.rs). Номер не сравнивается: у кадра @depth<N> есть data.lastUpdateId, а в ответе
 //! REST номера нет (bids, asks, ts) — связать нечем.
-//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: все уровни ответа.
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды BingX там), ctx.rs (символ пары, настройки), depth.rs (levels —
@@ -58,7 +58,7 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /openApi/spot/v1/market/depth (symbol, limit = venue.depth_levels; раздел и лимит — в шапке файла). Принимает: окружение,
+/// Решение 238: снимок стакана пары по REST для ордера — GET /openApi/spot/v1/market/depth (symbol, limit = venue.depth_levels; раздел и лимит — в шапке файла). Принимает: окружение,
 /// монету (тикер площадки). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как у отпечатка.
 pub async fn snapshot(
     ctx: &Ctx,

@@ -1,6 +1,7 @@
 //! Файл: venues/kraken/ws_req.rs
 //! Что делает: подключение WebSocket v2 Kraken через общий ограничитель попыток (на все соединения адаптера с этого IP)
-//! и запросы: подписка / отписка канала book пачками символов, ping, подписка balances с токеном.
+//! и запросы: подписка / отписка канала book пачками символов, ping, подписка balances с токеном; переподписка одной
+//! пары (unsubscribe + subscribe — разрыв чек-суммы и команда сторожа пар, решение 202).
 //! Кто вызывает: ws_conn.rs, user_stream_conn.rs, тесты.
 //! От чего зависит: tokio-tungstenite, serde_json.
 //! Настройки: нет (адрес, срок и размер пачки передаёт вызывающий).
@@ -17,9 +18,12 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
+use futures_util::SinkExt;
+use futures_util::stream::SplitSink;
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio::time::Instant;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 /// Попыток подключения на IP за окно — официально «approximately 150 attempts per rolling 10 minutes».
@@ -77,6 +81,28 @@ pub fn book_requests(
             json!({"method": method, "params": params, "req_id": req_id + i as u64}).to_string()
         })
         .collect()
+}
+
+/// Разъём на запись соединения.
+pub type Sink = SplitSink<Ws, Message>;
+
+/// Переподписка одной пары канала book: unsubscribe (те же channel, symbol, depth — «The number of price levels to be
+/// unsubscribed»), затем subscribe со снимком, в этом же соединении. Принимает: разъём, глубину, имя пары WebSocket,
+/// счётчик req_id. Ошибка — текст (запрос не отправлен).
+pub async fn resub(
+    sink: &mut Sink,
+    depth: u64,
+    wsname: &str,
+    req_id: &mut u64,
+) -> Result<(), String> {
+    for method in ["unsubscribe", "subscribe"] {
+        *req_id += 1;
+        let r = book_requests(method, depth, &[wsname], 1, *req_id).concat();
+        sink.send(Message::Text(r.into()))
+            .await
+            .map_err(|e| format!("отправка {method}: {e}"))?;
+    }
+    Ok(())
 }
 
 /// Запрос ping. Принимает: req_id. Ошибок нет.

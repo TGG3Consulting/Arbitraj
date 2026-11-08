@@ -4,8 +4,18 @@
 //! обрыв; снимки стакана → память и ядру (без ожидания, try_send); неразборчивый снимок пары → стакан пары
 //! недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, ctx.rs, tokio-tungstenite, gateway/feed_reg.rs (решение 202).
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [poloniex].
+//!
+//! Решение 202 (для всех бирж, Тигран 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр
+//! стакана по паре (и снимок с прежним id, и неразборчивый с символом); id кадра не передаётся (решение 213: в ответе
+//! REST стакана номера нет — подтверждение тихой пары по содержимому, book_print.rs). Команды сторожа ядра:
+//! «переподписать пару» — {"event": "unsubscribe", "channel": ["book"], "symbols": [символ]}, затем подписка той же
+//! пары (Spot → WebSocket: «Unsubscribe» — тот же channel и symbols, ответ {"channel", "event": "UNSUBSCRIBE"}); оба
+//! сообщения — в очередь отправки с темпом venue.ws_subs_per_sec (в счёт «500 requests per second»), соседи не
+//! трогаются; прежний id пары забывается — первый снимок новой подписки отдаётся ядру. Ответ на отписку без символа
+//! («Not subscribed» и др.) — как любая ошибка Poloniex, в журнал. «Переподключить соединение» — сессия
+//! заканчивается, ws.rs подключается заново с теми же парами.
 //!
 //! Решение 109: снимок с тем же или меньшим id (SeqId), что прежний, ядру не отдаётся — стакан не менялся (канал book
 //! шлёт снимки каждые 100 мс — «The order book updates every 100ms»); время кадра пары обновляется (book.rs, touch).
@@ -31,11 +41,24 @@ use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, BOOK, Msg};
 use super::ws::{Cfg, End, invalidate};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
+
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+}
 
 /// Что делает: сообщение подписки на канал book для одного символа. Ошибок нет.
 pub fn sub_message(symbol: &str, depth: u64) -> String {
     json!({"event": "subscribe", "channel": [BOOK], "symbols": [symbol], "depth": depth})
         .to_string()
+}
+
+/// Что делает: сообщение отписки канала book одного символа (Spot → WebSocket, «Unsubscribe»). Ошибок нет.
+pub fn unsub_message(symbol: &str) -> String {
+    json!({"event": "unsubscribe", "channel": [BOOK], "symbols": [symbol]}).to_string()
 }
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
@@ -46,6 +69,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -58,6 +82,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let mut pending: Vec<String> = assets
@@ -78,6 +103,17 @@ pub async fn session(
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    let Some((_, s)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
+                    // Очередь отправки берёт с конца: сначала уйдёт отписка, затем подписка.
+                    pending.push(sub_message(s, cfg.depth));
+                    pending.push(unsub_message(s));
+                    last_seq.remove(s);
+                    w.feed.resubscribed(&ticker);
+                }
+            },
             _ = ping.tick() => {
                 if let Err(e) = sink.send(Message::Text(depth::ping().into())).await {
                     return End::Broken(format!("отправка ping: {e}"));
@@ -94,6 +130,7 @@ pub async fn session(
                 };
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let text = match frame {
                     Message::Text(t) => t,
                     Message::Ping(p) => {
@@ -114,6 +151,7 @@ pub async fn session(
                     Msg::Books(list) => {
                         for d in list {
                             let Some(asset) = by_symbol.get(d.symbol.as_str()) else { continue };
+                            w.feed.frame(&asset.ticker);
                             if let Some(seq) = d.seq {
                                 if last_seq.get(&d.symbol).is_some_and(|&s| seq <= s) {
                                     books.touch(&asset.ticker);
@@ -139,6 +177,7 @@ pub async fn session(
                     }
                     Msg::Bad { symbol, reason } => {
                         if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
+                            w.feed.frame(&a.ticker);
                             invalidate(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;

@@ -29,8 +29,7 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 | `delist.rs` | Решение 226: делистинги — пары V1 GET /v1/settings/common/symbols с venue.quote_asset, state не offline и `dl` = true («delist»), время — `tca` («trade-close-at»); dl = false не учитывается (что значит tca без dl — вопрос Тиграну) |
 | `sign.rs` | Подпись V2: кодирование и сортировка параметров, HMAC-SHA256 → Base64, строка запроса REST, вход WebSocket v2 |
 | `rest.rs` | REST: GET — параметры в подписи; POST — тело JSON, в строке только подпись; резерв адреса только при сбое сети |
-| `rest_book.rs` | Решение 237: снимок стакана для ордера — GET /market/depth (symbol, depth = venue.depth_levels, type step0; tick — reply.rs) |
-| `reply.rs` | Разбор v1 {status, err-code, data} и v2 {code 200, message, data}; HTTP 429 — пауза всех запросов |
+| `reply.rs` | Разбор v1 {status, err-code, data} и v2 {code 200, message, data} (у рыночных эндпоинтов вместо data — tick); HTTP 429 — пауза всех запросов |
 | `errors.rs` | Коды HTX → единые коды («HTX, код …: …» — для человеческих причин, решение 164) |
 | `num.rs` | Числа (строкой или числом JSON) без потери точности |
 | `accounts.rs` | Список счетов, id спот-счёта («счёт не открыт» — урок 27) |
@@ -43,7 +42,8 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 | `transfers.rs` | Вывод со своим client-order-id, проверка списка адресов вывода, статус по client-order-id |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |
 | `trade.rs`, `order_state.rs`, `order_fee.rs` | Ордер buy-ioc / sell-ioc (или limit-fok), итог по детали ордера, отмена остатка, поиск по client-order-id, комиссия из matchresults |
-| `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Стаканы mbp.refresh (GZIP, ping/pong), отсев по seqNum (решение 109), котировка |
+| `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Стаканы mbp.refresh (GZIP, ping/pong), отсев по seqNum (решение 109), котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsub + sub темы) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `book_print.rs` | Решение 213 по содержимому: `GET /market/depth` (depth = `venue.depth_levels`, type step0) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта WebSocket v2: вход подписью, accounts.update#2 → изменение баланса |
 | `account.rs` | Балансы спота, «Проверить подключение» (своя запись ключа /v2/user/api-key, спот-счёт, поле адреса контракта) |
 | `all_balances.rs` | Панель «Балансы»: все счета пользователя по списку |
@@ -75,4 +75,8 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 - Поток аккаунта: `venue.ws_private_url` (wss://api.huobi.pro/ws/v2), без сжатия, ping сервера ~20 с —
   `venue.ws_silence_ms` больше 20000.
 - Лимиты REST: «N times/2s» на эндпоинт по UID (все ключи UID вместе); публичные — по IP.
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true — по
+  содержимому**: seqNum снимка mbp.refresh и version ответа GET /market/depth («Internal data») документация не
+  связывает; сравниваются первые `venue.depth_levels` уровней ответа и стакана в памяти (`book_print.rs`). Лимит
+  частоты /market/depth в документации не указан.
 - Функции контракта только для DEX отвечают `NotApplicable`.

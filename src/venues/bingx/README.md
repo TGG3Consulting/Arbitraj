@@ -46,7 +46,7 @@
 | `account_update.rs` | Разбор кадра ACCOUNT_UPDATE по docs-v3: причина m → вид изменения (DEPOSIT — поступление, WITHDRAW — вывод, ORDER — своё, INIT — снимок) |
 | `depth.rs` | Разбор сообщений: GZIP, ping, стакан |
 | `book.rs` | Стаканы в памяти, котировка на объём; решения 202/213 — время кадра пары (проверка — если задана `venue.book_stale_ms`) и срок подтверждения тихой пары (`book_confirmed`) |
-| `book_print.rs` | Решение 213 по содержимому: `GET /openApi/spot/v1/market/depth` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 237: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
+| `book_print.rs` | Решение 213 по содержимому: `GET /openApi/spot/v1/market/depth` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `tap.rs`, `feed.rs`, `tap_diff.rs` | Запись окна (решение 125): текст кадров стакана монеты из ws_conn.rs (после GZIP); свои соединения на монету — лента `<SYMBOL>@trade` (одна сделка в сообщении) и изменения всей глубины `<SYMBOL>@incrDepth` (action «all» / «update», разрыв lastUpdateId — переподключение), отписка reqType «unsub»; разбор кадров (стакан, сделка, изменения — объект или массив уровней) |
 
 Функции контракта только для DEX (`recheck_coins`, `dex_families`, `send_channels`, `check_send_channel`) отвечают

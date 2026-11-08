@@ -6,7 +6,7 @@
 //! уровней стакана в памяти (book.rs print — по нему считается котировка). Сравнивает ядро (core/feed_print.rs).
 //! Номер не сравнивается: у кадра /spotMarket/level2Depth5|50 номера нет (data — asks, bids, timestamp), sequence ответа
 //! REST сравнить не с чем.
-//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: все уровни ответа level2_{size} (size — как у отпечатка, не меньше venue.depth_levels).
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public, пул Public — пауза после 429000 соблюдается там, reply.rs), depth.rs (levels —
@@ -75,7 +75,7 @@ pub async fn book_version(
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — Get Part OrderBook level2_{size} (size — наименьший из 20, 100,
+/// Решение 238: снимок стакана пары по REST для ордера — Get Part OrderBook level2_{size} (size — наименьший из 20, 100,
 /// не меньший venue.depth_levels; раздел, пул и вес — в шапке файла). Принимает: окружение, символ KuCoin пары, монету
 /// (тикер KuCoin). Возвращает: стакан (все уровни ответа, от лучшей цены). Ошибки: как book_version.
 pub async fn snapshot(

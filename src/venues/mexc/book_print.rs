@@ -5,7 +5,7 @@
 //! после ответа — первые N уровней стакана в памяти (book.rs print — по нему считается котировка). Сравнивает ядро
 //! (core/feed_print.rs). Номер lastUpdateId не используется: связи с полем version частичного стакана в документации
 //! нет (решение «202/213 (MEXC)»).
-//! Решение 237: тот же запрос и разбор уровней — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда
+//! Решение 238: тот же запрос и разбор уровней — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда
 //! стакан потока устарел: все уровни ответа (limit = venue.depth_levels — столько, сколько даёт кадр потока).
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 418/429 соблюдается там, reply.rs), ctx.rs (символ пары, настройки),
@@ -64,7 +64,7 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels;
+/// Решение 238: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels;
 /// раздел и лимит — в шапке файла). Принимает: окружение, монету (тикер MEXC). Возвращает: стакан (все уровни ответа,
 /// от лучшей цены; времени биржи в ответе нет). Ошибки: как book_version.
 pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {

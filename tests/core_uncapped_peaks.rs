@@ -79,7 +79,7 @@ async fn multi_peak_search_finds_global() {
         split,
     };
     let p = params(&rec, dir, d("1000000"));
-    let u = uncapped(&mut c, &p, d("1000000"), &[], |_| true)
+    let u = uncapped(&mut c, &p, d("1000000"), &[], |_| true, None)
         .await
         .unwrap();
     // Перебор целых монет до наибольшего объёма.
@@ -112,9 +112,16 @@ async fn cost_by_max_evals() {
             let mut p = params(&rec, dir, d("1000000"));
             p.max_evals = n;
             let t = Instant::now();
-            let u = uncapped(&mut curve(&rec, dir), &p, d("100"), &ladder(), |_| true)
-                .await
-                .unwrap();
+            let u = uncapped(
+                &mut curve(&rec, dir),
+                &p,
+                d("100"),
+                &ladder(),
+                |_| true,
+                None,
+            )
+            .await
+            .unwrap();
             let ms = t.elapsed().as_secs_f64() * 1000.0;
             let best = *full.get_or_insert(u.opt.profit);
             assert!(u.evals <= n);

@@ -10,7 +10,7 @@
 //!   поле i описано только как «updateId» (limitDepth.md), связи с lastUpdateId REST в документации нет — первые N
 //!   уровней ответа и стакана в памяти (book.rs print, взят ПОСЛЕ ответа); сравнивает ядро (core/feed_print.rs).
 //!
-//! Решение 237: тот же запрос и разбор уровней — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда
+//! Решение 238: тот же запрос и разбор уровней — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда
 //! стакан потока устарел: все уровни ответа (limit = venue.depth_levels, тот же предел 1–500).
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 429 соблюдается там), depth.rs (RestDepth, convert), ws.rs (config —
@@ -98,7 +98,7 @@ pub async fn book_version(
     }
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /v4/public/depth (symbol, limit = venue.depth_levels;
+/// Решение 238: снимок стакана пары по REST для ордера — GET /v4/public/depth (symbol, limit = venue.depth_levels;
 /// раздел и лимит «10/s/ip» — в шапке). Принимает: окружение, справочник пар, монету (тикер XT). Возвращает: стакан
 /// (все уровни ответа, от лучшей цены; время биржи — timestamp ответа). Ошибки: как book_version.
 pub async fn snapshot(ctx: &Ctx, symbols: &Symbols, asset: &Asset) -> GatewayResult<OrderBook> {
@@ -120,7 +120,7 @@ pub async fn snapshot(ctx: &Ctx, symbols: &Symbols, asset: &Asset) -> GatewayRes
     rest_book(ctx, &v, asset)
 }
 
-/// Решение 237: стакан из result ответа GET /v4/public/depth (уровни — depth.rs convert, время биржи — timestamp).
+/// Решение 238: стакан из result ответа GET /v4/public/depth (уровни — depth.rs convert, время биржи — timestamp).
 /// Принимает: окружение, result, монету. Ошибки: BadResponse — вид ответа, не число.
 pub fn rest_book(ctx: &Ctx, v: &Value, asset: &Asset) -> GatewayResult<OrderBook> {
     let bad = |why: String| {

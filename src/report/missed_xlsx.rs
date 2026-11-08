@@ -5,7 +5,9 @@
 //! core/uncapped_sum.rs Sum), ниже таблица «Потолок → прибыль» (потолок | сделки | кандидаты и строка «без потолка»);
 //! «Сделки» — строка на сделку; «Кандидаты» — строка на эпизод; «Топ направлений» — монета, направление, сколько раз,
 //! упущено всего, по убыванию; «Сделки — занижено» (решение 217) — сделки, посчитанные после нашей покупки (старые
-//! записи), отдельно от остальных; у сделок столбец «Данные» — на каких данных посчитано. Внизу «Сделок» и «Кандидатов» — строка «Итого» формулами SUM по столбцам денег и
+//! записи), отдельно от остальных; у сделок столбец «Данные» — на каких данных посчитано. Решение 237: у сделок —
+//! «Расчёт на вложенных», «Потолок (макс. прибыль без лимита): вложить», «На потолке заработали бы / потеряли бы,
+//! расчёт», «Упущено против вложенного» (всё — одна модель по данным момента входа). Внизу «Сделок» и «Кандидатов» — строка «Итого» формулами SUM по столбцам денег и
 //! счётчиков. Оформление — как «Итоги сделок» (report/results_sheet.rs): Arial, шапка белым по 1F4E78, высота 31.5,
 //! закрепление первой строки, фильтр, форматы денег 2 и 4 знака, красный / зелёный факт, примечания курсивом.
 //! Кто вызывает: report/mod.rs (missed).
@@ -70,16 +72,19 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow], name: &str) -> Result<(), Xls
         "Что ограничило",
         "План, USDT",
         "Факт, USDT",
-        "Без потолка: вложить, USDT",
-        "Без потолка: прибыль, USDT",
-        "Упущено, USDT",
+        "Расчёт на вложенных, USDT",
+        "Потолок (макс. прибыль без лимита): вложить, USDT",
+        "На потолке заработали бы (+) / потеряли бы (−), расчёт, USDT",
+        "Упущено против вложенного, USDT",
         "Окно с (UTC)",
         "Данные",
     ];
     header(
         ws,
         &hdr,
-        &[19., 14., 16., 12., 34., 11., 11., 14., 14., 12., 36., 30.],
+        &[
+            19., 14., 16., 12., 34., 11., 11., 14., 18., 20., 14., 36., 30.,
+        ],
     )?;
     let (p, m, m4) = (plain(), money(), money4());
     for (k, r) in rows.iter().enumerate() {
@@ -94,14 +99,19 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow], name: &str) -> Result<(), Xls
             Some(f) => ws.write_number_with_format(row, 6, f, &m4)?,
             None => ws.write_blank(row, 6, &m4)?,
         };
-        ws.write_number_with_format(row, 7, r.opt_invested, &m)?;
-        ws.write_number_with_format(row, 8, r.opt_profit, &m4)?;
-        ws.write_number_with_format(row, 9, r.missed, &m4)?;
-        ws.write_string_with_format(row, 10, &r.window, &p)?;
-        ws.write_string_with_format(row, 11, &r.basis, &p)?;
+        // Решение 237: расчёт той же моделью на вложенном объёме (по данным момента входа); нет точки — пусто.
+        match r.at_invested {
+            Some(x) => ws.write_number_with_format(row, 7, x, &m4)?,
+            None => ws.write_blank(row, 7, &m4)?,
+        };
+        ws.write_number_with_format(row, 8, r.opt_invested, &m)?;
+        ws.write_number_with_format(row, 9, r.opt_profit, &m4)?;
+        ws.write_number_with_format(row, 10, r.missed, &m4)?;
+        ws.write_string_with_format(row, 11, &r.window, &p)?;
+        ws.write_string_with_format(row, 12, &r.basis, &p)?;
     }
     let tr = rows.len() as u32 + 1;
-    ws.autofilter(0, 0, tr - 1, 11)?;
+    ws.autofilter(0, 0, tr - 1, 12)?;
     red_green(ws, 1, 6, tr, 6)?;
     sum_row(
         ws,
@@ -110,9 +120,10 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow], name: &str) -> Result<(), Xls
             (3, money()),
             (5, money4()),
             (6, money4()),
-            (7, money()),
-            (8, money4()),
+            (7, money4()),
+            (8, money()),
             (9, money4()),
+            (10, money4()),
         ],
     )
 }

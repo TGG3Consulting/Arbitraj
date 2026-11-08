@@ -148,7 +148,7 @@ impl Venue for Xt {
         Ok(std::sync::Arc::new(f))
     }
 
-    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — book_version.rs snapshot (GET
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_version.rs snapshot (GET
     /// /v4/public/depth), комиссия — тот же план, что у стакана потока (book.rs frozen: takerFeeRate пары). Справочник
     /// пар — свежий, как у ордера (trade: symbols.rs ensure_fresh).
     async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {

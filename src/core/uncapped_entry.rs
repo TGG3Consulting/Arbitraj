@@ -65,12 +65,14 @@ pub fn cand(core: &Core, d: &Direction, calc: &Calc, reason: Option<&str>, mode:
 
 /// Решение 217: снимок рынка направления на момент решения — на пути сделки прямо перед ордером покупки (core/frozen.rs:
 /// копии стакана биржи и `Arc` состояний пулов DEX, без запросов к площадкам). Выключено — None (снимка нет, затрат нет).
-/// Принимает: ядро, направление. Возвращает: None — расчёт выключен; Some(Ok) — снимок; Some(Err) — причина. Ошибок нет.
-pub async fn freeze(core: &Core, d: &Direction) -> Option<Result<Frozen, String>> {
+/// Решение 237: вместе с ним — прочие входы плана (σ, T, курсы затрат, контекст направления на этот момент).
+/// Принимает: ядро, план сделки. Возвращает: None — расчёт выключен; Some(Ok) — снимок; Some(Err) — причина.
+/// Ошибок нет.
+pub async fn freeze(core: &Core, plan: &Calc) -> Option<Result<Frozen, String>> {
     if !enabled(core) {
         return None;
     }
-    Some(super::frozen::take(core, d).await)
+    Some(super::frozen::take(core, plan).await)
 }
 
 /// Вошли в сделку (покупка исполнилась). Принимает: ядро, id сделки, план покупки, бюджет плана до чтения баланса,

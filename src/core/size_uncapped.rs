@@ -11,6 +11,11 @@
 //!    соседними посчитанными точками, затем лучшая из посчитанных точек со списанием ≤ C — локальные максимумы ниже C
 //!    уже уточнены в п. 1.
 //!
+//! 5) решение 237: объём боя (у сделки — объём, на котором вошли) считается ПЕРВЫМ и всегда, вне предела расчётов
+//!    (Memo::force); у сделки «на нашем бюджете» — именно эта точка (вложено против потолка — одна модель, одни данные),
+//!    а не лучшая посчитанная в бюджете: при исчерпанном пределе поиск мог её не посчитать (сделка INTCB 08.11:
+//!    вложено 450, «на бюджете» — точка 340.81).
+//!
 //! Предел расчётов — Params.max_evals (у ядра — uncapped.max_evals); исчерпан — берётся лучшее из посчитанного, отметка
 //! capped. Ни одна точка не считается дважды.
 //! Кто вызывает: core/uncapped.rs (кривая ядра), тесты (tests/core_uncapped.rs — записанные стакан и пул CAKE).
@@ -76,7 +81,8 @@ pub struct Uncapped<T> {
 }
 
 /// Что делает: расчёт без потолка (см. шапку). Принимает: кривую, параметры (budget = предел поиска), боевой бюджет,
-/// значения таблицы потолков, проверку порогов точки. Возвращает: Uncapped.
+/// значения таблицы потолков, проверку порогов точки, объём сделки (решение 237: Some — «на нашем бюджете» = точка на
+/// этом объёме, посчитанная всегда; None — кандидат: лучшая посчитанная в бюджете). Возвращает: Uncapped.
 /// Ошибки: Fail поиска (Stop — расчёт невозможен; TooSmall / TooLarge — ни один объём до предела не подходит).
 pub async fn uncapped<C, F>(
     curve: &mut C,
@@ -84,6 +90,7 @@ pub async fn uncapped<C, F>(
     budget: Decimal,
     ladder: &[Decimal],
     pass: F,
+    own: Option<Decimal>,
 ) -> Result<Uncapped<C::Data>, Fail>
 where
     C: Curve,
@@ -96,6 +103,14 @@ where
         )));
     }
     let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
+    // Решение 237: объём сделки — первым, вне предела расчётов (Stop — расчёт невозможен при любом объёме).
+    let own_pt = match own.and_then(|q| m.units(q)) {
+        Some(n) => match m.force(n).await {
+            Err(Fail::Stop(e)) => return Err(Fail::Stop(e)),
+            r => Some(r.ok()),
+        },
+        None => None,
+    };
     let f = search_in(&mut m, p).await?;
     let upper = f.choice.max_qty;
     let hi = m
@@ -103,7 +118,15 @@ where
         .ok_or_else(|| Fail::Stop(format!("объём {upper} слишком велик")))?;
     let (cap_reached, limit) = edge(&mut m, p, hi, f.choice.max_exact).await;
     let min_plus = min_pass(&mut m, &pass, p.bisect_steps).await?;
-    let at_budget = level(&mut m, budget, p.bisect_steps, &pass).await?;
+    let at_budget = match own_pt {
+        // Сделка: точка на вложенном объёме (не посчиталась — объёма нет: None, причина в записи — limit поиска).
+        Some(pt) => Level {
+            cap: budget,
+            passes: pt.as_ref().is_some_and(&pass),
+            at: pt.as_ref().map(At::of),
+        },
+        None => level(&mut m, budget, p.bisect_steps, &pass).await?,
+    };
     let mut levels = Vec::with_capacity(ladder.len());
     for c in ladder {
         levels.push(level(&mut m, *c, p.bisect_steps, &pass).await?);

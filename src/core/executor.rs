@@ -216,7 +216,7 @@ async fn run(core: &Core, d: Direction) {
         plan
     };
     // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
-    let frozen = super::uncapped_entry::freeze(core, &d).await;
+    let frozen = super::uncapped_entry::freeze(core, &plan).await;
     // Покупка на A.
     let bought = super::trade_ops::trade(
         core,

@@ -48,7 +48,7 @@ async fn uncapped_not_worse_than_capped() {
                 .unwrap();
             let p = params(&rec, dir, d("1000000"));
             let t = Instant::now();
-            let u = uncapped(&mut curve(&rec, dir), &p, budget, &ladder(), |_| true)
+            let u = uncapped(&mut curve(&rec, dir), &p, budget, &ladder(), |_| true, None)
                 .await
                 .unwrap();
             let ms = t.elapsed().as_secs_f64() * 1000.0;
@@ -89,7 +89,7 @@ async fn min_plus_matches_direct_calc() {
         let min = small.best.profit;
         let p = params(&rec, dir, d("1000000"));
         let mut c = curve(&rec, dir);
-        let u = uncapped(&mut c, &p, d("50"), &[], |pt| pt.profit >= min)
+        let u = uncapped(&mut c, &p, d("50"), &[], |pt| pt.profit >= min, None)
             .await
             .unwrap();
         let m = u.min_plus.expect("есть плюсовой объём");
@@ -118,9 +118,14 @@ async fn min_plus_matches_direct_calc() {
     }
     // Порог выше любой прибыли — «не становится плюсовой».
     let p = params(&rec, Dir::BingxToDex, d("1000000"));
-    let u = uncapped(&mut curve(&rec, Dir::BingxToDex), &p, d("50"), &[], |pt| {
-        pt.profit >= d("1000000000")
-    })
+    let u = uncapped(
+        &mut curve(&rec, Dir::BingxToDex),
+        &p,
+        d("50"),
+        &[],
+        |pt| pt.profit >= d("1000000000"),
+        None,
+    )
     .await
     .unwrap();
     assert!(u.min_plus.is_none() && !u.opt_passes);
@@ -131,7 +136,7 @@ async fn missed_zero_when_budget_not_binding() {
     let rec = Rec::load("uncapped-zero").await;
     for dir in [Dir::BingxToDex, Dir::DexToBingx] {
         let p = params(&rec, dir, d("1000000"));
-        let u = uncapped(&mut curve(&rec, dir), &p, d("1000000"), &[], |_| true)
+        let u = uncapped(&mut curve(&rec, dir), &p, d("1000000"), &[], |_| true, None)
             .await
             .unwrap();
         assert_eq!(u.at_budget.at.unwrap().profit, u.opt.profit, "{dir:?}");
@@ -149,7 +154,7 @@ async fn missed_zero_when_budget_not_binding() {
     let dir = Dir::DexToBingx;
     let p = params(&rec, dir, d("1000000"));
     {
-        let u = uncapped(&mut curve(&rec, dir), &p, d("20"), &[], |_| true)
+        let u = uncapped(&mut curve(&rec, dir), &p, d("20"), &[], |_| true, None)
             .await
             .unwrap();
         let m = missed("accept", true, u.opt.profit, &u.at_budget);

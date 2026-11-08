@@ -9,7 +9,7 @@
 //! <symbol>@depth (U, u — «How to manage a local order book correctly»: «discard any event where u is <= lastUpdateId
 //! of the snapshot»). Что lastUpdateId частичного стакана — тот же счётчик, прямо не сказано (решение «202/213
 //! (Binance)», вопрос — docs/TASKS.md); номер ответа не используется.
-//! Решение 237: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос и разбор — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: все уровни ответа (limit = venue.depth_levels, тот же предел 5/10/20, вес «1-100: 5»).
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — пауза после 418/429 по Retry-After соблюдается там), depth.rs (разбор уровней),
@@ -75,7 +75,7 @@ pub async fn book_version(ctx: &Ctx, books: &Books, ticker: &str) -> GatewayResu
     })
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels; раздел,
+/// Решение 238: снимок стакана пары по REST для ордера — GET /api/v3/depth (symbol, limit = venue.depth_levels; раздел,
 /// вес — в шапке файла). Принимает: окружение, монету (тикер Binance). Возвращает: стакан (все уровни ответа, от лучшей
 /// цены; времени биржи в ответе нет). Ошибки: как book_version.
 pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {

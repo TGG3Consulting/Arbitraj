@@ -1,7 +1,7 @@
 //! Файл: venues/gate/book_version.rs
 //! Что делает: решение 213 — версия стакана пары Gate по REST для сторожа ядра (контракт book_version): один
 //! публичный запрос GET /spot/order_book?currency_pair=…&with_id=true, из ответа — только id, update, current.
-//! Решение 237: тот же запрос с уровнями — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
+//! Решение 238: тот же запрос с уровнями — снимок стакана пары для ордера (snapshot, контракт quote_rest), когда стакан
 //! потока устарел: GET /spot/order_book (currency_pair, limit = venue.depth_levels — столько уровней даёт кадр
 //! spot.order_book; limit — «Maximum number of order depth data in asks or bids»), уровни asks / bids [цена, количество]
 //! строками разбираются так же, как кадр (depth.rs levels); живой ответ — tests/data/cex_samples_2026_11_04/
@@ -51,7 +51,7 @@ pub async fn book_version(ctx: &Ctx, ticker: &str) -> GatewayResult<BookVersion>
     Ok(parse(&v))
 }
 
-/// Решение 237: снимок стакана пары по REST для ордера — GET /spot/order_book (currency_pair, limit =
+/// Решение 238: снимок стакана пары по REST для ордера — GET /spot/order_book (currency_pair, limit =
 /// venue.depth_levels; раздел и лимит — в шапке). Принимает: окружение, монету (тикер Gate). Возвращает: стакан (все
 /// уровни ответа, от лучшей цены; время биржи — current ответа). Ошибки: NotConfigured (venue.depth_levels,
 /// venue.quote_asset, адрес REST), связь, RateLimited, коды Gate; BadResponse — вид ответа.
@@ -65,7 +65,7 @@ pub async fn snapshot(ctx: &Ctx, asset: &Asset) -> GatewayResult<OrderBook> {
     rest_book(ctx, &v, asset)
 }
 
-/// Решение 237: стакан из ответа GET /spot/order_book (уровни — depth.rs levels, время биржи — current).
+/// Решение 238: стакан из ответа GET /spot/order_book (уровни — depth.rs levels, время биржи — current).
 /// Принимает: окружение, ответ, монету. Ошибки: BadResponse — нет asks / bids или уровень не [цена, количество].
 pub fn rest_book(ctx: &Ctx, v: &Value, asset: &Asset) -> GatewayResult<OrderBook> {
     let bad = |why: String| {

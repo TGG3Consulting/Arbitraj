@@ -49,7 +49,6 @@
 | `ctx.rs` | Окружение: настройки, секреты (ключ, приватный ключ Base64), HTTP, журнал, сырые сообщения, полоса nonce |
 | `sign.rs` | API-Sign = Base64(HMAC-SHA512(путь + SHA256(nonce + данные), Base64-декод секрета)); следующий nonce |
 | `rest.rs` | Публичные GET /0/public, подписанные POST /0/private (форма), подписанные /funding (строка запроса + JSON) |
-| `rest_book.rs` | Решение 237: снимок стакана для ордера — GET /0/public/Depth (pair, count = venue.depth_levels, не больше 500) |
 | `reply.rs` | Разбор {error, result} и ответов Funding; паузы «private», «trade», путь — после «Rate limit exceeded» / Throttled |
 | `errors.rs` | Строки ошибок Kraken → единые коды; текст «Kraken, ошибка …» (notify/reason.rs, решение 164) |
 | `num.rs` | Числа и поля без потери точности; суммы Funding {asset, amount} / {asset_amount} |
@@ -66,7 +65,8 @@
 | `trade.rs`, `order_state.rs` | Ордер limit IOC/FOK со своим cl_ord_id, итог `QueryOrders` (vol_exec, price, fee), отмена, поиск по cl_ord_id |
 | `depth.rs` | Разбор кадров WS v2: pong, ответы, heartbeat/status, book, balances |
 | `local_book.rs`, `checksum.rs` | Локальный стакан (снимок + изменения, обрезка до глубины) и CRC32 |
-| `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: ограничитель подключений, подписка пачками, ping, пересподписка, котировка |
+| `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: ограничитель подключений, подписка пачками, ping, пересподписка, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `book_print.rs` | Решение 213 по содержимому: `GET /0/public/Depth` (count = `venue.depth_levels`, не больше 500) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `balance_event.rs` | Приватный поток balances → MarketEvent::Balance |
 
 ## Что важно знать
@@ -77,4 +77,8 @@
   сеть закрывается с записью в журнале (`venue.networks`).
 - Скидки своей монетой у Kraken нет — урок 23 (решение 158) неприменим.
 - Запись окна (решение 125) для Kraken не сделана — `window_tap` отвечает NotApplicable (по умолчанию контракта).
+- Сторож пар (решения 202/213, 08.11): `feed_health` — scheduled = false, per_pair = true, **confirm = true — по
+  содержимому**: номера нет ни у кадра book, ни у ответа REST; сравниваются первые `venue.depth_levels` уровней ответа
+  GET /0/public/Depth и стакана в памяти (`book_print.rs`). У REST count — не больше 500: при `venue.depth_levels` = 1000
+  подтверждения нет (ошибка с причиной). Лимит публичных запросов в документации не описан.
 - Функции контракта только для DEX отвечают `NotApplicable`.

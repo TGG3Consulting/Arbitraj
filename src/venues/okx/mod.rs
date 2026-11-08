@@ -157,7 +157,7 @@ impl Venue for Okx {
         Ok(std::sync::Arc::new(f))
     }
 
-    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — book_print.rs snapshot
     /// (GET /api/v5/market/books), комиссия — тот же план, что у стакана потока (book.rs frozen).
     async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
         let symbol = self.symbols.get(&self.ctx, &asset.ticker)?.symbol;

@@ -207,3 +207,72 @@ fn recorded_ws_balances() {
     }
     assert!(auth > 0 && rows > 0);
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/poloniex/book_print.rs — подтверждение тихой пары по
+/// содержимому. Разбор ответа GET /markets/{symbol}/orderBook на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (Spot → Public Endpoints →
+/// Market Data → Order Book: asks ["1.91", "47.17277487"], bids ["1.9", "110", "1.889", "10"]) — живого ответа REST
+/// и кадров book в tests/data нет (api.poloniex.com закрыт прокси; что записать — tests/README.md, раздел Poloniex).
+/// Стакан в памяти — кадр канала book того же вида, что пример документации (Market Data → Book), с уровнями примера
+/// REST (собран здесь, не запись). Сравнение — живая логика ядра (core/feed_confirm.rs verdict): тот же отпечаток —
+/// Quiet; стакана нет или он другой — Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::poloniex::book_print;
+    let docs: Value = serde_json::from_str(
+        r#"{"time":1648708448871,"scale":"1","asks":["1.91","47.17277487"],"bids":["1.9","110","1.889","10"],"ts":1648708448873}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&docs, 5).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (2, 1));
+    assert_eq!(
+        (p.asks[0].price, p.asks[0].qty),
+        (d("1.91"), d("47.17277487"))
+    );
+    assert_eq!((p.bids[0].price, p.bids[0].qty), (d("1.9"), d("110")));
+    assert_eq!((p.bids[1].price, p.bids[1].qty), (d("1.889"), d("10")));
+    // Кадр book с теми же уровнями (порядок сторон — как в описании канала) даёт тот же отпечаток.
+    let frame = r#"{"channel":"book","data":[{"symbol":"BTC_USDT","createTime":1648052239156,"asks":[["1.91","47.17277487"]],"bids":[["1.9","110"],["1.889","10"]],"id":123456,"ts":1648052239192}]}"#;
+    let depth::Msg::Books(list) = depth::parse(frame) else {
+        panic!("кадр book не разобран")
+    };
+    let ours = BookPrint::top(&list[0].bids, &list[0].asks, 5);
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 5,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(ours)), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    let other = BookPrint::top(&p.bids[..1], &p.asks, 5);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(other)), 2),
+        Verdict::Lost(_)
+    ));
+    // Вид ответа: нет asks, нечётный список.
+    let bad: Value = serde_json::from_str(r#"{"bids":[]}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет asks");
+    let odd: Value = serde_json::from_str(r#"{"asks":["1.91"],"bids":[]}"#).unwrap();
+    assert!(book_print::parse(&odd, 5).is_err());
+}
+
+/// Решение 202: отписка одной пары — вид из Spot → WebSocket, «Unsubscribe» (тот же channel и symbols, что подписка).
+#[test]
+fn unsubscribe_message_is_official_shape() {
+    let v: Value = serde_json::from_str(&ws_conn::unsub_message("BTC_USDT")).unwrap();
+    assert_eq!(
+        v,
+        serde_json::json!({"event": "unsubscribe", "channel": ["book"], "symbols": ["BTC_USDT"]})
+    );
+}

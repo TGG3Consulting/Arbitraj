@@ -133,6 +133,27 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   же объекта даёт тот же отпечаток — verdict ядра Quiet; стакана нет / другой — Lost. `resub_request_shape` —
   depth.unsubscribe всех рынков (пример «All markets» документации) и depth.subscribe со своим id. Записать на сервере
   бота подряд кадры depth.update пары (raw.book_frames = да) и `GET /v2/spot/depth?market=<SYM>&limit=20&interval=0`.
+- `poloniex_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET
+  /markets/{symbol}/orderBook на **примере из документации** (Public Endpoints → Market Data → Order Book: плоские
+  списки asks / bids «цена, количество» подряд); стакан в памяти — кадр book того же вида, что пример документации Market
+  Data → Book, с уровнями примера REST (**собран в тесте, не запись**; живых ответов и кадров нет — api.poloniex.com
+  закрыт прокси): одинаковый отпечаток — verdict ядра Quiet; стакана нет / другой — Lost. `unsubscribe_message_is_official_shape`
+  — отписка одной пары по примеру «Unsubscribe» (Spot → WebSocket). Записать на сервере бота подряд кадры book пары
+  (raw.book_frames = да) и `GET /markets/<SYM>/orderBook?limit=20`: (1) плоский ли список asks / bids (пары «цена,
+  количество»); (2) равенство отпечатков на одной книге.
+- `kraken_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /0/public/Depth
+  на **примере из документации** (api-reference/market-data/get-order-book.md: ключ XXBTZUSD при запросе XBTUSD —
+  берётся единственная книга; уровни [цена, объём, время]); живого ответа нет — api.kraken.com закрыт прокси; verdict
+  ядра: тот же отпечаток — Quiet, стакана нет / обрезанный — Lost. Записать на сервере бота подряд кадры book пары
+  (raw.book_frames = да) и `GET /0/public/Depth?pair=<REST-имя>&count=10`: (1) ключ result — то же имя или внутреннее;
+  (2) равенство отпечатков на одной книге.
+- `htx_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор tick GET /market/depth на
+  **примере из документации** (Get Market Depth; взяты первые два уровня каждой стороны из пяти, 1.82E-4 — научная
+  запись); стакан в памяти — снимок mbp.refresh того же вида, что в документации, с уровнями примера REST (**собран в
+  тесте, не запись**; живых ответов нет — api.huobi.pro закрыт прокси): verdict ядра Quiet; стакана нет / другой — Lost.
+  `unsubscribe_message_is_official_shape` — {"unsub", "id"} («Websocket Market Data → Unsubscribe»). Записать на
+  сервере бота подряд снимки mbp.refresh.20 пары (raw.book_frames = да) и `GET /market/depth?symbol=<sym>&depth=20&type=step0`:
+  (1) равенство отпечатков на одной книге; (2) version ответа против seqNum снимка — одна ли шкала.
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:
@@ -205,8 +226,8 @@ Java и SDK) и кадры канала баланса спота (страни�
 - `binance_real_data.rs` — адаптер Binance (решение 160). Всегда выполняются: подпись REST и WebSocket API на
   официальных примерах документации (request-security: `c8db5682…6b71`; websocket-api/request-security: `aa1b5712…db24`).
   Остальное — `#[ignore]` до записи в `data/cex_samples_2026_11_05/` (из среды Claude `api.binance.com` закрыт прокси).
-- `core_exec_book_237.rs` — решение 237 на живом ядре (SQLite) с настоящим адаптером XT и локальным HTTP-сервером с записанными ответами (справочник пар — живой ответ 06.11, `data/xt_live_2026-11-06/`; стакан — пример ответа документации XT, `data/rest_book_2026-11-09/`): котировка исполнения и худшая цена ордера по одному снимку REST (один запрос), кейс XTER целиком (sell_or_stuck — без пустых повторов), REST не ответил — один повтор через exec.rest_book_retry_ms и ошибка без кода безопасного повтора, старый снимок не используется.
-- `rest_book_237.rs` — решение 237 у адаптеров: вход — стакан MEXC старше venue.book_stale_ms без котировки, с подтверждением тихой пары — с котировкой; BingX без venue.book_stale_ms — котировки нет; разбор снимков REST: Gate (живой ответ 04.11), XT, Phemex, Poloniex (примеры документации).
+- `core_exec_book_238.rs` — решение 238 на живом ядре (SQLite) с настоящим адаптером XT и локальным HTTP-сервером с записанными ответами (справочник пар — живой ответ 06.11, `data/xt_live_2026-11-06/`; стакан — пример ответа документации XT, `data/rest_book_2026-11-09/`): котировка исполнения и худшая цена ордера по одному снимку REST (один запрос), кейс XTER целиком (sell_or_stuck — без пустых повторов), REST не ответил — один повтор через exec.rest_book_retry_ms и ошибка без кода безопасного повтора, старый снимок не используется.
+- `rest_book_238.rs` — решение 238 у адаптеров: вход — стакан MEXC старше venue.book_stale_ms без котировки, с подтверждением тихой пары — с котировкой; BingX без venue.book_stale_ms — котировки нет; разбор снимков REST: Gate (живой ответ 04.11), XT, Phemex, Poloniex (примеры документации).
 - `binance_book_print.rs` — решения 202/213 у Binance: подтверждение тихой пары по содержимому на **примерах из
   документации** (github.com/binance/binance-spot-api-docs: rest-api.md «Order book», web-socket-streams.md «Partial Book
   Depth Streams»), не на живых ответах: живой пары «кадр + ответ REST в тот же момент» нет. Ответ REST с уровнями кадра
@@ -261,6 +282,14 @@ bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IO
 Затем `cargo test --test binance_real_data -- --ignored` и снять `#[ignore]` с прошедших.
 
 ### Phemex — tests/phemex_real_data.rs и команды записи (решение 168)
+
+Решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /md/orderbook на **примере из
+документации** («Query Order Book», sBTCUSDT, масштабы 8 / 8); стакан в памяти — локальный стакан из снимка OrderBook
+того же вида, с уровнями примера REST (**собран в тесте, не запись**; живых ответов нет — api.phemex.com закрыт прокси):
+verdict ядра Quiet; стакана нет / другой — Lost. `unsubscribe_message_is_official_shape` — «Unsubscribe OrderBook»
+(params пустой). Записать на сервере бота подряд кадры orderbook пары (raw.book_frames = да) и
+`GET /md/orderbook?symbol=sCAKEUSDT`: (1) равенство отпечатков на одной книге; (2) sequence ответа против sequence
+последнего кадра — одна ли шкала; (3) интервалы контрольных снимков тихой пары (приходят ли раз в 60 с без изменений).
 
 Без записей (идут всегда): строка для подписи — ровно «Signed string» примеров 1–3 документации (General API
 information → Signature example), HMAC SHA256 hex — посчитан теми же вызовами, что официальный пример клиента

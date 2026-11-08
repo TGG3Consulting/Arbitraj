@@ -170,7 +170,7 @@ impl Venue for Bitget {
     /// Решение 217: снимок стакана монеты на момент решения (book.rs freeze_decided — копия того стакана, по которому
     /// котировали: поток или снимок REST котировки исполнения, решение 201; без запросов в пути сделки).
     /// Ошибки: как у котировки до прохода по уровням (стакана нет, устарел, комиссия, настройка).
-    /// Решение 237: на пути ордера (gateway/patience.rs is_exec — core/exec_book.rs) — только стакан потока (book.rs
+    /// Решение 238: на пути ордера (gateway/patience.rs is_exec — core/exec_book.rs) — только стакан потока (book.rs
     /// freeze, мера venue.book_stale_ms) со справочником исполнения (symbols.rs get_exec, решение 201); устарел — ядро
     /// берёт снимок REST (quote_rest), а не снимок прошлой котировки по сроку feed.stale_after_ms (одна мера свежести).
     async fn quote_snapshot(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {
@@ -192,7 +192,7 @@ impl Venue for Bitget {
         Ok(std::sync::Arc::new(f))
     }
 
-    /// Решение 237: снимок стакана по REST для ордера (стакан потока устарел) — rest_book.rs snapshot (GET
+    /// Решение 238: снимок стакана по REST для ордера (стакан потока устарел) — rest_book.rs snapshot (GET
     /// /api/v2/spot/market/orderbook, «20 times/1s (IP)»), как у котировки исполнения решения 201: снимок — и в память
     /// адаптера (put_rest), и ядру; комиссия — тот же план (book.rs frozen).
     async fn quote_rest(&self, asset: &Asset, side: Side) -> GatewayResult<QuoteSnapshot> {

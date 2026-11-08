@@ -185,20 +185,28 @@ fn recorded_order_fee() {
 }
 
 /// Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — отказ вывода
-/// (WithdrawRejected), как 11000, при любой операции. В официальной таблице кодов его нет: текст и статус — из живого
-/// ответа Bitget на вывод (сделки CHEEMS, AVA, RWA; сырое тело в репозиторий не записано — тело ниже собрано из
-/// кода и msg этого ответа).
+/// (WithdrawRejected), как 11000, при любой операции. В официальной таблице кодов его нет: основание — живые ответы
+/// Bitget на вывод из журнала бота (tests/data/bitget_40938_2026-11-07, сделки CHEEMS и др.).
 #[test]
 fn code_40938_is_withdraw_rejected() {
     use arb::gateway::errors::ErrorCode;
     use arb::venues::bitget::errors::{Op, from_code};
-    let msg = "Your account can only withdraw to addresses in the address book";
-    let raw = format!(r#"{{"code":"40938","msg":"{msg}"}}"#);
-    for op in [Op::Withdraw, Op::Move, Op::Other] {
-        let e = from_code(400, "40938", msg, op, &raw);
-        assert_eq!(e.code, ErrorCode::WithdrawRejected, "{op:?}");
-        assert!(e.message.contains("40938") && e.message.contains("address book"));
+    let text = std::fs::read_to_string("tests/data/bitget_40938_2026-11-07/withdraw_rejected.jsonl")
+        .expect("записанные ответы 40938");
+    let mut n = 0;
+    for raw in text.lines().filter(|l| !l.trim().is_empty()) {
+        let v: serde_json::Value = serde_json::from_str(raw).expect("JSON ответа");
+        let code = v["code"].as_str().expect("code — строка");
+        let msg = v["msg"].as_str().expect("msg");
+        assert!(v["data"].is_null());
+        for op in [Op::Withdraw, Op::Move, Op::Other] {
+            let e = from_code(400, code, msg, op, raw);
+            assert_eq!(e.code, ErrorCode::WithdrawRejected, "{op:?}");
+            assert!(e.message.contains("40938") && e.message.contains("address book"));
+        }
+        n += 1;
     }
+    assert_eq!(n, 4);
     // 11000 — как раньше.
     assert_eq!(
         from_code(400, "11000", "", Op::Withdraw, "").code,

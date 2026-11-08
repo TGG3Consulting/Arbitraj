@@ -16,8 +16,11 @@
 //! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
 //! Решение 220: «вывод отклонён» (WithdrawRejected) не повторяется при любых правилах шлюза (rules_apply.rs) — ошибка
 //! уходит вызывающему (продажа на месте — relay_here.rs, возврат USDT — usdt_return_retry.rs).
+//! Решение 231: вывод с «исход неизвестен» и «чем найти» — бот ищет его сам (outcome_resolve.rs); найден — перевод идёт
+//! дальше обычным путём (статус, хеш, зачисление); не найден за срок — как раньше, ручная проверка.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
-//! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs).
+//! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), risk.outcome_poll_s,
+//! risk.outcome_max_s (через outcome_resolve.rs).
 
 use std::time::Duration;
 
@@ -207,6 +210,23 @@ async fn go(
                     tokio::time::sleep(Duration::from_millis(pause_ms)).await
                 }
                 Next::Stop => {
+                    // Решение 231: исход неизвестен — бот ищет вывод по своему ID (или по хешу у DEX); создан — дальше
+                    // обычный опрос статуса и зачисление (ожидание поступления уже стоит).
+                    // Найден и отклонён (или перевод DEX откатился) — вывода нет: дальше как при обычном отказе.
+                    let e = match e.code {
+                        ErrorCode::OutcomeUnknown => {
+                            match super::outcome_resolve::withdraw(
+                                core, deal, from, &gw_from, &req, &e,
+                            )
+                            .await
+                            {
+                                Some(Ok(t)) => break t,
+                                Some(Err(rejected)) => rejected,
+                                None => e,
+                            }
+                        }
+                        _ => e,
+                    };
                     // Вывода не будет — получатель снимает ожидание поступления (DEX: wallet/inflows.rs). Исход
                     // неизвестен — перевод мог уйти: ожидание остаётся (до ручной проверки или срока).
                     if e.code != ErrorCode::OutcomeUnknown {

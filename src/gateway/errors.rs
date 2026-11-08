@@ -100,6 +100,10 @@ pub struct GatewayError {
     /// проверкой значения). По нему пул, брошенный из-за настройки, возвращается в чтение, когда её зададут (решение 63).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setting: Option<String>,
+    /// Решение 231: у «исход неизвестен» — чем найти операцию (свой ID ордера или вывода, ID площадки, хеш и nonce
+    /// транзакции; gateway/pending.rs). Ставит адаптер; ядро выясняет по нему исход (core/outcome_resolve.rs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending: Option<Box<super::pending::PendingRef>>,
 }
 
 impl GatewayError {
@@ -114,6 +118,7 @@ impl GatewayError {
             raw: None,
             tx: None,
             setting: None,
+            pending: None,
         }
     }
 

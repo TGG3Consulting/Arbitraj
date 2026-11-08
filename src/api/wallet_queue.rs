@@ -54,7 +54,7 @@ pub async fn release(
     let v = super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
-    v.release_wallet_queue("интерфейс", body.pending_ok)
+    v.release_wallet_queue("вручную, интерфейс", body.pending_ok)
         .await
         .map(Json)
         .map_err(ApiError::gateway)

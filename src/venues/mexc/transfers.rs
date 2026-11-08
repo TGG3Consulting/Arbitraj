@@ -20,6 +20,7 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -80,7 +81,8 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         // А-🟠5: итог неизвестен — поиск в истории по своему withdrawOrderId.
         Err(e) if e.code == ErrorCode::OutcomeUnknown => match find(ctx, &order_id).await {
             Some(id) => id,
-            None => return Err(e),
+            // Решение 231: «чем найти» — свой withdrawOrderId (ядро поищет ещё, outcome_resolve.rs).
+            None => return Err(e.pending(PendingRef::withdraw(&order_id))),
         },
         Err(e) => return Err(e),
     };
@@ -114,7 +116,7 @@ async fn history(ctx: &Ctx) -> GatewayResult<Vec<Value>> {
 }
 
 /// ID вывода MEXC по своему withdrawOrderId (поле есть в ответе withdraw/history). None — не найден или сбой.
-async fn find(ctx: &Ctx, order_id: &str) -> Option<String> {
+pub(super) async fn find(ctx: &Ctx, order_id: &str) -> Option<String> {
     let list = history(ctx).await.ok()?;
     list.iter()
         .find(|r| num::text_opt(r, "withdrawOrderId").as_deref() == Some(order_id))

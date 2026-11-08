@@ -76,6 +76,10 @@ pub struct Risk {
     /// Решение 225: «Стоп» системы поставлен софтом (общий лимит дня, правило «стоп всё») — режим до него; любая смена
     /// режима (risk::set_mode) снимает отметку.
     pub mode_auto: Option<super::auto_pause::ModeMark>,
+    /// Решение 231: открытые «исход неизвестен» по площадкам (outcome_open.rs) — паузу Outcome бот снимает, когда все
+    /// выяснены им самим. «Снять паузу» человеком снимает учёт.
+    #[serde(skip)]
+    pub outcome_open: HashMap<VenueId, super::outcome_open::Open>,
 }
 
 impl Default for Risk {
@@ -94,6 +98,7 @@ impl Default for Risk {
             loss_seen: BTreeMap::new(),
             venue_auto: HashMap::new(),
             mode_auto: None,
+            outcome_open: HashMap::new(),
         }
     }
 }
@@ -209,6 +214,8 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     r.cycle_paused.remove(&venue.0);
     // Решение 225: паузу снял человек — софтовая отметка снята.
     r.venue_auto.remove(venue);
+    // Решение 231: учёт «исход неизвестен» площадки — тоже (человек проверил сам).
+    r.outcome_open.remove(venue);
     drop(r);
     publish(core);
 }

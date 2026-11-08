@@ -17,6 +17,7 @@ use serde_json::Value;
 
 use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::Op;
@@ -42,12 +43,14 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
             .with_raw(r.to_string())
         })
     });
+    // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
+    let pending = PendingRef::order(&p.symbol, &p.link_id, req.qty);
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
             match order_state::recover(ctx, &p.symbol, &p.link_id).await {
                 Some(id) => id,
-                None => return Err(e),
+                None => return Err(e.pending(pending)),
             }
         }
         Err(e) => return Err(e),
@@ -58,7 +61,7 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         Err(e) => Err(e),
     };
     ctx.private.forget(&order_id);
-    out
+    out.map_err(|e| e.pending(pending.with_ref(&order_id)))
 }
 
 /// Результат ядра по окончательной записи ордера. Ошибки: OrderRejected (Rejected без исполнения), BadResponse,

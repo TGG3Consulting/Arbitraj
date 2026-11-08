@@ -21,7 +21,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
 use super::BscDex;
-use super::{coins, connection, directory, exec, pools, quote, send, wallet};
+use super::{coins, connection, directory, exec, pools, quote, resolve, send, wallet};
 use crate::gateway::urgency::{self, Urgency as Class, scope};
 
 #[async_trait]
@@ -122,7 +122,8 @@ impl Venue for BscDex {
         // Решение 222: монета сделки — по изменению баланса кошелька на блоке свопа (все пути исполнения ниже).
         let r = self.trade_logs(req).await;
         let fact = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, r);
-        scope(Class::Trade, fact).await
+        // Решение 231: «исход неизвестен» с фактом транзакции — «чем найти» (хеш, nonce) для ядра (resolve.rs).
+        scope(Class::Trade, fact).await.map_err(resolve::attach)
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -135,6 +136,7 @@ impl Venue for BscDex {
             wallet::transfer::withdraw(&env, &self.p.tokens, &self.p.nonces, req),
         )
         .await
+        .map_err(resolve::attach)
     }
 
     /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.
@@ -145,6 +147,27 @@ impl Venue for BscDex {
         let work =
             wallet::transfer_status::withdrawal_status(&self.p.ctx, &self.p.tokens, venue_ref, w);
         scope(Class::Trade, work).await
+    }
+
+    /// Решение 231: своп с неизвестным исходом — квитанция по хешу; очередь кошелька снимается, итог свопа — человек
+    /// (resolve.rs).
+    async fn resolve_trade(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        self.p.ctx.bound()?;
+        scope(Class::Trade, resolve::trade(&self.p, req, p)).await
+    }
+
+    /// Решение 231: перевод из кошелька с неизвестным исходом — квитанция по хешу (resolve.rs).
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        self.p.ctx.bound()?;
+        scope(Class::Trade, resolve::withdraw(&self.p, req, p)).await
     }
 
     /// Адрес кошелька; заодно регистрирует ожидаемое поступление монеты (после конца идущего обмена с ней на выходе) —

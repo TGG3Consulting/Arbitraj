@@ -7,10 +7,13 @@
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs; deal_value / sell_value — sell.rs, sell_unsent.rs, relay*.rs,
 //! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
 //! Худшая цена — worst.rs (та же у расчёта, решение 66).
-//! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs.
+//! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs, outcome_resolve.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
-//! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset.
+//! Решение 231: «исход неизвестен» с «чем найти» — после паузы площадки бот ищет ордер сам (outcome_resolve.rs); найден
+//! окончательный итог — разбирается как обычный ответ на ордер; не найден за срок — как раньше, ручная проверка.
+//! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset; risk.outcome_poll_s, risk.outcome_max_s
+//! (через outcome_resolve.rs).
 
 use std::time::Duration;
 
@@ -61,42 +64,53 @@ pub async fn trade(
         "Продажа"
     };
     let mut attempt = 0;
+    // Решение 231: итог операции с неизвестным исходом, найденный ботом (outcome_resolve.rs), — разбирается ниже как
+    // ответ на ордер (тот же путь: имена монет, газ, «не исполнилась» по правилам шлюза), без новой постановки.
+    let mut found: Option<TradeResult> = None;
     loop {
-        attempt += 1;
-        let worst = worst_price(core, v, a, side, qty, avg)?;
-        // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
-        if let Some(cap) = cap
-            && side == Side::Buy
-            && qty * worst > cap
-        {
-            return Err(OpError::from(format!(
-                "{op} {qty} {}: списание по худшей цене {worst} — {} больше бюджета {cap}, ордер не ставится",
-                a.ticker,
-                qty * worst
-            )));
-        }
-        let req = TradeRequest {
-            venue: v.clone(),
-            // Решение 211: ордер площадки — с её тикером монеты; результат — обратно в монету ядра (ниже).
-            asset: super::venue_ticker::on_venue(core, a, v),
-            side,
-            qty,
-            worst_price: worst,
-            deal_id: deal.to_string(),
-            route: route.clone(),
-            // Решение 177: каждая продажа отсюда — выход из позиции: монета уже куплена (продажа сделки — sell.rs, в
-            // том числе продажа на DEX в сделке CEX → DEX; застрявшая монета; кнопки человека; «Продать» в «Балансах»).
-            // Покупка — нет. Циклы DEX ↔ DEX сюда не ходят (cycle_deal.rs, свой запрос) — у них сверка с квотером — стоп.
-            exit_position: side == Side::Sell,
-        };
-        // Решение 132: DEX — кошелёк сделки.
-        let res = match super::dex_account::venue_deal(core, deal, v).await {
-            Ok(x) => x.trade(req).await,
-            Err(e) => Err(GatewayError::new(
-                ErrorCode::NotConfigured,
-                Some(v.clone()),
-                e,
-            )),
+        let (x, req, res) = match found.take() {
+            Some(r) => (None, r.request.clone(), Ok(r)),
+            None => {
+                attempt += 1;
+                let worst = worst_price(core, v, a, side, qty, avg)?;
+                // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
+                if let Some(cap) = cap
+                    && side == Side::Buy
+                    && qty * worst > cap
+                {
+                    return Err(OpError::from(format!(
+                        "{op} {qty} {}: списание по худшей цене {worst} — {} больше бюджета {cap}, ордер не ставится",
+                        a.ticker,
+                        qty * worst
+                    )));
+                }
+                let req = TradeRequest {
+                    venue: v.clone(),
+                    // Решение 211: ордер площадки — с её тикером монеты; результат — обратно в монету ядра (ниже).
+                    asset: super::venue_ticker::on_venue(core, a, v),
+                    side,
+                    qty,
+                    worst_price: worst,
+                    deal_id: deal.to_string(),
+                    route: route.clone(),
+                    // Решение 177: каждая продажа отсюда — выход из позиции: монета уже куплена (продажа сделки —
+                    // sell.rs, в том числе продажа на DEX в сделке CEX → DEX; застрявшая монета; кнопки человека;
+                    // «Продать» в «Балансах»). Покупка — нет. Циклы DEX ↔ DEX сюда не ходят (cycle_deal.rs, свой
+                    // запрос) — у них сверка с квотером — стоп.
+                    exit_position: side == Side::Sell,
+                };
+                // Решение 132: DEX — кошелёк сделки.
+                match super::dex_account::venue_deal(core, deal, v).await {
+                    Ok(x) => {
+                        let res = x.trade(req.clone()).await;
+                        (Some(x), req, res)
+                    }
+                    Err(e) => {
+                        let e = GatewayError::new(ErrorCode::NotConfigured, Some(v.clone()), e);
+                        (None, req, Err(e))
+                    }
+                }
+            }
         };
         let res = res.map(|mut r| {
             // Решение 219: каждая монета комиссии — в имя ядра.
@@ -130,7 +144,23 @@ pub async fn trade(
         };
         match rules_apply::on_error(core, op, v, Some(deal), &err, attempt).await {
             Next::Retry { pause_ms } => tokio::time::sleep(Duration::from_millis(pause_ms)).await,
-            Next::Stop => return Err(OpError::from(&err)),
+            Next::Stop => {
+                // Решение 231: исход неизвестен — бот ищет ордер по «чем найти» из ошибки; нашёл — разбор как ответа.
+                // Отклонён площадкой — окончательно, ничего не исполнено: как обычный отказ ордера, без повтора.
+                if let Some(x) = x.as_ref().filter(|_| err.code == ErrorCode::OutcomeUnknown)
+                    && let Some(r) =
+                        super::outcome_resolve::trade(core, op, deal, v, x, &req, &err).await
+                {
+                    match r {
+                        Ok(r) => {
+                            found = Some(r);
+                            continue;
+                        }
+                        Err(rejected) => return Err(OpError::from(&rejected)),
+                    }
+                }
+                return Err(OpError::from(&err));
+            }
         }
     }
 }

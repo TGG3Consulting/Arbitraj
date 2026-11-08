@@ -35,6 +35,7 @@ pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
 pub mod reply;
+pub mod resolve;
 pub mod rest;
 pub mod sign;
 pub mod subs;
@@ -181,6 +182,15 @@ impl Venue for Kucoin {
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
+    }
+
+    /// Решение 231: итог ордера с неизвестным исходом — resolve.rs.
+    async fn resolve_trade(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        resolve::trade(&self.ctx, req, p).await
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {

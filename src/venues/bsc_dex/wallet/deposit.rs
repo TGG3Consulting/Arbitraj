@@ -102,7 +102,7 @@ pub async fn release(p: &Parts, by: &str, pending_ok: bool) -> GatewayResult<Wal
     } else {
         ""
     };
-    let msg = format!("Очередь кошелька снята вручную после проверки ({by}{note})");
+    let msg = format!("Очередь кошелька снята после проверки ({by}{note})");
     ctx.log(Level::Warn, "send.queue_released", msg, None).await;
     super::queue_store::save(ctx, &state).await;
     let q = WalletQueue {

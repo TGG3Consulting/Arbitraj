@@ -161,6 +161,42 @@ pub trait Venue: Send + Sync {
     /// Возвращает: перевод с актуальным статусом. Ошибки: не найден, связь.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer>;
 
+    /// Решение 231: окончательный итог ордера (свопа), чей исход был неизвестен, — по «чем найти» из ошибки
+    /// (gateway/pending.rs), официальным запросом ордера площадки. Найден не окончательным — адаптер доводит его как
+    /// обычный (ждёт, отменяет остаток — правило Тиграна). Принимает: исходный запрос, PendingRef.
+    /// Возвращает: Some(итог) — как у trade (исполнено / частично / не исполнено, суммы, комиссии); None — пока не найден
+    /// (ядро спросит ещё). Ошибки: сбой запроса (ядро спросит ещё); по умолчанию NotApplicable — однозначного способа
+    /// нет, исход выясняет человек.
+    async fn resolve_trade(
+        &self,
+        req: TradeRequest,
+        pending: &super::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        let _ = (req, pending);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "площадка не умеет искать ордер по своему ID — исход проверяет человек",
+        ))
+    }
+
+    /// Решение 231: создан ли вывод, чей исход был неизвестен, — по своему ID вывода (история выводов площадки) или
+    /// по хешу транзакции (DEX). Принимает: исходный запрос, PendingRef. Возвращает: Some(перевод с ID площадки) —
+    /// дальше ядро ведёт его обычным опросом статуса; None — пока не найден. Ошибки: сбой запроса (ядро спросит ещё);
+    /// по умолчанию NotApplicable — однозначного способа нет, исход выясняет человек.
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        pending: &super::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        let _ = (req, pending);
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "площадка не умеет искать вывод по своему ID — исход проверяет человек",
+        ))
+    }
+
     /// Адрес для депозита монеты в указанной сети.
     /// Возвращает: адрес. Ошибки: ввод закрыт, сеть не поддерживается.
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String>;

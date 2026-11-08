@@ -27,6 +27,7 @@ use tokio::time::Instant;
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::{Ctx, currency, ticker};
 use super::errors::{self, Op};
@@ -97,6 +98,8 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     let venue_ref = match sent {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
+            // Решение 231: «чем найти» — свой clientOrderId (ядро поищет ещё, outcome_resolve.rs).
+            let e = e.pending(PendingRef::withdraw(&client_id));
             match detail(ctx, ("clientOrderId", client_id.clone())).await {
                 Ok(r) => match num::text_opt(&r, "id") {
                     Some(id) => id,
@@ -121,7 +124,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
 }
 
 /// Запись вывода по recordId или clientOrderId (в очереди 1/с). Ошибки: связь, коды XT, пусто — не найден.
-async fn detail(ctx: &Ctx, by: (&'static str, String)) -> GatewayResult<Value> {
+pub(super) async fn detail(ctx: &Ctx, by: (&'static str, String)) -> GatewayResult<Value> {
     turn().await;
     let rec = rest::signed(
         ctx,

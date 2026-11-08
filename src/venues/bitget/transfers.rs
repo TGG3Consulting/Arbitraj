@@ -23,6 +23,7 @@ use serde_json::{Value, json};
 
 use crate::core::types::{Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
@@ -71,6 +72,8 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     let venue_ref = match sent {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
+            // Решение 231: «чем найти» — свой clientOid (ядро поищет ещё, outcome_resolve.rs).
+            let e = e.pending(PendingRef::withdraw(&client_oid));
             match find(ctx, ("clientOid", client_oid.clone())).await {
                 Some(r) => num::text_opt(&r, "orderId").ok_or(e)?,
                 None => return Err(e),
@@ -92,7 +95,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
 }
 
 /// Запись вывода по orderId или clientOid в окне. None — не найдена или сбой.
-async fn find(ctx: &Ctx, by: (&'static str, String)) -> Option<Value> {
+pub(super) async fn find(ctx: &Ctx, by: (&'static str, String)) -> Option<Value> {
     records::fetch(ctx, RECORDS, vec![by])
         .await
         .ok()?

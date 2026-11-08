@@ -84,6 +84,8 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "send.tx_not_included" => (WARN, "Транзакция не попала в блок"),
         "send.tx_reverted" => (STOP, "Транзакция откатилась — газ потрачен"),
         "send.outcome_unknown" => (STOP, "Итог операции неизвестен — нужна проверка"),
+        "outcome.resolved" => (OK, "Исход операции выяснен ботом"),
+        "outcome.unresolved" => (STOP, "Исход операции бот не выяснил — нужна проверка"),
         "send.queue_halted" => (STOP, "Кошелёк DEX остановлен до проверки"),
         "dex.swap_waits_inflow" => (WARN, "Обмен на DEX ждёт поступления в кошелёк"),
         "dex.rebuilt_after_approve" => (INFO, "Обмен на DEX пересобран после разрешения"),

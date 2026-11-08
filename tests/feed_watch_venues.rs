@@ -43,14 +43,24 @@ async fn venues(tag: &str) -> Vec<Arc<dyn Venue>> {
     let vault = arb::secrets::Vault::locked(d.join("secrets.enc"));
     let raw = RawLog::start(d.join("raw"), settings.clone());
     let mx = arb::venues::mexc::ctx::Ctx {
+        settings: settings.clone(),
+        vault: vault.clone(),
+        http: reqwest::Client::new(),
+        journal: journal.clone(),
+        raw: raw.clone(),
+        taps: Default::default(),
+    };
+    let bg = arb::venues::bitget::ctx::Ctx {
         settings,
         vault,
         http: reqwest::Client::new(),
         journal,
         raw,
-        taps: Default::default(),
     };
-    vec![Arc::new(arb::venues::mexc::Mexc::new(mx))]
+    vec![
+        Arc::new(arb::venues::mexc::Mexc::new(mx)),
+        Arc::new(arb::venues::bitget::Bitget::new(bg)),
+    ]
 }
 
 #[tokio::test]

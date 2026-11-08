@@ -272,3 +272,58 @@ fn private_funding_answers() {
     }
     assert!(!kinds.is_empty());
 }
+
+/// Решения 202/213 для всех бирж (Тигран 08.11), venues/kraken/book_print.rs — подтверждение тихой пары по содержимому.
+/// Разбор result GET /0/public/Depth на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (api-reference/market-data/get-order-book.md, пример
+/// ответа: XXBTZUSD, asks ['30384.10000', '2.059', 1688671659] …, bids ['30297.00000', '1.115', 1688671636] …) — живого
+/// ответа REST в tests/data нет (api.kraken.com закрыт прокси; что записать — tests/README.md, раздел Kraken). Запрос по
+/// имени XBTUSD, ключ ответа — внутреннее имя XXBTZUSD («When omitted, internal names are used») — берётся единственная
+/// книга. Сравнение — живая логика ядра (core/feed_confirm.rs verdict): тот же отпечаток — Quiet; стакана нет или он
+/// другой — Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::kraken::book_print;
+    let docs: Value = serde_json::from_str(
+        r#"{"XXBTZUSD":{"asks":[["30384.10000","2.059",1688671659],["30387.90000","1.500",1688671380],["30393.70000","9.871",1688671261]],"bids":[["30297.00000","1.115",1688671636],["30296.70000","2.002",1688671674],["30289.80000","5.001",1688671673]]}}"#,
+    )
+    .unwrap();
+    let p = book_print::parse(&docs, "XBTUSD", 10).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (3, 3));
+    assert_eq!((p.asks[0].price, p.asks[0].qty), (d("30384.1"), d("2.059")));
+    assert_eq!((p.bids[0].price, p.bids[0].qty), (d("30297"), d("1.115")));
+    assert_eq!(p.bids[2].price, d("30289.8"));
+    // Первые 2 уровня — обрезка по n.
+    let two = book_print::parse(&docs, "XXBTZUSD", 2).unwrap();
+    assert_eq!((two.bids.len(), two.asks.len()), (2, 2));
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 10,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(p.clone())), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    assert!(matches!(
+        verdict(&pair, &ver(Some(two)), 2),
+        Verdict::Lost(_)
+    ));
+    // Вид ответа: две книги без нужной, нет asks.
+    let many: Value = serde_json::from_str(r#"{"A":{},"B":{}}"#).unwrap();
+    assert!(book_print::parse(&many, "XBTUSD", 10).is_err());
+    let bad: Value = serde_json::from_str(r#"{"XBTUSD":{"bids":[]}}"#).unwrap();
+    assert_eq!(
+        book_print::parse(&bad, "XBTUSD", 10).unwrap_err(),
+        "нет asks"
+    );
+}

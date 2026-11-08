@@ -141,6 +141,12 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   — отписка одной пары по примеру «Unsubscribe» (Spot → WebSocket). Записать на сервере бота подряд кадры book пары
   (raw.book_frames = да) и `GET /markets/<SYM>/orderBook?limit=20`: (1) плоский ли список asks / bids (пары «цена,
   количество»); (2) равенство отпечатков на одной книге.
+- `kraken_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /0/public/Depth
+  на **примере из документации** (api-reference/market-data/get-order-book.md: ключ XXBTZUSD при запросе XBTUSD —
+  берётся единственная книга; уровни [цена, объём, время]); живого ответа нет — api.kraken.com закрыт прокси; verdict
+  ядра: тот же отпечаток — Quiet, стакана нет / обрезанный — Lost. Записать на сервере бота подряд кадры book пары
+  (raw.book_frames = да) и `GET /0/public/Depth?pair=<REST-имя>&count=10`: (1) ключ result — то же имя или внутреннее;
+  (2) равенство отпечатков на одной книге.
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:

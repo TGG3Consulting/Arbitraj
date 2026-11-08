@@ -3,7 +3,7 @@
 //! все стаканы соединения недостоверны, журнал, пауза, переподключение (через ограничитель попыток ws_req.rs). Нет
 //! нужной настройки — соединение останавливается (без бесконечных повторов).
 //! Кто вызывает: market.rs (по задаче на соединение), user_stream_conn.rs (config_ping — те же сроки пинга).
-//! От чего зависит: ws_conn.rs, book.rs, ctx.rs, market.rs (Sub).
+//! От чего зависит: ws_conn.rs, book.rs, ctx.rs, market.rs (Sub), gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.depth_levels (10, 25, 100, 500, 1000), venue.ws_ping_ms, venue.ws_silence_ms,
 //! venue.ws_streams_per_msg, venue.ws_subs_per_sec, venue.ws_reconnect_pause_ms [kraken], http.timeout_ms.
 //!
@@ -61,9 +61,18 @@ pub async fn run(
     books: Books,
     out: mpsc::Sender<MarketEvent>,
 ) {
+    // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
+    let tickers: Vec<String> = subs.iter().map(|s| s.asset.ticker.clone()).collect();
+    let (feed, mut cmd) = books.feed.register(&name, &tickers);
     while !out.is_closed() {
         let end = match config(&ctx) {
-            Ok(cfg) => ws_conn::session(&ctx, &name, &subs, &books, &out, cfg).await,
+            Ok(cfg) => {
+                let w = ws_conn::Watch {
+                    feed: &feed,
+                    cmd: &mut cmd,
+                };
+                ws_conn::session(&ctx, &name, &subs, &books, &out, cfg, w).await
+            }
             Err(e) => {
                 let m = format!("WebSocket {name} остановлен: {e}");
                 ctx.log(Level::Error, "venue.ws", m).await;

@@ -79,6 +79,8 @@ pub async fn subscribe(
             })
         })
         .collect();
+    // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
+    books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in subs.chunks(per_conn).enumerate() {
         tasks.push(tokio::spawn(ws::run(

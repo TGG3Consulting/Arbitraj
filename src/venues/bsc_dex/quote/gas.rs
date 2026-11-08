@@ -5,7 +5,9 @@
 //! блока, не блокируясь; сам запрос обычно делает фоновый прогрев (quote/warm.rs) на каждый новый блок, а не расчёт.
 //! Единственное исключение — холодный старт (кэш пуст): один раз дожидаемся первого запроса.
 //! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (exec/txs.rs) и в котировке (quote/mod.rs).
-//! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs.
+//! Решение 237: pinned — цена газа, закреплённая на момент снимка котировки (venues/bsc_dex/frozen.rs): котировка по
+//! снимку считает газ по цене момента решения, а не по цене блока, пришедшего позже.
+//! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs, frozen.rs (pinned).
 //! От чего зависит: node/rpc.rs, node/heads.rs, num.rs.
 //! Настройки: send.gas_price_markup_pct [bsc_dex]; узел — bsc.node_http_url.
 //!
@@ -31,11 +33,39 @@ pub struct GasPrice {
     cache: Arc<Mutex<Option<(u64, U256)>>>,
     /// Один запрос на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
+    /// Решение 237: закреплена на момент снимка — узел не спрашивается, свежесть блока не проверяется.
+    pinned: bool,
 }
 
 impl GasPrice {
-    /// Цена газа в wei с надбавкой. Ошибки: StaleData (нет свежего блока), NotConfigured (надбавка), узел.
+    /// Решение 237: копия с ценой, закреплённой сейчас (последняя известная цена из памяти, без запроса к узлу; цены
+    /// ещё нет — котировка по копии вернёт StaleData, живая цена не подставляется). Возвращает: GasPrice. Ошибок нет.
+    pub fn pinned(&self) -> GasPrice {
+        let now = *self.cache.lock().unwrap_or_else(|p| p.into_inner());
+        GasPrice {
+            cache: Arc::new(Mutex::new(now)),
+            flight: Arc::default(),
+            pinned: true,
+        }
+    }
+
+    /// Цена газа в wei с надбавкой (закреплённая — решение 237: без узла и без проверки свежести блока).
+    /// Ошибки: StaleData (нет свежего блока; у закреплённой — цены не было), NotConfigured (надбавка), узел.
     pub async fn wei(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<U256> {
+        if self.pinned {
+            let p = self
+                .cache
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .map(|(_, p)| p);
+            let p = p.ok_or_else(|| {
+                ctx.err(
+                    ErrorCode::StaleData,
+                    "цены газа на момент снимка в памяти не было — газ по снимку не посчитать",
+                )
+            })?;
+            return self.marked(ctx, p);
+        }
         let head = heads.fresh(ctx)?;
         let hit = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
             Some((b, p)) if b == head.number => Some(p),
@@ -70,6 +100,12 @@ impl GasPrice {
                 },
             },
         };
+        self.marked(ctx, base)
+    }
+
+    /// Цена с надбавкой send.gas_price_markup_pct. Принимает: окружение, цену узла в wei. Возвращает: wei.
+    /// Ошибки: NotConfigured (надбавка), BadResponse (не считается).
+    fn marked(&self, ctx: &Ctx, base: U256) -> GatewayResult<U256> {
         let markup = ctx.dec("send.gas_price_markup_pct")?;
         let bad = || {
             ctx.err(

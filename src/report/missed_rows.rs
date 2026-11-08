@@ -36,6 +36,8 @@ pub struct DealRow {
     pub plan: f64,
     /// Итог сделки из учёта; None — ещё нет.
     pub fact: Option<f64>,
+    /// Решение 237: прибыль той же модели на вложенном объёме (Record.at_budget у сделки); None — точки нет.
+    pub at_invested: Option<f64>,
     pub opt_invested: f64,
     pub opt_profit: f64,
     pub missed: f64,
@@ -120,6 +122,7 @@ pub fn deals(data: &MissedData, old: bool) -> Vec<DealRow> {
                 limited: limited_label(&b.limited_by),
                 plan: num(b.battle.profit, 4),
                 fact: i.fact.map(|f| num(f, 4)),
+                at_invested: b.at_budget.at.map(|a| num(a.profit, 4)),
                 opt_invested: num(b.opt.invested, 2),
                 opt_profit: num(b.opt.profit, 4),
                 missed: num(b.missed, 4),

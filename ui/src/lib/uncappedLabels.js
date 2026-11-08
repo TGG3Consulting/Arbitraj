@@ -73,13 +73,21 @@ export function windowSec(b) {
 export const understated = (b) => b?.battle?.verdict === 'deal' && (b.basis ?? 'live_after_buy') === 'live_after_buy';
 
 const BASIS = {
-  decision_snapshot: 'рынок на момент решения (до покупки)',
+  // Решение 237: все входы — на момент входа; decision_snapshot — записи до него (σ и курсы позже входа).
+  decision_inputs: 'все данные на момент входа: стаканы, пулы, σ, время в пути, курсы, газ',
+  decision_snapshot: 'стаканы на момент входа, σ и курсы — позже (до решения 237, несравнимо)',
   live_after_buy: 'посчитано после покупки — занижено',
   live: 'живые котировки',
   // Решение 218: старая запись сделки пересчитана по окну (основная запись сделки — последняя).
   recomputed_window: 'пересчитано по окну: стаканы на момент решения (до покупки)',
   recomputed_window_dex_plan: 'пересчитано по окну: биржа — стакан на момент решения, DEX — из плана (приблизительно)',
 };
+
+/** Решение 237: запись сделки по снимку стаканов, но σ и курсы — на момент расчёта (до решения 237): несравнимо. */
+export const lateInputs = (b) => b?.battle?.verdict === 'deal' && b?.basis === 'decision_snapshot';
+
+/** Решение 237: «заработали бы» / «потеряли бы» по знаку расчёта. */
+export const wouldText = (profit) => (Number(profit) < 0 ? 'потеряли бы' : 'заработали бы');
 
 /** Решение 218: запись — пересчёт старой записи сделки по окну. */
 export const recomputed = (b) => (b?.basis ?? '').startsWith('recomputed_window');

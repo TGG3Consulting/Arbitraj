@@ -52,6 +52,19 @@ impl<'a, C: Curve> Memo<'a, C> {
         Decimal::from(n) * self.step
     }
 
+    /// Решение 237: расчёт на n шагов ВНЕ предела расчётов (объём, на котором вошли в сделку, — считается всегда, даже
+    /// если предел уже исчерпан; в счёт предела идёт). Принимает: n. Возвращает: как at. Ошибок сверх at нет.
+    pub async fn force(&mut self, n: u64) -> Result<Point<C::Data>, Fail> {
+        if self.map.contains_key(&n) || !self.capped() {
+            return self.at(n).await;
+        }
+        let max = self.max;
+        self.max = self.done + 1;
+        let r = self.at(n).await;
+        self.max = max;
+        r
+    }
+
     /// Расчёт на n шагов (один раз на n). Принимает: n. Возвращает: точку или Fail; n = 0 — TooSmall;
     /// списание больше бюджета — TooLarge (инвариант бюджета: проверяется в каждой точке, не только на границе —
     /// вложение от объёма у умного маршрута DEX может быть немонотонным); предел size.max_evals исчерпан — Stop.

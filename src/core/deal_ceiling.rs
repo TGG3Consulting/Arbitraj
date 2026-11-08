@@ -1,9 +1,13 @@
 //! Файл: core/deal_ceiling.rs
 //! Что делает: решение 216 — строки расчёта «без потолка» (решение 141) в сообщении Telegram о закрытой сделке
 //! (deal.closed). «Потолок» по Тиграну — сколько можно было вложить без ограничения нашего бюджета (opt.invested записи
-//! без потолка), а не наш бюджет. Плюсовая: «💸 Упустили» (missed) и «🔝 Потолок: вложить → прибыль» (opt.invested,
-//! opt.profit; оптимум не проходит пороги — пометка «(не проходит пороги)»). Минусовая: «🔝 Потолок» и «💥 Через
-//! потолок потеряли бы ≈ …» — оценка тем же процентом убытка на объёме потолка. Записи нет — «Без потолка: не
+//! без потолка), а не наш бюджет. Решение 237 (Тигран, 09.11): строки говорят ровно то, что считается, одинаково у
+//! плюсовой и минусовой: «🔝 Потолок (макс. прибыль без лимита): opt.invested», «📐 На потолке заработали бы / потеряли
+//! бы: opt.profit (расчёт по данным входа)» (не проходит пороги — пометка), «📐 На вложенных: at_budget (тот же расчёт)»
+//! — точка модели на объёме, на котором вошли, «💸 Упущено против вложенного: missed». Всё — одна модель по данным
+//! момента входа; факт на объёме потолка не считается (продажи на нём не было; пропорция «факт / вложено × потолок»
+//! решения 216 убрана — это была не модель). Запись до решения 237 (basis decision_snapshot: σ и курсы позже входа) —
+//! строка «⚠️ … несравнимо» перед цифрами. Записи нет — «Без потолка: не
 //! посчитано» и причина, если она известна в момент закрытия (выключено, цикл DEX ↔ DEX, ещё считается / ждёт в
 //! очереди, сбой чтения базы, решение 217 — сбой расчёта по сделке и «нет снимка рынка» по id сделки). Решение 217:
 //! запись без поля basis (посчитана после нашей покупки, до решения 217) — строка «⚠️ … посчитано после покупки —
@@ -25,9 +29,11 @@ use crate::storage::uncapped_db;
 
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
-use super::size_uncapped::At;
+use super::size_uncapped::{At, Level};
 use super::uncapped_state::Key;
-use super::uncapped_types::{BASIS_RECOMPUTED, BASIS_RECOMPUTED_DEX_PLAN, old_basis, understated};
+use super::uncapped_types::{
+    BASIS_RECOMPUTED, BASIS_RECOMPUTED_DEX_PLAN, late_inputs, old_basis, understated,
+};
 
 /// Часть записи «без потолка» (core/uncapped_types.rs Record, JSON в SQLite), нужная сообщению.
 #[derive(Debug, Clone, Deserialize)]
@@ -35,6 +41,9 @@ struct Part {
     opt: At,
     opt_passes: bool,
     missed: Decimal,
+    /// Решение 237: у сделки — точка модели на вложенном объёме; у записей без поля — None.
+    #[serde(default)]
+    at_budget: Option<Level>,
     /// Решение 217: источник данных; записи без поля — «после покупки» (занижено).
     #[serde(default = "old_basis")]
     basis: String,
@@ -50,8 +59,12 @@ pub enum Ceiling {
         profit: Decimal,
         passes: bool,
         missed: Decimal,
+        /// Решение 237: та же модель на вложенном объёме (Record.at_budget.at); None — точки нет.
+        at_invested: Option<At>,
         /// Решение 217: посчитано после нашей покупки (старая запись) — цифры занижены, в сообщении пометка.
         understated: bool,
+        /// Решение 237: σ и курсы взяты позже входа (запись до решения 237) — несравнимо, в сообщении пометка.
+        late: bool,
         /// Решение 218: запись пересчитана по окну сделки — строка-пометка источника; None — обычная запись.
         recomputed: Option<String>,
     },
@@ -67,7 +80,9 @@ pub fn parse(body: &str) -> Ceiling {
             profit: p.opt.profit,
             passes: p.opt_passes,
             missed: p.missed,
+            at_invested: p.at_budget.and_then(|l| l.at),
             understated: understated("deal", &p.basis),
+            late: late_inputs("deal", &p.basis),
             recomputed: recomputed_note(&p.basis),
         },
         Err(e) => Ceiling::Unknown(Some(format!("запись не читается: {e}"))),
@@ -125,23 +140,27 @@ fn why_none(core: &Core, d: &Deal) -> Option<String> {
         .map(|(_, e)| e)
 }
 
-/// Строки «без потолка» в сообщение закрытой сделки. Принимает: сообщение, сделку, её факт (итог, USDT), знак
-/// (плюсовая — итог ≥ 0), расчёт. Возвращает: сообщение со строками. Ошибок нет.
-pub fn lines(m: Msg, d: &Deal, fact: Decimal, plus: bool, c: &Ceiling) -> Msg {
-    let (invested, profit, passes, missed, low, again) = match c {
+/// Строки «без потолка» в сообщение закрытой сделки (см. шапку; одинаковы у плюсовой и минусовой).
+/// Принимает: сообщение, расчёт. Возвращает: сообщение со строками. Ошибок нет.
+pub fn lines(m: Msg, c: &Ceiling) -> Msg {
+    let (invested, profit, passes, missed, at_invested, understated, late, recomputed) = match c {
         Ceiling::Known {
             invested,
             profit,
             passes,
             missed,
+            at_invested,
             understated,
+            late,
             recomputed,
         } => (
-            *invested,
-            *profit,
-            *passes,
-            *missed,
-            *understated,
+            invested,
+            profit,
+            passes,
+            missed,
+            at_invested,
+            understated,
+            late,
             recomputed,
         ),
         Ceiling::Unknown(why) => {
@@ -149,33 +168,46 @@ pub fn lines(m: Msg, d: &Deal, fact: Decimal, plus: bool, c: &Ceiling) -> Msg {
             return m.line(format!("Без потолка: не посчитано{tail}"));
         }
     };
+    let mut m = m;
     // Решение 217: старая запись (посчитана после нашей покупки) — пометка, цифры занижены.
-    let m = if low {
-        m.line("⚠️ Без потолка посчитано после покупки — занижено")
-    } else {
-        m
-    };
+    if *understated {
+        m = m.line("⚠️ Без потолка посчитано после покупки — занижено");
+    }
+    // Решение 237: запись до решения 237 — σ и курсы позже входа.
+    if *late {
+        m = m.line("⚠️ Без потолка: σ и курсы взяты позже входа (до решения 237) — несравнимо");
+    }
     // Решение 218: пересчёт старой записи по окну сделки — пометка источника.
-    let m = match again {
-        Some(n) => m.line(n.clone()),
-        None => m,
+    if let Some(n) = recomputed {
+        m = m.line(n.clone());
+    }
+    let would = if profit.is_sign_negative() && !profit.is_zero() {
+        "потеряли бы"
+    } else {
+        "заработали бы"
     };
-    let cap = format!("🔝 Потолок: {}", h::usd(invested));
-    if plus {
-        let mark = if passes {
-            ""
-        } else {
-            " (не проходит пороги)"
-        };
-        return m
-            .line(format!("💸 Упустили: {}", h::usd(missed)))
-            .line(format!("{cap} → прибыль {} USDT{mark}", h::money(profit)));
+    let mark = if *passes {
+        ""
+    } else {
+        ", не проходит пороги"
+    };
+    m = m
+        .line(format!(
+            "🔝 Потолок (макс. прибыль без лимита): {}",
+            h::usd(*invested)
+        ))
+        .line(format!(
+            "📐 На потолке {would}: {} (расчёт по данным входа{mark})",
+            h::usd(*profit)
+        ));
+    if let Some(a) = at_invested {
+        m = m.line(format!(
+            "📐 На вложенных {}: {} (тот же расчёт)",
+            h::usd(a.invested),
+            h::signed_usd(a.profit)
+        ));
     }
-    let m = m.line(cap);
-    match loss_at(fact, d.invested, invested) {
-        Some(x) => m.line(format!("💥 Через потолок потеряли бы ≈ {}", h::usd(x))),
-        None => m,
-    }
+    m.line(format!("💸 Упущено против вложенного: {}", h::usd(*missed)))
 }
 
 /// Решение 218: пометка записи, пересчитанной по окну сделки (uncapped_types BASIS_RECOMPUTED*); иначе None.
@@ -189,13 +221,4 @@ fn recomputed_note(basis: &str) -> Option<String> {
         ),
         _ => None,
     }
-}
-
-/// Оценка убытка на объёме потолка: факт / вложено × вложение потолка — тот же процент убытка, что у сделки.
-/// Это ОЦЕНКА, не расчёт: продажи на объёме потолка не было; на большем объёме покупка шла бы глубже по стакану или
-/// пулу (средняя цена хуже), продажа — тоже глубже, а газ, комиссия вывода и другие постоянные затраты на крупном
-/// объёме весят меньше. Поэтому в сообщении — знак «≈». Принимает: факт сделки, вложено, вложение потолка.
-/// Возвращает: оценку (со знаком факта); вложено 0 — None (процента нет). Ошибок нет.
-pub fn loss_at(fact: Decimal, invested: Decimal, cap: Decimal) -> Option<Decimal> {
-    (!invested.is_zero()).then(|| fact / invested * cap)
 }

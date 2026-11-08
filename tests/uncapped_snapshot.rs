@@ -165,6 +165,7 @@ async fn uncapped_on_snapshot_not_affected_by_buy() {
         budget,
         &ladder,
         |_| true,
+        None,
     )
     .await
     .unwrap();
@@ -186,6 +187,7 @@ async fn uncapped_on_snapshot_not_affected_by_buy() {
         budget,
         &ladder,
         |_| true,
+        None,
     )
     .await
     .unwrap();
@@ -202,6 +204,7 @@ async fn uncapped_on_snapshot_not_affected_by_buy() {
         budget,
         &ladder,
         |_| true,
+        None,
     )
     .await
     .unwrap();

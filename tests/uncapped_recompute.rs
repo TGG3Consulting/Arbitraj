@@ -158,6 +158,7 @@ fn frozen_side(b: &OrderBook, side: Side) -> FrozenBook {
             rate: d("0.001"),
             per_coin,
             asset: asset.into(),
+            paid_in: None,
         },
         taken_at: b.received_at,
     }

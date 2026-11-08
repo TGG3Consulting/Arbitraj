@@ -22,7 +22,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -149,8 +149,7 @@ pub fn result(
         } else {
             funds / filled
         },
-        fee,
-        fee_asset,
+        fees: Fee::single(fee, fee_asset),
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

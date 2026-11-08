@@ -10,12 +10,15 @@
 //! https://www.mexc.com/api-docs/spot-v3/spot-account-trade/account-trade-list — symbol (YES), orderId (NO),
 //! limit (NO; «Default 10; max 1000» — пересказ таблицы); ответ — массив: orderId, qty, commission, commissionAsset.
 //! Без limit приходят только 10 сделок: у ордера по худшей цене сделок бывает больше — комиссия занижалась.
+//! Решение 219: сделки ордера с разными commissionAsset (например, часть в MX при скидке MX) — не ошибка, а сумма
+//! по каждой монете (список комиссий ядра, core/types/trade.rs Fee).
 
 use std::time::{Duration, Instant};
 
 use reqwest::Method;
 use rust_decimal::Decimal;
 
+use crate::core::types::Fee;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -41,44 +44,35 @@ pub fn limit(ctx: &Ctx) -> GatewayResult<u64> {
     Ok(n)
 }
 
-/// Сделки одного чтения: сумма qty, сумма commission, монета комиссии, сколько сделок ордера пришло.
+/// Сделки одного чтения: сумма qty, комиссия по монетам (решение 219), сколько сделок ордера пришло.
 struct Read {
     qty: Decimal,
-    fee: Decimal,
-    asset: String,
+    fees: Vec<Fee>,
     count: usize,
-    /// Комиссия пришла в разных монетах: «первая, другая».
-    mixed: Option<String>,
 }
 
-/// Что делает: комиссия ордера — сумма commission его сделок — после сверки суммы qty с executedQty.
-/// Принимает: окружение, символ, ID ордера MEXC, executedQty ордера.
-/// Возвращает: (комиссия, монета комиссии).
+/// Что делает: комиссия ордера — сумма commission его сделок по каждой commissionAsset — после сверки суммы qty с
+/// executedQty. Принимает: окружение, символ, ID ордера MEXC, executedQty ордера.
+/// Возвращает: комиссию по монетам (пусто — комиссии нет).
 /// Ошибки: OutcomeUnknown — сделки так и не сошлись с executedQty за venue.order_final_wait_ms или не читаются
-/// (ордер исполнен, а факт не подтверждён: ручная проверка); BadResponse — комиссия в разных монетах.
+/// (ордер исполнен, а факт не подтверждён: ручная проверка).
 pub async fn commission(
     ctx: &Ctx,
     symbol: &str,
     order_id: &str,
     executed: Decimal,
-) -> GatewayResult<(Decimal, String)> {
+) -> GatewayResult<Vec<Fee>> {
     let poll = Duration::from_millis(ctx.int("venue.order_poll_ms")?);
     let wait = Duration::from_millis(ctx.int("venue.order_final_wait_ms")?);
     let started = Instant::now();
     let why = loop {
         let why = match read(ctx, symbol, order_id).await {
-            // Разные монеты комиссии — факт, повтор его не изменит.
-            Ok(r) if r.mixed.is_some() => {
-                let m = r.mixed.unwrap_or_default();
-                return Err(super::errors::bad(
-                    &format!("ордер {order_id}: комиссия в разных монетах ({m})"),
-                    "",
-                ));
-            }
-            Ok(r) if r.qty == executed => return Ok((r.fee, r.asset)),
+            Ok(r) if r.qty == executed => return Ok(r.fees),
             Ok(r) => format!(
-                "сумма qty сделок {} (сделок {}) не равна executedQty {executed}, комиссия по ним {} {}",
-                r.qty, r.count, r.fee, r.asset
+                "сумма qty сделок {} (сделок {}) не равна executedQty {executed}, комиссия по ним {}",
+                r.qty,
+                r.count,
+                Fee::text(&r.fees)
             ),
             Err(e) => format!("сделки не прочитаны: {}", e.message),
         };
@@ -111,26 +105,19 @@ async fn read(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Read> {
         .ok_or_else(|| super::errors::bad("myTrades не массив", &data.to_string()))?;
     let mut r = Read {
         qty: Decimal::ZERO,
-        fee: Decimal::ZERO,
-        asset: String::new(),
+        fees: vec![],
         count: 0,
-        mixed: None,
     };
     for t in trades
         .iter()
         .filter(|t| num::text_opt(t, "orderId").as_deref() == Some(order_id))
     {
         let a = num::text_opt(t, "commissionAsset").unwrap_or_default();
-        if !r.asset.is_empty() && !a.is_empty() && a != r.asset {
-            r.mixed = Some(format!("{}, {a}", r.asset));
-        }
-        if r.asset.is_empty() {
-            r.asset = a;
-        }
         r.qty += num::dec(t, "qty")?;
-        r.fee += num::dec_opt(t, "commission")?
+        let fee = num::dec_opt(t, "commission")?
             .unwrap_or(Decimal::ZERO)
             .abs();
+        Fee::add(&mut r.fees, &a, fee);
         r.count += 1;
     }
     Ok(r)

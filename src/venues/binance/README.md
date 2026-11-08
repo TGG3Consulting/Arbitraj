@@ -28,7 +28,7 @@
 | `symbols.rs`, `symbols_parse.rs` | exchangeInfo (вне рабочих потоков): tickSize, stepSize, PRICE_FILTER, LOT_SIZE, NOTIONAL/MIN_NOTIONAL, статус, isSpotTradingAllowed, permissionSets ∩ права аккаунта |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как MEXC); с первой подпиской — поток аккаунта и круг остатка BNB |
 | `order_rules.rs` | ОДНА функция правил ордера (решение 134): у ордера и у `check_order`; LIMIT + IOC/FOK, округление, пределы, пробный `POST /api/v3/order/test` |
-| `trade.rs`, `order_state.rs`, `fills.rs` | Ордер с ответом FULL (итог сразу), иначе опрос/отмена; поиск по `origClientOrderId` при неизвестном итоге; комиссия — fills ответа или myTrades со сверкой с executedQty |
+| `trade.rs`, `order_state.rs`, `fills.rs` | Ордер с ответом FULL (итог сразу), иначе опрос/отмена; поиск по `origClientOrderId` при неизвестном итоге; комиссия — fills ответа или myTrades со сверкой с executedQty; разные commissionAsset — сумма по монете (решение 219) |
 | `fee_rates.rs`, `fees.rs`, `discount_balance.rs` | Ставки `account/commission` (стандартная + налог + специальная; taker + buyer/seller) фоном; скидка BNB по `venue.fee_deduction` и остатку BNB (решение 158) |
 | `book.rs`, `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs` | Стаканы `<symbol>@depth<N>[@100ms]` комбинированным потоком; одинаковый lastUpdateId — без разбора и без отдачи ядру (решение 109); котировка |
 | `wallet.rs`, `networks_parse.rs` | config/getall (вне рабочих потоков, кэш): сеть BSC, contractAddress, флаги, комиссия, пределы, шаг вывода withdrawIntegerMultiple, минимум депозита — решение человека |

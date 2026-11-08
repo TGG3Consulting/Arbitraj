@@ -24,7 +24,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -162,30 +162,46 @@ pub fn result(
     } else {
         quote / filled
     };
-    let zero = |f: &str| num::dec_opt(s, f).map(|v| v.unwrap_or_default().abs());
-    let (fee, gt, point) = (zero("fee")?, zero("gt_fee")?, zero("point_fee")?);
-    let (fee, fee_asset) = match (fee.is_zero(), gt.is_zero(), point.is_zero()) {
-        (_, true, true) => (fee, num::text_opt(s, "fee_currency").unwrap_or_default()),
-        (true, false, true) => (gt, "GT".to_string()),
-        _ => {
-            let m = format!(
-                "ордер {order_id}: комиссия не в одной монете (fee {fee}, gt_fee {gt}, point_fee {point})"
-            );
-            return Err(ctx.tag(errors::bad(&m, &s.to_string())));
-        }
-    };
+    let fees = fee_list(s, &order_id).map_err(|m| ctx.tag(errors::bad(&m, &s.to_string())))?;
     Ok(TradeResult {
         request: req,
         status,
         filled_qty: filled,
         avg_price: avg,
-        fee,
-        fee_asset,
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),
         executor: None,
     })
+}
+
+/// Что делает: комиссия ордера по монетам (решение 219): fee в fee_currency и gt_fee в GT — каждая своей частью
+/// (обе бывают у одного ордера). Документация (Order.md): fee — «Fee deducted», fee_currency — «Fee currency unit»,
+/// gt_fee — «GT used to deduct fee», point_fee — «Points used to deduct fee». Не из документации: что fee и gt_fee
+/// при обеих ненулевых — непересекающиеся части (не «fee включает gt_fee»), документация не уточняет; так читается
+/// «used to deduct» — GT покрыл часть, остаток — fee. point_fee ≠ 0 — очки не монета счёта: ошибка разбора (ручная
+/// проверка, как было). Принимает: состояние ордера, id. Возвращает: Vec<Fee>. Ошибки: текст — поле не число, очки.
+pub fn fee_list(s: &Value, order_id: &str) -> Result<Vec<Fee>, String> {
+    let zero = |f: &str| {
+        num::dec_opt(s, f)
+            .map(|v| v.unwrap_or_default().abs())
+            .map_err(|e| format!("ордер {order_id}: {f}: {}", e.message))
+    };
+    let (fee, gt, point) = (zero("fee")?, zero("gt_fee")?, zero("point_fee")?);
+    if !point.is_zero() {
+        return Err(format!(
+            "ордер {order_id}: часть комиссии очками (fee {fee}, gt_fee {gt}, point_fee {point}) — сверить вручную"
+        ));
+    }
+    let mut out = vec![];
+    Fee::add(
+        &mut out,
+        &num::text_opt(s, "fee_currency").unwrap_or_default(),
+        fee,
+    );
+    Fee::add(&mut out, super::gt_balance::GT, gt);
+    Ok(out)
 }
 
 /// Запрос или отмена ордера по id или text. Ошибки: как у rest::signed (вызывающий решает, что делать).

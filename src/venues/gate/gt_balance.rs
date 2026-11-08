@@ -26,7 +26,7 @@ use super::account;
 use super::ctx::Ctx;
 
 /// Тикер GT у Gate (монета скидки; имя валюты в API — «GT»). Не настройка: это имя валюты API Gate.
-const GT: &str = "GT";
+pub const GT: &str = "GT";
 
 /// Последний замер свободного GT. Дешёво клонируется.
 #[derive(Clone, Default)]

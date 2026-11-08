@@ -57,6 +57,7 @@ fn frozen(b: OrderBook, rate: Decimal) -> FrozenBook {
             rate,
             per_coin: false,
             asset: "USDT".into(),
+            paid_in: None,
         },
         taken_at: Utc::now(),
     }

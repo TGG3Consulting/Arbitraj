@@ -126,6 +126,7 @@ impl Books {
                 rate: rates.taker,
                 per_coin: false,
                 asset: "USDT".into(),
+                paid_in: None,
             },
             taken_at: chrono::Utc::now(),
         })

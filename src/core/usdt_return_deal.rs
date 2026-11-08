@@ -123,11 +123,7 @@ async fn not_returned(
 
 /// Комиссия продаж сделки в котируемой монете (её нет в выручке). Принимает: сделку, тикер котируемой. Ошибок нет.
 fn sell_fee(deal: &Deal, quote: &str) -> Decimal {
-    deal.sells
-        .iter()
-        .filter(|r| r.fee_asset == quote)
-        .map(|r| r.fee)
-        .sum()
+    deal.sells.iter().map(|r| r.fee_in(quote)).sum()
 }
 
 /// Область настройки «площадка». Принимает: площадку. Возвращает: At. Ошибок нет.

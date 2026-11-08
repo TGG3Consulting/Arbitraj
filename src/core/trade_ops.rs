@@ -98,7 +98,10 @@ pub async fn trade(
             )),
         };
         let res = res.map(|mut r| {
-            r.fee_asset = super::venue_ticker::name_back(core, a, v, &r.fee_asset);
+            // Решение 219: каждая монета комиссии — в имя ядра.
+            for f in &mut r.fees {
+                f.asset = super::venue_ticker::name_back(core, a, v, &f.asset);
+            }
             r.request.asset = a.clone();
             r
         });

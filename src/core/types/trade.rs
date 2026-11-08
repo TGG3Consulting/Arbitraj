@@ -85,17 +85,69 @@ pub enum TradeStatus {
     NotFilled,
 }
 
+/// Одна часть фактической комиссии ордера: сколько и в какой монете (решение 219).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Fee {
+    /// В чём взята: тикер монеты сделки, котируемая монета (USDT), монета скидки биржи (BGB, GT, MX, BNB, KCS),
+    /// BNB за газ у DEX.
+    pub asset: String,
+    /// Сумма в единицах `asset`, неотрицательная.
+    pub amount: Decimal,
+}
+
+impl Fee {
+    /// Что делает: список из одной части комиссии (у площадки, что сообщает одну монету). Ноль — пустой список.
+    /// Принимает: сумму, монету. Возвращает: Vec<Fee>. Ошибок нет.
+    pub fn single(amount: Decimal, asset: impl Into<String>) -> Vec<Fee> {
+        if amount.is_zero() {
+            return vec![];
+        }
+        vec![Fee {
+            asset: asset.into(),
+            amount,
+        }]
+    }
+
+    /// Что делает: добавляет часть комиссии, суммируя по монете (несколько сделок ордера с разными монетами).
+    /// Нулевая сумма не добавляется (пустая монета при ненулевой сумме — добавляется: факт виден, пересчёт в USDT
+    /// не пройдёт и это пишется в хронологию). Принимает: список, монету, сумму. Ошибок нет.
+    pub fn add(list: &mut Vec<Fee>, asset: &str, amount: Decimal) {
+        if amount.is_zero() {
+            return;
+        }
+        match list.iter_mut().find(|f| f.asset == asset) {
+            Some(f) => f.amount += amount,
+            None => list.push(Fee {
+                asset: asset.to_string(),
+                amount,
+            }),
+        }
+    }
+
+    /// Что делает: текст «0.1 USDT + 0.00002 BGB»; пусто — «0». Принимает: список. Ошибок нет.
+    pub fn text(list: &[Fee]) -> String {
+        if list.is_empty() {
+            return "0".into();
+        }
+        list.iter()
+            .map(|f| format!("{} {}", f.amount, f.asset))
+            .collect::<Vec<_>>()
+            .join(" + ")
+    }
+}
+
 /// Фактический результат покупки или продажи.
+/// Решение 219: комиссия — СПИСОК частей (любое число монет: Bitget BGB + монета, Gate GT + монета, сделки ордера в
+/// разных монетах). Старые записи (одна комиссия: поля fee и fee_asset) читаются — `TradeResultRaw` ниже.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "TradeResultRaw")]
 pub struct TradeResult {
     pub request: TradeRequest,
     pub status: TradeStatus,
     pub filled_qty: Decimal,
     pub avg_price: Decimal,
-    /// Фактическая комиссия (у DEX — газ в BNB, подробности в chain).
-    pub fee: Decimal,
-    /// В чём взята комиссия (монета, USDT, BNB за газ).
-    pub fee_asset: String,
+    /// Фактическая комиссия по монетам (у DEX — газ в BNB, подробности в chain). Пусто — комиссии нет.
+    pub fees: Vec<Fee>,
     /// Идентификатор ордера на бирже или хеш транзакции свопа.
     pub venue_ref: String,
     /// DEX: транзакция в сети (каналы, блок, газ). Биржа — None.
@@ -106,4 +158,57 @@ pub struct TradeResult {
     /// не разбирает, только показывает. Биржа — None.
     #[serde(default)]
     pub executor: Option<String>,
+}
+
+impl TradeResult {
+    /// Что делает: сколько комиссии взято в этой монете (сумма частей с тем же тикером).
+    /// Принимает: тикер. Возвращает: сумму (0 — в этой монете не брали). Ошибок нет.
+    pub fn fee_in(&self, asset: &str) -> Decimal {
+        self.fees
+            .iter()
+            .filter(|f| f.asset == asset)
+            .map(|f| f.amount)
+            .sum()
+    }
+}
+
+/// Вид записи TradeResult при чтении (сделки в БД, JSON): новый формат — `fees`; старый (до решения 219) — одна
+/// комиссия `fee` + `fee_asset`. Пишется всегда новый формат (derive Serialize у TradeResult).
+#[derive(Deserialize)]
+struct TradeResultRaw {
+    request: TradeRequest,
+    status: TradeStatus,
+    filled_qty: Decimal,
+    avg_price: Decimal,
+    #[serde(default)]
+    fees: Option<Vec<Fee>>,
+    #[serde(default)]
+    fee: Option<Decimal>,
+    #[serde(default)]
+    fee_asset: Option<String>,
+    venue_ref: String,
+    chain: Option<ChainTx>,
+    finished_at: DateTime<Utc>,
+    #[serde(default)]
+    executor: Option<String>,
+}
+
+impl From<TradeResultRaw> for TradeResult {
+    /// Старая запись: fee + fee_asset → список из одной части (ноль — пусто). Ошибок нет.
+    fn from(r: TradeResultRaw) -> Self {
+        let fees = r.fees.unwrap_or_else(|| {
+            Fee::single(r.fee.unwrap_or_default(), r.fee_asset.unwrap_or_default())
+        });
+        TradeResult {
+            request: r.request,
+            status: r.status,
+            filled_qty: r.filled_qty,
+            avg_price: r.avg_price,
+            fees,
+            venue_ref: r.venue_ref,
+            chain: r.chain,
+            finished_at: r.finished_at,
+            executor: r.executor,
+        }
+    }
 }

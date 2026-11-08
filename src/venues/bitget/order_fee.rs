@@ -13,26 +13,29 @@
 //! формат — ключ BGB (deduction, feeCoinCode, totalDeductionFee, totalFee) — встречается только у старых ордеров; у
 //! ордеров бота не ожидается: без newFees при исполненном ордере — факт не подтверждён (ошибка).
 //! Знак значений (минус у списания?) в документации не указан — берётся модуль (проверить на живом ответе).
+//! Решение 219: комиссия — список по монетам. BGB не хватило на всю комиссию — d в BGB и r в получаемой монете (живой
+//! ордер 08.11 XTER: d = 0.0000197 BGB, r = 5.32956 XTER, t = 5.33536) — обе части, а не ошибка.
 
 use rust_decimal::Decimal;
 use serde_json::Value;
+
+use crate::core::types::Fee;
 
 use super::num;
 
 /// Тикер BGB — монета скидки Bitget (имя монеты в API, как в описании поля d «unit: BGB»). Не настройка: имя монеты API.
 pub const BGB: &str = "BGB";
 
-/// Что делает: комиссия ордера одной монетой.
+/// Что делает: комиссия ордера по монетам (решение 219).
 /// Принимает: значение feeDetail (строка JSON или пусто), получаемую монету сделки.
-/// Возвращает: (комиссия ≥ 0, монета комиссии); пустой feeDetail — (0, получаемая монета).
-/// Ошибки: текст причины — feeDetail не JSON, нет newFees, значение не число, комиссия сразу в двух монетах (BGB и
-/// монета сделки) или купоном (c ≠ 0: как он делит комиссию, документация не говорит).
-pub fn parse(fee_detail: Option<&Value>, received: &str) -> Result<(Decimal, String), String> {
+/// Возвращает: части комиссии (≥ 0): без BGB — получаемая монета (t); BGB хватило — BGB (d); BGB не хватило —
+/// BGB (d) и получаемая монета (r). Пустой feeDetail — пустой список.
+/// Ошибки: текст причины — feeDetail не JSON, нет newFees, значение не число, часть купоном (c ≠ 0: как он делит
+/// комиссию, документация не говорит).
+pub fn parse(fee_detail: Option<&Value>, received: &str) -> Result<Vec<Fee>, String> {
     let text = match fee_detail {
-        None | Some(Value::Null) => return Ok((Decimal::ZERO, received.to_string())),
-        Some(Value::String(s)) if s.trim().is_empty() => {
-            return Ok((Decimal::ZERO, received.to_string()));
-        }
+        None | Some(Value::Null) => return Ok(vec![]),
+        Some(Value::String(s)) if s.trim().is_empty() => return Ok(vec![]),
         Some(Value::String(s)) => s.clone(),
         Some(other) => other.to_string(),
     };
@@ -51,12 +54,14 @@ pub fn parse(fee_detail: Option<&Value>, received: &str) -> Result<(Decimal, Str
             "комиссия частично купоном (newFees.c = {c}) — как делится, в документации нет: {text}"
         ));
     }
-    match (d.is_zero(), r.is_zero()) {
+    let mut out = vec![];
+    if d.is_zero() {
         // Без BGB: вся комиссия — в получаемой монете (t; r — остаток после BGB, у ордера без скидки может быть 0).
-        (true, _) => Ok((t.max(r), received.to_string())),
-        (false, true) => Ok((d, BGB.to_string())),
-        (false, false) => Err(format!(
-            "комиссия в двух монетах: BGB {d} и {received} {r} — ядро принимает одну монету комиссии: {text}"
-        )),
+        Fee::add(&mut out, received, t.max(r));
+    } else {
+        // BGB покрыл всю комиссию (r = 0) или часть — остаток r из получаемой монеты.
+        Fee::add(&mut out, BGB, d);
+        Fee::add(&mut out, received, r);
     }
+    Ok(out)
 }

@@ -198,11 +198,20 @@ pub fn frozen(
         asset: asset.clone(),
         side,
         book,
-        // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
+        // Комиссия taker аккаунта (не входит в avg_price). Решение 219: Bitget берёт комиссию из получаемой монеты
+        // (Get Order Info, feeDetail.newFees: t — «total trading fees, unit: currency obtained from the transaction»; факт
+        // 08.11: покупка — в монете): покупка — в монете от количества, продажа — в USDT от суммы. Скидка BGB — часть или
+        // вся комиссия в BGB, размер скидки в документации нет (fees.rs): расчёт по обычной ставке в получаемой монете —
+        // худший случай для количества монет; не хватит BGB — Bitget сам берёт остаток из получаемой монеты (r).
         fee: BookFee {
             rate: rates.taker,
-            per_coin: false,
-            asset: "USDT".into(),
+            per_coin: side == Side::Buy,
+            asset: if side == Side::Buy {
+                asset.ticker.clone()
+            } else {
+                "USDT".into()
+            },
+            paid_in: None,
         },
         taken_at: chrono::Utc::now(),
     })

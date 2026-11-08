@@ -1,0 +1,5 @@
+{
+  "_source": "Живой бот 08.11.2026, исполненный ордер покупки Bitget XTER (Get Order Info GET /api/v2/spot/trade/orderInfo, поле feeDetail): newFees d = 0.0000197 (BGB), r = 5.32956 (XTER), t = 5.33536. Сырой ответ orderInfo целиком не сохранён — feeDetail собран из значений живого ордера в формате документации (строка JSON с newFees c/d/r/t). Заменить сырым ответом при следующей записи.",
+  "baseCoin": "xter",
+  "feeDetail": "{\"newFees\":{\"c\":0,\"d\":0.0000197,\"deduction\":true,\"r\":5.32956,\"t\":5.33536,\"totalDeductionFee\":0}}"
+}

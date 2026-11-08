@@ -10,7 +10,8 @@
 //! Официально (rest-api «Account endpoints»): GET /api/v3/myTrades — symbol (обязателен), orderId («can only be used
 //! in combination with symbol»), limit («Default 500; max 1000»); ответ — массив: orderId, qty, commission,
 //! commissionAsset. Скидка BNB (faqs/commission_faq): комиссия в BNB, если скидка включена и BNB хватает, иначе — из
-//! полученной монеты; разные монеты комиссии у одного ордера — факт, показывается как ошибка разбора (ручная сверка).
+//! полученной монеты. Решение 219: разные монеты комиссии у одного ордера (часть в BNB, часть в монете) — не ошибка,
+//! а сумма по каждой монете (список комиссий ядра, core/types/trade.rs Fee).
 
 use std::time::{Duration, Instant};
 
@@ -18,6 +19,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
+use crate::core::types::Fee;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -40,14 +42,12 @@ pub fn limit(ctx: &Ctx) -> GatewayResult<u64> {
     Ok(n)
 }
 
-/// Сумма сделок: qty, commission, монета, сколько сделок, разные монеты («первая, другая»).
+/// Сумма сделок: qty, комиссия по монетам (решение 219), сколько сделок.
 #[derive(Debug, Default)]
 pub struct Sum {
     pub qty: Decimal,
-    pub fee: Decimal,
-    pub asset: String,
+    pub fees: Vec<Fee>,
     pub count: usize,
-    pub mixed: Option<String>,
 }
 
 /// Что делает: сумма по сделкам (fills ответа или myTrades). Принимает: сделки. Возвращает: Sum.
@@ -56,64 +56,45 @@ pub fn sum<'a>(trades: impl Iterator<Item = &'a Value>) -> GatewayResult<Sum> {
     let mut r = Sum::default();
     for t in trades {
         let a = num::text_opt(t, "commissionAsset").unwrap_or_default();
-        if !r.asset.is_empty() && !a.is_empty() && a != r.asset {
-            r.mixed = Some(format!("{}, {a}", r.asset));
-        }
-        if r.asset.is_empty() {
-            r.asset = a;
-        }
         r.qty += num::dec(t, "qty")?;
-        r.fee += num::dec_opt(t, "commission")?.unwrap_or_default().abs();
+        let fee = num::dec_opt(t, "commission")?.unwrap_or_default().abs();
+        Fee::add(&mut r.fees, &a, fee);
         r.count += 1;
     }
     Ok(r)
 }
 
 /// Что делает: комиссия из fills ответа FULL. Принимает: ответ ордера, executedQty.
-/// Возвращает: Some((комиссия, монета)) — fills покрывают всё исполненное; None — fills нет или не сошлись.
-/// Ошибка BadResponse — комиссия в разных монетах или поле не число.
-pub fn from_fills(order: &Value, executed: Decimal) -> GatewayResult<Option<(Decimal, String)>> {
+/// Возвращает: Some(комиссия по монетам) — fills покрывают всё исполненное; None — fills нет или не сошлись.
+/// Ошибка BadResponse — поле не число.
+pub fn from_fills(order: &Value, executed: Decimal) -> GatewayResult<Option<Vec<Fee>>> {
     let Some(list) = order.get("fills").and_then(Value::as_array) else {
         return Ok(None);
     };
     let s = sum(list.iter())?;
-    mixed(&s, &num::text_opt(order, "orderId").unwrap_or_default())?;
-    Ok((s.count > 0 && s.qty == executed).then_some((s.fee, s.asset)))
-}
-
-/// Разные монеты комиссии — ошибка с фактом. Ошибок, кроме этой, нет.
-fn mixed(s: &Sum, order_id: &str) -> GatewayResult<()> {
-    match &s.mixed {
-        Some(m) => Err(super::errors::bad(
-            &format!(
-                "ордер {order_id}: комиссия в разных монетах ({m}), всего {} — сверить вручную",
-                s.fee
-            ),
-            "",
-        )),
-        None => Ok(()),
-    }
+    Ok((s.count > 0 && s.qty == executed).then_some(s.fees))
 }
 
 /// Что делает: комиссия ордера по myTrades после сверки суммы qty с executedQty (повторы до venue.order_final_wait_ms).
-/// Принимает: окружение, символ, orderId, executedQty. Возвращает: (комиссия, монета).
-/// Ошибки: OutcomeUnknown — не сошлось или не читается; BadResponse — разные монеты.
+/// Принимает: окружение, символ, orderId, executedQty. Возвращает: комиссию по монетам.
+/// Ошибки: OutcomeUnknown — не сошлось или не читается.
 pub async fn commission(
     ctx: &Ctx,
     symbol: &str,
     order_id: &str,
     executed: Decimal,
-) -> GatewayResult<(Decimal, String)> {
+) -> GatewayResult<Vec<Fee>> {
     let poll = Duration::from_millis(ctx.int("venue.order_poll_ms")?);
     let wait = Duration::from_millis(ctx.int("venue.order_final_wait_ms")?);
     let started = Instant::now();
     let why = loop {
         let why = match read(ctx, symbol, order_id).await {
-            Ok(s) if s.mixed.is_some() => return mixed(&s, order_id).map(|_| (s.fee, s.asset)),
-            Ok(s) if s.qty == executed => return Ok((s.fee, s.asset)),
+            Ok(s) if s.qty == executed => return Ok(s.fees),
             Ok(s) => format!(
-                "сумма qty сделок {} (сделок {}) не равна executedQty {executed}, комиссия по ним {} {}",
-                s.qty, s.count, s.fee, s.asset
+                "сумма qty сделок {} (сделок {}) не равна executedQty {executed}, комиссия по ним {}",
+                s.qty,
+                s.count,
+                Fee::text(&s.fees)
             ),
             Err(e) => format!("сделки не прочитаны: {}", e.message),
         };

@@ -1,7 +1,7 @@
 //! Файл: core/fills.rs
 //! Что делает: перенос факта исполнения в учёт сделки: сколько монет у бота, сколько вложено и получено,
 //! сколько потрачено на комиссии. Комиссия в монете уменьшает количество; в USDT или BNB — идёт в затраты
-//! (BNB — по живой цене, convert.rs). Также затраты перевода (Transfer.fee). В хронологию сделки — кто исполнил своп
+//! (BNB — по живой цене, convert.rs). Решение 219: комиссия ордера — список по монетам, каждая часть — отдельно. Также затраты перевода (Transfer.fee). В хронологию сделки — кто исполнил своп
 //! DEX (TradeResult.executor, решение 121 B7).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: deal.rs, convert.rs, settings.
@@ -102,8 +102,11 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
             deal.proceeds += r.filled_qty * r.avg_price;
         }
     }
-    let fee = Cost::new(CostKind::TradeFee, r.fee, r.fee_asset.clone(), false);
-    charge(core, deal, &v, r.avg_price, fee).await;
+    // Решение 219: комиссия — по каждой монете отдельно (монета сделки уменьшает количество, остальное — в spent).
+    for f in &r.fees {
+        let fee = Cost::new(CostKind::TradeFee, f.amount, f.asset.clone(), false);
+        charge(core, deal, &v, r.avg_price, fee).await;
+    }
     // Решение 121 B7: кто исполнил своп DEX (свой сборщик: прямой / умный / бандл или KyberSwap) — в хронологию сделки.
     let by = r
         .executor
@@ -111,8 +114,12 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
         .map(|e| format!("; исполнил: {e}"))
         .unwrap_or_default();
     deal.note(format!(
-        "{:?} на {}: {} по {} (комиссия {} {}){by}",
-        r.request.side, v.0, r.filled_qty, r.avg_price, r.fee, r.fee_asset
+        "{:?} на {}: {} по {} (комиссия {}){by}",
+        r.request.side,
+        v.0,
+        r.filled_qty,
+        r.avg_price,
+        crate::core::types::Fee::text(&r.fees)
     ));
 }
 

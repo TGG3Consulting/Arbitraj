@@ -157,18 +157,22 @@ impl Books {
         let (rate, in_gt, _why) = rates
             .plan(&mode, gt_ok)
             .map_err(|m| ctx.tag(GatewayError::not_set(None, "venue.fee_deduction", m)))?;
-        // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — USDT по сумме.
+        // Комиссия taker аккаунта (не входит в avg_price): покупка без GT — в монете, иначе — по сумме сделки.
+        // Решение 219: со скидкой GT Gate берёт комиссию в GT (факт 08.11: все 73 ордера — GT; поле gt_fee — «GT used
+        // to deduct fee»): сумма — USDT-эквивалент по gt_taker_fee, платится GT (paid_in) — не из USDT и не из монеты.
         let fee = if side == Side::Buy && !in_gt {
             BookFee {
                 rate,
                 per_coin: true,
                 asset: asset.ticker.clone(),
+                paid_in: None,
             }
         } else {
             BookFee {
                 rate,
                 per_coin: false,
                 asset: "USDT".into(),
+                paid_in: in_gt.then(|| super::gt_balance::GT.to_string()),
             }
         };
         Ok(FrozenBook {

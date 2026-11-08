@@ -96,11 +96,13 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
             super::risk::on_ok(core, &v);
             deal.invested = r.input * r.base_usdt;
             deal.proceeds = r.output * r.base_usdt;
-            deal.spent += r.trade.fee * r.bnb_usdt;
+            // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
+            let gas = r.trade.fee_in(super::convert::GAS_TICKER);
+            deal.spent += gas * r.bnb_usdt;
             let by = r.trade.executor.clone().unwrap_or_default();
             deal.note(format!(
                 "Цикл исполнен: вход {} → выход {} {} (газ {} BNB); исполнил: {by}",
-                r.input, r.output, d.asset.ticker, r.trade.fee
+                r.input, r.output, d.asset.ticker, gas
             ));
             deal.buy = Some(r.trade);
             super::ledger::finish(core, &mut deal, Step::Closed, "цикл DEX ↔ DEX исполнен").await;

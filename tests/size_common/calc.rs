@@ -72,6 +72,7 @@ pub fn calc(rec: &Rec, qty: Decimal) -> Calc {
         sell_quote: quote("bsc_dex", Side::Sell, qty, sell_avg),
         at: Utc::now(),
         spend_max: spent,
+        spend_fee: Decimal::ZERO,
         size: None,
     }
 }

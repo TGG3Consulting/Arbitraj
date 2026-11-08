@@ -133,12 +133,14 @@ impl Books {
                 rate: rates.taker,
                 per_coin: true,
                 asset: asset.ticker.clone(),
+                paid_in: None,
             }
         } else {
             BookFee {
                 rate: rates.taker,
                 per_coin: false,
                 asset: ctx.text("venue.quote_asset")?,
+                paid_in: None,
             }
         };
         Ok(FrozenBook {

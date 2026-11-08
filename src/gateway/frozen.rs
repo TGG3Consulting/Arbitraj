@@ -53,6 +53,9 @@ pub struct BookFee {
     pub per_coin: bool,
     /// Монета комиссии (тикер монеты или котируемой монеты).
     pub asset: String,
+    /// Решение 219: комиссия берётся монетой скидки (GT, BNB), а сумма — в `asset` (USDT-эквивалент); см.
+    /// core/types/cost.rs Cost::paid_in. None — списывается сама `asset`.
+    pub paid_in: Option<String>,
 }
 
 /// Снимок стакана биржи: копия стакана адаптера на момент снимка и план комиссии.
@@ -89,12 +92,18 @@ impl FrozenBook {
             qty,
             fillable_qty: filled,
             avg_price: avg,
-            costs: vec![Cost::new(
-                CostKind::TradeFee,
-                base * self.fee.rate,
-                &self.fee.asset,
-                false,
-            )],
+            costs: vec![{
+                let c = Cost::new(
+                    CostKind::TradeFee,
+                    base * self.fee.rate,
+                    &self.fee.asset,
+                    false,
+                );
+                match &self.fee.paid_in {
+                    Some(coin) => c.paid_with(coin.clone()),
+                    None => c,
+                }
+            }],
             route: None,
             signal_route: None,
             pick: None,

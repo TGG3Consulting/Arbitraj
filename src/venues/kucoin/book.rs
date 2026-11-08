@@ -129,9 +129,14 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price). Решение 219: факт 08.11 — покупка
-            // в USDT (входит в списание покупки, costs_types.rs spend_fee); документация KuCoin по монете комиссии
-            // спота при решении 219 не перепроверялась — модель не менялась.
+            // Комиссия taker аккаунта — в USDT по сумме сделки (не входит в avg_price), покупка и продажа. Решение 232:
+            // без скидки KCS — «you'll pay the full fee in the quote currency of the trading pair»; со скидкой —
+            // «trading fees that would have originally been settled in USDT will be charged as KCS after applying a 20%
+            // discount»; «If your KCS balance isn't enough, the 20% discount won't apply» (KuCoin Help «Using KCS to Save
+            // 20% on Trading Fees»). Факт живого бота 08.11: покупка — feeCurrency USDT 42/42 (ставка 0.003 от суммы).
+            // Покупка в USDT входит в списание (costs_types.rs spend_fee). Не из документации — состояние «Pay Fees with
+            // KCS» в классическом API не читается: расчёт в USDT — худший случай для списания USDT (при скидке комиссия
+            // уйдёт в KCS, USDT останется с запасом).
             fee: BookFee {
                 rate: rates.taker,
                 per_coin: false,

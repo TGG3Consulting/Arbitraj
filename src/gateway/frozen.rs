@@ -58,6 +58,21 @@ pub struct BookFee {
     pub paid_in: Option<String>,
 }
 
+impl BookFee {
+    /// Решение 232: план «комиссия в получаемой монете» — покупка в монете сделки от исполненного количества, продажа в
+    /// котируемой монете от суммы сделки (как у BingX, Bybit, Bitget — решение 219). Без монеты скидки.
+    /// Принимает: ставку, сторону, монету сделки (тикер площадки), котируемую монету. Возвращает: BookFee. Ошибок нет.
+    pub fn in_received(rate: Decimal, side: Side, coin: &str, quote: &str) -> BookFee {
+        let buy = side == Side::Buy;
+        BookFee {
+            rate,
+            per_coin: buy,
+            asset: if buy { coin } else { quote }.to_string(),
+            paid_in: None,
+        }
+    }
+}
+
 /// Снимок стакана биржи: копия стакана адаптера на момент снимка и план комиссии.
 #[derive(Debug, Clone)]
 pub struct FrozenBook {

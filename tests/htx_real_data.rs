@@ -219,8 +219,11 @@ fn recorded_fee_rate() {
 #[test]
 #[ignore = "записать на живом боте htx_matchresults.json — matchresults исполненного IOC-ордера"]
 fn recorded_order_fee() {
-    let (fee, asset) = order_fee::parse(&data("htx_matchresults.json"), "CAKE").unwrap();
-    assert!(fee >= Decimal::ZERO && !asset.is_empty());
+    let fees = order_fee::parse(&data("htx_matchresults.json"), "CAKE").unwrap();
+    assert!(
+        fees.iter()
+            .all(|f| f.amount > Decimal::ZERO && !f.asset.is_empty())
+    );
 }
 
 #[test]

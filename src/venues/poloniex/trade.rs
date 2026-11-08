@@ -57,5 +57,5 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         Err(e) => return Err(e),
     };
     let state = order_state::settle(ctx, &order_id).await?;
-    order_state::result(ctx, req, &state, order_id, &p.received).await
+    order_state::result(ctx, req, &state, order_id).await
 }

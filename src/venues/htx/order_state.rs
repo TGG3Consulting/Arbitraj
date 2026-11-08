@@ -24,7 +24,7 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -135,8 +135,8 @@ pub async fn result(
     let size = num::dec(s, "amount")?;
     let qty = filled(s, "amount")?.unwrap_or(Decimal::ZERO);
     let funds = filled(s, "cash-amount")?.unwrap_or(Decimal::ZERO);
-    let (fee, fee_asset) = if qty.is_zero() {
-        (Decimal::ZERO, received.to_string())
+    let fees = if qty.is_zero() {
+        Vec::new()
     } else {
         order_fee::fact(ctx, &order_id, received)
             .await
@@ -158,7 +158,7 @@ pub async fn result(
         } else {
             funds / qty
         },
-        fees: Fee::single(fee, fee_asset),
+        fees,
         venue_ref: order_id,
         chain: None,
         finished_at: Utc::now(),

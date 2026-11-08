@@ -130,13 +130,13 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                asset: "USDT".into(),
-                paid_in: None,
-            },
+            // Комиссия taker аккаунта (не входит в avg_price). Решение 232: «When you buy on the order book, the fee is
+            // charged in the crypto you bought»; «When you sell, the fee is charged on the proceeds of the sale» (OKX Help
+            // «Trading Fee Rules FAQ», разд. 6); скидки монетой OKB нет («OKB is charged under the same standard fee
+            // rules as any other currency»). «Проверить подключение» требует feeType 0 — «fee is charged in the currency you
+            // receive from the trade» (account.rs; модель была USDT — расходилась с этим). Покупка — в монете от
+            // количества, продажа — в USDT от суммы. Факт — feeCcy ордера (order_state.rs). Живых ордеров OKX 08.11 нет.
+            fee: BookFee::in_received(rates.taker, side, &asset.ticker, "USDT"),
             taken_at: chrono::Utc::now(),
         })
     }

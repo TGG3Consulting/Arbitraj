@@ -130,13 +130,14 @@ impl Books {
             asset: asset.clone(),
             side,
             book,
-            // Комиссия taker аккаунта — в USDT-эквиваленте по сумме сделки (не входит в avg_price).
-            fee: BookFee {
-                rate: rates.taker,
-                per_coin: false,
-                asset: "USDT".into(),
-                paid_in: None,
-            },
+            // Комиссия taker аккаунта (не входит в avg_price). Решение 232: поля ордера — base_fee «Trading fee charged in
+            // base currency», quote_fee «… in quote currency», discount_fee «… in deduction currency»; пример
+            // документации (Get Order Status) — покупка CETUSDT: base_fee 11.6582326221, quote_fee 0 — комиссия покупки в
+            // получаемой монете. Продажа — в USDT от суммы: не из документации (пример продажи не дан) — по образцу
+            // получаемой монеты. Скидка CET: «When your CET is insufficient, the trading fees will be charged by default»
+            // (Help «About CET Deduction»); состояние выключателя прочитать нельзя (fees.rs) — расчёт без скидки
+            // (со скидкой комиссия уходит в CET, монеты и USDT остаётся не меньше). Живых ордеров CoinEx 08.11 нет.
+            fee: BookFee::in_received(rates.taker, side, &asset.ticker, "USDT"),
             taken_at: chrono::Utc::now(),
         })
     }

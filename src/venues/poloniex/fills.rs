@@ -9,7 +9,9 @@
 //! Официально — Trades by Order Id GET /orders/{id}/trades https://api-docs.poloniex.com/spot/api/private/trade
 //! («clientOrderId is not accepted»): массив сделок {id, orderId, side, matchRole, price, quantity («base units»),
 //! amount, feeCurrency, feeAmount, …}. В какой монете берётся комиссия покупки — не описано: монета — feeCurrency
-//! каждой сделки как есть (скидка TRX может давать комиссию в TRX — урок 23).
+//! каждой сделки как есть (скидка TRX может давать комиссию в TRX — урок 23). Примеры документации: Trades by Order Id —
+//! side BUY, LINK_USDT, feeCurrency LINK (комиссия покупки в получаемой монете); Trade History — side SELL,
+//! feeCurrency USDT. Решение 232: части в разных монетах — список (core/types/trade.rs Fee), не ошибка.
 
 use std::time::Instant;
 
@@ -17,19 +19,21 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
+use crate::core::types::Fee;
+
 use super::ctx::Ctx;
 use super::errors::Op;
 use super::{num, order_state, rest};
 
-/// Что делает: сумма сделок — (количество, комиссия, монета комиссии).
-/// Принимает: ответ /orders/{id}/trades, получаемую монету (если сделок нет). Ошибки: текст причины — ответ не массив,
-/// поле не число, комиссия в двух монетах (ядро принимает одну монету комиссии).
-pub fn sum(data: &Value, received: &str) -> Result<(Decimal, Decimal, String), String> {
+/// Что делает: сумма сделок — (количество, комиссия по монетам).
+/// Принимает: ответ /orders/{id}/trades. Возвращает: (Σ quantity, список частей комиссии по feeCurrency). Решение 232 (образец 219): сделки ордера в разных
+/// монетах комиссии (например, часть — TRX со скидкой) — несколько частей, а не ошибка.
+/// Ошибки: текст причины — ответ не массив, поле не число, feeAmount без feeCurrency.
+pub fn sum(data: &Value) -> Result<(Decimal, Vec<Fee>), String> {
     let list = data
         .as_array()
         .ok_or_else(|| format!("сделки ордера — не массив: {data}"))?;
-    let (mut qty, mut fee, mut coin): (Decimal, Decimal, Option<String>) =
-        (Decimal::ZERO, Decimal::ZERO, None);
+    let (mut qty, mut fees) = (Decimal::ZERO, Vec::new());
     for t in list {
         let get = |f: &str| num::dec_opt(t, f).map_err(|e| e.message);
         qty += get("quantity")?.unwrap_or_default();
@@ -40,35 +44,24 @@ pub fn sum(data: &Value, received: &str) -> Result<(Decimal, Decimal, String), S
         let c = num::text_opt(t, "feeCurrency")
             .map(|c| c.to_ascii_uppercase())
             .ok_or_else(|| format!("сделка с feeAmount без feeCurrency: {t}"))?;
-        match &coin {
-            Some(old) if *old != c => {
-                return Err(format!("комиссия в двух монетах ({old} и {c}): {data}"));
-            }
-            _ => coin = Some(c),
-        }
-        fee += amount;
+        Fee::add(&mut fees, &c, amount);
     }
-    Ok((qty, fee, coin.unwrap_or_else(|| received.to_string())))
+    Ok((qty, fees))
 }
 
 /// Что делает: комиссия ордера по его сделкам — ждёт, пока количество сделок не сойдётся с filled.
-/// Принимает: id ордера, исполненное количество, получаемую монету. Возвращает: (комиссия, монета).
+/// Принимает: id ордера, исполненное количество. Возвращает: части комиссии по монетам.
 /// Ошибки: текст причины — сроки не заданы, сделки не сошлись за venue.order_final_wait_ms, разбор.
-pub async fn fee(
-    ctx: &Ctx,
-    order_id: &str,
-    filled: Decimal,
-    received: &str,
-) -> Result<(Decimal, String), String> {
+pub async fn fee(ctx: &Ctx, order_id: &str, filled: Decimal) -> Result<Vec<Fee>, String> {
     let (poll, wait) = order_state::times(ctx).map_err(|e| e.message)?;
     let path = format!("/orders/{order_id}/trades");
     let started = Instant::now();
     loop {
         let why = match rest::signed(ctx, Method::GET, &path, vec![], None, Op::Other).await {
             Ok(d) => {
-                let (qty, fee, coin) = sum(&d, received)?;
+                let (qty, fees) = sum(&d)?;
                 if qty >= filled {
-                    return Ok((fee, coin));
+                    return Ok(fees);
                 }
                 format!("сделки ордера на {qty} из {filled}")
             }

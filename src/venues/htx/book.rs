@@ -127,7 +127,10 @@ impl Books {
             ));
         }
         let rates = fees.get(ctx, symbol)?;
-        // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы.
+        // Покупка — комиссия в монете от количества, продажа — в котируемой монете от суммы. Решение 232: fee-currency
+        // matchresults — «transaction fee of buy order is based on base currency, transaction fee of sell order is based
+        // on quote currency»; со скидкой HT / баллами — списание ими (fee-deduct-currency), монета не уменьшается —
+        // расчёт без скидки (fees.rs). Живых ордеров HTX 08.11 нет.
         let fee = if side == Side::Buy {
             BookFee {
                 rate: rates.taker,

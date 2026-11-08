@@ -4,12 +4,15 @@
 //! транзакция могла исполниться) от обычного отказа: такую сделку нельзя ни продавать, ни перегонять — только
 //! ручная проверка (core/executor.rs).
 //! Повтор продажи, не ушедшей в сеть, — retry_safe (решение 110) и rejected_unsent (решение 154), core/sell_unsent.rs.
+//! Решение 229: продажа не попала в блок, а её nonce занят нашей отменой в блоке (квитанция отмены есть — исход
+//! известен, исходная транзакция уже не исполнится) — cancel_confirmed, тоже повтор (core/sell_unsent.rs).
 //! Повтор возврата USDT — withdraw_unsent (решение 163), core/usdt_return_retry.rs; решение 220: WithdrawRejected
 //! («вывод точно не ушёл», но площадка откажет снова) там не повторяется — проверка в usdt_return_retry::fail.
 //! Кто вызывает: core/trade_ops.rs, core/transfers.rs (создают), core/executor.rs, core/sell_unsent.rs (читают код).
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.
 
+use crate::core::types::TxOutcome;
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
 /// Ошибка операции: код шлюза (None — ошибка ядра, не площадки) и текст.
@@ -19,6 +22,10 @@ pub struct OpError {
     pub message: String,
     /// Транзакция или ордер уже ушли на площадку (у ошибки шлюза есть факт транзакции в сети). Решение 110.
     pub sent: bool,
+    /// Решение 229: транзакция не попала в блок, а её nonce занят нашей отменой В БЛОКЕ (у факта транзакции исход
+    /// NotIncluded и хеш отмены — адаптер ставит их только по квитанции отмены, venues/bsc_dex/send/track_util.rs
+    /// landed). Исходная транзакция с этим nonce уже не исполнится.
+    pub cancelled: bool,
 }
 
 impl OpError {
@@ -52,6 +59,14 @@ impl OpError {
     /// транзакцией безопасен. Ошибок нет.
     pub fn rejected_unsent(&self) -> bool {
         !self.sent && self.code == Some(ErrorCode::ChannelRejected)
+    }
+
+    /// Решение 229 (Тигран, 08.11.2026: «риска нет: исход известен, деньги на месте»; живой случай JCT 08.11): продажа
+    /// DEX не попала в блок за send.max_wait_blocks (TxNotIncluded), и nonce занят нашей отменой в блоке — исходная
+    /// транзакция точно не исполнится, монеты на месте; повтор новой транзакцией безопасен. Отмены нет или её исход не
+    /// подтверждён квитанцией (итог «исход неизвестен» — OutcomeUnknown, у бандла без отмены) — нет. Ошибок нет.
+    pub fn cancel_confirmed(&self) -> bool {
+        self.code == Some(ErrorCode::TxNotIncluded) && self.cancelled
     }
 
     /// Решение 163: прежний вывод (перегон USDT) точно не ушёл — повтор не создаст двойного вывода. Да: ошибка до
@@ -98,6 +113,7 @@ impl From<String> for OpError {
             code: None,
             message,
             sent: false,
+            cancelled: false,
         }
     }
 }
@@ -108,6 +124,10 @@ impl From<&GatewayError> for OpError {
             code: Some(e.code),
             message: e.message.clone(),
             sent: e.tx.is_some(),
+            cancelled: e
+                .tx
+                .as_ref()
+                .is_some_and(|t| t.outcome == TxOutcome::NotIncluded && t.cancel_hash.is_some()),
         }
     }
 }

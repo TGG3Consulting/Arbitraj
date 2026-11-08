@@ -68,6 +68,11 @@ pub struct Deal {
     /// stuck.unsent_retries_max, дальше — алерт человеку).
     #[serde(default)]
     pub unsent_retries: u32,
+    /// Решение 229: цепочку повторов продажи начал случай решения 229 (продажа не попала в блок, а отмена подтверждена;
+    /// отказ до отправки после кнопки человека) — исчерпание повторов ведёт к продаже здесь по порогу
+    /// stuck.relay_max_loss_pct (sell_unsent.rs → relay_here.rs), а не сразу к человеку.
+    #[serde(default)]
+    pub unsent_here: bool,
     /// Итог сделки, USDT (когда закрыта).
     pub result_usd: Option<Decimal>,
     /// Предварительный убыток, учтённый в итоге дня (решение 53, daily.rs): Halted или «Беру на себя»;
@@ -118,6 +123,7 @@ impl Deal {
             relays: 0,
             return_usdt: false,
             unsent_retries: 0,
+            unsent_here: false,
             result_usd: None,
             provisional_usd: None,
             dex_account: None,

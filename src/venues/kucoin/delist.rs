@@ -1,9 +1,9 @@
 //! Файл: venues/kucoin/delist.rs
 //! Что делает: делистинги KuCoin (решение 226, контракт delistings) — два источника:
-//! (1) справочник пар: пары с котируемой монетой venue.quote_asset и меткой st = true («Special Treatment») — без
-//!    времени, ядро монету на KuCoin не торгует;
-//! (2) анонсы делистинга (delist_ann.rs): «KuCoin Will Delist A and B on 2026-10-14» — монеты из заголовка, которые
-//!    есть в справочнике, блокируются на KuCoin с момента анонса.
+//! (1) справочник пар: пары с котируемой монетой venue.quote_asset и меткой st = true («Special Treatment») — запись
+//!    с признаком st (блок только при delist.st_block KuCoin = да, уточнение Тиграна 08.11.2026);
+//! (2) анонсы делистинга (delist_ann.rs): монеты из заголовка или со страницы анонса и время делистинга из annDesc
+//!    («at 8:00 on November 5, 2026 (UTC)») — ядро блокирует за delist.block_hours до него.
 //! Сбой анонсов не отменяет справочник — причина идёт в warnings ответа.
 //! Кто вызывает: mod.rs (Venue::delistings), tests/delist_sources.rs.
 //! От чего зависит: rest.rs, num.rs, errors.rs, ctx.rs, reply.rs (Pool), delist_ann.rs, gateway/delist_ann.rs.
@@ -36,7 +36,7 @@ pub async fn delistings(ctx: &Ctx) -> GatewayResult<Delistings> {
     let quote = ctx.text("venue.quote_asset")?;
     let data = super::rest::public(ctx, "/api/v2/symbols", vec![], Pool::Public).await?;
     let (base, known) = parse(&data, &quote)?;
-    let ann = super::delist_ann::items(ctx, &known).await;
+    let ann = super::delist_ann::items(ctx, &known, &quote).await;
     Ok(crate::gateway::delist_ann::merge(base, ann))
 }
 
@@ -64,6 +64,7 @@ pub fn parse(data: &Value, quote: &str) -> GatewayResult<(Delistings, HashMap<St
             trading_end: None,
             withdraw_end: None,
             source: SOURCE.into(),
+            st: true,
         });
     }
     Ok((Delistings::of(items), known))

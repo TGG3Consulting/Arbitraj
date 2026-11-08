@@ -1,11 +1,15 @@
 //! Файл: venues/okx/delist_ann.rs
-//! Что делает: анонсы делистинга OKX (решение 226) — страницы GET /api/v5/support/announcements с типом
-//! announcements-delistings на английском; отбор только спотовых анонсов вида «OKX to delist A, B and C spot trading
-//! pairs» (perpetual futures, X-Perp, миграции, «postpone», «selected USD…» — не подходят), список монет из заголовка
-//! → записи без времени через gateway/delist_ann.rs (только тикеры из справочника OKX с venue.quote_asset).
-//! Кто вызывает: delist.rs, tests/delist_sources.rs (parse).
-//! От чего зависит: rest.rs (public_lang), num.rs, errors.rs, ctx.rs, gateway/delist_ann.rs.
-//! Настройки: delist.ann_max_age_h (анонсы старше не читаются), delist.ann_max_pages (не больше страниц).
+//! Что делает: анонсы делистинга OKX (решение 226, уточнение Тиграна 08.11.2026) — страницы GET
+//! /api/v5/support/announcements с типом announcements-delistings на английском; отбор только спотовых анонсов вида
+//! «OKX to delist A, B and C spot trading pairs» (perpetual futures, X-Perp, миграции, «postpone» — не подходят).
+//! Монеты — из заголовка, иначе («selected USDⓈ spot trading pairs») со страницы url; время делистинга — только со
+//! страницы url (API отдаёт title, url, pTime, businessPTime — без времени делистинга): таблица «пара | October 3,
+//! 2026, 08:00 - 10:00 UTC» (начало окна, у каждой пары своё) или «at 8:00 am UTC on September 18, 2026» —
+//! gateway/delist_ann.rs, delist_html.rs. Только тикеры справочника OKX с venue.quote_asset.
+//! Кто вызывает: delist.rs, tests/delist_sources.rs, tests/delist_ann.rs (parse).
+//! От чего зависит: rest.rs (public_lang), num.rs, errors.rs, ctx.rs, gateway/{delist_ann,delist_page}.rs.
+//! Настройки: delist.ann_max_age_h (анонсы старше не читаются), delist.ann_max_pages (не больше страниц),
+//! delist.ann_html_per_refresh, http.* (страницы анонсов).
 //!
 //! Официальная документация: Get announcements GET /api/v5/support/announcements https://www.okx.com/docs-v5/en/ —
 //! «the response is sorted by pTime and businessPTime with the most recent first … Every page has 20 records», «When
@@ -14,6 +18,8 @@
 //! «announcements-delistings») и page; ответ data[0] = {details: [{annType, title, url, pTime, businessPTime}],
 //! totalPage}. Живой ответ 08.11: totalPage 7; спотовые заголовки — «OKX to delist DORA, ICX, STORJ, ZEUS and ELF spot
 //! trading pairs», «OKX to delist GODS, PRCL and DUCK spot trading pairs». Время делистинга — только в тексте статьи.
+//! Живой ответ 08.11 (3 страницы): последний спотовый делистинг — 23.09.2026, за 30 дней — ни одного; 20 анонсов
+//! страницы ≈ 2–3 месяца (вместе с фьючерсами и миграциями).
 
 use std::collections::HashMap;
 
@@ -21,7 +27,8 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::core::types::DelistItem;
-use crate::gateway::delist_ann::{self, Ann};
+use crate::gateway::delist_ann::{self, Ann, Known};
+use crate::gateway::delist_page::Fetch;
 use crate::gateway::errors::GatewayResult;
 
 use super::ctx::Ctx;
@@ -38,8 +45,13 @@ const HEAD: &str = "OKX to delist ";
 const TAILS: [&str; 2] = [" spot trading pairs", " spot trading pair"];
 
 /// Что делает: читает страницы анонсов (не старше delist.ann_max_age_h, не больше delist.ann_max_pages) и строит
-/// записи. Принимает: окружение, справочник «тикер → символ». Возвращает: Ok(записи) или Err(причина для warnings).
-pub async fn items(ctx: &Ctx, known: &HashMap<String, String>) -> Result<Vec<DelistItem>, String> {
+/// записи (страницы самих анонсов — за временем). Принимает: окружение, справочник «тикер → символ», котируемую
+/// монету. Возвращает: Ok((записи, предупреждения)) или Err(причина для warnings — анонсы не прочитаны).
+pub async fn items(
+    ctx: &Ctx,
+    known: &HashMap<String, String>,
+    quote: &str,
+) -> Result<(Vec<DelistItem>, Vec<String>), String> {
     let now = Utc::now();
     let d = delist_ann::depth(
         ctx.int("delist.ann_max_age_h"),
@@ -62,7 +74,13 @@ pub async fn items(ctx: &Ctx, known: &HashMap<String, String>) -> Result<Vec<Del
             break;
         }
     }
-    Ok(delist_ann::items(&anns, known, d.since, SOURCE))
+    let fetch = Fetch {
+        http: &ctx.http,
+        limits: ctx.limits(),
+        per_refresh: ctx.int("delist.ann_html_per_refresh"),
+    };
+    let k = Known { map: known, quote };
+    Ok(delist_ann::collect(&anns, &k, d.since, SOURCE, &fetch).await)
 }
 
 /// Что делает: разбор data одной страницы. Принимает: data. Возвращает: (спотовые анонсы делистинга, totalPage,
@@ -98,8 +116,10 @@ pub fn parse(data: &Value) -> GatewayResult<(Vec<Ann>, u64, Option<DateTime<Utc>
             continue;
         };
         out.push(Ann {
-            list: list.to_string(),
+            list: Some(list.to_string()),
             title: title.clone(),
+            desc: String::new(),
+            url: num::text_opt(a, "url").filter(|u| !u.is_empty()),
             at,
         });
     }

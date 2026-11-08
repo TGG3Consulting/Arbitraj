@@ -47,6 +47,7 @@ pub async fn delistings(ctx: &Ctx, symbols: &Symbols) -> GatewayResult<Delisting
                 trading_end: Some(at),
                 withdraw_end: None,
                 source: SOURCE.into(),
+                st: false,
             })
         })
         .collect();

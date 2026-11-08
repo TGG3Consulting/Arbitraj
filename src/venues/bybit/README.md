@@ -22,8 +22,8 @@
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки, секреты, HTTP, журнал, сырые сообщения, окна, состояние приватного потока; символ `CAKEUSDT` |
-| `delist.rs` | Решение 226: делистинги — `stTag` = "1" («special treatment label») спот-пар GET /v5/market/instruments-info с venue.quote_asset (метка у ПАРЫ) + анонсы (delist_ann.rs); сбой анонсов — warnings |
-| `delist_ann.rs` | Решение 226: анонсы GET /v5/announcements/index?locale=en-US&type=delistings&tag=Spot: только тег Spot и «Delisting of A, B and C[ on …]», тикеры из справочника — блок с момента анонса |
+| `delist.rs` | Решение 226: делистинги — `stTag` = "1" («special treatment label») спот-пар GET /v5/market/instruments-info с venue.quote_asset — запись с признаком st (блок только при delist.st_block = да) + анонсы (delist_ann.rs) |
+| `delist_ann.rs` | Решение 226 (уточнение 08.11): анонсы GET /v5/announcements/index?locale=en-US&type=delistings БЕЗ tag (спот с сентября 2026 — без тега Spot): в заголовке «delist», без тегов Derivatives / WEB3 и заголовков про фьючерсы / залог; монеты — из «Delisting of A, B», иначе со страницы url («Delisted trading pairs: HFTUSDT»); время — из title/description, иначе со страницы («… will end after Oct 28, 2026, 8:00AM UTC») |
 | `http.rs` | HTTP-обмен со сроками gateway/http.rs и заголовками X-Bapi-Limit* |
 | `rest.rs` | Подпись HMAC SHA256 (`timestamp+key+recv_window+query|body`), GET/POST, резервный адрес только при сбое сети |
 | `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод (дополнение 08.11) — тем же совпадением «монета + сеть + адрес + сумма с момента отправки», что `transfers.rs` сразу после сбоя: ровно одна запись — создан, ноль — ядро спросит ещё, больше одной — человек |

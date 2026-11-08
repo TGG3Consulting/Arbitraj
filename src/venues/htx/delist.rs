@@ -60,6 +60,7 @@ pub fn parse(data: &Value, quote: &str) -> GatewayResult<Delistings> {
             trading_end: end,
             withdraw_end: None,
             source: SOURCE.into(),
+            st: false,
         });
     }
     Ok(Delistings::of(items))

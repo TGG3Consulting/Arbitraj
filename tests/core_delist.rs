@@ -101,6 +101,7 @@ fn kucoin_ion() -> Delistings {
         trading_end: Some(at(2026, 11, 5, 0)),
         withdraw_end: Some(at(2026, 12, 7, 8)),
         source: "объявление KuCoin 05.11.2026".into(),
+        st: false,
     }])
 }
 
@@ -203,7 +204,7 @@ async fn passed_and_untimed_block() {
         .unwrap_err();
     assert_eq!(
         err,
-        "ION: делистинг на KuCoin 05.11 00:00 UTC — время уже прошло"
+        "ION: делистинг на KuCoin 05.11 00:00 UTC — время делистинга в прошлом, пара ещё торгуется — блок до явной отмены/переноса (объявление KuCoin 05.11.2026)"
     );
     // BingX: статус pre-delisted без времени — отказ.
     put(
@@ -239,6 +240,7 @@ fn withdraw_close_counts_on_buy_side_only() {
         trading_end: Some(at(2026, 11, 10, 0)),
         withdraw_end: Some(at(2026, 11, 5, 0)),
         source: "тест".into(),
+        st: false,
     };
     let h = rust_decimal::Decimal::from(48);
     // Сторона покупки (вывод нужен): закрытие вывода раньше торгов — по нему.
@@ -252,4 +254,47 @@ fn withdraw_close_counts_on_buy_side_only() {
         arb::core::delist_check::verdict("kucoin", &item, false, now(), h),
         Ok(())
     );
+}
+
+/// Решение 226 (уточнение Тиграна 08.11): метка ST (MEXC st) блокирует, только если delist.st_block площадки = да.
+#[tokio::test]
+async fn st_label_blocks_only_with_st_block() {
+    let core = start(&dir("st"), Some("12")).await;
+    put(&core, "kucoin", Delistings::of(vec![]));
+    put(
+        &core,
+        "mexc",
+        Delistings::of(vec![DelistItem {
+            ticker: "ION".into(),
+            symbol: "IONUSDT".into(),
+            trading_end: None,
+            withdraw_end: None,
+            source: "MEXC GET /api/v3/exchangeInfo: st = true".into(),
+            st: true,
+        }]),
+    );
+    let d = ion("mexc", "kucoin");
+    // Не задано — ST торгуем.
+    assert_eq!(
+        arb::core::delist_check::check(&core, &d, now()).await,
+        Ok(())
+    );
+    let mexc = Scope::Venue("mexc".into());
+    let settings = &core.inner.deps.settings;
+    settings
+        .set("delist.st_block", mexc.clone(), Some(json!(false)), "тест")
+        .await
+        .unwrap();
+    assert_eq!(
+        arb::core::delist_check::check(&core, &d, now()).await,
+        Ok(())
+    );
+    settings
+        .set("delist.st_block", mexc, Some(json!(true)), "тест")
+        .await
+        .unwrap();
+    let err = arb::core::delist_check::check(&core, &d, now())
+        .await
+        .unwrap_err();
+    assert!(err.contains("метка ST на MEXC"), "{err}");
 }

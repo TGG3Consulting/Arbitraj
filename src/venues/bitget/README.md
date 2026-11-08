@@ -39,7 +39,8 @@
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки, секреты (ключ, секрет, passphrase), HTTP, журнал, сырые сообщения |
-| `delist.rs` | Решение 226: делистинги — `offTime` («Symbol off time») пар GET /api/v2/spot/public/symbols с venue.quote_asset; живая сверка 08.11: ALPINE, QUBIC 13.11 10:00 UTC = анонс «Notice of Delisting 2 Spot Trading Pairs on November 13, 2026» |
+| `delist.rs` | Решение 226: делистинги — `offTime` («Symbol off time») пар GET /api/v2/spot/public/symbols с venue.quote_asset; живая сверка 08.11: ALPINE, QUBIC 13.11 10:00 UTC = анонс «Notice of Delisting 2 Spot Trading Pairs on November 13, 2026»; + анонсы (delist_ann.rs), справочник «тикер → символ» для их сверки |
+| `delist_ann.rs` | Решение 226 (уточнение 08.11): анонсы GET /api/v2/public/annoucements?annType=symbol_delisting&language=en_US&startTime (10 на странице, курсор annId, только за месяц, 20 / с): «Notice of Delisting N Spot Trading Pairs on …» — тикеров в заголовке нет, annDesc «Deprecated»: пары и время со страницы annUrl («… (spot trading) on November 13, 2026, 10:00 AM (UTC): ALPINE/USDT; QUBIC/USDT») |
 | `sign.rs` | Подпись: Base64(HMAC-SHA256(timestamp+METHOD+путь?запрос+тело)), заголовки ACCESS-* |
 | `rest.rs` | REST: параметры по имени без кодирования (как SDK), POST — тело JSON, locale; резерв только при сбое сети; решение 201 — ручная работа ждёт конец паузы 429 эндпоинта |
 | `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |

@@ -2,8 +2,9 @@
 //! Что делает: делистинги OKX (решение 226, контракт delistings) — два источника:
 //! (1) справочник инструментов: спот-пары с котируемой монетой venue.quote_asset, у которых задан expTime (время
 //!    снятия пары, если её снимают вручную);
-//! (2) анонсы делистинга (delist_ann.rs): «OKX to delist A, B and C spot trading pairs» — монеты из заголовка,
-//!    которые есть в справочнике, блокируются на OKX с момента анонса.
+//! (2) анонсы делистинга (delist_ann.rs): «OKX to delist A, B and C spot trading pairs» — монеты из заголовка (или
+//!    со страницы), время делистинга каждой пары — со страницы анонса (таблица «DORA/USDT | October 3, 2026, 08:00 -
+//!    10:00 UTC»); ядро блокирует за delist.block_hours до него.
 //! Сбой анонсов не отменяет справочник — причина идёт в warnings ответа.
 //! Кто вызывает: mod.rs (Venue::delistings), tests/delist_sources.rs.
 //! От чего зависит: rest.rs, num.rs, errors.rs, ctx.rs, delist_ann.rs, gateway/delist_ann.rs, core/types.
@@ -36,7 +37,7 @@ pub async fn delistings(ctx: &Ctx) -> GatewayResult<Delistings> {
     let q = vec![("instType", "SPOT".to_string())];
     let data = super::rest::public(ctx, "/api/v5/public/instruments", q).await?;
     let (base, known) = parse(&data, &quote)?;
-    let ann = super::delist_ann::items(ctx, &known).await;
+    let ann = super::delist_ann::items(ctx, &known, &quote).await;
     Ok(crate::gateway::delist_ann::merge(base, ann))
 }
 
@@ -72,6 +73,7 @@ pub fn parse(data: &Value, quote: &str) -> GatewayResult<(Delistings, HashMap<St
             trading_end: Some(at),
             withdraw_end: None,
             source: SOURCE.into(),
+            st: false,
         });
     }
     Ok((Delistings::of(items), known))

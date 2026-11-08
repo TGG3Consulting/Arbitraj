@@ -27,7 +27,7 @@ fn gate_recorded_pairs() {
     let got = arb::venues::gate::delist::parse(&data, "USDT").unwrap();
     assert!(!got.is_unknown());
     assert_eq!(got.items.len(), 34);
-    let wag = got.find("WAG").unwrap();
+    let wag = got.find("WAG", false).unwrap();
     assert_eq!(wag.symbol, "WAG_USDT");
     assert_eq!(
         wag.trading_end,
@@ -35,7 +35,7 @@ fn gate_recorded_pairs() {
     );
     assert_eq!(wag.withdraw_end, None);
     // Пара без delisting_time в делистинг не попадает.
-    assert!(got.find("ALEPH").is_none());
+    assert!(got.find("ALEPH", false).is_none());
     // Другая котируемая монета — своих пар нет.
     assert!(
         arb::venues::gate::delist::parse(&data, "NOPE")
@@ -69,7 +69,7 @@ fn coinex_doc_fields() {
     ]);
     let got = arb::venues::coinex::delist::parse(&data, "USDT").unwrap();
     assert_eq!(got.items.len(), 1);
-    let cet = got.find("CET").unwrap();
+    let cet = got.find("CET", false).unwrap();
     assert_eq!(cet.symbol, "CETUSDT");
     assert_eq!(
         cet.trading_end,

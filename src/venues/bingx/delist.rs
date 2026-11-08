@@ -43,6 +43,7 @@ pub fn build(pairs: Vec<(String, String)>) -> Delistings {
             trading_end: None,
             withdraw_end: None,
             source: SOURCE.into(),
+            st: false,
         })
         .collect();
     Delistings::of(items)

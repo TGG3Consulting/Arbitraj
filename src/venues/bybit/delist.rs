@@ -1,9 +1,9 @@
 //! Файл: venues/bybit/delist.rs
 //! Что делает: делистинги Bybit (решение 226, контракт delistings) — два источника:
 //! (1) справочник спот-пар: пары с котируемой монетой venue.quote_asset и меткой stTag = "1" (special treatment) —
-//!    без времени, ядро монету на Bybit не торгует;
-//! (2) анонсы делистинга (delist_ann.rs): «Delisting of A, B and C» с тегом Spot — монеты из заголовка, которые есть
-//!    в справочнике, блокируются на Bybit с момента анонса.
+//!    запись с признаком st (блок только при delist.st_block Bybit = да, уточнение Тиграна 08.11.2026);
+//! (2) анонсы делистинга (delist_ann.rs): «Delisting of A, B and C», «Bybit to Delist N Token(s) on …» — монеты из
+//!    заголовка или со страницы анонса и время делистинга — ядро блокирует за delist.block_hours до него.
 //! Сбой анонсов не отменяет справочник — причина идёт в warnings ответа.
 //! Кто вызывает: mod.rs (Venue::delistings), tests/delist_sources.rs.
 //! От чего зависит: rest.rs, num.rs, errors.rs, ctx.rs, delist_ann.rs, gateway/delist_ann.rs, core/types.
@@ -36,7 +36,7 @@ pub async fn delistings(ctx: &Ctx) -> GatewayResult<Delistings> {
     let p = vec![("category", "spot".to_string())];
     let info = super::rest::public(ctx, "/v5/market/instruments-info", p).await?;
     let (base, known) = parse(&info, &quote)?;
-    let ann = super::delist_ann::items(ctx, &known).await;
+    let ann = super::delist_ann::items(ctx, &known, &quote).await;
     Ok(crate::gateway::delist_ann::merge(base, ann))
 }
 
@@ -65,6 +65,7 @@ pub fn parse(info: &Value, quote: &str) -> GatewayResult<(Delistings, HashMap<St
             trading_end: None,
             withdraw_end: None,
             source: SOURCE.into(),
+            st: true,
         });
     }
     Ok((Delistings::of(items), known))

@@ -11,6 +11,7 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_version;
 pub mod ctx;
 pub mod deposit_addr;
 pub mod deposits;
@@ -238,5 +239,43 @@ impl Venue for Xt {
 
     async fn check_send_channel(&self, _id: &str) -> GatewayResult<ConnectionCheck> {
         Err(self.not_applicable("проверка канала отправки транзакций"))
+    }
+
+    /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
+    /// - scheduled = false: «rate: 1000ms» (depth@, limitDepth.md) и «rate: 100ms» (depth_update@, increDepth.md) — что
+    ///   кадр идёт и без изменений книги, документация не говорит (https://doc.xt.com/#websocket_publiclimitDepth);
+    /// - per_pair = true: отписка одной темы — {"method":"unsubscribe"} (Request message format,
+    ///   https://doc.xt.com/#websocket_publicrequestFormat), см. ws_conn.rs;
+    /// - confirm = true (решение 213): depth_update — по номеру (lastUpdateId REST ↔ номер локального стакана,
+    ///   «Orderbook manage»), depth — по содержимому (связи updateId снимка с REST нет) — book_version.rs.
+    fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {
+        Some(self.books.feed.health(false, true, true))
+    }
+
+    /// Решение 213: версия стакана пары по REST GET /v4/public/depth — номер или отпечатки (book_version.rs).
+    async fn book_version(
+        &self,
+        ticker: &str,
+    ) -> GatewayResult<crate::gateway::feed_health::BookVersion> {
+        book_version::book_version(&self.ctx, &self.symbols, &self.books, ticker).await
+    }
+
+    /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
+    fn book_confirmed(&self, ticker: &str, until_ms: i64) {
+        self.books.confirm(ticker, until_ms);
+    }
+
+    /// Решение 202: переподписать одну пару в её соединении (unsubscribe + subscribe, ws_conn.rs).
+    async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books
+            .feed
+            .command(self.id(), conn, Cmd::Resub(ticker.to_string()))
+    }
+
+    /// Решение 202: переподключить одно соединение с теми же парами (ws.rs подключается заново).
+    async fn reconnect_conn(&self, conn: &str) -> GatewayResult<()> {
+        use crate::gateway::feed_health::Cmd;
+        self.books.feed.command(self.id(), conn, Cmd::Reconnect)
     }
 }

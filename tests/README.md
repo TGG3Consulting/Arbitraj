@@ -442,6 +442,15 @@ message»; X фьючерсов), HMAC SHA256 на векторе RFC 4231 (по
 примера не опубликован, тело первого не JSON), человеческая причина кода `AUTH_103` (решение 164). Остальное —
 `#[ignore]` до записи в `data/cex_samples_2026_11_05/xt_*` (из среды Claude `sapi.xt.com` закрыт прокси).
 
+Решения 202/213 у XT — `tests/xt_book_version.rs` на **примерах из документации** (github.com/xt-com/xt4-api:
+`_market/3depth.md`, `_websocket_public/increDepth.md`, `limitDepth.md`), не на живых ответах: живой пары «кадр WebSocket
++ ответ REST в тот же момент» нет. Собрано по правилам документации и помечено в тесте: снимок с lastUpdateId 121 под
+кадр примера (fi 121, i 123) и ответ REST с уровнями кадра примера depth. Стык адаптера (feed_health, команды до
+подписки, book_version без настроек) — `tests/feed_watch_venues.rs`. Записать на сервере бота для теста на живых данных:
+по номеру — кадры `depth_update@cake_usdt` и сразу `GET /v4/public/depth?symbol=cake_usdt&limit=N` (уже есть в командах
+ниже); по содержимому — кадры `depth@cake_usdt,20` и в ту же секунду `GET /v4/public/depth?symbol=cake_usdt&limit=20`
+(совпадают ли первые 20 уровней при той же книге).
+
 ### XT — команды записи (на сервере бота)
 
 ## Kraken (решение 172) — tests/kraken_real_data.rs

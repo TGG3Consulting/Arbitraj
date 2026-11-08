@@ -86,8 +86,9 @@
 ## Сторож пар (решение 202)
 
 Советы Тиграна (06.11.2026). Задавать на площадке, где сторож работает (Gate), или на всю систему. Решение 213
-(07.11.2026): подтверждение тихой пары по REST — venue.quiet_confirm_* (без них у Gate, MEXC, Bitget тихие пары только в
-журнале; Gate — по номеру книги, MEXC и Bitget — по содержимому стакана, Тигран 08.11).
+(07.11.2026): подтверждение тихой пары по REST — venue.quiet_confirm_* (без них у Gate, MEXC, Bitget, XT тихие пары только в
+журнале; Gate — по номеру книги, MEXC и Bitget — по содержимому стакана, Тигран 08.11; XT — по номеру при
+venue.book_stream = depth_update, по содержимому при depth).
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
@@ -106,6 +107,9 @@
 | venue.quiet_confirm_min_ms | Bitget | *метод:* как у Gate — например `30000`; решает Тигран | Подтверждение по содержимому (Тигран 08.11): первые venue.depth_levels уровней GET /api/v2/spot/market/orderbook (type step0) против стакана в памяти (venues/bitget/book_print.rs) | Решение 213 (по содержимому) |
 | venue.quiet_confirm_max_per_s | Bitget | *метод:* не больше 5 — например `5`; решает Тигран | Лимит «20 times/1s (IP)» на этот эндпоинт — его же берёт котировка исполнения (решение 201); общий 6000/IP/мин; запас — на котировки исполнения | src/venues/bitget/rest_book.rs, docs/notes/bitget-429-2026-11-06.md |
 | venue.pair_resub_attempts, venue.pair_resub_interval_ms, venue.pair_resub_pause_ms | Bitget | держать так, чтобы переподписок на одно соединение за час было заметно меньше 240: на одну пару при советах Gate (3 попытки, 3 с, пауза 60 с) — до ≈ 156 в час, значит, двух пар подряд одного соединения уже хватит до предела | Переподписка пары — запрос subscribe (и unsubscribe — считается ли он, в документации не уточнено); лимит Bitget «240 subscription requests/Hour/connection». Сейчас (confirm = false) сторож Bitget сам не переподписывает — запас на случай включения подтверждения | https://www.bitget.com/docs/classic/websocket/intro |
+| venue.quiet_confirm_min_ms | XT | *метод:* как у Gate — больше venue.book_stale_ms × venue.pair_dead_mult и чтобы venue.quiet_confirm_max_per_s × (это число / 1000) было не меньше числа тихих пар XT (журнал core.feed_watch) — например `30000`; решает Тигран | depth_update — по номеру (lastUpdateId GET /v4/public/depth против номера локального стакана), depth — по содержимому (первые venue.depth_levels уровней); стакан подтверждённой пары свежий до следующей проверки | Решение «202/213 (XT)», venues/xt/book_version.rs |
+| venue.quiet_confirm_max_per_s | XT | *метод:* venue.quiet_confirm_max_per_s + venue.depth_snapshot_per_sec (если канал depth_update) не больше 10, с запасом — например `2` (при снимках 5/с); решает Тигран | «Get depth data»: «Limit Flow Rules 10/s/ip» — на этот эндпоинт; его же берёт очередь снимков локального стакана (snapshots.rs). 429 — «IP или apiKey будет заблокирован» (README адаптера) | https://doc.xt.com/#marketdepth (`_market/3depth.md`) |
+| venue.pair_resub_attempts, venue.pair_resub_interval_ms, venue.pair_resub_pause_ms | XT | как у Gate (`3`, `3000`, `60000`) — решает Тигран | Лимитов подписок / сообщений в секунду на соединение в документации XT нет (README адаптера, ws.rs); переподписка — 2 сообщения (unsubscribe + subscribe). При depth_update каждая переподписка — ещё и снимок REST из очереди snapshots.rs | https://doc.xt.com/#websocket_publicrequestFormat |
 
 ## Окна (решение 125)
 

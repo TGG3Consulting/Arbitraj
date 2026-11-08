@@ -22,7 +22,7 @@
 | MEXC | spot@public.limit.depth.v3.api.pb (снимок уровней) | в шапке адаптера расписание не названо — не проверено по документации | — | нет (проверить документацию) |
 | KuCoin | /spotMarket/level2Depth5\|50 | в шапке адаптера расписание не названо — не проверено | — | нет (проверить документацию) |
 | Poloniex | book | «The order book updates every 100ms» — не сказано, что без изменений | — | нет (уточнить на живой записи) |
-| XT | depth / depth_update + снимки REST | не проверено | — | нет |
+| XT | depth / depth_update + снимки REST | нет в документации: «rate: 1000ms» / «rate: 100ms» без «и без изменений» | да — method unsubscribe (requestFormat.md) | **реализован** 08.11 (решение «202/213 (XT)»): depth_update — подтверждение по номеру, depth — по содержимому |
 | Bybit | orderbook.{depth}.{symbol} (snapshot/delta) | нет: изменения (delta) — только при изменениях | — | нет |
 | OKX | books / bbo-tbt | не проверено; в документации — «data has not been pushed for more than 30 seconds» как признак сбоя подписки | — | нет (кандидат: проверить документацию) |
 | Binance | partial depth @100ms/@1000ms | не проверено | — | нет |

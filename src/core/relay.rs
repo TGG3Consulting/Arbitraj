@@ -16,6 +16,9 @@
 //! не цель; целей нет, а продажа здесь не считается или ≤ 0 — остаток списывается в пыль (dust::write_off), сделка
 //! закрывается (живой случай PIT 08.11: «Перегон на MEXC (ожидается 0.0039 USDT)» остатка 770 PIT).
 //! Решение 230: кошелёк DEX на паузе от сверки (wallet_pause.rs) — не цель перегона; монета на нём — продажа на месте.
+//! Решение 227 (дополнение): площадка уже отказала в выводе в этой сделке (Deal.withdraw_refused) — перегона с неё нет,
+//! продажа здесь (relay_here.rs); отказ вывода перегона ставит эту метку (withdraw_refused.rs).
+//! Решение 227: перегон на DEX — через send_trade (зачисление по приходу в блокчейне, решение 151), как перевод сделки.
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs).
 
 use rust_decimal::Decimal;
@@ -91,6 +94,15 @@ pub async fn run(core: &Core, mut deal: Deal) {
         );
         return super::relay_here::sell_here(core, deal, &why).await;
     }
+    // Решение 227 (дополнение): площадка, где лежит монета, уже отказала в выводе в этой сделке (адресная книга и т. п.)
+    // — перегон с неё заведомо откажет: продажа здесь по тем же правилам.
+    if super::withdraw_refused::refused(&deal, &deal.at) {
+        let why = format!(
+            "вывод с {} в этой сделке уже отклонён площадкой — перегон с неё не делаем",
+            deal.at.0
+        );
+        return super::relay_here::sell_here(core, deal, &why).await;
+    }
     let a = deal.direction.asset.clone();
     // Решение 220: котировка — кошельком сделки.
     let here = super::trade_ops::deal_value(core, &deal)
@@ -163,8 +175,14 @@ pub async fn run(core: &Core, mut deal: Deal) {
     ));
     super::ledger::save(core, &deal).await;
     let price = deal.buy.as_ref().map(|b| b.avg_price).unwrap_or_default();
-    match super::transfers::send(core, &deal.id, &from, &to, &a, deal.qty).await {
-        Ok((sent, credited)) => {
+    // Решение 227 (п. 4): перегон на кошелёк DEX засчитывается по приходу монеты в блокчейне, как перевод сделки
+    // (решение 151: send_trade → credit_chain; кошелёк — счёт сделки, записанный выше, решение 185), а не по хешу от
+    // биржи-отправителя (живой случай JCT: +18 с). На биржу — как раньше (send_trade без DEX = send).
+    match super::transfers::send_trade(core, &deal.id, &from, &to, &a, deal.qty).await {
+        Ok((sent, credited, chain)) => {
+            if let Some(line) = chain {
+                deal.note(line);
+            }
             super::fills::transfer(core, &mut deal, &sent, &credited, &to, price).await;
             deal.relays += 1;
             let text = crate::notify::human::Msg::new(
@@ -202,6 +220,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
         // повторяем; монет на месте нет — остановка, решает человек (relay_here::transfer_failed).
         Err(e) => {
             deal.step = Step::Stuck;
+            // Решение 227: отказ вывода площадкой — метка, следующий «Перегон» с неё не пойдёт.
+            super::withdraw_refused::mark(&mut deal, &from, &e);
             let why = format!("перегон не состоялся: {e}");
             deal.note(format!("{why} — продажа здесь, вывод не повторяем"));
             super::relay_here::transfer_failed(core, deal, &why).await

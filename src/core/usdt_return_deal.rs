@@ -9,8 +9,12 @@
 //! задача оборвалась, исключённый путь — Deal.usdt_return_skip) — страховка «USDT не вернулись».
 //! Решение 224: исключённый путь («Продано вручную», решение 100) запрещает перегон только выручки человека — выручку
 //! продаж БОТА в той же сделке (deal.sells на площадке выручки) бот перегоняет сам, как при обычном закрытии.
+//! Решение 227: продажи на нескольких площадках (живой случай JCT: часть на Bitget, остаток на DEX) — возврат по
+//! частям: с каждой площадки выручки ровно её выручка минус комиссия, каждая часть — своим перегоном (Job), состояние —
+//! по частям (usdt_return_parts.rs; части считает usdt_return_split.rs). Одна площадка продаж — как раньше.
 //! Кто вызывает: core/ledger.rs (finish).
-//! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, dex_account.rs, deal.rs, settings.
+//! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, usdt_return_parts.rs,
+//! usdt_return_split.rs, dex_account.rs, deal.rs, settings.
 //! Настройки: usdt_return.mode, venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -36,28 +40,75 @@ pub fn wanted(core: &Core, deal: &Deal) -> bool {
     deal.return_usdt || mode.ok().as_deref() == Some("per_trade")
 }
 
-/// Решает возврат закрытой сделки и ставит состояние в сделку (сохранит ledger::finish). Принимает: ядро, сделку.
-/// Возвращает: Job — запустить после сохранения; None — возврат не нужен или уже решён. Ошибок нет: сбой — страховка.
-pub async fn prepare(core: &Core, deal: &mut Deal) -> Option<Job> {
+/// Решает возврат закрытой сделки и ставит состояние в сделку (сохранит ledger::finish). Решение 227: продажи на
+/// нескольких площадках — часть с каждой площадки выручки (кроме площадки покупки), каждая своим перегоном.
+/// Принимает: ядро, сделку. Возвращает: перегоны — запустить после сохранения; пусто — возврат не нужен или уже решён.
+/// Ошибок нет: сбой — страховка.
+pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
     if deal.usdt_return.is_some() || !wanted(core, deal) {
-        return None;
+        return vec![];
     }
+    let parts = if super::usdt_return_parts::multi(deal) {
+        super::usdt_return_split::parts(core, deal).await
+    } else {
+        single(core, deal).await.into_iter().collect()
+    };
+    if parts.is_empty() {
+        return vec![];
+    }
+    // Решение 132: перегон выручки — кошельком сделки.
+    let acc = match super::dex_account::of(core, deal) {
+        Ok(a) => a,
+        Err(e) => {
+            for (from, amount) in &parts {
+                not_returned(core, deal, *amount, from, &format!("перегон не начат: {e}")).await;
+            }
+            return vec![];
+        }
+    };
+    let to = deal.direction.buy_on.clone();
+    let n = parts.len();
+    let mut jobs = Vec::with_capacity(n);
+    for (i, (from, amount)) in parts.into_iter().enumerate() {
+        let of = if n > 1 {
+            format!(" (часть {} из {n}, решение 227)", i + 1)
+        } else {
+            String::new()
+        };
+        let text = format!(
+            "Сделка {}: возврат USDT {amount}: {} → {} начат{of}",
+            deal.id, from.0, to.0
+        );
+        deal.note(text.clone());
+        core.inner
+            .deps
+            .log(Level::Info, "core.usdt_return", Some(&from.0), text, None)
+            .await;
+        let state = UsdtReturn::Pending {
+            amount,
+            from: from.clone(),
+            to: to.clone(),
+        };
+        super::usdt_return_parts::put(deal, state);
+        jobs.push(Job {
+            deal: deal.id.clone(),
+            amount,
+            from,
+            to: to.clone(),
+            acc: acc.clone(),
+        });
+    }
+    jobs
+}
+
+/// Одна часть — все продажи на площадке закрытия (как до решения 227). Принимает: ядро, сделку. Возвращает: (откуда,
+/// сумма) или None — возврат не нужен или не будет (страховка уже поставлена). Ошибок нет.
+async fn single(core: &Core, deal: &mut Deal) -> Option<(VenueId, Decimal)> {
     let deps = &core.inner.deps;
     if deal.at == deal.direction.buy_on {
         // Решение 108: продано там же, где куплено (монета не уезжала) — выручка уже на площадке покупки.
         if deal.return_usdt {
-            let text = format!(
-                "Сделка {}: перегон не нужен — продано на {}, выручка уже на площадке покупки",
-                deal.id, deal.at.0
-            );
-            deps.log(
-                Level::Info,
-                "core.usdt_return",
-                Some(&deal.at.0),
-                text,
-                None,
-            )
-            .await;
+            no_need(core, deal).await;
         }
         return None;
     }
@@ -76,7 +127,8 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Option<Job> {
     if let Some(why) = deal.usdt_return_skip.clone() {
         let bot = bot_part(deal, quote.as_deref().ok()).min(amount);
         if bot <= Decimal::ZERO {
-            return not_returned(core, deal, amount, &from, &why).await;
+            not_returned(core, deal, amount, &from, &why).await;
+            return None;
         }
         let human = amount - bot;
         if human > Decimal::ZERO {
@@ -87,52 +139,43 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Option<Job> {
         }
         amount = bot;
     }
-    // Решение 132: перегон выручки — кошельком сделки.
-    let acc = match super::dex_account::of(core, deal) {
-        Ok(a) => a,
-        Err(e) => {
-            return not_returned(core, deal, amount, &from, &format!("перегон не начат: {e}"))
-                .await;
-        }
-    };
-    let to = deal.direction.buy_on.clone();
-    let text = format!(
-        "Сделка {}: возврат USDT {amount}: {} → {} начат",
-        deal.id, from.0, to.0
-    );
-    deal.note(text.clone());
-    deps.log(Level::Info, "core.usdt_return", Some(&from.0), text, None)
-        .await;
-    deal.usdt_return = Some(UsdtReturn::Pending {
-        amount,
-        from: from.clone(),
-        to: to.clone(),
-    });
-    Some(Job {
-        deal: deal.id.clone(),
-        amount,
-        from,
-        to,
-        acc,
-    })
+    Some((from, amount))
 }
 
-/// Возврата не будет: состояние в сделку, страховка. Возвращает: None (перегона нет). Ошибок нет.
-async fn not_returned(
+/// Журнал «перегон не нужен — выручка уже на площадке покупки» (решение 108, «Продать и перегнать»). Ошибок нет.
+pub(super) async fn no_need(core: &Core, deal: &Deal) {
+    let text = format!(
+        "Сделка {}: перегон не нужен — продано на {}, выручка уже на площадке покупки",
+        deal.id, deal.at.0
+    );
+    core.inner
+        .deps
+        .log(
+            Level::Info,
+            "core.usdt_return",
+            Some(&deal.at.0),
+            text,
+            None,
+        )
+        .await;
+}
+
+/// Возврата этой части не будет: состояние части в сделку, страховка. Ошибок нет.
+pub(super) async fn not_returned(
     core: &Core,
     deal: &mut Deal,
     amount: Decimal,
     from: &VenueId,
     why: &str,
-) -> Option<Job> {
+) {
     deal.note(st::not_returned_text(&deal.id, amount, from, why));
-    deal.usdt_return = Some(UsdtReturn::NotReturned {
+    let state = UsdtReturn::NotReturned {
         amount,
         at: from.clone(),
         why: why.to_string(),
-    });
+    };
+    super::usdt_return_parts::put(deal, state);
     st::alarm(core, &deal.id, amount, from, why).await;
-    None
 }
 
 /// Комиссия продаж сделки в котируемой монете (её нет в выручке). Принимает: сделку, тикер котируемой. Ошибок нет.
@@ -144,36 +187,29 @@ fn sell_fee(deal: &Deal, quote: &str) -> Decimal {
 /// ввод «Продано вручную» в sells не попадает. Принимает: сделку. Возвращает: сумму USDT (0 — бот здесь не продавал).
 /// Ошибок нет.
 pub fn bot_sold(deal: &Deal) -> Decimal {
-    deal.sells
-        .iter()
-        .filter(|r| r.request.venue == deal.at)
-        .map(|r| r.filled_qty * r.avg_price)
-        .sum()
+    super::usdt_return_parts::sold_at(deal, &deal.at)
 }
 
 /// Решение 224: сколько выручки продаж бота можно вернуть — bot_sold минус комиссия этих продаж в котируемой монете.
 /// Принимает: сделку, тикер котируемой (None — не задан: без вычета). Возвращает: сумму (может быть ≤ 0). Ошибок нет.
 pub fn bot_part(deal: &Deal, quote: Option<&str>) -> Decimal {
-    let fee: Decimal = match quote {
-        Some(q) => deal
-            .sells
-            .iter()
-            .filter(|r| r.request.venue == deal.at)
-            .map(|r| r.fee_in(q))
-            .sum(),
-        None => Decimal::ZERO,
-    };
-    bot_sold(deal) - fee
+    super::usdt_return_parts::amount_at(deal, &deal.at, quote)
 }
 
-/// bot_part с котируемой монетой площадки выручки из настроек. Принимает: ядро, сделку. Ошибок нет.
-pub fn bot_amount(core: &Core, deal: &Deal) -> Decimal {
-    let q = core
-        .inner
+/// Решение 227: сумма части с площадки `v` — выручка продаж бота там минус их комиссия в котируемой монете площадки
+/// (настройка venue.quote_asset). Принимает: ядро, сделку, площадку. Ошибок нет.
+pub fn amount_of(core: &Core, deal: &Deal, v: &VenueId) -> Decimal {
+    let q = core.inner.deps.settings.text("venue.quote_asset", at(v));
+    super::usdt_return_parts::amount_at(deal, v, q.ok().as_deref())
+}
+
+/// Котируемая монета площадки из настроек (None — не задана). Принимает: ядро, площадку. Ошибок нет.
+pub(super) fn quote_of(core: &Core, v: &VenueId) -> Option<String> {
+    core.inner
         .deps
         .settings
-        .text("venue.quote_asset", at(&deal.at));
-    bot_part(deal, q.ok().as_deref())
+        .text("venue.quote_asset", at(v))
+        .ok()
 }
 
 /// Область настройки «площадка». Принимает: площадку. Возвращает: At. Ошибок нет.

@@ -84,12 +84,13 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         _ => Default::default(),
     };
     // Решение 138: общий шаг после закрытия — возврат выручки USDT на площадку покупки (для всех путей закрытия).
+    // Решение 227: по части на каждую площадку выручки — свой перегон.
     let ret = match step {
         Step::Closed => super::usdt_return_deal::prepare(core, deal).await,
-        _ => None,
+        _ => vec![],
     };
     save(core, deal).await;
-    if let Some(job) = ret {
+    for job in ret {
         job.start(core);
     }
     let deps = &core.inner.deps;

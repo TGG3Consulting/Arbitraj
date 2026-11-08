@@ -6,9 +6,10 @@
 //! уведомление и карантин монеты, ждём дальше (монеты в пути). Фактическое время в пути пишется в историю
 //! (для T в расчёте, dirctx.rs). Сумма вывода — вниз до точности вывода биржи (решение 104).
 //! Решение 151: перевод сделки на кошелёк DEX (send_trade) засчитывается и по приходу монеты в блокчейне, не дожидаясь
-//! хеша от биржи-отправителя (credit_chain.rs, transfer_chain.rs; transfer.credit_by_chain получателя). Перегон
-//! (send), возврат USDT (send_as), биржа ↔ биржа и переводы на биржу — как раньше (решение 76).
-//! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон), usdt_relay_retry.rs (USDT).
+//! хеша от биржи-отправителя (credit_chain.rs, transfer_chain.rs; transfer.credit_by_chain получателя). Решение 227:
+//! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
+//! биржу — как раньше (решение 76).
+//! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
@@ -106,7 +107,7 @@ pub async fn send(
     send_as(core, deal, from, to, asset, qty, acc.as_ref()).await
 }
 
-/// Перевод сделки (executor.rs): как send, но на кошелёк DEX сделки зачисляется и по приходу в блокчейне (решение
+/// Перевод сделки (executor.rs) и перегон застрявшей монеты (relay.rs, решение 227): как send, но на кошелёк DEX сделки зачисляется и по приходу в блокчейне (решение
 /// 151). Возвращает: (вывод, зачисление, строка хронологии сделки — если зачислено по блокчейну). Ошибки: как у send.
 pub async fn send_trade(
     core: &Core,

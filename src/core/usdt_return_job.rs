@@ -4,6 +4,8 @@
 //! неизвестен). Задача оборвалась до итога (паника) — страховка «USDT не вернулись» из Drop. Решение 163: сбой, при
 //! котором вывод точно не ушёл, и заданы повторы (usdt.return_retry_s, usdt.return_retries_max) — повторы
 //! (usdt_return_retry.rs); тогда сбой первой попытки не извещается usdt.relay_failed — итог известит повтор.
+//! Решение 227: Job — одна ЧАСТЬ возврата (площадка выручки); у сделки с продажами на нескольких площадках — по Job на
+//! часть, итог каждой — в её состояние.
 //! Кто вызывает: core/usdt_return_deal.rs (prepare создаёт Job), core/ledger.rs (finish запускает после сохранения).
 //! От чего зависит: usdt_return.rs (relay, relay_try), usdt_return_retry.rs, usdt_return_state.rs, gateway/urgency.rs.
 //! Настройки: через usdt_return.rs (usdt_return.*), через usdt_return_retry.rs (usdt.return_retry_s, usdt.return_retries_max).
@@ -67,7 +69,7 @@ impl Job {
                     let way = (&self.from, &self.to);
                     if super::usdt_return_retry::fail(&c, &self.deal, self.amount, way, 0, &e).await
                     {
-                        super::usdt_return_retry::schedule(&c, &self.deal);
+                        super::usdt_return_retry::schedule(&c, &self.deal, &self.from);
                     }
                 }
             }

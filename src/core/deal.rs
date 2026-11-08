@@ -87,10 +87,19 @@ pub struct Deal {
     /// не вернулись. None — возврат не нужен (продано на площадке покупки, режим «отдельно») или сделка до решения 138.
     #[serde(default)]
     pub usdt_return: Option<super::usdt_return_state::UsdtReturn>,
+    /// Решение 227: остальные части возврата — выручка продаж на других площадках (кроме площадки покупки), каждая своим
+    /// переводом (usdt_return_parts.rs); usdt_return — первая часть. Возврат закончен, когда закончены все части.
+    /// Пусто — одна часть (и у сделок до решения 227).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub usdt_return_parts: Vec<super::usdt_return_state::UsdtReturn>,
     /// Решение 138: путь закрытия, на котором возврата по решению нет (например «Продано вручную», решение 100), —
     /// причина; при закрытии вместо перегона — страховка «USDT не вернулись». None — обычный путь.
     #[serde(default)]
     pub usdt_return_skip: Option<String>,
+    /// Решение 227 (дополнение): площадки, отказавшие в выводе в этой сделке (WithdrawRejected / InvalidAddress /
+    /// WithdrawLocked, withdraw_refused.rs) — «Перегон» с них больше не выбирается. Пусто — отказов не было.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withdraw_refused: Vec<VenueId>,
     /// Решение 177: алерт, с которого человек запустил продажу («Продать сейчас», «Продать и перегнать»); тот же отказ —
     /// эта запись обновляется (core/manual_repeat.rs), а не ставится новая. None — продажа не с алерта.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -128,7 +137,9 @@ impl Deal {
             provisional_usd: None,
             dex_account: None,
             usdt_return: None,
+            usdt_return_parts: vec![],
             usdt_return_skip: None,
+            withdraw_refused: vec![],
             alert_was: None,
             timeline: vec![],
             started_at: now,

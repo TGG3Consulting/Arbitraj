@@ -48,6 +48,9 @@ pub struct MarketState {
     pub(super) pairs: HashMap<VenueId, HashMap<String, SpotPairState>>,
     /// Биржа → когда её справочник пар последний раз получен (SpotPairs.loaded_at; свежесть — pairs_fresh.rs).
     pub(super) pairs_at: HashMap<VenueId, DateTime<Utc>>,
+    /// Решение 227: тихая пара подтверждена по REST (решение 213) — стакан свежий для худшей цены ордера до этого
+    /// момента (unix мс), как в котировке адаптера (book_confirmed). Ключ — (площадка, тикер площадки).
+    pub(super) quiet: HashMap<(VenueId, String), i64>,
 }
 
 /// Ключ индекса пары: площадка и адреса по возрастанию. Ошибок нет.

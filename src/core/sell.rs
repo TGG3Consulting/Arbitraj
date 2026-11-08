@@ -12,6 +12,8 @@
 //! Решение 148: сделка закрыта продажей — сверка средней цены продажи с планом (sell_slip.rs).
 //! Решение 177: продажа кнопкой человека — итог отдельным событием (manual_outcome.rs); остаток после частичной продажи
 //! и застрявшая BNB уходят в режим застрявшей монеты уже как автоматика (risk_count::auto).
+//! Решение 227: котировка продажи (средняя, исполнимо, возраст) и худшая цена ордера со стаканом (возраст) — строкой в
+//! хронологию сделки; худшая цена — только по свежему стакану (worst.rs worst_order).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs.
@@ -66,10 +68,32 @@ pub async fn market(core: &Core, deal: Deal, why: &str) {
     .await
 }
 
+/// Строка хронологии (решение 227): котировка продажи (средняя, исполнимо из запрошенного, возраст котировки) и худшая
+/// цена ордера со стаканом, по которому посчитана (возраст стакана ядра; у DEX — от средней с допуском).
+/// Принимает: котировку, количество ордера, худшую цену (None — до расчёта не дошло). Ошибок нет.
+fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> String {
+    let age = (chrono::Utc::now() - q.at).num_milliseconds();
+    let worst = match w {
+        Some(w) => match w.book_age_ms {
+            Some(b) => format!("худшая цена ордера {} по стакану возрастом {b} мс", w.price),
+            None => format!(
+                "худшая цена ордера {} (средняя котировки с допуском DEX)",
+                w.price
+            ),
+        },
+        None => "худшая цена ордера не посчитана".to_string(),
+    };
+    format!(
+        "Котировка продажи на {}: средняя {}, исполнимо {} из {qty} (котировке {age} мс); {worst}",
+        q.venue.0, q.avg_price, q.fillable_qty
+    )
+}
+
 /// Продажа всего количества по котировке q. Принимает: сделку, котировку, причину (для хронологии).
 async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
-    match super::trade_ops::trade(
+    let mut seen = None;
+    let res = super::trade_ops::trade_seen(
         core,
         &deal.id,
         &v,
@@ -79,9 +103,12 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         q.route.clone(),
         q.avg_price,
         None,
+        &mut seen,
     )
-    .await
-    {
+    .await;
+    // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).
+    deal.note(quote_note(&q, deal.qty, seen.as_ref()));
+    match res {
         Ok(r) => {
             super::fills::trade(core, &mut deal, &r).await;
             deal.sells.push(r.clone());

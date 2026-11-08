@@ -27,6 +27,18 @@
 -->
 <script>
   import { uniqBy } from '../lib/uniq.js';
+
+  /** Решение 227: части возврата «не вернулись» по сделкам — { key, d, r }; ключ как у ядра (usdt_return_parts::key). */
+  function usdtParts(deals) {
+    const out = [];
+    for (const d of uniqBy(deals ?? [], (x) => x.id)) {
+      if (d.usdt_return?.state === 'not_returned') out.push({ key: d.id, d, r: d.usdt_return });
+      for (const r of d.usdt_return_parts ?? []) {
+        if (r.state === 'not_returned') out.push({ key: d.id + '@' + r.at, d, r });
+      }
+    }
+    return out;
+  }
   import { post } from '../lib/api.js';
   import { remote } from '../lib/remote.svelte.js';
   import { assetLabel } from '../lib/coinLabels.js';
@@ -152,11 +164,12 @@
   <table>
     <thead><tr><th>Сделка</th><th class="num">Сумма, USDT</th><th>Где лежат</th><th>Куда должны</th><th>Причина</th><th></th></tr></thead>
     <tbody>
-      {#each uniqBy(manual.data.usdt, (d) => d.id) as d (d.id)}
+      <!-- Решение 227: строка на каждую часть «не вернулись»; ключ — id (первая часть) или «id@площадка». -->
+      {#each usdtParts(manual.data.usdt) as p (p.key)}
         <tr>
-          <td><code>{d.id}</code></td><td class="num">{d.usdt_return.amount}</td><td>{d.usdt_return.at}</td>
-          <td>{d.direction.buy_on}</td><td class="err">{d.usdt_return.why}</td>
-          <td class="row">{@render buttons('u.' + d.id)}</td>
+          <td><code>{p.d.id}</code></td><td class="num">{p.r.amount}</td><td>{p.r.at}</td>
+          <td>{p.d.direction.buy_on}</td><td class="err">{p.r.why}</td>
+          <td class="row">{@render buttons('u.' + p.key)}</td>
         </tr>
       {:else}
         <tr><td colspan="6" class="muted">Невернувшихся USDT нет.</td></tr>

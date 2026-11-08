@@ -4,7 +4,8 @@
 //! («pre-crediting assets temporarily unavailable for withdrawal») — «не вернулись», бот больше не пытался.
 //! Теперь: перегон не состоялся, а прежний вывод точно не ушёл (retry_safe: площадка отказала или сбой до вывода) —
 //! повтор каждые usdt.return_retry_s секунд, не больше usdt.return_retries_max повторов; сумма каждого повтора —
-//! свободные USDT площадки, не больше выручки сделки. Каждая попытка — журнал (core.usdt_return) и хронология сделки
+//! ровно сумма части (решение 227: не свободный баланс; свободно меньше — попытка ничего не отправляет).
+//! Решение 227: повторы идут по ЧАСТИ возврата (часть = площадка, где лежат USDT) — у каждой части своя задача. Каждая попытка — журнал (core.usdt_return) и хронология сделки
 //! «Возврат USDT: попытка N из M — причина». Все неудачны, исход неизвестен или настроек нет — «не вернулись»:
 //! страховка (usdt.not_returned) и запись с кнопками на экране «Ручное управление» (core/manual_usdt.rs).
 //! Решение 220 (Тигран 08.11): вывод отклонён площадкой (WithdrawRejected) — без повторов при любых настройках: сразу
@@ -135,31 +136,36 @@ pub async fn fail(
     false
 }
 
-/// Запускает повторы отдельной задачей класса Trade (путь сделки). Принимает: ядро, сделку. Ошибок нет.
-pub fn schedule(core: &Core, deal: &str) {
-    let (c, d) = (core.clone(), deal.to_string());
-    tokio::spawn(urgency::scope(
-        Urgency::Trade,
-        async move { run(&c, &d).await },
-    ));
+/// Запускает повторы части отдельной задачей класса Trade (путь сделки). Принимает: ядро, сделку, площадку части
+/// (где лежат USDT). Ошибок нет.
+pub fn schedule(core: &Core, deal: &str, at: &VenueId) {
+    let (c, d, v) = (core.clone(), deal.to_string(), at.clone());
+    tokio::spawn(urgency::scope(Urgency::Trade, async move {
+        run(&c, &d, &v).await
+    }));
 }
 
-/// После перезапуска: сделки «ждёт повтора» продолжают повторы с того же счёта. Ошибок нет.
+/// После перезапуска: части «ждёт повтора» продолжают повторы с того же счёта (каждая своей задачей). Ошибок нет.
 pub fn resume(core: &Core) {
-    let ids: Vec<String> = lk(&core.inner.deals)
+    let parts: Vec<(String, VenueId)> = lk(&core.inner.deals)
         .values()
-        .filter(|d| matches!(d.usdt_return, Some(UsdtReturn::Retrying { .. })))
-        .map(|d| d.id.clone())
+        .flat_map(|d| {
+            super::usdt_return_parts::all(d)
+                .into_iter()
+                .filter(|p| matches!(p, UsdtReturn::Retrying { .. }))
+                .map(|p| (d.id.clone(), p.venue().clone()))
+                .collect::<Vec<_>>()
+        })
         .collect();
-    for id in ids {
-        schedule(core, &id);
+    for (id, at) in parts {
+        schedule(core, &id, &at);
     }
 }
 
-/// Повторы: пауза, попытка, итог — пока состояние «ждёт повтора» и повторы не кончились. Ошибок нет.
-async fn run(core: &Core, deal: &str) {
+/// Повторы части: пауза, попытка, итог — пока состояние «ждёт повтора» и повторы не кончились. Ошибок нет.
+async fn run(core: &Core, deal: &str, at: &VenueId) {
     loop {
-        let Some((amount, from, to, tries, last)) = retrying(core, deal) else {
+        let Some((amount, from, to, tries, last)) = retrying(core, deal, at) else {
             return;
         };
         // Настройки сменились на лету: повторы выключены или их предел уже исчерпан — «не вернулись».
@@ -178,7 +184,7 @@ async fn run(core: &Core, deal: &str) {
         tokio::time::sleep(p.every).await;
         let n = tries + 1;
         // Захват попытки: «ждёт повтора» с тем же счётом → «идёт». Вторая задача по той же сделке не пройдёт.
-        if !claim(core, deal, tries).await {
+        if !claim(core, deal, at, tries).await {
             return;
         }
         match attempt(core, deal, amount, (&from, &to), &format!("u{n}")).await {

@@ -2,12 +2,14 @@
 //! Что делает: «USDT не вернулись» на экране «Ручное управление» (решение 163, Тигран 05.11.2026): закрытая сделка,
 //! чья выручка USDT не вернулась на площадку покупки (Deal.usdt_return = NotReturned: все повторы неудачны, исход
 //! неизвестен, повторов нет), — запись с кнопками «Перегнать» (ещё одна попытка возврата той же командой ядра —
-//! usdt_return_attempt::attempt: свободные USDT площадки, не больше выручки) и «Перегнано вручную» (человек перевёл
+//! usdt_return_attempt::attempt: сумма части) и «Перегнано вручную» (человек перевёл
 //! сам: возврат помечается «вручную», в журнал — кто нажал). Кнопки «Продать» нет — уже продано. В Telegram запись
 //! уходит тем же зеркалом экрана (событие manual.record, notify/mirror*.rs, решение 156). Повторное нажатие по уже
 //! решённой записи — «проигнорирована», действие не повторяется.
 //! Решение 224: у «Продано вручную» «Перегнать» доступна, если в сделке были продажи бота (перегон — не больше их
 //! выручки); недоступна — текст записи «Перегнать» не предлагает, только «Перегнано вручную».
+//! Решение 227: запись — на каждую ЧАСТЬ возврата «не вернулись» (часть = площадка, где лежат USDT); «Перегнать» —
+//! ровно сумма части (не свободный баланс), свободно меньше — попытка ничего не отправляет.
 //! Кто вызывает: core/manual_feed.rs (записи), core/commands.rs (команды UsdtRetry, UsdtReturnedManually),
 //! core/manual_return.rs (Core::manual — таблица экрана; список сделок — Core::usdt_not_returned в manual_feed.rs).
 //! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs.
@@ -25,12 +27,23 @@ use super::engine::{Core, lk};
 use super::manual_rows::btn;
 use super::usdt_return_state::{self as st, UsdtReturn};
 
-/// Запись «USDT не вернулись» с кнопками «Перегнать» и «Перегнано вручную». Принимает: сделку.
-/// Возвращает: запись или None — у сделки возврат не в состоянии «не вернулись». Ошибок нет.
-pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
-    let Some(UsdtReturn::NotReturned { amount, at, why }) = &d.usdt_return else {
+/// Записи «USDT не вернулись» сделки — по одной на каждую часть возврата в этом состоянии (решение 227). Принимает:
+/// сделку. Возвращает: записи (пусто — ни одной такой части). Ошибок нет.
+pub fn usdt_records(d: &Deal) -> Vec<ManualRecord> {
+    super::usdt_return_parts::all(d)
+        .into_iter()
+        .filter_map(|p| usdt_record(d, p))
+        .collect()
+}
+
+/// Запись «USDT не вернулись» части с кнопками «Перегнать» и «Перегнано вручную». Решение 227: ключ записи и поле
+/// deal_id команд — ключ части (usdt_return_parts::key: первая часть — id сделки, остальные — «<id>@<площадка>»).
+/// Принимает: сделку, часть. Возвращает: запись или None — часть не в состоянии «не вернулись». Ошибок нет.
+fn usdt_record(d: &Deal, part: &UsdtReturn) -> Option<ManualRecord> {
+    let UsdtReturn::NotReturned { amount, at, why } = part else {
         return None;
     };
+    let key = super::usdt_return_parts::key(d, at);
     let (id, v, to, sum) = (&d.id, &at.0, &d.direction.buy_on.0, amount.round_dp(4));
     // «Продано вручную» (решение 100): выручку человека перегоняет только человек; решение 224 — выручку продаж бота
     // «Перегнать» перегоняет (retry_block).
@@ -42,9 +55,9 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
         "«Перегнать» или, если перевели сами, «Перегнано вручную»"
     };
     Some(ManualRecord {
-        key: ManualRecord::key_of(RecordKind::UsdtReturn, id),
+        key: ManualRecord::key_of(RecordKind::UsdtReturn, &key),
         kind: RecordKind::UsdtReturn,
-        object_id: id.clone(),
+        object_id: key.clone(),
         deal_id: id.clone(),
         venue: v.clone(),
         // Решение 164: человеческий текст записи (тот же уходит в Telegram зеркалом экрана).
@@ -62,10 +75,10 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
                 "usdt_retry",
                 "Перегнать",
                 A::UsdtRetry {
-                    deal_id: id.clone(),
+                    deal_id: key.clone(),
                 },
                 format!(
-                    "Перегнать USDT сделки {id} с {v} на {to}? Сумма — свободные USDT на {v}, не больше {sum}. Если причина — «исход неизвестен» или «вывод мог уйти», сначала проверьте обе площадки: перевод мог уже уйти."
+                    "Перегнать USDT сделки {id} с {v} на {to}? Сумма — {sum} (выручка этой части; свободно меньше — перегон не отправится). Если причина — «исход неизвестен» или «вывод мог уйти», сначала проверьте обе площадки: перевод мог уже уйти."
                 ),
                 block,
                 false,
@@ -74,7 +87,7 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
                 "usdt_manual",
                 "Перегнано вручную",
                 A::UsdtReturnedManually {
-                    deal_id: id.clone(),
+                    deal_id: key.clone(),
                 },
                 format!(
                     "Отметить, что {sum} USDT сделки {id} вы перевели с {v} на {to} сами? Запись закроется, бот этот возврат больше не делает."
@@ -86,13 +99,13 @@ pub fn usdt_record(d: &Deal) -> Option<ManualRecord> {
     })
 }
 
-/// Почему «Перегнать» недоступна. «Продано вручную» (решение 100) без продаж бота на площадке выручки — бот выручку
-/// не перегоняет; с продажами бота — доступна (решение 224, перегон не больше их выручки). USDT уже на площадке
-/// покупки — тоже недоступна. Принимает: сделку, где лежат USDT, площадку покупки. Возвращает: причину или None.
-/// Ошибок нет.
+/// Почему «Перегнать» недоступна. «Продано вручную» (решение 100) без продаж бота на площадке этой части — бот
+/// выручку не перегоняет; с продажами бота — доступна (решение 224, перегон не больше их выручки на этой площадке,
+/// решение 227). USDT уже на площадке покупки — тоже недоступна. Принимает: сделку, где лежат USDT, площадку покупки.
+/// Возвращает: причину или None. Ошибок нет.
 pub fn retry_block(d: &Deal, at: &VenueId, to: &VenueId) -> Option<String> {
     if let Some(w) = &d.usdt_return_skip
-        && super::usdt_return_deal::bot_sold(d) <= Decimal::ZERO
+        && super::usdt_return_parts::sold_at(d, at) <= Decimal::ZERO
     {
         return Some(format!("бот выручку этой сделки не перегоняет: {w}"));
     }
@@ -107,6 +120,7 @@ pub async fn command(core: &Core, a: &A, who: &str) -> Option<Result<String, Str
         A::UsdtReturnedManually { deal_id } => (deal_id, false),
         _ => return None,
     };
+    // Решение 227: deal_id команды — ключ части («<id>» — первая, «<id>@<площадка>» — остальные).
     Some(match take(core, deal, who, retry).await {
         Ok(Some(t)) => Ok(t),
         Ok(None) => Ok(format!(
@@ -116,15 +130,19 @@ pub async fn command(core: &Core, a: &A, who: &str) -> Option<Result<String, Str
     })
 }
 
-/// Под замком учёта: «не вернулись» → «идёт» («Перегнать», попытка — отдельной задачей) или → «вручную».
-/// Возвращает: Ok(Some(текст)) — выполнено; Ok(None) — записи нет; Err — кнопка недоступна (причина).
-async fn take(core: &Core, deal: &str, who: &str, retry: bool) -> Result<Option<String>, String> {
+/// Под замком учёта: часть «не вернулись» → «идёт» («Перегнать», попытка — отдельной задачей) или → «вручную».
+/// Принимает: ядро, ключ части (решение 227), кто, «Перегнать» ли. Возвращает: Ok(Some(текст)) — выполнено;
+/// Ok(None) — записи нет; Err — кнопка недоступна (причина).
+async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<String>, String> {
+    let (deal, part) = super::usdt_return_parts::parse(key);
     let (d, amount, at, to) = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
             return Ok(None);
         };
-        let Some(UsdtReturn::NotReturned { mut amount, at, .. }) = d.usdt_return.clone() else {
+        let Some(UsdtReturn::NotReturned { mut amount, at, .. }) =
+            super::usdt_return_parts::get(d, part.as_ref()).cloned()
+        else {
             return Ok(None);
         };
         let to = d.direction.buy_on.clone();
@@ -132,26 +150,33 @@ async fn take(core: &Core, deal: &str, who: &str, retry: bool) -> Result<Option<
             if let Some(w) = retry_block(d, &at, &to) {
                 return Err(w);
             }
-            // Решение 224: у «Продано вручную» — не больше выручки продаж бота (выручку человека бот не трогает).
+            // Решение 224: у «Продано вручную» — не больше выручки продаж бота на площадке части (решение 227; выручку
+            // человека бот не трогает).
             if d.usdt_return_skip.is_some() {
-                amount = amount.min(super::usdt_return_deal::bot_amount(core, d));
+                amount = amount.min(super::usdt_return_deal::amount_of(core, d, &at));
             }
-            d.usdt_return = Some(UsdtReturn::Pending {
-                amount,
-                from: at.clone(),
-                to: to.clone(),
-            });
+            super::usdt_return_parts::put(
+                d,
+                UsdtReturn::Pending {
+                    amount,
+                    from: at.clone(),
+                    to: to.clone(),
+                },
+            );
             d.note(format!(
                 "«Перегнать» ({who}): ещё одна попытка возврата USDT {} → {}",
                 at.0, to.0
             ));
         } else {
-            d.usdt_return = Some(UsdtReturn::Manual {
-                amount,
-                at: at.clone(),
-                to: to.clone(),
-                by: who.to_string(),
-            });
+            super::usdt_return_parts::put(
+                d,
+                UsdtReturn::Manual {
+                    amount,
+                    at: at.clone(),
+                    to: to.clone(),
+                    by: who.to_string(),
+                },
+            );
             d.note(format!(
                 "Перегнано вручную ({who}): {amount} USDT {} → {} — человек перевёл сам, запись «USDT не вернулись» закрыта",
                 at.0, to.0
@@ -163,7 +188,7 @@ async fn take(core: &Core, deal: &str, who: &str, retry: bool) -> Result<Option<
     let text = if retry {
         start(core, deal, amount, at.clone(), to.clone(), who);
         format!(
-            "Сделка {deal}: перегон USDT {} → {} запущен (свободные USDT, не больше {})",
+            "Сделка {deal}: перегон USDT {} → {} запущен (сумма части {})",
             at.0,
             to.0,
             amount.round_dp(4)

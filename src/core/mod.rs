@@ -217,7 +217,9 @@ pub mod usdt_return;
 pub mod usdt_return_attempt;
 pub mod usdt_return_deal;
 pub mod usdt_return_job;
+pub mod usdt_return_parts;
 pub mod usdt_return_retry;
+pub mod usdt_return_split;
 pub mod usdt_return_state;
 pub mod usdt_sources;
 pub mod usdt_transfer;
@@ -239,6 +241,7 @@ pub mod window_tap;
 pub mod window_view;
 pub mod window_worker;
 pub mod withdraw_limit;
+pub mod withdraw_refused;
 pub mod worst;
 
 pub use engine::Core;

@@ -109,20 +109,25 @@ impl Core {
         v.extend(holdings.iter().map(holding_record));
         v.extend(self.halted().iter().map(halted_record));
         // Решение 163: «USDT не вернулись» — после остановленных (порядок таблиц экрана).
+        // Решение 227: запись на каждую часть возврата «не вернулись».
         v.extend(
             self.usdt_not_returned()
                 .iter()
-                .filter_map(super::manual_usdt::usdt_record),
+                .flat_map(super::manual_usdt::usdt_records),
         );
         v
     }
 
-    /// Закрытые сделки, чьи USDT не вернулись (таблица «USDT не вернулись — ждут перегона»), старые сверху.
-    /// Ошибок нет.
+    /// Закрытые сделки, чьи USDT не вернулись (таблица «USDT не вернулись — ждут перегона»), старые сверху. Решение 227:
+    /// сделка попадает, если хотя бы одна часть возврата «не вернулись». Ошибок нет.
     pub fn usdt_not_returned(&self) -> Vec<Deal> {
         let mut v: Vec<Deal> = lk(&self.inner.deals)
             .values()
-            .filter(|d| matches!(d.usdt_return, Some(UsdtReturn::NotReturned { .. })))
+            .filter(|d| {
+                super::usdt_return_parts::all(d)
+                    .iter()
+                    .any(|p| matches!(p, UsdtReturn::NotReturned { .. }))
+            })
             .cloned()
             .collect();
         v.sort_by_key(|d| d.updated_at);

@@ -4,6 +4,8 @@
 //! Плюс страховка: «USDT не вернулись» — журнал (core.usdt_not_returned), событие Telegram usdt.not_returned, строка
 //! на экране «Сделки» (по полю сделки) и запись с кнопками на экране «Ручное управление» (решение 163,
 //! core/manual_usdt.rs; в Telegram — событием manual.record).
+//! Решение 227: состояние — у каждой ЧАСТИ возврата (часть = площадка, где лежат USDT; usdt_return_parts.rs): set,
+//! mark_not_returned и on_restart меняют часть по её площадке, остальные части не трогают.
 //! Кто вызывает: core/usdt_return_deal.rs (шаг после закрытия), core/ledger.rs (load — возврат, прерванный
 //! перезапуском), core/manual_halted.rs («Продано вручную» — возврата нет по решению 100), core/usdt_return_retry.rs
 //! (повторы, решение 163), core/manual_usdt.rs («Перегнать», «Перегнано вручную»).
@@ -103,7 +105,7 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
     deps.notify("usdt.not_returned", Some(&at.0), &tg).await;
 }
 
-/// Ставит состояние возврата закрытой сделке в учёте (память, SQLite, интерфейс) с записью в хронологию.
+/// Ставит состояние части возврата (по площадке состояния, решение 227) закрытой сделке в учёте (память, SQLite, интерфейс) с записью в хронологию.
 /// Принимает: ядро, id сделки, состояние, текст для хронологии («» — без записи). Ошибок нет: сделки нет — ничего.
 pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
     let d = {
@@ -111,7 +113,8 @@ pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
         let Some(d) = deals.get_mut(deal) else {
             return;
         };
-        d.usdt_return = Some(state);
+        // Решение 227: часть — по площадке состояния (первая или остальная).
+        super::usdt_return_parts::put(d, state);
         if !note.is_empty() {
             d.note(note.to_string());
         }
@@ -132,20 +135,27 @@ pub async fn mark_not_returned(core: &Core, deal: &str, amount: Decimal, at: &Ve
     alarm(core, deal, amount, at, why).await;
 }
 
-/// После перезапуска: возврат «идёт» у закрытой сделки — задача перегона потеряна вместе с памятью. Перевод мог уйти:
-/// не повторяем, а ставим «не вернулись» со страховкой. Принимает: ядро, сделку (из базы). Возвращает: true —
-/// состояние изменено (сохранить). Ошибок нет.
+/// После перезапуска: часть возврата «идёт» у закрытой сделки — задача перегона потеряна вместе с памятью. Перевод мог
+/// уйти: не повторяем, а ставим «не вернулись» со страховкой — каждой такой части (решение 227). Принимает: ядро,
+/// сделку (из базы). Возвращает: true — состояние изменено (сохранить). Ошибок нет.
 pub async fn on_restart(core: &Core, d: &mut Deal) -> bool {
-    let Some(UsdtReturn::Pending { amount, from, .. }) = d.usdt_return.clone() else {
-        return false;
-    };
+    let lost: Vec<(Decimal, VenueId)> = super::usdt_return_parts::all(d)
+        .into_iter()
+        .filter_map(|p| match p {
+            UsdtReturn::Pending { amount, from, .. } => Some((*amount, from.clone())),
+            _ => None,
+        })
+        .collect();
     let why = "возврат прерван перезапуском — проверьте на обеих площадках, ушёл ли перевод";
-    d.note(not_returned_text(&d.id, amount, &from, why));
-    d.usdt_return = Some(UsdtReturn::NotReturned {
-        amount,
-        at: from.clone(),
-        why: why.to_string(),
-    });
-    alarm(core, &d.id, amount, &from, why).await;
-    true
+    for (amount, from) in &lost {
+        d.note(not_returned_text(&d.id, *amount, from, why));
+        let state = UsdtReturn::NotReturned {
+            amount: *amount,
+            at: from.clone(),
+            why: why.to_string(),
+        };
+        super::usdt_return_parts::put(d, state);
+        alarm(core, &d.id, *amount, from, why).await;
+    }
+    !lost.is_empty()
 }

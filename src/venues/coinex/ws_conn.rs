@@ -5,8 +5,19 @@
 //! подписки — обрыв с причиной; неполный пуш или неразборчивый снимок → стакан пары недостоверен.
 //! Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, inflate.rs, book.rs, ctx.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, inflate.rs, book.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [coinex].
+//!
+//! Решение 202 (для всех бирж, Тигран 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — пуш стакана
+//! по паре (в том числе с тем же updated_at — полный пуш «every 1 minute» без изменений книги, неполный и неразборчивый
+//! с рынком). Команды сторожа ядра: «переподписать пару» — {"method":"depth.unsubscribe","params":{"market_list":[]}}
+//! («Empty list to unsubscribe to all markets»; пример «All markets» в WS Market Depth), затем depth.subscribe со ВСЕМИ
+//! рынками соединения, как при подключении. Почему не одна пара: отписка одного рынка в документации есть, а что делает
+//! повторный depth.subscribe (добавляет рынки или заменяет прежний список) — нет; «отписать все + подписать все» даёт
+//! один и тот же итог при любом из двух вариантов. Соседи по соединению получают новый полный пуш (if_full = true —
+//! локального стакана нет) и начинают прогрев. Отказ одного из двух запросов (ответ с ошибкой на его id) — обрыв с
+//! причиной, как отказ подписки при подключении. «Переподключить соединение» — сессия заканчивается, ws.rs подключается
+//! заново с теми же парами.
 //!
 //! Решение 109: снимок с тем же updated_at, что прежний, ядру не отдаётся (стакан не менялся); время кадра пары
 //! обновляется (book.rs, touch). Номеров последовательности у CoinEx нет (WS Market Depth).
@@ -17,7 +28,7 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
@@ -31,17 +42,15 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::inflate::Inflater;
 use super::ws::{Cfg, End, invalidate};
+pub use super::ws_msg::sub_message;
+use super::ws_msg::{SUB_ID, sub_message_id, unsub_all_message};
+use crate::gateway::feed_health::Cmd;
+use crate::gateway::feed_reg::ConnHandle;
 
-/// id запроса подписки (ping идут со следующих номеров).
-const SUB_ID: i64 = 1;
-
-/// Что делает: запрос подписки на стаканы рынков. Принимает: рынки, limit. Возвращает: текст запроса. Ошибок нет.
-pub fn sub_message(symbols: &[&str], levels: u64) -> String {
-    let list: Vec<Value> = symbols
-        .iter()
-        .map(|s| json!([s, levels, "0", true]))
-        .collect();
-    json!({"method": "depth.subscribe", "params": {"market_list": list}, "id": SUB_ID}).to_string()
+/// Учёт свежести соединения и канал команд сторожа (решение 202).
+pub struct Watch<'a> {
+    pub feed: &'a ConnHandle,
+    pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
 }
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
@@ -52,6 +61,7 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
+    w: Watch<'_>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -64,6 +74,7 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
+    w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let syms: Vec<&str> = assets.iter().map(|(_, s)| s.as_str()).collect();
@@ -80,6 +91,8 @@ pub async fn session(
     let mut ping_id = SUB_ID;
     let mut last_rx = Instant::now();
     let mut dropped = 0u64;
+    // id запросов переподписки сторожем (решение 202): ответ с ошибкой на них — обрыв.
+    let mut resub_ids: Vec<i64> = Vec::new();
     loop {
         tokio::select! {
             _ = ping.tick() => {
@@ -89,6 +102,25 @@ pub async fn session(
                     return End::Broken(format!("отправка server.ping: {e}"));
                 }
             }
+            Some(c) = w.cmd.recv() => match c {
+                Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
+                Cmd::Resub(ticker) => {
+                    if !assets.iter().any(|(a, _)| a.ticker == ticker) { continue }
+                    let (un, sub) = (ping_id + 1, ping_id + 2);
+                    ping_id = sub;
+                    resub_ids.extend([un, sub]);
+                    for m in [unsub_all_message(un), sub_message_id(&syms, cfg.levels, sub)] {
+                        if let Err(e) = sink.send(Message::Text(m.into())).await {
+                            return End::Broken(format!("отправка переподписки (сторож пар): {e}"));
+                        }
+                    }
+                    // Новый полный пуш каждой пары — в память и ядру, даже с прежним updated_at.
+                    last_at.clear();
+                    for (a, _) in assets {
+                        w.feed.resubscribed(&a.ticker);
+                    }
+                }
+            },
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
                 return End::Broken(format!("нет кадров дольше venue.ws_silence_ms ({} мс)", cfg.silence.as_millis()));
             }
@@ -100,6 +132,7 @@ pub async fn session(
                 };
                 last_rx = Instant::now();
                 alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                w.feed.alive();
                 let text: &str = match &frame {
                     Message::Text(t) => t.as_str(),
                     // Распаковка — в буфер соединения, текст берётся из него без копии (урок 13).
@@ -130,6 +163,7 @@ pub async fn session(
                 match msg {
                     Msg::Depth { symbol, full, bids, asks, updated_at } => {
                         let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
+                        w.feed.frame(&asset.ticker);
                         if !full {
                             invalidate(ctx, books, out, &asset.ticker);
                             ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: {symbol} — неполный пуш (is_full = false) при подписке if_full = true; стакан недостоверен")).await;
@@ -159,12 +193,16 @@ pub async fn session(
                     }
                     Msg::Bad { symbol, reason } => {
                         if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
+                            w.feed.frame(&a.ticker);
                             invalidate(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
                     }
                     Msg::Error { id: Some(SUB_ID), code, text } => {
                         return End::Broken(format!("подписка depth.subscribe отклонена, код {code}: {text}"));
+                    }
+                    Msg::Error { id: Some(id), code, text } if resub_ids.contains(&id) => {
+                        return End::Broken(format!("переподписка сторожем отклонена, код {code}: {text}"));
                     }
                     Msg::Error { code, text, .. } => {
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: ошибка CoinEx, код {code}: {text}")).await;

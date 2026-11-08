@@ -126,6 +126,12 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
   Записать на сервере бота подряд кадры books5 пары (raw.book_frames = да) и сразу
   `GET /api/v5/market/books?instId=<SYM>&sz=5`: (1) равенство отпечатков на одной книге; (2) seqId ответа против seqId
   последнего кадра books5 / books — одна ли шкала (вопрос «по номеру» — docs/TASKS.md).
+- `coinex_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET /v2/spot/depth на
+  **примере из документации** (Get Market Depth, Response example; вложенность data → depth — по таблице полей; живого
+  ответа и кадров нет — api.coinex.com закрыт прокси): уровень с количеством "0" не берётся, разбор пуша (depth.rs) того
+  же объекта даёт тот же отпечаток — verdict ядра Quiet; стакана нет / другой — Lost. `resub_request_shape` —
+  depth.unsubscribe всех рынков (пример «All markets» документации) и depth.subscribe со своим id. Записать на сервере
+  бота подряд кадры depth.update пары (raw.book_frames = да) и `GET /v2/spot/depth?market=<SYM>&limit=20&interval=0`.
 - `kucoin_real_data.rs` — адаптер KuCoin (решение 137) на живых публичных ответах 04.11 (`data/cex_samples_2026_11_04/kucoin_*`:
   /api/v2/symbols, /api/v3/currencies и /CAKE, bullet-public, level2_20 CAKE-USDT, kucoin_ws.jsonl — welcome, ack, pong,
   level2Depth50, level2) и на тестовом векторе подписи официального SDK (test_default_signer.py). `#[ignore]` до записи:

@@ -216,3 +216,85 @@ fn recorded_order_fee_and_deals() {
         assert_eq!(by.get(&c).copied().unwrap_or_default(), f);
     }
 }
+
+/// Решение 202 (Тигран 08.11), venues/coinex/ws_msg.rs: переподписка сторожем — depth.unsubscribe всех рынков (пример
+/// документации WS Market Depth «All markets»: {"method": "depth.unsubscribe", "params": {"market_list": []}, "id": 1}) и
+/// depth.subscribe всех рынков соединения со своим id (отказ разбирается по id).
+#[test]
+fn resub_request_shape() {
+    use arb::venues::coinex::ws_msg;
+    let un: Value = serde_json::from_str(&ws_msg::unsub_all_message(1)).unwrap();
+    assert_eq!(
+        un,
+        serde_json::json!({"method": "depth.unsubscribe", "params": {"market_list": []}, "id": 1})
+    );
+    let sub: Value =
+        serde_json::from_str(&ws_msg::sub_message_id(&["CAKEUSDT", "BTCUSDT"], 20, 7)).unwrap();
+    assert_eq!(sub["method"], "depth.subscribe");
+    assert_eq!(sub["id"], 7);
+    assert_eq!(
+        sub["params"]["market_list"][1],
+        serde_json::json!(["BTCUSDT", 20, "0", true])
+    );
+}
+
+/// Решение 213 (Тигран 08.11), venues/coinex/book_print.rs — подтверждение тихой пары по содержимому. Разбор ответа
+/// GET /v2/spot/depth на ПРИМЕРЕ ИЗ ДОКУМЕНТАЦИИ (Get Market Depth, Response example: market BTCUSDT, is_full true, asks
+/// [["30740.00","0.31763545"],["30769.00","1.45155000"]], bids [["30736.00","0.04857373"],["30733.00","0.84696320"],
+/// ["30725.00","0.12563353"],["30422.00","0"]], last, updated_at 1689152421692, checksum 2578768879; вложенность data →
+/// depth — по таблице полей) — живого ответа и кадров в tests/data нет (api.coinex.com закрыт прокси; что записать —
+/// tests/README.md). Уровень с количеством "0" не берётся (как у пуша, depth.rs). Тот же объект depth, разобранный
+/// разбором пуша (depth::levels), даёт тот же отпечаток — verdict ядра Quiet; стакана в памяти нет или другой — Lost.
+#[test]
+fn book_print_docs_example() {
+    use arb::core::feed_confirm::{Verdict, verdict};
+    use arb::gateway::feed_health::{BookPrint, BookPrints, BookVersion, PairHealth};
+    use arb::venues::coinex::book_print;
+    let body: Value = serde_json::from_str(
+        r#"{"code":0,"data":{"market":"BTCUSDT","is_full":true,"depth":{"asks":[["30740.00","0.31763545"],["30769.00","1.45155000"]],"bids":[["30736.00","0.04857373"],["30733.00","0.84696320"],["30725.00","0.12563353"],["30422.00","0"]],"last":"30746.28","updated_at":1689152421692,"checksum":2578768879}},"message":"OK"}"#,
+    )
+    .unwrap();
+    let data = rest::data(body);
+    let p = book_print::parse(&data, 5).unwrap();
+    assert_eq!((p.bids.len(), p.asks.len()), (3, 2));
+    assert_eq!(
+        (p.bids[0].price, p.bids[0].qty),
+        (d("30736.00"), d("0.04857373"))
+    );
+    assert_eq!(
+        (p.asks[0].price, p.asks[0].qty),
+        (d("30740.00"), d("0.31763545"))
+    );
+    assert_eq!(book_print::parse(&data, 2).unwrap().bids.len(), 2);
+    // Разбор пуша (depth.rs) того же объекта depth.
+    let dep = &data["depth"];
+    let mut bids = depth::levels(dep, "bids").unwrap();
+    let mut asks = depth::levels(dep, "asks").unwrap();
+    bids.sort_by_key(|b| std::cmp::Reverse(b.price));
+    asks.sort_by_key(|a| a.price);
+    let ours = BookPrint::top(&bids, &asks, 5);
+    let pair = PairHealth {
+        ticker: "BTC".into(),
+        last_ms: Some(1),
+        since_ms: 0,
+        last_id: None,
+        last_changed_ms: None,
+    };
+    let ver = |ours: Option<BookPrint>| BookVersion {
+        print: Some(BookPrints {
+            levels: 5,
+            rest: p.clone(),
+            ours,
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair, &ver(Some(ours)), 2), Verdict::Quiet);
+    assert!(matches!(verdict(&pair, &ver(None), 2), Verdict::Lost(_)));
+    let other = BookPrint::top(&bids, &asks, 1);
+    assert!(matches!(
+        verdict(&pair, &ver(Some(other)), 2),
+        Verdict::Lost(_)
+    ));
+    let bad: Value = serde_json::from_str(r#"{"market":"BTCUSDT"}"#).unwrap();
+    assert_eq!(book_print::parse(&bad, 5).unwrap_err(), "нет data.depth");
+}

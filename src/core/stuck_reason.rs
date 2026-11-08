@@ -3,6 +3,7 @@
 //! журнал и Telegram всегда писали «продавать невыгодно», хотя монета попадала сюда и после несостоявшегося перевода,
 //! без котировки, после продажи, не ушедшей в сеть, после неисполненного ордера биржи и с остатком после частичной
 //! продажи. Теперь каждый вызов stuck::handle передаёт настоящую причину — она в журнале, хронологии и Telegram.
+//! Решение 229: продажа DEX не попала в блок, а отмена подтверждена — своя причина «не попала в блок и отменена».
 //! Кто вызывает: sell.rs, sell_unsent.rs (передают причину), stuck.rs (пишет её). «Перевод не состоялся» после покупки
 //! с ответов Тиграна 08.11 идёт не сюда, а в продажу здесь (relay_here::transfer_failed).
 //! От чего зависит: gateway/errors.rs (код ошибки продажи), op_error.rs.
@@ -27,6 +28,8 @@ pub enum StuckReason {
     Unsent(String),
     /// Ордер продажи на бирже не исполнился совсем (решение 182) — текст ошибки.
     NotFilled(String),
+    /// Продажа DEX не попала в блок, nonce занят нашей отменой в блоке (решение 229) — текст ошибки.
+    Cancelled(String),
     /// Продано не всё — остаток.
     Partial(Decimal),
     /// BNB на DEX: газ продажи не помещается сверх резерва (решение 62) — текст ошибки.
@@ -35,10 +38,13 @@ pub enum StuckReason {
 
 impl StuckReason {
     /// Причина по ошибке продажи, которую повторяет режим застрявшей монеты (sell_unsent.rs): OrderNotFilled —
-    /// «ордер не исполнился», остальное — «не ушла в сеть». Принимает: ошибку продажи. Ошибок нет.
+    /// «ордер не исполнился», не попала в блок и отменена (решение 229) — «отменена», остальное — «не ушла в сеть».
+    /// Принимает: ошибку продажи. Ошибок нет.
     pub fn of_sell(e: &OpError) -> StuckReason {
         if e.code == Some(ErrorCode::OrderNotFilled) {
             StuckReason::NotFilled(e.message.clone())
+        } else if e.cancel_confirmed() {
+            StuckReason::Cancelled(e.message.clone())
         } else {
             StuckReason::Unsent(e.message.clone())
         }
@@ -52,6 +58,7 @@ impl StuckReason {
             StuckReason::TransferFailed(_) => "перевод не состоялся",
             StuckReason::Unsent(_) => "продажа не ушла в сеть",
             StuckReason::NotFilled(_) => "ордер продажи не исполнился",
+            StuckReason::Cancelled(_) => "продажа не попала в блок и отменена",
             StuckReason::Partial(_) => "продано не всё",
             StuckReason::GasReserve(_) => "газ продажи не помещается сверх резерва BNB",
         }
@@ -66,6 +73,7 @@ impl StuckReason {
             | StuckReason::TransferFailed(e)
             | StuckReason::Unsent(e)
             | StuckReason::NotFilled(e)
+            | StuckReason::Cancelled(e)
             | StuckReason::GasReserve(e) => format!("{}: {e}", self.title()),
         }
     }

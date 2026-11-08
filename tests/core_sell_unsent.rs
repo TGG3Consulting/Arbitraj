@@ -109,6 +109,7 @@ fn rejected(sent: bool) -> OpError {
         code: Some(ErrorCode::ChannelRejected),
         message: ASTER.into(),
         sent,
+        cancelled: false,
     }
 }
 
@@ -150,6 +151,7 @@ async fn decide_retries_only_unsent_channel_reject() {
         code: Some(ErrorCode::QuoteMismatch),
         message: "цена сборки хуже".into(),
         sent: false,
+        cancelled: false,
     };
     assert_eq!(
         sell_unsent::decide(&core, &deal, &quote, "выгодно"),
@@ -174,7 +176,7 @@ async fn retry_goes_to_new_sale_then_exhausted_alerts_once() {
     let e = rejected(false);
 
     // Повтор: счётчик, запись, пауза, режим застрявшей монеты → продажа по рынку с новой котировкой.
-    sell_unsent::retry(&core, aster(), &e, 1).await;
+    sell_unsent::retry(&core, aster(), &e, "выгодно", 1).await;
     let x = deal_of(&core, "20261104120743802ASTER");
     assert_eq!(x.unsent_retries, 1);
     let lines: Vec<&str> = x.timeline.iter().map(|(_, t)| t.as_str()).collect();
@@ -367,6 +369,7 @@ async fn usdt_return_not_retried_after_withdraw_rejected() {
         code: Some(ErrorCode::WithdrawRejected),
         message: BITGET_40938.into(),
         sent: false,
+        cancelled: false,
     };
     let amount = Decimal::from(83);
     let again = arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &e).await;
@@ -386,6 +389,7 @@ async fn usdt_return_not_retried_after_withdraw_rejected() {
         code: Some(ErrorCode::WithdrawLocked),
         message: "locked".into(),
         sent: false,
+        cancelled: false,
     };
     assert!(
         arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &locked).await

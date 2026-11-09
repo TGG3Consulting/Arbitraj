@@ -223,6 +223,7 @@ venue.book_stream = depth_update, по содержимому при depth; Bina
 | venue.recv_window_ms | площадка BingX | `5000` | Максимальное окно подписанного запроса | Документация BingX: не больше 5000 |
 | venue.ws_subs_per_sec | площадка BingX | `10` | Предел темпа подписок WebSocket | Документация BingX: не больше 10 |
 | venue.fee_requests_per_sec | площадка BingX | `2` | Предел запросов ставок комиссии | Документация BingX: не больше 2 |
+| venue.rate_limit_pause_ms | площадка BingX | `10000` | Решение 243: пауза после HTTP 429 — только эндпоинта, после 418 — всей биржи (Retry-After BingX не описан). Окна лимитов в документации расходятся: api-ai-skills — «Rate limit: 1/s per IP» у стакана и справочника (окно 1 с), docs-v3 — «IP Rate Limit: 500 requests per 10 seconds» и группы 2/3 «… per 10 seconds» (окно 10 с). Пауза — самое длинное окно документации (10 с): за ней любое из окон точно сброшено; повтор раньше — «Continued access after receiving 429» → 418, бан IP всей биржи на неизвестный срок. Пауза только у эндпоинта, получившего 429, — ордера и опрос ордеров не ждут фоновый 429. Ручная команда ждёт паузу не дольше exec.rate_limit_wait_max_ms | error-codes.md (api-ai-skills): 418, 429; spot-market api-reference.md (api-ai-skills); docs-v3 «IP Rate Limit» |
 
 ## Биржа Gate (решение 135)
 

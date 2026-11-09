@@ -2,10 +2,11 @@
 //! Что делает: запросы REST к BingX — публичные и подписанные (HMAC SHA256), разбор ответа
 //! {code, msg, data}, перевод ошибок в коды шлюза, переход на резервный адрес только при сбое сети.
 //! Ответы REST пишутся в сырой журнал (raw.*, как сообщения WebSocket), кроме пути listenKey (user_key.rs).
+//! Пауза после HTTP 429 (эндпоинт) и 418 (вся биржа) — rate_pause.rs (решение 243): во время паузы запрос не уходит.
 //! Кто вызывает: файлы адаптера BingX (symbols, wallet, transfers, account, trade, order_state, fees).
-//! От чего зависит: ctx.rs, errors.rs, hmac, sha2, reqwest.
-//! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms;
-//! секреты bingx.api_key, bingx.api_secret.
+//! От чего зависит: ctx.rs, errors.rs, rate_pause.rs, gateway/patience.rs, hmac, sha2, reqwest.
+//! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms,
+//! venue.rate_limit_pause_ms (rate_pause.rs); секреты bingx.api_key, bingx.api_secret.
 //!
 //! Подпись — по официальной документации «Authentication»:
 //! https://github.com/BingX-API/api-ai-skills/blob/main/skills/references/authentication.md
@@ -24,6 +25,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
+use super::rate_pause;
 
 /// Предел recvWindow — из официальной документации (authentication.md: «maximum is 5000»).
 const MAX_RECV_WINDOW_MS: u64 = 5000;
@@ -115,6 +117,7 @@ async fn send_with_key(
 
 /// Отправка с переходом на резервный адрес при сбое сети.
 /// auth: (ключ, тело POST); тело пустое — параметры в строке запроса.
+/// Ошибки: RateLimited без запроса — идёт пауза после 429/418 (rate_pause.rs); прочие — как у parse и сбоев обмена.
 async fn send(
     ctx: &Ctx,
     m: Method,
@@ -125,6 +128,10 @@ async fn send(
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
+    // Решение 243: пауза после 429 (этот эндпоинт) или 418 (вся биржа) — запрос не отправляется вовсе; ручная работа
+    // ждёт её конец (решение 201, gateway/patience.rs), автоматика — отказ сразу.
+    crate::gateway::patience::wait(rate_pause::pause_left_ms(path)).await;
+    rate_pause::gate(path).map_err(|e| ctx.tag(e))?;
     let mut last = None;
     for base in &urls {
         let url = if query.is_empty() {
@@ -143,11 +150,14 @@ async fn send(
         }
         // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело — пока данные идут чаще
         // http.body_idle_ms (справочник пар и сетей BingX — большой ответ).
-        match crate::gateway::http::exchange(req, lim).await {
+        match crate::gateway::http::exchange_full(req, lim).await {
             // Ордер или вывод без ясного итога — «результат неизвестен» (errors::unsure, решение 64).
-            Ok((status, text)) => {
-                return parse(ctx, path, status.as_u16(), text, op)
-                    .map_err(|e| errors::unsure(e, op));
+            // 429/418 — пауза (rate_pause.rs), её пояснение — в текст ошибки.
+            Ok(r) => {
+                let status = r.status.as_u16();
+                let note = rate_pause::on_reply(ctx, path, status, r.retry_after_s).await;
+                return parse(ctx, path, status, r.text, op)
+                    .map_err(|e| rate_pause::with_note(errors::unsure(e, op), note));
             }
             // Резерв — только если запрос точно не дошёл до BingX (нет соединения).
             // Иной сбой ордера или вывода — «результат неизвестен» (errors::fail_for): мог исполниться, не повторяем.

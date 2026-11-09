@@ -116,6 +116,8 @@ fn not_included(code: ErrorCode, outcome: TxOutcome, cancel: Option<B256>) -> Op
         cancel_hash: cancel,
         cancel_gas_bnb: None,
         approve_gas_bnb: None,
+        tip_hash: None,
+        tip_gas_bnb: None,
     };
     let g = GatewayError::new(code, Some(VenueId("bsc_dex".into())), JCT).with_tx(tx);
     OpError::from(&g)

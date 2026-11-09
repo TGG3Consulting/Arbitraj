@@ -3,7 +3,8 @@
 //! ВСЕМИ затратами») — газ, который раньше не попадал в итог сделки, идёт в её затраты (spent) один раз:
 //! - газ разрешений (approve) перед обменом DEX (ChainTx::approve_gas_bnb у успеха, GatewayError::approve_gas_bnb у
 //!   ошибки — ставит адаптер, venues/bsc_dex/exec/swap_send.rs, venues/kyberswap/trade.rs);
-//! - чаевые канала отправки (ChainTx::tip_bnb — адаптер ставит их, только когда обмен в блоке или откатился в блоке);
+//! - чаевые канала отправки (ChainTx::tip_bnb — адаптер ставит их, только когда обмен в блоке или откатился в блоке)
+//!   и газ отдельной транзакции их перевода (ChainTx::tip_gas_bnb — по её квитанции; решение 236, дополнение п. 6);
 //! - газ откатившегося / отменённого / неисполненного обмена (газ транзакции, газ отмены, занявшей nonce) — раньше
 //!   только статистика газа монеты (gas_stats.rs);
 //! - газ неудачного вывода из кошелька DEX (откат перевода, отмена, занявшая nonce) — раньше нигде (transfers.rs).
@@ -47,7 +48,7 @@ fn item(what: &str, kind: CostKind, bnb: Option<Decimal>) -> Option<Wasted> {
 }
 
 /// Что делает: газ сверх газа самого обмена у ИСПОЛНЕННОГО обмена (газ обмена уже в TradeResult.fees → fills.rs):
-/// approve и чаевые канала. Принимает: итог. Возвращает: статьи. Ошибок нет.
+/// approve, чаевые канала и газ транзакции их перевода. Принимает: итог. Возвращает: статьи. Ошибок нет.
 pub fn of_filled(r: &TradeResult) -> Vec<Wasted> {
     let Some(c) = &r.chain else {
         return vec![];
@@ -55,14 +56,19 @@ pub fn of_filled(r: &TradeResult) -> Vec<Wasted> {
     [
         item("approve", CostKind::ApproveGas, c.approve_gas_bnb),
         item("чаевые канала", CostKind::ChannelTip, c.tip_bnb),
+        item(TIP_GAS, CostKind::ChannelTip, c.tip_gas_bnb),
     ]
     .into_iter()
     .flatten()
     .collect()
 }
 
+/// Статья «газ перевода чаевых» (решение 236, дополнение п. 6): чаевые идут отдельной транзакцией (nonce + 1 в том же
+/// бандле), её газ в квитанции обмена не входит.
+const TIP_GAS: &str = "газ перевода чаевых";
+
 /// Что делает: весь газ транзакции, которая не дала исполнения (откат, отмена, занявшая nonce, обмен в блоке без
-/// монет): газ самой транзакции, газ отмены, чаевые, approve перед ней. Принимает: факт транзакции, что за операция
+/// монет): газ самой транзакции, газ отмены, чаевые и газ их перевода, approve перед ней. Принимает: факт транзакции, что за операция
 /// («обмена» / «перевода»), вид газа транзакции (Gas / TransferGas). Возвращает: статьи. Ошибок нет.
 pub fn of_failed_tx(tx: &ChainTx, op: &str, kind: CostKind) -> Vec<Wasted> {
     let own = match tx.outcome {
@@ -73,6 +79,7 @@ pub fn of_failed_tx(tx: &ChainTx, op: &str, kind: CostKind) -> Vec<Wasted> {
         item(&own, kind, tx.gas_bnb),
         item(&format!("отмена {op}"), kind, tx.cancel_gas_bnb),
         item("чаевые канала", CostKind::ChannelTip, tx.tip_bnb),
+        item(TIP_GAS, CostKind::ChannelTip, tx.tip_gas_bnb),
         item("approve", CostKind::ApproveGas, tx.approve_gas_bnb),
     ]
     .into_iter()

@@ -132,6 +132,16 @@ pub struct ChainTx {
     /// ядро берёт его в затраты сделки (core/deal_gas.rs). None — разрешений не было. Старые записи — None.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approve_gas_bnb: Option<Decimal>,
+    /// Решение 236, дополнение п. 6 (техлид 09.11 по поручению Тиграна): хеш отдельной транзакции перевода чаевых
+    /// каналу (nonce + 1 в том же бандле, venues/bsc_dex/exec/txs.rs). Нужен позднему выяснению — прочитать её
+    /// квитанцию. None — чаевых не было. Старые записи — None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tip_hash: Option<B256>,
+    /// Газ транзакции перевода чаевых, BNB (`gasUsed × effectiveGasPrice` её квитанции) — ставит адаптер DEX, когда
+    /// чаевые в блоке (tip_bnb есть); ядро берёт его в затраты сделки (core/deal_gas.rs). None — чаевых не было или
+    /// квитанция не прочитана (журнал адаптера). Старые записи — None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tip_gas_bnb: Option<Decimal>,
 }
 
 /// Состояние очереди транзакций кошелька DEX (решение 45): одна транзакция за раз, до занятия её nonce в блоке.

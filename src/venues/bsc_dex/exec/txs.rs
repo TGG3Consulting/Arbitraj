@@ -9,7 +9,7 @@
 //! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро. В «чем найти» — и хеши отправленных
 //! трекером отмен (журнал отмен send/track_util.rs CancelLog): позднее выяснение проверяет и их квитанции.
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
-//! От чего зависит: exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
+//! От чего зависит: exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
@@ -175,10 +175,13 @@ pub async fn send(
     // Слежение прервано (паника, отмена) — исход не установлен, очередь уже остановлена: дальше как при Pending —
     // «исход неизвестен» с «чем найти» (хеш, nonce, чаевые), исход выясняет ядро (решение 231).
     let t = joined.unwrap_or_else(|why| Tracked::bare(TxOutcome::Pending, Some(why)));
+    let tip_hash = tip.as_ref().map(|(s, _)| s.hash);
     let tip_bnb = tip.and_then(|(_, a)| num::to_decimal(a, num::BNB_DECIMALS));
     let cancels = cancels_of(&cancel_log);
+    let mut chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
+    // Решение 236, дополнение п. 6: чаевые — отдельная транзакция (nonce + 1); её хеш — в факт (позднее выяснение).
+    chain.tip_hash = tip_hash;
     if let Some(why) = &t.unresolved {
-        let chain = super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb);
         // Решение 231 (дополнение): чаевые — в «чем найти» (в chain.tip_bnb их нет), чтобы итог свопа по квитанции совпал
         // с обычным путём (exec/swap_rebuild.rs); хеши отмен — тоже: nonce могла занять отмена (resolve_single.rs).
         let seed = super::swap_ctx::with_cancels(super::swap_ctx::seed(&chain, tip_bnb), &cancels);
@@ -191,7 +194,8 @@ pub async fn send(
             .pending(seed));
     }
     Ok(Done {
-        chain: super::chain_tx::chain_tx(signed.hash, nonce, channels, method, &t, tip_bnb),
+        // Чаевые в блоке — газ их перевода по квитанции (chain_tx.rs tip_gas), в затраты сделки (core/deal_gas.rs).
+        chain: super::chain_tx::tip_gas(ctx, chain).await,
         receipt: t.receipt,
         cancel: t.cancel,
         tip_bnb,

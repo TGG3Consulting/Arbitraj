@@ -110,6 +110,8 @@ fn reverted() -> GatewayError {
         cancel_hash: None,
         cancel_gas_bnb: None,
         approve_gas_bnb: None,
+        tip_hash: None,
+        tip_gas_bnb: None,
     };
     GatewayError::new(
         ErrorCode::SwapReverted,

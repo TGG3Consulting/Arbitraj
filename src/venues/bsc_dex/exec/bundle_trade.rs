@@ -181,6 +181,8 @@ pub fn bundle_result(
         cancel_hash: None,
         cancel_gas_bnb: None,
         approve_gas_bnb: None,
+        tip_hash: None,
+        tip_gas_bnb: None,
     };
     // Решение 233: исход не установлен (Pending) или квитанции прочитаны не все — «исход неизвестен», а не «не попала».
     if let Some(e) = bundle_ref::unknown(ctx, sent, &chain) {

@@ -27,7 +27,8 @@
 //! (release_if_ours, landed); resolve_cycle.rs (trade — цикл DEX ↔ DEX); resolve_withdraw.rs (keys, receipt,
 //! release_if_ours — вывод).
 //! От чего зависит: node/rpc.rs, send/receipt.rs, wallet/deposit.rs (release), parts.rs,
-//! exec/swap_ctx.rs, exec/swap_rebuild.rs, resolve_bundle.rs, resolve_single.rs.
+//! exec/swap_ctx.rs, exec/swap_rebuild.rs, exec/chain_tx.rs (газ перевода чаевых найденного итога — решение 236,
+//! дополнение п. 6), resolve_bundle.rs, resolve_single.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! Квитанция — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165
@@ -102,7 +103,10 @@ pub(super) async fn landed(
 ) -> GatewayResult<TradeResult> {
     let queue = release_if_ours(p, hash, nonce, false).await;
     match SwapCtx::of(pend).filter(SwapCtx::complete) {
-        Some(c) => swap_rebuild::rebuild(&p.ctx, req, &c, hash, r),
+        Some(c) => {
+            let out = swap_rebuild::rebuild(&p.ctx, req, &c, hash, r);
+            tip_gas(p, c.chain.as_ref().and_then(|t| t.tip_hash), out).await
+        }
         None => Err(p.ctx.err(
             ErrorCode::NotApplicable,
             format!(
@@ -111,6 +115,39 @@ pub(super) async fn landed(
                 r.block_number, r.status
             ),
         )),
+    }
+}
+
+/// Что делает: решение 236, дополнение п. 6 — газ перевода чаевых у итога, найденного по квитанции, как у обычного
+/// пути (exec/txs.rs → exec/chain_tx.rs tip_gas): хеш перевода — из факта в «чем найти», газ — по его квитанции, если
+/// чаевые в блоке (в блоке / откат). Принимает: части адаптера, хеш перевода чаевых (None — не было или «чем найти» до
+/// этого поля), итог (успех — TradeResult.chain, ошибка — GatewayError.tx). Возвращает: тот же итог. Ошибок своих нет.
+async fn tip_gas(
+    p: &Parts,
+    tip_hash: Option<B256>,
+    out: GatewayResult<TradeResult>,
+) -> GatewayResult<TradeResult> {
+    if tip_hash.is_none() {
+        return out;
+    }
+    let fix = |c: ChainTx| async move {
+        let mut c = c;
+        c.tip_hash = tip_hash;
+        super::exec::chain_tx::tip_gas(&p.ctx, c).await
+    };
+    match out {
+        Ok(mut t) => {
+            if let Some(c) = t.chain.take() {
+                t.chain = Some(fix(c).await);
+            }
+            Ok(t)
+        }
+        Err(mut e) => {
+            if let Some(c) = e.tx.take() {
+                e.tx = Some(Box::new(fix(*c).await));
+            }
+            Err(e)
+        }
     }
 }
 

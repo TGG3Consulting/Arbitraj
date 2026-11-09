@@ -236,6 +236,7 @@ pub mod usdt_return_parts;
 pub mod usdt_return_retry;
 pub mod usdt_return_split;
 pub mod usdt_return_state;
+pub mod usdt_sent_backfill;
 pub mod usdt_sources;
 pub mod usdt_transfer;
 pub mod usdt_transfer_check;

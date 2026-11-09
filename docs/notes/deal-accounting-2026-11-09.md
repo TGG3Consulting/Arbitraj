@@ -133,3 +133,5 @@ Gate 0.5, MEXC 0.01 на вывод; у 2 сделок Gate план 0.01 при
 4. **Один код вывода «отмена в блоке»** (вопрос решения 233): обычный путь и позднее выяснение — TxNotIncluded с тем
    же фактом; повтор безопасен (withdraw_unsent через cancel_confirmed). Одиночная транзакция получает NotIncluded только
    по квитанции нашей отмены (send/track_util.rs landed).
+5. **«Ушло» старых возвратов** (вопрос 1, вариант (а)): программа `usdt_sent_backfill` (по образцу uncapped_recompute)
+   дописывает sent из журнала core.transfer_sent; не запускалась — инструкция docs/notes/usdt-sent-backfill-2026-11-09.md.

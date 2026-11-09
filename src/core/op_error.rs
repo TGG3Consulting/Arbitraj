@@ -29,6 +29,27 @@ pub struct OpError {
 }
 
 impl OpError {
+    /// Решение 238 (ревью, п. 2; дополнение — Тигран 09.11: согласовано): ошибка «не задана настройка или привязка»
+    /// (код NotConfigured) с текстом. Принимает: текст. Ошибок нет.
+    pub fn not_configured(message: String) -> Self {
+        Self {
+            code: Some(ErrorCode::NotConfigured),
+            ..Self::from(message)
+        }
+    }
+
+    /// Решение 238 (ревью, п. 2; дополнение — Тигран 09.11: согласовано): ошибка шлюза на пути котировки продажи —
+    /// текстом `message`; код переносится, только если это NotConfigured (не задана настройка или привязка), прочие
+    /// коды (сеть, нет стакана, устарело …) — без кода, как было (их вызывающие котировки не различают).
+    /// Принимает: ошибку шлюза, текст. Ошибок нет.
+    pub fn keep_not_configured(e: &GatewayError, message: String) -> Self {
+        if e.code == ErrorCode::NotConfigured {
+            Self::not_configured(message)
+        } else {
+            Self::from(message)
+        }
+    }
+
     /// Исход операции неизвестен (транзакция могла исполниться). Ошибок нет.
     pub fn outcome_unknown(&self) -> bool {
         self.code == Some(ErrorCode::OutcomeUnknown)

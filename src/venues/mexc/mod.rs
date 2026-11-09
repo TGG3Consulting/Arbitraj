@@ -24,6 +24,7 @@ pub mod feed;
 pub mod fees;
 pub mod fills;
 pub mod futures_rest;
+pub mod ip_weight;
 pub mod market;
 pub mod networks_parse;
 pub mod num;

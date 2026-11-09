@@ -29,6 +29,11 @@
 //! на каждый тик монеты) не бьёт REST биржи без предела при постоянных отказах. Ни одна не задана — частота не
 //! ограничена, это сказано в тексте ошибки. Успешный снимок REST снимает неудачу. Окно и проверка — exec_book_fail.rs.
 //!
+//! Дополнение к ревью п. 2 (Тигран 09.11: согласовано): REST отказал с NotConfigured (gateway/errors.rs: «нужная
+//! настройка не задана в интерфейсе» — глубина запроса, адрес REST и т. п.; сама не появится) — без повтора и без окна
+//! неудачи, ошибка с кодом NotConfigured (застрявшая монета сразу Halted — stuck_quote.rs; ордер — как раньше алерт:
+//! sell_unsent.rs решает одинаково для этого кода и без кода).
+//!
 //! Кто вызывает: core/trade_ops.rs (sell_value — котировка биржи; trade_seen — forget после ордера), core/worst.rs
 //! (worst_order — худшая цена биржи).
 //! От чего зависит: gateway (registry, contract quote_snapshot / quote_rest, frozen, patience exec_scope),
@@ -78,7 +83,8 @@ pub const RETRY: &str = "exec.rest_book_retry_ms";
 
 /// Стакан биржи для ордера (порядок — в шапке). Принимает: ядро, площадку, монету ЯДРА, сторону.
 /// Возвращает: Book. Ошибки: площадки нет; не задана venue.book_stale_ms (NotConfigured); ошибки адаптера, кроме
-/// StaleData, — с их кодом; REST не ответил после повтора — без кода (не безопасный повтор, алерт).
+/// StaleData, — с их кодом; REST отказал с NotConfigured — NotConfigured, без повтора; REST не ответил после повтора —
+/// без кода (не безопасный повтор, алерт).
 pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Book, OpError> {
     let x = core
         .inner
@@ -114,6 +120,26 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         Ok(s) => return Ok(keep(core, key, s, &stream).await),
         Err(e) => e,
     };
+    // Дополнение к ревью п. 2 (Тигран 09.11: согласовано): REST отказал, потому что не задана настройка (NotConfigured:
+    // глубина запроса, адрес REST и т. п.) — повтор и окно неудачи бессмысленны,
+    // ошибка с кодом NotConfigured (застрявшая монета — сразу Halted, stuck_quote.rs).
+    if first.code == ErrorCode::NotConfigured {
+        let message = format!(
+            "{}: {}; снимок стакана по REST не получен: {}",
+            v.0, stream.message, first.message
+        );
+        core.inner
+            .deps
+            .log(
+                Level::Error,
+                "core.exec_book",
+                Some(&v.0),
+                message.clone(),
+                None,
+            )
+            .await;
+        return Err(OpError::not_configured(message));
+    }
     let pause = setting(core, v, RETRY);
     let Some(ms) = pause else {
         let why = format!("{}; повтор не настроен: не задана {RETRY}", first.message);

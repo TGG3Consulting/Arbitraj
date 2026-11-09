@@ -5,7 +5,8 @@
 //! - шаги исполнителя для цикла одной долей (exec/chain.rs Step): первый шаг берёт весь вход у кошелька, последний несёт
 //!   minOut ядра — у ArbExecutor это minOut execute (contracts/ArbExecutor.sol: при tokenIn = tokenOut прямой вход
 //!   выключен, вход забирается до замера баланса, received = весь выход цикла);
-//! - проверка чистой прибыли ПОСЛЕ симуляции: выход − вход − (газ симуляции × цена газа + чаевые) в базовой ≥
+//! - проверка чистой прибыли ПОСЛЕ симуляции: выход − вход − (газ симуляции × цена газа + чаевые + газ перевода
+//!   чаевых — send/tip_gas.rs, Тигран 09.11) в базовой ≥
 //!   dex_dex.min_profit_usd, иначе сделки нет (газ съел прибыль);
 //! - итог сделки цикла (CycleTradeResult) из итога свопа.
 //!
@@ -111,8 +112,9 @@ pub async fn wei(q: &Quoting) -> GatewayResult<U256> {
 
 /// Чистая прибыль по симуляции. Принимает: выход и вход (базовая), газ симуляции (единиц), цену газа, курсы.
 /// Возвращает: чистую прибыль в базовой. Ошибки: NotConfigured (dex_dex.min_profit_usd), QuoteMismatch — ниже порога,
-/// BadResponse (числа).
-pub fn net_check(
+/// BadResponse (числа); газ перевода чаевых — как send/tip_gas.rs (ключ кошелька, узел eth_estimateGas).
+/// Тигран 09.11 (согласовано): к чаевым — газ их отдельной транзакции перевода (send/tip_gas.rs, та же цена газа).
+pub async fn net_check(
     ctx: &Ctx,
     (output, input): (Decimal, Decimal),
     (gas_units, wei): (u64, U256),
@@ -124,13 +126,16 @@ pub fn net_check(
     let tip = send::planned_tip(ctx)
         .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
         .unwrap_or(Decimal::ZERO);
+    let tip_gas = send::tip_gas::planned_bnb(ctx, wei)
+        .await?
+        .unwrap_or(Decimal::ZERO);
     let gas = num::to_decimal(wei.saturating_mul(U256::from(gas_units)), num::BNB_DECIMALS)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "газ симуляции не в Decimal"))?;
-    let net = output - input - (gas + tip) * r.bnb_in_base;
+    let net = output - input - (gas + tip + tip_gas) * r.bnb_in_base;
     if net < min_profit {
         let why = format!(
             "по симуляции чистая прибыль цикла {net} (≈ {} USDT) < порога dex_dex.min_profit_usd {min_usd} (выход {output}, \
-             вход {input}, газ {gas_units} ед., чаевые {tip} BNB) — сделки нет",
+             вход {input}, газ {gas_units} ед., чаевые {tip} BNB, газ перевода чаевых {tip_gas} BNB) — сделки нет",
             (net * r.base_usdt).round_dp(6)
         );
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));

@@ -73,6 +73,8 @@ impl Core {
         if let Some(rx) = lk(&core.inner.window_rx).take() {
             tokio::spawn(super::window_worker::run(core.clone(), rx));
         }
+        // Решение 245: точки цены DEX на объём открытой сделки — своя задача (тик только ставит отметку).
+        tokio::spawn(super::window_deal_run::run(core.clone()));
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

@@ -8,7 +8,7 @@
 //! Решение 236: итог закрытой сделки включает затраты возврата USDT (deal_return_cost.rs); пока возврат идёт,
 //! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
-//! От чего зависит: deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -43,6 +43,7 @@ pub(super) fn recompute_exposure(core: &Core) {
 pub async fn save(core: &Core, deal: &Deal) {
     // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
     core.inner.window_kick.notify_one();
+    super::window_deal::saved(core, deal); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
     lk(&core.inner.deals).insert(deal.id.clone(), deal.clone());
     recompute_exposure(core);
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &deal.id, deal).await {

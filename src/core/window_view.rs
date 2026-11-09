@@ -6,6 +6,7 @@
 //! изменения с начала файла, верхние top уровней), наши сделки окна с хронологией; путь файла для «Скачать файл».
 //! Решение 241: точки цены пула DEX (строки «dex» файла, window_dex.rs) — отдельным рядом `dex` (все прочитанные, в
 //! предел строк не входят — их число из сводки) и причина, почему не пишутся (`dex_off`).
+//! Решение 245: на странице — сбой цены DEX на объём сделки по сделкам монеты (`dex_deal_err`, window_deal.rs).
 //! Кто вызывает: api/windows.rs.
 //! От чего зависит: window.rs, window_cfg.rs, window_tap.rs (parse), storage/windows_db.rs, storage/episode_files.rs,
 //! window_dex.rs (cfg), шлюз (Venue::decode_tap).
@@ -167,6 +168,7 @@ impl Core {
         Ok(Some(json!({
             "info": info, "lines": lines, "frames": frames, "frames_read": n, "truncated": truncated, "deals": deals,
             "dex": dex, "dex_off": super::window_dex::cfg(&self.inner.deps.settings).err(),
+            "dex_deal_err": super::window_deal::errors(self, &info.asset),
         })))
     }
 

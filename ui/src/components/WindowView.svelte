@@ -7,7 +7,8 @@
     сторона агрессора, ID) вместе с событиями наших сделок окна на одной шкале времени; «Скачать файл». Кадры читаются
     с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере. Решение 241: цена пула
     DEX — точки котировки стороны DEX (core/window_dex.rs): у кадра стакана — последняя точка не позже его получения,
-    и весь ряд таблицей; не пишется — причина (dex_off).
+    и весь ряд таблицей; не пишется — причина (dex_off). Решение 245: у направления с нашей открытой сделкой — ещё точки
+    на объём сделки (столбец «Объём чего»: «сделка … (план/факт)», запрошено; сбой — dex_deal_err).
   Кто вызывает: pages/Windows.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
   Настройки: нет.
@@ -66,6 +67,9 @@
   const dexAt = (ns) => dex.findLast((p) => p.t <= ns / 1e6) ?? null;
   const curDex = $derived(cur ? dexAt(cur.recv_ns) : null);
   const sideText = (s) => (s === 'Sell' ? 'продажа на DEX' : 'покупка на DEX');
+  /** Решение 245: объём точки — тика (решение 241) или нашей сделки (план / факт, запрошено). */
+  const sizeText = (p) => (p.deal ? `сделка ${p.deal.id} (${p.deal.qty_from === 'fact' ? 'факт' : 'план'}, запрошено ${p.deal.asked})` : 'тик');
+  const dealErr = $derived(Object.entries(data?.dex_deal_err ?? {}));
 </script>
 
 <Modal title={`Окно ${win.id}`} {onclose}>
@@ -121,22 +125,23 @@
     </div>
     {#if curDex}
       <p>Цена DEX на момент кадра: <b>{curDex.price}</b> · <code>{curDex.venue}</code> {sideText(curDex.side)}
-        · объём {curDex.qty} · котировка {msTime(curDex.t)}{#if curDex.block != null} · блок {curDex.block}{/if}</p>
+        · объём {curDex.qty} ({sizeText(curDex)}) · котировка {msTime(curDex.t)}{#if curDex.block != null} · блок {curDex.block}{/if}</p>
     {:else if dex.length}<p class="muted">Цены DEX до этого кадра нет.</p>{/if}
   {:else}<p class="muted">Кадров стакана в прочитанной части нет.</p>{/if}
 
   <h3>Цена пула DEX ({dex.length})</h3>
   {#if data?.dex_off}<p class="unset">Цена DEX не пишется: {data.dex_off}</p>{/if}
+  {#each dealErr as [id, why] (id)}<p class="warn-text">Цена DEX на объём сделки {id} не посчитана: {why}</p>{/each}
   <div class="tscroll">
     <table class="compact">
-      <thead><tr><th>Котировка</th><th>Направление</th><th>DEX</th><th>Сторона</th><th class="num">Средняя цена</th><th class="num">Объём</th><th class="num">Блок</th><th>Пулы</th></tr></thead>
+      <thead><tr><th>Котировка</th><th>Направление</th><th>DEX</th><th>Сторона</th><th class="num">Средняя цена</th><th class="num">Объём</th><th>Объём чего</th><th class="num">Блок</th><th>Пулы</th></tr></thead>
       <tbody>
         {#each dex as p, j (j)}
           <tr><td>{msTime(p.t)}</td><td>{p.buy_on} → {p.sell_on}</td><td><code>{p.venue}</code></td><td>{sideText(p.side)}</td>
-            <td class="num">{p.price}</td><td class="num">{p.qty}</td><td class="num">{p.block ?? '—'}</td>
+            <td class="num">{p.price}</td><td class="num">{p.qty}</td><td>{sizeText(p)}</td><td class="num">{p.block ?? '—'}</td>
             <td>{#each p.pools as a (a)}<code>{a}</code> {/each}</td></tr>
         {:else}
-          <tr><td colspan="8" class="muted">Точек цены DEX в окне нет.</td></tr>
+          <tr><td colspan="9" class="muted">Точек цены DEX в окне нет.</td></tr>
         {/each}
       </tbody>
     </table>

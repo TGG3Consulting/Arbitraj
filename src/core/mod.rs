@@ -257,6 +257,8 @@ pub mod window_at;
 pub mod window_book;
 pub mod window_cfg;
 pub mod window_close;
+pub mod window_deal;
+pub mod window_deal_run;
 pub mod window_dex;
 pub mod window_info;
 pub mod window_run;

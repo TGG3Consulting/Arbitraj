@@ -5,7 +5,8 @@
 //! Новые стаканы, пулы и проверки толкают пересборку справочника. Пересчёт одной монеты идёт
 //! отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор. Событие пула толкает поиск циклов
 //! DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs). Стакан и пул отмечают живость потока площадки (решение 196,
-//! feed_live.rs).
+//! feed_live.rs). Решение 245: событие пула маршрута нашей открытой сделки — отметка задаче точек цены DEX на объём
+//! сделки (window_deal.rs touched, только память).
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
 //! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
@@ -53,9 +54,12 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             Touched::Pool {
                 venue,
                 tokens,
+                pool,
                 first,
             } => {
                 core.inner.feed_seen.mark(&venue);
+                // Решение 245: пул маршрута нашей сделки — отметка для точки цены DEX на объём сделки (только память).
+                super::window_deal::touched(&core, &venue, &pool);
                 // Решение 109: пулы токенов изменились — котировки DEX с ними в памяти больше не годятся.
                 {
                     let mut c = lk(&core.inner.quote_cache);

@@ -85,11 +85,12 @@ impl MarketState {
                     self.pool_pairs
                         .entry(pair_key(&venue, tokens.0, tokens.1))
                         .or_default()
-                        .insert(r);
+                        .insert(r.clone());
                 }
                 Touched::Pool {
                     venue,
                     tokens,
+                    pool: r,
                     first,
                 }
             }

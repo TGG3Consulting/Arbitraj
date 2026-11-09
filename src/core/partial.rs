@@ -3,6 +3,8 @@
 //! два итога сделки: «довезти и продать, как задумано» (costs.rs на фактический объём, с фактической
 //! ценой покупки вместо котировки) и «продать обратно на площадке покупки» (trade_ops::sell_value).
 //! Выбирается больший итог (оба в минусе — меньший убыток). Режим застрявшей монеты здесь не включается.
+//! Решение 240: контекст — DirCtx::build_held (сделка уже идёт): как до решения 240, без доли закрытия разницы, границы
+//! σ и проверки profit.sigma_min_changes.
 //! Кто вызывает: core/executor.rs.
 //! От чего зависит: dirctx.rs, costs.rs, trade_ops.rs, deal.rs.
 //! Настройки: через costs.rs и dirctx.rs.
@@ -41,7 +43,7 @@ fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
 
 /// Выбор пути. Принимает: ядро, сделку после частичной покупки. Возвращает: Choice. Ошибок нет.
 pub async fn choose(core: &Core, deal: &Deal) -> Choice {
-    let deliver = match super::dirctx::DirCtx::build(core, &deal.direction) {
+    let deliver = match super::dirctx::DirCtx::build_held(core, &deal.direction) {
         Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
             .await
             .map(|c| deliver_result(&c, deal))

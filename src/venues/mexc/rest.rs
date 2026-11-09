@@ -3,7 +3,8 @@
 //! шлюза, переход на резервный адрес только при сбое сети. Ответы пишутся в сырой журнал (raw.*), кроме пути listenKey.
 //! Кто вызывает: файлы адаптера MEXC.
 //! От чего зависит: ctx.rs, errors.rs, reply.rs, gateway/http.rs, hmac, sha2, reqwest.
-//! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.*; секреты mexc.api_key, mexc.api_secret.
+//! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.*; через ip_weight.rs —
+//! venue.public_ip_weight_10s; секреты mexc.api_key, mexc.api_secret.
 //!
 //! Подпись — по официальному разделу «Signature» https://www.mexc.com/api-docs/spot-v3/introduction:
 //! «Signatures use the HMAC SHA256 algorithm», «totalParams = queryString + requestBody», «the parameter sequence used
@@ -12,6 +13,7 @@
 //! («parameters may be sent entirely in the Query String») и снимает вопрос Content-Type (application/x-www-form-urlencoded
 //! даёт 700013). recvWindow — меньше 60000 (700005 «recvWindow must less than 60000»; решение 118, А-🟡1).
 //! Разбор ответа и пауза по Retry-After — reply.rs. Большой ответ (signed_heavy) разбирается вне рабочих потоков.
+//! Свой ограничитель веса публичных запросов (Тигран 09.11: согласовано) — ip_weight.rs (venue.public_ip_weight_10s).
 
 use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Method;
@@ -32,8 +34,11 @@ const MAX_RECV_WINDOW_MS: u64 = 60_000;
 pub type Params = Vec<(&'static str, String)>;
 
 /// Публичный GET (без подписи). Возвращает: ответ (поле data, если ответ в обёртке {code, data}).
+/// Тигран 09.11 (согласовано): перед запросом — место в окне веса IP (ip_weight.rs: фон ждёт, путь сделки — нет).
+/// Ошибки: как send; ip_weight::slot (вес пути не сверен — Internal; вес больше venue.public_ip_weight_10s — NotConfigured).
 pub async fn public(ctx: &Ctx, path: &str, params: Params) -> GatewayResult<Value> {
     let query = query(&params)?;
+    super::ip_weight::slot(ctx, path).await?;
     send(ctx, Method::GET, path, &query, None, Op::Other).await
 }
 

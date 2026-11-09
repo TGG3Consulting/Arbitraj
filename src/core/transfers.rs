@@ -367,6 +367,8 @@ async fn go(
     let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
     // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
     let (f, a) = (&net_from, credited.amount);
-    super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a).await;
+    // Решение 247, п. Ж: комиссия вывода — из ответа площадки (статус вывода, иначе ответ на создание).
+    let fee = sent.fee.as_ref().or(created.fee.as_ref());
+    super::credit_shortfall::check(core, deal, from, to, asset, f, qty, a, fee).await;
     Ok((sent, credited, None))
 }

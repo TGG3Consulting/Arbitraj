@@ -13,7 +13,7 @@
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{Asset, VenueId};
+use crate::core::types::{Asset, Cost, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -23,7 +23,10 @@ use super::engine::{Core, rd};
 const AUTHOR: &str = "ядро: зачислено меньше ожидаемого (решение 118)";
 
 /// Сверяет зачисленное с ожидаемым и при недостаче больше допуска блокирует монету. Принимает: сделку, откуда,
-/// куда, монету, сеть отправителя, сумму вывода, зачислено. Ошибок нет: ожидание не посчитать — проверки нет.
+/// куда, монету, сеть отправителя, сумму вывода, зачислено, комиссию вывода из ответа площадки-отправителя (решение
+/// 247, п. Ж: Transfer.fee ответа на вывод / статуса; в этой монете — ожидание = (вывод − она) × (1 − известный налог),
+/// вместо комиссии справочника; None или не в монете — как раньше, credit_expect::arrival).
+/// Ошибок нет: ожидание не посчитать — проверки нет.
 #[allow(clippy::too_many_arguments)]
 pub async fn check(
     core: &Core,
@@ -34,6 +37,7 @@ pub async fn check(
     net: &str,
     sent: Decimal,
     credited: Decimal,
+    fee: Option<&Cost>,
 ) {
     let deps = &core.inner.deps;
     let Ok(max) = deps
@@ -45,8 +49,19 @@ pub async fn check(
     if rd(&core.inner.usdt).as_ref().ok() == asset.bsc_contract.as_ref() {
         return;
     }
-    let Ok(expected) = super::credit_expect::arrival(core, from, to, asset, net, sent).await else {
-        return;
+    // Решение 247, п. Ж: комиссия вывода — факт из ответа площадки, если она в этой монете (имя площадки → ядра).
+    let fact_fee = fee
+        .filter(|c| super::venue_ticker::name_back(core, asset, from, &c.asset) == asset.ticker)
+        .map(|c| c.amount);
+    let expected = match fact_fee {
+        Some(f) => match super::transfer_tax::pct(core, to, asset) {
+            Ok(tax) => (sent - f) * (Decimal::ONE - tax / Decimal::ONE_HUNDRED),
+            Err(_) => return,
+        },
+        None => match super::credit_expect::arrival(core, from, to, asset, net, sent).await {
+            Ok(e) => e,
+            Err(_) => return,
+        },
     };
     let Some(pct) = shortfall_pct(expected, credited) else {
         return;
@@ -55,10 +70,18 @@ pub async fn check(
         return;
     }
     let pct = pct.round_dp(4);
-    let note = format!(
-        "зачислено меньше на {pct}% — похоже на налог перевода ({deal}: {} → {}, ожидалось {expected}, пришло {credited})",
-        from.0, to.0
-    );
+    // Решение 247, п. Ж: текст — по фактам: комиссия из ответа площадки известна — недостача сверх неё (налог
+    // перевода); нет — комиссия по справочнику сетей, недостача — комиссия вывода или налог перевода.
+    let note = match fact_fee {
+        Some(f) => format!(
+            "зачислено меньше на {pct}% сверх комиссии вывода {f} {} из ответа {} — налог перевода ({deal}: {} → {}, отправлено {sent}, ожидалось {expected}, пришло {credited})",
+            asset.ticker, from.0, from.0, to.0
+        ),
+        None => format!(
+            "зачислено меньше на {pct}% — комиссия вывода или налог перевода: {} комиссию вывода в ответе не сообщила, ожидание — по справочнику сетей ({deal}: {} → {}, отправлено {sent}, ожидалось {expected}, пришло {credited})",
+            from.0, from.0, to.0
+        ),
+    };
     let scope = super::blacklist::coin_scope(asset);
     let s = &deps.settings;
     let set = async {

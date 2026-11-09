@@ -4,6 +4,8 @@
 //! (BNB — по живой цене, convert.rs). Решение 219: комиссия ордера — список по монетам, каждая часть — отдельно; часть
 //! со стоимостью в USDT из документации площадки (Fee.usd — баллы HTX, рынка нет) — в затраты как есть. Также затраты перевода (Transfer.fee). В хронологию сделки — кто исполнил своп
 //! DEX (TradeResult.executor, решение 121 B7).
+//! Решение 236, дополнение п. 8: газ обмена DEX (TradeResult.chain есть) — вид Gas, всегда в затраты, и у сделки с BNB
+//! (решение 62, как в плане costs.rs); комиссия биржи в монете сделки — в количество, как раньше.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
 //! От чего зависит: deal.rs, convert.rs, settings.
 //! Настройки: venue.quote_asset.
@@ -90,6 +92,21 @@ async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c
     }
 }
 
+/// Что делает: вид затраты комиссии исполнения. Обмен в сети (TradeResult.chain есть — DEX) — газ: адаптеры DEX кладут
+/// в fees только газ транзакции обмена (venues/bsc_dex/exec/result.rs, venues/kyberswap/trade_fact.rs — Fee::single(газ,
+/// BNB)), он платится из BNB кошелька, а не из монет сделки — у сделки с BNB тоже (решение 62; так считает план —
+/// CostKind::Gas, costs.rs). Биржа (chain нет) — торговая комиссия: в монете сделки уменьшает количество.
+/// Решение 236, дополнение п. 8 (техлид 09.11 по поручению Тиграна): раньше газ шёл видом TradeFee — у сделки с BNB
+/// convert::in_coin принимал его за комиссию в монете: количество уменьшалось, в spent газа не было (продажа BNB на DEX —
+/// количество уходило в −газ, газ пропадал из итога). Принимает: итог. Возвращает: вид. Ошибок нет.
+fn fee_kind(r: &TradeResult) -> CostKind {
+    if r.chain.is_some() {
+        CostKind::Gas
+    } else {
+        CostKind::TradeFee
+    }
+}
+
 /// Факт покупки или продажи → учёт сделки. Ошибок нет.
 pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
     let v = r.request.venue.clone();
@@ -104,13 +121,14 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
         }
     }
     // Решение 219: комиссия — по каждой монете отдельно (монета сделки уменьшает количество, остальное — в spent).
+    // Газ обмена DEX — всегда в spent, и у сделки с BNB (fee_kind, решение 236, дополнение п. 8).
     for f in &r.fees {
         // Стоимость в USDT задана документацией площадки (Fee.usd: баллы HTX, рынка нет) — в затраты как есть.
         if let Some(u) = f.usd {
             deal.spent += u;
             continue;
         }
-        let fee = Cost::new(CostKind::TradeFee, f.amount, f.asset.clone(), false);
+        let fee = Cost::new(fee_kind(r), f.amount, f.asset.clone(), false);
         charge(core, deal, &v, r.avg_price, fee).await;
     }
     // Решение 121 B7: кто исполнил своп DEX (свой сборщик: прямой / умный / бандл или KyberSwap) — в хронологию сделки.

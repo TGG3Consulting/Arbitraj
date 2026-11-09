@@ -134,7 +134,8 @@ async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
     deal.proceeds = r.output * r.base_usdt;
     // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
     let gas = r.trade.fee_in(super::convert::GAS_TICKER);
-    // Решение 236, дополнение: approve перед циклом и чаевые канала (факт транзакции) — тем же курсом BNB адаптера.
+    // Решение 236, дополнение: approve перед циклом, чаевые канала и газ их перевода (п. 6; факт транзакции) — тем же
+    // курсом BNB адаптера.
     let extra: Decimal = super::deal_gas::of_filled(&r.trade)
         .iter()
         .map(|w| w.bnb)
@@ -144,7 +145,7 @@ async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
     let extra_t = if extra.is_zero() {
         String::new()
     } else {
-        format!(", approve и чаевые канала {extra} BNB")
+        format!(", approve, чаевые канала и газ их перевода {extra} BNB")
     };
     deal.note(format!(
         "Цикл исполнен: вход {} → выход {} {} (газ {} BNB{extra_t}); исполнил: {by}",
@@ -219,7 +220,7 @@ pub async fn settle_unknown(
 }
 
 /// Газ транзакции ошибки (и отмены, занявшей nonce) — в затраты по курсу BNB плана и в статистику газа. Решение 236,
-/// дополнение: и чаевые канала (факт транзакции), и газ approve до ошибки (GatewayError::approve_gas_bnb). Ошибок нет.
+/// дополнение: и чаевые канала с газом их перевода (факт транзакции, п. 6), и газ approve до ошибки (GatewayError::approve_gas_bnb). Ошибок нет.
 async fn spend(core: &Core, deal: &mut Deal, bnb_usdt: Decimal, e: &GatewayError) {
     if let Some(tx) = &e.tx {
         super::gas_stats::record_tx(core, &deal.direction.asset, tx).await;
@@ -229,6 +230,11 @@ async fn spend(core: &Core, deal: &mut Deal, bnb_usdt: Decimal, e: &GatewayError
         if let Some(t) = tx.tip_bnb.filter(|t| !t.is_zero()) {
             deal.spent += t * bnb_usdt;
             deal.note(format!("Чаевые канала цикла: {t} BNB"));
+        }
+        // Решение 236, дополнение п. 6: газ отдельной транзакции перевода чаевых (её квитанция, адаптер).
+        if let Some(t) = tx.tip_gas_bnb.filter(|t| !t.is_zero()) {
+            deal.spent += t * bnb_usdt;
+            deal.note(format!("Газ перевода чаевых цикла: {t} BNB"));
         }
     }
     if let Some(a) = e.approve_gas().filter(|a| !a.is_zero()) {

@@ -126,6 +126,8 @@ fn done(hash: B256, nonce: u64, receipt: Option<Receipt>) -> Done {
         cancel_hash: None,
         cancel_gas_bnb: None,
         approve_gas_bnb: None,
+        tip_hash: None,
+        tip_gas_bnb: None,
     };
     Done { chain, receipt }
 }

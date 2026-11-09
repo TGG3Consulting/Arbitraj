@@ -53,6 +53,8 @@ fn tx(
         cancel_hash: cancel.map(|_| B256::repeat_byte(1)),
         cancel_gas_bnb: cancel.map(d),
         approve_gas_bnb: approve.map(d),
+        tip_hash: None,
+        tip_gas_bnb: None,
     }
 }
 

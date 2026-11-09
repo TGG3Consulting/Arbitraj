@@ -14,9 +14,10 @@
 //!
 //! Очередь кошелька, остановленная ИМЕННО этим переводом (тот же хеш и nonce), снимается, когда исход выяснен (resolve.rs
 //! release_if_ours: nonce должен быть занят).
+//! Найденный перевод несёт газ своей квитанции (fee — TransferGas, как wallet/transfer.rs; решение 236, дополнение п. 7).
 //! Кто вызывает: venue.rs (Venue::resolve_withdraw) — ядро core/outcome_resolve.rs (из core/transfers.rs).
 //! От чего зависит: resolve.rs (keys, receipt, release_if_ours), resolve_single.rs (verdict), exec/single_rebuild.rs,
-//! exec/swap_ctx.rs, wallet/transfer.rs (transfer), parts.rs.
+//! exec/swap_ctx.rs, wallet/transfer.rs (transfer), wallet/balances.rs (BNB), send/receipt.rs (газ), parts.rs.
 //! Настройки: через resolve_single.rs — send.replaced_confirm_blocks, feed.stale_after_ms (узел — bsc.node_http_url).
 //!
 //! Квитанция — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165
@@ -24,7 +25,7 @@
 
 use alloy_primitives::B256;
 
-use crate::core::types::{Transfer, TransferStatus, WithdrawRequest};
+use crate::core::types::{Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::pending::PendingRef;
 
@@ -34,6 +35,7 @@ use super::parts::Parts;
 use super::resolve::{keys, receipt, release_if_ours};
 use super::send::receipt::Receipt;
 use super::wallet;
+use super::wallet::balances::BNB;
 
 /// Что делает: вывод (перевод из кошелька) с неизвестным исходом (см. шапку). Принимает: части адаптера, исходный
 /// запрос, «чем найти». Возвращает: Some(перевод с хешем, Pending — дальше опрос статуса); None — исход пока не установлен.
@@ -78,7 +80,8 @@ pub async fn withdraw(
 }
 
 /// Что делает: исходный перевод в блоке (квитанция найдена): очередь кошелька снята (если остановлена этим переводом);
-/// успех — перевод с хешем (Pending, дальше обычный опрос статуса), откат — вывода нет. Принимает: части адаптера,
+/// успех — перевод с хешем (Pending, дальше обычный опрос статуса) и газом квитанции (fee, как обычный путь), откат —
+/// вывода нет. Принимает: части адаптера,
 /// запрос, (хеш, nonce), квитанцию. Возвращает: перевод. Ошибки: WithdrawRejected — откат в блоке.
 async fn landed(
     p: &Parts,
@@ -96,6 +99,11 @@ async fn landed(
             ),
         ));
     }
+    // Решение 236, дополнение п. 7 (техлид 09.11 по поручению Тиграна): газ перевода = gasUsed × effectiveGasPrice
+    // этой квитанции, как у обычного пути (wallet/transfer.rs). В учёт идёт один раз: обычно ядро (core/transfers.rs go)
+    // ждёт статус withdrawal_status (тот же газ той же квитанции) и берёт его fee, а этот перевод — только на пути
+    // «зачислено по блокчейну» (core/transfer_chain.rs: вывод как есть; получатель — DEX, core/credit_chain.rs arm).
+    let fee = fee(&r);
     Ok(wallet::transfer::transfer(
         &p.ctx,
         req.asset,
@@ -103,6 +111,14 @@ async fn landed(
         req.amount,
         TransferStatus::Pending,
         hash,
-        None,
+        fee,
     ))
+}
+
+/// Что делает: газ перевода по его квитанции — затрата TransferGas в BNB (gasUsed × effectiveGasPrice), как у обычного
+/// пути (wallet/transfer.rs) и статуса (wallet/transfer_status.rs). Принимает: квитанцию. Возвращает: None — газ не
+/// помещается в Decimal. Ошибок нет.
+pub fn fee(r: &Receipt) -> Option<Cost> {
+    r.gas_bnb()
+        .map(|g| Cost::new(CostKind::TransferGas, g, BNB, false))
 }

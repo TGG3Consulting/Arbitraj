@@ -43,6 +43,7 @@ pub async fn compute(core: &Core, calc: &Calc) -> Result<MaxVolume, String> {
         core,
         cx: &cx,
         src: None,
+        budget: None,
     };
     max_volume(&mut curve, &p, calc.qty, |pt| {
         passes(&pt.data, min_usd, min_pct)

@@ -13,6 +13,7 @@
 //! котировка — по ним отказ по сроку называет, где расчёт стоял.
 //! Решение 175: сначала — делистинг монеты на сторонах направления (delist_check.rs, delist.block_hours).
 //! Решение 234 (п. 3): затем — свежесть замера налогов на DEX-сторонах (tax_age.rs, tax.max_age_s).
+//! Решение 246: кривая подбора знает бюджет — объём сверх бюджета отбрасывается до котировок B (costs.rs evaluate_capped).
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -94,10 +95,12 @@ pub async fn decide_capped(
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
+    // Решение 246: бюджет поиска — и у кривой: объём сверх него отбрасывается до котировок B (выбор тот же).
     let mut curve = CoreCurve {
         core,
         cx: &cx,
         src: None,
+        budget: Some(p.budget),
     };
     let found = match stage(
         || "подбор объёма".into(),

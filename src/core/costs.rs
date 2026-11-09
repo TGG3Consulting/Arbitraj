@@ -19,7 +19,9 @@
 //! Решение 218: сама модель — evaluate_with над источником данных (costs_source.rs Source): бой, кандидаты и снимок —
 //! источник Live (живое ядро); пересчёт старых записей «без потолка» по окнам — свой источник (uncapped_replay.rs).
 //! Второй модели затрат нет.
-//! Кто вызывает: core/size_curve.rs (подбор объёма, SourceCurve), core/partial.rs.
+//! Решение 246: evaluate_capped — с бюджетом подбора объёма: списание сверх бюджета — отказ сразу после стороны A
+//! (котировки B, вывод, возврат и курсы не считаются); итог в бюджете — тот же Calc, что у evaluate_with.
+//! Кто вызывает: core/size_curve.rs (подбор объёма: CoreCurve — evaluate_capped, SourceCurve), core/partial.rs.
 //! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs, size.rs,
 //! engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
@@ -61,6 +63,20 @@ pub async fn evaluate_on(
 /// снимка и пересчёта по окнам. Принимает: контекст направления, объём, источник. Возвращает: Calc.
 /// Ошибки: Fail с видом и текстом причины (как у evaluate).
 pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Result<Calc, Fail> {
+    evaluate_capped(cx, qty, src, None).await
+}
+
+/// Что делает: то же, что evaluate_with, с бюджетом подбора объёма (решение 246): списание по бюджету (spend_max)
+/// известно уже после стороны A — объём сверх бюджета подбор (size_memo.rs) всё равно отбросит, поэтому сторона B
+/// (котировки DEX — самые дорогие), вывод, возврат и курсы на нём не считаются. Отказ — тот же, что у size_memo.rs
+/// (over_budget: вид TooLarge, тот же текст). Принимает: как evaluate_with и бюджет (None — без проверки, как
+/// evaluate_with). Возвращает: Calc. Ошибки: как у evaluate_with; TooLarge — списание больше бюджета.
+pub async fn evaluate_capped<S: Source>(
+    cx: &DirCtx,
+    qty: Decimal,
+    src: &S,
+    budget: Option<Decimal>,
+) -> Result<Calc, Fail> {
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
     let qa = stage(
@@ -72,6 +88,14 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
     // Списание по бюджету — по худшей цене покупки (лимит биржи, допуск DEX): столько может уйти или замёрзнуть.
     let worst_a = src.worst(d, false, qty, qa.avg_price)?;
     order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst_a)?;
+    // Решение 246: та же формула списания, что в итоге ниже (spend_max), — до стороны B.
+    if let Some(b) = budget {
+        let spend =
+            qty * worst_a + super::costs_types::quote_fee_at_worst(&qa, &cx.quote[0], worst_a);
+        if spend > b {
+            return Err(super::size_memo::over_budget(qty, spend, b));
+        }
+    }
     // Затраты покупки в монете (комиссия биржи в монете) уменьшают выводимое количество.
     let mut lines: Vec<(Cost, &'static str)> = qa.costs.iter().map(|c| (c.clone(), "A")).collect();
     let coin_fee = |cs: &[Cost]| -> Decimal {

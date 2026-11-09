@@ -2,7 +2,8 @@
 //! Что делает: расчёт кривой в целых шагах количества с запоминанием (решение 66): объём n — это n × шаг, каждый
 //! объём считается один раз. Здесь же держится инвариант бюджета: расчёт с вложением больше бюджета — не точка
 //! кривой, а Fail::TooLarge («вложение больше бюджета»), поэтому ни одна допустимая точка бюджет не превышает.
-//! Кто вызывает: core/size_bounds.rs, core/size_search.rs.
+//! Решение 246: текст отказа «вложение больше бюджета» — over_budget, общий с ранней проверкой costs.rs evaluate_capped.
+//! Кто вызывает: core/size_bounds.rs, core/size_search.rs; over_budget — ещё core/costs.rs.
 //! От чего зависит: core/size.rs.
 //! Настройки: нет.
 
@@ -12,6 +13,14 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
 use super::size::{Curve, Fail, Point};
+
+/// Что делает: отказ «вложение больше бюджета» — один текст у проверки точки (Memo::at) и у ранней проверки расчёта
+/// (решение 246, costs.rs evaluate_capped). Принимает: объём, списание, бюджет. Возвращает: Fail::TooLarge. Ошибок нет.
+pub fn over_budget(qty: Decimal, invested: Decimal, budget: Decimal) -> Fail {
+    Fail::TooLarge(format!(
+        "объём {qty}: вложение {invested} больше бюджета {budget}"
+    ))
+}
 
 /// Расчёты кривой по номеру шага.
 pub struct Memo<'a, C: Curve> {
@@ -88,10 +97,7 @@ impl<'a, C: Curve> Memo<'a, C> {
             // потоки рантайма — голодали бы веб-сервер, обработка событий пулов и опрос блока.
             tokio::task::yield_now().await;
             match self.curve.at(q).await {
-                Ok(p) if p.invested > self.budget => Err(Fail::TooLarge(format!(
-                    "объём {q}: вложение {} больше бюджета {}",
-                    p.invested, self.budget
-                ))),
+                Ok(p) if p.invested > self.budget => Err(over_budget(q, p.invested, self.budget)),
                 r => r,
             }
         };

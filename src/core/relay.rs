@@ -9,7 +9,8 @@
 //! Решение 220 (Тигран 08.11): перегон не состоялся (отказ вывода) — монеты на месте: продажа здесь по тем же правилам,
 //! вывод не повторяется; монет нет или исход неизвестен — сделка остановлена (relay_here::transfer_failed).
 //! Кто вызывает: stuck.rs.
-//! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, registry (площадки монеты).
+//! От чего зависит: trade_ops.rs, transfers.rs, fills.rs, convert.rs, sell.rs, stuck.rs, stuck_quote.rs, registry (площадки
+//! монеты). Решение 238 (ревью, п. 2): котировки «продать здесь» нет из-за незаданной настройки — сделка остановлена.
 //! Решение 185: сделка биржа ↔ биржа без счёта DEX перегоняется на DEX только кошельком строки биржи, где лежит монета
 //! (dex_account::for_relay; строки нет — DEX не цель), счёт записывается в сделку до перевода.
 //! Решение 222: цель, выручка перегона на которую после затрат ≤ 0 (у relay_value приход-пыль на цели = 0 выручки), —
@@ -105,10 +106,15 @@ pub async fn run(core: &Core, mut deal: Deal) {
     }
     let a = deal.direction.asset.clone();
     // Решение 220: котировка — кошельком сделки.
-    let here = super::trade_ops::deal_value(core, &deal)
-        .await
-        .map(|x| x.0)
-        .ok();
+    // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
+    // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон вслепую.
+    let here = match super::trade_ops::deal_quote(core, &deal).await {
+        Ok((v, _)) => Some(v),
+        Err(e) if super::stuck_quote::not_configured(&e) => {
+            return super::stuck_quote::halt_not_configured(core, deal, &e).await;
+        }
+        Err(_) => None,
+    };
     let mut best: Option<(VenueId, Decimal)> = None;
     // Решение 222: перегон, выручка которого после затрат ≤ 0 (или приход — пыль на площадке-цели), не делается.
     let mut tiny = false;

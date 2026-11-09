@@ -17,7 +17,8 @@
 //! - REST не ответил — один повтор через exec.rest_book_retry_ms, затем ошибка с причиной без кода безопасного
 //!   повтора (не StaleData: продажа — алертом, а не повторами); пауза не задана — без повтора;
 //! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести);
-//! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану.
+//! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану;
+//! - ревью п. 2: не задана venue.book_stale_ms — застрявшая монета («Порог убытка», «Перегон») сразу остановлена.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway.
@@ -389,5 +390,63 @@ async fn old_rest_snapshot_is_not_reused() {
         srv.depth.load(Ordering::SeqCst),
         2,
         "снимок старше venue.book_stale_ms — новый запрос"
+    );
+}
+
+/// Сделка на xt: 1 BTC, куплено на bsc_dex (для сценариев застрявшей монеты).
+fn stuck_deal(id: &str) -> Deal {
+    let dir = Direction {
+        asset: btc(),
+        buy_on: VenueId("bsc_dex".into()),
+        sell_on: xt(),
+    };
+    let mut deal = Deal::new(id.into(), dir, json!(null), Decimal::ZERO);
+    deal.at = xt();
+    deal.qty = dec("1");
+    deal
+}
+
+/// Решение 238 (ревью, п. 2): сценарий ревью — у биржи не задана venue.book_stale_ms, монета в режиме застрявшей
+/// монеты «Порог убытка» и «Перегон»: раньше «Порог убытка» ждал тика без предела (нет алерта), теперь сделка сразу
+/// остановлена с причиной «не задана настройка …». Тиков монеты в тесте нет — ожидание тика повисло бы (timeout).
+#[tokio::test]
+async fn stuck_without_book_stale_ms_halts_at_once() {
+    use arb::core::stuck_reason::StuckReason;
+    let d = dir("noconf");
+    let (core, s, _, srv) = start(&d).await;
+    let xt_scope = || Scope::Venue("xt".into());
+    s.set("venue.book_stale_ms", xt_scope(), None, "тест")
+        .await
+        .unwrap();
+    for (n, v) in [("stuck.max_loss_pct", 1), ("stuck.max_relays", 3)] {
+        s.set(n, Scope::Global, Some(json!(v)), "тест")
+            .await
+            .unwrap();
+    }
+    for (mode, id) in [
+        ("loss_limit", "20261109000000002BTC"),
+        ("relay", "20261109000000003BTC"),
+    ] {
+        s.set("stuck.mode", Scope::Global, Some(json!(mode)), "тест")
+            .await
+            .unwrap();
+        let run = arb::core::stuck::handle_as_is(&core, stuck_deal(id), StuckReason::Unprofitable);
+        tokio::time::timeout(std::time::Duration::from_secs(5), run)
+            .await
+            .unwrap_or_else(|_| panic!("{mode}: ждёт тика без предела"));
+        let x = core.deals().into_iter().find(|d| d.id == id).unwrap();
+        assert_eq!(x.step, Step::Halted, "{mode}");
+        let lines: Vec<&str> = x.timeline.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            lines
+                .iter()
+                .any(|t| t.contains("не задана настройка") && t.contains("venue.book_stale_ms")),
+            "{mode}: {lines:#?}"
+        );
+    }
+    assert_eq!(
+        srv.depth.load(Ordering::SeqCst),
+        0,
+        "стакан не запрашивался"
     );
 }

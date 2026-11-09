@@ -194,6 +194,7 @@ pub mod size_uncapped_at;
 pub mod start_reason;
 pub mod status_debounce;
 pub mod stuck;
+pub mod stuck_quote;
 pub mod stuck_reason;
 pub mod sub_state;
 pub mod subscribe;

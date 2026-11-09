@@ -248,8 +248,18 @@ pub async fn trade_seen(
 /// СДЕЛКИ (dex_account::of). Так маршрут, который этот кошелёк не соберёт (межроутерный без исполнителя), не выбирается.
 /// Принимает: ядро, сделку. Возвращает: как sell_value. Ошибки: как sell_value; сделка с DEX без счёта (dex_account::of).
 pub async fn deal_value(core: &Core, deal: &super::deal::Deal) -> Result<(Decimal, Quote), String> {
+    deal_quote(core, deal).await.map_err(|e| e.message)
+}
+
+/// Как deal_value, но ошибка — с кодом (решение 238, ревью п. 2: стакан для ордера без venue.book_stale_ms —
+/// NotConfigured; застрявшая монета не ждёт его вечно — stuck.rs). Принимает и возвращает: как deal_value.
+/// Ошибки: как deal_value; код — только у ошибок с кодом (стакан для ордера, exec_book.rs), прочие — без кода.
+pub async fn deal_quote(
+    core: &Core,
+    deal: &super::deal::Deal,
+) -> Result<(Decimal, Quote), OpError> {
     let acc = super::dex_account::of(core, deal)?;
-    sell_value(
+    sell_quote(
         core,
         acc.as_ref(),
         &deal.at,
@@ -272,6 +282,21 @@ pub async fn sell_value(
     a: &Asset,
     qty: Decimal,
 ) -> Result<(Decimal, Quote), String> {
+    sell_quote(core, acc, v, a, qty)
+        .await
+        .map_err(|e| e.message)
+}
+
+/// Как sell_value, но ошибка — с кодом (решение 238, ревью п. 2): ошибка стакана для ордера (exec_book.rs) — со своим
+/// кодом (NotConfigured — не задана venue.book_stale_ms), прочие — без кода, тем же текстом.
+/// Принимает и возвращает: как sell_value.
+pub async fn sell_quote(
+    core: &Core,
+    acc: Option<&DexAccountId>,
+    v: &VenueId,
+    a: &Asset,
+    qty: Decimal,
+) -> Result<(Decimal, Quote), OpError> {
     let x = core
         .inner
         .deps
@@ -284,9 +309,7 @@ pub async fn sell_value(
     // исполнения (gateway/patience.rs exec_scope), как раньше.
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
     let q = if kind(core, v)? == VenueKind::Cex {
-        let b = super::exec_book::book(core, v, a, Side::Sell)
-            .await
-            .map_err(|e| e.message)?;
+        let b = super::exec_book::book(core, v, a, Side::Sell).await?;
         b.snap
             .quote(qty)
             .await
@@ -299,10 +322,10 @@ pub async fn sell_value(
     };
     let q = super::venue_ticker::quote_back(core, a, v, q);
     if q.fillable_qty < qty {
-        return Err(format!(
+        return Err(OpError::from(format!(
             "{}: глубины хватает на {} из {qty}",
             v.0, q.fillable_qty
-        ));
+        )));
     }
     let quote = core
         .inner

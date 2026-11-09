@@ -8,8 +8,13 @@
 //! Решение 220: причина входа (stuck_reason.rs) — настоящая, от вызывающего; в журнале и Telegram.
 //! Решение 222: перед режимом остаток сверяется с балансом площадки (remain_fact.rs) — min(учёт, факт); после
 //! несостоявшегося перевода — без сверки (handle_as_is).
+//! Решение 238 (ревью, п. 2): котировка продажи отказала с кодом NotConfigured (не задана настройка — например,
+//! venue.book_stale_ms площадки: стакана для ордера нет) — ждать тика бессмысленно, настройка сама не появится: в
+//! «Ожидании», «Пороге убытка» и «Перегоне» (оценка «продать здесь») сделка сразу остановлена (Halted) с причиной
+//! «не задана настройка …», журнал Error и уведомление закрытия сделки человеку (ledger::finish). Прочие ошибки
+//! котировки — ждём тика, как раньше; первая — в журнал (Warn), чтобы ожидание было видно (stuck_quote.rs).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
-//! От чего зависит: sell.rs, trade_ops.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
+//! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
@@ -22,6 +27,7 @@ use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::stuck_quote as q;
 use super::stuck_reason::StuckReason;
 
 /// Ведёт застрявшую монету по режиму. Принимает: ядро, сделку, настоящую причину, почему монета здесь (решение 220 —
@@ -124,13 +130,17 @@ async fn wait(core: &Core, mut deal: Deal) {
         Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await,
     };
     let until = Instant::now() + Duration::from_millis(ms);
+    let mut first = true;
     while next_tick(core, &deal, Some(until)).await {
-        let v = super::trade_ops::deal_value(core, &deal).await;
-        // Решение 47: выгодно — итог сделки не ниже нуля.
-        if let Ok((v, _)) = v
-            && super::sell::profitable(&deal, v)
-        {
-            return super::sell::market(core, deal, "ожидание: стало выгодно").await;
+        match super::trade_ops::deal_quote(core, &deal).await {
+            // Решение 47: выгодно — итог сделки не ниже нуля.
+            Ok((v, _)) if super::sell::profitable(&deal, v) => {
+                return super::sell::market(core, deal, "ожидание: стало выгодно").await;
+            }
+            Ok(_) => {}
+            // Решение 238 (ревью, п. 2): не задана настройка — ждать нечего.
+            Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
+            Err(e) => q::no_quote_once(core, &deal, &e, &mut first).await,
         }
     }
     sold_by_market(core, deal, &format!("ждали {ms} мс — выгодно не стало")).await;
@@ -147,12 +157,19 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
         Ok(v) => v,
         Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await,
     };
-    // Нет котировки — ждём тика монеты: оценивать убыток вслепую нельзя.
+    // Нет котировки — ждём тика монеты: оценивать убыток вслепую нельзя. Решение 238 (ревью, п. 2): не задана
+    // настройка (NotConfigured) — не ждём (без предела ждали бы вечно без алерта), сделка остановлена.
+    let mut first = true;
     let value = loop {
-        match super::trade_ops::deal_value(core, &deal).await {
+        match super::trade_ops::deal_quote(core, &deal).await {
             Ok((v, _)) => break v,
-            Err(_) if next_tick(core, &deal, None).await => continue,
-            Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e).await,
+            Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
+            Err(e) => {
+                q::no_quote_once(core, &deal, &e, &mut first).await;
+                if !next_tick(core, &deal, None).await {
+                    return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await;
+                }
+            }
         }
     };
     let loss = deal.loss_pct_if(value);

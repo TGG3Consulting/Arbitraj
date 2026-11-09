@@ -15,6 +15,8 @@
 //! Решение 227: котировка продажи (средняя, исполнимо, возраст) и худшая цена ордера со стаканом (возраст) — строкой в
 //! хронологию сделки; худшая цена — только по свежему стакану (worst.rs worst_order). Решение 238: котировка и худшая
 //! цена биржи — один стакан (core/exec_book.rs); стакан потока устарел — снимок REST (в строке хронологии).
+//! Решение 238 (ревью, п. 3): стакан котировки (trade_ops::deal_quote) передаётся ордеру (trade_seen) — порог убытка
+//! и лимит IOC первой попытки считаются по одному снимку.
 //! Решение 235: продажа кнопкой (BUTTON) — до конца в режиме кнопки: повтор после отказа до отправки, остаток после
 //! частичной продажи и газ BNB — manual_sell.rs (без порогов убытка и «выгодно»); исчерпание повторов — алерт; итог
 //! кнопки — после закрытия, с возвратом USDT (manual_outcome.rs).
@@ -46,12 +48,15 @@ pub fn profitable(deal: &Deal, value: Decimal) -> bool {
 
 /// Продать сейчас, если выгодно, иначе — режим застрявшей монеты. Ошибок нет.
 pub async fn sell_or_stuck(core: &Core, deal: Deal) {
-    let value = super::trade_ops::deal_value(core, &deal).await;
+    let value = super::trade_ops::deal_quote(core, &deal).await;
     match value {
-        Ok((v, q)) if profitable(&deal, v) => sell(core, deal, q, "выгодно").await,
+        Ok((v, q, b)) if profitable(&deal, v) => sell(core, deal, q, b, "выгодно").await,
         // Решение 220: в режим застрявшей монеты — с настоящей причиной.
         Ok(_) => Box::pin(super::stuck::handle(core, deal, StuckReason::Unprofitable)).await,
-        Err(e) => Box::pin(super::stuck::handle(core, deal, StuckReason::NoQuote(e))).await,
+        Err(e) => {
+            let why = StuckReason::NoQuote(e.message);
+            Box::pin(super::stuck::handle(core, deal, why)).await
+        }
     }
 }
 
@@ -60,8 +65,8 @@ pub async fn sell_or_stuck(core: &Core, deal: Deal) {
 pub async fn market(core: &Core, deal: Deal, why: &str) {
     // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
     super::patience_scope::with(core, async {
-        match super::trade_ops::deal_value(core, &deal).await {
-            Ok((_, q)) => sell(core, deal, q, why).await,
+        match super::trade_ops::deal_quote(core, &deal).await {
+            Ok((_, q, b)) => sell(core, deal, q, b, why).await,
             Err(e) => {
                 let mut deal = deal;
                 let text = format!("продажа по рынку ({why}) невозможна: {e}");
@@ -99,8 +104,15 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
     )
 }
 
-/// Продажа всего количества по котировке q. Принимает: сделку, котировку, причину (для хронологии).
-async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
+/// Продажа всего количества по котировке q. Принимает: сделку, котировку, стакан котировки (решение 238, ревью п. 3:
+/// худшая цена первой попытки — по нему; None — DEX), причину (для хронологии).
+async fn sell(
+    core: &Core,
+    mut deal: Deal,
+    q: Quote,
+    book: Option<super::exec_book::Book>,
+    why: &str,
+) {
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
     let mut gas = Vec::new();
@@ -114,6 +126,7 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         q.route.clone(),
         q.avg_price,
         None,
+        book,
         &mut seen,
         Some(&mut gas),
     )

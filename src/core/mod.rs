@@ -87,6 +87,7 @@ pub mod episode_view;
 pub mod episode_worker;
 pub mod evaluate;
 pub mod exec_book;
+pub mod exec_book_fail;
 pub mod executor;
 pub mod feed_confirm;
 #[cfg(test)]
@@ -194,6 +195,7 @@ pub mod size_uncapped_at;
 pub mod start_reason;
 pub mod status_debounce;
 pub mod stuck;
+pub mod stuck_quote;
 pub mod stuck_reason;
 pub mod sub_state;
 pub mod subscribe;

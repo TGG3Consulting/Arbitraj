@@ -10,6 +10,7 @@
 //! в сводке открытого окна решения 125; медиана и p75 сделок пары; мало сделок пары — по бирже-источнику; мало и там —
 //! «нет данных»; «успели бы»; столбцы отчёта «Упущено»; запись без окна — «нет данных». Дополнение 09.11 (maxwin_watch):
 //! наблюдение uncapped.maxwin_watch_ms — «держалось всё наблюдение», цепочка расчётов наблюдения в очереди.
+//! Дополнение п. 2 (deal_time_from_decision): длительность сделки — от решения о сделке, старые — от открытия.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{uncapped_store, uncapped_maxwin, maxwin_view, deal_time, window_run},
 //! arb::report::missed_rows, tests/size_common.
@@ -420,7 +421,10 @@ async fn maxwin_windows_and_deal_time() {
         (Some(60.0), "точно", Some(3.0))
     );
     assert_eq!(c.start, arb::report::missed_rows::when(t0));
-    assert_eq!(c.deal_by, "пара, 16 сделок");
+    assert_eq!(
+        c.deal_by,
+        "пара, 16 сделок, из них 16 — от открытия (момента решения в учёте нет)"
+    );
     assert_eq!(c.would, if would == "yes" { "да" } else { "нет" });
     arb::report::missed(&data, None, None, Utc::now()).expect("книга «Упущено» с новыми столбцами");
     let _ = std::fs::remove_dir_all(&dir);
@@ -575,4 +579,42 @@ async fn maxwin_watch() {
     arb::core::uncapped_queue::submit_watch(&core, &back(), battle);
     assert_eq!(pending(&core, &key), Some(false));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Решение 245, дополнение п. 2 (Тигран 09.11): длительность сделки — от решения о сделке (Deal::decided_at), у сделок
+/// без него — от открытия (их число — Stat.from_open). Сделки учёта 05.11 (deals.csv): у первых 100 сделок пары
+/// bingx → bsc_dex момент решения — за 10 с до открытия.
+#[test]
+fn deal_time_from_decision() {
+    let (mut deals, _) = ledger_deals();
+    let dr = size_common::calc::direction();
+    let (bingx, dex) = (dr.buy_on.clone(), dr.sell_on.clone());
+    let pair = |x: &Deal| x.direction.buy_on == bingx && x.direction.sell_on == dex;
+    let mut want = vec![];
+    let mut k = 0;
+    for x in deals.iter_mut().filter(|x| pair(x)) {
+        let end = x.sells[0].finished_at;
+        if k < 100 {
+            x.decided_at = Some(x.started_at - Duration::seconds(10));
+            k += 1;
+        }
+        want.push((end - x.decided_at.unwrap_or(x.started_at)).num_milliseconds());
+        assert_eq!(arb::core::deal_time::duration_ms(x), want.last().copied());
+    }
+    want.sort_unstable();
+    let t = arb::core::deal_time::DealTimes::of(deals.iter());
+    let st = t.stat(&bingx, &dex, 5).unwrap();
+    assert_eq!((st.n, st.by, st.from_open), (298, "pair", 198));
+    assert_eq!(st.median_ms, arb::core::deal_time::quantile(&want, 0.5));
+    assert_eq!(st.p75_ms, arb::core::deal_time::quantile(&want, 0.75));
+    let src = t.stat(&bingx, &VenueId("mexc".into()), 5).unwrap();
+    assert_eq!((src.n, src.by, src.from_open), (300, "source", 200));
+    // Сериализация учёта: поле есть только у сделок с моментом решения; старая запись читается без него.
+    let x = deals.iter().find(|x| x.decided_at.is_some()).unwrap();
+    let back: Deal = serde_json::from_value(serde_json::to_value(x).unwrap()).unwrap();
+    assert_eq!(back.decided_at, x.decided_at);
+    let mut old = serde_json::to_value(&deals[0]).unwrap();
+    old.as_object_mut().unwrap().remove("decided_at");
+    let old: Deal = serde_json::from_value(old).unwrap();
+    assert_eq!(old.decided_at, None);
 }

@@ -4,7 +4,8 @@
     потолка проходит пороги; core/uncapped_maxwin.rs): начало, конец (или почему неизвестен), длительность (точно / не
     меньше), вложить → прибыль на начале и в пике, сколько окон; рядом — медиана и p75 длительности нашей сделки пары
     бирж (или биржи-источника, core/deal_time.rs) и вывод «успели бы» (core/maxwin_view.rs). Показывается самое
-    длинное окно записи. Дополнение 09.11 (core/uncapped_watch.rs): держалось всё наблюдение uncapped.maxwin_watch_ms —
+    длинное окно записи. Длительность сделки — от решения о сделке (дополнение 245 п. 2; старые сделки — от открытия,
+    их число — deal_time.from_open). Дополнение 09.11 (core/uncapped_watch.rs): держалось всё наблюдение uncapped.maxwin_watch_ms —
     «держалось всё наблюдение», длительность «2 м+» (время наблюдения с плюсом).
   Кто вызывает: pages/Uncapped.svelte (запись кандидата), components/WindowView.svelte (направления окна).
   От чего зависит: lib/uncappedLabels.js (money, duration), lib/labels.js (showTime).
@@ -37,7 +38,7 @@
     {:else}
       нет.
     {/if}
-    Сделка: {#if view.deal_time}медиана {sec(view.deal_time.median_ms)}, p75 {sec(view.deal_time.p75_ms)} ({by(view.deal_time)}, {view.deal_time.n} сделок){:else}{view.deal_time_err}{/if}.
+    Сделка: {#if view.deal_time}медиана {sec(view.deal_time.median_ms)}, p75 {sec(view.deal_time.p75_ms)} ({by(view.deal_time)}, {view.deal_time.n} сделок, от решения о сделке до последней продажи{#if view.deal_time.from_open}; из них {view.deal_time.from_open} — от открытия: момента решения в учёте нет{/if}){:else}{view.deal_time_err}{/if}.
     Успели бы: <strong class={wouldCls}>{would}</strong>{#if view.would !== 'yes' && view.would !== 'no'} <span>({view.why})</span>{/if}
   </p>
 {/if}

@@ -20,6 +20,7 @@
 //! маппинг поменяли во время предпроверки — сделки нет. Счёт записывается в сделку, все шаги идут им.
 //! Решение 141: покупка исполнилась — фоновый расчёт «без потолка» с id сделки (uncapped_entry.rs; путь не ждёт).
 //! Решение 147: отказ на входе (NotTradable, Busy) несёт точную причину (start_reason.rs) — в «Кандидаты» и журнал.
+//! Решение 245, дополнение п. 2: момент решения (Calc.at прошедшего кандидата) — в учёт сделки (Deal::decided_at).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs.
 //! Настройки: через вызываемые модули.
@@ -74,8 +75,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         ));
     }
     let core = core.clone();
+    // Решение 245, дополнение п. 2: момент решения — время расчёта кандидата, прошедшего пороги (Calc.at).
+    let decided = calc.at;
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
-        run(&core, d.clone()).await;
+        run(&core, d.clone(), decided).await;
         lk(&core.inner.active).remove(&key);
     }));
     Start::Started
@@ -91,8 +94,9 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
     }
 }
 
-/// Ведёт сделку до конца или до передачи в режим застрявшей монеты.
-async fn run(core: &Core, d: Direction) {
+/// Ведёт сделку до конца или до передачи в режим застрявшей монеты. Принимает: ядро, направление, момент решения
+/// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2).
+async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) {
     let deps = &core.inner.deps;
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
     let pre = async {
@@ -148,6 +152,8 @@ async fn run(core: &Core, d: Direction) {
         plan.profit_usd,
         acc.clone(),
     );
+    // Решение 245, дополнение п. 2: момент решения о сделке — в учёт (длительность сделки для «успели бы»).
+    deal.decided_at = Some(decided);
     // Решение 180: место в окне выводов — за сделкой до её вывода (transfers.rs) или конца (ledger.rs).
     if let Some(s) = slot {
         super::withdraw_limit::bind(core, &deal.id, s);

@@ -54,7 +54,7 @@ pub struct ManualButton {
     /// Надпись (как на экране).
     pub title: String,
     /// Команда ядру — та же, что шлёт экран в POST /api/manual/command. Если input задан — поле usdt
-    /// у SoldManually заполняет человек (экран — prompt, Telegram — ответ на сообщение ForceReply).
+    /// у SoldManually / UsdtReturnedManually заполняет человек (экран — prompt, Telegram — ответ на сообщение ForceReply).
     pub action: ManualAction,
     /// Вопрос подтверждения (экран — confirm, Telegram — вторая кнопка «Да, …»). «{usdt}» заменяется введённой суммой.
     pub confirm: String,
@@ -67,13 +67,20 @@ pub struct ManualButton {
 }
 
 impl ManualButton {
-    /// Команда с введённой суммой (для SoldManually), иначе — как есть. Принимает: сумму (None — ввода нет).
+    /// Команда с введённой суммой (для SoldManually; решение 236, дополнение п. 2 — и UsdtReturnedManually: сколько
+    /// зачислено), иначе — как есть. Принимает: сумму (None — ввода нет).
     pub fn action_with(&self, usdt: Option<&str>) -> ManualAction {
         match (&self.action, usdt) {
             (ManualAction::SoldManually { deal_id, .. }, Some(u)) => ManualAction::SoldManually {
                 deal_id: deal_id.clone(),
                 usdt: u.trim().to_string(),
             },
+            (ManualAction::UsdtReturnedManually { deal_id, .. }, Some(u)) => {
+                ManualAction::UsdtReturnedManually {
+                    deal_id: deal_id.clone(),
+                    usdt: Some(u.trim().to_string()),
+                }
+            }
             (a, _) => a.clone(),
         }
     }
@@ -132,7 +139,7 @@ impl ManualRecord {
             }
             (
                 RecordKind::UsdtReturn,
-                M::UsdtRetry { deal_id } | M::UsdtReturnedManually { deal_id },
+                M::UsdtRetry { deal_id } | M::UsdtReturnedManually { deal_id, .. },
             ) => deal_id == &self.object_id,
             (_, M::SoldManually { deal_id, .. }) => deal_id == &self.deal_id,
             _ => false,

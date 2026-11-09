@@ -125,6 +125,7 @@ pub mod manual_return;
 pub mod manual_rows;
 pub mod manual_sell;
 pub mod manual_usdt;
+pub mod manual_usdt_credit;
 pub mod market_read;
 pub mod market_state;
 pub mod native;

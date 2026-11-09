@@ -3,7 +3,9 @@
 //! чья выручка USDT не вернулась на площадку покупки (Deal.usdt_return = NotReturned: все повторы неудачны, исход
 //! неизвестен, повторов нет), — запись с кнопками «Перегнать» (ещё одна попытка возврата той же командой ядра —
 //! usdt_return_attempt::attempt: сумма части) и «Перегнано вручную» (человек перевёл
-//! сам: возврат помечается «вручную», в журнал — кто нажал). Кнопки «Продать» нет — уже продано. В Telegram запись
+//! сам: возврат помечается «вручную», в журнал — кто нажал; решение 236, дополнение п. 2 (техлид 09.11): бот спрашивает,
+//! сколько USDT зачислено, — затраты возврата = сумма части − зачислено идут в итог сделки, как у «вернулись»; «-» —
+//! не знает: затраты не входят, пометка). Кнопки «Продать» нет — уже продано. В Telegram запись
 //! уходит тем же зеркалом экрана (событие manual.record, notify/mirror*.rs, решение 156). Повторное нажатие по уже
 //! решённой записи — «проигнорирована», действие не повторяется.
 //! Решение 224: у «Продано вручную» «Перегнать» доступна, если в сделке были продажи бота (перегон — не больше их
@@ -13,7 +15,8 @@
 //! допуска usdt.return_tolerance_usd — тогда свободный остаток, usdt_return_attempt.rs).
 //! Кто вызывает: core/manual_feed.rs (записи), core/commands.rs (команды UsdtRetry, UsdtReturnedManually),
 //! core/manual_return.rs (Core::manual — таблица экрана; список сделок — Core::usdt_not_returned в manual_feed.rs).
-//! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs.
+//! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs,
+//! deal_return_cost.rs (затраты «перегнано вручную»), manual_usdt_credit.rs (кнопка с вводом и разбор ответа).
 //! Настройки: нет (повторы — usdt.return_retry_s, usdt.return_retries_max в usdt_return_retry.rs).
 
 use rust_decimal::Decimal;
@@ -84,18 +87,7 @@ fn usdt_record(d: &Deal, part: &UsdtReturn) -> Option<ManualRecord> {
                 block,
                 false,
             ),
-            btn(
-                "usdt_manual",
-                "Перегнано вручную",
-                A::UsdtReturnedManually {
-                    deal_id: key.clone(),
-                },
-                format!(
-                    "Отметить, что {sum} USDT сделки {id} вы перевели с {v} на {to} сами? Запись закроется, бот этот возврат больше не делает."
-                ),
-                None,
-                true,
-            ),
+            super::manual_usdt_credit::button(&key, id, (v, to), sum),
         ],
     })
 }
@@ -116,13 +108,13 @@ pub fn retry_block(d: &Deal, at: &VenueId, to: &VenueId) -> Option<String> {
 /// Команды записи «USDT не вернулись». Принимает: ядро, действие, кто (commands::who). Возвращает: None — действие
 /// не отсюда; Some(итог). Запись уже решена (повторное нажатие) — Ok «проигнорирована», действие не повторяется.
 pub async fn command(core: &Core, a: &A, who: &str) -> Option<Result<String, String>> {
-    let (deal, retry) = match a {
-        A::UsdtRetry { deal_id } => (deal_id, true),
-        A::UsdtReturnedManually { deal_id } => (deal_id, false),
+    let (deal, retry, usdt) = match a {
+        A::UsdtRetry { deal_id } => (deal_id, true, None),
+        A::UsdtReturnedManually { deal_id, usdt } => (deal_id, false, usdt.as_deref()),
         _ => return None,
     };
     // Решение 227: deal_id команды — ключ части («<id>» — первая, «<id>@<площадка>» — остальные).
-    Some(match take(core, deal, who, retry).await {
+    Some(match take(core, deal, who, retry, usdt).await {
         Ok(Some(t)) => Ok(t),
         Ok(None) => Ok(format!(
             "запись «USDT не вернулись» сделки {deal} уже решена или не существует — команда проигнорирована"
@@ -132,10 +124,19 @@ pub async fn command(core: &Core, a: &A, who: &str) -> Option<Result<String, Str
 }
 
 /// Под замком учёта: часть «не вернулись» → «идёт» («Перегнать», попытка — отдельной задачей) или → «вручную».
-/// Принимает: ядро, ключ части (решение 227), кто, «Перегнать» ли. Возвращает: Ok(Some(текст)) — выполнено;
-/// Ok(None) — записи нет; Err — кнопка недоступна (причина).
-async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<String>, String> {
+/// Принимает: ядро, ключ части (решение 227), кто, «Перегнать» ли, ответ «сколько зачислено» («Перегнано вручную»,
+/// решение 236, дополнение п. 2). Возвращает: Ok(Some(текст)) — выполнено; Ok(None) — записи нет; Err — кнопка
+/// недоступна или ответ не принят (причина).
+async fn take(
+    core: &Core,
+    key: &str,
+    who: &str,
+    retry: bool,
+    usdt: Option<&str>,
+) -> Result<Option<String>, String> {
     let (deal, part) = super::usdt_return_parts::parse(key);
+    let mut credited = None;
+    let mut delta = Decimal::ZERO;
     let (d, amount, at, to) = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
@@ -171,6 +172,7 @@ async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<S
                 at.0, to.0
             ));
         } else {
+            credited = super::manual_usdt_credit::parse(usdt, amount)?;
             super::usdt_return_parts::put(
                 d,
                 UsdtReturn::Manual {
@@ -178,16 +180,29 @@ async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<S
                     at: at.clone(),
                     to: to.clone(),
                     by: who.to_string(),
+                    credited,
                 },
             );
+            // Решение 236, дополнение п. 2: затраты возврата = сумма части − зачислено — в итог (как «вернулись»).
+            let cost = match credited {
+                Some(c) => format!(
+                    "зачислено {c} USDT, затраты возврата {} USDT — в итоге сделки",
+                    amount - c
+                ),
+                None => {
+                    "зачисление не указано — затраты возврата неизвестны, в итог не вошли".into()
+                }
+            };
             d.note(format!(
-                "Перегнано вручную ({who}): {amount} USDT {} → {} — человек перевёл сам, запись «USDT не вернулись» закрыта",
+                "Перегнано вручную ({who}): {amount} USDT {} → {} — человек перевёл сам, запись «USDT не вернулись» закрыта; {cost}",
                 at.0, to.0
             ));
+            delta = super::deal_return_cost::apply(d);
         }
         (d.clone(), amount, at, to)
     };
     super::ledger::save(core, &d).await;
+    super::deal_return_cost::after(core, &d, delta).await;
     let text = if retry {
         start(core, deal, amount, at.clone(), to.clone(), who);
         format!(
@@ -197,8 +212,12 @@ async fn take(core: &Core, key: &str, who: &str, retry: bool) -> Result<Option<S
             amount.round_dp(4)
         )
     } else {
+        let c = credited.map_or(
+            " (зачисление не указано)".to_string(),
+            |c| format!(", зачислено {c}, затраты возврата {}", amount - c),
+        );
         format!(
-            "Сделка {deal}: возврат USDT отмечен «перегнано вручную» ({who}), {} USDT {} → {}",
+            "Сделка {deal}: возврат USDT отмечен «перегнано вручную» ({who}), {} USDT {} → {}{c}",
             amount.round_dp(4),
             at.0,
             to.0

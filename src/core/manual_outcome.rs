@@ -87,13 +87,25 @@ pub fn return_text(deal: &Deal) -> Option<String> {
                 hu::usd(*amount),
                 hu::venue(&at.0)
             ),
-            U::Manual { amount, to, .. } => {
-                format!(
-                    "{} перегнаны на {} вручную",
+            U::Manual {
+                amount,
+                to,
+                credited,
+                ..
+            } => match credited {
+                // Решение 236, дополнение п. 2: зачислено — ответ человека.
+                Some(c) => format!(
+                    "{} перегнаны на {} вручную, зачислено {}",
+                    hu::usd(*amount),
+                    hu::venue(&to.0),
+                    hu::usd(*c)
+                ),
+                None => format!(
+                    "{} перегнаны на {} вручную (зачисление не указано — затраты возврата неизвестны)",
                     hu::usd(*amount),
                     hu::venue(&to.0)
-                )
-            }
+                ),
+            },
         })
         .collect();
     if !parts.is_empty() {

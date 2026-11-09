@@ -11,6 +11,7 @@
 //!   (как exec/txs.rs при отправке); газ = 21000 × цена газа; второй раз — из памяти, без запроса;
 //! - чаевые выключены (channel.tip_enabled = нет) — газа нет и запроса нет;
 //! - net_check цикла DEX ↔ DEX вычитает и газ перевода чаевых: (газ + чаевые + газ перевода) × курс.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: route_common, arb::venues::bsc_dex::{send::tip_gas, exec::cycle_steps, quote::cycle_cost}.
 

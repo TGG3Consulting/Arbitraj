@@ -58,7 +58,7 @@
 | `transfers.rs` | Вывод `POST /api/v3/withdrawals` (feeDeductType INTERNAL, метка попытки в remark), статус `GET /api/v1/withdrawals/{id}`, поиск по remark |
 | `fund_move.rs` | Перевод main ↔ trade (Flex Transfer) |
 | `withdraw_quota.rs` | Решение 166: удержание вывода — `GET /api/v1/withdrawals/quotas` по котируемой монете, lockedAmount; 115008 у вывода → WithdrawLocked (errors.rs). Перед выводом на main переводится только недостающее (повтор вывода, fund_move.rs) |
-| `account.rs` | Балансы trade (все и одной монеты), «Проверить подключение» (версия ключа, права, без Margin/Futures, IP, HF-счёт) |
+| `account.rs` | Балансы trade (все и одной монеты), «Проверить подключение» (версия ключа, права; Margin/Futures/Unified — предупреждение, решение 242; IP, HF-счёт) |
 | `all_balances.rs`, `all_balances_parse.rs` | Панель «Балансы» (решение 144, только чтение): Спот, Фонд (main), Фьючерсы (`/api/v1/account-overview-all` на `venue.futures_rest_url`, монеты `venue.futures_balance_currencies`), Маржа кросс и изолированная (`queryType=ALL`), Опционы, Earn — параллельно, сбой счёта — в его error |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробный `POST /api/v1/hf/orders/test` (`venue.order_test_first`) |
 | `trade.rs`, `order_state.rs` | Ордер `POST /api/v1/hf/orders/sync` limit + IOC/FOK, итог по orderId (dealSize, dealFunds, fee, feeCurrency), отмена остатка, поиск по clientOid |

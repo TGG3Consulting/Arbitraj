@@ -1,8 +1,9 @@
 //! Файл: venues/kucoin/account.rs
 //! Что делает: балансы торгового счёта KuCoin (trade) — все и одной монеты (решение 113), и кнопка «Проверить
-//! подключение»: ключ принят, версия ключа совпадает с настройкой, права (без маржи и фьючерсов — урок 19), привязка
-//! к IP, высокочастотный ли спот-счёт (ордера адаптера — HF-эндпоинты /api/v1/hf/*) и тип счёта — Classic или UTA,
-//! явно в тексте (решение 137, Тигран 04.11): адаптер на Classic API, счёт UTA — отказ проверки.
+//! подключение»: ключ принят, версия ключа совпадает с настройкой, права (маржа и фьючерсы — только
+//! предупреждение, решение 242), привязка к IP, высокочастотный ли спот-счёт (ордера адаптера — HF-эндпоинты
+//! /api/v1/hf/*) и тип счёта — Classic или UTA, явно в тексте (решение 137, Тигран 04.11): адаптер на Classic API,
+//! счёт UTA — отказ проверки.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.api_key_version, venue.api_ip_bound, venue.api_ip, venue.deposit_to_spot, venue.withdraw_from_trade
@@ -42,7 +43,8 @@ use super::{num, rest};
 const TRADE_TYPE: &str = "trade";
 /// Права, без которых бот не работает.
 const REQUIRED: [&str; 3] = ["General", "Spot", "Transfer"];
-/// Права, которых у ключа бота быть не должно (только спот — CLAUDE.md; единый счёт бот не поддерживает).
+/// Права, которые боту не нужны (только спот — CLAUDE.md; единый счёт бот не поддерживает — его проверяет
+/// selfAccountMode). Есть — предупреждение, не сбой (решение 242).
 const FORBIDDEN: [&str; 3] = ["Margin", "Futures", "Unified"];
 
 /// Балансы торгового счёта; currency — одна монета (None — все). Ошибки: ключи, связь, ответ KuCoin.
@@ -122,12 +124,12 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
         .into_iter()
         .filter(|p| perms.iter().any(|x| x == p))
         .collect();
-    if !extra.is_empty() {
-        return Err(format!(
-            "У ключа KuCoin лишние права: {} — бот только спот, снимите их",
-            extra.join(", ")
-        ));
-    }
+    // Лишние права — только предупреждение, не сбой (решение 242): бот их не использует.
+    let extra = if extra.is_empty() {
+        String::new()
+    } else {
+        format!("; у ключа есть лишние права: {}", extra.join(", "))
+    };
     let ips = split(&num::text_opt(&info, "ipWhitelist").unwrap_or_default());
     let ip_note = if ctx.flag("venue.api_ip_bound").map_err(|e| e.message)? {
         let ip = ctx.text("venue.api_ip").map_err(|e| e.message)?;
@@ -165,7 +167,7 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
     }
     Ok(format!(
         "Подключено. Тип счёта: Classic (selfAccountMode = CLASSIC), спот — HF (высокочастотный, hf/accounts/opened = true). \
-         Версия ключа {got}, права есть ({}), {ip_note}",
+         Версия ключа {got}, права есть ({}), {ip_note}{extra}",
         perms.join(", ")
     ))
 }

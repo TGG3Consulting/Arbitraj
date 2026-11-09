@@ -8,6 +8,8 @@
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
 //! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (кэш — Arc с копией при записи: снимок —
 //! без копирования всех значений, копия делается только при изменении настройки, пока снимок жив).
+//! Решение 242, дополнение: пара «площадка · тип направления» при записи проверяется по видам площадок шлюза
+//! (settings/venue_kinds.rs).
 //! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
 use std::collections::HashMap;
@@ -55,6 +57,9 @@ pub struct Store {
     accounts: super::accounts::Accounts,
     /// Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение области «монета» (coin_alias.rs).
     aliases: super::coin_alias::CoinAliases,
+    /// Решение 242, дополнение: виды площадок шлюза — проверка пары «площадка · тип направления» при записи
+    /// (venue_kinds.rs; сообщает ядро при запуске).
+    venue_kinds: super::venue_kinds::VenueKinds,
 }
 
 impl Store {
@@ -100,6 +105,7 @@ impl Store {
             writer: Arc::new(Mutex::new(())),
             accounts,
             aliases: Default::default(),
+            venue_kinds: Default::default(),
         })
     }
 
@@ -118,6 +124,12 @@ impl Store {
     /// Тикеры монет по адресу для запасного чтения области «монета» (решение 211, ревью В9; coin_alias.rs).
     pub fn coin_aliases(&self) -> &super::coin_alias::CoinAliases {
         &self.aliases
+    }
+
+    /// Виды площадок шлюза для проверки области «площадка + тип направления» при записи (решение 242, дополнение;
+    /// venue_kinds.rs). Ошибок нет.
+    pub fn venue_kinds(&self) -> &super::venue_kinds::VenueKinds {
+        &self.venue_kinds
     }
 
     /// Действующее значение: монета сильнее площадки, площадка сильнее всей системы. Решение 211 (второе ревью, п.3):
@@ -190,6 +202,11 @@ impl Store {
             }
             _ => return Err(SetError::Unknown(name.to_string())),
         };
+        // Решение 242, дополнение: пара «площадка · тип направления» должна подходить виду площадки шлюза (очистка —
+        // без проверки: старую неверную пару можно удалить).
+        if let (Scope::VenueDir(id), Some(_)) = (&scope, &new) {
+            self.venue_kinds.check(id).map_err(SetError::Invalid)?;
+        }
         let _turn = self.writer.lock().await;
         // Решение 128: предел длины нового id DEX (dex.id_max_len, необязательная; очистка не проверяется).
         if let (Scope::Dex(id), Some(_)) = (&scope, &new) {

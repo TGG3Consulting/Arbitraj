@@ -7,6 +7,8 @@
 //! id области — «площадка:тип» («bingx:cex_dex»), ключ в SQLite — «venue_dir:bingx:cex_dex» (settings/scope.rs).
 //! «DEX ↔ DEX» (Тигран 09.11) — ОДИН набор значений на все сделки DEX ↔ DEX, не по DEX и не по кошельку: id «dex_dex»
 //! без площадки (ключ «venue_dir:dex_dex»).
+//! Дополнение п. 2 (Тигран 09.11: согласовано): у profit.price_move_k значение монеты сильнее пары —
+//! decimal_coin_dir (монета → пара → вся система); у остальных четырёх — как было (пара сильнее).
 //! Кто вызывает: settings/scope.rs (разбор id), settings/value.rs (проверка), core/venue_dir.rs и места чтения
 //! money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k, profit.closure_share.
 //! От чего зависит: settings/store.rs, settings/read.rs (At), gateway/errors.rs, serde.
@@ -145,5 +147,26 @@ impl Store {
                 }),
             None => self.decimal(name, at),
         }
+    }
+
+    /// Что делает: решение 242, дополнение п. 2 (Тигран 09.11: согласовано) — десятичное число, у которого значение
+    /// МОНЕТЫ сильнее пары: монета → площадка + тип направления → прежняя цепочка без монеты (вся система). Только для
+    /// profit.price_move_k (остальные настройки решения 242 — decimal_dir: пара сильнее). Значение монеты — ровно в
+    /// области «монета» по id монеты (как первый шаг Store::resolve; старые значения по тикеру к этой настройке и раньше
+    /// не применялись — coin_alias.rs). Принимает: имя, пару (None — нет), область чтения (coin — id монеты).
+    /// Ошибки: как decimal_dir — NotConfigured (не задано нигде), Internal (неверный вид).
+    pub fn decimal_coin_dir(
+        &self,
+        name: &str,
+        vd: Option<VenueDir>,
+        at: At,
+    ) -> Result<Decimal, GatewayError> {
+        let coin_set = at
+            .coin
+            .is_some_and(|c| self.get_exact(name, &Scope::Coin(c.to_string())).is_some());
+        if coin_set {
+            return self.decimal(name, at);
+        }
+        self.decimal_dir(name, vd, at)
     }
 }

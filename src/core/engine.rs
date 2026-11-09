@@ -52,6 +52,11 @@ impl Core {
             }
         }
         kinds.sort_by(|a, b| a.0.0.cmp(&b.0.0));
+        // Решение 242, дополнение: виды площадок — хранилищу настроек для проверки пары «площадка · тип направления»
+        // при записи (settings/venue_kinds.rs; те же виды, по которым правило стороны core/venue_dir.rs выбирает пару).
+        deps.settings
+            .venue_kinds()
+            .set(kinds.iter().map(|(id, k)| (id.0.clone(), *k)));
         let core = Core {
             inner: Arc::new(Inner::new(deps, kinds.clone(), market_tx, cand_tx)),
         };

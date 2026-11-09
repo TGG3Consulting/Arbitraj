@@ -70,8 +70,18 @@
   const dexAt = (ns) => dex.findLast((p) => p.t <= ns / 1e6) ?? null;
   const curDex = $derived(cur ? dexAt(cur.recv_ns) : null);
   const sideText = (s) => (s === 'Sell' ? 'продажа на DEX' : 'покупка на DEX');
-  /** Решение 245: объём точки — тика (решение 241) или нашей сделки (план / факт, запрошено). */
-  const sizeText = (p) => (p.deal ? `сделка ${p.deal.id} (${p.deal.qty_from === 'fact' ? 'факт' : 'план'}, запрошено ${p.deal.asked})` : 'тик');
+  /** Дополнение 245 п. 3: каким путём посчитана точка на объём сделки (core/window_deal_run.rs path_of). */
+  const PATHS = {
+    own: 'свой сборщик',
+    kyber: 'KyberSwap',
+    kyber_no_route: 'свой: у KyberSwap нет маршрута',
+    own_rate: 'свой: KyberSwap не спрашивался — window.dex_price_min_ms = 0',
+  };
+  const who = (w) => (w === 'kyber' ? 'KyberSwap' : 'свой');
+  const pathText = (d) =>
+    d.path === 'best_of' ? `лучший из двух → ${who(d.winner)}${d.pick ? `: ${d.pick}` : ''}` : (PATHS[d.path] ?? 'свой сборщик (до 09.11)');
+  /** Решение 245: объём точки — тика (решение 241) или нашей сделки (план / факт, запрошено, путь котировки). */
+  const sizeText = (p) => (p.deal ? `сделка ${p.deal.id} (${p.deal.qty_from === 'fact' ? 'факт' : 'план'}, запрошено ${p.deal.asked}; ${pathText(p.deal)})` : 'тик');
   const dealErr = $derived(Object.entries(data?.dex_deal_err ?? {}));
 </script>
 

@@ -9,7 +9,7 @@
 //!    «биржа → биржа» — у биржи покупки; «DEX → биржа» — у биржи; снятие значения — снова прежние;
 //! 3) пороги прибыли (thresholds: profit.rs, card_max.rs, uncapped.rs, precheck_dex_sell.rs) — так же;
 //! 4) доля закрытия (reserve::closure_share) — пара сильнее площадки-получателя, без пары — прежняя площадка B;
-//!    k (profit.price_move_k) — пара сильнее монеты, без пары — монета;
+//!    k (profit.price_move_k) — дополнение 242 п. 2 (Тигран 09.11): монета сильнее пары;
 //! 5) DEX ↔ DEX: лимит цикла (как cycle_plan.rs: пара, иначе площадка DEX, иначе вся система).
 //!
 //! Кто вызывает: cargo test.
@@ -106,6 +106,11 @@ async fn core(name: &str) -> (Core, Store) {
         (v("mexc"), VenueKind::Cex),
         (v("bsc_dex"), VenueKind::Dex),
     ];
+    // Решение 242, дополнение: те же виды — хранилищу (проверка пары при записи), как делает Core::start.
+    let kinds = core.inner.kinds.read().unwrap().clone();
+    settings
+        .venue_kinds()
+        .set(kinds.into_iter().map(|(id, k)| (id.0, k)));
     (core, settings)
 }
 
@@ -161,7 +166,8 @@ fn read(core: &Core, s: &Store, x: &Direction) -> Read {
         parts: parts(core, x, &Mode::Live).unwrap(),
         thr: thresholds(s, vd).unwrap(),
         share: reserve::closure_share(s, x, vd).unwrap(),
-        k: s.decimal_dir(
+        // Дополнение 242 п. 2: k — монета сильнее пары (то же чтение, что core/dirctx.rs).
+        k: s.decimal_coin_dir(
             "profit.price_move_k",
             vd,
             At {
@@ -253,7 +259,8 @@ async fn empty_is_as_before_and_pair_applies_only_to_its_side() {
         if i == idx("bingx", "bsc_dex") {
             assert_eq!(r.parts.per_trade, d("0.7"));
             assert_eq!(r.thr, (d("0.7"), d("0.7")));
-            assert_eq!(r.k, d("0.7"));
+            // Дополнение 242 п. 2 (Тигран 09.11): у k значение монеты (2) сильнее пары.
+            assert_eq!(r.k, d("2"));
             assert_eq!(r.share, Some(d("0.7")));
         } else {
             assert_eq!(r, before[i], "{x:?}");

@@ -569,6 +569,15 @@ rationale = "Два интервала uncapped.min_interval_ms (совет 3000
 prefill = { kind = "Global" }
 
 [[section.rec]]
+name = "uncapped.maxwin_watch_ms"
+area = "вся система"
+unit = "мс"
+value = "120000"
+source = "Тигран 09.11.2026 (решение 245, дополнение)"
+rationale = "Тигран 09.11: «постоянно записывать 2 мин: держится 38 с — пишем 38; больше 2 мин — пишем „2 м+“». При uncapped.min_interval_ms 30000 — до 4–5 расчётов наблюдения на окно."
+prefill = { kind = "Global" }
+
+[[section.rec]]
 name = "uncapped.deal_time_min_n"
 area = "вся система"
 unit = "сделок"

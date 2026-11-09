@@ -115,6 +115,12 @@ pub struct Deal {
     pub alert_was: Option<crate::core::types::StuckAlert>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
+    /// Решение 245, дополнение п. 2 (Тигран 09.11: согласовано): момент решения о сделке — время расчёта кандидата,
+    /// прошедшего пороги прибыли (Calc.at вердикта Accept, по которому исполнитель запущен: executor.rs). Длительность
+    /// сделки для «успели бы» (deal_time.rs) — от него. None — сделка до дополнения или не с пути кандидата (цикл
+    /// DEX ↔ DEX, ручные действия): берётся started_at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<DateTime<Utc>>,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -153,6 +159,7 @@ impl Deal {
             withdraw_refused: vec![],
             alert_was: None,
             timeline: vec![],
+            decided_at: None,
             started_at: now,
             updated_at: now,
         }

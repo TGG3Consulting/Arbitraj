@@ -7,7 +7,10 @@
 //! (кошелька в маппинге нет — причина у сделки и на странице окна, отметка снята); событие чужого пула или пула другой
 //! площадки — без отметки, пула маршрута — отметка; интервал не прошёл — отметка ждёт; объём — план, пока монет нет на
 //! DEX, и факт, когда они там; точка на объём сделки — в файле окна с пометкой сделки; закрытая сделка снята;
-//! DEX → биржа — под наблюдением только до факта покупки.
+//! DEX → биржа — под наблюдением только до факта покупки. Дополнение 245 п. 3 (deal_point_path): путь точки — как
+//! исполнение (свой / KyberSwap / нет маршрута у KyberSwap / «лучший из двух» и кто выиграл; при
+//! window.dex_price_min_ms = 0 KyberSwap не спрашивается); точка до дополнения
+//! читается.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{window_deal, window_deal_run, window_run, ledger, episode_run}, arb::venues::{bingx,
 //! bsc_dex}, tests/size_common.
@@ -257,6 +260,9 @@ async fn window_writes_dex_price_on_deal_size() {
         id: "D1".into(),
         qty_from: "fact".into(),
         asked: d("9.5"),
+        path: Some(window_deal_run::path_of(false, true, &q).into()),
+        winner: Some(window_deal_run::winner(&q).into()),
+        pick: q.pick.clone(),
     };
     assert!(window_deal_run::write(
         &core,
@@ -323,4 +329,47 @@ async fn window_writes_dex_price_on_deal_size() {
     assert_eq!(p.pools, [format!("{PAIR:#x}")]);
     assert_eq!(p.block, Some(rec.pool.pool.block));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Дополнение 245 п. 3 (Тигран 09.11: «маршрут важен»): путь точки на объём сделки — по котировке адаптера на
+/// записанном пуле CAKE (своя — с маршрутом) и её видах: KyberSwap (kyberswap/quote.rs: без маршрута), «лучший из двух»
+/// (best_of/quote.rs: текст выбора в pick). Интервал 0 при exec.via_kyber — KyberSwap не спрашивается.
+#[test]
+fn deal_point_path() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rec = rt.block_on(Rec::load("window-deal"));
+    let own = sell_quote(&rec, "10");
+    let mut kyber = own.clone();
+    kyber.route = None;
+    let mut best_own = own.clone();
+    best_own.pick = Some("KyberSwap 24.15 vs свой 24.21 USDT за 10 CAKE → свой (+0.06)".into());
+    let mut best_kyber = kyber.clone();
+    best_kyber.pick =
+        Some("KyberSwap 24.25 vs свой 24.21 USDT за 10 CAKE → KyberSwap (+0.04)".into());
+    use window_deal_run::{path_of, use_final, winner};
+    // exec.via_kyber нет — свой сборщик (финальный путь адаптера тот же, что без него).
+    assert!(use_final(false, true) && use_final(false, false));
+    assert_eq!((path_of(false, true, &own), winner(&own)), ("own", "own"));
+    // exec.via_kyber, интервал задан — путь исполнения.
+    assert!(use_final(true, false));
+    assert_eq!(
+        (path_of(true, true, &kyber), winner(&kyber)),
+        ("kyber", "kyber")
+    );
+    assert_eq!(path_of(true, true, &own), "kyber_no_route");
+    assert_eq!(
+        (path_of(true, true, &best_own), winner(&best_own)),
+        ("best_of", "own")
+    );
+    assert_eq!(
+        (path_of(true, true, &best_kyber), winner(&best_kyber)),
+        ("best_of", "kyber")
+    );
+    // exec.via_kyber, интервал 0 — KyberSwap не спрашивается.
+    assert!(!use_final(true, true));
+    assert_eq!(path_of(true, false, &own), "own_rate");
+    // Точка до дополнения (без пути) читается.
+    let old: DealSize =
+        serde_json::from_value(json!({"id": "D1", "qty_from": "plan", "asked": "10"})).unwrap();
+    assert_eq!((old.path, old.winner, old.pick), (None, None, None));
 }

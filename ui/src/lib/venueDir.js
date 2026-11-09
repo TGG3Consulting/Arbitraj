@@ -4,7 +4,8 @@
 //   и не по кошельку), id области VenueDir («bingx:cex_dex», «dex_dex» — как src/settings/venue_dir.rs) и текст «что
 //   действует», когда значение пары не задано: прежняя цепочка бэкенда (core/venue_dir.rs → Store::decimal_dir →
 //   Store::decimal): площадка (у money.max_per_trade_usd — площадка покупки A, у profit.closure_share
-//   (venue_role TransferTarget) — площадка продажи B), монета (profit.price_move_k), вся система.
+//   (venue_role TransferTarget) — площадка продажи B), монета (profit.price_move_k), вся система. Дополнение 242 п. 2
+//   (Тигран 09.11): у profit.price_move_k монета сильнее и заданной пары (settings/venue_dir.rs decimal_coin_dir).
 // Кто вызывает: components/VenueDirMoney.svelte, pages/Settings.svelte, components/SettingsGroupList.svelte.
 // От чего зависит: ничего (чистые функции над схемой, значениями и видами площадок из lib/settings.svelte.js).
 // Настройки: money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k,

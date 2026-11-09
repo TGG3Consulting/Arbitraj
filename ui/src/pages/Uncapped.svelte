@@ -168,7 +168,7 @@
     {#each sum.top as t, ti (`${t.direction}|${ti}`)}<tr><td>{t.direction}</td><td>{money(t.missed)} USDT</td><td class="muted">записей {t.count}</td></tr>{/each}
   </tbody></table>
   <p class="muted">
-    Очередь: посчитано {sum.stats.counters.done} (кандидатов без упущенного, не записаны: {sum.stats.counters.no_missed}),
+    Очередь: посчитано {sum.stats.counters.done} (кандидатов без упущенного, не записаны: {sum.stats.counters.no_missed}; наблюдение окна максимального объёма: {sum.stats.counters.watched ?? 0}),
     слито повторов {sum.stats.counters.merged}, сделок ждут {sum.stats.counters.deals_waiting} (сделки — вне очереди кандидатов),
     <strong>не посчитано (очередь полна) {sum.stats.counters.skipped_full}</strong>, сбоев {sum.stats.counters.failed},
     в работе {sum.stats.counters.running}, ждут {sum.stats.counters.waiting}; расчёт в среднем {money(sum.stats.mean_ms)} мс,

@@ -18,4 +18,5 @@ pub mod scope;
 pub mod store;
 pub mod value;
 pub mod venue_dir;
+pub mod venue_kinds;
 pub mod wait;

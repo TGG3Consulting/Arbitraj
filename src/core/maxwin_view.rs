@@ -1,9 +1,11 @@
 //! Файл: core/maxwin_view.rs
 //! Что делает: решение 245 (часть Б) — показ окна максимального объёма (uncapped_maxwin.rs) рядом с длительностью
-//! наших сделок (deal_time.rs) и вывод «успели бы»: длительность окна ≥ медианы длительности сделки пары (или
+//! наших сделок (deal_time.rs; дополнение п. 2 — от решения о сделке) и вывод «успели бы»: длительность окна ≥ медианы длительности сделки пары (или
 //! биржи-источника) — «yes»; окно кончилось (расчёт, где оптимум не прошёл пороги) короче медианы — «no»; конец окна
 //! неизвестен (идёт или расчётов не было дольше uncapped.maxwin_gap_ms) и известная часть короче медианы, медианы нет,
-//! окна нет — «unknown» с причиной. Берётся самое длинное окно записи (MaxWins.best). Общий для экрана «Упущено из-за
+//! окна нет — «unknown» с причиной. Дополнение 09.11 (uncapped_watch.rs): окно держалось всё наблюдение
+//! uncapped.maxwin_watch_ms — статус «held» (длительность «не меньше», на экране «2 м+»): ≥ медианы — «yes», медиана
+//! длиннее наблюдения — «unknown». Берётся самое длинное окно записи (MaxWins.best). Общий для экрана «Упущено из-за
 //! потолка», экрана «Окна» (API) и отчёта Excel «Упущено».
 //! Кто вызывает: core/uncapped_view.rs, core/window_view.rs, core/uncapped_report.rs, report/missed_rows.rs.
 //! От чего зависит: uncapped_maxwin.rs, deal_time.rs, ledger (сделки в памяти), settings.
@@ -30,7 +32,7 @@ pub struct Ctx {
     pub times: DealTimes,
 }
 
-/// Показ одного окна: статус (ended / open / cut / none), длительность, точная ли, медиана сделок, вывод и почему.
+/// Показ одного окна: статус (ended / held / open / cut / none), длительность, точная ли, медиана сделок, вывод и почему.
 #[derive(Debug, Clone, PartialEq)]
 pub struct View {
     pub status: &'static str,
@@ -127,6 +129,7 @@ impl Ctx {
         };
         let status = match b.end.as_deref() {
             Some("not_passing") => "ended",
+            Some("watch") => "held",
             Some(_) => "cut",
             None if self.gap.as_ref().is_ok_and(idle) => "cut",
             None => "open",
@@ -146,10 +149,10 @@ impl Ctx {
                 "unknown",
                 format!(
                     "окно не меньше {ms} мс, конец неизвестен ({}), медиана сделки {} мс",
-                    if status == "open" {
-                        "идёт"
-                    } else {
-                        "расчётов не было дольше uncapped.maxwin_gap_ms"
+                    match status {
+                        "open" => "идёт",
+                        "held" => "держалось всё время наблюдения uncapped.maxwin_watch_ms",
+                        _ => "расчётов не было дольше uncapped.maxwin_gap_ms",
                     },
                     s.median_ms
                 ),

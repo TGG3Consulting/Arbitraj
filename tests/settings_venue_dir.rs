@@ -10,6 +10,8 @@
 //!    данных: столбец scope — текст, старые строки не трогаются);
 //! 6) экспорт/импорт: те же шаги, что api/settings_io.rs (Scope::to_key, json_to_toml, TOML, Scope::from_key,
 //!    toml_to_json, Store::set) переносят значения пары в новую базу один-в-один.
+//! 7) дополнение 09.11: пара проверяется по видам площадок шлюза (неизвестная площадка, тип биржи у DEX — отказ);
+//! 8) дополнение 09.11: у profit.price_move_k монета сильнее пары (монета → пара → вся система).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::settings, arb::api::settings_io_fmt, arb::storage. Моков нет — настоящая база.
@@ -316,4 +318,120 @@ async fn reload_and_export_import_round_trip() {
     let mut c = t.all();
     c.sort_by_key(|x| (x.0.clone(), x.1.to_key()));
     assert_eq!(a, c);
+}
+
+/// Решение 242, дополнение (Тигран 09.11: согласовано): пара «площадка · тип направления» проверяется при записи по
+/// видам площадок шлюза (settings/venue_kinds.rs; ядро сообщает их при запуске). Виды не сообщены — как раньше; сообщены
+/// — неизвестная площадка и тип биржи у DEX отклоняются с причиной (в том числе импорт — тот же Store::set), «dex_dex»
+/// с площадкой отклоняет разбор id; очистка неверной пары, записанной до проверки, проходит; перезапуск — значение на
+/// месте (загрузка не проверяет).
+#[tokio::test]
+async fn pair_checked_against_gateway_kinds() {
+    use arb::gateway::contract::VenueKind;
+    let s = open("kinds", true).await;
+    let n = "money.min_profit_usd";
+    // Виды не сообщены — проверки вида нет (запись прежняя).
+    set(&s, n, Scope::VenueDir("bsc_dex:cex_dex".into()), json!("1")).await;
+    s.venue_kinds().set([
+        ("bingx".to_string(), VenueKind::Cex),
+        ("mexc".to_string(), VenueKind::Cex),
+        ("bsc_dex".to_string(), VenueKind::Dex),
+    ]);
+    for k in ["cex_dex", "dex_cex", "cex_cex"] {
+        let e = s
+            .set(
+                n,
+                Scope::VenueDir(format!("bsc_dex:{k}")),
+                Some(json!("2")),
+                "тест",
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("«bsc_dex» — DEX") && e.contains("dex_dex"),
+            "{e}"
+        );
+    }
+    let e = s
+        .set(
+            n,
+            Scope::VenueDir("gate:cex_dex".into()),
+            Some(json!("2")),
+            "импорт",
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        e.contains("площадки «gate» нет в шлюзе") && e.contains("bingx, bsc_dex, mexc"),
+        "{e}"
+    );
+    assert!(
+        s.set(
+            n,
+            Scope::VenueDir("bsc_dex:dex_dex".into()),
+            Some(json!("2")),
+            "тест"
+        )
+        .await
+        .is_err()
+    );
+    // Верные пары — как раньше.
+    for id in ["bingx:cex_dex", "mexc:dex_cex", "bingx:cex_cex"] {
+        set(&s, n, Scope::VenueDir(id.into()), json!("0.4")).await;
+    }
+    // «DEX ↔ DEX» — только у money.max_per_trade_usd (решение 242).
+    let m = "money.max_per_trade_usd";
+    set(&s, m, Scope::VenueDir("dex_dex".into()), json!("25")).await;
+    // Записанная до проверки неверная пара видна после перезапуска и очищается.
+    let r = open("kinds", false).await;
+    let bad = Scope::VenueDir("bsc_dex:cex_dex".into());
+    assert_eq!(r.get_exact(n, &bad), Some(json!("1")));
+    s.set(n, bad.clone(), None, "тест").await.unwrap();
+    assert_eq!(s.get_exact(n, &bad), None);
+}
+
+/// Решение 242, дополнение п. 2 (Тигран 09.11: согласовано): profit.price_move_k — монета → площадка · направление →
+/// вся система (Store::decimal_coin_dir). Монета и пара заданы — монета; только пара — пара; ничего — вся система;
+/// у прочих настроек пары (decimal_dir) — по-прежнему пара сильнее монеты.
+#[tokio::test]
+async fn price_move_k_coin_first() {
+    let s = open("kcoin", true).await;
+    let k = "profit.price_move_k";
+    let p = vd("bingx", DirKind::CexToDex);
+    let at = At {
+        venue: None,
+        coin: Some(COIN),
+    };
+    set(&s, k, Scope::Global, json!("1.5")).await;
+    // Ничего, кроме всей системы, — вся система.
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "1.5");
+    // Только пара — пара.
+    set(&s, k, Scope::VenueDir("bingx:cex_dex".into()), json!("3")).await;
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "3");
+    // Монета и пара — монета.
+    set(&s, k, Scope::Coin(COIN.into()), json!("2")).await;
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "2");
+    // Другая пара или без пары — монета.
+    assert_eq!(
+        s.decimal_coin_dir(k, vd("mexc", DirKind::CexToDex), at)
+            .unwrap()
+            .to_string(),
+        "2"
+    );
+    assert_eq!(s.decimal_coin_dir(k, None, at).unwrap().to_string(), "2");
+    // Без монеты в области — пара, иначе вся система.
+    assert_eq!(
+        s.decimal_coin_dir(k, p, At::default()).unwrap().to_string(),
+        "3"
+    );
+    // Прежнее чтение decimal_dir (остальные четыре настройки) — пара сильнее монеты, без изменений.
+    assert_eq!(s.decimal_dir(k, p, at).unwrap().to_string(), "3");
+    // Не задано нигде — та же ошибка, что у decimal.
+    let s2 = open("kcoin2", true).await;
+    assert_eq!(
+        s2.decimal_coin_dir(k, p, at).unwrap_err().message,
+        s2.decimal(k, at).unwrap_err().message
+    );
 }

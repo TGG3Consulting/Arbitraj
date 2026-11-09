@@ -5,7 +5,8 @@
 //! Окно не задано — замеры не копятся (хранится только последняя цена), σ нет — сделки нет.
 //! Решение 118 (Я-6): ряд — по направлению: (площадка, монета, сторона, площадка-напарник). Объём сравнения у каждого
 //! направления свой, и замеры продажи на MEXC от BingX → MEXC и от DEX → MEXC в одном ряду выглядели бы движением цены.
-//! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B).
+//! Решение 240: measure — σ вместе с числом ненулевых изменений цены в окне (profit.sigma_min_changes, core/reserve.rs).
+//! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B), core/reserve.rs (measure).
 //! От чего зависит: rust_decimal (ln, sqrt), chrono.
 //! Настройки: profit.sigma_window_min (окно передаёт вызывающий).
 
@@ -94,6 +95,21 @@ impl Volatility {
         window_min: u64,
         now: DateTime<Utc>,
     ) -> Result<Decimal, String> {
+        self.measure(venue, asset, side, partner, window_min, now)
+            .map(|(sigma, _)| sigma)
+    }
+
+    /// Решение 240: то же, что sigma, и число шагов окна с ненулевым изменением цены (ln pᵢ/pᵢ₋₁ ≠ 0).
+    /// Принимает: как sigma. Возвращает: (σ за секунду, число ненулевых изменений). Ошибки: как у sigma.
+    pub fn measure(
+        &mut self,
+        venue: &VenueId,
+        asset: &Asset,
+        side: Side,
+        partner: &VenueId,
+        window_min: u64,
+        now: DateTime<Utc>,
+    ) -> Result<(Decimal, usize), String> {
         let none = || {
             format!(
                 "волатильность {} на {} (направление с {}) за последние {window_min} мин ещё не измерена",
@@ -119,8 +135,10 @@ impl Volatility {
         if dt <= Decimal::ZERO {
             return Err(none());
         }
+        let changes = s.steps.iter().filter(|(_, r, _)| !r.is_zero()).count();
         (sq / dt)
             .sqrt()
+            .map(|sigma| (sigma, changes))
             .ok_or_else(|| "волатильность не вычисляется".to_string())
     }
 }

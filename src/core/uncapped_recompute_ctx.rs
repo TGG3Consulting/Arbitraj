@@ -5,7 +5,8 @@
 //! search_params). Всё, чего не хватает, — причина «не пересчитано» (текст).
 //! Контекст направления собирается из плана и настроек, а не из живого справочника (его на момент сделки нет): σ и
 //! время в пути — из плана; k (profit.price_move_k), h (profit.liquidity_share_h), котируемые монеты
-//! (venue.quote_asset) — из настроек базы; возврат USDT в каждой сделке — был ли он в плане. Правил пары и данных сети
+//! (venue.quote_asset), решение 240 — доля закрытия разницы (profit.closure_share [B]) — из настроек базы, как k; возврат
+//! USDT в каждой сделке — был ли он в плане. Правил пары и данных сети
 //! (минимумы вывода и депозита, точность вывода) на момент сделки в базе нет — в контексте их нет, проверки не идут
 //! (пометка в записи). Шаг поиска — 10^-n, n — наибольшее число знаков у количества плана и количеств уровней стакана A
 //! (количества кратны шагу биржи, поиск не грубее него).
@@ -13,7 +14,8 @@
 //! От чего зависит: uncapped_recompute_cfg.rs (старая запись, настройки, шаг), uncapped_replay.rs, window_at.rs,
 //! dirctx.rs, size_curve.rs, storage/episode_files.rs, settings.
 //! Настройки: card.max_search_usdt, money.min_profit_usd, money.min_profit_pct, uncapped.max_evals,
-//! uncapped.ladder_usdt, size.*, venue.quote_asset [A, B], profit.price_move_k [монета], profit.liquidity_share_h [B].
+//! uncapped.ladder_usdt, size.*, venue.quote_asset [A, B], profit.price_move_k [монета], profit.liquidity_share_h [B],
+//! profit.closure_share [B] (решение 240, core/reserve.rs).
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -125,6 +127,7 @@ pub fn prepare(
     if h.is_zero() {
         return Err("profit.liquidity_share_h = 0: глубину B использовать нельзя".into());
     }
+    let closure_share = super::reserve::closure_share(s, dir)?;
     let budget = old
         .budget
         .or(old.battle.budget)
@@ -184,6 +187,7 @@ pub fn prepare(
         transit_s: plan.transit_s,
         k,
         h,
+        closure_share,
         return_per_trade: plan.returns(),
         pair_a: None,
         pair_b: None,

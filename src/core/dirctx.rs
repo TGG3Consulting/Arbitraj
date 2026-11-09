@@ -5,11 +5,17 @@
 //! максимальная сумма ордера — решение 66). Собирается один раз на кандидата.
 //! Время в пути — transit.rs (решение 50); σ — по окну profit.sigma_window_min (решение 49, vol.rs).
 //! Решение 237: build_decided — контекст на момент решения о входе с σ и T из плана сделки (core/frozen.rs take).
-//! Кто вызывает: core/profit.rs, card_max.rs, partial.rs, uncapped.rs (кандидаты), frozen.rs (build_decided).
-//! От чего зависит: engine.rs, registry.rs, vol.rs, settings.
+//! Решение 240 (reserve.rs): build — σ с проверкой profit.sigma_min_changes и границей profit.sigma_floor_per_s [B],
+//! доля закрытия разницы profit.closure_share [B]; build_decided — σ из плана, доля и все настройки контекста — из копии
+//! настроек на момент входа (решение 239, Decided.settings); build_held (частичная покупка, сделка уже идёт) — как до
+//! решения 240: σ ряда без проверки и границы, без доли.
+//! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs (кандидаты) — build; partial.rs — build_held; frozen.rs —
+//! build_decided.
+//! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings.
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
-//! profit.sigma_window_min, usdt_return.mode (+ transit.rs).
+//! profit.sigma_window_min, usdt_return.mode (+ transit.rs), profit.closure_share, profit.sigma_floor_per_s,
+//! profit.sigma_min_changes (reserve.rs).
 
 use rust_decimal::Decimal;
 
@@ -17,6 +23,7 @@ use crate::core::types::{Asset, CoinNetworkInfo, Direction, Side, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::gateway::events::SpotPairState;
 use crate::settings::read::At;
+use crate::settings::store::Store;
 
 use super::dirctx_venue as venue;
 use super::engine::{Core, lk, rd};
@@ -37,9 +44,12 @@ pub struct DirCtx {
     pub usdt: Asset,
     /// Включённые биржи — откуда брать цену BNB.
     pub cex: Vec<VenueId>,
+    /// σ продажи на B за секунду; решение 240 — с границей profit.sigma_floor_per_s (reserve.rs sigma_now).
     pub sigma: Decimal,
     pub transit_s: Decimal,
     pub k: Decimal,
+    /// Решение 240: доля закрытия разницы profit.closure_share [B]; None — не задана (запас как раньше).
+    pub closure_share: Option<Decimal>,
     pub h: Decimal,
     pub return_per_trade: bool,
     /// Правила спот-пары биржи на A и на B (решение 66); у DEX — None.
@@ -53,32 +63,62 @@ pub struct DirCtx {
     pub transfer_tax: Option<Decimal>,
 }
 
+/// Решение 240: момент сборки контекста — от него зависят σ, доля закрытия и хранилище настроек.
+enum Moment<'a> {
+    /// План входа (кандидат, пересчёт перед покупкой): σ с проверкой и границей, доля — живые настройки.
+    Entry,
+    /// Сделка уже идёт (частичная покупка): как до решения 240 — σ ряда, без доли.
+    Held,
+    /// Момент решения о входе: σ и T плана, настройки — копия на этот момент (решения 237, 239).
+    Decided {
+        sigma: Decimal,
+        transit_s: Decimal,
+        settings: &'a Store,
+    },
+}
+
 impl DirCtx {
-    /// Собирает контекст. Ошибки: текст причины (монеты или площадки нет в справочнике, не задана
-    /// настройка, σ ещё не измерена, нет сети BSC ни у одной стороны, нет адреса USDT).
+    /// Собирает контекст для плана входа. Ошибки: текст причины (монеты или площадки нет в справочнике, не задана
+    /// настройка, σ ещё не измерена (решение 240: и ненулевых изменений цены меньше profit.sigma_min_changes), нет сети
+    /// BSC ни у одной стороны, нет адреса USDT).
     pub fn build(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
-        Self::build_with(core, dir, None)
+        Self::build_with(core, dir, Moment::Entry)
+    }
+
+    /// Решение 240: контекст для сделки, которая уже идёт (частичная покупка, partial.rs) — как до решения 240: σ ряда
+    /// без проверки profit.sigma_min_changes и границы, без доли закрытия. Ошибки: как у build.
+    pub fn build_held(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
+        Self::build_with(core, dir, Moment::Held)
     }
 
     /// Решение 237: контекст на момент решения о входе (core/frozen.rs take) — σ и время в пути T берутся из плана
     /// сделки (те же, что у плана входа), а не измеряются заново; всё прочее — как у build, в тот же момент.
-    /// Принимает: ядро, направление, σ и T плана. Ошибки: как у build (кроме σ и T).
+    /// Решение 240: настройки (k, h, доля закрытия и прочие) — из копии на момент входа `settings` (решение 239).
+    /// Принимает: ядро, направление, σ и T плана, копию настроек. Ошибки: как у build (кроме σ и T).
     pub fn build_decided(
         core: &Core,
         dir: &Direction,
         sigma: Decimal,
         transit_s: Decimal,
+        settings: &Store,
     ) -> Result<DirCtx, String> {
-        Self::build_with(core, dir, Some((sigma, transit_s)))
+        Self::build_with(
+            core,
+            dir,
+            Moment::Decided {
+                sigma,
+                transit_s,
+                settings,
+            },
+        )
     }
 
-    /// Сборка контекста: plan — σ и T плана (None — измерить сейчас: vol.rs, transit.rs). Ошибки: как у build.
-    fn build_with(
-        core: &Core,
-        dir: &Direction,
-        plan: Option<(Decimal, Decimal)>,
-    ) -> Result<DirCtx, String> {
-        let s = &core.inner.deps.settings;
+    /// Сборка контекста на момент `at_m` (см. Moment). Ошибки: как у build.
+    fn build_with(core: &Core, dir: &Direction, at_m: Moment) -> Result<DirCtx, String> {
+        let s = match &at_m {
+            Moment::Decided { settings, .. } => *settings,
+            _ => &core.inner.deps.settings,
+        };
         let coins = rd(&core.inner.coins);
         // Решение 131: по карте места, без прохода справочника.
         let entry = super::ticker_index::find(core, &coins, &dir.asset)
@@ -114,10 +154,14 @@ impl DirCtx {
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
             .map(|(v, _)| v.clone())
             .collect();
-        // σ продажи на B — ряд этого направления (напарник A, решение 118); решение 237 — у плана сделки своя.
-        let sigma = match plan {
-            Some((sigma, _)) => sigma,
-            None => {
+        // σ продажи на B — ряд этого направления (напарник A, решение 118); решение 237 — у плана сделки своя;
+        // решение 240 — у плана входа с проверкой и границей (reserve.rs).
+        let sigma = match &at_m {
+            Moment::Decided { sigma, .. } => *sigma,
+            Moment::Entry => {
+                super::reserve::sigma_now(&mut lk(&core.inner.vol), s, dir, chrono::Utc::now())?
+            }
+            Moment::Held => {
                 let window = s
                     .integer("profit.sigma_window_min", At::default())
                     .map_err(|e| e.message)?;
@@ -149,9 +193,14 @@ impl DirCtx {
         let mode = s
             .text("usdt_return.mode", At::default())
             .map_err(|e| e.message)?;
-        let transit_s = match plan {
-            Some((_, t)) => t,
-            None => super::transit::seconds(core, dir)?,
+        let transit_s = match &at_m {
+            Moment::Decided { transit_s, .. } => *transit_s,
+            _ => super::transit::seconds(core, dir)?,
+        };
+        // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.
+        let closure_share = match at_m {
+            Moment::Held => None,
+            _ => super::reserve::closure_share(s, dir)?,
         };
         // Решение 211: пара площадки — по её тикеру монеты (Presence::ticker).
         let pair_a = venue::pair_rules(core, &dir.buy_on, &a.ticker)?;
@@ -206,6 +255,7 @@ impl DirCtx {
             transit_s,
             k,
             h,
+            closure_share,
             return_per_trade: cx_return(&mode),
             pair_a,
             pair_b,

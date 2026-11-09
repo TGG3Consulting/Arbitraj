@@ -3,7 +3,8 @@
 //! сторон по реальной ликвидности, стоимость вывода с A (биржа — комиссия вывода; DEX — газ перевода
 //! и налог на перевод), минимумы вывода и минимальный депозит B (неизвестен — сделки нет), доля
 //! глубины B (коэффициент h), возврат USDT в каждой сделке (решение 34), запас на движение цены
-//! r = k·σ·√T. Всё переводится в USDT (convert.rs). Затраты в монете уменьшают количество, а не сумму.
+//! r = k·σ·√T (решение 240: не меньше доли закрытия разницы profit.closure_share — reserve.rs). Всё переводится в USDT
+//! (convert.rs). Затраты в монете уменьшают количество, а не сумму.
 //! Каждая строка несёт шаг маршрута обмена (решение 52) — экран группирует расчёт по шагам.
 //! Решение 66: отказ несёт вид (size.rs Fail: меньше минимума / больше возможного / невозможно) — по нему подбор
 //! объёма двигает границы; продажа на бирже B — количество вниз до шага пары (остаток — строка StepRemainder, в
@@ -19,7 +20,7 @@
 //! источник Live (живое ядро); пересчёт старых записей «без потолка» по окнам — свой источник (uncapped_replay.rs).
 //! Второй модели затрат нет.
 //! Кто вызывает: core/size_curve.rs (подбор объёма, SourceCurve), core/partial.rs.
-//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, size.rs,
+//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs, size.rs,
 //! engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
@@ -137,12 +138,20 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
                 .map(|c| (convert::usdt_return(c), "возврат USDT")),
         );
     }
-    // Запас r = k·σ·√T от выручки (ТЗ, шаг 4).
+    // Запас r = k·σ·√T от выручки (ТЗ, шаг 4); решение 240 — не меньше доли закрытия разницы (reserve.rs).
     let sqrt_t = cx
         .transit_s
         .sqrt()
         .ok_or_else(|| Fail::Stop("время в пути не вычисляется".into()))?;
-    let reserve = cx.k * cx.sigma * sqrt_t * proceeds;
+    let reserve = super::reserve::amount(
+        cx.k,
+        cx.sigma,
+        sqrt_t,
+        proceeds,
+        cx.closure_share,
+        qa.avg_price,
+        qb.avg_price,
+    );
     lines.push((
         Cost::new(
             CostKind::PriceMoveReserve,

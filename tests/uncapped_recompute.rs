@@ -137,6 +137,7 @@ fn cx(rec: &Rec, b: &str) -> DirCtx {
         transit_s: d("120"),
         k: d("1"),
         h: d("1"),
+        closure_share: None,
         return_per_trade: false,
         pair_a: Some(rec.pair.clone()),
         pair_b: Some(rec.pair.clone()),

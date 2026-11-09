@@ -2,7 +2,7 @@
 //! Что делает: запросы REST к BingX — публичные и подписанные (HMAC SHA256), разбор ответа
 //! {code, msg, data}, перевод ошибок в коды шлюза, переход на резервный адрес только при сбое сети.
 //! Ответы REST пишутся в сырой журнал (raw.*, как сообщения WebSocket), кроме пути listenKey (user_key.rs).
-//! Пауза после HTTP 429 (эндпоинт) и 418 (вся биржа) — rate_pause.rs (решение 243): во время паузы запрос не уходит.
+//! Пауза после HTTP 429 (эндпоинт) и 418 (вся биржа) — rate_pause.rs (решение 244): во время паузы запрос не уходит.
 //! Кто вызывает: файлы адаптера BingX (symbols, wallet, transfers, account, trade, order_state, fees).
 //! От чего зависит: ctx.rs, errors.rs, rate_pause.rs, gateway/patience.rs, hmac, sha2, reqwest.
 //! Настройки: venue.rest_url, venue.rest_fallback_url, venue.recv_window_ms, http.timeout_ms,
@@ -128,7 +128,7 @@ async fn send(
 ) -> GatewayResult<Value> {
     let urls = ctx.rest_urls()?;
     let lim = ctx.limits()?;
-    // Решение 243: пауза после 429 (этот эндпоинт) или 418 (вся биржа) — запрос не отправляется вовсе; ручная работа
+    // Решение 244: пауза после 429 (этот эндпоинт) или 418 (вся биржа) — запрос не отправляется вовсе; ручная работа
     // ждёт её конец (решение 201, gateway/patience.rs), автоматика — отказ сразу.
     crate::gateway::patience::wait(rate_pause::pause_left_ms(path)).await;
     rate_pause::gate(path).map_err(|e| ctx.tag(e))?;

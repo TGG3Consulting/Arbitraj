@@ -56,7 +56,7 @@
 | `deposit_addr.rs` | Адрес депозита (кэш; tag — не поддерживается) |
 | `records.rs`, `deposits.rs`, `transfers.rs` | Окно истории venue.history_window_s; статус депозита по хешу; вывод со своим clientOid, статус и поиск |
 | `fund_move.rs` | Перевод spot ↔ p2p по настройкам |
-| `account.rs` | Балансы спота (все и одной монеты), «Проверить подключение» (authorities — лишние права только предупреждение, решение 242; IP, Classic/UTA, BGB) |
+| `account.rs` | Балансы спота (все и одной монеты), «Проверить подключение» (authorities — лишние права только предупреждение, решение 243; IP, Classic/UTA, BGB) |
 | `all_balances.rs` | Панель «Балансы»: Спот, Фонд, Боты (спот, фьючерсы), итог всех счетов в USDT |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |
 | `trade.rs`, `order_state.rs`, `order_fee.rs` | Ордер limit + ioc/fok, итог по orderInfo, отмена остатка, поиск по clientOid, комиссия из feeDetail — по монетам: BGB и остаток в получаемой монете (решение 219) |

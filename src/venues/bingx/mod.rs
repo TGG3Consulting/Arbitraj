@@ -140,7 +140,7 @@ impl Venue for Bingx {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
-        // Решение 243: событие venue.rate_limited при HTTP 418 — через канал событий ядра (rate_pause.rs).
+        // Решение 244: событие venue.rate_limited при HTTP 418 — через канал событий ядра (rate_pause.rs).
         rate_pause::set_out(out.clone());
         let parts = Parts {
             ctx: self.ctx.clone(),

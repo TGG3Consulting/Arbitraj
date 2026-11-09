@@ -1,5 +1,5 @@
 //! Файл: tests/bingx_rate_pause.rs
-//! Что делает: решение 243 — пауза REST BingX после HTTP 429 (только эндпоинт) и 418 (вся биржа) на настоящем
+//! Что делает: решение 244 — пауза REST BingX после HTTP 429 (только эндпоинт) и 418 (вся биржа) на настоящем
 //! транспорте адаптера (venues/bingx/rest.rs → rate_pause.rs): запросы идут по HTTP в локальный сервер, который отвечает
 //! 429 / 418 или примером ответа из официальной документации docs-v3 (Spot → Market Data → Order Book и Spot → Trade →
 //! Create an Order, «Response»; записанных ответов 429/418 и ордера BingX в tests/data нет — tests/README.md). Вид тела

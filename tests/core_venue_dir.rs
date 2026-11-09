@@ -106,6 +106,11 @@ async fn core(name: &str) -> (Core, Store) {
         (v("mexc"), VenueKind::Cex),
         (v("bsc_dex"), VenueKind::Dex),
     ];
+    // Решение 242, дополнение: те же виды — хранилищу (проверка пары при записи), как делает Core::start.
+    let kinds = core.inner.kinds.read().unwrap().clone();
+    settings
+        .venue_kinds()
+        .set(kinds.into_iter().map(|(id, k)| (id.0, k)));
     (core, settings)
 }
 

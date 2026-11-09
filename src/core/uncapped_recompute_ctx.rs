@@ -125,7 +125,7 @@ pub fn prepare(
         coin: Some(&coin),
     };
     let k = s
-        .decimal_dir("profit.price_move_k", vd, coin_at)
+        .decimal_coin_dir("profit.price_move_k", vd, coin_at)
         .map_err(|e| e.message)?;
     let h = s
         .decimal("profit.liquidity_share_h", venue_at(&dir.sell_on))

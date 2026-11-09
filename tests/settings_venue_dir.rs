@@ -10,7 +10,8 @@
 //!    данных: столбец scope — текст, старые строки не трогаются);
 //! 6) экспорт/импорт: те же шаги, что api/settings_io.rs (Scope::to_key, json_to_toml, TOML, Scope::from_key,
 //!    toml_to_json, Store::set) переносят значения пары в новую базу один-в-один.
-//! 7) дополнение 09.11: пара проверяется по видам площадок шлюза (неизвестная площадка, тип биржи у DEX — отказ).
+//! 7) дополнение 09.11: пара проверяется по видам площадок шлюза (неизвестная площадка, тип биржи у DEX — отказ);
+//! 8) дополнение 09.11: у profit.price_move_k монета сильнее пары (монета → пара → вся система).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::settings, arb::api::settings_io_fmt, arb::storage. Моков нет — настоящая база.
@@ -389,4 +390,48 @@ async fn pair_checked_against_gateway_kinds() {
     assert_eq!(r.get_exact(n, &bad), Some(json!("1")));
     s.set(n, bad.clone(), None, "тест").await.unwrap();
     assert_eq!(s.get_exact(n, &bad), None);
+}
+
+/// Решение 242, дополнение п. 2 (Тигран 09.11: согласовано): profit.price_move_k — монета → площадка · направление →
+/// вся система (Store::decimal_coin_dir). Монета и пара заданы — монета; только пара — пара; ничего — вся система;
+/// у прочих настроек пары (decimal_dir) — по-прежнему пара сильнее монеты.
+#[tokio::test]
+async fn price_move_k_coin_first() {
+    let s = open("kcoin", true).await;
+    let k = "profit.price_move_k";
+    let p = vd("bingx", DirKind::CexToDex);
+    let at = At {
+        venue: None,
+        coin: Some(COIN),
+    };
+    set(&s, k, Scope::Global, json!("1.5")).await;
+    // Ничего, кроме всей системы, — вся система.
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "1.5");
+    // Только пара — пара.
+    set(&s, k, Scope::VenueDir("bingx:cex_dex".into()), json!("3")).await;
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "3");
+    // Монета и пара — монета.
+    set(&s, k, Scope::Coin(COIN.into()), json!("2")).await;
+    assert_eq!(s.decimal_coin_dir(k, p, at).unwrap().to_string(), "2");
+    // Другая пара или без пары — монета.
+    assert_eq!(
+        s.decimal_coin_dir(k, vd("mexc", DirKind::CexToDex), at)
+            .unwrap()
+            .to_string(),
+        "2"
+    );
+    assert_eq!(s.decimal_coin_dir(k, None, at).unwrap().to_string(), "2");
+    // Без монеты в области — пара, иначе вся система.
+    assert_eq!(
+        s.decimal_coin_dir(k, p, At::default()).unwrap().to_string(),
+        "3"
+    );
+    // Прежнее чтение decimal_dir (остальные четыре настройки) — пара сильнее монеты, без изменений.
+    assert_eq!(s.decimal_dir(k, p, at).unwrap().to_string(), "3");
+    // Не задано нигде — та же ошибка, что у decimal.
+    let s2 = open("kcoin2", true).await;
+    assert_eq!(
+        s2.decimal_coin_dir(k, p, at).unwrap_err().message,
+        s2.decimal(k, at).unwrap_err().message
+    );
 }

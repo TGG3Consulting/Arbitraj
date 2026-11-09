@@ -13,7 +13,8 @@
 //! build_decided.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings.
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
-//! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs).
+//! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs);
+//! дополнение п. 2 (Тигран 09.11): у profit.price_move_k монета сильнее пары (монета → пара → вся система).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
 //! profit.sigma_window_min, usdt_return.mode (+ transit.rs), profit.closure_share, profit.sigma_floor_per_s,
 //! profit.sigma_min_changes (reserve.rs).
@@ -182,10 +183,11 @@ impl DirCtx {
             venue: None,
             coin: Some(&coin),
         };
-        // Решение 242: k и доля закрытия — площадки и типа направления (venue_dir.rs), иначе прежняя цепочка.
+        // Решение 242: k и доля закрытия — площадки и типа направления (venue_dir.rs), иначе прежняя цепочка;
+        // дополнение п. 2: у k значение монеты сильнее пары.
         let vd = super::venue_dir::of(core, dir);
         let k = s
-            .decimal_dir("profit.price_move_k", vd, coin_at)
+            .decimal_coin_dir("profit.price_move_k", vd, coin_at)
             .map_err(|e| e.message)?;
         let h = s
             .decimal("profit.liquidity_share_h", at(&dir.sell_on))

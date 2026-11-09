@@ -9,7 +9,8 @@
 //! GET /api/windows?limit=N&offset=M&coin=T&deal=yes|no&outcome=plus|minus|zero (coin — тикер или адрес 0x…, решение 211)
 //!                                 — {windows: [WindowInfo], total, off: причина | null, used_bytes}
 //! GET /api/windows/{id}?limit=N&offset=M&levels=K — {info, lines, frames (у изменений стакана — book: стакан после кадра,
-//!                                 K верхних уровней), frames_read, truncated, deals}; 404 — нет окна
+//!                                 K верхних уровней), frames_read, truncated, deals, dex (решение 241: точки цены пула
+//!                                 DEX), dex_off (почему не пишутся | null)}; 404 — нет окна
 //! GET /api/windows/{id}/file      — файл <id>.jsonl.zst (application/zstd, attachment)
 
 use axum::Json;

@@ -6,7 +6,9 @@
 //! перекрылись бы по времени, — одно окно; площадки новых направлений добавляются к записи. Направление перестало
 //! проходить — убирается из «проходящих»; когда не проходит ни одно, окно ждёт window.min_hold_ms (прошло снова —
 //! то же окно) и закрывается, если по монете нет открытой сделки; сделка идёт — окно ждёт её конца (что позже).
-//! Кто вызывает: core/window_run.rs (pass, fail), core/window_worker.rs (closable, close, deadline), тесты.
+//! Решение 241: у открытого окна — памятка последних точек цены пула DEX по направлениям (dex_slot, window_dex.rs).
+//! Кто вызывает: core/window_run.rs (pass, fail), core/window_worker.rs (closable, close, deadline), core/window_dex.rs
+//! (dex_slot), тесты.
 //! От чего зависит: core/types, coin_key.rs, window_info.rs (сводка окна), chrono, rust_decimal.
 //! Настройки: нет (min_hold_ms передаёт вызывающий из window.min_hold_ms).
 
@@ -39,6 +41,8 @@ struct Open {
     passing: HashSet<Direction>,
     /// С какого момента не проходит ни одно направление.
     quiet_since: Option<DateTime<Utc>>,
+    /// Решение 241: последняя записанная точка цены DEX по направлению (window_dex.rs).
+    dex: super::window_dex::Marks,
 }
 
 /// Открытые окна по монетам.
@@ -95,6 +99,7 @@ impl Windows {
             frames: 0,
             lost: 0,
             bytes: 0,
+            dex_points: 0,
             stopped: None,
             close_reason: None,
         };
@@ -103,6 +108,7 @@ impl Windows {
             info: info.clone(),
             passing,
             quiet_since: None,
+            dex: Default::default(),
         };
         self.open.insert(key, o);
         Pass::Opened(info)
@@ -169,6 +175,19 @@ impl Windows {
         info.ended_at = Some(now);
         info.close_reason = Some(reason.to_string());
         Some(info)
+    }
+
+    /// Решение 241: сводка и памятка точек цены DEX окна, если окно монеты открыто и направление в нём (входило за
+    /// время окна); None — нет. Ошибок нет.
+    pub fn dex_slot(
+        &mut self,
+        d: &Direction,
+    ) -> Option<(&mut WindowInfo, &mut super::window_dex::Marks)> {
+        let o = self.open.get_mut(&CoinKey::of(&d.asset))?;
+        o.info
+            .directions
+            .contains(d)
+            .then_some((&mut o.info, &mut o.dex))
     }
 
     /// Сводка открытого окна монеты (память). Ошибок нет.

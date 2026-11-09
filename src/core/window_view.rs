@@ -4,10 +4,12 @@
 //! кадры из файла (с offset, не больше limit) разобранные адаптером своей площадки (стакан на момент кадра, сделки),
 //! время площадки и время получения ботом, стакан всей глубины после каждого кадра изменений (window_book.rs: полный +
 //! изменения с начала файла, верхние top уровней), наши сделки окна с хронологией; путь файла для «Скачать файл».
+//! Решение 241: точки цены пула DEX (строки «dex» файла, window_dex.rs) — отдельным рядом `dex` (все прочитанные, в
+//! предел строк не входят — их число из сводки) и причина, почему не пишутся (`dex_off`).
 //! Кто вызывает: api/windows.rs.
 //! От чего зависит: window.rs, window_cfg.rs, window_tap.rs (parse), storage/windows_db.rs, storage/episode_files.rs,
-//! шлюз (Venue::decode_tap).
-//! Настройки: window.* (только показ причины, если не заданы).
+//! window_dex.rs (cfg), шлюз (Venue::decode_tap).
+//! Настройки: window.*, window.dex_price* (только показ причины, если не заданы).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -43,11 +45,12 @@ impl Core {
             .filter_map(|b| serde_json::from_str::<WindowInfo>(b).ok())
             .map(|w| {
                 let mut w = match open.iter().find(|o| o.id == w.id) {
-                    // Открытое: направления и прибыль — из памяти, счётчики записи — из последней сводки задачи.
+                    // Открытое: направления, прибыль и точки DEX — из памяти, счётчики записи — из последней сводки задачи.
                     Some(o) => WindowInfo {
                         directions: o.directions.clone(),
                         max_profit: o.max_profit,
                         max_profit_unbounded: o.max_profit_unbounded,
+                        dex_points: o.dex_points,
                         ..w
                     },
                     None => w,
@@ -65,9 +68,10 @@ impl Core {
     }
 
     /// Что делает: окно — сводка, служебные строки файла (открытие, включение записи, вход, закрытие), кадры с offset
-    /// не больше limit (разобранные; у изменений — стакан после кадра, top уровней), сделки окна. Принимает: id, offset,
-    /// limit, top.
-    /// Возвращает: {info, lines, frames, frames_read, truncated, deals}; None — нет окна. Ошибки: база, файл.
+    /// не больше limit (разобранные; у изменений — стакан после кадра, top уровней), сделки окна, точки цены DEX
+    /// (решение 241). Принимает: id, offset, limit, top.
+    /// Возвращает: {info, lines, frames, frames_read, truncated, deals, dex, dex_off}; None — нет окна.
+    /// Ошибки: база, файл.
     pub async fn window(
         &self,
         id: &str,
@@ -82,18 +86,25 @@ impl Core {
             return Ok(None);
         };
         let info: WindowInfo = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        // Решение 241: точек DEX у открытого окна — из памяти (сводка в базе — с последнего сохранения).
+        let dex_points = lk(&self.inner.windows)
+            .list()
+            .iter()
+            .find(|o| o.id == info.id)
+            .map_or(info.dex_points, |o| o.dex_points.max(info.dex_points));
         let path = self.inner.window_files.path(id);
         let p = path.clone();
         // Чтение и распаковка — блокирующие, вне потоков async. Предел строк — служебные + кадры до offset + limit.
         let max = offset
             .saturating_add(limit)
-            .saturating_add(1 + 2 * info.venues.len() + info.directions.len() + 1);
+            .saturating_add(1 + 2 * info.venues.len() + info.directions.len() + 1)
+            .saturating_add(usize::try_from(dex_points).unwrap_or(usize::MAX));
         let (rows, truncated) = tokio::task::spawn_blocking(move || episode_files::read(&p, max))
             .await
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("файл окна {}: {e}", path.display()))?;
         let mut venues: HashMap<String, Arc<dyn Venue>> = HashMap::new();
-        let (mut lines, mut frames, mut n) = (vec![], vec![], 0usize);
+        let (mut lines, mut frames, mut dex, mut n) = (vec![], vec![], vec![], 0usize);
         // Стакан всей глубины по биржам (дополнение решения 125): изменения применяются с начала файла, в том числе до offset.
         let mut books: HashMap<String, Book> = HashMap::new();
         for r in rows
@@ -101,7 +112,11 @@ impl Core {
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         {
             let Some(f) = super::window_tap::parse(&r) else {
-                lines.push(r);
+                if r["type"] == "dex" {
+                    dex.push(r["point"].clone());
+                } else {
+                    lines.push(r);
+                }
                 continue;
             };
             n += 1;
@@ -151,6 +166,7 @@ impl Core {
         };
         Ok(Some(json!({
             "info": info, "lines": lines, "frames": frames, "frames_read": n, "truncated": truncated, "deals": deals,
+            "dex": dex, "dex_off": super::window_dex::cfg(&self.inner.deps.settings).err(),
         })))
     }
 

@@ -5,7 +5,9 @@
     (DepthStepper, собирает сервер — core/window_book.rs); стакан N уровней по времени — шаг по кадрам стакана (‹ › и ползунок), уровни на момент кадра,
     время биржи и время получения ботом; лента сделок — каждая сделка (время биржи, время получения, цена, количество,
     сторона агрессора, ID) вместе с событиями наших сделок окна на одной шкале времени; «Скачать файл». Кадры читаются
-    с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере.
+    с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере. Решение 241: цена пула
+    DEX — точки котировки стороны DEX (core/window_dex.rs): у кадра стакана — последняя точка не позже его получения,
+    и весь ряд таблицей; не пишется — причина (dex_off).
   Кто вызывает: pages/Windows.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
   Настройки: нет.
@@ -58,6 +60,12 @@
     }
     return out.sort((a, b) => a.t - b.t);
   });
+  /** Решение 241: точки цены DEX по времени котировки (мс). */
+  const dex = $derived((data?.dex ?? []).map((p) => ({ ...p, t: Date.parse(p.at) })).sort((a, b) => a.t - b.t));
+  /** Последняя точка DEX не позже получения кадра; null — точек до кадра нет. */
+  const dexAt = (ns) => dex.findLast((p) => p.t <= ns / 1e6) ?? null;
+  const curDex = $derived(cur ? dexAt(cur.recv_ns) : null);
+  const sideText = (s) => (s === 'Sell' ? 'продажа на DEX' : 'покупка на DEX');
 </script>
 
 <Modal title={`Окно ${win.id}`} {onclose}>
@@ -111,7 +119,28 @@
         </table>
       {/each}
     </div>
+    {#if curDex}
+      <p>Цена DEX на момент кадра: <b>{curDex.price}</b> · <code>{curDex.venue}</code> {sideText(curDex.side)}
+        · объём {curDex.qty} · котировка {msTime(curDex.t)}{#if curDex.block != null} · блок {curDex.block}{/if}</p>
+    {:else if dex.length}<p class="muted">Цены DEX до этого кадра нет.</p>{/if}
   {:else}<p class="muted">Кадров стакана в прочитанной части нет.</p>{/if}
+
+  <h3>Цена пула DEX ({dex.length})</h3>
+  {#if data?.dex_off}<p class="unset">Цена DEX не пишется: {data.dex_off}</p>{/if}
+  <div class="tscroll">
+    <table class="compact">
+      <thead><tr><th>Котировка</th><th>Направление</th><th>DEX</th><th>Сторона</th><th class="num">Средняя цена</th><th class="num">Объём</th><th class="num">Блок</th><th>Пулы</th></tr></thead>
+      <tbody>
+        {#each dex as p, j (j)}
+          <tr><td>{msTime(p.t)}</td><td>{p.buy_on} → {p.sell_on}</td><td><code>{p.venue}</code></td><td>{sideText(p.side)}</td>
+            <td class="num">{p.price}</td><td class="num">{p.qty}</td><td class="num">{p.block ?? '—'}</td>
+            <td>{#each p.pools as a (a)}<code>{a}</code> {/each}</td></tr>
+        {:else}
+          <tr><td colspan="8" class="muted">Точек цены DEX в окне нет.</td></tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 
   <h3>Лента сделок и наши сделки</h3>
   <div class="tscroll">

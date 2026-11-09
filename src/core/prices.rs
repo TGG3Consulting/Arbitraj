@@ -10,6 +10,7 @@
 //! устарели — ошибка, сигнала нет («не торгуем вслепую»).
 //! Решение 109: на тике котировка DEX может браться из памяти (quote_cache.rs) — пулы не менялись, тот же объём,
 //! не старше signal.dex_quote_cache_ms.
+//! Решение 241: котировка стороны DEX направления в открытом окне — точкой цены в окно (window_dex.rs, только память).
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, settings.
 //! Настройки: money.max_per_trade_usd (по площадке A), venue.quote_asset (по площадке), signal.dex_quote_cache_ms.
@@ -126,6 +127,8 @@ pub async fn for_direction(
         .decimal("money.max_per_trade_usd", at)
         .map_err(|e| e.message)?;
     let cap_qty = usd / ref_price;
+    // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).
+    let generation = super::window_dex::generation(core, dir);
     let (qa, qb) = tick_quotes(core, dir, cap_qty).await?;
     // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87). fillable_qty ≤
     // запрошенного, поэтому меньшая из глубин обеих сторон уже в пределах потолка. Требовать полного
@@ -144,6 +147,7 @@ pub async fn for_direction(
     } else {
         (qa, qb)
     };
+    super::window_dex::note(core, dir, &qa, &qb, generation);
     let fees = fee_usdt(deps, &qa)? + fee_usdt(deps, &qb)?;
     let notional = qa.avg_price * qty;
     Ok(Prices {

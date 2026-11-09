@@ -1,7 +1,8 @@
 //! Файл: core/gas_stats.rs
 //! Что делает: статистика газа по монете (решение 36): попытки обмена на DEX, успехи, отмены, газ
-//! впустую и всего (BNB), итог по монете (прибыль/убыток сделок минус газ впустую, USDT). Сгоревший
-//! газ неудачных обменов в расчёт сделки не входит — только сюда. Хранится в учёте ядра (persist.rs).
+//! впустую и всего (BNB), итог по монете (прибыль/убыток сделок минус газ впустую, USDT). Решение 236, дополнение:
+//! газ неудачных обменов сделки биржа ↔ DEX входит в итог сделки (deal_gas.rs) — из итога монеты второй раз не
+//! вычитается (record_tx_as); без сделки (продажа из «Балансов») — как раньше, только сюда. Хранится в учёте ядра (persist.rs).
 //! Кто вызывает: executor.rs и stuck.rs (после обмена или ошибки с транзакцией), ledger.rs (итог сделки).
 //! От чего зависит: core/types, convert.rs (цена BNB), persist.rs, view.rs.
 //! Настройки: нет.
@@ -82,11 +83,18 @@ async fn store(core: &Core, s: CoinGasStats) {
 /// Обмен на DEX отправлен: транзакция в сети (из TradeResult.chain или GatewayError.tx).
 /// Принимает: ядро, монету, транзакцию. Газ отката — впустую, переводится в USDT по живому BNB.
 pub async fn record_tx(core: &Core, asset: &Asset, tx: &ChainTx) {
+    record_tx_as(core, asset, tx, false).await
+}
+
+/// Как record_tx; in_deal = true — газ впустую уже идёт в затраты сделки (решение 236, дополнение: core/deal_gas.rs), а
+/// итог сделки — в итог монеты (record_result): из итога монеты он второй раз не вычитается (попытки, газ впустую и
+/// всего — считаются как раньше). Принимает: ядро, монету, транзакцию, в сделке ли газ. Ошибок нет.
+pub async fn record_tx_as(core: &Core, asset: &Asset, tx: &ChainTx, in_deal: bool) {
     // Газ отмены (не попавшая транзакция отменена тем же nonce) потрачен впустую, как газ отката.
     let cancel = tx.cancel_gas_bnb.unwrap_or_default();
     let gas = tx.gas_bnb.unwrap_or_default() + cancel;
     let wasted = tx.outcome == TxOutcome::Reverted || !cancel.is_zero();
-    let wasted_usd = if wasted && !gas.is_zero() {
+    let wasted_usd = if wasted && !in_deal && !gas.is_zero() {
         let cex: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()
             .filter(|(_, k)| *k == VenueKind::Cex)
@@ -116,7 +124,7 @@ pub async fn record_tx(core: &Core, asset: &Asset, tx: &ChainTx) {
         s.updated_at = Utc::now();
         s.clone()
     };
-    if wasted && wasted_usd.is_none() {
+    if wasted && !in_deal && wasted_usd.is_none() {
         core.inner
             .deps
             .log(

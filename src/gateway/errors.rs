@@ -95,8 +95,9 @@ pub struct GatewayError {
     pub venue: Option<VenueId>,
     /// Понятная причина по-русски — её видит Тигран в интерфейсе и Telegram.
     pub message: String,
-    /// Сырой ответ площадки (без секретов) для разбора.
-    pub raw: Option<String>,
+    /// Сырой ответ площадки (без секретов) для разбора. Box<str> — ошибка остаётся маленькой (решение 236, дополнение:
+    /// место под approve_gas_bnb без роста размера; в JSON — та же строка).
+    pub raw: Option<Box<str>>,
     /// Транзакция в сети, если ошибка случилась после отправки (откат, не попала в блок).
     /// В коробке, чтобы ошибка оставалась маленькой (она возвращается из множества функций).
     pub tx: Option<Box<ChainTx>>,
@@ -108,6 +109,12 @@ pub struct GatewayError {
     /// транзакции; gateway/pending.rs). Ставит адаптер; ядро выясняет по нему исход (core/outcome_resolve.rs).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending: Option<Box<super::pending::PendingRef>>,
+    /// Решение 236, дополнение (техлид 09.11): газ разрешений (approve), уже в блоке до этой ошибки обмена, BNB. Деньги
+    /// потрачены, хотя обмен не состоялся (или исход выясняется). Не факт транзакции обмена — поле tx не трогает
+    /// (OpError.sent по нему не меняется). Ставит адаптер DEX; ядро — в затраты сделки (core/deal_gas.rs). В коробке —
+    /// ошибка остаётся маленькой (как tx). Читать — approve_gas().
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approve_gas_bnb: Option<Box<rust_decimal::Decimal>>,
 }
 
 impl GatewayError {
@@ -123,6 +130,7 @@ impl GatewayError {
             tx: None,
             setting: None,
             pending: None,
+            approve_gas_bnb: None,
         }
     }
 
@@ -140,10 +148,24 @@ impl GatewayError {
         self
     }
 
+    /// Решение 236, дополнение: газ разрешений (approve), отправленных до ошибки (см. поле). Принимает: газ BNB (None —
+    /// разрешений не было: поле не меняется). Возвращает: ту же ошибку. Ошибок нет.
+    pub fn with_approve_gas(mut self, gas: Option<rust_decimal::Decimal>) -> Self {
+        if let Some(g) = gas {
+            self.approve_gas_bnb = Some(Box::new(g));
+        }
+        self
+    }
+
+    /// Решение 236, дополнение: газ разрешений до ошибки (BNB; None — не было). Ошибок нет.
+    pub fn approve_gas(&self) -> Option<rust_decimal::Decimal> {
+        self.approve_gas_bnb.as_deref().copied()
+    }
+
     /// Добавляет сырой ответ площадки.
     /// Принимает: текст ответа. Возвращает: ту же ошибку с полем raw.
     pub fn with_raw(mut self, raw: impl Into<String>) -> Self {
-        self.raw = Some(raw.into());
+        self.raw = Some(raw.into().into_boxed_str());
         self
     }
 }

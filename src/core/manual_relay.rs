@@ -128,7 +128,12 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
     deal.step = Step::Transfer;
     super::ledger::save(core, &deal).await;
     let price = deal.buy.as_ref().map(|b| b.avg_price).unwrap_or_default();
-    match super::transfers::send_trade(core, &deal.id, &from, &to, &a, deal.qty).await {
+    let mut gas = Vec::new();
+    let res =
+        super::transfers::send_trade(core, &deal.id, (&from, &to), &a, deal.qty, &mut gas).await;
+    // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
+    super::deal_gas::charge(core, &mut deal, &from, &mut gas).await;
+    match res {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {
                 deal.note(line);

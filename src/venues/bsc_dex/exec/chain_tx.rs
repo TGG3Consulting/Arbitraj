@@ -39,5 +39,6 @@ pub fn chain_tx(
         },
         cancel_hash: t.cancel.as_ref().map(|c| c.0),
         cancel_gas_bnb: t.cancel.as_ref().and_then(|c| c.1.gas_bnb()),
+        approve_gas_bnb: None,
     }
 }

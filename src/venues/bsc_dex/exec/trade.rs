@@ -35,7 +35,9 @@ use super::super::quote::Quoting;
 use super::super::quote::graph_route::{self, GraphForm};
 use super::super::wallet::nonce::Nonces;
 pub use super::order::{check_price, order, worst_positive};
-pub use super::swap_send::{no_new_approvals, rebuilt_notice, send_approvals, send_swap};
+pub use super::swap_send::{
+    no_new_approvals, rebuilt_notice, send_approvals, send_swap, with_approve_gas,
+};
 use super::txs::Env;
 use super::{bundle_trade, executor, result, trade_direct, trade_smart, verify_gate};
 

@@ -178,7 +178,12 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // Решение 227 (п. 4): перегон на кошелёк DEX засчитывается по приходу монеты в блокчейне, как перевод сделки
     // (решение 151: send_trade → credit_chain; кошелёк — счёт сделки, записанный выше, решение 185), а не по хешу от
     // биржи-отправителя (живой случай JCT: +18 с). На биржу — как раньше (send_trade без DEX = send).
-    match super::transfers::send_trade(core, &deal.id, &from, &to, &a, deal.qty).await {
+    let mut gas = Vec::new();
+    let res =
+        super::transfers::send_trade(core, &deal.id, (&from, &to), &a, deal.qty, &mut gas).await;
+    // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
+    super::deal_gas::charge(core, &mut deal, &from, &mut gas).await;
+    match res {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {
                 deal.note(line);

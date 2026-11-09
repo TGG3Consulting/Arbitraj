@@ -191,6 +191,7 @@ pub fn not_executed(
         tip_bnb: None,
         cancel_hash: None,
         cancel_gas_bnb: None,
+        approve_gas_bnb: None,
     };
     let t = TradeResult {
         status: TradeStatus::NotFilled,

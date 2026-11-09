@@ -36,7 +36,8 @@ use super::native::{self, Wrap};
 use super::plan::{self, Plan};
 use super::swap_ctx::SwapCtx;
 use super::trade::{
-    check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
+    check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides,
+    with_approve_gas, worst_positive,
 };
 use super::txs::Env;
 use super::{chain, exit_quote, leg_min, live, precheck_sim, result, verify_gate};
@@ -90,54 +91,60 @@ pub async fn trade(
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let (mut p, mut at) = build(q, &prep, wallet).await?;
-    if send_approvals(env, &slot, &p.approvals).await? {
-        // Решение 121 B1: разрешения ждали своих блоков — маршрут и минимумы устарели. Графу — свежая верификация
-        // (минимумы и граница сделки), затем пересчёт доли по живому состоянию и новая сборка обмена.
-        let mins = match graph_mins {
-            Some(_) => Some(verify_gate::gate(q, env, &req, route).await?.amount_out_min),
-            None => None,
+    let approved = send_approvals(env, &slot, &p.approvals).await?;
+    // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
+    let out: GatewayResult<TradeResult> = async {
+        if approved.is_some() {
+            // Решение 121 B1: разрешения ждали своих блоков — маршрут и минимумы устарели. Графу — свежая верификация
+            // (минимумы и граница сделки), затем пересчёт доли по живому состоянию и новая сборка обмена.
+            let mins = match graph_mins {
+                Some(_) => Some(verify_gate::gate(q, env, &req, route).await?.amount_out_min),
+                None => None,
+            };
+            prep = prepare(&v, &req, leg, mins.as_deref(), decs, is_native).await?;
+            (p, at) = build(q, &prep, wallet).await?;
+            no_new_approvals(ctx, &p)?;
+            rebuilt_notice(env, &req);
+        }
+        let router = is_native.then_some(p.router);
+        let entries: Vec<&Entry> = prep.path.hops.iter().map(|h| &h.entry).collect();
+        precheck_sim::emitters(ctx, &p, &entries, at).await?;
+        let tin = if req.side == Side::Buy { usdt } else { coin };
+        // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
+        let sc = SwapCtx::swap(
+            wallet,
+            (tin, out_token),
+            decs,
+            router.as_slice(),
+            None,
+            prep.note.clone(),
+        );
+        let d = send_swap(env, &slot, p, guard)
+            .await
+            .map_err(|e| sc.attach(e))?;
+        drop(slot);
+        let sc = SwapCtx {
+            tip_bnb: d.tip_bnb,
+            ..sc
         };
-        prep = prepare(&v, &req, leg, mins.as_deref(), decs, is_native).await?;
-        (p, at) = build(q, &prep, wallet).await?;
-        no_new_approvals(ctx, &p)?;
-        rebuilt_notice(env, &req);
-    }
-    let router = is_native.then_some(p.router);
-    let entries: Vec<&Entry> = prep.path.hops.iter().map(|h| &h.entry).collect();
-    precheck_sim::emitters(ctx, &p, &entries, at).await?;
-    let tin = if req.side == Side::Buy { usdt } else { coin };
-    // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
-    let sc = SwapCtx::swap(
-        wallet,
-        (tin, out_token),
-        decs,
-        router.as_slice(),
-        None,
-        prep.note.clone(),
-    );
-    let d = send_swap(env, &slot, p, guard)
-        .await
+        let mut r = result::result(
+            ctx,
+            req,
+            d,
+            wallet,
+            (tin, out_token),
+            decs,
+            router.as_slice(),
+        )
         .map_err(|e| sc.attach(e))?;
-    drop(slot);
-    let sc = SwapCtx {
-        tip_bnb: d.tip_bnb,
-        ..sc
-    };
-    let mut r = result::result(
-        ctx,
-        req,
-        d,
-        wallet,
-        (tin, out_token),
-        decs,
-        router.as_slice(),
-    )
-    .map_err(|e| sc.attach(e))?;
-    // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
-    if prep.note.is_some() {
-        r.executor = prep.note;
+        // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
+        if prep.note.is_some() {
+            r.executor = prep.note;
+        }
+        Ok(r)
     }
-    Ok(r)
+    .await;
+    with_approve_gas(out, approved)
 }
 
 /// Доля по живому состоянию: путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs), свежий

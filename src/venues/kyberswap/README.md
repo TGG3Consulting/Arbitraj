@@ -73,7 +73,7 @@
 - `trade_prep.rs` — подготовка без отправки: свежий GET /routes на объём сделки (покупка — подбор входа под точный
   выход, `quote::buy_route`), POST /route/build, проверка худшей цены `req.worst_price`, вид сборки котировкой ядра
   (`Prepared.view`: средняя по суммам сборки, исполнимое количество, газ из /routes).
-- `trade.rs` — `trade` (очередь кошелька → подготовка → `execute`) и `execute` (approve и пересборка после него —
+- `trade.rs` — `trade` (очередь кошелька → подготовка → `execute`) и `execute` (approve и пересборка после него — Решение 236, дополнение: газ approve — в итог свопа (ChainTx::approve_gas_bnb) или в ошибку после него (GatewayError::approve_gas_bnb).
   решение 99, отправка, квитанция). `trade_fact.rs` — факт по логам Transfer, подпись «KyberSwap».
 - Режим «лучший из двух» (`bsc_dex/best_of/`, `exec.dex_best_of`) берёт `Prepared` для сравнения со своим маршрутом
   и исполняет его тем же `execute` — второго запроса к агрегатору нет.

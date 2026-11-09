@@ -20,9 +20,13 @@
 //! Решение 235: продажа кнопкой (BUTTON) — до конца в режиме кнопки: повтор после отказа до отправки, остаток после
 //! частичной продажи и газ BNB — manual_sell.rs (без порогов убытка и «выгодно»); исчерпание повторов — алерт; итог
 //! кнопки — после закрытия, с возвратом USDT (manual_outcome.rs).
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs.
+//! Решение 247: продажа DEX откатилась на пробе по minOut — адаптер пере-меряет реальный выход и повторяет с minOut от
+//! него, если выход не ниже границы (TradeRequest.remeasure): кнопка — всегда (без порога), режим застрявшей
+//! монеты — по своему порогу убытка (market_guarded ← stuck.rs, relay_here.rs; граница — core/remeasure.rs); первая
+//! продажа сделки (sell_or_stuck) и остальные — без пере-замера, как раньше.
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
-//! manual_outcome.rs, risk_count.rs.
+//! manual_outcome.rs, risk_count.rs, remeasure.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154).
 
 use rust_decimal::Decimal;
@@ -33,6 +37,7 @@ use crate::core::types::{Quote, Side};
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::remeasure::Guard;
 use super::stuck_reason::StuckReason;
 
 /// Причина продажи кнопкой «Продать сейчас» / «Продать и перегнать» (manual.rs, manual_halted.rs, manual_relay.rs).
@@ -50,7 +55,7 @@ pub fn profitable(deal: &Deal, value: Decimal) -> bool {
 pub async fn sell_or_stuck(core: &Core, deal: Deal) {
     let value = super::trade_ops::deal_quote(core, &deal).await;
     match value {
-        Ok((v, q, b)) if profitable(&deal, v) => sell(core, deal, q, b, "выгодно").await,
+        Ok((v, q, b)) if profitable(&deal, v) => sell(core, deal, q, b, "выгодно", None).await,
         // Решение 220: в режим застрявшей монеты — с настоящей причиной.
         Ok(_) => Box::pin(super::stuck::handle(core, deal, StuckReason::Unprofitable)).await,
         Err(e) => {
@@ -60,13 +65,28 @@ pub async fn sell_or_stuck(core: &Core, deal: Deal) {
     }
 }
 
-/// Продажа по рынку (по текущей котировке; худшая цена — trade_ops). Ошибок нет: не вышло —
-/// сделка остановлена, монеты остаются на площадке (видно на экране «Сделки»).
+/// Продажа по рынку (по текущей котировке; худшая цена — trade_ops). Решение 247: кнопка человека (BUTTON) — с
+/// пере-замером без порога (remeasure::Guard::Any), прочие — без пере-замера (market_guarded — с порогом).
+/// Ошибок нет: не вышло — сделка остановлена, монеты остаются на площадке (видно на экране «Сделки»).
 pub async fn market(core: &Core, deal: Deal, why: &str) {
+    let g = if why == BUTTON {
+        Guard::Any
+    } else {
+        Guard::Off
+    };
+    market_guarded(core, deal, why, g).await
+}
+
+/// Как market, с пере-замером продажи DEX при откате по minOut (решение 247): граница реального выхода — по порогу
+/// `g` и свежей котировке (remeasure::floor). Принимает: ядро, сделку, причину, порог. Ошибок нет (как market).
+pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
     // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
     super::patience_scope::with(core, async {
         match super::trade_ops::deal_quote(core, &deal).await {
-            Ok((_, q, b)) => sell(core, deal, q, b, why).await,
+            Ok((v, q, b)) => {
+                let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
+                sell(core, deal, q, b, why, f).await
+            }
             Err(e) => {
                 let mut deal = deal;
                 let text = format!("продажа по рынку ({why}) невозможна: {e}");
@@ -105,13 +125,15 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
 }
 
 /// Продажа всего количества по котировке q. Принимает: сделку, котировку, стакан котировки (решение 238, ревью п. 3:
-/// худшая цена первой попытки — по нему; None — DEX), причину (для хронологии).
+/// худшая цена первой попытки — по нему; None — DEX), причину (для хронологии), границу пере-замера продажи DEX
+/// (решение 247, remeasure::of; None — без пере-замера).
 async fn sell(
     core: &Core,
     mut deal: Deal,
     q: Quote,
     book: Option<super::exec_book::Book>,
     why: &str,
+    floor: Option<crate::core::types::Remeasure>,
 ) {
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
@@ -129,6 +151,7 @@ async fn sell(
         book,
         &mut seen,
         Some(&mut gas),
+        floor,
     )
     .await;
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.

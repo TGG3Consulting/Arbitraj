@@ -40,15 +40,38 @@ pub async fn check(
     (at, now): (u64, u64),
     decs: (u8, u8),
 ) -> GatewayResult<(U256, u64)> {
+    let r = run(ctx, c, wallet, (at, now)).await?;
+    judge(ctx, req, c, &r, decs)
+}
+
+/// Одна симуляция execute от кошелька поверх блока сборки (симулированный блок на 1 с позже). Решение 247: итог как
+/// есть — откат по minOut распознаёт exec/executor/remeasure.rs. Ошибки: узел, BadResponse (нет итога).
+pub async fn run(
+    ctx: &Ctx,
+    c: &ExecCall,
+    wallet: Address,
+    (at, now): (u64, u64),
+) -> GatewayResult<CallResult> {
     let call = Call {
         from: wallet,
         to: c.executor,
         input: c.data(),
     };
     let res = simulate::run(ctx, &[call], simulate::Base::timed(at, now)).await?;
-    let r = res
-        .first()
-        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
+    res.into_iter()
+        .next()
+        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))
+}
+
+/// Разбор итога пробы: получено (откат — ошибка received) и сверка с req.worst_price. Возвращает: получено и газ.
+/// Ошибки: как check.
+pub fn judge(
+    ctx: &Ctx,
+    req: &TradeRequest,
+    c: &ExecCall,
+    r: &CallResult,
+    decs: (u8, u8),
+) -> GatewayResult<(U256, u64)> {
     let got = received(ctx, r)?;
     price(ctx, req, c, got, decs)?;
     Ok((got, r.gas_used.to::<u64>()))

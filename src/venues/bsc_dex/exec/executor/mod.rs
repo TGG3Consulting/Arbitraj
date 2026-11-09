@@ -18,6 +18,7 @@ pub mod entry;
 pub mod fact;
 pub mod kind;
 pub mod onchain;
+pub mod remeasure;
 pub mod sim;
 pub mod trade;
 

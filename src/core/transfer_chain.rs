@@ -107,7 +107,9 @@ pub async fn finish(
         },
     ));
     let (d, f, t, a) = (c.deal, c.from, c.to, c.asset);
-    super::credit_shortfall::check(core, d, f, t, a, c.net_from, c.qty, credited.amount).await;
+    // Решение 247, п. Ж: комиссия вывода — из ответа площадки на создание вывода.
+    let fee = c.created.fee.as_ref();
+    super::credit_shortfall::check(core, d, f, t, a, c.net_from, c.qty, credited.amount, fee).await;
     let note = super::credit_chain::note(c.from, credited.amount, &c.asset.ticker, &hash);
     (sent, credited, note)
 }

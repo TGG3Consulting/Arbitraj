@@ -1,7 +1,7 @@
 <!--
   Файл: ui/src/pages/Manual.svelte
   Что делает: экран «Ручное управление» (решение 37): алерты застрявших монет (сделка, площадка, монета,
-    количество, убыток %, время) с кнопками «Продать сейчас» и «Беру на себя»; монеты «Беру на себя»
+    количество, итог при продаже сейчас % — решение 247: плюс прибыль, минус убыток, красный только при убытке, время) с кнопками «Продать сейчас» и «Беру на себя»; монеты «Беру на себя»
     (сделка, площадка, монета, количество, причина, когда взяты) с кнопкой «Вернуть боту» (возврат по реальному
     балансу площадки — считает ядро). Данные — GET /api/manual, команды — POST /api/manual/command
     (источник — интерфейс, пишется в журнал). Пока ядро не подключено — «нет данных» (503) с причиной.
@@ -27,6 +27,16 @@
 -->
 <script>
   import { uniqBy } from '../lib/uniq.js';
+
+  /**
+   * Решение 247, п. Е: итог при продаже сейчас со знаком из убытка ядра (loss_pct: плюс — убыток). Живой случай PIG:
+   * ядро −2.03 (убыток) — это прибыль, показываем «+2.03». Нет котировки — «—».
+   */
+  function saleNow(loss) {
+    if (loss == null) return '—';
+    const v = -Number(loss);
+    return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
+  }
 
   /** Решение 227: части возврата «не вернулись» по сделкам — { key, d, r }; ключ как у ядра (usdt_return_parts::key). */
   function usdtParts(deals) {
@@ -112,11 +122,11 @@
 {:else if manual.data}
   <h2>Застрявшие монеты — ждут решения</h2>
   <table>
-    <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th class="num">Убыток, %</th><th>Причина</th><th>Сделка</th><th>Когда</th><th></th></tr></thead>
+    <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th class="num" title="Итог сделки при продаже сейчас, % от вложенного: плюс — прибыль, минус — убыток (решение 247)">Итог, %</th><th>Причина</th><th>Сделка</th><th>Когда</th><th></th></tr></thead>
     <tbody>
       {#each uniqBy(manual.data.alerts, (a) => a.id) as a (a.id)}
         <tr>
-          <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num" title={a.qty}>{fmtQty(a.qty)}</td><td class="num err" title={a.loss_pct ?? ''}>{a.loss_pct == null ? '—' : Number(a.loss_pct).toFixed(2)}</td>
+          <td>{assetLabel(a.asset)}</td><td>{a.venue}</td><td class="num" title={a.qty}>{fmtQty(a.qty)}</td><td class="num" class:err={a.loss_pct != null && Number(a.loss_pct) > 0} class:ok={a.loss_pct != null && Number(a.loss_pct) <= 0} title={a.loss_pct == null ? 'нет котировки' : 'итог при продаже сейчас (по котировке)'}>{saleNow(a.loss_pct)}</td>
           <td title={recordOf('a.' + a.id).reason_full ?? a.reason ?? ''}>{recordOf('a.' + a.id).reason ?? a.reason ?? ''}</td><td><code>{a.deal_id}</code></td><td>{showTime(a.at)}</td>
           <td class="row">{@render buttons('a.' + a.id)}</td>
         </tr>

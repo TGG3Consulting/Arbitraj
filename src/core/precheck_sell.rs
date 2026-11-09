@@ -76,5 +76,6 @@ pub fn request(core: &Core, d: &Direction, plan: &Calc) -> Result<TradeRequest, 
         route: plan.sell_quote.route.clone(),
         // Решение 177: та же продажа выхода, что поставит исполнение (trade_ops.rs).
         exit_position: true,
+        remeasure: None,
     })
 }

@@ -28,6 +28,7 @@ use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::remeasure::Guard;
 
 /// Имя настройки порога убытка продажи здесь в режиме «Перегон».
 pub const SETTING: &str = "stuck.relay_max_loss_pct";
@@ -55,18 +56,14 @@ pub fn decide(
 ) -> Here {
     let loss = value.as_ref().ok().map(|v| deal.loss_pct_if(*v));
     match (max, loss) {
+        // Решение 247, п. Е: подпись по знаку (минус убытка — прибыль), логика порога та же.
         (Ok(max), Some(loss)) if loss <= max => Here::Market(format!(
-            "{why}; убыток {} не больше порога {} ({SETTING})",
-            h::pct(loss),
-            h::pct(max)
+            "{why}; {} ({SETTING})",
+            h::loss_vs_max(loss, max, true)
         )),
         (Ok(max), Some(loss)) => Here::Alert {
             loss: Some(loss),
-            why: format!(
-                "{why}; убыток {} выше порога {} ({SETTING})",
-                h::pct(loss),
-                h::pct(max)
-            ),
+            why: format!("{why}; {} ({SETTING})", h::loss_vs_max(loss, max, false)),
         },
         (Err(e), loss) => Here::Alert {
             loss,
@@ -92,13 +89,18 @@ pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
         .as_ref()
         .ok()
         .and_then(|_| s.integer(WAIT, At::default()).ok());
+    // Решение 247: порог продажи здесь — и граница пере-замера продажи DEX (core/remeasure.rs).
+    let cap = max.as_ref().ok().copied();
     let d = &deal;
     let value = quote_or_wait(core, d, wait, move || async move {
         super::trade_ops::deal_value(core, d).await.map(|(v, _)| v)
     })
     .await;
     match decide(&deal, why, max, value) {
-        Here::Market(text) => super::stuck::sold_by_market(core, deal, &text).await,
+        Here::Market(text) => {
+            let g = cap.map_or(Guard::Off, Guard::MaxLoss);
+            super::stuck::sold_by_market(core, deal, &text, g).await
+        }
         Here::Alert { loss, why } => super::manual::raise_alert(core, deal, loss, why, None).await,
     }
 }

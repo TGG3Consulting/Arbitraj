@@ -39,6 +39,7 @@ pub mod executor;
 pub mod exit_quote;
 pub mod fill;
 pub mod fork_swap;
+pub mod gas_fund;
 pub mod leg_min;
 pub mod live;
 pub mod live_hops;

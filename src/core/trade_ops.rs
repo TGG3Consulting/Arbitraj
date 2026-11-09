@@ -70,7 +70,7 @@ pub async fn trade(
 ) -> Result<TradeResult, OpError> {
     let mut seen = None;
     trade_seen(
-        core, deal, v, a, side, qty, route, avg, cap, None, &mut seen, gas,
+        core, deal, v, a, side, qty, route, avg, cap, None, &mut seen, gas, None,
     )
     .await
 }
@@ -83,6 +83,8 @@ pub async fn trade(
 /// (TradeResult.fees): approve и чаевые канала успеха; весь газ каждой неудачной попытки (откат, отмена, занявшая
 /// nonce, обмен без монет, approve до ошибки). Исход неизвестен — газ транзакции берётся, только если исход так и не
 /// найден (найденный итог несёт свой газ — иначе вошёл бы дважды); approve до ошибки — всегда.
+/// Решение 247: `remeasure` — граница пере-замера продажи DEX (TradeRequest.remeasure, core/remeasure.rs);
+/// None — без пере-замера; у покупки не ставится.
 /// Ошибки: как trade; «стакан устарел» (worst.rs worst_order).
 #[allow(clippy::too_many_arguments)]
 pub async fn trade_seen(
@@ -98,6 +100,7 @@ pub async fn trade_seen(
     mut book: Option<super::exec_book::Book>,
     seen: &mut Option<Worst>,
     mut gas: Option<&mut Vec<Wasted>>,
+    remeasure: Option<crate::core::types::Remeasure>,
 ) -> Result<TradeResult, OpError> {
     let in_deal = gas.is_some();
     let mut add = |w: Vec<Wasted>| {
@@ -155,11 +158,18 @@ pub async fn trade_seen(
                     // «Продать» в «Балансах»). Покупка — нет. Циклы DEX ↔ DEX сюда не ходят (cycle_deal.rs, свой
                     // запрос) — у них сверка с квотером — стоп.
                     exit_position: side == Side::Sell,
+                    // Решение 247: пере-замер — только у продажи (граница — от вызывающего, core/remeasure.rs).
+                    remeasure: remeasure.clone().filter(|_| side == Side::Sell),
                 };
                 // Решение 132: DEX — кошелёк сделки.
                 match super::dex_account::venue_deal(core, deal, v).await {
                     Ok(x) => {
-                        let res = x.trade(req.clone()).await;
+                        // Решение 247, п. В: продажа — выход из позиции (как exit_position), пороги входа не нужны.
+                        let res = if side == Side::Sell {
+                            crate::gateway::exit_scope::scope(x.trade(req.clone())).await
+                        } else {
+                            x.trade(req.clone()).await
+                        };
                         // Решение 238 (ревью, п. 1): ордер биржи ушёл — снимок REST стакана пары и стороны больше не
                         // факт (IOC не исполнился или съел уровни снимка): следующая попытка — по свежему стакану.
                         if kind(core, v) == Ok(VenueKind::Cex) {
@@ -343,7 +353,9 @@ pub async fn sell_quote(
         (q, Some(b))
     } else {
         let on = super::venue_ticker::on_venue(core, a, v);
-        let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
+        // Решение 247, п. В: оценка продажи монет сделки — продажа выхода (пороги входа адаптер не применяет).
+        let exit = crate::gateway::exit_scope::scope(x.quote(&on, Side::Sell, qty));
+        let q = crate::gateway::patience::exec_scope(exit)
             .await
             .map_err(|e| OpError::keep_not_configured(&e, format!("{}: {}", v.0, e.message)))?;
         (q, None)

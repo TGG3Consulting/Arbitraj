@@ -122,9 +122,10 @@ pub async fn raise_alert(
         error,
         attempts: prev.as_ref().map_or(1, super::manual_repeat::next_attempt),
     };
-    let loss = loss_pct
-        .map(hu::pct)
-        .unwrap_or_else(|| "не известен (нет котировки)".into());
+    // Решение 247, п. Е: подпись по знаку (прибыль / убыток), пометка «по модели», если продажа по ней откатилась.
+    let (loss_k, loss) = hu::sale_now_alert(loss_pct, alert.error.as_deref());
+    let head = hu::alert_head(loss_pct, alert.error.is_some());
+    let hint = hu::min_out_hint(alert.error.as_deref());
     deal.step = Step::WaitingHuman;
     if prev.is_some() {
         deal.note(super::manual_repeat::note(
@@ -145,11 +146,15 @@ pub async fn raise_alert(
         return persist(core).await;
     }
     // Решение 164: коротко и по-человечески; кнопки — в сообщении manual.record.
-    let text = Msg::new(hu::STOP, "Нужно ваше решение: монета застряла с убытком")
+    let mut text = Msg::new(hu::STOP, head)
         .line(super::deal_text::coin_route(&deal))
         .kv("Монеты", super::deal_text::coins_at(&deal))
-        .kv("Убыток при продаже сейчас", &loss)
-        .reason(&reason)
+        .kv(loss_k, &loss)
+        .reason(&reason);
+    if let Some(h) = hint {
+        text = text.kv("Что делает бот", h);
+    }
+    let text = text
         .todo("«Продать сейчас», «Продать и перегнать» или «Беру на себя» — в сообщении ниже или на экране «Ручное управление»")
         .id(&deal.id)
         .render();
@@ -183,6 +188,9 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
             return Err(e);
         }
     }
+    // Решение 247, п. А (Тигран 10.11: согласовано): нажатие — новая цепочка повторов кнопки: счётчик автоматики
+    // (Deal.unsent_retries) не наследуется, иначе после исчерпания автоматики кнопка давала одну попытку и Exhausted.
+    deal.unsent_retries = 0;
     deal.step = Step::Selling;
     // Решение 177: тот же отказ — эта запись обновится, а не появится новая (raise_alert, manual_repeat.rs).
     deal.alert_was = Some(alert);

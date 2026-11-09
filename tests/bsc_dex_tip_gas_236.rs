@@ -162,6 +162,7 @@ async fn tip_gas_reaches_deal_timeline() {
             deal_id: "g6DOGE".into(),
             route: None,
             exit_position: false,
+            remeasure: None,
         },
     };
     let mut list = dg::of_filled(&res);

@@ -130,6 +130,7 @@ pub fn request(
         route: None,
         // Решение 177: продаётся монета, которая уже есть, — продажа выхода (как у trade_ops.rs).
         exit_position: true,
+        remeasure: None,
     })
 }
 

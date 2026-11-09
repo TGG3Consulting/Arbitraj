@@ -484,7 +484,11 @@ impl BscDex {
         // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по
         // объёму из расчёта (req.qty, req.worst_price); сигналы, цены и подбор размера — на bsc_dex. Нет маршрута у
         // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
-        if self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
+        // Решение 247, п. Г: продажа выхода с условиями пере-замера (повтор режима застрявшей монеты, кнопка человека —
+        // TradeRequest.remeasure) — своим сборщиком, не KyberSwap: у своего пути проба перед отправкой и пере-замер
+        // выхода при откате по minOut (exec/executor/remeasure.rs); первая продажа сделки — как раньше.
+        let own_exit = req.exit_position && req.remeasure.is_some();
+        if !own_exit && self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
             // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
             if super::best_of::enabled(&self.p.ctx) {
                 return super::best_of::trade::trade(&self.p, &self.kyber, req).await;

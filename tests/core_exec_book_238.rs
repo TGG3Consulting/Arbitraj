@@ -503,6 +503,7 @@ async fn first_order_uses_quote_book() {
                 b,
                 &mut seen,
                 None,
+                None,
             )
             .await;
             (r, seen)

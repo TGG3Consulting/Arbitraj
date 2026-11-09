@@ -70,8 +70,16 @@ pub async fn run(core: &Core, mut deal: Deal) {
         (to.clone(), r)
     }))
     .await;
+    // Решение 247, п. Д: продажа здесь уже откатилась по minOut — оценка «здесь» из той же модели завышена; помечаем
+    // (сама продажа здесь пойдёт кнопкой с пере-замером выхода, sell::market → remeasure::Guard::Any).
+    let failed = hu::min_out_failed(deal.alert_was.as_ref().and_then(|a| a.error.as_deref()));
+    let mark = if failed {
+        " (по модели — продажа по ней откатилась по minOut; продажа здесь — с пере-замером)"
+    } else {
+        ""
+    };
     let mut lines = vec![match &here {
-        Ok(v) => format!("здесь ({}): {}", deal.at.0, hu::usd(*v)),
+        Ok(v) => format!("здесь ({}): {}{mark}", deal.at.0, hu::usd(*v)),
         Err(e) => format!("здесь ({}): нет котировки — {e}", deal.at.0),
     }];
     for (to, r) in &vals {

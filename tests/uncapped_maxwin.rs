@@ -216,6 +216,7 @@ fn ledger_deals() -> (Vec<Deal>, Vec<i64>) {
                 deal_id: format!("csv{i}"),
                 route: None,
                 exit_position: false,
+                remeasure: None,
             },
             status: TradeStatus::Filled,
             filled_qty: d("1"),

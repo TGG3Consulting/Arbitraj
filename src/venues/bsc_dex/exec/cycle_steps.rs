@@ -52,6 +52,7 @@ pub fn trade_request(req: &CycleTradeRequest) -> TradeRequest {
         route: None,
         // Решение 177: цикл DEX ↔ DEX — не выход из позиции, сверка с квотером — стоп, как раньше.
         exit_position: false,
+        remeasure: None,
     }
 }
 

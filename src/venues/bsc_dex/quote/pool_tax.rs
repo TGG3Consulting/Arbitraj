@@ -36,6 +36,11 @@ pub fn usable(ctx: &Ctx, facts: &PoolFacts, side: Side) -> Result<Decimal, Strin
         .as_ref()
         .and_then(|t| t.side(side))
         .ok_or_else(|| format!("налог {what} монеты в этом пуле не измерен пробным обменом"))?;
+    // Решение 247, п. В: продажа выхода (монета уже куплена) — порог входа не применяется, налог идёт в модель как
+    // измерен; реальный выход проверяет проба перед отправкой (и пере-замер при откате по minOut).
+    if side == Side::Sell && crate::gateway::exit_scope::is_exit() {
+        return Ok(pct.max(Decimal::ZERO));
+    }
     let limit = ctx
         .settings
         .decimal(limit_name, At::default())

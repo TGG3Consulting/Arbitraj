@@ -359,6 +359,7 @@ async fn panic_outside_guard_and_cancel_halt_queue() {
         deal_id: "20261108120000000USDT".into(),
         route: None,
         exit_position: false,
+        remeasure: None,
     };
     let mut sc = SwapCtx::swap(after.from, (USDT, USDT), (18, 18), &[], None, None);
     sc.bundle = Some(BundleRef::of(&sent, first));

@@ -87,6 +87,16 @@ pub fn taxes(q: &Quoting, asset: &Asset) -> GatewayResult<TokenTaxes> {
     // Решение 211: налоги — по адресу контракта монеты.
     match q.checks.coin_of(asset).map(|c| c.taxes) {
         Some(CheckState::Known(t)) => Ok(t),
+        // Решение 247, п. В: продажа выхода (монета уже куплена) — проверка «не прошла» не закрывает продажу: модель
+        // без налога, реальный выход меряет проба перед отправкой (откат — ошибка с числами; у исполнителя —
+        // пере-замер). Честного отказа продажи (ханипот) проба не пропустит.
+        Some(CheckState::Failed { .. }) if crate::gateway::exit_scope::is_exit() => {
+            Ok(TokenTaxes {
+                buy_pct: Decimal::ZERO,
+                sell_pct: Decimal::ZERO,
+                transfer_pct: Decimal::ZERO,
+            })
+        }
         Some(CheckState::Failed { reason }) => Err(q.ctx.err(
             ErrorCode::CoinCheckFailed,
             format!("{}: {reason}", asset.ticker),

@@ -102,6 +102,7 @@ fn req(side: Side, qty: Decimal, worst: Decimal) -> TradeRequest {
         deal_id: "t".into(),
         route: None,
         exit_position: false,
+        remeasure: None,
     }
 }
 

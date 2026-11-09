@@ -205,6 +205,7 @@ fn deal(rec: &Rec, id: &str, avg: Decimal, at: chrono::DateTime<Utc>) -> Deal {
             deal_id: id.into(),
             route: None,
             exit_position: false,
+            remeasure: None,
         },
         status: TradeStatus::Filled,
         filled_qty: d("10"),

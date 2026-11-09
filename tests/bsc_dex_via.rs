@@ -330,6 +330,7 @@ async fn buy_and_sell_through_wbnb() {
             deal_id: "т".into(),
             route: None,
             exit_position: false,
+            remeasure: None,
         };
         let st = chain::steps(&q.ctx, &req, &path, qty, (18, 18)).unwrap();
         assert_eq!(st.len(), 2);

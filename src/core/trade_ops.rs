@@ -164,7 +164,12 @@ pub async fn trade_seen(
                 // Решение 132: DEX — кошелёк сделки.
                 match super::dex_account::venue_deal(core, deal, v).await {
                     Ok(x) => {
-                        let res = x.trade(req.clone()).await;
+                        // Решение 247, п. В: продажа — выход из позиции (как exit_position), пороги входа не нужны.
+                        let res = if side == Side::Sell {
+                            crate::gateway::exit_scope::scope(x.trade(req.clone())).await
+                        } else {
+                            x.trade(req.clone()).await
+                        };
                         // Решение 238 (ревью, п. 1): ордер биржи ушёл — снимок REST стакана пары и стороны больше не
                         // факт (IOC не исполнился или съел уровни снимка): следующая попытка — по свежему стакану.
                         if kind(core, v) == Ok(VenueKind::Cex) {
@@ -348,7 +353,9 @@ pub async fn sell_quote(
         (q, Some(b))
     } else {
         let on = super::venue_ticker::on_venue(core, a, v);
-        let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
+        // Решение 247, п. В: оценка продажи монет сделки — продажа выхода (пороги входа адаптер не применяет).
+        let exit = crate::gateway::exit_scope::scope(x.quote(&on, Side::Sell, qty));
+        let q = crate::gateway::patience::exec_scope(exit)
             .await
             .map_err(|e| OpError::keep_not_configured(&e, format!("{}: {}", v.0, e.message)))?;
         (q, None)

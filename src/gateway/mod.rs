@@ -13,6 +13,7 @@ pub mod delist_page;
 pub mod delist_time;
 pub mod errors;
 pub mod events;
+pub mod exit_scope;
 pub mod feed_health;
 pub mod feed_reg;
 pub mod frozen;

@@ -119,10 +119,17 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
     } else {
         "hooks.max_impact_c_pct"
     };
-    let limit = ctx
-        .settings
-        .decimal(limit_name, At::default())
-        .map_err(|e| e.message)?;
+    // Решение 247, п. В: продажа выхода — порог входа hooks.max_impact_* не применяется (влияние — в модель).
+    let exit = side == Side::Sell && crate::gateway::exit_scope::is_exit();
+    let limit = if exit {
+        None
+    } else {
+        Some(
+            ctx.settings
+                .decimal(limit_name, At::default())
+                .map_err(|e| e.message)?,
+        )
+    };
     let impact = match facts.hook.as_ref().map(|c| &c.impact) {
         Some(CheckState::Known(i)) => {
             if side == Side::Buy {
@@ -142,7 +149,7 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
         }
         _ => return Err("влияние крючка ещё не измерено".into()),
     };
-    if impact > limit {
+    if let Some(limit) = limit.filter(|l| impact > *l) {
         return Err(format!(
             "влияние крючка {impact}% больше {limit_name} ({limit}%)"
         ));

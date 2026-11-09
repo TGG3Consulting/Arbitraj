@@ -15,12 +15,14 @@
 //! dirctx.rs, size_curve.rs, storage/episode_files.rs, settings.
 //! Настройки: card.max_search_usdt, money.min_profit_usd, money.min_profit_pct, uncapped.max_evals,
 //! uncapped.ladder_usdt, size.*, venue.quote_asset [A, B], profit.price_move_k [монета], profit.liquidity_share_h [B],
-//! profit.closure_share [B] (решение 240, core/reserve.rs).
+//! profit.closure_share [B] (решение 240, core/reserve.rs). Решение 242: пороги прибыли, k и доля — сначала площадка + тип
+//! направления сделки (core/venue_dir.rs rule по видам сторон из плана).
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, VenueId};
+use crate::gateway::contract::VenueKind;
 use crate::settings::read::At as SAt;
 
 use super::deal::Deal;
@@ -107,7 +109,11 @@ pub fn prepare(
         return Err(format!("{}: в стакане окна нет покупателей", dir.sell_on.0));
     }
     let s = env.settings;
-    let cfg = Cfg::read(s)?;
+    // Решение 242: площадка и тип направления сделки (правило стороны, core/venue_dir.rs). Ядра в пересчёте нет — вид
+    // сторон из плана, как выше: покупка на DEX сюда не доходит (не пересчитывается), продажа на DEX — маршрут плана.
+    let sell_kind = if dex { VenueKind::Dex } else { VenueKind::Cex };
+    let vd = super::venue_dir::rule(dir, Some(VenueKind::Cex), Some(sell_kind));
+    let cfg = Cfg::read(s, vd)?;
     let text = |n: &str, v: &VenueId| s.text(n, venue_at(v)).map_err(|e| e.message);
     let (qa, qb) = (
         text("venue.quote_asset", &dir.buy_on)?,
@@ -119,7 +125,7 @@ pub fn prepare(
         coin: Some(&coin),
     };
     let k = s
-        .decimal("profit.price_move_k", coin_at)
+        .decimal_dir("profit.price_move_k", vd, coin_at)
         .map_err(|e| e.message)?;
     let h = s
         .decimal("profit.liquidity_share_h", venue_at(&dir.sell_on))
@@ -127,7 +133,7 @@ pub fn prepare(
     if h.is_zero() {
         return Err("profit.liquidity_share_h = 0: глубину B использовать нельзя".into());
     }
-    let closure_share = super::reserve::closure_share(s, dir)?;
+    let closure_share = super::reserve::closure_share(s, dir, vd)?;
     let budget = old
         .budget
         .or(old.battle.budget)

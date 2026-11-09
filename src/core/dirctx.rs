@@ -13,6 +13,7 @@
 //! build_decided.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings.
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
+//! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
 //! profit.sigma_window_min, usdt_return.mode (+ transit.rs), profit.closure_share, profit.sigma_floor_per_s,
 //! profit.sigma_min_changes (reserve.rs).
@@ -181,8 +182,10 @@ impl DirCtx {
             venue: None,
             coin: Some(&coin),
         };
+        // Решение 242: k и доля закрытия — площадки и типа направления (venue_dir.rs), иначе прежняя цепочка.
+        let vd = super::venue_dir::of(core, dir);
         let k = s
-            .decimal("profit.price_move_k", coin_at)
+            .decimal_dir("profit.price_move_k", vd, coin_at)
             .map_err(|e| e.message)?;
         let h = s
             .decimal("profit.liquidity_share_h", at(&dir.sell_on))
@@ -200,7 +203,7 @@ impl DirCtx {
         // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.
         let closure_share = match at_m {
             Moment::Held => None,
-            _ => super::reserve::closure_share(s, dir)?,
+            _ => super::reserve::closure_share(s, dir, vd)?,
         };
         // Решение 211: пара площадки — по её тикеру монеты (Presence::ticker).
         let pair_a = venue::pair_rules(core, &dir.buy_on, &a.ticker)?;

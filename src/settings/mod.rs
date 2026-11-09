@@ -17,4 +17,5 @@ pub mod schema;
 pub mod scope;
 pub mod store;
 pub mod value;
+pub mod venue_dir;
 pub mod wait;

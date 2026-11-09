@@ -8,6 +8,7 @@
     Address — адрес BSC, формат 0x + 40 шестнадцатеричных знаков проверяется до отправки (окончательно — бэкенд);
     AddressList — адреса BSC через запятую, формат каждого проверяется так же;
     остальное — текст. Значения по умолчанию нет: поле показывает текущее значение или пусто.
+    Решение 242: inherited — что действует, пока значение области не задано (строки «площадка · направление»).
   Кто вызывает: components/SettingCard.svelte, pages/Notifications.svelte, pages/Venues.svelte.
   От чего зависит: lib/settings.svelte.js, lib/labels.js, components/ErrorText.svelte.
   Настройки: любая — по описанию из схемы.
@@ -21,9 +22,10 @@
 
   /**
    * def — описание из схемы; scope — {kind, id?}; label — подпись области; options — варианты для TextList;
-   * only — для Choice: какие из def.choices показать (например способы, которые есть у канала); null — все.
+   * only — для Choice: какие из def.choices показать (например способы, которые есть у канала); null — все;
+   * inherited — решение 242: текст «что действует», пока значение не задано ('' — не показывать).
    */
-  let { def, scope, label = '', options = null, only = null } = $props();
+  let { def, scope, label = '', options = null, only = null, inherited = '' } = $props();
 
   const current = $derived(store.values[valueKey(def.name, scope)]);
 
@@ -102,9 +104,10 @@
 <div class="editor">
   {#if label}<span class="scope">{label}</span>{/if}
   <!-- Необязательная (def.optional) не задана — не «пробел», а выключенная часть функции (описание — ниже). -->
-  <span class={current === undefined ? (def.optional ? 'muted' : 'unset') : 'value'}>
+  <span class={current === undefined ? (def.optional || inherited ? 'muted' : 'unset') : 'value'}>
     {current === undefined ? (def.optional ? 'не задано (необязательная)' : 'не задано') : def.kind === 'Choice' ? choiceLabel(current) : showValue(current)}
   </span>
+  {#if current === undefined && inherited}<span class="muted">→ действует {inherited}</span>{/if}
   {#if def.kind === 'Integer' && def.max != null}<span class="muted">не больше {def.max}</span>{/if}
   {#if def.kind === 'Bool'}
     <button disabled={busy || current === true} onclick={() => save(true)}>да</button>

@@ -13,13 +13,12 @@
 //! Кто вызывает: core/precheck_sell.rs (сторона продажи — DEX).
 //! От чего зависит: precheck_sell.rs (запрос продажи), dex_account.rs (вид на кошелёк направления), costs_types.rs
 //! (Calc, CostLine), deps.rs (журнал, шлюз).
-//! Настройки: money.min_profit_usd, money.min_profit_pct (+ через адаптер — exec.dex_slippage_pct и др.).
+//! Настройки: money.min_profit_usd, money.min_profit_pct (решение 242: площадка + тип направления — venue_dir.rs) (+ через адаптер — exec.dex_slippage_pct и др.).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{CostKind, DexPresell, Direction};
 use crate::gateway::errors::ErrorCode;
-use crate::settings::read::At;
 
 use super::costs::Calc;
 use super::engine::Core;
@@ -54,12 +53,8 @@ pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, Strin
         }
     };
     let s = &core.inner.deps.settings;
-    let min_usd = s
-        .decimal("money.min_profit_usd", At::default())
-        .map_err(|e| e.message)?;
-    let min_pct = s
-        .decimal("money.min_profit_pct", At::default())
-        .map_err(|e| e.message)?;
+    // Решение 242: пороги — как у расчёта (площадка + тип направления, иначе вся система).
+    let (min_usd, min_pct) = super::venue_dir::thresholds(s, super::venue_dir::of(core, d))?;
     let text = summary(&plan, &sim, tax);
     let c = apply(plan, &sim, min_usd, min_pct).map_err(|e| format!("{e}; {text}"))?;
     log(

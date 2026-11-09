@@ -28,7 +28,8 @@
 //! От чего зависит: frozen.rs, plan_gap.rs, dirctx.rs, size_curve.rs, size_uncapped.rs, uncapped_record.rs, limits_parts.rs, dry.rs,
 //! card_max.rs (passes), settings.
 //! Настройки: card.max_search_usdt (предел поиска), uncapped.max_evals (предел расчётов), uncapped.ladder_usdt (таблица
-//! потолков), money.min_profit_usd, money.min_profit_pct, size.* (через size_curve::params).
+//! потолков), money.min_profit_usd, money.min_profit_pct (решение 242: с областью «площадка + тип направления», как у
+//! сделки — venue_dir.rs), size.* (через size_curve::params).
 
 use std::time::Instant;
 
@@ -77,7 +78,8 @@ pub async fn compute(
     let s = decided.map_or(&core.inner.deps.settings, |x| &x.settings);
     let dec = |name: &str| s.decimal(name, SAt::default()).map_err(|e| e.message);
     let search_cap = dec("card.max_search_usdt")?;
-    let (min_usd, min_pct) = (dec("money.min_profit_usd")?, dec("money.min_profit_pct")?);
+    // Решение 242: пороги — площадки и типа направления, как у решения о сделке (из того же хранилища).
+    let (min_usd, min_pct) = super::venue_dir::thresholds(s, super::venue_dir::of(core, d))?;
     let max_evals = s
         .integer("uncapped.max_evals", SAt::default())
         .map_err(|e| e.message)?;

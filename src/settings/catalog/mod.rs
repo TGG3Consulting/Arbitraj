@@ -36,6 +36,7 @@ mod window;
 mod xt;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
+use super::venue_dir::DirKind;
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
 /// Возвращает: SettingDef без вариантов выбора и без верхней границы (их добавляют .choices() и .max()).
@@ -66,6 +67,8 @@ const fn d(
         },
         venue_role: VenueRole::Venue,
         optional: false,
+        // Решение 242: область «площадка + тип направления» задаётся .dir_kinds(…).
+        dir_kinds: &[],
     }
 }
 
@@ -83,13 +86,21 @@ const fn has_dex(scopes: &[S]) -> bool {
 
 const G: &[S] = &[S::Global];
 const GV: &[S] = &[S::Global, S::Venue];
-const GC: &[S] = &[S::Global, S::Coin];
 const V: &[S] = &[S::Venue];
 const VC: &[S] = &[S::Venue, S::Coin];
 const C: &[S] = &[S::Coin];
 const E: &[S] = &[S::Event];
 const DX: &[S] = &[S::Dex];
 const CH: &[S] = &[S::Channel];
+// Решение 242: наборы с областью «площадка + тип направления» и её типы.
+const GX: &[S] = &[S::Global, S::VenueDir];
+const GVX: &[S] = &[S::Global, S::Venue, S::VenueDir];
+const GCX: &[S] = &[S::Global, S::Coin, S::VenueDir];
+const VX: &[S] = &[S::Venue, S::VenueDir];
+/// Типы направлений с переводом (у биржи): биржа → DEX, DEX → биржа, биржа → биржа.
+const DIR_TRANSFER: &[DirKind] = &[DirKind::CexToDex, DirKind::DexToCex, DirKind::CexCex];
+/// Все типы, включая DEX ↔ DEX (у DEX).
+const DIR_ALL: &[DirKind] = &DirKind::ALL;
 
 /// Все части каталога. Порядок — как в docs/SETTINGS.md.
 static PARTS: &[&[SettingDef]] = &[
@@ -143,6 +154,12 @@ mod tests {
             assert_eq!(
                 s.scopes.contains(&S::Dex),
                 s.dex_id != DexId::None,
+                "{}",
+                s.name
+            );
+            assert_eq!(
+                s.scopes.contains(&S::VenueDir),
+                !s.dir_kinds.is_empty(),
                 "{}",
                 s.name
             );

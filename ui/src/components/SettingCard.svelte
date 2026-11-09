@@ -12,6 +12,8 @@
     области «DEX» (правило id — checkDexId: строчная латиница, цифры, «-», «_», длина — dex.id_max_len). Строка
     появляется в этой карточке; после первого сохранения адаптер сообщает id сам — он во всех карточках области «DEX».
     Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
+    Решение 242: значения области «площадка + тип направления» задаются в подпункте «… › по биржам и направлениям»
+    (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
   Кто вызывает: pages/Settings.svelte.
   От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte.
   Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
@@ -21,6 +23,8 @@
   import { store, venueScopeLabel } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
+  import { href } from '../lib/router.svelte.js';
+  import { venueDirRoute } from '../lib/venueDir.js';
   import { names, coinName, ensure, coinIdOf } from '../lib/coinNames.svelte.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
@@ -165,6 +169,13 @@
       </button>
       {#if dexInputError}<span class="err">{dexInputError}</span>{/if}
     </div>
+  {/if}
+
+  {#if def.scopes.includes('VenueDir')}
+    <p class="muted">
+      По площадке и типу направления: задано {idsOf('VenueDir').length} —
+      <a href={href('settings', venueDirRoute(store.schema))}>подпункт «по биржам и направлениям»</a>.
+    </p>
   {/if}
 
   <button class="quiet" onclick={() => (showHistory = !showHistory)}>

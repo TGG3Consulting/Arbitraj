@@ -9,7 +9,7 @@
 //! (как минимум обмена ноги — наибольшее из «по границе» и «по допуску»). У исполнителя ArbExecutor это его minOut.
 //! Кто вызывает: core/cycle_watch.rs (живой и сухой режим), core/cycle_dry.rs (ручная сухая сделка цикла).
 //! От чего зависит: core/{cycle_curve, size, size_search, dry, engine, coin_key}.rs, gateway, settings.
-//! Настройки: money.max_per_trade_usd [площадка DEX], money.max_per_coin_usd, dry.budget_usdt (сухой режим),
+//! Настройки: money.max_per_trade_usd [площадка DEX; решение 242 — DEX · «DEX ↔ DEX», venue_dir.rs], money.max_per_coin_usd, dry.budget_usdt (сухой режим),
 //! dex_dex.size_step_base, dex_dex.min_profit_usd, exec.dex_slippage_pct [площадка DEX], size.bisect_steps,
 //! size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals.
 
@@ -139,13 +139,19 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
 /// Ошибки: не задан лимит, лимит исчерпан.
 fn limits(core: &Core, c: &DexCycle, v: &VenueId) -> Result<Decimal, String> {
     let s = &core.inner.deps.settings;
-    let g = |n: &str, venue: Option<&str>| {
-        s.decimal(n, At { venue, coin: None })
+    // Решение 242: значение пары «площадка + тип направления» (DEX · «DEX ↔ DEX»), иначе площадка DEX, иначе система.
+    let g = |n: &str, venue: Option<&str>, vd| {
+        s.decimal_dir(n, vd, At { venue, coin: None })
             .map_err(|e| e.message)
     };
-    let per_trade = g("money.max_per_trade_usd", Some(&v.0))?;
-    let per_coin = g("money.max_per_coin_usd", None)?;
-    let asset = direction(c).asset;
+    let dir = direction(c);
+    let per_trade = g(
+        "money.max_per_trade_usd",
+        Some(&v.0),
+        super::venue_dir::of(core, &dir),
+    )?;
+    let per_coin = g("money.max_per_coin_usd", None, None)?;
+    let asset = dir.asset;
     let used = lk(&core.inner.exposure)
         .per_coin
         .get(&asset)

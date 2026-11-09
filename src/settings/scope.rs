@@ -4,8 +4,10 @@
 //! Решение 128: id области «DEX» может ввести человек (DEX, которую находит только поиск по фабрике, оракул или
 //! события Initialize) — поэтому у id есть правило записи (check_dex_id) и необязательный предел длины нового id
 //! (check_new_dex_id_len, настройка dex.id_max_len).
+//! Решение 242: область «площадка + тип направления» (VenueDir) — id «площадка:тип» (settings/venue_dir.rs), ключ
+//! «venue_dir:bingx:cex_dex»; старые ключи читаются как раньше (новый вид только добавлен).
 //! Кто вызывает: settings/store.rs, settings/value.rs, settings/read*.rs, api/settings.rs.
-//! От чего зависит: settings/schema.rs (ScopeKind), serde.
+//! От чего зависит: settings/schema.rs (ScopeKind), settings/venue_dir.rs (разбор id), serde.
 //! Настройки: dex.id_max_len [вся система] — через store.rs (сюда приходит числом).
 
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,9 @@ pub enum Scope {
     Dex(String),
     /// Канал отправки («club48») — ids даёт адаптер DEX (contract::send_channels).
     Channel(String),
+    /// Решение 242: площадка + тип направления, id «площадка:тип» («bingx:cex_dex») или «dex_dex» (один набор на все
+    /// DEX ↔ DEX) — settings/venue_dir.rs.
+    VenueDir(String),
 }
 
 impl Scope {
@@ -37,12 +42,13 @@ impl Scope {
             Scope::Event(_) => ScopeKind::Event,
             Scope::Dex(_) => ScopeKind::Dex,
             Scope::Channel(_) => ScopeKind::Channel,
+            Scope::VenueDir(_) => ScopeKind::VenueDir,
         }
     }
 
     /// Строка для хранения в SQLite: «global», «venue:bingx», «coin:0x0e09…» (решение 211; у монеты без адреса —
     /// «coin:ТИКЕР»), «event:deal.closed»,
-    /// «dex:pancakeswap_v3», «channel:club48».
+    /// «dex:pancakeswap_v3», «channel:club48», «venue_dir:bingx:cex_dex» (решение 242).
     pub fn to_key(&self) -> String {
         match self {
             Scope::Global => "global".to_string(),
@@ -51,11 +57,12 @@ impl Scope {
             Scope::Event(e) => format!("event:{e}"),
             Scope::Dex(d) => format!("dex:{d}"),
             Scope::Channel(c) => format!("channel:{c}"),
+            Scope::VenueDir(id) => format!("venue_dir:{id}"),
         }
     }
 
     /// Разбор строки из SQLite обратно в область.
-    /// Возвращает: Scope или None, если строка не в известном формате.
+    /// Возвращает: Scope или None, если строка не в известном формате (у «venue_dir:» — и id не «площадка:тип»).
     pub fn from_key(key: &str) -> Option<Scope> {
         if key == "global" {
             return Some(Scope::Global);
@@ -71,6 +78,7 @@ impl Scope {
             "event" => Some(Scope::Event(id)),
             "dex" => Some(Scope::Dex(id)),
             "channel" => Some(Scope::Channel(id)),
+            "venue_dir" => super::venue_dir::parse_id(&id).map(|_| Scope::VenueDir(id.clone())),
             _ => None,
         }
     }

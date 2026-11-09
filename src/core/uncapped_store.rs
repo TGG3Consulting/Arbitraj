@@ -113,7 +113,7 @@ pub async fn save(core: &Core, key: &Key, mut rec: Record) {
         Key::Cand(d) => {
             publish(core, d, &rec);
             // Решение 245: окно максимального объёма — по каждому расчёту кандидата, и без упущенного.
-            wins = maxwin::note(core, d, &rec);
+            wins = maxwin::note(core, d, &rec, false);
             if rec.missed <= rust_decimal::Decimal::ZERO {
                 lk(&core.inner.uncapped.stats).no_missed += 1;
                 maxwin::attach(core, d, &wins, rec.at).await;

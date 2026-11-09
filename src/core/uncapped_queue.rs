@@ -13,7 +13,10 @@
 //! (SQLite) и строка «Кандидатов» (поле uncapped). Не задана настройка — сбой со счётчиком и причиной на экране.
 //! Решение 217: работа сделки несёт снимок рынка момента решения (core/frozen.rs) — расчёт идёт по нему; сбой расчёта
 //! сделки запоминается по её id (uncapped_store::deal_failed) для сообщения о закрытии.
-//! Кто вызывает: core/uncapped_entry.rs (submit).
+//! Решение 245, дополнение (Тигран 09.11): расчёт наблюдения окна максимального объёма (submit_watch, uncapped_watch.rs) —
+//! ключ кандидата направления, те же интервал и предел очереди; ожидающий расчёт ключа он не вытесняет (расчёт кандидата
+//! вытесняет его); итог — только окно (uncapped_watch::saved); после каждого расчёта ключа кандидата — uncapped_watch::next.
+//! Кто вызывает: core/uncapped_entry.rs (submit), core/uncapped_watch.rs (submit_watch).
 //! От чего зависит: uncapped_permit.rs (место расчёта), uncapped.rs (compute), uncapped_state.rs, uncapped_store.rs, gateway/urgency.rs, settings.
 //! Настройки: uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max.
 
@@ -47,6 +50,25 @@ pub fn submit(
     battle: Battle,
     src: Option<Result<Frozen, String>>,
 ) {
+    put(core, key, d, battle, src, false)
+}
+
+/// Решение 245, дополнение (Тигран 09.11): расчёт наблюдения окна максимального объёма (uncapped_watch.rs) — ключ
+/// кандидата направления, те же интервал, предел очереди и место расчёта; ожидающий расчёт ключа не вытесняет.
+/// Принимает: ядро, направление, бой прошлого расчёта направления. Ошибок нет.
+pub fn submit_watch(core: &Core, d: &Direction, battle: Battle) {
+    put(core, Key::Cand(d.clone()), d, battle, None, true)
+}
+
+/// Постановка работы (submit, submit_watch). Ошибок нет.
+fn put(
+    core: &Core,
+    key: Key,
+    d: &Direction,
+    battle: Battle,
+    src: Option<Result<Frozen, String>>,
+    watch: bool,
+) {
     if !super::uncapped_entry::enabled(core) {
         return;
     }
@@ -68,6 +90,7 @@ pub fn submit(
         dir: d.clone(),
         battle,
         src,
+        watch,
     };
     let deal = matches!(key, Key::Deal(_));
     // Решение 197: сделку очередь не выбрасывает.
@@ -80,7 +103,10 @@ pub fn submit(
     };
     if slot.running || !wait.is_zero() {
         if slot.pending.is_some() {
-            slot.pending = Some(job);
+            // Решение 245, дополнение: расчёт наблюдения ожидающий расчёт ключа не вытесняет.
+            if !watch {
+                slot.pending = Some(job);
+            }
             lk(&st.stats).merged += 1;
             return;
         }
@@ -148,7 +174,7 @@ async fn run(core: Core, key: Key, job: Job) {
         Ok(held) => {
             let rt = tokio::runtime::Handle::current();
             let c = core.clone();
-            let (d, battle, src) = (job.dir.clone(), job.battle, job.src);
+            let (d, battle, src) = (job.dir.clone(), job.battle.clone(), job.src);
             let r = tokio::task::spawn_blocking(move || {
                 let _held = held;
                 rt.block_on(urgency::scope(
@@ -160,9 +186,17 @@ async fn run(core: Core, key: Key, job: Job) {
             .map_err(|e| format!("поток расчёта без потолка прерван: {e}"))
             .and_then(|r| r);
             match (r, &key) {
+                // Решение 245, дополнение: расчёт наблюдения ведёт только окно максимального объёма.
+                (Ok(rec), Key::Cand(d)) if job.watch => {
+                    super::uncapped_watch::saved(&core, d, rec).await
+                }
                 (Ok(rec), _) => super::uncapped_store::save(&core, &key, rec).await,
                 (Err(e), Key::Deal(id)) => super::uncapped_store::deal_failed(&core, id, e),
                 (Err(e), Key::Cand(_)) => super::uncapped_store::failed(&core, e),
+            }
+            // Решение 245, дополнение: окно наблюдается — следующий расчёт наблюдения (с интервалом ключа).
+            if let Key::Cand(d) = &key {
+                super::uncapped_watch::next(&core, d, job.battle);
             }
         }
         Err(e) => match &key {

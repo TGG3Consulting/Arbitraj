@@ -20,7 +20,8 @@ pub struct MaxWinCols {
     pub start: String,
     pub end: String,
     pub secs: Option<f64>,
-    /// «точно» / «не меньше (идёт)» / «не меньше (расчётов не было)»; окна нет — пусто.
+    /// «точно» / «не меньше (идёт)» / «не меньше (держалось всё наблюдение)» / «не меньше (расчётов не было)»; окна
+    /// нет — пусто.
     pub kind: String,
     pub start_invested: Option<f64>,
     pub start_profit: Option<f64>,
@@ -68,6 +69,12 @@ pub fn cols(v: &View, w: Option<&MaxWins>) -> MaxWinCols {
     c.end = match (v.status, b.end_at) {
         ("ended", Some(e)) => when(e),
         ("open", _) => "идёт".into(),
+        // Дополнение 09.11: держалось всё наблюдение uncapped.maxwin_watch_ms.
+        ("held", _) => format!(
+            "держалось всё наблюдение ({} с+), последний выгодный расчёт {}",
+            b.watch_ms.map_or(0, |w| w / 1000),
+            when(b.last_pass_at)
+        ),
         _ => format!(
             "неизвестен: расчётов не было после {}",
             when(b.last_pass_at)
@@ -77,6 +84,7 @@ pub fn cols(v: &View, w: Option<&MaxWins>) -> MaxWinCols {
     c.kind = match v.status {
         "ended" => "точно",
         "open" => "не меньше (идёт)",
+        "held" => "не меньше (держалось всё наблюдение)",
         _ => "не меньше (расчётов не было)",
     }
     .into();

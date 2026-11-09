@@ -8,7 +8,8 @@
 //! в базу не пишется) закрывает окно в строке эпизода (конец, точная длительность); новое окно в том же эпизоде — n = 2;
 //! промежуток длиннее uncapped.maxwin_gap_ms — окно оборвалось, следующее — новое; самое длинное остаётся «best»; то же —
 //! в сводке открытого окна решения 125; медиана и p75 сделок пары; мало сделок пары — по бирже-источнику; мало и там —
-//! «нет данных»; «успели бы»; столбцы отчёта «Упущено»; запись без окна — «нет данных».
+//! «нет данных»; «успели бы»; столбцы отчёта «Упущено»; запись без окна — «нет данных». Дополнение 09.11 (maxwin_watch):
+//! наблюдение uncapped.maxwin_watch_ms — «держалось всё наблюдение», цепочка расчётов наблюдения в очереди.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{uncapped_store, uncapped_maxwin, maxwin_view, deal_time, window_run},
 //! arb::report::missed_rows, tests/size_common.
@@ -422,5 +423,156 @@ async fn maxwin_windows_and_deal_time() {
     assert_eq!(c.deal_by, "пара, 16 сделок");
     assert_eq!(c.would, if would == "yes" { "да" } else { "нет" });
     arb::report::missed(&data, None, None, Utc::now()).expect("книга «Упущено» с новыми столбцами");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Ожидающая работа ключа кандидата направления: (есть, расчёт наблюдения ли). Ошибок нет.
+fn pending(core: &Core, key: &Key) -> Option<bool> {
+    lk(&core.inner.uncapped.slots)
+        .get(key)
+        .and_then(|s| s.pending.as_ref().map(|j| j.watch))
+}
+
+/// Решение 245, дополнение (Тигран 09.11): наблюдение окна uncapped.maxwin_watch_ms на тех же записях CAKE.
+/// Проверяется: выгодный расчёт через ≥ времени наблюдения закрывает окно «держалось всё наблюдение» (watch_ms,
+/// статус held, «не меньше», «успели бы» по медиане); пока направление выгодно, новое окно не начинается; невыгодный
+/// расчёт снимает это, следующее выгодное — новое окно; расчёт наблюдения окна не начинает; окно кончилось раньше
+/// наблюдения — точная длительность; цепочка расчётов наблюдения — очередь «без потолка» (тот же ключ, ожидающий
+/// кандидат не вытесняется, кандидат вытесняет наблюдение); монета занята сделкой — расчёта наблюдения нет;
+/// отчёт «Упущено» — «держалось всё наблюдение».
+#[tokio::test]
+async fn maxwin_watch() {
+    let dir = std::env::temp_dir().join(format!("arb-maxwin-watch-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let (core, s) = start(&dir).await;
+    let set = |n: &'static str, v: Value| {
+        let s = s.clone();
+        async move { s.set(n, Scope::Global, Some(v), "тест").await.unwrap() }
+    };
+    for (n, v) in [
+        ("uncapped.episode_gap_ms", 600_000),
+        ("uncapped.keep_days", 30),
+        ("uncapped.maxwin_gap_ms", 45_000),
+        ("uncapped.maxwin_watch_ms", 60_000),
+        ("uncapped.deal_time_min_n", 5),
+    ] {
+        set(n, json!(v)).await;
+    }
+    let (deals, _) = ledger_deals();
+    lk(&core.inner.deals).extend(deals.into_iter().map(|x| (x.id.clone(), x)));
+    let rec = Rec::load("uncapped-maxwin").await;
+    let zero = Decimal::ZERO;
+    let key = Key::Cand(back());
+    let t0 = Utc::now() + Duration::seconds(1);
+    let sec = |s: i64| t0 + Duration::seconds(s);
+
+    // Расчёт наблюдения окна не начинает.
+    arb::core::uncapped_watch::saved(&core, &back(), record(&rec, zero, sec(-100)).await).await;
+    let going = lk(&core.inner.uncapped.maxwin)
+        .get(&back())
+        .and_then(|t| t.going());
+    assert_eq!(going, None, "расчёт наблюдения нового окна не начинает");
+    assert_eq!(lk(&core.inner.uncapped.stats).watched, 1);
+
+    // Окно с t0; через 30 с — расчёт наблюдения продолжает окно; через 60 с — держалось всё наблюдение.
+    uncapped_store::save(&core, &key, record(&rec, zero, t0).await).await;
+    arb::core::uncapped_watch::saved(&core, &back(), record(&rec, zero, sec(30)).await).await;
+    uncapped_store::save(&core, &key, record(&rec, zero, sec(60)).await).await;
+    let (b, view) = row(&core).await;
+    let best: arb::core::uncapped_maxwin::MaxWin =
+        serde_json::from_value(b["maxwin"]["best"].clone()).unwrap();
+    assert_eq!(
+        (
+            best.end.as_deref(),
+            best.watch_ms,
+            best.end_at,
+            best.ms(),
+            best.evals
+        ),
+        (Some("watch"), Some(60_000), None, 60_000, 3)
+    );
+    assert_eq!(
+        (view["status"].as_str(), view["exact"].as_bool()),
+        (Some("held"), Some(false))
+    );
+    let med = core
+        .maxwin_ctx()
+        .times
+        .stat(&back().buy_on, &back().sell_on, 5)
+        .unwrap()
+        .median_ms;
+    let would = if 60_000 >= med { "yes" } else { "unknown" };
+    assert_eq!(view["would"], would, "{view}");
+    // Отчёт «Упущено»: держалось всё наблюдение.
+    let data = core.uncapped_report(None, None).await.unwrap();
+    let c = &arb::report::missed_rows::candidates(&data)[0].maxwin;
+    assert_eq!(
+        (c.secs, c.kind.as_str()),
+        (Some(60.0), "не меньше (держалось всё наблюдение)")
+    );
+    assert!(
+        c.end.starts_with("держалось всё наблюдение (60 с+)"),
+        "{}",
+        c.end
+    );
+
+    // Всё ещё выгодно — нового окна нет; невыгодный снимает; следующее выгодное — новое окно (n = 2), кончилось
+    // раньше наблюдения — точно.
+    uncapped_store::save(&core, &key, record(&rec, zero, sec(90)).await).await;
+    let (b, _) = row(&core).await;
+    assert_eq!(b["maxwin"]["n"], 1, "держалось и выгодно — то же окно");
+    let off = d("1000000000");
+    uncapped_store::save(&core, &key, record(&rec, off, sec(120)).await).await;
+    uncapped_store::save(&core, &key, record(&rec, zero, sec(130)).await).await;
+    uncapped_store::save(&core, &key, record(&rec, off, sec(150)).await).await;
+    let (b, _) = row(&core).await;
+    assert_eq!(b["maxwin"]["n"], 2);
+    let last: arb::core::uncapped_maxwin::MaxWin =
+        serde_json::from_value(b["maxwin"]["last"].clone()).unwrap();
+    assert_eq!(
+        (last.end.as_deref(), last.ms(), last.watch_ms),
+        (Some("not_passing"), 20_000, None)
+    );
+
+    // Цепочка расчётов наблюдения: окно идёт (начало — сейчас) — next ставит расчёт наблюдения в очередь «без потолка».
+    for (n, v) in [
+        ("uncapped.min_interval_ms", 600_000),
+        ("uncapped.queue_max", 8),
+        ("uncapped.max_concurrent", 1),
+    ] {
+        set(n, json!(v)).await;
+    }
+    set("uncapped.enabled", json!(true)).await;
+    let now = Utc::now();
+    uncapped_store::save(&core, &key, record(&rec, zero, now).await).await;
+    let battle = record(&rec, zero, now).await.battle;
+    // Монета занята нашей сделкой — расчёта наблюдения нет.
+    let coin = arb::core::coin_key::CoinKey::of(&back().asset);
+    lk(&core.inner.active).insert(coin.clone());
+    arb::core::uncapped_watch::next(&core, &back(), battle.clone());
+    assert!(!lk(&core.inner.uncapped.slots).contains_key(&key));
+    lk(&core.inner.active).remove(&coin);
+    // Свободна — расчёт наблюдения идёт (живого рынка у ядра теста нет — сбой расчёта), после него следующий расчёт
+    // наблюдения ждёт интервала ключа.
+    let failed0 = lk(&core.inner.uncapped.stats).failed;
+    arb::core::uncapped_watch::next(&core, &back(), battle.clone());
+    for _ in 0..100 {
+        if pending(&core, &key).is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(lk(&core.inner.uncapped.stats).failed > failed0);
+    assert_eq!(
+        pending(&core, &key),
+        Some(true),
+        "следующий расчёт наблюдения"
+    );
+    // Кандидат вытесняет ожидающее наблюдение; наблюдение ожидающего кандидата не вытесняет.
+    arb::core::uncapped_queue::submit(&core, key.clone(), &back(), battle.clone(), None);
+    assert_eq!(pending(&core, &key), Some(false));
+    arb::core::uncapped_queue::submit_watch(&core, &back(), battle);
+    assert_eq!(pending(&core, &key), Some(false));
     let _ = std::fs::remove_dir_all(&dir);
 }

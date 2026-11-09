@@ -10,7 +10,8 @@
 //! - planned_bnb: запрос узлу — from = кошелёк, to = channel.tip_address, value = channel.tip_bnb в wei, пустые данные
 //!   (как exec/txs.rs при отправке); газ = 21000 × цена газа; второй раз — из памяти, без запроса;
 //! - чаевые выключены (channel.tip_enabled = нет) — газа нет и запроса нет;
-//! - net_check цикла DEX ↔ DEX вычитает и газ перевода чаевых: (газ + чаевые + газ перевода) × курс.
+//! - net_check цикла DEX ↔ DEX вычитает и газ перевода чаевых: (газ + чаевые + газ перевода) × курс — у формы одной
+//!   транзакцией (исполнитель); у бандла свопов (чаевых не шлёт) — ни чаевых, ни их газа (Тигран 09.11: согласовано).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: route_common, arb::venues::bsc_dex::{send::tip_gas, exec::cycle_steps, quote::cycle_cost}.
@@ -176,10 +177,25 @@ async fn tip_transfer_gas_in_plan() {
         bnb_in_base: Decimal::new(600, 0),
     };
     let gwei = U256::from(1_000_000_000u64);
-    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r)
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, true)
         .await
         .unwrap();
     assert_eq!(net, dec("0.7474"));
+    // Бандл свопов (форма, которая чаевых не шлёт; Тигран 09.11: согласовано, план = факт) — те же настройки, чаевых и
+    // газа их перевода в проверке нет; узел не спрашивается.
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, false)
+        .await
+        .unwrap();
+    assert_eq!(net, dec("0.82"));
+    let tip = cycle_steps::plan_tip(&p.ctx, gwei, true).await.unwrap();
+    assert_eq!(tip, (dec("0.0001"), dec("0.000021")), "одна транзакция");
+    let none = cycle_steps::plan_tip(&p.ctx, gwei, false).await.unwrap();
+    assert_eq!(none, (Decimal::ZERO, Decimal::ZERO), "бандл");
+    assert_eq!(
+        n.load(Ordering::SeqCst),
+        1,
+        "оценка из памяти, бандл узел не спрашивает"
+    );
     // Чаевые выключены — газа перевода нет, узел не спрашивается.
     p.ctx
         .settings
@@ -192,7 +208,7 @@ async fn tip_transfer_gas_in_plan() {
         .await
         .unwrap();
     assert_eq!(tip_gas::planned_bnb(&p.ctx, price).await.unwrap(), None);
-    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r)
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, true)
         .await
         .unwrap();
     assert_eq!(net, dec("0.82"));

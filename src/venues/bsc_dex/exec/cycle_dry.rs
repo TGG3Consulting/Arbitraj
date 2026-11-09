@@ -150,6 +150,8 @@ async fn fill(
         (out, req.input),
         (gas, cycle_steps::wei(q).await?),
         &rates,
+        // Как у сделки: исполнитель шлёт чаевые, бандл — нет (Тигран 09.11: согласовано, план = факт).
+        !matches!(form, Some(Form::Bundle)),
     )
     .await?;
     r.notes.push(format!(

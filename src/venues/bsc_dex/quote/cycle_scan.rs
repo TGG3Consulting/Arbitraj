@@ -11,13 +11,14 @@
 //! должен быть проверенной монетой без налогов (покупки/продажи/перевода); иначе цикл пропускается — «налог токена на
 //! каждом свопе» (решение 85) тогда структурно равен нулю, не гадаем о неописанной механике мид-свопного налога.
 //! Газ свопов и чаевые (BNB) переводятся в базовую монету курсом из графа (решение 62: WBNB ≈ BNB; для базовой USDT —
-//! лучший пул WBNB–USDT, quote/rate.rs). Нет перевода — чистой прибыли нет, видна валовая (quote/cycle.rs).
+//! лучший пул WBNB–USDT, quote/rate.rs). Нет перевода — чистой прибыли нет, видна валовая (quote/cycle.rs). Чаевые — только
+//! если цикл пойдёт не бандлом свопов (exec/cycle_gate.rs form): бандл их не шлёт (Тигран 09.11: согласовано).
 //! Первичный фильтр BingX ↔ DEX (монета на бирже / выводится по BSC) к DEX ↔ DEX НЕ применяется (решение 85): нужна
 //! только ликвидность пулов и совпадение адресов токенов в пулах (это обеспечивает граф и реестр).
 //! Сам поиск сделок не запускает: сигналы забирает ядро (core/cycle_watch.rs, решение 124) и интерфейс.
 //! Кто вызывает: venue.rs (dex_cycles — ядро и «Живой экран»); тесты — напрямую quote/cycle.rs.
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
-//! send/mod.rs (чаевые канала), num.rs.
+//! send/mod.rs (чаевые канала), exec/cycle_gate.rs (форма исполнения), num.rs.
 //! Настройки: dex_dex.enabled, dex_dex.base_tokens, dex_dex.max_cycle_len, dex_dex.max_cycles, dex_dex.probe_input_base,
 //! dex_dex.min_profit_base [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
 
@@ -30,6 +31,7 @@ use crate::core::types::CheckState;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::exec::cycle_gate::{self, Form};
 use super::super::num;
 use super::super::pools::graph;
 use super::super::pools::registry::Registry;
@@ -121,6 +123,12 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
             let Ok(p) = cycle_opt::best(ctx, &legs, input) else {
                 continue;
+            };
+            // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form —
+            // тот же выбор, что у сделки), чаевых не шлёт — в сигнале их нет. Исполнитель или форма не выбрана — как было.
+            let tip = match cycle_gate::form(ctx, &legs) {
+                Ok(Form::Bundle) => Decimal::ZERO,
+                _ => tip,
             };
             if let Ok(sig) =
                 cycle::build_signal(ctx, base, &base_ticker, &p, &legs, gas, tip, rate_to_base)

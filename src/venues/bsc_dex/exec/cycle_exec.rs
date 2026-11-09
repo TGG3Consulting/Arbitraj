@@ -78,7 +78,8 @@ pub async fn trade(
     let (got, gas) = probe(ctx, &c, wallet, at).await?;
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
-    net_check(ctx, (out, req.input), (gas, cycle_steps::wei(q).await?), &r).await?;
+    // Исполнитель — одна транзакция с чаевыми (txs::send ниже): чаевые и газ их перевода — в проверке.
+    net_check(ctx, (out, req.input), (gas, cycle_steps::wei(q).await?), &r, true).await?;
     // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
     // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
     // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.

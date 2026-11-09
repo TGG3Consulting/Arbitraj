@@ -6,7 +6,8 @@
 //! - циклы DEX ↔ DEX без строки не исполняются;
 //! - сделка запоминает кошелёк: смена маппинга не меняет кошелёк идущей сделки; сделка до решения 132 — кошелёк
 //!   переноса; незавершённые сделки кошелька не дают его удалить;
-//! - перенос читает старую настройку исполнителя (записанное значение решения 132) и ставит маппинг bingx.
+//! - перенос читает старую настройку исполнителя (записанное значение решения 132) и ставит маппинг bingx;
+//! - решение 238 (ревью п. 2, дополнение — Тигран 09.11): котировка продажи сделки без кошелька — код NotConfigured.
 //!
 //! Ключи — официальные тестовые векторы (EIP-155 «Example», Hardhat Network счёт #0 — tests/bsc_dex_accounts.rs).
 //! Кто вызывает: cargo test.
@@ -266,4 +267,47 @@ async fn deal_keeps_its_wallet_and_blocks_removal() {
         None,
     );
     assert_eq!(dex_account::of_deal(&core, &cex.id).unwrap(), None);
+}
+
+/// Решение 238 (ревью, п. 2; дополнение — Тигран 09.11: согласовано): котировка продажи сделки, монета которой на DEX, —
+/// привязка кошелька не задана: (а) сделка без счёта и без кошелька переноса (перенос не сделан) — dex_account::of;
+/// (б) счёт сделки — кошелёк, которого нет (шлюз get_as → for_account). Обе — код NotConfigured (застрявшая монета
+/// сразу «Остановлена», stuck_quote.rs), текст — прежний.
+#[tokio::test]
+async fn deal_quote_without_wallet_is_not_configured() {
+    use arb::gateway::errors::ErrorCode;
+    let (core, _s, _vault) = start("nowallet").await;
+    let d = dir("bingx", "bsc_dex");
+    let mut deal = arb::core::deal::Deal::new(
+        "20261109000000021CAKE".into(),
+        d,
+        serde_json::json!(null),
+        Decimal::ZERO,
+    );
+    deal.at = VenueId("bsc_dex".into());
+    deal.qty = Decimal::ONE;
+    let code = |r: Result<_, arb::core::op_error::OpError>| match r {
+        Err(e) => (e.code, e.message),
+        Ok(_) => panic!("котировка без кошелька"),
+    };
+    let (c, m) = code(
+        arb::core::trade_ops::deal_quote(&core, &deal)
+            .await
+            .map(|_| ()),
+    );
+    assert_eq!(c, Some(ErrorCode::NotConfigured), "{m}");
+    assert!(m.contains(NO_WALLET), "{m}");
+    deal.dex_account = Some(DexAccountId("w-none".into()));
+    let (c, m) = code(
+        arb::core::trade_ops::deal_quote(&core, &deal)
+            .await
+            .map(|_| ()),
+    );
+    assert_eq!(c, Some(ErrorCode::NotConfigured), "{m}");
+    assert!(m.contains("w-none"), "{m}");
+    // Текстовая обёртка (deal_value — прочие вызывающие) — тот же текст.
+    let t = arb::core::trade_ops::deal_value(&core, &deal)
+        .await
+        .unwrap_err();
+    assert_eq!(t, m);
 }

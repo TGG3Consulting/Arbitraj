@@ -272,11 +272,13 @@ pub async fn deal_value(core: &Core, deal: &super::deal::Deal) -> Result<(Decima
 /// NotConfigured; застрявшая монета не ждёт его вечно — stuck.rs). Принимает: как deal_value. Возвращает: как
 /// deal_value и стакан котировки биржи (ревью п. 3 — для trade_seen; None — DEX).
 /// Ошибки: как deal_value; код — только у ошибок с кодом (стакан для ордера, exec_book.rs), прочие — без кода.
+/// Дополнение (Тигран 09.11: согласовано): у сделки с DEX нет счёта и нет кошелька переноса (dex_account::of —
+/// привязка не задана) — NotConfigured.
 pub async fn deal_quote(
     core: &Core,
     deal: &super::deal::Deal,
 ) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
-    let acc = super::dex_account::of(core, deal)?;
+    let acc = super::dex_account::of(core, deal).map_err(OpError::not_configured)?;
     sell_quote(
         core,
         acc.as_ref(),
@@ -308,6 +310,9 @@ pub async fn sell_value(
 
 /// Как sell_value, но ошибка — с кодом (решение 238, ревью п. 2): ошибка стакана для ордера (exec_book.rs) — со своим
 /// кодом (NotConfigured — не задана venue.book_stale_ms), прочие — без кода, тем же текстом.
+/// Дополнение (Тигран 09.11: согласовано): «не задана настройка или привязка» на этом пути — тоже NotConfigured (тот же
+/// текст): кошелька счёта нет (шлюз get_as → for_account), котировка DEX отказала с NotConfigured, не задана
+/// venue.quote_asset. Прочие коды (площадка не подключена, сеть, нет глубины, устарело) — без кода, как было.
 /// Принимает: как sell_value. Возвращает: как sell_value и стакан котировки биржи (ревью п. 3: ордер первой попытки
 /// считает худшую цену по нему — trade_seen; None — DEX).
 pub async fn sell_quote(
@@ -323,7 +328,7 @@ pub async fn sell_quote(
         .gw
         .get_as(v, acc)
         .await
-        .map_err(|e| e.message)?;
+        .map_err(|e| OpError::keep_not_configured(&e, e.message.clone()))?;
     // Решение 238: котировка исполнения у биржи — стакан для ордера (exec_book.rs): тот же снимок и та же мера
     // свежести, что у худшей цены ордера (worst.rs); стакан потока устарел — снимок REST. У DEX — котировка для
     // исполнения (gateway/patience.rs exec_scope), как раньше.
@@ -340,7 +345,7 @@ pub async fn sell_quote(
         let on = super::venue_ticker::on_venue(core, a, v);
         let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
             .await
-            .map_err(|e| format!("{}: {}", v.0, e.message))?;
+            .map_err(|e| OpError::keep_not_configured(&e, format!("{}: {}", v.0, e.message)))?;
         (q, None)
     };
     let q = super::venue_ticker::quote_back(core, a, v, q);
@@ -361,7 +366,7 @@ pub async fn sell_quote(
                 coin: None,
             },
         )
-        .map_err(|e| e.message)?;
+        .map_err(|e| OpError::keep_not_configured(&e, e.message.clone()))?;
     let cex: Vec<VenueId> = rd(&core.inner.kinds)
         .iter()
         .filter(|(_, k)| *k == VenueKind::Cex)

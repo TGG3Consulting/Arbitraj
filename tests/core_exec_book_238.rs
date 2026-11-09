@@ -19,6 +19,8 @@
 //! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести);
 //! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану;
 //! - ревью п. 2: не задана venue.book_stale_ms — застрявшая монета («Порог убытка», «Перегон») сразу остановлена;
+//!   дополнение (Тигран 09.11): REST стакана отказал «не задана» (venue.depth_levels, venue.quote_asset) — тоже
+//!   NotConfigured, без повтора и запроса;
 //! - ревью п. 3: первая попытка ордера — по стакану котировки (тот же снимок), повтор — по свежему;
 //! - ревью п. 4: неудача REST запоминается на exec.rest_book_retry_ms (или venue.rate_limit_pause_ms) — в окне без
 //!   запроса.
@@ -589,4 +591,79 @@ async fn rest_failure_is_remembered_for_window() {
         .unwrap();
     assert!(w.rest);
     assert_eq!(n(), 6);
+}
+
+/// Дополнение к ревью п. 2 (Тигран 09.11: согласовано): незаданная настройка на пути котировки продажи, кроме
+/// venue.book_stale_ms, — тоже NotConfigured. Стакана потока нет (StaleData), REST стакана XT отказывает до запроса: не
+/// задана venue.depth_levels (ws.rs config) или venue.quote_asset (справочник пар). Раньше: ошибка без кода, повтор через
+/// exec.rest_book_retry_ms, окно неудачи, «Порог убытка» ждал тика без предела. Теперь: код NotConfigured, без повтора и
+/// без запроса стакана; застрявшая монета («Порог убытка») сразу остановлена с причиной.
+#[tokio::test]
+async fn rest_not_configured_is_not_configured() {
+    use arb::core::stuck_reason::StuckReason;
+    use arb::gateway::errors::ErrorCode;
+    for (name, id) in [
+        ("venue.depth_levels", "20261109000000011BTC"),
+        ("venue.quote_asset", "20261109000000012BTC"),
+    ] {
+        let d = dir(&format!("nc-{name}"));
+        let (core, s, _, srv) = start(&d).await;
+        let xt_scope = || Scope::Venue("xt".into());
+        s.set(name, xt_scope(), None, "тест").await.unwrap();
+        // Повтор задан — при NotConfigured его быть не должно.
+        s.set(
+            "exec.rest_book_retry_ms",
+            xt_scope(),
+            Some(json!(30)),
+            "тест",
+        )
+        .await
+        .unwrap();
+        let e =
+            arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
+                .await
+                .unwrap_err();
+        assert_eq!(
+            e.code,
+            Some(ErrorCode::NotConfigured),
+            "{name}: {}",
+            e.message
+        );
+        assert!(e.message.contains(name), "{name}: {}", e.message);
+        assert!(!e.message.contains("повтор через"), "{name}: {}", e.message);
+        // Котировка продажи сделки — тот же код (stuck.rs, relay.rs читают его).
+        match arb::core::trade_ops::deal_quote(&core, &stuck_deal(id)).await {
+            Err(e) => assert_eq!(
+                e.code,
+                Some(ErrorCode::NotConfigured),
+                "{name}: {}",
+                e.message
+            ),
+            Ok(_) => panic!("{name}: котировка без настройки"),
+        }
+        for (n, v) in [
+            ("stuck.max_loss_pct", json!(1)),
+            ("stuck.mode", json!("loss_limit")),
+        ] {
+            s.set(n, Scope::Global, Some(v), "тест").await.unwrap();
+        }
+        let run = arb::core::stuck::handle_as_is(&core, stuck_deal(id), StuckReason::Unprofitable);
+        tokio::time::timeout(std::time::Duration::from_secs(5), run)
+            .await
+            .unwrap_or_else(|_| panic!("{name}: ждёт тика без предела"));
+        let x = core.deals().into_iter().find(|d| d.id == id).unwrap();
+        assert_eq!(x.step, Step::Halted, "{name}");
+        let lines: Vec<&str> = x.timeline.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            lines
+                .iter()
+                .any(|t| t.contains("не задана настройка или привязка") && t.contains(name)),
+            "{name}: {lines:#?}"
+        );
+        assert_eq!(
+            srv.depth.load(Ordering::SeqCst),
+            0,
+            "{name}: стакан не запрашивался"
+        );
+    }
 }

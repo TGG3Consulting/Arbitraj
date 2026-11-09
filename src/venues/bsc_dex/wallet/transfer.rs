@@ -97,10 +97,16 @@ pub async fn withdraw(
                 .pending(seed));
         }
         _ => {
+            // Решение 236, дополнение п. 4: одиночная транзакция «не попала» — только когда nonce занят нашей отменой в
+            // блоке (send/track_util.rs landed): вывода нет, исход известен — тот же код и факт, что у позднего
+            // выяснения (exec/single_rebuild.rs withdraw_cancelled).
+            let by = d.cancel.as_ref().map_or(String::new(), |(h, _)| {
+                format!(" — nonce занят отменой {h}: вывода нет")
+            });
             return Err(ctx
                 .err(
                     ErrorCode::TxNotIncluded,
-                    format!("Перевод не попал в блок, tx {}", d.chain.hash),
+                    format!("Перевод не попал в блок, tx {}{by}", d.chain.hash),
                 )
                 .with_tx(d.chain));
         }

@@ -18,9 +18,11 @@
 //! решение 229 cancel_confirmed), с подписью исполнителя и причиной «лучший из двух», как обычный путь.
 //!
 //! (3) withdraw_cancelled — вывод из кошелька DEX (перевод, wallet/transfer.rs; ветка t49/withdraw-cancel): nonce занят
-//! нашей отменой в блоке — вывода нет: WithdrawRejected («перевод не ушёл»; ядро — окончательный итог, core/outcome_resolve.rs
-//! definitive) с тем же фактом транзакции, что обычный путь даёт при отмене, занявшей nonce (cancel_hash, cancel_gas_bnb
-//! — газ отмены).
+//! нашей отменой в блоке — вывода нет. Решение 236, дополнение п. 4 (техлид 09.11): тот же код, что обычный путь —
+//! TxNotIncluded «перевод не попал в блок — nonce занят отменой» (было WithdrawRejected), с тем же фактом транзакции
+//! (NotIncluded, cancel_hash, cancel_gas_bnb — газ отмены): ядро — окончательный итог (core/outcome_resolve.rs definitive),
+//! «перевод не ушёл, исход известен» — безопасный повтор (OpError::cancel_confirmed → withdraw_unsent, как продажа в
+//! решении 229).
 //!
 //! Кто вызывает: resolve_single.rs, resolve_withdraw.rs; тесты (tests/bsc_dex_single_cancel.rs,
 //! tests/bsc_dex_withdraw_cancel.rs).
@@ -149,7 +151,8 @@ pub fn cancelled(
 /// этим nonce уже не исполнится). Факт транзакции — тот же, что обычный путь (exec/txs.rs → wallet/transfer.rs) даёт при
 /// отмене, занявшей nonce: исход NotIncluded, cancel_hash и cancel_gas_bnb по квитанции отмены (газ отмены).
 /// Принимает: окружение, контекст из «чем найти» (chain обязателен), хеш исходного перевода, отмену (хеш, квитанция),
-/// строку об очереди кошелька. Возвращает: ошибку WithdrawRejected с фактом транзакции; Internal — в контексте нет
+/// строку об очереди кошелька. Возвращает: ошибку TxNotIncluded с фактом транзакции (решение 236, дополнение п. 4 — как
+/// обычный путь wallet/transfer.rs); Internal — в контексте нет
 /// факта транзакции. Ошибок (паник) нет.
 pub fn withdraw_cancelled(
     ctx: &Ctx,
@@ -180,9 +183,9 @@ pub fn withdraw_cancelled(
         c.tip_bnb,
     );
     ctx.err(
-        ErrorCode::WithdrawRejected,
+        ErrorCode::TxNotIncluded,
         format!(
-            "Перевод не ушёл, tx {hash} — nonce занят отменой {h} (блок {block}; выяснено ботом по квитанции \
+            "Перевод не попал в блок, tx {hash} — nonce занят отменой {h} (блок {block}; выяснено ботом по квитанции \
              отмены): вывода нет; {queue}"
         ),
     )

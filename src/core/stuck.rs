@@ -134,7 +134,7 @@ async fn wait(core: &Core, mut deal: Deal) {
     while next_tick(core, &deal, Some(until)).await {
         match super::trade_ops::deal_quote(core, &deal).await {
             // Решение 47: выгодно — итог сделки не ниже нуля.
-            Ok((v, _)) if super::sell::profitable(&deal, v) => {
+            Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
                 return super::sell::market(core, deal, "ожидание: стало выгодно").await;
             }
             Ok(_) => {}
@@ -162,7 +162,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     let mut first = true;
     let value = loop {
         match super::trade_ops::deal_quote(core, &deal).await {
-            Ok((v, _)) => break v,
+            Ok((v, _, _)) => break v,
             Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
             Err(e) => {
                 q::no_quote_once(core, &deal, &e, &mut first).await;

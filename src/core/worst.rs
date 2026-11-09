@@ -12,6 +12,8 @@
 //! взятый котировкой (тот же), а без него — новый. Стакан ядра по received_at для ордера больше не используется: ядро
 //! не видит кадров с тем же снимком (решение 109) — котировка проходила, ордер отказывал. venue.book_stale_ms
 //! обязательна у всех бирж (не задана — ордера нет).
+//! Решение 238 (ревью, п. 3): худшая цена по уже взятому стакану (worst_of) — у первой попытки ордера продажи по
+//! стакану котировки (trade_ops::trade_seen): котировка и ордер — один снимок.
 //! Кто вызывает: core/trade_ops.rs, core/costs_quote.rs.
 //! От чего зависит: engine.rs (рынок), trade_ops.rs (вид площадки), exec_book.rs, op_error.rs, settings.
 //! Настройки: exec.dex_slippage_pct (по площадке DEX); через exec_book.rs — venue.book_stale_ms, exec.rest_book_retry_ms.
@@ -60,6 +62,18 @@ pub async fn worst_order(
         });
     }
     let b = super::exec_book::book(core, v, a, side).await?;
+    worst_of(v, &b, side, qty)
+}
+
+/// Решение 238 (ревью, п. 3): худшая цена ордера биржи по данному стакану для ордера (exec_book::Book) — самый глубокий
+/// уровень на весь объём. Принимает: площадку, стакан, сторону, количество. Возвращает: цену, возраст стакана, источник.
+/// Ошибки (без кода): в снимке нет стакана; глубины не хватает на qty.
+pub fn worst_of(
+    v: &VenueId,
+    b: &super::exec_book::Book,
+    side: Side,
+    qty: Decimal,
+) -> Result<Worst, OpError> {
     let book = b
         .snap
         .book()

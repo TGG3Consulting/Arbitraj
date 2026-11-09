@@ -18,7 +18,8 @@
 //!   повтора (не StaleData: продажа — алертом, а не повторами); пауза не задана — без повтора;
 //! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести);
 //! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану;
-//! - ревью п. 2: не задана venue.book_stale_ms — застрявшая монета («Порог убытка», «Перегон») сразу остановлена.
+//! - ревью п. 2: не задана venue.book_stale_ms — застрявшая монета («Порог убытка», «Перегон») сразу остановлена;
+//! - ревью п. 3: первая попытка ордера — по стакану котировки (тот же снимок), повтор — по свежему.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway.
@@ -449,4 +450,65 @@ async fn stuck_without_book_stale_ms_halts_at_once() {
         0,
         "стакан не запрашивался"
     );
+}
+
+/// Решение 238 (ревью, п. 3): сценарий ревью — котировка продажи (порог убытка) по снимку S1, а лимит IOC первой
+/// попытки — по новому снимку S2. Здесь S1 к моменту ордера старше venue.book_stale_ms (50 мс): без стакана котировки
+/// худшая цена взяла бы новый снимок (2-й запрос); со стаканом котировки — тот же S1, запроса нет.
+#[tokio::test]
+async fn first_order_uses_quote_book() {
+    let d = dir("same");
+    let (core, s, _, srv) = start(&d).await;
+    s.set(
+        "venue.book_stale_ms",
+        Scope::Venue("xt".into()),
+        Some(json!(50)),
+        "тест",
+    )
+    .await
+    .unwrap();
+    let qty = dec("1");
+    let (_, q, book) = arb::core::trade_ops::sell_quote(&core, None, &xt(), &btc(), qty)
+        .await
+        .unwrap();
+    let book = book.expect("у биржи котировка отдаёт стакан");
+    assert!(book.rest);
+    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+    let order = |b: Option<arb::core::exec_book::Book>| {
+        let (core, q) = (core.clone(), q.clone());
+        async move {
+            let mut seen = None;
+            let r = arb::core::trade_ops::trade_seen(
+                &core,
+                "20261109000000004BTC",
+                &xt(),
+                &btc(),
+                Side::Sell,
+                qty,
+                None,
+                q.avg_price,
+                None,
+                b,
+                &mut seen,
+                None,
+            )
+            .await;
+            (r, seen)
+        }
+    };
+    let (r, seen) = order(Some(book)).await;
+    // Ордер дошёл до адаптера (отказ: не задана venue.order_time_in_force) — худшая цена посчитана по S1.
+    assert!(r.unwrap_err().message.contains("venue.order_time_in_force"));
+    let w = seen.expect("худшая цена посчитана");
+    assert!(w.rest);
+    assert_eq!(w.price, dec("20"));
+    assert_eq!(
+        srv.depth.load(Ordering::SeqCst),
+        1,
+        "котировка и ордер — один снимок"
+    );
+    // Без стакана котировки (повтор) — свежий снимок.
+    let (_, seen) = order(None).await;
+    assert!(seen.unwrap().rest);
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 2);
 }

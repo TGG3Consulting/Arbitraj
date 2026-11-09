@@ -109,7 +109,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
     // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон вслепую.
     let here = match super::trade_ops::deal_quote(core, &deal).await {
-        Ok((v, _)) => Some(v),
+        Ok((v, _, _)) => Some(v),
         Err(e) if super::stuck_quote::not_configured(&e) => {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;
         }

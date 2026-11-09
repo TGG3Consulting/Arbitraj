@@ -9,6 +9,9 @@
 //! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
 //! Худшая цена — worst.rs (та же у расчёта, решение 66); у ордера — только по свежему стакану (решение 227).
 //! Решение 238: котировка исполнения биржи (sell_value) и худшая цена ордера — один стакан (exec_book.rs).
+//! Решение 238 (ревью, п. 3): котировка продажи отдаёт и стакан, по которому посчитана (sell_quote / deal_quote →
+//! exec_book::Book), — первая попытка ордера (trade_seen) считает худшую цену по нему же (worst::worst_of), а не по
+//! новому снимку; повторы — по свежему стакану (ревью п. 1).
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs, outcome_resolve.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
@@ -66,11 +69,16 @@ pub async fn trade(
     gas: Option<&mut Vec<Wasted>>,
 ) -> Result<TradeResult, OpError> {
     let mut seen = None;
-    trade_seen(core, deal, v, a, side, qty, route, avg, cap, &mut seen, gas).await
+    trade_seen(
+        core, deal, v, a, side, qty, route, avg, cap, None, &mut seen, gas,
+    )
+    .await
 }
 
 /// Как trade, плюс по чему посчитана худшая цена последней попытки (решение 227: продажа пишет её в хронологию
-/// сделки — sell.rs). Принимает: как trade и место для Worst (None — до расчёта худшей цены не дошло).
+/// сделки — sell.rs). Принимает: как trade, стакан котировки (решение 238, ревью п. 3: Some — у биржи худшая цена
+/// ПЕРВОЙ попытки считается по этому стакану — котировка и ордер по одному снимку; повторы — по свежему; None — стакан
+/// берётся заново) и место для Worst (None — до расчёта худшей цены не дошло).
 /// Решение 236, дополнение (техлид 09.11): в `gas` (если Some) — газ, которого нет в итоге исполненного обмена
 /// (TradeResult.fees): approve и чаевые канала успеха; весь газ каждой неудачной попытки (откат, отмена, занявшая
 /// nonce, обмен без монет, approve до ошибки). Исход неизвестен — газ транзакции берётся, только если исход так и не
@@ -87,6 +95,7 @@ pub async fn trade_seen(
     route: Option<DexRoute>,
     avg: Decimal,
     cap: Option<Decimal>,
+    mut book: Option<super::exec_book::Book>,
     seen: &mut Option<Worst>,
     mut gas: Option<&mut Vec<Wasted>>,
 ) -> Result<TradeResult, OpError> {
@@ -113,7 +122,12 @@ pub async fn trade_seen(
                 // Решение 238: у ордера биржи — тот же стакан и та же мера свежести, что у котировки исполнения
                 // (exec_book.rs: стакан адаптера или снимок REST, если поток устарел); REST не ответил после повтора —
                 // ошибка без кода безопасного повтора (алерт, а не повторы по тому же стакану).
-                let w = super::worst::worst_order(core, v, a, side, qty, avg).await?;
+                // Решение 238 (ревью, п. 3): первая попытка — по стакану котировки (тот же снимок, по которому
+                // проверен порог); дальше — book пуст, стакан берётся заново (после ордера снимок забыт, п. 1).
+                let w = match book.take() {
+                    Some(b) => super::worst::worst_of(v, &b, side, qty)?,
+                    None => super::worst::worst_order(core, v, a, side, qty, avg).await?,
+                };
                 *seen = Some(w);
                 let worst = w.price;
                 // Решение 66: худшая цена берётся заново по живому стакану — списание не должно выйти за бюджет.
@@ -248,16 +262,20 @@ pub async fn trade_seen(
 /// СДЕЛКИ (dex_account::of). Так маршрут, который этот кошелёк не соберёт (межроутерный без исполнителя), не выбирается.
 /// Принимает: ядро, сделку. Возвращает: как sell_value. Ошибки: как sell_value; сделка с DEX без счёта (dex_account::of).
 pub async fn deal_value(core: &Core, deal: &super::deal::Deal) -> Result<(Decimal, Quote), String> {
-    deal_quote(core, deal).await.map_err(|e| e.message)
+    deal_quote(core, deal)
+        .await
+        .map(|(v, q, _)| (v, q))
+        .map_err(|e| e.message)
 }
 
 /// Как deal_value, но ошибка — с кодом (решение 238, ревью п. 2: стакан для ордера без venue.book_stale_ms —
-/// NotConfigured; застрявшая монета не ждёт его вечно — stuck.rs). Принимает и возвращает: как deal_value.
+/// NotConfigured; застрявшая монета не ждёт его вечно — stuck.rs). Принимает: как deal_value. Возвращает: как
+/// deal_value и стакан котировки биржи (ревью п. 3 — для trade_seen; None — DEX).
 /// Ошибки: как deal_value; код — только у ошибок с кодом (стакан для ордера, exec_book.rs), прочие — без кода.
 pub async fn deal_quote(
     core: &Core,
     deal: &super::deal::Deal,
-) -> Result<(Decimal, Quote), OpError> {
+) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
     let acc = super::dex_account::of(core, deal)?;
     sell_quote(
         core,
@@ -284,19 +302,21 @@ pub async fn sell_value(
 ) -> Result<(Decimal, Quote), String> {
     sell_quote(core, acc, v, a, qty)
         .await
+        .map(|(v, q, _)| (v, q))
         .map_err(|e| e.message)
 }
 
 /// Как sell_value, но ошибка — с кодом (решение 238, ревью п. 2): ошибка стакана для ордера (exec_book.rs) — со своим
 /// кодом (NotConfigured — не задана venue.book_stale_ms), прочие — без кода, тем же текстом.
-/// Принимает и возвращает: как sell_value.
+/// Принимает: как sell_value. Возвращает: как sell_value и стакан котировки биржи (ревью п. 3: ордер первой попытки
+/// считает худшую цену по нему — trade_seen; None — DEX).
 pub async fn sell_quote(
     core: &Core,
     acc: Option<&DexAccountId>,
     v: &VenueId,
     a: &Asset,
     qty: Decimal,
-) -> Result<(Decimal, Quote), OpError> {
+) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
     let x = core
         .inner
         .deps
@@ -308,17 +328,20 @@ pub async fn sell_quote(
     // свежести, что у худшей цены ордера (worst.rs); стакан потока устарел — снимок REST. У DEX — котировка для
     // исполнения (gateway/patience.rs exec_scope), как раньше.
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
-    let q = if kind(core, v)? == VenueKind::Cex {
+    let (q, book) = if kind(core, v)? == VenueKind::Cex {
         let b = super::exec_book::book(core, v, a, Side::Sell).await?;
-        b.snap
+        let q = b
+            .snap
             .quote(qty)
             .await
-            .map_err(|e| format!("{}: {}", v.0, e.message))?
+            .map_err(|e| format!("{}: {}", v.0, e.message))?;
+        (q, Some(b))
     } else {
         let on = super::venue_ticker::on_venue(core, a, v);
-        crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
+        let q = crate::gateway::patience::exec_scope(x.quote(&on, Side::Sell, qty))
             .await
-            .map_err(|e| format!("{}: {}", v.0, e.message))?
+            .map_err(|e| format!("{}: {}", v.0, e.message))?;
+        (q, None)
     };
     let q = super::venue_ticker::quote_back(core, a, v, q);
     if q.fillable_qty < qty {
@@ -358,5 +381,5 @@ pub async fn sell_quote(
     for c in q.costs.iter().filter(|c| !c.in_price) {
         net -= convert::to_usdt(c, &rates)?;
     }
-    Ok((net, q))
+    Ok((net, q, book))
 }

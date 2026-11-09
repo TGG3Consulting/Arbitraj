@@ -127,6 +127,11 @@ pub struct ChainTx {
     /// Газ отмены в BNB — потрачен; отдельно от газа самой транзакции (gas_bnb). None — отмены не было.
     #[serde(default)]
     pub cancel_gas_bnb: Option<Decimal>,
+    /// Решение 236, дополнение (техлид 09.11): газ разрешений (approve), отправленных в блок перед этой транзакцией
+    /// обмена, BNB (сумма их квитанций). Ставит адаптер DEX у успешного обмена (у ошибки — GatewayError::approve_gas_bnb);
+    /// ядро берёт его в затраты сделки (core/deal_gas.rs). None — разрешений не было. Старые записи — None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approve_gas_bnb: Option<Decimal>,
 }
 
 /// Состояние очереди транзакций кошелька DEX (решение 45): одна транзакция за раз, до занятия её nonce в блоке.

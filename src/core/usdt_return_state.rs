@@ -64,11 +64,16 @@ pub enum UsdtReturn {
         why: String,
     },
     /// Решение 163: «Перегнано вручную» — человек перевёл USDT сам; by — кто нажал (журнал и хронология).
+    /// Решение 236, дополнение п. 2: credited — сколько зачислено на площадке покупки (ответ человека); затраты возврата
+    /// части = amount − credited (deal_return_cost.rs). None — человек не знает (или запись до дополнения): затраты
+    /// неизвестны, в итог не входят.
     Manual {
         amount: Decimal,
         at: VenueId,
         to: VenueId,
         by: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        credited: Option<Decimal>,
     },
 }
 

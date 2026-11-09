@@ -19,6 +19,8 @@
 //! уходит вызывающему (продажа на месте — relay_here.rs, возврат USDT — usdt_return_retry.rs).
 //! Решение 231: вывод с «исход неизвестен» и «чем найти» — бот ищет его сам (outcome_resolve.rs); найден — перевод идёт
 //! дальше обычным путём (статус, хеш, зачисление); не найден за срок — как раньше, ручная проверка.
+//! Решение 236, дополнение (техлид 09.11): газ неудачного вывода из кошелька DEX (откат, отмена, занявшая nonce) —
+//! вызывающему для затрат сделки (deal_gas.rs).
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), risk.outcome_poll_s,
 //! risk.outcome_max_s (через outcome_resolve.rs).
@@ -29,10 +31,11 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
-use crate::core::types::{Asset, Transfer, TransferStatus, VenueId, WithdrawRequest};
+use crate::core::types::{Asset, CostKind, Transfer, TransferStatus, VenueId, WithdrawRequest};
 use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
+use super::deal_gas::Wasted;
 use super::engine::{Core, rd};
 use super::op_error::OpError;
 use super::rules_apply::{self, Next};
@@ -92,37 +95,27 @@ pub fn own_bsc_name(core: &Core, venue: &VenueId) -> Option<String> {
         .ok()
 }
 
-/// Переводит qty монеты с from на to. Возвращает: (вывод с хешем и комиссией, зачисление — сколько дошло).
-/// Ошибки: текст причины (вывод отклонён, правило шлюза остановило) — уже в журнале и уведомлениях.
-pub async fn send(
-    core: &Core,
-    deal: &str,
-    from: &VenueId,
-    to: &VenueId,
-    asset: &Asset,
-    qty: Decimal,
-) -> Result<(Transfer, Transfer), OpError> {
-    // Решение 132: DEX — кошелёк сделки (адрес депозита на DEX, вывод с кошелька — его).
-    let acc = super::dex_account::of_deal(core, deal)?;
-    send_as(core, deal, from, to, asset, qty, acc.as_ref()).await
-}
-
-/// Перевод сделки (executor.rs) и перегон застрявшей монеты (relay.rs, решение 227): как send, но на кошелёк DEX сделки зачисляется и по приходу в блокчейне (решение
-/// 151). Возвращает: (вывод, зачисление, строка хронологии сделки — если зачислено по блокчейну). Ошибки: как у send.
+/// Перевод сделки (executor.rs) и перегон застрявшей монеты (relay.rs, решение 227): кошелёк DEX — сделки (решение
+/// 132), на кошелёк DEX зачисляется и по приходу в блокчейне (решение 151). Принимает: ядро, сделку, (откуда, куда),
+/// монету, количество, место для газа неудачных переводов из кошелька DEX (решение 236, дополнение — вызывающий вносит
+/// в затраты сделки, deal_gas::charge). Возвращает: (вывод, зачисление, строка хронологии сделки — если зачислено по
+/// блокчейну). Ошибки: текст причины (вывод отклонён, правило шлюза остановило) — уже в журнале и уведомлениях.
 pub async fn send_trade(
     core: &Core,
     deal: &str,
-    from: &VenueId,
-    to: &VenueId,
+    (from, to): (&VenueId, &VenueId),
     asset: &Asset,
     qty: Decimal,
+    gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let acc = super::dex_account::of_deal(core, deal)?;
-    go(core, deal, from, to, asset, qty, acc.as_ref(), true).await
+    go(core, deal, (from, to), asset, qty, acc.as_ref(), true, gas).await
 }
 
-/// Как send, но счёт DEX задан явно (перегон USDT вне сделки — строка маппинга биржи, решение 132).
-/// Принимает: …, счёт DEX (None — DEX не участвует). Ошибки: как у send.
+/// Перевод со счётом DEX, заданным явно (перегон USDT — кошелёк сделки или строка маппинга биржи, решение 132).
+/// Принимает: …, счёт DEX (None — DEX не участвует), место для газа неудачных переводов (как send_trade).
+/// Ошибки: как у send_trade.
+#[allow(clippy::too_many_arguments)]
 pub async fn send_as(
     core: &Core,
     deal: &str,
@@ -131,9 +124,23 @@ pub async fn send_as(
     asset: &Asset,
     qty: Decimal,
     acc: Option<&crate::core::types::DexAccountId>,
+    gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer), OpError> {
-    let (sent, credited, _) = go(core, deal, from, to, asset, qty, acc, false).await?;
+    let (sent, credited, _) = go(core, deal, (from, to), asset, qty, acc, false, gas).await?;
     Ok((sent, credited))
+}
+
+/// Решение 236, дополнение (техлид 09.11): газ неудачного перевода из кошелька DEX (откат, отмена, занявшая nonce) —
+/// из факта транзакции ошибки. Исход неизвестен — не здесь (вызывающий берёт газ, только если исход не найден).
+/// Принимает: ошибку, место для газа. Ошибок нет.
+fn failed_gas(e: &crate::gateway::errors::GatewayError, gas: &mut Vec<Wasted>) {
+    if let Some(tx) = e.tx.as_deref() {
+        gas.extend(super::deal_gas::of_failed_tx(
+            tx,
+            "перевода",
+            CostKind::TransferGas,
+        ));
+    }
 }
 
 /// Сумма вывода вниз до точности и шага вывода площадки-отправителя в сети `net` (решение 104) — столько уходит с
@@ -155,17 +162,19 @@ pub(super) fn floored(core: &Core, from: &VenueId, asset: &Asset, qty: Decimal) 
 }
 
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
-/// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send.
+/// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send_trade.
+/// Решение 236, дополнение: в `gas` — газ каждой неудачной попытки вывода с фактом транзакции (и повторённой правилом
+/// шлюза), газ найденного ботом отказа (отмена в блоке); исход неизвестен и не найден — газ, что есть в факте.
 #[allow(clippy::too_many_arguments)]
 async fn go(
     core: &Core,
     deal: &str,
-    from: &VenueId,
-    to: &VenueId,
+    (from, to): (&VenueId, &VenueId),
     asset: &Asset,
     qty: Decimal,
     acc: Option<&crate::core::types::DexAccountId>,
     chain: bool,
+    gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let deps = &core.inner.deps;
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
@@ -222,6 +231,7 @@ async fn go(
                 .await
             {
                 Next::Retry { pause_ms } => {
+                    failed_gas(&e, gas);
                     tokio::time::sleep(Duration::from_millis(pause_ms)).await
                 }
                 Next::Stop => {
@@ -242,6 +252,8 @@ async fn go(
                         }
                         _ => e,
                     };
+                    // Решение 236, дополнение: вывода нет (или исход не найден) — газ факта транзакции потрачен.
+                    failed_gas(&e, gas);
                     // Вывода не будет — получатель снимает ожидание поступления (DEX: wallet/inflows.rs). Исход
                     // неизвестен — перевод мог уйти: ожидание остаётся (до ручной проверки или срока).
                     if e.code != ErrorCode::OutcomeUnknown {
@@ -285,6 +297,7 @@ async fn go(
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
+                failed_gas(&e, gas);
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
                 let _ = gw_to.deposit_abandoned(&on_to).await;
                 return Err(OpError::from(&e));

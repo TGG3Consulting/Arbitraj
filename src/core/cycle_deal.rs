@@ -15,8 +15,10 @@
 //!   факту и Closed, как исполненный; «окончательно не исполнено» — Closed, денег не стоил; откат в блоке — газ в
 //!   затраты, Closed; не выяснен (нет «чем найти», сроки не заданы, человек, срок вышел) — Halted до ручной проверки.
 //!
+//! Решение 236, дополнение (техлид 09.11): газ approve перед циклом и чаевые канала — в затраты (курсом BNB адаптера);
+//! approve уже в блоке, а цикл не отправлен — сделка остаётся в учёте с газом approve, Closed (не discard).
 //! Кто вызывает: core/cycle_watch.rs.
-//! От чего зависит: core/{cycle_plan, cycle_outcome, ledger, deal, executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
+//! От чего зависит: core/{cycle_plan, cycle_outcome, ledger, deal, deal_gas, executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
 //! gateway, core/types.
 //! Настройки: через вызываемые (dry.enabled, signal.route_cooldown_s, правила шлюза, risk.outcome_poll_s, risk.outcome_max_s).
 
@@ -99,6 +101,18 @@ async fn deal(core: &Core, plan: CyclePlan) -> Outcome {
             filled(core, &mut deal, r).await;
             Outcome::Done
         }
+        // Решение 236, дополнение: разрешение (approve) уже в блоке, а цикл не отправлен — газ approve потрачен: сделка
+        // остаётся в учёте с этой затратой (иначе газ терялся вместе с записью), Closed.
+        Err(e)
+            if e.tx.is_none()
+                && e.code != ErrorCode::OutcomeUnknown
+                && e.approve_gas().is_some() =>
+        {
+            spend(core, &mut deal, plan.quote.bnb_usdt, &e).await;
+            let why = format!("цикл не отправлен после approve: {}", e.message);
+            super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+            Outcome::Done
+        }
         Err(e) if e.tx.is_none() && e.code != ErrorCode::OutcomeUnknown => {
             super::ledger::discard(core, &deal.id);
             Outcome::Refused(e.message)
@@ -120,10 +134,20 @@ async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
     deal.proceeds = r.output * r.base_usdt;
     // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
     let gas = r.trade.fee_in(super::convert::GAS_TICKER);
-    deal.spent += gas * r.bnb_usdt;
+    // Решение 236, дополнение: approve перед циклом и чаевые канала (факт транзакции) — тем же курсом BNB адаптера.
+    let extra: Decimal = super::deal_gas::of_filled(&r.trade)
+        .iter()
+        .map(|w| w.bnb)
+        .sum();
+    deal.spent += (gas + extra) * r.bnb_usdt;
     let by = r.trade.executor.clone().unwrap_or_default();
+    let extra_t = if extra.is_zero() {
+        String::new()
+    } else {
+        format!(", approve и чаевые канала {extra} BNB")
+    };
     deal.note(format!(
-        "Цикл исполнен: вход {} → выход {} {} (газ {} BNB); исполнил: {by}",
+        "Цикл исполнен: вход {} → выход {} {} (газ {} BNB{extra_t}); исполнил: {by}",
         r.input, r.output, deal.direction.asset.ticker, gas
     ));
     deal.buy = Some(r.trade);
@@ -194,12 +218,21 @@ pub async fn settle_unknown(
     }
 }
 
-/// Газ транзакции ошибки (и отмены, занявшей nonce) — в затраты по курсу BNB плана и в статистику газа. Ошибок нет.
+/// Газ транзакции ошибки (и отмены, занявшей nonce) — в затраты по курсу BNB плана и в статистику газа. Решение 236,
+/// дополнение: и чаевые канала (факт транзакции), и газ approve до ошибки (GatewayError::approve_gas_bnb). Ошибок нет.
 async fn spend(core: &Core, deal: &mut Deal, bnb_usdt: Decimal, e: &GatewayError) {
     if let Some(tx) = &e.tx {
         super::gas_stats::record_tx(core, &deal.direction.asset, tx).await;
         let gas = tx.gas_bnb.unwrap_or(Decimal::ZERO) + tx.cancel_gas_bnb.unwrap_or(Decimal::ZERO);
         deal.spent += gas * bnb_usdt;
         deal.note(format!("Газ транзакции цикла: {gas} BNB"));
+        if let Some(t) = tx.tip_bnb.filter(|t| !t.is_zero()) {
+            deal.spent += t * bnb_usdt;
+            deal.note(format!("Чаевые канала цикла: {t} BNB"));
+        }
+    }
+    if let Some(a) = e.approve_gas().filter(|a| !a.is_zero()) {
+        deal.spent += a * bnb_usdt;
+        deal.note(format!("Газ approve перед циклом: {a} BNB"));
     }
 }

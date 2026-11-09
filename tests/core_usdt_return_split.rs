@@ -199,6 +199,7 @@ async fn jct_close_starts_two_parts_each_with_own_state() {
     core.command(ManualCommand {
         action: ManualAction::UsdtReturnedManually {
             deal_id: "s3JCT@mexc".into(),
+            usdt: None,
         },
         source: CommandSource::Ui,
         by: Some("тест".into()),

@@ -88,7 +88,8 @@
         <!-- Решение 163: ждёт повтора (usdt.return_retry_s, usdt.return_retries_max). -->
         <p class="muted">Возврат USDT: ждёт повтора — {r.amount} USDT <code>{r.from}</code> → <code>{r.to}</code>, повторов сделано {r.tries}; последняя причина: {r.why}</p>
       {:else if r.state === 'manual'}
-        <p class="ok">USDT перегнаны вручную: {r.amount} USDT <code>{r.at}</code> → <code>{r.to}</code> ({r.by})</p>
+        <!-- Решение 236, дополнение п. 2: зачислено — ответ человека; затраты возврата = сумма − зачислено (в итоге). -->
+        <p class="ok">USDT перегнаны вручную: {r.amount} USDT <code>{r.at}</code> → <code>{r.to}</code> ({r.by}){#if r.credited != null}, зачислено {r.credited} — затраты возврата в итоге{:else}<span class="muted"> — зачисление не указано, затраты возврата неизвестны и в итог не вошли</span>{/if}</p>
       {:else if r.state === 'not_returned'}
         <p class="err">USDT не вернулись: {r.amount} USDT лежат на <code>{r.at}</code> — {r.why}. Перегоните на площадку покупки — кнопки «Перегнать» и «Перегнано вручную» на экране «Ручное управление»</p>
       {/if}

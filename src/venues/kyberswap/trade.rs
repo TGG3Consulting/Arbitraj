@@ -43,8 +43,8 @@ pub async fn execute(p: &Parts, req: TradeRequest, prep: Prepared) -> GatewayRes
     let mut built = prep.built;
     // Разрешение на списание входного токена роутером (ERC-20 approve), если его не хватает; у свопа с нативной
     // монетой на входе (value > 0) approve не нужен.
-    if built.value.is_zero()
-        && ensure_allowance(
+    let approved = if built.value.is_zero() {
+        ensure_allowance(
             ctx,
             &p.nonce_next,
             token_in,
@@ -53,7 +53,13 @@ pub async fn execute(p: &Parts, req: TradeRequest, prep: Prepared) -> GatewayRes
             built.amount_in,
         )
         .await?
-    {
+    } else {
+        None
+    };
+    // Решение 236, дополнение (техлид 09.11): газ разрешения — в итог свопа и в любую ошибку после него (ядро берёт его
+    // в затраты сделки, core/deal_gas.rs): успех — ChainTx::approve_gas_bnb, ошибка — GatewayError::approve_gas_bnb.
+    let out: GatewayResult<TradeResult> = async {
+    if approved.is_some() {
         // Решение 99: approve — отдельная транзакция, ждём её блока (секунды). Маршрут и транзакция свопа, собранные
         // ДО него, к этому моменту устарели — симуляция свопа откатывалась «Return amount is not enough» (сделка
         // 20261101182135312CAKE). Собираем заново на свежем маршруте и снова сверяем худшую цену.
@@ -86,6 +92,17 @@ pub async fn execute(p: &Parts, req: TradeRequest, prep: Prepared) -> GatewayRes
     })?;
     let tokens = (token_in, prep.token_out);
     trade_fact::result(ctx, req, d, &r, wallet, tokens, prep.decs)
+    }
+    .await;
+    match out {
+        Ok(mut t) => {
+            if let Some(c) = t.chain.as_mut() {
+                c.approve_gas_bnb = approved;
+            }
+            Ok(t)
+        }
+        Err(e) => Err(e.with_approve_gas(approved)),
+    }
 }
 
 /// Текущее разрешение роутеру на списание токена (ERC-20 allowance). Ошибки: узел.
@@ -108,7 +125,8 @@ async fn allowance(
 
 /// Разрешение на списание токена роутером: читает allowance, при нехватке — approve(router, amount) и ждёт блока.
 /// Принимает: окружение, запомненный nonce (tx.rs), токен, кошелёк, роутер, сумму.
-/// Возвращает: true — approve отправлялся (прошло время, маршрут свопа надо собрать заново).
+/// Возвращает: Some(газ approve в BNB по квитанции) — approve отправлялся (прошло время, маршрут свопа надо собрать
+/// заново; решение 236, дополнение — газ в затраты сделки); None — разрешения хватало.
 /// Ошибки: узел, SwapReverted (approve не прошёл — с фактом транзакции), OutcomeUnknown.
 async fn ensure_allowance(
     ctx: &Ctx,
@@ -117,9 +135,9 @@ async fn ensure_allowance(
     wallet: Address,
     router: Address,
     amount: U256,
-) -> GatewayResult<bool> {
+) -> GatewayResult<Option<rust_decimal::Decimal>> {
     if allowance(ctx, token, wallet, router).await? >= amount {
-        return Ok(false);
+        return Ok(None);
     }
     let data = Bytes::from(
         IERC20::approveCall {
@@ -130,7 +148,7 @@ async fn ensure_allowance(
     );
     let d = tx::send(ctx, next, wallet, token, data, U256::ZERO).await?;
     match d.chain.outcome {
-        TxOutcome::Included => Ok(true),
+        TxOutcome::Included => Ok(Some(d.chain.gas_bnb.unwrap_or_default())),
         TxOutcome::NotIncluded => Err(ctx
             .err(ErrorCode::TxNotIncluded, "approve не попал в блок")
             .with_tx(d.chain)),

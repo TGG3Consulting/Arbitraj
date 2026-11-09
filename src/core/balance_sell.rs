@@ -134,6 +134,8 @@ async fn sell(core: &Core, v: &VenueId, account: &str, ticker: &str) -> Result<S
         None,
         req.worst_price,
         None,
+        // Не сделка — газ впустую только в статистику монеты (gas_stats), как раньше.
+        None,
     )
     .await
     .map_err(|e| {

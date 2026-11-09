@@ -3,7 +3,8 @@
 //! сейчас». Худшая цена: у биржи — самый глубокий уровень текущего стакана, нужный на весь объём
 //! (лимитный ордер по уровням); у DEX — цена котировки с допуском exec.dex_slippage_pct (минимум на выходе).
 //! Ошибка — по правилу шлюза (rules_apply.rs): повтор, только если так задано правилом; «не исполнился» —
-//! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты.
+//! тоже ошибка (стартовое правило: отменить, не повторять). Газ обмена — в статистику монеты. Решение 236, дополнение:
+//! газ вне итога обмена (approve, чаевые, газ неудачных попыток) — вызывающему для затрат сделки (deal_gas.rs).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs; deal_value / sell_value — sell.rs, sell_unsent.rs, relay*.rs,
 //! partial.rs, daily_value.rs (решение 220: котировка кошельком сделки).
 //! Худшая цена — worst.rs (та же у расчёта, решение 66); у ордера — только по свежему стакану (решение 227).
@@ -21,13 +22,15 @@ use std::time::Duration;
 use rust_decimal::Decimal;
 
 use crate::core::types::{
-    Asset, DexAccountId, DexRoute, Quote, Side, TradeRequest, TradeResult, TradeStatus, VenueId,
+    Asset, CostKind, DexAccountId, DexRoute, Quote, Side, TradeRequest, TradeResult, TradeStatus,
+    VenueId,
 };
 use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::settings::read::At;
 
 use super::convert;
+use super::deal_gas::Wasted;
 use super::engine::{Core, rd};
 use super::op_error::OpError;
 use super::rules_apply::{self, Next};
@@ -45,7 +48,9 @@ pub use super::worst::{Worst, worst_price};
 
 /// Покупка или продажа. Принимает: ядро, id сделки, площадку, монету, сторону, количество,
 /// маршрут DEX из котировки, среднюю цену котировки, бюджет покупки (решение 66: qty × худшая цена не больше его —
-/// иначе ордер не ставится; None — без предела). Возвращает: факт (исполнено полностью или частично).
+/// иначе ордер не ставится; None — без предела), место для газа вне итога обмена (решение 236, дополнение: Some —
+/// сделка, вызывающий вносит его в затраты сделки deal_gas::charge; None — без сделки, газ впустую — только в
+/// статистику монеты, как раньше). Возвращает: факт (исполнено полностью или частично).
 /// Ошибки: текст причины (не исполнился, отклонён, нет данных, бюджет) — уже в журнале и уведомлениях.
 #[allow(clippy::too_many_arguments)]
 pub async fn trade(
@@ -58,13 +63,18 @@ pub async fn trade(
     route: Option<DexRoute>,
     avg: Decimal,
     cap: Option<Decimal>,
+    gas: Option<&mut Vec<Wasted>>,
 ) -> Result<TradeResult, OpError> {
     let mut seen = None;
-    trade_seen(core, deal, v, a, side, qty, route, avg, cap, &mut seen).await
+    trade_seen(core, deal, v, a, side, qty, route, avg, cap, &mut seen, gas).await
 }
 
 /// Как trade, плюс по чему посчитана худшая цена последней попытки (решение 227: продажа пишет её в хронологию
 /// сделки — sell.rs). Принимает: как trade и место для Worst (None — до расчёта худшей цены не дошло).
+/// Решение 236, дополнение (техлид 09.11): в `gas` (если Some) — газ, которого нет в итоге исполненного обмена
+/// (TradeResult.fees): approve и чаевые канала успеха; весь газ каждой неудачной попытки (откат, отмена, занявшая
+/// nonce, обмен без монет, approve до ошибки). Исход неизвестен — газ транзакции берётся, только если исход так и не
+/// найден (найденный итог несёт свой газ — иначе вошёл бы дважды); approve до ошибки — всегда.
 /// Ошибки: как trade; «стакан устарел» (worst.rs worst_order).
 #[allow(clippy::too_many_arguments)]
 pub async fn trade_seen(
@@ -78,7 +88,14 @@ pub async fn trade_seen(
     avg: Decimal,
     cap: Option<Decimal>,
     seen: &mut Option<Worst>,
+    mut gas: Option<&mut Vec<Wasted>>,
 ) -> Result<TradeResult, OpError> {
+    let in_deal = gas.is_some();
+    let mut add = |w: Vec<Wasted>| {
+        if let Some(g) = gas.as_mut() {
+            g.extend(w);
+        }
+    };
     let op = if side == Side::Buy {
         "Покупка"
     } else {
@@ -149,11 +166,16 @@ pub async fn trade_seen(
         let err = match res {
             Ok(r) => {
                 if let Some(tx) = &r.chain {
-                    super::gas_stats::record_tx(core, a, tx).await;
+                    super::gas_stats::record_tx_as(core, a, tx, in_deal).await;
                 }
                 if r.status != TradeStatus::NotFilled && r.filled_qty > Decimal::ZERO {
                     super::risk::on_ok(core, v);
+                    add(super::deal_gas::of_filled(&r));
                     return Ok(r);
+                }
+                // Решение 236, дополнение: итог «не исполнилась» отбрасывается — его газ (fees) в сделку не попадёт иначе.
+                if let Some(tx) = &r.chain {
+                    add(super::deal_gas::of_failed_tx(tx, "обмена", CostKind::Gas));
                 }
                 GatewayError::new(
                     ErrorCode::OrderNotFilled,
@@ -163,13 +185,26 @@ pub async fn trade_seen(
             }
             Err(e) => {
                 if let Some(tx) = &e.tx {
-                    super::gas_stats::record_tx(core, a, tx).await;
+                    super::gas_stats::record_tx_as(core, a, tx, in_deal).await;
+                    // Исход неизвестен — газ транзакции ниже, если исход так и не найден.
+                    if e.code != ErrorCode::OutcomeUnknown {
+                        add(super::deal_gas::of_failed_tx(tx, "обмена", CostKind::Gas));
+                    }
                 }
+                add(super::deal_gas::of_err_approve(&e));
                 e
             }
         };
         match rules_apply::on_error(core, op, v, Some(deal), &err, attempt).await {
-            Next::Retry { pause_ms } => tokio::time::sleep(Duration::from_millis(pause_ms)).await,
+            Next::Retry { pause_ms } => {
+                // Повтор после «исход неизвестен» (если так задано правилом): газ уже в факте — потрачен.
+                if err.code == ErrorCode::OutcomeUnknown
+                    && let Some(tx) = &err.tx
+                {
+                    add(super::deal_gas::of_failed_tx(tx, "обмена", CostKind::Gas));
+                }
+                tokio::time::sleep(Duration::from_millis(pause_ms)).await
+            }
             Next::Stop => {
                 // Решение 231: исход неизвестен — бот ищет ордер по «чем найти» из ошибки; нашёл — разбор как ответа.
                 // Отклонён площадкой — окончательно, ничего не исполнено: как обычный отказ ордера, без повтора.
@@ -185,11 +220,18 @@ pub async fn trade_seen(
                         Err(rejected) => {
                             // Газ найденного факта (откат, отмена, занявшая nonce) — в статистику, как обычный путь.
                             if let Some(tx) = &rejected.tx {
-                                super::gas_stats::record_tx(core, a, tx).await;
+                                super::gas_stats::record_tx_as(core, a, tx, in_deal).await;
+                                add(super::deal_gas::of_failed_tx(tx, "обмена", CostKind::Gas));
                             }
                             return Err(OpError::from(&rejected));
                         }
                     }
+                }
+                // Исход так и не найден: газ, что уже есть в факте транзакции (квитанция), — потрачен.
+                if err.code == ErrorCode::OutcomeUnknown
+                    && let Some(tx) = &err.tx
+                {
+                    add(super::deal_gas::of_failed_tx(tx, "обмена", CostKind::Gas));
                 }
                 return Err(OpError::from(&err));
             }

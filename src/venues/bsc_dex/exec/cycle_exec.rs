@@ -35,7 +35,7 @@ use super::cycle_steps::{self, exec_steps, net_check};
 use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, sim};
 use super::result;
-use super::swap_send::{rebuilt_notice, send_approvals};
+use super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::txs::{self, Env};
 
 /// Сделка через исполнитель. Принимает: котировку, окружение отправки, очередь кошелька, запрос, свежие ноги, адрес
@@ -59,7 +59,10 @@ pub async fn trade(
     onchain::ensure(ctx, executor, wallet).await?;
     let (mut c, mut at) = build(q, &legs, req, executor).await?;
     let need = approve_executor::missing(ctx, base, wallet, executor, c.amount_in).await?;
-    if send_approvals(env, &slot, &need).await? {
+    let approved = send_approvals(env, &slot, &need).await?;
+    // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог цикла и в любую ошибку после них (swap_send.rs).
+    let out: GatewayResult<CycleTradeResult> = async {
+    if approved.is_some() {
         // Решение 121 B1: разрешение ждало блока — пулы, выход и вызов устарели: свежее перечтение и сборка.
         let (legs, _) = cycle_legs::fresh(q, &req.cycle).await?;
         (c, at) = build(q, &legs, req, executor).await?;
@@ -87,6 +90,9 @@ pub async fn trade(
     let t = result::result(ctx, tr, d, wallet, (base, base), (dec, dec), &[])
         .map_err(|e| sc.attach(e))?;
     Ok(cycle_steps::finish(t, &r))
+    }
+    .await;
+    with_approve_gas(out, approved)
 }
 
 /// Вызов execute на текущем блоке: ожидаемый выход на этих ногах не ниже границы ядра. Возвращает: вызов и (номер,

@@ -103,6 +103,7 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
 async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
+    let mut gas = Vec::new();
     let res = super::trade_ops::trade_seen(
         core,
         &deal.id,
@@ -114,8 +115,11 @@ async fn sell(core: &Core, mut deal: Deal, q: Quote, why: &str) {
         q.avg_price,
         None,
         &mut seen,
+        Some(&mut gas),
     )
     .await;
+    // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
+    super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).
     deal.note(quote_note(&q, deal.qty, seen.as_ref()));
     match res {

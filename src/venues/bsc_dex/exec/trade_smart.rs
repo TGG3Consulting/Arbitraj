@@ -37,7 +37,8 @@ use super::plan::Plan;
 use super::smart_legs::{Prep, prepare};
 use super::swap_ctx::SwapCtx;
 use super::trade::{
-    no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, worst_positive,
+    no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, with_approve_gas,
+    worst_positive,
 };
 use super::txs::Env;
 use super::{precheck_sim, result, universal, verify_gate};
@@ -82,53 +83,59 @@ pub async fn trade(
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     let (mut plan, mut at) = build(q, &prep, wallet).await?;
-    if send_approvals(env, &slot, &plan.approvals).await? {
-        // Решение 121 B1: разрешения ждали своих блоков — доли и минимумы устарели. Графу — свежая верификация, затем
-        // пересчёт долей по живому состоянию, сверка с MixedQuoter и новая сборка execute.
-        let mins = match verify_mins {
-            Some(_) => Some(verify_gate::gate(q, env, &req, route).await?.amount_out_min),
-            None => None,
+    let approved = send_approvals(env, &slot, &plan.approvals).await?;
+    // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
+    let out: GatewayResult<TradeResult> = async {
+        if approved.is_some() {
+            // Решение 121 B1: разрешения ждали своих блоков — доли и минимумы устарели. Графу — свежая верификация, затем
+            // пересчёт долей по живому состоянию, сверка с MixedQuoter и новая сборка execute.
+            let mins = match verify_mins {
+                Some(_) => Some(verify_gate::gate(q, env, &req, route).await?.amount_out_min),
+                None => None,
+            };
+            prep = prepare(&v, &req, route, mins.as_deref(), decs, is_native).await?;
+            (plan, at) = build(q, &prep, wallet).await?;
+            no_new_approvals(ctx, &plan)?;
+            rebuilt_notice(env, &req);
+        }
+        let router = is_native.then_some(plan.router);
+        let entries: Vec<&Entry> = prep
+            .paths
+            .iter()
+            .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
+            .collect();
+        precheck_sim::emitters(ctx, &plan, &entries, at).await?;
+        let tin = if req.side == Side::Buy { usdt } else { coin };
+        // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
+        let sc = SwapCtx::swap(
+            wallet,
+            (tin, out_token),
+            decs,
+            router.as_slice(),
+            None,
+            None,
+        );
+        let d = send_swap(env, &slot, plan, guard)
+            .await
+            .map_err(|e| sc.attach(e))?;
+        drop(slot);
+        let sc = SwapCtx {
+            tip_bnb: d.tip_bnb,
+            ..sc
         };
-        prep = prepare(&v, &req, route, mins.as_deref(), decs, is_native).await?;
-        (plan, at) = build(q, &prep, wallet).await?;
-        no_new_approvals(ctx, &plan)?;
-        rebuilt_notice(env, &req);
+        result::result(
+            ctx,
+            req,
+            d,
+            wallet,
+            (tin, out_token),
+            decs,
+            router.as_slice(),
+        )
+        .map_err(|e| sc.attach(e))
     }
-    let router = is_native.then_some(plan.router);
-    let entries: Vec<&Entry> = prep
-        .paths
-        .iter()
-        .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
-        .collect();
-    precheck_sim::emitters(ctx, &plan, &entries, at).await?;
-    let tin = if req.side == Side::Buy { usdt } else { coin };
-    // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
-    let sc = SwapCtx::swap(
-        wallet,
-        (tin, out_token),
-        decs,
-        router.as_slice(),
-        None,
-        None,
-    );
-    let d = send_swap(env, &slot, plan, guard)
-        .await
-        .map_err(|e| sc.attach(e))?;
-    drop(slot);
-    let sc = SwapCtx {
-        tip_bnb: d.tip_bnb,
-        ..sc
-    };
-    result::result(
-        ctx,
-        req,
-        d,
-        wallet,
-        (tin, out_token),
-        decs,
-        router.as_slice(),
-    )
-    .map_err(|e| sc.attach(e))
+    .await;
+    with_approve_gas(out, approved)
 }
 
 /// План execute на текущем блоке (exec/universal.rs): разрешения, которых не хватает сейчас. Принимает: котировку,

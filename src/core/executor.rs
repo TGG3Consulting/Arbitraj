@@ -218,6 +218,7 @@ async fn run(core: &Core, d: Direction) {
     // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
     let frozen = super::uncapped_entry::freeze(core, &plan).await;
     // Покупка на A.
+    let mut gas = Vec::new();
     let bought = super::trade_ops::trade(
         core,
         &deal.id,
@@ -229,8 +230,11 @@ async fn run(core: &Core, d: Direction) {
         plan.buy_quote.avg_price,
         // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
         Some(plan.order_cap(cap)),
+        Some(&mut gas),
     )
     .await;
+    // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки (и при отказе покупки).
+    super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
     let r = match bought {
         Ok(r) => r,
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,
@@ -295,9 +299,19 @@ async fn run(core: &Core, d: Direction) {
     deal.step = Step::Transfer;
     super::ledger::save(core, &deal).await;
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
-    match super::transfers::send_trade(core, &deal.id, &d.buy_on, &d.sell_on, &d.asset, deal.qty)
-        .await
-    {
+    let mut gas = Vec::new();
+    let sent = super::transfers::send_trade(
+        core,
+        &deal.id,
+        (&d.buy_on, &d.sell_on),
+        &d.asset,
+        deal.qty,
+        &mut gas,
+    )
+    .await;
+    // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
+    super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
+    match sent {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {
                 deal.note(line);

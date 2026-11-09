@@ -1,5 +1,6 @@
 # Сборка для Linux: статический бинарь arb (musl) + собранный интерфейс + start.sh одним архивом «arb-linux».
 # Решение 218: в архиве и uncapped_recompute (cargo build собирает все бинарники крейта, src/bin).
+# Решение 236, дополнение п. 5: и usdt_sent_backfill (разовая запись «ушло» в старые возвраты USDT).
 # Статический musl — чтобы бинарь запускался на любой версии Ubuntu/Linux независимо от glibc сервера.
 # Запускается на каждый пуш в main, вручную (Actions → Linux build → Run workflow) и на PR, меняющий этот файл или dist-linux.
 # Скачать: Actions → последний успешный запуск «Linux build» → Artifacts → arb-linux.
@@ -39,9 +40,11 @@ jobs:
           cp "target/$TARGET/release/arb" out/arb/
           # Решение 218: программа пересчёта старых записей «без потолка» по окнам (src/bin/uncapped_recompute.rs).
           cp "target/$TARGET/release/uncapped_recompute" out/arb/
+          # Решение 236, дополнение п. 5: разовая запись «ушло» в старые возвраты USDT (src/bin/usdt_sent_backfill.rs).
+          cp "target/$TARGET/release/usdt_sent_backfill" out/arb/
           cp -r ui/dist out/arb/ui
           cp dist-linux/* out/arb/
-          chmod +x out/arb/arb out/arb/uncapped_recompute out/arb/start.sh
+          chmod +x out/arb/arb out/arb/uncapped_recompute out/arb/usdt_sent_backfill out/arb/start.sh
       - uses: actions/upload-artifact@v4
         with:
           name: arb-linux

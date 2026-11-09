@@ -99,7 +99,13 @@ pub enum ManualAction {
     /// Решение 163: «Перегнать» — ещё одна попытка возврата выручки USDT закрытой сделки («USDT не вернулись»).
     UsdtRetry { deal_id: String },
     /// Решение 163: «Перегнано вручную» — человек перевёл USDT сам; запись закрывается, возврат — «вручную».
-    UsdtReturnedManually { deal_id: String },
+    /// Решение 236, дополнение п. 2 (техлид 09.11): usdt — сколько USDT зачислено на площадке покупки (ответ человека
+    /// числом, как в «Продано вручную»); None или «-» — человек не знает: затраты возврата в итог не входят, пометка.
+    UsdtReturnedManually {
+        deal_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        usdt: Option<String>,
+    },
     /// Решение 157: плашка режима (ControlBar) из Telegram — «Старт» / «Пауза» / «Стоп» (Core::set_mode_by).
     SetMode { mode: crate::core::risk::Mode },
     /// Решение 157: «Снять паузу» площадки (как POST /api/control/venue/{id}/resume).

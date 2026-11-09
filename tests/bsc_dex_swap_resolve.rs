@@ -108,6 +108,7 @@ fn unknown_chain(hash: B256) -> ChainTx {
         tip_bnb: None,
         cancel_hash: None,
         cancel_gas_bnb: None,
+        approve_gas_bnb: None,
     }
 }
 

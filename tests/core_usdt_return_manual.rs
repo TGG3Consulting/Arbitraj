@@ -60,11 +60,9 @@ async fn old_not_returned_is_on_screen_after_restart() {
         .unwrap();
     let titles: Vec<&str> = rec.buttons.iter().map(|b| b.title.as_str()).collect();
     assert_eq!(titles, ["Перегнать", "Перегнано вручную"]);
-    assert!(
-        rec.buttons
-            .iter()
-            .all(|b| b.disabled.is_none() && b.input.is_none())
-    );
+    assert!(rec.buttons.iter().all(|b| b.disabled.is_none()));
+    // Решение 236, дополнение п. 2: «Перегнать» — без ввода, «Перегнано вручную» — спрашивает, сколько зачислено.
+    assert!(rec.buttons[0].input.is_none() && rec.buttons[1].input.is_some());
     // Решение 164: исходный текст причины — в reason_full, в тексте записи — человеческий.
     assert!(
         rec.reason_full
@@ -81,6 +79,7 @@ async fn returned_manually_closes_and_second_press_does_nothing() {
     not_returned(&core, "m2DOGE", None).await;
     let a = ManualAction::UsdtReturnedManually {
         deal_id: "m2DOGE".into(),
+        usdt: None,
     };
     let t = press(&core, a.clone()).await.unwrap();
     assert!(t.contains("перегнано вручную"), "{t}");

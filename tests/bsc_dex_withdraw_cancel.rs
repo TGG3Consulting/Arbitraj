@@ -4,12 +4,14 @@
 //! ядре (настоящая SQLite, моков нет):
 //! 1) «чем найти» перевода несёт хеши отмен: exec/txs.rs / wallet/transfer.rs seed + with_cancels → venue.rs
 //!    resolve::attach (не перетирает) → JSON (как ядро хранит ошибку) — список отмен не теряется;
-//! 2) итог «вывода нет» (exec/single_rebuild.rs withdraw_cancelled): WithdrawRejected, факт транзакции тот же, что
+//! 2) итог «вывода нет» (exec/single_rebuild.rs withdraw_cancelled): TxNotIncluded (решение 236, дополнение п. 4 — тот
+//!    же код, что обычный путь wallet/transfer.rs), факт транзакции тот же, что
 //!    обычный путь даёт при отмене, занявшей nonce (exec/txs.rs chain_tx: NotIncluded, cancel_hash, cancel_gas_bnb по
 //!    квитанции отмены); ядро считает его окончательным (core/outcome_resolve.rs definitive), «исход неизвестен» снят;
 //!    без факта транзакции в контексте — Internal (не окончательно, ядро спросит ещё);
-//! 3) живое ядро (core/usdt_return_retry.rs fail): найденный итог — «вывод отклонён площадкой — не повторяем», а не
-//!    «перевод мог уйти»; исходная ошибка «исход неизвестен» — «исход перегона неизвестен».
+//! 3) живое ядро (core/usdt_return_retry.rs fail): найденный итог — «перевод не ушёл, исход известен»: повтор возврата
+//!    безопасен (OpError::withdraw_unsent через cancel_confirmed, как продажа в решении 229) — «ждёт повтора», а не
+//!    «перевод мог уйти»; исходная ошибка «исход неизвестен» — «исход перегона неизвестен», без повтора.
 //!
 //! Вердикт по квитанциям (judge) — общий со свопом, проверен в tests/bsc_dex_single_cancel.rs. Чтение узлом и снятие
 //! очереди (resolve_withdraw.rs → resolve_single.rs verdict, resolve.rs release_if_ours) — через узел, здесь не
@@ -154,7 +156,7 @@ async fn cancelled_withdraw_is_final_with_cancel_gas() {
         (h, rc.clone()),
         "очередь кошелька снята",
     );
-    assert_eq!(late.code, ErrorCode::WithdrawRejected);
+    assert_eq!(late.code, ErrorCode::TxNotIncluded);
     assert!(late.message.contains("вывода нет"), "{}", late.message);
     assert!(late.message.contains(&h.to_string()), "{}", late.message);
     // Обычный путь: трекер нашёл квитанцию отмены (send/track_util.rs landed) → exec/txs.rs chain_tx.
@@ -194,6 +196,16 @@ async fn cancelled_withdraw_is_final_with_cancel_gas() {
     );
     let op = OpError::from(&late);
     assert!(!op.outcome_unknown() && op.sent && op.cancelled);
+    // Решение 236, дополнение п. 4: один код и одна семантика с обычным путём — «перевод не ушёл, исход известен».
+    let usual = OpError::from(
+        &GatewayError::new(ErrorCode::TxNotIncluded, None, "Перевод не попал в блок")
+            .with_tx(normal.clone()),
+    );
+    assert_eq!(
+        (usual.code, usual.sent, usual.cancelled),
+        (op.code, op.sent, op.cancelled)
+    );
+    assert!(op.cancel_confirmed() && op.withdraw_unsent() && usual.withdraw_unsent());
     // Без факта транзакции в контексте — Internal: не окончательно, ядро спросит ещё.
     let mut bare = sc.clone();
     bare.chain = None;
@@ -203,7 +215,7 @@ async fn cancelled_withdraw_is_final_with_cancel_gas() {
 }
 
 #[tokio::test]
-async fn core_does_not_retry_withdraw_cancelled() {
+async fn core_retries_withdraw_cancelled_only() {
     let c = ctx("core").await;
     let (h, rc) = cancel_rc();
     let e = unknown(&c, hash(), &[h]);
@@ -214,23 +226,39 @@ async fn core_does_not_retry_withdraw_cancelled() {
         (h, rc),
         "очередь кошелька снята",
     );
-    // Живое ядро с повторами возврата USDT (1 с, 3 раза): найденный итог не повторяется.
+    // Живое ядро с повторами возврата USDT (1 с, 3 раза): найденный итог «отмена в блоке» — повтор (перевод не ушёл и
+    // уже не уйдёт); «исход неизвестен» — без повтора.
     let (core, _) = start(&dir("wdcancel"), Some((1, 3))).await;
     let (from, to) = (VenueId("bsc_dex".into()), VenueId("mexc".into()));
     let amount = Decimal::new(8310, 2);
-    for (id, err, want) in [
-        ("w1DOGE", &found, "вывод отклонён площадкой"),
-        ("w2DOGE", &e, "исход перегона неизвестен"),
-    ] {
-        let mut x = doge(id);
-        x.step = Step::Closed;
-        arb::core::ledger::save(&core, &x).await;
-        assert!(!fail(&core, id, amount, (&from, &to), 0, &OpError::from(err)).await);
-        let d = core.deals().into_iter().find(|d| d.id == id).unwrap();
-        assert!(
-            matches!(&d.usdt_return, Some(UsdtReturn::NotReturned { why, .. }) if why.contains(want)),
-            "{id}: {:?}",
-            d.usdt_return
-        );
-    }
+    let mut x = doge("w1DOGE");
+    x.step = Step::Closed;
+    arb::core::ledger::save(&core, &x).await;
+    assert!(
+        fail(
+            &core,
+            "w1DOGE",
+            amount,
+            (&from, &to),
+            0,
+            &OpError::from(&found)
+        )
+        .await
+    );
+    let d = core.deals().into_iter().find(|d| d.id == "w1DOGE").unwrap();
+    assert!(
+        matches!(&d.usdt_return, Some(UsdtReturn::Retrying { tries: 0, .. })),
+        "{:?}",
+        d.usdt_return
+    );
+    let mut x = doge("w2DOGE");
+    x.step = Step::Closed;
+    arb::core::ledger::save(&core, &x).await;
+    assert!(!fail(&core, "w2DOGE", amount, (&from, &to), 0, &OpError::from(&e)).await);
+    let d = core.deals().into_iter().find(|d| d.id == "w2DOGE").unwrap();
+    assert!(
+        matches!(&d.usdt_return, Some(UsdtReturn::NotReturned { why, .. }) if why.contains("исход перегона неизвестен")),
+        "{:?}",
+        d.usdt_return
+    );
 }

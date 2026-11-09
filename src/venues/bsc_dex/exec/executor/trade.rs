@@ -39,7 +39,7 @@ use super::super::leg_min;
 use super::super::native;
 use super::super::order::{check_price, worst_positive};
 use super::super::swap_ctx::SwapCtx;
-use super::super::swap_send::{rebuilt_notice, send_approvals};
+use super::super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::super::trade::sides;
 use super::super::txs::{self, Env};
 use super::super::verify_gate::{self, Verified};
@@ -85,7 +85,10 @@ pub async fn trade(
     onchain::ensure(ctx, executor, wallet).await?;
     let (mut c, mut at) = build(q, &legs, executor).await?;
     let need = approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in).await?;
-    if send_approvals(env, &slot, &need).await? {
+    let approved = send_approvals(env, &slot, &need).await?;
+    // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
+    let out: GatewayResult<TradeResult> = async {
+    if approved.is_some() {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
         let (legs, fresh, exp) = prepare(&v, &req, route, &mins, decs).await?;
@@ -122,6 +125,9 @@ pub async fn trade(
         r.executor = note;
     }
     Ok(r)
+    }
+    .await;
+    with_approve_gas(out, approved)
 }
 
 /// Доли по живому состоянию: пути, сверка средней цены с худшей, шаги exec/chain.rs и минимум каждой доли по решению

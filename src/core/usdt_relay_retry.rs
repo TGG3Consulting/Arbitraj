@@ -6,8 +6,9 @@
 //! сумму; (2) откат (SwapReverted — денег не ушло) повторяется после паузы, снова с ожиданием баланса; (3) перегон
 //! так и не состоялся — уведомление usdt.relay_failed (деньги остались на площадке-отправителе).
 //! Повтор — только при откате: при «исход неизвестен» и прочих ошибках вывод мог уйти, повторять нельзя.
+//! Решение 236, дополнение: газ неудачных переводов из кошелька DEX — в затраты сделки возврата (deal_gas.rs).
 //! Кто вызывает: core/usdt_return.rs (relay).
-//! От чего зависит: transfers.rs, limits.rs (free_now), settings.
+//! От чего зависит: transfers.rs, deal_gas.rs, limits.rs (free_now), settings.
 //! Настройки: usdt_return.balance_wait_ms, usdt_return.balance_poll_ms, usdt_return.retry_attempts,
 //! usdt_return.retry_pause_ms (все необязательные: не задано — без ожидания и без повтора, как раньше).
 
@@ -34,6 +35,25 @@ pub async fn send(
     asset: &Asset,
     amount: Decimal,
 ) -> Result<(Transfer, Transfer), OpError> {
+    // Решение 236, дополнение (техлид 09.11): газ неудачных переводов из кошелька DEX (откат, отмена) каждой попытки —
+    // в затраты сделки возврата (сделка уже закрыта — итог, итог дня, итог монеты: deal_gas::charge_closed).
+    let mut gas = Vec::new();
+    let res = attempts_loop(core, id, (from, to), acc, asset, amount, &mut gas).await;
+    super::deal_gas::charge_closed(core, id, from, &mut gas).await;
+    res
+}
+
+/// Попытки перегона (ожидание баланса, повтор при откате). Принимает: как send, место для газа неудачных переводов.
+/// Возвращает и ошибки: как send.
+async fn attempts_loop(
+    core: &Core,
+    id: &str,
+    (from, to): (&VenueId, &VenueId),
+    acc: Option<&DexAccountId>,
+    asset: &Asset,
+    amount: Decimal,
+    gas: &mut Vec<super::deal_gas::Wasted>,
+) -> Result<(Transfer, Transfer), OpError> {
     let s = &core.inner.deps.settings;
     let int = |n: &str| s.integer(n, At::default()).ok();
     let attempts = int("usdt_return.retry_attempts").unwrap_or(0) + 1;
@@ -42,7 +62,7 @@ pub async fn send(
     loop {
         n += 1;
         wait_balance(core, from, acc, &asset.ticker, amount).await?;
-        match super::transfers::send_as(core, id, from, to, asset, amount, acc).await {
+        match super::transfers::send_as(core, id, from, to, asset, amount, acc, gas).await {
             Ok(r) => return Ok(r),
             Err(e) if e.code == Some(ErrorCode::SwapReverted) && n < attempts => {
                 core.inner

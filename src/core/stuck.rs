@@ -185,12 +185,12 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
         return sold_by_market(
             core,
             deal,
-            &format!("убыток {} не больше порога {}", h::pct(loss), h::pct(max)),
+            &h::loss_vs_max(loss, max, true),
             Guard::MaxLoss(max),
         )
         .await;
     }
-    let why = format!("убыток {} выше порога {}", h::pct(loss), h::pct(max));
+    let why = h::loss_vs_max(loss, max, false);
     super::manual::raise_alert(core, deal, Some(loss), why, None).await;
 }
 

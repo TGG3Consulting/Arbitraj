@@ -56,18 +56,14 @@ pub fn decide(
 ) -> Here {
     let loss = value.as_ref().ok().map(|v| deal.loss_pct_if(*v));
     match (max, loss) {
+        // Решение 247, п. Е: подпись по знаку (минус убытка — прибыль), логика порога та же.
         (Ok(max), Some(loss)) if loss <= max => Here::Market(format!(
-            "{why}; убыток {} не больше порога {} ({SETTING})",
-            h::pct(loss),
-            h::pct(max)
+            "{why}; {} ({SETTING})",
+            h::loss_vs_max(loss, max, true)
         )),
         (Ok(max), Some(loss)) => Here::Alert {
             loss: Some(loss),
-            why: format!(
-                "{why}; убыток {} выше порога {} ({SETTING})",
-                h::pct(loss),
-                h::pct(max)
-            ),
+            why: format!("{why}; {} ({SETTING})", h::loss_vs_max(loss, max, false)),
         },
         (Err(e), loss) => Here::Alert {
             loss,

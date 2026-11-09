@@ -18,12 +18,12 @@ def _stats(vals):
     return {"n": len(v), "sum": sum(v, Z), "median": median(v), "p25": quantile(v, 0.25), "p75": quantile(v, 0.75)}
 
 
-def _cf_block(rs, th):
+def _cf_block(rs):
     known = [r for r in rs if r.get("cf_med") is not None]
     return {
         "n": len(rs), "computed": len(known), "not_computed": len(rs) - len(known),
         "plus_med_n": sum(1 for r in known if r["cf_med"] > 0),
-        "pass_threshold_med_n": sum(1 for r in known if passes(r["cf_med"], r["invested"], th)),
+        "pass_threshold_med_n": sum(1 for r in known if passes(r["cf_med"], r["invested"], r["th"])),
         "plus_p75_n": sum(1 for r in known if r.get("cf_p75") is not None and r["cf_p75"] > 0),
         "cf_med_sum": sum((r["cf_med"] for r in known), Z),
         "cf_p75_sum": sum((r["cf_p75"] for r in known if r.get("cf_p75") is not None), Z),
@@ -35,7 +35,7 @@ def _cf_block(rs, th):
     }
 
 
-def summary_a(eps, th):
+def summary_a(eps):
     """(А): отказы биржа → DEX «только из-за запаса» — по строкам и по эпизодам (первая такая строка эпизода)."""
     rows = [r for ep in eps for r in ep["ro"] if r["type"] == "cex_dex"]
     firsts = [ep["ro"][0] for ep in eps if ep["ro"] and ep["ro"][0]["type"] == "cex_dex"]
@@ -47,11 +47,11 @@ def summary_a(eps, th):
     for r in firsts:
         by_a.setdefault(r["A"], []).append(r)
     return {
-        "rows": _cf_block(rows, th),
-        "episodes": _cf_block(firsts, th),
+        "rows": _cf_block(rows),
+        "episodes": _cf_block(firsts),
         "pairs_coin_direction": len({ep["key"] for ep in eps if ep["ro"] and ep["ro"][0]["type"] == "cex_dex"}),
         "not_computed_reasons": dict(sorted(reasons.items(), key=lambda x: -x[1])),
-        "episodes_by_source": {a: _cf_block(v, th) for a, v in sorted(by_a.items())},
+        "episodes_by_source": {a: _cf_block(v) for a, v in sorted(by_a.items())},
     }
 
 
@@ -70,10 +70,10 @@ def move_vs_reserve(ds):
     return out
 
 
-def need_to_cut(d, th):
+def need_to_cut(d):
     """Сколько запаса нужно было, чтобы сделку отсечь: R > pb − требуемая прибыль; в долях: от выручки, k, доля
-    закрытия, граница σ (при текущем k и T плана). Ошибок нет."""
-    req = max(th["min_usd"], th["min_pct"] / 100 * d["invested"])
+    закрытия, граница σ (при k и пороге на момент сделки и T плана). Ошибок нет."""
+    req = max(d["th"]["min_usd"], d["th"]["min_pct"] / 100 * d["invested"])
     need = d["pb"] - req
     P, sq = d["proceeds"], d["sqrtT"]
     spread = (d["sell_avg"] - d["buy_avg"]) / d["buy_avg"] if d["buy_avg"] else None
@@ -85,11 +85,11 @@ def need_to_cut(d, th):
             "current_share_of_proceeds": d["R"] / P if P else None}
 
 
-def summary_b(deals_all, eps, windows, th):
+def summary_b(deals_all, eps, windows):
     """(Б): DEX → биржа — по исполненным сделкам; отказы — только счётчик и покрытие окнами стакана."""
     s = [d for d in deals_all if d["type"] == "dex_cex"]
     losses = [d for d in s if d["actual"] < 0]
-    nd = [need_to_cut(d, th) for d in losses]
+    nd = [need_to_cut(d) for d in losses]
     by_b = {}
     for d in s:
         by_b.setdefault(d["B"], []).append(d)
@@ -127,7 +127,7 @@ def deals_check_stats(ds):
     """Проверка метода: модель пула (r − 1) против факта продажи на DEX (move) у сделок биржа → DEX."""
     v = [d for d in ds if d["type"] == "cex_dex" and d.get("model_r") is not None]
     if not v:
-        return {"n": 0}
+        return {"n": 0, "not_computed_reasons": _count(d.get("model_err") for d in ds if d["type"] == "cex_dex")}
     m = [d["model_r"] - 1 for d in v]
     f = [d["move"] for d in v]
     diff = [abs(a - b) * 100 for a, b in zip(m, f)]
@@ -153,7 +153,7 @@ def _count(it):
 EP_COLS = ["episode", "type", "coin", "coin_addr", "A", "B", "start", "end", "rows", "reserve_only_rows", "first_id", "first_at",
            "profit", "R", "pb", "invested", "proceeds", "sigma", "T_plan", "T_real_med", "T_real_p75", "route_block",
            "b1_med", "b1_p75", "events_med", "dex_move_med_pct", "dex_move_p75_pct", "cf_med", "cf_p75", "plus_med",
-           "pool_kinds", "cf_err"]
+           "pool_kinds", "cf_err", "th_usd", "th_pct"]
 
 
 def ep_line(i, ep):
@@ -169,12 +169,13 @@ def ep_line(i, ep):
             "dex_move_p75_pct": (r["r_p75"] - 1) * 100 if r.get("r_p75") is not None else None,
             "cf_med": r.get("cf_med"), "cf_p75": r.get("cf_p75"),
             "plus_med": None if r.get("cf_med") is None else int(r["cf_med"] > 0),
-            "pool_kinds": r.get("pool_kinds"), "cf_err": r.get("cf_err")}
+            "pool_kinds": r.get("pool_kinds"), "cf_err": r.get("cf_err"),
+            "th_usd": r["th"]["min_usd"], "th_pct": r["th"]["min_pct"]}
 
 
 DEAL_COLS = ["id", "type", "coin", "A", "B", "plan_at", "profit", "R", "pb", "actual", "return_cost_known", "scale",
              "T_plan", "T_real", "move_pct", "R_share_pct", "route_block", "sell_block", "model_move_pct", "model_err",
-             "in_period"]
+             "in_period", "th_usd", "th_pct"]
 
 
 def deal_line(d):
@@ -185,7 +186,8 @@ def deal_line(d):
             "move_pct": d["move"] * 100, "R_share_pct": d["R"] / d["proceeds"] * 100 if d["proceeds"] else None,
             "route_block": d.get("b0"), "sell_block": d.get("sell_block"),
             "model_move_pct": (d["model_r"] - 1) * 100 if d.get("model_r") is not None else None,
-            "model_err": d.get("model_err"), "in_period": int(d["period"])}
+            "model_err": d.get("model_err"), "in_period": int(d["period"]),
+            "th_usd": d["th"]["min_usd"], "th_pct": d["th"]["min_pct"]}
 
 
 def write_tables(out, eps, rows_ro, deals, table):

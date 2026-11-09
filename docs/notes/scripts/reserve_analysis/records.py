@@ -10,7 +10,8 @@
   profit_usd, profit_pct (= profit / invested × 100), transit_s, sigma, buy_quote, sell_quote, at (Utc::now в конце расчёта);
 - запас — строка CostLine kind = PriceMoveReserve, stage «ядро», в USDT (core/costs.rs:146-163);
 - порог: отказ «прибыль X USDT ниже порога» (money.min_profit_usd) или «прибыль X% ниже порога» (money.min_profit_pct,
-  в процентах) — core/profit.rs:151-171; прошёл — profit_usd ≥ min_usd И profit_pct ≥ min_pct;
+  в процентах) — core/profit.rs; прошёл — profit_usd ≥ min_usd И profit_pct ≥ min_pct; пороги — НА МОМЕНТ расчёта
+  (Calc.at) по истории настроек и области «площадка · тип направления» (settings_at.py), не текущие;
 - строка журнала с повторами хранит текст и данные ПОСЛЕДНЕГО повтора (core/reject_log.rs, решение 155): одна строка —
   один набор чисел за период [at, last_at];
 - сделка — core/deal.rs Deal: plan (Calc на момент решения), step, buy, sells[TradeResult{request.venue, filled_qty,
@@ -55,10 +56,14 @@ def passes(profit, invested, th):
     return profit >= th["min_usd"] and pct >= th["min_pct"]
 
 
-def reject_rows(entries, th):
-    """Записи журнала core.candidate_rejected → строки с расчётом. Возвращает: (строки, счётчики).
-    Строка: calc + id, j_at, j_last, repeats, threshold (отказ по порогу), pb (прибыль до запаса), reserve_only."""
-    rows, cnt = [], {"entries": len(entries), "no_data": 0, "bad_format": 0, "no_reserve_line": 0}
+def reject_rows(entries, thfn):
+    """Записи журнала core.candidate_rejected → строки с расчётом. thfn(строка) → пороги НА МОМЕНТ строки
+    (settings_at.thresholds_at; RuntimeError — не заданы). Возвращает: (строки, счётчики).
+    Строка: calc + id, j_at, j_last, repeats, threshold (отказ по порогу), th, pb (прибыль до запаса), reserve_only.
+    Счётчик threshold_text_but_passes_at_time — текст «ниже порога», а прибыль проходит пороги своего момента
+    (должен быть 0; иначе история настроек неполна или область порога не та)."""
+    rows, cnt = [], {"entries": len(entries), "no_data": 0, "bad_format": 0, "no_reserve_line": 0,
+                     "no_threshold_at_time": 0, "threshold_text_but_passes_at_time": 0}
     for e in entries:
         data = e.get("data")
         if not data:
@@ -74,13 +79,20 @@ def reject_rows(entries, th):
         c["j_last"] = ts(e.get("last_at") or e["at"])
         c["repeats"] = e.get("repeats") or 1
         c["threshold"] = bool(RE_THRESHOLD.search(e.get("message") or ""))
+        try:
+            c["th"] = thfn(c)
+        except RuntimeError:
+            cnt["no_threshold_at_time"] += 1
+            continue
+        if c["threshold"] and passes(c["profit"], c["invested"], c["th"]):
+            cnt["threshold_text_but_passes_at_time"] += 1
         if c["R"] is None:
             cnt["no_reserve_line"] += 1
             c["pb"], c["reserve_only"] = None, False
         else:
             c["pb"] = c["profit"] + c["R"]
-            c["reserve_only"] = (c["threshold"] and not passes(c["profit"], c["invested"], th)
-                                 and passes(c["pb"], c["invested"], th))
+            c["reserve_only"] = (c["threshold"] and not passes(c["profit"], c["invested"], c["th"])
+                                 and passes(c["pb"], c["invested"], c["th"]))
         rows.append(c)
     return rows, cnt
 

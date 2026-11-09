@@ -3,7 +3,7 @@
 с узла: r = (выход за единицу входа в целевом блоке) / (то же в блоке котировки), по каждому хопу в направлении
 обмена, произведение по хопам доли, взвешенное по expected_out долей маршрута.
 Кто вызывает: run.py.
-От чего зависит: node.py, keccak.py (TOPICS), common.py.
+От чего зависит: node.py (Pruned — блок старше истории узла), keccak.py (TOPICS), common.py.
 
 Факты кода бота, на которых стоит разбор:
 - маршрут котировки — core/types/cost.rs DexRoute {mode, legs[{share, hops[{family, kind, pool}], expected_out}], block}:
@@ -26,6 +26,7 @@ from decimal import Decimal
 
 from common import D
 from keccak import TOPICS
+from node import Pruned
 
 SUPPORTED = "V2, V3 (PancakeSwap/Uniswap/Slipstream), CL в синглтоне (Infinity CL, Uniswap V4)"
 
@@ -83,7 +84,9 @@ class HopTrack:
         ch = node.chunk
         evs = []
         for k in range((b0 + 1) // ch, b_max // ch + 1):
-            evs.extend(e for e in node.chunk_logs(addr, topics, k) if b0 < e[0] <= b_max and (pid is None or e[2] == pid))
+            # Нужны ВСЕ события после котировки: окно старше истории узла (и не в кэше) — Pruned, не обрезка.
+            got = node.chunk_logs(addr, topics, k, need_from=b0 + 1)
+            evs.extend(e for e in got if b0 < e[0] <= b_max and (pid is None or e[2] == pid))
         self.after = sorted(evs)
         self.base = None
         self.base_err = None
@@ -91,12 +94,18 @@ class HopTrack:
             k = b0 // ch
             stop = max(0, b0 - lookback)
             while k >= 0 and k * ch + ch - 1 >= stop:
-                cand = [e for e in node.chunk_logs(addr, topics, k) if e[0] <= b0 and (pid is None or e[2] == pid)]
+                try:
+                    got = node.chunk_logs(addr, topics, k)
+                except Pruned:
+                    # История узла кончилась раньше, чем нашлась база: цена в блоке котировки неизвестна.
+                    self.base_err = "нет события пула от earliest узла до блока котировки (earliest = %d)" % node.earliest
+                    break
+                cand = [e for e in got if e[0] <= b0 and (pid is None or e[2] == pid)]
                 if cand:
                     self.base = max(cand)
                     break
                 k -= 1
-            if self.base is None:
+            if self.base is None and self.base_err is None:
                 self.base_err = "нет события пула не раньше %d блоков до блока котировки — цена в блоке котировки неизвестна" % lookback
 
     def ratio(self, b1, token_in_is_0):

@@ -26,10 +26,12 @@ def set_log(path):
     _LOG_PATH = path
 
 
-def log(msg):
-    """Пишет строку с временем UTC в stderr и в журнал прогресса. Ошибок нет (сбой записи файла — только stderr)."""
+def log(msg, quiet=False):
+    """Пишет строку с временем UTC в журнал прогресса и (если не quiet) в stderr. quiet — подробности (каждый запрос
+    к узлу, каждая сделка/строка): только в файл, чтобы зависание было видно по последней строке. Ошибок нет."""
     line = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + " " + msg
-    print(line, file=sys.stderr, flush=True)
+    if not quiet:
+        print(line, file=sys.stderr, flush=True)
     if _LOG_PATH:
         try:
             with open(_LOG_PATH, "a", encoding="utf-8") as f:

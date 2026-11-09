@@ -22,15 +22,23 @@
 //! стороны забывается (forget): IOC по худшей цене снимка мог не исполниться или исполниться частично (съеденные нами
 //! уровни ещё лежат в снимке) — повтор и «продажа здесь» берут свежий стакан, а не тот же снимок до venue.book_stale_ms.
 //!
+//! Решение 238 (ревью, п. 4): неудача REST запоминается по (площадка, тикер, сторона) — окно exec.rest_book_retry_ms
+//! площадки, а если она не задана — venue.rate_limit_pause_ms (пауза адаптера после «слишком часто»); в окне стакан
+//! потока по-прежнему проверяется (ожил — берётся), но REST не запрашивается: сразу ошибка с причиной и возрастом
+//! прошлой неудачи (без кода — алерт, как п. 4 порядка). Так застрявшая монета («Ожидание», «Порог убытка» — котировка
+//! на каждый тик монеты) не бьёт REST биржи без предела при постоянных отказах. Ни одна не задана — частота не
+//! ограничена, это сказано в тексте ошибки. Успешный снимок REST снимает неудачу. Окно и проверка — exec_book_fail.rs.
+//!
 //! Кто вызывает: core/trade_ops.rs (sell_value — котировка биржи; trade_seen — forget после ордера), core/worst.rs
 //! (worst_order — худшая цена биржи).
 //! От чего зависит: gateway (registry, contract quote_snapshot / quote_rest, frozen, patience exec_scope),
-//! venue_ticker.rs, op_error.rs, settings, journal.
-//! Настройки: venue.book_stale_ms (по площадке, обязательна), exec.rest_book_retry_ms (по площадке, необязательна).
+//! venue_ticker.rs, op_error.rs, exec_book_fail.rs, settings, journal.
+//! Настройки: venue.book_stale_ms (по площадке, обязательна), exec.rest_book_retry_ms (по площадке, необязательна),
+//! через exec_book_fail.rs — venue.rate_limit_pause_ms (окно неудачи REST, если нет exec.rest_book_retry_ms).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::core::types::{Asset, Side, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -41,8 +49,20 @@ use crate::storage::journal::Level;
 use super::engine::Core;
 use super::op_error::OpError;
 
-/// Снимки REST по (площадка, тикер площадки, покупка?) — последний взятый на пути ордера.
-pub type Cache = Mutex<HashMap<(VenueId, String, bool), QuoteSnapshot>>;
+/// Ключ: (площадка, тикер площадки, покупка?).
+pub(super) type Key = (VenueId, String, bool);
+
+/// Память пути ордера (Inner.exec_books).
+#[derive(Default)]
+pub struct Books {
+    /// Снимки REST — последний взятый на пути ордера.
+    snaps: HashMap<Key, QuoteSnapshot>,
+    /// Решение 238 (ревью, п. 4): последняя неудача REST — когда и почему (exec_book_fail.rs).
+    pub(super) fails: HashMap<Key, (Instant, String)>,
+}
+
+/// Память пути ордера под замком.
+pub type Cache = Mutex<Books>;
 
 /// Стакан для ордера: снимок и откуда он.
 #[derive(Clone)]
@@ -86,19 +106,18 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         Err(e) if e.code == ErrorCode::StaleData => e,
         Err(e) => return Err(OpError::from(&e)),
     };
+    // Решение 238 (ревью, п. 4): REST недавно не ответил — без нового запроса.
+    if let Some(e) = super::exec_book_fail::recent(core, &key, &stream) {
+        return Err(e);
+    }
     let first = match crate::gateway::patience::exec_scope(x.quote_rest(&on, side)).await {
         Ok(s) => return Ok(keep(core, key, s, &stream).await),
         Err(e) => e,
     };
     let pause = setting(core, v, RETRY);
     let Some(ms) = pause else {
-        return Err(failed(
-            core,
-            v,
-            &stream,
-            &format!("{}; повтор не настроен: не задана {RETRY}", first.message),
-        )
-        .await);
+        let why = format!("{}; повтор не настроен: не задана {RETRY}", first.message);
+        return Err(failed(core, key, &stream, &why).await);
     };
     let text = format!(
         "{}: {}; снимок стакана по REST не получен: {} — повтор через {ms} мс",
@@ -113,7 +132,7 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
         Ok(s) => Ok(keep(core, key, s, &stream).await),
         Err(e) => {
             let why = format!("{}; повтор через {ms} мс: {}", first.message, e.message);
-            Err(failed(core, v, &stream, &why).await)
+            Err(failed(core, key, &stream, &why).await)
         }
     }
 }
@@ -128,6 +147,7 @@ pub fn forget(core: &Core, v: &VenueId, a: &Asset, side: Side) {
         .exec_books
         .lock()
         .unwrap_or_else(|p| p.into_inner())
+        .snaps
         .remove(&key);
 }
 
@@ -149,12 +169,13 @@ fn stale_ms(core: &Core, v: &VenueId) -> Result<i64, OpError> {
 }
 
 /// Снимок REST из памяти, если он не старше max мс; старый — убирается. Ошибок нет.
-fn cached(core: &Core, key: &(VenueId, String, bool), max: i64) -> Option<QuoteSnapshot> {
-    let mut m = core
+fn cached(core: &Core, key: &Key, max: i64) -> Option<QuoteSnapshot> {
+    let mut g = core
         .inner
         .exec_books
         .lock()
         .unwrap_or_else(|p| p.into_inner());
+    let m = &mut g.snaps;
     let age = |s: &QuoteSnapshot| (chrono::Utc::now() - s.taken_at()).num_milliseconds();
     match m.get(key) {
         Some(s) if age(s) <= max => Some(s.clone()),
@@ -167,12 +188,7 @@ fn cached(core: &Core, key: &(VenueId, String, bool), max: i64) -> Option<QuoteS
 }
 
 /// Запоминает снимок REST и пишет в журнал, почему он взят. Возвращает: Book (rest). Ошибок нет.
-async fn keep(
-    core: &Core,
-    key: (VenueId, String, bool),
-    s: QuoteSnapshot,
-    stream: &GatewayError,
-) -> Book {
+async fn keep(core: &Core, key: Key, s: QuoteSnapshot, stream: &GatewayError) -> Book {
     let text = format!(
         "{}: {} — для ордера взят снимок стакана по REST ({})",
         key.0.0,
@@ -180,11 +196,16 @@ async fn keep(
         s.describe()
     );
     let venue = key.0.0.clone();
-    core.inner
-        .exec_books
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(key, s.clone());
+    {
+        let mut g = core
+            .inner
+            .exec_books
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        // Решение 238 (ревью, п. 4): снимок получен — прошлая неудача снята.
+        g.fails.remove(&key);
+        g.snaps.insert(key, s.clone());
+    }
     core.inner
         .deps
         .log(Level::Info, "core.exec_book", Some(&venue), text, None)
@@ -196,10 +217,14 @@ async fn keep(
 }
 
 /// Ошибка «стакан устарел, снимка REST нет» — без кода: продажа не повторяется по тому же стакану, а уходит в алерт с
-/// причиной (sell_unsent.rs). Пишет в журнал Error. Принимает: ядро, площадку, ошибку потока, причину REST.
-async fn failed(core: &Core, v: &VenueId, stream: &GatewayError, why: &str) -> OpError {
+/// причиной (sell_unsent.rs). Пишет в журнал Error; решение 238 (ревью, п. 4) — неудача запоминается
+/// (exec_book_fail::remember: при заданном окне; окна нет — в тексте сказано, что частота REST не ограничена).
+/// Принимает: ядро, ключ, ошибку потока, причину REST.
+async fn failed(core: &Core, key: Key, stream: &GatewayError, why: &str) -> OpError {
+    let v = key.0.clone();
+    let limit = super::exec_book_fail::remember(core, key, why);
     let message = format!(
-        "{}: {}; снимок стакана по REST не получен: {why}",
+        "{}: {}; снимок стакана по REST не получен: {why}{limit}",
         v.0, stream.message
     );
     core.inner
@@ -216,7 +241,7 @@ async fn failed(core: &Core, v: &VenueId, stream: &GatewayError, why: &str) -> O
 }
 
 /// Целая настройка площадки. None — не задана. Ошибок нет.
-fn setting(core: &Core, v: &VenueId, name: &str) -> Option<u64> {
+pub(super) fn setting(core: &Core, v: &VenueId, name: &str) -> Option<u64> {
     let at = At {
         venue: Some(&v.0),
         coin: None,

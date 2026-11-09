@@ -19,7 +19,9 @@
 //! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести);
 //! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану;
 //! - ревью п. 2: не задана venue.book_stale_ms — застрявшая монета («Порог убытка», «Перегон») сразу остановлена;
-//! - ревью п. 3: первая попытка ордера — по стакану котировки (тот же снимок), повтор — по свежему.
+//! - ревью п. 3: первая попытка ордера — по стакану котировки (тот же снимок), повтор — по свежему;
+//! - ревью п. 4: неудача REST запоминается на exec.rest_book_retry_ms (или venue.rate_limit_pause_ms) — в окне без
+//!   запроса.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway.
@@ -342,6 +344,12 @@ async fn rest_down_one_retry_then_error_with_reason() {
         !e.retry_safe(),
         "не безопасный повтор: алерт, а не повторы по тому же стакану"
     );
+    // Ревью п. 4: окна неудачи нет (не задана ни exec.rest_book_retry_ms, ни venue.rate_limit_pause_ms) — сказано.
+    assert!(
+        e.message.contains("частота запросов REST не ограничена"),
+        "{}",
+        e.message
+    );
     assert_eq!(srv.depth.load(Ordering::SeqCst), 1);
     // Пауза задана — ровно один повтор.
     s.set(
@@ -352,14 +360,16 @@ async fn rest_down_one_retry_then_error_with_reason() {
     )
     .await
     .unwrap();
+    // Неудача без окна не запоминалась — запрос идёт сразу.
     let e = arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
         .await
         .unwrap_err();
     assert!(e.message.contains("повтор через 30 мс"), "{}", e.message);
     assert_eq!(e.code, None);
     assert_eq!(srv.depth.load(Ordering::SeqCst), 3);
-    // REST ожил — снимок берётся.
+    // REST ожил — снимок берётся (после окна прошлой неудачи 30 мс — ревью п. 4).
     srv.fail.store(false, Ordering::SeqCst);
+    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
     let w = arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
         .await
         .unwrap();
@@ -511,4 +521,72 @@ async fn first_order_uses_quote_book() {
     let (_, seen) = order(None).await;
     assert!(seen.unwrap().rest);
     assert_eq!(srv.depth.load(Ordering::SeqCst), 2);
+}
+
+/// Решение 238 (ревью, п. 4): сценарий ревью — REST стакана отказывает постоянно, а застрявшая монета («Ожидание»,
+/// «Порог убытка») котирует на каждый тик монеты. Неудача запоминается на exec.rest_book_retry_ms (не задана —
+/// venue.rate_limit_pause_ms): в окне — сразу ошибка с причиной, без запроса; после окна — снова запрос.
+#[tokio::test]
+async fn rest_failure_is_remembered_for_window() {
+    let d = dir("window");
+    let (core, s, _, srv) = start(&d).await;
+    srv.fail.store(true, Ordering::SeqCst);
+    let ask = |c: Core| async move {
+        arb::core::worst::worst_order(&c, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
+            .await
+            .unwrap_err()
+    };
+    let n = || srv.depth.load(Ordering::SeqCst);
+    let set = |name: &'static str, v: Option<Value>| {
+        let s = s.clone();
+        async move {
+            s.set(name, Scope::Venue("xt".into()), v, "тест")
+                .await
+                .unwrap()
+        }
+    };
+    // Окно — пауза повтора REST (200 мс): запрос + повтор, затем в окне — ни одного запроса.
+    set("exec.rest_book_retry_ms", Some(json!(200))).await;
+    let e = ask(core.clone()).await;
+    assert!(
+        e.message.contains("не раньше чем через 200 мс"),
+        "{}",
+        e.message
+    );
+    assert_eq!(n(), 2);
+    for _ in 0..5 {
+        let e = ask(core.clone()).await;
+        assert!(e.message.contains("не запрашивался"), "{}", e.message);
+        assert!(
+            e.message.contains("окно 200 мс (exec.rest_book_retry_ms)"),
+            "{}",
+            e.message
+        );
+        assert!(!e.retry_safe(), "алерт, а не повтор по тому же стакану");
+    }
+    assert_eq!(n(), 2, "в окне неудачи REST не запрашивается");
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    ask(core.clone()).await;
+    assert_eq!(n(), 4, "окно прошло — снова запрос и повтор");
+    // Без exec.rest_book_retry_ms — окно venue.rate_limit_pause_ms (повтора нет: один запрос).
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    set("exec.rest_book_retry_ms", None).await;
+    set("venue.rate_limit_pause_ms", Some(json!(200))).await;
+    ask(core.clone()).await;
+    assert_eq!(n(), 5);
+    let e = ask(core.clone()).await;
+    assert!(
+        e.message.contains("(venue.rate_limit_pause_ms)"),
+        "{}",
+        e.message
+    );
+    assert_eq!(n(), 5);
+    // REST ожил: после окна снимок берётся, неудача снята.
+    srv.fail.store(false, Ordering::SeqCst);
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    let w = arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
+        .await
+        .unwrap();
+    assert!(w.rest);
+    assert_eq!(n(), 6);
 }

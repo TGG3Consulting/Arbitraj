@@ -153,6 +153,9 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
             return Err(e);
         }
     }
+    // Решение 247, п. А (Тигран 10.11: согласовано): нажатие — новая цепочка повторов кнопки: счётчик автоматики
+    // (Deal.unsent_retries) не наследуется, иначе после исчерпания автоматики кнопка давала одну попытку и Exhausted.
+    deal.unsent_retries = 0;
     if ret {
         // Решения 101 и 235: лучшая площадка после затрат перевода (manual_relay.rs), затем выручка USDT — на площадку
         // покупки (usdt_return.rs).

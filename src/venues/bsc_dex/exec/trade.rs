@@ -12,7 +12,9 @@
 //! один Universal Router PancakeSwap — умным (exec/trade_smart.rs); мульти-роутер — атомарным бандлом (exec/bundle_trade.rs),
 //! а при заданном exec.executor_address — одной транзакцией через свой исполнитель ArbExecutor (exec/executor/trade.rs,
 //! решение 122, часть X).
-//! Кто вызывает: venue.rs (контракт trade); общие шаги — exec/trade_direct.rs, exec/trade_smart.rs,
+//! sends_tip — тот же выбор пути для плана: чаевые канала и газ их перевода в котировке только у путей одной
+//! транзакцией; у бандла свопов их нет (Тигран 09.11: согласовано; вызывает quote/mod.rs).
+//! Кто вызывает: venue.rs (контракт trade), quote/mod.rs (sends_tip); общие шаги — exec/trade_direct.rs, exec/trade_smart.rs,
 //! exec/bundle_trade.rs, exec/verify_gate.rs.
 //! От чего зависит: exec/swap_ctx.rs (подпись в «чем найти», решение 231), exec/trade_direct.rs, exec/trade_smart.rs, exec/bundle_trade.rs, exec/executor/*, exec/verify_gate.rs, exec/order.rs,
 //! exec/plan.rs, exec/txs.rs, exec/native.rs, quote/graph_route.rs, wallet/nonce.rs, wallet/inflows.rs, wallet/balances.rs.
@@ -72,6 +74,20 @@ fn by_whom(ctx: &Ctx, route: &DexRoute, native: bool) -> &'static str {
             GraphForm::Bundle => result::BY_BUNDLE,
         },
         RouteMode::Direct => result::BY_DIRECT,
+    }
+}
+
+/// Отправит ли путь исполнения маршрута чаевые канала — для плана (Тигран 09.11: согласовано — план совпадает с
+/// фактом). Путь — тот же выбор, что в run (by_whom): одиночная транзакция (прямой, умный, исполнитель — exec/txs.rs
+/// send с чаевыми) — да; бандл свопов графа (exec/bundle_send.rs → send::dispatch_slice, чаевых не принимает) — нет.
+/// Маршрута нет или графовый маршрут неисполним (сделки нет, путь не выбирается) — да, как было.
+/// Принимает: окружение, маршрут котировки, нативная ли монета (exec/native.rs). Ошибок нет.
+pub fn sends_tip(ctx: &Ctx, route: Option<&DexRoute>, native: bool) -> bool {
+    match route {
+        Some(r) if r.mode == RouteMode::Graph && r.executable => {
+            by_whom(ctx, r, native) != result::BY_BUNDLE
+        }
+        _ => true,
     }
 }
 

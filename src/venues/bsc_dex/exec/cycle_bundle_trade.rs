@@ -61,7 +61,15 @@ pub async fn trade(
     let at4 = (wallet, first_nonce, now, false);
     let a = cycle_bundle::build_floor(ctx, &legs, (req.input, floor), at4).await?;
     let (out, gas) = measure(ctx, &a.bundle, wallet, base, at, (req.input, dec)).await?;
-    net_check(ctx, (out, req.input), (gas, cycle_steps::wei(q).await?), &r).await?;
+    // Бандл свопов чаевых не шлёт (send::dispatch_slice) — в проверке их нет (Тигран 09.11: согласовано, план = факт).
+    net_check(
+        ctx,
+        (out, req.input),
+        (gas, cycle_steps::wei(q).await?),
+        &r,
+        false,
+    )
+    .await?;
     let b = &a.bundle;
     bundle_notify::assembled(&env.stats, ctx, b.swaps, 1, b.txs.len(), first_nonce);
     let entries: Vec<&Entry> = legs.iter().map(|l| &l.entry).collect();

@@ -7,10 +7,11 @@
 //!   выключен, вход забирается до замера баланса, received = весь выход цикла);
 //! - проверка чистой прибыли ПОСЛЕ симуляции: выход − вход − (газ симуляции × цена газа + чаевые + газ перевода
 //!   чаевых — send/tip_gas.rs, Тигран 09.11) в базовой ≥
-//!   dex_dex.min_profit_usd, иначе сделки нет (газ съел прибыль);
+//!   dex_dex.min_profit_usd, иначе сделки нет (газ съел прибыль); чаевые и их газ — только у формы, которая их шлёт
+//!   (исполнитель; у бандла — нет, plan_tip; Тигран 09.11: согласовано, план = факт);
 //! - итог сделки цикла (CycleTradeResult) из итога свопа.
 //!
-//! Кто вызывает: exec/{cycle_trade, cycle_exec, cycle_bundle_trade, cycle_dry}.rs.
+//! Кто вызывает: exec/{cycle_trade, cycle_exec, cycle_bundle_trade, cycle_dry}.rs, quote/cycle_cost.rs (plan_tip).
 //! От чего зависит: quote/{cycle, cycle_cost, route_calc}.rs, exec/{chain, plan}.rs, send/mod.rs, num.rs, core/types.
 //! Настройки: dex_dex.min_profit_usd [bsc_dex] (обязательна для исполнения); через send — channel.* (чаевые).
 
@@ -110,7 +111,26 @@ pub async fn wei(q: &Quoting) -> GatewayResult<U256> {
         .max(send::planned_floor(&q.ctx)?))
 }
 
-/// Чистая прибыль по симуляции. Принимает: выход и вход (базовая), газ симуляции (единиц), цену газа, курсы.
+/// Чаевые канала и газ их перевода (BNB) в плане цикла. Тигран 09.11 (согласовано, план = факт): только у формы,
+/// которая их отправляет, — исполнитель одной транзакцией (exec/cycle_exec.rs → exec/txs.rs send с чаевыми); бандл
+/// свопов (exec/cycle_bundle_trade.rs → send::dispatch_slice) их не шлёт — ноль, узел не спрашивается.
+/// Принимает: окружение, цену газа, шлёт ли форма чаевые. Возвращает: (чаевые, газ перевода чаевых); чаевых в плане
+/// нет (send::planned_tip) — нули. Ошибки: как send/tip_gas.rs (ключ кошелька, узел eth_estimateGas, BadResponse).
+pub async fn plan_tip(ctx: &Ctx, wei: U256, with_tip: bool) -> GatewayResult<(Decimal, Decimal)> {
+    if !with_tip {
+        return Ok((Decimal::ZERO, Decimal::ZERO));
+    }
+    let tip = send::planned_tip(ctx)
+        .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
+        .unwrap_or(Decimal::ZERO);
+    let tip_gas = send::tip_gas::planned_bnb(ctx, wei)
+        .await?
+        .unwrap_or(Decimal::ZERO);
+    Ok((tip, tip_gas))
+}
+
+/// Чистая прибыль по симуляции. Принимает: выход и вход (базовая), газ симуляции (единиц), цену газа, курсы, шлёт ли
+/// форма исполнения чаевые (исполнитель — да, бандл — нет; plan_tip).
 /// Возвращает: чистую прибыль в базовой. Ошибки: NotConfigured (dex_dex.min_profit_usd), QuoteMismatch — ниже порога,
 /// BadResponse (числа); газ перевода чаевых — как send/tip_gas.rs (ключ кошелька, узел eth_estimateGas).
 /// Тигран 09.11 (согласовано): к чаевым — газ их отдельной транзакции перевода (send/tip_gas.rs, та же цена газа).
@@ -119,16 +139,12 @@ pub async fn net_check(
     (output, input): (Decimal, Decimal),
     (gas_units, wei): (u64, U256),
     r: &Rates,
+    with_tip: bool,
 ) -> GatewayResult<Decimal> {
     // Порог — в USDT (решение 124): одна настройка для любой базовой монеты, в базовую — по курсу пулов.
     let min_usd = ctx.dec("dex_dex.min_profit_usd")?;
     let min_profit = min_usd / r.base_usdt;
-    let tip = send::planned_tip(ctx)
-        .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
-        .unwrap_or(Decimal::ZERO);
-    let tip_gas = send::tip_gas::planned_bnb(ctx, wei)
-        .await?
-        .unwrap_or(Decimal::ZERO);
+    let (tip, tip_gas) = plan_tip(ctx, wei, with_tip).await?;
     let gas = num::to_decimal(wei.saturating_mul(U256::from(gas_units)), num::BNB_DECIMALS)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "газ симуляции не в Decimal"))?;
     let net = output - input - (gas + tip + tip_gas) * r.bnb_in_base;

@@ -6,7 +6,8 @@
 //! ядра (contracts/ArbExecutor.sol: при tokenIn = tokenOut прямой вход выключен, received = весь выход); (3) выбор
 //! формы: исполнитель → бандл (все каналы бандловые) → отказ с причинами обеих; (4) граница ядра у бандла — на
 //! последнем хопе последнего участка; (5) курсы по пулам записи; (6) порог чистой прибыли после симуляции; (7) запрос
-//! свопа «базовая → базовая» в формате ядра; (8) память причин ядра (core/cycle_state.rs).
+//! свопа «базовая → базовая» в формате ядра; (8) память причин ядра (core/cycle_state.rs); (9) форма «бандл» — без
+//! чаевых в проверке после симуляции (Тигран 09.11: согласовано, план = факт).
 //! Факт сделки по живой квитанции — тест с #[ignore] (записи нет, что записать — tests/README.md).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{quote::{cycle_legs, cycle_cost}, exec::{cycle_steps, cycle_gate,
@@ -264,21 +265,69 @@ async fn net_after_simulation_must_clear_threshold() {
     };
     let gwei = U256::from(1_000_000_000u64);
     let io = (Decimal::new(101, 0), Decimal::new(100, 0));
-    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r, true)
         .await
         .expect_err("порог не задан");
     assert_eq!(e.code, ErrorCode::NotConfigured);
     set(&p, "dex_dex.min_profit_usd", json!("0.5")).await;
     // Газ 300 000 × 1 gwei = 0,0003 BNB × 600 = 0,18 USDT; чистая 1 − 0,18 = 0,82.
-    let net = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+    let net = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r, true)
         .await
         .unwrap();
     assert_eq!(net, Decimal::new(82, 2));
     set(&p, "dex_dex.min_profit_usd", json!("1")).await;
-    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r, true)
         .await
         .expect_err("ниже порога");
     assert_eq!(e.code, ErrorCode::QuoteMismatch);
+}
+
+/// Тигран 09.11 (согласовано, план = факт): форма «бандл» чаевых не шлёт — в проверке после симуляции их нет, даже если
+/// чаевые канала заданы (send::planned_tip — Some); узел за газом перевода чаевых не спрашивается (здесь его нет).
+#[tokio::test]
+async fn bundle_form_net_check_has_no_tip() {
+    let p = parts().await;
+    let q = p.quoting();
+    let legs = cycle_legs::now(&q, &signal(&p)).await.unwrap();
+    route_common::channel(&p, "club48", "bundle").await;
+    let ch = Scope::Channel("club48".into());
+    for (k, v) in [
+        ("channel.tip_enabled", json!(true)),
+        ("channel.tip_bnb", json!("0.0001")),
+        (
+            "channel.tip_address",
+            json!("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"),
+        ),
+    ] {
+        p.ctx
+            .settings
+            .set(k, ch.clone(), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+    assert!(arb::venues::bsc_dex::send::planned_tip(&q.ctx).is_some());
+    let form = cycle_gate::form(&q.ctx, &legs).unwrap();
+    assert_eq!(form, Form::Bundle);
+    // Как quote/cycle_cost.rs: чаевые — только у формы «исполнитель».
+    let with_tip = matches!(form, Form::Executor(_));
+    let gwei = U256::from(1_000_000_000u64);
+    let zero = (Decimal::ZERO, Decimal::ZERO);
+    assert_eq!(
+        cycle_steps::plan_tip(&q.ctx, gwei, with_tip).await.unwrap(),
+        zero
+    );
+    set(&p, "dex_dex.min_profit_usd", json!("0.5")).await;
+    let r = Rates {
+        base_usdt: Decimal::ONE,
+        bnb_usdt: Decimal::new(600, 0),
+        bnb_in_base: Decimal::new(600, 0),
+    };
+    let io = (Decimal::new(101, 0), Decimal::new(100, 0));
+    // Газ 0,0003 BNB × 600 = 0,18; чаевых нет — чистая 0,82, как без чаевых.
+    let net = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r, with_tip)
+        .await
+        .unwrap();
+    assert_eq!(net, Decimal::new(82, 2));
 }
 
 #[tokio::test]
@@ -393,12 +442,12 @@ async fn wbnb_base_cycle_end_to_end_without_network() {
     assert_eq!((call.token_in, call.token_out), (WBNB, WBNB));
     // Порог в USDT: 1 USDT = 1 / курс WBNB в базовой; выход, равный входу, его не проходит.
     set(&p, "dex_dex.min_profit_usd", json!("1")).await;
-    let e = cycle_steps::net_check(&p.ctx, (input, input), (0, U256::ZERO), &r)
+    let e = cycle_steps::net_check(&p.ctx, (input, input), (0, U256::ZERO), &r, true)
         .await
         .unwrap_err();
     assert!(e.message.contains("USDT"), "{}", e.message);
     let gain = Decimal::new(2, 0) / r.base_usdt;
-    let net = cycle_steps::net_check(&p.ctx, (input + gain, input), (0, U256::ZERO), &r)
+    let net = cycle_steps::net_check(&p.ctx, (input + gain, input), (0, U256::ZERO), &r, true)
         .await
         .unwrap();
     assert_eq!(net, gain);

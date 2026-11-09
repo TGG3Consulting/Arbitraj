@@ -5,7 +5,8 @@
 //! каждого пула — Usable.gas) × цена газа (как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых
 //! каналов); газ разрешения базовой монеты исполнителю, если его ещё нет (память разрешений wallet/allow_cache.rs, газ —
 //! замер пробы первого пула, верхняя оценка — как quote/approve_gas.rs); чаевые канала (send::planned_tip) и газ их
-//! транзакции перевода (send/tip_gas.rs — оценка узла, Тигран 09.11: согласовано). Налог
+//! транзакции перевода (send/tip_gas.rs — оценка узла, Тигран 09.11: согласовано) — только у формы «исполнитель»
+//! (одна транзакция с чаевыми); бандл свопов их не шлёт — в расчёте их нет (exec/cycle_steps.rs plan_tip). Налог
 //! токена: через налоговые токены цикл не строится (quote/cycle_scan.rs tax_free) — структурно 0. Перевода, вывода,
 //! депозита и риска движения цены за перевод у цикла НЕТ.
 //! Курсы (для бюджета ядра в USDT и учёта сделки): базовая USDT — 1; WBNB — лучший пул WBNB–USDT реестра (решение 62:
@@ -13,7 +14,7 @@
 //! Газ разрешений бандла (Permit2 каждого участка) здесь не оценивается — его меряет симуляция перед отправкой, и
 //! проверка чистой прибыли после симуляции его учитывает (exec/cycle_trade.rs).
 //! Кто вызывает: venue.rs (dex_cycle_quote), exec/{cycle_trade, cycle_dry}.rs.
-//! От чего зависит: quote/{cycle, rate, route_calc}.rs, exec/cycle_gate.rs, send/mod.rs, wallet/{balances, signer}.rs,
+//! От чего зависит: quote/{cycle, rate, route_calc}.rs, exec/{cycle_gate, cycle_steps}.rs, send/mod.rs, wallet/{balances, signer}.rs,
 //! check/state.rs (газ разрешения), num.rs, tokens.rs.
 //! Настройки: dex.native_wrapped [bsc_dex]; через вызываемые — exec.executor_address, channel.*, send.*.
 
@@ -24,6 +25,7 @@ use crate::core::types::{CycleQuote, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::exec::cycle_gate::{self, Form};
+use super::super::exec::cycle_steps;
 use super::super::num;
 use super::super::send;
 use super::super::wallet::{balances, signer};
@@ -96,13 +98,10 @@ pub async fn quote(
     let approve_units = approve_units(q, legs, form, base, input).await?;
     let gas = wei.saturating_mul(U256::from(swap_units.saturating_add(approve_units)));
     let bad = || ctx.err(ErrorCode::BadResponse, "газ цикла не помещается в Decimal");
-    let tip = send::planned_tip(ctx)
-        .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
-        .unwrap_or(Decimal::ZERO);
-    // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (send/tip_gas.rs, та же цена газа).
-    let tip_gas = send::tip_gas::planned_bnb(ctx, wei)
-        .await?
-        .unwrap_or(Decimal::ZERO);
+    // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (send/tip_gas.rs, та же цена газа). Чаевые и
+    // их газ — только у формы, которая их шлёт: исполнитель (одна транзакция); бандл свопов — нет (план = факт).
+    let with_tip = matches!(form, Form::Executor(_));
+    let (tip, tip_gas) = cycle_steps::plan_tip(ctx, wei, with_tip).await?;
     let cost_bnb = num::to_decimal(gas, num::BNB_DECIMALS).ok_or_else(bad)? + tip + tip_gas;
     let cost_base = cost_bnb * r.bnb_in_base;
     let wallet_base = if with_wallet {

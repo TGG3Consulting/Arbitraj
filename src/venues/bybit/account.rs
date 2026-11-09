@@ -1,8 +1,9 @@
 //! Файл: venues/bybit/account.rs
 //! Что делает: балансы единого торгового счёта Bybit (UNIFIED — там торгует спот), баланс одной монеты и кнопка
-//! «Проверить подключение»: ключ действует, есть нужные права и НЕТ прав на деривативы (урок 19), ключ главного
-//! аккаунта, счёт UTA (тип — явно, решение 136, Тигран 04.11), привязка к IP. Счёт зачисления депозита API не читает
-//! (есть только запись Set Deposit Account) — не проверяется: UNIFIED назначается в кабинете Bybit.
+//! «Проверить подключение»: ключ действует, есть нужные права (права на деривативы — только предупреждение в тексте
+//! «Подключено», решение 243), ключ главного аккаунта, счёт UTA (тип — явно, решение 136, Тигран 04.11), привязка
+//! к IP. Счёт зачисления депозита API не читает (есть только запись Set Deposit Account) — не проверяется: UNIFIED
+//! назначается в кабинете Bybit.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.api_ip_bound, venue.api_ip, venue.deposit_to_spot [bybit] (да — нужно право AccountTransfer).
@@ -34,7 +35,8 @@ const TRANSFER: (&str, &str) = ("Wallet", "AccountTransfer");
 /// Тип счёта по enum unifiedMarginStatus (1 — classic, 3/4 — UTA 1.0 / pro, 5/6 — UTA 2.0 / pro).
 #[rustfmt::skip]
 const UTA: [(i64, &str); 4] = [(3, "UTA 1.0"), (4, "UTA 1.0 pro"), (5, "UTA 2.0"), (6, "UTA 2.0 pro")];
-/// Группы прав торговли не спотом (урок 19: фьючерсов и маржи в проекте нет) — должны быть пусты.
+/// Группы прав торговли не спотом (урок 19: фьючерсов и маржи в проекте нет). Не пусты — предупреждение, не сбой
+/// (решение 243).
 const FORBIDDEN: [&str; 3] = ["ContractTrade", "Options", "Derivatives"];
 
 /// Балансы UNIFIED. Ошибки: ключи, связь, ответ Bybit.
@@ -126,12 +128,15 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
                 .is_some_and(|a| !a.is_empty())
         })
         .collect();
-    if !extra.is_empty() {
-        return fail(format!(
-            "У ключа лишние права торговли не спотом ({}) — снимите их: в проекте только спот",
+    // Лишние права — только предупреждение, не сбой (решение 243): бот их не использует.
+    let extra = if extra.is_empty() {
+        "прав деривативов нет".to_string()
+    } else {
+        format!(
+            "у ключа есть лишние права торговли не спотом: {}",
             extra.join(", ")
-        ));
-    }
+        )
+    };
     let mode = match rest::get(ctx, "/v5/account/info", vec![], Op::Other).await {
         Ok(d) => num::int(&d, "unifiedMarginStatus").unwrap_or(-1),
         Err(e) => return fail(e.message),
@@ -162,7 +167,7 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     ConnectionCheck {
         ok: true,
         details: format!(
-            "Подключено. Тип счёта: {kind} — единый торговый счёт (unifiedMarginStatus {mode}). Права есть ({}), прав деривативов нет, \
+            "Подключено. Тип счёта: {kind} — единый торговый счёт (unifiedMarginStatus {mode}). Права есть ({}), {extra}, \
              {ip_note}, {term}",
             need.iter()
                 .map(|(g, p)| format!("{g}: {p}"))

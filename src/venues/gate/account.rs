@@ -1,6 +1,7 @@
 //! Файл: venues/gate/account.rs
 //! Что делает: балансы спот-счёта Gate (все и одной монеты — решение 113) и кнопка «Проверить подключение»: ключ
-//! принят, режим счёта классический, права спота на запись и кошелька есть, нет прав записи фьючерсов и маржи, IP.
+//! принят, режим счёта классический, права спота на запись и кошелька есть, IP; права записи фьючерсов и маржи —
+//! только предупреждение в тексте «Подключено» (решение 243).
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, key_info.rs (своя запись в списке /account/main_keys).
 //! Настройки: venue.api_ip_bound, venue.api_ip [gate].
@@ -26,7 +27,8 @@ use super::ctx::Ctx;
 use super::errors::Op;
 use super::{num, rest};
 
-/// Права записи, которых у ключа бота быть не должно (урок 19: только спот и ввод/вывод — без фьючерсов и маржи).
+/// Права записи, которые боту не нужны (урок 19: бот — только спот и ввод/вывод). Есть — предупреждение, не сбой
+/// (решение 243).
 const FORBIDDEN_WRITE: [&str; 7] = [
     "futures", "delivery", "margin", "unified", "options", "loan", "copy",
 ];
@@ -131,12 +133,12 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         .copied()
         .filter(|n| has(n, true))
         .collect();
-    if !extra.is_empty() {
-        return fail(format!(
-            "У ключа лишние права записи: {} — оставьте только спот, кошелёк и вывод",
-            extra.join(", ")
-        ));
-    }
+    // Лишние права — только предупреждение, не сбой (решение 243): бот их не использует.
+    let extra = if extra.is_empty() {
+        String::new()
+    } else {
+        format!("; у ключа есть лишние права записи: {}", extra.join(", "))
+    };
     let ips = strings(detail.get("ip_whitelist"));
     let ip_note = match ip(ctx, &ips) {
         Ok(n) => n,
@@ -151,7 +153,7 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     ConnectionCheck {
         ok: true,
         details: format!(
-            "Подключено: классический режим, права spot и wallet есть, {ip_note}, {pairs_note}; право вывода проверяется первым выводом"
+            "Подключено: классический режим, права spot и wallet есть, {ip_note}, {pairs_note}; право вывода проверяется первым выводом{extra}"
         ),
     }
 }

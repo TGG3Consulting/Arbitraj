@@ -1,7 +1,8 @@
 //! Файл: venues/bitget/account.rs
 //! Что делает: балансы спот-счёта Bitget — все и одной монеты (решение 113), и кнопка «Проверить подключение»: ключ
-//! принят, права (спот-торговля и вывод; без фьючерсов, маржи и копитрейдинга — урок 19, 29), привязка к IP (вывод —
-//! только с IP из белого списка), режим счёта Classic или UTA — явно в тексте (адаптер на Classic API v2), скидка BGB.
+//! принят, права (спот-торговля и вывод; фьючерсы, маржа и копитрейдинг — только предупреждение, решение 243),
+//! привязка к IP (вывод — только с IP из белого списка), режим счёта Classic или UTA — явно в тексте (адаптер на
+//! Classic API v2), скидка BGB.
 //! Кто вызывает: mod.rs (функции контракта), all_balances.rs (Спот).
 //! От чего зависит: rest.rs, num.rs, fees.rs (deduct_info), ctx.rs.
 //! Настройки: venue.api_ip_bound, venue.api_ip, venue.deposit_to_spot, venue.withdraw_from_trade [bitget].
@@ -32,7 +33,7 @@ use super::{fees, num, rest};
 const REQUIRED: [(&str, &str); 2] = [("stow", "спот-торговля"), ("wwow", "вывод")];
 /// Право перевода между счетами (нужно при venue.deposit_to_spot / venue.withdraw_from_trade).
 const TRANSFER: (&str, &str) = ("wtow", "перевод между счетами");
-/// Права, которых у ключа бота быть не должно (только спот — CLAUDE.md).
+/// Права, которые боту не нужны (только спот — CLAUDE.md). Есть — предупреждение, не сбой (решение 243).
 const FORBIDDEN: [(&str, &str); 4] = [
     ("coow", "фьючерсы: ордера"),
     ("cpow", "фьючерсы: позиции"),
@@ -118,12 +119,12 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
         .filter(|(c, _)| has(c))
         .map(|(c, n)| format!("{c} ({n})"))
         .collect();
-    if !extra.is_empty() {
-        return Err(format!(
-            "У ключа Bitget лишние права: {} — бот только спот, снимите их",
-            extra.join(", ")
-        ));
-    }
+    // Лишние права — только предупреждение, не сбой (решение 243): бот их не использует.
+    let extra = if extra.is_empty() {
+        String::new()
+    } else {
+        format!("; у ключа есть лишние права: {}", extra.join(", "))
+    };
     let ip_note = ip_note(ctx, &num::text_opt(&info, "ips").unwrap_or_default())?;
     let mode = mode(&get("/api/v2/spot/account/upgrade-status").await?)?;
     let bgb = match fees::deduct_info(ctx).await {
@@ -133,7 +134,7 @@ async fn run(ctx: &Ctx) -> Result<String, String> {
     };
     Ok(format!(
         "Подключено. Тип счёта: {mode}. Права есть ({}), {ip_note}; {bgb}. Вывод — только на адреса из адресной книги \
-         кабинета Bitget (код 11000)",
+         кабинета Bitget (код 11000){extra}",
         perms.join(", ")
     ))
 }

@@ -29,6 +29,7 @@ pub mod order_rules;
 pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
+pub mod rate_pause;
 pub mod resolve;
 pub mod rest;
 pub mod subs;
@@ -139,6 +140,8 @@ impl Venue for Bingx {
         assets: Vec<Asset>,
         out: mpsc::Sender<MarketEvent>,
     ) -> GatewayResult<()> {
+        // Решение 244: событие venue.rate_limited при HTTP 418 — через канал событий ядра (rate_pause.rs).
+        rate_pause::set_out(out.clone());
         let parts = Parts {
             ctx: self.ctx.clone(),
             symbols: self.symbols.clone(),

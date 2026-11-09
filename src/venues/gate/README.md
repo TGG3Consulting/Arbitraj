@@ -34,7 +34,7 @@
 | `all_balances.rs`, `all_balances_parse.rs` | Решение 144: панель «Балансы» — все счета Gate (спот, маржа, фьючерсы по venue.futures_settles, поставочные по venue.delivery_settles, опционы, Earn, итог /wallet/total_balance), только чтение |
 | `transfers.rs`, `deposits.rs` | Вывод POST /withdrawals (withdraw_order_id на попытку), статус и поиск по withdraw_order_id; статус депозита по хешу (/wallet/deposits) |
 | `deposit_hold.rs` | Решение 166: удержания вывода — депозиты DEP_CREDITED («withdrawal is not unlocked», GET /wallet/deposits). Метки «заблокировано для вывода» в списке меток Gate нет — WithdrawLocked не выдаётся |
-| `account.rs` | Балансы /spot/accounts (все и одной монеты); «Проверить подключение»: key.mode, state, perms, IP |
+| `account.rs` | Балансы /spot/accounts (все и одной монеты); «Проверить подключение»: key.mode, state, perms (права записи фьючерсов/маржи — предупреждение, решение 243), IP |
 | `order_rules.rs` | Правила ордера — одни у ордера и у check_order (решение 134): сторона через API, ioc/fok, шаги, пределы; свой text «t-…» |
 | `trade.rs`, `order_state.rs` | Ордер limit + ioc или fok (venue.order_time_in_force); итог из полей ордера; опрос, отмена по сроку, поиск по text (ожидающие → отмена → законченные) |
 | `withdraw_notice.rs` | Вывод в статусе FAIL — журнал и событие exec.withdraw_fail_pending, один раз на вывод (вывод не проваливается — ждём) |

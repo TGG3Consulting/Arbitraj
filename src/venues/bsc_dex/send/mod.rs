@@ -35,6 +35,7 @@ pub mod ready;
 pub mod receipt;
 pub mod settle;
 pub mod stats;
+pub mod tip_gas;
 pub mod track;
 pub mod track_util;
 pub mod tx;

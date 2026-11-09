@@ -264,14 +264,20 @@ async fn net_after_simulation_must_clear_threshold() {
     };
     let gwei = U256::from(1_000_000_000u64);
     let io = (Decimal::new(101, 0), Decimal::new(100, 0));
-    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r).expect_err("порог не задан");
+    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+        .await
+        .expect_err("порог не задан");
     assert_eq!(e.code, ErrorCode::NotConfigured);
     set(&p, "dex_dex.min_profit_usd", json!("0.5")).await;
     // Газ 300 000 × 1 gwei = 0,0003 BNB × 600 = 0,18 USDT; чистая 1 − 0,18 = 0,82.
-    let net = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r).unwrap();
+    let net = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+        .await
+        .unwrap();
     assert_eq!(net, Decimal::new(82, 2));
     set(&p, "dex_dex.min_profit_usd", json!("1")).await;
-    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r).expect_err("ниже порога");
+    let e = cycle_steps::net_check(&p.ctx, io, (300_000, gwei), &r)
+        .await
+        .expect_err("ниже порога");
     assert_eq!(e.code, ErrorCode::QuoteMismatch);
 }
 
@@ -387,10 +393,14 @@ async fn wbnb_base_cycle_end_to_end_without_network() {
     assert_eq!((call.token_in, call.token_out), (WBNB, WBNB));
     // Порог в USDT: 1 USDT = 1 / курс WBNB в базовой; выход, равный входу, его не проходит.
     set(&p, "dex_dex.min_profit_usd", json!("1")).await;
-    let e = cycle_steps::net_check(&p.ctx, (input, input), (0, U256::ZERO), &r).unwrap_err();
+    let e = cycle_steps::net_check(&p.ctx, (input, input), (0, U256::ZERO), &r)
+        .await
+        .unwrap_err();
     assert!(e.message.contains("USDT"), "{}", e.message);
     let gain = Decimal::new(2, 0) / r.base_usdt;
-    let net = cycle_steps::net_check(&p.ctx, (input + gain, input), (0, U256::ZERO), &r).unwrap();
+    let net = cycle_steps::net_check(&p.ctx, (input + gain, input), (0, U256::ZERO), &r)
+        .await
+        .unwrap();
     assert_eq!(net, gain);
 }
 

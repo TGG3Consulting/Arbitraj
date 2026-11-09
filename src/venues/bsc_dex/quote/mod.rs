@@ -2,7 +2,8 @@
 //! Что делает: котировка на объём для контракта quote — режим dex.swap_mode: «direct» (лучший одиночный пул или пара
 //! пулов через промежуточную монету, решения 29, 52 — quote/classic_direct.rs → direct_route.rs; неисполнимые пулы —
 //! только сигнал, решение 121) или «smart» (умный маршрут PancakeSwap против прямой сделки Uniswap, решение 38 —
-//! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые.
+//! quote/smart_quote.rs). Проверяет свежесть блока («не торгуем вслепую»), добавляет газ разрешений и чаевые, а к
+//! чаевым — газ их транзакции перевода (send/tip_gas.rs, Тигран 09.11: согласовано).
 //! Цена газа = max(eth_gasPrice с надбавкой, минимум газа готовых каналов) — та же, что при отправке.
 //! Нативная монета BNB (решение 62): газ обёртки — quote/native_gas.rs; у продажи BNB разрешений нет (approve_gas.rs).
 //! Выбор маршрута (классика, граф, merge) — quote/routing.rs, вне рабочих потоков tokio (quote/cpu.rs, решение 129).
@@ -218,6 +219,12 @@ impl Quoting {
         {
             q.costs
                 .push(with_step(Cost::new(CostKind::ChannelTip, tip, BNB, false)));
+            // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (exec/txs.rs, nonce + 1, та же цена
+            // газа) — та же статья, что в факте (core/deal_gas.rs «газ перевода чаевых», вид ChannelTip).
+            if let Some(g) = super::send::tip_gas::planned_bnb(ctx, gas).await? {
+                q.costs
+                    .push(with_step(Cost::new(CostKind::ChannelTip, g, BNB, false)));
+            }
         }
         Ok(q)
     }

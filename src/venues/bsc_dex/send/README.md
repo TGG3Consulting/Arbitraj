@@ -20,6 +20,7 @@
 | `cancel.rs` | Отмена не попавшей: 0 BNB себе с тем же nonce, цена газа выше на `send.cancel_gas_bump_pct` |
 | `tx.rs` | Лимит газа (eth_estimateGas + запас), legacy-транзакция EIP-155, настройки ожидания и отмены (`SendCfg`) |
 | `stats.rs` | Счётчики каналов и событие SendChannel |
+| `tip_gas.rs` | Газ перевода чаевых для плана (Тигран 09.11: согласовано): единицы — eth_estimateGas узла (от кошелька на адрес чаевых, сумма чаевых, пустые данные — как exec/txs.rs при отправке), память по (кошелёк, адрес, сумма); × цена газа обмена; чаевых в плане нет — газа нет |
 | `public.rs` | Открытая отправка (свой узел или провайдер; `{key}` в channel.url — ключ узла bsc.node_http_key) |
 | `mev_guard.rs` | PancakeSwap MEV Guard |
 | `club48.rs` | 48 Club (Privacy RPC / Puissant) |

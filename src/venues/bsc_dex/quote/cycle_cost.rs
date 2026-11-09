@@ -4,7 +4,8 @@
 //! проскальзывание на каждом шаге — уже в выходе (quote/cycle.rs eval, математика пулов); газ BSC свопов (замер пробы
 //! каждого пула — Usable.gas) × цена газа (как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых
 //! каналов); газ разрешения базовой монеты исполнителю, если его ещё нет (память разрешений wallet/allow_cache.rs, газ —
-//! замер пробы первого пула, верхняя оценка — как quote/approve_gas.rs); чаевые канала (send::planned_tip). Налог
+//! замер пробы первого пула, верхняя оценка — как quote/approve_gas.rs); чаевые канала (send::planned_tip) и газ их
+//! транзакции перевода (send/tip_gas.rs — оценка узла, Тигран 09.11: согласовано). Налог
 //! токена: через налоговые токены цикл не строится (quote/cycle_scan.rs tax_free) — структурно 0. Перевода, вывода,
 //! депозита и риска движения цены за перевод у цикла НЕТ.
 //! Курсы (для бюджета ядра в USDT и учёта сделки): базовая USDT — 1; WBNB — лучший пул WBNB–USDT реестра (решение 62:
@@ -98,7 +99,11 @@ pub async fn quote(
     let tip = send::planned_tip(ctx)
         .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
         .unwrap_or(Decimal::ZERO);
-    let cost_bnb = num::to_decimal(gas, num::BNB_DECIMALS).ok_or_else(bad)? + tip;
+    // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (send/tip_gas.rs, та же цена газа).
+    let tip_gas = send::tip_gas::planned_bnb(ctx, wei)
+        .await?
+        .unwrap_or(Decimal::ZERO);
+    let cost_bnb = num::to_decimal(gas, num::BNB_DECIMALS).ok_or_else(bad)? + tip + tip_gas;
     let cost_base = cost_bnb * r.bnb_in_base;
     let wallet_base = if with_wallet {
         let w = signer::address(ctx)?;

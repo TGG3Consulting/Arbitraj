@@ -150,7 +150,8 @@ async fn fill(
         (out, req.input),
         (gas, cycle_steps::wei(q).await?),
         &rates,
-    )?;
+    )
+    .await?;
     r.notes.push(format!(
         "чистая прибыль по симуляции {net} {} (≈ {} USDT), газ {gas} ед. вместе с разрешениями",
         req.cycle.base_ticker,

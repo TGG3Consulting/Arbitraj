@@ -128,7 +128,12 @@ pub async fn compute(
     let mut p = params(core, cx, search_cap, price, fz)?;
     p.max_evals = u32::try_from(max_evals).map_err(|_| "uncapped.max_evals вне пределов")?;
     // Решение 239: объёмы с валютой затрат не из плана — недопустимы, их число и причина — в запись.
-    let mut curve = PlanGap::new(CoreCurve { core, cx, src: fz });
+    let mut curve = PlanGap::new(CoreCurve {
+        core,
+        cx,
+        src: fz,
+        budget: None,
+    });
     // Решение 237: у сделки объём входа — точка «на нашем бюджете» (всегда посчитана).
     let own = (battle.verdict == "deal" && battle.qty > Decimal::ZERO).then_some(battle.qty);
     let u = uncapped(

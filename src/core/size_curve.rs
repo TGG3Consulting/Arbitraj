@@ -8,7 +8,8 @@
 //! потолка» по окнам), search_params — параметры поиска из настроек size.* при известных шаге и изломах.
 //! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs, uncapped_recompute.rs (SourceCurve, search_params).
 //! От чего зависит: costs.rs, costs_source.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
-//! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки).
+//! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки); решение 246 —
+//! у кривой боя (profit.rs) бюджет проверяется уже после стороны A (CoreCurve.budget), без котировок B.
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет).
 
@@ -31,15 +32,24 @@ pub struct CoreCurve<'a> {
     pub cx: &'a DirCtx,
     /// Решение 217: снимок рынка момента решения (расчёт «без потолка» по сделке); None — живые котировки.
     pub src: Option<&'a Frozen>,
+    /// Решение 246: бюджет подбора объёма (тот же, что Params.budget) — объём сверх него отбрасывается после стороны
+    /// A, без котировок B (costs.rs evaluate_capped). None — полный расчёт каждого объёма: поиск без бюджета (size_max,
+    /// size_uncapped — Memo::beyond) должен видеть точки сверх бюджета.
+    pub budget: Option<Decimal>,
 }
 
 #[async_trait]
 impl Curve for CoreCurve<'_> {
     type Data = Calc;
 
-    /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate.
+    /// Полный расчёт на объём (решение 246: с бюджетом — до стороны B, если списание больше бюджета).
+    /// Ошибки: Fail из costs::evaluate_capped.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
-        let c = costs::evaluate_on(self.core, self.cx, qty, self.src).await?;
+        let src = costs::Live {
+            core: self.core,
+            src: self.src,
+        };
+        let c = costs::evaluate_capped(self.cx, qty, &src, self.budget).await?;
         Ok(point(qty, c))
     }
 }

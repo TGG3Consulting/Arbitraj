@@ -124,6 +124,7 @@ pub mod manual_repeat;
 pub mod manual_return;
 pub mod manual_rows;
 pub mod manual_sell;
+pub mod manual_sold_check;
 pub mod manual_usdt;
 pub mod manual_usdt_credit;
 pub mod market_read;

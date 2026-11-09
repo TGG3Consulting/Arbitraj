@@ -10,8 +10,10 @@
 //! продажа на площадке, где больше после всех затрат перевода (manual_relay.rs), без порогов убытка.
 //! Решение 177: продажа кнопкой — ручная команда (risk_count.rs), итог отдельным событием (manual_outcome.rs).
 //! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
-//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы).
-//! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
+//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы),
+//! manual_sold_check.rs (проверка ввода «Продано вручную», решение 236, дополнение п. 3).
+//! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62);
+//! manual.sold_max_over_pct — через manual_sold_check.rs.
 
 use std::str::FromStr;
 
@@ -187,7 +189,8 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
 
 /// «Продано вручную»: человек продал монеты сам и вводит полученные USDT. Сделка (остановленная, ждущая решения
 /// или «Беру на себя») закрывается фактом; её алерт и запись «Беру на себя» снимаются.
-/// Принимает: id сделки, выручку USDT (строка, ≥ 0), кто. Возвращает: текст. Ошибки: сумма, сделки нет, шаг.
+/// Принимает: id сделки, выручку USDT (строка, ≥ 0), кто. Возвращает: текст. Ошибки: сумма, сделки нет, шаг; решение
+/// 236, дополнение п. 3 — ввод больше стоимости остатка по рынку больше чем на manual.sold_max_over_pct %.
 pub async fn sold_manually(
     core: &Core,
     deal_id: &str,
@@ -199,6 +202,15 @@ pub async fn sold_manually(
     if got < Decimal::ZERO {
         return Err("выручка не может быть отрицательной".into());
     }
+    // Решение 236, дополнение п. 3: ввод больше стоимости остатка по рынку больше чем на manual.sold_max_over_pct % —
+    // отказ (manual_sold_check.rs). Снимок сделки — до метки «идёт разбор»; шаг проверяется ниже, как раньше.
+    let snap = lk(&core.inner.deals).get(deal_id).cloned();
+    let checked = match snap {
+        Some(d) if matches!(d.step, Step::Halted | Step::TakenOver | Step::WaitingHuman) => {
+            super::manual_sold_check::check(core, &d, got).await?
+        }
+        _ => None,
+    };
     let mut deal = {
         let mut deals = lk(&core.inner.deals);
         let d = deals
@@ -237,6 +249,9 @@ pub async fn sold_manually(
         "Продано вручную ({who}): {} {ticker}, выручка человека {got} USDT (ввод) + выручка продаж бота {bot} USDT = {} USDT; газ и комиссия ручной продажи в итог не входят",
         deal.qty, deal.proceeds
     ));
+    if let Some(c) = &checked {
+        deal.note(format!("Продано вручную: {c}"));
+    }
     deal.qty = Decimal::ZERO;
     // Решение 138: продал человек — бот его выручку не двигает (решение 100); не на площадке покупки — страховка.
     // Решение 224: выручку продаж бота в этой же сделке бот перегоняет сам (usdt_return_deal.rs, шаг prepare).
@@ -246,8 +261,9 @@ pub async fn sold_manually(
     // Решение 165 (05.11): снять метку монеты — иначе следующая сделка и «Продано вручную» по этой монете
     // получали отказ «идёт другая сделка» до перезапуска (найдено на двух LUCIC Gate).
     lk(&core.inner.active).remove(&key);
+    let tail = checked.map(|c| format!("; {c}")).unwrap_or_default();
     Ok(format!(
-        "Сделка {deal_id} закрыта: ваша выручка {got} USDT + выручка бота {bot} USDT − вложено {} − затраты {} = итог {} USDT",
+        "Сделка {deal_id} закрыта: ваша выручка {got} USDT + выручка бота {bot} USDT − вложено {} − затраты {} = итог {} USDT{tail}",
         deal.invested.round_dp(4),
         deal.spent.round_dp(4),
         deal.result_usd.unwrap_or_default().round_dp(4)

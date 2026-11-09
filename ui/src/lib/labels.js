@@ -37,6 +37,7 @@ const SCOPE = {
   Event: 'событие',
   Dex: 'DEX / вид пула',
   Channel: 'канал отправки',
+  VenueDir: 'площадка + тип направления',
 };
 // Варианты выбора — по решениям 29, 32, 34, 37, 43 (docs/DECISIONS.md).
 const CHOICE = {

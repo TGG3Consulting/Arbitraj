@@ -339,7 +339,7 @@ async fn sigma_settings() {
     let was = old_sigma(&mut vol, now).unwrap();
     assert!(was > Decimal::ZERO);
     assert_eq!(reserve::sigma_now(&mut vol, &s, &gd, now).unwrap(), was);
-    assert_eq!(reserve::closure_share(&s, &gd).unwrap(), None);
+    assert_eq!(reserve::closure_share(&s, &gd, None).unwrap(), None);
     // 2) Граница выше σ ряда — σ = граница; ниже — σ ряда; граница другой площадки не действует.
     let gate = Scope::Venue("gate".into());
     set(
@@ -429,7 +429,7 @@ async fn reserve_without_settings_and_floor() {
     let src = replay(&rec, &dd, false);
     let sigma = d("0.00002");
     // Без настроек: доли нет, запас k·σ·√T·выручка, расчёт побайтно как у контекста без доли.
-    let share = reserve::closure_share(&s, &dd).unwrap();
+    let share = reserve::closure_share(&s, &dd, None).unwrap();
     assert_eq!(share, None);
     let c0 = cx(&rec, dd.clone(), sigma, share);
     let r0 = costs::evaluate_with(&c0, d("10"), &src).await.unwrap();
@@ -482,7 +482,7 @@ async fn closure_share_reserve() {
         json!("0.5"),
     )
     .await;
-    assert_eq!(reserve::closure_share(&s, &dd).unwrap(), None);
+    assert_eq!(reserve::closure_share(&s, &dd, None).unwrap(), None);
     // Доля у BingX (получатель): запас = доля · спред · выручка (больше k·σ·√T), прибыль меньше ровно на разницу запасов.
     set(
         &s,
@@ -491,7 +491,7 @@ async fn closure_share_reserve() {
         json!("0.5"),
     )
     .await;
-    let share = reserve::closure_share(&s, &dd).unwrap();
+    let share = reserve::closure_share(&s, &dd, None).unwrap();
     assert_eq!(share, Some(d("0.5")));
     let c1 = cx(&rec, dd.clone(), sigma, share);
     let r1 = costs::evaluate_with(&c1, d("10"), &src).await.unwrap();
@@ -514,7 +514,7 @@ async fn closure_share_reserve() {
     .await;
     let cc = dir("bingx", "mexc");
     let cs = replay(&rec, &cc, true);
-    let share = reserve::closure_share(&s, &cc).unwrap();
+    let share = reserve::closure_share(&s, &cc, None).unwrap();
     assert_eq!(share, Some(d("0.5")));
     let with = costs::evaluate_with(&cx(&rec, cc.clone(), sigma, share), d("10"), &cs)
         .await
@@ -563,7 +563,7 @@ async fn pinned_at_entry() {
     )
     .await;
     assert_eq!(
-        reserve::closure_share(&pinned, &gd).unwrap(),
+        reserve::closure_share(&pinned, &gd, None).unwrap(),
         Some(d("0.39"))
     );
     assert_eq!(
@@ -571,6 +571,9 @@ async fn pinned_at_entry() {
         was * d("2")
     );
     // Живые — уже новые.
-    assert_eq!(reserve::closure_share(&s, &gd).unwrap(), Some(d("0.9")));
+    assert_eq!(
+        reserve::closure_share(&s, &gd, None).unwrap(),
+        Some(d("0.9"))
+    );
     assert!(reserve::sigma_now(&mut vol, &s, &gd, now).is_err());
 }

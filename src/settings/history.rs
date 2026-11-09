@@ -1,6 +1,6 @@
 //! Файл: settings/history.rs
 //! Что делает: чтение истории изменений настроек (кто, когда, старое и новое значение).
-//! Кто вызывает: api/settings.rs (экран «Настройки» → история).
+//! Кто вызывает: api/settings.rs (экран «Настройки» → история; решение 242 — история одной области, history_in).
 //! От чего зависит: settings/store.rs, storage/db.rs.
 //! Настройки: нет. Сколько записей читать — задаёт интерфейс.
 
@@ -15,13 +15,25 @@ impl Store {
     /// История изменений, новые первыми.
     /// Принимает: имя (или None — все), сколько записей. Ошибки: база.
     pub async fn history(&self, name: Option<String>, limit: u32) -> Result<Vec<Value>, DbError> {
+        self.history_in(name, None, limit).await
+    }
+
+    /// История изменений одной области (решение 242: строка «площадка · тип направления» экрана), новые первыми.
+    /// Принимает: имя (или None — все), ключ области как в SQLite (Scope::to_key; None — все), сколько записей.
+    /// Ошибки: база.
+    pub async fn history_in(
+        &self,
+        name: Option<String>,
+        scope: Option<String>,
+        limit: u32,
+    ) -> Result<Vec<Value>, DbError> {
         self.db
             .call(move |c| {
                 let mut st = c.prepare(
                     "SELECT name, scope, old_value, new_value, changed_by, changed_at FROM settings_history
-                     WHERE (?1 IS NULL OR name = ?1) ORDER BY id DESC LIMIT ?2",
+                     WHERE (?1 IS NULL OR name = ?1) AND (?3 IS NULL OR scope = ?3) ORDER BY id DESC LIMIT ?2",
                 )?;
-                let it = st.query_map(params![name, limit], |r| {
+                let it = st.query_map(params![name, limit, scope], |r| {
                     Ok(json!({
                         "name": r.get::<_, String>(0)?,
                         "scope": r.get::<_, String>(1)?,

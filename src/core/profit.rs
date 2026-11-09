@@ -13,7 +13,8 @@
 //! котировка — по ним отказ по сроку называет, где расчёт стоял.
 //! Решение 175: сначала — делистинг монеты на сторонах направления (delist_check.rs, delist.block_hours).
 //! Решение 234 (п. 3): затем — свежесть замера налогов на DEX-сторонах (tax_age.rs, tax.max_age_s).
-//! Настройки: money.min_profit_usd, money.min_profit_pct, tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
+//! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
+//! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
 
 use rust_decimal::Decimal;
@@ -71,12 +72,10 @@ pub async fn decide_capped(
         Err(e) => return reject(e, None),
     };
     let s = &core.inner.deps.settings;
-    let (min_usd, min_pct) = match (
-        s.decimal("money.min_profit_usd", At::default()),
-        s.decimal("money.min_profit_pct", At::default()),
-    ) {
-        (Ok(a), Ok(b)) => (a, b),
-        (Err(e), _) | (_, Err(e)) => return reject(e.message, None),
+    // Решение 242: пороги — площадки и типа направления сделки (правило стороны), иначе вся система.
+    let (min_usd, min_pct) = match super::venue_dir::thresholds(s, super::venue_dir::of(core, d)) {
+        Ok(t) => t,
+        Err(e) => return reject(e, None),
     };
     let budget = match stage(|| "бюджет".into(), super::limits::budget(core, &cx, mode)).await
     {

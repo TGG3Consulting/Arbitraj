@@ -6,6 +6,7 @@
 //! (котировка DEX) — причина края — в MaxVolume.limit.
 //! Кто вызывает: core/card.rs.
 //! От чего зависит: size_max.rs, size_curve.rs, dirctx.rs, costs.rs, settings.
+//! Решение 242: пороги — с областью «площадка + тип направления» (venue_dir.rs), как у сделки.
 //! Настройки: card.max_search_usdt, money.min_profit_usd, money.min_profit_pct, size.* (через size_curve::params).
 
 use rust_decimal::Decimal;
@@ -26,8 +27,9 @@ pub async fn compute(core: &Core, calc: &Calc) -> Result<MaxVolume, String> {
     let s = &core.inner.deps.settings;
     let g = |name: &str| s.decimal(name, At::default()).map_err(|e| e.message);
     let cap = g("card.max_search_usdt")?;
-    let (min_usd, min_pct) = (g("money.min_profit_usd")?, g("money.min_profit_pct")?);
     let d = &calc.direction;
+    // Решение 242: пороги — как у сделки (площадка + тип направления, иначе вся система).
+    let (min_usd, min_pct) = super::venue_dir::thresholds(s, super::venue_dir::of(core, d))?;
     let cx = DirCtx::build(core, d)?;
     let price = rd(&core.inner.market)
         .best(&d.buy_on, &cx.a.ticker, Side::Buy)

@@ -5,10 +5,12 @@
 //! учёта дня сделки (решение 173: значение площадки или «вся система»).
 //! Кто вызывает: risk.rs (can_open).
 //! От чего зависит: settings (catalog, store), daily_venue.rs (площадки сделки).
+//! Решение 242: money.* с областью «площадка + тип направления» — заданы и значением пары (core/venue_dir.rs).
 //! Настройки: все обязательные money.* и risk.*, risk.max_errors_in_row, risk.max_daily_loss_usd.
 
 use crate::core::types::Direction;
 use crate::settings::catalog;
+use crate::settings::schema::ScopeKind;
 
 use super::engine::Core;
 
@@ -16,10 +18,16 @@ use super::engine::Core;
 /// Возвращает: Ok или Err — «торговля не включается: не задана настройка …».
 pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
     let s = &core.inner.deps.settings;
+    // Решение 242: у настроек с областью «площадка + тип направления» значение пары тоже считается заданным (как его
+    // читает расчёт — venue_dir.rs); не задано для пары — как раньше.
+    let vd = super::venue_dir::of(core, d);
     for def in catalog::all()
         .filter(|d| !d.optional && (d.name.starts_with("money.") || d.name.starts_with("risk.")))
     {
-        if s.resolve(def.name, Some(&d.buy_on.0), None).is_none() {
+        let pair = vd.filter(|_| def.scopes.contains(&ScopeKind::VenueDir));
+        if s.resolve_dir(def.name, pair, Some(&d.buy_on.0), None)
+            .is_none()
+        {
             return Err(format!(
                 "торговля не включается: не задана настройка {}",
                 def.name

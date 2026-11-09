@@ -13,7 +13,7 @@
 //! Решение 241: котировка стороны DEX направления в открытом окне — точкой цены в окно (window_dex.rs, только память).
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, settings.
-//! Настройки: money.max_per_trade_usd (по площадке A), venue.quote_asset (по площадке), signal.dex_quote_cache_ms.
+//! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms.
 
 use rust_decimal::Decimal;
 
@@ -122,9 +122,14 @@ pub async fn for_direction(
         venue: Some(&dir.buy_on.0),
         coin: None,
     };
+    // Решение 242: потолок — площадки и типа направления (venue_dir.rs), иначе площадка A, иначе вся система.
     let usd = deps
         .settings
-        .decimal("money.max_per_trade_usd", at)
+        .decimal_dir(
+            "money.max_per_trade_usd",
+            super::venue_dir::of(core, dir),
+            at,
+        )
         .map_err(|e| e.message)?;
     let cap_qty = usd / ref_price;
     // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).

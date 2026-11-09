@@ -7,7 +7,8 @@
 //! GET  /api/settings/schema                 — каталог настроек и событий уведомлений
 //! GET  /api/settings                        — все заданные значения
 //! PUT  /api/settings                        — {name, scope, value} (value = null — очистить)
-//! GET  /api/settings/history?limit=N[&name=] — история, новые первыми; limit обязателен
+//! GET  /api/settings/history?limit=N[&name=][&scope=] — история, новые первыми; limit обязателен; scope — ключ области
+//!      как в SQLite (решение 242: «venue_dir:bingx:cex_dex» — история одной строки «площадка · тип направления»)
 
 use axum::Json;
 use axum::extract::{Query, State};
@@ -70,6 +71,7 @@ pub async fn set(
 pub struct HistoryQuery {
     limit: u32,
     name: Option<String>,
+    scope: Option<String>,
 }
 
 /// История изменений. Ошибки: 400 — не указан limit; 500 — база.
@@ -78,7 +80,7 @@ pub async fn history(
     Query(q): Query<HistoryQuery>,
 ) -> Result<Json<Vec<Value>>, ApiError> {
     st.settings
-        .history(q.name, q.limit)
+        .history_in(q.name, q.scope, q.limit)
         .await
         .map(Json)
         .map_err(ApiError::internal)

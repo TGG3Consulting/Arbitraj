@@ -246,6 +246,7 @@ pub mod usdt_sources;
 pub mod usdt_transfer;
 pub mod usdt_transfer_check;
 pub mod usdt_transfer_plan;
+pub mod venue_dir;
 pub mod venue_ticker;
 pub mod view;
 pub mod vol;

@@ -7,7 +7,8 @@
 //! Кто вызывает: core/uncapped_recompute_ctx.rs, core/uncapped_recompute.rs, uncapped_recompute_all.rs.
 //! От чего зависит: uncapped_types.rs (Battle), limits_parts.rs, size_uncapped.rs (At), registry.rs (Presence),
 //! uncapped_record.rs (ladder_in), uncapped_replay.rs (Plan), settings.
-//! Настройки: card.max_search_usdt, money.min_profit_usd, money.min_profit_pct, uncapped.max_evals, uncapped.ladder_usdt.
+//! Настройки: card.max_search_usdt, money.min_profit_usd, money.min_profit_pct (решение 242: площадка + тип направления —
+//! core/venue_dir.rs), uncapped.max_evals, uncapped.ladder_usdt.
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -15,6 +16,7 @@ use serde::Deserialize;
 use crate::core::types::{Asset, OrderBook, VenueId};
 use crate::settings::read::At as SAt;
 use crate::settings::store::Store;
+use crate::settings::venue_dir::VenueDir;
 
 use super::limits_parts::Parts;
 use super::registry::Presence;
@@ -53,16 +55,19 @@ pub struct Cfg {
 }
 
 impl Cfg {
-    /// Чтение из настроек. Ошибки: текст — не задана настройка.
-    pub fn read(s: &Store) -> Result<Cfg, String> {
+    /// Чтение из настроек. Принимает: хранилище, площадку и тип направления сделки (решение 242; None — нет).
+    /// Ошибки: текст — не задана настройка.
+    pub fn read(s: &Store, vd: Option<VenueDir>) -> Result<Cfg, String> {
         let dec = |n: &str| s.decimal(n, SAt::default()).map_err(|e| e.message);
         let max_evals = s
             .integer("uncapped.max_evals", SAt::default())
             .map_err(|e| e.message)?;
+        let search_cap = dec("card.max_search_usdt")?;
+        let (min_usd, min_pct) = super::venue_dir::thresholds(s, vd)?;
         Ok(Cfg {
-            search_cap: dec("card.max_search_usdt")?,
-            min_usd: dec("money.min_profit_usd")?,
-            min_pct: dec("money.min_profit_pct")?,
+            search_cap,
+            min_usd,
+            min_pct,
             max_evals: u32::try_from(max_evals).map_err(|_| "uncapped.max_evals вне пределов")?,
             ladder: super::uncapped_record::ladder_in(s)?,
         })

@@ -27,6 +27,17 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
         ));
     }
     check_scope_id(scope)?;
+    // Решение 242: тип направления области должен быть у настройки (SettingDef::dir_kinds).
+    if let Scope::VenueDir(id) = scope
+        && let Some((_, k)) = super::venue_dir::parse_id(id)
+        && !def.dir_kinds.contains(&k)
+    {
+        return Err(format!(
+            "Настройка {} не задаётся для типа направления «{}»",
+            def.name,
+            k.key()
+        ));
+    }
     match def.kind {
         Kind::Decimal => {
             let text = match value {
@@ -118,12 +129,17 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
     }
 }
 
-/// Проверка области: идентификатор не пустой, событие есть в каталоге уведомлений, id DEX по правилу записи (решение 128).
+/// Проверка области: идентификатор не пустой, событие есть в каталоге уведомлений, id DEX по правилу записи (решение 128),
+/// id «площадка + тип направления» — «площадка:тип» или «dex_dex» (решение 242).
 /// Возвращает Err с причиной, если область неверная.
 fn check_scope_id(scope: &Scope) -> Result<(), String> {
     match scope {
         Scope::Global => Ok(()),
-        Scope::Venue(id) | Scope::Coin(id) | Scope::Dex(id) | Scope::Channel(id)
+        Scope::Venue(id)
+        | Scope::Coin(id)
+        | Scope::Dex(id)
+        | Scope::Channel(id)
+        | Scope::VenueDir(id)
             if id.trim().is_empty() =>
         {
             Err("Не указан идентификатор области".into())
@@ -133,6 +149,10 @@ fn check_scope_id(scope: &Scope) -> Result<(), String> {
         }
         // Решение 128: id DEX может ввести человек — правило записи ключа (settings/scope.rs).
         Scope::Dex(id) => super::scope::check_dex_id(id),
+        // Решение 242: id — «площадка:тип» (settings/venue_dir.rs).
+        Scope::VenueDir(id) if super::venue_dir::parse_id(id).is_none() => Err(format!(
+            "Область «{id}»: нужно «площадка:тип» (тип — cex_dex, dex_cex, cex_cex) или «dex_dex» (одна на все DEX ↔ DEX)"
+        )),
         _ => Ok(()),
     }
 }

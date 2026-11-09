@@ -146,6 +146,11 @@ pub async fn trade_seen(
                 match super::dex_account::venue_deal(core, deal, v).await {
                     Ok(x) => {
                         let res = x.trade(req.clone()).await;
+                        // Решение 238 (ревью, п. 1): ордер биржи ушёл — снимок REST стакана пары и стороны больше не
+                        // факт (IOC не исполнился или съел уровни снимка): следующая попытка — по свежему стакану.
+                        if kind(core, v) == Ok(VenueKind::Cex) {
+                            super::exec_book::forget(core, v, a, side);
+                        }
                         (Some(x), req, res)
                     }
                     Err(e) => {

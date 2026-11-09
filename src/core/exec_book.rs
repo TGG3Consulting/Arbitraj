@@ -18,7 +18,12 @@
 //!    причиной без кода безопасного повтора: продажа уходит в алерт человеку (sell_unsent.rs Retry::No), а не в
 //!    повторы по тому же устаревшему стакану.
 //!
-//! Кто вызывает: core/trade_ops.rs (sell_value — котировка биржи), core/worst.rs (worst_order — худшая цена биржи).
+//! Решение 238 (ревью, п. 1): ордер биржи отправлен (trade_ops.rs trade_seen, после x.trade) — снимок REST этой пары и
+//! стороны забывается (forget): IOC по худшей цене снимка мог не исполниться или исполниться частично (съеденные нами
+//! уровни ещё лежат в снимке) — повтор и «продажа здесь» берут свежий стакан, а не тот же снимок до venue.book_stale_ms.
+//!
+//! Кто вызывает: core/trade_ops.rs (sell_value — котировка биржи; trade_seen — forget после ордера), core/worst.rs
+//! (worst_order — худшая цена биржи).
 //! От чего зависит: gateway (registry, contract quote_snapshot / quote_rest, frozen, patience exec_scope),
 //! venue_ticker.rs, op_error.rs, settings, journal.
 //! Настройки: venue.book_stale_ms (по площадке, обязательна), exec.rest_book_retry_ms (по площадке, необязательна).
@@ -111,6 +116,19 @@ pub async fn book(core: &Core, v: &VenueId, a: &Asset, side: Side) -> Result<Boo
             Err(failed(core, v, &stream, &why).await)
         }
     }
+}
+
+/// Решение 238 (ревью, п. 1): забывает снимок REST пары и стороны после отправки ордера биржи — следующая попытка
+/// (повтор правила шлюза, повтор продажи, «продажа здесь») берёт свежий стакан. Принимает: ядро, площадку, монету ЯДРА,
+/// сторону. Ошибок нет (снимка не было — ничего не делает).
+pub fn forget(core: &Core, v: &VenueId, a: &Asset, side: Side) {
+    let on = super::venue_ticker::on_venue(core, a, v);
+    let key = (v.clone(), on.ticker, side == Side::Buy);
+    core.inner
+        .exec_books
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(&key);
 }
 
 /// venue.book_stale_ms площадки — одна мера свежести для потока и снимка REST. Ошибка: не задана (ордера нет).

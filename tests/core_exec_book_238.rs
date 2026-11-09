@@ -16,7 +16,8 @@
 //!   повтора — алерт человеку);
 //! - REST не ответил — один повтор через exec.rest_book_retry_ms, затем ошибка с причиной без кода безопасного
 //!   повтора (не StaleData: продажа — алертом, а не повторами); пауза не задана — без повтора;
-//! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести).
+//! - снимок REST старше venue.book_stale_ms — не используется (новый запрос: одна мера свежести);
+//! - ревью п. 1: ордер ушёл к адаптеру — снимок забыт, следующая попытка — по свежему стакану.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway.
@@ -266,7 +267,58 @@ async fn xter_case_sells_by_rest_without_empty_retries() {
             .any(|t| t.contains("venue.order_time_in_force")),
         "{lines:#?}"
     );
+    // Котировка и ордер — один снимок (1 запрос); ревью п. 1: ордер ушёл к адаптеру — снимок забыт, оценка убытка
+    // алерта (sell_unsent::alert → deal_value) — по свежему стакану (2-й запрос).
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 2);
+}
+
+/// Решение 238 (ревью, п. 1): сценарий ревью — ордер по худшей цене снимка S ушёл к адаптеру и не исполнился (здесь —
+/// отказ адаптера: не задана venue.order_time_in_force) — следующая котировка и худшая цена (повтор, «продажа здесь»)
+/// не берут тот же S, а запрашивают стакан заново.
+#[tokio::test]
+async fn snapshot_forgotten_after_order() {
+    let d = dir("forget");
+    let (core, _, _, srv) = start(&d).await;
+    let qty = dec("1");
+    let (_, q) = arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), qty)
+        .await
+        .unwrap();
     assert_eq!(srv.depth.load(Ordering::SeqCst), 1);
+    let e = arb::core::trade_ops::trade(
+        &core,
+        "20261109000000001BTC",
+        &xt(),
+        &btc(),
+        Side::Sell,
+        qty,
+        None,
+        q.avg_price,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        e.message.contains("venue.order_time_in_force"),
+        "{}",
+        e.message
+    );
+    // Худшая цена ордера — по тому же снимку, что котировка (запроса не было).
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 1);
+    let w = arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, qty, q.avg_price)
+        .await
+        .unwrap();
+    assert!(w.rest);
+    assert_eq!(
+        srv.depth.load(Ordering::SeqCst),
+        2,
+        "после ордера снимок S забыт — новый запрос стакана"
+    );
+    // Новый снимок снова общий для котировки и ордера.
+    arb::core::trade_ops::sell_value(&core, None, &xt(), &btc(), qty)
+        .await
+        .unwrap();
+    assert_eq!(srv.depth.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]

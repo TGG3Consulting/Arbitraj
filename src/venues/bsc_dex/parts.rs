@@ -98,6 +98,7 @@ impl Parts {
             gas: self.gas.clone(),
             inflows: self.inflows.clone(),
             allow: self.allow.clone(),
+            wake: self.wake.clone(),
         }
     }
 

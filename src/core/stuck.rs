@@ -13,6 +13,8 @@
 //! «Ожидании», «Пороге убытка» и «Перегоне» (оценка «продать здесь») сделка сразу остановлена (Halted) с причиной
 //! «не задана настройка …», журнал Error и уведомление закрытия сделки человеку (ledger::finish). Прочие ошибки
 //! котировки — ждём тика, как раньше; первая — в журнал (Warn), чтобы ожидание было видно (stuck_quote.rs).
+//! Решение 247: продажа режима — с пере-замером продажи DEX при откате по minOut в пределах порога режима
+//! («Порог убытка» — stuck.max_loss_pct, «Ожидание: стало выгодно» — итог ≥ 0; по истечении ожидания — без пере-замера).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
@@ -27,6 +29,7 @@ use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
 use super::engine::Core;
+use super::remeasure::Guard;
 use super::stuck_quote as q;
 use super::stuck_reason::StuckReason;
 
@@ -135,7 +138,10 @@ async fn wait(core: &Core, mut deal: Deal) {
         match super::trade_ops::deal_quote(core, &deal).await {
             // Решение 47: выгодно — итог сделки не ниже нуля.
             Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
-                return super::sell::market(core, deal, "ожидание: стало выгодно").await;
+                // Решение 247: пере-замер — по тому же условию «выгодно» (итог ≥ 0 — порог убытка 0).
+                let g = Guard::MaxLoss(rust_decimal::Decimal::ZERO);
+                let why = "ожидание: стало выгодно";
+                return super::sell::market_guarded(core, deal, why, g).await;
             }
             Ok(_) => {}
             // Решение 238 (ревью, п. 2): не задана настройка — ждать нечего.
@@ -143,7 +149,9 @@ async fn wait(core: &Core, mut deal: Deal) {
             Err(e) => q::no_quote_once(core, &deal, &e, &mut first).await,
         }
     }
-    sold_by_market(core, deal, &format!("ждали {ms} мс — выгодно не стало")).await;
+    // Решение 247: по истечении ожидания — продажа по рынку без порога убытка, пере-замера нет (порога для него нет).
+    let why = format!("ждали {ms} мс — выгодно не стало");
+    sold_by_market(core, deal, &why, Guard::Off).await;
 }
 
 /// «Порог убытка»: убыток не больше stuck.max_loss_pct — по рынку; больше — алерт человеку.
@@ -178,6 +186,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
             core,
             deal,
             &format!("убыток {} не больше порога {}", h::pct(loss), h::pct(max)),
+            Guard::MaxLoss(max),
         )
         .await;
     }
@@ -185,8 +194,9 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     super::manual::raise_alert(core, deal, Some(loss), why, None).await;
 }
 
-/// Продажа по рынку с уведомлением stuck.market_sold.
-pub async fn sold_by_market(core: &Core, deal: Deal, why: &str) {
+/// Продажа по рынку с уведомлением stuck.market_sold. Решение 247: `g` — порог, по которому решено продать (граница
+/// пере-замера продажи DEX при откате по minOut, core/remeasure.rs; Guard::Off — без пере-замера).
+pub async fn sold_by_market(core: &Core, deal: Deal, why: &str, g: Guard) {
     let text = Msg::new(h::WARN, "Застрявшая монета продаётся по рынку")
         .kv("Монеты", super::deal_text::coins_at(&deal))
         .reason(why)
@@ -196,7 +206,7 @@ pub async fn sold_by_market(core: &Core, deal: Deal, why: &str) {
         .deps
         .notify("stuck.market_sold", Some(&deal.at.0), &text)
         .await;
-    super::sell::market(core, deal, why).await;
+    super::sell::market_guarded(core, deal, why, g).await;
 }
 
 /// Режим застрявшей монеты словами (варианты stuck.mode — settings/catalog/trade.rs). Принимает: значение настройки.

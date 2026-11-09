@@ -134,6 +134,7 @@ fn req(side: Side, worst: &str, exit: bool) -> TradeRequest {
         deal_id: "20261105131254836GAIB".into(),
         route: None,
         exit_position: exit,
+        remeasure: None,
     }
 }
 

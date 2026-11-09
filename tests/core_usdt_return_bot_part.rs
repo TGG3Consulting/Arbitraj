@@ -42,6 +42,7 @@ fn sell(venue: &str, qty: Decimal, avg: Decimal, fees: Vec<Fee>) -> TradeResult 
             deal_id: "x".into(),
             route: None,
             exit_position: true,
+            remeasure: None,
         },
         status: TradeStatus::Filled,
         filled_qty: qty,

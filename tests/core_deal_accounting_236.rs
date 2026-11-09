@@ -53,6 +53,7 @@ fn dex_sell(qty: &str, avg: &str, gas_bnb: &str) -> TradeResult {
             deal_id: "x".into(),
             route: None,
             exit_position: true,
+            remeasure: None,
         },
         status: TradeStatus::PartiallyFilled,
         filled_qty: d(qty),

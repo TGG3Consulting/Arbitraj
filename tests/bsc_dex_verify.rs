@@ -324,6 +324,7 @@ async fn plan_price_reconstructed_from_worst() {
         deal_id: "t".into(),
         route: Some(route.clone()),
         exit_position: false,
+        remeasure: None,
     };
     let plan =
         verify_gate::plan_quote(&p.ctx, &req, &route, slip()).expect("цена плана восстановлена");

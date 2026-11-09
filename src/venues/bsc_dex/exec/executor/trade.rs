@@ -8,7 +8,8 @@
 //! собирается заново на живом состоянии со свежей верификацией, новое разрешение после этого — отказ, решение 121 B1;
 //! до разрешения код и владелец исполнителя сверяются с узлом — onchain.rs),
 //! проба execute перед отправкой со сверкой req.worst_price (sim.rs; откат — с minOut, ожидаемым и модельным налогом
-//! каждой доли, решение 234 п. 4), одна транзакция существующими каналами
+//! каждой доли, решение 234 п. 4; решение 247 — откат по minOut у продажи выхода: пере-замер, remeasure.rs), одна
+//! транзакция существующими каналами
 //! (exec/txs.rs), факт по событиям Transfer (fact.rs). Повторов нет (стартовое правило Тиграна).
 //! Отметка «идёт обмен» (wallet/inflows.rs) не нужна: минимум проверяет сам исполнитель по приросту баланса кошелька
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
@@ -44,7 +45,7 @@ use super::super::trade::sides;
 use super::super::txs::{self, Env};
 use super::super::verify_gate::{self, Verified};
 use super::call::{self, ExecCall};
-use super::{fact, onchain, sim};
+use super::{fact, onchain, remeasure, sim};
 
 /// Сделка через исполнитель. Принимает: котировку, окружение отправки, очередь кошелька, запрос, маршрут, итог
 /// верификации (минимумы долей), адрес исполнителя. Ошибки: NoRoute (нативная, доля не годится, пул без шага
@@ -79,6 +80,7 @@ pub async fn trade(
     let (legs, mut note, exp) = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
     let mut diag = sim::legs_text(&legs, &exp, &req, decs);
+    let mut model = exp;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
@@ -94,6 +96,7 @@ pub async fn trade(
         let (legs, fresh, exp) = prepare(&v, &req, route, &mins, decs).await?;
         note = fresh;
         diag = sim::legs_text(&legs, &exp, &req, decs);
+        model = exp;
         (c, at) = build(q, &legs, executor).await?;
         if !approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
             .await?
@@ -104,9 +107,11 @@ pub async fn trade(
         }
         rebuilt_notice(env, &req);
     }
-    sim::check(ctx, &req, &c, wallet, at, decs)
-        .await
-        .map_err(|e| sim::explain(e, &diag))?;
+    // Решение 247: откат пробы по minOut у продажи выхода — пере-замер реального выхода (remeasure.rs).
+    let fix = remeasure::probe(ctx, &req, &mut c, wallet, at, decs, &diag, &model, &env.wake).await?;
+    if let Some(line) = fix {
+        note = Some(note.map_or(line.clone(), |n| format!("{n}; {line}")));
+    }
     // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
     let tokens = (c.token_in, c.token_out);
     let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());

@@ -54,6 +54,7 @@ fn pit_sold_by_logs() -> TradeResult {
             deal_id: "20261108094918374PIT".into(),
             route: None,
             exit_position: true,
+            remeasure: None,
         },
         status: TradeStatus::PartiallyFilled,
         filled_qty: d("291889628787.9168"),

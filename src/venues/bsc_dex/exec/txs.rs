@@ -45,6 +45,9 @@ pub struct Env {
     pub inflows: Inflows,
     /// Разрешения кошелька для котировки — очищаются при каждой транзакции кошелька (wallet/allow_cache.rs).
     pub allow: super::super::wallet::allow_cache::Allowances,
+    /// Решение 247, п. Б: очереди внеочередных проверок (check/recheck.rs) — откат продажи выхода по minOut ставит
+    /// монету в перепроверку налогов (exec/executor/remeasure.rs).
+    pub wake: super::super::check::recheck::Recheck,
 }
 
 /// Итог транзакции (nonce занят в блоке).

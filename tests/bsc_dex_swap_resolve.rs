@@ -91,6 +91,7 @@ fn req() -> TradeRequest {
         deal_id: "20261108120000000COIN".into(),
         route: None,
         exit_position: false,
+        remeasure: None,
     }
 }
 

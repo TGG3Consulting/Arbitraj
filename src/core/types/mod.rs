@@ -60,7 +60,7 @@ pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
     WalletQueueState,
 };
-pub use trade::{Fee, Quote, Side, TradeRequest, TradeResult, TradeStatus};
+pub use trade::{Fee, Quote, Remeasure, Side, TradeRequest, TradeResult, TradeStatus};
 pub use transfer::{
     AccountBalances, Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest,
 };

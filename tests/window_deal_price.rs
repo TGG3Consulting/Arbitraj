@@ -131,6 +131,7 @@ fn bought(dir: &Direction, qty: &str) -> TradeResult {
             deal_id: "D2".into(),
             route: None,
             exit_position: false,
+            remeasure: None,
         },
         status: TradeStatus::Filled,
         filled_qty: d(qty),

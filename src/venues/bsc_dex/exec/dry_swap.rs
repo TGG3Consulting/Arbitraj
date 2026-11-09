@@ -85,6 +85,7 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
         route: Some(route.clone()),
         // Решение 177: сухая сделка проверяет сборку как есть — без продажи по квотеру.
         exit_position: false,
+        remeasure: None,
     };
     let ready = dry_build::build(q, &req, &route, wallet, mode).await?;
     r.form = Some(ready.form.clone());

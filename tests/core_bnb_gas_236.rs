@@ -100,6 +100,7 @@ fn result(venue: &str, side: Side, qty: &str, price: &str, fee: Decimal, dex: bo
             deal_id: "t".into(),
             route: None,
             exit_position: false,
+            remeasure: None,
         },
     }
 }

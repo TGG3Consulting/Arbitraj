@@ -94,14 +94,19 @@ pub async fn send(
     let nonce = slot.nonce(ctx).await?;
     let gas = tx::limit(ctx, from, to, &data, value).await?;
     let signed = signer::sign(ctx, tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;
+    let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {
         Some((tip_to, amount)) => {
             let g = tx::limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
+            tip_cost = Some((amount, g));
             let t = tx::legacy(ctx, nonce + 1, price, g, tip_to, amount, Bytes::new())?;
             Some((signer::sign(ctx, t)?, amount))
         }
         None => None,
     };
+    // Решение 247, п. З: BNB на газ (value + газ + чаевые с газом их перевода) — до отправки, с понятной причиной.
+    let need = super::gas_fund::need_wei(value, price, gas, tip_cost);
+    super::gas_fund::ensure(ctx, from, need).await?;
     let head = env.heads.fresh(ctx)?;
     let d = send::dispatch(
         ctx,

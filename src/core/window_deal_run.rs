@@ -1,19 +1,29 @@
 //! Файл: core/window_deal_run.rs
 //! Что делает: решение 245 (часть А) — задача точек цены DEX на объём нашей сделки (кто под наблюдением и когда —
 //! core/window_deal.rs): по сделкам с отметкой «пул маршрута менялся», у которых прошёл window.dex_price_min_ms, —
-//! котировка стороны DEX на объём сделки кошельком сделки (Venue::quote — память пулов, без запросов к узлу сверх
-//! котировки тика, см. шапку window_deal.rs) и точка в окно направления (поле `deal`: id, план/факт, запрошенный
-//! объём) сообщением задаче окон. Окна направления нет — котировки нет. Сбой — причина у сделки и запись в журнал на
-//! смену причины.
+//! котировка стороны DEX на объём сделки кошельком сделки и точка в окно направления (поле `deal`: id, план/факт,
+//! запрошенный объём, путь) сообщением задаче окон. Окна направления нет — котировки нет. Сбой — причина у сделки и
+//! запись в журнал на смену причины.
+//! Дополнение 245 п. 3 (Тигран 09.11: «маршрут важен»): котировка — тем же путём, что финальная котировка кандидата и
+//! исполнение: внутри gateway::quote_stage::final_scope (как profit.rs final_calc) — адаптер DEX сам выбирает (venue.rs
+//! quote: exec.via_kyber — KyberSwap, нет маршрута — свой; exec.dex_best_of — «лучший из двух», best_of/quote.rs; иначе
+//! свой сборщик по памяти пулов). KyberSwap — внешний API: темп kyber.rps / kyber.max_wait_ms (kyberswap/ctx.rs
+//! pace_slot) общий со всеми запросами бота к нему, в том числе финальными котировками кандидатов и сделками. Точки
+//! — только открытые сделки, не чаще window.dex_price_min_ms на сделку, по одной котировке за раз (сделки — по очереди
+//! в step), поэтому в очереди KyberSwap от точек не больше одного запроса (покупка — до трёх /routes, kyberswap/quote.rs
+//! buy_route). window.dex_price_min_ms = 0 (предела частоты нет) — KyberSwap для точек не спрашивается: своя котировка
+//! с путём «own_rate». Путь точки — path_of (свой / KyberSwap / нет маршрута у KyberSwap / лучший из двух и кто выиграл).
 //! Кто вызывает: core/engine.rs (run), тесты (step, write, qty_of).
 //! От чего зависит: window_deal.rs (Watch, Entry), window.rs (dex_slot), window_dex.rs (cfg, pools, DexPoint),
 //! window_run.rs (send), dex_account.rs (кошелёк сделки), venue_ticker.rs.
-//! Настройки: window.dex_price, window.dex_price_min_ms.
+//! Настройки: window.dex_price, window.dex_price_min_ms; exec.via_kyber [площадка DEX] — только чтение
+//! (gateway::quote_stage::final_external), остальное (exec.dex_best_of, kyber.*) читает адаптер.
 
 use rust_decimal::Decimal;
 use tokio::time::{Duration, Instant, sleep_until};
 
 use crate::core::types::{Direction, Quote, Side, VenueId};
+use crate::gateway::quote_stage;
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
@@ -64,15 +74,18 @@ pub async fn step(core: &Core) -> Option<Instant> {
         };
         let (qty, from) = qty_of(&deal, e.side, &e.venue);
         let r = match qty {
-            Some(q) if q > Decimal::ZERO => quote(core, &deal, &e, q).await,
+            Some(q) if q > Decimal::ZERO => quote(core, &deal, &e, q, min.is_zero()).await,
             _ => Err("объёма сделки нет (план без количества)".into()),
         };
         match r {
-            Ok(q) => {
+            Ok((q, path)) => {
                 let size = DealSize {
                     id: id.clone(),
                     qty_from: from.into(),
                     asked: qty.unwrap_or_default(),
+                    path: Some(path.into()),
+                    winner: Some(winner(&q).into()),
+                    pick: q.pick.clone(),
                 };
                 write(core, &e.direction, e.side, &q, size);
                 if let Some(x) = lk(&core.inner.window_deals.deals).get_mut(&id) {
@@ -126,13 +139,51 @@ pub fn qty_of(deal: &Deal, side: Side, venue: &VenueId) -> (Option<Decimal>, &'s
     }
 }
 
-/// Котировка стороны DEX кошельком сделки (решение 132). Ошибки: текст — нет кошелька, площадка, котировка.
-async fn quote(core: &Core, deal: &Deal, e: &Entry, qty: Decimal) -> Result<Quote, String> {
+/// Котировка стороны DEX кошельком сделки (решение 132) тем же путём, что исполнение (см. шапку). Принимает: ядро,
+/// сделку, запись наблюдения, объём, window.dex_price_min_ms = 0 ли. Возвращает: котировку и путь (path_of).
+/// Ошибки: текст — нет кошелька, площадка, котировка (у KyberSwap — его причина: лимит, срок, настройка).
+async fn quote(
+    core: &Core,
+    deal: &Deal,
+    e: &Entry,
+    qty: Decimal,
+    no_limit: bool,
+) -> Result<(Quote, &'static str), String> {
     let v = super::dex_account::venue_of(core, deal, &e.venue).await?;
     let a = &deal.direction.asset;
     let on = super::venue_ticker::on_venue(core, a, &e.venue);
-    let q = v.quote(&on, e.side, qty).await.map_err(|x| x.message)?;
-    Ok(super::venue_ticker::quote_back(core, a, &e.venue, q))
+    let kyber = quote_stage::final_external(&core.inner.deps.settings, &e.venue);
+    let fin = use_final(kyber, no_limit);
+    let q = quote_stage::final_if(fin, v.quote(&on, e.side, qty))
+        .await
+        .map_err(|x| x.message)?;
+    let path = path_of(kyber, fin, &q);
+    Ok((super::venue_ticker::quote_back(core, a, &e.venue, q), path))
+}
+
+/// Что делает: котировать ли путём исполнения (final_scope): да, кроме exec.via_kyber при window.dex_price_min_ms = 0
+/// (KyberSwap без предела частоты не спрашивается). Принимает: exec.via_kyber, интервал 0 ли. Ошибок нет.
+pub fn use_final(kyber: bool, no_limit: bool) -> bool {
+    !(kyber && no_limit)
+}
+
+/// Что делает: путь точки (DealSize.path) по факту кода адаптера: «лучший из двух» всегда ставит Quote.pick
+/// (bsc_dex/best_of/quote.rs); котировка KyberSwap — без маршрута (kyberswap/quote.rs: route None), своя — с маршрутом
+/// (bsc_dex/quote/costs.rs: route Some). Принимает: exec.via_kyber, котировали ли путём исполнения, котировку.
+/// Возвращает: «best_of» / «kyber» / «kyber_no_route» / «own_rate» / «own». Ошибок нет.
+pub fn path_of(kyber: bool, fin: bool, q: &Quote) -> &'static str {
+    match (kyber, fin) {
+        (true, false) => "own_rate",
+        (true, true) if q.pick.is_some() => "best_of",
+        (true, true) if q.route.is_none() => "kyber",
+        (true, true) => "kyber_no_route",
+        (false, _) => "own",
+    }
+}
+
+/// Кто дал котировку: «kyber» — без маршрута (котировка KyberSwap), «own» — с маршрутом своего сборщика. Ошибок нет.
+pub fn winner(q: &Quote) -> &'static str {
+    if q.route.is_none() { "kyber" } else { "own" }
 }
 
 /// Сбой котировки: причина у сделки (страница окна), в журнал — при смене причины. Ошибок нет.

@@ -497,6 +497,7 @@ async fn recompute_end_to_end() {
         frames: 0,
         lost: 0,
         bytes: 0,
+        dex_points: 0,
         stopped: None,
         close_reason: None,
     };

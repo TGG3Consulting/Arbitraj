@@ -5,7 +5,8 @@
 //! больше не проходит (толчок задаче: пора ли закрывать). Окно пишется только на биржах направления (CEX ↔ CEX — обе,
 //! CEX ↔ DEX — одна); у DEX стакана и ленты сделок нет.
 //! Торговый путь окно не трогает: оно только наблюдает.
-//! Кто вызывает: core/candidates.rs (pass, fail), core/episode_run.rs (fail, sweep — общий путь «перестало
+//! Решение 241: точка цены DEX (WinMsg::Dex) шлёт core/window_dex.rs через send.
+//! Кто вызывает: core/candidates.rs (pass, fail), core/window_dex.rs (send), core/episode_run.rs (fail, sweep — общий путь «перестало
 //! проходить»), core/evaluate.rs (passing), core/card_job.rs (unbounded).
 //! От чего зависит: window.rs, window_cfg.rs (Cfg), inner.rs (каналы и память).
 //! Настройки: window.* (window_cfg.rs).
@@ -32,6 +33,11 @@ pub enum WinMsg {
     Join { info: Box<WindowInfo> },
     /// Окна перестали писаться (или снова пишутся — None): одна запись в журнал на смену.
     Off(Option<String>),
+    /// Решение 241: точка цены пула DEX окна id (window_dex.rs) — строкой в файл окна.
+    Dex {
+        id: String,
+        point: Box<super::window_dex::DexPoint>,
+    },
 }
 
 /// Что делает: кандидат прошёл расчёт прибыльности — открыть окно монеты или войти в открытое. Только память и

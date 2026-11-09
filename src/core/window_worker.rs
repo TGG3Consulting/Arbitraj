@@ -6,6 +6,8 @@
 //! Закрытие: ни одно направление не проходит дольше window.min_hold_ms и по монете нет открытой сделки (window.rs);
 //! будят задачу сообщения, толчок window_kick (направление перестало проходить, сделка сохранена) и срок.
 //! Окна выключены (window.enabled = нет, не задана настройка) — открытые закрываются с этой причиной.
+//! Решение 241: точка цены пула DEX (WinMsg::Dex, window_dex.rs) — строка `{"type":"dex","point":…}` в файл открытого
+//! окна; окно уже закрыто — точка отбрасывается.
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: window.rs, window_run.rs (WinMsg), window_cfg.rs, window_tap.rs, window_close.rs (сделки, закрытие,
 //! сводка).
@@ -116,6 +118,12 @@ async fn handle(core: &Core, st: &mut HashMap<String, Run>, m: WinMsg) {
             let text = format!("{}Окно открыто: {}", mark(&shown), pairs(&shown));
             log(core, text.clone(), Some(&shown)).await;
             core.inner.deps.notify("window.opened", None, &text).await;
+        }
+        WinMsg::Dex { id, point } => {
+            if st.contains_key(&id) {
+                let line = json!({ "type": "dex", "point": &*point });
+                core.inner.window_files.line(&id, line.to_string());
+            }
         }
         WinMsg::Join { info } => {
             let Some(r) = st.get_mut(&info.id) else {

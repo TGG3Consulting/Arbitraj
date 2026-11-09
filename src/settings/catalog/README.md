@@ -11,6 +11,6 @@
 | `index.rs` | Справочник пулов от индексатора: адрес API, сеть, ключ, темп, страницы, частота, порог, подпись (решение 58) |
 | `send.rs` | Отправка транзакций и каналы отправки (решения 33, 41–45) |
 | `signals.rs` | Сигналы и эпизоды: сухой режим, предел поиска максимального объёма, шаблоны ссылок на пару и пул, эпизоды (решение 74) |
-| `uncapped.rs` | Упущено из-за потолка (решение 141): uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max, uncapped.max_evals, uncapped.ladder_usdt, uncapped.episode_gap_ms, uncapped.keep_days |
+| `uncapped.rs` | Упущено из-за потолка (решение 141): uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max, uncapped.max_evals, uncapped.ladder_usdt, uncapped.episode_gap_ms, uncapped.keep_days; решение 245 — uncapped.maxwin_gap_ms, uncapped.deal_time_min_n |
 | `window.rs` | Окна (решение 125): window.enabled, window.min_hold_ms, window.queue_max, window.max_mb, window.keep_days, window.zstd_level, window.cleanup_s, window.dex_price, window.dex_price_min_ms (решение 241), venue.trades_interval, venue.window_depth_interval, venue.window_depth_limit [mexc] |
 | `gate.rs` | Только Gate (решение 135): venue.book_interval, venue.window_diff_interval, venue.rate_limit_pause_ms, venue.order_history_limit |

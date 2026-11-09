@@ -155,6 +155,8 @@ pub struct Inner {
     pub window_rx: Mutex<Option<mpsc::Receiver<super::window_run::WinMsg>>>,
     /// Толчок задаче окон: направление перестало проходить, сделка сохранена — пора ли закрывать.
     pub window_kick: Notify,
+    /// Решение 245: сделки, по которым окно пишет цену DEX на объём сделки (window_deal.rs).
+    pub window_deals: super::window_deal::Watch,
     /// Карточки сигнала в работе (card_job.rs): направление → ожидающая следующей работа.
     pub card_jobs: Mutex<HashMap<Direction, Option<super::card_job::Job>>>,
     /// Исполнение циклов DEX ↔ DEX (решение 124): толчок поиска и память причин (cycle_state.rs).
@@ -248,6 +250,7 @@ impl Inner {
             window_lost: Default::default(),
             window_rx: Mutex::new(Some(window_rx)),
             window_kick: Notify::new(),
+            window_deals: Default::default(),
             card_jobs: Mutex::default(),
             cycles: Default::default(),
             uncapped: Default::default(),

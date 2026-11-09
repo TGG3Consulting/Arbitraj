@@ -188,6 +188,9 @@ pub struct Brief {
     /// Решение 217: момент решения о входе (снимок рынка); старые записи — None.
     #[serde(default)]
     pub decided_at: Option<DateTime<Utc>>,
+    /// Решение 245: окна максимального объёма эпизода кандидата (uncapped_maxwin.rs); старые записи и сделки — None.
+    #[serde(default)]
+    pub maxwin: Option<super::uncapped_maxwin::MaxWins>,
 }
 
 impl Brief {

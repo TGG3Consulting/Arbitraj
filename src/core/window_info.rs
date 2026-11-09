@@ -1,7 +1,8 @@
 //! Файл: core/window_info.rs
 //! Что делает: сводка окна (решение 125) — строка экрана «Окна» и JSON в SQLite (storage/windows_db.rs): монета,
 //! направления, биржи записи и что на них включено, начало и конец, наибольшая прибыль, наши сделки и их итог,
-//! счётчики записи, точки цены DEX (решение 241), причина закрытия; подписи для журнала и Telegram (pairs, mark).
+//! счётчики записи, точки цены DEX (решение 241; решение 245 — и на объём сделки), окна максимального объёма
+//! направлений (решение 245), причина закрытия; подписи для журнала и Telegram (pairs, mark).
 //! Кто вызывает: core/window.rs (ведёт), window_close.rs, window_view.rs, window_cfg.rs, интерфейс (JSON).
 //! От чего зависит: core/types, gateway/tap.rs (TapInfo), chrono, rust_decimal, serde.
 //! Настройки: нет.
@@ -59,9 +60,14 @@ pub struct WindowInfo {
     pub frames: u64,
     pub lost: u64,
     pub bytes: u64,
-    /// Решение 241: точек цены пула DEX, отправленных в файл окна (window_dex.rs). Старые сводки без поля — 0.
+    /// Решение 241: точек цены пула DEX, отправленных в файл окна (window_dex.rs; решение 245 — и на объём сделки,
+    /// window_deal.rs). Старые сводки без поля — 0.
     #[serde(default)]
     pub dex_points: u64,
+    /// Решение 245: окна максимального объёма направлений окна (core/uncapped_maxwin.rs): по направлению — самое
+    /// длинное, последнее, сколько. Старые сводки — пусто.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub maxwins: Vec<super::uncapped_maxwin::DirMaxWins>,
     /// Запись остановлена (лимит места) — почему.
     pub stopped: Option<String>,
     pub close_reason: Option<String>,

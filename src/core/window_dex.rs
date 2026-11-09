@@ -16,7 +16,10 @@
 //! Не видно: изменение пулов маршрута БЕЗ токена монеты (например, промежуточная WBNB/USDT) пересчёт монеты не толкает
 //! (tick.rs: монеты по токенам пула) — такое движение попадёт в точку только со следующим пересчётом монеты.
 //! Только память и сообщение задаче окон (window_run.rs send): тик ничего не ждёт; пишет строку window_worker.rs.
-//! Кто вызывает: core/prices.rs (generation, note), core/window_view.rs (cfg — причина на странице окна), тесты.
+//! Решение 245: у направления с нашей открытой сделкой — ещё точки на объём сделки (core/window_deal.rs, поле `deal`
+//! точки); точки этого файла — объём тика (`deal` пусто).
+//! Кто вызывает: core/prices.rs (generation, note), core/window_view.rs (cfg — причина на странице окна),
+//! core/window_deal.rs (cfg, dex_side, pools, DexPoint), тесты.
 //! От чего зависит: window.rs (dex_slot), window_run.rs (WinMsg, send), quote_cache.rs, inner.kinds, settings.
 //! Настройки: window.dex_price, window.dex_price_min_ms.
 
@@ -53,6 +56,9 @@ pub struct DexPoint {
     pub block: Option<u64>,
     /// Пулы маршрута: адрес контракта; V4 — менеджер:id; пара общего контракта — контракт:монета.
     pub pools: Vec<String>,
+    /// Решение 245: точка на объём нашей сделки (window_deal.rs); None — объём сравнения тика (решение 241).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deal: Option<super::window_deal::DealSize>,
 }
 
 /// Последняя записанная точка направления: поколение пулов, блок, цена, когда записана.
@@ -81,7 +87,7 @@ pub fn cfg(s: &Store) -> Result<u64, String> {
 }
 
 /// Площадка DEX направления и сторона на ней (по виду площадки из шлюза); None — DEX в направлении нет. Ошибок нет.
-fn dex_side(core: &Core, d: &Direction) -> Option<(VenueId, Side)> {
+pub(super) fn dex_side(core: &Core, d: &Direction) -> Option<(VenueId, Side)> {
     let kinds = rd(&core.inner.kinds);
     let dex = |v: &VenueId| kinds.iter().any(|(id, k)| id == v && *k == VenueKind::Dex);
     if dex(&d.sell_on) {
@@ -127,6 +133,7 @@ pub fn note(core: &Core, d: &Direction, qa: &Quote, qb: &Quote, generation: Opti
         qty: q.fillable_qty,
         block: q.route.as_ref().map(|r| r.block),
         pools: pools(q),
+        deal: None,
     };
     let now = Utc::now();
     let id = {
@@ -169,7 +176,7 @@ fn due(
 }
 
 /// Пулы маршрута котировки без повторов, по порядку долей и шагов. Ошибок нет.
-fn pools(q: &Quote) -> Vec<String> {
+pub(super) fn pools(q: &Quote) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     let hops = q.route.iter().flat_map(|r| &r.legs).flat_map(|l| &l.hops);
     for h in hops {

@@ -7,7 +7,7 @@
 use alloy_primitives::Address;
 
 use crate::core::types::{
-    CoinCheck, PoolCheck, SendChannelStats, VenueId, WalletQueue, WalletQueueState,
+    CoinCheck, PoolCheck, PoolRef, SendChannelStats, VenueId, WalletQueue, WalletQueueState,
 };
 
 /// Что изменилось после события — по этому ядро решает, что пересчитать.
@@ -19,10 +19,11 @@ pub enum Touched {
         ticker: String,
         first: bool,
     },
-    /// Новое состояние пула. `first` — пул встречен впервые.
+    /// Новое состояние пула. `first` — пул встречен впервые. `pool` — какой пул (решение 245: пулы маршрута сделки).
     Pool {
         venue: VenueId,
         tokens: (Address, Address),
+        pool: PoolRef,
         first: bool,
     },
     /// Площадка объявила данные монеты недостоверными — стакан удалён.

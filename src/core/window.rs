@@ -100,6 +100,7 @@ impl Windows {
             lost: 0,
             bytes: 0,
             dex_points: 0,
+            maxwins: vec![],
             stopped: None,
             close_reason: None,
         };

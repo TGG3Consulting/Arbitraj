@@ -13,8 +13,11 @@
 //! упущено 0 — только счётчик no_missed и поле строки «Кандидатов». Эпизод продолжают только такие расчёты: его первый и
 //! последний расчёт — окно, пока упущенное было (промежутки не длиннее uncapped.episode_gap_ms). Сделка пишется всегда
 //! (и с упущено 0 — «потолок не мешал» тоже знание).
+//! Решение 245: каждый расчёт кандидата (и с упущено 0) ведёт окно максимального объёма направления
+//! (uncapped_maxwin.rs note); окна, пересекающиеся с эпизодом, — в поле `maxwin` его строки (новая строка, продолжение,
+//! расчёт без упущенного — attach); у нового пика окна эпизода переходят в новое тело.
 //! Кто вызывает: core/uncapped_queue.rs.
-//! От чего зависит: uncapped_state.rs, uncapped_types.rs, storage/uncapped_db.rs, view.rs, settings.
+//! От чего зависит: uncapped_state.rs, uncapped_types.rs, uncapped_maxwin.rs, storage/uncapped_db.rs, view.rs, settings.
 //! Настройки: uncapped.episode_gap_ms, uncapped.keep_days.
 
 use std::time::{Duration, Instant};
@@ -28,6 +31,7 @@ use crate::storage::journal::Level;
 use crate::storage::uncapped_db::{self, Row};
 
 use super::engine::{Core, lk};
+use super::uncapped_maxwin as maxwin;
 use super::uncapped_state::{Key, OpenEp};
 use super::uncapped_types::{Episode, Record, budget_bound};
 use super::view::CoreEvent;
@@ -103,22 +107,28 @@ pub async fn save(core: &Core, key: &Key, mut rec: Record) {
     }
     let bound = budget_bound(&rec.limited_by);
     rec.ep.capped_count = u64::from(bound);
+    let mut wins = vec![];
     let (kind, deal_id, dir) = match key {
         Key::Deal(id) => ("deal", Some(id.clone()), None),
         Key::Cand(d) => {
             publish(core, d, &rec);
+            // Решение 245: окно максимального объёма — по каждому расчёту кандидата, и без упущенного.
+            wins = maxwin::note(core, d, &rec);
             if rec.missed <= rust_decimal::Decimal::ZERO {
                 lk(&core.inner.uncapped.stats).no_missed += 1;
+                maxwin::attach(core, d, &wins, rec.at).await;
                 return;
             }
             ("candidate", None, Some(d.clone()))
         }
     };
-    let body = serde_json::to_value(&rec).unwrap_or_default();
+    let mut body = serde_json::to_value(&rec).unwrap_or_default();
+    // Решение 245: новая строка эпизода начинается этим расчётом — окна, идущие на нём.
+    maxwin::apply(&mut body, &maxwin::near(&wins, rec.at));
     let db = &core.inner.deps.db;
     // Эпизод кандидата продолжается — обновить строку.
     if let Some(d) = &dir
-        && let Some((id, body)) = merge(core, d, &rec, body.clone(), bound, gap)
+        && let Some((id, body)) = merge(core, d, &rec, body.clone(), bound, gap, &wins)
     {
         if let Err(e) = uncapped_db::update(db, id, ts(rec.at), body.to_string()).await {
             failed(core, format!("запись в базу: {e}"));
@@ -170,6 +180,7 @@ fn merge(
     body: Value,
     bound: bool,
     gap: Duration,
+    wins: &[maxwin::MaxWin],
 ) -> Option<(i64, Value)> {
     if gap.is_zero() {
         return None;
@@ -183,8 +194,12 @@ fn merge(
     if rec.missed > op.peak {
         op.peak = rec.missed;
         ep.peak_at = rec.at;
+        // Решение 245: окна максимального объёма эпизода — в новое тело пика.
+        let mw = op.body["maxwin"].take();
         op.body = body;
+        op.body["maxwin"] = mw;
     }
+    maxwin::apply(&mut op.body, &maxwin::near(wins, ep.first_at));
     op.body["ep"] = serde_json::to_value(&ep).unwrap_or_default();
     op.last = Instant::now();
     Some((op.id, op.body.clone()))

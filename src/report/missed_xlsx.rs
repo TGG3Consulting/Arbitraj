@@ -10,6 +10,7 @@
 //! расчёт», «Упущено против вложенного» (всё — одна модель по данным момента входа). Внизу «Сделок» и «Кандидатов» — строка «Итого» формулами SUM по столбцам денег и
 //! счётчиков. Оформление — как «Итоги сделок» (report/results_sheet.rs): Arial, шапка белым по 1F4E78, высота 31.5,
 //! закрепление первой строки, фильтр, форматы денег 2 и 4 знака, красный / зелёный факт, примечания курсивом.
+//! Лист «Кандидаты» — report/missed_cands.rs (решение 245: столбцы окна максимального объёма).
 //! Кто вызывает: report/mod.rs (missed).
 //! От чего зависит: rust_xlsxwriter, report/missed_rows.rs, missed_total.rs (лист «Итог»), results_sheet.rs,
 //! core/uncapped_report.rs.
@@ -28,7 +29,7 @@ pub fn workbook(data: &MissedData, period: &str, now: DateTime<Utc>) -> Result<V
     let mut wb = Workbook::new();
     total(wb.add_worksheet(), data, period, now)?;
     deals(wb.add_worksheet(), &mr::deals(data, false), "Сделки")?;
-    candidates(wb.add_worksheet(), &mr::candidates(data))?;
+    super::missed_cands::candidates(wb.add_worksheet(), &mr::candidates(data))?;
     top(wb.add_worksheet(), &mr::top(data))?;
     // Решение 239: сделки, посчитанные не по данным момента входа, — свой лист и своя строка «Итого».
     deals(
@@ -51,7 +52,11 @@ pub fn bold() -> Format {
 
 /// Строка «Итого» формулами: SUM(<столбец>2:<столбец>N) по столбцам `cols` (0 — A). Принимает: лист, строку «Итого»
 /// (0-based; данные — строки 1…row−1), столбцы с форматом. Ошибки: XlsxError.
-fn sum_row(ws: &mut Worksheet, row: u32, cols: &[(u16, Format)]) -> Result<(), XlsxError> {
+pub(super) fn sum_row(
+    ws: &mut Worksheet,
+    row: u32,
+    cols: &[(u16, Format)],
+) -> Result<(), XlsxError> {
     ws.write_string_with_format(row, 0, "Итого", &bold())?;
     for (c, f) in cols {
         let l = (b'A' + *c as u8) as char;
@@ -124,62 +129,6 @@ fn deals(ws: &mut Worksheet, rows: &[mr::DealRow], name: &str) -> Result<(), Xls
             (8, money()),
             (9, money4()),
             (10, money4()),
-        ],
-    )
-}
-
-/// Лист «Кандидаты». Ошибки: XlsxError.
-fn candidates(ws: &mut Worksheet, rows: &[mr::CandRow]) -> Result<(), XlsxError> {
-    ws.set_name("Кандидаты")?;
-    let hdr = [
-        "Начало (UTC)",
-        "Конец (UTC)",
-        "Монета",
-        "Купить → продать",
-        "Вердикт / причина",
-        "Расчётов",
-        "Упёрлись в бюджет",
-        "Наш бюджет, USDT",
-        "Без потолка: вложить, USDT",
-        "Без потолка: прибыль, USDT",
-        "Минимум до плюса: вложить, USDT",
-        "Упущено, USDT",
-    ];
-    header(
-        ws,
-        &hdr,
-        &[19., 19., 14., 16., 40., 10., 11., 12., 14., 14., 15., 12.],
-    )?;
-    let (p, m, m4) = (plain(), money(), money4());
-    for (k, r) in rows.iter().enumerate() {
-        let row = k as u32 + 1;
-        ws.write_string_with_format(row, 0, &r.start, &p)?;
-        ws.write_string_with_format(row, 1, &r.end, &p)?;
-        ws.write_string_with_format(row, 2, &r.coin, &p)?;
-        ws.write_string_with_format(row, 3, &r.dir, &p)?;
-        ws.write_string_with_format(row, 4, &r.verdict, &p)?;
-        ws.write_number_with_format(row, 5, r.evals as f64, &p)?;
-        ws.write_number_with_format(row, 6, r.capped as f64, &p)?;
-        ws.write_number_with_format(row, 7, r.budget, &m)?;
-        ws.write_number_with_format(row, 8, r.opt_invested, &m)?;
-        ws.write_number_with_format(row, 9, r.opt_profit, &m4)?;
-        match r.min_plus {
-            Some(x) => ws.write_number_with_format(row, 10, x, &m)?,
-            None => ws.write_string_with_format(row, 10, "не становится плюсовой", &p)?,
-        };
-        ws.write_number_with_format(row, 11, r.missed, &m4)?;
-    }
-    let tr = rows.len() as u32 + 1;
-    ws.autofilter(0, 0, tr - 1, 11)?;
-    sum_row(
-        ws,
-        tr,
-        &[
-            (5, plain()),
-            (6, plain()),
-            (8, money()),
-            (9, money4()),
-            (11, money4()),
         ],
     )
 }

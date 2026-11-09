@@ -8,9 +8,11 @@
     с offset порциями по limit (задаёт зритель); разбирает их адаптер своей площадки на сервере. Решение 241: цена пула
     DEX — точки котировки стороны DEX (core/window_dex.rs): у кадра стакана — последняя точка не позже его получения,
     и весь ряд таблицей; не пишется — причина (dex_off). Решение 245: у направления с нашей открытой сделкой — ещё точки
-    на объём сделки (столбец «Объём чего»: «сделка … (план/факт)», запрошено; сбой — dex_deal_err).
+    на объём сделки (столбец «Объём чего»: «сделка … (план/факт)», запрошено; сбой — dex_deal_err); окна
+    максимального объёма направлений и «успели бы» (maxwin_view, MaxWinLine).
   Кто вызывает: pages/Windows.svelte.
-  От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte.
+  От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte,
+    MaxWinLine.svelte.
   Настройки: нет.
 -->
 <script>
@@ -21,6 +23,7 @@
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
   import DepthStepper from './DepthStepper.svelte';
+  import MaxWinLine from './MaxWinLine.svelte';
 
   let { win, onclose } = $props();
   let limit = $state(null);
@@ -91,6 +94,10 @@
     </div>
   {/each}
   {#if info.stopped}<p class="warn-text">{info.stopped}</p>{/if}
+  {#each data?.maxwin_view ?? [] as m, mi (`${m.buy_on}|${m.sell_on}|${mi}`)}
+    <div><b>{m.buy_on} → {m.sell_on}</b><MaxWinLine wins={m.wins} view={m.view} /></div>
+  {/each}
+  {#if data?.maxwin_off}<p class="unset">Окна максимального объёма не ведутся: {data.maxwin_off}</p>{/if}
   {#if info.lost}<p class="warn-text">Потеряно кадров (запись не успевала): {info.lost}</p>{/if}
 
   <div class="row">

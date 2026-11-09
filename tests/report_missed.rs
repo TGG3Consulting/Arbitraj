@@ -115,6 +115,18 @@ async fn brief(
         // Решение 237: сделки теста посчитаны по данным момента входа.
         basis: BASIS_DECISION.into(),
         decided_at: deal.map(|_| at),
+        // Решение 245: окна максимального объёма — в tests/uncapped_maxwin.rs.
+        maxwin: None,
+    }
+}
+
+/// Решение 245: показ окон максимального объёма без настроек и сделок (окна — в tests/uncapped_maxwin.rs).
+fn no_maxwin() -> arb::core::maxwin_view::Ctx {
+    arb::core::maxwin_view::Ctx {
+        now: Utc::now(),
+        gap: Err("не задана uncapped.maxwin_gap_ms".into()),
+        min_n: Err("не задана uncapped.deal_time_min_n".into()),
+        times: Default::default(),
     }
 }
 
@@ -205,6 +217,7 @@ async fn missed_workbook_from_recorded_calc() {
         ladder_error: None,
         off: None,
         labels: HashMap::from([(dir(Dir::BingxToDex).asset, "CAKE / Cake".to_string())]),
+        maxwin: no_maxwin(),
     };
     let deals = arb::report::missed_rows::deals(&data, false);
     assert_eq!(deals.len(), 2);
@@ -302,6 +315,7 @@ fn results_with_period_builds() {
         ladder_error: Some("uncapped.ladder_usdt не задана".into()),
         off: None,
         labels: HashMap::new(),
+        maxwin: no_maxwin(),
     };
     let bytes = arb::report::missed(&empty, from, None, now).expect("пустая книга «Упущено»");
     assert!(unzip(&bytes)["xl/worksheets/sheet2.xml"].contains("<f>SUM(D2:D1)</f>"));

@@ -14,6 +14,8 @@
 //! момента входа (не decision_inputs) — «несравнимо».
 //! Решение 218: у сделки в итогах и списке — одна, последняя запись (uncapped_sum.rs latest_per_deal): пересчёт старой
 //! записи по окну (basis recomputed_window*) — основной для сделки, старая остаётся в базе.
+//! Решение 245: у записи кандидата — показ окна максимального объёма рядом с длительностью сделок пары и вывод «успели
+//! бы» (`maxwin_view`, maxwin_view.rs); в итогах — почему окна не ведутся или медианы нет (maxwin_off, deal_time_off).
 //! Кто вызывает: api/uncapped.rs, core/uncapped_report.rs.
 //! От чего зависит: storage/uncapped_db.rs, uncapped_sum.rs, uncapped_types.rs, uncapped_state.rs, uncapped.rs (ladder), ledger (сделки).
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (только показ и причина).
@@ -89,8 +91,11 @@ impl Core {
                 json!({"direction": key, "missed": x.missed, "count": x.count})
             })
             .collect();
+        let mw = self.maxwin_ctx();
         Ok(json!({
             "off": self.uncapped_off(),
+            "maxwin_off": mw.gap.err(),
+            "deal_time_off": mw.min_n.err(),
             "hidden_zero": t.hidden,
             "deals": t.deals.json(),
             "deals_old": t.deals_old.json(),
@@ -116,6 +121,7 @@ impl Core {
                 .map_err(|e| e.to_string())?,
         );
         let total = rows.len();
+        let mw = self.maxwin_ctx();
         let facts = lk(&self.inner.deals);
         // Решение 197: у записи сделки — её факт из учёта (итог, вложено), чтобы окно показывало план против факта.
         let page: Vec<Value> = rows
@@ -126,7 +132,9 @@ impl Core {
                 let body = basis(serde_json::from_str::<Value>(&b).unwrap_or_default());
                 let deal = body["battle"]["deal_id"].as_str().and_then(|d| facts.get(d));
                 let fact = deal.map(|d| json!({"result_usd": d.result_usd, "invested": d.invested, "started_at": d.started_at}));
-                json!({"id": id, "body": body, "fact": fact})
+                // Решение 245: у кандидата — окно максимального объёма и «успели бы».
+                let view = (body["battle"]["verdict"] != "deal").then(|| mw.of_body(&body));
+                json!({"id": id, "body": body, "fact": fact, "maxwin_view": view})
             })
             .collect();
         drop(facts);

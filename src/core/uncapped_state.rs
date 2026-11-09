@@ -3,7 +3,7 @@
 //! сделки) — когда начинался последний расчёт, идёт ли он и ожидающая работа (повтор сливается: ждёт только последняя);
 //! сколько работ ждут (очередь, предел uncapped.queue_max); семафор одновременных расчётов (uncapped.max_concurrent);
 //! счётчики для экрана (посчитано, слито, «не посчитано: очередь полна», сбои, время расчёта); открытые эпизоды
-//! направлений (uncapped_store.rs). Решение 197: сделки ждут отдельно (deals_waiting, не входят в uncapped.queue_max) и
+//! направлений (uncapped_store.rs); окна максимального объёма (решение 245, uncapped_maxwin.rs). Решение 197: сделки ждут отдельно (deals_waiting, не входят в uncapped.queue_max) и
 //! получают место расчёта раньше кандидатов (turn — будит кандидатов, когда ждущих сделок не осталось).
 //! Кто вызывает: core/inner.rs (поле Inner::uncapped), uncapped_queue.rs, uncapped_store.rs, uncapped_view.rs.
 //! От чего зависит: uncapped_types.rs, frozen.rs (снимок рынка сделки, решение 217), tokio (Semaphore).
@@ -95,6 +95,8 @@ pub struct State {
     pub sem: Mutex<Option<(u64, Arc<Semaphore>)>>,
     pub stats: Mutex<Stats>,
     pub episodes: Mutex<HashMap<Direction, OpenEp>>,
+    /// Решение 245: окно максимального объёма, которое идёт, по направлениям кандидатов (uncapped_maxwin.rs).
+    pub maxwin: Mutex<HashMap<Direction, super::uncapped_maxwin::Track>>,
     /// Решение 217: почему по сделке нет записи (сбой расчёта, нет снимка) — id сделки → (когда, причина); читает
     /// сообщение о закрытии (deal_ceiling.rs), старше uncapped.keep_days — убирается (uncapped_store.rs deal_failed).
     pub deal_errors: Mutex<HashMap<String, (chrono::DateTime<chrono::Utc>, String)>>,

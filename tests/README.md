@@ -857,3 +857,11 @@ changeType null и изменения deposit / order-match / withdraw) и `htx_
 
 Решение 230 — tests/core_wallet_pause.rs (живое ядро на SQLite: расхождение сверки кошелька DEX — пауза только кошелька, не bsc_dex; can_open отказывает только направлениям этого кошелька по маппингу, DEX ↔ DEX — своему; автоснятие по чистым кругам кошелька, «Снять паузу» кошелька; короткое сообщение «⏸ Пауза …», событие risk.reconcile_paused в «Неудачные») и tests/rules_inactive.rs (чистые функции: для WithdrawRejected / InvalidAddress / WithdrawLocked «Повторить», «Стоп площадка», «Стоп всё» не действуют, справочник формы codes[].inactive); tests/core_reconcile_pause.rs — Found с полем кошелька.
 Решение 232 — tests/fees_232.rs (монета комиссии остальных бирж: живые покупки KuCoin — USDT от суммы и XT — в монете от количества (tests/data/fees_232_2026-11-08/live_deals_facts.json из GET /api/deals 08.11) против плана BookFee; BookFee::in_received для OKX, CoinEx, Poloniex и примеры документации Poloniex Trades by Order Id / CoinEx Get Order Status; разбор факта в двух монетах — HTX matchresults, Poloniex сделки, XT deductServices — список частей; строки HTX и XT с двумя монетами собраны по полям документации).
+
+Решение 245 — tests/window_deal_price.rs: цена DEX на объём открытой сделки в окне (настоящее ядро, адаптеры BingX и
+DEX без сети, SQLite, записанный пул CAKE/USDT): сделка под наблюдением, пулы маршрута плана, отметка только на пул
+маршрута этой DEX, интервал, объём план / факт, точка с пометкой сделки в файле окна, сбой котировки (нет кошелька) —
+причина на странице окна, закрытая сделка и DEX → биржа после покупки — сняты. tests/uncapped_maxwin.rs: окно
+максимального объёма кандидата (расчёт «без потолка» на записи CAKE через uncapped_store::save, SQLite), конец
+невыгодным расчётом и промежутком, n окон, самое длинное, сводка окна 125; медиана и p75 сделок пары, по источнику, «нет
+данных» (длительности учёта 05.11 — tests/data/report_2026-11-05/deals.csv); «успели бы»; столбцы отчёта «Упущено».

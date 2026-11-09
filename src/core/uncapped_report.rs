@@ -3,6 +3,7 @@
 //! «Упущено из-за потолка» (Core::uncapped_totals — одна выборка и один расчёт), почему расчёт не идёт, и показные имена
 //! монет по адресу (решение 211) — как на экране (ui/src/lib/coinNames.svelte.js coinName: тикер монеты записи, затем
 //! показной тикер справочника и тикеры площадок без повторов, через « / »).
+//! Решение 245: и контекст показа окон максимального объёма (maxwin_view.rs: длительности сделок учёта, настройки).
 //! Кто вызывает: report/mod.rs (missed_file).
 //! От чего зависит: core/uncapped_view.rs (uncapped_totals, uncapped_off), uncapped_store.rs (ts), справочник монет ядра.
 //! Настройки: uncapped.enabled, uncapped.ladder_usdt (через uncapped_totals).
@@ -26,6 +27,8 @@ pub struct MissedData {
     pub off: Option<String>,
     /// Монета → показное имя «NMT / NETMIND».
     pub labels: HashMap<Asset, String>,
+    /// Решение 245: показ окон максимального объёма и длительности сделок (как на экране).
+    pub maxwin: super::maxwin_view::Ctx,
 }
 
 impl Core {
@@ -42,6 +45,7 @@ impl Core {
             ladder_error,
             off: self.uncapped_off(),
             labels,
+            maxwin: self.maxwin_ctx(),
         })
     }
 

@@ -18,10 +18,13 @@
     записи до решения 237 (σ и курсы позже входа) — пометка «несравнимо».
     Решение 239: строка итога deals_old — все сделки не по данным момента входа (не decision_inputs) — «несравнимо»,
     в суммы «Исполненные сделки», таблицу потолков и топ не входят.
+    Решение 245: у кандидата — окно максимального объёма (начало, конец, длительность, вложить → прибыль на начале и в
+    пике), медиана и p75 длительности сделки пары и «успели бы» (MaxWinLine; поле maxwin_view строки); почему окна не
+    ведутся или медианы нет — над итогами (maxwin_off, deal_time_off).
     Данные — GET /api/uncapped/summary, GET /api/uncapped, GET /api/uncapped/{id}.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/labels.js, lib/uncappedLabels.js, components/PageSize.svelte, ErrorText.svelte,
-    UncappedRecord.svelte.
+    UncappedRecord.svelte, MaxWinLine.svelte.
   Настройки: нет (uncapped.* — экран «Настройки», категория «Упущено из-за потолка»). Период, топ и строки на странице
     задаёт зритель.
 -->
@@ -34,6 +37,7 @@
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import UncappedRecord from '../components/UncappedRecord.svelte';
+  import MaxWinLine from '../components/MaxWinLine.svelte';
 
   let kind = $state('day');
   let fromLocal = $state('');
@@ -127,6 +131,8 @@
 {#if !top}<p class="muted">Задайте «Топ направлений», чтобы увидеть итоги.</p>{/if}
 {#if sum}
   {#if sum.off}<p class="warn-text">Расчёт без потолка не идёт: {sum.off}</p>{/if}
+  {#if sum.maxwin_off}<p class="warn-text">Окна максимального объёма не ведутся: {sum.maxwin_off}</p>{/if}
+  {#if sum.deal_time_off}<p class="warn-text">Длительность сделок для «успели бы» не считается: {sum.deal_time_off}</p>{/if}
   <table>
     <thead><tr><th></th><th>записей</th><th>упёрлись в бюджет</th><th>план на нашем бюджете</th><th>факт</th><th>та же модель: сделки — на вложенном, кандидаты — на нашем бюджете</th><th>без потолка</th><th>упущено</th><th>окна</th></tr></thead>
     <tbody>
@@ -221,6 +227,7 @@
         Окно: {showTime(b.ep.first_at)} — {showTime(b.ep.last_at)} ({duration(windowSec(b))}), расчётов с упущенным {b.ep.count}, пик {showTime(b.ep.peak_at)}{#if b.battle.window_from}; спред выше порога с {showTime(b.battle.window_from)}{/if}
       {/if}
     </p>
+    {#if !deal}<MaxWinLine wins={b.maxwin ?? null} view={r.maxwin_view ?? null} />{/if}
     {#if open === r.id}<UncappedRecord rec={b} />{/if}
   </article>
 {:else}

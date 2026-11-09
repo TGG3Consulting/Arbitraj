@@ -515,6 +515,24 @@ rationale = "Четыре интервала uncapped.min_interval_ms: коро�
 prefill = { kind = "Global" }
 
 [[section.rec]]
+name = "uncapped.maxwin_gap_ms"
+area = "вся система"
+unit = "мс"
+value = "60000"
+source = "Ориентир (решение 245)"
+rationale = "Два интервала uncapped.min_interval_ms (совет 30000): один пропущенный или задержанный очередью расчёт не обрывает окно максимального объёма; больше — окно склеивалось бы через паузы, когда кандидат не считался."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "uncapped.deal_time_min_n"
+area = "вся система"
+unit = "сделок"
+value = "5"
+source = "Ориентир (решение 245)"
+rationale = "Как profit.transit_auto_after на боте (5 — docs/notes/transit-times-2026-11-09.md): медиана по меньшему числу сделок случайна; у пары с меньшим числом — по бирже-источнику."
+prefill = { kind = "Global" }
+
+[[section.rec]]
 name = "uncapped.keep_days"
 area = "вся система"
 unit = "дней"

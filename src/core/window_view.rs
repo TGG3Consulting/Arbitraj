@@ -6,7 +6,9 @@
 //! изменения с начала файла, верхние top уровней), наши сделки окна с хронологией; путь файла для «Скачать файл».
 //! Решение 241: точки цены пула DEX (строки «dex» файла, window_dex.rs) — отдельным рядом `dex` (все прочитанные, в
 //! предел строк не входят — их число из сводки) и причина, почему не пишутся (`dex_off`).
-//! Решение 245: на странице — сбой цены DEX на объём сделки по сделкам монеты (`dex_deal_err`, window_deal.rs).
+//! Решение 245: у строки и страницы окна — окна максимального объёма направлений и «успели бы» (`maxwin_view`,
+//! maxwin_view.rs), почему не ведутся (`maxwin_off`); на странице — сбой цены DEX на объём сделки по сделкам окна
+//! (`dex_deal_err`, window_deal.rs).
 //! Кто вызывает: api/windows.rs.
 //! От чего зависит: window.rs, window_cfg.rs, window_tap.rs (parse), storage/windows_db.rs, storage/episode_files.rs,
 //! window_dex.rs (cfg), шлюз (Venue::decode_tap).
@@ -41,7 +43,8 @@ impl Core {
             .map_err(|e| e.to_string())?;
         let open = lk(&self.inner.windows).list();
         let files = &self.inner.window_files;
-        let list: Vec<WindowInfo> = rows
+        let mw = self.maxwin_ctx();
+        let list: Vec<Value> = rows
             .iter()
             .filter_map(|b| serde_json::from_str::<WindowInfo>(b).ok())
             .map(|w| {
@@ -52,18 +55,23 @@ impl Core {
                         max_profit: o.max_profit,
                         max_profit_unbounded: o.max_profit_unbounded,
                         dex_points: o.dex_points,
+                        maxwins: o.maxwins.clone(),
                         ..w
                     },
                     None => w,
                 };
                 w.bytes = files.size(&w.id);
-                w
+                let view = mw.of_window(&w);
+                let mut v = json!(w);
+                v["maxwin_view"] = view;
+                v
             })
             .collect();
         Ok(json!({
             "windows": list,
             "total": total,
             "off": Cfg::read(&self.inner.deps.settings).err(),
+            "maxwin_off": mw.gap.err(),
             "used_bytes": files.used(),
         }))
     }
@@ -86,13 +94,19 @@ impl Core {
         else {
             return Ok(None);
         };
-        let info: WindowInfo = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-        // Решение 241: точек DEX у открытого окна — из памяти (сводка в базе — с последнего сохранения).
-        let dex_points = lk(&self.inner.windows)
+        let mut info: WindowInfo = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        // Решение 241: точек DEX у открытого окна — из памяти (сводка в базе — с последнего сохранения); решение 245 —
+        // окна максимального объёма тоже.
+        let open = lk(&self.inner.windows)
             .list()
-            .iter()
-            .find(|o| o.id == info.id)
+            .into_iter()
+            .find(|o| o.id == info.id);
+        let dex_points = open
+            .as_ref()
             .map_or(info.dex_points, |o| o.dex_points.max(info.dex_points));
+        if let Some(o) = open {
+            info.maxwins = o.maxwins;
+        }
         let path = self.inner.window_files.path(id);
         let p = path.clone();
         // Чтение и распаковка — блокирующие, вне потоков async. Предел строк — служебные + кадры до offset + limit.
@@ -165,10 +179,12 @@ impl Core {
                 .map(|d| json!({ "id": d.id, "direction": d.direction, "step": d.step, "result_usd": d.result_usd, "timeline": d.timeline }))
                 .collect()
         };
+        let mw = self.maxwin_ctx();
+        let deal_err = super::window_deal::errors(self, &info.asset);
         Ok(Some(json!({
             "info": info, "lines": lines, "frames": frames, "frames_read": n, "truncated": truncated, "deals": deals,
             "dex": dex, "dex_off": super::window_dex::cfg(&self.inner.deps.settings).err(),
-            "dex_deal_err": super::window_deal::errors(self, &info.asset),
+            "dex_deal_err": deal_err, "maxwin_view": mw.of_window(&info), "maxwin_off": mw.gap.err(),
         })))
     }
 

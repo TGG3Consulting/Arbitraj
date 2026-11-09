@@ -63,9 +63,10 @@ def _blank(var, seg):
     return o
 
 
-def run_variant(var, deals_period, deals_all, eps, th):
+def run_variant(var, deals_period, deals_all, eps):
     """Итог варианта по сегментам за один проход. deals_* — строки сделок (с cur, period), eps — эпизоды, у которых
-    ro — строки «только из-за запаса» по времени (с cur, cf_med, cf_p75). Возвращает: список итогов по сегментам, где
+    ro — строки «только из-за запаса» по времени (с cur, cf_med, cf_p75). Порог и остальные настройки каждой строки —
+    на её момент (r["th"], r["cur"]); вариант меняет ровно одну настройку. Возвращает: список итогов по сегментам, где
     вариант задел хоть одну строку. Ошибок нет."""
     res = {seg: _blank(var, seg) for seg in SEGMENTS}
 
@@ -76,7 +77,7 @@ def run_variant(var, deals_period, deals_all, eps, th):
 
     for label, ds in (("period", deals_period), ("all", deals_all)):
         for d in scope_rows(var, ds):
-            ok, hit = admitted(d, d["cur"], var, th)
+            ok, hit = admitted(d, d["cur"], var)
             if not hit:
                 continue
             add(d, "touched", 1)
@@ -92,7 +93,7 @@ def run_variant(var, deals_period, deals_all, eps, th):
         rows = scope_rows(var, ep["ro"])
         first = None
         for r in rows:
-            ok, hit = admitted(r, r["cur"], var, th)
+            ok, hit = admitted(r, r["cur"], var)
             if hit:
                 add(r, "touched", 1)
             if ok:

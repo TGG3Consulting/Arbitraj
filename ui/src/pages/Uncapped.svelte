@@ -31,6 +31,7 @@
 <script>
   import { uniqBy } from '../lib/uniq.js';
   import { get, download } from '../lib/api.js';
+  import { flight } from '../lib/flight.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import { showTime } from '../lib/labels.js';
   import { limitedLabel, budgetBound, money, period, verdictLabel, duration, windowSec, understated, lateInputs, wouldText } from '../lib/uncappedLabels.js';
@@ -64,26 +65,28 @@
     return q;
   }
 
-  /** Перечитывает итоги и страницу. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает итоги и страницу (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     const q = periodQuery();
     try {
-      if (top) sum = await get(`/api/uncapped/summary?${q}&top=${top}`);
+      if (top) sum = await get(`/api/uncapped/summary?${q}&top=${top}`, signal);
       if (limit) {
         const l = new URLSearchParams(q);
         l.set('limit', limit);
         l.set('offset', (page - 1) * limit);
         if (only) l.set('kind', only);
         if (missedOnly) l.set('missed_only', 'true');
-        const r = await get(`/api/uncapped?${l}`);
+        const r = await get(`/api/uncapped?${l}`, signal);
         rows = r.rows;
         total = r.total;
       }
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена фильтров или уход со страницы — отмена прежнего. */
+  const reload = flight(read);
 
   let downloading = $state(false);
   /** Решение 215: отчёт Excel «Упущено» за выбранный период. Ошибка — в error. */
@@ -106,6 +109,7 @@
   $effect(() => {
     void [kind, fromLocal, toLocal, only, limit, top, page, missedOnly];
     reload();
+    return () => reload.cancel();
   });
   const dirText = (d) => `${coinName(d.asset)} ${d.buy_on} → ${d.sell_on}`;
 </script>

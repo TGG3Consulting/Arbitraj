@@ -35,13 +35,18 @@
 
   $effect(() => {
     if (!limit || !levels) return;
-    get(`/api/windows/${seg(win.id)}?limit=${limit}&offset=${offset}&levels=${levels}`)
+    // Смена параметров или уход — прежний запрос отменяется (AbortController, шторм запросов 10.11.2026).
+    const ac = new AbortController();
+    get(`/api/windows/${seg(win.id)}?limit=${limit}&offset=${offset}&levels=${levels}`, ac.signal)
       .then((r) => {
         data = r;
         step = 0;
         error = '';
       })
-      .catch((e) => (error = e.message));
+      .catch((e) => {
+        if (!e.aborted) error = e.message;
+      });
+    return () => ac.abort();
   });
 
   const info = $derived(data?.info ?? win);

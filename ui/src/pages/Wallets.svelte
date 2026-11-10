@@ -13,6 +13,7 @@
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import WalletList from '../components/WalletList.svelte';
   import WalletMap from '../components/WalletMap.svelte';
 
@@ -20,22 +21,28 @@
   let error = $state('');
   let tab = $state('wallets');
 
-  /** Перечитывает данные экрана. */
-  async function load() {
+  /** Перечитывает данные экрана (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     try {
-      view = await get('/api/wallets');
+      view = await get('/api/wallets', signal);
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); уход со страницы — отмена. */
+  const load = flight(read);
 
   $effect(() => {
     load();
-    return onLive((msg) => {
+    const off = onLive((msg) => {
       const kind = msg.type === 'journal' ? msg.data?.kind : null;
       if (kind === 'wallets.changed' || kind === 'secrets' || lagFor(msg, 'journal')) load();
     });
+    return () => {
+      off();
+      load.cancel();
+    };
   });
 </script>
 

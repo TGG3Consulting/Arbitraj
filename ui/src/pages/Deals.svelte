@@ -15,6 +15,7 @@
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { stepLabel, dirText, pickLines } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import ErrorText from '../components/ErrorText.svelte';
@@ -28,23 +29,29 @@
   let onlyOpen = $state(false);
   const OPEN = ['Buying', 'Transfer', 'Selling', 'Stuck', 'WaitingHuman'];
 
-  /** Перечитывает сделки. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает сделки (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     try {
-      deals = Object.fromEntries((await get('/api/deals')).map((d) => [d.id, d]));
+      deals = Object.fromEntries((await get('/api/deals', signal)).map((d) => [d.id, d]));
       error = '';
-      uncapped = await get('/api/uncapped/deals');
+      uncapped = await get('/api/uncapped/deals', signal);
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); уход со страницы — отмена. */
+  const reload = flight(load);
 
   $effect(() => {
     reload();
-    return onLive((msg) => {
+    const off = onLive((msg) => {
       if (msg.type === 'deal') deals[msg.data.id] = msg.data;
       else if (lagFor(msg, 'core')) reload();
     });
+    return () => {
+      off();
+      reload.cancel();
+    };
   });
 
   const rows = $derived(

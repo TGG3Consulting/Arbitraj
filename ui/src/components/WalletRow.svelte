@@ -13,6 +13,7 @@
 -->
 <script>
   import { get, put, request, seg } from '../lib/api.js';
+  import { flight } from '../lib/flight.js';
   import CheckConnection from './CheckConnection.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
@@ -25,14 +26,16 @@
   let error = $state('');
   let exec = $state('');
 
-  /** Балансы BNB и USDT кошелька. */
-  async function balances() {
+  /** Балансы BNB и USDT кошелька (signal — отмена). Ошибка — в bal.error; отмена — ничего. */
+  async function read(signal) {
     try {
-      bal = await get(`/api/wallets/${seg(w.id)}/balances`);
+      bal = await get(`/api/wallets/${seg(w.id)}/balances`, signal);
     } catch (e) {
-      bal = { error: e.message };
+      if (!e.aborted) bal = { error: e.message };
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена кошелька или уход — отмена. */
+  const balances = flight(read);
 
   /** Выполняет запрос и перечитывает экран; ошибка — красным. */
   async function act(fn) {
@@ -57,6 +60,7 @@
 
   $effect(() => {
     if (unlocked && dex) balances();
+    return () => balances.cancel();
   });
 </script>
 

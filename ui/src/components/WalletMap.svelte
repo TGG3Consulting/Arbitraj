@@ -12,6 +12,7 @@
 <script>
   import { uniqBy } from '../lib/uniq.js';
   import { get, put, seg } from '../lib/api.js';
+  import { flight } from '../lib/flight.js';
   import { showTime } from '../lib/labels.js';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -44,18 +45,21 @@
   }
 
   /** История изменений (N — от зрителя). */
-  async function loadHistory() {
+  async function read(signal) {
     if (!limit) return;
     try {
-      history = await get(`/api/wallets/history?limit=${seg(String(limit))}`);
+      history = await get(`/api/wallets/history?limit=${seg(String(limit))}`, signal);
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена объёма или уход — отмена. */
+  const loadHistory = flight(read);
 
   $effect(() => {
     void view;
     loadHistory();
+    return () => loadHistory.cancel();
   });
 </script>
 

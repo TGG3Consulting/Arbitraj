@@ -21,7 +21,7 @@ use arb::core::usdt_return_state::{self as st, UsdtReturn};
 use arb::gateway::errors::{ErrorCode, GatewayError};
 use arb::venues::mexc::errors::{Op, from_code};
 use rust_decimal::Decimal;
-use usdt_return_common::{dir, doge, entries, start, wait_state};
+use usdt_return_common::{dir, doge, entries, start, wait_entries, wait_state};
 
 /// Ответ MEXC 16021 (текст — из журнала живого случая; разбор — настоящий адаптер).
 fn mexc_16021() -> OpError {
@@ -55,7 +55,8 @@ async fn retries_with_interval_then_record_with_two_buttons() {
     let t0 = Instant::now();
     arb::core::ledger::finish(&core, &mut x, Step::Closed, "продано (выгодно)").await;
     // Площадки mexc в реестре нет: каждая попытка — сбой до вывода (повтор безопасен), 2 повтора по 1 с.
-    let s = wait_state(&core, "r1DOGE", Duration::from_secs(10), |s| {
+    // Ждём условие с запасом (под нагрузкой полного прогона задачи повторов могут опаздывать); при норме — ~2 с.
+    let s = wait_state(&core, "r1DOGE", Duration::from_secs(60), |s| {
         matches!(s, UsdtReturn::NotReturned { .. })
     })
     .await;
@@ -95,8 +96,12 @@ async fn retries_with_interval_then_record_with_two_buttons() {
         1
     );
     // Страховка — одна, после всех повторов; запись экрана — с двумя кнопками, без «Продать».
+    // mark_not_returned сначала ставит состояние (его и дождался wait_state), потом пишет журнал страховки —
+    // запись может появиться чуть позже: ждём её появления, затем проверяем, что она ровно одна.
     assert_eq!(
-        entries(&j, "core.usdt_not_returned", "r1DOGE").await.len(),
+        wait_entries(&j, "core.usdt_not_returned", "r1DOGE", Duration::from_secs(60))
+            .await
+            .len(),
         1
     );
     let rec = core

@@ -7,14 +7,17 @@
 //   поиск по фабрике, оракул или события Initialize), человек вводит сам — правило id: checkDexId.
 //   Ответ 400 — «не применимо» (биржа): площадка просто не DEX. Иначе ошибка показывается как есть.
 //   Перечитывается при старте, при «lagged» (переподключение), по живому сообщению «send_channel» и по записи
-//   журнала вида dex.index (справочник обновился) — без таймеров и опроса.
+//   журнала вида dex.index (справочник обновился) — без таймеров и опроса. Шторм запросов 10.11.2026: перечитывание —
+//   один запрос в полёте (lib/flight.js); send_channel меняет только статистику каналов (api/dex.rs channels берёт
+//   её из ядра) — по нему перечитываются только каналы, а не виды пулов и справочник пулов (тысячи записей).
 // Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js, lib/settings.svelte.js (список площадок).
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js, lib/settings.svelte.js (список площадок).
 // Настройки: нет.
 
 import { get, seg } from './api.js';
 import { onLive } from './live.svelte.js';
 import { store, valueKey } from './settings.svelte.js';
+import { flight } from './flight.js';
 
 /**
  * byVenue: id → {families, familiesError, channels, channelsError, directory, directoryError};
@@ -36,7 +39,7 @@ async function fetchList(path) {
 }
 
 /** Что делает: перечитывает списки по всем площадкам. Ошибки — в byVenue[id].*Error. */
-export async function reloadDex() {
+async function loadDex() {
   const ids = [...store.venues];
   const out = {};
   await Promise.all(
@@ -67,6 +70,26 @@ export async function reloadDex() {
   dex.loaded = true;
 }
 
+/** Перечитывание списков DEX: один запрос в полёте, вызов во время него — один повтор после (lib/flight.js). */
+export const reloadDex = flight(loadDex);
+
+/** Что делает: перечитывает только каналы отправки площадок-DEX (статистика send_channel). Ошибки — в channelsError. */
+async function loadChannels() {
+  const ids = Object.entries(dex.byVenue)
+    .filter(([, v]) => !v.notDex)
+    .map(([id]) => id);
+  const got = await Promise.all(ids.map((id) => fetchList(`/api/channels/${seg(id)}`)));
+  ids.forEach((id, i) => {
+    const v = dex.byVenue[id];
+    if (!v) return;
+    v.channels = got[i].list;
+    v.channelsError = got[i].error;
+  });
+}
+
+/** Перечитывание каналов по send_channel: один запрос в полёте. */
+const reloadChannels = flight(loadChannels);
+
 /** Запись «не DEX» без запросов. */
 function emptyNotDex() {
   return {
@@ -95,7 +118,7 @@ export function start() {
     });
   });
   onLive((msg) => {
-    if (msg.type === 'send_channel') reloadDex();
+    if (msg.type === 'send_channel') reloadChannels();
     if (msg.type === 'journal' && msg.data?.kind === 'dex.index') reloadDex();
   });
 }

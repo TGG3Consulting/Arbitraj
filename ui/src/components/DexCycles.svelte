@@ -13,6 +13,7 @@
 <script>
   import { get, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { fmtPrice } from '../lib/fmt.js';
   import { poolRefText } from '../lib/coinLabels.js';
   import { poolKindLabel } from '../lib/labels.js';
@@ -24,16 +25,17 @@
   let error = $state('');
   let note = $state('');
 
-  /** Перечитывает сигналы циклов по всем площадкам-DEX. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает сигналы циклов по всем площадкам-DEX (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     try {
-      const venues = await get('/api/venues/kinds');
+      const venues = await get('/api/venues/kinds', signal);
       const dexes = venues.filter((v) => v.kind === 'Dex');
       const lists = await Promise.all(
         dexes.map(async (v) => {
           try {
-            return await get(`/api/venues/${seg(v.id)}/dex-cycles`);
+            return await get(`/api/venues/${seg(v.id)}/dex-cycles`, signal);
           } catch (e) {
+            if (e.aborted) throw e;
             // 400 — площадка не DEX (гонка списка): пропускаем; прочее — показываем.
             if (e.status !== 400) note = e.message;
             return [];
@@ -43,15 +45,21 @@
       cycles = lists.flat();
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); уход со страницы — отмена. */
+  const reload = flight(read);
 
   $effect(() => {
     reload();
-    return onLive((msg) => {
+    const off = onLive((msg) => {
       if (lagFor(msg, 'core')) reload();
     });
+    return () => {
+      off();
+      reload.cancel();
+    };
   });
 
   /** Маршрут строкой: «Pancake V3 0x… → Uniswap V3 0x…». */

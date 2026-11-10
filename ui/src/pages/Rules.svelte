@@ -14,6 +14,7 @@
   import { uniqBy } from '../lib/uniq.js';
   import { get, put } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import RuleForm from '../components/RuleForm.svelte';
   import ErrorText from '../components/ErrorText.svelte';
 
@@ -23,21 +24,27 @@
   let editing = $state(undefined); // undefined — формы нет; null — новое правило; правило — изменение
   let rowError = $state('');
 
-  /** Перечитывает правила и справочник. Ошибка — в error. */
-  async function load() {
+  /** Перечитывает правила и справочник (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     try {
-      [rules, meta] = await Promise.all([get('/api/rules'), get('/api/rules/meta')]);
+      [rules, meta] = await Promise.all([get('/api/rules', signal), get('/api/rules/meta', signal)]);
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); уход со страницы — отмена. */
+  const load = flight(read);
 
   $effect(() => {
     load();
-    return onLive((m) => {
+    const off = onLive((m) => {
       if (lagFor(m, 'journal') || (m.type === 'journal' && m.data.kind.startsWith('rules.'))) load();
     });
+    return () => {
+      off();
+      load.cancel();
+    };
   });
 
   /** Включает или выключает правило. Ошибка бэкенда — под таблицей. */

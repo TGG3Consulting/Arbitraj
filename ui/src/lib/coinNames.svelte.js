@@ -2,14 +2,19 @@
 // Что делает: решение 211 (монета = адрес контракта BSC) — справочник имён монет по адресу для всех экранов:
 //   GET /api/coins/names → адрес → {ticker (показной), venues: {биржа: тикер этой биржи}}. Отсюда имя монеты
 //   «NMT / NETMIND» (уникальные тикеры площадок через « / », первым показной), тикер своей площадки (делистинг)
-//   и все тикеры монеты (фильтр). Перечитывается по живому сообщению coin_check (справочник пересобран) и «lagged».
+//   и все тикеры монеты (фильтр). Перечитывается по живому сообщению coins (ядро пересобрало справочник монет —
+//   core/rebuild.rs; GET /api/coins/names строится из того же справочника, api/coins.rs names) и по «lagged» ядра.
+//   Шторм 10.11.2026: раньше перечитывался на КАЖДОЕ сообщение coin_check (итог проверки налогов одной монеты —
+//   тысячи за цикл проверки, справочник имён от них не меняется) без single-flight — браузер исчерпал лимит
+//   запросов (893 × net::ERR_INSUFFICIENT_RESOURCES). Теперь — по coins и один запрос в полёте (lib/flight.js).
 //   Нет справочника (503, ядро не запущено) — имя = тикер монеты из её данных, как раньше.
 // Кто вызывает: lib/coreLabels.js, lib/delist.svelte.js, lib/coinFilter.js, pages/Live.svelte, LiveCoins и др.
-// От чего зависит: lib/api.js, lib/live.svelte.js.
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js.
 // Настройки: нет.
 
 import { get } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
+import { flight } from './flight.js';
 
 /** Адрес (нижний регистр) → {ticker, venues}. */
 export const names = $state({ map: {} });
@@ -26,6 +31,9 @@ async function load() {
   }
 }
 
+/** Перечитывание справочника: один запрос в полёте, вызов во время запроса — один повтор после него. */
+const reload = flight(load);
+
 /**
  * Запускает загрузку и подписку один раз за страницу. Вызывается при первом обращении через функции ниже; экран,
  * который читает names.map напрямую (ManualBlacklist, SettingCard), вызывает его сам (ревью М1).
@@ -33,9 +41,9 @@ async function load() {
 export function ensure() {
   if (started) return;
   started = true;
-  load();
+  reload();
   onLive((m) => {
-    if (m.type === 'coin_check' || lagFor(m, 'coin_check')) load();
+    if (m.type === 'coins' || lagFor(m, 'core')) reload();
   });
 }
 

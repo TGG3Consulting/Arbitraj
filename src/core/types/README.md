@@ -10,7 +10,7 @@
 | `fee.rs` | Fee — часть фактической комиссии ордера (монета, сумма; `usd` — стоимость в USDT из документации площадки у монеты без рынка, баллы HTX); вынесена из `trade.rs` |
 | `cost.rs` | CostKind, Cost (затрата: вид, сумма, в чём, учтена ли в цене, шаг маршрута, монета скидки `paid_in` — решение 219), RouteStep (номер шага и пара токенов, решение 52), RouteMode, RouteHop, RouteLeg, DexRoute |
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
-| `hold.rs` | HoldItem, WithdrawHold — что биржа сейчас держит от вывода (решение 150: у MEXC — предварительно зачисленные депозиты, статус 9 PRE_SUCCESS); пусто — ничего не держится. Решение 166: unknown — у площадки нет официального источника («неизвестно», не «удержаний нет») |
+| `hold.rs` | HoldItem, WithdrawHold — что биржа сейчас держит от вывода (решение 150: у MEXC — предварительно зачисленные депозиты, статус 9 PRE_SUCCESS); пусто — ничего не держится. Решение 166: unknown — у площадки нет официального источника («неизвестно», не «удержаний нет»). Решение 251: WithdrawReady — готов ли вывод монеты после покупки (контракт withdraw_ready): свободно ≥ суммы, источник ответа |
 | `delist.rs` | DelistItem, Delistings — пары биржи в делистинге (решение 175): тикер, символ, когда прекращаются торги и закрывается вывод, источник в API; unknown — у площадки нет официального источника («неизвестно», не «делистингов нет») |
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |

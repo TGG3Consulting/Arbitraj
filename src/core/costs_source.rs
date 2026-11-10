@@ -131,12 +131,20 @@ impl Source for Live<'_> {
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со
-    /// входами момента решения: затраты «перевод» плана. Ошибки: как у withdraw_a.
+    /// входами момента решения: затраты «перевод» плана; решение 251 (д) — у биржи A поправка по фактам прошлых
+    /// переводов (withdraw_seen.rs adjust, transfer.seen_cost). Ошибки: как у withdraw_a.
     async fn withdraw(&self, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
         if let (Some(p), None) = (self.plan(), &cx.a.info) {
             return Ok(p.withdraw(cx, amount));
         }
-        super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await
+        let mut c = super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await?;
+        // Решение 251 (д): у биржи A — поправка по фактам прошлых переводов (transfer.seen_cost; не задана — нет).
+        if cx.a.info.is_some() {
+            let d = &cx.dir;
+            let extra = super::withdraw_seen::adjust(self.core, &d.asset, &d.buy_on, amount, &c);
+            c.extend(extra);
+        }
+        Ok(c)
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs return_b); решение 237 — DEX на B со

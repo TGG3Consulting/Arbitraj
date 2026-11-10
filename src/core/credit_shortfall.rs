@@ -5,7 +5,10 @@
 //! «зачислено меньше на N% — похоже на налог перевода»), журнал и уведомление coin.credit_shortfall. Больше эта монета
 //! не торгуется, пока человек не снимет отметку на экране «Монеты». USDT (перегон) не проверяется — его блок
 //! остановил бы всю торговлю, а налога у него нет.
-//! Кто вызывает: core/transfers.rs (после зачисления).
+//! Решение 251 (д): каждое зачисление пишет факты перевода (фактическая комиссия, недостача) — withdraw_seen.rs,
+//! независимо от порога transfer.credit_shortfall_pct.
+//! Кто вызывает: core/transfers.rs (после зачисления), core/transfer_chain.rs (зачисление по блокчейну — после
+//! фактической комиссии из статуса вывода, решение 251).
 //! От чего зависит: credit_expect.rs, engine.rs, settings (запись ручной отметки), deps.rs (журнал, уведомления).
 //! Настройки: transfer.credit_shortfall_pct (вся система, необязательная; не задана — без авто-блока);
 //! пишет coin.blocked и coin.blocked_note (по монете — тикер, как ручной список).
@@ -40,12 +43,6 @@ pub async fn check(
     fee: Option<&Cost>,
 ) {
     let deps = &core.inner.deps;
-    let Ok(max) = deps
-        .settings
-        .decimal("transfer.credit_shortfall_pct", At::default())
-    else {
-        return;
-    };
     if rd(&core.inner.usdt).as_ref().ok() == asset.bsc_contract.as_ref() {
         return;
     }
@@ -62,6 +59,21 @@ pub async fn check(
             Ok(e) => e,
             Err(_) => return,
         },
+    };
+    // Решение 251 (д): факты перевода — фактическая комиссия и недостача — для затрат следующих сделок по монете с
+    // этой площадки (withdraw_seen.rs; в расчёт — при transfer.seen_cost). Пишутся всегда, порог ниже — отдельно.
+    let seen = super::withdraw_seen::Seen {
+        asset: asset.clone(),
+        from: from.clone(),
+        fee: fact_fee,
+        shortfall_pct: shortfall_pct(expected, credited).unwrap_or_default(),
+    };
+    super::withdraw_seen::record(core, seen).await;
+    let Ok(max) = deps
+        .settings
+        .decimal("transfer.credit_shortfall_pct", At::default())
+    else {
+        return;
     };
     let Some(pct) = shortfall_pct(expected, credited) else {
         return;

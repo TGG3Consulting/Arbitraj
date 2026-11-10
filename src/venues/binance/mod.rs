@@ -47,6 +47,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod user_stream_conn;
 pub mod wallet;
+pub mod withdraw_ready;
 pub mod ws;
 pub mod ws_conn;
 
@@ -169,7 +170,13 @@ impl Venue for Binance {
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        trade::trade(&self.ctx, &self.symbols, req).await
+        let (ticker, buy) = (req.asset.ticker.clone(), req.side == Side::Buy);
+        let r = trade::trade(&self.ctx, &self.symbols, req).await;
+        // Решение 251: своя покупка монеты — начало окна «монета ещё не доступна для вывода» (transfers.rs).
+        if buy && r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
+            withdraw_ready::bought(&ticker);
+        }
+        r
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер, если включён.
@@ -182,6 +189,17 @@ impl Venue for Binance {
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
         transfers::withdraw(&self.ctx, req).await
+    }
+
+    /// Решение 251: купленная монета доступна для вывода — событие outboundAccountPosition, по сроку — REST баланса
+    /// (withdraw_ready.rs).
+    async fn withdraw_ready(
+        &self,
+        asset: &Asset,
+        amount: Decimal,
+        wait: std::time::Duration,
+    ) -> GatewayResult<crate::core::types::WithdrawReady> {
+        withdraw_ready::wait(&self.ctx, asset, amount, wait).await
     }
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {

@@ -384,6 +384,8 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.rate_limit_pause_ms | площадка Binance | `60000` | Если Retry-After не пришёл (SAPI) | rest-api «LIMITS» |
 | venue.withdraw_wallet | площадка Binance | `spot` | Торговля на споте | Withdraw: walletType |
 | venue.withdraw_history_min_ms | площадка Binance | `6000` | Вес 18000 из 180000 UID в минуту | Withdraw History; General Info |
+| venue.withdraw_ready_wait_ms | площадка Binance | `3000` | Отказы вывода были через 0.35–0.77 с после покупки (12 сделок 10.11); ожидание кончается событием баланса раньше срока, срок — только если события нет (нужна venue.balance_events = да) | Решение 251; user-data-stream «Account Update» |
+| venue.withdraw_unready_window_ms | площадка Binance | `15000` | Окно должно покрыть ожидание (3 с) и все повторы (transfer.locked_retry_ms × transfer.locked_retries_max = 1 с × 10): каждый отказ в окне — «ещё не доступна», повтор; вне окна — отказ | Решение 251; Wallet Error Code −4026, −4024 |
 | venue.window_depth_limit | площадка Binance | `1000` | Снимок для изменений стакана окна | Order book: limit ≤ 5000 |
 | venue.deposit_dust_as_min | площадка Binance | `да` (задано 08.11.2026) | depositDust — минимальная зачисляемая сумма | официальный Changelog Binance Wallet 2021-09-03: «depositDust means minimum creditable amount» (https://developers.binance.com/docs/wallet/change-log) |
 | venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
@@ -669,6 +671,7 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | --- | --- | --- | --- | --- |
 | transfer.locked_retry_ms | вся система, можно по площадке | `1000` | Тигран: «каждые 1000 мс». Удержание снимается, когда депозит набирает подтверждения сети BSC (блок ≈ 1–3 с), — секундный шаг ловит снятие без лишней задержки; запрос вывода — один в секунду. Исключения — Bybit (в документации вывода «you can only withdraw once every 10 seconds per chain/coin combination») и Gate (живой ответ «Withdrawal frequency is limited to 10s», решение 179): у площадок bybit и gate задать 10000 (считается ли отказ попыткой — в документации не сказано) | Тигран, 05.11.2026 (решение 166) |
 | transfer.locked_retries_max | вся система, можно по площадке | `10` | Тигран: «не больше 10 раз». 10 повторов по 1 с — около 10 с ожидания: за это время монета на бирже почти не дешевеет, а если удержание держится дольше — человек решает сам | Тигран, 05.11.2026 (решение 166) |
+| transfer.seen_cost | вся система | `да` | Комиссия вывода по факту ответа биржи (Binance — transactionFee) и недостача зачисления сверх неё — в затраты следующих сделок по монете с этой биржи; факта нет — как раньше | Решение 251 |
 
 ## Делистинги (решение 175)
 

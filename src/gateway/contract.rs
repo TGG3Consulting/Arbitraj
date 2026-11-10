@@ -207,6 +207,21 @@ pub trait Venue: Send + Sync {
     /// Возвращает: созданный перевод. Ошибки: адрес, права, баланс, вывод закрыт.
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer>;
 
+    /// Решение 251: дождаться, пока купленная монета станет доступна для вывода (свободно на счёте вывода ≥ amount), но не
+    /// дольше wait; ядро зовёт перед выводом, только если задана venue.withdraw_ready_wait_ms площадки. По умолчанию —
+    /// площадка доступность не сообщает: сразу ready = None (ядро выводит сразу, как раньше). Binance — событие
+    /// outboundAccountPosition потока аккаунта, по сроку — один запрос баланса REST (venues/binance/withdraw_ready.rs).
+    /// Принимает: монету (тикер площадки), сумму вывода, срок ожидания. Возвращает: WithdrawReady.
+    /// Ошибки: связь, ключи, ответ площадки (ядро тогда выводит сразу, причина — в хронологии).
+    async fn withdraw_ready(
+        &self,
+        _asset: &Asset,
+        _amount: Decimal,
+        _wait: std::time::Duration,
+    ) -> GatewayResult<crate::core::types::WithdrawReady> {
+        Ok(crate::core::types::WithdrawReady::default())
+    }
+
     /// Текущий статус вывода по идентификатору площадки.
     /// Возвращает: перевод с актуальным статусом. Ошибки: не найден, связь.
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer>;

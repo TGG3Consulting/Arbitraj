@@ -273,8 +273,11 @@ pub mod window_run;
 pub mod window_tap;
 pub mod window_view;
 pub mod window_worker;
+pub mod withdraw_block;
 pub mod withdraw_limit;
 pub mod withdraw_refused;
+pub mod withdraw_seen;
+pub mod withdraw_wait;
 pub mod worst;
 
 pub use engine::Core;

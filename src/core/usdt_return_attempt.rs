@@ -9,6 +9,8 @@
 //! Допуск (решение 227, допуск; Тигран 08.11): свободно меньше части не больше чем на usdt.return_tolerance_usd —
 //! уходит свободный остаток, в хронологию «отправлено X вместо Y …». Это единственная проверка «свободно ≥ части» на
 //! пути повтора и «Перегнать» (обе идут через attempt).
+//! Решение 249, дополнение 10.11 (п. 4): каждая попытка перепроверяет правило биржа ↔ биржа (правило могли поменять
+//! между попытками; usdt_return_deal::return_block) — запрещено: ничего не отправляет, ошибка «запрещено правилом: …».
 //! Кто вызывает: core/usdt_return_retry.rs (повторы), core/manual_usdt.rs («Перегнать»).
 //! От чего зависит: usdt_return.rs (relay_try, usdt), limits.rs (free_now), dex_account.rs, ledger.rs, deal.rs.
 //! Настройки: venue.quote_asset (через usdt_return.rs), usdt.return_tolerance_usd (площадка, где лежат USDT;
@@ -27,8 +29,8 @@ use super::usdt_return_state::UsdtReturn;
 /// Одна попытка возврата части: сумма — ровно сумма части (cap, решение 227), не свободный баланс; при нехватке в
 /// пределах допуска — свободный остаток (меньше части, строка в хронологию); кошелёк DEX — сделки. Принимает: ядро,
 /// сделку, сумму части, откуда/куда, метку попытки (к ID вывода). Возвращает: (запрошено к выводу, итог перегона —
-/// решение 236: ушло, зачислено, газ). Ошибки: сделки нет, кошелька нет, баланс не получен, свободно меньше части (чужие USDT не трогаем),
-/// перегон не состоялся (OpError).
+/// решение 236: ушло, зачислено, газ). Ошибки: сделки нет, запрещено правилом биржа ↔ биржа (решение 249), кошелька нет,
+/// баланс не получен, свободно меньше части (чужие USDT не трогаем), перегон не состоялся (OpError).
 pub async fn attempt(
     core: &Core,
     deal: &str,
@@ -40,6 +42,10 @@ pub async fn attempt(
         .get(deal)
         .cloned()
         .ok_or_else(|| OpError::from(format!("сделки {deal} нет в учёте")))?;
+    // Решение 249, дополнение 10.11 (п. 4): правило перепроверяется на каждой попытке — запрещённое не отправляется.
+    if let Some(w) = super::usdt_return_deal::return_block(core, &d, from, to) {
+        return Err(OpError::from(format!("{RULE}{w}")));
+    }
     let acc = super::dex_account::of(core, &d)?;
     let usdt = super::usdt_return::usdt(core, from)?;
     let free = super::limits::free_now(core, from, acc.as_ref(), &usdt.ticker)
@@ -58,6 +64,19 @@ pub async fn attempt(
         note(core, deal, &t).await;
     }
     Ok((amount, r))
+}
+
+/// Начало причины «запрещено правилом» (решение 249, дополнение 10.11, п. 4) — хронология и страховка.
+pub const RULE: &str = "запрещено правилом: ";
+
+/// Решение 249, дополнение 10.11 (п. 4): возврат части запрещён правилом биржа ↔ биржа (usdt_return_deal::return_block)
+/// — проверка повторов перед попыткой (usdt_return_retry.rs). Принимает: ядро, сделку, откуда, куда. Возвращает:
+/// причину «запрещено правилом: …» или None (сделки нет — None, дальше решает попытка). Ошибок нет.
+pub(super) fn rule_block(core: &Core, deal: &str, from: &VenueId, to: &VenueId) -> Option<String> {
+    let d = lk(&core.inner.deals)
+        .get(super::usdt_return_parts::parse(deal).0)
+        .cloned()?;
+    super::usdt_return_deal::return_block(core, &d, from, to).map(|w| format!("{RULE}{w}"))
 }
 
 /// Допуск нехватки возврата части на площадке (usdt.return_tolerance_usd, область — площадка, где лежат USDT).

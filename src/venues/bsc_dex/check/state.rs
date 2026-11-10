@@ -5,7 +5,7 @@
 //! (решения 30, 32).
 //! Кто вызывает: check/cycle.rs, check/taxes.rs, check/hooks_probe.rs, quote/quoter.rs (пишут), quote/direct.rs,
 //! quote/select.rs (читают).
-//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side).
+//! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side), check/deal_taxes.rs (DealTax, Overlay).
 //! Настройки: нет.
 //! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
 //! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
@@ -13,6 +13,9 @@
 //! Решение 239: pinned — копия итогов проверок нужных токенов и пулов на момент снимка котировки
 //! (venues/bsc_dex/frozen.rs): налоги монет и пулов, газ обменов и разрешений, крючки, сверка с квотером — котировка
 //! по снимку читает их такими, какими они были в момент решения, а не после нового замера.
+//! Дополнение 10.11 к 247/252 (t78, Тигран: согласовано): налоги, перепроверенные кошельком сделки, — отдельно, по id
+//! сделки (deals; check/deal_taxes.rs); общие (coins, pools.taxes) — только от кошелька строки «Пробы». Котировка и
+//! исполнение продажи ЭТОЙ сделки получают копию с наложением (over): coin() и pool() отдают налоги сделки поверх общих.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -22,6 +25,8 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
 use crate::core::types::{CoinCheck, PoolCheck, PoolRef, Side};
+
+use super::deal_taxes::{DealTax, Overlay};
 
 /// Налоги монеты пула (Entry.coin), измеренные пробным обменом ИМЕННО в этом пуле (решение 146, check/probe.rs): у
 /// токенов с налогом «только при обмене через зарегистрированные пулы» (живой случай FLOKI 04.11: продажи на 0,30 %
@@ -83,6 +88,10 @@ pub struct Checks {
     transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
     /// Газ нативного перевода BNB из кошелька (решение 62) — пробный перевод с value, check/native_probe.rs.
     native_transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
+    /// t78: итоги перепроверки налогов кошельком сделки — по (id сделки, адрес монеты) (check/deal_taxes.rs).
+    pub(super) deals: Arc<RwLock<HashMap<(String, Address), DealTax>>>,
+    /// t78: налоги продажи одной сделки поверх общих (Checks::for_exit); None — общие.
+    pub(super) over: Option<Arc<Overlay>>,
 }
 
 impl Checks {
@@ -98,8 +107,12 @@ impl Checks {
             .insert(a, c);
     }
 
-    /// Проверка монеты по адресу контракта. None — не было.
+    /// Проверка монеты по адресу контракта (t78: у копии продажи сделки — итог перепроверки кошельком сделки, если есть).
+    /// None — не было.
     pub fn coin(&self, token: &Address) -> Option<CoinCheck> {
+        if let Some(c) = self.over.as_ref().and_then(|o| o.coins.get(token)) {
+            return Some(c.clone());
+        }
         self.coins
             .read()
             .unwrap_or_else(|p| p.into_inner())
@@ -181,17 +194,34 @@ impl Checks {
             pools: Arc::new(RwLock::new(pools)),
             transfer_gas: Arc::new(RwLock::new(pick(&self.transfer_gas))),
             native_transfer_gas: Arc::new(RwLock::new(pick(&self.native_transfer_gas))),
+            deals: Default::default(),
+            over: self.over.clone(),
         }
     }
 
-    /// Факты о пуле (пустые, если проверок не было). Ошибок нет.
+    /// Факты о пуле (пустые, если проверок не было); t78: у копии продажи сделки налоги пула — из перепроверки кошельком
+    /// сделки, если пул в ней пробовался. Ошибок нет.
     pub fn pool(&self, r: &PoolRef) -> PoolFacts {
-        self.pools
+        let mut f = self
+            .pools
             .read()
             .unwrap_or_else(|p| p.into_inner())
             .get(r)
             .cloned()
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Some(t) = self.over.as_ref().and_then(|o| o.pools.get(r)) {
+            f.taxes = t.clone();
+        }
+        f
+    }
+
+    /// Налоги всех пулов этого хранилища (t78: пустое хранилище перепроверки кошельком сделки — что она измерила;
+    /// check/deal_taxes.rs). Ошибок нет.
+    pub fn pool_taxes(&self) -> HashMap<PoolRef, Option<PoolTaxes>> {
+        let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
+        m.iter()
+            .map(|(r, f)| (r.clone(), f.taxes.clone()))
+            .collect()
     }
 
     /// Изменяет факты о пуле. Принимает: ссылку и функцию. Ошибок нет.

@@ -73,7 +73,7 @@ fn transfer(venue: &str, amount: &str) -> Transfer {
 fn sell_and_relay_sales_are_button_any() {
     // Все продажи «Продать и перегнать» идут sell::market(…, BUTTON): здесь, на цели, после несостоявшегося перегона.
     assert_eq!(guard_of(BUTTON), Guard::Any);
-    // Прочие продажи по рынку (частичная покупка — executor.rs) — без пере-замера, как в решении 247.
+    // Прочие причины sell::market — без пере-замера (t78: частичная покупка — executor.rs → market_guarded с PROFITABLE).
     assert_eq!(
         guard_of("частичная покупка: продать на A выгоднее"),
         Guard::Off

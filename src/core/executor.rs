@@ -23,7 +23,8 @@
 //! Решение 147: отказ на входе (NotTradable, Busy) несёт точную причину (start_reason.rs) — в «Кандидаты» и журнал.
 //! Решение 245, дополнение п. 2: момент решения (Calc.at прошедшего кандидата) — в учёт сделки (Deal::decided_at).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
-//! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs.
+//! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
+//! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
 //! Настройки: через вызываемые модули.
 
 use crate::core::types::{Direction, Side};
@@ -294,7 +295,10 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
                     x.round_dp(4)
                 );
                 deal.note(why.clone());
-                return super::sell::market(core, deal, &why).await;
+                // Решение 247, дополнение 10.11 (t78, Тигран: согласовано): пере-замер продажи DEX при откате «мало на
+                // выходе» — по порогу «итог сделки ≥ 0» (remeasure::PROFITABLE).
+                let g = super::remeasure::PROFITABLE;
+                return super::sell::market_guarded(core, deal, &why, g).await;
             }
             super::partial::Choice::Neither(e) => {
                 let why = format!("частичная покупка: ни один путь не считается — {e}");

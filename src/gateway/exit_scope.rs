@@ -6,23 +6,32 @@
 //! измеренному выходу (проба/симуляция перед отправкой, пере-замер при откате minOut). Ставит ядро (core/trade_ops.rs:
 //! котировка продажи сделки и сама продажа), читает адаптер DEX (quote/pool_tax.rs, quote/select.rs, quote/direct.rs).
 //! Ядро о площадках не знает, адаптер — о ядре: признак живёт здесь, в шлюзе (как patience.rs exec_scope).
-//! Кто вызывает: core/trade_ops.rs (scope), venues/bsc_dex/quote/* (is_exit).
+//! Дополнение 10.11 к 247/252 (t78, Тигран: согласовано): у признака — id сделки, чьи монеты продаются (None — продажа
+//! не сделки или id не передан): адаптер DEX берёт для продажи ЭТОЙ сделки налоги, перепроверенные кошельком сделки
+//! (venues/bsc_dex/check/deal_taxes.rs), остальные — общие.
+//! Кто вызывает: core/trade_ops.rs (scope), venues/bsc_dex/quote/* (is_exit), venues/bsc_dex/check/deal_taxes.rs (deal).
 //! От чего зависит: tokio (task_local).
 //! Настройки: нет.
 
 use std::future::Future;
 
 tokio::task_local! {
-    /// true — продажа выхода из позиции (котировка или исполнение).
-    static EXIT: bool;
+    /// Продажа выхода из позиции (котировка или исполнение) и id её сделки (None — не передан).
+    static EXIT: Option<String>;
 }
 
-/// Выполняет работу как продажу выхода. Принимает: работу. Возвращает: её итог. Ошибок нет.
-pub async fn scope<F: Future>(work: F) -> F::Output {
-    EXIT.scope(true, work).await
+/// Выполняет работу как продажу выхода. Принимает: id сделки (None — не сделки или не известен), работу.
+/// Возвращает: её итог. Ошибок нет.
+pub async fn scope<F: Future>(deal: Option<&str>, work: F) -> F::Output {
+    EXIT.scope(deal.map(str::to_string), work).await
 }
 
 /// Идёт ли продажа выхода. Вне признака — нет (расчёты, покупка, циклы, сухая сделка, предпроверка). Ошибок нет.
 pub fn is_exit() -> bool {
-    EXIT.try_with(|e| *e).unwrap_or(false)
+    EXIT.try_with(|_| ()).is_ok()
+}
+
+/// Id сделки продажи выхода. None — вне признака или id не передан. Ошибок нет.
+pub fn deal() -> Option<String> {
+    EXIT.try_with(|d| d.clone()).ok().flatten()
 }

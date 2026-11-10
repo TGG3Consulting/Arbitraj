@@ -2,7 +2,7 @@
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
 //! ожидаемые поступления, счётчики каналов, сигнал «перепроверить»; кошельковое — по счетам, parts_wallet.rs) и сборка окружений для котировки, сделки и слушателей пулов.
 //! Кто вызывает: mod.rs.
-//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
+//! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, check/deal_taxes.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
 //! wallet/inflows.rs.
 //! Настройки: нет.
 
@@ -73,12 +73,14 @@ impl Parts {
         }
     }
 
-    /// Окружение котировки. Ошибок нет.
+    /// Окружение котировки. t78 (дополнение 10.11 к 247/252): идёт продажа выхода сделки (gateway/exit_scope.rs) —
+    /// итоги проверок с налогами, перепроверенными кошельком этой сделки, поверх общих (check/deal_taxes.rs for_exit).
+    /// Ошибок нет.
     pub fn quoting(&self) -> Quoting {
         Quoting {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),
-            checks: self.checks.clone(),
+            checks: self.checks.for_exit(self.ctx.account.as_deref()),
             tokens: self.tokens.clone(),
             heads: self.heads.clone(),
             gas: self.gas.clone(),

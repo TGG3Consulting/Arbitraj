@@ -7,6 +7,7 @@
 //! Настройки: tax.*, hooks.*, check.probe_usdt, dex.quoter_check_s, dex.quoter_max_diff_pct, dex.deadline_s.
 
 pub mod cycle;
+pub mod deal_taxes;
 pub mod emitter;
 pub mod fresh;
 pub mod hooks_probe;

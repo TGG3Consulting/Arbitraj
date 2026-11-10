@@ -7,6 +7,9 @@
 //! Ошибка настройки — одна запись в журнал и одно событие dex.check_not_configured на каждую разную причину.
 //! Кто вызывает: check/tax_cycle.rs.
 //! От чего зависит: check/taxes.rs, check/tax_wallet.rs (кошелёк сделки у перепроверки после отката продажи выхода), check/state.rs, pools/listen.rs (Pools), pools/progress.rs, node/heads.rs.
+//! t78 (дополнение 10.11 к 247/252, Тигран: согласовано): монета с кошельком сделки проверяется им отдельно (итог — только
+//! для продажи этой сделки, tax_wallet::deal_check; вид итога — Pass::deal_done), и, как до t77, кошельком строки
+//! «Пробы» — общие налоги, событие ядру, журнал и счётчики прохода.
 //! Настройки: через вызываемые.
 
 use std::collections::{HashMap, HashSet};
@@ -60,6 +63,8 @@ pub struct Pass {
     /// Монеты, по которым проверка была (итог или причина ожидания — не «пулы загружаются»): адрес и вид итога —
     /// для сводки первого прохода (tax_cycle.rs).
     pub done: Vec<(Address, Res)>,
+    /// t78: итоги проверок кошельком сделки (tax_wallet::deal_check) — снятие кошелька и повтор (tax_cycle.rs).
+    pub deal_done: Vec<(Address, Res)>,
 }
 
 /// Вид итога монеты для сводки первого прохода.
@@ -73,15 +78,15 @@ pub enum Res {
 
 /// Проверяет монеты списка (см. шапку). Монета, чьи пулы ещё загружаются (pools/loading.rs), не проверяется — ждёт
 /// своих пулов, а не пулов всех монет (решение 61). Принимает: окружение, монеты, USDT, уже записанные ошибки
-/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой), счета сделок у монет на
-/// перепроверке кошельком сделки (check/tax_wallet.rs; пусто — все кошельком строки «Пробы»). Ошибок нет.
+/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой), кошельки сделок у монет на
+/// перепроверке ещё и кошельком сделки (check/tax_wallet.rs; пусто — только кошельком строки «Пробы»). Ошибок нет.
 pub async fn check(
     p: &Pools,
     list: &[(Address, String)],
     usdt: Address,
     seen: &mut HashSet<String>,
     firsts: &HashSet<Address>,
-    accounts: &HashMap<Address, String>,
+    accounts: &HashMap<Address, super::recheck::By>,
 ) -> Pass {
     let mut pass = Pass::default();
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
@@ -132,16 +137,16 @@ pub async fn check(
                 return pass;
             }
         }
-        // Дополнение 10.11 к 247/252: перепроверка после отката продажи выхода — кошельком сделки (tax_wallet.rs).
-        let by = super::tax_wallet::ctx_for(&p.ctx, accounts, addr);
-        let ctx = by.as_ref().unwrap_or(&p.ctx);
+        // Дополнение 10.11 к 247/252: перепроверка после отката продажи выхода — и кошельком сделки; t78: его итог —
+        // только для продажи этой сделки (tax_wallet.rs, deal_taxes.rs), общие — ниже, кошельком строки «Пробы».
+        if let Some(by) = accounts.get(addr) {
+            let r = super::tax_wallet::deal_check(p, &sources, by, ticker, *addr, usdt).await;
+            pass.deal_done.push((*addr, r));
+        }
         let (c, out) = taxes::check_coin(
-            ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
+            &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
         )
         .await;
-        if by.is_some() {
-            super::tax_wallet::log(ctx, ticker, &out).await;
-        }
         let prev = p.checks.coin(addr).map(|c| c.taxes);
         match out {
             Outcome::Known(_) => {

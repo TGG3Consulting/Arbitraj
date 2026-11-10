@@ -15,6 +15,8 @@
 //! От чего зависит: engine.rs, worst.rs, rules_apply.rs, gas_stats.rs, convert.rs, risk.rs, outcome_resolve.rs.
 //! Покупка с бюджетом (решение 66): qty × худшая цена (лимит биржи, допуск DEX) больше бюджета — ордер не ставится.
 //! Решение 177: у продажи — признак выхода из позиции (TradeRequest.exit_position, продажа DEX по квотеру).
+//! t78 (дополнение 10.11 к 247/252): признак продажи выхода (gateway/exit_scope.rs) несёт id сделки — у продажи сделки и
+//! её котировки (deal_quote); адаптер DEX берёт по нему налоги, перепроверенные кошельком сделки.
 //! Решение 231: «исход неизвестен» с «чем найти» — после паузы площадки бот ищет ордер сам (outcome_resolve.rs); найден
 //! окончательный итог — разбирается как обычный ответ на ордер; не найден за срок — как раньше, ручная проверка.
 //! Настройки: exec.dex_slippage_pct (по площадке DEX), venue.quote_asset; risk.outcome_poll_s, risk.outcome_max_s
@@ -166,7 +168,8 @@ pub async fn trade_seen(
                     Ok(x) => {
                         // Решение 247, п. В: продажа — выход из позиции (как exit_position), пороги входа не нужны.
                         let res = if side == Side::Sell {
-                            crate::gateway::exit_scope::scope(x.trade(req.clone())).await
+                            crate::gateway::exit_scope::scope(Some(deal), x.trade(req.clone()))
+                                .await
                         } else {
                             x.trade(req.clone()).await
                         };
@@ -289,14 +292,9 @@ pub async fn deal_quote(
     deal: &super::deal::Deal,
 ) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
     let acc = super::dex_account::of(core, deal).map_err(OpError::not_configured)?;
-    sell_quote(
-        core,
-        acc.as_ref(),
-        &deal.at,
-        &deal.direction.asset,
-        deal.qty,
-    )
-    .await
+    let (v, a) = (&deal.at, &deal.direction.asset);
+    // t78: продажа ЭТОЙ сделки — адаптер DEX берёт её налоги, перепроверенные кошельком сделки (gateway/exit_scope.rs).
+    sell_quote_of(core, acc.as_ref(), v, a, deal.qty, Some(&deal.id)).await
 }
 
 /// Сколько получим чистыми (USDT), если продать qty сейчас: котировка × количество минус затраты
@@ -332,6 +330,19 @@ pub async fn sell_quote(
     a: &Asset,
     qty: Decimal,
 ) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
+    sell_quote_of(core, acc, v, a, qty, None).await
+}
+
+/// Как sell_quote; `deal` — id сделки, чьи монеты продаются (t78: признак продажи выхода несёт его адаптеру —
+/// gateway/exit_scope.rs; None — оценка не продажи сделки). Принимает и возвращает: как sell_quote.
+async fn sell_quote_of(
+    core: &Core,
+    acc: Option<&DexAccountId>,
+    v: &VenueId,
+    a: &Asset,
+    qty: Decimal,
+    deal: Option<&str>,
+) -> Result<(Decimal, Quote, Option<super::exec_book::Book>), OpError> {
     let x = core
         .inner
         .deps
@@ -354,7 +365,7 @@ pub async fn sell_quote(
     } else {
         let on = super::venue_ticker::on_venue(core, a, v);
         // Решение 247, п. В: оценка продажи монет сделки — продажа выхода (пороги входа адаптер не применяет).
-        let exit = crate::gateway::exit_scope::scope(x.quote(&on, Side::Sell, qty));
+        let exit = crate::gateway::exit_scope::scope(deal, x.quote(&on, Side::Sell, qty));
         let q = crate::gateway::patience::exec_scope(exit)
             .await
             .map_err(|e| OpError::keep_not_configured(&e, format!("{}: {}", v.0, e.message)))?;

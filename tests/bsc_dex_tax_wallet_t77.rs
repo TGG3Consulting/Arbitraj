@@ -3,7 +3,7 @@
 //! отката продажи выхода идёт кошельком сделки. Адреса — из фактов сервера (docs/notes/tax-trace-2026-11-10.md): монета
 //! PIG, кошелёк сделки w2; количество на w2 — зачисление сделки 20261109202626272PIG (7065220091 PIG, журнал бота,
 //! tests/remeasure_247.rs), PIG — 9 знаков (Transfer «6711960084.822322376» в tax-trace).
-//! 1) очередь налогов помнит счёт сделки у монеты (coins_by), кнопка «Перепроверить» — без счёта (строка «Пробы»);
+//! 1) очередь налогов помнит счёт сделки и id сделки у монеты (coins_by; t78), кнопка «Перепроверить» — без счёта (строка «Пробы»);
 //!    очереди крючков и квотера счёт не получают;
 //! 2) счёт снимается после итога проверки или «не задана настройка», остаётся при ожидании (повтор тем же кошельком);
 //! 3) проба: баланс монеты кошелька до и после покупки в той же симуляции, купленное — прирост (на w2 лежат монеты
@@ -21,7 +21,7 @@ use serde_json::json;
 
 use arb::venues::bsc_dex::check::probe_buy::{Head, bought, buy_head};
 use arb::venues::bsc_dex::check::probe_calls as pc;
-use arb::venues::bsc_dex::check::recheck::Recheck;
+use arb::venues::bsc_dex::check::recheck::{By, Recheck};
 use arb::venues::bsc_dex::check::simulate::CallResult;
 use arb::venues::bsc_dex::check::tax_pass::Res;
 use arb::venues::bsc_dex::check::tax_wallet::settle;
@@ -33,6 +33,14 @@ const W2: Address = address!("a9C3CACff416e644Dec51986DFD0E17Cc2132817");
 /// Пара PIG/WBNB (tax-trace) — здесь только метка адресата вызовов квотера и покупки.
 const POOL: Address = address!("51dcaf423fe39f620a13379cd26821cf8d433308");
 
+/// Кошелёк сделки w2 и сделка PIG 09.11 (t78: очередь помнит и id сделки).
+fn by_w2() -> By {
+    By {
+        account: "w2".into(),
+        deal: "20261109202626272PIG".into(),
+    }
+}
+
 /// Итог balanceOf (execution-apis CallResult: status 0x1, returnData — uint256 по ABI).
 fn balance_result(v: U256) -> CallResult {
     let data = format!("0x{:064x}", v);
@@ -42,12 +50,12 @@ fn balance_result(v: U256) -> CallResult {
 #[test]
 fn tax_queue_keeps_deal_account() {
     let r = Recheck::default();
-    r.coins_by(&[PIG], Some("w2"));
+    r.coins_by(&[PIG], Some(by_w2()));
     r.coins(&[WBNB]);
     let (coins, new_pools, by) = r.taxes.take_all();
     assert!(coins.contains(&PIG) && coins.contains(&WBNB));
     assert!(!new_pools);
-    assert_eq!(by.get(&PIG).map(String::as_str), Some("w2"));
+    assert_eq!(by.get(&PIG), Some(&by_w2()));
     assert!(!by.contains_key(&WBNB), "кнопка — кошельком строки «Пробы»");
     // Крючки и квотер — без счёта.
     let (h, _, hb) = r.hooks.take_all();
@@ -61,15 +69,15 @@ fn tax_queue_keeps_deal_account() {
 
 #[test]
 fn account_released_after_verdict() {
-    let mut acc = HashMap::from([(PIG, "w2".to_string())]);
+    let mut acc = HashMap::from([(PIG, by_w2())]);
     settle(&mut acc, &[(PIG, Res::Wait)]);
     assert!(acc.contains_key(&PIG), "ожидание — повтор тем же кошельком");
     settle(&mut acc, &[(PIG, Res::Ok)]);
     assert!(acc.is_empty());
-    let mut acc = HashMap::from([(PIG, "w2".to_string())]);
+    let mut acc = HashMap::from([(PIG, by_w2())]);
     settle(&mut acc, &[(PIG, Res::Failed)]);
     assert!(acc.is_empty());
-    let mut acc = HashMap::from([(PIG, "w2".to_string())]);
+    let mut acc = HashMap::from([(PIG, by_w2())]);
     settle(&mut acc, &[(PIG, Res::Config)]);
     assert!(acc.is_empty());
 }

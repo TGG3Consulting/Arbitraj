@@ -18,6 +18,8 @@
 //! помнит счёт DEX сделки у такой монеты (coins_by), цикл налогов пробует ею (check/tax_cycle.rs). Кошелёк строки
 //! «Пробы» и кошелёк сделки — разные адреса (факт t71), налог reflection-монет может зависеть от отправителя и его
 //! баланса. Кнопка «Перепроверить», «пул готов» и полный проход — как раньше, кошельком строки «Пробы».
+//! t78 (дополнение 10.11, Тигран: согласовано): очередь помнит и id сделки (By) — итог кошелька сделки хранится только
+//! для продажи этой сделки (check/deal_taxes.rs); общие налоги монеты та же очередь перепроверяет кошельком «Пробы».
 //! Настроек нет.
 
 use std::collections::{HashMap, HashSet};
@@ -27,12 +29,20 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::Notify;
 
+/// Чьим кошельком перепроверить налоги монеты после отката продажи выхода: счёт DEX сделки (решение 132) и id сделки
+/// (t78: итог — только для продажи этой сделки, check/deal_taxes.rs).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct By {
+    pub account: String,
+    pub deal: String,
+}
+
 /// Очередь одного цикла.
 #[derive(Clone, Default)]
 pub struct Queue {
-    /// Монеты, были ли новые пулы, счёт DEX сделки у монеты (перепроверка кошельком сделки — только очередь налогов).
+    /// Монеты, были ли новые пулы, кошелёк сделки у монеты (перепроверка кошельком сделки — только очередь налогов).
     #[allow(clippy::type_complexity)]
-    inner: Arc<Mutex<(HashSet<Address>, bool, HashMap<Address, String>)>>,
+    inner: Arc<Mutex<(HashSet<Address>, bool, HashMap<Address, By>)>>,
     notify: Arc<Notify>,
 }
 
@@ -48,9 +58,9 @@ impl Queue {
         (coins, new_pools)
     }
 
-    /// Забирает запрос целиком: адреса монет, были ли новые пулы и счёт DEX сделки у монет, которые надо перепроверить
-    /// кошельком сделки (coins_by). Ошибок нет.
-    pub fn take_all(&self) -> (HashSet<Address>, bool, HashMap<Address, String>) {
+    /// Забирает запрос целиком: адреса монет, были ли новые пулы и кошелёк сделки у монет, которые надо перепроверить
+    /// и кошельком сделки (coins_by). Ошибок нет.
+    pub fn take_all(&self) -> (HashSet<Address>, bool, HashMap<Address, By>) {
         let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         (
             std::mem::take(&mut g.0),
@@ -59,15 +69,15 @@ impl Queue {
         )
     }
 
-    /// Ставит монеты в очередь; `account` — счёт DEX сделки (перепроверка его кошельком), None — кошельком строки
-    /// «Пробы». Ошибок нет.
-    fn push(&self, coins: &[Address], new_pools: bool, account: Option<&str>) {
+    /// Ставит монеты в очередь; `by` — кошелёк сделки (перепроверка и им, итог — для продажи сделки), None — только
+    /// кошельком строки «Пробы». Ошибок нет.
+    fn push(&self, coins: &[Address], new_pools: bool, by: Option<&By>) {
         {
             let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
             g.0.extend(coins.iter().copied());
             g.1 |= new_pools;
-            if let Some(id) = account {
-                g.2.extend(coins.iter().map(|a| (*a, id.to_string())));
+            if let Some(b) = by {
+                g.2.extend(coins.iter().map(|a| (*a, b.clone())));
             }
         }
         self.notify.notify_one();
@@ -88,11 +98,11 @@ impl Recheck {
         self.coins_by(coins, None);
     }
 
-    /// Как coins, налоги — кошельком счёта сделки `account` (решения 247/252, дополнение 10.11: перепроверка после
-    /// отката продажи выхода); None — как coins. Крючки и сверка с квотером от кошелька не зависят — как coins.
-    /// Ошибок нет.
-    pub fn coins_by(&self, coins: &[Address], account: Option<&str>) {
-        self.taxes.push(coins, false, account);
+    /// Как coins, налоги — ещё и кошельком сделки `by` (решения 247/252, дополнение 10.11: перепроверка после отката
+    /// продажи выхода; t78 — итог кошелька сделки только для её продажи, общие — кошельком «Пробы»); None — как coins.
+    /// Крючки и сверка с квотером от кошелька не зависят — как coins. Ошибок нет.
+    pub fn coins_by(&self, coins: &[Address], by: Option<By>) {
+        self.taxes.push(coins, false, by.as_ref());
         self.hooks.push(coins, false, None);
         self.quoter.push(coins, false, None);
     }

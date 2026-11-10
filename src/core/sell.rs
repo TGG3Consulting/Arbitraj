@@ -22,10 +22,12 @@
 //! кнопки — после закрытия, с возвратом USDT (manual_outcome.rs).
 //! Решение 247: продажа DEX откатилась на пробе по minOut — адаптер пере-меряет реальный выход и повторяет с minOut от
 //! него, если выход не ниже границы (TradeRequest.remeasure): кнопка — всегда (без порога), режим застрявшей
-//! монеты — по своему порогу убытка (market_guarded ← stuck.rs, relay_here.rs; граница — core/remeasure.rs); первая
-//! продажа сделки (sell_or_stuck) и остальные — без пере-замера, как раньше. Дополнение 10.11 (Тигран: согласовано):
-//! «Продать и перегнать» (manual_relay.rs) — все её продажи кнопкой (guard_of: Guard::Any); продажа на цели сразу после
-//! автоматического «Перегона» (relay.rs → sell_after_relay) — с пере-замером по условию «выгодно» (порог убытка 0).
+//! монеты — по своему порогу убытка (market_guarded ← stuck.rs, relay_here.rs; граница — core/remeasure.rs). Дополнение
+//! 10.11 (Тигран: согласовано): «Продать и перегнать» (manual_relay.rs) — все её продажи кнопкой (guard_of: Guard::Any);
+//! продажа на цели сразу после автоматического «Перегона» (relay.rs → sell_after_relay) — с пере-замером по условию
+//! «выгодно» (порог убытка 0). Дополнение 10.11 (t78, Тигран: согласовано): по тому же порогу «итог сделки ≥ 0»
+//! (remeasure::PROFITABLE) — и первая продажа сделки и «Вернуть боту» (sell_or_stuck), продажа после частичной покупки
+//! (executor.rs → market_guarded), «Ожидание» по истечении stuck.wait_ms (stuck.rs).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs, remeasure.rs.
@@ -53,20 +55,21 @@ pub fn profitable(deal: &Deal, value: Decimal) -> bool {
     deal.result_if(value) >= Decimal::ZERO
 }
 
-/// Продать сейчас, если выгодно, иначе — режим застрявшей монеты. Решение 247: без пере-замера (первая продажа сделки,
-/// «Вернуть боту»). Ошибок нет.
+/// Продать сейчас, если выгодно, иначе — режим застрявшей монеты (первая продажа сделки — executor.rs, «Вернуть боту» —
+/// manual_return.rs). Пере-замер продажи DEX при откате «мало на выходе» — в пределах того же условия «выгодно»: итог
+/// сделки ≥ 0, порог убытка 0 (remeasure::PROFITABLE; решение 247, дополнение 10.11, t78 — Тигран: согласовано); итог
+/// ниже — отказ продажи, дальше как раньше. Ошибок нет.
 pub async fn sell_or_stuck(core: &Core, deal: Deal) {
-    sell_or_stuck_guarded(core, deal, Guard::Off).await
-}
-
-/// Продажа на площадке-цели сразу после автоматического «Перегона» (relay.rs): как sell_or_stuck, но с пере-замером
-/// продажи DEX при откате «мало на выходе» в пределах того же условия «выгодно» — итог сделки ≥ 0, порог убытка 0
-/// (remeasure::PROFITABLE; решение 247, дополнение 10.11 — Тигран: согласовано). Ошибок нет.
-pub async fn sell_after_relay(core: &Core, deal: Deal) {
     sell_or_stuck_guarded(core, deal, super::remeasure::PROFITABLE).await
 }
 
-/// Выгодно — продажа с пере-замером по порогу `g` (Guard::Off — без него), иначе — режим застрявшей монеты.
+/// Продажа на площадке-цели сразу после автоматического «Перегона» (relay.rs): как sell_or_stuck — с пере-замером по
+/// условию «выгодно» (remeasure::PROFITABLE; решение 247, дополнение 10.11 — Тигран: согласовано). Ошибок нет.
+pub async fn sell_after_relay(core: &Core, deal: Deal) {
+    sell_or_stuck(core, deal).await
+}
+
+/// Выгодно — продажа с пере-замером по порогу `g`, иначе — режим застрявшей монеты.
 /// Принимает: ядро, сделку, порог пере-замера. Ошибок нет.
 async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
     let value = super::trade_ops::deal_quote(core, &deal).await;
@@ -85,7 +88,8 @@ async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
 }
 
 /// Продажа по рынку (по текущей котировке; худшая цена — trade_ops). Решение 247: кнопка человека (BUTTON) — с
-/// пере-замером без порога (remeasure::Guard::Any), прочие — без пере-замера (market_guarded — с порогом).
+/// пере-замером без порога (remeasure::Guard::Any), прочие причины — без пере-замера (автоматика продаёт через
+/// market_guarded со своим порогом; t78 — по коду других вызовов market, кроме кнопки, нет).
 /// Ошибок нет: не вышло — сделка остановлена, монеты остаются на площадке (видно на экране «Сделки»).
 pub async fn market(core: &Core, deal: Deal, why: &str) {
     market_guarded(core, deal, why, guard_of(why)).await

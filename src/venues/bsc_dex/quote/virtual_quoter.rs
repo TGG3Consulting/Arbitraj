@@ -8,7 +8,8 @@
 //! «по ответу сети», как у официального QuoterV2, но без поиска пула по фабрике. В сеть ничего не уходит.
 //! Пул взял меньше входа — ликвидности до предела цены не хватило: это «не хватает ликвидности» (как SPL у QuoterV2).
 //! Включается настройкой dex.quoter_virtual [DEX] = да; не задана или «нет» — как раньше (квотер DEX из dex.quoter).
-//! Кто вызывает: quote/quoter.rs (out), pools/families.rs (required — dex.quoter не нужен).
+//! Кто вызывает: quote/quoter.rs (out), pools/families.rs (required — dex.quoter не нужен), exec/dry_surplus_tail.rs
+//! (data, address, runtime — квотер в eth_simulateV1, решение 252 вариант «б»).
 //! От чего зависит: node/rpc.rs, pools/registry.rs, pools/families.rs (Proto), sha2, contracts/out/VirtualQuoter.*.
 //! Настройки: dex.quoter_virtual [DEX] (необязательная).
 
@@ -106,6 +107,19 @@ pub fn decode(raw: &[u8], amount: U256) -> Option<Result<U256, &'static str>> {
     })
 }
 
+/// Вход вызова quoteExactIn (пул, направление, сумма) — для eth_call и для eth_simulateV1 с подменой кода по address()
+/// (exec/dry_surplus_cut.rs). Ошибок нет.
+pub fn data(pool: Address, zero_for_one: bool, amount: U256) -> Bytes {
+    Bytes::from(
+        quoteExactInCall {
+            pool,
+            zeroForOne: zero_for_one,
+            amountIn: amount,
+        }
+        .abi_encode(),
+    )
+}
+
 /// Выход пула на точный вход по его собственному коду. Принимает: окружение, запись пула, токен входа, сумму.
 /// Ошибки: Internal (код квотера, ссылка пула не контракт, вид не поддержан), узел (откат пула — его текст),
 /// BadResponse (ответ не по ABI), SwapReverted с текстом SHORT — ликвидности не хватает.
@@ -123,18 +137,13 @@ pub async fn out(ctx: &Ctx, e: &Entry, token_in: Address, amount: U256) -> Gatew
         return Err(ctx.err(ErrorCode::Internal, "виртуальный квотер: пул не контракт"));
     };
     let code = runtime().map_err(|m| ctx.err(ErrorCode::Internal, m))?;
-    let data = quoteExactInCall {
-        pool,
-        zeroForOne: token_in == e.pool.token0,
-        amountIn: amount,
-    }
-    .abi_encode();
+    let data = data(pool, token_in == e.pool.token0, amount);
     let at = address();
     let raw: Bytes = rpc::call(
         ctx,
         "eth_call",
         json!([
-            { "to": at, "input": Bytes::from(data) },
+            { "to": at, "input": data },
             "latest",
             { at.to_string(): { "code": code } }
         ]),

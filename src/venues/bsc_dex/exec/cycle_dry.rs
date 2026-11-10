@@ -9,8 +9,8 @@
 //! У цикла вход и выход — один токен: dry_sim меряет прирост базовой у кошелька, «выход по симуляции» = вход + прирост
 //! (при убытке исполнитель и BALANCE_CHECK откатывают обмен — отказ с текстом узла).
 //! Кто вызывает: venue.rs (dex_dry_cycle).
-//! От чего зависит: exec/{cycle_gate, cycle_steps, cycle_bundle, dry_build, dry_sim}.rs, exec/executor/{dry, mod}.rs,
-//! quote/{cycle_legs, cycle_cost}.rs, wallet/signer.rs.
+//! От чего зависит: exec/{cycle_gate, cycle_steps, cycle_bundle, dry_build, dry_sim, dry_surplus_cut}.rs,
+//! exec/executor/{dry, mod}.rs, quote/{cycle_legs, cycle_cost}.rs, wallet/signer.rs.
 //! Настройки: через вызываемые — exec.executor_address, verify.*, dex.*, dex_dex.min_profit_usd, dex.multicall3.
 
 use alloy_primitives::U256;
@@ -27,6 +27,7 @@ use super::cycle_gate::{self, Form};
 use super::cycle_steps::{self, exec_steps, net_check, units};
 use super::dry_build::{Built, Ready};
 use super::dry_sim::{self, Io};
+use super::dry_surplus_cut;
 use super::executor::{self, dry::DryMode};
 use super::{cycle_bundle, cycle_exec};
 
@@ -137,6 +138,10 @@ async fn fill(
     r.gas_approve = Some(sim.gas_approve);
     r.approvals = sim.approvals;
     r.funding = sim.funding;
+    if let Some(s) = &sim.surplus {
+        let name = &req.cycle.base_ticker;
+        r.notes.push(dry_surplus_cut::line(s, dec, dec, name));
+    }
     if let Some(why) = sim.reason {
         r.reason = Some(why);
         return Ok(());

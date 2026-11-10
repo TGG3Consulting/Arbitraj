@@ -6,8 +6,9 @@
 //! перевод сдвинул бы его баланс против резервов), с наибольшим балансом этого токена ≥ суммы. Сумма перевода —
 //! недостача, увеличенная на налог токена (наибольший из налога покупки и перевода — перевод от пула токен может
 //! считать покупкой), чтобы после налога у кошелька было не меньше входа; что реально дошло — меряет симуляция.
-//! Кто вызывает: exec/dry_sim.rs.
-//! От чего зависит: pools/registry.rs, node/call.rs (view_many: Multicall3 / пачка), node/abi.rs (IERC20), wallet/balances.rs.
+//! Кто вызывает: exec/dry_sim.rs (plan).
+//! От чего зависит: pools/registry.rs, node/call.rs (view_many: Multicall3 / пачка), node/abi.rs (IERC20),
+//! exec/dry_build.rs (entries — пулы маршрута).
 //! Настройки: нет (через вызываемые — dex.multicall3).
 
 use alloy_primitives::{Address, U256};
@@ -20,6 +21,34 @@ use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::quote::Quoting;
+use super::dry_build::{Ready, entries};
+
+/// Пополнение кошелька в симуляции: пул-источник и сумма перевода. Принимает: котировку, сделку (пулы маршрута
+/// исключаются), токен, (есть у кошелька, нужно), налоги токена. Возвращает: Ok(Ok((источник, сумма))) или
+/// Ok(Err(причина)) — пополнение невозможно (налог ≥ 100 %, пула-источника нет). Ошибки: узел (balanceOf).
+pub async fn plan(
+    q: &Quoting,
+    r: &Ready,
+    token: Address,
+    (have, need): (U256, U256),
+    taxes: Option<&TokenTaxes>,
+) -> GatewayResult<Result<(Address, U256), String>> {
+    let route: Vec<_> = entries(&r.legs)
+        .iter()
+        .map(|e| e.pool.reference.clone())
+        .collect();
+    let Some(amount) = gross(need.saturating_sub(have), taxes) else {
+        return Ok(Err(
+            "налог токена входа не позволяет посчитать пополнение".into()
+        ));
+    };
+    Ok(match source(q, token, &route, amount).await? {
+        Some(src) => Ok((src, amount)),
+        None => Err(format!(
+            "у кошелька {have} единиц входа, нужно {need}; пула-источника (V2/V3 вне маршрута) с балансом ≥ {amount} нет — проверьте на сумме не больше баланса"
+        )),
+    })
+}
 
 /// Пул-источник токена для перевода в симуляции. Принимает: котировку (реестр), токен, пулы маршрута (исключаются),
 /// нужную сумму (минимальные единицы). Возвращает: адрес пула или None — подходящего нет. Ошибки: узел (balanceOf).

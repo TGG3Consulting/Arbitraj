@@ -3,15 +3,18 @@
 //! сборки от имени кошелька бота: [перевод входа от пула-источника, если у кошелька не хватает — exec/dry_fund.rs] →
 //! balanceOf входа (сколько у кошелька) → баланс выхода до → разрешения (approve / Permit2, если нужны) → обмен
 //! (execute Universal Router; у бандла — все его транзакции по порядку, разметка exec/bundle_sim.rs) → баланс выхода
-//! после. Выход по симуляции = после − до; газ — gasUsed вызовов; «кто меняет» (решение 59) — check/emitter::missing
+//! после. При пополнении (решение 252, вариант «б», Тигран 10.11) — ещё замер излишка пар первого шага (balanceOf −
+//! резерв до и после перевода, резервы после обмена; только чтение — exec/dry_surplus.rs) и поправка выхода на прирост,
+//! созданный самим пополнением (exec/dry_surplus_cut.rs). Выход по симуляции = после − до [− поправка]; газ — gasUsed
+//! вызовов; «кто меняет» (решение 59) — check/emitter::missing
 //! БЕЗ исключения пула (сухая сделка ничего не меняет в справочнике). Ничего не подписывается и не отправляется.
 //! Выход BNB (покупка нативной монеты, UNWRAP_WETH) — Multicall3.getEthBalance (dex.multicall3); не задан — не измерен.
 //! Через исполнитель ArbExecutor (решение 122, часть X): разрешение ERC-20 исполнителю → execute; не развёрнут —
 //! его код и слот владельца подставляются подменой состояния (check/simulate.rs::run_with, stateOverrides).
 //! Разбор итогов — exec/dry_judge.rs.
 //! Кто вызывает: exec/dry_swap.rs.
-//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/{dry_build, dry_fund, bundle_sim,
-//! plan, ur}.rs, wallet/balances.rs, node/multicall.rs (адрес).
+//! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/{dry_build, dry_fund, dry_surplus,
+//! dry_surplus_cut, bundle_sim, plan, ur}.rs, wallet/balances.rs, node/multicall.rs (адрес).
 //! Настройки: через вызываемые — dex.multicall3.
 //!
 //! eth_simulateV1 — execution-apis 16caee27 src/eth/execute.yaml#L137-L260; getEthBalance —
@@ -29,9 +32,11 @@ use super::super::node::multicall;
 use super::super::quote::Quoting;
 use super::super::wallet::balances;
 use super::bundle_sim::build_sim;
-use super::dry_build::{Built, Ready, entries};
+use super::dry_build::{Built, Ready};
 use super::dry_fund;
 use super::dry_judge::judge;
+use super::dry_surplus;
+use super::dry_surplus_cut::{self, Surplus};
 
 alloy::sol! {
     interface IMulticall3Eth {
@@ -56,6 +61,8 @@ pub struct Sim {
     pub gas_approve: u64,
     pub approvals: usize,
     pub funding: Option<String>,
+    /// Излишек пары от пополнения (решение 252, вариант «б»): out уже уменьшен на cut; None — прироста нет.
+    pub surplus: Option<Surplus>,
     /// Причина отказа; None — все вызовы прошли и обмен сделали пулы маршрута.
     pub reason: Option<String>,
 }
@@ -67,27 +74,26 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let mut sim = Sim::default();
     let mut calls: Vec<Call> = Vec::new();
     let mut values: Vec<(usize, U256)> = Vec::new();
+    let (mut watch, mut funded) = (Vec::new(), U256::ZERO);
     if let Some(t) = io.token_in {
         let have = balances::token_units(ctx, t, wallet).await?;
         if have >= io.need {
             sim.funding = Some(format!("баланс кошелька ({have} ≥ {} единиц)", io.need));
         } else {
-            let route: Vec<_> = entries(&r.legs)
-                .iter()
-                .map(|e| e.pool.reference.clone())
-                .collect();
-            let Some(amount) = dry_fund::gross(io.need - have, io.taxes_in) else {
-                sim.reason = Some("налог токена входа не позволяет посчитать пополнение".into());
-                return Ok(sim);
+            let (src, amount) = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
+                Ok(v) => v,
+                Err(why) => {
+                    sim.reason = Some(why);
+                    return Ok(sim);
+                }
             };
-            let Some(src) = dry_fund::source(q, t, &route, amount).await? else {
-                sim.reason = Some(format!(
-                    "у кошелька {have} единиц входа, нужно {}; пула-источника (V2/V3 вне маршрута) с балансом ≥ {amount} нет — проверьте на сумме не больше баланса",
-                    io.need
-                ));
-                return Ok(sim);
-            };
-            calls.push(pc::transfer(src, t, wallet, amount));
+            // Решение 252, вариант «б»: излишек пар первого шага до и после пополнения (exec/dry_surplus.rs).
+            watch = dry_surplus::around(
+                &mut calls,
+                (r, wallet, t),
+                pc::transfer(src, t, wallet, amount),
+            );
+            funded = amount;
             sim.funding = Some(format!(
                 "перевод {amount} единиц из пула {src:#x} внутри симуляции (у кошелька {have}, нужно {})",
                 io.need
@@ -107,6 +113,7 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         calls.push(c);
         calls.len() - 1
     });
+    dry_surplus::after_swap(&mut calls, wallet, &mut watch);
     // Исполнитель не развёрнут (режим «через исполнитель», решение 122): его код и владелец — подменой состояния.
     let over: Vec<_> = match &r.built {
         Built::Exec(x) => x.over.iter().cloned().collect(),
@@ -119,6 +126,7 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         sim.out = read(before)
             .zip(read(after))
             .map(|(a, b)| b.saturating_sub(a));
+        dry_surplus_cut::apply(ctx, r, &watch, &res, funded, &mut sim).await;
     }
     Ok(sim)
 }

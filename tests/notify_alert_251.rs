@@ -243,6 +243,63 @@ fn withdraw_rejected() {
     );
 }
 
+/// Изменение настройки для пачки. Ошибок нет.
+fn ch(
+    name: &str,
+    old: Option<serde_json::Value>,
+    new: Option<serde_json::Value>,
+    scope: Scope,
+) -> Change {
+    Change {
+        name: name.into(),
+        scope,
+        old,
+        new,
+        by: "интерфейс".into(),
+        at: Utc::now(),
+    }
+}
+
+#[test]
+fn settings_batch_is_one_message() {
+    let batch = vec![
+        ch(
+            "stuck.max_loss_pct",
+            Some(json!(5)),
+            Some(json!(7)),
+            Scope::Global,
+        ),
+        ch(
+            "exec.dex_slippage_pct",
+            Some(json!(0.5)),
+            Some(json!(0.7)),
+            Scope::Global,
+        ),
+        ch(
+            "notify.event.enabled",
+            Some(json!(true)),
+            Some(json!(false)),
+            Scope::Event("deal.candidate".into()),
+        ),
+        ch(
+            "notify.manual_repeat_s",
+            Some(json!(300)),
+            None,
+            Scope::Global,
+        ),
+    ];
+    let text = arb::notify::settings_watch::text(&batch);
+    println!(
+        "--- 4. изменения настроек пачкой ---\n{}\n",
+        telegram(&text)
+    );
+    assert_eq!(
+        text,
+        "ℹ️ Изменены настройки: 4\nКто: интерфейс\n• stuck.max_loss_pct: 5 → 7\n• exec.dex_slippage_pct: 0.5 → 0.7\n• notify.event.enabled [event:deal.candidate]: true → false\n• notify.manual_repeat_s: 300 → не задано"
+    );
+    assert!(arb::notify::settings_watch::text(&batch[..1]).starts_with("ℹ️ Изменена настройка\n"));
+}
+
 #[test]
 fn html_escapes_and_compacts() {
     assert_eq!(html("⚠️ a<b> & c"), "<b>⚠️ a&lt;b&gt; &amp; c</b>");

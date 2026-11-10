@@ -62,6 +62,16 @@ impl Notifier {
         self.deliver(code, venue, text, None).await;
     }
 
+    /// Как send, но ответ 429 — одна повторная попытка ровно через parameters.retry_after (ResponseParameters,
+    /// https://core.telegram.org/bots/api#responseparameters). Решение 251: склейка изменений настроек
+    /// (notify/settings_watch.rs) — 09.11 19:12 пачка изменений получила 429. Ошибок нет: всё — в журнал.
+    pub async fn send_retry(&self, code: &str, venue: Option<&str>, text: &str) {
+        if let Some(s) = self.deliver(code, venue, text, None).await {
+            tokio::time::sleep(std::time::Duration::from_secs(s)).await;
+            self.deliver(code, venue, text, None).await;
+        }
+    }
+
     /// Отправляет событие с кнопками из каталога (решение 37), если оно включено.
     /// Принимает: код события, площадку, текст, id объекта, к которому относятся кнопки (например id алерта
     /// StuckAlert) — он уходит в callback_data. Если кнопки собрать нельзя (id длиннее предела протокола),

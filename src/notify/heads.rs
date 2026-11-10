@@ -70,6 +70,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "coin.blacklisted" => (WARN, "Монета в чёрном списке"),
         "coin.credit_shortfall" => (WARN, "Пришло меньше монет, чем ожидали — монета в чёрном списке"),
         "coin.sell_slip" => (WARN, "Продажи хуже плана подряд — монета в чёрном списке"),
+        "coin.exit_gap" => (WARN, "Реальный выход продажи ниже модели — монета закрыта для входа"),
         "coin.unblacklisted" => (OK, "Монета убрана из чёрного списка"),
         "dex.check_not_configured" => (WARN, "Проверка налогов DEX не настроена"),
         "pool.hook_excluded" => (INFO, "Пул исключён"),

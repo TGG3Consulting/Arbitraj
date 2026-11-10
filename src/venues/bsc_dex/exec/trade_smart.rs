@@ -10,10 +10,12 @@
 //! верификация); свежей сборке нужно новое разрешение — своп не отправляется (QuoteMismatch).
 //! Итог и ошибку подписывает исполнителем «свой сборщик: умный» вызывающий (exec/trade.rs, решение 121 B7).
 //! Подготовка долей (пути, цена, MixedQuoter, минимумы) — exec/smart_legs.rs.
+//! Решение 248 (кейс SMARS 10.11): проба продажи выхода откатилась «мало на выходе» — пере-замер и новый минимум
+//! проверки баланса (exec/ur_remeasure.rs), строка пере-замера — в TradeResult.executor (хронология).
 //! Кто вызывает: exec/trade.rs.
 //! Графовый маршрут (решение 83): вызывающий (exec/trade.rs) передаёт свежие amountOutMin по ногам из предторговой
 //! верификации (exec/verify_gate.rs) — они ставятся последнему шагу каждой доли; умный путь без графа передаёт None.
-//! От чего зависит: exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/universal.rs, exec/precheck_sim.rs (кто меняет), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
+//! От чего зависит: exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/universal.rs, exec/ur_remeasure.rs (проба, кто меняет, пере-замер), exec/trade.rs (общие шаги), exec/verify_gate.rs, exec/result.rs,
 //! quote/direct.rs, quote/via.rs, quote/mixed_quoter.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — smart.*, exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 //!
@@ -32,6 +34,7 @@ use super::super::pools::registry::Entry;
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::nonce::Nonces;
+use super::executor::trade::{coin_tax, expected};
 use super::native;
 use super::plan::Plan;
 use super::smart_legs::{Prep, prepare};
@@ -41,7 +44,7 @@ use super::trade::{
     worst_positive,
 };
 use super::txs::Env;
-use super::{precheck_sim, result, universal, verify_gate};
+use super::{result, universal, ur_remeasure, verify_gate};
 
 /// Сделка по умному маршруту. verify_mins — свежие amountOutMin по ногам графовой верификации (решение 83): Some —
 /// ставятся последнему шагу каждой доли; None — умный путь без графа, минимумы считает exec/chain.rs. Ошибки: NoRoute
@@ -104,7 +107,24 @@ pub async fn trade(
             .iter()
             .flat_map(|(p, _)| p.hops.iter().map(|h| &h.entry))
             .collect();
-        precheck_sim::emitters(ctx, &plan, &entries, at).await?;
+        // Решение 248 (кейс SMARS): откат продажи выхода «мало на выходе» — пере-замер (exec/ur_remeasure.rs).
+        let mut note = None;
+        if let Some(orig) = ur_remeasure::check(env, &req, &plan, &entries, at).await? {
+            let exp: Vec<_> = prep
+                .paths
+                .iter()
+                .map(|(p, _)| (expected(p, req.side), coin_tax(&v, p)))
+                .collect();
+            let old = plan.min_total();
+            ur_remeasure::unit_mins(prep.steps.iter_mut().flatten());
+            let (probe, at2) = build(q, &prep, wallet).await?;
+            no_new_approvals(ctx, &probe)?;
+            let (fixed, line) =
+                ur_remeasure::measure(env, &req, probe, &entries, at2, &exp, (old, decs.1), orig)
+                    .await?;
+            plan = fixed;
+            note = Some(line);
+        }
         let tin = if req.side == Side::Buy { usdt } else { coin };
         // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
         let sc = SwapCtx::swap(
@@ -113,7 +133,7 @@ pub async fn trade(
             decs,
             router.as_slice(),
             None,
-            None,
+            note.clone(),
         );
         let d = send_swap(env, &slot, plan, guard)
             .await
@@ -123,7 +143,7 @@ pub async fn trade(
             tip_bnb: d.tip_bnb,
             ..sc
         };
-        result::result(
+        let mut r = result::result(
             ctx,
             req,
             d,
@@ -132,7 +152,12 @@ pub async fn trade(
             decs,
             router.as_slice(),
         )
-        .map_err(|e| sc.attach(e))
+        .map_err(|e| sc.attach(e))?;
+        // Решение 248: строка пере-замера — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
+        if note.is_some() {
+            r.executor = note;
+        }
+        Ok(r)
     }
     .await;
     with_approve_gas(out, approved)

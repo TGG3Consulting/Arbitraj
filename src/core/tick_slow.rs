@@ -1,8 +1,8 @@
 //! Файл: core/tick_slow.rs
 //! Что делает: медленные события тика (решение 131) — очередь кошелька, конец прохода проверок, баланс, уведомление
-//! площадки: они ждут журнал, Telegram или учёт, поэтому идут своей задачей по порядку (tick.rs), а цикл тика их не ждёт.
+//! площадки, замер выхода продажи и свежие налоги монеты (решение 248): они ждут журнал, Telegram или учёт, поэтому идут своей задачей по порядку (tick.rs), а цикл тика их не ждёт.
 //! Кто вызывает: core/tick.rs.
-//! От чего зависит: engine.rs, market_state.rs (Touched), queue_notify.rs, first_pass.rs, credit_event.rs, deps.rs.
+//! От чего зависит: engine.rs, market_state.rs (Touched), queue_notify.rs, first_pass.rs, credit_event.rs, exit_gap.rs, deps.rs.
 //! Настройки: нет своих.
 
 use super::engine::Core;
@@ -31,6 +31,9 @@ pub async fn slow(core: &Core, t: Touched) {
         Touched::Notice { venue, code, text } => {
             core.inner.deps.notify(&code, Some(&venue.0), &text).await
         }
+        // Решение 248: замер выхода продажи ниже модели — закрыть для входа; свежие налоги — снять, если сошлись.
+        Touched::ExitGap(g) => super::exit_gap::on_gap(core, g).await,
+        Touched::CoinCheck(c) => super::exit_gap::on_check(core, &c).await,
         _ => {}
     }
 }

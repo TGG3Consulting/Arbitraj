@@ -18,8 +18,14 @@
 //! что откатилась). Исполнитель проверяет только сумму (minOut = сумма долей, call.rs) — минимумы долей не меняются.
 //! Строка «пере-замер: модель X, реально R, новый minOut M» — в журнал dex.remeasure и в пометку итога (хронология).
 //! Решение 247, п. Б: откат по minOut у продажи выхода — монета во внеочередную перепроверку налогов (check/recheck.rs).
+//! Решение 248 (кейс SMARS 10.11): замер с minOut 1 ед. делается при любом откате продажи выхода по minOut (и без
+//! условий ядра — первая продажа сделки): граница по замеру уходит ядру (exec/exit_gap.rs → core/exit_gap.rs —
+//! закрытие монеты для входа); minOut меняется только при условиях ядра (TradeRequest.remeasure), как в 247.
+//! Симуляция — от кошелька сделки поверх живого блока (sim::run: один вызов execute, без пополнения кошелька от пула
+//! exec/dry_fund.rs и без подмены состояния) — то есть с реального баланса кошелька после зачисления.
 //! Кто вызывает: exec/executor/trade.rs.
-//! От чего зависит: exec/executor/sim.rs, check/simulate.rs (CallResult), check/recheck.rs, num.rs, ctx.rs.
+//! От чего зависит: exec/executor/sim.rs, exec/exit_gap.rs, exec/txs.rs (Env), check/simulate.rs (CallResult),
+//! check/recheck.rs, num.rs, ctx.rs.
 //! Настройки: exec.dex_slippage_pct [bsc_dex].
 
 use alloy_primitives::{Address, U256};
@@ -29,10 +35,11 @@ use crate::core::types::{Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
-use super::super::super::check::recheck::Recheck;
 use super::super::super::check::simulate::CallResult;
 use super::super::super::ctx::Ctx;
 use super::super::super::num;
+use super::super::exit_gap;
+use super::super::txs::Env;
 use super::call::ExecCall;
 use super::sim;
 
@@ -75,7 +82,7 @@ pub fn seen_out(exp: &[(Decimal, Decimal)], seen: Option<Decimal>) -> Option<Dec
 
 /// Проба execute с пере-замером. Принимает: запрос, вызов (minOut меняется при пере-замере), кошелёк, (номер, время)
 /// блока сборки, (decimals монеты, USDT), текст долей для отката (sim::legs_text), по долям (ожидаемый выход,
-/// модельный налог %), очереди перепроверок (п. Б).
+/// модельный налог %), окружение отправки (очереди перепроверок — п. Б; канал событий ядру — решение 248).
 /// Граница выхода — наименьшее из: замера симуляцией R (minOut 1 ед.) и выхода модели при налоге, наблюдённом в сети в
 /// этой сделке (seen_out; TradeRequest.remeasure.tax_seen_pct) — налог берётся наибольший из модельного, сетевого и
 /// симуляции. minOut = граница × (1 − exec.dex_slippage_pct), не 0.
@@ -92,7 +99,7 @@ pub async fn probe(
     decs: (u8, u8),
     diag: &str,
     exp: &[(Decimal, Decimal)],
-    wake: &Recheck,
+    env: &Env,
 ) -> GatewayResult<Option<String>> {
     let r = sim::run(ctx, c, wallet, at).await?;
     let exit = req.side == Side::Sell && req.exit_position;
@@ -104,16 +111,13 @@ pub async fn probe(
     let orig = sim::explain(no_route(ctx, &r), diag);
     // Решение 247, п. Б: модель налога монеты не сошлась с сетью — внеочередная перепроверка (для следующих сделок).
     if let Some(a) = req.asset.bsc_contract {
-        wake.coins(&[a]);
+        env.wake.coins(&[a]);
         let msg = format!(
             "{} {}: откат продажи выхода по minOut — монета в перепроверку налогов (решение 247, п. Б)",
             req.deal_id, req.asset.ticker
         );
         ctx.log(Level::Info, "dex.tax_recheck", msg, None).await;
     }
-    let Some(rm) = req.remeasure.as_ref() else {
-        return Err(orig);
-    };
     let usdt_dec = decs.1;
     let old = num::to_decimal(c.min_out, usdt_dec).unwrap_or_default();
     let mut probe = c.clone();
@@ -137,8 +141,17 @@ pub async fn probe(
     let got = sim::received(ctx, &r1).map_err(|e| add(orig.clone(), &e.message))?;
     let real = num::to_decimal(got, usdt_dec)
         .ok_or_else(|| add(orig.clone(), "пере-замер: выход не число"))?;
+    let seen = req.remeasure.as_ref().and_then(|r| r.tax_seen_pct);
+    let (bound, head) = bound_text(exp, real, seen);
+    // Решение 248: граница по замеру — ядру (закрыть монету для входа, если ниже модели больше guard.exit_gap_pct).
+    exit_gap::report(ctx, &env.stats, req, exp, bound);
+    let Some(rm) = req.remeasure.as_ref() else {
+        let why = format!(
+            "{head} — повтор с новым minOut не разрешён ядром (первая продажа сделки или продажа без порога)"
+        );
+        return Err(add(orig, &why));
+    };
     let slip = ctx.dec("exec.dex_slippage_pct")?;
-    let (bound, head) = bound_text(exp, real, rm.tax_seen_pct);
     if bound < rm.floor {
         let why = format!(
             "{head} — граница ниже {} USDT (порог убытка, по которому решено продать), повтор не сделан",

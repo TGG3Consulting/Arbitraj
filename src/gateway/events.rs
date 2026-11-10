@@ -12,7 +12,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::{
-    BalanceChange, CoinCheck, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId, WalletQueue,
+    BalanceChange, CoinCheck, ExitGap, OrderBook, Pool, PoolCheck, SendChannelStats, VenueId,
+    WalletQueue,
 };
 
 use super::errors::GatewayError;
@@ -83,6 +84,9 @@ pub enum MarketEvent {
     /// каждое изменение, которое видит, — только окончательное по правилам площадки (у кошелька — после
     /// send.deposit_confirmations блоков); снимок балансов (не изменение) не шлёт.
     Balance(BalanceChange),
+    /// Решение 248: продажа выхода DEX откатилась «мало на выходе», реальный выход замерен (адаптер DEX) — ядро
+    /// закрывает монету для новых входов, если замер ниже модели больше guard.exit_gap_pct (core/exit_gap.rs).
+    ExitGap(ExitGap),
 }
 
 /// Состояние спот-пары монеты на бирже (из справочника пар биржи) — для справочника ядра (core/presence.rs).

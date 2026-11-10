@@ -86,6 +86,7 @@ pub mod episode_run;
 pub mod episode_snap;
 pub mod episode_view;
 pub mod episode_worker;
+pub mod exit_gap;
 pub mod evaluate;
 pub mod exec_book;
 pub mod exec_book_fail;

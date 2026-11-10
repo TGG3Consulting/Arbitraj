@@ -257,3 +257,28 @@ fn html_escapes_and_compacts() {
         "0x1234 {шаг 2}"
     );
 }
+
+#[test]
+fn busy_record_is_not_reminded() {
+    use arb::notify::mirror_state::{MirrorState, Pending, Prompt};
+    let mut st = MirrorState::default();
+    assert!(!st.busy("a.a1"));
+    st.add_pending(Pending {
+        key: Some("a.a1".into()),
+        action: ManualAction::SellNow {
+            alert_id: "a1".into(),
+        },
+        title: "Продать сейчас".into(),
+        question: "?".into(),
+    });
+    assert!(st.busy("a.a1"));
+    st.prompts.insert(
+        (1, 2),
+        Prompt {
+            key: "h.h1".into(),
+            code: "sold_man".into(),
+        },
+    );
+    assert!(st.busy("h.h1"));
+    assert!(!st.busy("a.other"));
+}

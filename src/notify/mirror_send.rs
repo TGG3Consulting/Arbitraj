@@ -4,7 +4,8 @@
 //! editMessageReplyMarkup — https://core.telegram.org/bots/api#editmessagereplymarkup), итог команды
 //! «Выполнено: кто, что, итог» в сообщениях ушедших записей, ошибки Telegram (429 — пауза retry_after) и журнал.
 //! Решение 177: правка сообщения сменившейся записи (update_changed) и итог продажи кнопкой (sale_final).
-//! Решение 251: тексты — шаблон алерта в HTML (alert.rs::telegram, tg_html.rs);; полный текст причины — в журнал при первой отправке записи (log_full).
+//! Решение 251: тексты — шаблон алерта в HTML (alert.rs::telegram, tg_html.rs); напоминание без записей «в обработке»
+//! (mirror_state.rs::busy); полный текст причины — в журнал при первой отправке записи (log_full).
 //! Кто вызывает: notify/mirror.rs.
 //! От чего зависит: notify/mirror_state.rs, mirror_track.rs, mirror_view.rs, tg_methods.rs, tg_html.rs, alert.rs,
 //! client.rs, settings, storage/journal.
@@ -34,19 +35,26 @@ impl Mirror {
         allowed: &[&ManualRecord],
     ) {
         let now = Instant::now();
-        let list: Vec<&ManualRecord> = {
+        let (cand, list): (usize, Vec<&ManualRecord>) = {
             let st = lock(&self.state);
             if !st.reminder_due(now, self.every()) {
                 return;
             }
-            st.waiting(recs)
+            let cand: Vec<&ManualRecord> = st
+                .waiting(recs)
                 .into_iter()
                 .filter(|r| st.sent.contains_key(&r.key) && allowed.iter().any(|a| a.key == r.key))
-                .collect()
+                .collect();
+            // Решение 251: запись, которую человек сейчас обрабатывает (открыт «Да/Отмена» или вопрос суммы), в
+            // напоминание не идёт — не шлём ту же запись повторно, пока человек отвечает (Тигран 10.11: «не успеваешь
+            // завершить обработку — он снова ту же отправляет»).
+            let n = cand.len();
+            (n, cand.into_iter().filter(|r| !st.busy(&r.key)).collect())
         };
         if list.is_empty() {
-            // Напоминать некого (событие выключено, площадка не в списке) — отсчёт не идёт.
-            lock(&self.state).last_reminder = None;
+            // Напоминать некого (событие выключено, площадка не в списке) — отсчёт не идёт; все ждущие в обработке у
+            // человека — следующая проверка через полный интервал.
+            lock(&self.state).last_reminder = (cand > 0).then_some(now);
             return;
         }
         let (text, kb) = batch_message_for(&list, &reminder_header(list.len()), all);

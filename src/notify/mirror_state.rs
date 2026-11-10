@@ -157,6 +157,13 @@ impl MirrorState {
             .collect()
     }
 
+    /// Решение 251: человек сейчас обрабатывает запись — открыт вопрос «Да/Отмена» по её кнопке (pending) или вопрос
+    /// суммы (prompts). Такая запись не повторяется в напоминании. Принимает: ключ записи. Ошибок нет.
+    pub fn busy(&self, key: &str) -> bool {
+        self.pending.values().any(|p| p.key.as_deref() == Some(key))
+            || self.prompts.values().any(|p| p.key == key)
+    }
+
     /// Ещё не отправленные записи (из ждущих). Порядок — как на экране.
     pub fn unsent<'a>(&self, recs: &'a [ManualRecord]) -> Vec<&'a ManualRecord> {
         self.waiting(recs)

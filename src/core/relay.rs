@@ -25,6 +25,10 @@
 //! venue.cex_cex_deny бирж пути монеты — cex_link::relay_block), не цель; разрешённых целей нет — продажа здесь.
 //! Дополнение 10.11 (п. 5): отсеянные правилом биржи — одной строкой в хронологию сделки на каждый перегон (биржа и
 //! причина каждой), как в «Продать и перегнать».
+//! Решение 247, дополнение 10.11 (Тигран: согласовано): продажа на цели сразу после перегона (sell::sell_after_relay) —
+//! выгодно (итог ≥ 0) → по рынку с пере-замером продажи DEX при откате «мало на выходе» в пределах того же условия
+//! (порог убытка 0, remeasure::PROFITABLE); невыгодно — режим застрявшей монеты, как раньше. Продажа здесь — relay_here.rs
+//! (порог stuck.relay_max_loss_pct — он же граница пере-замера, решение 247).
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs).
 
@@ -250,7 +254,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
                 .await;
             deal.step = Step::Selling;
             super::ledger::save(core, &deal).await;
-            Box::pin(super::sell::sell_or_stuck(core, deal)).await;
+            // Решение 247, дополнение 10.11: продажа на цели — с пере-замером продажи DEX по условию «выгодно».
+            Box::pin(super::sell::sell_after_relay(core, deal)).await;
         }
         // Исход неизвестен (вывод мог уйти) — ни продажи, ни повтора: ручная проверка.
         Err(e) if e.outcome_unknown() => {

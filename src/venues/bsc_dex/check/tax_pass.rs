@@ -6,10 +6,10 @@
 //! (прошла ↔ не прошла, сменилась причина без учёта цифр) и не в первом проходе (там — одна сводка, tax_cycle.rs).
 //! Ошибка настройки — одна запись в журнал и одно событие dex.check_not_configured на каждую разную причину.
 //! Кто вызывает: check/tax_cycle.rs.
-//! От чего зависит: check/taxes.rs, check/state.rs, pools/listen.rs (Pools), pools/progress.rs, node/heads.rs.
+//! От чего зависит: check/taxes.rs, check/tax_wallet.rs (кошелёк сделки у перепроверки после отката продажи выхода), check/state.rs, pools/listen.rs (Pools), pools/progress.rs, node/heads.rs.
 //! Настройки: через вызываемые.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 
@@ -73,13 +73,15 @@ pub enum Res {
 
 /// Проверяет монеты списка (см. шапку). Монета, чьи пулы ещё загружаются (pools/loading.rs), не проверяется — ждёт
 /// своих пулов, а не пулов всех монет (решение 61). Принимает: окружение, монеты, USDT, уже записанные ошибки
-/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой). Ошибок нет.
+/// настроек, монеты, у которых ещё не было первой проверки (журнал по ним — только сводкой), счета сделок у монет на
+/// перепроверке кошельком сделки (check/tax_wallet.rs; пусто — все кошельком строки «Пробы»). Ошибок нет.
 pub async fn check(
     p: &Pools,
     list: &[(Address, String)],
     usdt: Address,
     seen: &mut HashSet<String>,
     firsts: &HashSet<Address>,
+    accounts: &HashMap<Address, String>,
 ) -> Pass {
     let mut pass = Pass::default();
     // Балансы источников пробы — один раз на проход (check/taxes_util.rs).
@@ -130,10 +132,16 @@ pub async fn check(
                 return pass;
             }
         }
+        // Дополнение 10.11 к 247/252: перепроверка после отката продажи выхода — кошельком сделки (tax_wallet.rs).
+        let by = super::tax_wallet::ctx_for(&p.ctx, accounts, addr);
+        let ctx = by.as_ref().unwrap_or(&p.ctx);
         let (c, out) = taxes::check_coin(
-            &p.ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
+            ctx, &p.reg, &p.checks, &p.tokens, &sources, ticker, *addr, usdt, &p.heads,
         )
         .await;
+        if by.is_some() {
+            super::tax_wallet::log(ctx, ticker, &out).await;
+        }
         let prev = p.checks.coin(addr).map(|c| c.taxes);
         match out {
             Outcome::Known(_) => {

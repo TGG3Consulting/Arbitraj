@@ -5,14 +5,15 @@
 //! незаданную настройку), была первая проверка (tax_wait.rs; «пулы не читаются: N» — отдельным числом): одна
 //! запись в журнал и событие CheckPass ядру (одно сводное уведомление, core/first_pass.rs).
 //! Дальше — полный проход раз в tax.recheck_interval_s. Между проходами:
-//! - «Перепроверить» — только переданные монеты (check/recheck.rs);
+//! - «Перепроверить» — только переданные монеты (check/recheck.rs); монета из отката продажи выхода (решения 247/248) —
+//!   кошельком сделки (дополнение 10.11, check/tax_wallet.rs), остальные — кошельком строки «Пробы»;
 //! - «пул готов» — ждущие монеты, у которых появился достоверный пул или дочитались свои пулы;
 //! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s;
 //! - ждущие «не задана настройка» — сразу при изменении настроек (settings_wait.rs), без перезапуска и без часа ожидания.
 //!
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
-//! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, pools/listen.rs (Pools), pools/progress.rs.
+//! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
 //! Настройки: tax.recheck_interval_s, tax.retry_s (вся система), check.probe_usdt [bsc_dex].
 
 use std::collections::{HashMap, HashSet};
@@ -31,6 +32,7 @@ use super::recheck::Queue;
 use super::tax_deep::has_deep;
 use super::tax_pass::{self, Pass, Why};
 use super::tax_wait::{self, First};
+use super::tax_wallet;
 use super::taxes;
 
 /// Цикл налогов. Принимает: окружение, монеты (адрес → тикер), USDT, очередь «Перепроверить». Работает постоянно.
@@ -69,9 +71,12 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
     let mut changes = settings_wait::watch(&p.ctx);
     // Имена незаданных настроек ждущих монет (из ошибки хранилища) — по ним due_config.
     let mut cfg: HashMap<Address, Vec<String>> = HashMap::new();
+    // Дополнение 10.11 к 247/252: монеты на перепроверке кошельком сделки → счёт DEX сделки (до итога проверки).
+    let mut acc: HashMap<Address, String> = HashMap::new();
     loop {
         let was_sent = sum.sent;
-        let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left).await;
+        let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left, &acc).await;
+        tax_wallet::settle(&mut acc, &pass.done);
         settle(&p, &pass, &mut sum).await;
         cfg.extend(pass.config_names.iter().cloned());
         // Полный проход после первого — своя строка журнала (первый — сводкой в settle).
@@ -115,7 +120,9 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                 tokio::select! {
                     _ = tokio::time::sleep_until(next) => break,
                     _ = queue.notified() => {
-                        let (coins, _) = queue.take();
+                        // Счёт сделки у монет после отката продажи выхода — проверка его кошельком (tax_wallet.rs).
+                        let (coins, _, by) = queue.take_all();
+                        acc.extend(by);
                         all.iter().filter(|(a, _)| coins.contains(a)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
@@ -140,7 +147,8 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             if list.is_empty() {
                 continue;
             }
-            let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left).await;
+            let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left, &acc).await;
+            tax_wallet::settle(&mut acc, &again.done);
             settle(&p, &again, &mut sum).await;
             cfg.extend(again.config_names.iter().cloned());
             waiting.retain(|(a, _, _)| !list.iter().any(|(r, _)| r == a));

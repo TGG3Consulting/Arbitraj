@@ -20,7 +20,11 @@
 //! Решение 227 (дополнение): площадка уже отказала в выводе в этой сделке (Deal.withdraw_refused) — перегона с неё нет,
 //! продажа здесь (relay_here.rs); отказ вывода перегона ставит эту метку (withdraw_refused.rs).
 //! Решение 227: перегон на DEX — через send_trade (зачисление по приходу в блокчейне, решение 151), как перевод сделки.
-//! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs).
+//! Решение 249 (живой случай Тиграна 10.11: сделка BingX → DEX, перегон увёз монету на MEXC с venue.cex_cex = нет):
+//! биржа-цель, запрещённая правилами биржа ↔ биржа (venue.cex_cex у биржи пути монеты или у цели, список
+//! venue.cex_cex_deny биржи покупки — cex_link::relay_block), не цель; разрешённых целей нет — продажа здесь.
+//! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
+//! venue.cex_cex_deny (через cex_link.rs).
 
 use rust_decimal::Decimal;
 
@@ -31,8 +35,9 @@ use crate::storage::journal::Level;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk, rd};
 
-/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API; не на паузе).
-fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
+/// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API; не на паузе;
+/// решение 249 — разрешены правилами биржа ↔ биржа). Открыта для тестов (tests/core_cex_cex_deny.rs). Ошибок нет.
+pub fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
     let coins = rd(&core.inner.coins);
     // Решение 131: по карте места, без прохода справочника.
     let Some(e) = super::ticker_index::find(core, &coins, &deal.direction.asset) else {
@@ -48,6 +53,8 @@ fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
         .iter()
         .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
         .filter(|p| !paused.contains_key(&p.venue))
+        // Решение 249: биржа-цель запрещена правилами биржа ↔ биржа относительно пути монеты (cex_link.rs).
+        .filter(|p| super::cex_link::relay_block(core, deal, &p.venue).is_none())
         // Решение 185: на DEX — только если есть кошелёк (сделки или строки биржи, где монета); решение 230 — и этот
         // кошелёк не на паузе от сверки.
         .filter(

@@ -10,7 +10,7 @@
 //! порога нет; (4) выбор «Продать и перегнать» — наибольшая выручка после затрат против «здесь»; (5) проход оценки без
 //! справочника монеты — только «здесь», строка оценки в хронологии; (6) итог кнопки — возврат USDT словами;
 //! (7) цели перегона: у биржи, где лежит монета, venue.cex_cex = нет — на другие биржи нельзя, на DEX можно (решение 214
-//! «у одной из сторон»; ветка t42/small-fixes).
+//! «у одной из сторон»; ветка t42/small-fixes); решение 249 — и когда монета на DEX, а сделка начата на бирже с «нет».
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::gateway, arb::settings, arb::storage, arb::notify, arb::secrets.
 
@@ -309,6 +309,7 @@ async fn relay_targets_respect_cex_cex_of_source() {
         wait: None,
         cex_cex: None,
         cex_cex_off: vec![],
+        cex_cex_deny: vec![],
     };
     // Виды площадок и справочник кладутся прямо перед расчётом целей, без await между ними: пересборка справочника
     // (core/rebuild.rs, толчок от venue.* настроек) — задача того же однопоточного рантайма теста и не вклинится.
@@ -359,13 +360,17 @@ async fn relay_targets_respect_cex_cex_of_source() {
     assert_eq!(to, vec![v("bsc_dex")], "{skip:?}");
     assert!(
         skip.iter()
-            .any(|t| t == "bingx: биржа ↔ биржа выключена (venue.cex_cex = нет)"),
+            .any(|t| t == "bingx: биржа ↔ биржа выключена у bingx (venue.cex_cex = нет)"),
         "{skip:?}"
     );
-    // Монета на DEX: venue.cex_cex бирж-целей «да» — обе биржи цели (условие только для биржа → биржа).
+    // Монета на DEX: сделка начата на mexc. Решение 249 (Тигран 10.11): venue.cex_cex = нет у mexc действует в обе
+    // стороны и через кошелёк DEX — на bingx нельзя (до решения 249 было можно); вернуть на саму mexc — можно.
     cc("bingx", true).await;
     x.at = v("bsc_dex");
+    let (to, skip) = targets(&x);
+    assert!(to.contains(&v("bingx")), "у mexc «да» — bingx цель: {skip:?}");
     cc("mexc", false).await;
     let (to, skip) = targets(&x);
-    assert!(to.contains(&v("bingx")), "{skip:?}");
+    assert!(!to.contains(&v("bingx")), "{skip:?}");
+    assert!(to.contains(&v("mexc")), "{skip:?}");
 }

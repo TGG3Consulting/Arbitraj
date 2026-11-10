@@ -14,8 +14,10 @@
     Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
     Решение 242: значения области «площадка + тип направления» задаются в подпункте «… › по биржам и направлениям»
     (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
+    Решение 249: у venue.cex_cex под значением каждой биржи — список «не взаимодействовать» и кнопка «Настроить список»
+    (components/CexCexDeny.svelte); у самой venue.cex_cex_deny — только ссылка на это окно и «История».
   Кто вызывает: pages/Settings.svelte.
-  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte.
+  От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte.
   Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
 -->
 <script>
@@ -28,6 +30,7 @@
   import { names, coinName, ensure, coinIdOf } from '../lib/coinNames.svelte.js';
   import SettingEditor from './SettingEditor.svelte';
   import SettingHistory from './SettingHistory.svelte';
+  import CexCexDeny from './CexCexDeny.svelte';
 
   // Справочник имён читается здесь напрямую (names.map) — загрузить его сразу (ревью М1).
   ensure();
@@ -113,9 +116,15 @@
   {#if def.scopes.includes('Global')}
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />
   {/if}
-  {#if def.scopes.includes('Venue')}
+  {#if def.name === 'venue.cex_cex_deny'}
+    <!-- Решение 249: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
+    <p class="muted">Задаётся кнопкой «Настроить список» в карточке venue.cex_cex (у каждой биржи).</p>
+  {:else if def.scopes.includes('Venue')}
     {#each uniq(store.venues) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
+      {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
+        <CexCexDeny venue={v} />
+      {/if}
     {:else}
       <p class="muted">Площадок в шлюзе нет — значение по площадке задать не для чего.</p>
     {/each}

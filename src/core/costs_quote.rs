@@ -11,7 +11,8 @@
 //!
 //! Сбой шлюза — расчёт невозможен. Решение 217: со снимком рынка момента решения (core/frozen.rs) котировка и худшая
 //! цена — по снимку стороны, не по живым данным (расчёт «без потолка» по сделке).
-//! Кто вызывает: core/costs.rs (enough, floor_step, order_limits), core/costs_source.rs (fetch, worst — источник Live),
+//! Решение 250: fillable — исполнимое количество через контракт quote_fills (проверка доли глубины h), enough_qty.
+//! Кто вызывает: core/costs.rs (enough, enough_qty, floor_step, order_limits), core/costs_source.rs (fetch, fillable, worst — источник Live),
 //! core/uncapped_replay.rs (пересчёт по окнам, решение 218: enough, floor_step).
 //! От чего зависит: core/types, core/size.rs (Fail), deps.rs (шлюз), trade_ops.rs, frozen.rs, gateway/events.rs (SpotPairState),
 //! gateway/frozen.rs (deepest).
@@ -62,13 +63,43 @@ pub async fn fetch(
 /// Проверка глубины котировки (общая для всех источников, costs.rs). Принимает: площадку (текст), котировку,
 /// запрошенное количество. Возвращает: ту же котировку. Ошибки: TooLarge — глубины хватает не на всё количество.
 pub fn enough(venue: &str, q: Quote, qty: Decimal) -> Result<Quote, Fail> {
-    if q.fillable_qty < qty {
+    enough_qty(venue, q.fillable_qty, qty)?;
+    Ok(q)
+}
+
+/// Решение 250: та же проверка глубины по исполнимому количеству (проверка доли глубины h — costs.rs). Принимает:
+/// площадку (текст), исполнимое количество, запрошенное. Ошибки: TooLarge — тот же текст, что у enough.
+pub fn enough_qty(venue: &str, fillable: Decimal, qty: Decimal) -> Result<(), Fail> {
+    if fillable < qty {
         return Err(Fail::TooLarge(format!(
-            "{venue}: глубины хватает на {} из {qty}",
-            q.fillable_qty
+            "{venue}: глубины хватает на {fillable} из {qty}"
         )));
     }
-    Ok(q)
+    Ok(())
+}
+
+/// Решение 250: исполнимое количество стороны без цены (источник Live без снимка; проверка доли глубины h) —
+/// контракт quote_fills площадки (по умолчанию — fillable_qty полной котировки; bsc_dex — quote/fills.rs). Тот же
+/// кошелёк маппинга и тикер площадки, что у fetch. Принимает: ядро, направление, сторону, количество.
+/// Возвращает: исполнимое количество. Ошибки: как у fetch (TooLarge — NoRoute, Stop — прочие сбои).
+pub async fn fillable(
+    core: &Core,
+    d: &Direction,
+    sell: bool,
+    qty: Decimal,
+) -> Result<Decimal, Fail> {
+    let (venue, side) = if sell {
+        (&d.sell_on, Side::Sell)
+    } else {
+        (&d.buy_on, Side::Buy)
+    };
+    let v = super::dex_account::venue_dir(&core.inner.deps, d, venue)
+        .await
+        .map_err(Fail::Stop)?;
+    let on = super::venue_ticker::on_venue(core, &d.asset, venue);
+    v.quote_fills(&on, side, qty)
+        .await
+        .map_err(|e| classify(&venue.0, &e))
 }
 
 /// Вид отказа котировки площадки. Принимает: площадку (для текста), ошибку шлюза. Возвращает: TooLarge — NoRoute

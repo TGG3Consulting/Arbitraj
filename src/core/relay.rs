@@ -268,6 +268,9 @@ pub async fn run(core: &Core, mut deal: Deal) {
             deal.step = Step::Stuck;
             // Решение 227: отказ вывода площадкой — метка, следующий «Перегон» с неё не пойдёт.
             super::withdraw_refused::mark_at(core, &mut deal, &from, &e);
+            // Решение 253 (г): отказ запоминается по паре «монета + биржа» — новые входы с неё закрыты.
+            let asset = deal.direction.asset.clone();
+            super::withdraw_block::close(core, &deal.id, &asset, &from, &e).await;
             let why = format!("перегон не состоялся: {e}");
             deal.note(format!("{why} — продажа здесь, вывод не повторяем"));
             super::relay_here::transfer_failed(core, deal, &why).await

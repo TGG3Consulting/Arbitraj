@@ -104,6 +104,19 @@ impl Venue for BscDex {
         scope(class, self.p.quoting().quote(asset, side, qty)).await
     }
 
+    /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет
+    /// объём целиком — ответ без полной котировки; иначе — полная котировка, как quote. Финальная котировка через
+    /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
+    async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
+        if crate::gateway::quote_stage::is_final()
+            && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+        {
+            return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
+        }
+        let class = urgency::is_set().unwrap_or(Class::Quote);
+        scope(class, self.p.quoting().fills(asset, side, qty)).await
+    }
+
     /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
     /// память. Ошибки: StaleData (блок, лента событий), NotConfigured (тикер USDT), NoRoute (нет адреса монеты).
     async fn quote_snapshot(

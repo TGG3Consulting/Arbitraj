@@ -76,6 +76,7 @@ impl Core {
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
         super::transit::load(&core).await;
+        super::withdraw_seen::load(&core).await;
         super::low_usdt::load(&core).await;
         // Задача эпизодов (решение 74): при запуске закрывает прерванные перезапуском, дальше — запись и уборка.
         if let Some(rx) = lk(&core.inner.episode_rx).take() {

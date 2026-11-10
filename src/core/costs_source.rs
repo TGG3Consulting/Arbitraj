@@ -10,6 +10,7 @@
 //! - пересчёт старых записей «без потолка» по окнам (решение 218, core/uncapped_replay.rs) — стаканы окна и план сделки.
 //!
 //! Методы возвращают `impl Future + Send` (статическая отправка, без упаковки на пути боя).
+//! Решение 250: fillable — исполнимое количество без цены (проверка доли глубины h); по умолчанию — из quote.
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
 //! От чего зависит: costs_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
@@ -37,6 +38,18 @@ pub trait Source: Sync {
         sell: bool,
         qty: Decimal,
     ) -> impl Future<Output = Result<Quote, Fail>> + Send;
+
+    /// Что делает: исполнимое количество стороны на объём (решение 250: проверка доли глубины h — costs.rs; цена не
+    /// нужна). По умолчанию — fillable_qty котировки quote. Принимает: направление, сторону, количество.
+    /// Возвращает: исполнимое количество. Ошибки: как у quote.
+    fn fillable(
+        &self,
+        d: &Direction,
+        sell: bool,
+        qty: Decimal,
+    ) -> impl Future<Output = Result<Decimal, Fail>> + Send {
+        async move { self.quote(d, sell, qty).await.map(|q| q.fillable_qty) }
+    }
 
     /// Что делает: худшая цена ордера, как её поставит исполнение. Принимает: направление, сторону, количество, среднюю
     /// цену котировки. Возвращает: цену. Ошибки: Stop — нет стакана, глубины или допуска.
@@ -92,6 +105,15 @@ impl Source for Live<'_> {
         super::costs_quote::fetch(self.core, d, sell, qty, self.src).await
     }
 
+    /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
+    /// рынка — fillable_qty котировки снимка (как раньше). Ошибки: как у quote.
+    async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
+        if self.src.is_some() {
+            return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
+        }
+        super::costs_quote::fillable(self.core, d, sell, qty).await
+    }
+
     /// Худшая цена (costs_quote.rs worst). Ошибки: как у worst.
     fn worst(
         &self,
@@ -109,12 +131,20 @@ impl Source for Live<'_> {
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со
-    /// входами момента решения: затраты «перевод» плана. Ошибки: как у withdraw_a.
+    /// входами момента решения: затраты «перевод» плана; решение 253 (д) — у биржи A поправка по фактам прошлых
+    /// переводов (withdraw_seen.rs adjust, transfer.seen_cost). Ошибки: как у withdraw_a.
     async fn withdraw(&self, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
         if let (Some(p), None) = (self.plan(), &cx.a.info) {
             return Ok(p.withdraw(cx, amount));
         }
-        super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await
+        let mut c = super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await?;
+        // Решение 253 (д): у биржи A — поправка по фактам прошлых переводов (transfer.seen_cost; не задана — нет).
+        if cx.a.info.is_some() {
+            let d = &cx.dir;
+            let extra = super::withdraw_seen::adjust(self.core, &d.asset, &d.buy_on, amount, &c);
+            c.extend(extra);
+        }
+        Ok(c)
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs return_b); решение 237 — DEX на B со

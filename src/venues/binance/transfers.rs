@@ -4,7 +4,8 @@
 //! Кто вызывает: mod.rs (функции контракта), deposits.rs (transfer).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: venue.withdraw_wallet [binance] (spot | funding — параметр walletType), venue.withdraw_history_min_ms
-//! [binance] (обе проверяются до отправки вывода: после — поздно).
+//! [binance] (обе проверяются до отправки вывода: после — поздно); решение 253 — venue.withdraw_unready_window_ms
+//! [binance]: −4026 / −4024 в пределах окна после своей покупки монеты — WithdrawLocked (повтор ядра, как −4060).
 //!
 //! Официально (Wallet SAPI):
 //! - POST /sapi/v1/capital/withdraw/apply (вес UID 900) — coin*, address*, amount*, withdrawOrderId («client side id
@@ -84,7 +85,9 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ("walletType", wallet.to_string()),
     ];
     let path = "/sapi/v1/capital/withdraw/apply";
-    let sent = rest::signed(ctx, Method::POST, path, params, Op::Withdraw).await;
+    let sent = rest::signed(ctx, Method::POST, path, params, Op::Withdraw)
+        .await
+        .map_err(|e| not_ready(ctx, &req.asset.ticker, e));
     let sent = sent.and_then(|d| {
         num::text_opt(&d, "id").ok_or_else(|| {
             let msg = format!("Вывод {order_id}: ответ без id — итог неизвестен");
@@ -114,6 +117,35 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         fee: None,
         updated_at: Utc::now(),
     })
+}
+
+/// Решение 253: отказ вывода −4026 CAPITAL_WITHDRAW_USER_ASSET_NOT_ENOUGH («You have insufficient balance») или −4024
+/// CAPITAL_WITHDRAW_USER_NO_ASSET («You don't have this asset») — Wallet → Error Code
+/// (https://developers.binance.com/en/docs/products/wallet/error-code) — в пределах venue.withdraw_unready_window_ms
+/// после своей покупки этой монеты (withdraw_ready.rs since_buy): «монета ещё не доступна для вывода» — WithdrawLocked
+/// (вывод не создан, повтор безопасен; повтор — core/transfer_locked.rs по transfer.locked_retry_ms /
+/// transfer.locked_retries_max площадки, как −4060, решение 166). Живые факты 10.11: 12 сделок, отказ через 0.35–0.77 с
+/// после покупки. Окно не задано, покупки не было или она раньше окна — ошибка как есть (WithdrawRejected).
+/// Принимает: окружение, монету (тикер Binance), ошибку вывода. Возвращает: ошибку. Ошибок нет.
+pub fn not_ready(ctx: &Ctx, ticker: &str, e: GatewayError) -> GatewayError {
+    if !matches!(errors::code_of(&e), Some(-4026 | -4024)) {
+        return e;
+    }
+    let Ok(window) = ctx.int("venue.withdraw_unready_window_ms") else {
+        return e;
+    };
+    match super::withdraw_ready::since_buy(ticker) {
+        Some(t) if t <= Duration::from_millis(window) => GatewayError {
+            code: ErrorCode::WithdrawLocked,
+            message: format!(
+                "{} — монета куплена {} мс назад: ещё не доступна для вывода (решение 253)",
+                e.message,
+                t.as_millis()
+            ),
+            ..e
+        },
+        _ => e,
+    }
 }
 
 /// История выводов не чаще venue.withdraw_history_min_ms (ждёт свою очередь). Ошибки: настройка, связь, коды, формат.
@@ -176,7 +208,7 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
 }
 
 /// Перевод формата ядра из записи истории (вывода или депозита). Ошибки: нет coin/amount.
-pub(super) fn transfer(
+pub fn transfer(
     ctx: &Ctx,
     rec: &Value,
     venue_ref: &str,

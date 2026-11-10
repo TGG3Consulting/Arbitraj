@@ -48,7 +48,7 @@ pub use directory::{
 };
 pub use dry_swap::{DexDrySwap, DrySwapPool};
 pub use executor::{ExecutorDeployQuote, ExecutorDeployed};
-pub use hold::{HoldItem, WithdrawHold};
+pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{

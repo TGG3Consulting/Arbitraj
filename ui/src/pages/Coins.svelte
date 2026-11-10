@@ -13,7 +13,7 @@
     Решение 211: блок «Один адрес — два тикера на одной бирже» (TickerConflict) — только показ.
   Кто вызывает: App.svelte.
   От чего зависит: lib/remote.svelte.js, lib/coinFilter.js, components/CoinFilters.svelte, CoinTable.svelte,
-    CoinModal.svelte, ManualBlacklist.svelte, TickerConflict.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
+    CoinModal.svelte, ManualBlacklist.svelte, WithdrawBlocked.svelte (решение 253), TickerConflict.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
   Настройки: coin.blocked, coin.blocked_note (через ManualBlacklist); пороги tax.*, hooks.* — экран «Настройки».
 -->
 <script>
@@ -23,6 +23,7 @@
   import CoinTable from '../components/CoinTable.svelte';
   import CoinModal from '../components/CoinModal.svelte';
   import ManualBlacklist from '../components/ManualBlacklist.svelte';
+  import WithdrawBlocked from '../components/WithdrawBlocked.svelte';
   import TickerConflict from '../components/TickerConflict.svelte';
   import NoData from '../components/NoData.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -58,6 +59,7 @@
 
 <h1>Монеты</h1>
 <ManualBlacklist />
+<WithdrawBlocked />
 <TickerConflict />
 
 <h2>Справочник, налоги и пулы</h2>

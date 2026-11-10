@@ -2,7 +2,7 @@
 //! Что делает: разбор события потока аккаунта Binance (WebSocket API, обёртка {"subscriptionId", "event"}) в
 //! изменение баланса ядра. balanceUpdate — изменение баланса монеты (d — дельта) при депозите, выводе или переводе
 //! между счетами; outboundAccountPosition (полные остатки изменённых монет) и executionReport (ордер) — не изменения
-//! «извне»: ядру не отдаются (итог ордера — из ответа REST, trade.rs).
+//! «извне»: ядру не отдаются (итог ордера — из ответа REST, trade.rs); остатки outboundAccountPosition — в withdraw_ready.rs.
 //! Кто вызывает: user_stream_conn.rs, тесты (после первой живой записи — tests/README.md).
 //! От чего зависит: core/types/balance.rs, serde_json.
 //! Настройки: нет.
@@ -12,6 +12,10 @@
 //! from the account; transfer of funds between accounts». Хеша транзакции и вида изменения в событии нет: вид — по
 //! знаку дельты (плюс — Deposit, минус — Withdraw), «своё ли» — решает ядро по своим переводам (own = false).
 //! eventStreamTerminated — подписка закрыта сервером: переподключиться.
+//! Решение 253: outboundAccountPosition — {"e":"outboundAccountPosition","E":время события,"u":время последнего
+//! изменения счёта,"B":[{"a":монета,"f":свободно,"l":в ордерах}]}; «is sent any time an account balance has changed and
+//! contains the assets that were possibly changed by the event that generated the balance change» — свободный остаток
+//! монеты для ожидания доступности вывода (withdraw_ready.rs), ядру не отдаётся.
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -26,6 +30,8 @@ pub enum Event {
     Other(String),
     /// Изменение баланса монеты.
     Balance(BalanceChange),
+    /// Решение 253: остатки изменённых монет (outboundAccountPosition): (монета, свободно) и время события, мс.
+    Position(Vec<(String, Decimal)>, i64),
     /// Сервер закрыл подписку (eventStreamTerminated).
     Terminated,
     /// Событие не разобрано — причина.
@@ -43,9 +49,35 @@ pub fn parse(text: &str, venue: &VenueId) -> Event {
     let kind = ev.get("e").and_then(Value::as_str).unwrap_or_default();
     match kind {
         "balanceUpdate" => balance(ev, venue),
+        "outboundAccountPosition" => position(ev),
         "eventStreamTerminated" => Event::Terminated,
         other => Event::Other(other.to_string()),
     }
+}
+
+/// Решение 253: outboundAccountPosition → остатки (монета, свободно f) и время E. Ошибок нет: неразборчивое — Event::Bad.
+fn position(ev: &Value) -> Event {
+    let Some(list) = ev.get("B").and_then(Value::as_array) else {
+        return Event::Bad("outboundAccountPosition без массива B".into());
+    };
+    let mut out = Vec::with_capacity(list.len());
+    for b in list {
+        let asset = b.get("a").and_then(Value::as_str).filter(|a| !a.is_empty());
+        let free = b
+            .get("f")
+            .and_then(Value::as_str)
+            .and_then(|f| f.parse::<Decimal>().ok());
+        match (asset, free) {
+            (Some(a), Some(f)) => out.push((a.to_string(), f)),
+            _ => {
+                return Event::Bad(format!(
+                    "outboundAccountPosition: запись B без a или f-числа: {b}"
+                ));
+            }
+        }
+    }
+    let at = ev.get("E").and_then(Value::as_i64).unwrap_or_default();
+    Event::Position(out, at)
 }
 
 /// balanceUpdate → изменение. Ошибок нет: неразборчивое — Event::Bad.

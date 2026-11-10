@@ -30,6 +30,7 @@ pub mod depth_band_algebra;
 pub mod direct;
 pub mod direct_route;
 pub mod emptiness;
+pub mod fills;
 pub mod gas;
 pub mod graph_exec;
 pub mod graph_executor;

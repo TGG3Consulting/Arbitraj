@@ -180,11 +180,15 @@ async fn not_ready_codes_in_window_become_locked() {
         transfers::not_ready(&ctx, "WLFI251", e26.clone()).code,
         ErrorCode::WithdrawRejected
     );
-    // Другой отказ вывода (адрес не в белом списке −4035) — как раньше.
-    let wl = refusal(-4035, "This address is not on the whitelist.");
+    // Другой отказ вывода (адрес не в белом списке −4035 — отказ аккаунта, InvalidAddress) — не «ещё не доступна».
+    let wl = refusal(
+        -4035,
+        "This address is not on the whitelist. Please join and try again.",
+    );
+    assert_eq!(wl.code, ErrorCode::InvalidAddress);
     assert_eq!(
         transfers::not_ready(&ctx, "CYBER251", wl).code,
-        ErrorCode::WithdrawRejected
+        ErrorCode::InvalidAddress
     );
     // Вне окна — как раньше.
     set(&core, "venue.withdraw_unready_window_ms", json!(1)).await;
@@ -264,9 +268,9 @@ async fn refusal_closes_entries_from_that_exchange_only() {
 
 #[tokio::test]
 async fn history_fee_and_seen_cost() {
-    let d = dir("bn251fee");
-    let (core, _) = start(&d, None).await;
-    let ctx = bn(&core, &d);
+    let dp = dir("bn251fee");
+    let (core, _) = start(&dp, None).await;
+    let ctx = bn(&core, &dp);
     let list: Value = serde_json::from_str(
         &std::fs::read_to_string(format!("{DIR}/withdraw_history.json")).unwrap(),
     )
@@ -284,48 +288,253 @@ async fn history_fee_and_seen_cost() {
         (fee.kind, fee.amount, fee.asset.as_str()),
         (CostKind::WithdrawFee, Decimal::new(4, 3), "USDT")
     );
-    // Поправка по фактам: комиссия по факту 0.5 больше справочника 0.3, недостача 2 % сверх налога 1 %.
+    // В расчёт — только при transfer.seen_cost площадки (одна формула и у оценки «Перегона» — adjust_at).
     let coin = Asset {
-        ticker: "CYBER".into(),
+        ticker: "SQQQB".into(),
         bsc_contract: None,
     };
-    let seen = arb::core::withdraw_seen::Seen {
-        asset: coin.clone(),
-        from: venue(),
-        fee: Some(Decimal::new(5, 1)),
-        shortfall_pct: Decimal::TWO,
-    };
-    let amount = Decimal::from(100);
-    let dir_costs = vec![
-        Cost::new(CostKind::WithdrawFee, Decimal::new(3, 1), "CYBER", false),
-        Cost::new(CostKind::TransferTax, Decimal::new(997, 3), "CYBER", false),
-    ];
-    let extra = arb::core::withdraw_seen::extra(&seen, amount, &dir_costs);
-    assert_eq!(extra.len(), 2);
-    assert_eq!(
-        (extra[0].kind, extra[0].amount),
-        (CostKind::WithdrawFee, Decimal::new(2, 1))
+    let info = net(Some(Decimal::ZERO), None);
+    let s = fact("SQQQB", "1000", "990.25", Some("0"));
+    arb::core::withdraw_seen::record(&core, s).await;
+    let dir_costs = lines(Decimal::from(500), Decimal::ZERO, Decimal::ZERO);
+    let a = Decimal::from(500);
+    let off = arb::core::withdraw_seen::adjust_at(
+        &core,
+        &venue(),
+        &coin,
+        &info,
+        Decimal::ZERO,
+        a,
+        dir_costs.clone(),
     );
-    // (100 − 0.5 − 0.997) × 2 % = 1.97006.
-    assert_eq!(
-        (extra[1].kind, extra[1].amount),
-        (CostKind::TransferTax, Decimal::new(197_006, 5))
-    );
-    // Факт не больше справочника и недостачи нет — поправки нет.
-    let same = arb::core::withdraw_seen::Seen {
-        fee: Some(Decimal::new(3, 1)),
-        shortfall_pct: Decimal::ZERO,
-        ..seen.clone()
-    };
-    assert!(arb::core::withdraw_seen::extra(&same, amount, &dir_costs).is_empty());
-    // В расчёт — только при transfer.seen_cost площадки.
-    arb::core::withdraw_seen::record(&core, seen).await;
-    assert!(
-        arb::core::withdraw_seen::adjust(&core, &coin, &venue(), amount, &dir_costs).is_empty()
-    );
+    assert_eq!(off, dir_costs, "transfer.seen_cost не задана — как раньше");
     set(&core, "transfer.seen_cost", json!(true)).await;
-    assert_eq!(
-        arb::core::withdraw_seen::adjust(&core, &coin, &venue(), amount, &dir_costs),
-        extra
+    let on = arb::core::withdraw_seen::adjust_at(
+        &core,
+        &venue(),
+        &coin,
+        &info,
+        Decimal::ZERO,
+        a,
+        dir_costs,
     );
+    assert_eq!(loss(&on), d("4.875"), "0.975 % от 500");
+}
+
+fn d(x: &str) -> Decimal {
+    x.parse().unwrap()
+}
+
+/// Сеть монеты в справочнике: фиксированная комиссия и доля суммы.
+fn net(fee: Option<Decimal>, pct: Option<Decimal>) -> arb::core::types::CoinNetworkInfo {
+    arb::core::types::CoinNetworkInfo {
+        venue: venue(),
+        asset: Asset {
+            ticker: "X".into(),
+            bsc_contract: None,
+        },
+        network: "BSC".into(),
+        deposit_enabled: true,
+        withdraw_enabled: true,
+        withdraw_fee: fee,
+        withdraw_fee_pct: pct,
+        withdraw_min: None,
+        withdraw_max: None,
+        deposit_min: None,
+        deposit_confirmations: None,
+        withdraw_precision: None,
+        withdraw_step: None,
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+/// Сырые факты перевода: отправлено, зачислено, комиссия по факту.
+fn fact(t: &str, sent: &str, credited: &str, fee: Option<&str>) -> arb::core::withdraw_seen::Seen {
+    arb::core::withdraw_seen::Seen {
+        asset: Asset {
+            ticker: t.into(),
+            bsc_contract: None,
+        },
+        from: venue(),
+        sent: d(sent),
+        credited: d(credited),
+        fee: fee.map(d),
+    }
+}
+
+/// Затраты справочника на сумму a (как costs_withdraw.rs): комиссия, налог (a − комиссия) × t %.
+fn lines(a: Decimal, fee: Decimal, t: Decimal) -> Vec<Cost> {
+    vec![
+        Cost::new(CostKind::WithdrawFee, fee, "X", false),
+        Cost::new(
+            CostKind::TransferTax,
+            (a - fee) * t / Decimal::ONE_HUNDRED,
+            "X",
+            false,
+        ),
+    ]
+}
+
+/// Потеря монеты при переводе по строкам: комиссия + налог + прочее.
+fn loss(c: &[Cost]) -> Decimal {
+    c.iter()
+        .filter(|c| {
+            matches!(
+                c.kind,
+                CostKind::WithdrawFee | CostKind::TransferTax | CostKind::TransferShortfall
+            )
+        })
+        .map(|c| c.amount)
+        .sum()
+}
+
+/// Строка вида kind (0 — нет). Ошибок нет.
+fn of(c: &[Cost], k: CostKind) -> Decimal {
+    c.iter().filter(|c| c.kind == k).map(|c| c.amount).sum()
+}
+
+/// Решение 253 (д), дополнение (Тигран 10.11): каждая составляющая потери перевода — ровно один раз. Числа SQQQB/SOXSB —
+/// из сообщения техлида (недостача ~0.975 % при комиссии 0); CYBER — условные (живого успешного вывода CYBER с Binance
+/// нет: все 12 сделок 10.11 — отказ).
+#[test]
+fn transfer_loss_counted_exactly_once() {
+    use arb::core::withdraw_seen::model;
+    let z = Decimal::ZERO;
+    let s1000 = Decimal::from(1000);
+    // SQQQB: API комиссии 0, факт 0, налог не измерен (t = 0), дошло на 0.975 % меньше — всё в «прочее».
+    let sq = fact("SQQQB", "1000", "990.25", Some("0"));
+    let c = model(&sq, Some(z), z, s1000, lines(s1000, z, z));
+    assert_eq!(of(&c, CostKind::TransferShortfall), d("9.75"));
+    assert_eq!(loss(&c), d("9.75"), "= отправлено − зачислено");
+    // Потом налог измерили (0.975 %): прочее пересчитывается против нового налога — 0, двойного счёта нет.
+    let t = d("0.975");
+    let c = model(&sq, Some(z), t, s1000, lines(s1000, z, t));
+    assert_eq!(of(&c, CostKind::TransferTax), d("9.75"));
+    assert_eq!(of(&c, CostKind::TransferShortfall), z);
+    assert_eq!(loss(&c), d("9.75"));
+    // SOXSB: то же при факте «комиссии нет» (биржа не сообщила) и справочнике 0 — тоже в «прочее».
+    let so = fact("SOXSB", "250", "247.5625", None);
+    let c = model(
+        &so,
+        Some(z),
+        z,
+        Decimal::from(250),
+        lines(Decimal::from(250), z, z),
+    );
+    assert_eq!(loss(&c), d("2.4375"));
+    // Комиссия из API = 0, а биржа удержала 2 и сообщила это в истории выводов — в комиссии, не в прочем.
+    let held = fact("CYBER", "1000", "998", Some("2"));
+    let c = model(&held, Some(z), z, s1000, lines(s1000, z, z));
+    assert_eq!(of(&c, CostKind::WithdrawFee), d("2"));
+    assert_eq!(of(&c, CostKind::TransferShortfall), z);
+    // Удержала 2, но сообщила 0 — в прочем (недоучёта нет).
+    let hidden = fact("CYBER", "1000", "998", Some("0"));
+    let c = model(&hidden, Some(z), z, s1000, lines(s1000, z, z));
+    assert_eq!((of(&c, CostKind::WithdrawFee), loss(&c)), (z, d("2")));
+    // CYBER: справочник 1.5, факт 3, налог 1 %, сверх — ещё 0.5 % «прочего». При A = S сумма строк = S − C.
+    let t = Decimal::ONE;
+    let exp = (s1000 - d("3")) * d("0.99");
+    let credited = exp * d("0.995");
+    let cy = arb::core::withdraw_seen::Seen {
+        credited,
+        ..fact("CYBER", "1000", "0", Some("3"))
+    };
+    let c = model(&cy, Some(d("1.5")), t, s1000, lines(s1000, d("1.5"), t));
+    assert_eq!(of(&c, CostKind::WithdrawFee), d("3"));
+    assert_eq!(
+        of(&c, CostKind::TransferTax),
+        d("9.97"),
+        "налог — от фактической комиссии"
+    );
+    assert_eq!(
+        loss(&c),
+        s1000 - credited,
+        "комиссия + налог + прочее = отправлено − зачислено"
+    );
+    // На другой сумме — фиксированная часть комиссии по факту, налог и прочее долей от ушедшего в сеть.
+    let a = Decimal::from(400);
+    let c = model(&cy, Some(d("1.5")), t, a, lines(a, d("1.5"), t));
+    assert_eq!(of(&c, CostKind::WithdrawFee), d("3"));
+    assert_eq!(
+        of(&c, CostKind::TransferShortfall),
+        (a - d("3")) * d("0.99") * d("0.005")
+    );
+    // Комиссия долей суммы (0.1 % в справочнике): отличие факта от справочника на S добавляется к справочнику на A.
+    let info = net(Some(z), Some(d("0.001")));
+    let pr = fact("CYBER", "1000", "998", Some("2"));
+    let fee_a = info.fee_for(a).unwrap();
+    let c = model(&pr, info.fee_for(s1000), z, a, lines(a, fee_a, z));
+    assert_eq!(
+        of(&c, CostKind::WithdrawFee),
+        d("1.4"),
+        "0.4 по справочнику + (2 − 1) по факту"
+    );
+    // Пришло больше ожидаемого — прочего нет (налог и комиссия из API/пробы не уменьшаются).
+    let more = fact("CYBER", "1000", "1000", Some("0"));
+    let c = model(&more, Some(z), t, s1000, lines(s1000, z, t));
+    assert_eq!(
+        (
+            of(&c, CostKind::TransferShortfall),
+            of(&c, CostKind::TransferTax)
+        ),
+        (z, d("10"))
+    );
+}
+
+#[test]
+fn min_delay_after_buy() {
+    use arb::core::withdraw_wait::left_ms;
+    let t = chrono::Utc::now();
+    assert_eq!(
+        left_ms(t, t + chrono::Duration::milliseconds(300), 1000),
+        Some(Duration::from_millis(700))
+    );
+    assert_eq!(
+        left_ms(t, t + chrono::Duration::milliseconds(1500), 1000),
+        None,
+        "пауза уже прошла"
+    );
+}
+
+/// Дополнение (Тигран 10.11): отказы аккаунта по официальной таблице Binance (−4007, −4012, −4033…−4036) —
+/// InvalidAddress; монета не закрывается, уходит алерт «проблема в аккаунте» с человеческой причиной.
+#[tokio::test]
+async fn account_refusal_alerts_without_closing_coin() {
+    for code in [-4007, -4012, -4033, -4034, -4035, -4036] {
+        assert_eq!(refusal(code, "x").code, ErrorCode::InvalidAddress, "{code}");
+        // Не вывод — прежний смысл.
+        assert_ne!(
+            from_code(code, "x", Op::Other, "{}").code,
+            ErrorCode::InvalidAddress
+        );
+    }
+    let r = arb::notify::reason::human(
+        &refusal(-4035, "This address is not on the whitelist.").message,
+    );
+    assert!(
+        r.text.contains("нет в белом списке вывода Binance"),
+        "{r:?}"
+    );
+    let d = dir("bn253acc");
+    let (core, j) = start(&d, None).await;
+    let coin = Asset {
+        ticker: "SQQQB".into(),
+        bsc_contract: Some(alloy_primitives::address!(
+            "0x00000000000000000000000000000000000253a1"
+        )),
+    };
+    let e = OpError::from(&refusal(-4035, "This address is not on the whitelist."));
+    arb::core::withdraw_block::close(&core, "20261110130000000SQQQB", &coin, &venue(), &e).await;
+    let dir_b = Direction {
+        asset: coin.clone(),
+        buy_on: venue(),
+        sell_on: VenueId("bsc_dex".into()),
+    };
+    assert!(
+        arb::core::withdraw_block::check(&core, &dir_b).is_ok(),
+        "монета не закрыта"
+    );
+    let logs =
+        usdt_return_common::entries(&j, "core.withdraw_block", "проблема в аккаунте binance").await;
+    assert_eq!(logs.len(), 1);
 }

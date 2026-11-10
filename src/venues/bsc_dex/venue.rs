@@ -7,6 +7,7 @@
 //! Настройки: docs/SETTINGS.md — «Узел BSC», «DEX», «Отправка транзакций», venue.* и feed.* с областью bsc_dex;
 //! exec.via_kyber, exec.dex_best_of (решение 123, «лучший из двух» — best_of/).
 //! Решение 132: деньги и адрес кошелька — только у вида на счёт (venue_account.rs); без привязки — отказ (Ctx::bound).
+//! t78: продажа выхода сделки целиком или вывод её монеты — налоги кошелька сделки сняты (check/deal_taxes.rs).
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -134,11 +135,15 @@ impl Venue for BscDex {
     /// Обмен через Universal Router своей DEX (прямой) или PancakeSwap Infinity (умный) — exec/trade.rs; источники —
     /// research/flow/bsc_dex.md, раздел 5, bsc_smart_router.md. Ошибки: см. exec/trade.rs (с фактом транзакции).
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        let asked = req.clone();
         // Решение 222: монета сделки — по изменению баланса кошелька на блоке свопа (все пути исполнения ниже).
         let r = self.trade_logs(req).await;
         let fact = exec::balance_fact::apply(&self.p.ctx, &self.p.tokens, r);
         // Решение 231: «исход неизвестен» с фактом транзакции — «чем найти» (хеш, nonce) для ядра (resolve.rs).
-        scope(Class::Trade, fact).await.map_err(resolve::attach)
+        let r = scope(Class::Trade, fact).await.map_err(resolve::attach);
+        // t78: продажа выхода сделки исполнилась целиком — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
+        self.p.checks.forget_after_sale(&asked, &r);
+        r
     }
 
     /// Перевод монеты из кошелька на адрес (ERC-20 transfer, EIP-20) — wallet/transfer.rs.
@@ -146,12 +151,16 @@ impl Venue for BscDex {
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
         self.p.ctx.bound()?;
         let env = self.p.env();
-        scope(
+        let asked = req.clone();
+        let r = scope(
             Class::Trade,
             wallet::transfer::withdraw(&env, &self.p.tokens, &self.p.nonces, req),
         )
         .await
-        .map_err(resolve::attach)
+        .map_err(resolve::attach);
+        // t78: монета сделки ушла с кошелька — её налоги кошелька сделки больше не нужны (deal_taxes.rs).
+        self.p.checks.forget_after_withdraw(&asked, &r);
+        r
     }
 
     /// Статус перевода из кошелька по квитанции (execution-apis transaction.yaml#L127-L165) — wallet/transfer_status.rs.

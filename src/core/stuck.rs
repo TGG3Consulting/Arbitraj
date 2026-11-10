@@ -14,7 +14,8 @@
 //! «не задана настройка …», журнал Error и уведомление закрытия сделки человеку (ledger::finish). Прочие ошибки
 //! котировки — ждём тика, как раньше; первая — в журнал (Warn), чтобы ожидание было видно (stuck_quote.rs).
 //! Решение 247: продажа режима — с пере-замером продажи DEX при откате по minOut в пределах порога режима
-//! («Порог убытка» — stuck.max_loss_pct, «Ожидание: стало выгодно» — итог ≥ 0; по истечении ожидания — без пере-замера).
+//! («Порог убытка» — stuck.max_loss_pct, «Ожидание: стало выгодно» — итог ≥ 0; по истечении ожидания — тоже итог ≥ 0:
+//! дополнение 10.11, t78 — Тигран: согласовано; прежде без пере-замера).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
@@ -148,9 +149,10 @@ async fn wait(core: &Core, mut deal: Deal) {
             Err(e) => q::no_quote_once(core, &deal, &e, &mut first).await,
         }
     }
-    // Решение 247: по истечении ожидания — продажа по рынку без порога убытка, пере-замера нет (порога для него нет).
+    // Решение 247, дополнение 10.11 (t78, Тигран: согласовано): по истечении ожидания — продажа по рынку без порога
+    // убытка; пере-замер продажи DEX при откате «мало на выходе» — только при итоге сделки ≥ 0 (remeasure::PROFITABLE).
     let why = format!("ждали {ms} мс — выгодно не стало");
-    sold_by_market(core, deal, &why, Guard::Off).await;
+    sold_by_market(core, deal, &why, super::remeasure::PROFITABLE).await;
 }
 
 /// «Порог убытка»: убыток не больше stuck.max_loss_pct — по рынку; больше — алерт человеку.

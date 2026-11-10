@@ -18,7 +18,8 @@
 //! что откатилась). Исполнитель проверяет только сумму (minOut = сумма долей, call.rs) — минимумы долей не меняются.
 //! Строка «пере-замер: модель X, реально R, новый minOut M» — в журнал dex.remeasure и в пометку итога (хронология).
 //! Решение 247, п. Б: откат по minOut у продажи выхода — монета во внеочередную перепроверку налогов (check/recheck.rs);
-//! дополнение 10.11 (Тигран: согласовано) — перепроверка кошельком сделки (coins_by со счётом окружения сделки).
+//! дополнение 10.11 (Тигран: согласовано) — перепроверка и кошельком сделки (coins_by со счётом окружения и id сделки;
+//! t78: его итог — только для продажи этой сделки, check/deal_taxes.rs).
 //! Решение 248 (кейс SMARS 10.11): замер с minOut 1 ед. делается при любом откате продажи выхода по minOut (и без
 //! условий ядра — первая продажа сделки): граница по замеру уходит ядру (exec/exit_gap.rs → core/exit_gap.rs —
 //! закрытие монеты для входа); minOut меняется только при условиях ядра (TradeRequest.remeasure), как в 247.
@@ -36,6 +37,7 @@ use crate::core::types::{Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
+use super::super::super::check::recheck::By;
 use super::super::super::check::simulate::CallResult;
 use super::super::super::ctx::Ctx;
 use super::super::super::num;
@@ -112,10 +114,15 @@ pub async fn probe(
     let orig = sim::explain(no_route(ctx, &r), diag);
     // Решение 247, п. Б: модель налога монеты не сошлась с сетью — внеочередная перепроверка (для следующих сделок).
     if let Some(a) = req.asset.bsc_contract {
-        // Дополнение 10.11 (Тигран: согласовано): перепроверка — кошельком сделки (счёт окружения сделки), не строки «Пробы».
-        env.wake.coins_by(&[a], env.ctx.account.as_deref());
+        // Дополнение 10.11 (Тигран: согласовано): перепроверка — и кошельком сделки (счёт окружения сделки); t78: его
+        // итог — только для продажи этой сделки (check/deal_taxes.rs), общие налоги — кошельком строки «Пробы».
+        let by = env.ctx.account.clone().map(|account| By {
+            account,
+            deal: req.deal_id.clone(),
+        });
+        env.wake.coins_by(&[a], by);
         let msg = format!(
-            "{} {}: откат продажи выхода по minOut — монета в перепроверку налогов (решение 247, п. Б); кошельком сделки «{}»",
+            "{} {}: откат продажи выхода по minOut — монета в перепроверку налогов (решение 247, п. Б); общие — кошельком «Пробы», для продажи сделки — кошельком сделки «{}»",
             req.deal_id,
             req.asset.ticker,
             env.ctx.wallet_name()

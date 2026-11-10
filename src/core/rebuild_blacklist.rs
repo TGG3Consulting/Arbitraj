@@ -8,7 +8,9 @@
 //! Кто вызывает: core/rebuild.rs.
 //! От чего зависит: blacklist.rs, registry.rs, market_state.rs, engine.rs, settings.
 //! Решение 214: биржи с venue.cex_cex = нет — поле CoinEntry.cex_cex_off, направлений биржа ↔ биржа с ними нет.
-//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs; venue.cex_cex.
+//! Решение 248: список venue.cex_cex_deny биржи покупки — поле CoinEntry.cex_cex_deny (направления A → B из списка A).
+//! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs; venue.cex_cex,
+//! venue.cex_cex_deny — через cex_link.rs.
 
 use chrono::Utc;
 
@@ -17,19 +19,6 @@ use super::engine::{Core, rd, wr};
 use super::market_state::MarketState;
 use super::rebuild::has_pool;
 use super::registry::CoinEntry;
-
-/// Решение 214: разрешено ли бирже торговать с другими биржами (venue.cex_cex). Не задана — да (Тигран, 07.11.2026).
-/// Принимает: настройки, площадку. Возвращает: true — разрешено. Ошибок нет.
-fn cex_cex_allowed(s: &crate::settings::store::Store, venue: &str) -> bool {
-    s.flag(
-        "venue.cex_cex",
-        crate::settings::read::At {
-            venue: Some(venue),
-            coin: None,
-        },
-    )
-    .unwrap_or(true)
-}
 
 /// Чёрный список по справочнику: ручная отметка, проверки налогов со всех DEX, где у монеты есть
 /// пул с USDT. Заполняет block / problem у монет. Возвращает: изменения для уведомлений.
@@ -58,9 +47,11 @@ pub fn apply_blacklist(
         c.cex_cex_off = c
             .presence
             .iter()
-            .filter(|p| p.info.is_some() && !cex_cex_allowed(s, &p.venue.0))
+            .filter(|p| p.info.is_some() && !super::cex_link::on(s, &p.venue.0))
             .map(|p| p.venue.clone())
             .collect();
+        // Решение 248: список «не взаимодействовать» биржи покупки — запрещённые направления биржа → биржа.
+        c.cex_cex_deny = super::cex_link::deny_pairs(s, &c.presence);
         let checks: Vec<_> = match c.asset.bsc_contract {
             Some(token) => c
                 .presence

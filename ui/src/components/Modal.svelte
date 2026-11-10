@@ -2,7 +2,7 @@
   Файл: ui/src/components/Modal.svelte
   Что делает: всплывающее (модальное) окно поверх экрана с заголовком и крестиком (Issue #33).
     Закрывается крестиком, клавишей Esc и щелчком мимо окна. Содержимое — то, что передал экран.
-  Кто вызывает: components/LiveCoinModal.svelte, components/CoinModal.svelte.
+  Кто вызывает: components/LiveCoinModal.svelte, components/CoinModal.svelte, components/CexCexDeny.svelte.
   От чего зависит: ничего.
   Настройки: нет.
 -->

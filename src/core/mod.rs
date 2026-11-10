@@ -24,6 +24,7 @@ pub mod card_job;
 pub mod card_links;
 pub mod card_max;
 pub mod card_text;
+pub mod cex_link;
 pub mod coin_alias_sync;
 pub mod coin_book;
 pub mod coin_key;

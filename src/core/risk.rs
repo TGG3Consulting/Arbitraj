@@ -10,6 +10,7 @@
 //! требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
 //! auto_pause.rs); софтовую снимает сам бот (auto_resume.rs, day_roll.rs), человек — сбрасывает отметку.
 //! Решение 230: пауза кошелька DEX от сверки (Risk.wallet_paused, wallet_pause.rs) — отказ направлениям этого кошелька.
+//! Решение 248: направление биржа → биржа, запрещённое venue.cex_cex / venue.cex_cex_deny (cex_link.rs), — отказ.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
@@ -120,6 +121,9 @@ pub fn publish(core: &Core) {
 /// Можно ли открыть новую сделку по направлению. Ошибки: текст причины.
 pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     super::risk_ready::settings_ready(core, d)?;
+    // Решение 248: биржа → биржа по venue.cex_cex обеих и списку venue.cex_cex_deny биржи покупки (сразу по настройкам,
+    // не дожидаясь пересборки справочника).
+    super::cex_link::direction_ok(core, d)?;
     // Решение 230: кошелёк направления по текущему маппингу — до блокировки риска (свои замки видов и маппинга).
     let wallet = super::dex_account::of_direction_now(core, d);
     // Решение 231 (дополнение, п. 4): очередь кошелька остановлена — «биржа → DEX» не начинается (до замка риска).

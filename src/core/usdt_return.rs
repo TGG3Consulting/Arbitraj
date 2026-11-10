@@ -12,7 +12,10 @@
 //! затраты возврата входят в итог сделки (deal_return_cost.rs).
 //! Кто вызывает: usdt_return_job.rs (relay, relay_try), usdt_return_retry.rs (relay_try, решение 163), reconcile.rs (separate).
 //! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, deal_return_cost.rs (Relayed, газ в USDT), settings.
-//! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset.
+//! Решение 248: «отдельно» биржа → биржа — только если разрешено venue.cex_cex обеих и списком venue.cex_cex_deny
+//! донора (cex_link::pair); иначе этот донор не берётся.
+//! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset;
+//! venue.cex_cex, venue.cex_cex_deny (через cex_link.rs).
 
 use std::collections::HashMap;
 
@@ -182,6 +185,12 @@ pub async fn separate(core: &Core, free: &HashMap<Holder, Decimal>) {
             .iter()
             .filter(|(h, f)| *h != low_h && low_of(h).is_some_and(|l| **f - amount >= l))
             .filter(|(h, _)| pair_ok(core, h, low_h))
+            // Решение 248: донор-биржа → биржа-получатель — по venue.cex_cex обеих и списку venue.cex_cex_deny донора.
+            .filter(|(h, _)| {
+                h.1.is_some()
+                    || low_h.1.is_some()
+                    || super::cex_link::pair(s, &h.0.0, &low_h.0.0).is_none()
+            })
             .max_by_key(|(_, f)| **f)
             .map(|(h, _)| h.clone());
         if let Some(from) = donor {
@@ -195,7 +204,8 @@ pub async fn separate(core: &Core, free: &HashMap<Holder, Decimal>) {
     }
 }
 
-/// Можно ли перегнать между двумя держателями (решение 132): биржа ↔ биржа — да; биржа ↔ кошелёк DEX — только если
+/// Можно ли перегнать между двумя держателями (решение 132): биржа ↔ биржа — да (решение 248 — ещё правила cex_link.rs
+/// в separate); биржа ↔ кошелёк DEX — только если
 /// кошелёк привязан к этой бирже в маппинге; кошелёк ↔ кошелёк — нет. Ошибок нет.
 fn pair_ok(core: &Core, a: &Holder, b: &Holder) -> bool {
     let acc = core.inner.deps.settings.accounts();

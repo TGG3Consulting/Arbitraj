@@ -93,6 +93,9 @@ pub struct CoinEntry {
     /// Решение 214: биржи монеты, у которых venue.cex_cex = «нет» — с другими биржами направлений нет (только с DEX).
     /// Заполняет rebuild_blacklist.rs. Пусто — запретов нет.
     pub cex_cex_off: Vec<VenueId>,
+    /// Решение 248: направления биржа → биржа (покупка, продажа), запрещённые списком venue.cex_cex_deny биржи покупки
+    /// (одностороннее правило: список у A запрещает только A → B). Заполняет rebuild_blacklist.rs. Пусто — запретов нет.
+    pub cex_cex_deny: Vec<(VenueId, VenueId)>,
 }
 
 impl CoinEntry {
@@ -131,6 +134,14 @@ impl CoinEntry {
                 if a.info.is_some()
                     && b.info.is_some()
                     && (self.cex_cex_off.contains(&a.venue) || self.cex_cex_off.contains(&b.venue))
+                {
+                    continue;
+                }
+                // Решение 248: список «не взаимодействовать» биржи покупки — только направление A → B.
+                if self
+                    .cex_cex_deny
+                    .iter()
+                    .any(|(x, y)| x == &a.venue && y == &b.venue)
                 {
                     continue;
                 }

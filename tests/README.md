@@ -875,3 +875,4 @@ DEX без сети, SQLite, записанный пул CAKE/USDT): сделк�
 Deal::decided_at, без него — от открытия (Stat.from_open), поле учёта читается и без него. Дополнение 245, п. 3 —
 tests/window_deal_price.rs deal_point_path: путь точки на объём сделки (свой / KyberSwap / нет маршрута / лучший из двух
 и кто выиграл / KyberSwap не спрашивается при window.dex_price_min_ms = 0) на записанной котировке CAKE.
+- `core_cex_cex_deny.rs` — решение 248 на живом ядре и SQLite: список venue.cex_cex_deny односторонний (у binance [bingx] — bingx → binance есть, binance → bingx нет), venue.cex_cex = нет — в обе стороны, кейс Тиграна (сделка bingx → DEX, перегон не выбирает mexc с «нет» — relay::targets и manual_relay_targets::targets), список биржи покупки против списка цели, путь монеты через биржу с «нет», не задано — как до решения.

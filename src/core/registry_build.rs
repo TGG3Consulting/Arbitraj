@@ -159,6 +159,7 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
                 wait: None,
                 cex_cex: None,
                 cex_cex_off: vec![],
+                cex_cex_deny: vec![],
             }
         })
         .collect()

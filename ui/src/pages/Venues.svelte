@@ -12,7 +12,8 @@
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
-    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js).
+    ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js),
+    CexCexDeny.svelte (решение 248: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»).
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -29,6 +30,7 @@
   import ErrorText from '../components/ErrorText.svelte';
   import DayVenues from '../components/DayVenues.svelte';
   import Delistings from '../components/Delistings.svelte';
+  import CexCexDeny from '../components/CexCexDeny.svelte';
   import { startDelist } from '../lib/delist.svelte.js';
 
   startDelist();
@@ -36,7 +38,8 @@
   const groups = $derived.by(() => {
     const out = new Map();
     for (const d of store.schema?.settings ?? []) {
-      if (!d.scopes.includes('Venue')) continue;
+      // Решение 248: venue.cex_cex_deny — окном «Настроить список» у venue.cex_cex, отдельной строкой не показывается.
+      if (!d.scopes.includes('Venue') || d.name === 'venue.cex_cex_deny') continue;
       if (!out.has(d.group)) out.set(d.group, []);
       out.get(d.group).push(d);
     }
@@ -100,6 +103,9 @@
         <div class="setting-line">
           <code>{def.name}</code> <span class="muted">{def.description}{def.unit ? ` (${def.unit})` : ''}</span>
           <SettingEditor {def} scope={{ kind: 'Venue', id }} />
+          {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === id)?.kind === 'Cex'}
+            <CexCexDeny venue={id} />
+          {/if}
         </div>
       {/each}
     {/each}

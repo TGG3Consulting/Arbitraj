@@ -108,6 +108,7 @@ fn entry(rec: &Rec) -> CoinEntry {
         wait: None,
         cex_cex: None,
         cex_cex_off: vec![],
+        cex_cex_deny: vec![],
     }
 }
 

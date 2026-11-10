@@ -3,33 +3,21 @@
 //! монет: у монеты там рынок, приём по BSC и продажа через API; venue.enabled = да; площадка не на паузе; биржа ↔
 //! биржа — только если venue.cex_cex не «нет» у обеих сторон: у биржи, где лежит монета, и у биржи-цели (не задана —
 //! да; «у одной из сторон», как направления решения 214); на DEX и «продать здесь» — без этого условия; DEX — кошельком по
-//! маппингу (dex_account::for_relay, решение 185), кошелёк не на паузе (решение 230). С площадки, где лежит монета,
+//! маппингу (dex_account::for_relay, решение 185), кошелёк не на паузе (решение 230). Решение 248: условие биржа ↔ биржа —
+//! cex_link::relay_block: биржа-цель не берётся, если venue.cex_cex = нет у неё или у любой биржи, через которую монета
+//! сделки уже прошла (покупка, переводы, где лежит сейчас — в том числе когда монета сейчас на кошельке DEX), или если
+//! она в списке venue.cex_cex_deny биржи покупки. С площадки, где лежит монета,
 //! перегона нет, если вывод с неё по BSC закрыт, она или её кошелёк на паузе, или она уже отказала в выводе в этой
 //! сделке (решения 220, 227, 230). Каждая отсеянная площадка — с причиной (в хронологию сделки).
 //! Кто вызывает: core/manual_relay.rs.
 //! От чего зависит: ticker_index.rs, registry_sync.rs (enabled), dex_account.rs, wallet_pause.rs, withdraw_refused.rs,
 //! trade_ops.rs (вид площадки), engine.rs (справочник монет, пауза площадок).
-//! Настройки: venue.enabled, venue.cex_cex (по площадке).
+//! Настройки: venue.enabled; venue.cex_cex, venue.cex_cex_deny (по площадке, через cex_link.rs).
 
 use crate::core::types::VenueId;
-use crate::gateway::contract::VenueKind;
-use crate::settings::read::At;
 
 use super::deal::Deal;
 use super::engine::{Core, lk, rd};
-
-/// Биржа разрешает биржа ↔ биржа (venue.cex_cex; не задана — да, решение 214). Принимает: ядро, площадку. Ошибок нет.
-fn cex_cex(core: &Core, v: &VenueId) -> bool {
-    let at = At {
-        venue: Some(&v.0),
-        coin: None,
-    };
-    core.inner
-        .deps
-        .settings
-        .flag("venue.cex_cex", at)
-        .unwrap_or(true)
-}
 
 /// Цели перегона по настройкам и справочнику. Принимает: ядро, сделку. Возвращает: (цели; причины, почему площадки
 /// не цели или перегона нет вовсе — для хронологии). Ошибок нет.
@@ -64,9 +52,6 @@ pub fn targets(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
         return (vec![], skip);
     }
     let paused = lk(&core.inner.risk).venue_paused.clone();
-    let from_cex = super::trade_ops::kind(core, from).ok() == Some(VenueKind::Cex);
-    // Решение 214 «у одной из сторон»: у биржи, где лежит монета, venue.cex_cex = нет — на другие биржи не перегоняем.
-    let from_cex_cex = !from_cex || cex_cex(core, from);
     let mut out = vec![];
     for p in e
         .presence
@@ -74,20 +59,16 @@ pub fn targets(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
         .filter(|p| p.excluded.is_empty() && &p.venue != from)
     {
         let to = &p.venue;
-        let to_cex = super::trade_ops::kind(core, to).ok() == Some(VenueKind::Cex);
+        // Решение 248: правила биржа ↔ биржа относительно пути монеты сделки (cex_link.rs).
+        let link = super::cex_link::relay_block(core, deal, to);
         let why = if !p.can_receive || !p.can_sell {
             Some("приём по BSC или продажа через API закрыты".to_string())
         } else if !super::registry_sync::enabled(core, to) {
             Some("площадка выключена (venue.enabled)".into())
         } else if let Some(x) = paused.get(to) {
             Some(format!("на паузе ({x})"))
-        } else if from_cex && to_cex && !from_cex_cex {
-            Some(format!(
-                "биржа ↔ биржа выключена у {} (venue.cex_cex = нет), где лежит монета",
-                from.0
-            ))
-        } else if from_cex && to_cex && !cex_cex(core, to) {
-            Some("биржа ↔ биржа выключена (venue.cex_cex = нет)".into())
+        } else if let Some(w) = link {
+            Some(w)
         } else {
             match super::dex_account::for_relay(core, deal, to) {
                 Err(e) => Some(e),

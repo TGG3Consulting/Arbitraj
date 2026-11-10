@@ -4,11 +4,12 @@
 //   Значения обновляются на лету из живого потока ({"type":"settings"}), при «lagged» — перечитываются.
 //   Значений по умолчанию нет: не задано — значит в values нет записи.
 // Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js.
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: читает и показывает любые.
 
 import { get, put } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
+import { flight } from './flight.js';
 
 /** schema: {settings, events} или null; values: ключ области → значение; venues: id площадок;
  *  venueKinds: [{id, kind: 'Cex' | 'Dex'}]. */
@@ -20,8 +21,8 @@ export const store = $state({ schema: null, values: {}, venues: [], venueKinds: 
  */
 export const valueKey = (name, scope) => `${name}|${scope.kind}|${scope.id ?? ''}`;
 
-/** Что делает: перечитывает всё по REST. Ошибка — в store.error. */
-export async function reload() {
+/** Что делает: перечитывает всё по REST (один запрос в полёте — lib/flight.js). Ошибка — в store.error. */
+export const reload = flight(async () => {
   try {
     const [schema, values, venues, venueKinds] = await Promise.all([
       get('/api/settings/schema'),
@@ -39,7 +40,7 @@ export async function reload() {
   } catch (e) {
     store.error = e.message;
   }
-}
+});
 
 /** Что делает: первая загрузка и подписка на живой поток. Вызывается один раз из App.svelte. */
 export function start() {

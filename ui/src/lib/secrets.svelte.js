@@ -5,11 +5,12 @@
 //   Обновляется после каждого действия и по записям журнала вида «secrets» из живого потока
 //   (так изменения из другой вкладки видны сразу).
 // Кто вызывает: App.svelte (start), components/LockBanner.svelte, SecretRow.svelte, экраны.
-// От чего зависит: lib/api.js, lib/live.svelte.js.
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: нет.
 
 import { get } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
+import { flight } from './flight.js';
 
 /** Имя секрета токена Telegram (src/secrets/mod.rs, TELEGRAM_BOT_TOKEN) — экраны «Уведомления» и «Площадки». */
 export const TELEGRAM_TOKEN = 'telegram.bot_token';
@@ -28,8 +29,8 @@ export const TELEGRAM_ROLES = [
 /** status: {file_exists, unlocked, names} или null — ещё не загружено; known: [{name, scope, description}]. */
 export const secrets = $state({ status: null, known: [], error: '' });
 
-/** Что делает: перечитывает состояние и список. Ошибка — в secrets.error. */
-export async function refresh() {
+/** Что делает: перечитывает состояние и список (один запрос в полёте — lib/flight.js). Ошибка — в secrets.error. */
+export const refresh = flight(async () => {
   try {
     const [status, known] = await Promise.all([get('/api/secrets/status'), get('/api/secrets/known')]);
     secrets.status = status;
@@ -38,7 +39,7 @@ export async function refresh() {
   } catch (e) {
     secrets.error = e.message;
   }
-}
+});
 
 /** Что делает: первая загрузка и подписка на живой поток. Вызывается один раз из App.svelte. */
 export function start() {

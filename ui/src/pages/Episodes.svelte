@@ -15,6 +15,7 @@
   import { uniqBy } from '../lib/uniq.js';
   import { get, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { dirText } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
@@ -31,19 +32,21 @@
   let replay = $state(null);
   let now = $state(Date.now());
 
-  /** Перечитывает список. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает список (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     if (!limit) return;
     try {
-      const r = await get(`/api/episodes?limit=${limit}`);
+      const r = await get(`/api/episodes?limit=${limit}`, signal);
       rows = r.episodes;
       off = r.off;
       used = r.used_bytes;
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена объёма или уход со страницы — отмена. */
+  const reload = flight(load);
 
   $effect(() => {
     reload();
@@ -59,6 +62,7 @@
     return () => {
       clearInterval(t);
       stop();
+      reload.cancel();
     };
   });
 

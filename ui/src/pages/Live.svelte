@@ -24,10 +24,13 @@
     браузера (requestAnimationFrame), не чаще live.spread_min_interval_ms (то же значение, с которым сервер шлёт
     строку направления; не задана — каждый кадр). Раньше каждое из тысяч сообщений в секунду пересчитывало всю
     таблицу монет (~3700 направлений) — страница не успевала, данные на экране старели при свежих на сервере.
+  Шторм запросов 10.11.2026: перечитывание по coins / «lagged» — один запрос в полёте (lib/flight.js), уход со
+    страницы — отмена запросов.
 -->
 <script>
   import { uniq } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
+  import { flight } from '../lib/flight.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { store, valueKey } from '../lib/settings.svelte.js';
   import { dirText, dirKey, pickLines } from '../lib/coreLabels.js';
@@ -57,17 +60,18 @@
   let filter = $state('');
   let onlyActive = $state(false);
 
-  /** Перечитывает оба списка. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает оба списка (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function load(signal) {
     try {
-      const [s, c] = await Promise.all([get('/api/spreads'), get('/api/candidates')]);
+      const [s, c] = await Promise.all([get('/api/spreads', signal), get('/api/candidates', signal)]);
       spreads = Object.fromEntries(s.map((v) => [dirKey(v.direction), v]));
       cands = Object.fromEntries(c.map((v) => [dirKey(v.direction), v]));
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  const reload = flight(load);
 
   /** Наименьший промежуток между пачками, мс: live.spread_min_interval_ms (глобальная); не задана — 0. */
   const minGap = () => Number(store.values[valueKey('live.spread_min_interval_ms', { kind: 'Global' })] ?? 0);
@@ -108,6 +112,7 @@
     });
     return () => {
       off();
+      reload.cancel();
       if (frame) cancelAnimationFrame(frame);
     };
   });

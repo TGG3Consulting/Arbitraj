@@ -46,14 +46,19 @@
   // Чтение файла эпизода — как в EpisodeView; при новом объёме плеер встаёт в начало и на паузу.
   $effect(() => {
     if (!limit) return;
-    get(`/api/episodes/${seg(episode.id)}?limit=${limit}`)
+    // Смена параметров или уход — прежний запрос отменяется (AbortController, шторм запросов 10.11.2026).
+    const ac = new AbortController();
+    get(`/api/episodes/${seg(episode.id)}?limit=${limit}`, ac.signal)
       .then((r) => {
         data = r;
         error = '';
         index = 0;
         playing = false;
       })
-      .catch((e) => (error = e.message));
+      .catch((e) => {
+        if (!e.aborted) error = e.message;
+      });
+    return () => ac.abort();
   });
 
   // Проигрывание: пока playing — шаг вперёд раз в 1000/fps мс; на последней записи встаём на паузу.

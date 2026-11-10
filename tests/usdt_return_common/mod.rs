@@ -120,6 +120,20 @@ pub async fn entries(j: &Journal, kind: &str, part: &str) -> Vec<Entry> {
         .collect()
 }
 
+/// Ждёт, пока в журнале не появится запись с этим видом и подстрокой (не дольше max). Нужна, когда запись пишется
+/// после смены состояния (страховка mark_not_returned: сначала состояние, потом журнал core.usdt_not_returned).
+/// Возвращает: найденные записи (пусто — не дождались). Ошибок нет.
+pub async fn wait_entries(j: &Journal, kind: &str, part: &str, max: Duration) -> Vec<Entry> {
+    let t = Instant::now();
+    loop {
+        let v = entries(j, kind, part).await;
+        if !v.is_empty() || t.elapsed() >= max {
+            return v;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Ждёт, пока состояние возврата сделки не удовлетворит ok (не дольше max). Возвращает последнее состояние.
 pub async fn wait_state(
     core: &Core,

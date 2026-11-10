@@ -15,6 +15,7 @@
   import { uniqBy } from '../lib/uniq.js';
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { levelLabel, showTime } from '../lib/labels.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -29,31 +30,38 @@
   let venue = $state('');
   let open = $state({});
 
-  /** Читает страницу. Принимает: before — id, старше которого читать (или null — с начала). */
-  async function load(before) {
+  /** Читает страницу. Принимает: before — id, старше которого читать (или null — с начала); signal — отмена. */
+  async function load(before, signal) {
     if (limit === null) return;
     busy = true;
     try {
-      const page = await get(`/api/journal?limit=${limit}${before ? `&before=${before}` : ''}`);
+      const page = await get(`/api/journal?limit=${limit}${before ? `&before=${before}` : ''}`, signal);
       entries = uniqBy(before ? [...entries, ...page] : page, (e) => e.id);
       more = page.length === limit;
       error = '';
     } catch (e) {
+      if (e.aborted) return;
       error = e.message;
     }
     busy = false;
   }
+  /** Первая страница заново: один запрос в полёте (lib/flight.js); смена объёма или уход со страницы — отмена. */
+  const reload = flight((signal) => load(null, signal));
 
   $effect(() => {
-    load(null);
-    return onLive((m) => {
-      if (lagFor(m, 'journal')) load(null);
+    reload();
+    const off = onLive((m) => {
+      if (lagFor(m, 'journal')) reload();
       if (m.type !== 'journal') return;
       // Решение 155: обновление повторяющейся записи (тот же id) — замена на месте, новая — сверху.
       const i = entries.findIndex((e) => e.id === m.data.id);
       if (i >= 0) entries[i] = m.data;
       else entries = [m.data, ...entries];
     });
+    return () => {
+      off();
+      reload.cancel();
+    };
   });
 
   /** Время без даты (ЧЧ:ММ:СС) — для «с … по …». */

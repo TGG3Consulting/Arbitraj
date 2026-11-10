@@ -24,12 +24,17 @@
 
   $effect(() => {
     if (!limit) return;
-    get(`/api/episodes/${seg(episode.id)}?limit=${limit}`)
+    // Смена параметров или уход — прежний запрос отменяется (AbortController, шторм запросов 10.11.2026).
+    const ac = new AbortController();
+    get(`/api/episodes/${seg(episode.id)}?limit=${limit}`, ac.signal)
       .then((r) => {
         data = r;
         error = '';
       })
-      .catch((e) => (error = e.message));
+      .catch((e) => {
+        if (!e.aborted) error = e.message;
+      });
+    return () => ac.abort();
   });
 
   const calcs = $derived((data?.records ?? []).filter((r) => r.type === 'calc'));

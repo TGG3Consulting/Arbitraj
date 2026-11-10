@@ -13,6 +13,7 @@
 <script>
   import { get, post, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { showTime } from '../lib/labels.js';
 
   /** venue — id площадки DEX; wallet — id кошелька (решение 132: очередь своя у кошелька); name — его имя. */
@@ -24,15 +25,17 @@
   /** Сервер ответил «nonce ещё не занят» — нужен второй шаг подтверждения. */
   let pending = $state('');
 
-  /** Перечитывает состояние очереди (с проверкой nonce у остановленной). */
-  async function load() {
+  /** Перечитывает состояние очереди (с проверкой nonce у остановленной; signal — отмена). */
+  async function read(signal) {
     error = '';
     try {
-      queue = await get(`/api/wallet-queue/${seg(venue)}${q}`);
+      queue = await get(`/api/wallet-queue/${seg(venue)}${q}`, signal);
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена кошелька или уход со страницы — отмена. */
+  const load = flight(read);
 
   /** «Снять очередь после ручной проверки»; pendingOk — второй шаг при незанятом nonce. */
   async function release(pendingOk) {
@@ -55,7 +58,7 @@
 
   $effect(() => {
     load();
-    return onLive((msg) => {
+    const off = onLive((msg) => {
       if (msg.type === 'wallet_queue' && msg.data?.venue === venue && msg.data?.account === wallet) {
         queue = { ...msg.data, nonce_taken: null };
         if (msg.data.state?.Halted) load();
@@ -63,6 +66,10 @@
         load();
       }
     });
+    return () => {
+      off();
+      load.cancel();
+    };
   });
 
   const state = $derived(queue?.state);

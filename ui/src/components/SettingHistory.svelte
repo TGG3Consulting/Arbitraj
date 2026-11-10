@@ -10,6 +10,7 @@
 <script>
   import { get } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { showValue, showTime } from '../lib/labels.js';
   import PageSize from './PageSize.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -20,23 +21,29 @@
   let rows = $state([]);
   let error = $state('');
 
-  /** Читает историю; без размера страницы не читает. */
-  async function load() {
+  /** Читает историю; без размера страницы не читает (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     if (limit === null) return;
     try {
       const sc = scope ? `&scope=${encodeURIComponent(scope)}` : '';
-      rows = await get(`/api/settings/history?limit=${limit}&name=${encodeURIComponent(name)}${sc}`);
+      rows = await get(`/api/settings/history?limit=${limit}&name=${encodeURIComponent(name)}${sc}`, signal);
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена объёма или уход — отмена. */
+  const load = flight(read);
 
   $effect(() => {
     load();
-    return onLive((m) => {
+    const off = onLive((m) => {
       if (lagFor(m, 'settings') || (m.type === 'settings' && m.data.name === name)) load();
     });
+    return () => {
+      off();
+      load.cancel();
+    };
   });
 </script>
 

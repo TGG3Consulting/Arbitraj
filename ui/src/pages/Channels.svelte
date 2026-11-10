@@ -22,9 +22,14 @@
   /** Кошельки DEX (решение 132): у каждого своя очередь. */
   let wallets = $state([]);
   $effect(() => {
-    get('/api/wallets')
+    // Уход со страницы — запрос отменяется (AbortController, шторм запросов 10.11.2026).
+    const ac = new AbortController();
+    get('/api/wallets', ac.signal)
       .then((v) => (wallets = v.wallets))
-      .catch(() => (wallets = []));
+      .catch((e) => {
+        if (!e.aborted) wallets = [];
+      });
+    return () => ac.abort();
   });
 
   /** Площадки, давшие список каналов: [[id, channels]]. */

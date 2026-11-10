@@ -4,24 +4,25 @@
 //   общий и по площадке (решения 153, 173). Данные — GET /api/control, живое
 //   сообщение control (src/api/README.md); команды — POST /api/control и снятие паузы/карантина.
 // Кто вызывает: App.svelte (start), components/ControlBar.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js.
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: нет.
 
 import { get, post, seg } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
+import { flight } from './flight.js';
 
 /** Состояние: data — Risk от ядра (null — ещё не получено), error — причина сбоя. */
 export const control = $state({ data: null, error: '', busy: false });
 
-/** Перечитывает состояние. Ошибка — в control.error. */
-async function reload() {
+/** Перечитывает состояние (один запрос в полёте — lib/flight.js). Ошибка — в control.error. */
+const reload = flight(async () => {
   try {
     control.data = await get('/api/control');
     control.error = '';
   } catch (e) {
     control.error = e.message;
   }
-}
+});
 
 /** Запускает загрузку и подписку на живой поток (один раз из App.svelte). */
 export function start() {

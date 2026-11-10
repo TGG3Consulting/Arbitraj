@@ -16,6 +16,7 @@
   import { uniqBy } from '../lib/uniq.js';
   import { get, seg } from '../lib/api.js';
   import { onLive, lagFor } from '../lib/live.svelte.js';
+  import { flight } from '../lib/flight.js';
   import { showTime } from '../lib/labels.js';
   import { outcomeMark, winSecs, size, winDirs } from '../lib/windowLabels.js';
   import { coinName } from '../lib/coinNames.svelte.js';
@@ -37,24 +38,26 @@
   let now = $state(Date.now());
   const pages = $derived(limit ? Math.max(1, Math.ceil(total / limit)) : 1);
 
-  /** Перечитывает страницу. Ошибка — в error. */
-  async function reload() {
+  /** Перечитывает страницу (signal — отмена). Ошибка — в error; отмена — ничего. */
+  async function read(signal) {
     if (!limit) return;
     const q = new URLSearchParams({ limit, offset: (page - 1) * limit });
     if (coin.trim()) q.set('coin', coin.trim());
     if (deal) q.set('deal', deal);
     if (outcome) q.set('outcome', outcome);
     try {
-      const r = await get(`/api/windows?${q}`);
+      const r = await get(`/api/windows?${q}`, signal);
       rows = r.windows;
       total = r.total;
       off = r.off;
       used = r.used_bytes;
       error = '';
     } catch (e) {
-      error = e.message;
+      if (!e.aborted) error = e.message;
     }
   }
+  /** Один запрос в полёте (lib/flight.js); смена фильтров или уход со страницы — отмена прежнего. */
+  const reload = flight(read);
 
   $effect(() => {
     // Любой фильтр или размер страницы — заново с первой страницы.
@@ -64,6 +67,7 @@
   $effect(() => {
     void [page, coin, deal, outcome, limit];
     reload();
+    return () => reload.cancel();
   });
   $effect(() => {
     const t = setInterval(() => (now = Date.now()), 1000);

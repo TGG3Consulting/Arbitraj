@@ -4,12 +4,15 @@
 //   «делистинг на X: дата» на «Монетах» и «Живом экране». Данные — GET /api/delistings; перечитываются раз в минуту и
 //   при отставании живого потока ядра (обновление у ядра — delist.refresh_s, обычно раз в час).
 // Кто вызывает: pages/Venues.svelte (components/Delistings.svelte), components/CoinRow.svelte, pages/Live.svelte.
-// От чего зависит: lib/api.js, lib/live.svelte.js, lib/coinNames.svelte.js (тикер монеты на площадке, решение 211).
+//   Перечитывание — один запрос в полёте (lib/flight.js, шторм запросов 10.11.2026).
+// От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js, lib/coinNames.svelte.js (тикер монеты на площадке,
+//   решение 211).
 // Настройки: нет (delist.refresh_s, delist.block_hours — экран «Настройки» / «Площадки»).
 
 import { get } from './api.js';
 import { onLive, lagFor } from './live.svelte.js';
 import { tickerOn } from './coinNames.svelte.js';
+import { flight } from './flight.js';
 
 /** Период перечитывания экрана, мс — частота показа, не торговый параметр. */
 const RELOAD_MS = 60000;
@@ -20,14 +23,14 @@ export const delist = $state({ rows: [], error: '' });
 let started = false;
 
 /** Перечитывает делистинги. Ошибка — в delist.error. */
-async function reload() {
+const reload = flight(async () => {
   try {
     delist.rows = await get('/api/delistings');
     delist.error = '';
   } catch (e) {
     delist.error = e.message;
   }
-}
+});
 
 /** Запускает загрузку один раз (повторные вызовы ничего не делают). */
 export function startDelist() {

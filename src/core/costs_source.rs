@@ -10,6 +10,7 @@
 //! - пересчёт старых записей «без потолка» по окнам (решение 218, core/uncapped_replay.rs) — стаканы окна и план сделки.
 //!
 //! Методы возвращают `impl Future + Send` (статическая отправка, без упаковки на пути боя).
+//! Решение 250: fillable — исполнимое количество без цены (проверка доли глубины h); по умолчанию — из quote.
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
 //! От чего зависит: costs_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
@@ -37,6 +38,18 @@ pub trait Source: Sync {
         sell: bool,
         qty: Decimal,
     ) -> impl Future<Output = Result<Quote, Fail>> + Send;
+
+    /// Что делает: исполнимое количество стороны на объём (решение 250: проверка доли глубины h — costs.rs; цена не
+    /// нужна). По умолчанию — fillable_qty котировки quote. Принимает: направление, сторону, количество.
+    /// Возвращает: исполнимое количество. Ошибки: как у quote.
+    fn fillable(
+        &self,
+        d: &Direction,
+        sell: bool,
+        qty: Decimal,
+    ) -> impl Future<Output = Result<Decimal, Fail>> + Send {
+        async move { self.quote(d, sell, qty).await.map(|q| q.fillable_qty) }
+    }
 
     /// Что делает: худшая цена ордера, как её поставит исполнение. Принимает: направление, сторону, количество, среднюю
     /// цену котировки. Возвращает: цену. Ошибки: Stop — нет стакана, глубины или допуска.
@@ -90,6 +103,15 @@ impl Source for Live<'_> {
     /// Котировка шлюза или снимка (costs_quote.rs fetch). Ошибки: как у fetch.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
         super::costs_quote::fetch(self.core, d, sell, qty, self.src).await
+    }
+
+    /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
+    /// рынка — fillable_qty котировки снимка (как раньше). Ошибки: как у quote.
+    async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
+        if self.src.is_some() {
+            return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
+        }
+        super::costs_quote::fillable(self.core, d, sell, qty).await
     }
 
     /// Худшая цена (costs_quote.rs worst). Ошибки: как у worst.

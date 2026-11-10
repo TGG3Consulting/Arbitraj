@@ -21,6 +21,8 @@
 //! Второй модели затрат нет.
 //! Решение 246: evaluate_capped — с бюджетом подбора объёма: списание сверх бюджета — отказ сразу после стороны A
 //! (котировки B, вывод, возврат и курсы не считаются); итог в бюджете — тот же Calc, что у evaluate_with.
+//! Решение 250: проверка доли глубины h — Source::fillable (исполнимость без цены; у bsc_dex — без полной котировки,
+//! если лучший одиночный пул исполняет объём целиком: quote/fills.rs).
 //! Кто вызывает: core/size_curve.rs (подбор объёма: CoreCurve — evaluate_capped, SourceCurve), core/partial.rs.
 //! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs, size.rs,
 //! engine.rs (шлюз).
@@ -33,7 +35,7 @@ use crate::core::types::{Cost, CostKind};
 
 use super::calc_timing::stage;
 use super::convert;
-use super::costs_quote::{enough, floor_step, order_limits};
+use super::costs_quote::{enough, enough_qty, floor_step, order_limits};
 pub use super::costs_source::{Live, Source};
 pub use super::costs_types::{Calc, CostLine};
 use super::costs_withdraw::floor_precision;
@@ -121,11 +123,13 @@ pub async fn evaluate_capped<S: Source>(
         )));
     }
     // Изменение ликвидности к моменту продажи: используем только долю h глубины B.
+    // Решение 250: на доле глубины нужна только исполнимость (fillable) — без цены; адаптер может ответить дешевле
+    // полной котировки, если точно знает, что объём исполнится целиком (bsc_dex: quote/fills.rs).
     let name_b = || format!("котировка B {}", d.sell_on.0);
     let deep = sell_qty / cx.h;
-    stage(name_b, src.quote(d, true, deep))
+    stage(name_b, src.fillable(d, true, deep))
         .await
-        .and_then(|q| enough(&d.sell_on.0, q, deep))
+        .and_then(|f| enough_qty(&d.sell_on.0, f, deep))
         .map_err(|e| match e {
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,

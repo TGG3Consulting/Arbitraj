@@ -529,7 +529,11 @@ message»; X фьючерсов), HMAC SHA256 на векторе RFC 4231 (по
 Решения 202/213 у XT — `tests/xt_book_version.rs` на **примерах из документации** (github.com/xt-com/xt4-api:
 `_market/3depth.md`, `_websocket_public/increDepth.md`, `limitDepth.md`), не на живых ответах: живой пары «кадр WebSocket
 + ответ REST в тот же момент» нет. Собрано по правилам документации и помечено в тесте: снимок с lastUpdateId 121 под
-кадр примера (fi 121, i 123) и ответ REST с уровнями кадра примера depth. Стык адаптера (feed_health, команды до
+кадр примера (fi 121, i 123) и ответ REST с уровнями кадра примера depth. Дополнение 10.11 (там же): тихая пара
+depth_update после переподписки — тот же ответ REST даёт Unchanged, а не новый круг; снимок REST при переподписке —
+номер стакана = lastUpdateId, проверка тем же ответом — Quiet; канал depth — снимок верхними уровнями совпадает с
+отпечатком ответа. Ядро — `src/core/feed_confirm_tests.rs` (same_rest_after_resub_unchanged_without_changed_ms) и
+`src/core/feed_watch_log_tests.rs` (журнал видимости, venue.feed_watch_log_ms). Стык адаптера (feed_health, команды до
 подписки, book_version без настроек) — `tests/feed_watch_venues.rs`. Записать на сервере бота для теста на живых данных:
 по номеру — кадры `depth_update@cake_usdt` и сразу `GET /v4/public/depth?symbol=cake_usdt&limit=N` (уже есть в командах
 ниже); по содержимому — кадры `depth@cake_usdt,20` и в ту же секунду `GET /v4/public/depth?symbol=cake_usdt&limit=20`

@@ -80,6 +80,14 @@ pub(super) struct PairSt {
     pub(super) next_at: i64,
 }
 
+impl PairSt {
+    /// Пара в круге переподписки или в паузе после неудачного круга (для сводки журнала, feed_watch_log.rs).
+    /// Ошибок нет.
+    pub(super) fn busy(&self) -> bool {
+        self.attempts > 0 || self.rounds > 0
+    }
+}
+
 /// Состояние сторожа одной площадки между проходами.
 #[derive(Debug, Default)]
 pub struct State {
@@ -132,9 +140,11 @@ pub fn decide(
                         ticker: p.ticker.clone(),
                     });
                 }
-                // Решение 213: замолчит снова — проверка сразу (ведро позволит), прежний срок не держит.
+                // Решение 213: замолчит снова — проверка сразу (ведро позволит), прежний срок не держит; запомненный
+                // ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой тишине не относится.
                 if let Some(cs) = st.checks.get_mut(&key) {
                     cs.next_at = 0;
+                    cs.lost_ref = None;
                 }
                 continue;
             }

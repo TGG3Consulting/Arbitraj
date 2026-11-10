@@ -6,7 +6,8 @@
 //! От чего зависит: ws_conn.rs, snapshots.rs (config), book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.book_stream, venue.depth_levels, venue.ws_subs_per_sec, venue.ws_streams_per_msg,
 //! venue.ws_ping_ms, venue.ws_silence_ms, venue.ws_reconnect_pause_ms [xt], http.timeout_ms; при depth_update —
-//! venue.depth_snapshot_per_sec, venue.depth_snapshot_limit (snapshots.rs).
+//! venue.depth_snapshot_per_sec, venue.depth_snapshot_limit (snapshots.rs); при depth — venue.depth_snapshot_per_sec
+//! для снимка REST при переподписке пары сторожем (дополнение 10.11; не задана — снимка нет, журнал).
 //!
 //! Официально (https://doc.xt.com/#websocket_publicbase и далее, `_websocket_public/*.md`): адрес
 //! wss://stream.xt.com/public; «Each link of the client needs to send a text "ping" periodically … If the server does not

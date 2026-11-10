@@ -16,7 +16,8 @@
 //! {"method":"unsubscribe","params":[тема],"id"}, затем {"method":"subscribe","params":[тема],"id"} в этом же соединении
 //! (https://doc.xt.com/#websocket_publicrequestFormat, `_websocket_public/requestFormat.md`: unsubscribe), соседи не
 //! трогаются; отказ подписки — стакан пары недостоверен (как у первой подписки); «переподключить соединение» — сессия
-//! заканчивается, ws.rs подключается заново с теми же парами.
+//! заканчивается, ws.rs подключается заново с теми же парами. Дополнение 10.11: при переподписке пары — сразу снимок
+//! REST (ws_book.rs resub); снимок, ставший стаканом пары, отмечается в учёте свежести как кадр пары.
 
 use std::collections::HashMap;
 
@@ -124,12 +125,14 @@ pub async fn session(
             },
             Some(done) = snap_rx.recv() => {
                 let sym = done.0.clone();
-                if !conn.on_snapshot(done).await {
+                let (open, fresh) = conn.on_snapshot(done).await;
+                if !open {
                     return End::Done;
                 }
-                // Снимок REST стал стаканом пары (решение 213): номер стакана — lastUpdateId снимка.
-                if let (Some(a), Some(v)) = (conn.asset(&sym), conn.version(&sym)) {
-                    w.feed.frame_ver(&a.ticker, Some(v), None);
+                // Снимок REST стал стаканом пары (решение 213): номер стакана — lastUpdateId снимка (depth_update);
+                // у канала depth номера нет (дополнение 10.11 — снимок при переподписке).
+                if let (true, Some(a)) = (fresh, conn.asset(&sym)) {
+                    w.feed.frame_ver(&a.ticker, conn.version(&sym), None);
                 }
             }
             next = stream.next() => {

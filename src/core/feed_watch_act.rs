@@ -4,15 +4,20 @@
 //! (попытка — первая в круге), Telegram — «переподключить нельзя: идёт сделка» и «соединение не оживает, нужен
 //! человек». Решение 213: подтверждение тихой пары — info, только при смене состояния пары; ошибка подтверждения —
 //! warn с причиной, только при смене причины; тихие пары без подтверждения — info, по паре один раз.
+//! Дополнение 10.11 (Тигран: согласовано): строки решений по паре — через частоту журнала сторожа (feed_watch_log.rs):
+//! venue.feed_watch_log_ms не задана — как выше; задана — одна строка вида решения по паре не чаще раза в столько мс
+//! (и повторы того же решения), действия учитываются в сводке.
 //! Кто вызывает: core/feed_watch.rs.
-//! От чего зависит: feed_watch_action.rs, feed_watch_logic.rs (Cfg), engine.rs, gateway (contract), storage/journal.
-//! Настройки: значения приходят в Cfg.
+//! От чего зависит: feed_watch_action.rs, feed_watch_logic.rs (Cfg), feed_watch_log.rs (LogGate), engine.rs, gateway
+//! (contract), storage/journal.
+//! Настройки: значения приходят в Cfg; venue.feed_watch_log_ms — в LogGate.every.
 
 use crate::core::types::VenueId;
 use crate::gateway::contract::Venue;
 use crate::storage::journal::Level;
 
 use super::engine::Core;
+use super::feed_watch_log::LogGate;
 use super::feed_watch_logic::{Action, Cfg};
 
 /// Журнал сторожа. Ошибок нет.
@@ -23,10 +28,20 @@ pub async fn log(core: &Core, venue: &VenueId, level: Level, msg: String) {
         .await;
 }
 
-/// Выполняет действие: команда адаптеру, журнал, Telegram. Ошибок нет: сбой команды — в журнал.
-/// Action::Check сюда не приходит (его выполняет feed_watch.rs — запрос book_version).
-pub async fn act(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, c: &Cfg) {
+/// Выполняет действие: команда адаптеру, журнал, Telegram. Принимает: ещё частоту журнала сторожа площадки (lg).
+/// Ошибок нет: сбой команды — в журнал. Action::Check сюда не приходит (его выполняет feed_watch.rs — запрос
+/// book_version).
+pub async fn act(
+    core: &Core,
+    venue: &VenueId,
+    v: &dyn Venue,
+    a: Action,
+    c: &Cfg,
+    lg: &mut LogGate,
+) {
     let mult = c.book_stale_ms * c.dead_mult;
+    let now = chrono::Utc::now().timestamp_millis();
+    lg.count(&a);
     match a {
         Action::Resub {
             conn,
@@ -35,7 +50,7 @@ pub async fn act(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, c: &Cfg
             round,
         } => {
             let r = v.resubscribe_pair(&conn, &ticker).await;
-            if attempt == 1 || r.is_err() {
+            if r.is_err() || lg.pair(&conn, &ticker, "resub", attempt == 1, now) {
                 let tail = r
                     .err()
                     .map(|e| format!(" — не отправлено: {}", e.message))
@@ -49,8 +64,13 @@ pub async fn act(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, c: &Cfg
             }
         }
         Action::Recovered { conn, ticker } => {
-            let m = format!("{conn}: пара {ticker} ожила после переподписки");
-            log(core, venue, Level::Info, m).await;
+            if lg.pair(&conn, &ticker, "recovered", true, now) {
+                // Свежий стакан — кадр потока или снимок REST адаптера после переподписки (XT, дополнение 10.11).
+                let m = format!(
+                    "{conn}: пара {ticker} ожила после переподписки — стакан пары снова свежий"
+                );
+                log(core, venue, Level::Info, m).await;
+            }
         }
         Action::Reconnect { conn, dead, total } => {
             let r = v.reconnect_conn(&conn).await;
@@ -100,12 +120,20 @@ pub async fn act(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, c: &Cfg
                 .notify("venue.feed_conn_giveup", Some(&venue.0), &m)
                 .await;
         }
-        other => act_quiet(core, venue, v, other, mult).await,
+        other => act_quiet(core, venue, v, other, mult, lg, now).await,
     }
 }
 
-/// Решение 213: действия по тихим парам. Ошибок нет.
-async fn act_quiet(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, mult: i64) {
+/// Решение 213: действия по тихим парам. Строки — по частоте журнала сторожа (lg). Ошибок нет.
+async fn act_quiet(
+    core: &Core,
+    venue: &VenueId,
+    v: &dyn Venue,
+    a: Action,
+    mult: i64,
+    lg: &mut LogGate,
+    now: i64,
+) {
     let (level, m) = match a {
         Action::Confirmed {
             conn,
@@ -117,7 +145,7 @@ async fn act_quiet(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, mult:
             // Решение 227: то же подтверждение — худшей цене ордера ядра (worst.rs: стакан не старше venue.book_stale_ms
             // или подтверждён), иначе ордер тихой пары отказывал бы при котировке, которая прошла.
             super::engine::wr(&core.inner.market).set_quiet(venue, &ticker, until_ms);
-            if !log {
+            if !lg.pair(&conn, &ticker, "quiet", log, now) {
                 return;
             }
             let m = format!(
@@ -126,21 +154,41 @@ async fn act_quiet(core: &Core, venue: &VenueId, v: &dyn Venue, a: Action, mult:
             );
             (Level::Info, m)
         }
-        Action::Unchanged { conn, ticker } => (
-            Level::Info,
-            format!(
-                "{conn}: пара {ticker} — книга на бирже менялась до переподписки и с тех пор не менялась: кадр придёт \
-                 при изменении книги, переподписка не поможет; стакана этой версии нет — пара не торгуется до кадра"
-            ),
-        ),
-        Action::Lost { conn, ticker, why } => (
-            Level::Info,
-            format!("{conn}: пара {ticker} — кадры потеряны ({why}) — переподписка пары"),
-        ),
-        Action::CheckFailed { conn, ticker, why } => (
-            Level::Warn,
-            format!("{conn}: пара {ticker} молчит, подтвердить по REST не удалось: {why}"),
-        ),
+        Action::Unchanged { conn, ticker, log } => {
+            if !lg.pair(&conn, &ticker, "unchanged", log, now) {
+                return;
+            }
+            let m = format!(
+                "{conn}: пара {ticker} — книга на бирже менялась до переподписки и с тех пор не менялась: тихая, не \
+                 мёртвая — кадр придёт при изменении книги, переподписка не поможет; стакана этой версии нет — пара не \
+                 торгуется до кадра"
+            );
+            (Level::Info, m)
+        }
+        Action::Lost {
+            conn,
+            ticker,
+            why,
+            log,
+        } => {
+            if !lg.pair(&conn, &ticker, "lost", log, now) {
+                return;
+            }
+            let m = format!("{conn}: пара {ticker} — кадры потеряны ({why}) — переподписка пары");
+            (Level::Info, m)
+        }
+        Action::CheckFailed {
+            conn,
+            ticker,
+            why,
+            log,
+        } => {
+            if !lg.pair(&conn, &ticker, "failed", log, now) {
+                return;
+            }
+            let m = format!("{conn}: пара {ticker} молчит, подтвердить по REST не удалось: {why}");
+            (Level::Warn, m)
+        }
         Action::QuietNoConfirm { conn, why, tickers } => (
             Level::Info,
             format!(

@@ -2,7 +2,9 @@
 //! Что делает: стаканы одного соединения XT.com: снимок depth → память и ядру (тот же updateId — только время кадра,
 //! решение 109); изменения depth_update → локальный стакан (local_book.rs) со снимком REST из очереди (snapshots.rs);
 //! разрыв номеров — пара недостоверна, новый снимок не раньше venue.ws_reconnect_pause_ms (урок 12: без круга
-//! ресинков). Ядру — без ожидания (try_send).
+//! ресинков). Ядру — без ожидания (try_send). Дополнение 10.11 к решениям 202/213 (Тигран: согласовано): при
+//! переподписке пары сторожем ядра — сразу снимок REST из той же очереди (resub), ядро получает свежую книгу, не
+//! дожидаясь кадра (тихая пара после переподписки кадра может не прислать).
 //! Кто вызывает: ws_conn.rs.
 //! От чего зависит: depth.rs, local_book.rs, snapshots.rs, book.rs, ws.rs, ctx.rs; изменения — ws_diff.rs.
 //! Настройки: из ws.rs (Cfg).
@@ -26,8 +28,8 @@ use super::book::{Alive, Books};
 use super::ctx::Ctx;
 use super::depth::{self, Data};
 use super::local_book::LocalBook;
-use super::snapshots::Done;
-use super::ws::{Cfg, invalidate};
+use super::snapshots::{self, Done};
+use super::ws::{Cfg, Stream, invalidate};
 
 /// Состояние стаканов соединения.
 pub struct Conn<'a> {
@@ -38,6 +40,8 @@ pub struct Conn<'a> {
     pub(super) by_symbol: HashMap<String, &'a Asset>,
     pub(super) alive: Alive,
     pub(super) levels: usize,
+    /// Канал стакана (venue.book_stream): какой снимок REST брать при переподписке и как его применять.
+    pub(super) stream: Stream,
     pub(super) resync_pause: Duration,
     /// Снимки depth: последний отданный ядру updateId по символу.
     pub(super) last: HashMap<String, i64>,
@@ -68,6 +72,7 @@ impl<'a> Conn<'a> {
             by_symbol: assets.iter().map(|(a, s)| (s.to_lowercase(), a)).collect(),
             alive: Alive::default(),
             levels: cfg.levels as usize,
+            stream: cfg.stream,
             resync_pause: cfg.resync_pause,
             last: HashMap::new(),
             local: HashMap::new(),
@@ -92,13 +97,21 @@ impl<'a> Conn<'a> {
     }
 
     /// Решение 202: пара переподписана — прежнее состояние её потока не продолжается. Снимки depth: первый снимок после
-    /// подписки — ядру, даже с тем же updateId (решение 109); depth_update: локальный стакан сброшен, первое изменение
-    /// новой подписки попросит снимок REST сразу (по «Orderbook manage» — буфер, затем снимок), без паузы разрыва.
-    /// Стакан в памяти не снимается (как у MEXC, Gate): его свежесть — по времени кадра пары. Ошибок нет.
+    /// подписки — ядру, даже с тем же updateId (решение 109); depth_update: локальный стакан сброшен, без паузы разрыва.
+    /// Дополнение 10.11: снимок REST GET /v4/public/depth (https://doc.xt.com/#marketdepth) просится сразу, в общей
+    /// очереди snapshots.rs (лимит «10/s/ip»): depth_update — стакан пары заново со снимка по «Orderbook manage»
+    /// (https://doc.xt.com/#websocket_publicorderBook: изменения новой подписки копятся в буфер до снимка, затем
+    /// применяются по номерам), номер стакана = lastUpdateId снимка; depth — верхние venue.depth_levels уровней снимка
+    /// ядру (ws_diff.rs on_snapshot). Снимок уже в пути — второй не просится. Стакан в памяти до снимка не снимается:
+    /// его свежесть — по времени кадра пары. Ошибок нет (сбой снимка — в итоге очереди).
     pub fn resub(&mut self, symbol: &str) {
         self.last.remove(symbol);
         self.local.remove(symbol);
         self.not_before.remove(symbol);
+        if self.pending.insert(symbol.to_string()) {
+            let limit = (self.stream == Stream::Depth).then_some(self.levels as u64);
+            snapshots::request(self.ctx, symbol.to_string(), limit, self.snap_tx.clone());
+        }
     }
 
     /// Монета по символу XT (регистр не важен). Ошибок нет.

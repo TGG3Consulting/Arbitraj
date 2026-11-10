@@ -8,6 +8,10 @@
 //! - depth — по содержимому: снимок примера limitDepth.md и ответ REST с теми же уровнями (та же книга в двух форматах)
 //!   — Quiet (core/feed_print.rs); ответ примера 3depth.md против кадра примера limitDepth.md — книги разные — Lost.
 //!
+//! Дополнение 10.11 (Тигран: согласовано): тихая пара depth_update после переподписки — тот же ответ REST — Unchanged
+//! (без бесконечных кругов), снимок REST при переподписке — номер стакана = lastUpdateId, затем Quiet; канал depth —
+//! снимок REST верхними уровнями совпадает с отпечатком ответа (core/feed_rest_ref.rs, venues/xt/ws_book.rs resub).
+//!
 //! Живых записей «кадр WebSocket + ответ REST в тот же момент» у XT нет (sapi.xt.com из среды разработки закрыт
 //! прокси; tests/README.md, раздел XT — команды записи). Числа примеров — из документации, снимок с lastUpdateId 121 и
 //! ответ REST с уровнями кадра собраны по её правилам и помечены в тесте. Моков нет.
@@ -111,6 +115,156 @@ fn depth_update_by_number() {
         verdict(&pair(lb.version()), &at(124), 2_000),
         Verdict::Lost(_)
     ));
+}
+
+/// Дополнение 10.11 к решениям 202/213 (Тигран: согласовано; живой случай: сторож XT бесконечно повторял круги
+/// переподписки тихой пары). Канал depth_update, числа — примеры документации (`_market/3depth.md`,
+/// `_websocket_public/increDepth.md`):
+/// 1) было: номер стакана в памяти 123 (кадр примера), на бирже lastUpdateId примера (новее), кадров после переподписки
+///    нет — «кадры потеряны»; времени изменения книги у XT нет, поэтому правило Unchanged решения 213 не срабатывало и
+///    каждая проверка начинала новый круг. Теперь тот же ответ REST после переподписки — Unchanged, без круга;
+/// 2) снимок REST при переподписке (ws_book.rs resub): локальный стакан заново со снимка без отложенных изменений —
+///    номер стакана = lastUpdateId снимка, следующая проверка тем же ответом — Quiet (тихая, подтверждена).
+#[test]
+fn depth_update_quiet_after_resub() {
+    use arb::core::feed_confirm::{QuietCfg, apply};
+    use arb::core::feed_watch_logic::{Action, Cfg, State, decide};
+    use arb::gateway::feed_health::{ConnHealth, FeedHealth};
+
+    let rest: Value = serde_json::from_str(REST_DOC).unwrap();
+    let rest_id = book_version::last_update_id(&rest).unwrap();
+    let c = Cfg {
+        book_stale_ms: 5_000,
+        dead_mult: 3,
+        live_ms: 40_000,
+        warmup_ms: 30_000,
+        attempts: 3,
+        interval_ms: 3_000,
+        pause_ms: 60_000,
+        dead_pct: 90,
+        reconnect_min_ms: 120_000,
+        reconnect_max_per_hour: 3,
+        quiet: QuietCfg::Confirm {
+            min_ms: 30_000,
+            max_per_s: 2,
+        },
+    };
+    let h = |now, last_id, since| FeedHealth {
+        scheduled: false,
+        per_pair: true,
+        confirm: true,
+        conns: vec![ConnHealth {
+            conn: "market-1".into(),
+            alive_ms: Some(now),
+            started_ms: Some(0),
+            pairs: vec![PairHealth {
+                since_ms: since,
+                ..pair(Some(last_id))
+            }],
+        }],
+    };
+    let at = || {
+        Ok(BookVersion {
+            id: Some(rest_id),
+            ..Default::default()
+        })
+    };
+    // 1) Номер в памяти 123, на бирже новее — кадры потеряны, круг переподписки.
+    let (mut st, none) = (State::default(), std::collections::HashMap::new());
+    let a = apply(
+        &h(40_100, 123, 0),
+        "market-1",
+        "BTC",
+        at(),
+        40_000,
+        40_100,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(
+            &a[..],
+            [Action::Lost { .. }, Action::Resub { attempt: 1, .. }]
+        ),
+        "{a:?}"
+    );
+    // Переподписка в 40 200, кадра так и нет: ещё две попытки круга, пауза, затем проверка.
+    for n in [43_200, 46_200, 49_200] {
+        decide(&h(n, 123, 40_200), n, &c, &none, &mut st);
+    }
+    let checks = decide(&h(109_200, 123, 40_200), 109_200, &c, &none, &mut st);
+    assert!(matches!(&checks[..], [Action::Check { .. }]), "{checks:?}");
+    // На бирже тот же ответ — книга не менялась с переподписки: тихая, не мёртвая, нового круга нет.
+    let a = apply(
+        &h(109_300, 123, 40_200),
+        "market-1",
+        "BTC",
+        at(),
+        109_200,
+        109_300,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(&a[..], [Action::Unchanged { .. }]),
+        "тот же ответ REST после переподписки — не круг: {a:?}"
+    );
+
+    // 2) Снимок REST при переподписке: локальный стакан заново, без отложенных изменений.
+    let mut lb = LocalBook::default();
+    let r: depth::RestDepth<'_> = serde::Deserialize::deserialize(&rest).unwrap();
+    let applied = lb.snapshot(
+        r.last_update_id,
+        &depth::convert(&r.bids, "b").unwrap(),
+        &depth::convert(&r.asks, "a").unwrap(),
+    );
+    assert_eq!(applied, Applied::Changed, "снимок без буфера — стакан пары");
+    assert_eq!(
+        lb.version(),
+        Some(rest_id),
+        "номер стакана — lastUpdateId снимка"
+    );
+    let mut st = State::default();
+    let a = apply(
+        &h(40_100, lb.version().unwrap(), 0),
+        "market-1",
+        "BTC",
+        at(),
+        40_000,
+        40_100,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(&a[..], [Action::Confirmed { log: true, .. }]),
+        "после снимка тот же ответ — тихая, подтверждена: {a:?}"
+    );
+}
+
+/// Канал depth: снимок REST при переподписке отдаётся ядру верхними venue.depth_levels уровнями (ws_diff.rs —
+/// локальный стакан как сортировка, нулевые объёмы — уровня нет); следующая проверка по содержимому тем же ответом —
+/// Quiet. Числа — пример `_market/3depth.md`.
+#[test]
+fn depth_resub_snapshot_matches_rest_print() {
+    let rest: Value = serde_json::from_str(REST_DOC).unwrap();
+    let r: depth::RestDepth<'_> = serde::Deserialize::deserialize(&rest).unwrap();
+    let mut lb = LocalBook::default();
+    lb.snapshot(
+        r.last_update_id,
+        &depth::convert(&r.bids, "b").unwrap(),
+        &depth::convert(&r.asks, "a").unwrap(),
+    );
+    let (bids, asks) = lb.top(2);
+    let ours = BookPrint::top(&bids, &asks, 2);
+    let v = BookVersion {
+        print: Some(BookPrints {
+            levels: 2,
+            rest: book_version::parse(&rest, 2).unwrap(),
+            ours: Some(ours),
+        }),
+        ..Default::default()
+    };
+    assert_eq!(verdict(&pair(None), &v, 2_000), Verdict::Quiet);
 }
 
 #[test]

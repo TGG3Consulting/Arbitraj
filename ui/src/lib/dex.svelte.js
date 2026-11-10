@@ -6,16 +6,18 @@
 //   видом, DEX из справочника пулов и id с уже заданными настройками; DEX, которой нет нигде (её пулы находит только
 //   поиск по фабрике, оракул или события Initialize), человек вводит сам — правило id: checkDexId.
 //   Ответ 400 — «не применимо» (биржа): площадка просто не DEX. Иначе ошибка показывается как есть.
-//   Перечитывается при старте, при «lagged» (переподключение), по живому сообщению «send_channel» и по записи
+//   Перечитывается при старте, при смене списка или вида площадок, по живому сообщению «send_channel» и по записи
 //   журнала вида dex.index (справочник обновился) — без таймеров и опроса. Шторм запросов 10.11.2026: перечитывание —
 //   один запрос в полёте (lib/flight.js); send_channel меняет только статистику каналов (api/dex.rs channels берёт
 //   её из ядра) — по нему перечитываются только каналы, а не виды пулов и справочник пулов (тысячи записей).
+//   «lagged» (t80; сообщения потеряны — api/ws.rs, или переподключение): журнал/переподключение — всё (мог пропасть
+//   dex.index), только ядро — каналы (мог пропасть send_channel).
 // Кто вызывает: App.svelte (start), экраны «Площадки», «Настройки», «Каналы отправки», components/SettingCard.svelte.
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js, lib/settings.svelte.js (список площадок).
 // Настройки: нет.
 
 import { get, seg } from './api.js';
-import { onLive } from './live.svelte.js';
+import { onLive, lagFor } from './live.svelte.js';
 import { store, valueKey } from './settings.svelte.js';
 import { flight } from './flight.js';
 
@@ -120,6 +122,8 @@ export function start() {
   onLive((msg) => {
     if (msg.type === 'send_channel') reloadChannels();
     if (msg.type === 'journal' && msg.data?.kind === 'dex.index') reloadDex();
+    if (lagFor(msg, 'journal')) reloadDex();
+    else if (lagFor(msg, 'core')) reloadChannels();
   });
 }
 

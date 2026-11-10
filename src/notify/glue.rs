@@ -139,7 +139,8 @@ impl Notifier {
         let (ok, rest): (Vec<&Item>, Vec<&Item>) = items
             .iter()
             .partition(|i| self.allows(&i.code, i.venue.as_deref()));
-        // Не прошедшие фильтры — через deliver: он молча пропускает выключенные и пишет причину по условию.
+        // Не прошедшие фильтры — через deliver: выключенное пишет в журнал (notify/journal_off.rs), остальные фильтры
+        // пропускает молча, по условию пишет причину.
         for i in rest {
             self.deliver(&i.code, i.venue.as_deref(), &i.text, None)
                 .await;

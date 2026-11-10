@@ -6,7 +6,8 @@
     только чёрный список); щелчок по монете — всплывающее окно с полной информацией (налоги, пулы, крючки,
     причины по площадкам, «Перепроверить»). Окно обновляется вместе с живыми данными.
     Пока ядро не отдаёт справочник — честное «нет данных» с причиной бэкенда (503); ручной список работает всегда.
-    Живые сообщения coin_check, pool_check, coin_block — перечитать.
+    Живые сообщения coin_check, pool_check, coin_block и coins (справочник пересобран, core/rebuild.rs; Тигран 10.11,
+    t80) — перечитать; один запрос в полёте (lib/remote.svelte.js → lib/flight.js).
     Решение 116: таблица — по страницам (поле «Монет на странице», запоминается в браузере; без значения таблица
     не рисуется и просит его задать). С MEXC в справочнике >11 тыс. монет — все строки разом тормозили экран.
     Смена фильтров — снова первая страница.
@@ -29,7 +30,7 @@
   import ErrorText from '../components/ErrorText.svelte';
   import PageSize from '../components/PageSize.svelte';
 
-  const coins = remote('/api/coins', ['coin_check', 'pool_check', 'coin_block']);
+  const coins = remote('/api/coins', ['coin_check', 'pool_check', 'coin_block', 'coins']);
   let f = $state({ text: '', result: '', venue: '', pools: '', kind: '', tax: '', onlyBlocked: false });
   /** Ключ монеты в окне (тикер|адрес); null — окно закрыто. */
   let openKey = $state(null);

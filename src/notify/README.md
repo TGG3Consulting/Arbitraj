@@ -41,6 +41,7 @@
 | `check.rs` | «Проверить подключение»: токен (getMe) и доступ к чату (getChat); у роли — ещё тестовое сообщение в её чат |
 | `settings_watch.rs` | Изменения настроек → событие `system.settings_changed`; решение 251 — пачка изменений одним сообщением со списком, 429 — повтор через retry_after |
 | `glue.rs` | Решение 251 (г): события связи площадки (`venue.disconnected` / `reconnected`, `venue.rate_limited`, `dex.receipts_stuck`, `venue.feed_conn_blocked`) — одно сообщение на площадку за пачку: первое сразу, пришедшие во время отправки — следующим одним; без окна-числа |
+| `journal_off.rs` | Решение 251, дополнение: выключенное событие (`notify.event.enabled` = нет) — одной записью в журнал (вид — код события, текст без разметки, пометка «в Telegram не отправлено»), кроме событий из таблицы `OWN_RECORD` — у их мест своя запись в журнале |
 
 Настройки: `notify.*` (в т.ч. `notify.manual_repeat_s` — напоминание «Ручного управления»), `http.timeout_ms`. Токен — секрет `telegram.bot_token`.
 Решение 176 — четыре чата (`roles.rs`): «Управление» (`notify.control_chat`, `telegram.control_token`), «Общий»

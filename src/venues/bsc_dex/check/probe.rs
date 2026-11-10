@@ -16,8 +16,11 @@
 //! reflection-tax-2026-11-10.md). Продажа откатилась или квотер не ответил — налог продажи НЕ ИЗМЕРЕН (не 0).
 //! В покупке и продаже проверяется, что обмен сделал сам этот пул (check/emitter.rs, решение 59): Universal Router сам
 //! выбирает пару по своей фабрике; через исполнитель — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
+//! Кошелёк пробы — кошелёк окружения (строка «Пробы» или, при перепроверке после отката продажи выхода, кошелёк сделки —
+//! check/recheck.rs coins_by, дополнение 10.11 к решениям 247/252); купленное — прирост баланса монеты за покупку
+//! (check/probe_buy.rs), а не весь баланс: на кошельке сделки могут лежать её монеты.
 //! Кто вызывает: check/taxes.rs.
-//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
+//! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_buy.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
 //! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
 //! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s).
 //!
@@ -44,6 +47,7 @@ use super::super::pools::registry::Entry;
 use super::super::quote::quoter_calls;
 use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
+use super::probe_buy;
 use super::probe_calls as pc;
 use super::probe_exec;
 use super::sim_base;
@@ -117,19 +121,16 @@ pub async fn run(
         input: d.clone(),
     }));
     let n_appr = buy_aps.len();
-    list.push(Call {
-        from: wallet,
-        to: qto,
-        input: qdata,
-    });
-    list.push(Call {
-        from: wallet,
-        to: buy_router,
-        input: buy_data,
-    });
-    list.push(pc::balance(wallet, coin, wallet));
+    // Дополнение 10.11 к решениям 247/252 (перепроверка кошельком сделки, на нём могут лежать монеты сделки):
+    // купленное — прирост баланса монеты кошелька за покупку (баланс до и после в той же симуляции, probe_buy.rs).
+    let h = probe_buy::buy_head(
+        &mut list,
+        (wallet, coin),
+        (qto, qdata),
+        (buy_router, buy_data),
+    );
     let first = simulate::run(ctx, &list, at).await?;
-    let (q, x) = (1 + n_appr, 2 + n_appr);
+    let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
         return pc::buy_revert(ctx, i, r, q).map(Err);
     }
@@ -138,7 +139,7 @@ pub async fn run(
     probe_exec::emitter(ctx, e, &first[x].logs).await?;
     let (Some(buy_expected), Some(bought)) = (
         quoter_calls::decode(e, &first[q].return_data),
-        pc::u256(&first[x + 1]),
+        probe_buy::bought(&first[h.before], &first[h.after]),
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };

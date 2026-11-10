@@ -146,11 +146,12 @@ fn path_listed(s: &Store, path: &[VenueId], to: &VenueId) -> Option<String> {
         .find_map(|c| listed(s, &c.0, &to.0))
 }
 
-/// Возврат выручки USDT сделки с `from` на `to` (биржа покупки) — usdt_return_deal.rs, повторы и «Перегнать»
+/// Возврат выручки USDT сделки с `from` на `to` — usdt_return_deal.rs, повторы и «Перегнать»
 /// (дополнение 10.11, п. 4: перепроверка на каждой попытке). `to` не биржа или `from` = `to` — да. Правило 1 — у `from`
-/// и `to`, если обе биржи (как в решении 249); списки — у каждой биржи пути монеты сделки и у `from` (кроме самой `to`,
-/// п. 1): список биржи покупки возврат на неё саму не запрещает. Принимает: ядро, сделку, откуда, куда.
-/// Возвращает: причину запрета или None.
+/// и `to`, если обе биржи (как в решении 249). Списки venue.cex_cex_deny: возврат на биржу покупки этой же сделки
+/// (`to` = buy_on) ими НЕ ограничивается — это часть уже разрешённой сделки, запрет не взаимный (Тигран 10.11, п. 6);
+/// на любую другую биржу — списки каждой биржи пути монеты сделки и `from` (кроме самой `to`, п. 1).
+/// Принимает: ядро, сделку, откуда, куда. Возвращает: причину запрета или None.
 pub fn return_block(core: &Core, deal: &Deal, from: &VenueId, to: &VenueId) -> Option<String> {
     if from == to || !is_cex(core, to) {
         return None;
@@ -160,6 +161,10 @@ pub fn return_block(core: &Core, deal: &Deal, from: &VenueId, to: &VenueId) -> O
         && let Some(why) = flags(s, &from.0, &to.0)
     {
         return Some(why);
+    }
+    // Тигран 10.11, п. 6: возврат выручки на биржу начала сделки — списками не ограничивается.
+    if *to == deal.direction.buy_on {
+        return None;
     }
     let mut path = path_cexes(core, deal);
     if is_cex(core, from) && !path.contains(from) {

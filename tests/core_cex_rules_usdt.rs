@@ -1,9 +1,9 @@
 //! Файл: tests/core_cex_rules_usdt.rs
 //! Что делает: решение 249, дополнение 10.11 (Тигран: согласовано) — возврат выручки USDT на настоящем ядре и SQLite во
 //! временной папке (площадок в реестре нет, моков логики нет; сделка — как живая DOGE bingx → mexc, выручка 83.10 USDT
-//! на mexc, tests/usdt_return_common). Проверяется: (1) п. 1 — при закрытии возврат mexc → bingx запрещён списком
-//! venue.cex_cex_deny mexc (биржи, через которую монета прошла), список bingx (биржи покупки) возврат на неё саму не
-//! запрещает; (2) п. 4 — правило поменяли, пока возврат ждал повтора: попытки нет, «не вернулись» с причиной
+//! на mexc, tests/usdt_return_common). Проверяется: (1) п. 6 (Тигран 10.11) — возврат выручки на биржу покупки сделки
+//! списками venue.cex_cex_deny не ограничивается (ни mexc, ни bingx), запрещает его только venue.cex_cex = нет (у mexc);
+//! (2) п. 4 — правило поменяли, пока возврат ждал повтора: попытки нет, «не вернулись» с причиной
 //! «запрещено правилом: …» в хронологии; (3) п. 4 — «Перегнать» перепроверяет правило: запрещено — не отправляется,
 //! снова «не вернулись» с той же причиной.
 //! Кто вызывает: cargo test.
@@ -32,6 +32,21 @@ fn kinds(core: &Core) {
     ];
 }
 
+/// venue.cex_cex биржи `id` (Some(false) — биржа ↔ биржа выключена; None — очистить).
+async fn cex(core: &Core, id: &str, v: Option<bool>) {
+    core.inner
+        .deps
+        .settings
+        .set(
+            "venue.cex_cex",
+            Scope::Venue(id.into()),
+            v.map(|b| json!(b)),
+            "тест",
+        )
+        .await
+        .unwrap();
+}
+
 /// Список venue.cex_cex_deny биржи `id` (None — очистить).
 async fn deny(core: &Core, id: &str, list: Option<serde_json::Value>) {
     core.inner
@@ -53,14 +68,15 @@ fn timeline(core: &Core, id: &str) -> Vec<String> {
     d.timeline.into_iter().map(|(_, t)| t).collect()
 }
 
-const WHY: &str = "перегон USDT mexc → bingx запрещён: mexc не взаимодействует с bingx (список venue.cex_cex_deny у mexc)";
+const WHY: &str =
+    "перегон USDT mexc → bingx запрещён: биржа ↔ биржа выключена у mexc (venue.cex_cex = нет)";
 
-/// (1) Закрытие: список mexc запрещает возврат; список bingx — нет.
+/// (1) Закрытие: venue.cex_cex = нет у mexc запрещает возврат; списки mexc и bingx — нет (п. 6).
 #[tokio::test]
 async fn close_checks_list_of_path_exchange() {
     let (core, _) = start(&dir("c249-close"), None).await;
     kinds(&core);
-    deny(&core, "mexc", Some(json!(["bingx"]))).await;
+    cex(&core, "mexc", Some(false)).await;
     let mut x = doge("c1DOGE");
     arb::core::ledger::finish(&core, &mut x, Step::Closed, "продано (выгодно)").await;
     let s = wait_state(&core, "c1DOGE", Duration::from_secs(5), |s| {
@@ -71,8 +87,9 @@ async fn close_checks_list_of_path_exchange() {
         matches!(&s, Some(UsdtReturn::NotReturned { why, .. }) if why == WHY),
         "{s:?}"
     );
-    // Список биржи покупки возврат на неё саму не запрещает: попытка идёт (здесь площадки нет — сбой перегона).
-    deny(&core, "mexc", None).await;
+    // Списки (и mexc, и bingx) возврат на биржу покупки не запрещают: попытка идёт (здесь площадки нет — сбой перегона).
+    cex(&core, "mexc", None).await;
+    deny(&core, "mexc", Some(json!(["bingx"]))).await;
     deny(&core, "bingx", Some(json!(["mexc"]))).await;
     let mut x = doge("c2DOGE");
     arb::core::ledger::finish(&core, &mut x, Step::Closed, "продано (выгодно)").await;
@@ -94,7 +111,7 @@ async fn retry_rechecks_rule() {
     let mut x = doge("c3DOGE");
     arb::core::ledger::finish(&core, &mut x, Step::Closed, "продано (выгодно)").await;
     // Первая попытка (площадки нет — сбой до вывода) — «ждёт повтора»; правило задано до повтора (через 1 с).
-    deny(&core, "mexc", Some(json!(["bingx"]))).await;
+    cex(&core, "mexc", Some(false)).await;
     let s = wait_state(&core, "c3DOGE", Duration::from_secs(10), |s| {
         matches!(s, UsdtReturn::NotReturned { .. })
     })
@@ -127,7 +144,7 @@ async fn manual_retry_rechecks_rule() {
         why: "перегон не состоялся".into(),
     });
     arb::core::ledger::save(&core, &x).await;
-    deny(&core, "mexc", Some(json!(["bingx"]))).await;
+    cex(&core, "mexc", Some(false)).await;
     let t = core
         .command(ManualCommand {
             action: ManualAction::UsdtRetry {

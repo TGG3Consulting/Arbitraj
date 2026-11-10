@@ -12,10 +12,12 @@
 //! кнопкой — ещё одна правка сообщения ушедшей записи (mirror_track.rs, mirror_send.rs).
 //! Решение 251: тексты — по шаблону алерта в HTML (notify/alert.rs::telegram, карточка сделки — путь и где сейчас);
 //! напоминание не повторяет записи, которые человек сейчас обрабатывает (вопрос «Да/Отмена» или вопрос суммы открыт —
-//! mirror_state.rs::busy).
-//! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs.
+//! mirror_state.rs::busy). Ответ (б) Тиграна 10.11: сообщения записей — в SQLite, после перезапуска правятся, а не
+//! отправляются заново (mirror_store.rs: restore при запуске, persist после каждой сверки).
+//! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs; правка сменившихся — mirror_edit.rs.
 //! От чего зависит: core (Core::manual_records, Core::subscribe), notify/mirror_state.rs, mirror_view.rs,
-//! tg_methods.rs, tg_html.rs, alert.rs, client.rs, dispatch.rs (allows), settings, storage/journal.
+//! tg_methods.rs, tg_html.rs, alert.rs, client.rs, dispatch.rs (allows), mirror_store.rs, settings, storage/journal,
+//! storage/db (база для mirror_store.rs).
 //! Настройки: notify.manual_repeat_s (нет — без повторов), notify.updates_retry_ms (пауза после ошибки Telegram),
 //! notify.event.* для manual.record, notify.telegram_*; секрет telegram.bot_token.
 
@@ -28,6 +30,7 @@ use crate::core::types::ManualRecord;
 use crate::core::view::CoreEvent;
 use crate::settings::live::Watch;
 use crate::settings::read::At;
+use crate::storage::db::Db;
 use crate::storage::journal::Level;
 
 use super::alert::telegram;
@@ -44,12 +47,16 @@ pub struct Mirror {
     pub core: Core,
     pub notifier: Notifier,
     pub state: Shared,
+    /// База SQLite — сообщения записей переживают перезапуск (решение 251 (б), mirror_store.rs).
+    pub db: Db,
 }
 
 /// Работает, пока система запущена. Принимает: дубль и подписку на настройки (notify.*, http.timeout_ms).
 /// Ошибок не возвращает: всё пишется в журнал.
 pub async fn run(m: Mirror, mut watch: Watch) {
     let mut rx = m.core.subscribe();
+    // Решение 251 (б): сообщения записей прошлого запуска — в память до первой сверки (правятся, не шлются заново).
+    m.restore().await;
     loop {
         m.reconcile().await;
         let every = m.every();
@@ -93,8 +100,14 @@ impl Mirror {
             .map(Duration::from_secs)
     }
 
-    /// Сверяет записи экрана с отправленным: правит ушедшие, отправляет новые, напоминает. Ошибок не возвращает.
+    /// Сверка (sync_tg) и сохранение сообщений записей в базу (решение 251 (б), mirror_store.rs). Ошибок не возвращает.
     async fn reconcile(&self) {
+        self.sync_tg().await;
+        self.persist().await;
+    }
+
+    /// Сверяет записи экрана с отправленным: правит ушедшие, отправляет новые, напоминает. Ошибок не возвращает.
+    async fn sync_tg(&self) {
         let recs = self.core.manual_records();
         let diff = lock(&self.state).apply(&recs);
         let role = super::roles::mirror_role(&self.notifier.settings);

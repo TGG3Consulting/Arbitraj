@@ -7,7 +7,8 @@
 //!    сообщения ждут итога продажи (событие {final: true, deal, ok, text} от core/manual_outcome.rs) и правятся ещё раз:
 //!    «Выполнено: продано X по Y» или «Не продано: причина».
 //!
-//! Только в памяти, как вся память дубля (mirror_state.rs).
+//! Решение 251 (б): правка не прошла (Telegram отказал) — новое сообщение и его id (replace_msg, mirror_send.rs);
+//! сообщения записей хранятся в базе (mirror_store.rs).
 //! Кто вызывает: notify/mirror_state.rs (apply → track), notify/mirror.rs (правка сменившихся), notify/mirror_send.rs
 //! (итог команды и итог продажи).
 //! От чего зависит: notify/mirror_state.rs, core/types (ManualRecord, ManualAction).
@@ -45,6 +46,15 @@ impl MirrorState {
     pub fn set_text(&mut self, key: &str, text: String) {
         if let Some(s) = self.sent.get_mut(key) {
             s.text = text;
+        }
+    }
+
+    /// Решение 251 (б): сообщение записи не правится (Telegram отказал: удалено, слишком старое и т. п.) — отправлено
+    /// новое; теперь запись — в нём. Принимает: ключ, текст, id нового сообщения. Ошибок нет.
+    pub fn replace_msg(&mut self, key: &str, text: String, msg: i64) {
+        if let Some(s) = self.sent.get_mut(key) {
+            s.text = text;
+            s.msgs = vec![msg];
         }
     }
 

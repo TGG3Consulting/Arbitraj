@@ -8,7 +8,10 @@
 //! Это чат «Общий» (решение 176, notify/roles.rs): его поведение не меняется.
 //! Решение 251: текст — по единому шаблону (notify/alert.rs) в HTML (notify/tg_html.rs); исходный текст события —
 //! в журнал (data.text записи «Отправлено в Telegram»).
+//! Решение 251 (г, Тигран 10.11): deal.closed и stuck.loss_alert не идут в «Общий», если задан чат их роли
+//! (notify/routes.rs NOT_GENERAL); события связи площадки склеиваются по площадке (notify/glue.rs).
 //! От чего зависит: notify/client.rs, notify/catalog.rs, notify/callback.rs, notify/alert.rs, notify/tg_html.rs,
+//! notify/routes.rs, notify/glue.rs,
 //! settings, secrets, storage/journal.
 //! Настройки: notify.event.enabled / venues / condition (область «событие»), notify.telegram_*.
 //!
@@ -58,7 +61,11 @@ impl Notifier {
     /// Отправляет событие, если оно включено.
     /// Принимает: код события из notify/catalog.rs, площадку (если есть), текст.
     /// Ошибок не возвращает: всё, что пошло не так, пишется в журнал.
+    /// Решение 251 (г): события связи площадки (notify/glue.rs GLUED) склеиваются — одно сообщение на площадку за пачку.
     pub async fn send(&self, code: &str, venue: Option<&str>, text: &str) {
+        if super::glue::glued(code) {
+            return super::glue::push(self, code, venue, text);
+        }
         self.deliver(code, venue, text, None).await;
     }
 
@@ -89,7 +96,7 @@ impl Notifier {
 
     /// Общая часть send и send_with_buttons: фильтры события, сборка клиента, отправка, журнал.
     /// Возвращает: Some(секунды) — Telegram ответил 429 с retry_after (повторить можно через столько), иначе None.
-    async fn deliver(
+    pub(super) async fn deliver(
         &self,
         code: &str,
         venue: Option<&str>,
@@ -106,6 +113,10 @@ impl Notifier {
             return None;
         };
         if !self.passes(code, venue) {
+            return None;
+        }
+        // Решение 251 (г): событие идёт в чат своей роли вместо «Общего», если он задан (routes.rs NOT_GENERAL).
+        if super::routes::not_general(&self.settings, code).is_some() {
             return None;
         }
         if self

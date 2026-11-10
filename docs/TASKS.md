@@ -33,39 +33,37 @@
      но и настоящий ожидающий излишек тоже (консервативно); (б) пополнять переводом, а выход продажи симуляции
      уменьшать на замер излишка пары (balanceOf − резерв до/после пополнения); (в) оставить — ловят пере-замеры
      247/248. Не правилось.
-- **Решение 251 (10.11.2026), алерты Telegram (ветка t69/alerts-clean).** Сделано: единый шаблон (путь, где сейчас, цифры,
-  причина, что делает бот, что нужно от вас, свёрнутый хвост), HTML, напоминание «Ручного управления» без записей в
-  обработке, изменения настроек пачкой — одним сообщением. Ждёт решения — что из событий ОТКЛЮЧИТЬ или увести только в
-  журнал (сам бот ничего не отключал; включение — notify.event.enabled, экран «Уведомления»). Факт кода: в «Общий»
-  (notify.telegram_chat) уходит КАЖДОЕ включённое событие каталога (dispatch.rs); «Управление» событий не получает
-  (только меню и ответы, routes.rs); «Сделки» — deal.closed; «Неудачные» — risk.reconcile_paused и дубль «Ручного
-  управления» (manual.record; не задан — в «Общий»). Какие события включены у Тиграна — в его базе настроек, здесь не видно.
-
-  | Событие | Сейчас идёт | Предложение |
-  | --- | --- | --- |
-  | deal.closed | «Общий» + «Сделки» (дубль) | в «Общем» выключить — итог есть в «Сделки» |
-  | stuck.loss_alert | «Общий»; та же проблема — запись с кнопками manual.record в «Неудачные» | выключить (дубль записи с кнопками), если «Неудачные» задан |
-  | deal.candidate, episode.opened/closed, window.opened/closed | «Общий» | только журнал (сигналы, частые) |
-  | deal.buy_filled, deal.transfer_sent, deal.transfer_credited, deal.sell_filled, deal.dust | «Общий» | только журнал: шаги видны в итоге deal.closed и на экране «Сделки» |
-  | exec.verified, cycle.dry, bundle.assembled, bundle.simulated, bundle.sent, bundle.included, dex.rebuilt_after_approve, dex.swap_waits_inflow | «Общий» | только журнал (технические шаги DEX) |
-  | coin.check_done, pool.hook_excluded, venue.transfer_status, dex.check_not_configured, wallet.added, system.secrets_unlocked | «Общий» | только журнал |
-  | venue.disconnected / venue.reconnected, venue.rate_limited, dex.receipts_stuck, venue.feed_conn_blocked | «Общий» | склеить в одно сообщение на площадку (потеряна → восстановлена правкой) — нужно согласие; пока оставить |
-  | system.settings_changed | «Общий» | склеено (одно сообщение на пачку) — сделано |
-  | route.quarantine_in/out, coin.blacklisted/unblacklisted, coin.credit_shortfall, coin.sell_slip, coin.exit_gap, venue.delisting | «Общий» | оставить |
-  | risk.*, usdt.relay_failed, usdt.not_returned, usdt.relayed, balance.external | «Общий» (reconcile_paused — ещё «Неудачные») | оставить |
-  | exec.order_not_filled, exec.swap_reverted, exec.withdraw_rejected, exec.withdraw_fail_pending, exec.transfer_slow, exec.deposit_not_credited, exec.credit_mismatch, exec.chain_hash_mismatch, exec.verify_rejected, transfer.to_trading_failed | «Общий» | оставить; вопрос — дублировать ли в «Неудачные» (routes.rs) |
-  | stuck.detected, stuck.relayed, stuck.market_sold | «Общий» | оставить |
-  | send.channel_rejected, send.tx_not_included, bundle.sim_reverted, bundle.not_included | «Общий» | только журнал, если за ними нет остановки (итог придёт отдельным событием) |
-  | send.tx_reverted, send.outcome_unknown, outcome.resolved/unresolved, send.queue_halted/released, executor.deployed, wallet.executor_deployed, wallet.mapping_changed | «Общий» | оставить |
-  | manual.record, manual.taken, manual.returned, balance.sell | дубль — «Неудачные» (или «Общий»); остальные — «Общий» | оставить |
-  | system.started, system.stopped | «Общий» | оставить |
-
-  Ещё вопросы по 251: (а) напоминание notify.manual_repeat_s само по себе — НОВОЕ сообщение с теми же записями каждые
-  N секунд (так задумано решением 156); оставить, увеличить интервал или очистить настройку (без повторов)?
-  (б) после перезапуска бота все записи «Ручного управления» уходят заново (память дубля — только в памяти,
-  mirror_state.rs) — хранить message_id в базе, чтобы после перезапуска править старые сообщения, а не слать новые?
-  (в) тот же отказ продажи определяется по тексту без чисел (manual_repeat.rs shape) — hex-хвост в тексте (буквы a–f)
-  сделает «другой отказ» и новый алерт; живых текстов отказов с hex в tests/data нет — нужен ли разбор по журналу?
+- **Решение 251 (10.11.2026), алерты Telegram (ветки t69/alerts-clean, t73/alerts-followup).** Тигран 10.11 ответил на
+  вопросы а–в и таблицу «Общего» — сделано (DECISIONS 251, дополнение): (а) напоминание notify.manual_repeat_s — как
+  есть, закрыто; (б) сообщения «Ручного управления» в SQLite — после перезапуска правятся, а не шлются заново; отказ
+  правки — новое сообщение; (в) hex (0x…, хеши, адреса) в «том же отказе» — как цифры; (г) deal.closed не в «Общий»,
+  если задан «Сделки»; stuck.loss_alert не в «Общий», если задан «Неудачные»; события связи площадки склеены по площадке.
+  1. *Тиграну — установить в интерфейсе после выкладки* («Уведомления», каждое событие: «Включено» = нет; это настройка
+     notify.event.enabled, область «событие» — `[event:<код>]`; бот значения не менял). Факт кода: выключенное событие
+     notify в журнал НЕ пишет (dispatch.rs passes) — «только журнал» значит «только то, что место события пишет в журнал
+     само»:
+     - своя запись журнала есть (видно в «Журнале»): deal.candidate (core.candidate), window.opened, window.closed,
+       deal.transfer_sent (core.transfer_sent), deal.transfer_credited (core.transfer_credited), deal.dust (deal.dust),
+       cycle.dry (core.cycle_dry), coin.check_done (core.check_done), pool.hook_excluded (core.pool_excluded),
+       venue.transfer_status (core.transfer_status), dex.check_not_configured (dex.check_not_configured), wallet.added
+       (журнал кошельков «Кошелёк DEX … добавлен»), system.secrets_unlocked («Секреты разблокированы»),
+       send.channel_rejected и send.tx_not_included (core.op_error с ошибкой; у адаптера — send.channel_rejected /
+       send.tx_not_included);
+     - своей записи журнала НЕТ (выключить = следа в журнале не будет): episode.opened, episode.closed (эпизод — в своей
+       таблице, экран эпизодов), deal.buy_filled, deal.sell_filled (сама сделка — на экране «Сделки»), exec.verified,
+       bundle.assembled, bundle.simulated, bundle.sent, bundle.included, bundle.sim_reverted, bundle.not_included,
+       dex.rebuilt_after_approve, dex.swap_waits_inflow (события адаптера DEX MarketEvent::Notice → только notify).
+     Остановка после send.channel_rejected / send.tx_not_included / отказов бандла шлёт своё событие: ошибки подряд →
+     пауза площадки — risk.stop (core/rules_apply.rs); исход неизвестен — send.outcome_unknown и risk.stop
+     (core/rules_stop.rs); сделка цикла DEX ↔ DEX с ошибкой бандла идёт через тот же rules_apply::on_error
+     (core/cycle_deal.rs).
+  2. *Вопрос Тиграну:* у событий из второго списка выключение убирает след совсем. Варианты: (а) так и оставить;
+     (б) выключенное событие всё равно писать в журнал (одной строкой, для всех выключенных — deal.candidate уже пишется
+     core.candidate, будет дубль); (в) писать в журнал только события второго списка — нужна таблица в коде.
+  3. *Факт кода:* venue.disconnected / venue.reconnected есть в каталоге (экран «Уведомления»), но в коде их никто не
+     отправляет — склейка для них заработает, когда появится отправитель.
+  4. *Проверить после выкладки:* перезапуск бота при записях на «Ручном управлении» — новых сообщений в «Неудачных» нет,
+     в журнале «Ручное управление: сообщений записей прошлого запуска — N».
 
 - **Решение 249 (10.11.2026), venue.cex_cex_deny и правила биржа ↔ биржа везде (ветка t67/cex-cex-deny).** Сделано: см.
   DECISIONS 249. Подтвердить: (1) список venue.cex_cex_deny — только у биржи НАЧАЛА сделки (buy_on); у биржи, через

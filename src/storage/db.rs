@@ -111,6 +111,11 @@ CREATE TABLE IF NOT EXISTS dex_wallet_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notify_mirror (
+    key  TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS dex_wallet_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     what TEXT NOT NULL,

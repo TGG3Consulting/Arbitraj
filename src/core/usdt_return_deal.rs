@@ -16,7 +16,9 @@
 //! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, usdt_return_parts.rs,
 //! usdt_return_split.rs, dex_account.rs, deal.rs, settings.
 //! Решение 249: часть биржа → биржа, запрещённая venue.cex_cex (cex_link.rs), не перегоняется — страховка «USDT не вернулись».
-//! Настройки: usdt_return.mode, venue.quote_asset; venue.cex_cex (через cex_link.rs).
+//! Дополнение 10.11 (п. 1): и часть, площадка покупки которой есть в списке venue.cex_cex_deny любой биржи пути монеты
+//! сделки (cex_link::return_block); п. 4 — повторы и «Перегнать» перепроверяют то же правило (return_block).
+//! Настройки: usdt_return.mode, venue.quote_asset; venue.cex_cex, venue.cex_cex_deny (через cex_link.rs).
 
 use rust_decimal::Decimal;
 
@@ -71,9 +73,9 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
     let n = parts.len();
     let mut jobs = Vec::with_capacity(n);
     for (i, (from, amount)) in parts.into_iter().enumerate() {
-        // Решение 249: перегон USDT биржа → биржа запрещён venue.cex_cex (сменилась после начала сделки) — без перегона,
-        // страховка «USDT не вернулись», решает человек.
-        if let Some(why) = return_block(core, &from, &to) {
+        // Решение 249: перегон USDT биржа → биржа запрещён venue.cex_cex (сменилась после начала сделки) или списком
+        // venue.cex_cex_deny биржи пути (дополнение 10.11) — без перегона, страховка «USDT не вернулись», решает человек.
+        if let Some(why) = return_block(core, deal, &from, &to) {
             not_returned(core, deal, amount, &from, &why).await;
             continue;
         }
@@ -149,17 +151,13 @@ async fn single(core: &Core, deal: &mut Deal) -> Option<(VenueId, Decimal)> {
     Some((from, amount))
 }
 
-/// Решение 249: перегон выручки с биржи `from` на биржу покупки `to` — правило venue.cex_cex обеих (в обе стороны). Список
-/// venue.cex_cex_deny биржи покупки возврат на неё саму не запрещает (запрет — только уход с неё). Одна из сторон DEX —
-/// без условия. Принимает: ядро, откуда, куда. Возвращает: причину запрета или None.
-fn return_block(core: &Core, from: &VenueId, to: &VenueId) -> Option<String> {
-    let cex = |v: &VenueId| {
-        super::trade_ops::kind(core, v).ok() == Some(crate::gateway::contract::VenueKind::Cex)
-    };
-    if from == to || !cex(from) || !cex(to) {
-        return None;
-    }
-    super::cex_link::flags(&core.inner.deps.settings, &from.0, &to.0)
+/// Решение 249 (дополнение 10.11, п. 1 и 4): перегон выручки сделки с `from` на площадку покупки `to` — правило
+/// cex_link::return_block (venue.cex_cex обеих бирж, списки venue.cex_cex_deny бирж пути монеты; список биржи покупки
+/// возврат на неё саму не запрещает). Одна из сторон DEX — правило 1 без условия. Вызывают: prepare, повторы
+/// (usdt_return_retry.rs) и попытка (usdt_return_attempt.rs). Принимает: ядро, сделку, откуда, куда.
+/// Возвращает: причину запрета или None.
+pub fn return_block(core: &Core, deal: &Deal, from: &VenueId, to: &VenueId) -> Option<String> {
+    super::cex_link::return_block(core, deal, from, to)
         .map(|w| format!("перегон USDT {} → {} запрещён: {w}", from.0, to.0))
 }
 

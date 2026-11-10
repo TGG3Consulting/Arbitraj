@@ -13,6 +13,9 @@
 //! «не вернулись» (USDT остались на площадке) со страховкой, журнал «вывод отклонён — не повторяем».
 //! Состояние — в учёте сделки (UsdtReturn::Retrying): после перезапуска повторы продолжаются (resume). Во время
 //! попытки состояние «идёт» (Pending): перезапуск посреди попытки — «не вернулись» (перевод мог уйти, повтора нет).
+//! Решение 249, дополнение 10.11 (п. 4): перед каждой попыткой правило биржа ↔ биржа перепроверяется (могли поменять
+//! между попытками, usdt_return_deal::return_block) — запрещено: не отправляем, «не вернулись» с причиной «запрещено
+//! правилом: …» (в хронологию) и страховкой, как при запрете при закрытии; повторов больше нет.
 //! Кто вызывает: usdt_return_job.rs (сбой первой попытки), engine.rs (resume при запуске), manual_usdt.rs.
 //! От чего зависит: usdt_return_attempt.rs (попытка, захват, хронология), usdt_return_state.rs, gateway/urgency.rs,
 //! settings.
@@ -31,7 +34,7 @@ use crate::storage::journal::Level;
 
 use super::engine::{Core, lk};
 use super::op_error::OpError;
-use super::usdt_return_attempt::{attempt, claim, log, note, retrying};
+use super::usdt_return_attempt::{attempt, claim, log, note, retrying, rule_block};
 use super::usdt_return_state::{self as st, UsdtReturn};
 
 /// Повторы по настройкам площадки: пауза и сколько повторов всего.
@@ -191,6 +194,10 @@ async fn run(core: &Core, deal: &str, at: &VenueId) {
             return st::mark_not_returned(core, deal, amount, &from, &why).await;
         };
         tokio::time::sleep(p.every).await;
+        // Решение 249, дополнение 10.11 (п. 4): правило могли поменять, пока ждали повтора — запрещено: не отправляем.
+        if let Some(why) = rule_block(core, deal, &from, &to) {
+            return st::mark_not_returned(core, deal, amount, &from, &why).await;
+        }
         let n = tries + 1;
         // Захват попытки: «ждёт повтора» с тем же счётом → «идёт». Вторая задача по той же сделке не пройдёт.
         if !claim(core, deal, at, tries).await {

@@ -22,7 +22,9 @@
 //! Решение 227: перегон на DEX — через send_trade (зачисление по приходу в блокчейне, решение 151), как перевод сделки.
 //! Решение 249 (живой случай Тиграна 10.11: сделка BingX → DEX, перегон увёз монету на MEXC с venue.cex_cex = нет):
 //! биржа-цель, запрещённая правилами биржа ↔ биржа (venue.cex_cex у биржи пути монеты или у цели, список
-//! venue.cex_cex_deny биржи покупки — cex_link::relay_block), не цель; разрешённых целей нет — продажа здесь.
+//! venue.cex_cex_deny бирж пути монеты — cex_link::relay_block), не цель; разрешённых целей нет — продажа здесь.
+//! Дополнение 10.11 (п. 5): отсеянные правилом биржи — одной строкой в хронологию сделки на каждый перегон (биржа и
+//! причина каждой), как в «Продать и перегнать».
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs).
 
@@ -38,23 +40,39 @@ use super::engine::{Core, lk, rd};
 /// Площадки, куда монету можно перегнать отсюда (у монеты там есть рынок, приём и продажа через API; не на паузе;
 /// решение 249 — разрешены правилами биржа ↔ биржа). Открыта для тестов (tests/core_cex_cex_deny.rs). Ошибок нет.
 pub fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
+    targets_why(core, deal).0
+}
+
+/// Как targets, плюс биржи, отсеянные правилом биржа ↔ биржа (решение 249, дополнение 10.11, п. 5), — «биржа: причина».
+/// Открыта для тестов. Принимает: ядро, сделку. Возвращает: (цели, отсеянные правилом). Ошибок нет.
+pub fn targets_why(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
     let coins = rd(&core.inner.coins);
     // Решение 131: по карте места, без прохода справочника.
     let Some(e) = super::ticker_index::find(core, &coins, &deal.direction.asset) else {
-        return vec![];
+        return (vec![], vec![]);
     };
     let can_send = e.at(&deal.at).is_some_and(|p| p.can_send);
     if !can_send {
-        return vec![];
+        return (vec![], vec![]);
     }
     // Решение 118 (Я-14): площадка на паузе (ошибки подряд, балансы не получены) — не цель перегона.
     let paused = lk(&core.inner.risk).venue_paused.clone();
-    e.presence
+    let mut ruled = vec![];
+    let out = e
+        .presence
         .iter()
         .filter(|p| p.excluded.is_empty() && p.can_receive && p.can_sell && p.venue != deal.at)
         .filter(|p| !paused.contains_key(&p.venue))
         // Решение 249: биржа-цель запрещена правилами биржа ↔ биржа относительно пути монеты (cex_link.rs).
-        .filter(|p| super::cex_link::relay_block(core, deal, &p.venue).is_none())
+        .filter(
+            |p| match super::cex_link::relay_block(core, deal, &p.venue) {
+                Some(w) => {
+                    ruled.push(format!("{}: {w}", p.venue.0));
+                    false
+                }
+                None => true,
+            },
+        )
         // Решение 185: на DEX — только если есть кошелёк (сделки или строки биржи, где монета); решение 230 — и этот
         // кошелёк не на паузе от сверки.
         .filter(
@@ -64,7 +82,8 @@ pub fn targets(core: &Core, deal: &Deal) -> Vec<VenueId> {
             },
         )
         .map(|p| p.venue.clone())
-        .collect()
+        .collect();
+    (out, ruled)
 }
 
 /// Режим «Перегон». Ошибок нет.
@@ -125,7 +144,16 @@ pub async fn run(core: &Core, mut deal: Deal) {
     let mut best: Option<(VenueId, Decimal)> = None;
     // Решение 222: перегон, выручка которого после затрат ≤ 0 (или приход — пыль на площадке-цели), не делается.
     let mut tiny = false;
-    for to in targets(core, &deal) {
+    let (list, ruled) = targets_why(core, &deal);
+    // Решение 249, дополнение 10.11 (п. 5): отсеянные правилом биржи — одной строкой в хронологию сделки.
+    if !ruled.is_empty() {
+        deal.note(format!(
+            "Перегон: не цели по правилу биржа ↔ биржа (решение 249) — {}",
+            ruled.join("; ")
+        ));
+        super::ledger::save(core, &deal).await;
+    }
+    for to in list {
         // Решение 220: продажа на цели котируется кошельком, которым пойдёт (решение 185: for_relay).
         let acc = super::dex_account::for_relay(core, &deal, &to)
             .ok()

@@ -6,7 +6,10 @@
 //! стороны (справочник и risk-проверка cex_link::direction_ok); (3) кейс Тиграна 10.11: сделка bingx → bsc_dex, монета на
 //! кошельке DEX, у mexc venue.cex_cex = нет — «Перегон» (relay::targets) и «Продать и перегнать»
 //! (manual_relay_targets::targets) mexc не выбирают; (4) список биржи покупки запрещает перегон на биржу из списка,
-//! список биржи-цели — нет; (5) не задано — цели как до решения.
+//! список биржи-цели — нет; (5) не задано — цели как до решения. Дополнение 10.11: (6) п. 1 — список проверяется у
+//! каждой биржи пути монеты (сделка bingx → mexc, монета на mexc или дальше на кошельке DEX: список mexc и список bingx),
+//! шаг mexc → bingx запрещён списком mexc; п. 5 — relay::targets_why отдаёт отсеянные правилом биржи с причиной;
+//! (7) п. 2 — сделка начата на DEX, монета ещё ни на одной бирже: списки и «нет» на DEX → биржа не действуют.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::gateway, arb::settings, arb::storage, arb::notify, arb::secrets, tests/size_common.
 
@@ -17,7 +20,7 @@ use arb::core::cex_link;
 use arb::core::deal::{Deal, Step};
 use arb::core::deps::Deps;
 use arb::core::registry::{CoinEntry, Presence};
-use arb::core::types::{DexAccountId, Direction, VenueId};
+use arb::core::types::{DexAccountId, Direction, Transfer, TransferStatus, VenueId};
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
@@ -290,5 +293,100 @@ async fn path_exchange_off_blocks_relay() {
     x.at = v("bsc_dex");
     venue_set(&s, "venue.cex_cex", "bingx", Some(json!(false))).await;
     kinds(&core);
+    assert!(cex_link::relay_block(&core, &x, &v("bingx")).is_none());
+}
+
+/// Перевод сделки, зачисленный на `venue` (путь монеты, Deal.transfers).
+fn moved(venue: &str) -> Transfer {
+    Transfer {
+        venue: v(venue),
+        asset: size_common::calc::direction().asset,
+        network: "BSC".into(),
+        amount: Decimal::from(10),
+        status: TransferStatus::Credited,
+        venue_ref: String::new(),
+        tx_hash: None,
+        fee: None,
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+/// (6) Дополнение 10.11, п. 1 и 5: списки всех бирж пути монеты; отсеянные правилом — с причиной.
+#[tokio::test]
+async fn deny_list_of_every_path_exchange() {
+    let (core, s) = start("path-deny").await;
+    let rec = Rec::load("cex249-path-deny").await;
+    let c = entry(&rec, &["bingx", "mexc", "binance"]);
+    for id in ["bingx", "mexc", "binance", "bsc_dex"] {
+        venue_set(&s, "venue.enabled", id, Some(json!(true))).await;
+    }
+    // Сделка bingx → mexc, монета переведена на mexc и застряла там (пример Тиграна 10.11).
+    let mut x = deal();
+    x.direction = dir("bingx", "mexc");
+    x.at = v("mexc");
+    x.dex_account = None;
+    x.transfers = vec![moved("mexc")];
+    let both = |x: &Deal| {
+        kinds(&core);
+        core.inner.coins.write().unwrap().live = std::sync::Arc::new(vec![c.clone()]);
+        let auto = arb::core::relay::targets_why(&core, x);
+        let (manual, skip) = arb::core::manual_relay_targets::targets(&core, x);
+        (auto, manual, skip)
+    };
+    // Не задано — биржи цели (DEX — нет: строки маппинга у mexc нет, решение 185).
+    let ((auto, ruled), manual, _) = both(&x);
+    assert_eq!(auto, vec![v("bingx"), v("binance")]);
+    assert_eq!(manual, auto);
+    assert!(ruled.is_empty(), "{ruled:?}");
+    // Список mexc (где монета сейчас): mexc → binance запрещён.
+    venue_set(&s, cex_link::DENY, "mexc", Some(json!(["binance"]))).await;
+    let ((auto, ruled), manual, skip) = both(&x);
+    assert_eq!(auto, vec![v("bingx")]);
+    assert_eq!(manual, auto);
+    let why = "binance: mexc не взаимодействует с binance (список venue.cex_cex_deny у mexc)";
+    assert_eq!(ruled, vec![why.to_string()]);
+    assert!(skip.iter().any(|t| t == why), "{skip:?}");
+    // Список bingx (биржа начала) действует и после перехода монеты на mexc.
+    venue_set(&s, cex_link::DENY, "mexc", None).await;
+    venue_set(&s, cex_link::DENY, "bingx", Some(json!(["binance"]))).await;
+    let ((auto, ruled), _, _) = both(&x);
+    assert_eq!(auto, vec![v("bingx")]);
+    assert!(
+        ruled[0].starts_with("binance: bingx не взаимодействует с binance"),
+        "{ruled:?}"
+    );
+    // Шаг mexc → bingx: bingx в списке mexc — перегон обратно на биржу начала запрещён.
+    venue_set(&s, cex_link::DENY, "bingx", None).await;
+    venue_set(&s, cex_link::DENY, "mexc", Some(json!(["bingx"]))).await;
+    let ((auto, _), manual, _) = both(&x);
+    assert_eq!(auto, vec![v("binance")]);
+    assert_eq!(manual, auto);
+    // Монета ушла с mexc на кошелёк DEX — список mexc действует и дальше (через кошелёк DEX).
+    venue_set(&s, cex_link::DENY, "mexc", Some(json!(["binance"]))).await;
+    x.transfers.push(moved("bsc_dex"));
+    x.at = v("bsc_dex");
+    x.dex_account = Some(DexAccountId("w1".into()));
+    kinds(&core);
+    let why = cex_link::relay_block(&core, &x, &v("binance")).unwrap();
+    assert!(
+        why.starts_with("mexc не взаимодействует с binance"),
+        "{why}"
+    );
+    assert!(cex_link::relay_block(&core, &x, &v("bingx")).is_none());
+}
+
+/// (7) Дополнение 10.11, п. 2: сделка начата на DEX, монета ещё ни на одной бирже — DEX → биржа не затрагивается.
+#[tokio::test]
+async fn dex_start_coin_never_on_exchange() {
+    let (core, s) = start("dex-start").await;
+    kinds(&core);
+    let mut x = deal();
+    x.direction = dir("bsc_dex", "mexc");
+    x.at = v("bsc_dex");
+    venue_set(&s, "venue.cex_cex", "mexc", Some(json!(false))).await;
+    venue_set(&s, cex_link::DENY, "binance", Some(json!(["mexc"]))).await;
+    venue_set(&s, cex_link::DENY, "bingx", Some(json!(["mexc"]))).await;
+    kinds(&core);
+    assert!(cex_link::relay_block(&core, &x, &v("mexc")).is_none());
     assert!(cex_link::relay_block(&core, &x, &v("bingx")).is_none());
 }

@@ -10,13 +10,15 @@
 //! Сторож работает у любой площадки, чей адаптер отдаёт feed_health (поле scheduled больше его не выключает).
 //! Не задана любая настройка решения 202 — сторож площадки выключен (одна запись в журнал), ждёт изменения настроек;
 //! не задана настройка подтверждения — подтверждения нет (причина — в журнале вместе с тихими парами).
+//! Дополнение 10.11 (Тигран: согласовано): журнал видимости (feed_watch_log.rs) — строка «Сторож пар работает» при
+//! включении, сводка прохода не чаще venue.feed_watch_log_ms, строки решений по паре с той же частотой.
 //! Кто вызывает: core/engine.rs (задача на каждую биржу).
-//! От чего зависит: feed_watch_logic.rs, feed_confirm.rs, feed_watch_act.rs, feed_hold.rs, venue_ticker.rs, engine.rs,
-//! gateway (feed_health, book_version), settings.
+//! От чего зависит: feed_watch_logic.rs, feed_confirm.rs, feed_watch_act.rs, feed_watch_log.rs, feed_hold.rs,
+//! venue_ticker.rs, engine.rs, gateway (feed_health, book_version), settings.
 //! Настройки: venue.book_stale_ms, venue.pair_dead_mult, feed.stale_after_ms, venue.feed_warmup_ms,
 //! venue.pair_resub_attempts, venue.pair_resub_interval_ms, venue.pair_resub_pause_ms, venue.conn_dead_pct,
 //! venue.conn_reconnect_min_ms, venue.conn_reconnect_max_per_hour; решение 213 — venue.quiet_confirm_min_ms,
-//! venue.quiet_confirm_max_per_s (по площадке).
+//! venue.quiet_confirm_max_per_s (по площадке); журнал — venue.feed_watch_log_ms (по площадке, необязательная).
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -29,6 +31,7 @@ use crate::storage::journal::Level;
 use super::engine::Core;
 use super::feed_confirm::QuietCfg;
 use super::feed_watch_act::{act, log};
+use super::feed_watch_log::LogGate;
 use super::feed_watch_logic::{self as logic, Action, Cfg, State};
 
 /// Настройки сторожа площадки. Ошибка — текст: какая не задана (решение 202). Настройки подтверждения (решение 213)
@@ -65,6 +68,18 @@ fn cfg(core: &Core, venue: &VenueId) -> Result<Cfg, String> {
     })
 }
 
+/// Дополнение 10.11: частота журнала сторожа площадки (venue.feed_watch_log_ms). None — не задана. Ошибок нет.
+fn log_every(core: &Core, venue: &VenueId) -> Option<i64> {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    let s = &core.inner.deps.settings;
+    s.integer("venue.feed_watch_log_ms", at)
+        .ok()
+        .map(|v| v as i64)
+}
+
 /// Сейчас, unix мс.
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -73,6 +88,7 @@ fn now_ms() -> i64 {
 /// Задача сторожа одной биржи. Работает, пока жива система. Ошибок не возвращает.
 pub async fn run(core: Core, venue: VenueId) {
     let mut st = State::default();
+    let mut lg = LogGate::default();
     let mut told: Option<String> = None;
     let mut watch = core.inner.deps.watch(&["venue.", "feed."]);
     loop {
@@ -84,6 +100,7 @@ pub async fn run(core: Core, venue: VenueId) {
                     log(&core, &venue, Level::Info, m).await;
                     told = Some(why);
                 }
+                lg.off();
                 if watch.next().await.is_none() {
                     return;
                 }
@@ -96,6 +113,10 @@ pub async fn run(core: Core, venue: VenueId) {
             continue;
         };
         let Some(h) = v.feed_health() else { return };
+        lg.every = log_every(&core, &venue);
+        if let Some(m) = lg.announce(&h, &c) {
+            log(&core, &venue, Level::Info, m).await;
+        }
         let deals: HashMap<String, Vec<String>> = super::feed_hold::holders(&core, &venue)
             .into_iter()
             .fold(HashMap::new(), |mut m, (id, a)| {
@@ -108,10 +129,13 @@ pub async fn run(core: Core, venue: VenueId) {
         for a in logic::decide(&h, now_ms(), &c, &deals, &mut st) {
             match a {
                 Action::Check { conn, ticker } => checks.push((conn, ticker)),
-                a => act(&core, &venue, v.as_ref(), a, &c).await,
+                a => act(&core, &venue, v.as_ref(), a, &c, &mut lg).await,
             }
         }
-        confirm(&core, &venue, v.as_ref(), checks, &c, &mut st).await;
+        confirm(&core, &venue, v.as_ref(), checks, &c, &mut st, &mut lg).await;
+        if let Some(m) = lg.summary(&h, now_ms(), &c, &st) {
+            log(&core, &venue, Level::Info, m).await;
+        }
         tokio::time::sleep(Duration::from_millis(c.interval_ms.max(1) as u64)).await;
     }
 }
@@ -126,6 +150,7 @@ async fn confirm(
     checks: Vec<(String, String)>,
     c: &Cfg,
     st: &mut State,
+    lg: &mut LogGate,
 ) {
     if checks.is_empty() {
         return;
@@ -137,7 +162,7 @@ async fn confirm(
     for ((conn, ticker), r) in checks.into_iter().zip(res) {
         let r = r.map_err(|e| e.message);
         for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
-            act(core, venue, v, a, c).await;
+            act(core, venue, v, a, c, lg).await;
         }
     }
 }

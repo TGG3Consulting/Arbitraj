@@ -235,7 +235,10 @@ fn unchanged_since_resub_and_no_frames_since_sub() {
         &c,
         &mut st,
     );
-    assert!(matches!(&a[..], [Action::Unchanged { .. }]), "{a:?}");
+    assert!(
+        matches!(&a[..], [Action::Unchanged { log: true, .. }]),
+        "{a:?}"
+    );
     let a = apply(
         &h(100_100),
         "m1",
@@ -246,7 +249,11 @@ fn unchanged_since_resub_and_no_frames_since_sub() {
         &c,
         &mut st,
     );
-    assert!(a.is_empty(), "{a:?}");
+    // Снова «не менялась» — без переподписки, в журнал второй раз не пишется (log: false).
+    assert!(
+        matches!(&a[..], [Action::Unchanged { log: false, .. }]),
+        "{a:?}"
+    );
 }
 
 #[test]
@@ -260,9 +267,10 @@ fn rest_error_logged_once_no_blind_resub() {
         matches!(&a[..], [Action::CheckFailed { why, .. }] if why.contains("503")),
         "{a:?}"
     );
+    let a = apply(&h, "m1", "AIL", err(), 70_000, 70_100, &c, &mut st);
     assert!(
-        apply(&h, "m1", "AIL", err(), 70_000, 70_100, &c, &mut st).is_empty(),
-        "та же причина — молча"
+        matches!(&a[..], [Action::CheckFailed { log: false, .. }]),
+        "та же причина — без журнала, без переподписки: {a:?}"
     );
     // Кадры по расписанию по документации — без подтверждения тишина = мёртвая подписка (решение 202).
     let mut st = State::default();
@@ -398,4 +406,142 @@ fn no_confirm_only_journal_once() {
         matches!(&a[..], [Action::QuietNoConfirm { why, .. }] if why.contains("quiet_confirm_min_ms")),
         "{a:?}"
     );
+}
+
+/// Дополнение 10.11 (Тигран: согласовано; живой случай XT): у биржи без времени изменения книги (только номер) тот же
+/// ответ REST, что дал «кадры потеряны», после переподписки — книга не менялась с переподписки: Unchanged, кругов
+/// больше нет; книга снова поменялась без кадров — кадры потеряны, обычный круг; без переподписки — Lost, как раньше.
+#[test]
+fn same_rest_after_resub_unchanged_without_changed_ms() {
+    let (c, mut st, none) = (cfg(), State::default(), HashMap::new());
+    let by_id = |id| {
+        Ok(BookVersion {
+            id: Some(id),
+            ..Default::default()
+        })
+    };
+    let h = |n, since| {
+        health(
+            n,
+            false,
+            true,
+            vec![pair("XTP", Some(10_000), Some(100), since)],
+        )
+    };
+    assert_eq!(
+        decide(&h(40_000, 0), 40_000, &c, &none, &mut st),
+        vec![check("XTP")]
+    );
+    let a = apply(
+        &h(40_100, 0),
+        "m1",
+        "XTP",
+        by_id(105),
+        40_000,
+        40_100,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(
+            &a[..],
+            [
+                Action::Lost { log: true, .. },
+                Action::Resub {
+                    attempt: 1,
+                    round: 1,
+                    ..
+                }
+            ]
+        ),
+        "{a:?}"
+    );
+    // Адаптер переподписал пару в 40 200; круг 202 (ещё две попытки), пауза, затем снова проверка.
+    for n in [43_200, 46_200, 49_200] {
+        decide(&h(n, 40_200), n, &c, &none, &mut st);
+    }
+    assert_eq!(
+        decide(&h(109_200, 40_200), 109_200, &c, &none, &mut st),
+        vec![check("XTP")]
+    );
+    // На бирже тот же номер 105 — книга не менялась с переподписки: тихая, не мёртвая, без нового круга.
+    let a = apply(
+        &h(109_300, 40_200),
+        "m1",
+        "XTP",
+        by_id(105),
+        109_200,
+        109_300,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(&a[..], [Action::Unchanged { log: true, .. }]),
+        "{a:?}"
+    );
+    assert_eq!(
+        decide(&h(139_200, 40_200), 139_200, &c, &none, &mut st),
+        vec![check("XTP")]
+    );
+    let a = apply(
+        &h(139_300, 40_200),
+        "m1",
+        "XTP",
+        by_id(105),
+        139_200,
+        139_300,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(&a[..], [Action::Unchanged { log: false, .. }]),
+        "{a:?}"
+    );
+    // Книга поменялась (106), кадров нет — кадры потеряны, обычный круг.
+    assert_eq!(
+        decide(&h(169_200, 40_200), 169_200, &c, &none, &mut st),
+        vec![check("XTP")]
+    );
+    let a = apply(
+        &h(169_300, 40_200),
+        "m1",
+        "XTP",
+        by_id(106),
+        169_200,
+        169_300,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(
+            &a[..],
+            [Action::Lost { .. }, Action::Resub { attempt: 1, .. }]
+        ),
+        "{a:?}"
+    );
+    // Тот же ответ, но пара НЕ переподписана после него (since раньше ответа) — по-прежнему кадры потеряны.
+    let mut st = State::default();
+    let a = apply(
+        &h(40_100, 0),
+        "m1",
+        "XTP",
+        by_id(105),
+        40_000,
+        40_100,
+        &c,
+        &mut st,
+    );
+    assert!(matches!(&a[..], [Action::Lost { .. }, ..]), "{a:?}");
+    st.pairs.clear();
+    let a = apply(
+        &h(80_100, 0),
+        "m1",
+        "XTP",
+        by_id(105),
+        80_000,
+        80_100,
+        &c,
+        &mut st,
+    );
+    assert!(matches!(&a[..], [Action::Lost { .. }, ..]), "{a:?}");
 }

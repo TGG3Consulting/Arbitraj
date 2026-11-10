@@ -6,13 +6,19 @@
 //! переподписка по решению 202; ошибка — журнал (раз на изменение), вслепую не переподписывать.
 //! Сравнение — по номеру/времени книги (Gate) или по содержимому стакана (первые N уровней REST и своего стакана —
 //! feed_print.rs; MEXC, Bitget; Тигран 08.11).
+//! Дополнение 10.11 (Тигран: согласовано): «кадры потеряны» при том же ответе REST, что и до переподписки, — книга не
+//! менялась с переподписки: Unchanged и у бирж без времени изменения книги (feed_rest_ref.rs); действия по
+//! Unchanged / Lost / CheckFailed выдаются на каждый ответ с признаком log (смена состояния), журнал с частотой
+//! venue.feed_watch_log_ms решает feed_watch_log.rs.
 //! Без ожиданий и ввода-вывода — проверяется тестами (feed_confirm_tests.rs, feed_print_tests.rs).
 //! Кто вызывает: core/feed_watch_logic.rs (want, note_quiet), core/feed_watch.rs (apply).
-//! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs.
+//! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs,
+//! feed_rest_ref.rs.
 //! Настройки: значения приходят в Cfg.quiet (читает feed_watch.rs).
 
 use crate::gateway::feed_health::{BookVersion, FeedHealth, PairHealth};
 
+use super::feed_rest_ref::{LostRef, RestRef, unchanged_since_resub};
 use super::feed_watch_logic::{Action, Cfg, State, start_round};
 
 /// Подтверждение тихой пары: настройки площадки или причина, почему выключено.
@@ -40,6 +46,8 @@ pub(super) struct CheckSt {
     /// Следующая проверка — не раньше (unix мс).
     pub(super) next_at: i64,
     pub(super) told: Option<Told>,
+    /// Дополнение 10.11: ответ REST, давший «кадры потеряны» (feed_rest_ref.rs); тихая или свежая пара — None.
+    pub(super) lost_ref: Option<LostRef>,
 }
 
 /// Ведро запросов площадки: 1 запрос = 1000 долей, пополнение max_per_s долей за мс, запас — на 1 с.
@@ -161,7 +169,8 @@ pub(super) fn note_quiet(st: &mut State, key: &(String, String)) -> bool {
 
 /// Ответ биржи на проверку. Принимает: снимок свежести ПОСЛЕ ответа (кадр мог прийти, пока шёл запрос), соединение,
 /// тикер, ответ (ошибка — текст), когда запрос отправлен и когда получен ответ (часы бота), настройки, состояние.
-/// Возвращает: действия (подтверждение, переподписка, записи журнала — только при смене состояния). Ошибок нет.
+/// Возвращает: действия (подтверждение, переподписка; у каждого ответа — признак log: состояние пары сменилось).
+/// Ошибок нет.
 #[allow(clippy::too_many_arguments)]
 pub fn apply(
     h: &FeedHealth,
@@ -191,18 +200,38 @@ pub fn apply(
     {
         return out;
     }
+    let rest = r.as_ref().ok().and_then(RestRef::of);
     let v = match r {
         Ok(v) => verdict(p, &v, recv_ms),
         Err(e) => Verdict::Unknown(format!("запрос версии стакана не прошёл: {e}")),
     };
     let key = (conn.to_string(), ticker.to_string());
+    let cs = st.checks.entry(key.clone()).or_default();
+    // Дополнение 10.11: тот же ответ REST, что дал «кадры потеряны», а пара с тех пор переподписана — книга не
+    // менялась с переподписки (тихая, не мёртвая); иначе запомнить ответ для следующей проверки.
+    let v = match v {
+        Verdict::Lost(_) if unchanged_since_resub(cs.lost_ref.as_ref(), rest.as_ref(), p) => {
+            Verdict::Unchanged
+        }
+        Verdict::Lost(why) => {
+            cs.lost_ref = rest.map(|rest| LostRef {
+                rest,
+                at_ms: recv_ms,
+            });
+            Verdict::Lost(why)
+        }
+        Verdict::Quiet => {
+            cs.lost_ref = None;
+            Verdict::Quiet
+        }
+        other => other,
+    };
     let told = match &v {
         Verdict::Quiet => Told::Quiet,
         Verdict::Unchanged => Told::Unchanged,
         Verdict::Lost(_) => Told::Lost,
         Verdict::Unknown(w) => Told::Failed(w.clone()),
     };
-    let cs = st.checks.entry(key.clone()).or_default();
     let changed = cs.told.as_ref() != Some(&told);
     cs.told = Some(told);
     let (conn, ticker) = (key.0.clone(), key.1.clone());
@@ -222,28 +251,28 @@ pub fn apply(
         }
         Verdict::Unchanged => {
             st.pairs.remove(&key);
-            if changed {
-                out.push(Action::Unchanged { conn, ticker });
-            }
+            out.push(Action::Unchanged {
+                conn,
+                ticker,
+                log: changed,
+            });
         }
         Verdict::Lost(why) => {
-            if changed {
-                out.push(Action::Lost {
-                    conn: conn.clone(),
-                    ticker: ticker.clone(),
-                    why,
-                });
-            }
+            out.push(Action::Lost {
+                conn: conn.clone(),
+                ticker: ticker.clone(),
+                why,
+                log: changed,
+            });
             start_round(st, &key, recv_ms, c, &mut out);
         }
         Verdict::Unknown(why) => {
-            if changed {
-                out.push(Action::CheckFailed {
-                    conn: conn.clone(),
-                    ticker: ticker.clone(),
-                    why,
-                });
-            }
+            out.push(Action::CheckFailed {
+                conn: conn.clone(),
+                ticker: ticker.clone(),
+                why,
+                log: changed,
+            });
             // Кадры по документации идут по расписанию — тишина и без REST значит мёртвую подписку (решение 202).
             if h.scheduled {
                 start_round(st, &key, recv_ms, c, &mut out);

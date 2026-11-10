@@ -10,9 +10,12 @@
 //! Решение 176: чат зеркала — «Неудачные» (notify.failures_chat), если задан, иначе «Общий» (как раньше, roles.rs).
 //! Решение 177: запись сменилась или вернулась с тем же ключом — её сообщение правится, нового нет; итог продажи
 //! кнопкой — ещё одна правка сообщения ушедшей записи (mirror_track.rs, mirror_send.rs).
+//! Решение 251: тексты — по шаблону алерта в HTML (notify/alert.rs::telegram, карточка сделки — путь и где сейчас);
+//! напоминание не повторяет записи, которые человек сейчас обрабатывает (вопрос «Да/Отмена» или вопрос суммы открыт —
+//! mirror_state.rs::busy).
 //! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs.
 //! От чего зависит: core (Core::manual_records, Core::subscribe), notify/mirror_state.rs, mirror_view.rs,
-//! tg_methods.rs, client.rs, dispatch.rs (allows), settings, storage/journal.
+//! tg_methods.rs, tg_html.rs, alert.rs, client.rs, dispatch.rs (allows), settings, storage/journal.
 //! Настройки: notify.manual_repeat_s (нет — без повторов), notify.updates_retry_ms (пауза после ошибки Telegram),
 //! notify.event.* для manual.record, notify.telegram_*; секрет telegram.bot_token.
 
@@ -27,6 +30,7 @@ use crate::settings::live::Watch;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
+use super::alert::telegram;
 use super::client;
 use super::dispatch::Notifier;
 use super::mirror_state::{Shared, lock};
@@ -135,8 +139,8 @@ impl Mirror {
         }
         for (_, sent) in &diff.gone {
             for id in &sent.msgs {
-                let t = closed_text(&sent.text, None);
-                if let Err(e) = tg.edit_text_markup(chat, *id, &t, None).await {
+                let t = telegram(&closed_text(&sent.text, None));
+                if let Err(e) = tg.edit_html(chat, *id, &t, None).await {
                     self.log(
                         Level::Warn,
                         format!("Ручное управление: сообщение {id} не исправлено: {e}"),
@@ -165,8 +169,12 @@ impl Mirror {
         };
         for r in &unsent {
             let (text, kb) = record_message_for(r, all);
-            match tg.send_markup(chat, &text, kb, None).await {
-                Ok(id) => lock(&self.state).mark_sent(&r.key, text, id, Instant::now()),
+            match tg.send_html(chat, &telegram(&text), kb).await {
+                Ok(id) => {
+                    lock(&self.state).mark_sent(&r.key, text, id, Instant::now());
+                    // Решение 251: полный текст причины — в журнал (в сообщении — коротко, «полностью — в журнале»).
+                    self.log_full(r).await;
+                }
                 Err(e) => return self.tg_error(e, "сообщение записи").await,
             }
         }

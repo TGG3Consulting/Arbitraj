@@ -64,6 +64,7 @@ pub mod daily_venue_limit;
 pub mod day_roll;
 pub mod day_view;
 pub mod deal;
+pub mod deal_card;
 pub mod deal_ceiling;
 pub mod deal_closed;
 pub mod deal_gas;

@@ -14,7 +14,6 @@ use crate::core::types::{ManualAction as A, ManualHolding, ManualRecord, RecordK
 use crate::notify::human::{Msg, STOP, usd};
 
 use super::deal::Deal;
-use super::deal_text;
 use super::engine::{Core, lk};
 use super::manual_rows::{alert_record, btn, holding_record, sold};
 use super::usdt_return_state::UsdtReturn;
@@ -44,8 +43,7 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
     let full = last_note(d);
     // Решение 236: выручка продаж бота — видна в записи (ввод «Продано вручную» к ней прибавляется).
     let mut text = Msg::new(STOP, "Сделка остановлена — ждёт разбора")
-        .line(deal_text::coin_route(d))
-        .kv("Монеты", deal_text::coins_at(d))
+        .card(super::deal_card::card(d))
         .kv("Вложено", usd(d.invested));
     if d.proceeds > Decimal::ZERO {
         text = text.kv("Выручка бота", usd(d.proceeds));

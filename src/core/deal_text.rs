@@ -3,6 +3,7 @@
 //! «❌ Сделка минусовая», план, факт, итог; решение 216 — строки расчёта «без потолка», deal_ceiling.rs), остановка
 //! сделки, шаг сделки по-русски для хронологии.
 //! Решение 236: строка «Возврат USDT» — затраты возврата в факте или почему их нет (deal_return_cost.rs).
+//! Решение 251: монета, путь и где сейчас — карточкой сделки (deal_card.rs), суммы — блоком «Цифры» (notify/alert.rs).
 //! Логику не меняет — только то, что видит человек в Telegram и на экранах.
 //! Кто вызывает: ledger.rs (deal.closed), ledger_load.rs, manual_feed.rs, другие места с текстом сделки.
 //! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), deal_return_cost.rs, notify/human.rs (формат чисел, Msg).
@@ -13,6 +14,7 @@ use rust_decimal::Decimal;
 use crate::notify::human::{self as h, Msg};
 
 use super::deal::{Deal, Step};
+use super::deal_card::card;
 use super::deal_ceiling::Ceiling;
 
 /// Шаг сделки по-русски (для хронологии и экранов). Принимает: шаг.
@@ -53,14 +55,12 @@ pub fn closed(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     match d.step {
         Step::Closed => closed_result(d, why, ceil),
         Step::TakenOver => Msg::new(h::INFO, "Сделка передана человеку")
-            .line(coin_route(d))
-            .kv("Монеты", coins_at(d))
+            .card(card(d))
             .kv("Вложено", h::usd(d.invested))
             .id(&d.id)
             .render(),
         _ => Msg::new(h::STOP, "Сделка остановлена")
-            .line(coin_route(d))
-            .kv("Монеты", coins_at(d))
+            .card(card(d))
             .kv("Вложено", h::usd(d.invested))
             .reason(why)
             .todo("разобрать сделку на экране «Ручное управление»")
@@ -83,7 +83,7 @@ fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     };
     // Решение 191: размер ордера сделки — сколько вложено в покупку.
     m = m
-        .line(coin_route(d))
+        .card(card(d))
         .kv("Размер ордера", h::usd(d.invested))
         .kv("План", h::signed_usd(d.plan_profit_usd))
         .kv("Факт", h::signed_usd(fact));
@@ -185,8 +185,7 @@ pub fn venue_daily_stop(venue: &str, why: &str, cycles: bool) -> String {
 /// Сделка прервана перезапуском (risk.stop при запуске). Принимает: сделку (до смены шага на Halted).
 pub fn interrupted(d: &Deal) -> String {
     Msg::new(h::STOP, "Сделка прервана перезапуском бота")
-        .line(coin_route(d))
-        .kv("Монеты", coins_at(d))
+        .card(card(d))
         .kv("Была на шаге", step_name(d.step))
         .todo("проверить балансы и разобрать сделку на экране «Ручное управление»")
         .id(&d.id)

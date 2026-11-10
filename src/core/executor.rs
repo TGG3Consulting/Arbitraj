@@ -339,7 +339,7 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
             deal.note(format!("Перевод не состоялся: {e}"));
             // Решение 227: отказ вывода площадкой — метка, перегон с неё больше не выбирается (relay.rs).
             super::withdraw_refused::mark_at(core, &mut deal, &d.buy_on, &e);
-            // Решение 251 (г): отказ запоминается по паре «монета + биржа» — новые входы с неё закрыты.
+            // Решение 253 (г): отказ запоминается по паре «монета + биржа» — новые входы с неё закрыты.
             super::withdraw_block::close(core, &deal.id, &d.asset, &d.buy_on, &e).await;
             // Решение 220 (Тигран 08.11, п. 2): монеты на A — продажа здесь по порогу stuck.relay_max_loss_pct
             // (relay_here.rs), без повтора вывода; монет на A нет — остановка, решает человек.

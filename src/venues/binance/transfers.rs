@@ -4,7 +4,7 @@
 //! Кто вызывает: mod.rs (функции контракта), deposits.rs (transfer).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: venue.withdraw_wallet [binance] (spot | funding — параметр walletType), venue.withdraw_history_min_ms
-//! [binance] (обе проверяются до отправки вывода: после — поздно); решение 251 — venue.withdraw_unready_window_ms
+//! [binance] (обе проверяются до отправки вывода: после — поздно); решение 253 — venue.withdraw_unready_window_ms
 //! [binance]: −4026 / −4024 в пределах окна после своей покупки монеты — WithdrawLocked (повтор ядра, как −4060).
 //!
 //! Официально (Wallet SAPI):
@@ -119,7 +119,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     })
 }
 
-/// Решение 251: отказ вывода −4026 CAPITAL_WITHDRAW_USER_ASSET_NOT_ENOUGH («You have insufficient balance») или −4024
+/// Решение 253: отказ вывода −4026 CAPITAL_WITHDRAW_USER_ASSET_NOT_ENOUGH («You have insufficient balance») или −4024
 /// CAPITAL_WITHDRAW_USER_NO_ASSET («You don't have this asset») — Wallet → Error Code
 /// (https://developers.binance.com/en/docs/products/wallet/error-code) — в пределах venue.withdraw_unready_window_ms
 /// после своей покупки этой монеты (withdraw_ready.rs since_buy): «монета ещё не доступна для вывода» — WithdrawLocked
@@ -138,7 +138,7 @@ pub fn not_ready(ctx: &Ctx, ticker: &str, e: GatewayError) -> GatewayError {
         Some(t) if t <= Duration::from_millis(window) => GatewayError {
             code: ErrorCode::WithdrawLocked,
             message: format!(
-                "{} — монета куплена {} мс назад: ещё не доступна для вывода (решение 251)",
+                "{} — монета куплена {} мс назад: ещё не доступна для вывода (решение 253)",
                 e.message,
                 t.as_millis()
             ),

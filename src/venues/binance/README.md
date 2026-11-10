@@ -40,7 +40,7 @@
 | `fund_move.rs` | Funding → Spot после зачисления (`venue.deposit_to_spot`) |
 | `account.rs`, `all_balances.rs`, `key_check.rs` | Баланс спота; панель «Балансы» (Спот, Фонд, Все кошельки); «Проверить подключение» (apiRestrictions, canTrade/…, travel rule) |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта WebSocket API (`userDataStream.subscribe.signature`), balanceUpdate → MarketEvent::Balance |
-| `withdraw_ready.rs` | Решение 251: остатки монет из outboundAccountPosition, ожидание доступности вывода (контракт withdraw_ready: событие, по сроку — GET /api/v3/account), своя покупка монеты — окно «ещё не доступна для вывода» (−4026/−4024 → WithdrawLocked в transfers.rs по venue.withdraw_unready_window_ms) |
+| `withdraw_ready.rs` | Решение 253: остатки монет из outboundAccountPosition, ожидание доступности вывода (контракт withdraw_ready: событие, по сроку — GET /api/v3/account), своя покупка монеты — окно «ещё не доступна для вывода» (−4026/−4024 → WithdrawLocked в transfers.rs по venue.withdraw_unready_window_ms) |
 | `tap.rs`, `tap_decode.rs`, `feed.rs` | Окна (решение 125): кадры стакана, `<symbol>@trade`, `<symbol>@depth` + снимок `/api/v3/depth` при разрыве U/u |
 
 ## Что важно знать

@@ -5,8 +5,8 @@
 
 ## Ждут решения Тиграна
 
-- **Решение 251 (10.11.2026), Binance: вывод сразу после покупки — ожидание доступности, повтор, закрытие входов,
-  комиссия по факту (ветка t68/depth-binance).** Сделано: см. DECISIONS 251. После деплоя задать (советы — FIRST_RUN):
+- **Решение 253 (10.11.2026), Binance: вывод сразу после покупки — ожидание доступности, повтор, закрытие входов,
+  комиссия по факту (ветка t68/depth-binance).** Сделано: см. DECISIONS 253. После деплоя задать (советы — FIRST_RUN):
   venue.withdraw_ready_wait_ms [binance], venue.withdraw_unready_window_ms [binance], transfer.locked_retry_ms /
   transfer.locked_retries_max [binance] (если не заданы на всю систему), transfer.seen_cost; venue.balance_events
   [binance] = да. Вопросы:

@@ -12,7 +12,7 @@
 //! from the account; transfer of funds between accounts». Хеша транзакции и вида изменения в событии нет: вид — по
 //! знаку дельты (плюс — Deposit, минус — Withdraw), «своё ли» — решает ядро по своим переводам (own = false).
 //! eventStreamTerminated — подписка закрыта сервером: переподключиться.
-//! Решение 251: outboundAccountPosition — {"e":"outboundAccountPosition","E":время события,"u":время последнего
+//! Решение 253: outboundAccountPosition — {"e":"outboundAccountPosition","E":время события,"u":время последнего
 //! изменения счёта,"B":[{"a":монета,"f":свободно,"l":в ордерах}]}; «is sent any time an account balance has changed and
 //! contains the assets that were possibly changed by the event that generated the balance change» — свободный остаток
 //! монеты для ожидания доступности вывода (withdraw_ready.rs), ядру не отдаётся.
@@ -30,7 +30,7 @@ pub enum Event {
     Other(String),
     /// Изменение баланса монеты.
     Balance(BalanceChange),
-    /// Решение 251: остатки изменённых монет (outboundAccountPosition): (монета, свободно) и время события, мс.
+    /// Решение 253: остатки изменённых монет (outboundAccountPosition): (монета, свободно) и время события, мс.
     Position(Vec<(String, Decimal)>, i64),
     /// Сервер закрыл подписку (eventStreamTerminated).
     Terminated,
@@ -55,7 +55,7 @@ pub fn parse(text: &str, venue: &VenueId) -> Event {
     }
 }
 
-/// Решение 251: outboundAccountPosition → остатки (монета, свободно f) и время E. Ошибок нет: неразборчивое — Event::Bad.
+/// Решение 253: outboundAccountPosition → остатки (монета, свободно f) и время E. Ошибок нет: неразборчивое — Event::Bad.
 fn position(ev: &Value) -> Event {
     let Some(list) = ev.get("B").and_then(Value::as_array) else {
         return Event::Bad("outboundAccountPosition без массива B".into());

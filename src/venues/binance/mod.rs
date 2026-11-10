@@ -172,7 +172,7 @@ impl Venue for Binance {
         self.symbols.ensure_fresh(&self.ctx).await?;
         let (ticker, buy) = (req.asset.ticker.clone(), req.side == Side::Buy);
         let r = trade::trade(&self.ctx, &self.symbols, req).await;
-        // Решение 251: своя покупка монеты — начало окна «монета ещё не доступна для вывода» (transfers.rs).
+        // Решение 253: своя покупка монеты — начало окна «монета ещё не доступна для вывода» (transfers.rs).
         if buy && r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
             withdraw_ready::bought(&ticker);
         }
@@ -191,7 +191,7 @@ impl Venue for Binance {
         transfers::withdraw(&self.ctx, req).await
     }
 
-    /// Решение 251: купленная монета доступна для вывода — событие outboundAccountPosition, по сроку — REST баланса
+    /// Решение 253: купленная монета доступна для вывода — событие outboundAccountPosition, по сроку — REST баланса
     /// (withdraw_ready.rs).
     async fn withdraw_ready(
         &self,

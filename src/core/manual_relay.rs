@@ -177,7 +177,7 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
         }
         Err(e) => {
             super::withdraw_refused::mark_at(core, &mut deal, &from, &e);
-            // Решение 251 (г): отказ запоминается по паре «монета + биржа» — новые входы с неё закрыты.
+            // Решение 253 (г): отказ запоминается по паре «монета + биржа» — новые входы с неё закрыты.
             let asset = deal.direction.asset.clone();
             super::withdraw_block::close(core, &deal.id, &asset, &from, &e).await;
             let why = format!("перегон на {} не состоялся: {e}", to.0);

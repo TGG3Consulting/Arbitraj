@@ -5,7 +5,7 @@
 //! Ядро по этому списку решает до покупки, пройдёт ли вывод (core/precheck_withdraw.rs).
 //! Решение 166: у площадки может не быть официального способа это узнать — тогда ответ «неизвестно» (unknown), а НЕ
 //! «удержаний нет»: ядро такую проверку не считает пройденной по фактам, а только пишет в журнал и не блокирует.
-//! Решение 251: WithdrawReady — готов ли вывод купленной монеты (контракт withdraw_ready, core/withdraw_ready.rs).
+//! Решение 253: WithdrawReady — готов ли вывод купленной монеты (контракт withdraw_ready, core/withdraw_ready.rs).
 //! Кто вызывает: gateway/contract.rs (withdraw_hold, withdraw_ready), адаптеры бирж (venues/*/deposit_hold.rs, withdraw_quota.rs …),
 //! core/precheck_withdraw.rs.
 //! От чего зависит: rust_decimal, serde.
@@ -63,7 +63,7 @@ impl WithdrawHold {
     }
 }
 
-/// Решение 251: готов ли вывод монеты сразу после покупки (контракт withdraw_ready) — ответ площадки после ожидания.
+/// Решение 253: готов ли вывод монеты сразу после покупки (контракт withdraw_ready) — ответ площадки после ожидания.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WithdrawReady {
     /// Some(true) — свободно не меньше суммы вывода; Some(false) — меньше (вывод ядро всё равно отправит, отказ закроет

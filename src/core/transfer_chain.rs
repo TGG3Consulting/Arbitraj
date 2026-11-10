@@ -9,7 +9,7 @@
 //!   transfer.max_time_s от начала перевода), сделку не держит: совпал — журнал; другой хеш или вывод «отклонён» —
 //!   Level::Error и уведомление exec.chain_hash_mismatch; не получен за срок — Warn и то же уведомление. Сделку не трогаем.
 //!
-//! Решение 251 (д): комиссии вывода нет в ответе на создание (Binance — только id) — проверка недостачи
+//! Решение 253 (д): комиссии вывода нет в ответе на создание (Binance — только id) — проверка недостачи
 //! (credit_shortfall.rs) ждёт фактическую комиссию из статуса вывода в том же фоновом опросе; статус не получен — по
 //! справочнику сетей, как раньше.
 //! Кто вызывает: core/transfers.rs (send_trade).
@@ -95,7 +95,7 @@ pub async fn finish(
     let mut sent = c.created.clone();
     sent.tx_hash = Some(hash.clone());
     sent.status = TransferStatus::Sent;
-    // Решение 247, п. Ж: комиссия вывода — из ответа площадки на создание вывода. Решение 251 (д): её там нет (Binance
+    // Решение 247, п. Ж: комиссия вывода — из ответа площадки на создание вывода. Решение 253 (д): её там нет (Binance
     // отдаёт только id) — проверка зачисления ждёт фактическую комиссию из статуса вывода (sender_hash, тот же опрос).
     let (d, f, t, a) = (c.deal, c.from, c.to, c.asset);
     let fee = c.created.fee.as_ref();
@@ -154,11 +154,11 @@ struct Check {
     hash: String,
     started: DateTime<Utc>,
     gw: Arc<dyn Venue>,
-    /// Решение 251 (д): проверка зачисления, отложенная до фактической комиссии из статуса вывода; None — уже сделана.
+    /// Решение 253 (д): проверка зачисления, отложенная до фактической комиссии из статуса вывода; None — уже сделана.
     later: Option<Later>,
 }
 
-/// Решение 251 (д): что нужно отложенной проверке зачисления (credit_shortfall.rs).
+/// Решение 253 (д): что нужно отложенной проверке зачисления (credit_shortfall.rs).
 struct Later {
     asset: Asset,
     net_from: String,
@@ -166,7 +166,7 @@ struct Later {
     credited: Decimal,
 }
 
-/// Что делает: отложенная проверка зачисления с фактической комиссией из статуса вывода (решение 251 (д)); комиссии нет
+/// Что делает: отложенная проверка зачисления с фактической комиссией из статуса вывода (решение 253 (д)); комиссии нет
 /// (статус не получен) — как раньше, по справочнику сетей. Принимает: ядро, сверку, комиссию. Ошибок нет.
 async fn shortfall(core: &Core, c: &Check, fee: Option<&crate::core::types::Cost>) {
     if let Some(l) = &c.later {
@@ -226,7 +226,7 @@ async fn sender_hash(core: Core, c: Check) {
     while tokio::time::Instant::now() < end {
         match c.gw.withdrawal_status(&c.venue_ref).await {
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => {
-                // Решение 251 (д): фактическая комиссия вывода (у Binance — transactionFee истории выводов).
+                // Решение 253 (д): фактическая комиссия вывода (у Binance — transactionFee истории выводов).
                 shortfall(&core, &c, t.fee.as_ref()).await;
                 let tx = t.tx_hash.unwrap_or_default();
                 if norm(&tx) == norm(&c.hash) {

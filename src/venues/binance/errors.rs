@@ -60,7 +60,7 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
     .with_raw(raw)
 }
 
-/// Решение 251: код Binance (поле code) из сырого ответа ошибки ({"code": −4026, "msg": …}). Возвращает: None — сырого
+/// Решение 253: код Binance (поле code) из сырого ответа ошибки ({"code": −4026, "msg": …}). Возвращает: None — сырого
 /// ответа нет или в нём нет числа code. Ошибок нет.
 pub fn code_of(e: &GatewayError) -> Option<i64> {
     let v: serde_json::Value = serde_json::from_str(e.raw.as_deref()?).ok()?;

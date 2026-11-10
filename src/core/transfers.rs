@@ -21,7 +21,7 @@
 //! дальше обычным путём (статус, хеш, зачисление); не найден за срок — как раньше, ручная проверка.
 //! Решение 236, дополнение (техлид 09.11): газ неудачного вывода из кошелька DEX (откат, отмена, занявшая nonce) —
 //! вызывающему для затрат сделки (deal_gas.rs).
-//! Решение 251: перед выводом — ожидание доступности монеты (withdraw_wait.rs, venue.withdraw_ready_wait_ms отправителя;
+//! Решение 253: перед выводом — ожидание доступности монеты (withdraw_wait.rs, venue.withdraw_ready_wait_ms отправителя;
 //! не задана — сразу); начало перевода (время в пути) — до ожидания.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), venue.withdraw_ready_wait_ms (через
@@ -215,7 +215,7 @@ async fn go(
         amount: qty,
         deal_id: deal.to_string(),
     };
-    // Решение 251: начало перевода — до ожидания доступности монеты: ожидание входит во время в пути (transit.rs).
+    // Решение 253: начало перевода — до ожидания доступности монеты: ожидание входит во время в пути (transit.rs).
     let started = Utc::now();
     super::withdraw_wait::before(core, deal, from, &gw_from, &on_from, qty).await;
     // Решение 151: только получатель — DEX и известен кошелёк сделки (credit_chain.rs).

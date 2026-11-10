@@ -2,7 +2,7 @@
 //! Что делает: одна сессия потока аккаунта Binance через WebSocket API: подключение, запрос
 //! userDataStream.subscribe.signature (подпись — sign.rs, параметры по алфавиту), Pong на Ping сервера, запись сырых
 //! кадров (data/raw/binance, соединение «account»; ключ и подпись в журнал не попадают), разбор событий
-//! (account_update.rs) → журнал и события ядру (MarketEvent::Balance); решение 251 — остатки outboundAccountPosition в
+//! (account_update.rs) → журнал и события ядру (MarketEvent::Balance); решение 253 — остатки outboundAccountPosition в
 //! withdraw_ready.rs (ожидание доступности вывода).
 //! Кто вызывает: user_stream.rs.
 //! От чего зависит: account_update.rs, sign.rs, rest.rs (recv_window), ctx.rs.
@@ -134,7 +134,7 @@ fn reply_error(t: &str) -> Option<String> {
 async fn on_event(ctx: &Ctx, out: &mpsc::Sender<MarketEvent>, t: &str) -> Result<bool, String> {
     match account_update::parse(t, &ctx.venue()) {
         Event::Other(_) => Ok(true),
-        // Решение 251: свободный остаток — ожиданию доступности вывода (withdraw_ready.rs), ядру не отдаётся.
+        // Решение 253: свободный остаток — ожиданию доступности вывода (withdraw_ready.rs), ядру не отдаётся.
         Event::Position(list, at) => {
             super::withdraw_ready::on_position(&list, at);
             Ok(true)

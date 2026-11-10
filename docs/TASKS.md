@@ -95,6 +95,37 @@
   3. Единственное отличие от прежнего: ошибка затрат маршрута, которая есть на sell_qty / h и нет на sell_qty
      (разрешение кошелька меньше sell_qty / h, но не меньше sell_qty, и газ разрешений не измерен) раньше давала «расчёт
      невозможен» на точке, теперь — нет.
+- **Решение 251 (10.11.2026), алерты Telegram (ветки t69/alerts-clean, t73/alerts-followup).** Тигран 10.11 ответил на
+  вопросы а–в и таблицу «Общего» — сделано (DECISIONS 251, дополнение): (а) напоминание notify.manual_repeat_s — как
+  есть, закрыто; (б) сообщения «Ручного управления» в SQLite — после перезапуска правятся, а не шлются заново; отказ
+  правки — новое сообщение; (в) hex (0x…, хеши, адреса) в «том же отказе» — как цифры; (г) deal.closed не в «Общий»,
+  если задан «Сделки»; stuck.loss_alert не в «Общий», если задан «Неудачные»; события связи площадки склеены по площадке.
+  1. *Тиграну — установить в интерфейсе после выкладки* («Уведомления», каждое событие: «Включено» = нет; это настройка
+     notify.event.enabled, область «событие» — `[event:<код>]`; бот значения не менял). Факт кода: выключенное событие
+     notify в журнал НЕ пишет (dispatch.rs passes) — «только журнал» значит «только то, что место события пишет в журнал
+     само»:
+     - своя запись журнала есть (видно в «Журнале»): deal.candidate (core.candidate), window.opened, window.closed,
+       deal.transfer_sent (core.transfer_sent), deal.transfer_credited (core.transfer_credited), deal.dust (deal.dust),
+       cycle.dry (core.cycle_dry), coin.check_done (core.check_done), pool.hook_excluded (core.pool_excluded),
+       venue.transfer_status (core.transfer_status), dex.check_not_configured (dex.check_not_configured), wallet.added
+       (журнал кошельков «Кошелёк DEX … добавлен»), system.secrets_unlocked («Секреты разблокированы»),
+       send.channel_rejected и send.tx_not_included (core.op_error с ошибкой; у адаптера — send.channel_rejected /
+       send.tx_not_included);
+     - своей записи журнала НЕТ (выключить = следа в журнале не будет): episode.opened, episode.closed (эпизод — в своей
+       таблице, экран эпизодов), deal.buy_filled, deal.sell_filled (сама сделка — на экране «Сделки»), exec.verified,
+       bundle.assembled, bundle.simulated, bundle.sent, bundle.included, bundle.sim_reverted, bundle.not_included,
+       dex.rebuilt_after_approve, dex.swap_waits_inflow (события адаптера DEX MarketEvent::Notice → только notify).
+     Остановка после send.channel_rejected / send.tx_not_included / отказов бандла шлёт своё событие: ошибки подряд →
+     пауза площадки — risk.stop (core/rules_apply.rs); исход неизвестен — send.outcome_unknown и risk.stop
+     (core/rules_stop.rs); сделка цикла DEX ↔ DEX с ошибкой бандла идёт через тот же rules_apply::on_error
+     (core/cycle_deal.rs).
+  2. *Вопрос Тиграну:* у событий из второго списка выключение убирает след совсем. Варианты: (а) так и оставить;
+     (б) выключенное событие всё равно писать в журнал (одной строкой, для всех выключенных — deal.candidate уже пишется
+     core.candidate, будет дубль); (в) писать в журнал только события второго списка — нужна таблица в коде.
+  3. *Факт кода:* venue.disconnected / venue.reconnected есть в каталоге (экран «Уведомления»), но в коде их никто не
+     отправляет — склейка для них заработает, когда появится отправитель.
+  4. *Проверить после выкладки:* перезапуск бота при записях на «Ручном управлении» — новых сообщений в «Неудачных» нет,
+     в журнале «Ручное управление: сообщений записей прошлого запуска — N».
 
 - **Решение 249 (10.11.2026), venue.cex_cex_deny и правила биржа ↔ биржа везде (ветка t67/cex-cex-deny).** Сделано: см.
   DECISIONS 249. Подтвердить: (1) список venue.cex_cex_deny — только у биржи НАЧАЛА сделки (buy_on); у биржи, через

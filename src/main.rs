@@ -327,6 +327,7 @@ async fn run() -> Result<(), String> {
             core: core.clone(),
             notifier: notifier.clone(),
             state: mirror_state.clone(),
+            db: db.clone(),
         },
         Watch::new(
             changes.subscribe(),

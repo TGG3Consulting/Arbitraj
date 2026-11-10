@@ -3,7 +3,7 @@
 //! пачкой (одно сообщение со списком ждущих записей и их кнопками, у прежнего напоминания кнопки снимаются,
 //! editMessageReplyMarkup — https://core.telegram.org/bots/api#editmessagereplymarkup), итог команды
 //! «Выполнено: кто, что, итог» в сообщениях ушедших записей, ошибки Telegram (429 — пауза retry_after) и журнал.
-//! Решение 177: правка сообщения сменившейся записи (update_changed) и итог продажи кнопкой (sale_final).
+//! Решение 177: итог продажи кнопкой (sale_final); правка сообщения сменившейся записи — mirror_edit.rs.
 //! Решение 251: тексты — шаблон алерта в HTML (alert.rs::telegram, tg_html.rs); напоминание без записей «в обработке»
 //! (mirror_state.rs::busy); полный текст причины — в журнал при первой отправке записи (log_full).
 //! Кто вызывает: notify/mirror.rs.
@@ -21,7 +21,7 @@ use super::alert::telegram;
 use super::mirror::Mirror;
 use super::mirror_state::lock;
 use super::mirror_track::{final_text, is_sale};
-use super::mirror_view::{batch_message_for, closed_text, record_message_for, reminder_header};
+use super::mirror_view::{batch_message_for, closed_text, reminder_header};
 use super::telegram::{Telegram, TgError};
 use super::{client, tg_methods};
 
@@ -79,36 +79,6 @@ impl Mirror {
                 // Следующая попытка — через интервал (или после паузы retry_after).
                 lock(&self.state).last_reminder = Some(Instant::now());
                 self.tg_error(e, "напоминание").await
-            }
-        }
-    }
-
-    /// Решение 177: сменившиеся и вернувшиеся записи (Diff.changed) — правка текста и кнопок первого сообщения записи.
-    /// Принимает: клиента, (чат, показывать ли недоступные кнопки), записи. Ошибки — в журнал.
-    pub(super) async fn update_changed(
-        &self,
-        tg: &Telegram,
-        (chat, all): (&str, bool),
-        recs: &[ManualRecord],
-    ) {
-        for r in recs {
-            let Some(id) = lock(&self.state)
-                .sent
-                .get(&r.key)
-                .and_then(|s| s.msgs.first().copied())
-            else {
-                continue;
-            };
-            let (text, kb) = record_message_for(r, all);
-            match tg.edit_html(chat, id, &telegram(&text), kb).await {
-                Ok(()) => lock(&self.state).set_text(&r.key, text),
-                Err(e) => {
-                    self.log(
-                        Level::Warn,
-                        format!("Ручное управление: сообщение {id} не обновлено: {e}"),
-                    )
-                    .await
-                }
             }
         }
     }

@@ -114,6 +114,9 @@ pub async fn session(
     let (mut sink, mut stream) = ws.split();
     w.feed.session_started();
     let alive: Alive = Default::default();
+    // t79: пары соединения подписаны в этой сессии — стакан из ответа REST сторожа (book_rest.rs) только с её
+    // живостью.
+    books.bind(assets, &alive);
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let syms: Vec<&str> = assets.iter().map(|(_, s)| s.as_str()).collect();
     let mut pending: Vec<(String, Vec<&str>)> = syms

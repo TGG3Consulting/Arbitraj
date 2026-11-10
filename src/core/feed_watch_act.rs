@@ -7,9 +7,11 @@
 //! Дополнение 10.11 (Тигран: согласовано): строки решений по паре — через частоту журнала сторожа (feed_watch_log.rs):
 //! venue.feed_watch_log_ms не задана — как выше; задана — одна строка вида решения по паре не чаще раза в столько мс
 //! (и повторы того же решения), действия учитываются в сводке.
+//! t79 (Тигран 10.11: согласовано): «не менялась с переподписки» у бирж по содержимому — ответ REST ставится стаканом
+//! пары (feed_rest_book.rs); итог (поставлен / причина, почему нет) — в той же строке журнала.
 //! Кто вызывает: core/feed_watch.rs.
-//! От чего зависит: feed_watch_action.rs, feed_watch_logic.rs (Cfg), feed_watch_log.rs (LogGate), engine.rs, gateway
-//! (contract), storage/journal.
+//! От чего зависит: feed_watch_action.rs, feed_watch_logic.rs (Cfg), feed_watch_log.rs (LogGate), feed_rest_book.rs,
+//! engine.rs, gateway (contract), storage/journal.
 //! Настройки: значения приходят в Cfg; venue.feed_watch_log_ms — в LogGate.every.
 
 use crate::core::types::VenueId;
@@ -154,15 +156,35 @@ async fn act_quiet(
             );
             (Level::Info, m)
         }
-        Action::Unchanged { conn, ticker, log } => {
+        Action::Unchanged {
+            conn,
+            ticker,
+            book,
+            log,
+        } => {
+            // t79 (Тигран 10.11: согласовано): ответ REST, по которому так решено, — стакан пары (только по
+            // содержимому; свежесть — venue.book_stale_ms от получения ответа, feed_rest_book.rs).
+            let put = match &book {
+                Some(b) => Some(super::feed_rest_book::install(core, venue, v, &ticker, b).await),
+                None => None,
+            };
             if !lg.pair(&conn, &ticker, "unchanged", log, now) {
                 return;
             }
-            let m = format!(
+            let head = format!(
                 "{conn}: пара {ticker} — книга на бирже менялась до переподписки и с тех пор не менялась: тихая, не \
-                 мёртвая — кадр придёт при изменении книги, переподписка не поможет; стакана этой версии нет — пара не \
-                 торгуется до кадра"
+                 мёртвая — кадр придёт при изменении книги, переподписка не поможет"
             );
+            let m = match put {
+                None => format!("{head}; стакана этой версии нет — пара не торгуется до кадра"),
+                Some(Ok(())) => format!(
+                    "{head}; ответ REST поставлен стаканом пары — свежий venue.book_stale_ms от получения ответа, \
+                     дальше — кадр или подтверждение тихой пары по REST"
+                ),
+                Some(Err(why)) => format!(
+                    "{head}; ответ REST стаканом пары не поставлен: {why} — пара не торгуется до кадра"
+                ),
+            };
             (Level::Info, m)
         }
         Action::Lost {

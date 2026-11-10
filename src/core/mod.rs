@@ -98,6 +98,7 @@ pub mod feed_confirm;
 mod feed_confirm_tests;
 pub mod feed_hold;
 pub mod feed_print;
+pub mod feed_rest_book;
 pub mod feed_rest_ref;
 #[cfg(test)]
 mod feed_print_tests;

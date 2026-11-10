@@ -7,7 +7,8 @@
 //! DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs). Стакан и пул отмечают живость потока площадки (решение 196,
 //! feed_live.rs). Решение 245: событие пула маршрута нашей открытой сделки — отметка задаче точек цены DEX на объём
 //! сделки (window_deal.rs touched, только память).
-//! Кто вызывает: core/engine.rs (задача run).
+//! Кто вызывает: core/engine.rs (задача run); schedule — ещё core/feed_rest_book.rs (t79: ответ REST стал стаканом
+//! тихой пары).
 //! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
 //! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
 //! profit.sigma_window_min.
@@ -147,7 +148,7 @@ fn assets_by_tokens(
 /// Решение 109: пересчёт одной монеты — не чаще signal.eval_min_interval_ms (не задано — без предела): тики, пришедшие
 /// между пересчётами, сливаются в один повтор по всем приславшим площадкам. Так нагрузка зависит от числа монет и
 /// этого интервала, а не от того, как часто биржи шлют стаканы (MEXC — снимками потоком).
-fn schedule(core: &Core, asset: Asset, venue: VenueId) {
+pub(super) fn schedule(core: &Core, asset: Asset, venue: VenueId) {
     // Тик монеты — тем, кто ждёт её цены (режим «Ожидание», stuck.rs).
     let _ = core.inner.coin_ticks.send(asset.clone());
     {

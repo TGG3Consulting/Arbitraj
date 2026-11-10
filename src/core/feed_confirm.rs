@@ -10,6 +10,8 @@
 //! менялась с переподписки: Unchanged и у бирж без времени изменения книги (feed_rest_ref.rs); действия по
 //! Unchanged / Lost / CheckFailed выдаются на каждый ответ с признаком log (смена состояния), журнал с частотой
 //! venue.feed_watch_log_ms решает feed_watch_log.rs.
+//! t79 (Тигран 10.11: согласовано): у бирж по содержимому такой Unchanged несёт уровни ЭТОГО ответа REST (RestBook) —
+//! ядро ставит их стаканом пары (feed_rest_book.rs); Lost, Quiet, ошибка — без стакана.
 //! Без ожиданий и ввода-вывода — проверяется тестами (feed_confirm_tests.rs, feed_print_tests.rs).
 //! Кто вызывает: core/feed_watch_logic.rs (want, note_quiet), core/feed_watch.rs (apply).
 //! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs,
@@ -18,7 +20,7 @@
 
 use crate::gateway::feed_health::{BookVersion, FeedHealth, PairHealth};
 
-use super::feed_rest_ref::{LostRef, RestRef, unchanged_since_resub};
+use super::feed_rest_ref::{LostRef, RestBook, RestRef, unchanged_since_resub};
 use super::feed_watch_logic::{Action, Cfg, State, start_round};
 
 /// Подтверждение тихой пары: настройки площадки или причина, почему выключено.
@@ -168,7 +170,7 @@ pub(super) fn note_quiet(st: &mut State, key: &(String, String)) -> bool {
 }
 
 /// Ответ биржи на проверку. Принимает: снимок свежести ПОСЛЕ ответа (кадр мог прийти, пока шёл запрос), соединение,
-/// тикер, ответ (ошибка — текст), когда запрос отправлен и когда получен ответ (часы бота), настройки, состояние.
+/// тикер, ответ (ошибка — текст), когда запрос отправлен и когда получен ЭТОТ ответ (часы бота), настройки, состояние.
 /// Возвращает: действия (подтверждение, переподписка; у каждого ответа — признак log: состояние пары сменилось).
 /// Ошибок нет.
 #[allow(clippy::too_many_arguments)]
@@ -209,8 +211,11 @@ pub fn apply(
     let cs = st.checks.entry(key.clone()).or_default();
     // Дополнение 10.11: тот же ответ REST, что дал «кадры потеряны», а пара с тех пор переподписана — книга не
     // менялась с переподписки (тихая, не мёртвая); иначе запомнить ответ для следующей проверки.
+    // t79: уровни этого ответа (у бирж по содержимому) — стакан пары; только здесь, ни при каком другом исходе.
+    let mut book = None;
     let v = match v {
         Verdict::Lost(_) if unchanged_since_resub(cs.lost_ref.as_ref(), rest.as_ref(), p) => {
+            book = RestBook::of(rest.as_ref(), sent_ms, recv_ms);
             Verdict::Unchanged
         }
         Verdict::Lost(why) => {
@@ -254,6 +259,7 @@ pub fn apply(
             out.push(Action::Unchanged {
                 conn,
                 ticker,
+                book,
                 log: changed,
             });
         }

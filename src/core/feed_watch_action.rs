@@ -2,7 +2,7 @@
 //! Что делает: решения 202 и 213 — действия сторожа пар, которые выдаёт чистая логика (feed_watch_logic.rs,
 //! feed_watch_conn.rs, feed_confirm.rs) и выполняет core/feed_watch.rs (команды адаптеру, журнал, Telegram).
 //! Кто вызывает: feed_watch_logic.rs (pub use), feed_watch_conn.rs, feed_confirm.rs, feed_watch_act.rs, тесты.
-//! От чего зависит: ничего.
+//! От чего зависит: feed_rest_ref.rs (RestBook).
 //! Настройки: нет.
 
 /// Что сделать.
@@ -49,10 +49,12 @@ pub enum Action {
     },
     /// Решение 213: книга менялась до (пере)подписки и с тех пор не менялась — переподписка не поможет, стакана этой
     /// версии нет; log — состояние пары сменилось (дополнение 10.11: действие — на каждый ответ, журнал — по log и
-    /// venue.feed_watch_log_ms, feed_watch_log.rs).
+    /// venue.feed_watch_log_ms, feed_watch_log.rs). t79: book — уровни ответа REST, по которому так решено (только у
+    /// бирж по содержимому), — ставятся стаканом пары (feed_rest_book.rs); None — стакана этой версии нет.
     Unchanged {
         conn: String,
         ticker: String,
+        book: Option<super::feed_rest_ref::RestBook>,
         log: bool,
     },
     /// Решение 213: на бирже книга новее последнего кадра — кадры потеряны; log — как у Unchanged.

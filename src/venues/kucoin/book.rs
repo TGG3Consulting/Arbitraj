@@ -4,6 +4,7 @@
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
 //! живая котировка — тот же снимок на один вызов (одна формула).
 //! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
+//! t79: стакан пары может быть поставлен из ответа REST сторожа (book_rest.rs — тот же Entry с признаком REST).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [kucoin] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет.
@@ -38,13 +39,15 @@ use super::fees::Fees;
 pub type Alive = Arc<AtomicI64>;
 
 /// Стакан пары, живость его соединения, время последнего кадра стакана пары и срок подтверждения тихой пары
-/// (решение 213; 0 — нет) (unix мс).
-type Entry = (OrderBook, Alive, Alive, Alive);
+/// (решение 213; 0 — нет) (unix мс); t79: true — стакан поставлен из ответа REST (book_rest.rs), а не кадром.
+pub(super) type Entry = (OrderBook, Alive, Alive, Alive, bool);
 
 /// Стаканы по тикеру. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Books {
-    map: Arc<RwLock<HashMap<String, Entry>>>,
+    pub(super) map: Arc<RwLock<HashMap<String, Entry>>>,
+    /// t79: пары, подписанные в текущей сессии соединения (тикер → монета, живость соединения) — book_rest.rs.
+    pub(super) bound: Arc<RwLock<HashMap<String, (Asset, Alive)>>>,
     /// Решение 202 (для всех бирж, 08.11): свежесть соединений и пар для сторожа ядра (gateway/feed_health.rs).
     pub feed: crate::gateway::feed_reg::FeedReg,
 }
@@ -60,14 +63,14 @@ impl Books {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
         let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
         let until: Alive = Arc::new(AtomicI64::new(0));
-        m.insert(book.asset.ticker.clone(), (book, alive, seen, until));
+        m.insert(book.asset.ticker.clone(), (book, alive, seen, until, false));
     }
 
     /// Решение 213: сторож ядра подтвердил по REST, что книга пары на бирже совпадает со стаканом в памяти, — стакан
     /// свежий до until_ms (unix мс). Стакана нет — ничего. Ошибок нет.
     pub fn confirm(&self, ticker: &str, until_ms: i64) {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());
-        if let Some((_, _, _, until)) = m.get(ticker) {
+        if let Some((_, _, _, until, _)) = m.get(ticker) {
             until.fetch_max(until_ms, Ordering::Relaxed);
         }
     }
@@ -80,17 +83,27 @@ impl Books {
             .map(|(b, ..)| crate::gateway::feed_health::BookPrint::top(&b.bids, &b.asks, n))
     }
 
-    /// Кадр стакана пары пришёл, но снимок тот же (решение 109): только время кадра пары. Ошибок нет.
-    pub fn touch(&self, ticker: &str) {
+    /// Кадр стакана пары пришёл, но снимок тот же (решение 109): только время кадра пары. Возвращает: true — отмечено;
+    /// false — стакана нет или он поставлен из ответа REST (t79): кадр кладётся заново (put), снимок REST не
+    /// продлевается кадром, который с ним не сравнивался. Ошибок нет.
+    pub fn touch(&self, ticker: &str) -> bool {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());
-        if let Some((_, _, seen, _)) = m.get(ticker) {
-            seen.store(now_ms(), Ordering::Relaxed);
+        match m.get(ticker) {
+            Some((_, _, seen, _, false)) => {
+                seen.store(now_ms(), Ordering::Relaxed);
+                true
+            }
+            _ => false,
         }
     }
 
     /// Убирает стакан (данные недостоверны — например, оборвалось соединение).
+    /// t79: снимается и привязка пары к сессии (стакан из ответа REST не ставится до нового кадра или новой сессии).
+    /// Оба замка — в том же порядке, что book_rest.rs put_rest (сначала стаканы): снятие атомарно для постановки снимка.
     pub fn drop_ticker(&self, ticker: &str) {
-        self.map
+        let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
+        m.remove(ticker);
+        self.bound
             .write()
             .unwrap_or_else(|p| p.into_inner())
             .remove(ticker);
@@ -133,7 +146,7 @@ impl Books {
             .unwrap_or_else(|p| p.into_inner())
             .get(&asset.ticker)
             .cloned();
-        let (book, alive, seen, until) =
+        let (book, alive, seen, until, _) =
             book.ok_or_else(|| stale(ctx, &asset.ticker, "стакана нет"))?;
         let silent = now_ms() - alive.load(Ordering::Relaxed);
         if silent > stale_ms {

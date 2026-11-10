@@ -6,11 +6,14 @@
 //! форк-монета с налогом не проверится; у вида без своего пути (family.tradable = false) — execute своего контракта-
 //! исполнителя одним шагом этого пула (check/probe_exec.rs, решение 122 X). Выбор — part(). В одном симулированном блоке,
 //! от имени кошелька бота (без подписи): USDT на кошелёк из другого пула → разрешения → расчёт без налога
-//! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → перевод четверти на пустой адрес (налог перевода) →
-//! разрешения продажи → квотер на продажу остатка (расчёт без налога) → баланс встречного токена → продажа остатка →
-//! баланс встречного токена (налог продажи = (квотер − прирост баланса) / квотер; решение 146: настоящей продажей,
-//! а не переводом на адрес пула — токены с налогом «только при обмене через зарегистрированные пулы», живой случай
-//! FLOKI 04.11, переводом не ловятся). Продажа откатилась или квотер не ответил — налог продажи НЕ ИЗМЕРЕН (не 0).
+//! (квотер DEX) → покупка → сколько монет пришло (налог покупки) → разрешения продажи → квотер на продажу остатка
+//! (расчёт без налога) → баланс встречного токена → продажа остатка → баланс встречного токена (налог продажи =
+//! (квотер − прирост баланса) / квотер; решение 146: настоящей продажей, а не переводом на адрес пула — токены с налогом
+//! «только при обмене через зарегистрированные пулы», живой случай FLOKI 04.11, переводом не ловятся) → перевод четверти
+//! на пустой адрес (налог перевода). Решение 252: перевод — ПОСЛЕ продажи, как у настоящей продажи (перед ней перевода
+//! монеты нет): у монеты с отражением (reflection) перевод перед продажей поднимает balanceOf пары выше резерва, и вход
+//! продажи в паре V2 (balanceOf − резерв) больше настоящего (живые случаи PIG, SMARS 09–10.11, docs/notes/
+//! reflection-tax-2026-11-10.md). Продажа откатилась или квотер не ответил — налог продажи НЕ ИЗМЕРЕН (не 0).
 //! В покупке и продаже проверяется, что обмен сделал сам этот пул (check/emitter.rs, решение 59): Universal Router сам
 //! выбирает пару по своей фабрике; через исполнитель — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
 //! Кто вызывает: check/taxes.rs.
@@ -157,32 +160,20 @@ pub async fn run(
         now,
     )
     .await?;
-    let base = list.len();
-    list.extend([
-        pc::transfer(wallet, coin, empty, quarter),
-        pc::balance(wallet, coin, empty),
-    ]);
-    list.extend(sell_aps.iter().map(|(to, d)| Call {
-        from: wallet,
-        to: *to,
-        input: d.clone(),
-    }));
-    // Решение 146: квотер на продажу ТОГО ЖЕ остатка — прямо перед продажей (после переводов и разрешений, состояние
-    // пула то же, что увидит продажа), баланс встречного токена кошелька до и после продажи — в том же пакете.
+    // Решение 252: продажа — СРАЗУ после покупки, пробный перевод четверти — ПОСЛЕ продажи (порядок — pc::sell_tail).
+    // Настоящая продажа (Universal Router, исполнитель, роутер форка) идёт без перевода монеты перед ней в том же блоке;
+    // у монеты с отражением (reflection, форк SafeMoon) перевод перед продажей поднял бы balanceOf пары выше резерва, и
+    // пара V2 (вход = balanceOf − резерв) засчитала бы продаже лишний вход — налог продажи пробы занижен.
     let (sq_to, sq_data) = quoter_calls::request(ctx, e, coin, rest)?;
-    let sq = list.len();
-    list.push(Call {
-        from: wallet,
-        to: sq_to,
-        input: sq_data,
-    });
-    list.push(pc::balance(wallet, usdt, wallet));
-    list.push(Call {
-        from: wallet,
-        to: sell_router,
-        input: sell_data,
-    });
-    list.push(pc::balance(wallet, usdt, wallet));
+    let base = list.len();
+    let t = pc::sell_tail(
+        &mut list,
+        (wallet, coin, usdt, empty),
+        quarter,
+        &sell_aps,
+        (sq_to, sq_data),
+        (sell_router, sell_data),
+    );
     let all = simulate::run(ctx, &list, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
@@ -191,17 +182,23 @@ pub async fn run(
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));
     }
-    if let Some((i, r)) = all.iter().enumerate().take(base + 2).find(|(_, r)| !r.ok()) {
+    // Откат вызовов покупки (повтор первой симуляции) или пробного перевода — вердикт, как до решения 252.
+    let transfer = t.transfer..t.transfer + 2;
+    let mut bad = all
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i < base || transfer.contains(i));
+    if let Some((i, r)) = bad.find(|(_, r)| !r.ok()) {
         return Ok(Err(format!(
             "шаг {i} пробы (перевод монеты) откатился: {}",
             r.why()
         )));
     }
-    let Some(xb) = pc::u256(&all[base + 1]) else {
+    let Some(xb) = pc::u256(&all[t.transfer + 1]) else {
         return Ok(Err("ответ баланса не по ABI".into()));
     };
-    let sell_appr = &all[base + 2..sq];
-    let sell_swap = &all[sq + 2];
+    let sell_appr = &all[base..t.quote];
+    let sell_swap = &all[t.quote + 2];
     let sold = sell_swap.ok() && sell_appr.iter().all(|c| c.ok());
     if sold {
         probe_exec::emitter(ctx, e, &sell_swap.logs).await?;
@@ -210,12 +207,12 @@ pub async fn run(
     Ok(Ok(Measured {
         buy_expected,
         buy_got: bought,
-        sell: pc::sell_result(e, &all[sq..sq + 4], sold),
+        sell: pc::sell_result(e, &all[t.quote..t.quote + 4], sold),
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),
         gas_approve_buy: gas(&all[1..1 + n_appr]),
-        gas_transfer: all[base].gas_used.to(),
+        gas_transfer: all[t.transfer].gas_used.to(),
         gas_sell: sold.then(|| (sell_swap.gas_used.to(), gas(sell_appr))),
     }))
 }

@@ -6,3 +6,4 @@ REST бота (GET) и узла BSC, ничего в бота не пишут.
 | Папка | Что | Разбор |
 | --- | --- | --- |
 | `reserve_analysis/` | Запас на движение цены против реального движения: упущенные биржа → DEX по цене пулов, DEX → биржа по сделкам, перебор настроек запаса (решение 240) | `docs/notes/reserve-analysis-2026-11-09.md` |
+| `reflection-tax-facts.md` | Промпт для ИИ на сервере: факты по налогу reflection-монет PIG и SMARS (Swap против Transfer, исключения SafeMoon, опыт eth_simulateV1) — только чтение | `docs/notes/reflection-tax-2026-11-10.md` |

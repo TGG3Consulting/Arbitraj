@@ -40,6 +40,7 @@ pub mod resubscribe_wallets;
 pub mod send;
 pub mod settings_wait;
 pub mod tokens;
+pub mod trade_path;
 pub mod venue;
 pub mod venue_account;
 pub mod wallet;

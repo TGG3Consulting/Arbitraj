@@ -38,6 +38,7 @@
 | `errors.rs` | Ответы узла (JSON-RPC, HTTP, сеть) → единые коды шлюза |
 | `num.rs` | Суммы блокчейна U256 ↔ Decimal с decimals токена |
 | `tokens.rs` | Монеты из подписки ядра (адрес — из API биржи) и их decimals из контракта; решение 239 — `pinned`: копия на момент снимка котировки, без узла |
+| `trade_path.rs` | Путь исполнения сделки (чистая функция, вызывает venue.rs trade_logs): свой сборщик / KyberSwap (откат на свой при NoRoute) / «лучший из двух»; решение 247 п. Г — продажа выхода с пере-замером только своим, t81 — кроме путей t78 (Remeasure.any_executor: как до t78, у своего — пере-замер) |
 | `connection.rs` | «Проверить подключение»: узел HTTP, узел WebSocket (newHeads), eth_simulateV1, история состояния для V4, кошелёк (адрес, BNB) |
 | `connection_extra.rs` | «Проверить подключение»: резервный узел HTTP и WebSocket, Multicall3 (код по адресу и ответ getBlockNumber(), решение 121), обёртка нативной монеты (dex.native_wrapped = WETH() роутеров V2, решение 62) |
 | `connection_sync.rs` | «Проверить подключение»: синхронизация узла (eth_syncing = false, иначе «блок X из Y») и возраст головы против `feed.max_block_age_ms` (решение 121, A3) |

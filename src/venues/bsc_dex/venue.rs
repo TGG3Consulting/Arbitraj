@@ -508,13 +508,15 @@ impl BscDex {
         // KyberSwap (пул, которого он не знает) — откат на собственный исполнитель bsc_dex по маршруту котировки.
         // Решение 247, п. Г: продажа выхода с условиями пере-замера (повтор режима застрявшей монеты, кнопка человека —
         // TradeRequest.remeasure) — своим сборщиком, не KyberSwap: у своего пути проба перед отправкой и пере-замер
-        // выхода при откате по minOut (exec/executor/remeasure.rs); первая продажа сделки — как раньше.
-        let own_exit = req.exit_position && req.remeasure.is_some();
-        if !own_exit && self.p.ctx.flag("exec.via_kyber").unwrap_or(false) {
-            // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
-            if super::best_of::enabled(&self.p.ctx) {
-                return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
-            }
+        // выхода при откате по minOut (exec/executor/remeasure.rs). t81 (Тигран 10.11: согласовано): пути t78 (признак
+        // Remeasure.any_executor) — как до t78; у своего сборщика при этом пере-замер остаётся (trade_path.rs).
+        let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
+        let path = super::trade_path::of(&req, via_kyber, super::best_of::enabled(&self.p.ctx));
+        // Решение 123: «лучший из двух» — маршрут KyberSwap и свой в один момент, исполняет лучший (best_of/trade.rs).
+        if path == super::trade_path::Path::BestOf {
+            return super::best_of::trade::trade(&self.p, &self.kyber, req).await;
+        }
+        if path == super::trade_path::Path::Kyber {
             match crate::venues::kyberswap::trade::trade(&self.kyber, req.clone()).await {
                 Err(e) if e.code == ErrorCode::NoRoute => {}
                 // Решение 121 (B7): исполнитель — в тексте ошибки, как у своего сборщика.

@@ -27,7 +27,9 @@
 //! продажа на цели сразу после автоматического «Перегона» (relay.rs → sell_after_relay) — с пере-замером по условию
 //! «выгодно» (порог убытка 0). Дополнение 10.11 (t78, Тигран: согласовано): по тому же порогу «итог сделки ≥ 0»
 //! (remeasure::PROFITABLE) — и первая продажа сделки и «Вернуть боту» (sell_or_stuck), продажа после частичной покупки
-//! (executor.rs → market_guarded), «Ожидание» по истечении stuck.wait_ms (stuck.rs).
+//! (executor.rs → market_guarded), «Ожидание» по истечении stuck.wait_ms (stuck.rs). t81 (дополнение к 247 п. Г, Тигран
+//! 10.11: согласовано): у этих путей t78 — порог remeasure::PROFITABLE_OPEN (та же граница; продажа может идти и
+//! агрегатором DEX, если он включён и его маршрут лучше); sell_after_relay — PROFITABLE (только свой сборщик, как было).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs, remeasure.rs.
@@ -58,15 +60,17 @@ pub fn profitable(deal: &Deal, value: Decimal) -> bool {
 /// Продать сейчас, если выгодно, иначе — режим застрявшей монеты (первая продажа сделки — executor.rs, «Вернуть боту» —
 /// manual_return.rs). Пере-замер продажи DEX при откате «мало на выходе» — в пределах того же условия «выгодно»: итог
 /// сделки ≥ 0, порог убытка 0 (remeasure::PROFITABLE; решение 247, дополнение 10.11, t78 — Тигран: согласовано); итог
-/// ниже — отказ продажи, дальше как раньше. Ошибок нет.
+/// ниже — отказ продажи, дальше как раньше. t81 (дополнение к 247 п. Г, Тигран 10.11: согласовано): порог
+/// PROFITABLE_OPEN — исполнить может и агрегатор DEX, если включён и его маршрут лучше (без пере-замера). Ошибок нет.
 pub async fn sell_or_stuck(core: &Core, deal: Deal) {
-    sell_or_stuck_guarded(core, deal, super::remeasure::PROFITABLE).await
+    sell_or_stuck_guarded(core, deal, super::remeasure::PROFITABLE_OPEN).await
 }
 
 /// Продажа на площадке-цели сразу после автоматического «Перегона» (relay.rs): как sell_or_stuck — с пере-замером по
-/// условию «выгодно» (remeasure::PROFITABLE; решение 247, дополнение 10.11 — Тигран: согласовано). Ошибок нет.
+/// условию «выгодно» (remeasure::PROFITABLE; решение 247, дополнение 10.11 — Тигран: согласовано). t81: порог
+/// PROFITABLE, не PROFITABLE_OPEN — путь из решения 247 (t77), только свой сборщик (п. Г). Ошибок нет.
 pub async fn sell_after_relay(core: &Core, deal: Deal) {
-    sell_or_stuck(core, deal).await
+    sell_or_stuck_guarded(core, deal, super::remeasure::PROFITABLE).await
 }
 
 /// Выгодно — продажа с пере-замером по порогу `g`, иначе — режим застрявшей монеты.

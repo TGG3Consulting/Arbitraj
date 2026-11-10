@@ -156,10 +156,15 @@ async fn confirm(
         return;
     }
     let sent = now_ms();
-    let res = futures_util::future::join_all(checks.iter().map(|(_, t)| v.book_version(t))).await;
-    let recv = now_ms();
+    // t79: время получения — у каждого ответа своё (стакан из ответа REST свеж от него, а не от последнего ответа
+    // прохода).
+    let res = futures_util::future::join_all(checks.iter().map(|(_, t)| async move {
+        let r = v.book_version(t).await;
+        (r, now_ms())
+    }))
+    .await;
     let Some(h) = v.feed_health() else { return };
-    for ((conn, ticker), r) in checks.into_iter().zip(res) {
+    for ((conn, ticker), (r, recv)) in checks.into_iter().zip(res) {
         let r = r.map_err(|e| e.message);
         for a in super::feed_confirm::apply(&h, &conn, &ticker, r, sent, recv, c, st) {
             act(core, venue, v, a, c, lg).await;

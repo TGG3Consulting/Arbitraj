@@ -13,6 +13,7 @@ pub mod account_update;
 pub mod all_balances;
 pub mod book;
 pub mod book_print;
+pub mod book_rest;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
@@ -318,6 +319,26 @@ impl Venue for Mexc {
     /// Решение 213: тихая пара подтверждена — стакан свежий в котировке до until_ms (book.rs, confirm).
     fn book_confirmed(&self, ticker: &str, until_ms: i64) {
         self.books.confirm(ticker, until_ms);
+    }
+
+    /// t79 (Тигран 10.11: согласовано): тихая пара «книга не менялась с переподписки» — уровни того же ответа REST
+    /// стаканом пары (book_rest.rs put_rest: время кадра — получение ответа, свежесть — book.rs freeze).
+    fn book_from_rest(
+        &self,
+        ticker: &str,
+        levels: &crate::gateway::feed_health::BookPrint,
+        sent_ms: i64,
+        recv_ms: i64,
+    ) -> GatewayResult<crate::core::types::OrderBook> {
+        self.books
+            .put_rest(self.id(), ticker, levels, sent_ms, recv_ms)
+            .map_err(|why| {
+                self.ctx.tag(crate::gateway::errors::GatewayError::new(
+                    crate::gateway::errors::ErrorCode::StaleData,
+                    None,
+                    format!("MEXC {ticker}: {why}"),
+                ))
+            })
     }
 
     /// Решение 202: переподписать одну пару в её соединении (UNSUBSCRIPTION + SUBSCRIPTION, ws_conn.rs).

@@ -81,6 +81,9 @@ pub async fn session(
     let (mut sink, mut stream) = ws.split();
     w.feed.session_started();
     let alive: Alive = Default::default();
+    // t79: пары соединения подписаны в этой сессии — стакан из ответа REST сторожа (book_rest.rs) только с её
+    // живостью.
+    books.bind(assets, &alive);
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let by_channel: HashMap<String, String> = assets
         .iter()
@@ -170,8 +173,11 @@ pub async fn session(
                         w.feed.frame(&asset.ticker);
                         // Решение 109: тот же снимок — ядру не отдаём (стакан в памяти уже такой); время кадра пары
                         // обновляется (решение 118, А-🟠8).
-                        if last.get(&symbol).is_some_and(|(b, a)| *b == bids && *a == asks) {
-                            books.touch(&asset.ticker);
+                        // t79: стакан пары из ответа REST (book_rest.rs) кадр с прошлым снимком не продлевает — кадр
+                        // кладётся заново (touch = false).
+                        if last.get(&symbol).is_some_and(|(b, a)| *b == bids && *a == asks)
+                            && books.touch(&asset.ticker)
+                        {
                             continue;
                         }
                         last.insert(symbol.clone(), (bids.clone(), asks.clone()));

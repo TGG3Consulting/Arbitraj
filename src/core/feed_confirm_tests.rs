@@ -409,8 +409,9 @@ fn no_confirm_only_journal_once() {
 }
 
 /// Дополнение 10.11 (Тигран: согласовано; живой случай XT): у биржи без времени изменения книги (только номер) тот же
-/// ответ REST, что дал «кадры потеряны», после переподписки — книга не менялась с переподписки: Unchanged, кругов
-/// больше нет; книга снова поменялась без кадров — кадры потеряны, обычный круг; без переподписки — Lost, как раньше.
+/// ответ REST, что дал «кадры потеряны», после переподписки — книга не менялась с переподписки: Unchanged (t79: по
+/// номеру уровней нет — стакан не ставится, book = None), кругов больше
+/// нет; книга снова поменялась без кадров — кадры потеряны, обычный круг; без переподписки — Lost, как раньше.
 #[test]
 fn same_rest_after_resub_unchanged_without_changed_ms() {
     let (c, mut st, none) = (cfg(), State::default(), HashMap::new());
@@ -476,7 +477,14 @@ fn same_rest_after_resub_unchanged_without_changed_ms() {
         &mut st,
     );
     assert!(
-        matches!(&a[..], [Action::Unchanged { log: true, .. }]),
+        matches!(
+            &a[..],
+            [Action::Unchanged {
+                log: true,
+                book: None,
+                ..
+            }]
+        ),
         "{a:?}"
     );
     assert_eq!(

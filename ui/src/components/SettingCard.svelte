@@ -14,7 +14,7 @@
     Свои id каналов не вводятся: их даёт только адаптер. Кнопка «История».
     Решение 242: значения области «площадка + тип направления» задаются в подпункте «… › по биржам и направлениям»
     (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
-    Решение 248: у venue.cex_cex под значением каждой биржи — список «не взаимодействовать» и кнопка «Настроить список»
+    Решение 249: у venue.cex_cex под значением каждой биржи — список «не взаимодействовать» и кнопка «Настроить список»
     (components/CexCexDeny.svelte); у самой venue.cex_cex_deny — только ссылка на это окно и «История».
   Кто вызывает: pages/Settings.svelte.
   От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte.
@@ -117,7 +117,7 @@
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />
   {/if}
   {#if def.name === 'venue.cex_cex_deny'}
-    <!-- Решение 248: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
+    <!-- Решение 249: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
     <p class="muted">Задаётся кнопкой «Настроить список» в карточке venue.cex_cex (у каждой биржи).</p>
   {:else if def.scopes.includes('Venue')}
     {#each uniq(store.venues) as v (v)}

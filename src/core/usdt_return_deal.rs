@@ -15,7 +15,7 @@
 //! Кто вызывает: core/ledger.rs (finish).
 //! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, usdt_return_parts.rs,
 //! usdt_return_split.rs, dex_account.rs, deal.rs, settings.
-//! Решение 248: часть биржа → биржа, запрещённая venue.cex_cex (cex_link.rs), не перегоняется — страховка «USDT не вернулись».
+//! Решение 249: часть биржа → биржа, запрещённая venue.cex_cex (cex_link.rs), не перегоняется — страховка «USDT не вернулись».
 //! Настройки: usdt_return.mode, venue.quote_asset; venue.cex_cex (через cex_link.rs).
 
 use rust_decimal::Decimal;
@@ -71,7 +71,7 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
     let n = parts.len();
     let mut jobs = Vec::with_capacity(n);
     for (i, (from, amount)) in parts.into_iter().enumerate() {
-        // Решение 248: перегон USDT биржа → биржа запрещён venue.cex_cex (сменилась после начала сделки) — без перегона,
+        // Решение 249: перегон USDT биржа → биржа запрещён venue.cex_cex (сменилась после начала сделки) — без перегона,
         // страховка «USDT не вернулись», решает человек.
         if let Some(why) = return_block(core, &from, &to) {
             not_returned(core, deal, amount, &from, &why).await;
@@ -149,7 +149,7 @@ async fn single(core: &Core, deal: &mut Deal) -> Option<(VenueId, Decimal)> {
     Some((from, amount))
 }
 
-/// Решение 248: перегон выручки с биржи `from` на биржу покупки `to` — правило venue.cex_cex обеих (в обе стороны). Список
+/// Решение 249: перегон выручки с биржи `from` на биржу покупки `to` — правило venue.cex_cex обеих (в обе стороны). Список
 /// venue.cex_cex_deny биржи покупки возврат на неё саму не запрещает (запрет — только уход с неё). Одна из сторон DEX —
 /// без условия. Принимает: ядро, откуда, куда. Возвращает: причину запрета или None.
 fn return_block(core: &Core, from: &VenueId, to: &VenueId) -> Option<String> {

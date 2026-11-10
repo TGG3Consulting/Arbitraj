@@ -8,7 +8,7 @@
 //! Кто вызывает: core/rebuild.rs.
 //! От чего зависит: blacklist.rs, registry.rs, market_state.rs, engine.rs, settings.
 //! Решение 214: биржи с venue.cex_cex = нет — поле CoinEntry.cex_cex_off, направлений биржа ↔ биржа с ними нет.
-//! Решение 248: список venue.cex_cex_deny биржи покупки — поле CoinEntry.cex_cex_deny (направления A → B из списка A).
+//! Решение 249: список venue.cex_cex_deny биржи покупки — поле CoinEntry.cex_cex_deny (направления A → B из списка A).
 //! Настройки: coin.*, tax.*, hooks.* — через blacklist.rs; cex_cex.untaxed_ok — через transfer_tax.rs; venue.cex_cex,
 //! venue.cex_cex_deny — через cex_link.rs.
 
@@ -50,7 +50,7 @@ pub fn apply_blacklist(
             .filter(|p| p.info.is_some() && !super::cex_link::on(s, &p.venue.0))
             .map(|p| p.venue.clone())
             .collect();
-        // Решение 248: список «не взаимодействовать» биржи покупки — запрещённые направления биржа → биржа.
+        // Решение 249: список «не взаимодействовать» биржи покупки — запрещённые направления биржа → биржа.
         c.cex_cex_deny = super::cex_link::deny_pairs(s, &c.presence);
         let checks: Vec<_> = match c.asset.bsc_contract {
             Some(token) => c

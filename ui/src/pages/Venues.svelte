@@ -13,7 +13,7 @@
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
     ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js),
-    CexCexDeny.svelte (решение 248: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»).
+    CexCexDeny.svelte (решение 249: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»).
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
 -->
 <script>
@@ -38,7 +38,7 @@
   const groups = $derived.by(() => {
     const out = new Map();
     for (const d of store.schema?.settings ?? []) {
-      // Решение 248: venue.cex_cex_deny — окном «Настроить список» у venue.cex_cex, отдельной строкой не показывается.
+      // Решение 249: venue.cex_cex_deny — окном «Настроить список» у venue.cex_cex, отдельной строкой не показывается.
       if (!d.scopes.includes('Venue') || d.name === 'venue.cex_cex_deny') continue;
       if (!out.has(d.group)) out.set(d.group, []);
       out.get(d.group).push(d);

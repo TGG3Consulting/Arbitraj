@@ -17,6 +17,7 @@ pub mod glue;
 pub mod heads;
 pub mod human;
 pub mod human_msg;
+pub mod journal_off;
 pub mod menu;
 pub mod menu_day;
 pub mod menu_press;

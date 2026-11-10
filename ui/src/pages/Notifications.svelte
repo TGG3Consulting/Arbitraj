@@ -6,7 +6,8 @@
     пользователи, токен бота (секрет) и «Проверить подключение» с тестовым сообщением (POST /api/check/telegram/{роль});
     настройки чата «Управление» (лайв-обновление, срок экранов, доли перевода);
     события из схемы (schema.events) по группам: по каждому вкл/выкл
-    (notify.event.enabled), площадки (notify.event.venues, пусто — все), условие (notify.event.condition).
+    (notify.event.enabled; «нет» — только «Журнал», решение 251), площадки (notify.event.venues, пусто — все),
+    условие (notify.event.condition).
   Кто вызывает: App.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/router.svelte.js,
     components/SettingEditor.svelte, CheckConnection.svelte.
@@ -99,7 +100,8 @@
   <h2>События</h2>
   <p class="muted">
     Площадки: ничего не отмечено — для всех. Условие проверяется с этапа 5 (формат условия утверждается там),
-    до этого не влияет на отправку.
+    до этого не влияет на отправку. «Присылать» = нет — в Telegram не уходит, но пишется в «Журнал» одной записью (вид —
+    код события, пометка «в Telegram не отправлено»), если место события само уже не пишет ту же запись (решение 251).
   </p>
   {#each groups as [group, events] (group)}
     <h3>{group}</h3>

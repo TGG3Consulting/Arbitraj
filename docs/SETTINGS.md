@@ -636,7 +636,7 @@ https://www.geckoterminal.com — гайд https://brand.coingecko.com/resources
 | --- | --- | --- | --- |
 | notify.telegram_api_url | Адрес Telegram Bot API (из официальной документации core.telegram.org/bots/api) | URL | вся система |
 | notify.telegram_chat | Куда слать уведомления | ID чата | вся система |
-| notify.event.enabled | Присылать ли это событие | да/нет | по событию |
+| notify.event.enabled | Присылать ли это событие в Telegram; «нет» — не присылать, но записать в «Журнал» (если место события само не пишет ту же запись; решение 251, дополнение) | да/нет | по событию |
 | notify.event.venues | Для каких площадок присылать (пусто — для всех) | список | по событию |
 | notify.event.condition | Условие отправки, где оно имеет смысл (например, сделка с прибылью или убытком больше суммы) | зависит от события | по событию |
 | notify.updates_timeout_s | Кнопки Telegram: таймаут длинного опроса getUpdates (параметр timeout Bot API) | секунды | вся система |

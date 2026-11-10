@@ -10,8 +10,10 @@
 //! в журнал (data.text записи «Отправлено в Telegram»).
 //! Решение 251 (г, Тигран 10.11): deal.closed и stuck.loss_alert не идут в «Общий», если задан чат их роли
 //! (notify/routes.rs NOT_GENERAL); события связи площадки склеиваются по площадке (notify/glue.rs).
+//! Решение 251, дополнение (Тигран 10.11): выключенное событие (notify.event.enabled = нет) — одной записью в журнал,
+//! если у места события своей записи нет (notify/journal_off.rs).
 //! От чего зависит: notify/client.rs, notify/catalog.rs, notify/callback.rs, notify/alert.rs, notify/tg_html.rs,
-//! notify/routes.rs, notify/glue.rs,
+//! notify/routes.rs, notify/glue.rs, notify/journal_off.rs,
 //! settings, secrets, storage/journal.
 //! Настройки: notify.event.enabled / venues / condition (область «событие»), notify.telegram_*.
 //!
@@ -112,6 +114,11 @@ impl Notifier {
             .await;
             return None;
         };
+        // Решение 251, дополнение (Тигран 10.11): выключенное событие — одной записью в журнал (notify/journal_off.rs).
+        if super::journal_off::off(&self.settings, code) {
+            self.journal_off(code, def, venue, text).await;
+            return None;
+        }
         if !self.passes(code, venue) {
             return None;
         }

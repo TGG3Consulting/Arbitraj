@@ -33,7 +33,8 @@ pub mod window;
 pub use account::DexAccountId;
 pub use balance::{BalanceChange, BalanceKind};
 pub use check::{
-    BlockReason, CheckState, CoinBlock, CoinCheck, HookImpact, PoolCheck, TaxKind, TokenTaxes,
+    BlockReason, CheckState, CoinBlock, CoinCheck, ExitGap, HookImpact, PoolCheck, TaxKind,
+    TokenTaxes,
 };
 pub use control::{
     CoinGasStats, CommandSource, ManualAction, ManualCommand, ManualHolding, StuckAlert,

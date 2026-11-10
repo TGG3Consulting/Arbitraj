@@ -13,9 +13,11 @@
 //! Решение 177: продажа выхода (TradeRequest.exit_position) при расхождении с квотером — продажа по квотеру
 //! (exec/exit_quote.rs): ожидаемое, худшая цена и минимумы — от квотера; строка «— продажа по квотеру» — в журнал и в
 //! TradeResult.executor (хронология сделки). Покупка — сверка с квотером, как раньше, стоп.
+//! Решение 248 (кейс SMARS 10.11): проба продажи выхода откатилась «мало на выходе» (custom error Universal Router,
+//! exec/ur_short.rs) — пере-замер реального выхода и новый минимум (exec/ur_remeasure.rs), как 247 у исполнителя.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
-//! exec/precheck.rs, exec/exit_quote.rs, exec/precheck_sim.rs, exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
+//! exec/precheck.rs, exec/exit_quote.rs, exec/ur_remeasure.rs (проба и пере-замер), exec/executor/trade.rs (expected, coin_tax), exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 
@@ -32,6 +34,7 @@ use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::nonce::Nonces;
 use super::chain::Step;
+use super::executor::trade::{coin_tax, expected};
 use super::native::{self, Wrap};
 use super::plan::{self, Plan};
 use super::swap_ctx::SwapCtx;
@@ -40,7 +43,7 @@ use super::trade::{
     with_approve_gas, worst_positive,
 };
 use super::txs::Env;
-use super::{chain, exit_quote, leg_min, live, precheck_sim, result, verify_gate};
+use super::{chain, exit_quote, leg_min, live, result, ur_remeasure, verify_gate};
 
 /// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
 /// (решение 177; None — по расчёту).
@@ -108,7 +111,24 @@ pub async fn trade(
         }
         let router = is_native.then_some(p.router);
         let entries: Vec<&Entry> = prep.path.hops.iter().map(|h| &h.entry).collect();
-        precheck_sim::emitters(ctx, &p, &entries, at).await?;
+        // Решение 248 (кейс SMARS): откат продажи выхода «мало на выходе» — пере-замер реального выхода
+        // (exec/ur_remeasure.rs): план заново с минимумами шагов 1 ед., замер, новый минимум проверки баланса.
+        if let Some(orig) = ur_remeasure::check(env, &req, &p, &entries, at).await? {
+            let exp = [(expected(&prep.path, req.side), coin_tax(&v, &prep.path))];
+            let old = p.min_total();
+            ur_remeasure::unit_mins(prep.steps.iter_mut());
+            let (probe, at2) = build(q, &prep, wallet).await?;
+            no_new_approvals(ctx, &probe)?;
+            let (fixed, line) =
+                ur_remeasure::measure(env, &req, probe, &entries, at2, &exp, (old, decs.1), orig)
+                    .await?;
+            p = fixed;
+            prep.note = Some(
+                prep.note
+                    .take()
+                    .map_or(line.clone(), |n| format!("{n}; {line}")),
+            );
+        }
         let tin = if req.side == Side::Buy { usdt } else { coin };
         // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
         let sc = SwapCtx::swap(

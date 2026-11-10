@@ -122,6 +122,7 @@ impl MarketState {
                 Touched::Channel(s)
             }
             MarketEvent::Notice { venue, code, text } => Touched::Notice { venue, code, text },
+            MarketEvent::ExitGap(g) => Touched::ExitGap(g),
             MarketEvent::SpotPairs {
                 venue,
                 tickers,

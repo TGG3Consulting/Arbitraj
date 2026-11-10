@@ -100,6 +100,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 core.request_rebuild();
             }
             Touched::CoinCheck(c) => {
+                // Решение 248: свежие налоги — сверка с замером продажи (снятие авто-закрытия, core/exit_gap.rs).
+                let _ = slow_tx.send(Touched::CoinCheck(c.clone()));
                 core.inner.live.send(CoreEvent::CoinCheck(c));
                 core.request_rebuild();
             }
@@ -111,7 +113,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             slow @ (Touched::WalletQueue { .. }
             | Touched::CheckPass { .. }
             | Touched::Balance(_)
-            | Touched::Notice { .. }) => {
+            | Touched::Notice { .. }
+            | Touched::ExitGap(_)) => {
                 let _ = slow_tx.send(slow);
             }
             Touched::SpotPairs => core.request_rebuild(),

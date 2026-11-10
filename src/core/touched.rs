@@ -7,7 +7,8 @@
 use alloy_primitives::Address;
 
 use crate::core::types::{
-    CoinCheck, PoolCheck, PoolRef, SendChannelStats, VenueId, WalletQueue, WalletQueueState,
+    CoinCheck, ExitGap, PoolCheck, PoolRef, SendChannelStats, VenueId, WalletQueue,
+    WalletQueueState,
 };
 
 /// Что изменилось после события — по этому ядро решает, что пересчитать.
@@ -61,4 +62,6 @@ pub enum Touched {
         code: String,
         text: String,
     },
+    /// Решение 248: замер реального выхода продажи ниже модели — закрыть монету для входа (core/exit_gap.rs).
+    ExitGap(ExitGap),
 }

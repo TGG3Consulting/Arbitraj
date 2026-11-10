@@ -108,7 +108,7 @@ pub async fn trade(
         rebuilt_notice(env, &req);
     }
     // Решение 247: откат пробы по minOut у продажи выхода — пере-замер реального выхода (remeasure.rs).
-    let fix = remeasure::probe(ctx, &req, &mut c, wallet, at, decs, &diag, &model, &env.wake).await?;
+    let fix = remeasure::probe(ctx, &req, &mut c, wallet, at, decs, &diag, &model, env).await?;
     if let Some(line) = fix {
         note = Some(note.map_or(line.clone(), |n| format!("{n}; {line}")));
     }
@@ -190,7 +190,7 @@ async fn build(
 }
 
 /// Ожидаемый выход доли по живому пересчёту: продажа — USDT, покупка — монеты. Ошибок нет.
-fn expected(p: &Path, side: Side) -> Decimal {
+pub fn expected(p: &Path, side: Side) -> Decimal {
     match side {
         Side::Sell => p.usdt,
         Side::Buy => p.coins,
@@ -199,7 +199,7 @@ fn expected(p: &Path, side: Side) -> Decimal {
 
 /// Модельный налог монеты сделки на её шаге доли (продажа — первый шаг, покупка — последний), % — тот же, что в
 /// расчёте (quote/pool_tax.rs step_pct). Нет шагов — 0. Ошибок нет.
-fn coin_tax(v: &Via<'_>, p: &Path) -> Decimal {
+pub fn coin_tax(v: &Via<'_>, p: &Path) -> Decimal {
     let h = match v.side {
         Side::Sell => p.hops.first(),
         Side::Buy => p.hops.last(),

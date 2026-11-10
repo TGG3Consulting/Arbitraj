@@ -8,8 +8,12 @@
 //! симуляция до покупки — выход 102.16 при реальном ~101.1): tax_seen_pct — недостача зачисления вывода этой сделки
 //! (отправлено минус комиссия вывода из ответа биржи, если она в монете; иначе вся недостача) — передаётся адаптеру,
 //! граница выхода при пере-замере не выше выхода модели при этом налоге (TradeRequest.remeasure, types/trade.rs).
-//! Кто вызывает: core/sell.rs (market_guarded; sell_or_stuck и sell_after_relay — порог PROFITABLE), core/stuck.rs,
-//! core/relay_here.rs, core/executor.rs (частичная покупка — PROFITABLE).
+//! t81 (дополнение к 247 п. Г, Тигран 10.11: согласовано): у путей, где пере-замер добавил t78 (первая продажа сделки,
+//! «Вернуть боту», частичная покупка, «Ожидание» по истечении stuck.wait_ms), — порог PROFITABLE_OPEN: та же граница, и
+//! признак Remeasure.any_executor — адаптер DEX может исполнить продажу и агрегатором (без пере-замера), если так
+//! настроен и его маршрут лучше; у остальных путей с пере-замером признака нет — только свой сборщик (п. Г, как было).
+//! Кто вызывает: core/sell.rs (market_guarded; sell_or_stuck — PROFITABLE_OPEN, sell_after_relay — PROFITABLE),
+//! core/stuck.rs, core/relay_here.rs, core/executor.rs (частичная покупка — PROFITABLE_OPEN).
 //! От чего зависит: deal.rs, credit_shortfall.rs (shortfall_pct), types (Remeasure).
 //! Настройки: нет (пороги — у вызывающих: stuck.max_loss_pct, stuck.relay_max_loss_pct).
 
@@ -23,22 +27,31 @@ use super::deal::Deal;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Guard {
     /// Пере-замера нет (как до решения 247): продажа по рынку не кнопкой и не автоматикой с порогом (sell::guard_of).
-    /// t78: первая продажа сделки, «Вернуть боту», «Ожидание» по истечении stuck.wait_ms, частичная покупка — PROFITABLE.
+    /// t78: первая продажа сделки, «Вернуть боту», «Ожидание» по истечении stuck.wait_ms, частичная покупка — с порогом
+    /// «итог ≥ 0» (t81: PROFITABLE_OPEN).
     Off,
     /// Кнопка человека (решение 235: без порогов убытка) — пере-замер всегда, граница 0.
     Any,
     /// Автоматика: убыток при реальном выходе не больше этого порога, % (stuck.max_loss_pct — «Порог убытка»;
     /// stuck.relay_max_loss_pct — продажа здесь в «Перегоне»; 0 — итог сделки ≥ 0, PROFITABLE: «Ожидание: стало выгодно»,
-    /// продажа на цели после автоматического «Перегона», первая продажа сделки, «Вернуть боту», «Ожидание» по истечении
-    /// stuck.wait_ms, продажа после частичной покупки).
+    /// продажа на цели после автоматического «Перегона»; пути t78 — Guard::Open, t81).
     MaxLoss(Decimal),
+    /// t81 (дополнение к 247 п. Г, Тигран 10.11: согласовано): порог как MaxLoss, и продажу можно исполнить любым
+    /// исполнителем DEX (Remeasure.any_executor = да): агрегатор, если адаптер так настроен и его маршрут лучше, — без
+    /// пере-замера; свой сборщик — с пере-замером по этой границе. Только пути, где пере-замер добавил t78
+    /// (PROFITABLE_OPEN): первая продажа сделки, «Вернуть боту», частичная покупка, «Ожидание» по истечении.
+    Open(Decimal),
 }
 
 /// Порог «выгодно» (решение 47: итог сделки ≥ 0) как порог убытка 0 % — у продажи режима «Ожидание: стало выгодно»
 /// (stuck.rs) и у продажи на цели сразу после автоматического «Перегона» (sell::sell_after_relay, дополнение 10.11);
-/// t78 (дополнение 10.11, Тигран: согласовано) — и у первой продажи сделки и «Вернуть боту» (sell::sell_or_stuck), у
-/// продажи после частичной покупки (executor.rs) и «Ожидания» по истечении stuck.wait_ms (stuck.rs).
+/// пути t78 (первая продажа сделки, «Вернуть боту», частичная покупка, «Ожидание» по истечении) — PROFITABLE_OPEN (t81).
 pub const PROFITABLE: Guard = Guard::MaxLoss(Decimal::ZERO);
+
+/// t81 (дополнение к 247 п. Г, Тигран 10.11: согласовано): порог «итог сделки ≥ 0» у путей, где пере-замер добавил t78
+/// (первая продажа сделки и «Вернуть боту» — sell::sell_or_stuck, частичная покупка — executor.rs, «Ожидание» по
+/// истечении stuck.wait_ms — stuck.rs): граница та же, что у PROFITABLE, и продажа может идти агрегатором (Guard::Open).
+pub const PROFITABLE_OPEN: Guard = Guard::Open(Decimal::ZERO);
 
 /// Граница реального выхода продажи всего количества сделки. Принимает: сделку, оценку «продать сейчас» чистыми
 /// (trade_ops::deal_quote — котировка × количество минус затраты вне цены), выход котировки до затрат (количество ×
@@ -52,7 +65,7 @@ pub fn floor(deal: &Deal, value: Decimal, gross: Decimal, g: Guard) -> Option<De
     let max = match g {
         Guard::Off => return None,
         Guard::Any => return Some(Decimal::ZERO),
-        Guard::MaxLoss(max) => max,
+        Guard::MaxLoss(max) | Guard::Open(max) => max,
     };
     if deal.invested.is_zero() {
         return (max >= Decimal::ZERO).then_some(Decimal::ZERO);
@@ -62,12 +75,13 @@ pub fn floor(deal: &Deal, value: Decimal, gross: Decimal, g: Guard) -> Option<De
     Some((v_min + (gross - value)).max(Decimal::ZERO))
 }
 
-/// Условия пере-замера для запроса: граница (floor) и налог, наблюдённый в сети (tax_seen_pct). Принимает: как floor.
-/// Возвращает: None — пере-замера нет. Ошибок нет.
+/// Условия пере-замера для запроса: граница (floor), налог, наблюдённый в сети (tax_seen_pct), и признак «любой
+/// исполнитель» (t81: только у Guard::Open). Принимает: как floor. Возвращает: None — пере-замера нет. Ошибок нет.
 pub fn of(deal: &Deal, value: Decimal, gross: Decimal, g: Guard) -> Option<Remeasure> {
     floor(deal, value, gross, g).map(|floor| Remeasure {
         floor,
         tax_seen_pct: tax_seen_pct(deal),
+        any_executor: matches!(g, Guard::Open(_)),
     })
 }
 

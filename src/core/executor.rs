@@ -296,8 +296,9 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
                 );
                 deal.note(why.clone());
                 // Решение 247, дополнение 10.11 (t78, Тигран: согласовано): пере-замер продажи DEX при откате «мало на
-                // выходе» — по порогу «итог сделки ≥ 0» (remeasure::PROFITABLE).
-                let g = super::remeasure::PROFITABLE;
+                // выходе» — по порогу «итог сделки ≥ 0»; t81 (дополнение к 247 п. Г): PROFITABLE_OPEN — исполнить может и
+                // агрегатор DEX, если он включён и его маршрут лучше.
+                let g = super::remeasure::PROFITABLE_OPEN;
                 return super::sell::market_guarded(core, deal, &why, g).await;
             }
             super::partial::Choice::Neither(e) => {

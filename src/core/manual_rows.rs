@@ -84,9 +84,7 @@ pub fn alert_record(a: &StuckAlert, bot: Decimal) -> ManualRecord {
     let id = a.id.clone();
     // Решение 247, п. Е: подпись по знаку, пометка «по модели» и подсказка после отката minOut.
     let (loss_k, loss) = hu::sale_now_alert(a.loss_pct, a.error.as_deref());
-    let hint = hu::min_out_hint(a.error.as_deref())
-        .map(|h| format!("Что делает бот: {h}"))
-        .unwrap_or_default();
+    let hint = hu::min_out_hint(a.error.as_deref()).unwrap_or_default();
     let full = a.reason.clone().unwrap_or_default();
     let coins = format!("{} {t} на {}", hu::qty(q), hu::venue(v));
     ManualRecord {
@@ -99,7 +97,7 @@ pub fn alert_record(a: &StuckAlert, bot: Decimal) -> ManualRecord {
             .kv("Монеты", &coins)
             .kv(loss_k, &loss)
             .reason(&full)
-            .line(hint)
+            .bot(hint)
             // Решение 177: тот же отказ по этой записи — счётчик попыток вместо нового алерта (manual_repeat.rs).
             .line(if a.attempts > 1 {
                 format!("Попыток с этим отказом: {}", a.attempts)

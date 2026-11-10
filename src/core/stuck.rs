@@ -71,8 +71,7 @@ pub async fn handle_as_is(core: &Core, mut deal: Deal, why: StuckReason) {
     // Решение 164: в Telegram — по-человечески (режим — словами, числа округлены).
     // Решение 220: заголовок и причина — настоящие (не всегда «невыгодно»).
     let mut tg = Msg::new(h::WARN, format!("Монета застряла: {}", why.title()))
-        .line(super::deal_text::coin_route(&deal))
-        .kv("Монеты", super::deal_text::coins_at(&deal));
+        .card(super::deal_card::card(&deal));
     if why != StuckReason::Unprofitable {
         tg = tg.reason(&why.text());
     }
@@ -198,7 +197,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
 /// пере-замера продажи DEX при откате по minOut, core/remeasure.rs; Guard::Off — без пере-замера).
 pub async fn sold_by_market(core: &Core, deal: Deal, why: &str, g: Guard) {
     let text = Msg::new(h::WARN, "Застрявшая монета продаётся по рынку")
-        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .card(super::deal_card::card(&deal))
         .reason(why)
         .id(&deal.id)
         .render();

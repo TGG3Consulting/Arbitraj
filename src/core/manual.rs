@@ -147,8 +147,7 @@ pub async fn raise_alert(
     }
     // Решение 164: коротко и по-человечески; кнопки — в сообщении manual.record.
     let mut text = Msg::new(hu::STOP, head)
-        .line(super::deal_text::coin_route(&deal))
-        .kv("Монеты", super::deal_text::coins_at(&deal))
+        .card(super::deal_card::card(&deal))
         .kv(loss_k, &loss)
         .reason(&reason);
     if let Some(h) = hint {

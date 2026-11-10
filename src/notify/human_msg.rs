@@ -1,19 +1,27 @@
 //! Файл: notify/human_msg.rs
-//! Что делает: сборщик человеческого алерта `Msg` (решение 164): первая строка — значок уровня и что случилось,
-//! дальше по строке на факт без повторов, «Причина:» (notify/reason.rs), «Что делать:», «Ответ биржи:» для неизвестной
-//! ошибки, внизу — id сделки. Плюс разбор текста ядра «<id сделки>: …» (split_deal, from_core).
+//! Что делает: сборщик человеческого алерта `Msg` (решения 164, 251) по единому шаблону (разделы — notify/alert.rs):
+//! заголовок со значком уровня, «Сделка: <id>», карточка сделки («Монета», «Путь», «Где сейчас» — notify/alert_card.rs),
+//! строки фактов, блок «Цифры», «Причина» (notify/reason.rs), «Что делает бот», «Что нужно от вас», технический хвост
+//! «Подробно» (ответ биржи — коротко, полностью в журнале). Плюс разбор текста ядра «<id сделки>: …» (split_deal,
+//! from_core). Текст без разметки — для экрана; Telegram размечает его в HTML (notify/alert.rs::telegram).
 //! Кто вызывает: ядро и notify через notify/human.rs (переэкспорт).
-//! От чего зависит: notify/reason.rs, notify/heads.rs, notify/human.rs (имя площадки).
+//! От чего зависит: notify/reason.rs, notify/heads.rs, notify/human.rs (имя площадки), notify/alert.rs (подписи),
+//! notify/alert_card.rs (карточка).
 //! Настройки: нет.
 
+use super::alert::{self as t, BOT_LABELS, FIGURE_LABELS};
+use super::alert_card::{COIN, DEAL, DealCard, NOW, PATH};
 use super::human::venue;
 
-/// Сообщение алерта: заголовок со значком, строки фактов, причина, что делать, id внизу. Без повторов.
+/// Сообщение алерта по шаблону решения 251. Без повторов строк.
 #[derive(Debug, Clone, Default)]
 pub struct Msg {
     head: String,
+    card: Option<DealCard>,
     lines: Vec<String>,
+    figures: Vec<String>,
     reason: Option<String>,
+    bot: Option<String>,
     answer: Option<String>,
     todo: Option<String>,
     id: Option<String>,
@@ -36,6 +44,20 @@ impl Msg {
         }
     }
 
+    /// Как event, но для события без заголовка в notify/heads.rs — ℹ️ и название из каталога. Принимает: код, название.
+    pub fn titled(code: &str, title: &str) -> Self {
+        Self {
+            head: super::heads::head(code, title),
+            ..Self::default()
+        }
+    }
+
+    /// Карточка сделки: монета, путь, где сейчас (core/deal_text.rs::card). Принимает: карточку.
+    pub fn card(mut self, c: DealCard) -> Self {
+        self.card = Some(c);
+        self
+    }
+
     /// Строка факта (пустая — пропускается).
     pub fn line(mut self, s: impl Into<String>) -> Self {
         let s = s.into();
@@ -45,29 +67,57 @@ impl Msg {
         self
     }
 
-    /// Строка «Подпись: значение».
+    /// Строка «Подпись: значение». Подпись из FIGURE_LABELS — в блок «Цифры»; «Что делает бот» — в свой раздел.
     pub fn kv(self, label: &str, value: impl AsRef<str>) -> Self {
+        if BOT_LABELS.contains(&label) {
+            return self.bot(value.as_ref());
+        }
+        if FIGURE_LABELS.contains(&label) {
+            return self.num(label, value);
+        }
         self.line(format!("{label}: {}", value.as_ref()))
     }
 
-    /// Причина: исходный текст переводится в человеческий (notify/reason.rs); неизвестная ошибка биржи — строкой
-    /// «Ответ биржи: …» в конце. Пустая — пропускается.
+    /// Цифра в блок «Цифры»: «• подпись: значение».
+    pub fn num(mut self, label: &str, value: impl AsRef<str>) -> Self {
+        let s = format!("{}{label}: {}", t::BULLET, value.as_ref());
+        if !self.figures.contains(&s) {
+            self.figures.push(s);
+        }
+        self
+    }
+
+    /// Причина: исходный текст переводится в человеческий (notify/reason.rs); неизвестная ошибка биржи — в хвост
+    /// «Подробно». Пустая — пропускается.
     pub fn reason(mut self, raw: &str) -> Self {
         let r = super::reason::human(raw);
         if !r.text.is_empty() {
-            self.reason = Some(r.text);
+            // Решение 251: причина — с заглавной (как предложение).
+            let mut c = r.text.chars();
+            self.reason = c
+                .next()
+                .map(|f| f.to_uppercase().collect::<String>() + c.as_str());
         }
         self.answer = r.answer;
         self
     }
 
-    /// Что делать — одна строка.
+    /// Что делает бот — одна-две строки (пустая — пропускается).
+    pub fn bot(mut self, s: &str) -> Self {
+        if !s.trim().is_empty() {
+            // Номера решений человеку не нужны (как у причины, notify/reason.rs).
+            self.bot = Some(super::reason::tidy(s));
+        }
+        self
+    }
+
+    /// Что нужно от человека — одна строка.
     pub fn todo(mut self, s: impl Into<String>) -> Self {
         self.todo = Some(s.into());
         self
     }
 
-    /// id сделки (или объекта) — внизу, для поиска.
+    /// id сделки — строкой «Сделка: <id>» под заголовком (по ней Telegram находит карточку сделки).
     pub fn id(mut self, s: impl Into<String>) -> Self {
         let s = s.into();
         if !s.is_empty() {
@@ -76,22 +126,44 @@ impl Msg {
         self
     }
 
-    /// Текст сообщения. Возвращает: строки через перевод строки.
+    /// Текст сообщения по шаблону (без разметки). Возвращает: строки через перевод строки; разделы — через пустую.
     pub fn render(&self) -> String {
         let mut out = vec![self.head.clone()];
-        out.extend(self.lines.iter().cloned());
-        if let Some(r) = &self.reason {
-            out.push(format!("Причина: {r}"));
+        if let Some(id) = &self.id {
+            out.push(format!("{DEAL}: {id}"));
         }
-        if let Some(t) = &self.todo {
-            out.push(format!("Что делать: {t}"));
+        if let Some(c) = &self.card {
+            for (l, v) in [(COIN, &c.coin), (PATH, &c.path), (NOW, &c.now)] {
+                if !v.is_empty() {
+                    out.push(format!("{l}: {v}"));
+                }
+            }
+        }
+        if !self.figures.is_empty() {
+            out.push(String::new());
+            out.push(format!("{}:", t::FIGURES));
+            out.extend(self.figures.iter().cloned());
+            if !self.lines.is_empty() {
+                out.push(String::new());
+            }
+        }
+        out.extend(self.lines.iter().cloned());
+        let tail: Vec<String> = [
+            (t::REASON, &self.reason),
+            (t::BOT, &self.bot),
+            (t::TODO, &self.todo),
+        ]
+        .into_iter()
+        .filter_map(|(l, v)| v.as_ref().map(|v| format!("{l}: {v}")))
+        .collect();
+        if !tail.is_empty() {
+            out.push(String::new());
+            out.extend(tail);
         }
         if let Some(a) = &self.answer {
-            out.push(format!("Ответ биржи: {a}"));
-        }
-        if let Some(id) = &self.id {
             out.push(String::new());
-            out.push(format!("id {id}"));
+            out.push(t::DETAILS.to_string());
+            out.push(format!("Ответ биржи: {a}"));
         }
         out.join("\n")
     }
@@ -112,8 +184,8 @@ pub fn split_deal(text: &str) -> (Option<&str>, &str) {
     }
 }
 
-/// Сообщение события из текста ядра «<id>: что случилось»: заголовок события, площадка, причина, id внизу.
-/// Принимает: код события, площадку (id или None), текст. Возвращает: готовый текст для Telegram.
+/// Сообщение события из текста ядра «<id>: что случилось»: заголовок события, площадка, причина, id сделки.
+/// Принимает: код события, площадку (id или None), текст. Возвращает: готовый текст по шаблону.
 pub fn from_core(code: &str, venue_id: Option<&str>, text: &str) -> String {
     let (id, rest) = split_deal(text);
     let mut m = Msg::event(code);

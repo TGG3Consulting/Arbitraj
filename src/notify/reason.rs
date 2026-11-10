@@ -154,7 +154,10 @@ fn clean(raw: &str) -> String {
             None => break,
         }
     }
-    s.replace("  ", " ").replace(" .", ".").trim().to_string()
+    // Решение 251: длинный hex и JSON — коротко (notify/reason_compact.rs), полностью — в журнале.
+    super::reason_compact::compact(&s.replace("  ", " ").replace(" .", "."))
+        .trim()
+        .to_string()
 }
 
 /// Соединяет контекст и причину. Принимает: контекст (может быть пустым), причину.

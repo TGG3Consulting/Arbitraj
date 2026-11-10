@@ -107,10 +107,15 @@ fn unknown_code_goes_to_answer_line() {
         .id("20261104173851521BABYDOGE")
         .render();
     let lines: Vec<&str> = text.lines().collect();
+    // Решение 251: шаблон — заголовок, «Сделка: <id>», причина, ответ биржи — в хвосте «Подробно».
     assert_eq!(lines[0], "⛔ Биржа отклонила вывод");
-    assert_eq!(lines[1], "Причина: Вывод не состоялся");
-    assert_eq!(lines[2], "Ответ биржи: MEXC 99999: Something new");
-    assert_eq!(lines.last(), Some(&"id 20261104173851521BABYDOGE"));
+    assert_eq!(lines[1], "Сделка: 20261104173851521BABYDOGE");
+    assert_eq!(lines[3], "Причина: Вывод не состоялся");
+    assert_eq!(lines[5], "Подробно (полностью — в журнале):");
+    assert_eq!(
+        lines.last(),
+        Some(&"Ответ биржи: MEXC 99999: Something new")
+    );
     // Номера решений человеку не нужны.
     assert_eq!(
         reason::human("Предварительный убыток в итог дня (решение 53)").text,
@@ -147,15 +152,15 @@ fn deal_closed_format() {
     let plus = arb::core::deal_text::closed(&deal("0.13", "45", "45.1", "0.01"), "продано", None);
     assert_eq!(
         plus,
-        "✅ Сделка плюсовая\nBABYDOGE MEXC → DEX\nРазмер ордера: 45.00 USDT\nПлан: +0.13 USDT\nФакт: +0.09 USDT\nЗаработали: 0.09 USDT\n\nid 20261104173851521BABYDOGE"
+        "✅ Сделка плюсовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.13 USDT\n• Факт: +0.09 USDT\n• Заработали: 0.09 USDT"
     );
     let minus = arb::core::deal_text::closed(&deal("0.02", "45", "44.9", "0.05"), "продано", None);
     assert_eq!(
         minus,
-        "❌ Сделка минусовая\nBABYDOGE MEXC → DEX\nРазмер ордера: 45.00 USDT\nПлан: +0.02 USDT\nФакт: −0.15 USDT\nИтого минус: 0.15 USDT\n\nid 20261104173851521BABYDOGE"
+        "❌ Сделка минусовая\nСделка: 20261104173851521BABYDOGE\nМонета: BABYDOGE\nПуть: MEXC\nГде сейчас: монет нет; USDT — на MEXC\n\nЦифры:\n• Размер ордера: 45.00 USDT\n• План: +0.02 USDT\n• Факт: −0.15 USDT\n• Итого минус: 0.15 USDT"
     );
     let tiny = arb::core::deal_text::closed(&deal("0.01", "45", "45.004", "0"), "продано", None);
-    assert!(tiny.contains("Факт: +0.0040 USDT"), "{tiny}");
+    assert!(tiny.contains("• Факт: +0.0040 USDT"), "{tiny}");
 }
 
 #[test]

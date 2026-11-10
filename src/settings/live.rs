@@ -76,6 +76,22 @@ impl Watch {
         }
     }
 
+    /// Решение 251: следующее подходящее изменение, которое УЖЕ пришло, без ожидания (склейка пачки изменений в одно
+    /// уведомление, notify/settings_watch.rs). Возвращает: Some(изменение) или None — сейчас ничего нет (или рассылка
+    /// закрыта: это покажет следующий next). Отставание — как у next: пропуск с предупреждением.
+    pub fn try_next(&mut self) -> Option<Change> {
+        loop {
+            match self.rx.try_recv() {
+                Ok(c) if self.matches(&c.name) => return Some(c),
+                Ok(_) => continue,
+                Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                    tracing::warn!(skipped = n, "подписчик настроек отстал");
+                }
+                Err(_) => return None,
+            }
+        }
+    }
+
     /// Подходит ли имя под префиксы подписки.
     fn matches(&self, name: &str) -> bool {
         self.prefixes.is_empty() || self.prefixes.iter().any(|p| name.starts_with(p.as_str()))

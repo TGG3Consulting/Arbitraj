@@ -4,14 +4,15 @@
 //! ядро не ждёт Telegram (закрытие сделки не задерживается). Ответ 429 — одна повторная попытка ровно через
 //! parameters.retry_after (ResponseParameters, https://core.telegram.org/bots/api#responseparameters).
 //! Кто вызывает: core/deps.rs (notify_tagged) — закрытие сделки (core/ledger.rs).
-//! От чего зависит: notify/dispatch.rs (body, log), routes.rs, roles.rs, client.rs, catalog.rs, tg_methods.rs.
+//! От чего зависит: notify/dispatch.rs (html — шаблон решения 251, log), routes.rs, roles.rs, client.rs, catalog.rs,
+//! tg_methods.rs, tg_html.rs.
 //! Настройки: ID чатов и токены ролей (notify/roles.rs), notify.telegram_api_url, http.timeout_ms.
 
 use std::time::Duration;
 
 use crate::storage::journal::Level;
 
-use super::dispatch::{Notifier, body};
+use super::dispatch::{Notifier, html};
 use super::roles::{self, Role};
 use super::routes::{self, Tag};
 use super::{catalog, client, tg_methods};
@@ -41,7 +42,8 @@ impl Notifier {
         let Some(def) = catalog::find(code) else {
             return;
         };
-        let msg = body(code, def, text);
+        // Решение 251: тот же шаблон алерта в HTML, что у «Общего» (notify/alert.rs).
+        let msg = html(code, def, text);
         let ready = match client::build_role(&self.http, &self.settings, &self.vault, role) {
             Ok(r) => r,
             Err(e) => {
@@ -54,13 +56,13 @@ impl Notifier {
                 return self.log(Level::Warn, venue, why).await;
             }
         };
-        let mut res = ready.tg.send(&ready.chat, &msg).await;
+        let mut res = ready.tg.send_html(&ready.chat, &msg, None).await;
         if let Some(s) = res.as_ref().err().and_then(tg_methods::retry_after) {
             tokio::time::sleep(Duration::from_secs(s)).await;
-            res = ready.tg.send(&ready.chat, &msg).await;
+            res = ready.tg.send_html(&ready.chat, &msg, None).await;
         }
         let (level, line) = match res {
-            Ok(()) => (
+            Ok(_) => (
                 Level::Info,
                 format!(
                     "Отправлено в Telegram, чат «{}»: {}",

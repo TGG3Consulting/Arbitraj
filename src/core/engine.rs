@@ -60,6 +60,13 @@ impl Core {
         let core = Core {
             inner: Arc::new(Inner::new(deps, kinds.clone(), market_tx, cand_tx)),
         };
+        // Решение 251: шаблон алерта Telegram берёт карточку сделки (путь, где сейчас) по id из учёта — свежую на
+        // момент отправки (notify/alert_card.rs). Слабая ссылка: ядро не держится уведомлениями.
+        let weak = Arc::downgrade(&core.inner);
+        crate::notify::alert_card::install(move |id| {
+            let inner = weak.upgrade()?;
+            lk(&inner.deals).get(id).map(super::deal_card::card)
+        });
         // Учёт ядра: сделки, статистика газа, ручное управление — до запуска задач.
         // Итог дня — раньше сделок: прерванные перезапуском сделки сразу добавляют предварительный убыток.
         super::daily::load(&core).await;

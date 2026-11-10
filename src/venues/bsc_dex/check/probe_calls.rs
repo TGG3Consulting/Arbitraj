@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/check/probe_calls.rs
 //! Что делает: вызовы пробного обмена для eth_simulateV1 — переводы, разрешения и балансы ERC-20.
 //! Кто вызывает: check/probe.rs.
-//! Там же: итог пробной продажи — пара «квотер / пришло» или почему налог продажи не измерен (sell_result, решение 146),
+//! Там же: хвост второй симуляции пробы — продажа, затем пробный перевод (sell_tail, решение 252); итог пробной продажи — пара «квотер / пришло» или почему налог продажи не измерен (sell_result, решение 146),
 //! откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха, у Universal Router и у исполнителя).
 //! От чего зависит: check/simulate.rs (Call), check/probe.rs (SellMiss), node/abi.rs, quote/quoter_calls.rs, quote/quoter_revert.rs.
 //! Настройки: нет.
@@ -18,6 +18,7 @@ use super::super::exec::ur;
 use super::super::node::abi::IERC20;
 use super::super::pools::registry::Entry;
 use super::super::quote::{quoter_calls, quoter_revert};
+use super::super::wallet::approve::Approval;
 use super::probe::SellMiss;
 use super::simulate::{Call, CallResult};
 
@@ -129,5 +130,59 @@ pub fn sell_result(e: &Entry, r: &[CallResult], sold: bool) -> Result<(U256, U25
             false,
             "ответ квотера продажи или баланса не по ABI".into(),
         )),
+    }
+}
+
+/// Номера вызовов хвоста пробы в общем списке (sell_tail).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tail {
+    /// Квотер на продажу; за ним подряд: баланс встречного токена до, продажа, баланс после (sell_result).
+    pub quote: usize,
+    /// Пробный перевод монеты на пустой адрес; за ним — баланс пустого адреса.
+    pub transfer: usize,
+}
+
+/// Хвост второй симуляции пробы (решение 252): разрешения продажи → квотер на продажу → баланс встречного токена →
+/// продажа → баланс встречного токена → перевод четверти монеты на пустой адрес → его баланс. Перевод — ПОСЛЕ продажи:
+/// настоящая продажа идёт без перевода монеты перед ней в том же блоке, а у монеты с отражением (reflection) перевод
+/// поднимает balanceOf пары V2 выше резерва — вход продажи (balanceOf − резерв) был бы больше настоящего.
+/// Принимает: список вызовов (дописывается), (кошелёк, монета, встречный токен, пустой адрес), сумму перевода,
+/// разрешения продажи, квотер (адрес, данные), продажу (роутер, данные). Возвращает: номера вызовов. Ошибок нет.
+pub fn sell_tail(
+    list: &mut Vec<Call>,
+    (wallet, coin, counter, empty): (Address, Address, Address, Address),
+    quarter: U256,
+    approvals: &[Approval],
+    (quoter, quote_data): (Address, Bytes),
+    (router, sell_data): (Address, Bytes),
+) -> Tail {
+    list.extend(approvals.iter().map(|(to, d)| Call {
+        from: wallet,
+        to: *to,
+        input: d.clone(),
+    }));
+    let quote = list.len();
+    list.extend([
+        Call {
+            from: wallet,
+            to: quoter,
+            input: quote_data,
+        },
+        balance(wallet, counter, wallet),
+        Call {
+            from: wallet,
+            to: router,
+            input: sell_data,
+        },
+        balance(wallet, counter, wallet),
+    ]);
+    let at = list.len();
+    list.extend([
+        transfer(wallet, coin, empty, quarter),
+        balance(wallet, coin, empty),
+    ]);
+    Tail {
+        quote,
+        transfer: at,
     }
 }

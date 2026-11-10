@@ -8,7 +8,9 @@
 //! и прогоняется одной eth_simulateV1 (exec/dry_sim.rs). Монет у кошелька ещё нет: тот же приём, что у сухой сделки и
 //! пробы налогов, — первым вызовом той же симуляции перевод монет на кошелёк от пула-источника ВНЕ маршрута
 //! (exec/dry_fund.rs; пул маршрута не трогается, его резервы те же, что увидит продажа). Выход = баланс USDT кошелька
-//! после − до, т. е. после реального налога токена на реальной сумме реальным кошельком.
+//! после − до, т. е. после реального налога токена на реальной сумме реальным кошельком, минус излишек пары, который
+//! создало само пополнение (решение 252, вариант «б», exec/dry_surplus_cut.rs; строка «излишек пары от пополнения: …»
+//! — в «монеты в симуляции» журнала core.precheck и в причину отказа).
 //! Нативная BNB (решение 62): продаётся value транзакции, в симуляции не пополняется — у кошелька меньше суммы —
 //! NotApplicable с причиной (у нативной монеты нет контракта, налога токена нет).
 //! Кто вызывает: venue.rs (контракт dex_presell).
@@ -28,7 +30,7 @@ use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built};
 use super::dry_sim::{self, Io};
 use super::executor::dry::DryMode;
-use super::{dry_swap, native, trade};
+use super::{dry_surplus_cut, dry_swap, native, trade};
 
 /// Симуляция продажи. Принимает: котировку (вид на счёт сделки), запрос продажи как у исполнения (маршрут из плана).
 /// Возвращает: DexPresell. Ошибки: NotConfigured (кошелёк не выбран, настройки), NoRoute (нет маршрута, сборка,
@@ -87,15 +89,20 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
         ..dry_swap::io(&ready, Side::Sell, is_native, (coin, usdt))
     };
     let sim = dry_sim::run(q, &ready, wallet, &io).await?;
+    // Решение 252, вариант «б»: выход уже уменьшен на излишек пары от пополнения — строка в журнал и в причину отказа.
+    let surplus = sim
+        .surplus
+        .map(|s| dry_surplus_cut::line(&s, decs.0, decs.1, "USDT"));
     let tail = || {
         format!(
             "кошелёк {wallet:#x}, форма {}, ожидалось {} USDT (живой пересчёт, модельный налог), минимум {} USDT \
-             (по долям: {}), блок {}",
+             (по долям: {}), блок {}{}",
             ready.form,
             ready.usdt.round_dp(6),
             min_sum.round_dp(6),
             list(&min_legs),
-            ready.at.number
+            ready.at.number,
+            surplus.as_ref().map_or(String::new(), |l| format!("; {l}"))
         )
     };
     if let Some(why) = sim.reason {
@@ -122,7 +129,10 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
         out,
         expected: ready.usdt,
         min_legs,
-        funding: sim.funding,
+        funding: match (sim.funding, surplus) {
+            (Some(f), Some(l)) => Some(format!("{f}; {l}")),
+            (f, l) => f.or(l),
+        },
         gas_swap: sim.gas_swap,
     })
 }

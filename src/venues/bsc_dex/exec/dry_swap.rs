@@ -6,7 +6,8 @@
 //! симуляция eth_simulateV1 от кошелька бота с разрешениями первыми вызовами (exec/dry_sim.rs). Ничего не подписывает
 //! и не отправляет, очередь кошелька и nonce не трогает, уведомлений сделки не шлёт, пулы не исключает.
 //! Итог — DexDrySwap: форма маршрута, пулы, выход по котировке / живому пересчёту / минимум / симуляции, газ, причина.
-//! Подбор количества под сумму USDT — exec/dry_size.rs.
+//! Подбор количества под сумму USDT — exec/dry_size.rs. Пополнение кошелька в симуляции подняло излишек пары первого шага
+//! (reflection-монета, решение 252, вариант «б») — выход уже уменьшен, строка «излишек пары от пополнения: …» — в заметках.
 //! Режим «через исполнитель» (решение 122, часть X): маршрут — шагами ArbExecutor, код подставлен в симуляцию
 //! (exec/executor/dry.rs) — проверка исполнителя на живой сети до развёртывания.
 //! Кто вызывает: venue.rs (контракт dex_dry_swap).
@@ -26,6 +27,7 @@ use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built, Ready};
 use super::dry_sim::{self, Io};
 use super::dry_size;
+use super::dry_surplus_cut;
 use super::executor::dry::DryMode;
 use super::native;
 
@@ -141,6 +143,12 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
     r.gas_approve = Some(sim.gas_approve);
     r.approvals = sim.approvals;
     r.funding = sim.funding;
+    if let Some(s) = &sim.surplus {
+        let dec_in = if r.side == Side::Sell { decs.0 } else { decs.1 };
+        let name = r.out_symbol.clone().unwrap_or_default();
+        r.notes
+            .push(dry_surplus_cut::line(s, dec_in, out_dec, &name));
+    }
     r.sim_out = sim.out.and_then(|v| dec(v, out_dec));
     if io.token_out.is_none() && sim.out.is_none() {
         r.notes

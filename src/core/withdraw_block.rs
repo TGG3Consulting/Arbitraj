@@ -8,6 +8,10 @@
 //! начинаются (check — в core/profit.rs до расчёта, как делистинг); прочие направления монеты — без изменений; идущие
 //! сделки не трогаются. Снимает человек на экране «Монеты» (ui/src/components/WithdrawBlocked.svelte) — обе настройки
 //! очищаются. Отказ вывода с DEX (откат перевода из кошелька) — не отказ площадки, не записывается (как mark_at).
+//! Дополнение (Тигран 10.11): отказ из-за АККАУНТА, а не монеты — код InvalidAddress адаптера (адрес получателя не в
+//! белом списке / адресной книге, по официальной таблице ошибок биржи: Binance −4007/−4012/−4033…−4036, Bybit
+//! 131083/131093/131066/131098, OKX 58207 и другие коды InvalidAddress адаптера, Gate ADDRESS_NOT_USED) — монету НЕ закрывает: алерт
+//! venue.account_problem «проблема в аккаунте <биржа>: <причина> — исправьте». У бирж без такого кода — как раньше.
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -17,6 +21,7 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, Direction, VenueId};
 use crate::gateway::contract::VenueKind;
+use crate::gateway::errors::ErrorCode;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -58,6 +63,11 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     }
     if super::trade_ops::kind(core, from).ok() == Some(VenueKind::Dex) {
         return;
+    }
+    // Дополнение (Тигран 10.11): отказ из-за аккаунта (адрес получателя: белый список, адресная книга — у адаптера код
+    // InvalidAddress по официальной таблице ошибок биржи) монету не закрывает — алерт «проблема в аккаунте».
+    if e.code == Some(ErrorCode::InvalidAddress) {
+        return account(core, deal, asset, from, e).await;
     }
     let deps = &core.inner.deps;
     let scope = super::blacklist::coin_scope(asset);
@@ -105,5 +115,36 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     )
     .await;
     deps.notify("coin.withdraw_refused", Some(&from.0), &text)
+        .await;
+}
+
+/// Что делает: отказ вывода из-за аккаунта (InvalidAddress) — журнал core.withdraw_block и алерт venue.account_problem
+/// шаблоном решения 251 (notify/human_msg.rs): «Проблема в аккаунте <биржа>: <причина> — исправьте». Монета не
+/// закрывается. Принимает: ядро, id сделки, монету, биржу, ошибку. Ошибок нет.
+async fn account(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &OpError) {
+    let deps = &core.inner.deps;
+    let venue = crate::notify::human::venue(&from.0);
+    let text = crate::notify::human_msg::Msg::event("venue.account_problem")
+        .line(format!("Проблема в аккаунте {venue}: вывод {} отклонён", asset.ticker))
+        .reason(&e.to_string())
+        .bot("монету не закрывает (дело не в монете); сделка — как при отказе вывода")
+        .todo(format!(
+            "исправьте в аккаунте {venue}: адрес кошелька DEX — в белом списке (адресной книге) вывода"
+        ))
+        .id(deal)
+        .render();
+    let log = format!(
+        "{deal}: проблема в аккаунте {}: {e} — монета {} не закрыта",
+        from.0, asset.ticker
+    );
+    deps.log(
+        Level::Warn,
+        "core.withdraw_block",
+        Some(&from.0),
+        &log,
+        None,
+    )
+    .await;
+    deps.notify("venue.account_problem", Some(&from.0), &text)
         .await;
 }

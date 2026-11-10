@@ -62,11 +62,14 @@ pub async fn check(
     };
     // Решение 253 (д): факты перевода — фактическая комиссия и недостача — для затрат следующих сделок по монете с
     // этой площадки (withdraw_seen.rs; в расчёт — при transfer.seen_cost). Пишутся всегда, порог ниже — отдельно.
+    // Дополнение (Тигран 10.11): сырые числа (отправлено, зачислено, комиссия по факту) — разложение на комиссию, налог и
+    // прочее делает расчёт против своей текущей модели (без двойного счёта при последующем замере налога).
     let seen = super::withdraw_seen::Seen {
         asset: asset.clone(),
         from: from.clone(),
+        sent,
+        credited,
         fee: fact_fee,
-        shortfall_pct: shortfall_pct(expected, credited).unwrap_or_default(),
     };
     super::withdraw_seen::record(core, seen).await;
     let Ok(max) = deps

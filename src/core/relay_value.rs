@@ -8,6 +8,8 @@
 //! Кто вызывает: core/relay.rs.
 //! От чего зависит: dirctx_venue.rs (справочник сетей, свежесть), transfers.rs (сеть BSC), transfer_tax.rs,
 //! costs_withdraw.rs (точность вывода), trade_ops.rs (выручка продажи), convert.rs.
+//! Решение 253 (д), дополнение: затраты вывода с биржи — с поправкой по факту прошлого перевода (withdraw_seen.rs,
+//! transfer.seen_cost), как в расчёте сделки.
 //! Настройки: venue.quote_asset, venue.networks_stale_s (через dirctx_venue.rs), cex_cex.untaxed_ok (через transfer_tax.rs).
 
 use rust_decimal::Decimal;
@@ -58,10 +60,14 @@ fn cex_costs(
     })?;
     let pct = super::transfer_tax::pct(core, to, a)?;
     let tax = (qty - fee).max(Decimal::ZERO) * pct / Decimal::ONE_HUNDRED;
-    Ok(vec![
+    let dir = vec![
         Cost::new(CostKind::WithdrawFee, fee, a.ticker.clone(), false),
         Cost::new(CostKind::TransferTax, tax, a.ticker.clone(), false),
-    ])
+    ];
+    // Решение 253 (д), дополнение: та же поправка по факту прошлого перевода, что в расчёте сделки (withdraw_seen.rs).
+    Ok(super::withdraw_seen::adjust_at(
+        core, from, a, &info, pct, qty, dir,
+    ))
 }
 
 /// Минимальный депозит биржи `to` по справочнику ядра. У DEX ограничений нет.

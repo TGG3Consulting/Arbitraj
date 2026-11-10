@@ -47,6 +47,17 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // confirmations, we have temporarily locked {0} asset» (Wallet → Error Code,
         // https://developers.binance.com/en/dev-docs/products/wallet/error-code) — временно заблокировано для вывода.
         -4060 if op == Op::Withdraw => ErrorCode::WithdrawLocked,
+        // Решение 253, дополнение (Тигран 10.11): отказ вывода из-за адреса получателя в аккаунте, а не из-за монеты —
+        // Wallet → Error Code (https://developers.binance.com/en/docs/products/wallet/error-code): −4007
+        // CAPITAL_ADDRESS_VERIFICATION_NOT_PASS «Address validation is not passed», −4012 CAPITAL_WHITELIST_CLOSE «White
+        // list is not opened», −4033 CAPITAL_WITHDRAW_ILLEGAL_ADDRESS «Illegal address», −4034
+        // CAPITAL_WITHDRAW_ADDRESS_CHEAT «The address is suspected of fake», −4035 CAPITAL_WITHDRAW_NOT_WHITE_ADDRESS
+        // «This address is not on the whitelist», −4036 CAPITAL_WITHDRAW_NEW_ADDRESS «The new address needs to be
+        // withdrawn in {0} hours» — InvalidAddress: ядро монету не закрывает, а шлёт алерт «проблема в аккаунте»
+        // (core/withdraw_block.rs).
+        -4007 | -4012 | -4033 | -4034 | -4035 | -4036 if op == Op::Withdraw => {
+            ErrorCode::InvalidAddress
+        }
         // −2011 / −2013: ордера нет (или не отменён) — не отказ денег, вызывающий решает по смыслу.
         -2011 | -2013 => ErrorCode::BadResponse,
         _ => rejected(op),

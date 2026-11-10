@@ -137,14 +137,10 @@ impl Source for Live<'_> {
         if let (Some(p), None) = (self.plan(), &cx.a.info) {
             return Ok(p.withdraw(cx, amount));
         }
-        let mut c = super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await?;
-        // Решение 253 (д): у биржи A — поправка по фактам прошлых переводов (transfer.seen_cost; не задана — нет).
-        if cx.a.info.is_some() {
-            let d = &cx.dir;
-            let extra = super::withdraw_seen::adjust(self.core, &d.asset, &d.buy_on, amount, &c);
-            c.extend(extra);
-        }
-        Ok(c)
+        let c = super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await?;
+        // Решение 253 (д), дополнение: у биржи A — затраты вывода с разложением факта прошлого перевода (комиссия по
+        // факту, налог, прочее — withdraw_seen.rs; transfer.seen_cost не «да» — как есть).
+        Ok(super::withdraw_seen::adjust(self.core, cx, amount, c))
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs return_b); решение 237 — DEX на B со

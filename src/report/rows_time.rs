@@ -12,7 +12,8 @@
 //!
 //! Окно: [from, to) по UTC; to нет — до момента выгрузки. Кнопки «Сутки / 7 дней / 30 дней» (Telegram) — календарные дни
 //! UTC: с 00:00 UTC дня (сегодня − (N − 1)) до момента выгрузки (calendar_from).
-//! Кто вызывает: report/rows.rs, report/day_rows.rs, report/results_xlsx.rs, notify/ctl/report.rs.
+//! Кто вызывает: report/rows.rs, report/day_rows.rs, report/results_xlsx.rs, notify/ctl/report.rs; решение 256 —
+//! report/cap_rows.rs, cap_hold.rs, cap_notes.rs, sig_period.rs (Period::calendar).
 //! От чего зависит: core/deal.rs, core/deal_book.rs (end_prefix), core/ledger_load.rs (INTERRUPTED).
 //! Настройки: нет.
 

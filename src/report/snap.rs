@@ -11,7 +11,8 @@
 //! Общий срок — настройка report.snapshot_timeout_ms (не задана — слепок не снимается, причина на листе, отчёт
 //! выдаётся). Не ответила площадка — «нет данных: причина», не 0.
 //! Одна функция для кнопки интерфейса и Telegram (report/results.rs results_file).
-//! Кто вызывает: report/results.rs.
+//! Кто вызывает: report/results.rs; report/cap_send.rs (решение 256 — тот же слепок в «Сделках, лимитах и
+//! капитале»).
 //! От чего зависит: core (deals, cex_ids, настройки), core/deal_text.rs, report/snap_cex.rs, snap_dex.rs, snap_transit.rs,
 //! notify/human.rs.
 //! Настройки: report.snapshot_timeout_ms; venue.quote_asset (читается).

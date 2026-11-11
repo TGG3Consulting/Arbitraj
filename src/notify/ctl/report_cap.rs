@@ -1,11 +1,13 @@
 //! Файл: notify/ctl/report_cap.rs
 //! Что делает: решение 256 (Тигран 11.11) — отчёт «Сделки, лимиты и капитал» в «📊 Отчёты» чата «Управление»: экран
-//! периодов (за всё время, текущий день, 3 дня, 5 дней, 7 дней, свой интервал — те же, что у «Сигналов и сделок»: report/sig_period.rs BUTTONS), «Свой
+//! периодов (за всё время, текущий день, 3 дня, 5 дней, 7 дней, свой интервал — те же кнопки, что у «Сигналов и
+//! сделок»: report/sig_period.rs BUTTONS; окно — календарными днями UTC, как «Итоги сделок»: Period::calendar), «Свой
 //! интервал» — вопрос с ForceReply (как вопрос суммы перевода, transfer_input.rs), ответ «дд.мм.гг – дд.мм.гг»: разбор
 //! строго дд.мм.гг, ошибка — понятный текст и вопрос заново. Отчёт — report::cap_send::capital_send (сборка в
 //! spawn_blocking, торговля не ждёт); файлы — sendDocument по одному по мере сборки
 //! (https://core.telegram.org/bots/api#senddocument); больше предела DOCUMENT_MAX_BYTES — несколько частей по дням
-//! (report/cap_xlsx.rs files), подпись — часть и дни; частей больше одной — итог «файлов N» отдельным сообщением. Сбой —
+//! (report/cap_xlsx.rs files, каждая — сразу по сборке), подпись — окно, часть и дни; частей больше одной — итог
+//! «файлов N» отдельным сообщением. Сбой —
 //! текст в чат и журнал. Денег не двигает — подтверждения нет. Доступ — как у остальных отчётов (роль Control,
 //! notify.control_users).
 //! Кто вызывает: notify/ctl/report.rs (r:cap, r:cap.<период>), notify/ctl/press.rs (ответ на вопрос интервала).
@@ -126,8 +128,8 @@ impl Ctx<'_> {
     /// Собирает отчёт за период и шлёт файлы в чат. Принимает: чат, период, кто запросил. Ошибок нет: сбой — в чат
     /// и журнал.
     async fn cap_send(&self, chat: i64, p: Period, who: &str) {
-        let now = Utc::now();
-        let (from, to) = p.bounds(now);
+        // Решение 256 (дополнение, аудит п. 7): календарные дни UTC, как «Итоги сделок» (sig_period.rs calendar).
+        let w = p.calendar(Utc::now());
         let c = chat.to_string();
         let tg = self.tg;
         let send = |f: report::cap_xlsx::File| {
@@ -140,16 +142,8 @@ impl Ctx<'_> {
                     .map_err(|e| format!("файл {} ({size} байт): {e}", f.name))
             }
         };
-        let res = report::cap_send::capital_send(
-            self.core,
-            from,
-            to,
-            p.label(),
-            now,
-            DOCUMENT_MAX_BYTES,
-            send,
-        )
-        .await;
+        let res =
+            report::cap_send::capital_send(self.core, w, p.label(), DOCUMENT_MAX_BYTES, send).await;
         // В чат: сбой — всегда; успех — только если частей больше одной (сколько всего, заранее неизвестно).
         let (level, text, tell) = match res {
             Ok(sent) => (

@@ -9,7 +9,8 @@
 //! цены и, в режиме «в каждой сделке», затрат возврата USDT); запас и возврат плана — rows_text.rs plan_parts.
 //! Затраты по статьям — Deal.cost_items (core/deal_book.rs); разница spent − Σ статей — «без разбивки» (сделки до 257).
 //! Порядок — по концу сделки. Монета — тикер; одинаковый тикер у разных адресов — с адресом (coin_labels).
-//! Кто вызывает: report/results_xlsx.rs (через report/mod.rs).
+//! Кто вызывает: report/results_xlsx.rs (через report/mod.rs); report/cap_rows.rs (selected, moves_money, f —
+//! решение 256).
 //! От чего зависит: core/deal.rs, core/deal_return_cost.rs, report/rows_text.rs, report/rows_time.rs, notify/human.rs.
 //! Настройки: нет.
 
@@ -74,16 +75,22 @@ pub fn moves_money(d: &Deal) -> bool {
         && z(d.provisional_usd))
 }
 
+/// Отбор сделки в отчёт (см. шапку): закончилась (конец неизвестен — старт) в окне и двигала деньги. Одна функция для
+/// «Итогов сделок» и итога периода «Сделок, лимитов и капитала» (решение 256, дополнение). Ошибок нет.
+pub fn selected(d: &Deal, w: &Window) -> bool {
+    !d.is_open() && moves_money(d) && w.has(ended_at(d).unwrap_or(d.started_at))
+}
+
 /// Строки отчёта. Принимает: сделки, окно, id площадок DEX. Возвращает: строки по концу сделки. Ошибок нет.
 pub fn rows(deals: &[Deal], w: &Window, dex: &BTreeSet<String>) -> Vec<Row> {
     let labels = coin_labels(deals);
     let mut v: Vec<(DateTime<Utc>, Row)> = deals
         .iter()
-        .filter(|d| !d.is_open() && moves_money(d))
-        .filter_map(|d| {
+        .filter(|d| selected(d, w))
+        .map(|d| {
             let end = ended_at(d);
             let key = end.unwrap_or(d.started_at);
-            w.has(key).then(|| (key, row(d, end, key, dex, &labels)))
+            (key, row(d, end, key, dex, &labels))
         })
         .collect();
     v.sort_by_key(|(k, _)| *k);

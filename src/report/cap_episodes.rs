@@ -15,8 +15,9 @@
 //! - эпизод со сделкой — в нём есть запись исполненной сделки (Item.deal);
 //! - день — дата начала эпизода (UTC); направление — «MEXC → DEX» (notify/human.rs route).
 //!
-//! Кто вызывает: report/mod.rs (capital_send), tests/report_capital.rs.
-//! От чего зависит: core/uncapped_sum.rs (Totals, Item), core/uncapped_types.rs (take), notify/human.rs (route).
+//! Кто вызывает: report/cap_send.rs (capital_data), tests/report_capital.rs.
+//! От чего зависит: core/uncapped_sum.rs (Totals, Item), core/uncapped_types.rs (take), notify/human.rs (route),
+//! report/rows.rs (f).
 //! Настройки: нет (потолки — uncapped.ladder_usdt, приходят готовым списком).
 
 use std::collections::BTreeMap;
@@ -28,7 +29,7 @@ use crate::core::uncapped_sum::{Item, Totals};
 use crate::core::uncapped_types::take;
 use crate::notify::human::route;
 
-use super::cap_rows::f;
+use super::rows::f;
 
 /// Столбцы «сколько раз ограничил» по порядку листа.
 pub const LIMITS: [&str; 6] = [

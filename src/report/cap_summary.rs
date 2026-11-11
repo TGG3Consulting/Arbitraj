@@ -1,17 +1,13 @@
 //! Файл: report/cap_summary.rs
-//! Что делает: решение 256 — лист «Итоги» отчёта «Сделки, лимиты и капитал»: четыре таблицы ТОЛЬКО формулами
-//! (COUNTIFS / SUMIFS / _xlfn.MAXIFS / AVERAGEIFS по листам «Сделки» и «Упущено из-за потолка», без готовых чисел;
-//! без XLOOKUP / FILTER / UNIQUE — считаются в Excel и LibreOffice). Строки — направления, которые встречаются за
-//! период на любом из двух листов (список приходит готовым, по алфавиту).
+//! Что делает: решение 256 (с дополнением — аудит отчёта) — лист «Итоги» отчёта «Сделки, лимиты и капитал»: заголовок,
+//! примечания (report/cap_notes.rs) и таблицы ТОЛЬКО формулами по листам книги (COUNTIFS / SUMIFS / AVERAGEIFS / IF /
+//! IFERROR / ROUND, формулы массива MAX(IF(…)); без _xlfn-функций — MAXIFS / MINIFS нет в Excel до 2019, решение 257;
+//! без XLOOKUP / FILTER / UNIQUE). Строки таблиц 1–3 — направления периода с обоих листов (по алфавиту).
 //! 1. «Что ограничивает объём»: эпизодов, сколько раз ограничил выгодный объём, лимит на сделку, свободный баланс.
-//! 2. «Модель против факта» (сделки с покупкой и итогом): сделок, план, факт, факт / план, минусовых и их сумма.
-//! 3. «Сколько добавил бы больший лимит»: прибыль модели на нашем бюджете и на каждом потолке; прибавка между соседними
-//!    потолками.
-//! 4. «Сколько держать на балансе»: максимум одновременно открытых сделок с покупкой (столбец Q «Сделок»), средняя
-//!    длительность, с; рекомендованный баланс = лимит × максимум одновременных (лимиты — строка над таблицей, значения
-//!    uncapped.ladder_usdt).
+//! 2. «Итог периода» (= «Итог факт + оценка» «Итогов сделок» за то же окно).
 //!
-//! Таблицы 3 и 4 — report/cap_capital.rs.
+//! Таблица 2 — report/cap_total.rs; таблицы 3 («Сколько добавил бы больший лимит»), 4 («Сколько держать на балансе»
+//! по площадкам) и 5 (потолки модели) — report/cap_capital.rs.
 //! Кто вызывает: report/cap_xlsx.rs.
 //! От чего зависит: rust_xlsxwriter, report/results_sheet.rs (head, money), cap_sheets.rs (листы, столбцы, rng),
 //! cap_capital.rs.
@@ -20,12 +16,14 @@
 use rust_decimal::Decimal;
 use rust_xlsxwriter::{Format, Formula, Worksheet, XlsxError};
 
-use super::cap_sheets::{DEALS, MISSED, YES, col, d, rng};
+use super::cap_sheets::{DEALS, MISSED, col, rng};
 use super::results_sheet::{head, money};
 
 /// Что нужно листу: направления, последние строки диапазонов листов, потолки, заголовок и примечания.
 pub struct Ctx<'a> {
     pub dirs: &'a [String],
+    /// Площадки денег покупки (столбец «Где лежат деньги покупки» листа «Сделки»), по алфавиту.
+    pub places: &'a [String],
     pub deals_last: u32,
     pub missed_last: u32,
     pub ladder: &'a [Decimal],
@@ -110,15 +108,16 @@ pub fn summary(ws: &mut Worksheet, cx: &Ctx) -> Result<(), XlsxError> {
     }
     w.row += 1;
     limits(&mut w, cx)?;
-    model_vs_fact(&mut w, cx)?;
+    super::cap_total::period_total(&mut w, cx)?;
     super::cap_capital::ladder(&mut w, cx)?;
     super::cap_capital::balance(&mut w, cx)?;
+    super::cap_capital::model_caps(&mut w, cx)?;
     Ok(())
 }
 
 /// Диапазон столбца листа «Сделки». Ошибок нет.
-pub(super) fn dr(cx: &Ctx, c: char) -> String {
-    rng(DEALS, &c.to_string(), cx.deals_last)
+pub(super) fn dr(cx: &Ctx, c: &str) -> String {
+    rng(DEALS, c, cx.deals_last)
 }
 
 /// Диапазон столбца листа «Упущено» по номеру столбца. Ошибок нет.
@@ -152,51 +151,4 @@ fn limits(w: &mut W, cx: &Ctx) -> Result<(), XlsxError> {
         w.row += 1;
     }
     total(w, first, &[(1, false), (2, false), (3, false), (4, false)])
-}
-
-/// Таблица 2 «Модель против факта». Ошибки: XlsxError.
-fn model_vs_fact(w: &mut W, cx: &Ctx) -> Result<(), XlsxError> {
-    let hdr: Vec<String> = [
-        "Направление",
-        "Сделок с покупкой и итогом",
-        "План, USDT",
-        "Факт, USDT",
-        "Факт / план",
-        "Минусовых сделок",
-        "Сумма минусовых, USDT",
-    ]
-    .map(String::from)
-    .to_vec();
-    w.table("2. Модель против факта (сделки с покупкой и итогом)", &hdr)?;
-    let first = w.row + 1;
-    let (dir, bought, plan, fact) = (
-        dr(cx, d::DIR),
-        dr(cx, d::BOUGHT),
-        dr(cx, d::PLAN),
-        dr(cx, d::FACT),
-    );
-    for name in cx.dirs {
-        let n = w.row + 1;
-        let cond = format!("{dir},$A{n},{bought},\"{YES}\"");
-        w.ws.write_string_with_format(w.row, 0, name, &w.int)?;
-        let (int, m, pct) = (w.int.clone(), w.money.clone(), w.pct.clone());
-        w.f(1, format!("=COUNTIFS({cond},{fact},\"<>\")"), &int)?;
-        w.f(2, format!("=SUMIFS({plan},{cond},{fact},\"<>\")"), &m)?;
-        w.f(3, format!("=SUMIFS({fact},{cond},{fact},\"<>\")"), &m)?;
-        w.f(4, format!("=IF(C{n}=0,\"\",D{n}/C{n})"), &pct)?;
-        w.f(5, format!("=COUNTIFS({cond},{fact},\"<0\")"), &int)?;
-        w.f(6, format!("=SUMIFS({fact},{cond},{fact},\"<0\")"), &m)?;
-        w.row += 1;
-    }
-    let n = w.row + 1;
-    total(
-        w,
-        first,
-        &[(1, false), (2, true), (3, true), (5, false), (6, true)],
-    )?;
-    w.row -= 1;
-    let pct = w.pct.clone().set_bold();
-    w.f(4, format!("=IF(C{n}=0,\"\",D{n}/C{n})"), &pct)?;
-    w.row += 1;
-    Ok(())
 }

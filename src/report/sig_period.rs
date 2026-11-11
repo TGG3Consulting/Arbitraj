@@ -4,6 +4,9 @@
 //! время в UTC). «Текущий день» — с 00:00 UTC сегодня до момента выгрузки; «N дней» — последние N × 24 ч до момента
 //! выгрузки, как «7 дней» решения 215 (notify/ctl/report.rs PERIODS); свой интервал — строго «дд.мм.гг – дд.мм.гг»
 //! (обе даты включительно: с 00:00 UTC первой по 24:00 UTC второй), тире — «–», «—» или «-», пробелы вокруг — любые.
+//! Решение 256 (дополнение, аудит отчёта п. 7): «Сделки, лимиты и капитал» берёт те же кнопки, но окно — календарными
+//! днями UTC, как «Итоги сделок» (calendar — та же функция report/rows_time.rs calendar_from): «текущий день» — с 00:00
+//! UTC сегодня, «N дней» — с 00:00 UTC дня (сегодня − (N − 1)), до момента выгрузки; свой интервал — как bounds.
 //! Кто вызывает: notify/ctl/report_sig.rs, notify/ctl/report_cap.rs (решение 256 — те же периоды), тесты
 //! (tests/report_signals.rs, tests/report_capital.rs).
 //! От чего зависит: chrono.
@@ -43,6 +46,17 @@ impl Period {
             Period::Days(n) => (Some(now - Duration::days(n)), None),
             Period::Range(a, b) => (midnight(a), b.succ_opt().and_then(midnight)),
         }
+    }
+
+    /// Что делает: окно календарными днями UTC (см. шапку, решение 256). Принимает: момент выгрузки. Возвращает: окно
+    /// [from, to) с моментом выгрузки. Ошибок нет.
+    pub fn calendar(&self, now: DateTime<Utc>) -> super::rows_time::Window {
+        let (from, to) = match *self {
+            Period::Today => (Some(super::rows_time::calendar_from(1, now)), None),
+            Period::Days(n) => (Some(super::rows_time::calendar_from(n, now)), None),
+            _ => self.bounds(now),
+        };
+        super::rows_time::Window { from, to, now }
     }
 
     /// Надпись периода для подписи файла. Ошибок нет.

@@ -10,8 +10,9 @@
 //! Решение 218 — отчёт пересчёта старых записей «без потолка» по окнам (recompute.rs: CSV и итоги для stdout).
 //! Решение 255 — «Сигналы и сделки» (arb_signals_<дата>[_part<K>].xlsx, sig_*.rs): сигналы-окна, сделки, тики, стаканы,
 //! ликвидность пулов; потоком (sig_stream.rs), несколько файлов, если больше предела отправки (sig_parts.rs).
-//! Решение 256 — «Сделки, лимиты и капитал» (arb_capital_<дата>[_partKofN].xlsx, cap_*.rs): все сделки периода,
-//! эпизоды «без потолка» по дням и направлениям, лист «Итоги» формулами; несколько файлов, если больше предела.
+//! Решение 256 — «Сделки, лимиты и капитал» (arb_capital_<дата>[_part<K>].xlsx, cap_*.rs): сделки окна с адресами и
+//! занятостью денег, эпизоды «без потолка» по дням и направлениям, лист «Итоги» формулами (итог = «Итоги сделок»),
+//! лимиты на момент выгрузки, слепок балансов; несколько файлов, если больше предела (каждый — сразу по сборке).
 //! Кто вызывает: api/report.rs, notify/ctl/report.rs, notify/ctl/report_sig.rs (signals_send),
 //! notify/ctl/report_cap.rs (cap_send.rs capital_send),
 //! src/bin/uncapped_recompute.rs (recompute.rs).
@@ -20,12 +21,19 @@
 //! missed_xlsx.rs, missed_total.rs, sig_*.rs, core/signals_src.rs, cap_*.rs.
 //! Настройки: нет (решение 256: потолки uncapped.ladder_usdt — через Core::uncapped_report).
 
+pub mod cap_addr;
 pub mod cap_capital;
+pub mod cap_deals;
 pub mod cap_episodes;
+pub mod cap_hold;
+pub mod cap_limits;
+pub mod cap_notes;
+pub mod cap_parts;
 pub mod cap_rows;
 pub mod cap_send;
 pub mod cap_sheets;
 pub mod cap_summary;
+pub mod cap_total;
 pub mod cap_xlsx;
 pub mod day_rows;
 pub mod missed_cands;

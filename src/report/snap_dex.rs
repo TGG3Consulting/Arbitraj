@@ -55,6 +55,7 @@ async fn coin_line(
         qty: x.map(f),
         price,
         note: n,
+        doubt: false,
     }
 }
 
@@ -119,6 +120,7 @@ pub async fn wallets(
                     qty: x.map(f),
                     price: Ok(1.0),
                     note,
+                    doubt: false,
                 });
             }
             Err(e) => p.lines.push(Line {
@@ -127,6 +129,7 @@ pub async fn wallets(
                 qty: Err(e.clone()),
                 price: Err(e.clone()),
                 note: String::new(),
+                doubt: false,
             }),
         }
         for a in coins.values() {

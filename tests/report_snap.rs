@@ -7,12 +7,19 @@
 //!    исполнения), gateway::patience::exec_scope и памяти панели «Балансы» (venue_balances / wallet_balances,
 //!    balances_cache.rs); цена — только Venue::quote (котировка по текущим данным), балансы — чтением адаптера.
 //!
+//! 3) блок, где ни у одной строки нет цены, — «нет данных: причины», а не 0 с «неполно»; строка «под вопросом» в итог
+//!    не входит.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::report, tests/report_common. Моков нет.
 
 mod report_common;
 
+use std::collections::HashMap;
+use std::io::Read;
+
 use arb::report::rows_time::Window;
+use arb::report::snap::{Line, Place, Snapshot};
 use chrono::Utc;
 use report_common::{dir, start};
 
@@ -68,4 +75,75 @@ fn snapshot_does_not_touch_trading_state() {
             assert!(!code.contains(bad), "{f}: {bad}");
         }
     }
+}
+
+/// Файлы книги (zip: stored / deflate). Ошибок нет: паника — не книга.
+fn unzip(b: &[u8]) -> HashMap<String, String> {
+    let u16le = |i: usize| u16::from_le_bytes([b[i], b[i + 1]]) as usize;
+    let u32le = |i: usize| u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]) as usize;
+    let eocd = (0..b.len() - 3)
+        .rev()
+        .find(|&i| b[i..i + 4] == [0x50, 0x4b, 5, 6])
+        .unwrap();
+    let (n, mut p) = (u16le(eocd + 10), u32le(eocd + 16));
+    let mut out = HashMap::new();
+    for _ in 0..n {
+        let (method, csize) = (u16le(p + 10), u32le(p + 20));
+        let (nl, el, cl, off) = (u16le(p + 28), u16le(p + 30), u16le(p + 32), u32le(p + 42));
+        let name = String::from_utf8(b[p + 46..p + 46 + nl].to_vec()).unwrap();
+        let data = off + 30 + u16le(off + 26) + u16le(off + 28);
+        let raw = &b[data..data + csize];
+        let mut s = String::new();
+        if method == 8 {
+            flate2::read::DeflateDecoder::new(raw)
+                .read_to_string(&mut s)
+                .unwrap();
+        } else {
+            s = String::from_utf8(raw.to_vec()).unwrap();
+        }
+        out.insert(name, s);
+        p += 46 + nl + el + cl;
+    }
+    out
+}
+
+#[test]
+fn block_without_any_price_is_no_data() {
+    // Тексты причин — как их пишет слепок (snap_transit.rs: перегон без записанной площадки назначения).
+    let why = "площадка назначения перегона в учёте сделки не записана";
+    let line = |doubt: bool| Line {
+        account: "перевод".into(),
+        asset: "CAKE".into(),
+        qty: Ok(24.7),
+        price: Err(why.into()),
+        note: String::new(),
+        doubt,
+    };
+    let snap = Snapshot {
+        places: vec![Place {
+            name: "В пути".into(),
+            lines: vec![line(true), line(false)],
+            ..Place::default()
+        }],
+        problem: None,
+    };
+    let cx = arb::report::ResultsCtx {
+        snap,
+        ..Default::default()
+    };
+    let w = Window {
+        from: None,
+        to: None,
+        now: Utc::now(),
+    };
+    let x = unzip(&arb::report::results(&[], w, &cx).unwrap());
+    let shared = &x["xl/sharedStrings.xml"];
+    assert!(
+        shared.contains(&format!("нет данных: CAKE: {why}")),
+        "итог блока — «нет данных»"
+    );
+    assert!(
+        shared.contains("не ответили площадок: 1 из 1"),
+        "общий итог помечен неполным"
+    );
 }

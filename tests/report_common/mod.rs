@@ -70,7 +70,16 @@ pub async fn start(p: &Path) -> (Core, Store) {
 }
 
 /// Записанная строка: старт, длительность с, монета, покупка, продажа, вложено, факт, план.
-pub type Rec = (chrono::DateTime<Utc>, i64, String, String, String, Decimal, Decimal, Decimal);
+pub type Rec = (
+    chrono::DateTime<Utc>,
+    i64,
+    String,
+    String,
+    String,
+    Decimal,
+    Decimal,
+    Decimal,
+);
 
 /// Записанные строки.
 pub fn rows() -> Vec<Rec> {

@@ -69,6 +69,7 @@ pub async fn place(core: &Core, v: &VenueId, deadline: Instant) -> Place {
                 qty: Ok(f(x)),
                 price: pr,
                 note,
+                doubt: false,
             };
             p.lines.push(line);
         }

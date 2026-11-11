@@ -30,7 +30,7 @@ use crate::settings::read::At;
 /// Настройка общего срока слепка.
 pub const TIMEOUT: &str = "report.snapshot_timeout_ms";
 
-/// Строка: счёт, монета, количество (Err — нет данных), цена за монету в USDT (Err — нет цены), пометка.
+/// Строка: счёт, монета, количество (Err — нет данных), цена за монету в USDT (Err — нет цены), пометка, под вопросом.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     pub account: String,
@@ -38,6 +38,9 @@ pub struct Line {
     pub qty: Result<f64, String>,
     pub price: Result<f64, String>,
     pub note: String,
+    /// Под вопросом: по фактам сделки не определить, ушёл ли вывод — монета, возможно, ещё и в балансе площадки;
+    /// в итог не входит, отдельной суммой «под вопросом» (snap_transit.rs).
+    pub doubt: bool,
 }
 
 /// Площадка (биржа, кошелёк DEX, «В пути»): имя, время ответа, нет данных вовсе (причина), неполно (причины),

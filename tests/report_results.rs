@@ -97,6 +97,14 @@ async fn day_matches_bot_and_book_builds() {
     let mut tr = deal(6, "tr");
     (tr.step, tr.qty) = (Step::Transfer, d("1"));
     arb::core::ledger::save(&core, &tr).await;
+    // Возврат USDT «идёт» (не закончен): в слепке — «В пути» под вопросом, сумма части (живой случай MEXC).
+    let mut q = deal(9, "q");
+    q.usdt_return = Some(UsdtReturn::Pending {
+        amount,
+        from: VenueId("mexc".into()),
+        to: VenueId("bsc_dex".into()),
+    });
+    arb::core::ledger::finish(&core, &mut q, Step::Closed, "тест: возврат идёт").await;
     let mut ms = deal(7, "ms");
     (ms.step, ms.at, ms.qty) = (Step::Selling, VenueId("mexc".into()), d("1"));
     arb::core::ledger::save(&core, &ms).await;
@@ -181,6 +189,10 @@ async fn day_matches_bot_and_book_builds() {
     assert!(
         tp.lines.iter().any(|l| l.note.contains(&tr.id))
             && tp.deals.iter().any(|x| x.contains(&tr.id))
+    );
+    assert!(
+        tp.lines.iter().all(|l| l.doubt),
+        "«В пути» — под вопросом, в итог не входит"
     );
     let orphan = snap
         .places

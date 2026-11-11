@@ -1,9 +1,10 @@
 //! Файл: core/daily_load.rs
 //! Что делает: итог дня (вынесено из daily.rs): восстановление при запуске (последняя строка daily_result — факт дня,
 //! неразобранные оценки, пометки «цены нет», сброс лимита дня; решение 173 — разбивка по площадкам и их сбросы;
-//! запись без разбивки — разнесение по площадкам сделок, daily_migrate.rs) и перенос доли оценки при «Вернуть боту».
+//! запись без разбивки — разнесение по площадкам сделок, daily_migrate.rs; t91 — запись по прежнему правилу «биржа ↔
+//! биржа — обеим биржам» приводится к «бирже покупки», daily_rule.rs) и перенос доли оценки при «Вернуть боту».
 //! Кто вызывает: engine.rs (load), manual_return.rs (transfer) — через daily.rs.
-//! От чего зависит: daily.rs (Book, commit, today_book), daily_migrate.rs, daily_venue.rs, daily_commit.rs (announce),
+//! От чего зависит: daily.rs (Book, commit, today_book), daily_migrate.rs, daily_rule.rs, daily_venue.rs, daily_commit.rs (announce),
 //! deal.rs, storage/db.rs.
 //! Настройки: нет.
 
@@ -88,6 +89,12 @@ pub async fn load(core: &Core) {
             let old = parsed
                 .as_ref()
                 .is_some_and(|v| v.get("venue_final").is_none());
+            // t91: правило площадок записи (нет поля — решение 173, биржа ↔ биржа — обеим биржам).
+            let rule = parsed
+                .as_ref()
+                .and_then(|v| v.get("venue_rule"))
+                .and_then(|r| r.as_u64())
+                .unwrap_or(0);
             let (Ok(date), Some(Ok(mut book))) = (
                 day.parse::<NaiveDate>(),
                 parsed.map(serde_json::from_value::<Book>),
@@ -104,11 +111,15 @@ pub async fn load(core: &Core) {
                     .await;
                 return;
             };
-            if old {
-                super::daily_migrate::split(core, date, &mut book).await;
-            }
             // Другой день — факт и сбросы того дня в сегодняшний итог не входят; неразобранные оценки переносятся.
             let today = Utc::now().date_naive();
+            if old {
+                // Разнесение по сделкам — сразу по нынешнему правилу (daily_venue::of_direction).
+                super::daily_migrate::split(core, date, &mut book).await;
+            } else if rule < u64::from(super::daily_venue::RULE) {
+                // t91: запись по прежнему правилу — к новому (сегодня — без двойного счёта; прошлые дни не трогаются).
+                super::daily_rule::fix(core, date, today, &mut book).await;
+            }
             let cur = if date == today {
                 book
             } else {

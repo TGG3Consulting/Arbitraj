@@ -1,10 +1,11 @@
 //! Файл: core/risk_ready.rs
 //! Что делает: заданы ли настройки, без которых торговля по направлению не включается (вынесено из risk.rs):
 //! все обязательные money.* и risk.* (решение 15; необязательные — например risk.max_daily_loss_total_usd — не
-//! требуются), risk.max_errors_in_row у биржи продажи (решение 118, Я-10), risk.max_daily_loss_usd у каждой площадки
-//! учёта дня сделки (решение 173: значение площадки или «вся система»).
+//! требуются), risk.max_errors_in_row у биржи продажи (решение 118, Я-10), risk.max_daily_loss_usd у каждой биржи
+//! направления, DEX ↔ DEX — у DEX (решение 173: значение площадки или «вся система»; daily_venue::entry_venues — t91 не
+//! менял).
 //! Кто вызывает: risk.rs (can_open).
-//! От чего зависит: settings (catalog, store), daily_venue.rs (площадки сделки).
+//! От чего зависит: settings (catalog, store), daily_venue.rs (entry_venues).
 //! Решение 242: money.* с областью «площадка + тип направления» — заданы и значением пары (core/venue_dir.rs).
 //! Настройки: все обязательные money.* и risk.*, risk.max_errors_in_row, risk.max_daily_loss_usd.
 
@@ -43,8 +44,9 @@ pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
             d.sell_on.0
         ));
     }
-    // Решение 173: у каждой площадки учёта сделки — свой лимит дня (значение площадки или «вся система»).
-    for v in super::daily_venue::of_direction(core, d) {
+    // Решение 173: у каждой биржи направления (DEX ↔ DEX — у DEX) — свой лимит дня (значение площадки или «вся
+    // система»). t91 эту проверку входа не менял: daily_venue::entry_venues (прежнее правило), а не площадка учёта дня.
+    for v in super::daily_venue::entry_venues(core, d) {
         if s.resolve("risk.max_daily_loss_usd", Some(&v), None)
             .is_none()
         {

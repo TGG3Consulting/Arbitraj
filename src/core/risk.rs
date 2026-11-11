@@ -6,7 +6,9 @@
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
 //! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
 //! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
-//! Risk.cycle_paused: отказ только направлениям, чей учёт дня у DEX (DEX ↔ DEX). Необязательные настройки (optional) не
+//! Risk.cycle_paused: отказ только направлениям без биржи (DEX ↔ DEX). t91: учёт дня сделки биржа ↔ биржа — у биржи
+//! покупки, но ВХОД не менялся: пауза любой из двух площадок направления (Risk.venue_paused) не даёт начать сделку;
+//! площадки входа — daily_venue::entry_venues. Необязательные настройки (optional) не
 //! требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
 //! auto_pause.rs); софтовую снимает сам бот (auto_resume.rs, day_roll.rs), человек — сбрасывает отметку.
 //! Решение 230: пауза кошелька DEX от сверки (Risk.wallet_paused, wallet_pause.rs) — отказ направлениям этого кошелька.
@@ -14,8 +16,9 @@
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
-//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой площадки учёта
-//! сделки), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
+//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой биржи
+//! направления, DEX ↔ DEX — у DEX: daily_venue::entry_venues), risk.max_daily_loss_total_usd (необязательна),
+//! все обязательные money.* и risk.*.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -154,8 +157,9 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     if let Some(why) = queue_halt {
         return Err(why);
     }
-    // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений, чей учёт дня у DEX (DEX ↔ DEX).
-    for v in super::daily_venue::of_direction(core, d) {
+    // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений без биржи (DEX ↔ DEX). t91 вход не
+    // менял: площадки входа — daily_venue::entry_venues (прежнее правило), не площадка учёта дня.
+    for v in super::daily_venue::entry_venues(core, d) {
         if let Some(why) = r.cycle_paused.get(&v) {
             return Err(format!("циклы DEX ↔ DEX на паузе: {why}"));
         }

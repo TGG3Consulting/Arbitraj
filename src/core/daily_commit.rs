@@ -47,7 +47,9 @@ pub async fn announce(core: &Core, trip: &Trip) {
 
 /// Пересчитывает DayView из книги дня, сохраняет и проверяет лимиты. Принимает: ядро, день, книгу.
 /// Возвращает: что сработало (общий «Стоп», паузы площадок) — в журнал и Telegram его отдаёт daily_commit::announce.
-pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
+pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip {
+    // t91: разбивка в памяти — всегда по нынешнему правилу площадок; запись помечается им (daily_load.rs, daily_rule.rs).
+    book.venue_rule = super::daily_venue::RULE;
     let prov = prov_on(&book, date);
     let venues = super::daily_venue::days(core, &book, date);
     {

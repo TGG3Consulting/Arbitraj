@@ -3,8 +3,8 @@
 //! в реестре шлюза, моков нет; виды площадок — в inner.kinds, как их кладёт Core::start из реестра).
 //! Живой случай 05.11.2026: застряли CREPE1 (MEXC), ION (KuCoin), LUCIC (Gate) — их оценка положила итог дня ниже
 //! лимита, и встала ВСЯ торговля, хотя BingX и DEX работали в плюс. Проверяется: (1) убыток MEXC выше лимита — пауза
-//! только MEXC, направление BingX ↔ DEX открывается; (2) сделка CEX ↔ CEX считается обеим биржам, общий итог — без
-//! двойного счёта; (3) «Сбросить лимит дня» по площадке снимает её паузу, другие не трогает; (4) общий «Стоп» —
+//! только MEXC, направление BingX ↔ DEX открывается; (2) сделка CEX ↔ CEX считается бирже покупки (дополнение t91;
+//! было — обеим биржам), общий итог — без двойного счёта; (3) «Сбросить лимит дня» по площадке снимает её паузу, другие не трогает; (4) общий «Стоп» —
 //! только при заданной risk.max_daily_loss_total_usd; (5) перезапуск сохраняет разбивку; старая запись итога дня
 //! (без разбивки) разносится по площадкам сделок без потери общего итога; (6) убыток DEX ↔ DEX выше лимита — пауза
 //! только циклов DEX ↔ DEX, BingX → DEX и MEXC → DEX открываются.
@@ -164,12 +164,13 @@ async fn mexc_loss_pauses_only_mexc() {
 }
 
 #[tokio::test]
-async fn cex_cex_counts_for_both_and_total_once() {
+async fn cex_cex_counts_for_buy_venue_and_total_once() {
     let (core, _) = start(&dir("cexcex")).await;
     closed(&core, "x1", "bingx", "mexc", -3).await;
     let r = core.control();
     assert_eq!(venue_result(&core, "bingx"), Decimal::from(-3));
-    assert_eq!(venue_result(&core, "mexc"), Decimal::from(-3));
+    // t91: биржа ↔ биржа — только бирже покупки (было −3 и у MEXC).
+    assert_eq!(venue_result(&core, "mexc"), Decimal::ZERO);
     assert_eq!(r.day.venues["bsc_dex"].result_usd, Decimal::ZERO);
     assert_eq!(r.day.result_usd, Decimal::from(-3));
     // Цикл DEX ↔ DEX — к DEX.
@@ -254,11 +255,12 @@ async fn restart_keeps_split_and_old_record_is_split() {
         let (core, _) = start(&d0).await;
         let r = core.control();
         assert_eq!(r.day.result_usd, Decimal::from(-16));
-        assert_eq!(venue_result(&core, "mexc"), Decimal::from(-16));
+        // t91: BingX → MEXC (−3) — только бирже покупки BingX (было −16 у MEXC и пауза: 16 ≥ 15).
+        assert_eq!(venue_result(&core, "mexc"), Decimal::from(-13));
         assert_eq!(venue_result(&core, "bingx"), Decimal::from(-3));
         assert!(r.day.venues["bingx"].limit_reset.is_some());
-        // Убыток MEXC 16 ≥ 15 — после перезапуска MEXC снова на паузе.
-        assert!(r.venue_paused.contains_key(&v("mexc")));
+        // Убыток MEXC 13 < 15 — паузы нет.
+        assert!(!r.venue_paused.contains_key(&v("mexc")));
     }
     // Старая запись (до решения 173): только общий итог — разносится по площадкам сделок дня.
     let db = Db::open(&d0.join("t.sqlite")).unwrap();
@@ -276,7 +278,8 @@ async fn restart_keeps_split_and_old_record_is_split() {
     let (core, _) = start(&d0).await;
     let r = core.control();
     assert_eq!(r.day.result_usd, Decimal::from(-16));
-    assert_eq!(venue_result(&core, "mexc"), Decimal::from(-16));
+    // t91: разнесение — по нынешнему правилу (было −16 у MEXC).
+    assert_eq!(venue_result(&core, "mexc"), Decimal::from(-13));
     assert_eq!(venue_result(&core, "bingx"), Decimal::from(-3));
 }
 

@@ -3,8 +3,7 @@
 //! - статус человеческими словами (шаг сделки — core/deal_text.rs step_name; у остановленной и «Беру на себя» — «итог —
 //!   оценка»);
 //! - площадка итога по правилу владельца (Тигран 11.11): биржа ↔ DEX — бирже; биржа ↔ биржа — бирже ПОКУПКИ;
-//!   DEX ↔ DEX — DEX (бот в итоге дня по площадкам, решение 173 / core/daily_venue.rs, биржа ↔ биржа относит к обеим
-//!   биржам — расхождение отмечено в книге);
+//!   DEX ↔ DEX — DEX — та же функция, что у бота в итоге дня и дневных лимитах (core/daily_venue.rs owner, t91);
 //! - состояние возврата USDT по частям (core/usdt_return_state.rs) и его затраты (core/deal_return_cost.rs known);
 //! - части плана из строк расчёта (core/costs.rs → Calc.costs в Deal.plan): запас на движение цены (PriceMoveReserve) и
 //!   затраты возврата USDT (строки этапа «возврат USDT»), только вычитаемые (не в цене, не в количестве), как costs_usdt;
@@ -34,14 +33,12 @@ pub fn status(d: &Deal) -> String {
     }
 }
 
-/// Площадка итога сделки по правилу владельца (см. шапку). Принимает: сделку, id площадок DEX. Возвращает: id.
+/// Площадка итога сделки по правилу владельца — правилом бота (core/daily_venue.rs owner; см. шапку).
+/// Принимает: сделку, id площадок DEX. Возвращает: id. Ошибок нет.
 pub fn owner_venue(d: &Deal, dex: &BTreeSet<String>) -> String {
-    let (b, s) = (&d.direction.buy_on.0, &d.direction.sell_on.0);
-    match (dex.contains(b), dex.contains(s)) {
-        (false, _) => b.clone(),
-        (true, false) => s.clone(),
-        (true, true) => b.clone(),
-    }
+    crate::core::daily_venue::owner(&d.direction.buy_on.0, &d.direction.sell_on.0, |v| {
+        dex.contains(v)
+    })
 }
 
 /// Состояние одной части возврата USDT. Ошибок нет.

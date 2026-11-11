@@ -60,6 +60,7 @@ pub mod daily_limit;
 pub mod daily_load;
 mod daily_migrate;
 pub mod daily_rows;
+mod daily_rule;
 pub mod daily_value;
 pub mod daily_venue;
 pub mod daily_venue_limit;

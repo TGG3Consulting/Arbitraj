@@ -34,7 +34,7 @@ Proxy подменяет Host на адрес бэкенда (`changeOrigin`), O
 | Разблокировка (`unlock`) | `src/pages/Unlock.svelte` | `GET /api/secrets/status`, `/known`; `POST /api/secrets/create`, `/unlock`, `/lock`, `/password`; `PUT`/`DELETE /api/secrets/{name}` |
 | Площадки (`venues`) | `src/pages/Venues.svelte` | `GET /api/venues`; настройки области Venue из схемы; секреты площадки (`scope` = id); `POST /api/check/venue/{id}`; у DEX — `GET /api/venues/{id}/dex-families` (область «DEX»), `GET /api/channels/{id}` (ключ канала, `POST /api/check/channel/{venue}/{id}`) |
 | Настройки (`settings`) | `src/pages/Settings.svelte` | `GET /api/settings/schema`, `GET`/`PUT /api/settings`, `GET /api/settings/history`; области «DEX» и «канал» — id от адаптера DEX (нет адаптера — «нет данных»); виды значений: выбор из списка, адрес BSC, верхняя граница целого |
-| Монеты (`coins`) | `src/pages/Coins.svelte` | `GET /api/coins` (503 — «нет данных»), `POST /api/coins/recheck`; ручной чёрный список — `PUT /api/settings` (`coin.blocked`, `coin.blocked_note`); WS `coin_check`, `pool_check`, `coin_block`, `coins` (справочник пересобран) |
+| Монеты (`coins`) | `src/pages/Coins.svelte` | `GET /api/coins` (503 — «нет данных»), `GET /api/coins/{address}` (строка одной монеты, t84), `POST /api/coins/recheck`; ручной чёрный список — `PUT /api/settings` (`coin.blocked`, `coin.blocked_note`); WS `coin_check`, `pool_check`, `coin_block` — обновить строку монеты (`src/lib/coinsLive.svelte.js`), `coins` (справочник пересобран) и `lagged` — весь список |
 | Ручное управление (`manual`) | `src/pages/Manual.svelte` | `GET /api/manual`, `POST /api/manual/command`; WS `stuck_alert`, `manual` |
 | Каналы отправки (`channels`) | `src/pages/Channels.svelte` | `GET /api/channels/{venue}`, настройки области «канал», ключ канала, `POST /api/check/channel/{venue}/{id}`; WS `send_channel` |
 | Статистика газа (`gas`) | `src/pages/GasStats.svelte` | `GET /api/gas-stats`; WS `gas_stats` |
@@ -51,7 +51,9 @@ Proxy подменяет Host на адрес бэкенда (`changeOrigin`), O
 сообщение `coin_check`): перечитывание по живому потоку — через `src/lib/flight.js` (один запрос в полёте, поток
 сообщений во время запроса — один повтор после него); уход со страницы и смена параметров отменяют запрос
 (AbortController); `get()` (`src/lib/api.js`) держит не больше одного GET одного адреса в полёте. Перечитывать только по
-сообщению, которое меняет эти данные (например имена монет — по `coins`, а не по `coin_check`). Запросов по таймеру
+сообщению, которое меняет эти данные (например имена монет — по `coins`, а не по `coin_check`). Сообщение по одной
+монете меняет одну строку — запрашивается только она (экран «Монеты», t84: `src/lib/coinsLive.svelte.js`, один полёт на
+монету; пока идёт полный перечит, строки ждут его конца, чтобы старый ответ строки не перетёр свежий список). Запросов по таймеру
 нет, кроме панели «Балансы» (период — настройка `ui.balances_refresh_ms`) и делистингов (`src/lib/delist.svelte.js`, раз в минуту — Тигран 10.11: оставить так).
 `lagged` ядра или журнала — перечитать только данные этого источника (`lagFor`, `src/lib/live.svelte.js`); списки DEX
 (`src/lib/dex.svelte.js`): журнал или переподключение — всё (запись `dex.index` могла пропасть), только ядро — каналы

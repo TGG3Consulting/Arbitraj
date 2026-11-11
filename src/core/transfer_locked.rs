@@ -14,7 +14,7 @@
 //! (core/precheck_withdraw.rs): он безопасен (вывода не было) и закрывает случай, когда удержание появилось после
 //! проверки.
 //! Кто вызывает: core/transfers.rs (цикл вывода).
-//! От чего зависит: op_error.rs (withdraw_unsent), engine.rs, ledger.rs (сохранение хронологии), settings.
+//! От чего зависит: op_error.rs (withdraw_unsent), engine.rs, ledger.rs (сохранение хронологии), withdraw_after.rs (сделка по ID вывода), settings.
 //! Настройки: transfer.locked_retry_ms, transfer.locked_retries_max (вся система, можно по площадке-отправителю; без
 //! значений по умолчанию: не заданы — повтора нет).
 
@@ -114,10 +114,13 @@ pub async fn again(
 }
 
 /// Строка в хронологию сделки (и сохранить) и журнал core.transfer_locked. Сделки нет — только журнал. Ошибок нет.
+/// t89: у возврата USDT — в закрытую сделку (ID вывода = сделка + метка попытки).
 async fn note(core: &Core, deal: &str, from: &VenueId, text: &str) {
+    // Решение 253, дополнение t89: у возврата USDT ID вывода — сделка + метка попытки (withdraw_after::deal_of).
+    let key = super::withdraw_after::deal_of(core, deal);
     let d = {
         let mut deals = lk(&core.inner.deals);
-        deals.get_mut(deal).map(|d| {
+        key.and_then(|k| deals.get_mut(&k)).map(|d| {
             d.note(text.to_string());
             d.clone()
         })

@@ -22,6 +22,7 @@
 //! Решение 236, дополнение (техлид 09.11): газ неудачного вывода из кошелька DEX (откат, отмена, занявшая nonce) —
 //! вызывающему для затрат сделки (deal_gas.rs).
 //! Решение 253: перед выводом — ожидание доступности монеты (withdraw_wait.rs, venue.withdraw_ready_wait_ms отправителя;
+//! дополнение t89 — и у возврата USDT, и у перегона: пауза от своей сделки площадки по активу, withdraw_after.rs;
 //! не задана — сразу); начало перевода (время в пути) — до ожидания.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), venue.withdraw_ready_wait_ms (через

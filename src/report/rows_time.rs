@@ -3,14 +3,17 @@
 //! Конец сделки — запись хронологии, которую ядро делает в момент перехода в конечный шаг (факт кода, а не updated_at:
 //! updated_at двигает любая запись хронологии, и после закрытия — возврат USDT, газ перегона, уведомление):
 //! - core/ledger.rs finish: «Сделка закрыта: …» / «Сделка остановлена: …» / «Сделка монеты у человека: …»
-//!   (ledger::end_prefix текущего шага); берётся последняя такая запись;
-//! - core/ledger_load.rs: «Сделка прервана перезапуском …» (ledger_load::INTERRUPTED) — остановка при запуске (Halted).
-//!   Нет такой записи — конец неизвестен (в отчёте пусто, день — по старту, с пометкой).
+//!   (deal_book::end_prefix текущего шага; с 86832aa, 05.11.2026); до 86832aa (с первой версии cf5073e) —
+//!   `format!("{step:?}: {why}")`: «Closed: …» / «Halted: …» / «TakenOver: …» (имя шага в коде);
+//! - core/ledger_load.rs: «Сделка прервана перезапуском (шаг: …)» (ledger_load::INTERRUPTED, с 86832aa); до 86832aa
+//!   (cf5073e, e58ffd7) — «Сделка <id> (<монета>, шаг <Step>, <N> монет на <площадка>) прервана перезапуском — …».
+//!   Других вариантов конечных записей в истории ledger.rs / ledger_load.rs нет (git log всех версий, 11.11.2026).
+//!   Берётся последняя такая запись. Нет — конец неизвестен (в отчёте пусто, день — по старту, с пометкой).
 //!
 //! Окно: [from, to) по UTC; to нет — до момента выгрузки. Кнопки «Сутки / 7 дней / 30 дней» (Telegram) — календарные дни
 //! UTC: с 00:00 UTC дня (сегодня − (N − 1)) до момента выгрузки (calendar_from).
 //! Кто вызывает: report/rows.rs, report/day_rows.rs, report/results_xlsx.rs, notify/ctl/report.rs.
-//! От чего зависит: core/deal.rs, core/ledger.rs (end_prefix), core/ledger_load.rs (INTERRUPTED).
+//! От чего зависит: core/deal.rs, core/deal_book.rs (end_prefix), core/ledger_load.rs (INTERRUPTED).
 //! Настройки: нет.
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -67,16 +70,28 @@ pub fn calendar_from(days: i64, now: DateTime<Utc>) -> DateTime<Utc> {
     d.and_hms_opt(0, 0, 0).map_or(now, |t| t.and_utc())
 }
 
+/// Хвост записи остановки при запуске до 86832aa (cf5073e, e58ffd7: «Сделка <id> (…) прервана перезапуском — …»).
+const RESTART_BEFORE_86832AA: &str = ") прервана перезапуском";
+
+/// Конечная ли запись хронологии для шага сделки (все варианты — см. шапку). Ошибок нет.
+fn is_end(d: &Deal, t: &str) -> bool {
+    let now = crate::core::deal_book::end_prefix(d.step);
+    let old = format!("{:?}: ", d.step);
+    let halted = d.step == Step::Halted
+        && (t.starts_with(crate::core::ledger_load::INTERRUPTED)
+            || (t.starts_with(&format!("Сделка {} (", d.id))
+                && t.contains(RESTART_BEFORE_86832AA)));
+    t.starts_with(&now) || t.starts_with(&old) || halted
+}
+
 /// Время конца сделки по хронологии (см. шапку). Открытая сделка — None. Ошибок нет.
 pub fn ended_at(d: &Deal) -> Option<DateTime<Utc>> {
     if d.is_open() {
         return None;
     }
-    let own = crate::core::ledger::end_prefix(d.step);
-    let restart = crate::core::ledger_load::INTERRUPTED;
     d.timeline
         .iter()
         .rev()
-        .find(|(_, t)| t.starts_with(&own) || (d.step == Step::Halted && t.starts_with(restart)))
+        .find(|(_, t)| is_end(d, t))
         .map(|(at, _)| *at)
 }

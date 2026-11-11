@@ -145,10 +145,8 @@ pub async fn after(core: &Core, d: &Deal, delta: Decimal) {
         return;
     }
     let mut x = d.clone();
-    let before = x.day_book.len();
-    let trip = super::daily::settle(core, &mut x, -delta).await;
-    // Решение 257: начисление поправки в итог дня — в учёт сделки (копия x не сохраняется).
-    super::deal_book::keep_day(core, &x, before).await;
+    // Решение 257: поправка в итог дня и её начисление — в учёт сделки (копия x не сохраняется).
+    let trip = super::deal_book::settle_closed(core, &mut x, -delta).await;
     super::gas_stats::record_result(core, &d.direction.asset, -delta).await;
     let text = format!(
         "Сделка {}: затраты возврата USDT {} — вычтены из итога сделки, итог {} USDT",

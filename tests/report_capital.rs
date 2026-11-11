@@ -79,6 +79,12 @@ fn deals() -> Vec<Deal> {
             x.result_usd = Some(d(f[5]));
             x.started_at = start;
             x.updated_at = start + Duration::seconds(f[1].parse().unwrap());
+            // Решение 257: конец — запись закрытия в хронологии; сделки 01–05.11 закрыты до 86832aa («Closed: …»,
+            // живой текст — docs/notes/usdt-return-close-2026-11-04.md).
+            x.timeline.push((
+                x.updated_at,
+                "Closed: продано (перегон не выгоднее продажи здесь)".into(),
+            ));
             x
         })
         .collect()

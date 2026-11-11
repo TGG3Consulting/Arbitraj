@@ -49,6 +49,7 @@ pub mod credit_watch;
 pub mod cycle_curve;
 pub mod cycle_deal;
 pub mod cycle_dry;
+pub mod cycle_fact;
 pub mod cycle_outcome;
 pub mod cycle_plan;
 pub mod cycle_state;
@@ -90,21 +91,21 @@ pub mod episode_run;
 pub mod episode_snap;
 pub mod episode_view;
 pub mod episode_worker;
+pub mod exit_gap;
 pub mod evaluate;
 pub mod exec_book;
 pub mod exec_book_fail;
 pub mod executor;
-pub mod exit_gap;
 pub mod feed_confirm;
 #[cfg(test)]
 mod feed_confirm_tests;
 pub mod feed_hold;
-pub mod feed_live;
 pub mod feed_print;
-#[cfg(test)]
-mod feed_print_tests;
 pub mod feed_rest_book;
 pub mod feed_rest_ref;
+#[cfg(test)]
+mod feed_print_tests;
+pub mod feed_live;
 pub mod feed_watch;
 pub mod feed_watch_act;
 pub mod feed_watch_action;

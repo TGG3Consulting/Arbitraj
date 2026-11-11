@@ -115,15 +115,14 @@ pub fn plan_parts(plan: &Value) -> Option<(Decimal, Decimal)> {
             .and_then(|k| serde_json::from_value::<CostKind>(k.clone()).ok());
         if kind == Some(CostKind::PriceMoveReserve) {
             reserve += usdt;
-        } else if c.get("stage").and_then(Value::as_str) == Some(RETURN_STAGE) {
+        } else if c.get("stage").and_then(Value::as_str)
+            == Some(crate::core::costs_types::RETURN_STAGE)
+        {
             ret += usdt;
         }
     }
     Some((reserve, ret))
 }
-
-/// Этап строк возврата USDT в расчёте (core/costs.rs: lines.extend(… "возврат USDT")).
-const RETURN_STAGE: &str = "возврат USDT";
 
 /// Подпись вида затраты для колонки разбивки. Ошибок нет.
 pub fn cost_label(k: CostKind) -> &'static str {

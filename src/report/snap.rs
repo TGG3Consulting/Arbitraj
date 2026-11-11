@@ -1,64 +1,100 @@
 //! Файл: report/snap.rs
-//! Что делает: решение 257 (Тигран 11.11 п. 10) — данные листа «Слепок по балансам» отчёта «Итоги сделок»: в момент
-//! выгрузки балансы всех площадок в USDT — каждая биржа (все счета, как панель «Балансы», решение 144: свежий запрос
-//! core::venue_balances) и каждый кошелёк DEX (BNB и USDT, core::wallet_balances). Цена — только та, которой бот сам
-//! оценивает позицию (решение 152, core/daily_value.rs → trade_ops::sell_value): сколько USDT чистыми получим, если
-//! продать всё количество сейчас на площадке, где монета лежит (стакан биржи / котировка DEX кошельком, минус комиссии
-//! вне цены); цена за монету = эта сумма / количество. Котируемая монета площадки (venue.quote_asset) — 1. Нет цены —
-//! причина текстом («нет цены: …»), а не 0. Активные (открытые) сделки — строкой у площадки, где сейчас их монета или
-//! деньги (Deal.at; у DEX — кошелёк сделки): id, монета, направление, шаг, вложено.
-//! Одна функция для кнопки интерфейса и Telegram (report/mod.rs results_file).
-//! Кто вызывает: report/mod.rs (results_file).
-//! От чего зависит: core (venue_balances, wallet_balances, cex_ids, dex_id, deals), core/trade_ops.rs (sell_value),
-//! core/balance_sell_check.rs (quote_of, asset_of), core/deal_text.rs (step_name), settings (кошельки), notify/human.rs.
-//! Настройки: нет своих (venue.quote_asset — читается).
+//! Что делает: решение 257 (Тигран 11.11 п. 10; доработка по приёмке t90) — данные листа «Слепок по балансам» отчёта
+//! «Итоги сделок» в момент выгрузки:
+//! - биржи реестра — все счета (Venue::account_balances, чтение адаптера; память панели «Балансы» не трогается), цена —
+//!   report/snap_price.rs (котировка площадки, только чтение — торговлю не меняет);
+//! - кошельки DEX — report/snap_dex.rs; монеты в пути и площадки вне реестра — report/snap_transit.rs;
+//! - сделки с деньгами у площадки (открытые и остановленные / «Беру на себя» с монетами) — строкой там, где сейчас их
+//!   монеты или деньги по шагу сделки: покупка — площадка покупки; перевод — «В пути»; продажа, застряла, ждёт
+//!   человека, остановлена — площадка Deal.at (у DEX — кошелёк сделки).
+//!
+//! Общий срок — настройка report.snapshot_timeout_ms (не задана — слепок не снимается, причина на листе, отчёт
+//! выдаётся). Не ответила площадка — «нет данных: причина», не 0.
+//! Одна функция для кнопки интерфейса и Telegram (report/results.rs results_file).
+//! Кто вызывает: report/results.rs.
+//! От чего зависит: core (deals, cex_ids, настройки), core/deal_text.rs, report/snap_cex.rs, snap_dex.rs, snap_transit.rs,
+//! notify/human.rs.
+//! Настройки: report.snapshot_timeout_ms; venue.quote_asset (читается).
+
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
+use tokio::time::Instant;
 
 use crate::core::Core;
-use crate::core::balance_sell_check::{asset_of, quote_of};
-use crate::core::deal::Deal;
-use crate::core::types::{Asset, DexAccountId, VenueId};
+use crate::core::deal::{Deal, Step};
+use crate::core::types::VenueId;
 use crate::notify::human::{money, qty as q, venue as name};
+use crate::settings::read::At;
 
-use super::rows::f;
+/// Настройка общего срока слепка.
+pub const TIMEOUT: &str = "report.snapshot_timeout_ms";
 
-/// Строка баланса: счёт, монета, количество, цена за монету в USDT (Err — почему нет цены).
+/// Строка: счёт, монета, количество (Err — нет данных), цена за монету в USDT (Err — нет цены), пометка.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     pub account: String,
     pub asset: String,
-    pub qty: f64,
+    pub qty: Result<f64, String>,
     pub price: Result<f64, String>,
+    pub note: String,
 }
 
-/// Площадка (биржа или кошелёк DEX): имя, когда получен ответ, сбой, строки, активные сделки (текст).
+/// Площадка (биржа, кошелёк DEX, «В пути»): имя, время ответа, нет данных вовсе (причина), неполно (причины),
+/// строки, сделки (текст), что не учитывается (причины).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Place {
     pub name: String,
     pub at: Option<DateTime<Utc>>,
     pub error: Option<String>,
+    pub partial: Vec<String>,
     pub lines: Vec<Line>,
     pub deals: Vec<String>,
+    pub unknown: Vec<String>,
 }
 
-/// Цена за монету: продажа всего количества сейчас (решение 152), / количество. Ошибок нет: Err — причина.
-async fn price(
-    core: &Core,
-    acc: Option<&DexAccountId>,
-    v: &VenueId,
-    a: &Asset,
-    x: Decimal,
-) -> Result<f64, String> {
-    let (net, _) = crate::core::trade_ops::sell_value(core, acc, v, a, x).await?;
-    Ok(f(net / x))
+/// Слепок: площадки; problem — слепок не снят (причина).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Snapshot {
+    pub places: Vec<Place>,
+    pub problem: Option<String>,
 }
 
-/// Строка активной сделки. Ошибок нет.
-fn deal_line(d: &Deal) -> String {
+/// Где деньги или монеты сделки по шагу.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Loc {
+    Venue(VenueId),
+    Transit,
+}
+
+/// Сделка держит деньги у площадки: открытая или остановленная / «Беру на себя» с монетами. Ошибок нет.
+pub fn holds(d: &Deal) -> bool {
+    d.is_open()
+        || (matches!(d.step, Step::Halted | Step::TakenOver) && d.qty > rust_decimal::Decimal::ZERO)
+}
+
+/// Где сейчас деньги или монеты сделки (см. шапку). Ошибок нет.
+pub fn loc(d: &Deal) -> Loc {
+    match d.step {
+        Step::Buying => Loc::Venue(d.direction.buy_on.clone()),
+        Step::Transfer => Loc::Transit,
+        _ => Loc::Venue(d.at.clone()),
+    }
+}
+
+/// Строка сделки. Ошибок нет.
+pub fn deal_line(d: &Deal) -> String {
+    let what = if d.is_open() {
+        "активная сделка"
+    } else {
+        "сделка с монетами у площадки"
+    };
+    let place = match loc(d) {
+        Loc::Transit => format!("в пути от {} (вывод начат)", name(&d.at.0)),
+        Loc::Venue(v) => format!("на {}", name(&v.0)),
+    };
     format!(
-        "На момент отчёта активная сделка {}: {} {} → {}, шаг «{}», размером {} USDT (монеты: {} {} на {})",
+        "На момент отчёта {what} {}: {} {} → {}, шаг «{}», размером {} USDT (монеты: {} {} {place})",
         d.id,
         d.direction.asset.ticker,
         name(&d.direction.buy_on.0),
@@ -67,110 +103,42 @@ fn deal_line(d: &Deal) -> String {
         money(d.invested),
         q(d.qty),
         d.direction.asset.ticker,
-        name(&d.at.0)
     )
 }
 
-/// Слепок: биржи, затем кошельки DEX. Принимает: ядро. Возвращает: площадки. Ошибок нет: сбой — в поле площадки.
-pub async fn gather(core: &Core) -> Vec<Place> {
-    let open: Vec<Deal> = core.deals().into_iter().filter(Deal::is_open).collect();
-    let dex = core.dex_id();
+/// Слепок (см. шапку). Принимает: ядро. Возвращает: слепок. Ошибок нет: сбои — в площадках, без срока — problem.
+pub async fn gather(core: &Core) -> Snapshot {
+    let ms = match core.inner.deps.settings.integer(TIMEOUT, At::default()) {
+        Ok(v) => v,
+        Err(e) => {
+            return Snapshot {
+                places: vec![],
+                problem: Some(format!("слепок не снят: {}", e.message)),
+            };
+        }
+    };
+    let deadline = Instant::now() + Duration::from_millis(ms);
+    let all = core.deals();
+    let held: Vec<&Deal> = all.iter().filter(|d| holds(d)).collect();
+    let mut used = vec![false; held.len()];
     let mut out = Vec::new();
     let mut cex = core.cex_ids();
     cex.sort_by(|a, b| a.0.cmp(&b.0));
     for v in &cex {
-        let mut p = Place {
-            name: name(&v.0),
-            deals: open.iter().filter(|d| &d.at == v).map(deal_line).collect(),
-            ..Place::default()
-        };
-        match core.venue_balances(v, None).await {
-            Err(e) => p.error = Some(e),
-            Ok(b) => {
-                p.at = Some(b.at);
-                p.error = b.error.clone();
-                let quote = quote_of(core, v);
-                for a in &b.accounts {
-                    if let Some(e) = &a.error {
-                        let t = format!("счёт «{}» не прочитан: {e}", a.account);
-                        p.error = Some(p.error.take().map_or(t.clone(), |x| format!("{x}; {t}")));
-                    }
-                    for r in a.rows.iter().filter(|r| !(r.free + r.locked).is_zero()) {
-                        let x = r.free + r.locked;
-                        let pr = if quote.as_deref() == Ok(r.asset.as_str()) {
-                            Ok(1.0)
-                        } else {
-                            price(core, None, v, &asset_of(core, v, &r.asset), x).await
-                        };
-                        p.lines.push(Line {
-                            account: a.account.clone(),
-                            asset: r.asset.clone(),
-                            qty: f(x),
-                            price: pr,
-                        });
-                    }
-                }
+        let mut p = super::snap_cex::place(core, v, deadline).await;
+        for (k, d) in held.iter().enumerate() {
+            if loc(d) == Loc::Venue(v.clone()) {
+                p.deals.push(deal_line(d));
+                used[k] = true;
             }
         }
         out.push(p);
     }
-    let mut wallets = core.inner.deps.settings.accounts().wallets();
-    wallets.sort_by(|a, b| a.name.cmp(&b.name));
-    for w in &wallets {
-        let acc = DexAccountId(w.id.clone());
-        let mut p = Place {
-            name: format!("Кошелёк DEX «{}»", w.name),
-            deals: open
-                .iter()
-                .filter(|d| dex.as_ref() == Some(&d.at) && d.dex_account.as_ref() == Some(&acc))
-                .map(deal_line)
-                .collect(),
-            ..Place::default()
-        };
-        match (core.wallet_balances(&w.id, None).await, &dex) {
-            (Err(e), _) => p.error = Some(e),
-            (Ok(_), None) => p.error = Some("площадка DEX не подключена".into()),
-            (Ok(b), Some(dv)) => {
-                p.at = Some(b.at);
-                p.error = b.error.clone();
-                if let Some(x) = b.bnb.filter(|x| !x.is_zero()) {
-                    let t = crate::core::convert::GAS_TICKER;
-                    let a = Asset {
-                        ticker: t.into(),
-                        bsc_contract: None,
-                    };
-                    let pr = price(core, Some(&acc), dv, &a, x).await;
-                    p.lines.push(Line {
-                        account: "кошелёк".into(),
-                        asset: t.into(),
-                        qty: f(x),
-                        price: pr,
-                    });
-                }
-                if let (Some(x), Some(t)) = (b.usdt.filter(|x| !x.is_zero()), &b.quote) {
-                    p.lines.push(Line {
-                        account: "кошелёк".into(),
-                        asset: t.clone(),
-                        qty: f(x),
-                        price: Ok(1.0),
-                    });
-                }
-            }
-        }
-        out.push(p);
+    out.extend(super::snap_dex::wallets(core, &held, &mut used, deadline).await);
+    out.push(super::snap_transit::transit(core, &all, &held, &mut used, deadline).await);
+    out.extend(super::snap_transit::orphans(&held, &used));
+    Snapshot {
+        places: out,
+        problem: None,
     }
-    // Открытая сделка на DEX без кошелька в учёте (до решения 132) — отдельной строкой, чтобы не потерялась.
-    let lost: Vec<String> = open
-        .iter()
-        .filter(|d| dex.as_ref() == Some(&d.at) && d.dex_account.is_none())
-        .map(deal_line)
-        .collect();
-    if !lost.is_empty() {
-        out.push(Place {
-            name: "DEX (кошелёк сделки не указан)".into(),
-            deals: lost,
-            ..Place::default()
-        });
-    }
-    out
 }

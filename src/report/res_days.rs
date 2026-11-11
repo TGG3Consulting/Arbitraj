@@ -1,6 +1,6 @@
 //! Файл: report/res_days.rs
-//! Что делает: решение 257 (Тигран 11.11 п. 2, 3: «первая — UTC», итог дня отчёта = итогу дня бота) — листы «Учёт дня»
-//! (начисления сделок в итог дня бота, report/day_rows.rs) и «По дням» (день UTC): факт дня и оценка дня — SUMIFS по
+//! Что делает: решение 257 (Тигран 11.11 п. 2, 3: «первая — UTC», итог дня отчёта = итогу дня бота) — лист «По дням» (лист «Учёт дня» — начисления
+//! сделок в итог дня бота — report/res_ledger.rs) (день UTC): факт дня и оценка дня — SUMIFS по
 //! «Учёту дня» (та же сумма, что у бота: core/daily.rs кладёт эти начисления в книгу дня), рядом — итог дня по записи
 //! самого бота (таблица daily_result, core/daily_rows.rs) и разница; день в окне целиком или нет; сделки, закончившиеся
 //! в этот день (лист «Сделки»). «Итого» — суммы.
@@ -27,55 +27,6 @@ pub const FACT: &str = "факт";
 pub const ESTIMATE: &str = "оценка";
 /// Источник «восстановлено» (колонка J).
 pub const RESTORED: &str = "восстановлено";
-
-/// Лист «Учёт дня». Ошибки: XlsxError.
-pub fn ledger(ws: &mut Worksheet, rows: &[DayRow]) -> Result<(), XlsxError> {
-    ws.set_name("Учёт дня")?;
-    let hdr = [
-        "День (UTC)",
-        "Время (UTC)",
-        "Сделка (id)",
-        "Монета",
-        "Направление",
-        "Площадка итога",
-        "Часть итога дня",
-        "Сумма, USDT",
-        "Что",
-        "Источник",
-    ];
-    header(
-        ws,
-        &hdr,
-        &[12., 10., 18., 12., 18., 12., 10., 12., 50., 16.],
-    )?;
-    let p = base();
-    for (k, r) in rows.iter().enumerate() {
-        let row = k as u32 + 1;
-        let part = if r.fact { FACT } else { ESTIMATE };
-        let src = if r.booked {
-            "учёт сделки"
-        } else {
-            RESTORED
-        };
-        let texts = [
-            r.date.to_string(),
-            r.at.format("%H:%M:%S").to_string(),
-            r.deal.clone(),
-            r.coin.clone(),
-            r.direction.clone(),
-            r.owner.clone(),
-            part.to_string(),
-        ];
-        for (c, t) in texts.iter().enumerate() {
-            ws.write_string_with_format(row, c as u16, t, &p)?;
-        }
-        ws.write_number_with_format(row, 7, r.amount, &money4())?;
-        ws.write_string_with_format(row, 8, &r.what, &p)?;
-        ws.write_string_with_format(row, 9, src, &p)?;
-    }
-    ws.autofilter(0, 0, (rows.len() as u32).max(1), 9)?;
-    Ok(())
-}
 
 /// Дни листа «По дням»: дни начислений, дни конца сделок и дни записей бота, пересекающиеся с окном. Ошибок нет.
 pub fn days(rows: &[Row], led: &[DayRow], bot: &[BotDay], w: &Window) -> Vec<NaiveDate> {

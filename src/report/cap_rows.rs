@@ -4,13 +4,14 @@
 //! факт учёта (core/deal.rs):
 //! - покупка состоялась — вложено > 0 (вложено растёт только по исполненной покупке: core/fills.rs trade);
 //! - статус — шаг сделки по-русски (core/deal_text.rs step_name);
-//! - конец — последнее обновление записи сделки (updated_at, включая возврат USDT — как «Длительность» «Итогов сделок»);
+//! - конец — время закрытия сделки по хронологии (report/rows_time.rs ended_at — та же функция, что «Длительность»
+//!   «Итогов сделок»; Тигран 11.11, решение 257); не найдено — пусто;
 //!   у открытой сделки (шаг не «закрыта» / «остановлена» / «монеты у человека», Deal::is_open) — пусто;
 //! - итог по факту — result_usd (пусто — итога ещё нет);
 //! - возврат USDT — состояние каждой части возврата выручки на биржу покупки (core/usdt_return_state.rs) через «; ».
 //!
 //! Кто вызывает: report/mod.rs (capital_send), tests/report_capital.rs.
-//! От чего зависит: core/deal.rs, core/deal_text.rs, core/usdt_return_state.rs, notify/human.rs (venue, route).
+//! От чего зависит: core/deal.rs, core/deal_text.rs, core/usdt_return_state.rs, notify/human.rs (venue, route), report/rows_time.rs (ended_at).
 //! Настройки: нет.
 
 use chrono::{DateTime, Utc};
@@ -83,7 +84,8 @@ pub fn row(d: &Deal) -> DealRow {
         bought: d.invested > Decimal::ZERO,
         status: step_name(d.step).into(),
         start: d.started_at,
-        end: (!d.is_open()).then_some(d.updated_at),
+        // Решение 257 (Тигран 11.11): конец — закрытие по хронологии, как в «Итогах сделок».
+        end: super::rows_time::ended_at(d),
         invested: f(d.invested),
         proceeds: f(d.proceeds),
         plan: f(d.plan_profit_usd),

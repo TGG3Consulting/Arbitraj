@@ -132,7 +132,8 @@ fn row(
         },
         plan: f(d.plan_profit_usd),
         plan_parts: tx::plan_parts(&d.plan).map(|(r, x)| (f(r), f(x))),
-        duration_s: end.map(|e| ((e - d.started_at).num_milliseconds().saturating_add(500)) / 1000),
+        // Ровно «Конец − Старт» по показанным значениям (до секунды, доли отброшены — как в колонках B и C).
+        duration_s: end.map(|e| e.timestamp() - d.started_at.timestamp()),
         usdt_return: tx::usdt_return(d),
         costs,
         unsplit: f(d.spent - split),

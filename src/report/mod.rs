@@ -37,7 +37,9 @@ pub mod missed_xlsx;
 pub mod recompute;
 pub mod res_days;
 pub mod res_deals;
+pub mod res_ledger;
 pub mod res_notes;
+pub mod res_summary;
 pub mod res_total;
 pub mod results;
 pub mod results_sheet;
@@ -59,7 +61,11 @@ pub mod sig_stream;
 pub mod sig_summary;
 pub mod sig_xlsx;
 pub mod snap;
+pub mod snap_cex;
+pub mod snap_dex;
+pub mod snap_price;
 pub mod snap_sheet;
+pub mod snap_transit;
 
 use chrono::{DateTime, Utc};
 

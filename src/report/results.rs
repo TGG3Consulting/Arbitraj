@@ -6,7 +6,7 @@
 //! Кто вызывает: report/mod.rs (реэкспорт), api/report.rs, notify/ctl/report.rs, tests/report_results.rs.
 //! От чего зависит: core (deals, bot_days, control, daily_venue::is_dex), report/rows.rs, day_rows.rs, snap.rs,
 //! results_xlsx.rs, rows_time.rs.
-//! Настройки: нет.
+//! Настройки: report.long_deal_s (порог строки «Сделок дольше …»); report.snapshot_timeout_ms — у snap.rs.
 
 use chrono::{DateTime, Utc};
 
@@ -17,13 +17,32 @@ use super::{day_rows, results_xlsx, rows, rows_time, snap};
 
 /// Решение 257: данные «Итогов сделок», кроме сделок: итог дня бота (daily_result), дни учёта неразобранных оценок
 /// (DayView.provisional), id площадок DEX (реестр шлюза), слепок балансов, что не прочитано.
-#[derive(Debug, Clone, Default)]
+/// long_deal_s — порог «Сделок дольше …» (report.long_deal_s; Err — причина, почему его нет).
+#[derive(Debug, Clone)]
 pub struct ResultsCtx {
     pub bot: Vec<crate::core::daily_rows::BotDay>,
     pub prov_days: std::collections::BTreeMap<String, chrono::NaiveDate>,
     pub dex: std::collections::BTreeSet<String>,
-    pub snap: Vec<snap::Place>,
+    pub snap: snap::Snapshot,
     pub problems: Vec<String>,
+    pub long_deal_s: Result<u64, String>,
+}
+
+/// Настройка порога «Сделок дольше …».
+pub const LONG_DEAL: &str = "report.long_deal_s";
+
+impl Default for ResultsCtx {
+    /// Пустые данные; порога нет — «не задана настройка report.long_deal_s» (как у пустого хранилища настроек).
+    fn default() -> Self {
+        ResultsCtx {
+            bot: vec![],
+            prov_days: Default::default(),
+            dex: Default::default(),
+            snap: Default::default(),
+            problems: vec![],
+            long_deal_s: Err(format!("не задана настройка {LONG_DEAL}")),
+        }
+    }
 }
 
 /// Книга «Итоги сделок» (решения 193, 257) по окну [from, to) (None — без границы): сделки, закончившиеся в окне
@@ -39,6 +58,7 @@ pub fn results(deals: &[Deal], w: rows_time::Window, cx: &ResultsCtx) -> Result<
         snap: &cx.snap,
         window: w,
         problems: &cx.problems,
+        long_deal_s: &cx.long_deal_s,
     };
     results_xlsx::workbook(&input).map_err(|e| format!("отчёт xlsx: {e}"))
 }
@@ -75,6 +95,12 @@ pub async fn results_file(
             }
         }
     }
+    cx.long_deal_s = core
+        .inner
+        .deps
+        .settings
+        .integer(LONG_DEAL, crate::settings::read::At::default())
+        .map_err(|e| e.message);
     cx.snap = snap::gather(core).await;
     let w = rows_time::Window { from, to, now };
     tokio::task::spawn_blocking(move || results(&deals, w, &cx))

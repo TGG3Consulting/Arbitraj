@@ -15,6 +15,10 @@ use crate::core::types::{CostKind, Direction, Quote, RouteStep};
 
 use super::size::SizeChoice;
 
+/// Этап строк «возврат USDT» расчёта (costs.rs; читают plan_costs.rs, precheck.rs, uncapped_replay_plan.rs, отчёт
+/// «Итоги сделок» report/rows_text.rs — решение 257: одна строка на всех).
+pub const RETURN_STAGE: &str = "возврат USDT";
+
 /// Одна строка затрат расчёта.
 #[derive(Debug, Clone, Serialize)]
 pub struct CostLine {

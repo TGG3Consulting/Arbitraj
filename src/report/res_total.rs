@@ -109,11 +109,14 @@ pub fn total(
             format!("=IF(COUNT({0})=0,\"\",MEDIAN({0}))", r(C.duration)),
             "n",
         ),
-        (
-            "Сделок дольше 5 минут",
-            format!("=COUNTIF({},\">300\")", r(C.duration)),
-            "n",
-        ),
+        match x.long_deal_s {
+            Ok(s) => (
+                "Сделок дольше порога report.long_deal_s",
+                format!("=COUNTIF({},\">{s}\")", r(C.duration)),
+                "n",
+            ),
+            Err(e) => ("Сделок дольше порога report.long_deal_s", e.clone(), "t"),
+        },
         (
             "Итог дней за окно, как у бота (лист «По дням»), USDT",
             format!("='По дням'!D{day_t}"),
@@ -128,6 +131,11 @@ pub fn total(
             "Балансы на момент выгрузки, USDT (лист «Слепок по балансам»)",
             format!("='Слепок по балансам'!F{snap_t}"),
             "m",
+        ),
+        (
+            "Балансы: полнота слепка",
+            format!("='Слепок по балансам'!G{snap_t}"),
+            "n",
         ),
     ];
     let plain = base();

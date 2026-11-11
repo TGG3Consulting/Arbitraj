@@ -2,9 +2,11 @@
 //! Что делает: снимок пар монет подписки по справочнику пар (symbols.rs): на какие стаканы подписываться,
 //! каких пар нет, какие монеты торгуются (для подписки DEX в ядре) и состояние каждой пары (статус, покупка и
 //! продажа через API) — событие ядру MarketEvent::SpotPairs.
+//! Пара, на которой XT не примет наш ордер (тип LIMIT и timeInForce по справочнику — решение 254), помечается
+//! причиной (SpotPairState::order_block): ядро не берёт её в расчёт ни для покупки, ни для продажи.
 //! Кто вызывает: market.rs (при подписке), pairs_watch.rs (при обновлении справочника пар).
-//! От чего зависит: symbols.rs, sign.rs (value_ok), gateway/events, core/types.
-//! Настройки: нет.
+//! От чего зависит: symbols.rs, order_rules.rs (через symbols.rs), sign.rs (value_ok), gateway/events, core/types.
+//! Настройки: venue.order_time_in_force — значение передают market.rs и pairs_watch.rs.
 //!
 //! Официально: GET /v4/public/symbol (state — перечень «Symbol state» publicModule.md, tradingEnabled, openapiEnabled)
 //! https://doc.xt.com/#marketsymbol (`_market/2symbol.md`).
@@ -35,9 +37,11 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки. Ошибок нет: монета без пары
-    /// попадает в missing и в pairs не входит.
-    pub fn build(symbols: &Symbols, assets: &[Asset]) -> Self {
+    /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки, timeInForce из настройки
+    /// venue.order_time_in_force (None — не задан). Ошибок нет: монета без пары попадает в missing и в pairs не входит.
+    /// Пара, на которой XT не примет наш ордер (решение 254, order_block), остаётся в pairs с причиной (ядро её не
+    /// считает), стакан подписывается (живая цена монеты), в торгуемые (tickers) не входит.
+    pub fn build(symbols: &Symbols, assets: &[Asset], tif: Option<&str>) -> Self {
         let mut s = Snapshot {
             books: vec![],
             missing: vec![],
@@ -46,7 +50,7 @@ impl Snapshot {
             pairs: vec![],
         };
         for a in assets {
-            let Some(mut p) = symbols.state(&a.ticker) else {
+            let Some(mut p) = symbols.state(&a.ticker, tif) else {
                 s.missing.push(a.ticker.clone());
                 continue;
             };
@@ -61,7 +65,7 @@ impl Snapshot {
                 if let Some(sym) = sym {
                     s.books.push((a.clone(), sym));
                 }
-                if p.api_buy || p.api_sell {
+                if (p.api_buy || p.api_sell) && p.order_block.is_none() {
                     s.tickers.push(a.ticker.clone());
                 }
             } else {
@@ -92,6 +96,15 @@ impl Snapshot {
             .collect()
     }
 
+    /// Пары, на которых XT не примет наш ордер (решение 254) — причины для журнала. Ошибок нет.
+    pub fn order_blocked(&self) -> Vec<String> {
+        self.pairs
+            .iter()
+            .filter(|p| p.online)
+            .filter_map(|p| p.order_block.clone())
+            .collect()
+    }
+
     /// Чем этот снимок отличается от прежнего — строки «ТИКЕР: было → стало» (для журнала). Ошибок нет.
     pub fn changes(&self, old: &Snapshot) -> Vec<String> {
         let find = |s: &Snapshot, t: &str| s.pairs.iter().find(|p| p.ticker == t).cloned();
@@ -114,12 +127,17 @@ impl Snapshot {
     }
 }
 
-/// Состояние пары коротко: «нет пары», «state ИМЯ», «API: покупка да/нет, продажа да/нет». Ошибок нет.
+/// Состояние пары коротко: «нет пары», «state ИМЯ», «не примет наш ордер (причина)», «API: покупка да/нет, продажа
+/// да/нет». Ошибок нет.
 fn describe(p: Option<&SpotPairState>) -> String {
     let yn = |b: bool| if b { "да" } else { "нет" };
     match p {
         None => "нет пары".into(),
         Some(p) if !p.online => format!("state {}", super::symbols::state_name(p.status)),
+        Some(p) if p.order_block.is_some() => format!(
+            "не примет наш ордер ({})",
+            p.order_block.clone().unwrap_or_default()
+        ),
         Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
     }
 }

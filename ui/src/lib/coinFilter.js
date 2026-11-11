@@ -19,6 +19,7 @@ export const RESULTS = [
   ['no_contract', 'сеть BSC есть, адреса контракта нет'],
   ['pair_off', 'пара не торгуется (status)'],
   ['no_api', 'пара не торгуется через API (apiStateBuy/Sell)'],
+  ['order_type', 'биржа не примет наш тип ордера'],
   ['pairs_stale', 'справочник пар устарел'],
   ['no_book', 'нет стакана'],
   ['no_usdt_pool', 'нет пула с USDT'],
@@ -43,6 +44,7 @@ function exclusionCode(e) {
   if (e === 'NoContract') return 'no_contract';
   if (e === 'NoSpotBook') return 'no_book';
   if (e === 'NoApiTrading') return 'no_api';
+  if (e?.OrderTypeNotAccepted !== undefined) return 'order_type';
   if (e?.PairNotTrading !== undefined) return 'pair_off';
   if (e?.PairsStale !== undefined) return 'pairs_stale';
   if (e === 'NoUsdtPool' || e === 'NoUsdtAddress' || e?.IntermediateNotConfigured !== undefined) return 'no_usdt_pool';

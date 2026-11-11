@@ -2,6 +2,8 @@
 //! Что делает: снимок пар монет подписки по справочнику пар (symbols.rs): на какие стаканы подписываться,
 //! каких пар нет, какие монеты торгуются (для подписки DEX в ядре) и состояние каждой пары (статус, покупка и
 //! продажа через API) — событие ядру MarketEvent::SpotPairs.
+//! Пара без LIMIT в orderTypes (решение 254) помечается причиной (SpotPairState::order_block, symbols.rs): ядро не
+//! берёт её в расчёт ни для покупки, ни для продажи.
 //! Кто вызывает: market.rs (при подписке), pairs_watch.rs (при обновлении справочника пар).
 //! От чего зависит: symbols.rs, gateway/events, core/types.
 //! Настройки: нет.
@@ -32,7 +34,8 @@ pub struct Snapshot {
 
 impl Snapshot {
     /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки. Ошибок нет: монета без пары
-    /// попадает в missing и в pairs не входит.
+    /// попадает в missing и в pairs не входит. Пара, на которой Binance не примет наш ордер (решение 254,
+    /// order_block), остаётся в pairs с причиной (ядро её не считает), стакан подписывается, в tickers не входит.
     pub fn build(symbols: &Symbols, assets: &[Asset]) -> Self {
         let mut s = Snapshot {
             books: vec![],
@@ -49,7 +52,7 @@ impl Snapshot {
                 if let Some(sym) = symbols.symbol_of(&a.ticker) {
                     s.books.push((a.clone(), sym));
                 }
-                if p.api_buy || p.api_sell {
+                if (p.api_buy || p.api_sell) && p.order_block.is_none() {
                     s.tickers.push(a.ticker.clone());
                 }
             } else {
@@ -80,6 +83,15 @@ impl Snapshot {
             .collect()
     }
 
+    /// Пары, на которых Binance не примет наш ордер (решение 254) — причины для журнала. Ошибок нет.
+    pub fn order_blocked(&self) -> Vec<String> {
+        self.pairs
+            .iter()
+            .filter(|p| p.online)
+            .filter_map(|p| p.order_block.clone())
+            .collect()
+    }
+
     /// Чем этот снимок отличается от прежнего — строки «ТИКЕР: было → стало» (для журнала). Ошибок нет.
     pub fn changes(&self, old: &Snapshot) -> Vec<String> {
         let find = |s: &Snapshot, t: &str| s.pairs.iter().find(|p| p.ticker == t).cloned();
@@ -102,12 +114,17 @@ impl Snapshot {
     }
 }
 
-/// Состояние пары коротко: «нет пары», «status ИМЯ», «API: покупка да/нет, продажа да/нет». Ошибок нет.
+/// Состояние пары коротко: «нет пары», «status ИМЯ», «не примет наш ордер (причина)», «API: покупка да/нет, продажа
+/// да/нет». Ошибок нет.
 fn describe(p: Option<&SpotPairState>) -> String {
     let yn = |b: bool| if b { "да" } else { "нет" };
     match p {
         None => "нет пары".into(),
         Some(p) if !p.online => format!("status {}", super::symbols::status_name(p.status)),
+        Some(p) if p.order_block.is_some() => format!(
+            "не примет наш ордер ({})",
+            p.order_block.clone().unwrap_or_default()
+        ),
         Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
     }
 }

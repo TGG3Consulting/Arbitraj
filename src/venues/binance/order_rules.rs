@@ -4,7 +4,9 @@
 //! аккаунта), тип LIMIT есть в orderTypes, timeInForce IOC или FOK (venue.order_time_in_force), количество вниз до
 //! stepSize, цена до tickSize в безопасную сторону, пределы цены, количества и суммы; настройки ожидания итога и
 //! myTrades; при venue.order_test_first — пробный ордер POST /api/v3/order/test с теми же параметрами.
-//! Кто вызывает: trade.rs, mod.rs (check_order).
+//! Признак «биржа не примет наш ордер на паре» (order_block, решение 254) — та же проверка типа, ею symbols.rs
+//! помечает пару в справочнике для ядра (отсев до расчёта).
+//! Кто вызывает: trade.rs, mod.rs (check_order), symbols.rs (order_block).
 //! От чего зависит: symbols.rs, rest.rs, order_state.rs, fills.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force [binance], venue.order_test_first [binance]; через order_state.rs и fills.rs —
 //! venue.order_poll_ms, venue.order_final_wait_ms, venue.my_trades_limit.
@@ -48,6 +50,23 @@ pub struct Prepared {
     pub params: Vec<(&'static str, String)>,
 }
 
+/// Что делает: примет ли Binance на паре наш ордер — тип LIMIT есть в orderTypes пары (решение 254: тот же признак
+/// отсеивает пару ДО расчёта — symbols.rs → pairs.rs, и страхует ордер — check_rules). timeInForce в exchangeInfo не
+/// перечисляется (orderTypes — только типы; enums.md) — его подтверждает пробный ордер (venue.order_test_first).
+/// Поля orderTypes нет — не ограничивает. Принимает: правила пары. Возвращает: None — примет; Some — причина.
+/// Ошибок нет. Официально: exchangeInfo https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints
+/// (orderTypes), enums.md (Order types).
+pub fn order_block(r: &SymbolRules) -> Option<String> {
+    let types = r.order_types.as_ref()?;
+    (!types.iter().any(|t| t == "LIMIT")).then(|| {
+        format!(
+            "{}: типа LIMIT нет в orderTypes пары ({})",
+            r.symbol,
+            types.join(", ")
+        )
+    })
+}
+
 /// Что делает: правила пары без сети. Принимает: правила, сторону, количество, худшую цену, timeInForce.
 /// Возвращает: (количество, цена) после округления. Ошибки: текст причины (ордер не будет принят).
 pub fn check_rules(
@@ -70,13 +89,8 @@ pub fn check_rules(
             "venue.order_time_in_force = {tif}: у Binance для правила «не исполнился — отменяем» только IOC или FOK"
         ));
     }
-    if let Some(types) = &r.order_types
-        && !types.iter().any(|t| t == "LIMIT")
-    {
-        return Err(format!(
-            "{s}: типа LIMIT нет в orderTypes пары ({})",
-            types.join(", ")
-        ));
+    if let Some(why) = order_block(r) {
+        return Err(why);
     }
     let qty = round(qty, r.step_size, RoundingStrategy::ToZero);
     let how = if buy {

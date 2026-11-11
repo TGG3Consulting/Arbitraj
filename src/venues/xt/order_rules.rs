@@ -4,8 +4,9 @@
 //! есть в orderTypes, timeInForce IOC или FOK (venue.order_time_in_force) и есть в timeInForces пары, количество вниз
 //! до шага QUANTITY, цена до шага PRICE в безопасную сторону (шаг — от минимума, как в документации), пределы цены и
 //! количества, минимум суммы QUOTE_QTY; настройки ожидания итога. Пробного ордера у XT нет — venue.order_test_first =
-//! да для XT — ошибка настройки.
-//! Кто вызывает: trade.rs, mod.rs (check_order).
+//! да для XT — ошибка настройки. Признак «биржа не примет наш ордер на паре» (order_block, решение 254) — та же
+//! проверка типа, ею pairs.rs помечает пару в справочнике для ядра (отсев до расчёта).
+//! Кто вызывает: trade.rs, mod.rs (check_order), pairs.rs (order_block).
 //! От чего зависит: symbols.rs, order_state.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force [xt], venue.order_test_first [xt]; через order_state.rs — venue.order_poll_ms,
 //! venue.order_final_wait_ms.
@@ -49,6 +50,29 @@ pub struct Prepared {
     pub body: Value,
 }
 
+/// Что делает: примет ли XT на паре наш ордер — тип LIMIT есть в orderTypes, timeInForce (venue.order_time_in_force)
+/// есть в timeInForces (решение 254: тот же признак отсеивает пару ДО расчёта — pairs.rs, и страхует ордер —
+/// check_rules). Поле отсутствует (null) — не ограничивает. Пустой список [] — как в ответе: значения нет (живой
+/// справочник 06.11.2026 — у pepe_usdt orderTypes [] и timeInForces [], у btc_usdt [LIMIT, MARKET] и [GTC, IOC];
+/// tests/data/xt_live_2026-11-06). Принимает: правила пары, timeInForce из настройки (None — не задан: сверяется
+/// только LIMIT; недопустимое значение настройки — ошибка настройки, её показывает check_rules, а не пара).
+/// Возвращает: None — примет; Some — причина. Ошибок нет.
+/// Официально: https://doc.xt.com/#marketsymbol (orderTypes, timeInForces пары), https://doc.xt.com/#orderorderPost.
+pub fn order_block(r: &SymbolRules, tif: Option<&str>) -> Option<String> {
+    let s = &r.symbol;
+    let lacks =
+        |l: &Option<Vec<String>>, v: &str| l.as_ref().is_some_and(|l| !l.iter().any(|x| x == v));
+    if lacks(&r.order_types, "LIMIT") {
+        return Some(format!("{s}: типа LIMIT нет в orderTypes пары"));
+    }
+    match tif {
+        Some(t) if TIME_IN_FORCE.contains(&t) && lacks(&r.time_in_forces, t) => {
+            Some(format!("{s}: {t} нет в timeInForces пары"))
+        }
+        _ => None,
+    }
+}
+
 /// Что делает: правила пары без сети. Принимает: правила, сторону, количество, худшую цену, timeInForce.
 /// Возвращает: (количество, цена) после округления. Ошибки: текст причины (ордер не будет принят).
 pub fn check_rules(
@@ -71,13 +95,8 @@ pub fn check_rules(
             "venue.order_time_in_force = {tif}: у XT для правила «не исполнился — отменяем» только IOC или FOK"
         ));
     }
-    let lacks =
-        |l: &Option<Vec<String>>, v: &str| l.as_ref().is_some_and(|l| !l.iter().any(|x| x == v));
-    if lacks(&r.order_types, "LIMIT") {
-        return Err(format!("{s}: типа LIMIT нет в orderTypes пары"));
-    }
-    if lacks(&r.time_in_forces, tif) {
-        return Err(format!("{s}: {tif} нет в timeInForces пары"));
+    if let Some(why) = order_block(r, Some(tif)) {
+        return Err(why);
     }
     let qty = r.qty.round(qty, RoundingStrategy::ToZero);
     let how = if buy {

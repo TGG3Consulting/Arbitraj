@@ -157,6 +157,7 @@ impl Symbols {
             max_notional: None,
             min_qty: r.min_qty,
             max_qty: None,
+            order_block: None,
         })
     }
 }

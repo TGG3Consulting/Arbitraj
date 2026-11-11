@@ -2,9 +2,11 @@
 //! Что делает: снимок пар монет подписки по справочнику пар (symbols.rs): на какие стаканы подписываться,
 //! каких пар нет, какие монеты торгуются (для подписки DEX в ядре) и состояние каждой пары (статус, покупка и
 //! продажа через API) — событие ядру MarketEvent::SpotPairs.
+//! Пара, на которой MEXC не примет наш тип ордера (orderTypes, решение 254), помечается причиной
+//! (SpotPairState::order_block): ядро не берёт её в расчёт ни для покупки, ни для продажи.
 //! Кто вызывает: market.rs (при подписке), pairs_watch.rs (при обновлении справочника пар).
-//! От чего зависит: symbols.rs, gateway/events, core/types.
-//! Настройки: нет.
+//! От чего зависит: symbols.rs, order_rules.rs (через symbols.rs), gateway/events, core/types.
+//! Настройки: venue.order_type — значение передают market.rs и pairs_watch.rs.
 //!
 //! Официальная документация: GET /api/v3/exchangeInfo (status «1 - online, 2 - Pause, 3 - offline»,
 //! isSpotTradingAllowed, tradeSideType) https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information
@@ -33,9 +35,11 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки. Ошибок нет: монета без пары
-    /// попадает в missing и в pairs не входит.
-    pub fn build(symbols: &Symbols, assets: &[Asset]) -> Self {
+    /// Строит снимок по справочнику пар. Принимает: справочник, монеты подписки, тип ордера из настройки
+    /// venue.order_type (None — не задан). Ошибок нет: монета без пары попадает в missing и в pairs не входит.
+    /// Пара, на которой MEXC не примет наш ордер (решение 254, order_block), остаётся в pairs с причиной (ядро её не
+    /// считает), стакан подписывается, в tickers не входит.
+    pub fn build(symbols: &Symbols, assets: &[Asset], order_type: Option<&str>) -> Self {
         let mut s = Snapshot {
             books: vec![],
             missing: vec![],
@@ -43,7 +47,7 @@ impl Snapshot {
             pairs: vec![],
         };
         for a in assets {
-            let Some(p) = symbols.state(&a.ticker) else {
+            let Some(p) = symbols.state(&a.ticker, order_type) else {
                 s.missing.push(a.ticker.clone());
                 continue;
             };
@@ -51,7 +55,7 @@ impl Snapshot {
                 if let Some(sym) = symbols.symbol_of(&a.ticker) {
                     s.books.push((a.clone(), sym));
                 }
-                if p.api_buy || p.api_sell {
+                if (p.api_buy || p.api_sell) && p.order_block.is_none() {
                     s.tickers.push(a.ticker.clone());
                 }
             } else {
@@ -79,6 +83,15 @@ impl Snapshot {
             .iter()
             .filter(|p| p.online && !p.api_buy && !p.api_sell)
             .map(|p| p.ticker.clone())
+            .collect()
+    }
+
+    /// Пары, на которых MEXC не примет наш ордер (решение 254) — причины для журнала. Ошибок нет.
+    pub fn order_blocked(&self) -> Vec<String> {
+        self.pairs
+            .iter()
+            .filter(|p| p.online)
+            .filter_map(|p| p.order_block.clone())
             .collect()
     }
 
@@ -110,6 +123,10 @@ fn describe(p: Option<&SpotPairState>) -> String {
     match p {
         None => "нет пары".into(),
         Some(p) if !p.online => format!("status {}", p.status),
+        Some(p) if p.order_block.is_some() => format!(
+            "не примет наш ордер ({})",
+            p.order_block.clone().unwrap_or_default()
+        ),
         Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
     }
 }

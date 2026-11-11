@@ -73,13 +73,23 @@ pub async fn subscribe(
     Ok((tasks, snap, syms))
 }
 
-/// Запись в журнал: монеты без торгуемой пары и пары, закрытые для API. Ошибок нет.
+/// Запись в журнал: монеты без торгуемой пары, пары, где Binance не примет наш ордер (решение 254), и пары, закрытые
+/// для API. Ошибок нет.
 async fn note(ctx: &Ctx, snap: &Snapshot) {
     if !snap.missing.is_empty() {
         let m = format!(
             "Binance: нет пары TRADING для {} монет: {}",
             snap.missing.len(),
             snap.missing.join(", ")
+        );
+        ctx.log(Level::Warn, "venue.subscribe", m).await;
+    }
+    let blocked = snap.order_blocked();
+    if !blocked.is_empty() {
+        let m = format!(
+            "Binance: биржа не примет наш ордер (LIMIT) на {} парах — в расчёт не берутся (решение 254): {}",
+            blocked.len(),
+            blocked.join("; ")
         );
         ctx.log(Level::Warn, "venue.subscribe", m).await;
     }

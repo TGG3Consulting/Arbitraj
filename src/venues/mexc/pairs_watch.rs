@@ -9,6 +9,7 @@
 //! Кто вызывает: subs.rs (запускает при каждой подписке из ядра, останавливает при следующей).
 //! От чего зависит: symbols.rs, pairs.rs, subs.rs, ctx.rs, storage/journal, settings/wait.rs.
 //! Настройки: venue.symbols_refresh_s (период; читается каждый круг — новое значение действует со следующего);
+//! venue.order_type (каждый круг — признак «не примет наш ордер» пары, решение 254);
 //! порог устаревания venue.symbols_stale_s читает ядро.
 //!
 //! Официальная документация: GET /api/v3/exchangeInfo (вес IP 25 из 300 за 10 с) и GET /api/v3/selfSymbols (вес 1)
@@ -71,7 +72,8 @@ pub async fn run(
             send(&p, &out, &last).await;
             continue;
         }
-        let now = Snapshot::build(&p.symbols, &assets);
+        let order_type = p.ctx.text("venue.order_type").ok();
+        let now = Snapshot::build(&p.symbols, &assets, order_type.as_deref());
         if now == last {
             send(&p, &out, &now).await;
             continue;
@@ -84,7 +86,7 @@ pub async fn run(
             if books_changed {
                 " — пересподписка стаканов"
             } else {
-                " — только покупка/продажа через API"
+                " — только покупка/продажа через API или приём нашего ордера (решение 254)"
             }
         );
         log(&p.ctx, Level::Warn, m, Some(json!({ "changes": changes }))).await;

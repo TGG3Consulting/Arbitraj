@@ -174,6 +174,7 @@ impl Symbols {
             max_notional: None,
             min_qty: None,
             max_qty: None,
+            order_block: None,
         })
     }
 }

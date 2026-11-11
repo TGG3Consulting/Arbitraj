@@ -212,3 +212,27 @@ fn snapshot_change_is_visible() {
     );
     assert!(after.changes(&after).is_empty());
 }
+
+/// Решение 254: пара с признаком «биржа не примет наш ордер» (SpotPairState::order_block — его ставит адаптер по
+/// справочнику пар, у XT/Binance/MEXC — tests/order_type_filter.rs) отсеивается справочником ядра причиной
+/// OrderTypeNotAccepted до расчёта. Справочник BingX таких полей не отдаёт — у живой пары CAKE признак ставится
+/// вручную текстом живой причины XT (pepe_usdt, 06.11.2026), остальное — живые ответы BingX.
+#[test]
+fn order_block_excludes_pair_before_calc() {
+    let n = nets();
+    let mut ev = Snapshot::build(&syms(), &assets(&n)).event(bingx(), ms(SYMBOLS_AT_MS));
+    let why = "pepe_usdt: типа LIMIT нет в orderTypes пары".to_string();
+    if let MarketEvent::SpotPairs { pairs, .. } = &mut ev {
+        let cake = pairs.iter_mut().find(|p| p.ticker == "CAKE").unwrap();
+        assert_eq!(cake.order_block, None, "у BingX поля нет — признака нет");
+        cake.order_block = Some(why.clone());
+    }
+    let mut m = MarketState::default();
+    m.apply(ev);
+    m.apply(cake_book(&n));
+    let c = coins(&m, n, 3600);
+    assert_eq!(
+        at(&c, "CAKE").excluded,
+        vec![Exclusion::OrderTypeNotAccepted(why)]
+    );
+}

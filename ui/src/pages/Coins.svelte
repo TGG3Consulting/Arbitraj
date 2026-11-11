@@ -6,19 +6,20 @@
     только чёрный список); щелчок по монете — всплывающее окно с полной информацией (налоги, пулы, крючки,
     причины по площадкам, «Перепроверить»). Окно обновляется вместе с живыми данными.
     Пока ядро не отдаёт справочник — честное «нет данных» с причиной бэкенда (503); ручной список работает всегда.
-    Живые сообщения coin_check, pool_check, coin_block и coins (справочник пересобран, core/rebuild.rs; Тигран 10.11,
-    t80) — перечитать; один запрос в полёте (lib/remote.svelte.js → lib/flight.js).
+    t84 (Тигран 10.11): живые coin_check, pool_check, coin_block — обновляется только строка этой монеты
+    (GET /api/coins/{address}, на месте; фильтры и страницы считаются заново); coins (справочник пересобран),
+    «lagged» и переподключение — полный перечит; один запрос в полёте на монету (lib/coinsLive.svelte.js).
     Решение 116: таблица — по страницам (поле «Монет на странице», запоминается в браузере; без значения таблица
     не рисуется и просит его задать). С MEXC в справочнике >11 тыс. монет — все строки разом тормозили экран.
     Смена фильтров — снова первая страница.
     Решение 211: блок «Один адрес — два тикера на одной бирже» (TickerConflict) — только показ.
   Кто вызывает: App.svelte.
-  От чего зависит: lib/remote.svelte.js, lib/coinFilter.js, components/CoinFilters.svelte, CoinTable.svelte,
+  От чего зависит: lib/coinsLive.svelte.js, lib/coinFilter.js, components/CoinFilters.svelte, CoinTable.svelte,
     CoinModal.svelte, ManualBlacklist.svelte, WithdrawBlocked.svelte (решение 253), TickerConflict.svelte, NoData.svelte, ErrorText.svelte, PageSize.svelte.
   Настройки: coin.blocked, coin.blocked_note (через ManualBlacklist); пороги tax.*, hooks.* — экран «Настройки».
 -->
 <script>
-  import { remote } from '../lib/remote.svelte.js';
+  import { coinsLive } from '../lib/coinsLive.svelte.js';
   import { coinRowKey, matches, options } from '../lib/coinFilter.js';
   import CoinFilters from '../components/CoinFilters.svelte';
   import CoinTable from '../components/CoinTable.svelte';
@@ -30,7 +31,7 @@
   import ErrorText from '../components/ErrorText.svelte';
   import PageSize from '../components/PageSize.svelte';
 
-  const coins = remote('/api/coins', ['coin_check', 'pool_check', 'coin_block', 'coins']);
+  const coins = coinsLive();
   let f = $state({ text: '', result: '', venue: '', pools: '', kind: '', tax: '', onlyBlocked: false });
   /** Ключ монеты в окне (тикер|адрес); null — окно закрыто. */
   let openKey = $state(null);

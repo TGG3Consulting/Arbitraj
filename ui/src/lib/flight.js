@@ -6,7 +6,7 @@
 //   ровно один повтор (данные свежее последнего вызова, запросов в полёте — не больше одного).
 //   cancel() — уход со страницы или смена параметров: текущий запрос отменяется (AbortController), повтор снимается;
 //   следующий вызов начинает заново сразу.
-// Кто вызывает: lib/coinNames.svelte.js, lib/remote.svelte.js, lib/dex.svelte.js, lib/delist.svelte.js, хранилища
+// Кто вызывает: lib/coinNames.svelte.js, lib/remote.svelte.js, lib/coinsLive.svelte.js (полный список и строки монет), lib/dex.svelte.js, lib/delist.svelte.js, хранилища
 //   lib/*.svelte.js и экраны с перечитыванием по живому потоку (pages/*, components/*).
 // От чего зависит: AbortController браузера; ошибка отмены — lib/api.js (поле aborted).
 // Настройки: нет.

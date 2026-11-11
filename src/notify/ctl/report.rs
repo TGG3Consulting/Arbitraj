@@ -9,11 +9,13 @@
 //! Периоды — кнопки интерфейса, а не пороги (как «сутки / 7 дней» экрана «Упущено из-за потолка»,
 //! ui/src/lib/uncappedLabels.js period: последние 24 ч / 7 × 24 ч до сейчас; «30 дней» и «за всё время» — решение 215).
 //! Кто вызывает: notify/press.rs («r:<что>»).
-//! От чего зависит: report/mod.rs, ctl/kb.rs, ctl/press.rs (put_screen), tg_methods.rs (send_document), core.
+//! От чего зависит: report/mod.rs, ctl/kb.rs, ctl/report_sig.rs, ctl/press.rs (put_screen), tg_methods.rs (send_document), core.
 //! Настройки: нет.
 //!
 //! callback_data (≤ 64 байт): «r:m» — выбор отчёта; «r:<отчёт>» — выбор периода; «r:<отчёт>.<период>» — файл.
 //! Отчёт: res — «Итоги сделок», mis — «Упущено». Период: d, w, m, a (см. PERIODS).
+//! Решение 255: sig — «Сигналы и сделки», свои периоды (report/sig_period.rs BUTTONS: a, t, 3, 5, 7, c — свой
+//! интервал вводом «дд.мм.гг – дд.мм.гг») и отправка частями — notify/ctl/report_sig.rs.
 
 use chrono::{Duration, Utc};
 
@@ -25,9 +27,11 @@ use super::super::tg_buttons::{CallbackQuery, CbMessage};
 use super::kb::{Screen, btn};
 
 /// Отчёты: код, название, префикс файла.
-const REPORTS: [(&str, &str, &str); 2] = [
+const REPORTS: [(&str, &str, &str); 3] = [
     ("res", "Итоги сделок", "arb_results"),
     ("mis", "Упущено", "arb_missed"),
+    // Решение 255: свои периоды и ввод своего интервала — report_sig.rs.
+    ("sig", "Сигналы и сделки", "arb_signals"),
 ];
 
 /// Периоды: код, надпись, сколько суток назад от сейчас (None — за всё время). Кнопки интерфейса (см. шапку).
@@ -50,6 +54,9 @@ pub fn choose() -> Screen {
 /// Экран периода отчёта. Принимает: код отчёта. Возвращает: экран или None — нет такого отчёта. Ошибок нет.
 pub fn periods(code: &str) -> Option<Screen> {
     let (_, title, _) = REPORTS.iter().find(|r| r.0 == code)?;
+    if code == "sig" {
+        return Some(super::report_sig::periods(title));
+    }
     let row = PERIODS
         .iter()
         .map(|(p, t, _)| btn(t, &format!("r:{code}.{p}")))
@@ -67,6 +74,7 @@ impl Ctx<'_> {
         let screen = match object.split_once('.') {
             None if object == "m" => Some(choose()),
             None => periods(object),
+            Some(("sig", per)) => return self.sig_press(q, msg, per).await,
             Some((rep, per)) => return self.report_send(q, msg, rep, per).await,
         };
         let Some(s) = screen else {

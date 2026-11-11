@@ -21,7 +21,8 @@
 //! Кто вызывает: core/prices.rs (generation, note), core/window_view.rs (cfg — причина на странице окна),
 //! core/window_deal.rs (cfg, dex_side, pools, DexPoint), тесты.
 //! От чего зависит: window.rs (dex_slot), window_run.rs (WinMsg, send), quote_cache.rs, inner.kinds, settings.
-//! Настройки: window.dex_price, window.dex_price_min_ms.
+//! Решение 255: у точки — состояние пулов маршрута (window_pool.rs, window.dex_pool_state).
+//! Настройки: window.dex_price, window.dex_price_min_ms, window.dex_pool_state (window_pool.rs).
 
 use std::collections::HashMap;
 
@@ -59,6 +60,10 @@ pub struct DexPoint {
     /// Решение 245: точка на объём нашей сделки (window_deal.rs); None — объём сравнения тика (решение 241).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deal: Option<super::window_deal::DealSize>,
+    /// Решение 255: состояние пулов маршрута из памяти рынка (window_pool.rs, при window.dex_pool_state = да) — Pool
+    /// ядра в JSON (core/types/pool.rs; у Pool нет сравнения, а точка сравнивается в тестах).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<serde_json::Value>,
 }
 
 /// Последняя записанная точка направления: поколение пулов, блок, цена, когда записана.
@@ -134,6 +139,7 @@ pub fn note(core: &Core, d: &Direction, qa: &Quote, qb: &Quote, generation: Opti
         block: q.route.as_ref().map(|r| r.block),
         pools: pools(q),
         deal: None,
+        states: vec![],
     };
     let now = Utc::now();
     let id = {
@@ -154,7 +160,10 @@ pub fn note(core: &Core, d: &Direction, qa: &Quote, qb: &Quote, generation: Opti
         info.dex_points += 1;
         info.id.clone()
     };
-    let point = Box::new(point);
+    let point = Box::new(DexPoint {
+        states: super::window_pool::states(core, q),
+        ..point
+    });
     send(core, WinMsg::Dex { id, point });
 }
 

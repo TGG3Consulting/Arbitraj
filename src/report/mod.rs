@@ -5,9 +5,12 @@
 //! по данным экрана «Упущено из-за потолка»; файлы отчётов одной функцией на отчёт — для api/report.rs и кнопки
 //! «📊 Отчёты» чата «Управление» (notify/ctl/report.rs).
 //! Решение 218 — отчёт пересчёта старых записей «без потолка» по окнам (recompute.rs: CSV и итоги для stdout).
-//! Кто вызывает: api/report.rs, notify/ctl/report.rs, src/bin/uncapped_recompute.rs (recompute.rs).
+//! Решение 255 — «Сигналы и сделки» (arb_signals_<дата>[_part<K>].xlsx, sig_*.rs): сигналы-окна, сделки, тики, стаканы,
+//! ликвидность пулов; потоком (sig_stream.rs), несколько файлов, если больше предела отправки (sig_parts.rs).
+//! Кто вызывает: api/report.rs, notify/ctl/report.rs, notify/ctl/report_sig.rs (signals_send),
+//! src/bin/uncapped_recompute.rs (recompute.rs).
 //! От чего зависит: core (deals, uncapped_report), report/rows.rs, results_xlsx.rs, results_sheet.rs, missed_rows.rs,
-//! missed_xlsx.rs, missed_total.rs.
+//! missed_xlsx.rs, missed_total.rs, sig_*.rs, core/signals_src.rs.
 //! Настройки: нет.
 
 pub mod missed_cands;
@@ -20,6 +23,19 @@ pub mod recompute;
 pub mod results_sheet;
 pub mod results_xlsx;
 pub mod rows;
+pub mod sig_build;
+pub mod sig_episodes;
+pub mod sig_frames;
+pub mod sig_link;
+pub mod sig_model;
+pub mod sig_notes;
+pub mod sig_parts;
+pub mod sig_period;
+pub mod sig_pool;
+pub mod sig_sheet;
+pub mod sig_stream;
+pub mod sig_summary;
+pub mod sig_xlsx;
 
 use chrono::{DateTime, Utc};
 
@@ -107,4 +123,54 @@ pub async fn missed_file(
     tokio::task::spawn_blocking(move || missed(&data, from, to, now))
         .await
         .map_err(|e| format!("отчёт: задача сборки прервана: {e}"))?
+}
+
+/// Решение 255: «Сигналы и сделки» за период [from, to) — файлы по одному в `send`. Исходные данные ядра
+/// (Core::signals_src: короткие выборки и копии); чтение файлов окон и эпизодов и сборка книг — потоком в spawn_blocking
+/// (sig_stream.rs; торговля не ждёт, память не растёт с периодом): следующий файл собирается, пока отправляется
+/// предыдущий (канал на один файл). Принимает: ядро, границы, подпись периода, время выгрузки, предел байт файла,
+/// отправку файла. Возвращает: сколько файлов отправлено. Ошибки: текст (база, книга, файл не делится до предела, сбой
+/// отправки — тогда сборка останавливается).
+#[allow(clippy::too_many_arguments)]
+pub async fn signals_send<F, Fut>(
+    core: &Core,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
+    period: String,
+    now: DateTime<Utc>,
+    max: usize,
+    mut send: F,
+) -> Result<usize, String>
+where
+    F: FnMut(sig_parts::File) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
+    let src = core
+        .signals_src(now)
+        .await
+        .map_err(|e| format!("отчёт «Сигналы и сделки»: {e}"))?;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<sig_parts::File>(1);
+    let job = tokio::task::spawn_blocking(move || {
+        let notes = sig_notes::notes(&src, &period);
+        let prefix = format!("arb_signals_{}", now.format("%Y-%m-%d"));
+        let caption = format!("Отчёт «Сигналы и сделки» — {period}");
+        let mut emit = |f: sig_parts::File| tx.blocking_send(f).is_ok();
+        sig_stream::stream(&src, from, to, max, &prefix, &caption, &notes, &mut emit)
+    });
+    let mut failed = None;
+    while let Some(f) = rx.recv().await {
+        if let Err(e) = send(f).await {
+            failed = Some(e);
+            break;
+        }
+    }
+    // Сбой отправки: приёмник закрыт — сборка остановится на следующем файле.
+    drop(rx);
+    let built = job
+        .await
+        .map_err(|e| format!("отчёт: задача сборки прервана: {e}"))?;
+    match failed {
+        Some(e) => Err(e),
+        None => built,
+    }
 }

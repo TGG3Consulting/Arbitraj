@@ -5,7 +5,8 @@
 //! изменение, кончающееся не позже версии стакана, — устарело, пропуск; начинается позже версии + 1 — разрыв, стакан
 //! недостоверен до следующего полного; иначе уровни применяются: количество — новое значение, 0 — уровня больше нет.
 //! Изменения, пришедшие до полного стакана (MEXC: снимок берётся после подписки), ждут его и применяются после.
-//! Кто вызывает: core/window_view.rs, core/window_at.rs (решение 218: весь стакан на момент решения — levels), тесты.
+//! Кто вызывает: core/window_view.rs, core/window_at.rs (решение 218: весь стакан на момент решения — levels),
+//! report/sig_frames.rs (решение 255: сводка всего стакана после кадра — summary), тесты.
 //! От чего зависит: core/types (PriceLevel, TapView).
 //! Настройки: нет.
 
@@ -43,6 +44,19 @@ pub struct BookAt {
     /// Верхние уровни: bids по убыванию, asks по возрастанию.
     pub bids: Vec<PriceLevel>,
     pub asks: Vec<PriceLevel>,
+}
+
+/// Решение 255: сводка всего стакана (Book::summary).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BookSum {
+    /// Стакан достоверен (полный получен, разрывов нет).
+    pub ok: bool,
+    pub bid: Option<Decimal>,
+    pub ask: Option<Decimal>,
+    /// Уровней bids, asks.
+    pub levels: (usize, usize),
+    /// Сумма цена × количество по всем уровням: bids, asks.
+    pub usd: (Decimal, Decimal),
 }
 
 impl Book {
@@ -118,6 +132,20 @@ impl Book {
             self.bids.iter().rev().map(lv).collect(),
             self.asks.iter().map(lv).collect(),
         ))
+    }
+
+    /// Решение 255: сводка всего стакана без копии уровней (отчёт «Сигналы и сделки», report/sig_frames.rs) — достоверен
+    /// ли, лучший bid и ask, уровней с каждой стороны, сумма цена × количество по всем уровням каждой стороны (USDT).
+    /// Ошибок нет.
+    pub fn summary(&self) -> BookSum {
+        let usd = |m: &BTreeMap<Decimal, Decimal>| m.iter().map(|(p, q)| p * q).sum();
+        BookSum {
+            ok: self.ok,
+            bid: self.bids.keys().next_back().copied(),
+            ask: self.asks.keys().next().copied(),
+            levels: (self.bids.len(), self.asks.len()),
+            usd: (usd(&self.bids), usd(&self.asks)),
+        }
     }
 
     /// Уровни: новое количество, 0 — убрать. Ошибок нет.

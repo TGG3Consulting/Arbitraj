@@ -14,6 +14,7 @@ pub mod live;
 pub mod press;
 pub mod progress;
 pub mod report;
+pub mod report_sig;
 pub mod screens;
 pub mod sell;
 pub mod sessions;

@@ -113,6 +113,8 @@ pub fn write(core: &Core, d: &Direction, side: Side, q: &Quote, size: DealSize) 
         block: q.route.as_ref().map(|r| r.block),
         pools: pools(q),
         deal: Some(size),
+        // Решение 255: состояние пулов маршрута (window.dex_pool_state).
+        states: super::window_pool::states(core, q),
     };
     let id = {
         let mut w = lk(&core.inner.windows);

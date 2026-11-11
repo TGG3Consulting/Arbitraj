@@ -18,7 +18,7 @@
 //! Решение 236, дополнение (техлид 09.11): газ approve перед циклом и чаевые канала — в затраты (курсом BNB адаптера);
 //! approve уже в блоке, а цикл не отправлен — сделка остаётся в учёте с газом approve, Closed (не discard).
 //! Кто вызывает: core/cycle_watch.rs.
-//! От чего зависит: core/{cycle_plan, cycle_outcome, ledger, deal, deal_gas, executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
+//! От чего зависит: core/{cycle_plan, cycle_outcome, ledger, deal, deal_gas, deal_book (статьи затрат, решение 257), executor (buy_gate), coin_key, rules_apply, gas_stats, risk}.rs,
 //! gateway, core/types.
 //! Настройки: через вызываемые (dry.enabled, signal.route_cooldown_s, правила шлюза, risk.outcome_poll_s, risk.outcome_max_s).
 
@@ -26,7 +26,7 @@ use std::sync::Arc;
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{CycleTradeRequest, CycleTradeResult};
+use crate::core::types::{CostKind, CycleTradeRequest, CycleTradeResult};
 use crate::gateway::contract::Venue;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
@@ -136,11 +136,13 @@ async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
     let gas = r.trade.fee_in(super::convert::GAS_TICKER);
     // Решение 236, дополнение: approve перед циклом, чаевые канала и газ их перевода (п. 6; факт транзакции) — тем же
     // курсом BNB адаптера.
-    let extra: Decimal = super::deal_gas::of_filled(&r.trade)
-        .iter()
-        .map(|w| w.bnb)
-        .sum();
-    deal.spent += (gas + extra) * r.bnb_usdt;
+    let extra_list = super::deal_gas::of_filled(&r.trade);
+    let extra: Decimal = extra_list.iter().map(|w| w.bnb).sum();
+    // Решение 257: статьи затрат по виду (газ цикла, approve, чаевые) — тем же курсом.
+    super::deal_book::spend(deal, CostKind::Gas, gas * r.bnb_usdt);
+    for w in &extra_list {
+        super::deal_book::spend(deal, w.kind, w.bnb * r.bnb_usdt);
+    }
     let by = r.trade.executor.clone().unwrap_or_default();
     let extra_t = if extra.is_zero() {
         String::new()
@@ -225,20 +227,20 @@ async fn spend(core: &Core, deal: &mut Deal, bnb_usdt: Decimal, e: &GatewayError
     if let Some(tx) = &e.tx {
         super::gas_stats::record_tx(core, &deal.direction.asset, tx).await;
         let gas = tx.gas_bnb.unwrap_or(Decimal::ZERO) + tx.cancel_gas_bnb.unwrap_or(Decimal::ZERO);
-        deal.spent += gas * bnb_usdt;
+        super::deal_book::spend(deal, CostKind::Gas, gas * bnb_usdt);
         deal.note(format!("Газ транзакции цикла: {gas} BNB"));
         if let Some(t) = tx.tip_bnb.filter(|t| !t.is_zero()) {
-            deal.spent += t * bnb_usdt;
+            super::deal_book::spend(deal, CostKind::ChannelTip, t * bnb_usdt);
             deal.note(format!("Чаевые канала цикла: {t} BNB"));
         }
         // Решение 236, дополнение п. 6: газ отдельной транзакции перевода чаевых (её квитанция, адаптер).
         if let Some(t) = tx.tip_gas_bnb.filter(|t| !t.is_zero()) {
-            deal.spent += t * bnb_usdt;
+            super::deal_book::spend(deal, CostKind::ChannelTip, t * bnb_usdt);
             deal.note(format!("Газ перевода чаевых цикла: {t} BNB"));
         }
     }
     if let Some(a) = e.approve_gas().filter(|a| !a.is_zero()) {
-        deal.spent += a * bnb_usdt;
+        super::deal_book::spend(deal, CostKind::ApproveGas, a * bnb_usdt);
         deal.note(format!("Газ approve перед циклом: {a} BNB"));
     }
 }

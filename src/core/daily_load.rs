@@ -24,6 +24,21 @@ pub async fn transfer(core: &Core, from: &mut Deal, to: &mut Deal, share: Decima
         return;
     };
     let moved = amount * share;
+    // Решение 257: доля оценки переходит — начисления «−доля» у старой и «+доля» у новой в день учёта оценки.
+    super::deal_book::day(
+        from,
+        day,
+        super::deal_book::DayPart::Estimate,
+        -moved,
+        "доля оценки ушла «Вернуть боту»",
+    );
+    super::deal_book::day(
+        to,
+        day,
+        super::deal_book::DayPart::Estimate,
+        moved,
+        "доля оценки от «Беру на себя»",
+    );
     book.provisional.insert(to.id.clone(), (moved, day));
     // Решение 173: новая сделка — со своими площадками (монеты могли вернуться на другую площадку).
     let venues = super::daily_venue::of_direction(core, &to.direction);

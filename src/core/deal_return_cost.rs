@@ -16,7 +16,7 @@
 //! Кто вызывает: usdt_return_state.rs (set), ledger.rs (finish), ledger_load.rs, usdt_return.rs (relay_try — Relayed),
 //! deal_text.rs, manual_outcome.rs.
 //! От чего зависит: deal.rs, usdt_return_state.rs, usdt_return_parts.rs, daily.rs, daily_commit.rs, gas_stats.rs,
-//! fills.rs (перевод затраты в USDT), deps.rs (журнал).
+//! fills.rs (перевод затраты в USDT), deps.rs (журнал), deal_book.rs (начисление поправки в учёт сделки, решение 257).
 //! Настройки: нет (котируемая монета площадки venue.quote_asset — у вызывающего).
 
 use rust_decimal::Decimal;
@@ -145,7 +145,10 @@ pub async fn after(core: &Core, d: &Deal, delta: Decimal) {
         return;
     }
     let mut x = d.clone();
+    let before = x.day_book.len();
     let trip = super::daily::settle(core, &mut x, -delta).await;
+    // Решение 257: начисление поправки в итог дня — в учёт сделки (копия x не сохраняется).
+    super::deal_book::keep_day(core, &x, before).await;
     super::gas_stats::record_result(core, &d.direction.asset, -delta).await;
     let text = format!(
         "Сделка {}: затраты возврата USDT {} — вычтены из итога сделки, итог {} USDT",

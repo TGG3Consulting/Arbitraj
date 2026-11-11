@@ -307,7 +307,12 @@ fn results_with_period_builds() {
     assert!(arb::report::in_period(now, from, None));
     assert!(!arb::report::in_period(now - Duration::days(2), from, None));
     assert!(!arb::report::in_period(now, None, Some(now)));
-    let bytes = arb::report::results(&[], from, None, now).expect("книга без сделок");
+    let w = arb::report::rows_time::Window {
+        from,
+        to: None,
+        now,
+    };
+    let bytes = arb::report::results(&[], w, &Default::default()).expect("книга без сделок");
     assert!(unzip(&bytes)["xl/workbook.xml"].contains("name=\"Сделки\""));
     // «Упущено» за период без записей — книга с пустыми листами и нулевыми итогами.
     let empty = MissedData {

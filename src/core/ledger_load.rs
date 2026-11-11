@@ -15,6 +15,10 @@ use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 use super::ledger::{KIND, recompute_exposure, save};
 
+/// Начало строки хронологии «прервана перезапуском» — момент остановки сделки (решение 257: отчёт «Итоги сделок» берёт
+/// по ней время конца сделки, report/rows_time.rs).
+pub const INTERRUPTED: &str = "Сделка прервана перезапуском";
+
 /// Загружает сделки при запуске. Незакрытые — «прервана перезапуском», шаг Halted, уведомление.
 pub async fn load(core: &Core) {
     let deps = &core.inner.deps;
@@ -36,7 +40,7 @@ pub async fn load(core: &Core) {
         // Ждущие решения человека остаются ждать (алерты загружает manual.rs).
         if d.is_open() && d.step != Step::WaitingHuman {
             let text = format!(
-                "Сделка прервана перезапуском (шаг: {}, {}) — проверьте вручную",
+                "{INTERRUPTED} (шаг: {}, {}) — проверьте вручную",
                 super::deal_text::step_name(d.step),
                 super::deal_text::coins_at(&d)
             );

@@ -63,6 +63,8 @@ async fn return_locked(
     deal.qty = qty;
     deal.invested = old.invested * share;
     deal.spent = old.spent * share;
+    // Решение 257: статьи затрат — той же долей.
+    deal.cost_items = super::deal_book::share(&old.cost_items, share);
     deal.step = Step::Selling;
     deal.note(format!(
         "«Вернуть боту»: {qty} по реальному балансу (было взято {})",

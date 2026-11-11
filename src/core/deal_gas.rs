@@ -16,7 +16,7 @@
 //! Кто вызывает: trade_ops.rs (собирает), transfers.rs (собирает), executor.rs, sell.rs, relay.rs, manual_relay.rs
 //! (charge), usdt_relay_retry.rs (charge_closed), cycle_deal.rs (лист approve и чаевых цикла).
 //! От чего зависит: deal.rs, fills.rs (usdt), convert.rs (GAS_TICKER), ledger.rs, daily.rs, daily_commit.rs,
-//! gas_stats.rs, core/types (ChainTx, TradeResult, Cost).
+//! gas_stats.rs, core/types (ChainTx, TradeResult, Cost), deal_book.rs (статьи затрат и начисления дня, решение 257).
 //! Настройки: нет (venue.quote_asset — через fills::usdt).
 
 use rust_decimal::Decimal;
@@ -131,7 +131,8 @@ pub async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, list: &mut Ve
     let (bnb, u) = usd(core, venue, &list).await;
     deal.note(line(&list, bnb, &u));
     match u {
-        Ok(u) => deal.spent += u,
+        // Решение 257: статьи затрат — по виду каждой (доля BNB).
+        Ok(u) => super::deal_book::spend_bnb(deal, &items(&list), u),
         Err(e) => warn(core, venue, &deal.id, bnb, &e).await,
     }
 }
@@ -151,7 +152,7 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
         deals.get_mut(id).map(|d| {
             d.note(text.clone());
             if let Ok(u) = &u {
-                d.spent += *u;
+                super::deal_book::spend_bnb(d, &items(&list), *u);
                 if let Some(r) = d.result_usd.as_mut() {
                     *r -= *u;
                 }
@@ -168,7 +169,9 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
     match u {
         Ok(u) if d.result_usd.is_some() && !u.is_zero() => {
             let mut x = d.clone();
+            let before = x.day_book.len();
             let trip = super::daily::settle(core, &mut x, -u).await;
+            super::deal_book::keep_day(core, &x, before).await;
             super::gas_stats::record_result(core, &d.direction.asset, -u).await;
             let t = format!(
                 "Сделка {id}: газ {} BNB = {} USDT вычтен из итога, итог {} USDT",
@@ -182,6 +185,11 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
         Ok(_) => {}
         Err(e) => warn(core, venue, id, bnb, &e).await,
     }
+}
+
+/// Статьи для учёта затрат по виду (решение 257): вид и BNB. Ошибок нет.
+fn items(list: &[Wasted]) -> Vec<(CostKind, Decimal)> {
+    list.iter().map(|w| (w.kind, w.bnb)).collect()
 }
 
 /// Журнал «газ не пересчитан в USDT». Ошибок нет.

@@ -3,7 +3,8 @@
 //! (editMessageText, https://core.telegram.org/bots/api#editmessagetext), «s:<номер>.<строка>» — «Продать» монету из
 //! «Балансов»: доступность — заново из памяти панели (решение 174, та же причина), затем вопрос «Да, продать …» с
 //! количеством, монетой, счётом и биржей (press_confirm.rs ask → та же команда ядра SellBalance, что у панели);
-//! сообщения: /menu (/start, /help) — главное меню новым сообщением, ответ на вопрос суммы — в transfer_press.rs.
+//! сообщения: /menu (/start, /help) — главное меню новым сообщением, ответ на вопрос суммы — в transfer_press.rs,
+//! ответ на вопрос своего интервала отчёта «Сигналы и сделки» — в report_sig.rs (решение 255).
 //! Устаревшая денежная кнопка (после перезапуска, старше notify.dialog_ttl_s или экран уже перерисован) — «экран
 //! устарел, откройте меню», деньги не двигаются.
 //! «Продать» — sell.rs.
@@ -126,6 +127,18 @@ impl Ctx<'_> {
             .and_then(|r| lock(self.ctl).prompts.remove(&(m.chat.id, r.message_id)));
         if let Some(sid) = prompt {
             return self.transfer_typed(sid, text, m, who).await;
+        }
+        // Решение 255: ответ на вопрос своего интервала отчёта «Сигналы и сделки».
+        let range = m.reply_to_message.as_ref().is_some_and(|r| {
+            let mut st = lock(self.ctl);
+            let hit = st.range_prompts.get(&m.chat.id) == Some(&r.message_id);
+            if hit {
+                st.range_prompts.remove(&m.chat.id);
+            }
+            hit
+        });
+        if range {
+            return self.sig_typed(text, m, who).await;
         }
         match parse(text, self.bot).as_deref() {
             Some("menu" | "start" | "help") => self.show(m.chat.id, None, View::Root).await,

@@ -6,7 +6,7 @@
 //! Тот же код пишет файлы окон (решение 125): свой экземпляр, папка <data-dir>/windows (start_named). Сколько места занято — счётчик (для лимита episode.max_mb), с концом
 //! кадра при закрытии. remove и orphans — блокирующие: ядро зовёт их в spawn_blocking.
 //! Кто вызывает: core/episode_run.rs (open, line, close, remove, used), core/engine.rs (start), api/episodes.rs (read,
-//! path — через ядро); окна — core/window_*.rs.
+//! path — через ядро); окна — core/window_*.rs; решение 255 — report/sig_frames.rs, sig_episodes.rs (each).
 //! От чего зависит: zstd.
 //! Настройки: нет (уровень сжатия episode.zstd_level передаёт ядро при открытии).
 
@@ -138,6 +138,20 @@ pub fn read(path: &Path, max: usize) -> std::io::Result<(Vec<String>, bool)> {
         out.push(l);
     }
     Ok((out, false))
+}
+
+/// Решение 255: читает записи файла потоком — строка за строкой в `f`, без загрузки всего файла в память (отчёт
+/// «Сигналы и сделки», report/sig_frames.rs и sig_episodes.rs). У открытого файла — до последней сброшенной записи.
+/// Блокирующее: вызывать в spawn_blocking. Принимает: путь, обработчик строки. Ошибки: нет файла, сжатие повреждено в
+/// начале.
+pub fn each(path: &Path, mut f: impl FnMut(&str)) -> std::io::Result<()> {
+    let dec = zstd::Decoder::new(File::open(path)?)?;
+    for line in BufReader::new(dec).lines() {
+        // Незакрытый кадр (файл ещё пишется) обрывается ошибкой в конце — берём прочитанное, как read.
+        let Ok(l) = line else { break };
+        f(&l);
+    }
+    Ok(())
 }
 
 /// Сумма размеров файлов папки, байт. Ошибок нет (нет папки — 0).

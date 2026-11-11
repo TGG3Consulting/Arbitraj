@@ -102,6 +102,9 @@ pub struct Sess {
 #[derive(Debug)]
 pub struct CtlState {
     next: u64,
+    /// Решение 256: вопрос своего интервала отчёта «Сделки, лимиты и капитал» — чат → сообщение с ForceReply (один на
+    /// чат, новый вопрос заменяет прежний; report_cap.rs).
+    pub cap_prompts: HashMap<i64, i64>,
     /// Номер отрисовки → экран.
     pub sess: HashMap<u64, Sess>,
     /// Вопрос суммы: (чат, сообщение с ForceReply) → номер отрисовки диалога.
@@ -118,6 +121,7 @@ impl Default for CtlState {
     fn default() -> Self {
         Self {
             next: super::super::mirror_state::start_seed(),
+            cap_prompts: HashMap::new(),
             sess: HashMap::new(),
             prompts: HashMap::new(),
             range_prompts: HashMap::new(),

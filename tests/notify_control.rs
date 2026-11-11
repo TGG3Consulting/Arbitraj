@@ -233,13 +233,24 @@ fn screens_and_codes() {
     );
     // Решение 215: «📊 Отчёты» → отчёт → период; callback_data в пределе 64 байт.
     let rep = arb::notify::ctl::report::choose();
-    assert_eq!(datas(&rep.rows), ["r:res", "r:mis", "r:sig", "k:root"]);
+    assert_eq!(
+        datas(&rep.rows),
+        ["r:res", "r:mis", "r:sig", "r:cap", "k:root"]
+    );
     // Решение 255: «Сигналы и сделки» — свои периоды и «Свой интервал».
     let sig = arb::notify::ctl::report::periods("sig").expect("экран периода");
     assert_eq!(
         datas(&sig.rows),
         [
             "r:sig.a", "r:sig.t", "r:sig.3", "r:sig.5", "r:sig.7", "r:sig.c", "r:m", "k:root"
+        ]
+    );
+    // Решение 256: «Сделки, лимиты и капитал» — свои периоды и свой интервал.
+    let cap = arb::notify::ctl::report::periods("cap").expect("экран периода");
+    assert_eq!(
+        datas(&cap.rows),
+        [
+            "r:cap.a", "r:cap.t", "r:cap.3", "r:cap.5", "r:cap.7", "r:cap.c", "r:m", "k:root"
         ]
     );
     let per = arb::notify::ctl::report::periods("mis").expect("экран периода");

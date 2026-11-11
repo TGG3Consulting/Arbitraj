@@ -113,6 +113,7 @@ fn exclusion_text(e: &Exclusion) -> String {
         Exclusion::PairNotTrading(s) => format!("пара не торгуется (статус {s})"),
         Exclusion::PairsStale(why) => format!("справочнику пар верить нельзя: {why}"),
         Exclusion::NoApiTrading => "через API нельзя ни купить, ни продать".into(),
+        Exclusion::OrderTypeNotAccepted(why) => format!("биржа не примет наш ордер на паре: {why}"),
         Exclusion::NoUsdtAddress => "не известен адрес USDT в BSC".into(),
         Exclusion::NoUsdtPool => "нет пула с USDT".into(),
         Exclusion::PoolsLoading => "состояние пулов ещё не прочитано".into(),

@@ -2,7 +2,8 @@
 //! Что делает: правила торговли пар MEXC (шаг цены, шаг количества, минимальное количество и сумма, статус, разрешены
 //! ли покупка и продажа через API нашему ключу) — справочник в памяти с обновлением по запросу.
 //! Кто вызывает: trade.rs (округление и проверки перед ордером), pairs.rs (состояние пар для ядра), pairs_watch.rs.
-//! От чего зависит: rest.rs, symbols_parse.rs (разбор ответов), ctx.rs.
+//! От чего зависит: rest.rs, symbols_parse.rs (разбор ответов), ctx.rs, order_rules.rs (признак «не примет наш
+//! ордер» — решение 254).
 //! Настройки: venue.quote_asset, venue.symbols_refresh_s.
 //!
 //! Официальная документация:
@@ -141,8 +142,10 @@ impl Symbols {
         })
     }
 
-    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). None — пары нет. Ошибок нет.
-    pub fn state(&self, ticker: &str) -> Option<SpotPairState> {
+    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). Принимает: тикер, тип ордера из настройки
+    /// venue.order_type (None — не задан) — для признака «MEXC не примет наш ордер» (решение 254,
+    /// order_rules::order_block). None — пары нет. Ошибок нет.
+    pub fn state(&self, ticker: &str, order_type: Option<&str>) -> Option<SpotPairState> {
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
         map.get(ticker).map(|r| SpotPairState {
             ticker: ticker.to_string(),
@@ -155,6 +158,7 @@ impl Symbols {
             max_notional: r.max_notional,
             min_qty: r.min_qty,
             max_qty: None,
+            order_block: super::order_rules::order_block(r, order_type),
         })
     }
 

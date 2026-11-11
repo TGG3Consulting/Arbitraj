@@ -4,7 +4,8 @@
 //! Состояние пар монет и монеты, которыми можно торговать через API, сообщает ядру событием SpotPairs (pairs.rs).
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
 //! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
-//! Настройки: venue.ws_symbols_per_conn, venue.depth_levels.
+//! Настройки: venue.ws_symbols_per_conn, venue.depth_levels; venue.order_type — для признака пары «MEXC не примет наш
+//! ордер» (решение 254, pairs.rs).
 //!
 //! Официально (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/): «One ws connection supports a maximum
 //! of 30 subscriptions», превышение — «Any subscription will be invalid after the limit is exceeded» (FAQ); уровни
@@ -59,7 +60,8 @@ pub async fn subscribe(
         ));
     }
     symbols.ensure_fresh(ctx).await?;
-    let snap = Snapshot::build(symbols, &assets);
+    let order_type = ctx.text("venue.order_type").ok();
+    let snap = Snapshot::build(symbols, &assets, order_type.as_deref());
     note(ctx, &snap).await;
     // Ядру — состояние пар и монеты, которыми можно торговать через API (pairs.rs): по ним ядро ставит причины отсева
     // и подписывает DEX (core/subscribe.rs). Шлётся при каждой подписке, в том числе пустой (площадка выключена — пар нет).
@@ -91,7 +93,8 @@ pub async fn subscribe(
     Ok((tasks, snap, syms))
 }
 
-/// Запись в журнал: монеты без торгуемой пары и пары, закрытые для API. Ошибок нет.
+/// Запись в журнал: монеты без торгуемой пары, пары, где MEXC не примет наш ордер (решение 254), и пары, закрытые
+/// для API. Ошибок нет.
 async fn note(ctx: &Ctx, snap: &Snapshot) {
     let mut lines = vec![];
     if !snap.missing.is_empty() {
@@ -99,6 +102,14 @@ async fn note(ctx: &Ctx, snap: &Snapshot) {
             "MEXC: нет торгуемой пары для {} монет: {}",
             snap.missing.len(),
             snap.missing.join(", ")
+        ));
+    }
+    let blocked = snap.order_blocked();
+    if !blocked.is_empty() {
+        lines.push(format!(
+            "MEXC: биржа не примет наш ордер (venue.order_type) на {} парах — в расчёт не берутся (решение 254): {}",
+            blocked.len(),
+            blocked.join("; ")
         ));
     }
     let closed = snap.api_closed();

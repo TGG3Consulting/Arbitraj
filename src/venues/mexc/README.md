@@ -26,7 +26,7 @@
 | `num.rs` | Числа из ответов без потери точности |
 | `symbols.rs` | Справочник правил пар в памяти: шаги по решению 107, минимумы, статус, покупка/продажа через API, точность вывода |
 | `symbols_parse.rs` | Разбор exchangeInfo и selfSymbols (в том числе `orderTypes` пары) |
-| `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар, фоновое обновление справочника, подписка (как у BingX) |
+| `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар, фоновое обновление справочника, подписка (как у BingX); пара, где тип venue.order_type недопустим по orderTypes (решение 133), — признак `order_block` с причиной, ядро её не считает (решение 254) |
 | `fees.rs` | Ставки комиссии по паре (`GET /api/v3/tradeFee`, вес 20) |
 | `wallet.rs` | Монеты и сети (`config/getall`) с кэшем `venue.networks_fresh_ms`, комиссия вывода |
 | `networks_parse.rs` | Разбор `config/getall`: код `netWork` ↔ имя `network`, адрес контракта, пределы, шаг вывода `withdrawIntegerMultiple` (только дробный) |
@@ -38,7 +38,7 @@
 | `all_balances.rs` | Панель «Балансы» (решение 144): счета «Спот» (`GET /api/v3/account`) и «Фьючерсы» (`GET /api/v1/private/account/assets`) параллельно, ошибка счёта — в его `error`; других счетов (маржа, Earn, фонд) в API MEXC нет |
 | `futures_rest.rs` | Подписанный GET фьючерсного API (свой домен `venue.futures_rest_url`, заголовки `ApiKey`/`Request-Time`/`Signature`, подпись `accessKey+timestamp+параметры`), коды ошибок фьючерсов, своя пауза по Retry-After |
 | `trade.rs` | Ордер с худшей ценой; правила и пробный ордер — `order_rules.rs` |
-| `order_rules.rs` | Правила ордера — одни у настоящего ордера и у проверки без исполнения (`check_order`, решение 134): API-сторона, тип `venue.order_type` (orderTypes; IOC/FOK при LIMIT), шаги, минимумы и максимум суммы, сроки итога и myTrades; пробный ордер `POST /api/v3/order/test` — `venue.order_test_first` |
+| `order_rules.rs` | Правила ордера — одни у настоящего ордера и у проверки без исполнения (`check_order`, решение 134): API-сторона, тип `venue.order_type` (orderTypes; IOC/FOK при LIMIT), шаги, минимумы и максимум суммы, сроки итога и myTrades; пробный ордер `POST /api/v3/order/test` — `venue.order_test_first`; `order_block` — признак пары «не примет наш ордер» для справочника ядра (решение 254) |
 | `order_state.rs` | Ожидание итога (сбой запроса — повтор), отмена по сроку, чтение итога после отмены; поиск и отмена по своему ID (`origClientOrderId`) |
 | `fills.rs` | Комиссия по всем сделкам ордера: `myTrades` с `limit` (`venue.my_trades_limit`), сверка суммы `qty` с `executedQty`; разные `commissionAsset` — сумма по монете (решение 219) |
 | `proto.rs` | Нужные сообщения protobuf (prost) |

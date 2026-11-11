@@ -111,6 +111,12 @@ pub struct SpotPairState {
     /// в docs-v3 поля помечены устаревшими, в api-ai-skills — обычные поля, в живом ответе minQty ≠ minNotional / price.
     pub min_qty: Option<Decimal>,
     pub max_qty: Option<Decimal>,
+    /// Решение 254: биржа не примет на этой паре наш ордер (LIMIT с нужным timeInForce / типом из настройки) — по полям
+    /// справочника пар (у XT — orderTypes и timeInForces, у Binance и MEXC — orderTypes). Текст — причина, та же, что
+    /// у проверки перед ордером (order_rules адаптера). None — примет или справочник биржи таких полей не отдаёт.
+    /// Ядро такую пару не берёт в расчёт ни для покупки, ни для продажи (core/presence.rs, core/pairs_fresh.rs).
+    #[serde(default)]
+    pub order_block: Option<String>,
 }
 
 /// Состояние подключения площадки.

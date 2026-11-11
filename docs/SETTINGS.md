@@ -221,7 +221,7 @@ money.min_profit_* проверяются только после. Каждая 
 **XT (решение 167) — общие настройки площадки, как их понимает адаптер `venues/xt`:** venue.rest_url
 (`https://sapi.xt.com`), venue.ws_url (`wss://stream.xt.com/public`), venue.recv_window_ms (≤ 60000; документация
 противоречива — 5000 «не больше», пример 60000), venue.rate_limit_pause_ms (после 429 и `GATEWAY_*`: Retry-After у XT
-нет), venue.order_time_in_force (`IOC` или `FOK`, и должно быть в timeInForces пары), venue.order_test_first (у XT
+нет), venue.order_time_in_force (`IOC` или `FOK`, и должно быть в timeInForces пары; пара без него — отсев до расчёта, решение 254), venue.order_test_first (у XT
 пробного ордера нет — «да» даёт ошибку настройки), venue.depth_levels (у `depth` — 5, 10, 20, 50), venue.ws_ping_ms
 (текст «ping», меньше 60000 — без ping минуту сервер рвёт соединение), venue.ws_streams_per_msg (тем в одном
 subscribe — предела в документации нет), venue.ws_subs_per_sec и venue.ws_symbols_per_conn (пределов в документации

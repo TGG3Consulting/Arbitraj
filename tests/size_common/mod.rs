@@ -104,6 +104,7 @@ impl Rec {
             max_notional: num(&s["maxNotional"]),
             min_qty: num(&s["minQty"]),
             max_qty: num(&s["maxQty"]),
+            order_block: None,
         };
         let cfg = json_file("tests/data/bingx_2026-10-24/config_getall.json");
         let coin = cfg["data"]

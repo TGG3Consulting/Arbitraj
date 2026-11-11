@@ -83,6 +83,8 @@ const EXCLUSION = {
 export function exclusionText(e) {
   if (typeof e === 'string') return EXCLUSION[e] ?? e;
   if (e?.PairsStale !== undefined) return `справочнику пар не верим: ${e.PairsStale}`;
+  // Решение 254: биржа не примет наш ордер на паре (LIMIT / timeInForce по справочнику пар биржи).
+  if (e?.OrderTypeNotAccepted !== undefined) return `биржа не примет наш ордер на паре: ${e.OrderTypeNotAccepted}`;
   if (e?.PairNotTrading !== undefined) return `пара не торгуется (status ${e.PairNotTrading})`;
   if (e?.PoolsExcluded) return `все пулы исключены: ${e.PoolsExcluded.join('; ')}`;
   if (e?.NativeVsToken) return `нативная монета и токен обёртки — разные активы: ${e.NativeVsToken}`;

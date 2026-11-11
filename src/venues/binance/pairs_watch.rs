@@ -84,7 +84,7 @@ pub async fn run(
             if books_changed {
                 " — пересподписка стаканов"
             } else {
-                " — только покупка/продажа через API"
+                " — только покупка/продажа через API или приём нашего ордера (решение 254)"
             }
         );
         log(&p.ctx, Level::Warn, m, Some(json!({ "changes": changes }))).await;

@@ -11,6 +11,14 @@
 `quote_snapshot`); её живая котировка — тот же снимок на один вызов. DEX — `bsc_dex/frozen.rs`. KyberSwap снимка не
 отдаёт (не площадка цен — `NotApplicable` по умолчанию). Первые адаптеры (`bingx/`, `bsc_dex/`) — этап 2.
 
+Решение 254: если справочник пар биржи перечисляет допустимые типы ордера / timeInForce, адаптер при разборе
+справочника (подписка и фоновое обновление) ставит паре `SpotPairState::order_block` — причину «биржа не примет наш
+ордер» той же функцией, что проверяет ордер (`order_rules::order_block`); ядро такую пару не считает ни для покупки,
+ни для продажи (`core/presence.rs` OrderTypeNotAccepted, `core/pairs_fresh.rs`). Поля есть у XT (orderTypes,
+timeInForces), Binance (orderTypes), MEXC (orderTypes). У BingX, Bybit, Gate, KuCoin, OKX, Bitget, HTX, CoinEx,
+Phemex, Poloniex, Kraken в справочнике пар таких полей нет — признак не ставится (режимы «только post-only» и т. п. у
+OKX, Poloniex, Kraken — это статус пары: такие пары и так не торгуются, PairNotTrading).
+
 | Папка | Площадка |
 | --- | --- |
 | `gate/` | Биржа Gate (спот, API v4, решение 135) — README.md папки |

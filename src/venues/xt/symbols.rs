@@ -3,7 +3,8 @@
 //! торговля через API, ставка тейкера пары) — справочник в памяти с обновлением по запросу. При той же версии
 //! справочника (version) XT список не присылает — прежний остаётся, время получения обновляется (решение 131).
 //! Кто вызывает: order_rules.rs, trade.rs, pairs.rs, pairs_watch.rs, market.rs, book.rs.
-//! От чего зависит: rest.rs, symbols_parse.rs (разбор), range.rs (пределы и шаг), ctx.rs.
+//! От чего зависит: rest.rs, symbols_parse.rs (разбор), range.rs (пределы и шаг), ctx.rs, order_rules.rs (признак
+//! «не примет наш ордер» — решение 254).
 //! Настройки: venue.quote_asset, venue.symbols_refresh_s.
 //!
 //! Официально (https://doc.xt.com/#marketsymbol, `_market/2symbol.md`): GET /v4/public/symbol (10/s/ip), параметр
@@ -197,8 +198,10 @@ impl Symbols {
         self.all().get(ticker).and_then(|r| r.taker_fee)
     }
 
-    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). None — пары нет. Ошибок нет.
-    pub fn state(&self, ticker: &str) -> Option<SpotPairState> {
+    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). Принимает: тикер, timeInForce из настройки
+    /// venue.order_time_in_force (None — не задан) — для признака «XT не примет наш ордер» (решение 254,
+    /// order_rules::order_block). None — пары нет. Ошибок нет.
+    pub fn state(&self, ticker: &str, tif: Option<&str>) -> Option<SpotPairState> {
         self.all().get(ticker).map(|r| SpotPairState {
             ticker: ticker.to_string(),
             status: r.status,
@@ -210,6 +213,7 @@ impl Symbols {
             max_notional: None,
             min_qty: r.qty.min,
             max_qty: r.qty.max,
+            order_block: super::order_rules::order_block(r, tif),
         })
     }
 

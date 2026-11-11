@@ -3,7 +3,8 @@
 //! соединение) и запускает задачу на соединение; ядру — событие SpotPairs.
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
 //! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
-//! Настройки: venue.ws_symbols_per_conn (и всё, что читает ws.rs::config — проверяется до запуска соединений).
+//! Настройки: venue.ws_symbols_per_conn (и всё, что читает ws.rs::config — проверяется до запуска соединений);
+//! venue.order_time_in_force — для признака пары «XT не примет наш ордер» (решение 254, pairs.rs).
 //!
 //! Официально (https://doc.xt.com/#websocket_publicbase): предел тем на соединение и соединений с IP в документации
 //! XT НЕ указан — venue.ws_symbols_per_conn подбирается живым замером нагрузки (решение 109), вопрос Тиграну.
@@ -43,7 +44,8 @@ pub async fn subscribe(
         ws::config(ctx).map_err(|m| bad(ctx, m))?;
     }
     symbols.ensure_fresh(ctx).await?;
-    let snap = Snapshot::build(symbols, &assets);
+    let tif = ctx.text("venue.order_time_in_force").ok();
+    let snap = Snapshot::build(symbols, &assets, tif.as_deref());
     note(ctx, &snap).await;
     let loaded_at = symbols
         .loaded_at()
@@ -66,7 +68,8 @@ pub async fn subscribe(
     Ok((tasks, snap))
 }
 
-/// Запись в журнал: монеты без торгуемой пары и пары, закрытые для API. Ошибок нет.
+/// Запись в журнал: монеты без торгуемой пары, пары, где XT не примет наш ордер (решение 254), и пары, закрытые для
+/// API. Ошибок нет.
 async fn note(ctx: &Ctx, snap: &Snapshot) {
     if !snap.missing.is_empty() {
         let m = format!(
@@ -81,6 +84,15 @@ async fn note(ctx: &Ctx, snap: &Snapshot) {
             "XT: символ пары с недопустимыми для запроса XT знаками (разрешены буквы, цифры, «_ . , -») у {} пар — стакан не подписан, через API не торгуются: {}",
             snap.bad_symbols.len(),
             snap.bad_symbols.join(", ")
+        );
+        ctx.log(Level::Warn, "venue.subscribe", m).await;
+    }
+    let blocked = snap.order_blocked();
+    if !blocked.is_empty() {
+        let m = format!(
+            "XT: биржа не примет наш ордер (LIMIT, venue.order_time_in_force) на {} парах — в расчёт не берутся (решение 254): {}",
+            blocked.len(),
+            blocked.join("; ")
         );
         ctx.log(Level::Warn, "venue.subscribe", m).await;
     }

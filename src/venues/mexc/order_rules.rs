@@ -4,7 +4,10 @@
 //! 133), количество и цена после округления до шагов (решение 107), минимальное количество, минимальная и максимальная
 //! сумма, настройки ожидания итога и myTrades; если включено venue.order_test_first — пробный ордер
 //! POST /api/v3/order/test с теми же параметрами. Правила в одном месте — проверка до покупки и ордер не расходятся.
-//! Кто вызывает: trade.rs (перед постановкой), mod.rs (check_order — предпроверка ядра перед покупкой).
+//! Признак «биржа не примет наш ордер на паре» (order_block, решение 254) — та же проверка типа, ею symbols.rs
+//! помечает пару в справочнике для ядра (отсев до расчёта).
+//! Кто вызывает: trade.rs (перед постановкой), mod.rs (check_order — предпроверка ядра перед покупкой), symbols.rs
+//! (order_block).
 //! От чего зависит: symbols.rs (правила пары), rest.rs (пробный ордер), order_state.rs, fills.rs, ctx.rs.
 //! Настройки: venue.order_type [mexc], venue.order_test_first [mexc]; через order_state.rs и fills.rs — сроки ожидания
 //! итога и venue.my_trades_limit (без них ордер не ставится: после постановки — поздно).
@@ -48,6 +51,24 @@ pub struct Prepared {
     pub params: Vec<(&'static str, String)>,
 }
 
+/// Что делает: примет ли MEXC на паре наш тип ордера (решение 133: IOC/FOK — по LIMIT, остальные — по orderTypes).
+/// Решение 254: тот же признак отсеивает пару ДО расчёта (symbols.rs → pairs.rs) и страхует ордер (check_rules).
+/// Принимает: правила пары, тип из настройки venue.order_type (None — не задан: сверяется LIMIT — все наши типы
+/// лимитные). Поля orderTypes нет — не ограничивает. Возвращает: None — примет; Some — причина. Ошибок нет.
+/// Официально: exchangeInfo (orderTypes) https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information,
+/// типы ордера https://www.mexc.com/api-docs/spot-v3/public-api-definitions.
+pub fn order_block(rules: &SymbolRules, order_type: Option<&str>) -> Option<String> {
+    let types = rules.order_types.as_ref()?;
+    let t = order_type.unwrap_or("LIMIT");
+    (!rules.order_type_allowed(t)).then(|| {
+        format!(
+            "{}: тип ордера {t} (venue.order_type) не в orderTypes пары ({})",
+            rules.symbol,
+            types.join(", ")
+        )
+    })
+}
+
 /// Что делает: правила пары без сети — сторона через API, округление, пределы, тип ордера.
 /// Принимает: правила пары, сторону, количество, худшую допустимую цену, тип ордера (venue.order_type).
 /// Возвращает: (количество, цена) после округления до шагов. Ошибки: текст причины (ордер не будет принят).
@@ -66,13 +87,8 @@ pub fn check_rules(
         ));
     }
     // Решение 118, А-🟡7 и решение 133: тип ордера сверяется с orderTypes пары (exchangeInfo); IOC/FOK — по LIMIT.
-    if let Some(types) = &rules.order_types
-        && !rules.order_type_allowed(order_type)
-    {
-        return Err(format!(
-            "{s}: тип ордера {order_type} (venue.order_type) не в orderTypes пары ({})",
-            types.join(", ")
-        ));
+    if let Some(why) = order_block(rules, Some(order_type)) {
+        return Err(why);
     }
     // Количество — вниз до шага, цена — до шага в безопасную сторону (покупка — вниз, продажа — вверх).
     let qty = round(qty, rules.step_size, RoundingStrategy::ToZero);

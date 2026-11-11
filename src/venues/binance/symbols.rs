@@ -158,7 +158,8 @@ impl Symbols {
         })
     }
 
-    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs). None — пары нет. Ошибок нет.
+    /// Состояние пары монеты для ядра (MarketEvent::SpotPairs), с признаком «Binance не примет наш ордер» (решение 254,
+    /// order_rules::order_block). None — пары нет. Ошибок нет.
     pub fn state(&self, ticker: &str) -> Option<SpotPairState> {
         self.all().get(ticker).map(|r| SpotPairState {
             ticker: ticker.to_string(),
@@ -171,6 +172,7 @@ impl Symbols {
             max_notional: r.max_notional,
             min_qty: r.min_qty,
             max_qty: r.max_qty,
+            order_block: super::order_rules::order_block(r),
         })
     }
 

@@ -60,6 +60,8 @@ pub fn counts(e: &GatewayError) -> bool {
             | ErrorCode::WithdrawLocked
             // Решение 253, дополнение t82: проблема аккаунта — как InvalidAddress.
             | ErrorCode::AccountRestricted
+            // Дополнение t85: лимит вывода аккаунта — своя пауза (withdraw_limit_pause.rs), не ошибка подряд.
+            | ErrorCode::WithdrawLimit
             // Решение 231 (дополнение): очередь кошелька остановлена — транзакция не подписывалась (отказ до отправки).
             | ErrorCode::QueueHalted
     )

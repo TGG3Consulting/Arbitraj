@@ -67,15 +67,18 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // within 2 min login», −4015 CAPITAL_WITHDRAW_RESTRICTED_MINUTE «Withdraw is limited», −4016
         // CAPITAL_WITHDRAW_RESTRICTED_PASSWORD «Within 24 hours after password modification, withdrawal is prohibited»,
         // −4017 CAPITAL_WITHDRAW_RESTRICTED_UNBIND_2FA «Within 24 hours after the release of 2FA, withdrawal is
-        // prohibited», −4023 CAPITAL_WITHDRAW_MAX_AMOUNT «Within 24 hours, the withdrawal exceeds the maximum amount»
-        // (суточный лимит аккаунта), −4039 CAPITAL_USER_EMPTY «The user does not exist», −4046
-        // CAPITAL_AGREEMENT_NOT_CONFIRMED «Agreement not confirmed» — AccountRestricted: монета не закрывается, алерт
-        // «проблема в аккаунте» (core/withdraw_block.rs).
-        -4004 | -4006 | -4013 | -4014 | -4015 | -4016 | -4017 | -4023 | -4039 | -4046
+        // prohibited», −4039 CAPITAL_USER_EMPTY «The user does not exist», −4046 CAPITAL_AGREEMENT_NOT_CONFIRMED
+        // «Agreement not confirmed» — AccountRestricted: монета не закрывается, алерт «проблема в аккаунте»
+        // (core/withdraw_block.rs).
+        -4004 | -4006 | -4013 | -4014 | -4015 | -4016 | -4017 | -4039 | -4046
             if op == Op::Withdraw =>
         {
             ErrorCode::AccountRestricted
         }
+        // Решение 253, дополнение t85 (Тигран 11.11): −4023 CAPITAL_WITHDRAW_MAX_AMOUNT «Within 24 hours, the withdrawal
+        // exceeds the maximum amount» (та же таблица) — суточный лимит вывода аккаунта, сбросится сам: WithdrawLimit
+        // (площадка на паузу до ручного снятия, монета не закрывается — core/withdraw_limit_pause.rs).
+        -4023 if op == Op::Withdraw => ErrorCode::WithdrawLimit,
         // −2011 / −2013: ордера нет (или не отменён) — не отказ денег, вызывающий решает по смыслу.
         -2011 | -2013 => ErrorCode::BadResponse,
         _ => rejected(op),

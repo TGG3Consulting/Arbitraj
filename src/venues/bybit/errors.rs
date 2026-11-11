@@ -37,6 +37,11 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         10002 | -1 => return clock(code, msg, op, raw),
         // Права и блокировки: 10005 «Permission denied», 10008 «Common banned», 10009 «Service Restricted», 10024
         // «Compliance rules triggered», 10027 «Transactions are banned», 10028 «only … unified account users».
+        // Решение 253, дополнение t85 (Тигран 11.11), Error Codes → Asset (https://bybit-exchange.github.io/docs/v5/error,
+        // сверено 11.11.2026): у вывода 131004 «KYC needed», 131090 «User withdraw has been banned», 131091 «Blocked login
+        // status does not allow withdrawals», 131092 «User status is abnormal» — аккаунт (AccountRestricted: алерт
+        // «проблема в аккаунте», не ошибка подряд). У других операций — права, как раньше.
+        131004 | 131090 | 131091 | 131092 if op == Op::Withdraw => ErrorCode::AccountRestricted,
         10005 | 10008 | 10009 | 10024 | 10027 | 10028 | 131004 | 131090 | 131091 | 131092 => {
             ErrorCode::InsufficientPermissions
         }
@@ -59,13 +64,13 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // exceeds risk limit (the risk limit of margin trade is triggered)», 131087 «your current account spot risk level
         // is too high, withdrawal is prohibited», 131088 «exceeds the remaining withdrawal limit of your identity
         // verification level», 131089 «User sensitive operation, withdrawal is prohibited within 24 hours», 131094
-        // «UserId is not in the whitelist», 131095 «Withdrawl amount exceeds the 24 hour platform limit» —
-        // AccountRestricted (монета не закрывается, алерт «проблема в аккаунте»).
-        131065 | 131084 | 131086 | 131087 | 131088 | 131089 | 131094 | 131095
-            if op == Op::Withdraw =>
-        {
+        // «UserId is not in the whitelist» — AccountRestricted (монета не закрывается, алерт «проблема в аккаунте»).
+        131065 | 131084 | 131086 | 131087 | 131088 | 131089 | 131094 if op == Op::Withdraw => {
             ErrorCode::AccountRestricted
         }
+        // Дополнение t85 (Тигран 11.11): 131095 «Withdrawl amount exceeds the 24 hour platform limit» — суточный лимит,
+        // сбросится сам: WithdrawLimit (площадка на паузу до ручного снятия, core/withdraw_limit_pause.rs).
+        131095 if op == Op::Withdraw => ErrorCode::WithdrawLimit,
         // Сервер: 10000 «Server Timeout», 10016 «Server error», 170001, 170007 «Timeout waiting for response from
         // backend server», 170146 «Order creation timeout», 170032, 170234, 131001, 131003, 131200, 131201, 131230.
         // Для ордера, вывода и перевода — итог неизвестен (Timeout → errors::unsure), для остального — недоступно.

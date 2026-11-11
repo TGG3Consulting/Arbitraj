@@ -44,9 +44,11 @@ pub enum Lift {
 }
 
 /// Пауза площадки до «исход неизвестен» — вызывать ДО auto_pause::pause_venue. Пауза сверки и уже стоящая отметка
-/// Outcome прежней не считаются. Принимает: состояние риска, площадку. Возвращает: (причина, отметка) или None.
+/// Outcome прежней не считаются; пауза лимита вывода (WithdrawLimit, дополнение t85) — считается: вернётся после
+/// выяснения. Принимает: состояние риска, площадку. Возвращает: (причина, отметка) или None.
 pub fn prior(r: &Risk, v: &VenueId) -> Option<(String, Option<VenueMark>)> {
-    if r.reconcile_venues.contains(v) || super::auto_pause::human_only(r, v) {
+    let outcome = r.venue_auto.get(v).is_some_and(|m| m.kind == Kind::Outcome);
+    if r.reconcile_venues.contains(v) || outcome {
         return None;
     }
     let why = r.venue_paused.get(v)?.clone();

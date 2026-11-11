@@ -208,7 +208,7 @@ pub(super) fn resume_note(core: &Core, venue: &VenueId, kind: Kind) -> Option<St
         Kind::Rule => Some(format!(
             "Снимется сама: бот проверяет подключение площадки каждые {every} с, «Подключено» — пауза снята"
         )),
-        Kind::Outcome => None,
+        Kind::WithdrawLimit | Kind::Outcome => None,
     }
 }
 

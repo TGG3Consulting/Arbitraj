@@ -16,7 +16,9 @@
 //! роли не задан — «Общий», как раньше (чтобы не потерять).
 //! Кто вызывает: notify/dispatch_role.rs (send_tagged), notify/dispatch.rs (deliver — not_general).
 //! От чего зависит: notify/roles.rs, settings.
-//! Настройки: нет своих (чаты ролей — notify/roles.rs: notify.deals_chat, notify.failures_chat).
+//! Решение 253, дополнение t85 (Тигран 11.11): venue.account_problem и venue.withdraw_limit — в чат «Аккаунты»
+//! (notify.accounts_chat) вместо «Общего»; чат не задан — в «Общий», как раньше. Отправка — core/deps.rs notify_tagged.
+//! Настройки: нет своих (чаты ролей — notify/roles.rs: notify.deals_chat, notify.failures_chat, notify.accounts_chat).
 
 use crate::settings::store::Store;
 
@@ -42,6 +44,9 @@ pub static ROUTES: &[(&str, Tag, &[Role])] = &[
     // Решение 230 (Тигран, 08.11.2026): сверка поставила паузу площадке или кошельку DEX — короткое сообщение в чат
     // проблем «Неудачные».
     ("risk.reconcile_paused", Tag::Plain, &[Role::Failures]),
+    // Решение 253, дополнение t85 (Тигран 11.11): «проблема в аккаунте» и «лимит вывода исчерпан» — в чат «Аккаунты».
+    ("venue.account_problem", Tag::Plain, &[Role::Accounts]),
+    ("venue.withdraw_limit", Tag::Plain, &[Role::Accounts]),
 ];
 
 /// Решение 251 (г): (код события, роль) — событие НЕ идёт в «Общий», если чат роли задан (roles::chat).
@@ -51,6 +56,9 @@ pub static NOT_GENERAL: &[(&str, Role)] = &[
     ("deal.closed", Role::Deals),
     // Алерт без кнопок; та же запись с кнопками — в «Неудачные» дублем «Ручного управления» (manual.record).
     ("stuck.loss_alert", Role::Failures),
+    // Дополнение t85: алерты аккаунта — в «Аккаунты» вместо «Общего», если чат задан (как 251 (г)).
+    ("venue.account_problem", Role::Accounts),
+    ("venue.withdraw_limit", Role::Accounts),
 ];
 
 /// Не слать ли событие в «Общий»: оно в NOT_GENERAL и чат его роли задан. Принимает: настройки, код.

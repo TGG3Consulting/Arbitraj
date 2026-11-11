@@ -47,7 +47,7 @@ pub struct Ctx<'a> {
 /// Возвращает: true — обработать. Ошибок нет.
 pub fn accepts(role: Role, code: &str) -> bool {
     match role {
-        Role::Deals => false,
+        Role::Deals | Role::Accounts => false,
         // Решение 192: и кнопки записей «Ручного управления» — с карточки проблемной сделки (ctl/card.rs).
         Role::Control => code != "m",
         // Решение 215: «r» — отчёты, только чат «Управление».

@@ -90,10 +90,11 @@ pub fn retry_allowed(code: ErrorCode) -> bool {
 }
 
 /// Отказ вывода (решения 220, 225, 230): «вывод отклонён» (WithdrawRejected), «адрес отклонён» (InvalidAddress),
-/// «вывод заблокирован» (WithdrawLocked), «проблема аккаунта» (AccountRestricted, решение 253, дополнение t82). По
-/// правилу шлюза не повторяется (продажа на месте — core/relay_here.rs; у WithdrawLocked — только свой повтор по
-/// transfer.locked_retry_ms, решение 166), пауза площадки не ставится (core/auto_pause.rs no_pause). Принимает: код.
-/// Ошибок нет.
+/// «вывод заблокирован» (WithdrawLocked), «проблема аккаунта» (AccountRestricted, решение 253, дополнение t82), «лимит
+/// вывода аккаунта» (WithdrawLimit, дополнение t85). По правилу шлюза не повторяется (продажа на месте —
+/// core/relay_here.rs; у WithdrawLocked — только свой повтор по transfer.locked_retry_ms, решение 166), пауза площадки
+/// по правилу и по ошибкам подряд не ставится (core/auto_pause.rs no_pause; у WithdrawLimit пауза своя —
+/// core/withdraw_limit_pause.rs). Принимает: код. Ошибок нет.
 pub fn withdraw_refusal(code: ErrorCode) -> bool {
     matches!(
         code,
@@ -101,6 +102,7 @@ pub fn withdraw_refusal(code: ErrorCode) -> bool {
             | ErrorCode::InvalidAddress
             | ErrorCode::WithdrawLocked
             | ErrorCode::AccountRestricted
+            | ErrorCode::WithdrawLimit
     )
 }
 
@@ -114,6 +116,9 @@ pub fn inactive_reason(code: ErrorCode, kind: &str) -> Option<&'static str> {
         ),
         "Retry" if withdraw_refusal(code) => Some(
             "вывод по этому коду не повторяется — продажа на месте или «USDT не вернулись» (решения 220, 230)",
+        ),
+        "StopVenue" | "StopAll" if code == ErrorCode::WithdrawLimit => Some(
+            "пауза площадки ставится сама, без правила; снимает человек после сброса лимита (решение 253, дополнение t85)",
         ),
         "StopVenue" | "StopAll" if withdraw_refusal(code) => {
             Some("паузы по этому коду нет — только предупреждение (решения 225, 230)")

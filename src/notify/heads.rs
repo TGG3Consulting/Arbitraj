@@ -72,6 +72,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "coin.sell_slip" => (WARN, "Продажи хуже плана подряд — монета в чёрном списке"),
         "coin.exit_gap" => (WARN, "Реальный выход продажи ниже модели — монета закрыта для входа"),
         "venue.account_problem" => (WARN, "Проблема в аккаунте биржи — исправьте"),
+        "venue.withdraw_limit" => (STOP, "Лимит вывода биржи исчерпан — биржа на паузе"),
         "coin.withdraw_refused" => (WARN, "Вывод монеты с биржи отклонён — входы с неё закрыты"),
         "coin.unblacklisted" => (OK, "Монета убрана из чёрного списка"),
         "dex.check_not_configured" => (WARN, "Проверка налогов DEX не настроена"),

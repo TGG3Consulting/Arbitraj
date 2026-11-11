@@ -15,6 +15,10 @@
 //! Дополнение t82 (Тигран 10.11): так же — код AccountRestricted адаптера (вход, 2FA, пароль, верификация, блокировка
 //! или лимит вывода аккаунта — по официальной таблице ошибок биржи, venues/<биржа>/errors.rs); причина человеческим
 //! языком — notify/reason_codes_account.rs.
+//! Дополнение t85 (Тигран 11.11): исчерпан лимит вывода аккаунта, который сбрасывается сам (WithdrawLimit) — монету НЕ
+//! закрывает и алерта «проблема в аккаунте» не шлёт: площадка уже на паузе с алертом venue.withdraw_limit
+//! (core/withdraw_limit_pause.rs из rules_apply.rs). Алерт venue.account_problem уходит и в чат «Аккаунты»
+//! (notify.accounts_chat), если он задан (notify/routes.rs).
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -65,6 +69,10 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
         return;
     }
     if super::trade_ops::kind(core, from).ok() == Some(VenueKind::Dex) {
+        return;
+    }
+    // Дополнение t85: лимит вывода — монета ни при чём; пауза и алерт — withdraw_limit_pause.rs.
+    if e.code == Some(ErrorCode::WithdrawLimit) {
         return;
     }
     // Дополнение (Тигран 10.11): отказ из-за аккаунта (адрес получателя: белый список, адресная книга — у адаптера код
@@ -162,6 +170,12 @@ async fn account(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &OpE
         None,
     )
     .await;
-    deps.notify("venue.account_problem", Some(&from.0), &text)
-        .await;
+    // Дополнение t85: и в чат роли «Аккаунты», если он задан (notify/routes.rs).
+    deps.notify_tagged(
+        "venue.account_problem",
+        Some(&from.0),
+        &text,
+        crate::notify::routes::Tag::Plain,
+    )
+    .await;
 }

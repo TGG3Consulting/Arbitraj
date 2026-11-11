@@ -54,11 +54,6 @@ fn binance_wallet_codes() {
             "Within 24 hours after the release of 2FA, withdrawal is prohibited.",
             "2FA",
         ),
-        (
-            -4023,
-            "Within 24 hours, the withdrawal exceeds the maximum amount.",
-            "суточный лимит",
-        ),
         (-4039, "The user does not exist.", "пользователя"),
         (-4046, "Agreement not confirmed.", "соглашение"),
     ];
@@ -155,9 +150,10 @@ fn mexc_bingx_kucoin_codes() {
 
     let w = kucoin::errors::Op::Withdraw;
     let msg = "Withdrawal limit exceeded. The withdrawal request hit the limit.";
+    // Дополнение t85: суточный лимит, сбросится сам — WithdrawLimit (tests/withdraw_limit_t85.rs).
     check(
         &kucoin::errors::from_code("110003", msg, w, "{}"),
-        C::AccountRestricted,
+        C::WithdrawLimit,
         "суточный лимит",
     );
     // 260210 — монета или аккаунт по одному коду: как раньше.
@@ -221,11 +217,6 @@ fn bybit_okx_codes() {
             "24 часа",
         ),
         (131094, "UserId is not in the whitelist", "белом списке"),
-        (
-            131095,
-            "Withdrawl amount exceeds the 24 hour platform limit",
-            "суточный лимит",
-        ),
     ];
     for (code, msg, h) in acc {
         check(
@@ -258,11 +249,6 @@ fn bybit_okx_codes() {
         );
     }
     let acc = [
-        (
-            "58201",
-            "Withdrawal amount exceeds daily withdrawal limit.",
-            "суточный лимит",
-        ),
         (
             "58204",
             "Withdrawal suspended due to your account activity triggering risk control.",
@@ -340,6 +326,7 @@ fn gate_xt_poloniex_codes() {
         C::AccountRestricted,
         "безопасности",
     );
+    // Дополнение t85: дневные лимиты XT — WithdrawLimit (tests/withdraw_limit_t85.rs).
     for mc in [
         "WITHDRAW_012",
         "WITHDRAW_013",
@@ -348,7 +335,7 @@ fn gate_xt_poloniex_codes() {
     ] {
         check(
             &xt::errors::from_code(mc, "", w, "{}"),
-            C::AccountRestricted,
+            C::WithdrawLimit,
             "суточный лимит",
         );
     }

@@ -45,6 +45,16 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         // 50102 «Timestamp request expired», 50112 «Invalid OK-ACCESS-TIMESTAMP» — часы сервера.
         "50102" | "50112" => return clock(code, msg, op, raw),
         "50121" => ErrorCode::IpNotAllowed,
+        // Решение 253, дополнение t85 (Тигран 11.11), Error Code (https://www.okx.com/docs-v5/en/, сверено 11.11.2026):
+        // у вывода 58004 «Account blocked.» — аккаунт (AccountRestricted: алерт «проблема в аккаунте», не ошибка
+        // подряд). У других операций — права, как раньше.
+        "58004" if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        // Дополнение t85: лимит вывода аккаунта, который сбросится сам — 58201 «Withdrawal amount exceeds daily
+        // withdrawal limit.», 58256 «You can withdraw stablecoins valued at up to {dailyLimit} {symbol} every 24
+        // hours…», 58258 «You can withdraw crypto valued at up to {dailyLimit} {symbol} every 24 hours…» (сутки), 58257
+        // «You can withdraw stablecoins valued at up to {monthlyLimit} {symbol} every month…» (месяц) — WithdrawLimit
+        // (площадка на паузу до ручного снятия, core/withdraw_limit_pause.rs).
+        "58201" | "58256" | "58257" | "58258" if op == Op::Withdraw => ErrorCode::WithdrawLimit,
         "50100" | "50120" | "58004" | "51155" | "58100" | "58101" | "58104" => {
             ErrorCode::InsufficientPermissions
         }
@@ -56,19 +66,18 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         // list», 58213 «internal transfer address is illegal», 58221 «withdrawal address needs labels», 58222 «Invalid
         // withdrawal address», 58254 «complete the digital signature or satoshi test» — InvalidAddress.
         "58207" | "58203" | "58213" | "58221" | "58222" | "58254" => ErrorCode::InvalidAddress,
-        // Аккаунт (AccountRestricted, у вывода): 58011 сервис недоступен неверифицированным, 58201 «exceeds daily
-        // withdrawal limit», 58204 «account activity triggering risk control», 58208 «link your email», 58209
+        // Аккаунт (AccountRestricted, у вывода): 58011 сервис недоступен неверифицированным, 58204 «account activity triggering risk control», 58208 «link your email», 58209
         // «Sub-accounts don't support withdrawals», 58210 «unable to verify your identity», 58217 «suspended for your
         // account due to a risk detected in your withdrawal address», 58219 «within 24 hours after changing your mobile
         // number, email address, or Google Authenticator», 58230 / 58233 / 58235 / 58240 — верификация личности, 58232
         // «L1 withdrawal limit», 58237 / 58238 «provide accurate recipient information» (местные правила аккаунта),
         // 58239 «can't withdraw to a private wallet via API», 58248 «Due to local regulations, API withdrawal isn't
-        // allowed», 58252 «restricted for 48h after your first TRY transaction», 58256 / 58257 / 58258 — лимит вывода
-        // за 24 ч / месяц, 59504 «Sub-accounts don't support withdrawals», 59519 «while it's frozen», 59550
-        // «Complete identity verification (Lv2)».
-        "58011" | "58201" | "58204" | "58208" | "58209" | "58210" | "58217" | "58219" | "58230"
-        | "58232" | "58233" | "58235" | "58237" | "58238" | "58239" | "58240" | "58248"
-        | "58252" | "58256" | "58257" | "58258" | "59504" | "59519" | "59550"
+        // allowed», 58252 «restricted for 48h after your first TRY transaction», 59504 «Sub-accounts don't support
+        // withdrawals», 59519 «while it's frozen», 59550 «Complete identity verification (Lv2)». Лимиты 58201 / 58256 /
+        // 58257 / 58258 — выше (WithdrawLimit, дополнение t85).
+        "58011" | "58204" | "58208" | "58209" | "58210" | "58217" | "58219" | "58230" | "58232"
+        | "58233" | "58235" | "58237" | "58238" | "58239" | "58240" | "58248" | "58252"
+        | "59504" | "59519" | "59550"
             if op == Op::Withdraw =>
         {
             ErrorCode::AccountRestricted

@@ -4,7 +4,8 @@
 //! Кто вызывает: notify/dispatch*.rs, notify/check.rs, notify/mirror*.rs, notify/updates*.rs, notify/ctl/*.
 //! От чего зависит: settings, secrets, notify/telegram.rs, notify/roles.rs.
 //! Настройки: notify.telegram_api_url, http.timeout_ms, ID чата роли (notify.telegram_chat у «Общего»,
-//! notify.control_chat, notify.deals_chat, notify.failures_chat); секрет токена роли (Role::token_secret).
+//! notify.control_chat, notify.deals_chat, notify.failures_chat, notify.accounts_chat); секрет токена роли
+//! (Role::token_secret).
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

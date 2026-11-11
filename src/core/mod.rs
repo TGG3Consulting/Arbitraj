@@ -281,6 +281,7 @@ pub mod window_view;
 pub mod window_worker;
 pub mod withdraw_block;
 pub mod withdraw_limit;
+pub mod withdraw_limit_pause;
 pub mod withdraw_refused;
 pub mod withdraw_seen;
 pub mod withdraw_wait;

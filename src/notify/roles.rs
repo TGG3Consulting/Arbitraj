@@ -2,16 +2,18 @@
 //! Что делает: роли чатов Telegram (решение 176, Тигран 05.11.2026) — явная модель «четыре чата»:
 //! «Управление» (Control: меню кнопками — состояние, балансы, продажа, перевод USDT), «Общий» (General: прежний чат
 //! notify.telegram_chat — всё как до решения), «Сделки» (Deals: только закрытые плюсовые сделки), «Неудачные»
-//! (Failures: зеркало «Ручного управления» с кнопками, минусовые закрытия). У каждой роли своя пара «токен бота
+//! (Failures: зеркало «Ручного управления» с кнопками, минусовые закрытия). Решение 253, дополнение t85 (Тигран 11.11):
+//! пятая роль «Аккаунты» (Accounts: алерты «проблема в аккаунте» venue.account_problem и «лимит вывода исчерпан»
+//! venue.withdraw_limit; без кнопок). У каждой роли своя пара «токен бота
 //! (секрет) + ID чата (настройка)» и свой список разрешённых пользователей. Роль без ID чата не задана — её сообщения
 //! не уходят и её кнопки не принимаются (General — как раньше: без чата уведомления не уходят, причина в журнале).
 //! Кто вызывает: notify/client.rs (клиент роли), notify/routes.rs (куда событие), notify/updates*.rs (входящие по
 //! чату → роль), notify/press.rs (разрешённые пользователи), notify/check.rs, core/commands.rs (чат команды — один
 //! из чатов ролей), api/check.rs.
 //! От чего зависит: settings, secrets (имена секретов), notify/tg_buttons.rs (Chat, User).
-//! Настройки: notify.telegram_chat, notify.control_chat, notify.deals_chat, notify.failures_chat;
+//! Настройки: notify.telegram_chat, notify.control_chat, notify.deals_chat, notify.failures_chat, notify.accounts_chat;
 //! notify.general_users, notify.control_users, notify.failures_users; секреты telegram.bot_token,
-//! telegram.control_token, telegram.deals_token, telegram.failures_token.
+//! telegram.control_token, telegram.deals_token, telegram.failures_token, telegram.accounts_token.
 
 use crate::secrets;
 use crate::settings::read::At;
@@ -30,11 +32,19 @@ pub enum Role {
     Deals,
     /// «Неудачные»: записи «Ручного управления» с кнопками и минусовые закрытия (чат 4).
     Failures,
+    /// Решение 253, дополнение t85: «Аккаунты» — проблема в аккаунте биржи и исчерпанный лимит вывода (чат 5, без кнопок).
+    Accounts,
 }
 
 impl Role {
     /// Все роли — порядок экрана «Уведомления».
-    pub const ALL: [Role; 4] = [Role::Control, Role::General, Role::Deals, Role::Failures];
+    pub const ALL: [Role; 5] = [
+        Role::Control,
+        Role::General,
+        Role::Deals,
+        Role::Failures,
+        Role::Accounts,
+    ];
 
     /// Код роли для адреса API (POST /api/check/telegram/{роль}). Ошибок нет.
     pub fn code(self) -> &'static str {
@@ -43,6 +53,7 @@ impl Role {
             Role::General => "general",
             Role::Deals => "deals",
             Role::Failures => "failures",
+            Role::Accounts => "accounts",
         }
     }
 
@@ -58,6 +69,7 @@ impl Role {
             Role::General => "Общий",
             Role::Deals => "Сделки",
             Role::Failures => "Неудачные",
+            Role::Accounts => "Аккаунты",
         }
     }
 
@@ -68,6 +80,7 @@ impl Role {
             Role::General => "notify.telegram_chat",
             Role::Deals => "notify.deals_chat",
             Role::Failures => "notify.failures_chat",
+            Role::Accounts => "notify.accounts_chat",
         }
     }
 
@@ -78,15 +91,16 @@ impl Role {
             Role::General => secrets::TELEGRAM_BOT_TOKEN,
             Role::Deals => secrets::TELEGRAM_DEALS_TOKEN,
             Role::Failures => secrets::TELEGRAM_FAILURES_TOKEN,
+            Role::Accounts => secrets::TELEGRAM_ACCOUNTS_TOKEN,
         }
     }
 
-    /// Настройка разрешённых пользователей роли. None — у роли нет кнопок («Сделки»). Ошибок нет.
+    /// Настройка разрешённых пользователей роли. None — у роли нет кнопок («Сделки», «Аккаунты»). Ошибок нет.
     pub fn users_key(self) -> Option<&'static str> {
         match self {
             Role::Control => Some("notify.control_users"),
             Role::General => Some("notify.general_users"),
-            Role::Deals => None,
+            Role::Deals | Role::Accounts => None,
             Role::Failures => Some("notify.failures_users"),
         }
     }

@@ -118,6 +118,8 @@ impl OpError {
                     | ErrorCode::InvalidAddress
                     // Решение 253, дополнение t82: вывод отклонён из-за аккаунта — не создан.
                     | ErrorCode::AccountRestricted
+                    // Дополнение t85: лимит вывода аккаунта исчерпан — вывод не создан.
+                    | ErrorCode::WithdrawLimit
                     | ErrorCode::SwapReverted
                     | ErrorCode::RateLimited
                     | ErrorCode::NotConfigured

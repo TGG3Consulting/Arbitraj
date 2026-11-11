@@ -186,15 +186,16 @@ fn recorded_order_fee() {
     }
 }
 
-/// Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — отказ вывода
-/// (WithdrawRejected), как 11000, при любой операции. В официальной таблице кодов его нет: основание — живые ответы
+/// Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — отказ вывода,
+/// как 11000, при любой операции; решение 253, дополнение t82 — код InvalidAddress (адрес, монета не закрывается). В официальной таблице кодов его нет: основание — живые ответы
 /// Bitget на вывод из журнала бота (tests/data/bitget_40938_2026-11-07, сделки CHEEMS и др.).
 #[test]
-fn code_40938_is_withdraw_rejected() {
+fn code_40938_is_address_refusal() {
     use arb::gateway::errors::ErrorCode;
     use arb::venues::bitget::errors::{Op, from_code};
-    let text = std::fs::read_to_string("tests/data/bitget_40938_2026-11-07/withdraw_rejected.jsonl")
-        .expect("записанные ответы 40938");
+    let text =
+        std::fs::read_to_string("tests/data/bitget_40938_2026-11-07/withdraw_rejected.jsonl")
+            .expect("записанные ответы 40938");
     let mut n = 0;
     for raw in text.lines().filter(|l| !l.trim().is_empty()) {
         let v: serde_json::Value = serde_json::from_str(raw).expect("JSON ответа");
@@ -203,16 +204,16 @@ fn code_40938_is_withdraw_rejected() {
         assert!(v["data"].is_null());
         for op in [Op::Withdraw, Op::Move, Op::Other] {
             let e = from_code(400, code, msg, op, raw);
-            assert_eq!(e.code, ErrorCode::WithdrawRejected, "{op:?}");
+            assert_eq!(e.code, ErrorCode::InvalidAddress, "{op:?}");
             assert!(e.message.contains("40938") && e.message.contains("address book"));
         }
         n += 1;
     }
     assert_eq!(n, 4);
-    // 11000 — как раньше.
+    // 11000 — тот же смысл.
     assert_eq!(
         from_code(400, "11000", "", Op::Withdraw, "").code,
-        ErrorCode::WithdrawRejected
+        ErrorCode::InvalidAddress
     );
 }
 

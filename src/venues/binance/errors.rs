@@ -55,8 +55,26 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // «This address is not on the whitelist», −4036 CAPITAL_WITHDRAW_NEW_ADDRESS «The new address needs to be
         // withdrawn in {0} hours» — InvalidAddress: ядро монету не закрывает, а шлёт алерт «проблема в аккаунте»
         // (core/withdraw_block.rs).
-        -4007 | -4012 | -4033 | -4034 | -4035 | -4036 if op == Op::Withdraw => {
+        // Дополнение t82: −4008 CAPITAL_ADDRESS_TAG_VERIFICATION_NOT_PASS «Address tag validation is not passed» — тоже
+        // адрес получателя.
+        -4007 | -4008 | -4012 | -4033 | -4034 | -4035 | -4036 if op == Op::Withdraw => {
             ErrorCode::InvalidAddress
+        }
+        // Решение 253, дополнение t82 (Тигран 10.11): отказ вывода из-за АККАУНТА — Wallet → Error Code
+        // (https://developers.binance.com/en/docs/products/wallet/error-code, сверено 11.11.2026): −4004 CAPITAL_UA
+        // «You don't login or auth», −4006 CAPITAL_ONLY_SUPPORT_PRIMARY_ACCOUNT «Support main account only», −4013
+        // CAPITAL_WITHDRAW_2FA_VERIFY «2FA is not opened», −4014 CAPITAL_WITHDRAW_LOGIN_DELAY «Withdraw is not allowed
+        // within 2 min login», −4015 CAPITAL_WITHDRAW_RESTRICTED_MINUTE «Withdraw is limited», −4016
+        // CAPITAL_WITHDRAW_RESTRICTED_PASSWORD «Within 24 hours after password modification, withdrawal is prohibited»,
+        // −4017 CAPITAL_WITHDRAW_RESTRICTED_UNBIND_2FA «Within 24 hours after the release of 2FA, withdrawal is
+        // prohibited», −4023 CAPITAL_WITHDRAW_MAX_AMOUNT «Within 24 hours, the withdrawal exceeds the maximum amount»
+        // (суточный лимит аккаунта), −4039 CAPITAL_USER_EMPTY «The user does not exist», −4046
+        // CAPITAL_AGREEMENT_NOT_CONFIRMED «Agreement not confirmed» — AccountRestricted: монета не закрывается, алерт
+        // «проблема в аккаунте» (core/withdraw_block.rs).
+        -4004 | -4006 | -4013 | -4014 | -4015 | -4016 | -4017 | -4023 | -4039 | -4046
+            if op == Op::Withdraw =>
+        {
+            ErrorCode::AccountRestricted
         }
         // −2011 / −2013: ордера нет (или не отменён) — не отказ денег, вызывающий решает по смыслу.
         -2011 | -2013 => ErrorCode::BadResponse,

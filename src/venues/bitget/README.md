@@ -47,7 +47,7 @@
 | `rest_book.rs` | Решение 201: снимок стакана REST GET /api/v2/spot/market/orderbook для котировки исполнения при тихом стакане потока; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `book_print.rs` | Решение 213 по содержимому (Тигран 08.11): тот же запрос (type step0, limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром (core/feed_print.rs); в память снимок не кладётся |
 | `reply.rs` | Разбор {code "00000", msg, data}; 429 — пауза всех запросов на Retry-After или venue.rate_limit_pause_ms |
-| `errors.rs` | Коды Bitget и HTTP-статусы → единые коды (429, 401, 403, 5XX, 11000, остальное — отказ по операции) |
+| `errors.rs` | Коды Bitget и HTTP-статусы → единые коды (429, 401, 403, 5XX, 11000, остальное — отказ по операции). Отказы вывода (решение 253, дополнение t82): 11000/40938 → InvalidAddress (было WithdrawRejected) |
 | `num.rs` | Числа и флаги-строки ("true"/"false") без потери точности |
 | `symbols.rs`, `symbols_parse.rs` | Справочник пар: status, шаги из pricePrecision / quantityPrecision, minTradeUSDT |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131) |

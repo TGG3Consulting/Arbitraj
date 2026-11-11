@@ -35,6 +35,9 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         (401, _) => ErrorCode::InvalidCredentials,
         (403, _) => ErrorCode::InsufficientPermissions,
         (_, "21709") => ErrorCode::InsufficientBalance,
+        // Решение 253, дополнение t82 (Тигран 10.11): 21601 «Account locked. Contact support» (Error Codes → Accounts,
+        // сверено 11.11.2026) у вывода — аккаунт (AccountRestricted). 21711 «Currency locked» — монета, как раньше.
+        (_, "21601") if op == Op::Withdraw => ErrorCode::AccountRestricted,
         // Сервер занят или внутренняя ошибка: у денег итог неизвестен.
         (_, "500" | "603" | "415" | "24201") | (500..=599, _) if op != Op::Other => {
             ErrorCode::Timeout

@@ -50,9 +50,10 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
         ErrorCode::OrderNotFilled | ErrorCode::PartialFill => "exec.order_not_filled",
         ErrorCode::SwapReverted => "exec.swap_reverted",
         // Решение 225: паузы по ним нет — только предупреждение (журнал и это событие).
-        ErrorCode::WithdrawRejected | ErrorCode::WithdrawLocked | ErrorCode::InvalidAddress => {
-            "exec.withdraw_rejected"
-        }
+        ErrorCode::WithdrawRejected
+        | ErrorCode::WithdrawLocked
+        | ErrorCode::InvalidAddress
+        | ErrorCode::AccountRestricted => "exec.withdraw_rejected",
         ErrorCode::DepositNotCredited => "exec.deposit_not_credited",
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",

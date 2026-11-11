@@ -36,6 +36,11 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         100419 => ErrorCode::IpNotAllowed,
         100410 => ErrorCode::RateLimited,
         100202 => ErrorCode::InsufficientBalance,
+        // Решение 253, дополнение t82 (Тигран 10.11), error-codes.md (github.com/BingX-API/api-ai-skills,
+        // skills/references/error-codes.md, сверено 11.11.2026): 100403 «The current account is not the main account»
+        // (Account / Wallet), 100441 «Account is abnormal or advanced identity verification is required» (Spot) — у
+        // вывода аккаунт (AccountRestricted). Кодов «адрес / белый список» у вывода в таблице нет.
+        100403 | 100441 if op == Op::Withdraw => ErrorCode::AccountRestricted,
         // «Система занята / запрос не выполнен»: для ордера и вывода итог неизвестен — Timeout
         // (нужна проверка), для остального — площадка недоступна.
         100500 if op != Op::Other => ErrorCode::Timeout,

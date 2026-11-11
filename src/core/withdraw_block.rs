@@ -12,6 +12,9 @@
 //! белом списке / адресной книге, по официальной таблице ошибок биржи: Binance −4007/−4012/−4033…−4036, Bybit
 //! 131083/131093/131066/131098, OKX 58207 и другие коды InvalidAddress адаптера, Gate ADDRESS_NOT_USED) — монету НЕ закрывает: алерт
 //! venue.account_problem «проблема в аккаунте <биржа>: <причина> — исправьте». У бирж без такого кода — как раньше.
+//! Дополнение t82 (Тигран 10.11): так же — код AccountRestricted адаптера (вход, 2FA, пароль, верификация, блокировка
+//! или лимит вывода аккаунта — по официальной таблице ошибок биржи, venues/<биржа>/errors.rs); причина человеческим
+//! языком — notify/reason_codes_account.rs.
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -65,8 +68,12 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
         return;
     }
     // Дополнение (Тигран 10.11): отказ из-за аккаунта (адрес получателя: белый список, адресная книга — у адаптера код
-    // InvalidAddress по официальной таблице ошибок биржи) монету не закрывает — алерт «проблема в аккаунте».
-    if e.code == Some(ErrorCode::InvalidAddress) {
+    // InvalidAddress; состояние аккаунта — AccountRestricted, дополнение t82; оба — по официальной таблице ошибок
+    // биржи) монету не закрывает — алерт «проблема в аккаунте».
+    if matches!(
+        e.code,
+        Some(ErrorCode::InvalidAddress | ErrorCode::AccountRestricted)
+    ) {
         return account(core, deal, asset, from, e).await;
     }
     let deps = &core.inner.deps;
@@ -118,19 +125,29 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
         .await;
 }
 
-/// Что делает: отказ вывода из-за аккаунта (InvalidAddress) — журнал core.withdraw_block и алерт venue.account_problem
-/// шаблоном решения 251 (notify/human_msg.rs): «Проблема в аккаунте <биржа>: <причина> — исправьте». Монета не
-/// закрывается. Принимает: ядро, id сделки, монету, биржу, ошибку. Ошибок нет.
+/// Что делает: отказ вывода из-за аккаунта (InvalidAddress — адрес; AccountRestricted — состояние аккаунта) — журнал
+/// core.withdraw_block и алерт venue.account_problem шаблоном решения 251 (notify/human_msg.rs): «Проблема в аккаунте
+/// <биржа>: <причина> — исправьте». Монета не закрывается. Принимает: ядро, id сделки, монету, биржу, ошибку. Ошибок нет.
 async fn account(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &OpError) {
     let deps = &core.inner.deps;
     let venue = crate::notify::human::venue(&from.0);
+    let todo = if e.code == Some(ErrorCode::AccountRestricted) {
+        format!(
+            "исправьте в аккаунте {venue} то, что названо в причине (вход, 2FA, пароль, верификация, лимит)"
+        )
+    } else {
+        format!(
+            "исправьте в аккаунте {venue}: адрес кошелька DEX — в белом списке (адресной книге) вывода"
+        )
+    };
     let text = crate::notify::human_msg::Msg::event("venue.account_problem")
-        .line(format!("Проблема в аккаунте {venue}: вывод {} отклонён", asset.ticker))
+        .line(format!(
+            "Проблема в аккаунте {venue}: вывод {} отклонён",
+            asset.ticker
+        ))
         .reason(&e.to_string())
         .bot("монету не закрывает (дело не в монете); сделка — как при отказе вывода")
-        .todo(format!(
-            "исправьте в аккаунте {venue}: адрес кошелька DEX — в белом списке (адресной книге) вывода"
-        ))
+        .todo(todo)
         .id(deal)
         .render();
     let log = format!(

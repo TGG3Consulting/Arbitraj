@@ -116,6 +116,8 @@ impl OpError {
                     | ErrorCode::WithdrawLocked
                     | ErrorCode::InsufficientBalance
                     | ErrorCode::InvalidAddress
+                    // Решение 253, дополнение t82: вывод отклонён из-за аккаунта — не создан.
+                    | ErrorCode::AccountRestricted
                     | ErrorCode::SwapReverted
                     | ErrorCode::RateLimited
                     | ErrorCode::NotConfigured

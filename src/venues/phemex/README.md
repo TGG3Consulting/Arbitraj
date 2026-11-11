@@ -21,7 +21,7 @@
 | mod.rs | контракт адаптера | — |
 | ctx.rs | настройки, секреты (ключ и секрет; passphrase нет), журнал | #rest-request-header |
 | sign.rs | HMAC SHA256 hex: путь + строка + expiry + тело; вход WebSocket | #endpoint-security-type, #user-authentication-2 |
-| rest.rs, reply.rs, errors.rs | запросы, ответы {code,msg,data} и /md {error,id,result}, 429 — пауза, коды | #rest-response-format, #rate-limits, #error-codes |
+| rest.rs, reply.rs, errors.rs | запросы, ответы {code,msg,data} и /md {error,id,result}, 429 — пауза, коды; отказы вывода (решение 253, дополнение t82): кодов адреса и аккаунта в таблице нет — без изменений | #rest-response-format, #rate-limits, #error-codes |
 | num.rs | масштабированные целые ↔ Decimal | #price-ratio-value-scales |
 | symbols.rs, symbols_parse.rs | пары (шаги Ev/Ep, пределы) и масштабы монет | #query-product-information |
 | pairs.rs, pairs_watch.rs | состояние пар для ядра, обновление справочника | — |

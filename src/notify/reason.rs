@@ -34,6 +34,10 @@ const CODE_PREFIXES: &[(&str, &str)] = &[
     ("CoinEx, код ", "coinex"),
     ("HTX, код ", "htx"),
     ("Binance, код ", "binance"),
+    // Решение 253, дополнение t82: OKX «OKX, код <код>: <msg>», Bitget «Bitget, код <код> (HTTP <статус>): <msg>»
+    // (код — первое слово до пробела).
+    ("OKX, код ", "okx"),
+    ("Bitget, код ", "bitget"),
 ];
 /// Gate: «Gate, HTTP <статус>, <label>: <message>» (venues/gate/errors.rs, from_label).
 const GATE_PREFIX: &str = "Gate, HTTP ";
@@ -113,7 +117,8 @@ fn find_code(s: &str) -> Option<(usize, &'static str, String, String)> {
         if let Some(pos) = s.find(p) {
             let rest = &s[pos + p.len()..];
             let (code, msg) = rest.split_once(':').unwrap_or((rest, ""));
-            return Some((pos, v, code.trim().to_string(), msg.trim().to_string()));
+            let code = code.split_whitespace().next().unwrap_or_default();
+            return Some((pos, v, code.to_string(), msg.trim().to_string()));
         }
     }
     if let Some(pos) = s.find(KRAKEN_PREFIX) {

@@ -51,7 +51,29 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         c if is_rate_limit(c) => ErrorCode::RateLimited,
         // 51008 (и подкоды 51008_*) — «Insufficient {param0} balance», 58350 «Insufficient balance».
         c if c == "58350" || c.starts_with("51008") => ErrorCode::InsufficientBalance,
-        "58207" | "58203" | "58213" => ErrorCode::InvalidAddress,
+        // Решение 253, дополнение t82 (Тигран 10.11): Error Code → REST API → Funding (https://www.okx.com/docs-v5/en/,
+        // сверено 11.11.2026). Адрес: 58203 «Please add a withdrawal address», 58207 «isn't on the verified address
+        // list», 58213 «internal transfer address is illegal», 58221 «withdrawal address needs labels», 58222 «Invalid
+        // withdrawal address», 58254 «complete the digital signature or satoshi test» — InvalidAddress.
+        "58207" | "58203" | "58213" | "58221" | "58222" | "58254" => ErrorCode::InvalidAddress,
+        // Аккаунт (AccountRestricted, у вывода): 58011 сервис недоступен неверифицированным, 58201 «exceeds daily
+        // withdrawal limit», 58204 «account activity triggering risk control», 58208 «link your email», 58209
+        // «Sub-accounts don't support withdrawals», 58210 «unable to verify your identity», 58217 «suspended for your
+        // account due to a risk detected in your withdrawal address», 58219 «within 24 hours after changing your mobile
+        // number, email address, or Google Authenticator», 58230 / 58233 / 58235 / 58240 — верификация личности, 58232
+        // «L1 withdrawal limit», 58237 / 58238 «provide accurate recipient information» (местные правила аккаунта),
+        // 58239 «can't withdraw to a private wallet via API», 58248 «Due to local regulations, API withdrawal isn't
+        // allowed», 58252 «restricted for 48h after your first TRY transaction», 58256 / 58257 / 58258 — лимит вывода
+        // за 24 ч / месяц, 59504 «Sub-accounts don't support withdrawals», 59519 «while it's frozen», 59550
+        // «Complete identity verification (Lv2)».
+        "58011" | "58201" | "58204" | "58208" | "58209" | "58210" | "58217" | "58219" | "58230"
+        | "58232" | "58233" | "58235" | "58237" | "58238" | "58239" | "58240" | "58248"
+        | "58252" | "58256" | "58257" | "58258" | "59504" | "59519" | "59550"
+            if op == Op::Withdraw =>
+        {
+            ErrorCode::AccountRestricted
+        }
+        // Монета / сеть / сумма: 58200 «not supported for this currency», 58202, 58205 / 58206 пределы суммы.
         "58200" | "58201" | "58202" | "58204" | "58205" | "58206" | "58208" | "58209" | "58210"
         | "58237" => ErrorCode::WithdrawRejected,
         // Сторона OKX (50001 503, 50026 500, 50004 «API endpoint request timeout»): у денег итог неизвестен.

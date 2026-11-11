@@ -47,6 +47,14 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // временно заблокированы для вывода (предварительно зачисленный депозит, deposit_hold.rs). В таблице Error Code
         // кода нет — по живому ответу MEXC на вывод 04.11.2026 (сделка 20261104173851521BABYDOGE).
         16021 if op == Op::Withdraw => ErrorCode::WithdrawLocked,
+        // Решение 253, дополнение t82 (Тигран 10.11), Error Code (https://www.mexc.com/api-docs/spot-v3/error-code,
+        // сверено 11.11.2026): 10212 «This withdrawal address is not on the commonly used address list or has been
+        // invalidated» — адрес (InvalidAddress); 157005 «Withdrawal is currently locked by withdrawal protection» (по
+        // описанию — защита после смены пароля, 2FA или адресов), 10265 «Due to risk control, withdrawal is unavailable»
+        // (описание: проверить действия аккаунта), 10098 «risk control system detected abnormal», 730100 «Unusual user
+        // status» — аккаунт (AccountRestricted): монета не закрывается, алерт «проблема в аккаунте».
+        10212 if op == Op::Withdraw => ErrorCode::InvalidAddress,
+        157005 | 10265 | 10098 | 730100 if op == Op::Withdraw => ErrorCode::AccountRestricted,
         // 11444 «This feature is temporarily unavailable…» — однозначный отказ (решение 118, А-🟡3): у ордера и вывода
         // — отказ, а не «итог неизвестен».
         11444 if op == Op::Trade => ErrorCode::OrderRejected,

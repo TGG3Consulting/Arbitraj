@@ -18,12 +18,10 @@ use super::engine::Core;
 use super::op_error::OpError;
 
 /// Отказ вывода, после которого вывод с этой площадки в сделке больше не пробуем: WithdrawRejected, InvalidAddress,
-/// WithdrawLocked (повторы WithdrawLocked уже сделаны в transfers.rs, решение 166). Принимает: код ошибки. Ошибок нет.
+/// WithdrawLocked (повторы WithdrawLocked уже сделаны в transfers.rs, решение 166), AccountRestricted (решение 253,
+/// дополнение t82 — проблема аккаунта). Принимает: код ошибки. Ошибок нет.
 pub fn refusal(code: Option<ErrorCode>) -> bool {
-    matches!(
-        code,
-        Some(ErrorCode::WithdrawRejected | ErrorCode::InvalidAddress | ErrorCode::WithdrawLocked)
-    )
+    code.is_some_and(crate::gateway::rules::withdraw_refusal)
 }
 
 /// Записывает площадку-источник в сделку, если вывод отказан кодом из refusal. Принимает: сделку, площадку вывода,

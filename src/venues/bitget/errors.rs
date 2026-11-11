@@ -38,13 +38,13 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         (429, _) | (_, "429") => ErrorCode::RateLimited,
         (401, _) => ErrorCode::InvalidCredentials,
         (403, _) => ErrorCode::InsufficientPermissions,
-        // Белый список адресов вывода включён — адрес не в адресной книге (урок 19).
-        (_, "11000") => ErrorCode::WithdrawRejected,
-        // Решение 220: 40938 «Your account can only withdraw to addresses in the address book» (HTTP 400) — тот же
-        // смысл, что 11000. В официальной таблице кодов (https://www.bitget.com/docs/api/error-code) его НЕТ; основание —
-        // живой ответ Bitget на вывод (сделки CHEEMS, AVA, RWA). Явно — чтобы отказ вывода по адресной книге был
-        // WithdrawRejected при любой операции, а не только через rejected(Op::Withdraw).
-        (_, "40938") => ErrorCode::WithdrawRejected,
+        // Белый список адресов вывода включён — адрес не в адресной книге (урок 19). Решение 220: 40938 «Your account
+        // can only withdraw to addresses in the address book» (HTTP 400) — тот же смысл, что 11000. В официальной
+        // таблице кодов (https://www.bitget.com/docs/api/error-code) его НЕТ; основание — живой ответ Bitget на вывод
+        // (сделки CHEEMS, AVA, RWA; tests/data/bitget_40938_2026-11-07). Решение 253, дополнение t82 (Тигран 10.11):
+        // адрес / белый список — InvalidAddress (монета не закрывается, алерт «проблема в аккаунте»; было
+        // WithdrawRejected) при любой операции.
+        (_, "11000" | "40938") => ErrorCode::InvalidAddress,
         // Сервер: у денег итог неизвестен.
         (500..=599, _) if op != Op::Other => ErrorCode::Timeout,
         (500..=599, _) => ErrorCode::Unreachable,

@@ -43,7 +43,7 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `sign.rs` | Подпись Base64(HMAC-SHA256(timestamp+METHOD+путь?запрос+тело)), время ISO 8601 с мс, вход WebSocket |
 | `rest.rs` | REST: публичные и подписанные GET/POST, строка запроса = строка подписи; резерв только при сбое сети |
 | `reply.rs` | Разбор {code, msg, data} и sCode/sMsg; 50011/50013/50040/50061/58102, HTTP 429 — пауза пути (`venue.rate_limit_pause_ms`) |
-| `errors.rs` | Коды OKX → единые коды (501xx ключ и время, 51008 баланс, 58207 адрес вне списка, 58237 rcvrInfo …) |
+| `errors.rs` | Коды OKX → единые коды (501xx ключ и время, 51008 баланс, 58207 адрес вне списка, 58237 rcvrInfo …). Отказы вывода (решение 253, дополнение t82): 58203/58207/58213/58221/58222/58254 → InvalidAddress; 58011/58201/58204/58208…58210/58217/58219/58230/58232/58233/58235/58237…58240/58248/58252/58256…58258/59504/59519/59550 → AccountRestricted |
 | `num.rs` | Числа и поля без потери точности («» — нет значения) |
 | `symbols.rs`, `symbols_parse.rs` | Справочник `GET /api/v5/public/instruments?instType=SPOT`: tickSz, lotSz, minSz, maxLmtSz, state, ruleType |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление, подписка; соединений ≤ 3/с, ≤ 30 на канал |

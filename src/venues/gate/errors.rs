@@ -51,6 +51,10 @@ pub fn from_label(status: u16, label: &str, msg: &str, op: Op, raw: &str) -> Gat
         "BALANCE_NOT_ENOUGH" | "QUANTITY_NOT_ENOUGH" => ErrorCode::InsufficientBalance,
         // Адрес вывода не из списка кабинета: «ADDRESS_NOT_USED — address not used in web console».
         "ADDRESS_NOT_USED" => ErrorCode::InvalidAddress,
+        // Решение 253, дополнение t82 (Тигран 10.11): Error label list → Wallet (сверено 11.11.2026) — ACCOUNT_EXCEPTION
+        // «Abnormal account» у вывода — аккаунт (AccountRestricted). WITHDRAWAL_OVER_LIMIT «Withdrawal limit exceeded» —
+        // чей лимит (аккаунта за сутки или суммы монеты), из таблицы не видно: как раньше (вопрос в docs/TASKS.md).
+        "ACCOUNT_EXCEPTION" if op == Op::Withdraw => ErrorCode::AccountRestricted,
         // Сервер занят или ошибка сервера: у ордера и вывода итог неизвестен (Timeout → «результат неизвестен»).
         "INTERNAL" | "SERVER_ERROR" | "INTERNAL_SERVER_ERROR" | "TOO_BUSY" if op != Op::Other => {
             ErrorCode::Timeout

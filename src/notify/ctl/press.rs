@@ -8,6 +8,7 @@
 //! Устаревшая денежная кнопка (после перезапуска, старше notify.dialog_ttl_s или экран уже перерисован) — «экран
 //! устарел, откройте меню», деньги не двигаются.
 //! «Продать» — sell.rs.
+//! Решение 256: ответ на вопрос своего интервала отчёта «Сделки, лимиты и капитал» — в report_cap.rs (cap_typed).
 //! Кто вызывает: notify/press.rs, notify/tg_commands.rs (ctl_message).
 //! От чего зависит: ctl/view.rs, ctl/sessions.rs, ctl/kb.rs, press_confirm.rs (ask), core (venue_balances), tg_methods.rs.
 //! Настройки: notify.dialog_ttl_s, ui.balances_refresh_ms (возраст балансов, через Core::balances_age).
@@ -121,6 +122,10 @@ impl Ctx<'_> {
 
     /// Сообщение в чате «Управление»: ответ на вопрос суммы перевода или /menu. Ошибок нет.
     pub async fn ctl_message(&self, m: &InMessage, text: &str, who: &str) {
+        // Решение 256: ответ на вопрос своего интервала отчёта «Сделки, лимиты и капитал».
+        if self.cap_reply(m) {
+            return self.cap_typed(text, m, who).await;
+        }
         let prompt = m
             .reply_to_message
             .as_ref()

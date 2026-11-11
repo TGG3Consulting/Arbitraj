@@ -38,7 +38,7 @@
 | `sign.rs` | Подпись: «METHOD\nпуть\nпараметры» (GET — по имени с signTimestamp, тело — requestBody=…&signTimestamp=…), HmacSHA256 → Base64; вход в WS «GET\n/ws\nsignTimestamp=…» |
 | `rest.rs` | REST: строка запроса та же, что в подписи (кодирование SDK); резерв только при сбое сети |
 | `reply.rs` | 2xx — тело как есть; иначе code и message (как SDK); 429 — пауза на Retry-After или venue.rate_limit_pause_ms |
-| `errors.rs` | Коды Poloniex и HTTP-статусы → единые коды |
+| `errors.rs` | Коды Poloniex и HTTP-статусы → единые коды. Отказы вывода (решение 253, дополнение t82): 21601 → AccountRestricted; кодов адреса в таблице нет |
 | `num.rs` | Числа (строки или числа JSON) и флаги без потери точности |
 | `symbols.rs`, `symbols_parse.rs` | Справочник пар /markets: state, шаги из priceScale / quantityScale, мин./макс. количества и суммы, highestBid / lowestAsk |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131), поток аккаунта |

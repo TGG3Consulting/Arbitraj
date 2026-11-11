@@ -23,7 +23,7 @@
 | `mod.rs` | Реализация контракта `Venue` |
 | `ctx.rs` | Окружение: настройки, секреты `binance.api_key` / `binance.api_secret`, HTTP, журнал; символ `CAKEUSDT` |
 | `sign.rs` | Подпись HMAC SHA256 hex: строка REST (порядок отправки), строка WebSocket API (по алфавиту) |
-| `rest.rs`, `reply.rs`, `errors.rs` | REST: X-MBX-APIKEY, recvWindow ≤ 60000, резервный адрес только при сбое сети; 418/429/−1003 — пауза по Retry-After или `venue.rate_limit_pause_ms` отдельно для /api и /sapi; коды → единые |
+| `rest.rs`, `reply.rs`, `errors.rs` | REST: X-MBX-APIKEY, recvWindow ≤ 60000, резервный адрес только при сбое сети; 418/429/−1003 — пауза по Retry-After или `venue.rate_limit_pause_ms` отдельно для /api и /sapi; коды → единые. Отказы вывода (решение 253, дополнение t82): адрес −4007/−4008/−4012/−4033…−4036 → InvalidAddress; аккаунт −4004/−4006/−4013…−4017/−4023/−4039/−4046 → AccountRestricted |
 | `num.rs` | Числа без потери точности |
 | `symbols.rs`, `symbols_parse.rs` | exchangeInfo (вне рабочих потоков): tickSize, stepSize, PRICE_FILTER, LOT_SIZE, NOTIONAL/MIN_NOTIONAL, статус, isSpotTradingAllowed, permissionSets ∩ права аккаунта |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как MEXC); с первой подпиской — поток аккаунта и круг остатка BNB |

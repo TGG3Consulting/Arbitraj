@@ -3,4 +3,4 @@
 Сырые тела HTTP 400 эндпоинта вывода Bitget из журнала бота (`core.op_error`, поле `error.raw`), сделки
 20261107185701530CHEEMS и др. (Тигран, 08.11.2026). Код 40938 в официальной таблице кодов Bitget отсутствует —
 основание разбора (решение 220) только эти живые ответы. Используются в tests/bitget_real_data.rs
-(`code_40938_is_withdraw_rejected`).
+(`code_40938_is_address_refusal`; решение 253, дополнение t82 — InvalidAddress) и tests/account_codes_t82.rs.

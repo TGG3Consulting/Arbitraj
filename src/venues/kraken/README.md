@@ -50,7 +50,7 @@
 | `sign.rs` | API-Sign = Base64(HMAC-SHA512(путь + SHA256(nonce + данные), Base64-декод секрета)); следующий nonce |
 | `rest.rs` | Публичные GET /0/public, подписанные POST /0/private (форма), подписанные /funding (строка запроса + JSON) |
 | `reply.rs` | Разбор {error, result} и ответов Funding; паузы «private», «trade», путь — после «Rate limit exceeded» / Throttled |
-| `errors.rs` | Строки ошибок Kraken → единые коды; текст «Kraken, ошибка …» (notify/reason.rs, решение 164) |
+| `errors.rs` | Строки ошибок Kraken → единые коды; текст «Kraken, ошибка …» (notify/reason.rs, решение 164). Отказы вывода (решение 253, дополнение t82): в spot-errors кодов адреса и аккаунта у вывода нет — без изменений |
 | `num.rs` | Числа и поля без потери точности; суммы Funding {asset, amount} / {asset_amount} |
 | `symbols.rs`, `symbols_parse.rs` | Справочник `AssetPairs`: wsname, tick_size, lot_decimals, pair_decimals, ordermin, costmin, status |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление, подписка по соединениям |

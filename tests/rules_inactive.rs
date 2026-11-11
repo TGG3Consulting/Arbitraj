@@ -11,7 +11,12 @@ use arb::gateway::rules::{RuleAction, action_kind, inactive_reason, withdraw_ref
 
 #[test]
 fn withdraw_refusal_codes_have_no_retry_and_no_stop() {
-    for code in [C::WithdrawRejected, C::InvalidAddress, C::WithdrawLocked] {
+    for code in [
+        C::WithdrawRejected,
+        C::InvalidAddress,
+        C::WithdrawLocked,
+        C::AccountRestricted,
+    ] {
         assert!(withdraw_refusal(code));
         assert!(
             arb::core::auto_pause::no_pause(code),

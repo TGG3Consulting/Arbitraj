@@ -8,7 +8,11 @@
 //! Настройки: нет.
 
 /// Человеческая формулировка кода. Принимает: id площадки, код (число строкой или метка Gate). Возвращает: текст или None.
+/// Отказы вывода «по аккаунту / адресу» (решение 253, дополнение t82) — сначала notify/reason_codes_account.rs.
 pub fn lookup(venue: &str, code: &str) -> Option<&'static str> {
+    if let Some(t) = super::reason_codes_account::lookup(venue, code) {
+        return Some(t);
+    }
     match venue {
         "bingx" => bingx(code),
         "mexc" => mexc(code),

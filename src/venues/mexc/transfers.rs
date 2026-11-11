@@ -32,7 +32,8 @@ const MAX_WITHDRAW_ORDER_ID: usize = 32;
 const HISTORY_LIMIT: &str = "1000";
 
 /// Вывод (новый эндпоинт). Принимает: запрос ядра (сеть — код netWork). Возвращает: перевод Pending с ID MEXC.
-/// Ошибки: ключи, отказ MEXC (WithdrawRejected с текстом, например 10212 — адреса нет в списке разрешённых),
+/// Ошибки: ключи, отказ MEXC (WithdrawRejected; InvalidAddress — 10212 адреса нет в списке разрешённых;
+/// AccountRestricted — аккаунт, errors.rs),
 /// «итог неизвестен» (нет ответа или ответ без id, и вывод не найден в истории по withdrawOrderId).
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
     // Решение 118, А-🟠5 (как решение 114 у ордеров): метка попытки — миллисекунды (9 цифр) в начале, чтобы обрезка

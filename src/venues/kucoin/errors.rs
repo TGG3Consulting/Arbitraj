@@ -39,7 +39,12 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         "429000" => ErrorCode::RateLimited,
         // Баланс: 200004, 102421; 115007 — «withdrawals only come from the funds account» (вывод только с main).
         "200004" | "102421" | "115007" => ErrorCode::InsufficientBalance,
-        // Вывод закрыт по монете/сети или аккаунт заморожен (260210), суточный предел (110003).
+        // Решение 253, дополнение t82 (Тигран 10.11): 110003 «Withdrawal limit exceeded» — по таблице Classic Spot
+        // (https://www.kucoin.com/docs-new/error-code/spot, сверено 11.11.2026) суточный предел выводов аккаунта (24 ч,
+        // сумма) — аккаунт (AccountRestricted), не монета.
+        "110003" if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        // 260210 «withdraw.disabled -- Currency/Chain withdraw is closed, or user is frozen to withdraw» — по одному коду
+        // монета ИЛИ аккаунт: различить нельзя — как раньше (отказ вывода, закрытие входа по монете).
         "260210" | "110003" => ErrorCode::WithdrawRejected,
         // Решение 166: 115008 «Insufficient withdrawable assets: Assets equivalent to … USDT (… ION) are currently locked
         // from withdrawal» — средства временно заблокированы для вывода (квота вывода, withdraw_quota.rs). Смысл — по

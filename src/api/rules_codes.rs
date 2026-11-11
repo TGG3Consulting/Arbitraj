@@ -60,6 +60,10 @@ pub fn codes() -> Vec<CodeMeta> {
             C::InvalidAddress,
             "Адрес отклонён (не в белом списке, неверный формат)",
         ),
+        c(
+            C::AccountRestricted,
+            "Вывод отклонён из-за аккаунта (вход, 2FA, пароль, верификация, блокировка или лимит вывода) — монета не закрывается, алерт «проблема в аккаунте»",
+        ),
         c(C::RateLimited, "Превышен лимит запросов площадки"),
         c(C::NotConfigured, "Нужная настройка не задана в интерфейсе"),
         c(C::SecretsLocked, "Секреты не разблокированы паролем"),
@@ -119,6 +123,6 @@ const _: fn(C) = |code| match code {
     C::StaleData | C::VenueNotConnected | C::BadResponse | C::Internal => {}
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
-    C::NonceConflict | C::WithdrawLocked | C::QueueHalted => {}
+    C::NonceConflict | C::WithdrawLocked | C::QueueHalted | C::AccountRestricted => {}
     C::OutcomeUnknown => {}
 };

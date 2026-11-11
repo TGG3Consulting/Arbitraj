@@ -46,6 +46,21 @@ pub fn from_code(mc: &str, ma: &str, op: Op, raw: &str) -> GatewayError {
             ErrorCode::InsufficientBalance
         }
         m if is_risk_control(m) => ErrorCode::RateLimited,
+        // Решение 253, дополнение t82 (Тигран 10.11), таблица кодов (https://doc.xt.com/#documentationerrorCode; сверено
+        // 11.11.2026 по копии https://xt-com.github.io/xt4-api/): адрес — WITHDRAW_002 «The withdrawal address is
+        // invalid», WITHDRAW_004 «The withdrawal address is not added», WITHDRAW_014 «This withdrawal address cannot be
+        // used in the internal transfer function» (InvalidAddress); аккаунт — WITHDRAW_003 «account security level is
+        // low, please bind any two security verifications», WITHDRAW_012 / WITHDRAW_013 «remaining withdrawal limit
+        // today is not enough», WITHDRAW_020 / WITHDRAW_021 «withdrawal amount has reached the upper limit for today»
+        // (AccountRestricted).
+        "WITHDRAW_002" | "WITHDRAW_004" | "WITHDRAW_014" if op == Op::Withdraw => {
+            ErrorCode::InvalidAddress
+        }
+        "WITHDRAW_003" | "WITHDRAW_012" | "WITHDRAW_013" | "WITHDRAW_020" | "WITHDRAW_021"
+            if op == Op::Withdraw =>
+        {
+            ErrorCode::AccountRestricted
+        }
         // Выполнено ли — не сказано: у ордера и вывода — проверка по своему id (unsure → OutcomeUnknown).
         "COMMON_002" | "COMMON_003" if op != Op::Other => ErrorCode::Timeout,
         "COMMON_002" | "COMMON_003" => ErrorCode::Unreachable,

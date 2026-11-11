@@ -22,7 +22,7 @@
 | `rest.rs` | REST: подпись HMAC-SHA512 (KEY, Timestamp, SIGN; путь с /api/v4, строка запроса без кодирования, SHA512 тела), JSON-тело; резерв — только при сбое сети |
 | `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |
 | `reply.rs` | Разбор ответа: 2xx — JSON; иначе {label, message}; 429 / TOO_MANY_REQUESTS — пауза (Retry-After или venue.rate_limit_pause_ms) |
-| `errors.rs` | Метки Gate → единые коды (INVALID_KEY/SIGNATURE → ключ; REQUEST_EXPIRED → «часы»; IP_FORBIDDEN; READ_ONLY/FORBIDDEN → права; BALANCE_NOT_ENOUGH; ADDRESS_NOT_USED → адрес; 5xx и TOO_BUSY у ордера/вывода → итог неизвестен) |
+| `errors.rs` | Метки Gate → единые коды (INVALID_KEY/SIGNATURE → ключ; REQUEST_EXPIRED → «часы»; IP_FORBIDDEN; READ_ONLY/FORBIDDEN → права; BALANCE_NOT_ENOUGH; ADDRESS_NOT_USED → адрес; 5xx и TOO_BUSY у ордера/вывода → итог неизвестен). Отказы вывода (решение 253, дополнение t82): ACCOUNT_EXCEPTION → AccountRestricted; WITHDRAWAL_OVER_LIMIT — как раньше (вопрос) |
 | `num.rs` | Числа из ответов без потери точности |
 | `symbols.rs`, `symbols_parse.rs` | Справочник пар (/spot/currency_pairs + белый список пар ключа /account/detail): trade_status, шаги 10^−precision, минимумы и максимумы, buy_start/sell_start |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs` | Снимок пар (SpotPairs), фоновое обновление справочника, подписка (как MEXC; комиссии не перезапускаются при том же списке — решение 131) |

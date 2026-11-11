@@ -90,13 +90,17 @@ pub fn retry_allowed(code: ErrorCode) -> bool {
 }
 
 /// Отказ вывода (решения 220, 225, 230): «вывод отклонён» (WithdrawRejected), «адрес отклонён» (InvalidAddress),
-/// «вывод заблокирован» (WithdrawLocked). По правилу шлюза не повторяется (продажа на месте — core/relay_here.rs; у
-/// WithdrawLocked — только свой повтор по transfer.locked_retry_ms, решение 166), пауза площадки не ставится
-/// (core/auto_pause.rs no_pause). Принимает: код. Ошибок нет.
+/// «вывод заблокирован» (WithdrawLocked), «проблема аккаунта» (AccountRestricted, решение 253, дополнение t82). По
+/// правилу шлюза не повторяется (продажа на месте — core/relay_here.rs; у WithdrawLocked — только свой повтор по
+/// transfer.locked_retry_ms, решение 166), пауза площадки не ставится (core/auto_pause.rs no_pause). Принимает: код.
+/// Ошибок нет.
 pub fn withdraw_refusal(code: ErrorCode) -> bool {
     matches!(
         code,
-        ErrorCode::WithdrawRejected | ErrorCode::InvalidAddress | ErrorCode::WithdrawLocked
+        ErrorCode::WithdrawRejected
+            | ErrorCode::InvalidAddress
+            | ErrorCode::WithdrawLocked
+            | ErrorCode::AccountRestricted
     )
 }
 

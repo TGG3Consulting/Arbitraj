@@ -51,8 +51,8 @@ async fn turn() {
 }
 
 /// Вывод. Принимает: запрос ядра (сеть — chain). Возвращает: перевод Pending с id XT.
-/// Ошибки: ключи, отказ XT (WithdrawRejected — например WITHDRAW_004 «адрес не добавлен»), OutcomeUnknown — ответа нет
-/// и вывод не найден по clientOrderId.
+/// Ошибки: ключи, отказ XT (WithdrawRejected; InvalidAddress — WITHDRAW_004 «адрес не добавлен»; AccountRestricted —
+/// аккаунт, errors.rs), OutcomeUnknown — ответа нет и вывод не найден по clientOrderId.
 pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer> {
     if req.deal_id.is_empty() || req.amount <= rust_decimal::Decimal::ZERO {
         return Err(ctx.tag(GatewayError::new(

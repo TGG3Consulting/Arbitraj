@@ -53,6 +53,19 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         }
         // Адрес вывода: 131083 «only allowed from address book», 131093 «not in the whitelist», 131066, 131098.
         131083 | 131093 | 131066 | 131098 if op == Op::Withdraw => ErrorCode::InvalidAddress,
+        // Решение 253, дополнение t82 (Тигран 10.11), Error Codes → Asset (docs/v5/error.mdx репозитория
+        // github.com/bybit-exchange/docs, сверено 11.11.2026): вывод отклонён из-за аккаунта — 131065 «Your KYC
+        // information is incomplete», 131084 «Withdraw failed because of Uta Upgrading», 131086 «Withdrawal amount
+        // exceeds risk limit (the risk limit of margin trade is triggered)», 131087 «your current account spot risk level
+        // is too high, withdrawal is prohibited», 131088 «exceeds the remaining withdrawal limit of your identity
+        // verification level», 131089 «User sensitive operation, withdrawal is prohibited within 24 hours», 131094
+        // «UserId is not in the whitelist», 131095 «Withdrawl amount exceeds the 24 hour platform limit» —
+        // AccountRestricted (монета не закрывается, алерт «проблема в аккаунте»).
+        131065 | 131084 | 131086 | 131087 | 131088 | 131089 | 131094 | 131095
+            if op == Op::Withdraw =>
+        {
+            ErrorCode::AccountRestricted
+        }
         // Сервер: 10000 «Server Timeout», 10016 «Server error», 170001, 170007 «Timeout waiting for response from
         // backend server», 170146 «Order creation timeout», 170032, 170234, 131001, 131003, 131200, 131201, 131230.
         // Для ордера, вывода и перевода — итог неизвестен (Timeout → errors::unsure), для остального — недоступно.

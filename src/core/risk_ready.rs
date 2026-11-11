@@ -52,7 +52,7 @@ pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
     let pair = super::day_pair::of_direction(core, d);
     if !super::day_pair::is_set(core, &pair) {
         return Err(format!(
-            "торговля не включается: не задана настройка {} [venue_dir:{pair}] — ни у направления {}, ни у площадки, ни              у всей системы",
+            "торговля не включается: не задана настройка {} [venue_dir:{pair}] — ни у направления {}, ни у площадки, ни у всей системы",
             super::day_pair::SETTING,
             super::day_pair::label(&pair)
         ));

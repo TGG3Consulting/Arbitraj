@@ -4,23 +4,22 @@
 //! пауза площадки при расхождении сверки (решение 221: Risk.reconcile_venues). Торговля не включается, пока не заданы
 //! все настройки групп money.* и risk.* (решение 15); risk.max_errors_in_row — и у площадки продажи B (решение 118, Я-10).
 //! Карантин — по адресу контракта (quarantine.rs, решение 118).
-//! Лимит убытка за день — по площадке (daily_venue_limit.rs, решение 173: пауза только площадки) и общий «Стоп»
-//! (daily_limit.rs, risk.max_daily_loss_total_usd; решения 53, 152, 153). Пауза циклов DEX ↔ DEX по убытку дня DEX —
-//! Risk.cycle_paused: отказ только направлениям без биржи (DEX ↔ DEX). t91: учёт дня сделки биржа ↔ биржа — у биржи
-//! покупки, но ВХОД не менялся: пауза любой из двух площадок направления (Risk.venue_paused) не даёт начать сделку;
-//! площадки входа — daily_venue::entry_venues. Необязательные настройки (optional) не
-//! требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
+//! Лимит убытка за день — по паре «площадка × тип направления» (daily_venue_limit.rs, решение 258: пауза только этого
+//! направления этой биржи — Risk.pair_paused, отдельно от пауз площадки) и общий «Стоп» (daily_limit.rs,
+//! risk.max_daily_loss_total_usd; решения 53, 152, 153). Вход (can_open): пауза по убытку дня проверяется только у пары
+//! этой сделки (day_pair.rs; «DEX ↔ DEX» — пауза циклов); ВСЕ ПРОЧИЕ паузы площадки (Risk.venue_paused: ошибки подряд,
+//! правило, исход неизвестен, лимит вывода, сверка, человек) — на всю площадку, у обеих площадок сделки, как раньше.
+//! Необязательные настройки (optional) не требуются для включения торговли. Решение 225: кто поставил паузу (софт — Risk.venue_auto / Risk.mode_auto,
 //! auto_pause.rs); софтовую снимает сам бот (auto_resume.rs, day_roll.rs), человек — сбрасывает отметку.
 //! Решение 230: пауза кошелька DEX от сверки (Risk.wallet_paused, wallet_pause.rs) — отказ направлениям этого кошелька.
 //! Решение 249: направление биржа → биржа, запрещённое venue.cex_cex / venue.cex_cex_deny (cex_link.rs), — отказ.
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
-//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (по площадке; у каждой биржи
-//! направления, DEX ↔ DEX — у DEX: daily_venue::entry_venues), risk.max_daily_loss_total_usd (необязательна),
-//! все обязательные money.* и risk.*.
+//! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (у пары сделки: пара → площадка → вся
+//! система, day_pair.rs), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use rust_decimal::Decimal;
 
@@ -49,6 +48,8 @@ pub struct Risk {
     pub mode: Mode,
     /// Почему система не в работе (кто или что остановил).
     pub reason: Option<String>,
+    /// Паузы площадки (ошибки подряд, правило, исход неизвестен, лимит вывода, сверка, человек): новые сделки с её
+    /// участием не начинаются. Паузы по убытку дня здесь нет (решение 258) — она по паре, Risk.pair_paused.
     pub venue_paused: HashMap<VenueId, String>,
     pub errors_in_row: HashMap<VenueId, u64>,
     /// Монеты в карантине — все их направления на паузе до ручного снятия. Ключ — адрес контракта (решение 118,
@@ -64,15 +65,12 @@ pub struct Risk {
     /// снимается (forget_reconcile), такую паузу снимает только человек.
     #[serde(skip)]
     pub reconcile_venues: HashSet<VenueId>,
-    /// Решение 173: площадки на паузе по убытку дня (их причина — в venue_paused). Снимает «Снять паузу» или
-    /// «Сбросить лимит дня» (по площадке или общий).
-    #[serde(skip)]
-    pub loss_paused: BTreeSet<String>,
-    /// Решение 173: циклы DEX ↔ DEX на паузе по убытку дня DEX (id DEX → причина); направления CEX ↔ DEX этой
-    /// паузой не останавливаются. Снимает «Снять паузу» DEX или «Сбросить лимит дня».
-    pub cycle_paused: BTreeMap<String, String>,
-    /// Решение 173: убыток площадки для лимита при прошлом пересчёте — пауза ставится при переходе через лимит или
-    /// при росте убытка (daily_venue_limit.rs). Новый день — с нуля.
+    /// Решение 258: пары «площадка × тип направления» на паузе по убытку дня (id пары, day_pair.rs → причина): новые
+    /// сделки этого направления этой биржи не начинаются, остальные торгуют; «dex_dex» — пауза циклов DEX ↔ DEX (было
+    /// cycle_paused). Снимает «Снять паузу» пары или площадки, «Сбросить лимит дня» (пара, площадка, общий), новый день.
+    pub pair_paused: BTreeMap<String, String>,
+    /// Решение 258: убыток пары для лимита при прошлом пересчёте — пауза ставится при переходе через лимит или при росте
+    /// убытка (daily_venue_limit.rs). Новый день — с нуля.
     #[serde(skip)]
     pub loss_seen: BTreeMap<String, Decimal>,
     /// Решение 225: паузы площадок, поставленные софтом (вид, когда) — их снимает сам бот (auto_resume.rs). Нет записи —
@@ -102,8 +100,7 @@ impl Default for Risk {
             day: DayView::default(),
             daily_stop: false,
             reconcile_venues: HashSet::new(),
-            loss_paused: BTreeSet::new(),
-            cycle_paused: BTreeMap::new(),
+            pair_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
             venue_auto: HashMap::new(),
             mode_auto: None,
@@ -129,6 +126,8 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     super::cex_link::direction_ok(core, d)?;
     // Решение 230: кошелёк направления по текущему маппингу — до блокировки риска (свои замки видов и маппинга).
     let wallet = super::dex_account::of_direction_now(core, d);
+    // Решение 258: пара сделки (площадка × тип направления) — до блокировки риска (замок видов площадок).
+    let pair = super::day_pair::of_direction(core, d);
     // Решение 231 (дополнение, п. 4): очередь кошелька остановлена — «биржа → DEX» не начинается (до замка риска).
     let queue_halt = super::wallet_queue_gate::halted_for(core, d, wallet.as_ref());
     let r = lk(&core.inner.risk);
@@ -157,12 +156,16 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     if let Some(why) = queue_halt {
         return Err(why);
     }
-    // Решение 173: пауза циклов DEX ↔ DEX по убытку дня DEX — только у направлений без биржи (DEX ↔ DEX). t91 вход не
-    // менял: площадки входа — daily_venue::entry_venues (прежнее правило), не площадка учёта дня.
-    for v in super::daily_venue::entry_venues(core, d) {
-        if let Some(why) = r.cycle_paused.get(&v) {
-            return Err(format!("циклы DEX ↔ DEX на паузе: {why}"));
-        }
+    // Решение 258: пауза по убытку дня — только у пары этой сделки (у «DEX ↔ DEX» — пауза циклов, как раньше).
+    if let Some(why) = r.pair_paused.get(&pair) {
+        return Err(if super::day_pair::venue_of(&pair).is_none() {
+            format!("циклы DEX ↔ DEX на паузе: {why}")
+        } else {
+            format!(
+                "направление {} на паузе: {why}",
+                super::day_pair::label(&pair)
+            )
+        });
     }
     if let Some(q) = r.quarantine.get(&super::coin_key::CoinKey::of(&d.asset)) {
         return Err(format!("{} в карантине: {}", q.label, q.reason));
@@ -227,22 +230,33 @@ pub fn on_ok(core: &Core, venue: &VenueId) {
     lk(&core.inner.risk).errors_in_row.remove(venue);
 }
 
-/// Снять паузу площадки (интерфейс). Ошибок нет.
+/// Снять паузу площадки (интерфейс): все её паузы, в том числе паузы её пар по убытку дня. Ошибок нет.
 pub fn resume_venue(core: &Core, venue: &VenueId) {
+    let pairs = super::day_pair::of_venue(core, &venue.0);
     let mut r = lk(&core.inner.risk);
     r.venue_paused.remove(venue);
     // Решение 221: паузу снял человек — отметка сверки снята.
     forget_reconcile(&mut r, venue);
     r.errors_in_row.remove(venue);
-    // Решение 173: пауза по убытку дня тоже снята; новая — только если убыток площадки вырастет.
-    r.loss_paused.remove(&venue.0);
-    r.cycle_paused.remove(&venue.0);
+    // Решения 173, 258: паузы её пар по убытку дня тоже сняты; новая — только если убыток пары вырастет.
+    for p in &pairs {
+        r.pair_paused.remove(p);
+    }
     // Решение 225: паузу снял человек — софтовая отметка снята.
     r.venue_auto.remove(venue);
     // Решение 231: учёт «исход неизвестен» площадки — тоже (человек проверил сам).
     r.outcome_open.remove(venue);
     drop(r);
     publish(core);
+}
+
+/// Решение 258: снять паузу одной пары «площадка × тип направления» по убытку дня (интерфейс, Telegram); паузы
+/// площадки и других пар не трогает; новая — только если убыток пары вырастет. Принимает: ядро, id пары.
+/// Возвращает: true — пауза была. Ошибок нет.
+pub fn resume_pair(core: &Core, pair: &str) -> bool {
+    let was = lk(&core.inner.risk).pair_paused.remove(pair).is_some();
+    publish(core);
+    was
 }
 
 /// Решение 221: паузу площадки поставил или снял не сверка (человек, другой модуль) — отметка «паузу поставила
@@ -259,9 +273,9 @@ pub fn snapshot(core: &Core) -> Risk {
     let mut r = lk(&core.inner.risk).clone();
     r.day.limit = super::daily_limit::view(core, &r.day);
     let date = r.day.date;
-    for (v, x) in r.day.venues.iter_mut() {
-        x.limit = super::daily_venue_limit::view(core, v, x, date);
-        x.paused = r.loss_paused.contains(v);
+    for (p, x) in r.day.pairs.iter_mut() {
+        x.limit = super::daily_venue_limit::view(core, p, x, date);
+        x.paused = r.pair_paused.contains_key(p);
     }
     r
 }

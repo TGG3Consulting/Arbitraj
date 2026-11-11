@@ -1,11 +1,11 @@
 //! Файл: core/risk_ready.rs
 //! Что делает: заданы ли настройки, без которых торговля по направлению не включается (вынесено из risk.rs):
 //! все обязательные money.* и risk.* (решение 15; необязательные — например risk.max_daily_loss_total_usd — не
-//! требуются), risk.max_errors_in_row у биржи продажи (решение 118, Я-10), risk.max_daily_loss_usd у каждой биржи
-//! направления, DEX ↔ DEX — у DEX (решение 173: значение площадки или «вся система»; daily_venue::entry_venues — t91 не
-//! менял).
+//! требуются), risk.max_errors_in_row у биржи продажи (решение 118, Я-10), risk.max_daily_loss_usd у пары сделки
+//! «площадка × тип направления» (решение 258: значение пары → площадки → вся система, day_pair.rs — тот же порядок, что
+//! у проверки лимита).
 //! Кто вызывает: risk.rs (can_open).
-//! От чего зависит: settings (catalog, store), daily_venue.rs (entry_venues).
+//! От чего зависит: settings (catalog, store), day_pair.rs (пара сделки и её лимит).
 //! Решение 242: money.* с областью «площадка + тип направления» — заданы и значением пары (core/venue_dir.rs).
 //! Настройки: все обязательные money.* и risk.*, risk.max_errors_in_row, risk.max_daily_loss_usd.
 
@@ -22,9 +22,13 @@ pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
     // Решение 242: у настроек с областью «площадка + тип направления» значение пары тоже считается заданным (как его
     // читает расчёт — venue_dir.rs); не задано для пары — как раньше.
     let vd = super::venue_dir::of(core, d);
-    for def in catalog::all()
-        .filter(|d| !d.optional && (d.name.starts_with("money.") || d.name.starts_with("risk.")))
-    {
+    // Решение 258: risk.max_daily_loss_usd — ниже, у пары сделки (площадка второго шага — биржа пары, а не площадка
+    // покупки, как у остальных).
+    for def in catalog::all().filter(|d| {
+        !d.optional
+            && d.name != super::day_pair::SETTING
+            && (d.name.starts_with("money.") || d.name.starts_with("risk."))
+    }) {
         let pair = vd.filter(|_| def.scopes.contains(&ScopeKind::VenueDir));
         if s.resolve_dir(def.name, pair, Some(&d.buy_on.0), None)
             .is_none()
@@ -44,16 +48,14 @@ pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
             d.sell_on.0
         ));
     }
-    // Решение 173: у каждой биржи направления (DEX ↔ DEX — у DEX) — свой лимит дня (значение площадки или «вся
-    // система»). t91 эту проверку входа не менял: daily_venue::entry_venues (прежнее правило), а не площадка учёта дня.
-    for v in super::daily_venue::entry_venues(core, d) {
-        if s.resolve("risk.max_daily_loss_usd", Some(&v), None)
-            .is_none()
-        {
-            return Err(format!(
-                "торговля не включается: не задана настройка risk.max_daily_loss_usd [venue:{v}]"
-            ));
-        }
+    // Решение 258: у пары сделки — свой лимит дня (значение пары, площадки или «вся система»).
+    let pair = super::day_pair::of_direction(core, d);
+    if !super::day_pair::is_set(core, &pair) {
+        return Err(format!(
+            "торговля не включается: не задана настройка {} [venue_dir:{pair}] — ни у направления {}, ни у площадки, ни              у всей системы",
+            super::day_pair::SETTING,
+            super::day_pair::label(&pair)
+        ));
     }
     Ok(())
 }

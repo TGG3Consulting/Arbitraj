@@ -7,7 +7,8 @@
 //! (дополнение, п. 4; core/cycle_outcome.rs). Отказ остановленной очереди кошелька сюда больше
 //! не попадает (решение 231, дополнение: код QueueHalted — «не отправлено», обычные правила шлюза).
 //! Пауза, стоявшая до «исход неизвестен» (человек, правило, ошибки подряд — не сверка: её отметку pause_venue снимает),
-//! запоминается и при снятии возвращается как была; пауза по убытку дня (Risk.loss_paused) остаётся (снимет day_roll.rs).
+//! запоминается и при снятии возвращается как была. Пауза по убытку дня — по паре (Risk.pair_paused, решение 258), с
+//! паузой площадки не смешивается и здесь не участвует (снимет day_roll.rs).
 //! «Снять паузу» человеком (risk::resume_venue) снимает и этот учёт.
 //! Кто вызывает: rules_stop.rs (register), outcome_resolve.rs (resolving, resolved, unresolved), risk.rs (resume_venue),
 //! тесты (tests/core_outcome_resolve.rs).
@@ -109,8 +110,6 @@ pub fn resolved(r: &mut Risk, v: &VenueId, key: &str) -> Lift {
                 r.venue_auto.insert(v.clone(), m);
             }
         }
-        // Пауза по убытку дня поставлена поверх — остаётся (её снимет новый день, day_roll.rs).
-        None if r.loss_paused.contains(&v.0) => {}
         None => {
             r.venue_paused.remove(v);
             r.errors_in_row.remove(v);

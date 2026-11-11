@@ -158,8 +158,22 @@ impl Core {
         t
     }
 
-    /// Снять паузу площадки (после ошибок подряд или правила шлюза).
+    /// Снять паузу площадки (после ошибок подряд или правила шлюза). Решение 258: id пары «площадка × тип направления»
+    /// («bingx:dex_cex», «dex_dex», core/day_pair.rs) — снимается только пауза этой пары по убытку дня.
     pub async fn resume_venue(&self, venue: &VenueId) {
+        if super::day_pair::is_pair(&venue.0) {
+            risk::resume_pair(self, &venue.0);
+            let t = format!(
+                "Пауза направления {} по убытку дня снята",
+                super::day_pair::label(&venue.0)
+            );
+            let v = super::day_pair::venue_or_dex(self, &venue.0);
+            self.inner
+                .deps
+                .log(Level::Info, "core.control", v.as_deref(), &t, None)
+                .await;
+            return;
+        }
         risk::resume_venue(self, venue);
         self.inner
             .deps

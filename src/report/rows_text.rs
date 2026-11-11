@@ -2,15 +2,16 @@
 //! Что делает: решение 257 — подписи и части строки листа «Сделки» отчёта «Итоги сделок» из учёта сделки:
 //! - статус человеческими словами (шаг сделки — core/deal_text.rs step_name; у остановленной и «Беру на себя» — «итог —
 //!   оценка»);
-//! - площадка итога по правилу владельца (Тигран 11.11): биржа ↔ DEX — бирже; биржа ↔ биржа — бирже ПОКУПКИ;
-//!   DEX ↔ DEX — DEX — та же функция, что у бота в итоге дня и дневных лимитах (core/daily_venue.rs owner, t91);
+//! - направление итога (решение 258, Тигран 12.11: «Каждое направление имеет свой лимит. Все.»): пара «площадка × тип
+//!   направления» — «BingX → DEX», «DEX → BingX», «BingX → биржа» (биржа ↔ биржа — у биржи ПОКУПКИ), «DEX ↔ DEX» — та же
+//!   функция, что у бота в итоге дня и дневных лимитах (core/day_pair.rs of_kinds);
 //! - состояние возврата USDT по частям (core/usdt_return_state.rs) и его затраты (core/deal_return_cost.rs known);
 //! - части плана из строк расчёта (core/costs.rs → Calc.costs в Deal.plan): запас на движение цены (PriceMoveReserve) и
 //!   затраты возврата USDT (строки этапа «возврат USDT»), только вычитаемые (не в цене, не в количестве), как costs_usdt;
 //! - подписи видов затрат (CostKind) для колонок разбивки.
 //!
 //! Кто вызывает: report/rows.rs.
-//! От чего зависит: core/deal.rs, core/deal_text.rs, core/usdt_return_state.rs, core/usdt_return_parts.rs,
+//! От чего зависит: core/deal.rs, core/deal_text.rs, core/day_pair.rs, core/usdt_return_state.rs, core/usdt_return_parts.rs,
 //! core/deal_return_cost.rs, core/types (CostKind), notify/human.rs (venue, money).
 //! Настройки: нет.
 
@@ -33,12 +34,11 @@ pub fn status(d: &Deal) -> String {
     }
 }
 
-/// Площадка итога сделки по правилу владельца — правилом бота (core/daily_venue.rs owner; см. шапку).
-/// Принимает: сделку, id площадок DEX. Возвращает: id. Ошибок нет.
-pub fn owner_venue(d: &Deal, dex: &BTreeSet<String>) -> String {
-    crate::core::daily_venue::owner(&d.direction.buy_on.0, &d.direction.sell_on.0, |v| {
-        dex.contains(v)
-    })
+/// Направление итога сделки (пара «площадка × тип направления») — правилом бота (core/day_pair.rs; см. шапку).
+/// Принимает: сделку, id площадок DEX. Возвращает: подпись пары для человека («DEX → MEXC»). Ошибок нет.
+pub fn owner_pair(d: &Deal, dex: &BTreeSet<String>) -> String {
+    let p = crate::core::day_pair::of_kinds(&d.direction, |v| dex.contains(v));
+    crate::core::day_pair::label(&p)
 }
 
 /// Состояние одной части возврата USDT. Ошибок нет.

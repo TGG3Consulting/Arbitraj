@@ -7,14 +7,16 @@
 //! - money.min_profit_usd / money.min_profit_pct — те же пары, core/venue_dir.rs thresholds: пара, иначе вся система;
 //! - money.max_per_coin_usd, money.max_in_transit_usd — вся система (limits_parts.rs; бюджет сделки — значение минус
 //!   уже вложенное в открытые сделки монеты / в пути на момент решения);
-//! - risk.max_daily_loss_usd — по каждой площадке реестра (core/daily_venue_limit.rs: площадка → вся система) и
-//!   значение «вся система»; risk.max_daily_loss_total_usd — вся система (core/daily_limit.rs; не задана — общего стопа
-//!   по убытку нет).
+//! - risk.max_daily_loss_usd — по каждой паре «площадка × тип направления» реестра (решение 258, core/day_pair.rs max:
+//!   пара → площадка пары (у «DEX ↔ DEX» — DEX реестра, первая, как Core::dex_id) → вся система; у биржи три пары, у DEX
+//!   одна общая «DEX ↔ DEX») и значение «вся система»; risk.max_daily_loss_total_usd — вся система (core/daily_limit.rs;
+//!   не задана — общего стопа по убытку нет).
 //!
 //! «Откуда взято» — какая область хранилища дала значение (Store::get_exact в порядке чтения бота). Не задано — текст
 //! причины бота вместо числа.
 //! Кто вызывает: report/cap_send.rs (rows — из ядра), report/cap_xlsx.rs (sheet), tests/report_capital.rs.
-//! От чего зависит: settings (Store, Scope, At, venue_dir), core/venue_dir.rs (rule), gateway/contract.rs (VenueKind),
+//! От чего зависит: settings (Store, Scope, At, venue_dir), core/venue_dir.rs (rule), core/day_pair.rs (подпись пары),
+//! gateway/contract.rs (VenueKind),
 //! notify/human.rs (venue, route), report/results_sheet.rs.
 //! Настройки: читает перечисленные выше (только чтение).
 
@@ -138,19 +140,33 @@ pub fn rows(s: &Store, kinds: &[(VenueId, VenueKind)]) -> Vec<LimitRow> {
         "core/limits_parts.rs: вся система; бюджет = значение − уже занятое на момент решения";
     put("money.max_per_coin_usd", all.clone(), None, None, lim);
     put("money.max_in_transit_usd", all.clone(), None, None, lim);
-    let day = "core/daily_venue_limit.rs: площадка → вся система";
-    for (v, _) in kinds {
-        put(
-            "risk.max_daily_loss_usd",
-            venue(&v.0),
-            None,
-            Some(&v.0),
-            day,
-        );
+    let day = "core/day_pair.rs max: пара «площадка × тип» → площадка пары → вся система";
+    let dex = kinds
+        .iter()
+        .find(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| v.0.as_str());
+    for (v, _) in kinds.iter().filter(|(_, k)| *k == VenueKind::Cex) {
+        for kind in [DirKind::CexToDex, DirKind::DexToCex, DirKind::CexCex] {
+            let vd = VenueDir { venue: &v.0, kind };
+            let what = format!(
+                "{} ({})",
+                crate::core::day_pair::label(&crate::settings::venue_dir::id(&v.0, kind)),
+                kind_text(kind)
+            );
+            put("risk.max_daily_loss_usd", what, Some(vd), Some(&v.0), day);
+        }
+    }
+    if let Some(x) = dex {
+        let vd = VenueDir {
+            venue: x,
+            kind: DirKind::DexDex,
+        };
+        let what = format!("DEX ↔ DEX ({}, один набор на все циклы)", venue(x));
+        put("risk.max_daily_loss_usd", what, Some(vd), Some(x), day);
     }
     put(
         "risk.max_daily_loss_usd",
-        format!("{all} (площадкам без своего значения)"),
+        format!("{all} (направлениям без своего значения и без значения площадки)"),
         None,
         None,
         day,

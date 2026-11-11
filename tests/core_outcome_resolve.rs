@@ -150,12 +150,15 @@ fn reconcile_not_prior_and_loss_kept() {
     outcome(&mut r, &v, Some("a"));
     assert_eq!(open::resolved(&mut r, &v, "a"), Lift::Lifted);
     assert!(!r.venue_paused.contains_key(&v));
-    // Пауза по убытку дня поставлена поверх — остаётся до нового дня.
+    // Решение 258: пауза по убытку дня — по паре и отдельно от паузы площадки: выяснение исхода снимает паузу площадки,
+    // пауза направления остаётся до нового дня (было: пауза по убытку лежала в паузе площадки и оставляла её).
     let mut r = Risk::default();
     outcome(&mut r, &v, Some("a"));
-    r.loss_paused.insert(v.0.clone());
+    r.pair_paused
+        .insert("mexc:dex_cex".into(), "убыток дня".into());
     assert_eq!(open::resolved(&mut r, &v, "a"), Lift::Lifted);
-    assert!(r.venue_paused.contains_key(&v));
+    assert!(!r.venue_paused.contains_key(&v));
+    assert!(r.pair_paused.contains_key("mexc:dex_cex"));
     assert!(!r.venue_auto.contains_key(&v), "отметка Outcome снята");
 }
 

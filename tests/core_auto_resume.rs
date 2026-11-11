@@ -11,7 +11,8 @@
 //!    (отметки нет) — ничего; «Стоп» поверх «Стоп» отметки не ставит;
 //! 5) коды без паузы (WithdrawRejected, InvalidAddress, WithdrawLocked) — паузы нет и ошибкой подряд не считаются;
 //! 6) пауза сверки (решение 221) под паузой ошибок / «исход неизвестен» — отметка сверки снята, своя поставлена;
-//! 7) новый день: паузы по убытку дня (биржа, циклы DEX) и «Стоп» по общему лимиту сняты, «исход неизвестен» остаётся;
+//! 7) новый день: паузы по убытку дня (пары «площадка × тип», решение 258; в том числе циклы DEX) и «Стоп» по общему
+//!    лимиту сняты, «исход неизвестен» площадки остаётся;
 //!    до полуночи UTC — точное ожидание.
 //!
 //! Кто вызывает: cargo test.
@@ -262,21 +263,15 @@ fn withdraw_codes_never_pause() {
 
 #[test]
 fn new_day_lifts_loss_pauses_keeps_outcome() {
+    // Решение 258: пауза по убытку дня — по паре (Risk.pair_paused), отдельно от паузы площадки (было: loss_paused +
+    // venue_paused / cycle_paused). Новый день снимает все паузы пар; паузы площадки (здесь «исход неизвестен» Gate) —
+    // не по убытку, новый день их не трогает.
     let mut r = Risk::default();
-    let (bx, dex, gate) = (
-        VenueId("bingx".into()),
-        "bsc_dex".to_string(),
-        VenueId("gate".into()),
-    );
-    r.venue_paused
-        .insert(bx.clone(), "BingX: убыток за день".into());
-    r.loss_paused.insert("bingx".into());
-    r.cycle_paused
-        .insert(dex.clone(), "DEX ↔ DEX: убыток за день".into());
-    r.loss_paused.insert(dex.clone());
-    r.venue_paused
-        .insert(gate.clone(), "Gate: убыток за день".into());
-    r.loss_paused.insert("gate".into());
+    let gate = VenueId("gate".into());
+    for p in ["bingx:cex_dex", "dex_dex", "gate:dex_cex"] {
+        r.pair_paused
+            .insert(p.into(), format!("{p}: убыток за день"));
+    }
     ap::pause_venue(
         &mut r,
         &gate,
@@ -298,16 +293,16 @@ fn new_day_lifts_loss_pauses_keeps_outcome() {
     assert_eq!(
         l,
         DayLift {
-            venues: vec!["bingx".into()],
-            cycles: vec![dex.clone()],
-            kept: vec!["gate".into()],
+            pairs: vec![
+                "bingx:cex_dex".into(),
+                "dex_dex".into(),
+                "gate:dex_cex".into()
+            ],
             mode: Some(Mode::Paused),
         }
     );
-    assert!(!r.venue_paused.contains_key(&bx));
-    assert!(r.cycle_paused.is_empty());
+    assert!(r.pair_paused.is_empty());
     assert!(r.venue_paused.contains_key(&gate));
-    assert!(r.loss_paused.is_empty());
     assert_eq!(r.mode, Mode::Paused);
     assert!(!r.daily_stop);
 
@@ -315,7 +310,9 @@ fn new_day_lifts_loss_pauses_keeps_outcome() {
     let mut r = Risk::default();
     ap::mark_mode(
         &mut r,
-        ModeKind::Rule { venue: bx },
+        ModeKind::Rule {
+            venue: VenueId("bingx".into()),
+        },
         Mode::Running,
         None,
         t0(),

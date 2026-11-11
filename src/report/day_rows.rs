@@ -22,7 +22,7 @@ use crate::core::deal_book::DayPart;
 use crate::notify::human::venue;
 
 use super::rows::{coin_labels, f};
-use super::rows_text::owner_venue;
+use super::rows_text::owner_pair;
 use super::rows_time::{Window, ended_at};
 
 /// Строка листа «Учёт дня».
@@ -63,7 +63,7 @@ pub fn day_rows(
                 venue(&d.direction.buy_on.0),
                 venue(&d.direction.sell_on.0)
             ),
-            owner: venue(&owner_venue(d, dex)),
+            owner: owner_pair(d, dex),
             fact: true,
             amount: 0.0,
             what: String::new(),

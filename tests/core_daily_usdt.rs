@@ -97,10 +97,16 @@ async fn halted_provisional_then_fact_and_restart() {
         assert_eq!(day.result_usd, Decimal::from(-101));
         assert_eq!(day.provisional_usd, Decimal::from(-101));
         assert_eq!(x.provisional_usd, Some(Decimal::from(-101)));
-        // Предварительный убыток 101 ≥ лимита 50 — пауза площадки сделки (решение 173), не всей системы.
+        // Предварительный убыток 101 ≥ лимита 50 — пауза только направления сделки (решение 258; было — площадки
+        // BingX, решение 173), не всей системы. Реестр шлюза в этом тесте пуст — вид bsc_dex неизвестен и считается
+        // биржей (core/day_pair.rs, как раньше в учёте дня), поэтому пара — «BingX → биржа».
         let r = core.control();
         assert_eq!(r.mode, Mode::Running);
-        assert!(r.venue_paused.contains_key(&VenueId("bingx".into())));
+        assert_eq!(
+            r.pair_paused.keys().collect::<Vec<_>>(),
+            vec!["bingx:cex_cex"]
+        );
+        assert!(!r.venue_paused.contains_key(&VenueId("bingx".into())));
     }
     // После перезапуска итог дня восстановлен; закрытие сделки заменяет предварительное фактом.
     let (core, _) = start(&d).await;

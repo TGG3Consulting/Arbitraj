@@ -9,7 +9,7 @@
 // Кто вызывает: components/VenueDirMoney.svelte, pages/Settings.svelte, components/SettingsGroupList.svelte.
 // От чего зависит: ничего (чистые функции над схемой, значениями и видами площадок из lib/settings.svelte.js).
 // Настройки: money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k,
-//   profit.closure_share — все, у которых в схеме есть область VenueDir.
+//   profit.closure_share, risk.max_daily_loss_usd (решение 258) — все, у которых в схеме есть область VenueDir.
 
 /** Рубрики биржи (ключи — DirKind бэкенда). buy/sell — где покупка и продажа: 'self' — эта биржа, 'dex' — DEX,
  *  'cex' — другие биржи. */
@@ -53,8 +53,12 @@ export function inheritedText(def, rub, venue, values, venueKinds) {
   const global = values[`${def.name}|Global|`];
   const sys = def.scopes.includes('Global') ? `вся система: ${global ?? 'не задано'}` : 'не задано';
   if (def.scopes.includes('Venue')) {
-    // Площадка прежней цепочки: получатель перевода (TransferTarget) — продажа B, иначе покупка A (limits_parts.rs).
-    const list = side(def.venue_role === 'TransferTarget' ? rub.sell : rub.buy);
+    // Площадка прежней цепочки: получатель перевода (TransferTarget) — продажа B; решение 258 (PairVenue,
+    // risk.max_daily_loss_usd) — биржа самой рубрики (у DEX ↔ DEX — DEX, core/day_pair.rs); иначе покупка A
+    // (limits_parts.rs).
+    const who = def.venue_role === 'TransferTarget' ? rub.sell
+      : def.venue_role === 'PairVenue' ? (rub.key === 'dex_dex' ? 'dex' : 'self') : rub.buy;
+    const list = side(who);
     if (!list.length) return sys;
     return list
       .map((v) => {

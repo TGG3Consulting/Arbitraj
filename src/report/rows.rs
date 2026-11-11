@@ -39,7 +39,7 @@ pub struct Row {
     pub coin: String,
     pub buy: String,
     pub sell: String,
-    /// Площадка итога по правилу владельца (rows_text.rs owner_venue), имя для человека.
+    /// Направление итога — пара «площадка × тип направления» (rows_text.rs owner_pair, решение 258), подпись для человека.
     pub owner: String,
     pub status: String,
     pub invested: f64,
@@ -125,7 +125,7 @@ fn row(
         coin: labels.get(&d.id).cloned().unwrap_or_default(),
         buy: venue(&d.direction.buy_on.0),
         sell: venue(&d.direction.sell_on.0),
-        owner: venue(&tx::owner_venue(d, dex)),
+        owner: tx::owner_pair(d, dex),
         status,
         invested: f(d.invested),
         proceeds: f(d.proceeds),

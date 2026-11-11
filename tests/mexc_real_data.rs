@@ -121,7 +121,10 @@ fn error_codes_by_doc() {
     );
     let limit = from_code(30035, "You have triggered the order limit", Op::Trade, "");
     assert_eq!(limit.code, C::InsufficientPermissions);
+    // Решение 253, дополнение t85: у вывода 60005 — «аккаунт» (AccountRestricted), у других операций — права.
     let abnormal = from_code(60005, "your account is abnormal", Op::Withdraw, "");
+    assert_eq!(abnormal.code, C::AccountRestricted);
+    let abnormal = from_code(60005, "your account is abnormal", Op::Other, "");
     assert_eq!(abnormal.code, C::InsufficientPermissions);
     let off = "This feature is temporarily unavailable";
     assert_eq!(from_code(11444, off, Op::Trade, "").code, C::OrderRejected);

@@ -20,6 +20,8 @@ pub const TELEGRAM_CONTROL_TOKEN: &str = "telegram.control_token";
 pub const TELEGRAM_DEALS_TOKEN: &str = "telegram.deals_token";
 /// Решение 176: токен бота чата «Неудачные».
 pub const TELEGRAM_FAILURES_TOKEN: &str = "telegram.failures_token";
+/// Решение 253, дополнение t85: токен бота чата «Аккаунты» (проблема аккаунта, лимит вывода).
+pub const TELEGRAM_ACCOUNTS_TOKEN: &str = "telegram.accounts_token";
 
 /// Известные секреты: имя, к чему относится (площадка или «система»), описание — для интерфейса.
 /// Новая площадка или сервис добавляет сюда свои секреты.
@@ -43,6 +45,11 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         TELEGRAM_FAILURES_TOKEN,
         "telegram",
         "Токен бота чата «Неудачные» (решение 176; может быть тем же ботом)",
+    ),
+    (
+        TELEGRAM_ACCOUNTS_TOKEN,
+        "telegram",
+        "Токен бота чата «Аккаунты» (решение 253, дополнение t85: проблема аккаунта, лимит вывода; может быть тем же ботом)",
     ),
     ("bingx.api_key", "bingx", "API-ключ BingX"),
     (

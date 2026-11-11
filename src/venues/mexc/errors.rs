@@ -37,6 +37,10 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         700003 | 10073 => return clock(code, msg, op, raw),
         // Права и блок аккаунта (700007, 401, 30020, 70011; 30035 «You have triggered the order limit, please contact
         // us by submitting a ticket», 60005 «your account is abnormal» — решение 118, А-🟡2).
+        // Решение 253, дополнение t85 (Тигран 11.11), Error Code (https://www.mexc.com/api-docs/spot-v3/error-code,
+        // сверено 11.11.2026): у вывода 60005 «your account is abnormal» — аккаунт (AccountRestricted: алерт «проблема в
+        // аккаунте», не ошибка подряд). У других операций — права, как раньше.
+        60005 if op == Op::Withdraw => ErrorCode::AccountRestricted,
         700007 | 401 | 30020 | 70011 | 30035 | 60005 => ErrorCode::InsufficientPermissions,
         700006 => ErrorCode::IpNotAllowed,
         // 429 «Too Many Requests» в теле — лимит, как HTTP 429 (решение 118, А-🔴3).

@@ -19,7 +19,8 @@ use super::op_error::OpError;
 
 /// Отказ вывода, после которого вывод с этой площадки в сделке больше не пробуем: WithdrawRejected, InvalidAddress,
 /// WithdrawLocked (повторы WithdrawLocked уже сделаны в transfers.rs, решение 166), AccountRestricted (решение 253,
-/// дополнение t82 — проблема аккаунта). Принимает: код ошибки. Ошибок нет.
+/// дополнение t82 — проблема аккаунта), WithdrawLimit (дополнение t85 — лимит вывода аккаунта). Принимает: код ошибки.
+/// Ошибок нет.
 pub fn refusal(code: Option<ErrorCode>) -> bool {
     code.is_some_and(crate::gateway::rules::withdraw_refusal)
 }

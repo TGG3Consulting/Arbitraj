@@ -40,6 +40,10 @@ pub fn from_label(status: u16, label: &str, msg: &str, op: Op, raw: &str) -> Gat
         // Время запроса далеко от времени сервера (окно — 60 с): ключ ни при чём, свой текст про часы.
         "REQUEST_EXPIRED" => return clock(msg, op, raw),
         "IP_FORBIDDEN" => ErrorCode::IpNotAllowed,
+        // Решение 253, дополнение t85 (Тигран 11.11), Error label list → Authentication related (сверено 11.11.2026):
+        // у вывода ACCOUNT_LOCKED «Account is locked» — аккаунт (AccountRestricted: алерт «проблема в аккаунте», не
+        // ошибка подряд). У других операций — права, как раньше.
+        "ACCOUNT_LOCKED" if op == Op::Withdraw => ErrorCode::AccountRestricted,
         "READ_ONLY" | "FORBIDDEN" | "ACCOUNT_LOCKED" | "API_WITHDRAW_DISABLED" => {
             ErrorCode::InsufficientPermissions
         }

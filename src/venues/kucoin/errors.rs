@@ -33,6 +33,11 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         // 400002 «Invalid KC-API-TIMESTAMP» — часы сервера, запрос отклонён.
         "400002" => return clock(msg, op, raw),
         "400006" => ErrorCode::IpNotAllowed,
+        // Решение 253, дополнение t85 (Тигран 11.11), Classic Spot (https://www.kucoin.com/docs-new/error-code/spot,
+        // сверено 11.11.2026): у вывода 411100 «User is frozen», 400700 «Transaction restricted, there's a risk problem in
+        // your account», 200009 «Please complete the KYC verification before you trade XX» — аккаунт (AccountRestricted:
+        // алерт «проблема в аккаунте», не ошибка подряд). У других операций — права, как раньше.
+        "411100" | "400700" | "200009" if op == Op::Withdraw => ErrorCode::AccountRestricted,
         // 400007 доступ запрещён, 411100 аккаунт заморожен, 400700 ограничение по риску, 400500 недоступно в регионе,
         // 200009 нужна KYC.
         "400007" | "411100" | "400700" | "400500" | "200009" => ErrorCode::InsufficientPermissions,
@@ -41,8 +46,9 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         "200004" | "102421" | "115007" => ErrorCode::InsufficientBalance,
         // Решение 253, дополнение t82 (Тигран 10.11): 110003 «Withdrawal limit exceeded» — по таблице Classic Spot
         // (https://www.kucoin.com/docs-new/error-code/spot, сверено 11.11.2026) суточный предел выводов аккаунта (24 ч,
-        // сумма) — аккаунт (AccountRestricted), не монета.
-        "110003" if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        // сумма) — аккаунт, не монета. Дополнение t85 (Тигран 11.11): лимит сбросится сам — WithdrawLimit (площадка на
+        // паузу до ручного снятия, core/withdraw_limit_pause.rs).
+        "110003" if op == Op::Withdraw => ErrorCode::WithdrawLimit,
         // 260210 «withdraw.disabled -- Currency/Chain withdraw is closed, or user is frozen to withdraw» — по одному коду
         // монета ИЛИ аккаунт: различить нельзя — как раньше (отказ вывода, закрытие входа по монете).
         "260210" | "110003" => ErrorCode::WithdrawRejected,

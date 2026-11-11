@@ -16,10 +16,15 @@
 //!   ставят вовсе (вывод не повторяем, продаём на месте — решение 220б): не считаются ошибкой подряд (risk_count.rs),
 //!   правило шлюза «стоп площадка» / «стоп всё» для них — предупреждение без паузы (rules_stop.rs).
 //!   Снятие по проверке подключения — auto_resume.rs, с новым днём — day_roll.rs.
+//! - Решение 253, дополнение t85 (Тигран 11.11): исчерпан лимит вывода аккаунта (WithdrawLimit) — пауза площадки с
+//!   отметкой WithdrawLimit (withdraw_limit_pause.rs): «только человек», как Outcome (автоснятия нет — время сброса
+//!   лимита биржа не сообщает; новый день и сверка её не снимают). Ставится и поверх паузы без отметки (убыток дня,
+//!   человек) — иначе новый день снял бы её вместе с паузой по убытку. Пришла поверх Outcome — отметка остаётся
+//!   Outcome, а пауза лимита становится «прежней» паузой учёта outcome_open.rs: выяснение исхода вернёт её, а не снимет.
 //!
 //! Кто вызывает: risk.rs (on_error, resume_venue, set_mode), rules_stop.rs, rules_apply.rs, daily_limit.rs,
-//! auto_resume.rs, day_roll.rs, risk_count.rs (no_pause), тесты.
-//! От чего зависит: risk.rs (Risk, Mode), gateway/errors.rs.
+//! auto_resume.rs, day_roll.rs, risk_count.rs (no_pause), withdraw_limit_pause.rs, outcome_open.rs, тесты.
+//! От чего зависит: risk.rs (Risk, Mode), outcome_open.rs (Open.prior), gateway/errors.rs.
 //! Настройки: нет (интервалы — auto_resume.rs).
 
 use chrono::{DateTime, Utc};
@@ -37,8 +42,16 @@ pub enum Kind {
     Errors,
     /// Правило шлюза «стоп площадка»: снятие — проверкой подключения.
     Rule,
+    /// Решение 253, дополнение t85: исчерпан лимит вывода аккаунта — снимает только человек (время сброса неизвестно).
+    WithdrawLimit,
     /// «Исход неизвестен»: человек или выяснение исхода ботом (решение 231, outcome_open.rs).
     Outcome,
+}
+
+/// Вид паузы, которую снимает только человек (не auto_resume.rs, не новый день, не сверка): Outcome, WithdrawLimit.
+/// Ошибок нет.
+pub fn human_kind(k: Kind) -> bool {
+    matches!(k, Kind::Outcome | Kind::WithdrawLimit)
 }
 
 /// Отметка софтовой паузы площадки.
@@ -101,9 +114,17 @@ pub fn pause_venue(r: &mut Risk, v: &VenueId, why: String, kind: Kind, now: Date
             kind: m.kind.max(kind),
             since: m.since,
         }),
-        (None, _) if !was => Some(VenueMark { kind, since: now }),
+        // Дополнение t85: лимит вывода — отметка и поверх паузы без отметки (см. шапку).
+        (None, _) if !was || kind == Kind::WithdrawLimit => Some(VenueMark { kind, since: now }),
         (None, _) => None,
     };
+    // Дополнение t85: лимит вывода поверх «исход неизвестен» — становится прежней паузой учёта outcome_open.rs.
+    if kind == Kind::WithdrawLimit
+        && prev.as_ref().is_some_and(|m| m.kind == Kind::Outcome)
+        && let Some(o) = r.outcome_open.get_mut(v)
+    {
+        o.prior = Some((why.clone(), Some(VenueMark { kind, since: now })));
+    }
     if prev.as_ref().is_none_or(|m| m.kind != Kind::Outcome) || kind == Kind::Outcome {
         r.venue_paused.insert(v.clone(), why);
     }
@@ -115,13 +136,13 @@ pub fn pause_venue(r: &mut Risk, v: &VenueId, why: String, kind: Kind, now: Date
     changed
 }
 
-/// Пауза площадки снимается только человеком («исход неизвестен»). Ошибок нет.
+/// Пауза площадки снимается только человеком («исход неизвестен», лимит вывода — human_kind). Ошибок нет.
 pub fn human_only(r: &Risk, v: &VenueId) -> bool {
-    r.venue_auto.get(v).is_some_and(|m| m.kind == Kind::Outcome)
+    r.venue_auto.get(v).is_some_and(|m| human_kind(m.kind))
 }
 
 /// Пора ли проверять подключение для автоснятия. Errors — после ожидания `wait_errors_s` с постановки (не задано —
-/// никогда, снимает человек); Rule — на каждом круге; Outcome — никогда.
+/// никогда, снимает человек); Rule — на каждом круге; Outcome и WithdrawLimit — никогда.
 /// Принимает: отметку, сейчас, ожидание для Errors (секунды). Ошибок нет.
 pub fn due(m: &VenueMark, now: DateTime<Utc>, wait_errors_s: Option<u64>) -> bool {
     match m.kind {
@@ -129,7 +150,7 @@ pub fn due(m: &VenueMark, now: DateTime<Utc>, wait_errors_s: Option<u64>) -> boo
             .and_then(|w| i64::try_from(w).ok())
             .is_some_and(|w| (now - m.since).num_seconds() >= w),
         Kind::Rule => true,
-        Kind::Outcome => false,
+        Kind::WithdrawLimit | Kind::Outcome => false,
     }
 }
 
@@ -137,7 +158,7 @@ pub fn due(m: &VenueMark, now: DateTime<Utc>, wait_errors_s: Option<u64>) -> boo
 /// пауза, счётчик ошибок подряд, отметка. Принимает: состояние риска, площадку, отметку на момент проверки.
 /// Возвращает: true — снята. Ошибок нет.
 pub fn lift_venue(r: &mut Risk, v: &VenueId, seen: &VenueMark) -> bool {
-    let same = r.venue_auto.get(v) == Some(seen) && seen.kind != Kind::Outcome;
+    let same = r.venue_auto.get(v) == Some(seen) && !human_kind(seen.kind);
     if !same || !r.venue_paused.contains_key(v) {
         return false;
     }

@@ -50,16 +50,16 @@ pub fn from_code(mc: &str, ma: &str, op: Op, raw: &str) -> GatewayError {
         // 11.11.2026 по копии https://xt-com.github.io/xt4-api/): адрес — WITHDRAW_002 «The withdrawal address is
         // invalid», WITHDRAW_004 «The withdrawal address is not added», WITHDRAW_014 «This withdrawal address cannot be
         // used in the internal transfer function» (InvalidAddress); аккаунт — WITHDRAW_003 «account security level is
-        // low, please bind any two security verifications», WITHDRAW_012 / WITHDRAW_013 «remaining withdrawal limit
-        // today is not enough», WITHDRAW_020 / WITHDRAW_021 «withdrawal amount has reached the upper limit for today»
-        // (AccountRestricted).
+        // low, please bind any two security verifications» (AccountRestricted). Дополнение t85 (Тигран 11.11): дневной
+        // лимит вывода аккаунта, сбросится сам — WITHDRAW_012 / WITHDRAW_013 «remaining withdrawal limit today is not
+        // enough», WITHDRAW_020 / WITHDRAW_021 «withdrawal amount has reached the upper limit for today» (WithdrawLimit:
+        // площадка на паузу до ручного снятия, core/withdraw_limit_pause.rs).
         "WITHDRAW_002" | "WITHDRAW_004" | "WITHDRAW_014" if op == Op::Withdraw => {
             ErrorCode::InvalidAddress
         }
-        "WITHDRAW_003" | "WITHDRAW_012" | "WITHDRAW_013" | "WITHDRAW_020" | "WITHDRAW_021"
-            if op == Op::Withdraw =>
-        {
-            ErrorCode::AccountRestricted
+        "WITHDRAW_003" if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        "WITHDRAW_012" | "WITHDRAW_013" | "WITHDRAW_020" | "WITHDRAW_021" if op == Op::Withdraw => {
+            ErrorCode::WithdrawLimit
         }
         // Выполнено ли — не сказано: у ордера и вывода — проверка по своему id (unsure → OutcomeUnknown).
         "COMMON_002" | "COMMON_003" if op != Op::Other => ErrorCode::Timeout,

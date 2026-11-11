@@ -64,6 +64,10 @@ pub fn codes() -> Vec<CodeMeta> {
             C::AccountRestricted,
             "Вывод отклонён из-за аккаунта (вход, 2FA, пароль, верификация, блокировка или лимит вывода) — монета не закрывается, алерт «проблема в аккаунте»",
         ),
+        c(
+            C::WithdrawLimit,
+            "Вывод отклонён: исчерпан лимит вывода аккаунта, который сбрасывается сам (суточный, месячный) — площадка на паузе до ручного снятия, монета не закрывается, алерт «лимит вывода»",
+        ),
         c(C::RateLimited, "Превышен лимит запросов площадки"),
         c(C::NotConfigured, "Нужная настройка не задана в интерфейсе"),
         c(C::SecretsLocked, "Секреты не разблокированы паролем"),
@@ -124,5 +128,5 @@ const _: fn(C) = |code| match code {
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
     C::NonceConflict | C::WithdrawLocked | C::QueueHalted | C::AccountRestricted => {}
-    C::OutcomeUnknown => {}
+    C::OutcomeUnknown | C::WithdrawLimit => {}
 };

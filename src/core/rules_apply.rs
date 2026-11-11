@@ -16,8 +16,11 @@
 //! Решение 225: паузы отсюда — софтовые (auto_pause.rs): «стоп площадка», «стоп всё» и ошибки подряд снимает сам бот
 //! проверкой подключения (auto_resume.rs), «исход неизвестен» — только человек; отказ вывода / неверный адрес / вывод
 //! заблокирован паузу не ставят вовсе. Постановка пауз — rules_stop.rs.
+//! Решение 253, дополнение t85: исчерпан лимит вывода аккаунта (WithdrawLimit) — пауза площадки до ручного снятия и
+//! алерт venue.withdraw_limit (withdraw_limit_pause.rs; у ручной команды тоже), правила шлюза — как у отказа вывода.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
-//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, rules_stop.rs, deps.rs.
+//! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, rules_stop.rs,
+//! withdraw_limit_pause.rs, deps.rs.
 //! Настройки: правила шлюза (SQLite), risk.max_errors_in_row (через risk.rs), risk.auto_resume_check_s и
 //! risk.errors_resume_after_s (текст уведомления, rules_stop.rs).
 
@@ -54,6 +57,7 @@ fn event_of(code: ErrorCode) -> Option<&'static str> {
         | ErrorCode::WithdrawLocked
         | ErrorCode::InvalidAddress
         | ErrorCode::AccountRestricted => "exec.withdraw_rejected",
+        // Дополнение t85: лимит вывода — свой алерт venue.withdraw_limit (withdraw_limit_pause.rs), без этого дубля.
         ErrorCode::DepositNotCredited => "exec.deposit_not_credited",
         ErrorCode::RateLimited => "venue.rate_limited",
         ErrorCode::ChannelRejected => "send.channel_rejected",
@@ -87,6 +91,10 @@ pub async fn on_error(
     if !crate::gateway::rules::retry_allowed(err.code) {
         stop::outcome(core, op, venue, deal, err).await;
         return Next::Stop;
+    }
+    // Решение 253, дополнение t85: исчерпан лимит вывода аккаунта — площадка на паузу до ручного снятия, алерт.
+    if err.code == ErrorCode::WithdrawLimit {
+        super::withdraw_limit_pause::pause(core, op, venue, deal, err).await;
     }
     if let Some(code) = event_of(err.code) {
         let tg = tg_error(code, op, venue, deal, err).render();

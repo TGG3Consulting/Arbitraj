@@ -186,7 +186,14 @@ pub(super) fn lift(core: &Core, venue: &str) -> bool {
     if on {
         let id = VenueId(venue.to_string());
         super::risk::forget_reconcile(&mut r, &id);
-        r.venue_paused.remove(&id);
+        // Решение 253, дополнение t85: поверх стоит пауза лимита вывода — она остаётся (снимает «Снять паузу»).
+        let limit = r
+            .venue_auto
+            .get(&id)
+            .is_some_and(|m| m.kind == super::auto_pause::Kind::WithdrawLimit);
+        if !limit {
+            r.venue_paused.remove(&id);
+        }
         r.cycle_paused.remove(venue);
     }
     on

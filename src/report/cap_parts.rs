@@ -143,10 +143,11 @@ fn split(data: &Data, all: &[NaiveDate], i: usize, j: usize, o: &mut Out) -> Res
     }
     if j - i == 1 {
         return Err(format!(
-            "день {} — файл {} байт больше предела {} байт, не делится дальше (по дням)",
+            "день {} — файл {} байт больше предела {} байт, не делится дальше (по дням); частей уже отправлено: {}",
             span(a, b),
             bytes.len(),
-            o.max
+            o.max,
+            o.sent
         ));
     }
     drop(bytes);

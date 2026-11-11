@@ -19,6 +19,7 @@
 //! cap_addr.rs, notify/human.rs (venue, route).
 //! Настройки: нет.
 
+use rust_decimal::Decimal;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::{DateTime, Utc};
@@ -136,7 +137,9 @@ fn row(d: &Deal, w: &Window, hold: Hold, cx: &RowsCtx) -> DealRow {
         buy: venue(&x.buy_on.0),
         sell: venue(&x.sell_on.0),
         dir: route(&x.buy_on.0, &x.sell_on.0),
-        bought: d.buy.is_some(),
+        // Покупка состоялась — есть исполненная покупка И вложено > 0 (у неисполненного цикла DEX ↔ DEX
+        // cycle_deal.rs пишет buy при вложено 0 — приёмка 256, замечание 1).
+        bought: d.buy.is_some() && d.invested > Decimal::ZERO,
         status: rows_text::status(d),
         start: d.started_at,
         end,

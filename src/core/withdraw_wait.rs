@@ -12,10 +12,20 @@
 //! покупки сделки на этой площадке (TradeResult.finished_at покупки); действует вместе с ожиданием по событию (сначала
 //! пауза, потом ожидание) и повтором −4026/−4024; строка «Пауза перед выводом после покупки: N мс …», во время в пути
 //! входит так же. Покупки сделки на этой площадке нет (перегон, возврат USDT) или пауза уже прошла — без паузы.
+//! Дополнение t89 (Тигран 11.11, живой случай 20261111122340181OPEN — возврат USDT через 0.6 с после продажи на Binance
+//! отказан −4026): та же защита у ЛЮБОГО вывода с площадки сразу после своей сделки на ней — возврат USDT после продажи
+//! (usdt_return_job / retry / «Перегнать»), перегон монеты (relay, «Продать и перегнать»), «отдельно». Пауза — от
+//! последней своей сделки (покупки ИЛИ продажи) площадки по выводимому активу, если адаптер её сообщает (контракт
+//! since_own_trade — Binance; прочие биржи — как раньше, только после покупки сделки) — withdraw_after.rs. Ожидание —
+//! событие баланса этого актива после своего ордера (у USDT — outboundAccountPosition по USDT), затем один REST.
+//! Строки: «Пауза перед выводом USDT после своей сделки на <площадка>: N мс …», «Ожидание доступности USDT для
+//! вывода: N мс …» (у монеты — прежние строки); у возврата USDT — в хронологию закрытой сделки (ID вывода = сделка +
+//! метка, withdraw_after::deal_of). Время в пути (transfers.rs: начало перевода — до паузы) их включает.
 //! Кто вызывает: core/transfers.rs (go — перед выводом).
-//! От чего зависит: engine.rs, ledger.rs (хронология), gateway/contract.rs (withdraw_ready), settings.
+//! От чего зависит: engine.rs, ledger.rs (хронология), withdraw_after.rs, gateway/contract.rs (withdraw_ready,
+//! since_own_trade), settings.
 //! Настройки: venue.withdraw_ready_wait_ms, venue.withdraw_min_delay_ms (по площадке-отправителю, необязательные, без
-//! значений по умолчанию).
+//! значений по умолчанию); venue.quote_asset (котируемая монета — подпись строк USDT).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -45,13 +55,11 @@ pub async fn before(
         coin: None,
     };
     let s = &core.inner.deps.settings;
-    let paused = pause(
-        core,
-        deal,
-        from,
-        s.integer("venue.withdraw_min_delay_ms", at).ok(),
-    )
-    .await;
+    // t89: котируемая монета площадки (выручка USDT) — в строках её тикер, у монеты сделки — прежние строки.
+    let quote = s.text("venue.quote_asset", at).ok();
+    let what = (quote.as_deref() == Some(asset.ticker.as_str())).then_some(asset.ticker.as_str());
+    let delay = s.integer("venue.withdraw_min_delay_ms", at).ok();
+    let paused = pause(core, deal, (from, gw), asset, what, delay).await;
     let Ok(ms) = s.integer("venue.withdraw_ready_wait_ms", at) else {
         return paused;
     };
@@ -66,29 +74,43 @@ pub async fn before(
         qty,
         r.map_err(|e| e.message),
     );
+    let text = match what {
+        Some(t) => text.replacen("доступности монеты", &format!("доступности {t}"), 1),
+        None => text,
+    };
     note(core, deal, from, &text).await;
     Some(waited + paused.unwrap_or_default())
 }
 
-/// Что делает: страховка venue.withdraw_min_delay_ms (см. шапку) — пауза до «исполнение покупки сделки на этой площадке
-/// плюс delay_ms». Принимает: ядро, id сделки, площадку, паузу (None — не задана). Возвращает: сколько ждали (None — не
-/// ждали). Ошибок нет.
-async fn pause(core: &Core, deal: &str, from: &VenueId, delay_ms: Option<u64>) -> Option<Duration> {
+/// Что делает: страховка venue.withdraw_min_delay_ms (см. шапку) — пауза до «своя сделка плюс delay_ms»: покупка сделки
+/// на этой площадке или (t89) последняя своя сделка площадки по активу (withdraw_after::from_trade). Принимает: ядро, ID
+/// вывода, (площадку, её адаптер), актив (тикер площадки), подпись актива (Some — котируемая монета), паузу (None — не
+/// задана). Возвращает: сколько ждали (None — не ждали). Ошибок нет.
+async fn pause(
+    core: &Core,
+    deal: &str,
+    (from, gw): (&VenueId, &Arc<dyn Venue>),
+    asset: &Asset,
+    what: Option<&str>,
+    delay_ms: Option<u64>,
+) -> Option<Duration> {
     let ms = delay_ms?;
-    let bought = {
-        let deals = lk(&core.inner.deals);
-        deals
-            .get(deal)
-            .and_then(|d| d.buy.as_ref())
-            .filter(|b| &b.request.venue == from)
-            .map(|b| b.finished_at)
-    }?;
-    let left = left_ms(bought, chrono::Utc::now(), ms)?;
+    let now = chrono::Utc::now();
+    let (at, since) = super::withdraw_after::from_trade(core, deal, from, gw, asset, now)?;
+    let left = left_ms(at, now, ms)?;
     tokio::time::sleep(left).await;
-    let text = format!(
-        "Пауза перед выводом после покупки: {} мс (venue.withdraw_min_delay_ms = {ms})",
-        left.as_millis()
-    );
+    let text = match (since, what) {
+        (super::withdraw_after::Since::DealBuy, None) => format!(
+            "Пауза перед выводом после покупки: {} мс (venue.withdraw_min_delay_ms = {ms})",
+            left.as_millis()
+        ),
+        (_, w) => format!(
+            "Пауза перед выводом {} после своей сделки на {}: {} мс (venue.withdraw_min_delay_ms = {ms})",
+            w.unwrap_or(&asset.ticker),
+            from.0,
+            left.as_millis()
+        ),
+    };
     note(core, deal, from, &text).await;
     Some(left)
 }
@@ -143,9 +165,11 @@ pub fn line(ms: u128, ticker: &str, qty: Decimal, r: Result<WithdrawReady, Strin
 
 /// Строка в хронологию сделки (и сохранить) и журнал core.withdraw_wait. Сделки нет — только журнал. Ошибок нет.
 async fn note(core: &Core, deal: &str, from: &VenueId, text: &str) {
+    // t89: у возврата USDT ID вывода — сделка + метка попытки: строка — в закрытую сделку.
+    let key = super::withdraw_after::deal_of(core, deal);
     let d = {
         let mut deals = lk(&core.inner.deals);
-        deals.get_mut(deal).map(|d| {
+        key.and_then(|k| deals.get_mut(&k)).map(|d| {
             d.note(text.to_string());
             d.clone()
         })

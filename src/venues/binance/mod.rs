@@ -170,11 +170,17 @@ impl Venue for Binance {
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        let (ticker, buy) = (req.asset.ticker.clone(), req.side == Side::Buy);
+        let ticker = req.asset.ticker.clone();
+        // t89: время отправки ордера — событие остатков после него считается свежим (withdraw_ready.rs wait).
+        let sent = tokio::time::Instant::now();
         let r = trade::trade(&self.ctx, &self.symbols, req).await;
-        // Решение 253: своя покупка монеты — начало окна «монета ещё не доступна для вывода» (transfers.rs).
-        if buy && r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
-            withdraw_ready::bought(&ticker);
+        // Решение 253, дополнение t89: своя сделка (покупка ИЛИ продажа) — начало окна «ещё не доступна для вывода»
+        // (transfers.rs) и паузы ядра venue.withdraw_min_delay_ms — по монете сделки и котируемой монете (выручка USDT).
+        if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
+            withdraw_ready::traded(&ticker, sent);
+            if let Ok(q) = self.ctx.text("venue.quote_asset") {
+                withdraw_ready::traded(&q, sent);
+            }
         }
         r
     }
@@ -200,6 +206,11 @@ impl Venue for Binance {
         wait: std::time::Duration,
     ) -> GatewayResult<crate::core::types::WithdrawReady> {
         withdraw_ready::wait(&self.ctx, asset, amount, wait).await
+    }
+
+    /// Решение 253, дополнение t89: сколько прошло с последней своей сделки по монете (withdraw_ready.rs since_trade).
+    fn since_own_trade(&self, asset: &Asset) -> Option<std::time::Duration> {
+        withdraw_ready::since_trade(&asset.ticker)
     }
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {

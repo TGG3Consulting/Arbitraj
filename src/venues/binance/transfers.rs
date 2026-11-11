@@ -5,7 +5,8 @@
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: venue.withdraw_wallet [binance] (spot | funding — параметр walletType), venue.withdraw_history_min_ms
 //! [binance] (обе проверяются до отправки вывода: после — поздно); решение 253 — venue.withdraw_unready_window_ms
-//! [binance]: −4026 / −4024 в пределах окна после своей покупки монеты — WithdrawLocked (повтор ядра, как −4060).
+//! [binance]: −4026 / −4024 в пределах окна после своей покупки монеты — WithdrawLocked (повтор ядра, как −4060);
+//! дополнение t89 — после своей сделки (покупки ИЛИ продажи) по этой монете, в том числе USDT выручки продажи.
 //!
 //! Официально (Wallet SAPI):
 //! - POST /sapi/v1/capital/withdraw/apply (вес UID 900) — coin*, address*, amount*, withdrawOrderId («client side id
@@ -122,10 +123,12 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
 /// Решение 253: отказ вывода −4026 CAPITAL_WITHDRAW_USER_ASSET_NOT_ENOUGH («You have insufficient balance») или −4024
 /// CAPITAL_WITHDRAW_USER_NO_ASSET («You don't have this asset») — Wallet → Error Code
 /// (https://developers.binance.com/en/docs/products/wallet/error-code) — в пределах venue.withdraw_unready_window_ms
-/// после своей покупки этой монеты (withdraw_ready.rs since_buy): «монета ещё не доступна для вывода» — WithdrawLocked
+/// после своей покупки этой монеты (withdraw_ready.rs since_trade): «монета ещё не доступна для вывода» — WithdrawLocked
 /// (вывод не создан, повтор безопасен; повтор — core/transfer_locked.rs по transfer.locked_retry_ms /
 /// transfer.locked_retries_max площадки, как −4060, решение 166). Живые факты 10.11: 12 сделок, отказ через 0.35–0.77 с
-/// после покупки. Окно не задано, покупки не было или она раньше окна — ошибка как есть (WithdrawRejected).
+/// после покупки. Дополнение t89 (Тигран 11.11): окно — от своей сделки по монете, покупки ИЛИ продажи (выручка USDT:
+/// сделка 20261111122340181OPEN — продажа 12:24:21.980, возврат USDT отказан −4026 через 0.6 с).
+/// Окно не задано, своей сделки не было или она раньше окна — ошибка как есть (WithdrawRejected).
 /// Принимает: окружение, монету (тикер Binance), ошибку вывода. Возвращает: ошибку. Ошибок нет.
 pub fn not_ready(ctx: &Ctx, ticker: &str, e: GatewayError) -> GatewayError {
     if !matches!(errors::code_of(&e), Some(-4026 | -4024)) {
@@ -134,11 +137,11 @@ pub fn not_ready(ctx: &Ctx, ticker: &str, e: GatewayError) -> GatewayError {
     let Ok(window) = ctx.int("venue.withdraw_unready_window_ms") else {
         return e;
     };
-    match super::withdraw_ready::since_buy(ticker) {
+    match super::withdraw_ready::since_trade(ticker) {
         Some(t) if t <= Duration::from_millis(window) => GatewayError {
             code: ErrorCode::WithdrawLocked,
             message: format!(
-                "{} — монета куплена {} мс назад: ещё не доступна для вывода (решение 253)",
+                "{} — своя сделка по {ticker} {} мс назад: ещё не доступна для вывода (решение 253)",
                 e.message,
                 t.as_millis()
             ),

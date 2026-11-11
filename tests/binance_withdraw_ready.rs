@@ -8,6 +8,7 @@
 //!     core/transfer_locked.rs, как −4060); вне окна, без окна, другой код — как раньше (WithdrawRejected);
 //! (г) окончательный отказ вывода закрывает входы монеты с этой биржи (coin.entry_blocked_venues), другие биржи — нет;
 //! (д) фактическая комиссия — transactionFee истории выводов; поправка затрат по фактам прошлого перевода.
+//! Дополнение t89 (возврат USDT после продажи) — tests/binance_withdraw_after_sale.rs.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::binance, arb::core (withdraw_wait, withdraw_block, withdraw_seen, transfer_locked).
 //! Моков нет.
@@ -159,7 +160,7 @@ async fn not_ready_codes_in_window_become_locked() {
         "без окна — как раньше"
     );
     // Окно не задано — как раньше, даже сразу после покупки.
-    withdraw_ready::bought("CYBER251");
+    withdraw_ready::traded("CYBER251", tokio::time::Instant::now());
     assert_eq!(
         transfers::not_ready(&ctx, "CYBER251", e26.clone()).code,
         ErrorCode::WithdrawRejected

@@ -12,6 +12,8 @@
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
 //! Решение 103: свободный баланс A перед ордером меньше списания плана — объём подбирается заново под остаток (refit.rs).
+//! Решение 262: лимит ордера покупки на бирже — худший уровень стакана плана (Calc::buy_worst; после refit — нового
+//! плана), в хронологию — «Лимит покупки = худший уровень плана X (план avg Y)».
 //! Сухой режим (решение 74, dry.rs) — второй замок на входе: сделка не начинается, даже если кандидата передали сюда
 //! (первый замок — candidates.rs); предпроверка считает план в режиме Live (виртуального бюджета у сделки нет); перед
 //! покупкой — третий замок (buy_gate). После покупки сделка доводится как обычно.
@@ -225,7 +227,14 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
     };
     // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
     let frozen = super::uncapped_entry::freeze(core, &plan).await;
-    // Покупка на A.
+    // Покупка на A. Решение 262 (ТЗ «Покупка на A»): у биржи лимит IOC — худший уровень стакана плана (после refit —
+    // нового плана), не текущий стакан; у DEX — как раньше (trade_ops.rs).
+    if super::trade_ops::kind(core, &d.buy_on) == Ok(crate::gateway::contract::VenueKind::Cex) {
+        deal.note(format!(
+            "Лимит покупки = худший уровень плана {} (план avg {})",
+            plan.buy_worst, plan.buy_quote.avg_price
+        ));
+    }
     let mut gas = Vec::new();
     let bought = super::trade_ops::trade(
         core,
@@ -236,6 +245,7 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         plan.qty,
         plan.buy_quote.route.clone(),
         plan.buy_quote.avg_price,
+        Some(plan.buy_worst),
         // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
         Some(plan.order_cap(cap)),
         Some(&mut gas),

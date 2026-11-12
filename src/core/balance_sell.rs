@@ -133,6 +133,8 @@ async fn sell(core: &Core, v: &VenueId, account: &str, ticker: &str) -> Result<S
         qty,
         None,
         req.worst_price,
+        // Решение 262: худший уровень плана — только у покупки.
+        None,
         None,
         // Не сделка — газ впустую только в статистику монеты (gas_stats), как раньше.
         None,

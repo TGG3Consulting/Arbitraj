@@ -62,7 +62,7 @@
 | `account.rs` | Балансы `BalanceEx` (свободно = balance − hold_trade), «Проверить подключение» (`GetApiKeyInfo`, Funding, сеть BSC) |
 | `all_balances.rs` | Панель «Балансы» (решение 144): спот, прочие кошельки (.B .F .T .S .M), фьючерсы — только сведения |
 | `order_rules.rs` | Правила ордера — одни у ордера и `check_order` (решение 134); пробный ордер `validate=true` |
-| `trade.rs`, `order_state.rs` | Ордер limit IOC/FOK со своим cl_ord_id, итог `QueryOrders` (vol_exec, price, fee), отмена, поиск по cl_ord_id |
+| `trade.rs`, `order_state.rs` | Ордер limit IOC/FOK со своим cl_ord_id, итог `QueryOrders` (vol_exec, price, fee), отмена, поиск по cl_ord_id — фильтром cl_ord_id у OpenOrders / ClosedOrders (решение 264); EService:Deadline elapsed и EGeneral:Internal error у ордера — итог неизвестен, EOrder:Domain rate limit exceeded — лимит (`errors.rs`) |
 | `depth.rs` | Разбор кадров WS v2: pong, ответы, heartbeat/status, book, balances |
 | `local_book.rs`, `checksum.rs` | Локальный стакан (снимок + изменения, обрезка до глубины) и CRC32 |
 | `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: ограничитель подключений, подписка пачками, ping, пересподписка, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |

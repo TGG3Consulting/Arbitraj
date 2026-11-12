@@ -28,11 +28,13 @@ pub mod local_book;
 pub mod market;
 pub mod networks_parse;
 pub mod num;
+pub mod order_result;
 pub mod order_rules;
 pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
 pub mod reply;
+pub mod resolve;
 pub mod rest;
 pub mod sign;
 pub mod subs;
@@ -185,6 +187,16 @@ impl Venue for Okx {
 
     async fn withdrawal_status(&self, venue_ref: &str) -> GatewayResult<Transfer> {
         transfers::withdrawal_status(&self.ctx, venue_ref).await
+    }
+
+    /// Решение 231 (решение 264 для OKX): итог ордера с неизвестным исходом — resolve.rs (по ordId или clOrdId).
+    async fn resolve_trade(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        resolve::trade(&self.ctx, &self.symbols, req, p).await
     }
 
     async fn deposit_address(&self, asset: &Asset, network: &str) -> GatewayResult<String> {

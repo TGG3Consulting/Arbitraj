@@ -16,11 +16,13 @@ use crate::gateway::errors::{GatewayError, GatewayResult};
 
 use super::errors;
 
-/// Число из поля (строка или число JSON). None — поля нет или null.
+/// Число из поля (строка или число JSON). None — поля нет, null или пустая строка (решение 264: офдока «GET / Order
+/// details» — avgPx и fillPx «If none is filled, it will return ""», rebate «return "" if no rebate»).
 /// Ошибка BadResponse — поле есть, но это не число.
 pub fn dec_opt(v: &Value, field: &str) -> GatewayResult<Option<Decimal>> {
     match v.get(field) {
         None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) if s.trim().is_empty() => Ok(None),
         Some(x) => to_dec(x)
             .map(Some)
             .ok_or_else(|| errors::bad(&format!("поле {field} не число"), &x.to_string())),

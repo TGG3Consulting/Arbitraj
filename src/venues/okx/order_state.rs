@@ -2,8 +2,8 @@
 //! Что делает: доводит ордер OKX до окончательного состояния (filled, canceled, mmp_canceled): опрос по ordId (сбой
 //! запроса — повтор до срока); не дождался за venue.order_final_wait_ms — отмена остатка (правило Тиграна) и чтение
 //! итога ещё venue.order_final_wait_ms. Ордер с неизвестным итогом постановки ищется по своему clOrdId; не найден —
-//! отмена по clOrdId и снова поиск. Итог: accFillSz, avgPx, fee, feeCcy самого ордера.
-//! Кто вызывает: trade.rs, order_rules.rs (times — проверка до постановки).
+//! отмена по clOrdId и снова поиск. Итог для ядра — order_result.rs.
+//! Кто вызывает: trade.rs, resolve.rs, order_rules.rs (times — проверка до постановки).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms [okx].
 //!
@@ -18,11 +18,8 @@
 
 use std::time::{Duration, Instant};
 
-use chrono::Utc;
-use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -122,48 +119,6 @@ async fn poll_final(
         }
         tokio::time::sleep(poll).await;
     }
-}
-
-/// Что делает: результат ядра по окончательному состоянию (sz, accFillSz, avgPx, fee, feeCcy).
-/// Принимает: запрос ядра, состояние, ordId. Ошибки: BadResponse — нет полей; OutcomeUnknown — исполнено, а монеты
-/// комиссии нет (факт не подтверждён).
-pub fn result(
-    ctx: &Ctx,
-    req: TradeRequest,
-    s: &Value,
-    order_id: String,
-) -> GatewayResult<TradeResult> {
-    let size = num::dec(s, "sz")?;
-    let filled = num::dec_opt(s, "accFillSz")?.unwrap_or(Decimal::ZERO);
-    let avg = num::dec_opt(s, "avgPx")?.unwrap_or(Decimal::ZERO);
-    // fee: «negative = net fee paid to platform», positive — rebate → списано = −fee.
-    let fee = -num::dec_opt(s, "fee")?.unwrap_or(Decimal::ZERO);
-    let fee_asset = num::text_opt(s, "feeCcy").unwrap_or_default();
-    if !filled.is_zero() && (fee_asset.is_empty() || avg.is_zero()) {
-        return Err(unknown(
-            ctx,
-            &order_id,
-            "исполнено, а feeCcy или avgPx в ответе нет",
-        ));
-    }
-    let status = if filled.is_zero() {
-        TradeStatus::NotFilled
-    } else if filled < size {
-        TradeStatus::PartiallyFilled
-    } else {
-        TradeStatus::Filled
-    };
-    Ok(TradeResult {
-        request: req,
-        status,
-        filled_qty: filled,
-        avg_price: if filled.is_zero() { Decimal::ZERO } else { avg },
-        fees: Fee::single(fee, fee_asset),
-        venue_ref: order_id,
-        chain: None,
-        finished_at: Utc::now(),
-        executor: None,
-    })
 }
 
 /// Отмена. Ошибки: коды OKX (51400 — уже исполнен или отменён), связь.

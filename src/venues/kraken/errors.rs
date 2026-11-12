@@ -13,6 +13,9 @@
 //! (EAPI:Invalid key, EAPI:Invalid signature, EGeneral:Permission denied, EOrder:Insufficient funds, EService:
 //! Unavailable / Busy) — по таблице ошибок Kraken, которую из среды разработки прочитать не удалось: сверить на живых
 //! ответах. Неизвестная строка — отказ операции с текстом Kraken как есть (не угадываем смысл).
+//! Решение 264 (гид https://docs.kraken.com/api/docs/guides/spot-errors): «EOrder:Domain rate limit exceeded» — лимит
+//! (пауза); у ордера «EService:Deadline elapsed» («the order may have been placed despite the timeout») и
+//! «EGeneral:Internal error» (офдока о судьбе ордера молчит) — «итог неизвестен», не отказ.
 //! Текст ошибки — «Kraken, ошибка <строка Kraken>» (так его разбирает notify/reason.rs, решение 164).
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
@@ -39,6 +42,8 @@ pub fn is_rate_limit(e: &str) -> bool {
     e.starts_with("EAPI:Ratelimitexceeded")
         || e.starts_with("EOrder:Ratelimitexceeded")
         || e.starts_with("EOrder:Orderslimitexceeded")
+        // Решение 264, офдока guides/spot-errors: «The domain rate limit (master + all sub-accounts) has been reached».
+        || e.starts_with("EOrder:Domainratelimitexceeded")
         || e.starts_with("EService:Throttled")
 }
 
@@ -57,6 +62,13 @@ fn unified(e: &str, op: Op) -> ErrorCode {
         ErrorCode::RateLimited
     } else if has("EOrder:Insufficientfunds") {
         ErrorCode::InsufficientBalance
+    } else if op == Op::Trade && (has("EService:Deadlineelapsed") || has("EGeneral:Internalerror"))
+    {
+        // Решение 264 (https://docs.kraken.com/api/docs/guides/spot-errors): Deadline elapsed — «check OpenOrders —
+        // the order may have been placed despite the timeout»; Internal error — «An unexpected error occurred on
+        // Kraken's side», встал ли ордер, офдока не говорит. Оба у ордера — Timeout → unsure → «итог неизвестен»
+        // (поиск по cl_ord_id найдёт ордер или нет), не отказ.
+        ErrorCode::Timeout
     } else if has("EService:Unavailable") || has("EService:Busy") {
         if op == Op::Other {
             ErrorCode::Unreachable

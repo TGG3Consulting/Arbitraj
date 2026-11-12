@@ -11,10 +11,15 @@
 //! quote_fee, discount_fee, created_at, …} — поля status в ответе нет, окончательный ли это итог, не сказано: итог —
 //! order_state.rs. Ответ без order_id при code 0 — итог неизвестен (повтор дал бы второй ордер). Поиска ордера по своему
 //! client_id у CoinEx нет; при неизвестном итоге — отмена по client_id (POST /spot/cancel-order-by-client-id {market,
-//! market_type, client_id}, группа «Batch cancel spot orders (40r/1s)») и «итог неизвестен» (ручная проверка).
+//! market_type, client_id}, группа «Batch cancel spot orders (40r/1s)»,
+//! https://docs.coinex.com/api/v2/spot/order/http/cancel-order-by-client-id). Решение 264: её ответ разбирается — data
+//! массив элементов {code, data, message}, во вложенном data — ордер (order_id, client_id, filled_amount, filled_value,
+//! base_fee, quote_fee, discount_fee, created_at …; пример документации). Элемент с code 0 и ордером своего client_id —
+//! найден order_id: дальше обычное доведение (order_state::settle). Иначе — «итог неизвестен» с code/message элемента
+//! (ручная проверка). Что отвечает отмена уже закрытого IOC, офдока не говорит — проверить на живом ответе.
 
 use reqwest::Method;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::core::types::{TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -64,13 +69,42 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
                 Op::Other,
             )
             .await;
-            let note = match c {
-                Ok(_) => "отмена по client_id отправлена".to_string(),
-                Err(x) => format!("отмена по client_id: {}", x.message),
+            // Решение 264: ответ отмены несёт ордер — свой найден: обычное доведение по order_id.
+            let found = c
+                .map_err(|x| x.message)
+                .and_then(|d| cancelled(&d, &p.client_id));
+            let why = match found {
+                Ok(order) => return order_state::settle(ctx, req, &p, &order).await,
+                Err(why) => why,
             };
-            e.message = format!("{} ({note}; client_id {})", e.message, p.client_id);
+            e.message = format!(
+                "{} (отмена по client_id: {why}; client_id {})",
+                e.message, p.client_id
+            );
             Err(e)
         }
         Err(e) => Err(e),
     }
+}
+
+/// Что делает: ордер из ответа отмены по client_id (решение 264): data — массив {code, data, message}; берётся элемент с
+/// code 0, у которого во вложенном data есть order_id и client_id равен своему (поле есть в таблице ответа).
+/// Принимает: data ответа, свой client_id. Возвращает: объект ордера. Ошибка — текст: data не массив, своего ордера нет
+/// (с code и message элементов, как прислал CoinEx).
+pub fn cancelled(data: &Value, client_id: &str) -> Result<Value, String> {
+    let list = data
+        .as_array()
+        .ok_or_else(|| format!("data ответа не массив: {data}"))?;
+    let mut seen = Vec::new();
+    for it in list {
+        let code = num::text_opt(it, "code").unwrap_or_default();
+        let order = it.get("data").unwrap_or(&Value::Null);
+        let mine = num::text_opt(order, "client_id").as_deref() == Some(client_id);
+        if code == "0" && mine && num::text_opt(order, "order_id").is_some() {
+            return Ok(order.clone());
+        }
+        let msg = num::text_opt(it, "message").unwrap_or_default();
+        seen.push(format!("code {code}: {msg}"));
+    }
+    Err(format!("своего ордера в ответе нет ({})", seen.join("; ")))
 }

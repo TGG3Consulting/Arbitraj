@@ -1,8 +1,10 @@
 //! Файл: venues/phemex/order_state.rs
 //! Что делает: доводит ордер Phemex до окончательного состояния (Filled / Canceled / Rejected): опрос по своему clOrdID
-//! (сбой запроса или ордер ещё не виден — повтор до срока); не дождался за venue.order_final_wait_ms — отмена остатка
-//! по clOrdID (правило Тиграна) и чтение итога ещё venue.order_final_wait_ms; не получен — «итог неизвестен». Итог:
-//! исполненное количество, сумма, комиссия и её монета самого ордера.
+//! (сбой запроса или ордер ещё не виден — повтор до срока venue.order_final_wait_ms); не получен — «итог неизвестен».
+//! Решение 264: отмены остатка нет — ордер бота всегда ImmediateOrCancel / FillOrKill (order_rules.rs), остаток снимает
+//! биржа, а отменить такой ордер офдока не даёт (Error codes: 11109 TE_CANNOT_REPLACE_OR_CANCEL_IOC_ORDER «Cannot
+//! replace/amend ImmediateOrCancel order», 11110 — то же для FillOrKill); раньше пустой шаг отмены тратил лимит и
+//! второй срок ожидания. Итог: исполненное количество, сумма, комиссия и её монета самого ордера.
 //! Кто вызывает: trade.rs, order_rules.rs (times — проверка до постановки).
 //! От чего зависит: rest.rs, num.rs, order_rules.rs (Prepared), ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms [phemex].
@@ -15,7 +17,6 @@
 //!   котируемой) описанием полей не подтверждён — проверить на первом живом ордере (урок 7).
 //! - Order status: Rejected, New, PartiallyFilled, Filled, Canceled (Common order fields); у ответа создания —
 //!   «Created». Окончательные — Filled, Canceled, Rejected.
-//! - Cancel order DELETE /spot/orders?symbol=&clOrdID= (#cancel-order).
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -44,21 +45,13 @@ pub fn times(ctx: &Ctx) -> GatewayResult<(Duration, Duration)> {
     ))
 }
 
-/// Что делает: окончательное состояние ордера по clOrdID. Принимает: подготовленный ордер.
-/// Ошибки: OutcomeUnknown — не получено даже после отмены; NotConfigured — сроки.
+/// Что делает: окончательное состояние ордера по clOrdID (без отмены — решение 264, шапка). Принимает: подготовленный
+/// ордер. Ошибки: OutcomeUnknown — не получено за venue.order_final_wait_ms; NotConfigured — сроки.
 pub async fn settle(ctx: &Ctx, p: &Prepared) -> GatewayResult<Value> {
     let (poll, wait) = times(ctx)?;
-    if let Ok(s) = poll_final(ctx, p, poll, wait).await {
-        return Ok(s);
-    }
-    let cancel = cancel(ctx, p).await;
-    poll_final(ctx, p, poll, wait).await.map_err(|why| {
-        let c = cancel
-            .err()
-            .map(|e| format!("отмена: {}; ", e.message))
-            .unwrap_or_default();
-        unknown(ctx, &p.cl_ord_id, &format!("{c}{why}"))
-    })
+    poll_final(ctx, p, poll, wait)
+        .await
+        .map_err(|why| unknown(ctx, &p.cl_ord_id, &why))
 }
 
 /// Опрос до окончательного статуса не дольше wait; сбой запроса — повтор. Ошибка — текст последней причины.
@@ -136,15 +129,6 @@ pub fn result(
         finished_at: Utc::now(),
         executor: None,
     })
-}
-
-/// Отмена по clOrdID. Ошибки: коды Phemex, связь.
-async fn cancel(ctx: &Ctx, p: &Prepared) -> GatewayResult<Value> {
-    let q = vec![
-        ("symbol", p.symbol.clone()),
-        ("clOrdID", p.cl_ord_id.clone()),
-    ];
-    rest::signed(ctx, Method::DELETE, "/spot/orders", q, None, Op::Trade).await
 }
 
 /// Запрос ордера по clOrdID: первый элемент ответа. Возвращает: None — ордера в ответе нет. Ошибки: как rest::signed.

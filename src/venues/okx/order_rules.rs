@@ -31,7 +31,9 @@ use super::symbols::{SymbolRules, Symbols};
 const MAX_CL_ORD_ID: usize = 32;
 /// Типы ордера, при которых неисполненное снимает биржа (правило Тиграна): ioc и fok из перечня ordType.
 const TYPES_ALLOWED: [&str; 2] = ["ioc", "fok"];
-/// Режим торговли без маржи — «cash» (tdMode).
+/// Режим торговли без маржи — «cash» (tdMode). Решение 264: по офдоке (Place order, примечание о режимах счёта) «Spot
+/// mode: SPOT … cash», а в Multi-currency / Portfolio margin спот ставится с cross; бот требует Spot mode (acctLv 1 —
+/// «Проверить подключение», account.rs). Перед каждым ордером acctLv не проверяется — вопрос Тиграну, docs/TASKS.md.
 const TD_MODE: &str = "cash";
 
 /// Ордер, прошедший правила: что уйдёт на биржу.

@@ -8,8 +8,8 @@
 //! Настройки: через order_state.rs (venue.order_final_wait_ms — срок чтения сделок).
 //!
 //! Официально — Get Order Status (filled_amount, filled_value, base_fee, quote_fee, discount_fee)
-//! https://docs.coinex.com/api/v2/spot/order/http/get-order-status и List User Deals (amount, price, fee, fee_ccy)
-//! https://docs.coinex.com/api/v2/spot/deal/http/list-user-deals.
+//! https://docs.coinex.com/api/v2/spot/order/http/get-order-status и Get User Order Deals (amount, price, fee, fee_ccy)
+//! https://docs.coinex.com/api/v2/spot/deal/http/list-user-order-deals (решение 264).
 
 use std::time::Instant;
 
@@ -53,8 +53,7 @@ pub async fn from_state(
         Err(why) if !filled.is_zero() => return Err(unknown(ctx, &id, &why)),
         Err(_) => Vec::new(),
         Ok(Fee::FromDeals) => {
-            let start = num::int(s, "created_at").ok();
-            let sum = deals::of_order(ctx, &p.symbol, &id, start, Instant::now() + wait)
+            let sum = deals::of_order(ctx, &p.symbol, &id, Instant::now() + wait)
                 .await
                 .map_err(|e| {
                     let why = format!("монета комиссии по сделкам: {}", e.message);

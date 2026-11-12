@@ -30,7 +30,7 @@
 | depth.rs, local_book.rs, book.rs | кадры стакана, снимок + изменения, котировка; решение 213 — срок подтверждения тихой пары (`book_confirmed`) | #orderbook-message |
 | book_print.rs | решение 213 по содержимому: GET /md/orderbook — первые `venue.depth_levels` уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа | Query Order Book |
 | fees.rs | ставки комиссии ключа по паре | #query-fee-rate-by-quote-currency |
-| order_rules.rs, trade.rs, order_state.rs | ордер Limit + ImmediateOrCancel, свой clOrdID (UUID), итог | #place-order-http-put-prefered, #query-orders-by-order-id-or-client-order-id |
+| order_rules.rs, trade.rs, order_state.rs | ордер Limit + ImmediateOrCancel, свой clOrdID (UUID), итог; решение 264: ответ постановки — bizError ≠ 0 / ordStatus Rejected — отказ; отмены IOC/FOK нет (коды 11109/11110) | #place-order-http-put-prefered, #query-orders-by-order-id-or-client-order-id |
 | wallet.rs, networks_crawl.rs, networks_parse.rs | сети монет по одной (chainCfg + asset/info), фоновый круг | #query-deposit-chain-settings, #query-withdraw-chain-settings |
 | deposit_addr.rs, deposits.rs, transfers.rs, history.rs | адрес депозита, депозиты по хешу, вывод и его статус | #query-deposit-address-information, #create-withdraw-request |
 | fund_move.rs | перевод CONTRACT → SPOT после депозита (по настройке) | #transfer-between-wallets-within-an-account |

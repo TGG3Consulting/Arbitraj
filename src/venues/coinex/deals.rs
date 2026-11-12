@@ -1,16 +1,18 @@
 //! Файл: venues/coinex/deals.rs
-//! Что делает: сделки одного своего ордера CoinEx из истории сделок пары (фильтра по order_id у CoinEx нет — фильтр
-//! свой): сколько исполнено, на какую сумму, комиссия и её монета. Это факт исполнения там, где ордер не найти:
-//! «canceled orders without execution will not be saved» (ордер IOC без исполнения не сохраняется вовсе — нет сделок
-//! = не исполнился), и монета комиссии при скидке (discount_fee).
-//! Кто вызывает: order_state.rs, tests/coinex_real_data.rs.
+//! Что делает: сделки одного своего ордера CoinEx (запрос по order_id, решение 264): сколько исполнено, на какую сумму,
+//! комиссия и её монета. Это факт исполнения там, где ордер не найти: «canceled orders without execution will not be
+//! saved» (ордер IOC без исполнения не сохраняется вовсе — нет сделок = не исполнился), и монета комиссии при скидке
+//! (discount_fee).
+//! Кто вызывает: order_state.rs, order_result.rs, tests/coinex_real_data.rs.
 //! От чего зависит: rest.rs (signed_page), num.rs, ctx.rs.
 //! Настройки: venue.my_trades_limit [coinex] — сделок на страницу (limit; по умолчанию у CoinEx 10, максимум не указан).
 //!
-//! Официально — List User Deals GET /spot/user-deals?market=&market_type=SPOT&start_time=&page=&limit= (подпись; группа
-//! «Query spot order history (10r/1s)») https://docs.coinex.com/api/v2/spot/deal/http/list-user-deals: data[] {deal_id,
-//! created_at, order_id, market, side, price, amount «Filled volume», role, fee, fee_ccy}; pagination.has_next.
-//! Порядок записей (новые первыми?) не указан — читаются все страницы с start_time = создание ордера, пока has_next.
+//! Официально — Get User Order Deals GET /spot/order-deals?market=&market_type=SPOT&order_id=&page=&limit= (подпись)
+//! https://docs.coinex.com/api/v2/spot/deal/http/list-user-order-deals: order_id обязателен; data[] {deal_id,
+//! created_at, order_id, market, margin_market, side, price, amount «Filled volume», role, fee, fee_ccy};
+//! pagination.has_next. Группа лимита на странице не названа. Решение 264: раньше читалась вся история сделок пары
+//! (List User Deals GET /spot/user-deals с start_time = создание ордера) со своим фильтром — шапка утверждала «фильтра
+//! по order_id у CoinEx нет», офдока это опровергает. Поле order_id каждой сделки всё равно сверяется (add).
 
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -36,28 +38,25 @@ pub struct Sum {
     pub fees: BTreeMap<String, Decimal>,
 }
 
-/// Что делает: сделки ордера order_id на рынке market с момента start_ms (None — без нижней границы), не дольше deadline.
+/// Что делает: сделки ордера order_id на рынке market (все страницы, пока has_next), не дольше deadline.
 /// Возвращает: Sum. Ошибки: ключи, связь, коды CoinEx, поле не число; не успели прочитать все страницы — Timeout.
 pub async fn of_order(
     ctx: &Ctx,
     market: &str,
     order_id: &str,
-    start_ms: Option<i64>,
     deadline: Instant,
 ) -> GatewayResult<Sum> {
     let limit = ctx.int("venue.my_trades_limit")?;
     let mut sum = Sum::default();
     for page in 1u64.. {
-        let mut q = vec![
+        let q = vec![
             ("market", market.to_string()),
             ("market_type", "SPOT".to_string()),
+            ("order_id", order_id.to_string()),
+            ("page", page.to_string()),
+            ("limit", limit.to_string()),
         ];
-        if let Some(s) = start_ms {
-            q.push(("start_time", s.to_string()));
-        }
-        q.push(("page", page.to_string()));
-        q.push(("limit", limit.to_string()));
-        let (data, next) = rest::signed_page(ctx, "/v2/spot/user-deals", q).await?;
+        let (data, next) = rest::signed_page(ctx, "/v2/spot/order-deals", q).await?;
         add(&mut sum, &data, order_id)?;
         if !next {
             return Ok(sum);
@@ -75,11 +74,11 @@ pub async fn of_order(
     )))
 }
 
-/// Добавляет к итогу сделки страницы с этим order_id. Ошибка BadResponse — data не массив, поле не число.
+/// Добавляет к итогу сделки страницы с этим order_id (сверка поля order_id каждой сделки). Ошибка BadResponse — data не массив, поле не число.
 pub fn add(sum: &mut Sum, data: &Value, order_id: &str) -> GatewayResult<()> {
     let list = data
         .as_array()
-        .ok_or_else(|| super::errors::bad("user-deals: data не массив", &data.to_string()))?;
+        .ok_or_else(|| super::errors::bad("order-deals: data не массив", &data.to_string()))?;
     for d in list {
         if num::text_opt(d, "order_id").as_deref() != Some(order_id) {
             continue;

@@ -56,7 +56,7 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `account.rs` | Балансы Trading (все и одной монеты), «Проверить подключение» (`/account/config`: perm, acctLv, uid = mainUid, feeType, IP) |
 | `all_balances.rs` | Панель «Балансы» (решение 144): Trading, Funding, Simple Earn, итоговая оценка — параллельно, только чтение |
 | `order_rules.rs` | Правила ордера — одни у ордера и `check_order` (решение 134); пробного ордера для спота нет |
-| `trade.rs`, `order_state.rs` | Ордер limit-цены типа ioc/fok со своим clOrdId, итог по ordId (accFillSz, avgPx, fee, feeCcy), отмена остатка, поиск по clOrdId |
+| `trade.rs`, `order_state.rs`, `order_result.rs`, `resolve.rs` | Ордер limit-цены типа ioc/fok со своим clOrdId, итог по ordId (accFillSz, avgPx, fee, feeCcy; пустая строка avgPx «If none is filled» — не исполнился, решение 264), отмена остатка, поиск по clOrdId; итог неизвестен — PendingRef и позднее выяснение по ordId / clOrdId (решение 231, `resolve.rs`) |
 | `depth.rs` | Разбор кадров WS: pong, event (subscribe/login/error/notice), books5, books, данные каналов |
 | `local_book.rs` | Локальный стакан канала books: снимок + изменения, prevSeqId = прежний seqId, пустой кадр «живо» |
 | `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: подписка запросами ≤ 64 КБ, «ping», разрыв → пересподписка пары, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |

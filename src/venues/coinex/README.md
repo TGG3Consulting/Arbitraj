@@ -18,7 +18,7 @@
 | https://docs.coinex.com/api/v2/common/ws/ping | server.ping → "pong" |
 | https://docs.coinex.com/api/v2/spot/order/http/put-order | Ордер (type ioc/fok, client_id ≤ 32 байт) |
 | https://docs.coinex.com/api/v2/spot/order/http/get-order-status | Состояние ордера; «order without any transactions … will not be saved» |
-| https://docs.coinex.com/api/v2/spot/deal/http/list-user-deals | Сделки пары (fee, fee_ccy, order_id) |
+| https://docs.coinex.com/api/v2/spot/deal/http/list-user-order-deals | Сделки одного ордера по order_id (fee, fee_ccy; решение 264 — вместо перебора сделок пары user-deals) |
 | https://docs.coinex.com/api/v2/account/fees/http/get-account-trade-fees | Ставка ключа — только по одной паре |
 | https://docs.coinex.com/api/v2/assets/deposit-withdrawal/http/list-all-deposit-withdrawal-config | Монеты и сети: ввод/вывод, комиссия, минимумы, точность, memo |
 | https://docs.coinex.com/api/v2/assets/deposit-withdrawal/http/list-assets-info | chain_info.identity — адрес контракта |
@@ -55,7 +55,7 @@
 | `account.rs` | Баланс спота, «Проверить подключение» |
 | `all_balances.rs` | Панель «Балансы»: Спот, Маржа, Фьючерсы, Финансовый |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |
-| `trade.rs`, `order_state.rs`, `order_result.rs`, `order_fee.rs`, `deals.rs` | Ордер ioc/fok, опрос итога, отмена остатка, «не сохранён» → сделки, комиссия и её монета |
+| `trade.rs`, `order_state.rs`, `order_result.rs`, `order_fee.rs`, `deals.rs` | Ордер ioc/fok, опрос итога, отмена остатка, «не сохранён» → сделки ордера (order-deals), комиссия и её монета; итог неизвестен — отмена по client_id, ордер из её ответа доводится по order_id (решение 264) |
 | `inflate.rs`, `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WS: распаковка кадров (буфер соединения), снимки if_full, server.ping, котировка ; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка (depth.unsubscribe всех + depth.subscribe всех рынков соединения) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
 | `ws_msg.rs` | Тексты запросов depth.subscribe (свой id) и depth.unsubscribe всех рынков |
 | `book_print.rs` | Решение 213 по содержимому: `GET /v2/spot/depth` (limit = `venue.depth_levels`, interval "0") — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |

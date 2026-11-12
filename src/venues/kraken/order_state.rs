@@ -10,9 +10,12 @@
 //! Официально (OpenAPI spot-rest.yaml): POST /0/private/QueryOrders — txid (через запятую), result «txid → order»; схема
 //! open/order: status pending, open, closed, canceled, expired; vol, vol_exec «Volume executed (base currency)», cost,
 //! fee «Total fee (quote currency)», price «Average price», cl_ord_id. POST /0/private/CancelOrder — txid или cl_ord_id.
-//! OpenOrders → result.open, ClosedOrders → result.closed («txid → order»). Поиск по cl_ord_id в QueryOrders в
-//! прочитанном не подтверждён — ищем по полю cl_ord_id ордеров списков (есть ли оно в ответе — проверить живьём;
-//! нет — итог неизвестен, ручная проверка). Остаток IOC — status expired (проверить пробным/живым ордером, урок 30).
+//! OpenOrders → result.open, ClosedOrders → result.closed («txid → order»). Решение 264: поиск по своему ID — фильтр
+//! cl_ord_id у OpenOrders и ClosedOrders («Restrict results to given client order id», страницы
+//! https://docs.kraken.com/api/docs/rest-api/get-open-orders и .../get-closed-orders; у QueryOrders txid обязателен —
+//! без txid не годится), а не перебор первой страницы (ClosedOrders — «up to 50 orders» на страницу); в ответе ещё раз
+//! сверяется поле cl_ord_id. Каким status закрывается неисполненный остаток IOC — canceled или expired, — в офдоке не
+//! найдено: окончательные оба.
 
 use std::time::{Duration, Instant};
 
@@ -57,7 +60,8 @@ pub async fn settle(ctx: &Ctx, txid: &str) -> GatewayResult<Value> {
 }
 
 /// Что делает: txid по своему cl_ord_id, когда итог постановки неизвестен: отмена по cl_ord_id, затем поиск среди
-/// открытых и закрытых с повторами до venue.order_final_wait_ms. Возвращает: txid; None — не найден. Ошибок нет.
+/// открытых и закрытых с фильтром cl_ord_id (решение 264) с повторами до venue.order_final_wait_ms.
+/// Возвращает: txid; None — не найден. Ошибок нет.
 pub async fn recover(ctx: &Ctx, cl_ord_id: &str) -> Option<String> {
     let (poll, wait) = times(ctx).ok()?;
     let _ = rest::private(
@@ -70,7 +74,8 @@ pub async fn recover(ctx: &Ctx, cl_ord_id: &str) -> Option<String> {
     let started = Instant::now();
     loop {
         for (method, field) in [("OpenOrders", "open"), ("ClosedOrders", "closed")] {
-            if let Ok(res) = rest::private(ctx, method, vec![], Op::Other).await
+            let filter = vec![p("cl_ord_id", cl_ord_id)];
+            if let Ok(res) = rest::private(ctx, method, filter, Op::Other).await
                 && let Some(id) = by_client(res.get(field), cl_ord_id)
             {
                 return Some(id);

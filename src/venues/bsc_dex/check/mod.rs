@@ -22,6 +22,7 @@ pub mod quoter_amount;
 pub mod quoter_block;
 pub mod quoter_compare;
 pub mod quoter_cycle;
+pub mod quoter_one;
 pub mod quoter_pause;
 pub mod quoter_side;
 pub mod quoter_sides;

@@ -89,8 +89,8 @@ pub async fn prepare(
     check_price(ctx, req, coins, paid)?;
     let legs: Vec<Leg<'_>> = alone.iter().map(|(p, _)| Leg { path: p }).collect();
     // Решение 261: сверка односторонняя — против нас — отказ; в нашу сторону — строка в хронологию.
-    let favour = mixed_quoter::check(ctx, &legs).await?;
-    let favour = quoter_favour::report(ctx, req, &favour).await;
+    // Журнал — один раз перед отправкой (trade_smart.rs): после approve подготовка идёт второй раз.
+    let favour = quoter_favour::line(&mixed_quoter::check(ctx, &legs).await?);
     let mut steps = Vec::with_capacity(paths.len());
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, req, p, *qty, decs)?);

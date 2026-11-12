@@ -75,7 +75,7 @@ async fn quoter_side_waits_for_named_setting() {
         .await
         .unwrap();
     acc.map_set("bingx", Some("w1"), "тест").await.unwrap();
-    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
+    let name = wait(verify(&pools, &e, &mut None, 18, Side::Buy).await);
     assert_eq!(name.as_deref(), Some("money.max_per_trade_usd"));
     ctx.settings
         .set(
@@ -86,7 +86,7 @@ async fn quoter_side_waits_for_named_setting() {
         )
         .await
         .unwrap();
-    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
+    let name = wait(verify(&pools, &e, &mut None, 18, Side::Buy).await);
     assert_eq!(name, missing_setting(&ctx));
     for (n, x) in [
         ("dex.depth_band_pct", json!(2)),
@@ -98,7 +98,7 @@ async fn quoter_side_waits_for_named_setting() {
             .await
             .unwrap();
     }
-    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
+    let name = wait(verify(&pools, &e, &mut None, 18, Side::Buy).await);
     assert_eq!(name.as_deref(), Some("dex.quoter_max_diff_pct"));
     let name = name.unwrap();
     let mut q = QuoterSides::default();

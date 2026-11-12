@@ -31,6 +31,9 @@ pub struct QuoterSides {
     /// Решение 261: последняя сверка стороны — «не сверено (блок)» с причиной (итог стороны прежний); None — нет.
     pub buy_note: Option<String>,
     pub sell_note: Option<String>,
+    /// Решение 261: «память отстаёт от сети» — свежее состояние пула на голове H не равно памяти дольше
+    /// dex.quoter_memory_lag_blocks (check/quoter_block.rs); без паузы, только журнал и экран. None — нет/не сравнивали.
+    pub memory: Option<String>,
 }
 
 impl QuoterSides {

@@ -77,7 +77,8 @@ pub async fn trade(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
-    let (legs, mut note, exp) = prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+    let (legs, mut note, exp, mut favour) =
+        prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
     let mut diag = sim::legs_text(&legs, &exp, &req, decs);
     let mut model = exp;
@@ -93,8 +94,9 @@ pub async fn trade(
     if approved.is_some() {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
-        let (legs, fresh, exp) = prepare(&v, &req, route, &mins, decs).await?;
+        let (legs, fresh, exp, fav) = prepare(&v, &req, route, &mins, decs).await?;
         note = fresh;
+        favour = fav;
         diag = sim::legs_text(&legs, &exp, &req, decs);
         model = exp;
         (c, at) = build(q, &legs, executor).await?;
@@ -107,6 +109,8 @@ pub async fn trade(
         }
         rebuilt_notice(env, &req);
     }
+    // Решение 261: «в нашу сторону» — в журнал один раз, по последней подготовке (ревью: после approve — второй раз).
+    super::super::quoter_favour::log(ctx, &req, &favour).await;
     // Решение 247: откат пробы по minOut у продажи выхода — пере-замер реального выхода (remeasure.rs).
     let fix = remeasure::probe(ctx, &req, &mut c, wallet, at, decs, &diag, &model, env).await?;
     if let Some(line) = fix {
@@ -139,7 +143,8 @@ pub async fn trade(
 /// 228 (exec/leg_min.rs; минимум верификации — нижней границей). Решение 177: продажа выхода с расхождением хопа Maverick — доля по квотеру, минимум верификации — тем
 /// же множителем. Принимает: расчёт путей, запрос, маршрут, минимумы долей, (decimals монеты, USDT).
 /// Возвращает: шаги долей, строку «— продажа по квотеру» (None — по расчёту) и по каждой доле (ожидаемый выход,
-/// модельный налог монеты на её шаге, %) — для текста отката пробы (решение 234, п. 4).
+/// модельный налог монеты на её шаге, %) — для текста отката пробы (решение 234, п. 4), строку «в нашу сторону»
+/// (решение 261; журнал — вызывающий, один раз).
 /// Ошибки: NoRoute, QuoteMismatch (цена, число долей), CoinNotChecked, BadResponse, узел.
 pub async fn prepare(
     v: &Via<'_>,
@@ -147,11 +152,17 @@ pub async fn prepare(
     route: &DexRoute,
     mins: &[Decimal],
     decs: (u8, u8),
-) -> GatewayResult<(Vec<Vec<Step>>, Option<String>, Vec<(Decimal, Decimal)>)> {
+) -> GatewayResult<(
+    Vec<Vec<Step>>,
+    Option<String>,
+    Vec<(Decimal, Decimal)>,
+    Option<String>,
+)> {
     let ctx = &v.q.ctx;
     let mut paths = live_paths(v, req, route, false).await?;
     // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером на своём узле.
-    let (ratios, note) = super::super::precheck_quoter::hops_exit(ctx, req, &mut paths).await?;
+    let (ratios, note, favour) =
+        super::super::precheck_quoter::hops_exit(ctx, req, &mut paths).await?;
     let (coins, paid) = paths
         .iter()
         .fold((Decimal::ZERO, Decimal::ZERO), |(c, u), (p, _)| {
@@ -175,7 +186,7 @@ pub async fn prepare(
         .iter()
         .map(|(p, _)| (expected(p, req.side), coin_tax(v, p)))
         .collect();
-    Ok((legs, note, exp))
+    Ok((legs, note, exp, favour))
 }
 
 /// Вызов execute на текущем блоке. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как

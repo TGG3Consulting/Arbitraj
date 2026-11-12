@@ -126,6 +126,7 @@ pub async fn trade(
             note = Some(line);
         }
         // Решение 261: строка «в нашу сторону» сверки с MixedQuoter — к пометке исполнения (хронология сделки).
+        super::quoter_favour::log(ctx, &req, &prep.favour).await;
         let note = super::quoter_favour::join(prep.favour.clone(), note);
         let tin = if req.side == Side::Buy { usdt } else { coin };
         // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).

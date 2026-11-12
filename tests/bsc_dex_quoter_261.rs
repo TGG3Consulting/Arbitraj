@@ -5,9 +5,11 @@
 //!   продажа без признака выхода); квотер больше расчёта на те же 0.164% — сделка идёт, только строка «в нашу сторону»
 //!   (не поправка: ожидаемое и минимум — по нашему расчёту); продажа выхода (решение 177) — как была;
 //! - часть 2, сумма сверки — min(наш максимум money.max_per_trade_usd среди направлений с DEX, ликвидность стороны);
-//! - часть 2, блок сверки по позиции пула и записанным событиям пула AAVE V3 0x8e3ecc0b… (tests/data/ws_logs_2026-10-26:
-//!   блоки 129913959 logIndex 211 и 129914008 logIndex 1098) — «не сверено (блок)» или блок сверки;
-//! - часть 2, пауза и автоматическое снятие стороны пула и текст алерта (живой пул AAVE V3, запись 2026-10-25).
+//! - часть 2, блок сверки — голова из одного ответа eth_blockNumber (записанный ответ); узел без состояния (−32000,
+//!   запись 12.11) — «не сверено (блок)»; память против сети на H — события Sync пары V2 0xe6fe1804… из записи
+//!   квитанций 2026-10-25 (решение 261, ответ на вопрос 11);
+//! - часть 2, пауза и автоматическое снятие стороны пула, текст алерта (живой пул AAVE V3, запись 2026-10-25), «ПАУЗА» на
+//!   экране при иной причине после паузы.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/native_common, tests/depth_common, arb::venues::bsc_dex::{check, exec, quote}, arb::settings.
@@ -21,16 +23,22 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use arb::core::types::Side;
+use alloy_primitives::Address;
+use arb::core::types::{Pool, PoolRef, PoolState, Side, VenueId};
 use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::quoter_amount::{MAX, max_of, pick};
-use arb::venues::bsc_dex::check::quoter_block::{NOT_CHECKED, settle};
+use arb::venues::bsc_dex::check::quoter_block::{
+    Head, NOT_CHECKED, head_of, memory_lag, no_block as no_head,
+};
 use arb::venues::bsc_dex::check::quoter_compare::{Cmp, PAUSED, judged, no_block};
 use arb::venues::bsc_dex::check::quoter_pause::{Change, apply, text};
 use arb::venues::bsc_dex::check::quoter_sides::QuoterSides;
 use arb::venues::bsc_dex::check::quoter_verify::Verdict;
 use arb::venues::bsc_dex::exec::{precheck, quoter_favour};
+use arb::venues::bsc_dex::pools::depth_facts::{PAUSE_PREFIX, side_check};
+use arb::venues::bsc_dex::pools::families;
+use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::quote::quoter::{self, Judged};
 
 use depth_common::{aave_v3, rec};
@@ -38,9 +46,6 @@ use depth_common::{aave_v3, rec};
 /// Живой случай 05.11: расчёт и квотер (USDT, 18 знаков).
 const LOCAL: &str = "42559024903490846447";
 const REMOTE: &str = "42489232805231828113";
-/// Пул AAVE V3 (Uniswap V3) в записи WebSocket-событий 2026-10-26.
-const AAVE: &str = "0x8e3ecc0b261f1a4db62321090575eb299844f077";
-const WS: &str = "tests/data/ws_logs_2026-10-26/responses.json";
 
 fn u(s: &str) -> U256 {
     U256::from_str(s).unwrap()
@@ -141,41 +146,149 @@ async fn amount_is_min_of_max_and_liquidity() {
     );
 }
 
-/// Позиции (блок, logIndex) записанных событий пула AAVE и наибольший блок записи (узел до него дошёл).
-fn aave_logs() -> (Vec<(u64, u64)>, u64) {
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(WS).unwrap()).unwrap();
-    let hex =
-        |x: &Value| u64::from_str_radix(x.as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
-    let frames = v["frames"].as_array().unwrap();
-    let head = frames.iter().map(|f| hex(&f["blockNumber"])).max().unwrap();
-    let mine = frames
-        .iter()
-        .filter(|f| f["address"] == AAVE && f["removed"] == false)
-        .map(|f| (hex(&f["blockNumber"]), hex(&f["logIndex"])))
-        .collect();
-    (mine, head)
+/// Ответ eth_blockNumber из записи (tests/data/indexers_2026-10-24/arb_node_responses_2_2026-10-24.json, «block»).
+fn recorded_head() -> (String, u64) {
+    let v: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            "tests/data/indexers_2026-10-24/arb_node_responses_2_2026-10-24.json",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut found = None;
+    walk(&v, &mut |o| {
+        if o["name"] == "block" && o["request"]["method"] == "eth_blockNumber" {
+            found = Some(o["response"]["result"].as_str().unwrap().to_string());
+        }
+    });
+    let hex = found.unwrap();
+    let n = u64::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap();
+    (hex, n)
+}
+
+/// Обход JSON записи: каждый объект — в f. Ошибок нет.
+fn walk(v: &Value, f: &mut impl FnMut(&Value)) {
+    match v {
+        Value::Object(m) => {
+            f(v);
+            m.values().for_each(|x| walk(x, f));
+        }
+        Value::Array(a) => a.iter().for_each(|x| walk(x, f)),
+        _ => {}
+    }
 }
 
 #[test]
-fn block_of_check_from_recorded_logs() {
-    let (logs, head) = aave_logs();
-    assert_eq!(logs, vec![(129913959, 211), (129914008, 1098)]);
-    // Память учла первое событие, а у пула есть следующее — «не сверено (блок)», не ошибка математики.
-    let why = settle(129913959, Some(211), false, &logs, head).unwrap_err();
-    assert!(why.contains("ещё не догнало сеть"), "{why}");
-    assert!(matches!(no_block(&why), Cmp::NoBlock(t) if t.starts_with(NOT_CHECKED)));
-    // Учтено последнее событие — состояние равно сети на голове: сверка на голове.
-    assert_eq!(settle(129914008, Some(1098), false, &logs, head), Ok(head));
-    // Позиция — середина блока (logIndex меньше записанного события того же блока) — не на конец блока.
-    assert!(settle(129914008, Some(1000), false, &logs, head).is_err());
-    // Прочитано на конце блока целиком (logIndex None) — события этого блока уже внутри.
-    assert_eq!(settle(129914008, None, false, &logs, head), Ok(head));
-    // Узел HTTP позади состояния пула и неизвестный блок — не сверено.
-    assert!(settle(head + 1, None, false, &[], head).is_err());
-    assert!(settle(0, None, false, &[], head).is_err());
-    // Пул, перечитываемый на каждом блоке: только блок чтения целиком.
-    assert_eq!(settle(129914008, None, true, &[], head), Ok(129914008));
-    assert!(settle(129914008, Some(5), true, &[], head).is_err());
+fn block_of_check_is_one_head_answer() {
+    // Блок сверки — голова из одного ответа eth_blockNumber (результат hex).
+    let (hex, n) = recorded_head();
+    let raw = serde_json::value::to_raw_value(&hex).unwrap();
+    assert_eq!(head_of(&raw), Ok(n));
+    let bad = serde_json::value::to_raw_value(&json!({"x": 1})).unwrap();
+    assert!(head_of(&bad).is_err());
+    // Узел без состояния H (−32000, запись 12.11) и сбой связи — «не сверено (блок)», а не ошибка математики.
+    assert!(matches!(no_head("нет"), Head::NoBlock(t) if t.starts_with(NOT_CHECKED)));
+}
+
+/// Pair V2 0xe6fe1804… — события Sync (резервы целиком) из записи квитанций 2026-10-25: (блок, logIndex, r0, r1).
+fn v2_syncs() -> Vec<(u64, u64, U256, U256)> {
+    const PAIR: &str = "0xe6fe1804243785b26fac2f392213a733d66513d8";
+    const SYNC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+    let mut out = Vec::new();
+    for f in [
+        "tests/data/receipts_2026-10-25/responses.json",
+        "tests/data/receipts_2026-10-25/responses_3.json",
+    ] {
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(f).unwrap()).unwrap();
+        walk(&v, &mut |o| {
+            let addr = o["address"].as_str().map(str::to_lowercase);
+            if addr.as_deref() == Some(PAIR) && o["topics"][0] == SYNC {
+                let num = |k: &str| {
+                    u64::from_str_radix(o[k].as_str().unwrap().trim_start_matches("0x"), 16)
+                        .unwrap()
+                };
+                let data = o["data"].as_str().unwrap().trim_start_matches("0x");
+                let word =
+                    |i: usize| U256::from_str_radix(&data[i * 64..(i + 1) * 64], 16).unwrap();
+                out.push((num("blockNumber"), num("logIndex"), word(0), word(1)));
+            }
+        });
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Запись реестра пары V2 с резервами события Sync (состояние на конце его блока).
+fn v2_entry(block: u64, log: u64, r0: U256, r1: U256) -> Entry {
+    let family = families::make("pancakeswap-v2-bsc", "pancakeswap_v2").unwrap();
+    let pair = alloy_primitives::address!("0xe6fe1804243785b26fac2f392213a733d66513d8");
+    Entry {
+        family,
+        pool: Pool {
+            venue: VenueId("bsc_dex".into()),
+            family: family.id.into(),
+            kind: family.kind,
+            reference: PoolRef::Contract(pair),
+            token0: Address::ZERO,
+            token1: Address::ZERO,
+            fee_pips: None,
+            tick_spacing: None,
+            bin_step: None,
+            hooks: None,
+            state: PoolState::V2 {
+                reserve0: r0,
+                reserve1: r1,
+            },
+            block,
+            received_at: chrono::Utc::now(),
+        },
+        ticker: "PAIR".into(),
+        coin: Address::ZERO,
+        usdt: Address::ZERO,
+        key: None,
+        ticks: None,
+        bins: None,
+        synced_block: block,
+        synced_log: Some(log),
+        valid: true,
+        asleep: false,
+    }
+}
+
+#[test]
+fn memory_against_network_on_head() {
+    let s = v2_syncs();
+    let (first, last) = (s.first().unwrap(), s.last().unwrap());
+    assert!(last.0 > first.0 && (first.2, first.3) != (last.2, last.3));
+    // Память — на первом событии, сеть на голове H = блок последнего события (свежее чтение = его резервы).
+    let mem = v2_entry(first.0, first.1, first.2, first.3);
+    let fresh = v2_entry(last.0, last.1, last.2, last.3);
+    let h = last.0;
+    // Последнее событие памяти старше H − допуск — «память отстаёт от сети».
+    let why = memory_lag(&mem, &fresh, h, 1).unwrap();
+    assert!(why.contains("память отстаёт от сети") && why.contains(&first.0.to_string()));
+    // Допуск больше отставания — может быть законное асинхронное отставание: не пишется.
+    assert!(memory_lag(&mem, &fresh, h, h - first.0 + 1).is_none());
+    // Состояния равны — не пишется.
+    assert!(memory_lag(&fresh, &fresh, h, 0).is_none());
+}
+
+#[test]
+fn paused_side_stays_paused_on_screen() {
+    // Сторона на паузе, последняя сверка — иная причина или сторона мелкая: экран показывает «пауза:».
+    let fail: Option<Result<(), String>> = Some(Err("пул пуст".into()));
+    let c = side_check(&fail, true);
+    assert!(c.reason.unwrap().starts_with(PAUSE_PREFIX));
+    assert!(
+        side_check(&None, true)
+            .reason
+            .unwrap()
+            .starts_with(PAUSE_PREFIX)
+    );
+    // Без паузы — как было.
+    assert_eq!(side_check(&fail, false).reason.as_deref(), Some("пул пуст"));
+    assert!(PAUSED.starts_with(PAUSE_PREFIX));
 }
 
 #[tokio::test]

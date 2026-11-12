@@ -22,8 +22,7 @@
 //! прочитанные сверены (застрявшие из-за незаданной настройки не держат, решение 63); дальше — запись только при смене
 //! состояния пула (прошла ↔ не прошла, сменилась причина; цифры в причине не в счёт — progress::reason_key).
 //! Кто вызывает: pools/market.rs.
-//! От чего зависит: check/quoter_verify.rs (сверка пула), check/quoter_pause.rs (пауза, алерты), quote/select.rs
-//! (deep_side), check/fresh.rs,
+//! От чего зависит: check/quoter_one.rs (сверка одного пула), check/quoter_side.rs (side_ready), check/fresh.rs,
 //! check/state.rs, check/quoter_tally.rs (сводка), pools/listen.rs (Pools), pools/progress.rs.
 //! Настройки: dex.quoter_check_s, dex.quoter_max_diff_pct, dex.min_pool_liquidity_usd, check.probe_usdt [bsc_dex],
 //! money.max_per_trade_usd (через check/quoter_amount.rs).
@@ -33,17 +32,16 @@
 
 use std::time::Duration;
 
-use crate::core::types::{PoolRef, Side};
-use crate::storage::journal::Level;
+use crate::core::types::PoolRef;
 
 use super::super::pools::index_watch;
 use super::super::pools::listen::Pools;
-use super::super::quote::select;
 use super::super::settings_wait;
 use super::fresh::Fresh;
-use super::quoter_pause;
+/// Сверка одного пула (check/quoter_one.rs) — прежний путь `quoter_cycle::one` сохранён для вызывающих.
+pub use super::quoter_one::one;
 use super::quoter_tally::Tally;
-use super::quoter_verify::{HOOK_WAIT, Verdict, usdt_decimals, verify};
+use super::quoter_verify::HOOK_WAIT;
 use super::recheck::Queue;
 
 /// Цикл сверки с квотером (см. шапку). Ошибок нет: сбой — причина в итоге пула.
@@ -124,81 +122,4 @@ pub async fn run(p: Pools, queue: Queue) {
 fn hook_measured(p: &Pools, r: &PoolRef) -> bool {
     let c = p.checks.pool(r);
     c.quoter.any_err(|why| why == HOOK_WAIT) && c.hook.is_some()
-}
-
-/// Сверка одного пула и запись итога. Мелкий пул — итога нет (None), без журнала. До сводки первого прохода итог
-/// идёт в неё (`first`), журнал по пулу — только после. Возвращает: была ли проверка (пула нет или он недостоверен —
-/// false: пул не отмечается проверенным и сверится, как только станет достоверным, check/fresh.rs). Ошибок нет.
-pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
-    // Данные пулов отстают (лента догоняет, решение 72) — вердикта нет: пул не отмечен проверенным, сверится после
-    // снятия отметки (она будит циклы сигналом «пул готов»).
-    if p.lag.busy() {
-        return false;
-    }
-    let Some(e) = p.reg.get(r) else {
-        return false;
-    };
-    if !e.valid {
-        return false;
-    }
-    let dec = usdt_decimals(p).await;
-    // Стороны — независимо (решение 73): сторона сверяется, когда она глубокая; мелкая — без итога, другая не меняется.
-    let mut now = p.checks.pool(r).quoter;
-    for side in [Side::Buy, Side::Sell] {
-        let deep = match &dec {
-            Ok(dec) => select::deep_side(
-                &p.ctx,
-                &p.reg,
-                &p.tokens,
-                &e,
-                *dec,
-                select::Need::Side(side),
-            )
-            .map(|shallow| (shallow, *dec)),
-            Err(why) => Err(why.clone()),
-        };
-        let prev = now.side(side).clone();
-        // Итог и имя незаданной настройки — из ошибки там, где она возникла (решение 75): по нему сторона
-        // перепроверяется при задании именно этой настройки. Глубина — её настройки (pools/depth_book.rs).
-        let v = match deep {
-            Ok((None, dec)) => verify(p, &e, dec, side).await,
-            Ok((Some(_), _)) => {
-                now.set(side, None);
-                now.set_wait(side, None);
-                now.set_note(side, None);
-                continue;
-            }
-            Err(why) => Verdict::Fail((
-                why,
-                super::super::pools::depth_book::missing_setting(&p.ctx),
-            )),
-        };
-        // Решение 261: пауза по расхождению на одном блоке, снятие — прошедшей сверкой; «не сверено (блок)» — итог прежний.
-        let change = quoter_pause::apply(&mut now, side, &v);
-        if let Verdict::NoBlock(why) = &v {
-            let msg = format!(
-                "{} {} ({}): {why}",
-                e.family.title,
-                e.ticker,
-                quoter_pause::side_name(side)
-            );
-            p.signals.once(&p.ctx, Level::Info, "dex.quoter", msg).await;
-        }
-        match change {
-            Some(c) => quoter_pause::alert(p, &e, side, &v, c).await,
-            None => {
-                if first.is_none()
-                    && let Some(res) = now.side(side)
-                    && super::quoter_side::changed(prev.as_ref(), res)
-                {
-                    super::quoter_side::log_change(p, &e, side, res).await;
-                }
-            }
-        }
-    }
-    if let Some(t) = first {
-        t.set(r, now.combined());
-    }
-    p.checks.update_pool(r, |f| f.quoter = now);
-    true
 }

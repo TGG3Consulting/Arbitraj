@@ -18,42 +18,32 @@
 //! exec/ur_short.rs) — пере-замер реального выхода и новый минимум (exec/ur_remeasure.rs), как 247 у исполнителя.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
-//! exec/precheck.rs, exec/exit_quote.rs, exec/quoter_favour.rs, exec/ur_remeasure.rs (проба и пере-замер), exec/executor/trade.rs (expected, coin_tax), exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
+//! exec/trade_direct_prep.rs (подготовка доли), exec/quoter_favour.rs (журнал «в нашу сторону»), exec/ur_remeasure.rs (проба и пере-замер), exec/executor/trade.rs (expected, coin_tax), exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{DexRoute, RouteLeg, Side, TradeRequest, TradeResult};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 
 use super::super::check::sim_base::{self, Base};
 use super::super::pools::registry::Entry;
-use super::super::quote::path::Path;
 use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct};
 use super::super::wallet::nonce::Nonces;
-use super::chain::Step;
 use super::executor::trade::{coin_tax, expected};
-use super::native::{self, Wrap};
+use super::native;
 use super::plan::{self, Plan};
 use super::swap_ctx::SwapCtx;
 use super::trade::{
-    check_price, no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides,
-    with_approve_gas, worst_positive,
+    no_new_approvals, rebuilt_notice, send_approvals, send_swap, sides, with_approve_gas,
+    worst_positive,
 };
+use super::trade_direct_prep::{Prep, prepare};
 use super::txs::Env;
-use super::{chain, exit_quote, leg_min, live, quoter_favour, result, ur_remeasure, verify_gate};
-
-/// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
-/// (решение 177; None — по расчёту).
-struct Prep {
-    path: Path,
-    steps: Vec<Step>,
-    wrap: Wrap,
-    note: Option<String>,
-}
+use super::{quoter_favour, result, ur_remeasure, verify_gate};
 
 /// Сделка прямого маршрута. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса, его долю,
 /// свежие минимумы графовой верификации (Some — графовая прямая форма; None — классика). Ошибки: NoRoute,
@@ -130,6 +120,8 @@ pub async fn trade(
                     .map_or(line.clone(), |n| format!("{n}; {line}")),
             );
         }
+        // Решение 261: «в нашу сторону» — в журнал один раз, по последней подготовке.
+        quoter_favour::log(ctx, &req, &prep.favour).await;
         let tin = if req.side == Side::Buy { usdt } else { coin };
         // Решение 231 (дополнение): контекст разбора — в «чем найти» любой ошибки «исход неизвестен» ниже (exec/swap_ctx.rs).
         let sc = SwapCtx::swap(
@@ -166,83 +158,6 @@ pub async fn trade(
     }
     .await;
     with_approve_gas(out, approved)
-}
-
-/// Доля по живому состоянию: путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs), свежий
-/// минимум графовой верификации последнему шагу, нативная обёртка, сверка каждого хопа с квотером (решение 32).
-/// Решение 177: продажа выхода с расхождением — путь пересчитан по квотеру (exec/exit_quote.rs), затем снова проверка
-/// худшей цены, шаги, минимумы (свежий минимум графа — тем же множителем) и обёртка; у покупки и без расхождения — как
-/// раньше (тот же порядок, сверка — отказ).
-/// Принимает: расчёт путей, запрос, долю, минимумы верификации, decimals, нативная ли монета. Ошибки: NoRoute,
-/// QuoteMismatch, BadResponse, узел.
-async fn prepare(
-    v: &Via<'_>,
-    req: &TradeRequest,
-    leg: &RouteLeg,
-    mins: Option<&[Decimal]>,
-    decs: (u8, u8),
-    is_native: bool,
-) -> GatewayResult<Prep> {
-    let ctx = &v.q.ctx;
-    // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
-    let mut path = live::path(v, &leg.hops, req.qty, true).await?;
-    check_price(ctx, req, path.coins, path.usdt)?;
-    let (mut steps, mut wrap) = legs(ctx, req, &path, mins, decs, is_native)?;
-    let all = exit_quote::check(ctx, &path, exit_quote::exit_of(req), |_| true).await?;
-    // Решение 261: расхождения «в нашу сторону» — только строка в хронологию (exec/quoter_favour.rs).
-    let (fixes, favour) = quoter_favour::split(all);
-    let favour = quoter_favour::report(ctx, req, &favour).await;
-    if fixes.is_empty() {
-        return Ok(Prep {
-            path,
-            steps,
-            wrap,
-            note: favour,
-        });
-    }
-    // Решение 177: ожидаемое — по квотеру; худшая цена и минимумы — заново от него.
-    let r = exit_quote::rescale(ctx, &mut path, req.side, &fixes)?;
-    check_price(ctx, req, path.coins, path.usdt)?;
-    let mins = mins.map(|m| exit_quote::scale_mins(m, r));
-    (steps, wrap) = legs(ctx, req, &path, mins.as_deref(), decs, is_native)?;
-    let note = quoter_favour::join(exit_quote::report(ctx, req, &fixes).await, favour);
-    Ok(Prep {
-        path,
-        steps,
-        wrap,
-        note,
-    })
-}
-
-/// Шаги доли с минимумами (exec/chain.rs), свежий минимум графовой верификации последнему шагу, нативная обёртка.
-/// Принимает: окружение, запрос, путь, минимумы верификации, decimals, нативная ли монета. Возвращает: шаги и обёртку.
-/// Ошибки: NoRoute, QuoteMismatch, BadResponse, NotConfigured.
-fn legs(
-    ctx: &super::super::ctx::Ctx,
-    req: &TradeRequest,
-    path: &Path,
-    mins: Option<&[Decimal]>,
-    decs: (u8, u8),
-    is_native: bool,
-) -> GatewayResult<(Vec<Step>, Wrap)> {
-    let mut legs = vec![chain::steps(ctx, req, path, req.qty, decs)?];
-    // Решение 228 (exec/leg_min.rs): одна доля — наибольшее из границы сделки и ожидаемого × (1 − допуск), как раньше;
-    // графовый маршрут (решение 83) — свежий минимум верификации нижней границей (выше ожидаемого — отказ).
-    let ver =
-        match mins {
-            Some(mins) => Some(*mins.first().ok_or_else(|| {
-                ctx.err(ErrorCode::NoRoute, "верификация не вернула минимум выхода")
-            })?),
-            None => None,
-        };
-    let ver = ver.as_ref().map(std::slice::from_ref);
-    leg_min::set_leg_mins(ctx, req, [(path, req.qty)], &mut legs, ver, decs)?;
-    let wrap = if is_native {
-        native::adapt(ctx, req.side, &mut legs)?
-    } else {
-        Wrap::None
-    };
-    Ok((legs.pop().unwrap_or_default(), wrap))
 }
 
 /// План обмена на текущем блоке: время блока и разрешения, которых не хватает сейчас (exec/plan.rs). Принимает:

@@ -41,13 +41,14 @@ pub async fn hops(ctx: &Ctx, paths: &[(Path, Decimal)]) -> GatewayResult<()> {
 
 /// Как hops, но по запросу сделки (решение 177): продажа выхода с расхождением — доля пересчитана по квотеру
 /// (exec/exit_quote.rs rescale). Принимает: окружение, запрос, доли. Возвращает: множитель каждой доли (1 — без
-/// поправки; им же умножается свежий минимум верификации доли) и строку «— продажа по квотеру» / «в нашу сторону»
-/// (решение 261; None — поправок нет). Ошибки: как у hops; BadResponse (множитель).
+/// поправки; им же умножается свежий минимум верификации доли), строку «— продажа по квотеру» / «в нашу сторону»
+/// (None — поправок нет) и отдельно строку «в нашу сторону» (решение 261; журнал — у вызывающего, один раз перед
+/// отправкой). Ошибки: как у hops; BadResponse (множитель).
 pub async fn hops_exit(
     ctx: &Ctx,
     req: &TradeRequest,
     paths: &mut [(Path, Decimal)],
-) -> GatewayResult<(Vec<Decimal>, Option<String>)> {
+) -> GatewayResult<(Vec<Decimal>, Option<String>, Option<String>)> {
     let exit = exit_quote::exit_of(req);
     let (mut ratios, mut all, mut favour) =
         (Vec::with_capacity(paths.len()), Vec::new(), Vec::new());
@@ -62,9 +63,7 @@ pub async fn hops_exit(
         });
         all.extend(fixes);
     }
-    let fav = quoter_favour::report(ctx, req, &favour).await;
-    Ok((
-        ratios,
-        quoter_favour::join(exit_quote::report(ctx, req, &all).await, fav),
-    ))
+    let fav = quoter_favour::line(&favour);
+    let note = quoter_favour::join(exit_quote::report(ctx, req, &all).await, fav.clone());
+    Ok((ratios, note, fav))
 }

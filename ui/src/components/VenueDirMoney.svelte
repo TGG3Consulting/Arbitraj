@@ -10,7 +10,8 @@
   От чего зависит: lib/settings.svelte.js, lib/venueDir.js, components/SettingEditor.svelte, SettingHistory.svelte.
   Настройки: money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k,
     profit.closure_share, risk.max_daily_loss_usd (решение 258: дневной лимит убытка направления; не задан — значение
-    биржи этого направления, иначе вся система) — все с областью VenueDir.
+    биржи этого направления, иначе вся система), signal.probe_usd (решение 260: объём проверки сигнала; только рубрики
+    биржи — у «DEX ↔ DEX» сигнала шага 3 нет) — все с областью VenueDir.
 -->
 <script>
   import { uniq } from '../lib/uniq.js';
@@ -56,6 +57,8 @@
     продажи; DEX ↔ DEX — один набор на все циклы. Исключение (Тигран 09.11): у profit.price_move_k значение монеты сильнее
     пары — монета → пара → вся система. Решение 258: risk.max_daily_loss_usd — дневной лимит убытка этого направления
     (превышен — пауза только его); не задан — значение биржи рубрики (у DEX ↔ DEX — DEX), иначе вся система.
+    Решение 260: signal.probe_usd — объём проверки сигнала (грубый спред считается на min(это, money.max_per_trade_usd),
+    а не на потолке; подбор объёма идёт до потолка); не задан — биржа покупки, иначе вся система, иначе на потолке.
   </p>
   {#each cex as v (v)}
     <article class="card">

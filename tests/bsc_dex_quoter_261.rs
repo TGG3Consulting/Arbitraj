@@ -235,3 +235,50 @@ async fn pause_and_auto_resume_with_one_alert_each() {
     let r = text(&e, Side::Buy, &ok, Change::Resumed, Some(18));
     assert!(r.contains("Пауза снята") && r.contains("129914009"));
 }
+
+/// Ответы своего узла BSC 12.11.2026 (tests/data/node_limits_2026-11-12): отказ eth_getLogs по диапазону — не «нет
+/// состояния блока» (сверка даёт «не сверено (блок)» с текстом узла); нет состояния старше H−127 — StaleData
+/// (errors.rs from_rpc), у сверки — тоже «не сверено (блок)», не ошибка математики.
+#[test]
+fn node_limits_recorded_answers() {
+    use arb::venues::bsc_dex::errors::{Op, from_rpc};
+    let v: Value = serde_json::from_str(
+        &std::fs::read_to_string("tests/data/node_limits_2026-11-12/responses.json").unwrap(),
+    )
+    .unwrap();
+    let err = |x: &Value| {
+        let e = &x["error"];
+        from_rpc(
+            e["code"].as_i64().unwrap(),
+            e["message"].as_str().unwrap(),
+            "узел BSC (HTTP)",
+            Op::Read,
+            &e.to_string(),
+        )
+    };
+    let range = v["getLogs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["ok"] == false)
+        .unwrap();
+    let e = err(range);
+    assert_eq!(e.code, ErrorCode::BadResponse);
+    assert!(e.message.contains("exceed maximum block range 5000"));
+    // Принятый наибольший диапазон: toBlock − fromBlock = 5000.
+    assert!(
+        v["getLogs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["range_blocks"] == 5001 && x["ok"] == true)
+    );
+    let old = v["state"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["ok"] == false)
+        .unwrap();
+    assert_eq!(err(old).code, ErrorCode::StaleData);
+    assert!(matches!(no_block(err(old).message), Cmp::NoBlock(t) if t.starts_with(NOT_CHECKED)));
+}

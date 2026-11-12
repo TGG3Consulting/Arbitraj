@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/connection_sync.rs
 //! Что делает: часть «Проверить подключение» DEX — синхронизация узла (решение 121, часть A3): eth_syncing = false
 //! (иначе «узел догоняет сеть: блок X из Y» и что ещё строится — индекс транзакций, индекс состояния) и возраст головы
-//! (часы сервера − timestamp последнего блока, в секундах; при заданном feed.max_block_age_ms — сверка с ним).
+//! (часы сервера − время последнего блока в миллисекундах — timestamp и доля секунды из mixHash, решение 259; при
+//! заданном feed.max_block_age_ms — сверка с ним).
 //! Номер у догоняющего узла растёт каждую секунду, и проверка «есть блок» его не ловит — эта ловит.
 //! Кто вызывает: connection.rs (check).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs.
@@ -15,18 +16,20 @@
 //! https://github.com/bnb-chain/bsc/tree/v1.8.1 ; eth_getBlockByNumber «latest», поле timestamp (секунды) —
 //! execution-apis src/schemas/block.yaml.
 
-use alloy_primitives::U64;
+use alloy_primitives::{B256, U64};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ctx::Ctx;
 use super::node::{head_age, rpc};
 
-/// Поле timestamp блока «latest».
+/// Поля number, timestamp и mixHash блока «latest» (доля секунды — mixHash, BEP-520, node/block_ms.rs).
 #[derive(Deserialize)]
 struct RawBlock {
     number: U64,
     timestamp: U64,
+    #[serde(rename = "mixHash", default)]
+    mix_hash: Option<B256>,
 }
 
 /// Что делает: синхронизация узла и возраст головы.
@@ -43,7 +46,8 @@ pub async fn check(ctx: &Ctx) -> Result<String, String> {
         .await
         .map_err(|e| e.message)?;
     let b = block.ok_or("узел не отдал последний блок (eth_getBlockByNumber latest = null)")?;
-    let (number, t) = (b.number.to::<u64>(), b.timestamp.to::<u64>());
+    let number = b.number.to::<u64>();
+    let t = super::node::block_ms::millis(b.timestamp.to::<u64>(), b.mix_hash);
     let age = head_age::age_ms(t);
     let secs = rust_decimal::Decimal::new(age, 3).round_dp(1);
     let shown = format!("блок {number} создан {secs} с назад");

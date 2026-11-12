@@ -6,6 +6,7 @@
 
 pub mod abi;
 pub mod abi_dex;
+pub mod block_ms;
 pub mod call;
 pub mod events_lag;
 pub mod failover;

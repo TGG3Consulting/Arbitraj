@@ -8,7 +8,8 @@
 | `ws.rs` | Соединение WebSocket: открыть, запрос с ответом, eth_subscribe (источник событий пулов при bsc.pool_events_source=ws, решения 68, 79) |
 | `ws_task.rs` | Задача соединения: раздача ответов и уведомлений, тишина = обрыв, сырые сообщения на диск, отписка ушедших |
 | `heads.rs` | Опрос eth_blockNumber по HTTP раз в `bsc.blocks_poll_ms` (решение 57): последний блок, свежесть (`feed.stale_after_ms`), блок и его время по запросу (eth_getBlockByNumber, раз на блок на всех); при `feed.max_block_age_ms` — и возраст блока (head_age.rs) |
-| `head_age.rs` | Возраст головы по времени блока (решение 121, A2): часы сервера − timestamp против `feed.max_block_age_ms` → StaleData; время новой головы в опросе; журнал venue.head_age на переходах «свежо ↔ устарело» |
+| `block_ms.rs` | Решение 259: время блока в миллисекундах — timestamp·1000 + доля секунды из mixHash (BEP-520; значение ≥ 1000 — доля 0) |
+| `head_age.rs` | Возраст головы по времени блока (решение 121, A2; решение 259 — в миллисекундах): часы сервера − время блока против `feed.max_block_age_ms` → StaleData; время новой головы в опросе; журнал venue.head_age на переходах «свежо ↔ устарело» |
 | `call.rs` | eth_call к контракту с ABI-кодированием (alloy sol!); пачки — через Multicall3 или пачкой JSON-RPC |
 | `multicall.rs` | Multicall3.aggregate3 (dex.multicall3): пачка чтений одним eth_call, ответ каждого вызова отдельно |
 | `failover.rs` | Резервный провайдер узла: сбой основного (связь, таймаут, 5xx, 429) — запрос на резервный, удержание bsc.node_backup_hold_s |

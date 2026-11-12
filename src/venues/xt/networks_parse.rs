@@ -7,11 +7,11 @@
 //! Настройки: нет (название сети BSC и правило минимума депозита передаёт wallet.rs).
 //!
 //! Официально:
-//! - GET /v4/public/wallet/support/currency (https://doc.xt.com/#deposit_withdrawalsupportedCurrenciesGet,
+//! - GET /v4/public/wallet/support/currency (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies,
 //!   `_deposit_withdrawal/supportedCurrenciesGet.md`): [{currency, supportChains[{chain, depositEnabled,
 //!   withdrawEnabled, withdrawFeeAmount, withdrawMinAmount, depositFeeRate, contract}]}]; «The currency and chain in
 //!   the response need to be used in other deposit/withdrawal API».
-//! - GET /v4/public/currencies (#balancecurrenciesGet, `_balance/currenciesGet.md`): [{currency, depositStatus,
+//! - GET /v4/public/currencies (https://doc.xt.com/docs/spot/Balance/GetCurrencies, `_balance/currenciesGet.md`): [{currency, depositStatus,
 //!   withdrawStatus («0 close 1 open»), maxPrecision}]. Живой ответ 05.11.2026 (решение 184): result — объект
 //!   {time, version, currencies[...]}, статусы — числа; разбор принимает и массив, и result.currencies.
 //!

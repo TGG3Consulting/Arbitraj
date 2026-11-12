@@ -9,7 +9,7 @@
 //! Настройки: venue.order_time_in_force — значение передают market.rs и pairs_watch.rs.
 //!
 //! Официально: GET /v4/public/symbol (state — перечень «Symbol state» publicModule.md, tradingEnabled, openapiEnabled)
-//! https://doc.xt.com/#marketsymbol (`_market/2symbol.md`).
+//! https://doc.xt.com/docs/spot/Market/GetSymbolInformation (`_market/2symbol.md`).
 
 use chrono::{DateTime, Utc};
 

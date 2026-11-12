@@ -14,6 +14,7 @@
 //!   createTime, asks, bids, id, ts}]}; asks «ascending», bids «descending» — уровни [цена, количество] строками; id —
 //!   «Record ID (SeqId)», ts — «Send timestamp». Порядок уровней всё равно выравнивается здесь (дёшево: ≤ 20 уровней).
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use chrono::{DateTime, TimeZone, Utc};
@@ -148,4 +149,16 @@ pub fn levels(d: &Value, side: &str) -> Result<Vec<PriceLevel>, String> {
         }
     }
     Ok(out)
+}
+
+/// Что делает: решения 109 и 263 — новый ли снимок пары по id (SeqId): id больше прежнего (запоминается) или id нет —
+/// новый; тот же или меньший — нет (ядру не отдаётся и свежесть пары не продлевает). Принимает: прежние id по символу,
+/// снимок. Возвращает: true — новый. Ошибок нет.
+pub fn newer(last: &mut HashMap<String, i64>, d: &Depth) -> bool {
+    let Some(seq) = d.seq else { return true };
+    if last.get(&d.symbol).is_some_and(|&s| seq <= s) {
+        return false;
+    }
+    last.insert(d.symbol.clone(), seq);
+    true
 }

@@ -8,7 +8,7 @@
 //! От чего зависит: core/types (PriceLevel).
 //! Настройки: нет.
 //!
-//! Официально: https://doc.xt.com/#websocket_publicorderBook (`_websocket_public/orderBook.md`), пункты 1–9:
+//! Официально: https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage (`_websocket_public/orderBook.md`), пункты 1–9:
 //! «Drop any event where i is <= lastUpdateId in the snapshot», «The first processed event should have fi <=
 //! lastUpdateId+1 AND i >= lastUpdateId+1», «each new event's fi should be equal to the previous event's i+1»,
 //! «Receiving an event that removes a price level that is not in your local order book can happen and is normal».

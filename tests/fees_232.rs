@@ -7,9 +7,10 @@
 //! - BookFee::in_received (OKX, CoinEx, Poloniex): покупка — в монете от количества, продажа — в USDT от суммы; монета
 //!   комиссии покупки совпадает с примерами документации (Poloniex Trades by Order Id — BUY, feeCurrency LINK; CoinEx Get
 //!   Order Status — buy, base_fee ≠ 0, quote_fee 0).
-//! - Разбор факта: Poloniex сделки ордера (пример документации) — часть в LINK; HTX matchresults и XT deductServices с
-//!   двумя монетами — две части, а не ошибка (раньше — ошибка «ядро принимает одну монету»: сделка останавливалась).
-//!   HTX и XT с двумя монетами — строки собраны по полям документации (живых ордеров этих бирж в журнале нет).
+//! - Разбор факта: Poloniex сделки ордера (пример документации) — часть в LINK; HTX matchresults с двумя монетами — две
+//!   части, а не ошибка (раньше — ошибка «ядро принимает одну монету»: сделка останавливалась). HTX с двумя монетами —
+//!   строки собраны по полям документации (живых ордеров этой биржи в журнале нет). XT (решение 263): deductServices в
+//!   действующей документации нет — комиссия только из fee/feeCurrency, даже если поле пришло.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::gateway::frozen, arb::venues::{poloniex::fills, coinex::order_fee, htx::order_fee,
@@ -201,29 +202,17 @@ fn htx_two_coins_is_list() {
     assert!(htx_fee::parse(&Value::Null, "CAKE").unwrap().is_empty());
 }
 
-/// XT: deductServices в двух монетах — две части; без deductServices — fee/feeCurrency. По полям документации.
+/// XT (решение 263): комиссия — fee/feeCurrency ответа (Query single / Get Single Order); deductServices в действующей
+/// документации нет и не читается, даже если пришло.
 #[test]
-fn xt_deduct_two_coins_is_list() {
+fn xt_fee_from_fee_field_only() {
     let s = json!({"orderId": "1", "fee": "1413.932", "feeCurrency": "win",
         "deductServices": [{"fee": "0.01", "feeCurrency": "xt"}, {"fee": "5", "feeCurrency": "win"}]});
-    let fees = xt_state::fee(&s).unwrap();
     assert_eq!(
-        fees,
-        vec![
-            Fee {
-                asset: "XT".into(),
-                amount: d("0.01"),
-                usd: None,
-            },
-            Fee {
-                asset: "WIN".into(),
-                amount: d("5"),
-                usd: None,
-            }
-        ]
+        xt_state::fee(&s).unwrap(),
+        Fee::single(d("1413.932"), "WIN")
     );
-    let plain =
-        json!({"orderId": "1", "fee": "1413.932", "feeCurrency": "win", "deductServices": []});
+    let plain = json!({"orderId": "1", "fee": "1413.932", "feeCurrency": "win"});
     assert_eq!(
         xt_state::fee(&plain).unwrap(),
         Fee::single(d("1413.932"), "WIN")

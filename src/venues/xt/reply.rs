@@ -7,10 +7,10 @@
 //! Настройки: venue.rate_limit_pause_ms [xt] — пауза после 429 (Retry-After в документации XT нет).
 //!
 //! Официально:
-//! - формат https://doc.xt.com/#documentationreturnFormat (`_documentation/returnFormat.md`, errorCode.md):
+//! - формат https://doc.xt.com/docs/spot/Access%20Description/ResponseFormat (`_documentation/returnFormat.md`, errorCode.md):
 //!   {"rc": 0, "mc": "SUCCESS", "ma": [], "result": {…}}; rc 1 — отказ, причина — mc; HTTP 200 — «please check the rc
 //!   and mc sections further».
-//! - лимиты https://doc.xt.com/#documentationlimitRules: «If the interface request triggers the gateway flow limit, 429
+//! - лимиты https://doc.xt.com/docs/spot/Access%20Description/FrequencyLimitingRules: «If the interface request triggers the gateway flow limit, 429
 //!   will be returned … and the IP or apiKey will be blocked» — после 429 ничего не слать. Время бана и Retry-After не
 //!   описаны — пауза venue.rate_limit_pause_ms.
 //! - фьючерсы (панель «Балансы») `_futures_documentation/returnFormat.md`: {"returnCode", "msgInfo", "error":

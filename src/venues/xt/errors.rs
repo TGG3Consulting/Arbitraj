@@ -4,7 +4,7 @@
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.
 //!
-//! Коды — по официальной таблице https://doc.xt.com/#documentationerrorCode (`_documentation/errorCode.md`): ответ
+//! Коды — по официальной таблице https://doc.xt.com/docs/spot/Access%20Description/ResponseCode (`_documentation/errorCode.md`): ответ
 //! {"rc": 0|1, "mc": "<код>", "ma": [аргументы], "result"}; rc 1 — отказ, причина — mc. AUTH_001…007 — нет или неверен
 //! заголовок подписи, AUTH_101 ключа нет, AUTH_102 ключ не активирован, AUTH_103 подпись, AUTH_104 «Unbound IP
 //! request», AUTH_105 «outdated message» (часы/recvWindow — FAQ.md), AUTH_106 «Exceeded apikey permission»;
@@ -46,7 +46,7 @@ pub fn from_code(mc: &str, ma: &str, op: Op, raw: &str) -> GatewayError {
             ErrorCode::InsufficientBalance
         }
         m if is_risk_control(m) => ErrorCode::RateLimited,
-        // Решение 253, дополнение t82 (Тигран 10.11), таблица кодов (https://doc.xt.com/#documentationerrorCode; сверено
+        // Решение 253, дополнение t82 (Тигран 10.11), таблица кодов (https://doc.xt.com/docs/spot/Access%20Description/ResponseCode; сверено
         // 11.11.2026 по копии https://xt-com.github.io/xt4-api/): адрес — WITHDRAW_002 «The withdrawal address is
         // invalid», WITHDRAW_004 «The withdrawal address is not added», WITHDRAW_014 «This withdrawal address cannot be
         // used in the internal transfer function» (InvalidAddress); аккаунт — WITHDRAW_003 «account security level is

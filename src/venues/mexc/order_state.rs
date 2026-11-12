@@ -14,7 +14,7 @@
 //!   — status (NEW, PARTIALLY_FILLED, FILLED, CANCELED, PARTIALLY_CANCELED), executedQty, cumulativeQuoteQty
 //!   (в старом тексте — cummulativeQuoteQty: читаются оба), origQty (в живом примере — Qty: читаются оба).
 //! - DELETE /api/v3/order https://www.mexc.com/api-docs/spot-v3/spot-account-trade/cancel-order — «Either `orderId` or
-//!   `origClientOrderId` must be sent.»; ответ — status, executedQty, cummulativeQuoteQty (запасной итог, если
+//!   `origClientOrderId` must be sent.»; ответ — status, executedQty, cumulativeQuoteQty (запасной итог, если
 //!   запросы статуса после отмены не прошли).
 
 use std::time::{Duration, Instant};

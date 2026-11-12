@@ -8,7 +8,7 @@
 
 | Источник | Что там |
 | --- | --- |
-| https://doc.xt.com/ | Документация API v4 (одна страница, разделы по якорям `#<раздел><файл>`) |
+| https://doc.xt.com/docs/spot/ | Документация API v4 — постраничная (решение 263, сверено 13.11.2026: старые адреса `https://doc.xt.com/#<раздел><файл>` ведут на пустую переадресацию; в комментариях кода — адреса `https://doc.xt.com/docs/spot/<раздел>/<страница>`, фьючерсы — `docs/futures/…`, ключ — `docs/user-center/…`) |
 | https://github.com/xt-com/xt4-api (ветка main, коммит `8edf738` от 22.01.2025) | Исходник doc.xt.com: `_documentation/` (подпись, лимиты, коды, publicModule), `_market/` (symbol, depth), `_order/`, `_trade/`, `_balance/`, `_deposit_withdrawal/`, `_transfer/`, `_websocket_public/`, `_websocket_private/`, `_user_center_apikey/`, `_futures_user/`, `_futures_documentation/` |
 | https://github.com/kelvinxue/pyxt (коммит `db336a1`) | SDK, на который ссылается документация: эндпоинты совпадают; заголовки подписи `xt-validate-*` — расхождение с документацией |
 
@@ -25,7 +25,7 @@
 | `symbols.rs`, `symbols_parse.rs` | `/v4/public/symbol` (вне рабочих потоков, с `version` — без изменений список не приходит): state, tradingEnabled, openapiEnabled, PRICE / QUANTITY (шаг от min, null — без предела), QUOTE_QTY, точности, takerFeeRate, orderTypes, timeInForces |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар (SpotPairs), фоновое обновление, подписка (как Binance); пара, где XT не примет наш ордер (LIMIT нет в orderTypes или venue.order_time_in_force нет в timeInForces), — признак `order_block` с причиной, ядро её не считает (решение 254) |
 | `order_rules.rs` | ОДНА функция правил ордера (решение 134): у ордера и у `check_order`; LIMIT + IOC/FOK, округление от min, пределы, QUOTE_QTY; пробного ордера у XT нет; `order_block` — признак пары «не примет наш ордер» для справочника ядра (решение 254), та же проверка у ордера |
-| `trade.rs`, `order_state.rs` | `POST /v4/order` (тело JSON, свой clientOrderId), итог `GET /v4/order/{id}`, отмена `DELETE`; поиск по clientOrderId при неизвестном итоге; комиссия — `deductServices` или `fee`/`feeCurrency` |
+| `trade.rs`, `order_state.rs` | `POST /v4/order` (тело JSON, свой clientOrderId — 18 знаков `b|s` + мс + номер попытки, шаблон `^[a-zA-Z0-9_]{4,22}`, решение 263), итог `GET /v4/order?orderId=` (Query single, 50/s), отмена `DELETE`; поиск по clientOrderId при неизвестном итоге; комиссия — `fee`/`feeCurrency` (`deductServices` в документации нет — решение 263) |
 | `book_version.rs` | Решения 202/213: версия стакана пары по REST `GET /v4/public/depth` для сторожа ядра — при `depth_update` номер (`lastUpdateId` ↔ номер локального стакана, «Orderbook manage»), при `depth` — первые `venue.depth_levels` уровней (по содержимому); Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `book.rs`, `depth.rs`, `ws.rs`, `ws_conn.rs`, `ws_book.rs`, `local_book.rs`, `snapshots.rs` | Сторож пар (решение 202): учёт свежести на каждом кадре, переподписка пары `unsubscribe` + `subscribe`, переподключение соединения; подтверждённая тихая пара свежа до срока (`book.rs`). Стаканы: `depth@{symbol},{levels}` (снимки 1000 мс; тот же updateId — без отдачи ядру) или `depth_update@{symbol}` (100 мс) + снимок REST `/v4/public/depth` из общей очереди (≤ 10/с); текст `ping` раз в `venue.ws_ping_ms`; котировка по ставке тейкера пары. Дополнение 10.11 к 202/213: при переподписке пары сторожем — сразу снимок REST из той же очереди (`ws_book.rs` resub): `depth_update` — стакан пары заново со снимка (номер = `lastUpdateId`), `depth` — верхние `venue.depth_levels` уровней ядру, если кадр `depth@` ещё не пришёл (`ws_diff.rs`) |
 | `wallet.rs`, `networks_parse.rs` | `/v4/public/wallet/support/currency` + `/v4/public/currencies` (кэш): сеть BSC (`chain`), `contract`, ввод/вывод по сети и по монете, комиссия и минимум вывода; ненулевой `depositFeeRate` — ввод по сети закрыт; минимум депозита — `venue.deposit_min_absent_ok` |
@@ -44,10 +44,10 @@
 - WebSocket: документация требует заголовок `Sec-Websocket-Extensions: permessage-deflate`; tokio-tungstenite 0.30
   сжатие не умеет — подключение без заголовка. Если XT не отдаёт кадры без сжатия — нужна другая библиотека
   WebSocket (решение Тиграна).
-- Ставки комиссии по ключу в API нет — расчёт по `takerFeeRate` пары; скидка оплатой в XT (`deductServices`) — только
-- Решение 232: покупка — комиссия в монете (факт бота 08.11: WIN, 0.002 от количества); `deductServices` в нескольких монетах —
-  список частей (`order_state.rs fee`), не ошибка.
-  по факту ордера (урок 23).
+- Ставки комиссии по ключу в API нет — расчёт по `takerFeeRate` пары; факт комиссии — по ордеру (урок 23).
+- Решение 232: покупка — комиссия в монете (факт бота 08.11: WIN, 0.002 от количества). Решение 263: факт комиссии —
+  только `fee`/`feeCurrency` ответа ордера; `deductServices` (скидка оплатой в XT) в действующей документации нет — не
+  читается. В какой монете комиссия при скидке XT — проверить на живом ордере.
 - Поток аккаунта не подключён (урок 16): тема `balance` присылает итоговый баланс (`b`, `f`) без причины изменения —
   депозит нельзя отличить от сделки (как OKX `account`); зачисление — опросом `deposit_status`.
 - Удержание вывода T+1 (`WITHDRAW_009`) заранее через API не узнать — `withdraw_hold` пустой (урок 22).

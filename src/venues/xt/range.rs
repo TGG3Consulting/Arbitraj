@@ -5,7 +5,7 @@
 //! От чего зависит: rust_decimal.
 //! Настройки: нет.
 //!
-//! Официально (https://doc.xt.com/#marketsymbol): «price must be equal to minPrice+(integer multiple of tickSize)», то
+//! Официально (https://doc.xt.com/docs/spot/Market/GetSymbolInformation): «price must be equal to minPrice+(integer multiple of tickSize)», то
 //! же у количества; «Each of the above items can be null, when it is null, it means that this item is no longer
 //! restricted». Нет tickSize — шаг по pricePrecision / quantityPrecision (ORDER_008 «precision is abnormal»).
 

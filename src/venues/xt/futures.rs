@@ -5,7 +5,7 @@
 //! От чего зависит: ctx.rs, sign.rs, reply.rs, errors.rs, gateway/http.rs.
 //! Настройки: http.*; секреты xt.api_key, xt.api_secret (адрес передаёт вызывающий).
 //!
-//! Официально (https://doc.xt.com/#futures_documentationsignSteps, `_futures_documentation/signSteps.md`): заголовки
+//! Официально (https://doc.xt.com/docs/futures/Access%20Description/SignatureGeneration, `_futures_documentation/signSteps.md`): заголовки
 //! validate-appkey, validate-timestamp, validate-signature; X = «validate-appkey=…&validate-timestamp=…»,
 //! Y = «#path#query#body»; адреса https://fapi.xt.com (USDT-M) и https://dapi.xt.com (Coin-M).
 

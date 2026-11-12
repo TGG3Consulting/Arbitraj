@@ -8,7 +8,7 @@
 //! От чего зависит: ws_book.rs (Conn), depth.rs, local_book.rs, snapshots.rs.
 //! Настройки: из ws.rs (Cfg).
 //!
-//! Официально: «Orderbook manage» https://doc.xt.com/#websocket_publicorderBook.
+//! Официально: «Orderbook manage» https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage.
 
 use tokio::time::Instant;
 

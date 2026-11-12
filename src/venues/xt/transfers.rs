@@ -6,10 +6,10 @@
 //! Настройки: нет своих.
 //!
 //! Официально:
-//! - POST /v4/withdraw (https://doc.xt.com/#deposit_withdrawalwithdraw, `_deposit_withdrawal/withdraw.md`, «1/s/apikey»):
+//! - POST /v4/withdraw (https://doc.xt.com/docs/spot/Deposit&Withdrawal/Withdraw, `_deposit_withdrawal/withdraw.md`, «1/s/apikey»):
 //!   тело JSON currency, chain, amount («Withdrawal amount, including handling fee» — как считает ядро: приход = сумма −
 //!   комиссия), address, memo, clientOrderId «^[a-zA-Z0-9_]{4,32}$»; ответ result {id}.
-//! - GET /v4/withdraw?recordId=|clientOrderId= (#deposit_withdrawalwithdrawDetail, «1/s/apikey»): id, clientOrderId,
+//! - GET /v4/withdraw?recordId=|clientOrderId= (https://doc.xt.com/docs/spot/Deposit&Withdrawal/WithdrawDetail, «1/s/apikey»): id, clientOrderId,
 //!   currency, chain, address, status, amount, fee, transactionId, confirmations. Статусы — publicModule.md: SUBMIT,
 //!   REVIEW (ручная проверка), AUDITED, AUDITED_AGAIN, PENDING («already on-chaining»), SUCCESS, FAIL, CANCEL.
 //! - Адресная книга: коды WITHDRAW_004 «The withdrawal address is not added», WITHDRAW_016 — адрес кошелька DEX, видимо,

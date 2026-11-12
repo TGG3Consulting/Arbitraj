@@ -9,7 +9,7 @@
 //! (Coin-M, https://dapi.xt.com). Не заданы — счёт показывает причину.
 //!
 //! Официально: спот — GET /v4/balances (account.rs); фьючерсы — GET /future/user/v1/balance/list
-//! (https://doc.xt.com/#futures_usergetBalances, `_futures_user/getBalances.md`, своя подпись — sign.rs) → result
+//! (https://doc.xt.com/docs/futures/User/GetUserFunds, `_futures_user/getBalances.md`, своя подпись — sign.rs) → result
 //! [{coin, walletBalance, availableBalance, openOrderMarginFrozen, isolatedMargin, crossedMargin, bonus, coupon}].
 //! Свободно = availableBalance, занято = walletBalance − availableBalance. Ответ «счёт фьючерсов не открыт»
 //! (/future/user/v1/account/open) в документации не показан — пока это ошибка счёта (урок 27: проверить на живом).

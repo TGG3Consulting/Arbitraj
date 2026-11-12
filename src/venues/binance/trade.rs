@@ -11,11 +11,16 @@
 //! Официально: POST /api/v3/order (вес 1, «Unfilled order count: 1») — ответ FULL: orderId, status, origQty,
 //! executedQty, cummulativeQuoteQty, fills[] (price, qty, commission, commissionAsset); 5XX и −1007 TIMEOUT — «execution
 //! status unknown» → поиск по origClientOrderId (order_state.rs::recover).
+//! Решение 263 (Тигран 13.11): expiryReason — условное поле ответа ордера «When an order has expired» (rest-api.md
+//! «Conditional fields in Order Responses», enums.md «Expiry Reasons»; CHANGELOG 2026-05-06 «Order query responses may
+//! include an expiryReason field») — в журнал venue.order (expiry_note); логика исполнения не меняется.
 
 use reqwest::Method;
+use serde_json::Value;
 
 use crate::core::types::{TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::errors::Op;
@@ -55,5 +60,26 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
         Some(r) if order_state::is_final(&r) => r,
         _ => order_state::settle(ctx, &p.symbol, &order_id).await?,
     };
+    if let Some(m) = expiry_note(&p.symbol, &order_id, &state) {
+        ctx.log(Level::Info, "venue.order", m).await;
+    }
     order_state::result(ctx, &p.symbol, req, &state, order_id, p.qty).await
+}
+
+/// Что делает: решение 263 — строка журнала о причине истечения ордера по полю expiryReason (enums.md «Expiry
+/// Reasons»: UNFILLED_IOC_QUANTITY_EXPIRED, INSUFFICIENT_LIQUIDITY, EXECUTION_RULE_PRICE_RANGE_EXCEEDED и др.; NONE —
+/// «The order has not expired»). Значение — как прислал Binance. Принимает: символ, orderId, ответ ордера.
+/// Возвращает: текст; None — поля нет, оно пустое или NONE. Ошибок нет.
+pub fn expiry_note(symbol: &str, order_id: &str, s: &Value) -> Option<String> {
+    let why = s.get("expiryReason").and_then(Value::as_str)?.trim();
+    if why.is_empty() || why == "NONE" {
+        return None;
+    }
+    let st = s.get("status").and_then(Value::as_str).unwrap_or_default();
+    let q = |f: &str| s.get(f).and_then(Value::as_str).unwrap_or("?").to_string();
+    Some(format!(
+        "Binance {symbol}: ордер {order_id} ({st}) не исполнился до конца, expiryReason {why} (исполнено {} из {})",
+        q("executedQty"),
+        q("origQty")
+    ))
 }

@@ -6,7 +6,7 @@
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: нет своих.
 //!
-//! Официально: GET /v4/deposit/address (https://doc.xt.com/#deposit_withdrawaldepositAddressGet,
+//! Официально: GET /v4/deposit/address (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetDepositAddress,
 //! `_deposit_withdrawal/depositAddressGet.md`) — chain и currency обязательны (значения — из support/currency); ответ
 //! result {address, memo}. Коды — errorCode.md (DEPOSIT_001…008).
 

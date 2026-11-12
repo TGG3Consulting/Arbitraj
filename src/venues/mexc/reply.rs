@@ -92,7 +92,8 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
                 pause(s);
             }
             let msg = v.get("msg").and_then(Value::as_str).unwrap_or_default();
-            Err(errors::from_code(c, msg, op, &r.text))
+            // Решение 263: со статусом — код не из списка при HTTP 5XX не отказ, а сбой MEXC (errors.rs).
+            Err(errors::from_code_http(c, msg, op, &r.text, Some(status)))
         }
         None if status < 400 => Ok(v),
         None => Err(errors::from_http(status, &r.text, r.retry_after_s)),

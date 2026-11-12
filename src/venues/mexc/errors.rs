@@ -6,12 +6,15 @@
 //!
 //! Коды — по официальной таблице «Error Code» https://www.mexc.com/api-docs/spot-v3/error-code и разделу «HTTP Return
 //! Codes» https://www.mexc.com/api-docs/spot-v3/introduction (403 — WAF, 429 — превышен лимит, «the IP may be banned
-//! soon», 418/429 — заголовок Retry-After, 5XX — «the execution status is UNKNOWN and could have been a success»).
-//! Текст причины всегда берётся из поля msg ответа MEXC — он виден Тиграну как есть.
+//! soon», 418/429 — заголовок Retry-After, «HTTP 5XX codes indicate an issue on the MEXC server side» — сверено 13.11:
+//! слов «execution status is UNKNOWN» у MEXC нет). Решение 263 (Тигран 13.11): HTTP 5XX с кодом не из списка ниже — сбой
+//! на стороне MEXC: ордер, вывод, перевод — «итог неизвестен» (Timeout → unsure), а не отказ (from_code_http).
+//! Текст причины всегда берётся из поля msg ответа MEXC — он виден Тиграну как есть. Сбои обмена — errors_fail.rs.
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
 use super::ctx::ID;
+pub use super::errors_fail::{fail_for, from_fail};
 
 /// Для какой операции пришла ошибка: от этого зависит единый код у неизвестных кодов MEXC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,8 +29,21 @@ pub enum Op {
     Other,
 }
 
-/// Ошибка по полю code ответа MEXC. Принимает: код, текст msg, операцию, сырой ответ. Возвращает: GatewayError.
+/// Ошибка по полю code ответа MEXC (HTTP-статус не учитывается). Принимает: код, msg, операцию, сырой ответ.
 pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
+    from_code_http(code, msg, op, raw, None)
+}
+
+/// Ошибка по полю code ответа MEXC с HTTP-статусом ответа (reply.rs). Принимает: код, текст msg, операцию, сырой
+/// ответ, статус (None — не учитывать). Возвращает: GatewayError.
+pub fn from_code_http(
+    code: i64,
+    msg: &str,
+    op: Op,
+    raw: &str,
+    status: Option<u16>,
+) -> GatewayError {
+    let server = status.filter(|s| (500..=599).contains(s));
     let unified = match code {
         // Ключ, подпись (Error Code: 10072, 700001, 700002, 602).
         10072 | 700001 | 700002 | 602 => ErrorCode::InvalidCredentials,
@@ -68,10 +84,14 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         500 | 503 | 504 | 20002 | 11444 => ErrorCode::Unreachable,
         // Ордер не найден (-2011 «Unknown order sent»).
         -2011 => ErrorCode::BadResponse,
+        // Решение 263: код не из списка при HTTP 5XX («issue on the MEXC server side») — как «сервер занят» выше.
+        _ if server.is_some() && op != Op::Other => ErrorCode::Timeout,
+        _ if server.is_some() => ErrorCode::Unreachable,
         _ => rejected(op),
     };
     let msg = if msg.is_empty() { "(без msg)" } else { msg };
-    let text = format!("MEXC, код {code}: {msg}");
+    let http = server.map(|s| format!(" (HTTP {s})")).unwrap_or_default();
+    let text = format!("MEXC, код {code}{http}: {msg}");
     GatewayError::new(unified, Some(venue()), text).with_raw(raw)
 }
 
@@ -103,7 +123,7 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
 }
 
 /// Деньги могли двинуться → «результат неизвестен» с пояснением. Принимает: ошибку, операцию. Ошибок нет.
-fn unknown(e: GatewayError, op: Op) -> GatewayError {
+pub(super) fn unknown(e: GatewayError, op: Op) -> GatewayError {
     let what = match op {
         Op::Trade => "ордер",
         Op::Move => "перевод между счетами",
@@ -151,35 +171,6 @@ pub fn from_http(status: u16, raw: &str, retry_after_s: Option<u64>) -> GatewayE
     .with_raw(raw)
 }
 
-/// Сбой HTTP-обмена: нет связи (Unreachable), запрос мог дойти, а ответа нет (Timeout), тело не текст или больше
-/// предела (BadResponse). Принимает: сбой, сроки. Возвращает: GatewayError.
-pub fn from_fail(
-    f: &crate::gateway::http::Fail,
-    lim: &crate::gateway::http::Limits,
-) -> GatewayError {
-    use crate::gateway::http::Fail;
-    let code = match f {
-        Fail::Connect(_) => ErrorCode::Unreachable,
-        Fail::NotText | Fail::TooBig { .. } => ErrorCode::BadResponse,
-        _ => ErrorCode::Timeout,
-    };
-    GatewayError::new(code, Some(venue()), format!("MEXC: {}", f.text(lim)))
-}
-
-/// Сбой обмена по операции с деньгами (Trade, Withdraw, Move): любой сбой, кроме «соединение не установлено», —
-/// «результат неизвестен». Принимает: сбой, сроки, операцию. Возвращает: GatewayError. Ошибок нет.
-pub fn fail_for(
-    f: &crate::gateway::http::Fail,
-    lim: &crate::gateway::http::Limits,
-    op: Op,
-) -> GatewayError {
-    let e = from_fail(f, lim);
-    if op == Op::Other || f.not_sent() {
-        return e;
-    }
-    unknown(e, op)
-}
-
 /// Ответ не удалось разобрать.
 pub fn bad(what: &str, raw: &str) -> GatewayError {
     GatewayError::new(
@@ -191,6 +182,6 @@ pub fn bad(what: &str, raw: &str) -> GatewayError {
 }
 
 /// Площадка MEXC для ошибок.
-fn venue() -> crate::core::types::VenueId {
+pub(super) fn venue() -> crate::core::types::VenueId {
     crate::core::types::VenueId(ID.to_string())
 }

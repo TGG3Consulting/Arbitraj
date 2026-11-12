@@ -12,7 +12,7 @@
 //! venue.order_time_in_force (каждый круг — признак «не примет наш ордер» пары, решение 254);
 //! порог устаревания venue.symbols_stale_s читает ядро.
 //!
-//! Официально: GET /v4/public/symbol (10/s/ip) — https://doc.xt.com/#marketsymbol; период задаёт Тигран.
+//! Официально: GET /v4/public/symbol (10/s/ip) — https://doc.xt.com/docs/spot/Market/GetSymbolInformation; период задаёт Тигран.
 
 use std::time::Duration;
 

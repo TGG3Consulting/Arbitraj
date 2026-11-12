@@ -10,7 +10,8 @@
 //! Виды не сообщены (хранилище без ядра: утилиты, тесты хранилища) — проверка вида не делается (только разбор id и
 //! типы настройки, как раньше). Очистка значения (None) не проверяется: старую неверную пару можно удалить. Загрузка
 //! из базы не проверяется: уже записанные значения не теряются.
-//! Кто вызывает: settings/store.rs (set — запись значения с областью VenueDir), core/engine.rs (set — при запуске).
+//! Кто вызывает: settings/store.rs (set — запись значения с областью VenueDir), core/engine.rs (set — при запуске),
+//! venues/bsc_dex/check/quoter_amount.rs (cexes — решение 261).
 //! От чего зависит: settings/venue_dir.rs (parse_id, DirKind), gateway/contract.rs (VenueKind).
 //! Настройки: нет своих.
 
@@ -31,6 +32,18 @@ impl VenueKinds {
     /// Что делает: заменяет виды площадок (ядро при запуске). Принимает: (id площадки, вид). Ошибок нет.
     pub fn set(&self, kinds: impl IntoIterator<Item = (String, VenueKind)>) {
         *self.map.write().unwrap_or_else(|p| p.into_inner()) = Some(kinds.into_iter().collect());
+    }
+
+    /// Что делает: id бирж (CEX) шлюза — решение 261: адаптер DEX ищет наибольший money.max_per_trade_usd среди
+    /// направлений с DEX (check/quoter_amount.rs). Возвращает: список или None — виды не сообщены. Ошибок нет.
+    pub fn cexes(&self) -> Option<Vec<String>> {
+        let guard = self.map.read().unwrap_or_else(|p| p.into_inner());
+        guard.as_ref().map(|m| {
+            m.iter()
+                .filter(|(_, k)| **k == VenueKind::Cex)
+                .map(|(id, _)| id.clone())
+                .collect()
+        })
     }
 
     /// Что делает: проверка id области VenueDir по видам площадок (см. шапку). Принимает: id области.

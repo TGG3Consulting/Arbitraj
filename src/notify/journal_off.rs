@@ -83,6 +83,8 @@ pub static OWN_RECORD: &[&str] = &[
     "venue.withdraw_limit",      // core.withdraw_limit (withdraw_limit_pause.rs)
     "dex.check_not_configured",  // dex.check_not_configured (bsc_dex/check/tax_pass.rs)
     "pool.hook_excluded",        // core.pool_excluded (rebuild_report.rs, по пулу)
+    "pool.quoter_paused",        // dex.quoter_pause (bsc_dex/check/quoter_pause.rs, решение 261)
+    "pool.quoter_resumed",       // dex.quoter_pause (bsc_dex/check/quoter_pause.rs, решение 261)
     "stuck.detected",            // core.stuck (stuck.rs)
     "manual.taken",              // core.command (commands.rs — итог команды «Беру на себя»)
     "manual.returned",           // core.command (commands.rs — итог команды «Вернуть боту»)

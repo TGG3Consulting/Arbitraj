@@ -1,12 +1,19 @@
 //! Файл: venues/bsc_dex/check/quoter_verify.rs
-//! Что делает: сверка одного пула с квотером своей DEX (после фильтра ликвидности): пустой пул / не хватает
+//! Что делает: сверка одной стороны пула с квотером своей DEX (после фильтра ликвидности): пустой пул / не хватает
 //! ликвидности на сумму — честная причина; у пула с крючком B/C — за вычетом измеренного влияния крючка на сторону;
-//! покупка и продажа — независимо (решение 73);
-//! сумма — check.probe_usdt USDT (для пула с промежуточной монетой — пересчёт по живому пулу, решение 52).
-//! Кто вызывает: check/quoter_cycle.rs.
-//! От чего зависит: quote/quoter.rs, quote/emptiness.rs, quote/rate.rs, check/state.rs, pools/registry.rs, tokens.rs,
-//! num.rs.
-//! Настройки: dex.quoter_max_diff_pct (через quoter.rs), check.probe_usdt [bsc_dex].
+//! покупка и продажа — независимо (решение 73).
+//! Решение 261 (Тигран 12.11): сверка — на ОДНОМ блоке: пул прочитан заново на голове H (check/quoter_block.rs at_head —
+//! один раз на пул, после проверки настроек, лениво), математика по свежему состоянию и квотер на H
+//! (check/quoter_compare.rs); сумма стороны —
+//! min(наш максимум money.max_per_trade_usd среди направлений с DEX, ликвидность стороны в полосе) USDT
+//! (check/quoter_amount.rs; пул с крючком B/C — прежняя check.probe_usdt), для пула с промежуточной монетой — пересчёт
+//! во встречный токен по живому пулу (решение 52, quote/rate.rs). Итог: прошла / пауза (расхождение на одном блоке) /
+//! иная причина / «не сверено (блок)».
+//! Кто вызывает: check/quoter_one.rs.
+//! От чего зависит: check/quoter_block.rs, check/quoter_compare.rs, check/quoter_amount.rs, quote/emptiness.rs, quote/rate.rs, quote/spot.rs,
+//! check/state.rs, pools/registry.rs, tokens.rs, num.rs.
+//! Настройки: dex.quoter_max_diff_pct (через quoter_compare.rs), money.max_per_trade_usd, check.probe_usdt [bsc_dex]
+//! (через quoter_amount.rs).
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
@@ -18,7 +25,10 @@ use crate::storage::journal::Level;
 use super::super::num;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
-use super::super::quote::{emptiness, quoter, rate};
+use super::super::quote::{emptiness, rate};
+use super::quoter_amount;
+use super::quoter_block::{self, Head, NOT_CHECKED};
+use super::quoter_compare::{self, Cmp, Nums};
 use super::state::Checks;
 
 /// Причина «влияние крючка ещё не измерено»: такой пул сверяется снова, как только крючок измерен (check/cycle.rs
@@ -39,33 +49,107 @@ fn from_err(e: crate::gateway::errors::GatewayError) -> Fail {
     (e.message, e.setting)
 }
 
-/// Сверка стороны пула (после фильтра глубины этой стороны; решение 73 — стороны независимо): покупка — check.probe_usdt
-/// USDT во встречном токене в пул; продажа — монеты на эту сумму по текущей цене пула (quote/spot.rs, без обмена).
-/// Возвращает: Ok или Err(причина, имя незаданной настройки). Ошибок нет.
-pub async fn verify(p: &Pools, e: &Entry, side: Side) -> Result<(), Fail> {
+/// Итог сверки стороны (решение 261).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Verdict {
+    /// Сверка на одном блоке прошла (блок).
+    Ok { block: u64 },
+    /// Расхождение с квотером на одном блоке больше допуска — пауза стороны: причина с цифрами, блок, сумма USDT, цифры.
+    Pause {
+        why: String,
+        block: u64,
+        usd: Decimal,
+        nums: Option<Nums>,
+    },
+    /// Иная причина — сторона исключена (как раньше), без паузы.
+    Fail(Fail),
+    /// «Не сверено (блок)» — итог стороны прежний, причина видна на экране.
+    NoBlock(String),
+}
+
+/// Сверка стороны пула (после фильтра глубины этой стороны; решение 73 — стороны независимо): покупка — сумма стороны
+/// во встречном токене в пул; продажа — монеты на эту сумму по цене пула на H (quote/spot.rs, без обмена). Настройки
+/// (влияние крючка, сумма, допуск) — до обращения к узлу (ревью #65); голова и свежее чтение — в `head` (одно на пул:
+/// None — ещё не читали). Принимает: пулы, запись из памяти, голову пула, знаки USDT, сторону. Возвращает: итог.
+/// Ошибок нет.
+pub async fn verify(
+    p: &Pools,
+    e: &Entry,
+    head: &mut Option<Head>,
+    usdt_dec: u8,
+    side: Side,
+) -> Verdict {
     if emptiness::empty(e) {
-        return Err(plain(emptiness::EMPTY));
+        return Verdict::Fail(plain(emptiness::EMPTY));
     }
-    let pct = hook_pct(&p.checks, e, side).map_err(plain)?;
-    let (amount, usdt) = probe(p, e).await?;
+    let pct = match hook_pct(&p.checks, e, side) {
+        Ok(v) => v,
+        Err(why) => return Verdict::Fail(plain(why)),
+    };
+    // Сумма — по глубине стороны в памяти (её же фильтр глубины пропустил сторону; кэш глубины свежим чтением не
+    // трогается).
+    let a = match quoter_amount::side_usd(p, e, usdt_dec, side) {
+        Ok(a) => a,
+        Err(f) => return Verdict::Fail(f),
+    };
+    let amount = match counter(p, e, usdt_dec, a.usd) {
+        Ok(v) => v,
+        Err(f) => return Verdict::Fail(f),
+    };
+    if let Err(err) = p.ctx.dec("dex.quoter_max_diff_pct") {
+        return Verdict::Fail(from_err(err));
+    }
+    if head.is_none() {
+        *head = Some(quoter_block::at_head(p, e).await);
+    }
+    let (block, fresh): (u64, &Entry) = match head.as_ref() {
+        Some(Head::Ready { block, entry }) => (*block, &**entry),
+        Some(Head::NoBlock(why)) => return Verdict::NoBlock(why.clone()),
+        Some(Head::Fail(f)) => return Verdict::Fail(f.clone()),
+        None => return Verdict::NoBlock(format!("{NOT_CHECKED}: голова не прочитана")),
+    };
+    if emptiness::empty(fresh) {
+        return Verdict::Fail(plain(emptiness::EMPTY));
+    }
     let (token_in, amount) = match side {
-        Side::Buy => (e.usdt, amount),
-        // Продажа — монеты на ту же сумму по ТЕКУЩЕЙ цене пула, без обмена на стороне покупки (решение 73): у пула с
+        Side::Buy => (fresh.usdt, amount),
+        // Продажа — монеты на ту же сумму по цене пула на H, без обмена на стороне покупки (решение 73): у пула с
         // ликвидностью только с одной стороны цены покупка невозможна, а продажа глубокая — стороны независимы.
-        Side::Sell => match super::super::quote::spot::coins_for(e, amount) {
-            Some(c) if !c.is_zero() => (e.coin, c),
+        Side::Sell => match super::super::quote::spot::coins_for(fresh, amount) {
+            Some(c) if !c.is_zero() => (fresh.coin, c),
             _ => {
-                return Err(plain(
-                    "цены пула нет — монет на сумму пробы продажи не посчитать",
+                return Verdict::Fail(plain(
+                    "цены пула нет — монет на сумму сверки продажи не посчитать",
                 ));
             }
         },
     };
-    match quoter::compare(&p.ctx, e, token_in, amount, pct).await {
-        Ok(Err(why)) if why.starts_with(emptiness::SHORT) => {
-            Err(plain(format!("{why}, check.probe_usdt = {usdt} USDT")))
+    let sum = format!("сумма сверки {} USDT — {}", a.usd.round_dp(2), a.source);
+    let got = quoter_compare::compare(&p.ctx, fresh, token_in, amount, pct, block).await;
+    verdict(p, e, got, sum, a.usd).await
+}
+
+/// Итог сравнения → итог стороны. Принимает: пулы, запись, итог compare, строку суммы, сумму USDT. Ошибок нет.
+async fn verdict(
+    p: &Pools,
+    e: &Entry,
+    got: crate::gateway::errors::GatewayResult<Cmp>,
+    sum: String,
+    usd: Decimal,
+) -> Verdict {
+    match got {
+        Ok(Cmp::Ok { block }) => Verdict::Ok { block },
+        Ok(Cmp::Pause { block, why, nums }) => Verdict::Pause {
+            why: format!("{why}; {sum}"),
+            block,
+            usd,
+            nums,
+        },
+        Ok(Cmp::Fail(why)) if why.starts_with(emptiness::SHORT) => {
+            Verdict::Fail(plain(format!("{why}, {sum}")))
         }
-        Ok(r) => r.map_err(plain),
+        Ok(Cmp::Fail(why)) => Verdict::Fail(plain(why)),
+        Ok(Cmp::NoBlock(why)) => Verdict::NoBlock(why),
         // Не задана настройка (например dex.quoter вида пула) — одна запись на причину, не на пул.
         Err(err) if err.code == ErrorCode::NotConfigured => {
             let msg = format!(
@@ -75,9 +159,9 @@ pub async fn verify(p: &Pools, e: &Entry, side: Side) -> Result<(), Fail> {
             p.signals
                 .once(&p.ctx, Level::Error, "dex.quoter", msg)
                 .await;
-            Err(from_err(err))
+            Verdict::Fail(from_err(err))
         }
-        Err(err) => Err(from_err(err)),
+        Err(err) => Verdict::Fail(from_err(err)),
     }
 }
 
@@ -111,16 +195,14 @@ fn hook_pct(checks: &Checks, e: &Entry, side: Side) -> Result<Decimal, String> {
     }
 }
 
-/// Сумма сверки во встречном токене пула: check.probe_usdt USDT, для пула с промежуточной монетой (решение 52) —
-/// пересчёт по живому пулу «промежуточная — USDT» (quote/rate.rs). Возвращает: (сумма, check.probe_usdt). Err — причина и имя незаданной настройки.
-async fn probe(p: &Pools, e: &Entry) -> Result<(U256, Decimal), Fail> {
+/// Сумма сверки USDT → встречный токен пула (минимальные единицы): для пула с промежуточной монетой (решение 52) —
+/// пересчёт по живому пулу «промежуточная — USDT» (quote/rate.rs). Ошибки: причина и имя незаданной настройки.
+fn counter(p: &Pools, e: &Entry, usdt_dec: u8, usd: Decimal) -> Result<U256, Fail> {
     let usdt = p.tokens.usdt(&p.ctx).map_err(from_err)?;
-    let usdt_dec = p.tokens.decimals(&p.ctx, usdt).await.map_err(from_err)?;
-    let v = p.ctx.dec("check.probe_usdt").map_err(from_err)?;
-    let amount = num::to_units(v, usdt_dec).ok_or_else(|| {
-        let why = "check.probe_usdt не переводится в единицы USDT";
-        (why.to_string(), Some("check.probe_usdt".to_string()))
+    let amount = num::to_units(usd, usdt_dec).ok_or_else(|| {
+        plain(format!(
+            "сумма сверки {usd} USDT не переводится в единицы USDT"
+        ))
     })?;
-    let amount = rate::from_usdt(&p.ctx, &p.reg, usdt, e.usdt, amount).map_err(from_err)?;
-    Ok((amount, v))
+    rate::from_usdt(&p.ctx, &p.reg, usdt, e.usdt, amount).map_err(from_err)
 }

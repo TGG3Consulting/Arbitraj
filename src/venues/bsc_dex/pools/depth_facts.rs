@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/depth_facts.rs
 //! Что делает: пулы площадки для экрана «Монеты» (решение 73, Venue::pool_depths): глубина по направлениям в полосе
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
-//! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing — строкой в details.
+//! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing, «не сверено (блок)» по сторонам и «память отстаёт от сети» (решение 261) — строками в details; пауза по сверке
+//! на одном блоке — итог стороны «failed» с причиной «пауза: …» (цифры и блок в тексте).
 //! Кто вызывает: venue.rs (pool_depths; pool_depths_of — только пулы маршрута, карточка сигнала решения 74).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
@@ -48,20 +49,6 @@ pub async fn all(
             Err(why) => (None, Some(why)),
         };
         let q = checks.pool(&r).quoter;
-        let side = |x: &super::super::check::quoter_sides::SideCheck| match x {
-            None => SideCheck {
-                state: CrossCheck::NotChecked,
-                reason: None,
-            },
-            Some(Ok(())) => SideCheck {
-                state: CrossCheck::Ok,
-                reason: None,
-            },
-            Some(Err(why)) => SideCheck {
-                state: CrossCheck::Failed,
-                reason: Some(why.clone()),
-            },
-        };
         out.push(PoolDepth {
             venue: ctx.venue(),
             pool: r,
@@ -75,15 +62,55 @@ pub async fn all(
             depth_error: error,
             asleep: e.asleep,
             valid: e.valid,
-            cross_check_buy: side(&q.buy),
-            cross_check_sell: side(&q.sell),
+            cross_check_buy: side_check(&q.buy, q.buy_paused),
+            cross_check_sell: side_check(&q.sell, q.sell_paused),
+            // Решение 261: «не сверено (блок)» по сторонам — строками подробностей (итог стороны — прежний).
             details: e
                 .pool
                 .tick_spacing
                 .map(|s| format!("tickSpacing {s}"))
                 .into_iter()
+                .chain(q.buy_note.as_ref().map(|n| format!("покупка: {n}")))
+                .chain(q.sell_note.as_ref().map(|n| format!("продажа: {n}")))
+                .chain(q.memory.clone())
                 .collect(),
         });
     }
     Ok(out)
+}
+
+/// Начало причины стороны на паузе — по нему экран «Глубина» показывает «ПАУЗА» (ui PoolDepthCell.svelte).
+pub const PAUSE_PREFIX: &str = "пауза:";
+
+/// Итог сверки стороны для экрана. Решение 261 (ревью): сторона на паузе, а последняя сверка дала иную причину или
+/// сторона мелкая — показывается «пауза» (отметка держится до сверки, прошедшей на одном блоке) с последней причиной.
+/// Принимает: итог стороны, отметку паузы. Возвращает: SideCheck ядра. Ошибок нет.
+pub fn side_check(x: &super::super::check::quoter_sides::SideCheck, paused: bool) -> SideCheck {
+    let held = |last: &str| {
+        format!(
+            "{PAUSE_PREFIX} держится до сверки, прошедшей на одном блоке; последняя сверка: {last}"
+        )
+    };
+    match x {
+        Some(Err(why)) if paused && !why.starts_with(PAUSE_PREFIX) => SideCheck {
+            state: CrossCheck::Failed,
+            reason: Some(held(why)),
+        },
+        None if paused => SideCheck {
+            state: CrossCheck::Failed,
+            reason: Some(held("сторона мелкая — не сверялась")),
+        },
+        None => SideCheck {
+            state: CrossCheck::NotChecked,
+            reason: None,
+        },
+        Some(Ok(())) => SideCheck {
+            state: CrossCheck::Ok,
+            reason: None,
+        },
+        Some(Err(why)) => SideCheck {
+            state: CrossCheck::Failed,
+            reason: Some(why.clone()),
+        },
+    }
 }

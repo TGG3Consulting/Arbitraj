@@ -39,6 +39,7 @@ pub mod graph_route;
 pub mod graph_seq;
 pub mod graph_split;
 pub mod mixed_quoter;
+pub mod mixed_quoter_calls;
 pub mod native_gas;
 pub mod path;
 pub mod pick;

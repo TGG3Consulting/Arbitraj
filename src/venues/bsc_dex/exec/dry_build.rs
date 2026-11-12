@@ -110,6 +110,7 @@ pub async fn build(
     check_price(ctx, req, coins, paid)?;
     if shape == RouteMode::Smart {
         let legs: Vec<Leg<'_>> = paths.iter().map(|(p, _)| Leg { path: p }).collect();
+        // Решение 261: односторонняя сверка; строки «в нашу сторону» сухой сделке не нужны (сделки нет).
         mixed_quoter::check(ctx, &legs).await?;
     }
     let mut legs = Vec::with_capacity(paths.len());

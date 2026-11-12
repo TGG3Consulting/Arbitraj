@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/exec/smart_legs.rs
 //! Что делает: подготовка долей умного маршрута (решение 38) по живому состоянию: количество каждой доли (продажа —
 //! qty × доля входа; покупка — qty × ожидаемые монеты доли / все; последняя — остаток), путь доли (exec/live.rs),
-//! проверка средней цены против худшей допустимой, сверка с MixedQuoter PancakeSwap, шаги и минимумы (exec/chain.rs),
+//! проверка средней цены против худшей допустимой, сверка с MixedQuoter PancakeSwap (решение 261 — односторонняя:
+//! в нашу сторону — строка в хронологию, Prep.favour), шаги и минимумы (exec/chain.rs),
 //! минимум выхода каждой доли по решению 228 (exec/leg_min.rs: E_k × max(1 − допуск, B / E), свежий минимум графовой
 //! верификации, решение 83, — нижней границей) последнему шагу каждой доли, нативная обёртка (решение 62).
 //! Зовётся дважды, если отправлялись разрешения (решение 121 B1: после approve всё заново).
@@ -9,6 +10,7 @@
 //! (quote/graph_seq.rs resequence); MixedQuoter сверяет каждую долю на текущем состоянии — с расчётом доли на нём же.
 //! Кто вызывает: exec/trade_smart.rs.
 //! От чего зависит: exec/live.rs, exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/leg_min.rs,
+//! exec/quoter_favour.rs,
 //! quote/mixed_quoter.rs, quote/graph_seq.rs, quote/via.rs, quote/path.rs.
 //! Настройки: через вызываемые — smart.mixed_quoter, dex.quoter_max_diff_pct, exec.dex_slippage_pct, dex.*.
 
@@ -24,13 +26,15 @@ use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::order::check_price;
-use super::{chain, leg_min, live};
+use super::{chain, leg_min, live, quoter_favour};
 
 /// Подготовленные доли: пути по живому состоянию (с количеством доли), шаги с минимумами, нативная обёртка.
 pub struct Prep {
     pub paths: Vec<(Path, Decimal)>,
     pub steps: Vec<Vec<Step>>,
     pub wrap: Wrap,
+    /// Решение 261: строки «в нашу сторону» сверки с MixedQuoter (None — в допуске) — в хронологию сделки.
+    pub favour: Option<String>,
 }
 
 /// Доли по живому состоянию: количество каждой доли, путь (exec/live.rs), проверка средней цены против худшей, сверка
@@ -84,7 +88,9 @@ pub async fn prepare(
     }
     check_price(ctx, req, coins, paid)?;
     let legs: Vec<Leg<'_>> = alone.iter().map(|(p, _)| Leg { path: p }).collect();
-    mixed_quoter::check(ctx, &legs).await?;
+    // Решение 261: сверка односторонняя — против нас — отказ; в нашу сторону — строка в хронологию.
+    // Журнал — один раз перед отправкой (trade_smart.rs): после approve подготовка идёт второй раз.
+    let favour = quoter_favour::line(&mixed_quoter::check(ctx, &legs).await?);
     let mut steps = Vec::with_capacity(paths.len());
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, req, p, *qty, decs)?);
@@ -98,5 +104,10 @@ pub async fn prepare(
     } else {
         Wrap::None
     };
-    Ok(Prep { paths, steps, wrap })
+    Ok(Prep {
+        paths,
+        steps,
+        wrap,
+        favour,
+    })
 }

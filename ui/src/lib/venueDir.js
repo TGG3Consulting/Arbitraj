@@ -9,7 +9,8 @@
 // Кто вызывает: components/VenueDirMoney.svelte, pages/Settings.svelte, components/SettingsGroupList.svelte.
 // От чего зависит: ничего (чистые функции над схемой, значениями и видами площадок из lib/settings.svelte.js).
 // Настройки: money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k,
-//   profit.closure_share, risk.max_daily_loss_usd (решение 258) — все, у которых в схеме есть область VenueDir.
+//   profit.closure_share, risk.max_daily_loss_usd (решение 258), signal.probe_usd (решение 260) — все, у которых в схеме
+//   есть область VenueDir.
 
 /** Рубрики биржи (ключи — DirKind бэкенда). buy/sell — где покупка и продажа: 'self' — эта биржа, 'dex' — DEX,
  *  'cex' — другие биржи. */

@@ -10,7 +10,8 @@
 //! Дополнение п. 2 (Тигран 09.11: согласовано): у profit.price_move_k значение монеты сильнее пары —
 //! decimal_coin_dir (монета → пара → вся система); у остальных четырёх — как было (пара сильнее).
 //! Кто вызывает: settings/scope.rs (разбор id), settings/value.rs (проверка), core/venue_dir.rs и места чтения
-//! money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k, profit.closure_share.
+//! money.min_profit_usd, money.min_profit_pct, money.max_per_trade_usd, profit.price_move_k, profit.closure_share;
+//! решение 260 — signal.probe_usd (core/signal_probe.rs, та же область, что у money.max_per_trade_usd).
 //! От чего зависит: settings/store.rs, settings/read.rs (At), gateway/errors.rs, serde.
 //! Настройки: читает те, у которых в каталоге есть область VenueDir (SettingDef::dir_kinds).
 

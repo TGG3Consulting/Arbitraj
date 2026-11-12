@@ -199,6 +199,7 @@ pub mod sell;
 pub mod sell_slip;
 pub mod sell_unsent;
 pub mod signal;
+pub mod signal_probe;
 pub mod signals_src;
 pub mod size;
 pub mod size_bounds;

@@ -11,9 +11,12 @@
 //! Решение 109: на тике котировка DEX может браться из памяти (quote_cache.rs) — пулы не менялись, тот же объём,
 //! не старше signal.dex_quote_cache_ms.
 //! Решение 241: котировка стороны DEX направления в открытом окне — точкой цены в окно (window_dex.rs, только память).
+//! Решение 260: задан signal.probe_usd — котировки на объём проверки сигнала min(probe, потолок) / опорная цена, не ниже
+//! минимумов площадок из памяти (signal_probe.rs) вместо потолка; не задан — побайтно прежний расчёт.
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
-//! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, settings.
-//! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms.
+//! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, signal_probe.rs, settings.
+//! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms,
+//! signal.probe_usd (решение 260, та же область, что у потолка).
 
 use rust_decimal::Decimal;
 
@@ -106,9 +109,9 @@ async fn side_quote(
 
 /// Цены направления для сигнала.
 /// Принимает: зависимости, направление, опорную цену монеты (лучший ask биржи; None — стакана нет).
-/// Возвращает: Prices на максимально вливаемом объёме (≤ потолка). Ошибки: текст причины (нет опорной
-/// цены, не задан лимит сделки, нет котировки, нет исполнимого объёма ни на сколько — глубина 0,
-/// комиссия в валюте, которую не перевести без convert.rs).
+/// Возвращает: Prices на максимально вливаемом объёме (≤ потолка; решение 260 — ≤ объёма проверки signal.probe_usd).
+/// Ошибки: текст причины (нет опорной цены, не задан лимит сделки, signal.probe_usd в неверном виде, нет котировки,
+/// нет исполнимого объёма ни на сколько — глубина 0, комиссия в валюте, которую не перевести без convert.rs).
 pub async fn for_direction(
     core: &Core,
     dir: &Direction,
@@ -123,21 +126,25 @@ pub async fn for_direction(
         coin: None,
     };
     // Решение 242: потолок — площадки и типа направления (venue_dir.rs), иначе площадка A, иначе вся система.
+    let vd = super::venue_dir::of(core, dir);
     let usd = deps
         .settings
-        .decimal_dir(
-            "money.max_per_trade_usd",
-            super::venue_dir::of(core, dir),
-            at,
-        )
+        .decimal_dir("money.max_per_trade_usd", vd, at)
         .map_err(|e| e.message)?;
-    let cap_qty = usd / ref_price;
+    // Решение 260: объём проверки сигнала (signal.probe_usd, та же область); не задан — потолок, как раньше.
+    let want = match super::signal_probe::probe_usd(&deps.settings, vd, at)? {
+        None => usd / ref_price,
+        Some(p) => {
+            let floor = super::signal_probe::floor_of(core, dir, ref_price);
+            super::signal_probe::qty(usd, Some(p), ref_price, floor)
+        }
+    };
     // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).
     let generation = super::window_dex::generation(core, dir);
-    let (qa, qb) = tick_quotes(core, dir, cap_qty).await?;
-    // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87). fillable_qty ≤
-    // запрошенного, поэтому меньшая из глубин обеих сторон уже в пределах потолка. Требовать полного
-    // заполнения потолка нельзя: тонкие пулы тогда умирают здесь и не доходят до подбора объёма (66).
+    let (qa, qb) = tick_quotes(core, dir, want).await?;
+    // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87; решение 260 — не выше объёма
+    // проверки). fillable_qty ≤ запрошенного, поэтому меньшая из глубин обеих сторон уже в его пределах. Требовать
+    // полного заполнения потолка нельзя: тонкие пулы тогда умирают здесь и не доходят до подбора объёма (66).
     let qty = qa.fillable_qty.min(qb.fillable_qty);
     if qty <= Decimal::ZERO {
         return Err(format!(
@@ -145,9 +152,9 @@ pub async fn for_direction(
             qa.fillable_qty, qb.fillable_qty
         ));
     }
-    // Потолок не влез целиком — пересчитать обе стороны на реально доступный объём, чтобы цены и спред
+    // Запрошенный объём не влез целиком — пересчитать обе стороны на реально доступный объём, чтобы цены и спред
     // были согласованы по одному объёму (у сторон разная глубина — берём меньшую).
-    let (qa, qb) = if qty < cap_qty {
+    let (qa, qb) = if qty < want {
         tick_quotes(core, dir, qty).await?
     } else {
         (qa, qb)

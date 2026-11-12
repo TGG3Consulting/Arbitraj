@@ -11,7 +11,7 @@
 //!
 //! Источник: BEP-520 — https://github.com/bnb-chain/BEPs/blob/master/BEPs/BEP-520.md (раздел Specification). Живой
 //! ответ узла (публичный RPC BNB Chain, блок 132983865, 12.11.2026): timestamp 0x6af47ad0, mixHash …0384 (900 мс),
-//! milliTimestamp 0x1a1caffc004 = 0x6af47ad0·1000 + 900 — сверено в tests/dex_block_ms.rs.
+//! milliTimestamp 0x1a1caffc004 = 0x6af47ad0·1000 + 900 — сверено в tests/bsc_dex_head_age.rs.
 
 use alloy_primitives::{B256, U256};
 

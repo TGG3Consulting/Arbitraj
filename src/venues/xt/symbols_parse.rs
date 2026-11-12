@@ -5,7 +5,7 @@
 //! От чего зависит: num.rs, errors.rs, ctx.rs (тикер), symbols.rs (SymbolRules, коды состояния).
 //! Настройки: нет.
 //!
-//! Официально (https://doc.xt.com/#marketsymbol, `_market/2symbol.md`): result {time, version, symbols[]}; пара:
+//! Официально (https://doc.xt.com/docs/spot/Market/GetSymbolInformation, `_market/2symbol.md`): result {time, version, symbols[]}; пара:
 //! symbol («btc_usdt»), state (ONLINE, OFFLINE, DELISTED), tradingEnabled, openapiEnabled («Openapi transaction is
 //! available or not»), baseCurrency, quoteCurrency, pricePrecision, quantityPrecision, takerFeeRate, makerFeeRate,
 //! orderTypes, timeInForces, filters[{filter: PRICE|QUANTITY (min, max, tickSize) | QUOTE_QTY (min) |

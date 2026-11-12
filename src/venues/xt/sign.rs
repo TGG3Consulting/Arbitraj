@@ -9,14 +9,14 @@
 //! Настройки: нет.
 //!
 //! Официально:
-//! - спот https://doc.xt.com/#documentationsignSteps (`_documentation/signSteps.md`): «query: Sort all key=value
+//! - спот https://doc.xt.com/docs/spot/Access%20Description/SignatureGeneration (`_documentation/signSteps.md`): «query: Sort all key=value
 //!   according to the lexicographical order of the key»; «Json: Directly by JSON string without conversion or
 //!   sorting»; «Y=#method#path#query#body»; «After the keys are in natural ascending alphabetical order, use & to join
 //!   them together as X»; «signature = hmacSha256Hex(secretkey, original)», original = XY. Пример строки:
 //!   validate-algorithms=HmacSHA256&validate-appkey=2063495b-…&validate-recvwindow=60000&validate-timestamp=1666026215729
 //!   #POST#/v4/order#{"symbol":"XT_USDT",…} (тест). Подписи в примерах документации воспроизвести нельзя: секрет второго
 //!   примера не опубликован, тело первого дано не в JSON (вопрос Тиграну в отчёте решения 167).
-//! - фьючерсы https://doc.xt.com/#futures_documentationsignSteps (`_futures_documentation/signSteps.md`):
+//! - фьючерсы https://doc.xt.com/docs/futures/Access%20Description/SignatureGeneration (`_futures_documentation/signSteps.md`):
 //!   X = «validate-appkey=…&validate-timestamp=…», «Y=#path#query#body».
 //! - Расхождение: официальный SDK pyxt (pyxt/spot.py) шлёт заголовки «xt-validate-*» и подпись заглавными hex —
 //!   адаптер следует документации (validate-*, строчные hex); проверить на живом ответе (AUTH_103 — подпись).

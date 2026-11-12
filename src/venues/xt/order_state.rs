@@ -1,19 +1,22 @@
 //! Файл: venues/xt/order_state.rs
 //! Что делает: доводит ордер XT.com до окончательного состояния и собирает итог ядра. Ответ POST /v4/order содержит
-//! только orderId — итог всегда запросом GET /v4/order/{orderId}: опрос до окончательного состояния; сбой запроса —
+//! только orderId — итог всегда запросом GET /v4/order?orderId= (решение 263: Query single, 50/s/apikey, вместо
+//! GET /v4/order/{orderId} — 10/s/apikey; поля ответа те же): опрос до окончательного состояния; сбой запроса —
 //! повтор до срока; не дождался за venue.order_final_wait_ms — отмена (правило Тиграна «не исполнился — отменяем») и
 //! ещё опрос. Ордер с неизвестным итогом постановки ищется по своему clientOrderId (GET /v4/order?clientOrderId=) с
 //! повторами до срока; отмены по clientOrderId в документации нет — не найден, значит «итог неизвестен».
-//! Комиссия: при списании комиссии в XT — из deductServices («if set XT deduction fee and the deduction occurs, use
-//! this field»), иначе fee и feeCurrency.
+//! Комиссия — fee («handling fee») и feeCurrency ответа. Решение 263: поля deductServices в действующей документации
+//! (Get Single Order, Query single) нет — опора на него убрана.
 //! Кто вызывает: trade.rs, order_rules.rs (times — проверка до отправки).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms.
 //!
-//! Официально: состояния — publicModule.md «Order state»: NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED;
-//! GET /v4/order/{orderId} (#orderorderGet), GET /v4/order?orderId=|clientOrderId= (#orderorderGetQueryParam), DELETE
-//! /v4/order/{orderId} (#orderorderDel) → {cancelId}; поля origQty, executedQty, leavingQty, avgPrice, fee, feeCurrency,
-//! deductServices[{fee, feeCurrency}], state. Каким станет IOC с остатком (CANCELED или EXPIRED) — не сказано: оба
+//! Официально: состояния — https://doc.xt.com/docs/spot/Access Description/PublicModule «Order state»: NEW,
+//! PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED; GET /v4/order?orderId=|clientOrderId= (Query single,
+//! https://doc.xt.com/docs/spot/Order/QuerySingle, «50/s/apikey»; те же поля, что у Get Single Order
+//! https://doc.xt.com/docs/spot/Order/GetSingleOrder, кроме ip), DELETE /v4/order/{orderId}
+//! (https://doc.xt.com/docs/spot/Order/CancelOrder) → {cancelId}; поля origQty, executedQty, leavingQty, tradeQuote,
+//! avgPrice, fee, feeCurrency, state. Каким станет IOC с остатком (CANCELED или EXPIRED) — не сказано: оба
 //! окончательные (проверить на живом ордере, урок 30).
 
 use std::time::{Duration, Instant};
@@ -94,9 +97,10 @@ async fn poll_final(
     wait: Duration,
 ) -> Result<Value, String> {
     let started = Instant::now();
-    let path = format!("/v4/order/{order_id}");
     loop {
-        let why = match rest::signed(ctx, Method::GET, &path, vec![], None, Op::Other).await {
+        // Решение 263: Query single по orderId (50/s/apikey), не GET /v4/order/{orderId} (10/s/apikey).
+        let q = vec![("orderId", order_id.to_string())];
+        let why = match rest::signed(ctx, Method::GET, "/v4/order", q, None, Op::Other).await {
             Ok(s) if is_final(&s) => return Ok(s),
             Ok(s) => format!("state {}", num::text_opt(&s, "state").unwrap_or_default()),
             Err(e) => format!("запрос состояния: {}", e.message),
@@ -108,24 +112,16 @@ async fn poll_final(
     }
 }
 
-/// Что делает: части комиссии ордера по монетам (тикер ядра). deductServices непустой — из него, иначе fee/feeCurrency.
-/// Решение 232 (образец 219): части deductServices в разных монетах — несколько частей, а не ошибка.
-/// Принимает: состояние ордера. Возвращает: список частей (комиссии нет — пустой).
-/// Ошибка BadResponse — поле не число.
+/// Что делает: комиссия ордера (тикер ядра) — fee и feeCurrency ответа (Query single / Get Single Order). Решение 263:
+/// deductServices не читается — в документации его нет. Принимает: состояние ордера. Возвращает: список частей
+/// (комиссии нет — пустой). Ошибка BadResponse — поле не число.
 pub fn fee(s: &Value) -> GatewayResult<Vec<Fee>> {
-    let list = s
-        .get("deductServices")
-        .and_then(Value::as_array)
-        .filter(|l| !l.is_empty());
-    let one = [s.clone()];
+    let a = num::text_opt(s, "feeCurrency")
+        .map(|c| ticker(&c))
+        .unwrap_or_default();
+    let f = num::dec_opt(s, "fee")?.unwrap_or_default().abs();
     let mut fees = Vec::new();
-    for d in list.map(|l| l.as_slice()).unwrap_or(&one) {
-        let a = num::text_opt(d, "feeCurrency")
-            .map(|c| ticker(&c))
-            .unwrap_or_default();
-        let f = num::dec_opt(d, "fee")?.unwrap_or_default().abs();
-        Fee::add(&mut fees, &a, f);
-    }
+    Fee::add(&mut fees, &a, f);
     Ok(fees)
 }
 

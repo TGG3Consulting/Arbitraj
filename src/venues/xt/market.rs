@@ -6,7 +6,7 @@
 //! Настройки: venue.ws_symbols_per_conn (и всё, что читает ws.rs::config — проверяется до запуска соединений);
 //! venue.order_time_in_force — для признака пары «XT не примет наш ордер» (решение 254, pairs.rs).
 //!
-//! Официально (https://doc.xt.com/#websocket_publicbase): предел тем на соединение и соединений с IP в документации
+//! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/wss-general): предел тем на соединение и соединений с IP в документации
 //! XT НЕ указан — venue.ws_symbols_per_conn подбирается живым замером нагрузки (решение 109), вопрос Тиграну.
 
 use tokio::sync::mpsc;

@@ -9,7 +9,7 @@
 //! От чего зависит: depth.rs, local_book.rs, snapshots.rs, book.rs, ws.rs, ctx.rs; изменения — ws_diff.rs.
 //! Настройки: из ws.rs (Cfg).
 //!
-//! Официально: «Orderbook manage» https://doc.xt.com/#websocket_publicorderBook — буфер изменений, снимок REST,
+//! Официально: «Orderbook manage» https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage — буфер изменений, снимок REST,
 //! правила номеров (local_book.rs); снимок depth@{symbol},{levels} — data.i updateId.
 
 use std::collections::{HashMap, HashSet};
@@ -98,9 +98,9 @@ impl<'a> Conn<'a> {
 
     /// Решение 202: пара переподписана — прежнее состояние её потока не продолжается. Снимки depth: первый снимок после
     /// подписки — ядру, даже с тем же updateId (решение 109); depth_update: локальный стакан сброшен, без паузы разрыва.
-    /// Дополнение 10.11: снимок REST GET /v4/public/depth (https://doc.xt.com/#marketdepth) просится сразу, в общей
+    /// Дополнение 10.11: снимок REST GET /v4/public/depth (https://doc.xt.com/docs/spot/Market/GetDepthData) просится сразу, в общей
     /// очереди snapshots.rs (лимит «10/s/ip»): depth_update — стакан пары заново со снимка по «Orderbook manage»
-    /// (https://doc.xt.com/#websocket_publicorderBook: изменения новой подписки копятся в буфер до снимка, затем
+    /// (https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage: изменения новой подписки копятся в буфер до снимка, затем
     /// применяются по номерам), номер стакана = lastUpdateId снимка; depth — верхние venue.depth_levels уровней снимка
     /// ядру (ws_diff.rs on_snapshot). Снимок уже в пути — второй не просится. Стакан в памяти до снимка не снимается:
     /// его свежесть — по времени кадра пары. Ошибок нет (сбой снимка — в итоге очереди).

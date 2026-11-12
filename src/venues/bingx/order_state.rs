@@ -1,14 +1,16 @@
 //! Файл: venues/bingx/order_state.rs
 //! Что делает: доводит ордер BingX до окончательного состояния: опрашивает его, пока он не станет
-//! FILLED / CANCELED / FAILED; не дождался за venue.order_final_wait_ms — отменяет остаток
-//! (правило Тиграна: не исполнился — отменяем, больше не пробуем) и читает итог ещё раз.
+//! FILLED / CANCELED / FAILED; сбой запроса — повтор до срока (решение 263, как у Binance); не дождался за
+//! venue.order_final_wait_ms — отменяет остаток (правило Тиграна: не исполнился — отменяем, больше не пробуем) и
+//! опрашивает ещё раз до того же срока.
 //! Затем переводит ответ BingX в результат ядра (исполнено, средняя цена, комиссия).
 //! Кто вызывает: trade.rs.
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms.
 //!
-//! Официальная документация:
-//! - GET /openApi/spot/v1/trade/query (symbol, orderId) — status: NEW, PENDING, PARTIALLY_FILLED,
+//! Официальная документация (https://github.com/BingX-API/api-ai-skills/blob/main/skills/spot-trade/api-reference.md,
+//! «Query Single Order», «Cancel Order»):
+//! - GET /openApi/spot/v1/trade/query (symbol, orderId; «10/s per UID») — status: NEW, PENDING, PARTIALLY_FILLED,
 //!   FILLED, CANCELED, FAILED; executedQty, cummulativeQuoteQty, fee, feeAsset.
 //! - POST /openApi/spot/v1/trade/cancel (symbol, orderId).
 //!
@@ -31,23 +33,16 @@ use super::{num, rest};
 /// Окончательные состояния ордера по документации.
 const FINAL: [&str; 3] = ["FILLED", "CANCELED", "FAILED"];
 
-/// Возвращает окончательное состояние ордера (ответ «Query Order details»).
-/// Ошибка OutcomeUnknown — состояние не удалось получить даже после отмены (нужна проверка).
+/// Что делает: окончательное состояние ордера (ответ «Query Order details»). Принимает: окружение, символ, orderId.
+/// Возвращает: ответ BingX с окончательным status. Ошибки: NotConfigured — сроки не заданы; OutcomeUnknown — состояние
+/// не получено и после отмены (нужна проверка).
 pub async fn settle(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> {
     let poll = Duration::from_millis(ctx.int("venue.order_poll_ms")?);
     let wait = Duration::from_millis(ctx.int("venue.order_final_wait_ms")?);
-    let started = Instant::now();
-    loop {
-        let state = query(ctx, symbol, order_id).await?;
-        if is_final(&state) {
-            return Ok(state);
-        }
-        if started.elapsed() >= wait {
-            break;
-        }
-        tokio::time::sleep(poll).await;
+    if let Ok(state) = poll_final(ctx, symbol, order_id, poll, wait).await {
+        return Ok(state);
     }
-    // Не исполнился до конца за отведённое время — отменяем остаток.
+    // Не исполнился до конца за отведённое время (или состояние не читалось) — отменяем остаток.
     let p = vec![
         ("symbol", symbol.to_string()),
         ("orderId", order_id.to_string()),
@@ -60,15 +55,39 @@ pub async fn settle(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Va
         Op::Trade,
     )
     .await;
-    let state = query(ctx, symbol, order_id).await?;
-    if is_final(&state) {
-        return Ok(state);
+    match poll_final(ctx, symbol, order_id, poll, wait).await {
+        Ok(state) => Ok(state),
+        Err(why) => {
+            let c = match cancel {
+                Ok(_) => "отмена принята".to_string(),
+                Err(e) => format!("отмена: {}", e.message),
+            };
+            Err(unknown(ctx, order_id, &format!("{c}; {why}")))
+        }
     }
-    let why = cancel
-        .err()
-        .map(|e| e.message)
-        .unwrap_or_else(|| "отмена принята, но статус не окончательный".into());
-    Err(unknown(ctx, order_id, &why))
+}
+
+/// Решение 263: опрос до окончательного состояния не дольше wait; сбой запроса (лимит, 100500, сеть) — повтор через
+/// poll, а не сразу «итог неизвестен». Ошибка — текст последней причины.
+async fn poll_final(
+    ctx: &Ctx,
+    symbol: &str,
+    order_id: &str,
+    poll: Duration,
+    wait: Duration,
+) -> Result<Value, String> {
+    let started = Instant::now();
+    loop {
+        let why = match query(ctx, symbol, order_id).await {
+            Ok(s) if is_final(&s) => return Ok(s),
+            Ok(s) => format!("статус {}", num::text_opt(&s, "status").unwrap_or_default()),
+            Err(e) => format!("запрос статуса: {}", e.message),
+        };
+        if started.elapsed() >= wait {
+            return Err(why);
+        }
+        tokio::time::sleep(poll).await;
+    }
 }
 
 /// Результат ядра по окончательному состоянию.
@@ -116,7 +135,7 @@ pub fn result(
     })
 }
 
-/// Запрос состояния. Ошибка → OutcomeUnknown «ордер отправлен, состояние неизвестно».
+/// Запрос состояния. Ошибки: как rest::signed (повтор и «итог неизвестен» решает poll_final / settle).
 async fn query(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> {
     let q = vec![
         ("symbol", symbol.to_string()),
@@ -130,7 +149,6 @@ async fn query(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> 
         Op::Other,
     )
     .await
-    .map_err(|e| unknown(ctx, order_id, &e.message))
 }
 
 /// Состояние окончательное.

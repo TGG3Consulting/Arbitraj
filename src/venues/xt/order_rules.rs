@@ -12,15 +12,18 @@
 //! venue.order_final_wait_ms.
 //!
 //! Официально:
-//! - POST /v4/order https://doc.xt.com/#orderorderPost (`_order/orderPost.md`): symbol, side BUY/SELL, type LIMIT,
+//! - POST /v4/order https://doc.xt.com/docs/spot/Order/SubmitOrder: symbol, side BUY/SELL, type LIMIT,
 //!   timeInForce (обязателен: GTC, FOK, IOC, GTX), bizType SPOT (обязателен), price и quantity (type number),
-//!   clientOrderId «^[a-zA-Z0-9_]{4,32}$»; 20/s/apikey. IOC — «Cancel the part that cannot be transacted immediately».
-//! - фильтры https://doc.xt.com/#marketsymbol: PRICE, QUANTITY (min, max, tickSize; null — без ограничения; шаг от min),
+//!   clientOrderId «Pattern: ^[a-zA-Z0-9_]{4,22}» (решение 263, сверено 13.11; было {4,32}); 20/s/apikey. IOC
+//!   (https://doc.xt.com/docs/spot/Access Description/PublicModule) — «Cancel the part that cannot be transacted
+//!   immediately».
+//! - фильтры https://doc.xt.com/docs/spot/Market/GetSymbolInformation: PRICE, QUANTITY (min, max, tickSize; null — без ограничения; шаг от min),
 //!   QUOTE_QTY («For orders of the LIMIT type … price*quantity>=min»). PROTECTION_LIMIT / PROTECTION_ONLINE зависят от
 //!   последней цены сделки и цены открытия — не проверяются (отказ ORDER_F04xx/F05xx — до движения денег).
 //! - Пробного ордера (test order) в документации и SDK pyxt нет.
 
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde_json::{Number, Value, json};
@@ -32,8 +35,8 @@ use super::ctx::Ctx;
 use super::order_state;
 use super::symbols::{SymbolRules, Symbols};
 
-/// Длина своего ID — из документации: «^[a-zA-Z0-9_]{4,32}$».
-const MAX_CLIENT_ID: usize = 32;
+/// Номер попытки в пределах одной миллисекунды — для уникальности своего ID (как у Poloniex).
+static SEQ: AtomicU64 = AtomicU64::new(0);
 /// Допустимые timeInForce для правила Тиграна «не исполнился — отменяем» (publicModule.md: IOC, FOK снимают остаток сами).
 const TIME_IN_FORCE: [&str; 2] = ["IOC", "FOK"];
 
@@ -57,7 +60,8 @@ pub struct Prepared {
 /// tests/data/xt_live_2026-11-06). Принимает: правила пары, timeInForce из настройки (None — не задан: сверяется
 /// только LIMIT; недопустимое значение настройки — ошибка настройки, её показывает check_rules, а не пара).
 /// Возвращает: None — примет; Some — причина. Ошибок нет.
-/// Официально: https://doc.xt.com/#marketsymbol (orderTypes, timeInForces пары), https://doc.xt.com/#orderorderPost.
+/// Официально: https://doc.xt.com/docs/spot/Market/GetSymbolInformation (orderTypes, timeInForces пары),
+/// https://doc.xt.com/docs/spot/Order/SubmitOrder.
 pub fn order_block(r: &SymbolRules, tif: Option<&str>) -> Option<String> {
     let s = &r.symbol;
     let lacks =
@@ -149,7 +153,7 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::OrderRejected, None, m)))?;
     order_state::times(ctx)?;
     let buy = req.side == Side::Buy;
-    let client_id = client_id(buy, &req.deal_id);
+    let client_id = client_id(buy);
     let body = json!({
         "symbol": rules.symbol,
         "side": if buy { "BUY" } else { "SELL" },
@@ -176,15 +180,14 @@ pub fn number(d: Decimal) -> Value {
         .unwrap_or_else(|_| Value::String(d.normalize().to_string()))
 }
 
-/// Свой ID ордера (решение 114): метка попытки (мс, 9 цифр) в начале, номер сделки — для поиска. Принимает: покупка
-/// ли, ID сделки. Возвращает: буквы, цифры и «_», от 4 до 32 знаков. Ошибок нет.
-pub fn client_id(buy: bool, deal_id: &str) -> String {
-    let attempt = chrono::Utc::now()
+/// Свой ID ордера (решения 114, 263): новый у каждой попытки — сторона (b/s), 13 цифр времени (мс) и 4 цифры номера
+/// попытки в этой мс: 18 знаков, подходит под «^[a-zA-Z0-9_]{4,22}» (Submit order). Номер сделки в ID больше не входит
+/// (не помещается в 22 знака); итог ищется по этому ID целиком — он хранится в «чем найти» (trade.rs PendingRef,
+/// order_state::recover, resolve.rs). Принимает: покупка ли. Возвращает: ID. Ошибок нет.
+pub fn client_id(buy: bool) -> String {
+    let ms = chrono::Utc::now()
         .timestamp_millis()
-        .rem_euclid(1_000_000_000);
-    format!("{}{attempt:09}_{deal_id}", if buy { "b" } else { "s" })
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .take(MAX_CLIENT_ID)
-        .collect()
+        .rem_euclid(10_000_000_000_000);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed) % 10_000;
+    format!("{}{ms:013}{n:04}", if buy { "b" } else { "s" })
 }

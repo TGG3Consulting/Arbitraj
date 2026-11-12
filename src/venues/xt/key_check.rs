@@ -8,7 +8,7 @@
 //! venue.api_ip [xt].
 //!
 //! Официально:
-//! - GET /v4/user/account/api-key (https://doc.xt.com/#user_center_apikeyqueryUserApiKey, адрес api.xt.com —
+//! - GET /v4/user/account/api-key (https://doc.xt.com/docs/user-center/ApiKey/QueryUserApiKey, адрес api.xt.com —
 //!   `_user_center_documentation/restApi.md`): [{accessKey, secretKey, bindIps, isLock («0 not locked, 1 locked»),
 //!   roleScopes («QUERY_TRADE: trade is enabled; QUERY_NO_TRADE: trade is not enabled»), userAccountLevel}]. Раздел
 //!   описан для основного и субаккаунтов — доступен ли обычному ключу, не ясно (ошибка — пояснение, не «не подключено»).

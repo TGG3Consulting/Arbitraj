@@ -7,8 +7,8 @@
 //! От чего зависит: order_state.rs, transfers.rs, num.rs, ctx.rs, errors.rs, gateway/pending.rs.
 //! Настройки: через order_state.rs (venue.order_poll_ms, venue.order_final_wait_ms).
 //!
-//! Официальная документация: GET /v4/order?orderId=|clientOrderId= (#orderorderGetQueryParam) — order_state.rs;
-//! GET /v4/withdraw?recordId=|clientOrderId= (#deposit_withdrawalwithdrawDetail, «1/s/apikey») — transfers.rs.
+//! Официальная документация: GET /v4/order?orderId=|clientOrderId= (https://doc.xt.com/docs/spot/Order/QuerySingle) — order_state.rs;
+//! GET /v4/withdraw?recordId=|clientOrderId= (https://doc.xt.com/docs/spot/Deposit&Withdrawal/WithdrawDetail, «1/s/apikey») — transfers.rs.
 
 use crate::core::types::{TradeRequest, TradeResult, Transfer, WithdrawRequest};
 use crate::gateway::errors::GatewayResult;

@@ -9,7 +9,7 @@
 //! venue.depth_snapshot_per_sec, venue.depth_snapshot_limit (snapshots.rs); при depth — venue.depth_snapshot_per_sec
 //! для снимка REST при переподписке пары сторожем (дополнение 10.11; не задана — снимка нет, журнал).
 //!
-//! Официально (https://doc.xt.com/#websocket_publicbase и далее, `_websocket_public/*.md`): адрес
+//! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/wss-general и далее, `_websocket_public/*.md`): адрес
 //! wss://stream.xt.com/public; «Each link of the client needs to send a text "ping" periodically … If the server does not
 //! receive a ping message from the client within 1 minute, it will actively disconnect» — ping чаще 60 с; уровни
 //! снимка depth@{symbol},{levels}: 5, 10, 20, 50 (1000 мс); изменения depth_update@{symbol} — 100 мс. Лимиты подписок

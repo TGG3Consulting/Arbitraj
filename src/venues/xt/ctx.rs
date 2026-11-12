@@ -5,7 +5,7 @@
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
 //! Настройки: venue.* с областью «xt» (docs/SETTINGS.md, раздел «Площадки — XT»); секреты xt.api_key, xt.api_secret.
 //!
-//! Официально (https://doc.xt.com/#documentationsignStatement, исходник github.com/xt-com/xt4-api
+//! Официально (https://doc.xt.com/docs/spot/Access%20Description/SignatureInstructions, исходник github.com/xt-com/xt4-api
 //! `_documentation/signStatement.md`): ключ — заголовок validate-appkey, подпись — validate-signature (HMAC SHA256
 //! секретом ключа, hex). Passphrase у XT нет. Имена монет у XT строчные («usdt», «btc» — `_balance/balancesGet.md`,
 //! «Currency name must be all lowercase» — `_transfer/transferPost.md`); ядру отдаётся тикер заглавными (CAKE).

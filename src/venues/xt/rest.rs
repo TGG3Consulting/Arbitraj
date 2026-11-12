@@ -7,7 +7,7 @@
 //! От чего зависит: ctx.rs, sign.rs, reply.rs, errors.rs, gateway/http.rs, reqwest.
 //! Настройки: venue.rest_url, venue.recv_window_ms [xt], http.*; секреты xt.api_key, xt.api_secret.
 //!
-//! Официально (https://doc.xt.com/#documentationapiBasicInfo, `_documentation/apiBasicInfo.md`): «GET request parameters
+//! Официально (https://doc.xt.com/docs/spot/Access%20Description/BasicInformationOfTheInterface, `_documentation/apiBasicInfo.md`): «GET request parameters
 //! are placed in query Params, POST request parameters are placed in request body», «Content-Type=application/json»,
 //! «For requests that start other than /public, the request message needs to be signed». recvWindow: текст
 //! противоречив («between 2 to 60 seconds», «older than 5,000 milliseconds is invalid», «longer than 5 seconds is not

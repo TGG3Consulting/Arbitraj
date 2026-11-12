@@ -5,7 +5,7 @@
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, transfers.rs (transfer), gateway/tx_hash.rs.
 //! Настройки: venue.bsc_network, venue.history_window_s [xt].
 //!
-//! Официально: GET /v4/deposit/history (https://doc.xt.com/#deposit_withdrawalhistoryDepositGet,
+//! Официально: GET /v4/deposit/history (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetDepositHistory,
 //! `_deposit_withdrawal/historyDepositGet.md`) — currency и chain обязательны, status, fromId, direction, limit
 //! («max 200»), startTime, endTime (мс); result {hasPrev, hasNext, items[{id, currency, chain, memo, status, amount,
 //! confirmations, transactionId, address, fromAddr, createdTime}]}. Статусы — publicModule.md (SUBMIT, REVIEW, AUDITED,

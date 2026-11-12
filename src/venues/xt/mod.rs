@@ -253,9 +253,9 @@ impl Venue for Xt {
 
     /// Решение 202 (для всех бирж, Тигран 08.11): свежесть соединений и пар стаканов (ws_conn.rs, gateway/feed_reg.rs).
     /// - scheduled = false: «rate: 1000ms» (depth@, limitDepth.md) и «rate: 100ms» (depth_update@, increDepth.md) — что
-    ///   кадр идёт и без изменений книги, документация не говорит (https://doc.xt.com/#websocket_publiclimitDepth);
+    ///   кадр идёт и без изменений книги, документация не говорит (https://doc.xt.com/docs/spot/WebSocket%20Public/LimitedDepth);
     /// - per_pair = true: отписка одной темы — {"method":"unsubscribe"} (Request message format,
-    ///   https://doc.xt.com/#websocket_publicrequestFormat), см. ws_conn.rs;
+    ///   https://doc.xt.com/docs/spot/WebSocket%20Public/RequestMessageFormat), см. ws_conn.rs;
     /// - confirm = true (решение 213): depth_update — по номеру (lastUpdateId REST ↔ номер локального стакана,
     ///   «Orderbook manage»), depth — по содержимому (связи updateId снимка с REST нет) — book_version.rs.
     fn feed_health(&self) -> Option<crate::gateway::feed_health::FeedHealth> {

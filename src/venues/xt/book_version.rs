@@ -17,7 +17,7 @@
 //! канал и уровни), symbols.rs (символ пары), book.rs (Books::print), gateway/feed_health.rs.
 //! Настройки: venue.book_stream, venue.depth_levels [xt] (и всё, что проверяет ws.rs::config), адрес REST — rest.rs.
 //!
-//! Официально: Get depth data (https://doc.xt.com/#marketdepth, `_market/3depth.md`): «GET /v4/public/depth»,
+//! Официально: Get depth data (https://doc.xt.com/docs/spot/Market/GetDepthData, `_market/3depth.md`): «GET /v4/public/depth»,
 //! symbol (обязателен), limit («1~500», по умолчанию 100; описание «minimum number of queries is 100» — сколько уровней
 //! вернёт XT при limit меньше 100, не сказано: берутся первые N от лучшей цены), «Limit Flow Rules 10/s/ip»; ответ
 //! result {timestamp, lastUpdateId («Last updated record»), bids, asks [[цена, объём]]}. Порядок уровней не оговорён —

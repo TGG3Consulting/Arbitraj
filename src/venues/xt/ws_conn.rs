@@ -7,14 +7,14 @@
 //! tokio-tungstenite.
 //! Настройки: из ws.rs (Cfg); raw.book_frames [xt] — писать ли кадры стаканов в сырой журнал.
 //!
-//! Официально (https://doc.xt.com/#websocket_publicrequestFormat, responseFormat, heartBeat):
+//! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/ — RequestMessageFormat, ResponseMessageFormat, Heartbeat):
 //! {"method":"subscribe","params":["depth_update@btc_usdt", …],"id":"<id>"} → {"id","code":0,"msg":"success"};
 //! code 1 — отказ. Клиент шлёт текст «ping», сервер отвечает «pong». Темы — «{topic}@{arg},{arg}» (subscribeParam.md).
 //! Решение 202 (для всех бирж, 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs), кадр стакана — по
 //! паре (и снимок с тем же updateId тоже); depth_update — с номером локального стакана (решение 213, ws_book.rs
 //! version), как и итог снимка REST, ставший стаканом пары. Команды сторожа ядра: «переподписать пару» —
 //! {"method":"unsubscribe","params":[тема],"id"}, затем {"method":"subscribe","params":[тема],"id"} в этом же соединении
-//! (https://doc.xt.com/#websocket_publicrequestFormat, `_websocket_public/requestFormat.md`: unsubscribe), соседи не
+//! (https://doc.xt.com/docs/spot/WebSocket%20Public/RequestMessageFormat, `_websocket_public/requestFormat.md`: unsubscribe), соседи не
 //! трогаются; отказ подписки — стакан пары недостоверен (как у первой подписки); «переподключить соединение» — сессия
 //! заканчивается, ws.rs подключается заново с теми же парами. Дополнение 10.11: при переподписке пары — сразу снимок
 //! REST (ws_book.rs resub); снимок, ставший стаканом пары, отмечается в учёте свежести как кадр пары.

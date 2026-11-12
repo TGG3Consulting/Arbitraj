@@ -6,10 +6,10 @@
 //! Настройки: нет своих.
 //!
 //! Официально:
-//! - GET /v4/balances (https://doc.xt.com/#balancebalancesGet, `_balance/balancesGet.md`, «10/s/apikey») —
+//! - GET /v4/balances (https://doc.xt.com/docs/spot/Balance/GetBalances, `_balance/balancesGet.md`, «10/s/apikey») —
 //!   currencies (через запятую, необязательно); result {totalBtcAmount, assets[{currency, currencyId, frozenAmount,
 //!   availableAmount, totalAmount, convertBtcAmount}]}.
-//! - GET /v4/balance?currency= (#balancebalanceGet, `_balance/balanceGet.md`) — одна монета, те же поля.
+//! - GET /v4/balance?currency= (https://doc.xt.com/docs/spot/Balance/GetSingleCurrencyAsset, `_balance/balanceGet.md`) — одна монета, те же поля.
 
 use reqwest::Method;
 use serde_json::Value;

@@ -7,7 +7,7 @@
 //! «не примет наш ордер» — решение 254).
 //! Настройки: venue.quote_asset, venue.symbols_refresh_s.
 //!
-//! Официально (https://doc.xt.com/#marketsymbol, `_market/2symbol.md`): GET /v4/public/symbol (10/s/ip), параметр
+//! Официально (https://doc.xt.com/docs/spot/Market/GetSymbolInformation, `_market/2symbol.md`): GET /v4/public/symbol (10/s/ip), параметр
 //! version — «when the request version number is consistent with the response content version, the list will not be
 //! returned»; перечень состояний пары — publicModule.md «Symbol state»: ONLINE, OFFLINE, DELISTED.
 

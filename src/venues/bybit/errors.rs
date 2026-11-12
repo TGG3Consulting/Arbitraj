@@ -8,11 +8,13 @@
 //! Spot Trade, Asset) и «Rate Limit Rules» https://bybit-exchange.github.io/docs/v5/rate-limit («403, access too
 //! frequent» — бан IP, «retCode 10006 Too many visits!» — лимит UID). Текст причины — retMsg Bybit как есть.
 //! Ответ на ордер «асинхронный» (Place Order: «The acknowledgement … indicates that the request was successfully
-//! accepted») — серверные сбои у ордера, вывода и перевода дают «итог неизвестен», а не отказ.
+//! accepted») — серверные сбои у ордера, вывода и перевода дают «итог неизвестен», а не отказ. Сбои обмена —
+//! errors_fail.rs (вынесены без изменения логики, решение 263).
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
 use super::ctx::ID;
+pub use super::errors_fail::{fail_for, from_fail};
 
 /// Для какой операции пришла ошибка: от этого зависит единый код у неизвестных кодов Bybit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +86,9 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         | 131201 | 131230 => ErrorCode::Unreachable,
         // Ордер не найден: 110001 «Order does not exist», 170213 «Order does not exist».
         110001 | 170213 => ErrorCode::BadResponse,
+        // Решение 263 (Тигран 13.11): 170035 «Submitted to the system for processing!» (Error Codes → Spot Trade) — у
+        // ордера не отказ: принят в обработку, итог неизвестен (Timeout → unsure; поиск по orderLinkId — order_state.rs).
+        170035 if op == Op::Trade => ErrorCode::Timeout,
         _ => rejected(op),
     };
     let msg = if msg.is_empty() {
@@ -123,7 +128,7 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
 }
 
 /// Деньги могли двинуться → «результат неизвестен» с пояснением. Ошибок нет.
-fn unknown(e: GatewayError, op: Op) -> GatewayError {
+pub(super) fn unknown(e: GatewayError, op: Op) -> GatewayError {
     let what = match op {
         Op::Trade => "ордер",
         Op::Move => "перевод между счетами",
@@ -158,34 +163,6 @@ pub fn from_http(status: u16, raw: &str) -> GatewayError {
     GatewayError::new(code, Some(venue()), format!("Bybit: {text}, HTTP {status}")).with_raw(raw)
 }
 
-/// Сбой HTTP-обмена: нет связи (Unreachable), запрос мог дойти без ответа (Timeout), тело не текст или больше
-/// предела (BadResponse). Ошибок нет.
-pub fn from_fail(
-    f: &crate::gateway::http::Fail,
-    lim: &crate::gateway::http::Limits,
-) -> GatewayError {
-    use crate::gateway::http::Fail;
-    let code = match f {
-        Fail::Connect(_) => ErrorCode::Unreachable,
-        Fail::NotText | Fail::TooBig { .. } => ErrorCode::BadResponse,
-        _ => ErrorCode::Timeout,
-    };
-    GatewayError::new(code, Some(venue()), format!("Bybit: {}", f.text(lim)))
-}
-
-/// Сбой обмена у операции с деньгами: любой сбой, кроме «соединение не установлено», — «результат неизвестен».
-pub fn fail_for(
-    f: &crate::gateway::http::Fail,
-    lim: &crate::gateway::http::Limits,
-    op: Op,
-) -> GatewayError {
-    let e = from_fail(f, lim);
-    if op == Op::Other || f.not_sent() {
-        return e;
-    }
-    unknown(e, op)
-}
-
 /// Ответ не удалось разобрать.
 pub fn bad(what: &str, raw: &str) -> GatewayError {
     GatewayError::new(
@@ -197,6 +174,6 @@ pub fn bad(what: &str, raw: &str) -> GatewayError {
 }
 
 /// Площадка Bybit для ошибок.
-fn venue() -> crate::core::types::VenueId {
+pub(super) fn venue() -> crate::core::types::VenueId {
     crate::core::types::VenueId(ID.to_string())
 }

@@ -23,6 +23,7 @@ pub mod deposit_addr;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
+pub mod errors_fail;
 pub mod feed;
 pub mod fees;
 pub mod fills;

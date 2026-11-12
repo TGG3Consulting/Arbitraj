@@ -10,7 +10,7 @@
 //! Настройки: venue.depth_snapshot_per_sec [xt] (1–10), venue.depth_snapshot_limit [xt] (1–500; не нужна снимку при
 //! переподписке в канале depth).
 //!
-//! Официально (https://doc.xt.com/#marketdepth, `_market/3depth.md`): GET /v4/public/depth?symbol=&limit= («1~500»),
+//! Официально (https://doc.xt.com/docs/spot/Market/GetDepthData, `_market/3depth.md`): GET /v4/public/depth?symbol=&limit= («1~500»),
 //! «Limit Flow Rules 10/s/ip»; result {timestamp, lastUpdateId, bids, asks}. Инструкция «Orderbook manage» советует
 //! limit=500.
 

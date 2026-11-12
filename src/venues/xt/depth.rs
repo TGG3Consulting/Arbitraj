@@ -6,7 +6,7 @@
 //! От чего зависит: core/types, serde.
 //! Настройки: нет.
 //!
-//! Официально (https://doc.xt.com/#websocket_publicpushMessage и далее, `_websocket_public/*.md`):
+//! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/PushMessageFormat и далее, `_websocket_public/*.md`):
 //! - push {"topic", "event": "<topic>@<args>", "data"}; ответ {"id", "code": 0 успех / 1 отказ, "msg"};
 //! - Limited depth (limitDepth.md): data {s, i updateId, t время, a [[цена, количество]], b} — снимок раз в 1000 мс;
 //! - Incremental depth (increDepth.md): data {s, fi firstUpdateId «= previous lastUpdateId + 1», i lastUpdateId, a, b} —

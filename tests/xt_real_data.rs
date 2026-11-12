@@ -181,7 +181,7 @@ fn depth_snapshots_from_live_frames() {
 }
 
 #[test]
-#[ignore = "нужна запись xt_order.json (GET /v4/order/{id} исполненного IOC-ордера, ключ)"]
+#[ignore = "нужна запись xt_order.json (GET /v4/order?orderId= исполненного IOC-ордера, ключ)"]
 fn order_fee_from_live_reply() {
     let s = result("xt_order.json");
     assert!(order_state::is_final(&s));

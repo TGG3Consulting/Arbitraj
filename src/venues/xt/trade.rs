@@ -7,7 +7,7 @@
 //! Настройки: venue.order_time_in_force, venue.order_test_first [xt]; сроки итога — order_state.rs (все проверяются до
 //! отправки).
 //!
-//! Официально: POST /v4/order (https://doc.xt.com/#orderorderPost, 20/s/apikey) — тело JSON, ответ result {orderId,
+//! Официально: POST /v4/order (https://doc.xt.com/docs/spot/Order/SubmitOrder, 20/s/apikey) — тело JSON, ответ result {orderId,
 //! ip}; 5XX, COMMON_002/003 и обрыв — итог неизвестен → поиск по clientOrderId (order_state.rs::recover).
 
 use reqwest::Method;

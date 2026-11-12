@@ -1,8 +1,10 @@
 //! Файл: venues/coinex/order_state.rs
 //! Что делает: доводит ордер CoinEx до окончательного итога: опрос order-status по order_id до filled / part_canceled /
 //! canceled (сбой запроса — повтор до срока); не дождался за venue.order_final_wait_ms — отмена остатка (правило
-//! Тиграна) и опрос ещё venue.order_final_wait_ms; ордер так и не найден — итог по сделкам ордера (deals.rs): ордер IOC
-//! без исполнения CoinEx не сохраняет, и «нет сделок» при нулевом исполнении в ответе постановки — факт «не исполнился».
+//! Тиграна) и опрос ещё venue.order_final_wait_ms; ордер так и не найден — итог по сделкам ордера (deals.rs,
+//! order-deals): ордер IOC без исполнения CoinEx не сохраняет, и «нет сделок» при нулевом исполнении в ответе
+//! постановки — факт «не исполнился». Решение 264: окончателен ли filled_amount ответа постановки IOC, офдока Place Order
+//! не говорит (поля status в ответе нет) — сразу итогом он не берётся, путь не сокращён (вопрос Тиграну, docs/TASKS.md).
 //! Итог в формате ядра — order_result.rs.
 //! Кто вызывает: trade.rs, order_rules.rs (times — проверка до постановки).
 //! От чего зависит: rest.rs, num.rs, order_result.rs, deals.rs, order_rules.rs (Prepared), ctx.rs.
@@ -45,8 +47,8 @@ pub fn times(ctx: &Ctx) -> GatewayResult<(Duration, Duration)> {
     ))
 }
 
-/// Что делает: окончательный итог ордера. Принимает: запрос ядра, подготовленный ордер, ответ постановки (order_id,
-/// created_at, filled_amount). Ошибки: OutcomeUnknown — итог не получен ни опросом, ни по сделкам; NotConfigured.
+/// Что делает: окончательный итог ордера. Принимает: запрос ядра, подготовленный ордер, ответ постановки или ордер из
+/// ответа отмены по client_id (order_id, filled_amount; trade.rs). Ошибки: OutcomeUnknown — итог не получен ни опросом, ни по сделкам; NotConfigured.
 pub async fn settle(
     ctx: &Ctx,
     req: TradeRequest,
@@ -63,10 +65,9 @@ pub async fn settle(
         Ok(s) => return from_state(ctx, req, p, &s, id, wait).await,
         Err(w) => w,
     };
-    // Ордер не найден: ордер без исполнения CoinEx не хранит — итог по сделкам.
-    let start = num::int(placed, "created_at").ok();
+    // Ордер не найден: ордер без исполнения CoinEx не хранит — итог по сделкам ордера (order-deals, решение 264).
     let deadline = Instant::now() + wait;
-    match deals::of_order(ctx, &p.symbol, &id, start, deadline).await {
+    match deals::of_order(ctx, &p.symbol, &id, deadline).await {
         Ok(sum) if sum.count == 0 && put_zero(placed) => Ok(result(
             req,
             p.qty,

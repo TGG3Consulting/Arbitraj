@@ -1,9 +1,11 @@
 //! Файл: venues/okx/trade.rs
 //! Что делает: покупка или продажа на OKX лимитным ордером типа ioc / fok с худшей допустимой ценой (что не исполнилось
 //! сразу — снимает биржа); затем окончательное состояние и факт (количество, средняя цена, комиссия и её монета —
-//! order_state.rs). Правила — order_rules.rs (та же функция у check_order, решение 134).
+//! order_result.rs). Итог неизвестен — с «чем найти» (PendingRef, решение 231; позднее выяснение — resolve.rs).
+//! Правила — order_rules.rs (та же функция у check_order, решение 134).
 //! Кто вызывает: mod.rs (trade).
-//! От чего зависит: order_rules.rs, order_state.rs, rest.rs, symbols.rs, num.rs, ctx.rs.
+//! От чего зависит: order_rules.rs, order_state.rs, order_result.rs, gateway/pending.rs, rest.rs, symbols.rs, num.rs,
+//! ctx.rs.
 //! Настройки: через order_rules.rs и order_state.rs.
 //!
 //! Официально — «POST / Place order» POST /api/v5/trade/order https://www.okx.com/docs-v5/en/: ответ data[] — ordId,
@@ -12,11 +14,12 @@
 
 use crate::core::types::{TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::Op;
 use super::symbols::Symbols;
-use super::{num, order_rules, order_state, rest};
+use super::{num, order_result, order_rules, order_state, rest};
 
 /// Ставит ордер и возвращает фактический результат. Ошибки: OrderRejected (правила, отказ OKX — sCode/sMsg),
 /// OutcomeUnknown — ордер мог быть принят, итог не получен (решение 64).
@@ -44,16 +47,21 @@ pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayRe
             .with_raw(d.to_string())
         })
     });
+    // Решение 231 (264): «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, resolve.rs).
+    let pending = PendingRef::order(&p.symbol, &p.cl_ord_id, p.qty);
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
             match order_state::recover(ctx, &p.symbol, &p.cl_ord_id).await {
                 Some(id) => id,
-                None => return Err(e),
+                None => return Err(e.pending(pending)),
             }
         }
         Err(e) => return Err(e),
     };
-    let state = order_state::settle(ctx, &p.symbol, &order_id).await?;
-    order_state::result(ctx, req, &state, order_id)
+    let out = match order_state::settle(ctx, &p.symbol, &order_id).await {
+        Ok(state) => order_result::result(ctx, req, &state, order_id.clone()),
+        Err(e) => Err(e),
+    };
+    out.map_err(|e| e.pending(pending.with_ref(&order_id)))
 }

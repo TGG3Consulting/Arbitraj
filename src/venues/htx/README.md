@@ -41,7 +41,7 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 | `records.rs`, `deposits.rs` | История депозитов и выводов; статус депозита по хешу; удержания вывода (confirmed ≠ safe) |
 | `transfers.rs` | Вывод со своим client-order-id, проверка списка адресов вывода, статус по client-order-id |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |
-| `trade.rs`, `order_state.rs`, `order_fee.rs` | Ордер buy-ioc / sell-ioc (или limit-fok), итог по детали ордера, отмена остатка, поиск по client-order-id, комиссия из matchresults |
+| `trade.rs`, `order_state.rs`, `order_fee.rs` | Ордер buy-ioc / sell-ioc (или limit-fok), итог по детали ордера, отмена остатка, поиск по client-order-id, комиссия из matchresults (решение 264: сделки ждутся до venue.order_final_wait_ms, пока Σ filled-amount не сойдётся с исполненным ордера; не сошлась — итог неизвестен, не «комиссия 0») |
 | `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Стаканы mbp.refresh (GZIP, ping/pong), отсев по seqNum (решение 109), котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsub + sub темы) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
 | `book_print.rs` | Решение 213 по содержимому: `GET /market/depth` (depth = `venue.depth_levels`, type step0) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта WebSocket v2: вход подписью, accounts.update#2 → изменение баланса |

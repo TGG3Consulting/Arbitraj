@@ -7,7 +7,7 @@
 //!   цифры, «-», «_»), запрос depth.subscribe, распознавание вида сжатия кадра (заголовки RFC 1950 / 1952);
 //! - `#[ignore]` до записи с сервера бота (из среды разработки api.coinex.com закрыт прокси): справочник пар, монет
 //!   и сетей с адресом контракта (CAKE, USDT), кадры WebSocket depth.update (сжатые, base64 по строке), приватные
-//!   ответы (trade-fee-rate, ордер IOC, user-deals). Что и как записать — tests/README.md, раздел CoinEx. Моков нет.
+//!   ответы (trade-fee-rate, ордер IOC, order-deals). Что и как записать — tests/README.md, раздел CoinEx. Моков нет.
 //!
 //! Кто вызывает: cargo test. От чего зависит: arb::venues::coinex.
 
@@ -202,13 +202,13 @@ fn recorded_trade_fee_rate() {
 }
 
 #[test]
-#[ignore = "записать на живом боте coinex_order_status.json и coinex_user_deals.json одного исполненного IOC-ордера"]
+#[ignore = "записать на живом боте coinex_order_status.json и coinex_order_deals.json одного исполненного IOC-ордера"]
 fn recorded_order_fee_and_deals() {
     let s = data("coinex_order_status.json");
     let fee = order_fee::from_order(&s, "CAKE", "USDT", "CAKE").unwrap();
     let id = s["order_id"].to_string();
     let mut sum = deals::Sum::default();
-    deals::add(&mut sum, &data("coinex_user_deals.json"), &id).unwrap();
+    deals::add(&mut sum, &data("coinex_order_deals.json"), &id).unwrap();
     assert!(sum.count > 0);
     assert_eq!(Some(sum.filled), s["filled_amount"].as_str().map(d));
     if let order_fee::Fee::Known(f, c) = fee {

@@ -2,7 +2,8 @@
 //! Что делает: доводит ордер HTX до окончательного состояния (filled / partial-canceled / canceled): опрос по order-id
 //! (сбой запроса — повтор до срока); не дождался за venue.order_final_wait_ms — отмена остатка (правило Тиграна) и
 //! чтение итога ещё venue.order_final_wait_ms. Ордер с неизвестным итогом постановки ищется по своему client-order-id;
-//! не найден — отмена по client-order-id и снова поиск. Итог: количество, сумма, комиссия и её монета (order_fee.rs).
+//! не найден — отмена по client-order-id и снова поиск. Итог: количество, сумма, комиссия и её монета (order_fee.rs:
+//! сделки matchresults ждутся до venue.order_final_wait_ms, пока не сойдутся с исполненным, — решение 264).
 //! Кто вызывает: trade.rs, order_rules.rs (times — проверка до постановки).
 //! От чего зависит: rest.rs, num.rs, order_fee.rs, ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms [htx].
@@ -124,7 +125,8 @@ pub fn filled(s: &Value, what: &str) -> GatewayResult<Option<Decimal>> {
 
 /// Что делает: результат ядра по окончательному состоянию ордера и сделкам (matchresults, order_fee.rs).
 /// Принимает: запрос ядра, деталь ордера, order-id, получаемую монету. Ошибки: BadResponse — нет полей;
-/// OutcomeUnknown — исполнено, а комиссия не подтверждена.
+/// OutcomeUnknown — исполнено, а сделки ордера за venue.order_final_wait_ms не сошлись с исполненным (решение 264);
+/// NotConfigured — сроки.
 pub async fn result(
     ctx: &Ctx,
     req: TradeRequest,
@@ -138,7 +140,10 @@ pub async fn result(
     let fees = if qty.is_zero() {
         Vec::new()
     } else {
-        order_fee::fact(ctx, &order_id, received)
+        // Решение 264: сделки ордера ждём до срока, пока не сойдутся с исполненным (order_fee.rs); не сошлись —
+        // OutcomeUnknown, а не нулевая комиссия.
+        let (poll, wait) = times(ctx)?;
+        order_fee::fact(ctx, &order_id, received, qty, poll, wait)
             .await
             .map_err(|why| unknown(ctx, &order_id, &why))?
     };

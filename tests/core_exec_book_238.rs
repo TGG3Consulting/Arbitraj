@@ -301,6 +301,7 @@ async fn snapshot_forgotten_after_order() {
         q.avg_price,
         None,
         None,
+        None,
     )
     .await
     .unwrap_err();
@@ -499,6 +500,7 @@ async fn first_order_uses_quote_book() {
                 qty,
                 None,
                 q.avg_price,
+                None,
                 None,
                 b,
                 &mut seen,

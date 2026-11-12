@@ -180,6 +180,8 @@ async fn sell(
         deal.qty,
         q.route.clone(),
         q.avg_price,
+        // Решение 262: худший уровень плана — только у покупки; продажа — по текущему стакану.
+        None,
         None,
         book,
         &mut seen,

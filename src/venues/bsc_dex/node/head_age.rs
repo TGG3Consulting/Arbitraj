@@ -13,10 +13,11 @@
 //! bsc.node_ws_url (петля ли адрес).
 //!
 //! Источник: eth_getBlockByNumber, поле timestamp — секунды Unix (hex) — execution-apis
-//! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/schemas/block.yaml .
-//! Время блока в секундах: измеренный возраст больше настоящего на долю секунды (0–1 с) — порог ставить с запасом.
+//! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/schemas/block.yaml ;
+//! доля секунды — поле mixHash (BEP-520, node/block_ms.rs). Решение 259: возраст считается по времени блока в
+//! миллисекундах (раньше — по секундам, возраст был завышен на 0–999 мс).
 
-use alloy_primitives::U64;
+use alloy_primitives::{B256, U64};
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -33,10 +34,21 @@ use super::rpc;
 /// Имя настройки порога возраста головы.
 pub const SETTING: &str = "feed.max_block_age_ms";
 
-/// Поле timestamp блока из eth_getBlockByNumber.
+/// Поля timestamp и mixHash блока из eth_getBlockByNumber (mixHash нет — доля секунды 0, node/block_ms.rs).
 #[derive(Deserialize)]
 struct RawBlock {
     timestamp: U64,
+    #[serde(rename = "mixHash", default)]
+    mix_hash: Option<B256>,
+}
+
+/// Время блока: секунды (для deadline и симуляции — block.timestamp в EVM) и миллисекунды (для возраста головы).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockTime {
+    /// Секунды Unix (поле timestamp).
+    pub secs: u64,
+    /// Миллисекунды Unix: секунды·1000 + доля секунды из mixHash (BEP-520).
+    pub millis: u64,
 }
 
 /// Что делает: порог возраста головы из настроек площадки.
@@ -67,14 +79,15 @@ pub fn active(ctx: &Ctx) -> bool {
 }
 
 /// Что делает: возраст блока по часам сервера.
-/// Принимает: время блока (секунды Unix). Возвращает: мс от времени блока до сейчас (может быть < 0, если часы
-/// сервера отстают). Ошибок нет.
-pub fn age_ms(block_time_s: u64) -> i64 {
-    Utc::now().timestamp_millis() - (block_time_s as i64).saturating_mul(1000)
+/// Принимает: время блока (миллисекунды Unix, решение 259). Возвращает: мс от времени блока до сейчас (может быть
+/// < 0, если часы сервера отстают). Ошибок нет.
+pub fn age_ms(block_time_ms: u64) -> i64 {
+    Utc::now().timestamp_millis() - i64::try_from(block_time_ms).unwrap_or(i64::MAX)
 }
 
 /// Что делает: проверка возраста головы для fresh().
-/// Принимает: окружение, последнее известное (номер, время блока). Возвращает: Ok — свежо или проверка выключена.
+/// Принимает: окружение, последнее известное (номер, время блока в миллисекундах Unix — Heads::block_time_ms).
+/// Возвращает: Ok — свежо или проверка выключена.
 /// Ошибки: StaleData (время блока ещё не получено, блок старше порога, свой узел без порога), Internal (хранилище).
 pub fn check(ctx: &Ctx, known: Option<(u64, u64)>) -> GatewayResult<()> {
     let Some(max) = max_age_ms(ctx)? else {
@@ -106,16 +119,23 @@ pub fn check(ctx: &Ctx, known: Option<(u64, u64)>) -> GatewayResult<()> {
 
 /// Что делает: время блока с узла (eth_getBlockByNumber).
 /// Принимает: окружение, номер блока, paced — через общую очередь темпа (node/pace.rs) или мимо неё (опрос головы:
-/// от него зависит свежесть, как и eth_blockNumber). Возвращает: время блока (секунды Unix).
+/// от него зависит свежесть, как и eth_blockNumber). Возвращает: время блока — секунды и миллисекунды (BlockTime).
 /// Ошибки: узел; BadResponse (узел не знает блок).
-pub async fn fetch(ctx: &Ctx, number: u64, paced: bool) -> GatewayResult<u64> {
+pub async fn fetch(ctx: &Ctx, number: u64, paced: bool) -> GatewayResult<BlockTime> {
     let params = json!([block_tag(number), false]);
     let b: Option<RawBlock> = if paced {
         rpc::call(ctx, "eth_getBlockByNumber", params).await?
     } else {
         rpc::call_unpaced(ctx, "eth_getBlockByNumber", params).await?
     };
-    b.map(|b| b.timestamp.to::<u64>()).ok_or_else(|| {
+    b.map(|b| {
+        let secs = b.timestamp.to::<u64>();
+        BlockTime {
+            secs,
+            millis: super::block_ms::millis(secs, b.mix_hash),
+        }
+    })
+    .ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
             format!("узел BSC (HTTP) не знает блок {number}"),

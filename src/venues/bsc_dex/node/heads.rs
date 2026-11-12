@@ -45,8 +45,8 @@ pub struct Head {
 #[derive(Clone)]
 pub struct Heads {
     tx: watch::Sender<Option<Head>>,
-    /// Время последнего запрошенного блока: (номер, секунды Unix).
-    time: Arc<Mutex<Option<(u64, u64)>>>,
+    /// Время последнего запрошенного блока: номер и время (секунды — deadline; миллисекунды — возраст, решение 259).
+    time: Arc<Mutex<Option<(u64, super::head_age::BlockTime)>>>,
     /// Один eth_getBlockByNumber на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
 }
@@ -90,7 +90,7 @@ impl Heads {
                 format!("Последний блок {} получен {age} мс назад — больше feed.stale_after_ms ({limit})", head.number),
             ));
         }
-        super::head_age::check(ctx, self.block_time())?;
+        super::head_age::check(ctx, self.block_time_ms())?;
         Ok(head)
     }
 
@@ -135,17 +135,29 @@ impl Heads {
     async fn fetch_time(&self, ctx: &Ctx, number: u64) -> GatewayResult<(u64, u64)> {
         let t = super::head_age::fetch(ctx, number, true).await?;
         self.remember_time(number, t);
-        Ok((number, t))
+        Ok((number, t.secs))
     }
 
-    /// Последнее известное время блока: (номер, секунды Unix). None — ещё не было. Ошибок нет.
+    /// Последнее известное время блока: (номер, секунды Unix) — для deadline и симуляции. None — ещё не было.
+    /// Ошибок нет.
     pub fn block_time(&self) -> Option<(u64, u64)> {
+        self.time_raw().map(|(n, t)| (n, t.secs))
+    }
+
+    /// Последнее известное время блока: (номер, миллисекунды Unix) — для возраста головы (решение 259). None — ещё
+    /// не было. Ошибок нет.
+    pub fn block_time_ms(&self) -> Option<(u64, u64)> {
+        self.time_raw().map(|(n, t)| (n, t.millis))
+    }
+
+    /// Кэш времени блока как есть. Ошибок нет.
+    fn time_raw(&self) -> Option<(u64, super::head_age::BlockTime)> {
         *self.time.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Запоминает время блока, если он не старше уже известного (запросы могут вернуться не по порядку).
-    /// Принимает: номер блока, время (секунды Unix). Ошибок нет.
-    pub fn remember_time(&self, number: u64, t: u64) {
+    /// Принимает: номер блока, время (секунды и миллисекунды). Ошибок нет.
+    pub fn remember_time(&self, number: u64, t: super::head_age::BlockTime) {
         let mut cur = self.time.lock().unwrap_or_else(|p| p.into_inner());
         if cur.is_none_or(|(n, _)| number >= n) {
             *cur = Some((number, t));
@@ -199,7 +211,7 @@ impl Heads {
             }
             // Возраст головы — каждый круг опроса, и при сбое опроса тоже: голова стареет — запись о переходе.
             let age = super::head_age::active(&ctx)
-                .then(|| super::head_age::check(&ctx, self.block_time()));
+                .then(|| super::head_age::check(&ctx, self.block_time_ms()));
             age_log.step(&ctx, age.as_ref()).await;
             tokio::time::sleep(every).await;
         }

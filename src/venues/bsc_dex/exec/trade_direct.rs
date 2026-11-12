@@ -12,12 +12,13 @@
 //! Итог и ошибку подписывает исполнителем «свой сборщик: прямой» вызывающий (exec/trade.rs, решение 121 B7). Повторов нет (стартовое правило Тиграна).
 //! Решение 177: продажа выхода (TradeRequest.exit_position) при расхождении с квотером — продажа по квотеру
 //! (exec/exit_quote.rs): ожидаемое, худшая цена и минимумы — от квотера; строка «— продажа по квотеру» — в журнал и в
-//! TradeResult.executor (хронология сделки). Покупка — сверка с квотером, как раньше, стоп.
+//! TradeResult.executor (хронология сделки). Остальные — решение 261: сверка односторонняя (квотер меньше расчёта
+//! больше допуска — стоп; больше — сделка идёт, строка «в нашу сторону» в хронологию — exec/quoter_favour.rs).
 //! Решение 248 (кейс SMARS 10.11): проба продажи выхода откатилась «мало на выходе» (custom error Universal Router,
 //! exec/ur_short.rs) — пере-замер реального выхода и новый минимум (exec/ur_remeasure.rs), как 247 у исполнителя.
 //! Кто вызывает: exec/trade.rs (RouteMode::Direct и графовая прямая форма).
 //! От чего зависит: exec/trade.rs (общие шаги), exec/swap_ctx.rs (контекст разбора в «чем найти», решение 231), check/sim_base.rs (блок пробы, решение 127), exec/live.rs, exec/chain.rs, exec/plan.rs, exec/native.rs,
-//! exec/precheck.rs, exec/exit_quote.rs, exec/ur_remeasure.rs (проба и пере-замер), exec/executor/trade.rs (expected, coin_tax), exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
+//! exec/precheck.rs, exec/exit_quote.rs, exec/quoter_favour.rs, exec/ur_remeasure.rs (проба и пере-замер), exec/executor/trade.rs (expected, coin_tax), exec/verify_gate.rs, exec/leg_min.rs, exec/result.rs, quote/direct.rs, quote/via.rs,
 //! wallet/nonce.rs, wallet/inflows.rs, pools/registry.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, verify.*, send.*, channel.*.
 
@@ -43,7 +44,7 @@ use super::trade::{
     with_approve_gas, worst_positive,
 };
 use super::txs::Env;
-use super::{chain, exit_quote, leg_min, live, result, ur_remeasure, verify_gate};
+use super::{chain, exit_quote, leg_min, live, quoter_favour, result, ur_remeasure, verify_gate};
 
 /// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
 /// (решение 177; None — по расчёту).
@@ -187,13 +188,16 @@ async fn prepare(
     let mut path = live::path(v, &leg.hops, req.qty, true).await?;
     check_price(ctx, req, path.coins, path.usdt)?;
     let (mut steps, mut wrap) = legs(ctx, req, &path, mins, decs, is_native)?;
-    let fixes = exit_quote::check(ctx, &path, exit_quote::exit_of(req), |_| true).await?;
+    let all = exit_quote::check(ctx, &path, exit_quote::exit_of(req), |_| true).await?;
+    // Решение 261: расхождения «в нашу сторону» — только строка в хронологию (exec/quoter_favour.rs).
+    let (fixes, favour) = quoter_favour::split(all);
+    let favour = quoter_favour::report(ctx, req, &favour).await;
     if fixes.is_empty() {
         return Ok(Prep {
             path,
             steps,
             wrap,
-            note: None,
+            note: favour,
         });
     }
     // Решение 177: ожидаемое — по квотеру; худшая цена и минимумы — заново от него.
@@ -201,7 +205,7 @@ async fn prepare(
     check_price(ctx, req, path.coins, path.usdt)?;
     let mins = mins.map(|m| exit_quote::scale_mins(m, r));
     (steps, wrap) = legs(ctx, req, &path, mins.as_deref(), decs, is_native)?;
-    let note = exit_quote::report(ctx, req, &fixes).await;
+    let note = quoter_favour::join(exit_quote::report(ctx, req, &fixes).await, favour);
     Ok(Prep {
         path,
         steps,

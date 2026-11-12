@@ -4,7 +4,8 @@
 //! Торговли нет, пока проверка не завершена.
 //! Кто вызывает: pools/market.rs (запуск циклов), mod.rs (recheck_coins), quote/* (итоги).
 //! От чего зависит: ctx.rs, node/*, pools/*, quote/*, exec/calls.rs.
-//! Настройки: tax.*, hooks.*, check.probe_usdt, dex.quoter_check_s, dex.quoter_max_diff_pct, dex.deadline_s.
+//! Настройки: tax.*, hooks.*, check.probe_usdt, dex.quoter_check_s, dex.quoter_max_diff_pct, dex.deadline_s,
+//! money.max_per_trade_usd (сумма сверки с квотером, решение 261).
 
 pub mod cycle;
 pub mod deal_taxes;
@@ -17,7 +18,11 @@ pub mod probe;
 pub mod probe_buy;
 pub mod probe_calls;
 pub mod probe_exec;
+pub mod quoter_amount;
+pub mod quoter_block;
+pub mod quoter_compare;
 pub mod quoter_cycle;
+pub mod quoter_pause;
 pub mod quoter_side;
 pub mod quoter_sides;
 pub mod quoter_tally;

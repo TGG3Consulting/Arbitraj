@@ -4,6 +4,9 @@
 //! обменом квотером (итог — в состояние проверок, и по нему же пул проходит или не проходит допуск quote/select.rs);
 //! сверка обмена с квотером своей DEX на реальной сумме сделки (прямой режим; умный сверяет доли MixedQuoter —
 //! quote/mixed_quoter.rs). Решение 177: у продажи выхода расхождение — не отказ, а продажа по квотеру (quoter_hop).
+//! Решение 261 (Тигран 12.11: «если в нашу сторону то ок если наоборот то не делаем»): у остальных сделок сверка
+//! односторонняя — выход квотера меньше нашего больше допуска — отказ; больше (на любую величину) — сделка идёт,
+//! поправка с favour = true (только строка в хронологию; ожидаемое и минимум — по нашему расчёту).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/exit_quote.rs.
 //! От чего зависит: check/hooks_probe.rs, check/state.rs, quote/quoter.rs, quote/emptiness.rs, pools/registry.rs.
 //! Настройки: через вызываемые — check.probe_usdt, dex.quoter [вид пула], dex.router (V2), dex.quoter_max_diff_pct.
@@ -76,8 +79,8 @@ pub async fn quoter_now(
 
 /// Как quoter_now, но продажа выхода (решение 177, exit = true): расхождение больше допуска с цифрами (Judged::Diff) —
 /// не отказ, а Some(ExitFix) — продать по выходу квотера (exec/exit_quote.rs). Пустой пул, неполный расчёт, откат
-/// квотера, «сравнить нельзя» — отказ, как у quoter_now. exit = false — ровно quoter_now. Возвращает: None — в допуске.
-/// Ошибки: как у quoter_now.
+/// квотера, «сравнить нельзя» — отказ, как у quoter_now. exit = false — ровно quoter_now. Возвращает: None — в допуске;
+/// Some(ExitFix с favour = true) — решение 261, расхождение в нашу сторону (exit = false). Ошибки: как у quoter_now.
 pub async fn quoter_hop(
     ctx: &Ctx,
     e: &Entry,
@@ -120,18 +123,21 @@ pub async fn quoter_hop(
 }
 
 /// Решение по итогу сверки (без узла — проверяется тестами на цифрах живого случая): в допуске — None; расхождение
-/// у продажи выхода — Some(ExitFix); иначе — отказ QuoteMismatch с тем же текстом, что до решения 177.
-/// Принимает: окружение, пул, итог сверки, продажа ли выхода. Ошибки: QuoteMismatch.
+/// у продажи выхода — Some(ExitFix) (решение 177, по модулю, как было); у остальных расхождение в нашу сторону
+/// (квотер больше расчёта) — Some(ExitFix, favour = true) (решение 261); иначе — отказ QuoteMismatch с тем же текстом,
+/// что до решения 177. Принимает: окружение, пул, итог сверки, продажа ли выхода. Ошибки: QuoteMismatch.
 pub fn verdict(ctx: &Ctx, e: &Entry, j: Judged, exit: bool) -> GatewayResult<Option<ExitFix>> {
+    let favour = !exit && j.favours_us();
     match j {
         Judged::Within => Ok(None),
         Judged::Diff {
             local, remote, pct, ..
-        } if exit => Ok(Some(ExitFix {
+        } if exit || favour => Ok(Some(ExitFix {
             pool: format!("{} {}", e.family.title, e.ticker),
             local,
             remote,
             pct,
+            favour,
         })),
         j => Err(ctx.err(
             ErrorCode::QuoteMismatch,

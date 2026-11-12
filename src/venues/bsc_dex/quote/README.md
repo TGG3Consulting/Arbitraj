@@ -20,7 +20,7 @@
 | `smart.rs` | Умный маршрут: деление объёма шагами `smart.split_step_pct` между пулами PancakeSwap (не больше `smart.max_splits`); монета с налогом — только V2 |
 | `smart_ways.rs` | Кандидаты деления умного маршрута: пулы с USDT и пары через промежуточные; расчёт кандидата |
 | `smart_quote.rs` | Режим `smart`: умный маршрут против прямой сделки Uniswap, больший итог; затраты долей складываются |
-| `mixed_quoter.rs` | Сверка долей умного маршрута с MixedQuoter PancakeSwap перед отправкой |
+| `mixed_quoter.rs` | Сверка долей умного маршрута с MixedQuoter PancakeSwap перед отправкой; решение 261 — односторонняя (в нашу сторону — строка в хронологию) |
 | `fills.rs` | Решение 250: исполнимость объёма продажи без полной котировки (проверка доли глубины h ядра) — лучший одиночный пул классики прямого режима (direct::best по тем же пулам) исполняет объём целиком → полная котировка точно дала бы fillable_qty = qty; иначе (умный режим, покупка, BNB, пул не исполняет) — полная котировка. Проверки до маршрута — те же и в том же порядке, что у quote |
 | `classic_direct.rs` | Классическая прямая котировка (решение 121): на сделку — только пулы с путём исполнения (tradable, не форк); лучший неисполнимый маршрут — в signal_route (executable = нет) для карточки; исполнимого нет — NoRoute «только сигнал». Зовут quote/mod.rs (direct) и smart_quote.rs |
 | `direct_route.rs` | Режим `direct`: лучший пул с USDT против лучшей пары через промежуточную (один Universal Router), больший итог |
@@ -57,9 +57,9 @@
 | `native_gas.rs` | BNB (решение 62): затрата WrapGas — газ WRAP_ETH / UNWRAP_WETH сверх обмена токеном WBNB (замер check/native_probe.rs); не измерен — котировки нет |
 | `costs.rs` | Котировка ядру: средняя цена, маршрут, затраты (комиссия пула, налоги, крючок — в цене; газ — отдельно, BNB) |
 | `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
-| `quoter.rs` | Выход по квотеру DEX (eth_call) и сверка с математикой (`dex.quoter_max_diff_pct`) |
+| `quoter.rs` | Выход по квотеру DEX (eth_call на «latest» или на блоке — out_at, решение 261) и сверка с математикой (`dex.quoter_max_diff_pct`; favours_us — расхождение в нашу сторону) |
 | `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) Infinity Stable — CLQuoter (основной). |
-| `quoter_extra.rs` | Дополнительный квотер сверки — get_dy крючка Infinity Stable, параллельно с основным (решение «122 (Infinity Stable, ответы)»): расхождение, откат или сбой — сделки нет |
+| `quoter_extra.rs` | Дополнительный квотер сверки — get_dy крючка Infinity Stable, параллельно с основным (решение «122 (Infinity Stable, ответы)»): расхождение, откат или сбой — сделки нет; решение 261 — на блоке сверки пула, перед сделкой односторонне |
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |

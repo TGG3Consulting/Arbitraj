@@ -8,7 +8,7 @@
 //! «по ответу сети», как у официального QuoterV2, но без поиска пула по фабрике. В сеть ничего не уходит.
 //! Пул взял меньше входа — ликвидности до предела цены не хватило: это «не хватает ликвидности» (как SPL у QuoterV2).
 //! Включается настройкой dex.quoter_virtual [DEX] = да; не задана или «нет» — как раньше (квотер DEX из dex.quoter).
-//! Кто вызывает: quote/quoter.rs (out), pools/families.rs (required — dex.quoter не нужен), exec/dry_surplus_tail.rs
+//! Кто вызывает: quote/quoter.rs (out, out_at — решение 261), pools/families.rs (required — dex.quoter не нужен), exec/dry_surplus_tail.rs
 //! (data, address, runtime — квотер в eth_simulateV1, решение 252 вариант «б»).
 //! От чего зависит: node/rpc.rs, pools/registry.rs, pools/families.rs (Proto), sha2, contracts/out/VirtualQuoter.*.
 //! Настройки: dex.quoter_virtual [DEX] (необязательная).
@@ -124,6 +124,18 @@ pub fn data(pool: Address, zero_for_one: bool, amount: U256) -> Bytes {
 /// Ошибки: Internal (код квотера, ссылка пула не контракт, вид не поддержан), узел (откат пула — его текст),
 /// BadResponse (ответ не по ABI), SwapReverted с текстом SHORT — ликвидности не хватает.
 pub async fn out(ctx: &Ctx, e: &Entry, token_in: Address, amount: U256) -> GatewayResult<U256> {
+    out_at(ctx, e, token_in, amount, "latest").await
+}
+
+/// Как out, но на заданном блоке (решение 261: периодическая сверка — на блоке состояния пула). Принимает: ещё блок
+/// (номер hex или «latest»). Ошибки: как у out; StaleData — состояния блока у узла нет.
+pub async fn out_at(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    amount: U256,
+    block: &str,
+) -> GatewayResult<U256> {
     if !supports(e.family.proto) {
         return Err(ctx.err(
             ErrorCode::Internal,
@@ -144,7 +156,7 @@ pub async fn out(ctx: &Ctx, e: &Entry, token_in: Address, amount: U256) -> Gatew
         "eth_call",
         json!([
             { "to": at, "input": data },
-            "latest",
+            block,
             { at.to_string(): { "code": code } }
         ]),
     )

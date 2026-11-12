@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/depth_facts.rs
 //! Что делает: пулы площадки для экрана «Монеты» (решение 73, Venue::pool_depths): глубина по направлениям в полосе
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
-//! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing — строкой в details.
+//! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing и «не сверено (блок)» по сторонам (решение 261) — строками в details; пауза по сверке
+//! на одном блоке — итог стороны «failed» с причиной «пауза: …» (цифры и блок в тексте).
 //! Кто вызывает: venue.rs (pool_depths; pool_depths_of — только пулы маршрута, карточка сигнала решения 74).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
@@ -77,11 +78,14 @@ pub async fn all(
             valid: e.valid,
             cross_check_buy: side(&q.buy),
             cross_check_sell: side(&q.sell),
+            // Решение 261: «не сверено (блок)» по сторонам — строками подробностей (итог стороны — прежний).
             details: e
                 .pool
                 .tick_spacing
                 .map(|s| format!("tickSpacing {s}"))
                 .into_iter()
+                .chain(q.buy_note.as_ref().map(|n| format!("покупка: {n}")))
+                .chain(q.sell_note.as_ref().map(|n| format!("продажа: {n}")))
                 .collect(),
         });
     }

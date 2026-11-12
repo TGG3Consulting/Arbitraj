@@ -77,6 +77,8 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "coin.unblacklisted" => (OK, "Монета убрана из чёрного списка"),
         "dex.check_not_configured" => (WARN, "Проверка налогов DEX не настроена"),
         "pool.hook_excluded" => (INFO, "Пул исключён"),
+        "pool.quoter_paused" => (STOP, "Пул DEX на паузе: расчёт разошёлся с квотером"),
+        "pool.quoter_resumed" => (OK, "Пауза пула DEX снята: сверка с квотером прошла"),
         "stuck.detected" => (WARN, "Монета застряла: продавать сейчас невыгодно"),
         "stuck.loss_alert" => (STOP, "Нужно решение: убыток выше порога"),
         "stuck.relayed" => (INFO, "Монета перегнана на другую площадку"),

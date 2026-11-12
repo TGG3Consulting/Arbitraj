@@ -1,7 +1,8 @@
 //! Файл: tests/bsc_dex_config_wake3.rs
 //! Что делает: решение 75, ревью #65 (живой пул AAVE Uniswap V3 0x8e3ecc0b…, запись 2026-10-25):
 //! - имя незаданной настройки у итога сверки с квотером — из ошибки там, где она возникла (GatewayError.setting;
-//!   глубина — pools/depth_book.rs missing_setting): сторона ждёт её и перепроверяется только при её изменении;
+//!   глубина — pools/depth_book.rs missing_setting): сторона ждёт её и перепроверяется только при её изменении
+//!   (решение 261: сумма сверки — money.max_per_trade_usd и глубина стороны, затем допуск квотера);
 //! - монета, ждущая из-за отставания ленты (Why::Lag): отметка стоит — не выдаётся; сняли — выдаётся на проверку на
 //!   ближайшем шаге цикла (due_lag), сигнал до постановки в ожидание не теряется; снятие будит «пул готов»;
 //! - пересчёт глубины, которому нужен узел (pools/depth_sync.rs), «замораживает» пачку: пока чтение идёт, её пулы
@@ -20,9 +21,10 @@ use std::time::Duration;
 use serde_json::json;
 
 use arb::core::types::{Asset, Side};
+use arb::gateway::contract::VenueKind;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::quoter_sides::QuoterSides;
-use arb::venues::bsc_dex::check::quoter_verify::verify;
+use arb::venues::bsc_dex::check::quoter_verify::{Verdict, verify};
 use arb::venues::bsc_dex::check::tax_pass::Why;
 use arb::venues::bsc_dex::check::tax_wait::due_lag;
 use arb::venues::bsc_dex::parts::Parts;
@@ -57,18 +59,46 @@ async fn quoter_side_waits_for_named_setting() {
         Some("dex.min_pool_liquidity_usd")
     );
     // Сверка: имя — из ошибки там, где она возникла; допуск квотера читается ДО обращения к узлу (узла в тесте нет —
-    // без этого была бы ошибка связи без имени).
-    let Err((_, name)) = verify(&pools, &e, Side::Buy).await else {
-        panic!("без check.probe_usdt сверки нет");
+    // без этого была бы ошибка связи без имени). Решение 261: сумма сверки пула без крючка — min(наш максимум
+    // money.max_per_trade_usd, глубина стороны), поэтому сначала ждут они, а не check.probe_usdt.
+    ctx.settings.venue_kinds().set([
+        ("bingx".to_string(), VenueKind::Cex),
+        ("bsc_dex".to_string(), VenueKind::Dex),
+    ]);
+    let wait = |x: Verdict| match x {
+        Verdict::Fail((_, name)) => name,
+        other => panic!("ждали отказ с именем настройки: {other:?}"),
     };
-    assert_eq!(name.as_deref(), Some("check.probe_usdt"));
-    ctx.settings
-        .set("check.probe_usdt", v.clone(), Some(json!(1)), "тест")
+    // Биржа направлений с DEX — только привязанная к кошельку DEX (решение 132, экран «Маппинг кошельков»).
+    let acc = ctx.settings.accounts();
+    acc.add("w1", "Кошелёк BingX", "wallet.w1.key", "w1", "тест")
         .await
         .unwrap();
-    let Err((_, name)) = verify(&pools, &e, Side::Buy).await else {
-        panic!("без допуска сверки нет");
-    };
+    acc.map_set("bingx", Some("w1"), "тест").await.unwrap();
+    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
+    assert_eq!(name.as_deref(), Some("money.max_per_trade_usd"));
+    ctx.settings
+        .set(
+            "money.max_per_trade_usd",
+            Scope::Global,
+            Some(json!(100)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
+    assert_eq!(name, missing_setting(&ctx));
+    for (n, x) in [
+        ("dex.depth_band_pct", json!(2)),
+        ("dex.min_pool_liquidity_usd", json!(1)),
+        ("dex.depth_hysteresis_pct", json!(10)),
+    ] {
+        ctx.settings
+            .set(n, v.clone(), Some(x), "тест")
+            .await
+            .unwrap();
+    }
+    let name = wait(verify(&pools, &e, 18, Side::Buy).await);
     assert_eq!(name.as_deref(), Some("dex.quoter_max_diff_pct"));
     let name = name.unwrap();
     let mut q = QuoterSides::default();

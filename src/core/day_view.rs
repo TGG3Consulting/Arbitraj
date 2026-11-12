@@ -1,12 +1,13 @@
 //! Файл: core/day_view.rs
 //! Что делает: итог дня для плашки режима и экрана «Управление» (решения 53, 152, 153, 173): дата, всего, фактическая
 //! часть и оценка позиций, неразобранные оценки сделок (и какие из них без цены — худший случай), сброс лимита дня
-//! и состояние лимита (сколько из скольких, превышен ли) — всей системы и по каждой площадке (решение 173: у площадки
-//! свой итог, свой лимит, своя пауза). Значения ведёт core/daily.rs; лимиты — core/daily_limit.rs, daily_venue.rs.
+//! и состояние лимита (сколько из скольких, превышен ли) — всей системы и по каждой паре «площадка × тип направления»
+//! (решение 258, было — по площадке, решение 173: у пары свой итог, свой лимит, своя пауза; пара — core/day_pair.rs).
+//! Значения ведёт core/daily.rs; лимиты — core/daily_limit.rs, daily_venue_limit.rs.
 //! Кто вызывает: core/risk.rs (поле Risk.day), core/daily.rs, core/daily_limit.rs, core/daily_venue.rs.
 //! От чего зависит: chrono, rust_decimal.
-//! Настройки: нет (лимиты — risk.max_daily_loss_usd по площадке и risk.max_daily_loss_total_usd; читают
-//! daily_venue.rs и daily_limit.rs).
+//! Настройки: нет (лимиты — risk.max_daily_loss_usd по паре и risk.max_daily_loss_total_usd; читают
+//! daily_venue_limit.rs и daily_limit.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,7 +27,7 @@ pub struct LimitReset {
 }
 
 /// Состояние лимита дня — считается при каждом пересчёте: всей системы (risk.max_daily_loss_total_usd,
-/// daily_limit.rs) или площадки (risk.max_daily_loss_usd, daily_venue_limit.rs).
+/// daily_limit.rs) или пары «площадка × тип направления» (risk.max_daily_loss_usd, daily_venue_limit.rs).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LimitView {
     /// Лимит, USDT.
@@ -77,27 +78,33 @@ pub struct DayView {
     /// Общий лимит дня всей системы (решение 173: risk.max_daily_loss_total_usd — «Стоп» всей системы);
     /// None — не задан, общего стопа по убытку нет.
     pub limit: Option<LimitView>,
-    /// Решение 173: итог дня по площадкам (ключ — id площадки). Сделка CEX ↔ DEX — у биржи, CEX ↔ CEX — у обеих
-    /// бирж (каждой — весь итог сделки), DEX ↔ DEX — у DEX. Сумма по площадкам может быть больше общего итога.
-    pub venues: BTreeMap<String, VenueDay>,
-    /// Решение 173: площадки неразобранных оценок (сделка → id площадок).
-    pub deal_venues: BTreeMap<String, Vec<String>>,
+    /// Решение 258: итог дня по парам «площадка × тип направления» (ключ — id пары, core/day_pair.rs: «bingx:cex_dex»,
+    /// «bingx:dex_cex», «bingx:cex_cex», «dex_dex»). Сделка — ровно у одной пары; сумма по парам = общий итог дня.
+    pub pairs: BTreeMap<String, PairDay>,
+    /// Решение 258: пара неразобранной оценки (сделка → id пары).
+    pub deal_pairs: BTreeMap<String, String>,
 }
 
-/// Итог дня одной площадки (решение 173) и её лимит.
+/// Итог дня одной пары «площадка × тип направления» (решение 258) и её лимит.
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
-pub struct VenueDay {
+pub struct PairDay {
+    /// Биржа пары (id); None — «DEX ↔ DEX» (один набор на все циклы).
+    pub venue: Option<String>,
+    /// Тип направления: cex_dex, dex_cex, cex_cex, dex_dex (settings/venue_dir.rs DirKind::key).
+    pub kind: String,
+    /// Подпись для человека: «BingX → DEX», «DEX → BingX», «BingX → биржа», «DEX ↔ DEX» (day_pair::label).
+    pub label: String,
     /// Всего: факт + оценки позиций её сделок, учтённых сегодня.
     pub result_usd: Decimal,
-    /// Факт закрытых сегодня сделок с её участием.
+    /// Факт закрытых сегодня сделок этой пары.
     pub final_usd: Decimal,
     /// Оценка позиций её сделок, учтённых сегодня.
     pub provisional_usd: Decimal,
-    /// Сброс лимита дня этой площадки сегодня; None — не сбрасывался.
+    /// Сброс лимита дня этой пары сегодня; None — не сбрасывался.
     pub limit_reset: Option<LimitReset>,
-    /// Лимит площадки (risk.max_daily_loss_usd: значение площадки, иначе «вся система»); None — не задан.
+    /// Лимит пары (risk.max_daily_loss_usd: пара → площадка → вся система); None — не задан.
     pub limit: Option<LimitView>,
-    /// Площадка на паузе по убытку дня (Risk.venue_paused с причиной лимита).
+    /// Пара на паузе по убытку дня (Risk.pair_paused).
     pub paused: bool,
 }
 
@@ -112,8 +119,8 @@ impl Default for DayView {
             unpriced: Default::default(),
             limit_reset: None,
             limit: None,
-            venues: BTreeMap::new(),
-            deal_venues: BTreeMap::new(),
+            pairs: BTreeMap::new(),
+            deal_pairs: BTreeMap::new(),
         }
     }
 }

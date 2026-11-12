@@ -1,21 +1,22 @@
 //! Файл: core/day_roll.rs
 //! Что делает: решение 225 — новый день (полночь UTC; день учёта — UTC, daily.rs) снимает софтовые паузы по убытку дня:
-//! - паузы площадок по их лимиту дня (Risk.loss_paused: биржа — Risk.venue_paused, DEX — только циклы Risk.cycle_paused);
-//!   у площадки с отметкой «исход неизвестен» (auto_pause::human_only) пауза остаётся — её снимает человек;
+//! - паузы пар «площадка × тип направления» по их лимиту дня (Risk.pair_paused, решение 258; «dex_dex» — циклы DEX ↔
+//!   DEX). Паузы площадки (Risk.venue_paused: ошибки подряд, исход неизвестен, лимит вывода, сверка, человек) — другие
+//!   паузы, новый день их не трогает (пауза по убытку с ними больше не смешивается);
 //! - «Стоп» системы по общему лимиту дня (Risk.mode_auto вида DailyTotal) — режим до него возвращается; человек менял
 //!   режим — отметки нет, ничего не возвращается.
 //!   Затем итог дня пересчитывается на новую дату (daily::commit — новый день виден сразу, а не с первой сделкой).
 //!   Журнал core.control, уведомление risk.auto_resumed.
 //!
 //! Кто вызывает: engine.rs (фоновая задача run).
-//! От чего зависит: auto_pause.rs, risk.rs, daily.rs (today_book, commit), daily_commit.rs (announce), deps.rs.
+//! От чего зависит: auto_pause.rs, risk.rs, day_pair.rs (подписи), daily.rs (today_book, commit), daily_commit.rs
+//! (announce), deps.rs.
 //! Настройки: нет (граница дня — полночь UTC, как у учёта дня).
 
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveTime, Utc};
 
-use crate::core::types::VenueId;
 use crate::notify::human::{self as h, Msg};
 use crate::storage::journal::Level;
 
@@ -26,12 +27,8 @@ use super::risk::{Mode, Risk};
 /// Что сняла смена дня.
 #[derive(Debug, Default, PartialEq)]
 pub struct DayLift {
-    /// Площадки (биржи), с которых снята пауза по убытку дня.
-    pub venues: Vec<String>,
-    /// DEX, у которых снята пауза циклов DEX ↔ DEX.
-    pub cycles: Vec<String>,
-    /// Площадки, чья пауза осталась: «исход неизвестен» — снимает человек.
-    pub kept: Vec<String>,
+    /// Пары «площадка × тип направления» (id), с которых снята пауза по убытку дня (решение 258).
+    pub pairs: Vec<String>,
     /// Режим, который вернулся после «Стоп» по общему лимиту дня.
     pub mode: Option<Mode>,
 }
@@ -39,23 +36,10 @@ pub struct DayLift {
 /// Снимает паузы по убытку прошедшего дня (чистая логика). Принимает: состояние риска (под блокировкой).
 /// Возвращает: что снято. Ошибок нет.
 pub fn new_day(r: &mut Risk) -> DayLift {
-    let mut out = DayLift::default();
-    for v in std::mem::take(&mut r.loss_paused) {
-        if r.cycle_paused.remove(&v).is_some() {
-            out.cycles.push(v.clone());
-        }
-        let id = VenueId(v.clone());
-        if !r.venue_paused.contains_key(&id) {
-            continue;
-        }
-        if ap::human_only(r, &id) {
-            out.kept.push(v);
-        } else {
-            r.venue_paused.remove(&id);
-            r.venue_auto.remove(&id);
-            out.venues.push(v);
-        }
-    }
+    let mut out = DayLift {
+        pairs: std::mem::take(&mut r.pair_paused).into_keys().collect(),
+        mode: None,
+    };
     r.loss_seen.clear();
     if let Some(m) = r.mode_auto.clone()
         && m.kind == ModeKind::DailyTotal
@@ -110,37 +94,15 @@ async fn report(core: &Core, l: &DayLift) {
     let deps = &core.inner.deps;
     let mut msg = Msg::new(h::OK, "Новый день — паузы по убытку дня сняты");
     let mut any = false;
-    for v in &l.venues {
+    for p in &l.pairs {
+        let name = super::day_pair::label(p);
         let t = format!(
-            "Новый день (UTC): пауза площадки {} по убытку дня снята сама (решение 225)",
-            h::venue(v)
+            "Новый день (UTC): пауза направления {name} по убытку дня снята сама (решения 225, 258)"
         );
-        deps.log(Level::Info, "core.control", Some(v), &t, None)
+        let v = super::day_pair::venue_or_dex(core, p);
+        deps.log(Level::Info, "core.control", v.as_deref(), &t, None)
             .await;
-        msg = msg.line(format!("{} снова торгует", h::venue(v)));
-        any = true;
-    }
-    for v in &l.cycles {
-        let t = format!(
-            "Новый день (UTC): пауза циклов DEX ↔ DEX {} по убытку дня снята сама (решение 225)",
-            h::venue(v)
-        );
-        deps.log(Level::Info, "core.control", Some(v), &t, None)
-            .await;
-        msg = msg.line(format!("Циклы {} снова торгуют", h::venue(v)));
-        any = true;
-    }
-    for v in &l.kept {
-        let t = format!(
-            "Новый день (UTC): пауза площадки {} по убытку дня не снята — исход операции неизвестен, снимает человек",
-            h::venue(v)
-        );
-        deps.log(Level::Warn, "core.control", Some(v), &t, None)
-            .await;
-        msg = msg.line(format!(
-            "{}: пауза осталась — исход операции неизвестен",
-            h::venue(v)
-        ));
+        msg = msg.line(format!("{name} снова торгует"));
         any = true;
     }
     if let Some(m) = l.mode {

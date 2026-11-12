@@ -71,7 +71,8 @@ pub async fn set_mode(State(st): State<AppState>, Json(b): Json<ModeBody>) -> Js
     Json(st.core.control())
 }
 
-/// Снять паузу площадки. Ошибок нет.
+/// Снять паузу площадки (все её паузы) или, по id пары «площадка × тип направления» (решение 258), — только паузу
+/// этого направления по убытку дня (Core::resume_venue). Ошибок нет.
 pub async fn resume_venue(State(st): State<AppState>, Path(id): Path<String>) -> Json<Risk> {
     st.core.resume_venue(&VenueId(id)).await;
     Json(st.core.control())
@@ -98,9 +99,10 @@ pub async fn reset_daily_limit(State(st): State<AppState>) -> Json<Risk> {
     Json(st.core.control())
 }
 
-/// «Сбросить лимит дня» одной площадки (решение 173): отметка её итога дня; её пауза по убытку дня снимается;
-/// остальные площадки и общий лимит не меняются. Журнал core.loss_limit_reset, уведомление risk.daily_limit_reset.
-/// Ошибок нет.
+/// «Сбросить лимит дня» одной площадки (решение 173: все её направления) или одной пары «площадка × тип направления»
+/// (решение 258: id пары — «bingx:dex_cex», «dex_dex», core/day_pair.rs): отметка итога дня; пауза по убытку дня
+/// снимается; остальные пары и общий лимит не меняются. Журнал core.loss_limit_reset, уведомление
+/// risk.daily_limit_reset. Ошибок нет.
 pub async fn reset_venue_daily_limit(
     State(st): State<AppState>,
     Path(id): Path<String>,

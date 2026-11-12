@@ -8,6 +8,8 @@
 //! пользователи (notify.control_users).
 //! Периоды — кнопки интерфейса, а не пороги (как «сутки / 7 дней» экрана «Упущено из-за потолка»,
 //! ui/src/lib/uncappedLabels.js period: последние 24 ч / 7 × 24 ч до сейчас; «30 дней» и «за всё время» — решение 215).
+//! Решение 257: у «Итогов сделок» те же кнопки — календарные дни UTC («Сутки» — сегодня с 00:00 UTC до выгрузки;
+//! «7 / 30 дней» — с 00:00 UTC дня 6 / 29 дней назад; report/rows_time.rs calendar_from), подпись — точное окно.
 //! Кто вызывает: notify/press.rs («r:<что>»).
 //! От чего зависит: report/mod.rs, ctl/kb.rs, ctl/report_sig.rs, ctl/report_cap.rs, ctl/press.rs (put_screen), tg_methods.rs (send_document), core.
 //! Настройки: нет.
@@ -103,7 +105,12 @@ impl Ctx<'_> {
         };
         self.answer(&q.id, Some("Готовлю отчёт…")).await;
         let now = Utc::now();
-        let from = p.2.map(|days| now - Duration::days(days));
+        // Решение 257 (Тигран 11.11: «Первая UTC»): «Итоги сделок» — календарные дни UTC (с 00:00 UTC сегодня или N − 1
+        // дней назад до момента выгрузки); «Упущено» — как раньше, последние N × 24 ч (как экран «Упущено из-за потолка»).
+        let from = match rep {
+            "res" => p.2.map(|days| report::rows_time::calendar_from(days, now)),
+            _ => p.2.map(|days| now - Duration::days(days)),
+        };
         let built = match rep {
             "res" => report::results_file(self.core, from, None, now).await,
             _ => report::missed_file(self.core, from, None, now).await,
@@ -111,7 +118,16 @@ impl Ctx<'_> {
         let who = q.from.describe();
         let chat = msg.chat.id.to_string();
         let name = report::file_name(r.2, now);
-        let caption = format!("Отчёт «{}» — {}", r.1, report::period_text(from, None));
+        let period = match rep {
+            "res" => report::rows_time::Window {
+                from,
+                to: None,
+                now,
+            }
+            .text(),
+            _ => report::period_text(from, None),
+        };
+        let caption = format!("Отчёт «{}» — {period}", r.1);
         let sent = match built {
             Ok(bytes) => self
                 .tg

@@ -78,10 +78,7 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         super::deal_return_cost::apply(deal);
         result = deal.result_usd.unwrap_or(result);
     }
-    deal.note(format!(
-        "Сделка {}: {why}",
-        super::deal_text::step_name(step)
-    ));
+    deal.note(format!("{}{why}", super::deal_book::end_prefix(step)));
     // Итог дня (решения 53, 152): закрыта — факт (снимает оценку этой сделки); остановлена или «Беру на себя» —
     // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
     // Решение 173: итог идёт и площадкам сделки — лимит площадки ставит паузу только ей.

@@ -8,13 +8,17 @@
 //! Итог дня — таблица daily_result (storage/db.rs), строка на дату; после перезапуска восстанавливается; неразобранные
 //! оценки переносятся в новый день (в его итог не входят). Там же — отметка сброса лимита дня (решение 153,
 //! daily_limit.rs): действует только в свой день.
-//! Решение 173: у итога дня — разбивка по площадкам (daily_venue.rs): факт сделки и её оценка идут каждой её площадке
-//! (CEX ↔ DEX — бирже, CEX ↔ CEX — обеим биржам, DEX ↔ DEX — DEX); общий итог — по-прежнему сумма сделок.
+//! Решение 258 (было — по площадкам, решение 173): у итога дня — разбивка по парам «площадка × тип направления»
+//! (daily_venue.rs, day_pair.rs): факт сделки и её оценка идут её паре (биржа → DEX, DEX → биржа — бирже этого
+//! направления; биржа → биржа — бирже покупки; DEX ↔ DEX — общей паре «DEX ↔ DEX»); общий итог — сумма сделок.
 //! Пересчёт, запись в базу и проверка лимитов — daily_commit.rs.
+//! Решение 257: каждое изменение итога дня из-за сделки — ещё и начисление в её учёт (Deal.day_book, deal_book.rs):
+//! отчёт «Итоги сделок» складывает их по дням и получает итог дня бота.
 //! Кто вызывает: ledger.rs (finish), ledger_load.rs, manual_return.rs (перенос доли), engine.rs (load), daily_limit.rs,
-//! daily_venue.rs.
-//! От чего зависит: daily_value.rs (оценка), daily_commit.rs, daily_venue.rs, day_view.rs, deal.rs.
-//! Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (через daily_venue.rs, daily_limit.rs).
+//! daily_venue.rs, daily_migrate.rs.
+//! От чего зависит: daily_value.rs (оценка), daily_commit.rs, daily_venue.rs, day_view.rs, deal.rs, deal_book.rs
+//! (начисления в учёт сделки, решение 257).
+//! Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (через daily_venue_limit.rs, daily_limit.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,6 +30,7 @@ use super::daily_commit::Trip;
 use super::daily_value::Estimate;
 use super::day_view::LimitReset;
 use super::deal::Deal;
+use super::deal_book::{DayPart, day as day_entry};
 use super::engine::{Core, lk};
 
 pub(super) use super::daily_commit::commit;
@@ -43,16 +48,17 @@ pub(super) struct Book {
     /// Сброс общего лимита дня (решение 153) — только этого дня.
     #[serde(default)]
     pub(super) limit_reset: Option<LimitReset>,
-    /// Решение 173: факт дня по площадкам (id площадки → сумма). Нет поля в старой записи — разнесение при загрузке
-    /// (daily_migrate.rs).
+    /// Решение 258: факт дня по парам «площадка × тип направления» (id пары → сумма; day_pair.rs). Пишется всегда (и
+    /// пустым): нет поля — запись до решения 258 (по площадкам: venue_final / deal_venues / venue_resets или без
+    /// разбивки) — разнесение по парам при загрузке (daily_migrate.rs).
     #[serde(default)]
-    pub(super) venue_final: BTreeMap<String, Decimal>,
-    /// Решение 173: площадки неразобранных оценок (сделка → id площадок).
+    pub(super) pair_final: BTreeMap<String, Decimal>,
+    /// Решение 258: пара неразобранной оценки (сделка → id пары).
     #[serde(default)]
-    pub(super) deal_venues: BTreeMap<String, Vec<String>>,
-    /// Решение 173: сброс лимита дня площадки (id → отметка) — только этого дня.
+    pub(super) deal_pairs: BTreeMap<String, String>,
+    /// Решение 258: сброс лимита дня пары (id пары → отметка) — только этого дня.
     #[serde(default)]
-    pub(super) venue_resets: BTreeMap<String, LimitReset>,
+    pub(super) pair_resets: BTreeMap<String, LimitReset>,
 }
 
 /// Сумма оценок, учтённых в день `date`. Ошибок нет.
@@ -80,13 +86,13 @@ pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
             } else {
                 None
             },
-            venue_final: if same {
+            pair_final: if same {
                 super::daily_venue::finals(&r.day)
             } else {
                 BTreeMap::new()
             },
-            deal_venues: r.day.deal_venues.clone(),
-            venue_resets: if same {
+            deal_pairs: r.day.deal_pairs.clone(),
+            pair_resets: if same {
                 super::daily_venue::resets(&r.day)
             } else {
                 BTreeMap::new()
@@ -107,16 +113,27 @@ pub async fn provisional(core: &Core, deal: &mut Deal) -> Trip {
 /// запоминается сумма), оценку (daily_value::estimate). Возвращает: что сработало (лимиты, Trip).
 pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
     let (today, mut book) = today_book(core);
-    let venues = super::daily_venue::of_deal(core, &book, deal);
-    if let Some((old, day)) = book.provisional.remove(&deal.id)
-        && day != today
-    {
-        book.final_usd -= old;
-        super::daily_venue::add_final(&mut book, &venues, -old);
+    let pair = super::daily_venue::of_deal(core, &book, deal);
+    // Решение 257: каждое изменение итога дня из-за сделки — начислением в её учёт (deal_book.rs).
+    match book.provisional.remove(&deal.id) {
+        Some((old, day)) if day != today => {
+            book.final_usd -= old;
+            super::daily_venue::add_final(&mut book, &pair, -old);
+            day_entry(
+                deal,
+                today,
+                DayPart::Fact,
+                -old,
+                "оценка прошлого дня снята",
+            );
+        }
+        Some((old, _)) => day_entry(deal, today, DayPart::Estimate, -old, "прежняя оценка снята"),
+        None => {}
     }
+    day_entry(deal, today, DayPart::Estimate, est.amount, "оценка позиции");
     book.provisional
         .insert(deal.id.clone(), (est.amount, today));
-    book.deal_venues.insert(deal.id.clone(), venues);
+    book.deal_pairs.insert(deal.id.clone(), pair);
     if est.priced {
         book.unpriced.remove(&deal.id);
     } else {
@@ -132,19 +149,24 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
 }
 
 /// Факт закрытой сделки: снимает её оценку (если была) и добавляет факт; разбор в другой день — коррекция в итог дня
-/// разбора. Решение 173: та же сумма — каждой площадке сделки. Принимает: сделку, факт.
+/// разбора. Решение 258: та же сумма — паре сделки (daily_venue::of_deal). Принимает: сделку, факт.
 /// Возвращает: что сработало (лимиты, Trip).
 pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Trip {
     let (today, mut book) = today_book(core);
-    let venues = super::daily_venue::of_deal(core, &book, deal);
+    let pair = super::daily_venue::of_deal(core, &book, deal);
+    // Решение 257: начисления в учёт сделки — те же суммы, что идут в книгу дня (deal_book.rs).
     let delta = match book.provisional.remove(&deal.id) {
-        Some((_, day)) if day == today => fact,
+        Some((old, day)) if day == today => {
+            day_entry(deal, today, DayPart::Estimate, -old, "оценка снята фактом");
+            fact
+        }
         Some((old, _)) => fact - old,
         None => fact,
     };
+    day_entry(deal, today, DayPart::Fact, delta, "факт");
     book.final_usd += delta;
-    super::daily_venue::add_final(&mut book, &venues, delta);
-    book.deal_venues.remove(&deal.id);
+    super::daily_venue::add_final(&mut book, &pair, delta);
+    book.deal_pairs.remove(&deal.id);
     book.unpriced.remove(&deal.id);
     deal.provisional_usd = None;
     commit(core, today, book).await

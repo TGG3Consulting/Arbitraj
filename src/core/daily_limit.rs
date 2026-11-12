@@ -1,7 +1,7 @@
 //! Файл: core/daily_limit.rs
 //! Что делает: общий лимит убытка за день всей системы (решения 53, 152, 153, 173) и общий «Сбросить лимит дня».
-//! Решение 173: обычный дневной лимит — по площадке (risk.max_daily_loss_usd, daily_venue_limit.rs: пауза только
-//! площадки-нарушителя). Полный «Стоп» всей системы по убытку — только отдельной настройкой
+//! Решение 173 / 258: обычный дневной лимит — по паре «площадка × тип направления» (risk.max_daily_loss_usd,
+//! daily_venue_limit.rs: пауза только этого направления этой биржи). Полный «Стоп» всей системы по убытку — только отдельной настройкой
 //! risk.max_daily_loss_total_usd (вся система; не задана — общего стопа по убытку нет).
 //! Убыток для общего лимита = −(итог дня − итог дня в момент общего сброса); без сброса — −итог дня (итог дня = факт
 //! закрытых сегодня сделок + оценки позиций, daily.rs). Это не «сумма минусов»: прибыльные сделки дня его уменьшают.
@@ -9,12 +9,13 @@
 //! DailyTotal, режим до него) — снимается сам с новым днём UTC (day_roll.rs), раньше — кнопкой «Старт»; человек сменил
 //! режим — отметка снята. Пересчёт внутри дня убрал превышение — остановка сама НЕ снимается, но плашка и журнал пишут
 //! «лимит сейчас не превышен».
-//! «Сбросить лимит дня» общий (решение 153): отметка времени и итога дня — всей системы и каждой площадки; паузы
-//! площадок по убытку дня снимаются; система из «Стоп» сама не запускается. По одной площадке — daily_venue_limit.rs.
+//! «Сбросить лимит дня» общий (решение 153): отметка времени и итога дня — всей системы и каждой пары; паузы пар по
+//! убытку дня снимаются; система из «Стоп» сама не запускается. По паре или площадке — daily_venue_limit.rs.
 //! Отметки — в учёте (daily_result, переживают перезапуск, новый день — теряют силу). Журнал core.loss_limit_reset,
 //! уведомление risk.daily_limit_reset.
 //! Кто вызывает: daily_commit.rs (check), risk.rs (view — snapshot), daily_venue_limit.rs (describe), api (reset).
-//! От чего зависит: daily.rs (today_book, commit), daily_venue.rs, daily_venue_limit.rs, day_view.rs, risk.rs, settings.
+//! От чего зависит: daily.rs (today_book, commit), daily_venue.rs, day_pair.rs, daily_venue_limit.rs, day_view.rs, risk.rs,
+//! settings.
 //! Настройки: risk.max_daily_loss_total_usd.
 
 use chrono::Utc;
@@ -121,8 +122,8 @@ pub fn check(core: &Core) -> (Option<String>, Option<String>) {
     out
 }
 
-/// Что делает: общий «Сбросить лимит дня»: отметка времени и итога дня — всей системы и каждой площадки, паузы
-/// площадок по убытку дня снимаются; журнал, уведомление. Принимает: ядро, кто нажал. Возвращает: текст для журнала.
+/// Что делает: общий «Сбросить лимит дня»: отметка времени и итога дня — всей системы и каждой пары, паузы пар по
+/// убытку дня снимаются; журнал, уведомление. Принимает: ядро, кто нажал. Возвращает: текст для журнала.
 pub async fn reset(core: &Core, who: &str) -> String {
     let (today, mut book) = super::daily::today_book(core);
     let base = book.final_usd + super::daily::prov_on(&book, today);
@@ -134,17 +135,17 @@ pub async fn reset(core: &Core, who: &str) -> String {
     };
     book.limit_reset = Some(mark(base));
     let mut lifted = Vec::new();
-    for (v, x) in super::daily_venue::days(core, &book, today) {
-        book.venue_resets.insert(v.clone(), mark(x.result_usd));
-        if super::daily_venue_limit::lift(core, &v) {
-            lifted.push(crate::notify::human::venue(&v));
+    for (p, x) in super::daily_venue::days(core, &book, today) {
+        book.pair_resets.insert(p.clone(), mark(x.result_usd));
+        if super::daily_venue_limit::lift(core, &p) {
+            lifted.push(super::day_pair::label(&p));
         }
     }
     let trip = super::daily::commit(core, today, book).await;
     let stopped = lk(&core.inner.risk).daily_stop;
     let lifted = lifted.join(", ");
     let text = format!(
-        "Лимит дня сброшен ({who}) в {} UTC — вся система и все площадки: итог дня в этот момент {} USDT (убыток для \
+        "Лимит дня сброшен ({who}) в {} UTC — вся система и все направления площадок: итог дня в этот момент {} USDT (убыток для \
          лимита до сброса {}). Дальше лимиты считают только изменения итога дня после отметки; итог дня, история и \
          сделки не меняются.{}{}",
         at.format("%H:%M:%S"),
@@ -153,7 +154,7 @@ pub async fn reset(core: &Core, who: &str) -> String {
         if lifted.is_empty() {
             String::new()
         } else {
-            format!(" Паузы площадок по убытку дня сняты: {lifted}.")
+            format!(" Паузы направлений по убытку дня сняты: {lifted}.")
         },
         if stopped {
             " Система остаётся в «Стоп» (остановлена по общему лимиту дня) — снимется сама с новым днём (UTC) или \
@@ -166,7 +167,7 @@ pub async fn reset(core: &Core, who: &str) -> String {
     let tg = Msg::new(INFO, "Лимит дня сброшен")
         .kv("Кто", who)
         .line(format!(
-            "Вся система и все площадки: дальше лимиты считают только убытки после {} UTC; итог дня и сделки не меняются",
+            "Вся система и все направления площадок: дальше лимиты считают только убытки после {} UTC; итог дня и сделки не меняются",
             at.format("%H:%M")
         ))
         .line(if lifted.is_empty() {

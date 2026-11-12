@@ -47,7 +47,9 @@ impl Plan {
 
     /// Возврат USDT в каждой сделке был в плане (строки стадии «возврат USDT»). Ошибок нет.
     pub fn returns(&self) -> bool {
-        self.costs.iter().any(|l| l.stage == "возврат USDT")
+        self.costs
+            .iter()
+            .any(|l| l.stage == super::costs_types::RETURN_STAGE)
     }
 }
 

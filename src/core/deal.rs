@@ -113,6 +113,12 @@ pub struct Deal {
     /// эта запись обновляется (core/manual_repeat.rs), а не ставится новая. None — продажа не с алерта.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alert_was: Option<crate::core::types::StuckAlert>,
+    /// Решение 257: статьи затрат по факту (вид и USDT; сумма = spent у сделок после решения) — core/deal_book.rs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cost_items: Vec<super::deal_book::CostItem>,
+    /// Решение 257: начисления этой сделки в итог дня бота (день UTC, факт / оценка, сумма) — core/deal_book.rs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub day_book: Vec<super::deal_book::DayEntry>,
     /// Хронология: время и что случилось — для экрана «Сделки».
     pub timeline: Vec<(DateTime<Utc>, String)>,
     /// Решение 245, дополнение п. 2 (Тигран 09.11: согласовано): момент решения о сделке — время расчёта кандидата,
@@ -158,6 +164,8 @@ impl Deal {
             usdt_return_skip: None,
             withdraw_refused: vec![],
             alert_was: None,
+            cost_items: vec![],
+            day_book: vec![],
             timeline: vec![],
             decided_at: None,
             started_at: now,

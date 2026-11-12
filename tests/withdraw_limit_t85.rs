@@ -250,14 +250,16 @@ fn limit_pause_is_human_only() {
     ap::pause_venue(&mut r, &v, "правило шлюза №4".into(), Kind::Rule, t0());
     assert_eq!(r.venue_auto[&v].kind, Kind::WithdrawLimit);
 
-    // Поверх паузы по убытку дня (без отметки) — своя отметка; новый день её не снимает.
+    // Вместе с паузой направления по убытку дня (решение 258: отдельно, Risk.pair_paused) — своя отметка; новый день
+    // снимает паузу направления, а паузу площадки по лимиту вывода — нет.
     let mut r = Risk::default();
-    r.venue_paused.insert(v.clone(), "убыток дня".into());
-    r.loss_paused.insert(v.0.clone());
+    r.pair_paused
+        .insert("binance:cex_dex".into(), "убыток дня".into());
     ap::pause_venue(&mut r, &v, "лимит".into(), Kind::WithdrawLimit, t0());
     assert_eq!(r.venue_auto[&v].kind, Kind::WithdrawLimit);
     let lift = arb::core::day_roll::new_day(&mut r);
     assert!(r.venue_paused.contains_key(&v), "{lift:?}");
+    assert!(r.pair_paused.is_empty());
 }
 
 #[test]

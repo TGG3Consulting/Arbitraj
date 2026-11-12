@@ -1,28 +1,41 @@
 //! Файл: report/mod.rs
 //! Что делает: отчёты для скачивания из интерфейса и Telegram. Решение 193 — «Итоги сделок» (arb_results_<дата>.xlsx)
-//! 1 в 1 как отчёт 05.11.2026, на сделках из учёта ядра на момент скачивания. Решение 215 — период у «Итогов сделок»
-//! (from/to по времени старта сделки; без них — за всё время, как раньше) и отчёт «Упущено» (arb_missed_<дата>.xlsx)
+//! на сделках из учёта ядра на момент скачивания. Решение 215 — период у «Итогов сделок» (from/to; без них — за всё
+//! время; решение 257 — по времени конца сделки) и отчёт «Упущено» (arb_missed_<дата>.xlsx)
 //! по данным экрана «Упущено из-за потолка»; файлы отчётов одной функцией на отчёт — для api/report.rs и кнопки
 //! «📊 Отчёты» чата «Управление» (notify/ctl/report.rs).
+//! Решение 257 — «Итоги сделок» по окну UTC: сделки, закончившиеся в окне (и остановленные, «Беру на себя» — оценкой),
+//! итог дня как у бота (начисления сделок Deal.day_book и запись бота daily_result), «По биржам» по правилу владельца,
+//! «Слепок по балансам» (запросы к площадкам в момент выгрузки) — одна функция results_file для интерфейса и Telegram.
 //! Решение 218 — отчёт пересчёта старых записей «без потолка» по окнам (recompute.rs: CSV и итоги для stdout).
 //! Решение 255 — «Сигналы и сделки» (arb_signals_<дата>[_part<K>].xlsx, sig_*.rs): сигналы-окна, сделки, тики, стаканы,
 //! ликвидность пулов; потоком (sig_stream.rs), несколько файлов, если больше предела отправки (sig_parts.rs).
-//! Решение 256 — «Сделки, лимиты и капитал» (arb_capital_<дата>[_partKofN].xlsx, cap_*.rs): все сделки периода,
-//! эпизоды «без потолка» по дням и направлениям, лист «Итоги» формулами; несколько файлов, если больше предела.
+//! Решение 256 — «Сделки, лимиты и капитал» (arb_capital_<дата>[_part<K>].xlsx, cap_*.rs): сделки окна с адресами и
+//! занятостью денег, эпизоды «без потолка» по дням и направлениям, лист «Итоги» формулами (итог = «Итоги сделок»),
+//! лимиты на момент выгрузки, слепок балансов; несколько файлов, если больше предела (каждый — сразу по сборке).
 //! Кто вызывает: api/report.rs, notify/ctl/report.rs, notify/ctl/report_sig.rs (signals_send),
 //! notify/ctl/report_cap.rs (cap_send.rs capital_send),
 //! src/bin/uncapped_recompute.rs (recompute.rs).
-//! От чего зависит: core (deals, uncapped_report), report/rows.rs, results_xlsx.rs, results_sheet.rs, missed_rows.rs,
+//! От чего зависит: core (deals, uncapped_report, bot_days, control, daily_venue, балансы), report/rows*.rs, day_rows.rs,
+//! res_*.rs, snap*.rs, results_xlsx.rs, results_sheet.rs, missed_rows.rs,
 //! missed_xlsx.rs, missed_total.rs, sig_*.rs, core/signals_src.rs, cap_*.rs.
 //! Настройки: нет (решение 256: потолки uncapped.ladder_usdt — через Core::uncapped_report).
 
+pub mod cap_addr;
 pub mod cap_capital;
+pub mod cap_deals;
 pub mod cap_episodes;
+pub mod cap_hold;
+pub mod cap_limits;
+pub mod cap_notes;
+pub mod cap_parts;
 pub mod cap_rows;
 pub mod cap_send;
 pub mod cap_sheets;
 pub mod cap_summary;
+pub mod cap_total;
 pub mod cap_xlsx;
+pub mod day_rows;
 pub mod missed_cands;
 pub mod missed_labels;
 pub mod missed_maxwin;
@@ -30,9 +43,18 @@ pub mod missed_rows;
 pub mod missed_total;
 pub mod missed_xlsx;
 pub mod recompute;
+pub mod res_days;
+pub mod res_deals;
+pub mod res_ledger;
+pub mod res_notes;
+pub mod res_summary;
+pub mod res_total;
+pub mod results;
 pub mod results_sheet;
 pub mod results_xlsx;
 pub mod rows;
+pub mod rows_text;
+pub mod rows_time;
 pub mod sig_build;
 pub mod sig_episodes;
 pub mod sig_frames;
@@ -46,31 +68,22 @@ pub mod sig_sheet;
 pub mod sig_stream;
 pub mod sig_summary;
 pub mod sig_xlsx;
+pub mod snap;
+pub mod snap_cex;
+pub mod snap_dex;
+pub mod snap_price;
+pub mod snap_sheet;
+pub mod snap_transit;
 
 use chrono::{DateTime, Utc};
 
 use crate::core::Core;
-use crate::core::deal::Deal;
 use crate::core::uncapped_report::MissedData;
+
+pub use results::{ResultsCtx, results, results_file};
 
 /// Тип файла .xlsx (Content-Type ответа и документа Telegram).
 pub const XLSX_MIME: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-/// Книга «Итоги сделок» по сделкам периода [from, to) по времени старта (None — без границы). Принимает: сделки,
-/// границы, время выгрузки. Возвращает: байты .xlsx или текст ошибки.
-pub fn results(
-    deals: &[Deal],
-    from: Option<DateTime<Utc>>,
-    to: Option<DateTime<Utc>>,
-    now: DateTime<Utc>,
-) -> Result<Vec<u8>, String> {
-    let picked: Vec<Deal> = deals
-        .iter()
-        .filter(|d| in_period(d.started_at, from, to))
-        .cloned()
-        .collect();
-    results_xlsx::workbook(&rows::rows(&picked), now).map_err(|e| format!("отчёт xlsx: {e}"))
-}
 
 /// Книга «Упущено» по данным периода. Принимает: данные (Core::uncapped_report), границы (для подписи периода),
 /// время выгрузки. Возвращает: байты .xlsx или текст ошибки.
@@ -102,20 +115,6 @@ pub fn period_text(from: Option<DateTime<Utc>>, to: Option<DateTime<Utc>>) -> St
 /// Имя файла отчёта: <префикс>_<ГГГГ-ММ-ДД>.xlsx (arb_results, arb_missed). Ошибок нет.
 pub fn file_name(prefix: &str, now: DateTime<Utc>) -> String {
     format!("{prefix}_{}.xlsx", now.format("%Y-%m-%d"))
-}
-
-/// Файл «Итоги сделок» за период — сделки учёта ядра на момент вызова, книга в spawn_blocking.
-/// Принимает: ядро, границы, время выгрузки. Возвращает: байты .xlsx. Ошибки: текст (книга не собралась).
-pub async fn results_file(
-    core: &Core,
-    from: Option<DateTime<Utc>>,
-    to: Option<DateTime<Utc>>,
-    now: DateTime<Utc>,
-) -> Result<Vec<u8>, String> {
-    let deals = core.deals();
-    tokio::task::spawn_blocking(move || results(&deals, from, to, now))
-        .await
-        .map_err(|e| format!("отчёт: задача сборки прервана: {e}"))?
 }
 
 /// Файл «Упущено» за период — данные экрана «Упущено из-за потолка», книга в spawn_blocking.

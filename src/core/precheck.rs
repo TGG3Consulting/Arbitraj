@@ -239,7 +239,7 @@ async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, Strin
     // упадёт с InsufficientBalance и монета застрянет. A — покупка и перевод, B — продажа и возврат USDT.
     for (v, stages) in [
         (&d.buy_on, ["A", "перевод"]),
-        (&d.sell_on, ["B", "возврат USDT"]),
+        (&d.sell_on, ["B", super::costs_types::RETURN_STAGE]),
     ] {
         if super::trade_ops::kind(core, v)? != VenueKind::Dex {
             continue;

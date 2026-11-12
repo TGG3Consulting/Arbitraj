@@ -100,6 +100,10 @@ pub enum VenueRole {
     /// Площадка — получатель перевода (решение 118): значение относится к зачислению «на эту площадку».
     /// Интерфейс подписывает его как зачисление.
     TransferTarget,
+    /// Решение 258: значение площадки — для пар «площадка × тип направления» этой площадки (у биржи — все три её
+    /// направления, у DEX — «DEX ↔ DEX»): второй шаг чтения после значения пары (core/day_pair.rs). Интерфейс в рубрике
+    /// пары показывает значение этой биржи, а не площадки покупки.
+    PairVenue,
 }
 
 /// Описание одной настройки.
@@ -156,6 +160,15 @@ impl SettingDef {
     pub const fn transfer_target(self) -> Self {
         SettingDef {
             venue_role: VenueRole::TransferTarget,
+            ..self
+        }
+    }
+
+    /// Решение 258: значение площадки относится к парам этой площадки (VenueRole::PairVenue). Возвращает: описание с
+    /// пометкой.
+    pub const fn pair_venue(self) -> Self {
+        SettingDef {
+            venue_role: VenueRole::PairVenue,
             ..self
         }
     }

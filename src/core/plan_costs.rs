@@ -65,7 +65,7 @@ impl PlanCosts {
         PlanCosts {
             sent_plan: arrive + in_coin,
             transfer,
-            returns: stage("возврат USDT"),
+            returns: stage(super::costs_types::RETURN_STAGE),
             prices,
         }
     }

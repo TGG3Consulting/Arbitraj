@@ -6,7 +6,7 @@
 //! Решение 251: монета, путь и где сейчас — карточкой сделки (deal_card.rs), суммы — блоком «Цифры» (notify/alert.rs).
 //! Логику не меняет — только то, что видит человек в Telegram и на экранах.
 //! Кто вызывает: ledger.rs (deal.closed), ledger_load.rs, manual_feed.rs, другие места с текстом сделки.
-//! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), deal_return_cost.rs, notify/human.rs (формат чисел, Msg).
+//! От чего зависит: deal.rs, deal_ceiling.rs (строки «без потолка»), deal_return_cost.rs, day_pair.rs (подпись пары), notify/human.rs (формат чисел, Msg).
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -156,20 +156,22 @@ pub fn daily_stop(stop: &str) -> String {
         .render()
 }
 
-/// Решение 173: пауза одной площадки по её дневному лимиту (risk.venue_daily_loss). Принимает: id площадки, причину
-/// паузы из daily_venue_limit.rs («MEXC: убыток за день … больше лимита …»).
-/// cycles — это DEX: на паузе только циклы DEX ↔ DEX, направления бирж с DEX торгуют.
-pub fn venue_daily_stop(venue: &str, why: &str, cycles: bool) -> String {
-    let v = h::venue(venue);
+/// Решение 258 (было — пауза площадки, решение 173): пауза одного направления одной биржи по дневному лимиту пары
+/// (risk.venue_daily_loss). Принимает: id пары (day_pair.rs), причину паузы из daily_venue_limit.rs («DEX → MEXC:
+/// убыток за день … больше лимита …»). «DEX ↔ DEX» — на паузе только циклы, направления бирж с DEX торгуют.
+pub fn pair_daily_stop(pair: &str, why: &str) -> String {
+    let l = super::day_pair::label(pair);
+    let cycles =
+        super::day_pair::kind_of(pair) == Some(crate::settings::venue_dir::DirKind::DexDex);
     let (head, rest) = if cycles {
         (
-            format!("Циклы {v} ↔ {v} на паузе: дневной лимит убытка"),
-            "Биржи ↔ DEX и остальные площадки торгуют; идущие сделки доводятся",
+            "Циклы DEX ↔ DEX на паузе: дневной лимит убытка".to_string(),
+            "Биржи ↔ DEX и остальные направления торгуют; идущие сделки доводятся",
         )
     } else {
         (
-            format!("Торговля на {v} на паузе: дневной лимит убытка"),
-            "Остальные площадки торгуют; идущие сделки доводятся",
+            format!("Направление {l} на паузе: дневной лимит убытка"),
+            "Другие направления этой биржи и остальные площадки торгуют; идущие сделки доводятся",
         )
     };
     Msg::new(h::STOP, head)
@@ -177,7 +179,7 @@ pub fn venue_daily_stop(venue: &str, why: &str, cycles: bool) -> String {
         .line(rest)
         .line("Снимется сама с новым днём (UTC)")
         .todo(format!(
-            "разобрать сделки {v} на экране «Ручное управление», затем «Снять паузу» или «Сбросить лимит дня» по {v}"
+            "разобрать сделки на экране «Ручное управление», затем «Снять паузу» или «Сбросить лимит дня» по {l}"
         ))
         .render()
 }

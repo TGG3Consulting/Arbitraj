@@ -63,7 +63,7 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
         d.provisional_usd,
         super::menu_day::limit_line(r)
     ));
-    // Решение 173: итог дня и лимит по площадкам.
+    // Решение 258: итог дня и лимит по парам «площадка × тип направления».
     for line in super::menu_day::venue_lines(r) {
         t.push_str(&format!("\n{line}"));
     }
@@ -76,8 +76,16 @@ pub fn state(r: &Risk, manual: usize) -> (String, Value) {
             super::human::venue(&v.0)
         ));
     }
-    for why in r.cycle_paused.values() {
-        t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+    // Решение 258: паузы направлений по убытку дня (пары «площадка × тип направления»; «DEX ↔ DEX» — циклы).
+    for (p, why) in &r.pair_paused {
+        if crate::core::day_pair::venue_of(p).is_none() {
+            t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+        } else {
+            t.push_str(&format!(
+                "\nНаправление {} на паузе: {why}",
+                crate::core::day_pair::label(p)
+            ));
+        }
     }
     for p in r.wallet_paused.values() {
         t.push_str(&format!("\n{}", super::menu_press::wallet_line(p)));

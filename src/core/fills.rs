@@ -7,7 +7,7 @@
 //! Решение 236, дополнение п. 8: газ обмена DEX (TradeResult.chain есть) — вид Gas, всегда в затраты, и у сделки с BNB
 //! (решение 62, как в плане costs.rs); комиссия биржи в монете сделки — в количество, как раньше.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: deal.rs, convert.rs, settings.
+//! От чего зависит: deal.rs, convert.rs, settings, deal_book.rs (статьи затрат, решение 257).
 //! Настройки: venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -71,7 +71,8 @@ async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, price: Decimal, c
         return;
     }
     match usdt(core, venue, &coin, price, &c).await {
-        Ok(u) => deal.spent += u,
+        // Решение 257: статья затрат — с видом затраты.
+        Ok(u) => super::deal_book::spend(deal, c.kind, u),
         Err(e) => {
             let t = format!(
                 "{}: затрата {} {} не переведена в USDT ({e}) — итог сделки без неё",
@@ -125,7 +126,7 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
     for f in &r.fees {
         // Стоимость в USDT задана документацией площадки (Fee.usd: баллы HTX, рынка нет) — в затраты как есть.
         if let Some(u) = f.usd {
-            deal.spent += u;
+            super::deal_book::spend(deal, fee_kind(r), u);
             continue;
         }
         let fee = Cost::new(fee_kind(r), f.amount, f.asset.clone(), false);

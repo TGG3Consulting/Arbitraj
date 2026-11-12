@@ -163,7 +163,7 @@ pub async fn evaluate_capped<S: Source>(
         let rc = stage(|| format!("стоимость возврата USDT {}", d.sell_on.0), ret).await?;
         lines.extend(
             rc.into_iter()
-                .map(|c| (convert::usdt_return(c), "возврат USDT")),
+                .map(|c| (convert::usdt_return(c), super::costs_types::RETURN_STAGE)),
         );
     }
     // Запас r = k·σ·√T от выручки (ТЗ, шаг 4); решение 240 — не меньше доли закрытия разницы (reserve.rs).

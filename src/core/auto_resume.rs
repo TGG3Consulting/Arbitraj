@@ -6,16 +6,18 @@
 //! - паузу площадки по правилу шлюза «стоп площадка» (Kind::Rule) — на каждом круге;
 //! - «Стоп» системы по правилу «стоп всё» (ModeKind::Rule) — проверяется площадка, чья ошибка вызвала стоп; режим до
 //!   стопа возвращается.
-//!   Не трогает: паузы без отметки (человек, другой модуль), «исход неизвестен» (только человек), паузы по убытку дня
-//!   (day_roll.rs). Отметка сменилась за время проверки (человек снял / поставили сильнее) — ничего не делает.
-//!   Страховка лимита дня: у биржи убыток дня больше её лимита — вместо снятия пауза становится паузой по убытку дня
-//!   (снимется с новым днём); общий лимит превышен — «Стоп» становится «Стоп» по лимиту дня.
+//!   Не трогает: паузы без отметки (человек, другой модуль), «исход неизвестен» (только человек), паузы пар по убытку
+//!   дня (Risk.pair_paused — снимет day_roll.rs). Отметка сменилась за время проверки (человек снял / поставили сильнее)
+//!   — ничего не делает. Решение 258: пауза по убытку дня — по паре и отдельно от паузы площадки (её ставит проверка
+//!   лимитов независимо от пауз площадки), поэтому снятие паузы площадки направления с превышенным лимитом не открывает:
+//!   их пауза остаётся, остальные направления площадки торгуют (прежнее превращение паузы площадки в паузу по убытку
+//!   убрано). Общий лимит превышен — «Стоп» становится «Стоп» по лимиту дня.
 //!   Журнал core.control (снято) и core.auto_resume (проверка не прошла — один раз на смену причины), уведомление
 //!   risk.auto_resumed. Не задана risk.auto_resume_check_s — автоснятия нет (одна запись core.not_configured).
 //!
 //! Кто вызывает: engine.rs (фоновая задача run).
 //! От чего зависит: auto_pause.rs, risk.rs, wait.rs (Pacer), gateway (registry, check_connection), daily_limit.rs,
-//! daily_venue_limit.rs, daily_venue.rs, deal_text.rs, deps.rs.
+//! deal_text.rs, deps.rs.
 //! Настройки: risk.auto_resume_check_s, risk.errors_resume_after_s (вся система, можно по площадке).
 
 use std::collections::HashMap;
@@ -117,43 +119,22 @@ async fn failed(core: &Core, v: &VenueId, e: &str, last: &mut HashMap<VenueId, S
         .await;
 }
 
-/// «Подключено» — снять паузу площадки (или превратить в паузу по убытку дня, если её лимит дня превышен).
+/// «Подключено» — снять паузу площадки. Паузы её пар по убытку дня (Risk.pair_paused) не трогает (решение 258).
 /// Принимает: ядро, площадку, отметку на момент проверки, подробности проверки. Ошибок нет.
 async fn venue(core: &Core, v: &VenueId, m: &VenueMark, details: &str) {
-    let over = loss_over(core, v);
     let (why, done) = {
         let mut r = lk(&core.inner.risk);
         let why = r.venue_paused.get(v).cloned().unwrap_or_default();
         if r.venue_auto.get(v) != Some(m) {
             return;
         }
-        let done = match &over {
-            Some((text, loss)) => {
-                r.venue_auto.remove(v);
-                r.venue_paused.insert(v.clone(), text.clone());
-                r.loss_paused.insert(v.0.clone());
-                r.loss_seen.insert(v.0.clone(), *loss);
-                false
-            }
-            None => ap::lift_venue(&mut r, v, m),
-        };
-        (why, done)
+        (why, ap::lift_venue(&mut r, v, m))
     };
     super::risk::publish(core);
-    let deps = &core.inner.deps;
-    if let Some((text, _)) = over {
-        let t = format!(
-            "{text} — пауза ({why}) не снята, а стала паузой по убытку дня: снимется с новым днём (UTC)"
-        );
-        deps.log(Level::Warn, "core.venue_daily_loss", Some(&v.0), &t, None)
-            .await;
-        let tg = super::deal_text::venue_daily_stop(&v.0, &text, false);
-        deps.notify("risk.venue_daily_loss", Some(&v.0), &tg).await;
-        return;
-    }
     if !done {
         return;
     }
+    let deps = &core.inner.deps;
     let t = format!(
         "Пауза площадки {} снята автоматически: её поставил бот ({:?}: {why}), проверка подключения — Подключено \
          ({details}) (решение 225)",
@@ -167,27 +148,6 @@ async fn venue(core: &Core, v: &VenueId, m: &VenueMark, details: &str) {
         .line("Бот сам проверил подключение — «Подключено», пауза снята")
         .render();
     deps.notify("risk.auto_resumed", Some(&v.0), &tg).await;
-}
-
-/// Убыток дня биржи больше её лимита — (текст, убыток). DEX — None (его лимит — пауза только циклов). Ошибок нет.
-fn loss_over(core: &Core, v: &VenueId) -> Option<(String, rust_decimal::Decimal)> {
-    if super::daily_venue::is_dex(core, &v.0) {
-        return None;
-    }
-    let (x, date) = {
-        let r = lk(&core.inner.risk);
-        (r.day.venues.get(&v.0).cloned()?, r.day.date)
-    };
-    let l = super::daily_venue_limit::view(core, &v.0, &x, date)?;
-    l.exceeded.then(|| {
-        let t = format!(
-            "{}: убыток за день {} больше лимита {}",
-            super::daily_venue::label(core, &v.0),
-            h::usd(l.loss_usd),
-            h::usd(l.max_usd)
-        );
-        (t, l.loss_usd)
-    })
 }
 
 /// «Подключено» у площадки «стоп всё» — вернуть режим до стопа (общий лимит дня превышен — «Стоп» становится «Стоп»

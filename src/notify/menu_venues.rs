@@ -1,10 +1,11 @@
 //! Файл: notify/menu_venues.rs
-//! Что делает: экран «Площадки и карантин» меню /menu (решение 157) — паузы площадок, циклов DEX ↔ DEX, кошельков DEX
+//! Что делает: экран «Площадки и карантин» меню /menu (решение 157) — паузы площадок, направлений по убытку дня
+//! (решение 258: пара «площадка × тип направления», «DEX ↔ DEX» — циклы), кошельков DEX
 //! (решение 230) и карантины монет с кнопками снятия — как на плашке режима. Вынесен из notify/menu.rs (ориентир
 //! 200 строк); пути menu::venues / menu::venue_buttons сохранены переэкспортом. Площадка подписана человеческим
 //! именем (notify/human.rs venue()), как в строке паузы кошелька и остальных экранах Telegram.
 //! Кто вызывает: notify/menu.rs (переэкспорт) → notify/menu_press.rs («m:ven»), notify/ctl/screens.rs («Состояние»).
-//! От чего зависит: core/risk.rs (Risk), notify/menu.rs (кнопка, «Назад»), notify/menu_press.rs (строка кошелька,
+//! От чего зависит: core/risk.rs (Risk), core/day_pair.rs (подпись пары), notify/menu.rs (кнопка, «Назад»), notify/menu_press.rs (строка кошелька,
 //! карантин), notify/human.rs (имя площадки).
 //! Настройки: нет.
 
@@ -21,7 +22,7 @@ pub fn venues(r: &Risk) -> (String, Value) {
     (t, with_back(rows))
 }
 
-/// Текст и кнопки снятия пауз площадок, циклов, кошельков DEX и карантина (решение 176: и «Состояние» чата «Управление»).
+/// Текст и кнопки снятия пауз площадок, направлений (пар), кошельков DEX и карантина (решение 176: и «Состояние» чата «Управление»).
 /// Принимает: Risk. Возвращает: (текст, кнопки «c:vr.…», «c:wr.…», «c:qr.…»). Ошибок нет.
 pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
     let mut t = String::from("Площадки и карантин");
@@ -36,10 +37,16 @@ pub fn venue_buttons(r: &Risk) -> (String, Vec<Value>) {
             &format!("c:vr.{}", v.0),
         ));
     }
-    // Решение 173: пауза только циклов DEX ↔ DEX по убытку дня DEX.
-    for (v, why) in &r.cycle_paused {
-        t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
-        rows.push(b("Снять паузу циклов DEX ↔ DEX", &format!("c:vr.{v}")));
+    // Решение 258: пауза одного направления одной биржи по убытку дня (у «DEX ↔ DEX» — только циклы).
+    for (p, why) in &r.pair_paused {
+        let l = crate::core::day_pair::label(p);
+        if crate::core::day_pair::venue_of(p).is_none() {
+            t.push_str(&format!("\nЦиклы DEX ↔ DEX на паузе: {why}"));
+            rows.push(b("Снять паузу циклов DEX ↔ DEX", &format!("c:vr.{p}")));
+        } else {
+            t.push_str(&format!("\nНаправление {l} на паузе: {why}"));
+            rows.push(b(&format!("Снять паузу {l}"), &format!("c:vr.{p}")));
+        }
     }
     // Решение 230: пауза кошелька DEX от сверки — та же команда ядра, что «Снять паузу» на плашке (resume_wallet).
     for (id, p) in &r.wallet_paused {

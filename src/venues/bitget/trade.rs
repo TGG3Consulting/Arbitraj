@@ -26,6 +26,17 @@ use super::{num, order_rules, order_state, rest};
 /// OutcomeUnknown — ордер мог быть принят, итог не получен (решение 64).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = order_rules::ready(ctx, symbols, &req).await?;
+    place(ctx, req, p).await
+}
+
+/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
+/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
+/// Возвращает и ошибки: как trade.
+pub(super) async fn place(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: order_rules::Prepared,
+) -> GatewayResult<TradeResult> {
     let path = "/api/v2/spot/trade/place-order";
     let placed = rest::signed(ctx, Method::POST, path, vec![], Some(p.body), Op::Trade).await;
     let placed = placed.and_then(|r| {

@@ -34,7 +34,7 @@ const TYPES_ALLOWED: [&str; 2] = ["ioc", "fok"];
 /// Режим торговли без маржи — «cash» (tdMode). Решение 264: по офдоке (Place order, примечание о режимах счёта) «Spot
 /// mode: SPOT … cash», а в Multi-currency / Portfolio margin спот ставится с cross; бот требует Spot mode (acctLv 1 —
 /// «Проверить подключение», account.rs). Перед каждым ордером acctLv не проверяется — вопрос Тиграну, docs/TASKS.md.
-const TD_MODE: &str = "cash";
+pub(super) const TD_MODE: &str = "cash";
 
 /// Ордер, прошедший правила: что уйдёт на биржу.
 #[derive(Debug, Clone)]

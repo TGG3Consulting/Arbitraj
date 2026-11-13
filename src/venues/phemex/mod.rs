@@ -25,6 +25,7 @@ pub mod fund_move;
 pub mod history;
 pub mod local_book;
 pub mod market;
+pub mod market_sell;
 pub mod networks_crawl;
 pub mod networks_parse;
 pub mod num;
@@ -170,6 +171,12 @@ impl Venue for Phemex {
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, req).await
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (PUT /spot/orders/create, ordType Market).
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        market_sell::sell(&self.ctx, &self.symbols, req).await
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready); пробного ордера у Phemex нет.

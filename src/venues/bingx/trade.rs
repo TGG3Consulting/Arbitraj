@@ -38,6 +38,17 @@ pub use super::order_rules::round;
 /// «чем найти» — решение 231).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = order_rules::ready(ctx, symbols, &req)?;
+    place(ctx, req, p).await
+}
+
+/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
+/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
+/// Возвращает и ошибки: как trade.
+pub(super) async fn place(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: order_rules::Prepared,
+) -> GatewayResult<TradeResult> {
     // Нет ответа на постановку — OutcomeUnknown (rest.rs, решение 64): ядро не повторяет. Решение 231: свой ID у каждой
     // постановки свой (решение 114) — ошибка несёт «чем найти» (newClientOrderId), и ядро ищет ордер само
     // (resolve.rs, Query Order details по clientOrderID); сразу здесь не ищем.

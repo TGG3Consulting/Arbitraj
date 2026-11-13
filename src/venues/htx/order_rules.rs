@@ -31,7 +31,7 @@ use super::symbols::{SymbolRules, Symbols};
 /// Предел длины client-order-id ордера — «maximum 64 characters».
 pub const MAX_ORDER_CID: usize = 64;
 /// Источник ордера — значение source документации («spot-api», по умолчанию).
-const SOURCE: &str = "spot-api";
+pub(super) const SOURCE: &str = "spot-api";
 
 /// Ордер, прошедший правила: что уйдёт на биржу.
 #[derive(Debug, Clone)]

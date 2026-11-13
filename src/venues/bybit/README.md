@@ -48,6 +48,7 @@
 | `all_balances.rs`, `all_balances_parse.rs` | Решение 144: панель «Балансы» — UNIFIED (wallet-balance), FUND (query-account-coins-balance), прочие счета (asset-overview: Earn, боты, копитрейдинг, займы…), параллельно, только чтение |
 | `order_rules.rs` | Правила ордера — одни у ордера и check_order; предел цены price-limit (venue.price_limit_check) |
 | `trade.rs`, `order_state.rs`, `fills.rs` | Limit + IOC/FOK, ожидание итога (поток или REST), отмена по сроку, комиссия и её монета |
+| `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs` → `place`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `user_stream.rs`, `user_stream_conn.rs`, `private_cache.rs` | Приватный поток order.spot, execution.spot, wallet (venue.private_stream) |
 | `tap.rs`, `feed.rs` | Окна (решение 125): кадры стакана, publicTrade, стакан окна `orderbook.{venue.window_depth_limit}` |
 

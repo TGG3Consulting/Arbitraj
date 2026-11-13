@@ -36,6 +36,17 @@ use super::{num, order_rules, order_state, rest};
 /// получен (решение 64) — с «чем найти» (свой ID, ID ордера, если был; решение 231).
 pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = order_rules::ready(ctx, symbols, &req).await?;
+    place(ctx, req, p).await
+}
+
+/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
+/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
+/// Возвращает и ошибки: как trade.
+pub(super) async fn place(
+    ctx: &Ctx,
+    req: TradeRequest,
+    p: order_rules::Prepared,
+) -> GatewayResult<TradeResult> {
     let placed = rest::signed(ctx, Method::POST, "/api/v3/order", p.params, Op::Trade).await;
     // Решение 118, А-🟠3: HTTP успешен, а orderId нет — итог неизвестен (не обычный сбой: повтор дал бы второй ордер).
     let placed = placed.and_then(|r| {

@@ -29,6 +29,7 @@ pub mod fees;
 pub mod gt_balance;
 pub mod key_info;
 pub mod market;
+pub mod market_sell;
 pub mod networks_parse;
 pub mod num;
 pub mod order_rules;
@@ -178,6 +179,12 @@ impl Venue for Gate {
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, req).await
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (POST /spot/orders, type market).
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        market_sell::sell(&self.ctx, &self.symbols, req).await
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready). Пробного ордера у Gate нет.

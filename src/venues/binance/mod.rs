@@ -28,6 +28,7 @@ pub mod fills;
 pub mod fund_move;
 pub mod key_check;
 pub mod market;
+pub mod market_sell;
 pub mod networks_parse;
 pub mod num;
 pub mod order_rules;
@@ -176,6 +177,22 @@ impl Venue for Binance {
         let r = trade::trade(&self.ctx, &self.symbols, req).await;
         // Решение 253, дополнение t89: своя сделка (покупка ИЛИ продажа) — начало окна «ещё не доступна для вывода»
         // (transfers.rs) и паузы ядра venue.withdraw_min_delay_ms — по монете сделки и котируемой монете (выручка USDT).
+        if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
+            withdraw_ready::traded(&ticker, sent);
+            if let Ok(q) = self.ctx.text("venue.quote_asset") {
+                withdraw_ready::traded(&q, sent);
+            }
+        }
+        r
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (POST /api/v3/order, type MARKET). Отметка своей сделки для
+    /// вывода (t89) — как у trade.
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        let ticker = req.asset.ticker.clone();
+        let sent = tokio::time::Instant::now();
+        let r = market_sell::sell(&self.ctx, &self.symbols, req).await;
         if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {
             withdraw_ready::traded(&ticker, sent);
             if let Ok(q) = self.ctx.text("venue.quote_asset") {

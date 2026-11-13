@@ -24,6 +24,7 @@ pub mod depth;
 pub mod errors;
 pub mod fees;
 pub mod market;
+pub mod market_sell;
 pub mod networks_parse;
 pub mod num;
 pub mod order_fee;
@@ -172,6 +173,12 @@ impl Venue for Htx {
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, &self.spot, req).await
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (POST /v1/order/orders/place, type sell-market).
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        market_sell::sell(&self.ctx, &self.symbols, &self.spot, req).await
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready); пробного ордера у HTX нет.

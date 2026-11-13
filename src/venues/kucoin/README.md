@@ -62,6 +62,7 @@
 | `all_balances.rs`, `all_balances_parse.rs` | Панель «Балансы» (решение 144, только чтение): Спот, Фонд (main), Фьючерсы (`/api/v1/account-overview-all` на `venue.futures_rest_url`, монеты `venue.futures_balance_currencies`), Маржа кросс и изолированная (`queryType=ALL`), Опционы, Earn — параллельно, сбой счёта — в его error |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробный `POST /api/v1/hf/orders/test` (`venue.order_test_first`) |
 | `trade.rs`, `order_state.rs` | Ордер `POST /api/v1/hf/orders/sync` limit + IOC/FOK, итог по orderId (dealSize, dealFunds, fee, feeCurrency), отмена остатка, поиск по clientOid |
+| `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs` → `place`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `bullet.rs` | Токен WebSocket (bullet-public / bullet-private): адрес, pingInterval, pingTimeout из ответа |
 | `depth.rs` | Разбор кадров WS: welcome, pong, ack, error, снимок level2Depth5/50 |
 | `ws.rs`, `ws_conn.rs`, `book.rs` | Соединения стаканов (темы по 100 символов, ≤ 400 тем), ping, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка темы пары (`unsubscribe` + `subscribe`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |

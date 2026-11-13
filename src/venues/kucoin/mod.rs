@@ -30,6 +30,7 @@ pub mod feed;
 pub mod fees;
 pub mod fund_move;
 pub mod market;
+pub mod market_sell;
 pub mod networks_parse;
 pub mod num;
 pub mod order_rules;
@@ -177,6 +178,12 @@ impl Venue for Kucoin {
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         trade::trade(&self.ctx, &self.symbols, req).await
+    }
+
+    /// Решение 268: рыночная продажа — market_sell.rs (POST /api/v1/hf/orders/sync, type market).
+    async fn trade_market_sell(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        market_sell::sell(&self.ctx, &self.symbols, req).await
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер, если включён.

@@ -24,6 +24,10 @@
 //! Решение 141: покупка исполнилась — фоновый расчёт «без потолка» с id сделки (uncapped_entry.rs; путь не ждёт).
 //! Решение 147: отказ на входе (NotTradable, Busy) несёт точную причину (start_reason.rs) — в «Кандидаты» и журнал.
 //! Решение 245, дополнение п. 2: момент решения (Calc.at прошедшего кандидата) — в учёт сделки (Deal::decided_at).
+//! Решение 265: «Время по шагам» в хронологию сделки (step_timing.rs): от расчёта кандидата и от передачи исполнителю
+//! до старта задачи, лимит выводов, маппинг, предпроверка, открытие сделки; шаги предпроверки и этапы пересчёта
+//! (precheck.rs); свободный баланс, подбор под остаток (со своими этапами), снимок рынка, ордер покупки целиком и
+//! каждый его HTTP-запрос (замер снаружи вызова шлюза — gateway/step_meter.rs), газ, учёт исполнения.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
@@ -36,6 +40,8 @@ use crate::storage::journal::Level;
 use super::costs::Calc;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk, rd};
+use super::step_timing::Steps;
+use std::time::Instant;
 
 /// Что вышло на входе исполнителя.
 #[derive(Debug, Clone, PartialEq)]
@@ -81,8 +87,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     let core = core.clone();
     // Решение 245, дополнение п. 2: момент решения — время расчёта кандидата, прошедшего пороги (Calc.at).
     let decided = calc.at;
+    // Решение 265: от передачи исполнителю до старта задачи сделки — шаг «Время по шагам (исполнение до покупки)».
+    let handed = Instant::now();
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
-        run(&core, d.clone(), decided).await;
+        run(&core, d.clone(), decided, handed).await;
         lk(&core.inner.active).remove(&key);
     }));
     Start::Started
@@ -99,19 +107,37 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
 }
 
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты. Принимает: ядро, направление, момент решения
-/// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2).
-async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) {
+/// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2), момент передачи исполнителю
+/// (решение 265: время по шагам).
+async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>, handed: Instant) {
     let deps = &core.inner.deps;
+    // Решение 265: «Время по шагам» от положительного расчёта до исполненной покупки (step_timing.rs).
+    let mut ts = Steps::default();
+    let since = chrono::Utc::now() - decided;
+    ts.add(
+        "от расчёта кандидата до старта исполнителя",
+        since.num_milliseconds().into(),
+    );
+    ts.mark("от передачи исполнителю до старта задачи", handed);
     // Решение 132: счёт DEX сделки — по маппингу сейчас; нет строки — сделки нет (биржа без кошелька с DEX не торгует).
     let pre = async {
         // Решение 180: лимит выводов биржи A — место занимается в момент решения; окно занято — сигнал пропускается.
         // Решение 211: ключ лимита «биржа и монета» — тикер этой биржи (так же, как в transfers.rs take).
+        let at = Instant::now();
         let on = super::venue_ticker::ticker_on(core, &d.asset, &d.buy_on);
         let slot = super::withdraw_limit::reserve(core, &d.buy_on, &on)?;
+        ts.mark("место в лимите выводов", at);
+        let at = Instant::now();
         let acc = super::dex_account::of_direction(deps, &d).await?;
+        ts.mark("кошелёк DEX по маппингу", at);
+        let at = Instant::now();
         let plan = super::precheck::run(core, &d).await?;
+        ts.mark("предпроверка", at);
         // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.
-        if super::dex_account::of_direction(deps, &d).await? != acc {
+        let at = Instant::now();
+        let same = super::dex_account::of_direction(deps, &d).await? == acc;
+        ts.mark("маппинг повторно", at);
+        if !same {
             return Err("маппинг кошельков изменился во время предпроверки".to_string());
         }
         Ok((acc, plan, slot))
@@ -147,6 +173,8 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         }
     };
     // Решение 141: составляющие бюджета — до открытия сделки (своя сделка ещё не в учёте лимитов).
+    let at = Instant::now();
+    let (plan, lines) = plan;
     let parts = super::limits_parts::parts(core, &d, &super::dry::Mode::Live).ok();
     // Решение 118 (Я-17): ID сделки выдаётся и занимается в учёте под одним замком — повтор невозможен.
     let mut deal = super::ledger::open(
@@ -174,6 +202,11 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));
     }
     super::ledger::save(core, &deal).await;
+    ts.mark("открытие сделки в учёте", at);
+    // Решение 265: время шагов предпроверки и этапов пересчёта — в хронологию.
+    for l in lines {
+        deal.note(l);
+    }
     // Решение 66: покупка только с бюджетом подбора объёма — без него предела списания нет, сделки нет.
     let Some(budget) = plan.size.as_ref().map(|s| s.budget) else {
         let why = "в плане нет подбора объёма (бюджета) — покупка без предела списания не ставится";
@@ -185,7 +218,10 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
     }
     // Решение 94: свободный баланс A — один запрос прямо перед ордером (не на каждый расчёт); предел списания —
     // меньшее из бюджета плана и свободного. Не хватает на объём плана — объём заново под остаток (решение 103).
-    let cap = match super::limits::buy_cap(core, &d, budget, deal.dex_account.as_ref()).await {
+    let at = Instant::now();
+    let free = super::limits::buy_cap(core, &d, budget, deal.dex_account.as_ref()).await;
+    ts.mark(format!("свободный баланс {}", d.buy_on.0), at);
+    let cap = match free {
         Ok((cap, free, q)) => {
             deal.note(format!(
                 "Перед покупкой свободно на {}: {free} {q}; предел списания {cap}",
@@ -195,13 +231,19 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         }
         Err(why) => {
             let why = format!("перед покупкой: {why} — ордер не ставился");
+            deal.note(ts.text("исполнение до покупки"));
             return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
         }
     };
     // Решение 103: свободного меньше списания плана — объём подбирается заново под свободный остаток (все затраты,
     // финальная котировка, пороги). Не выгодно — отказ до ордера.
     let plan = if super::refit::needed(&plan, cap) {
-        match super::refit::plan(core, &d, cap).await {
+        // Решение 265: подбор под остаток — шаг и свои этапы пересчёта.
+        let at = Instant::now();
+        let (r, m) = super::step_timing::measure(Box::pin(super::refit::plan(core, &d, cap))).await;
+        ts.mark("подбор объёма под свободный остаток", at);
+        deal.note(m.calc_text("подбор объёма под свободный остаток"));
+        match r {
             Ok(p) => {
                 deal.note(format!(
                     "Объём под свободный остаток {cap}: {} вместо {}, прибыль {} USDT (было {})",
@@ -219,6 +261,7 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
                 let why = format!(
                     "на свободный остаток {cap} сделка невыгодна: {why} — ордер не ставился"
                 );
+                deal.note(ts.text("исполнение до покупки"));
                 return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
             }
         }
@@ -226,7 +269,9 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         plan
     };
     // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
+    let at = Instant::now();
     let frozen = super::uncapped_entry::freeze(core, &plan).await;
+    ts.mark("снимок рынка момента решения", at);
     // Покупка на A. Решение 262 (ТЗ «Покупка на A»): у биржи лимит IOC — худший уровень стакана плана (после refit —
     // нового плана), не текущий стакан; у DEX — как раньше (trade_ops.rs).
     if super::trade_ops::kind(core, &d.buy_on) == Ok(crate::gateway::contract::VenueKind::Cex) {
@@ -236,7 +281,9 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         ));
     }
     let mut gas = Vec::new();
-    let bought = super::trade_ops::trade(
+    let at = Instant::now();
+    // Будущее ордера — в куче (как в precheck.rs: обёртки замера не копируют его на стек).
+    let (bought, order) = super::step_timing::measure(Box::pin(super::trade_ops::trade(
         core,
         &deal.id,
         &d.buy_on,
@@ -249,10 +296,16 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
         // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
         Some(plan.order_cap(cap)),
         Some(&mut gas),
-    )
+    )))
     .await;
+    ts.mark(format!("ордер покупки {}", d.buy_on.0), at);
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки (и при отказе покупки).
+    let at = Instant::now();
     super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
+    ts.mark("газ попыток в затраты сделки", at);
+    // Решение 265: шаги до покупки и каждый запрос ордера (пробный, ордер, опросы статуса, сделки и комиссия).
+    deal.note(ts.text("исполнение до покупки"));
+    deal.note(order.reqs_text(&format!("ордер покупки {}", d.buy_on.0)));
     let r = match bought {
         Ok(r) => r,
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,
@@ -266,7 +319,11 @@ async fn run(core: &Core, d: Direction, decided: chrono::DateTime<chrono::Utc>) 
             .await;
         }
     };
+    let at = Instant::now();
     super::fills::trade(core, &mut deal, &r).await;
+    let mut after = Steps::default();
+    after.mark("учёт исполнения покупки (комиссии в затраты)", at);
+    deal.note(after.text("после покупки"));
     deal.buy = Some(r.clone());
     // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт); решение 217 — по снимку.
     super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts, frozen);

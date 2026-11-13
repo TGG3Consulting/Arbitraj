@@ -4,7 +4,8 @@
 //! записанные CAKE: asks BingX, пул V2); тот же расчёт без сухого режима проходит этот замок и останавливается дальше
 //! («направление не торгуемо» — площадок в реестре нет), то есть отказ в сухом режиме дал именно он; режим читается на
 //! лету; dry.enabled не задана — обычный режим; включён без dry.budget_usdt — бюджета нет, причина названа; ссылки
-//! карточки по шаблонам из настроек (пара — по площадке, пул — по DEX).
+//! карточки по шаблонам из настроек (пара — по площадке, пул — по DEX); решение 265 — у пересчёта и предпроверки есть
+//! строка «Время по шагам» с названиями шагов.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, tests/size_common. Моков нет: площадок в
 //! реестре нет, проверяется решение ядра.
@@ -230,9 +231,29 @@ async fn precheck_replans_live() {
     };
     let dry_reason = reason(profit::decide(&core, &dir, &dry::mode(&s)).await);
     assert!(dry_reason.contains("dry.budget_usdt"), "{dry_reason}");
-    let live_reason = reason(precheck::replan(&core, &dir).await);
+    // Будущее большое (отладочная сборка) — в кучу, иначе стек потока теста переполняется.
+    let (v, m) = Box::pin(arb::core::step_timing::measure(precheck::replan(
+        &core, &dir,
+    )))
+    .await;
+    let live_reason = reason(v);
     assert!(
         !live_reason.contains("dry"),
         "пересчёт сделки — режим Live: {live_reason}"
+    );
+    // Решение 265: этапы пересчёта — в строке «Время по шагам» (числа не проверяются).
+    let text = m.calc_text("пересчёт с финальной котировкой");
+    for name in [
+        "Время по шагам (пересчёт с финальной котировкой",
+        "делистинг",
+        "вне этапов",
+    ] {
+        assert!(text.contains(name), "нет «{name}»: {text}");
+    }
+    // Предпроверка целиком: отказ несёт время своих шагов.
+    let e = precheck::run(&core, &dir).await.unwrap_err();
+    assert!(
+        e.contains("Время по шагам (предпроверка): стоп-условия"),
+        "{e}"
     );
 }

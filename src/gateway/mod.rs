@@ -26,6 +26,7 @@ pub mod quote_stage;
 pub mod registry;
 pub mod rest_book;
 pub mod rules;
+pub mod step_meter;
 pub mod tap;
 pub mod tx_hash;
 pub mod urgency;

@@ -14,9 +14,10 @@
 //! https://docs.rs/reqwest/0.13.5/reqwest/struct.RequestBuilder.html#method.timeout — и на медленной сети обрывает
 //! большой ответ на середине. Тело читается порциями — Response::chunk:
 //! https://docs.rs/reqwest/0.13.5/reqwest/struct.Response.html#method.chunk .
+//! Решение 265: exchange_full пишет каждый запрос в журнал шага сделки, если он стоит на задаче (step_meter.rs).
 //! Кто вызывает: venues/bsc_dex/node/rpc.rs (узел BSC), venues/bsc_dex/directory/gt_http.rs (индексатор),
 //! venues/bingx/rest.rs (REST BingX), venues/mexc/rest.rs (REST MEXC — exchange_full с Retry-After).
-//! От чего зависит: reqwest, tokio.
+//! От чего зависит: reqwest, tokio, gateway/step_meter.rs.
 //! Настройки: нет своих (сроки передаёт вызывающий из http.timeout_ms и http.body_idle_ms).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -119,13 +120,33 @@ pub struct Reply {
 /// Отправляет запрос и дочитывает ответ. Принимает: запрос (без общего срока reqwest), сроки и пределы.
 /// Возвращает: (HTTP-код, текст тела). Ошибки: Fail.
 pub async fn exchange(req: RequestBuilder, lim: Limits) -> Result<(StatusCode, String), Fail> {
-    exchange_full(req, lim).await.map(|r| (r.status, r.text))
+    full(req, lim).await.map(|r| (r.status, r.text))
 }
 
 /// То же, что exchange, но отдаёт и заголовок Retry-After (MEXC: «Responses with 418 or 429 include a Retry-After
 /// header indicating the wait time in seconds», https://www.mexc.com/api-docs/spot-v3/introduction).
 /// Принимает: запрос, сроки и пределы. Возвращает: Reply. Ошибки: Fail.
+/// Решение 265: журнал запросов шага на задаче (step_meter.rs) — «метод путь» (без строки запроса), время, итог.
 pub async fn exchange_full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
+    if !super::step_meter::active() {
+        return full(req, lim).await;
+    }
+    let name = req.try_clone().and_then(|r| r.build().ok()).map_or_else(
+        || "запрос (имя не прочитано)".to_string(),
+        |r| format!("{} {}", r.method(), r.url().path()),
+    );
+    let t0 = std::time::Instant::now();
+    let r = full(req, lim).await;
+    let outcome = match &r {
+        Ok(x) => format!("код {}", x.status.as_u16()),
+        Err(f) => f.text(&lim),
+    };
+    super::step_meter::record(name, t0, outcome);
+    r
+}
+
+/// Обмен без журнала запросов (exchange — узел BSC, KyberSwap, индексатор; exchange_full). Ошибки: Fail.
+async fn full(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
     let got = AtomicUsize::new(0);
     match tokio::time::timeout(lim.total, read(req, lim, &got)).await {
         Ok(r) => r,

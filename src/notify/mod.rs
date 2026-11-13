@@ -35,6 +35,7 @@ pub mod press_record;
 pub mod reason;
 pub mod reason_codes;
 pub mod reason_codes_account;
+pub mod reason_codes_range;
 pub mod reason_compact;
 pub mod roles;
 pub mod routes;

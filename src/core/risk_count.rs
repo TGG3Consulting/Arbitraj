@@ -50,6 +50,8 @@ pub fn counts(e: &GatewayError) -> bool {
             | ErrorCode::SecretsLocked
             | ErrorCode::InsufficientBalance
             | ErrorCode::OrderRejected
+            // Решение 268: цена лимитного ордера вне диапазона биржи — ордер не принят, деньги не тронуты (как OrderRejected).
+            | ErrorCode::PriceOutOfRange
             // Решение 182: ордер биржи снят без исполнения (IOC/FOK) — деньги не тронуты, это движение рынка.
             | ErrorCode::OrderNotFilled
             | ErrorCode::NotApplicable

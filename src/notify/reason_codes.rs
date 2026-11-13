@@ -13,6 +13,10 @@ pub fn lookup(venue: &str, code: &str) -> Option<&'static str> {
     if let Some(t) = super::reason_codes_account::lookup(venue, code) {
         return Some(t);
     }
+    // Решение 268: «цена ордера вне диапазона биржи» — notify/reason_codes_range.rs.
+    if let Some(t) = super::reason_codes_range::lookup(venue, code) {
+        return Some(t);
+    }
     match venue {
         "bingx" => bingx(code),
         "mexc" => mexc(code),

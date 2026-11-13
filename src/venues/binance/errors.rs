@@ -43,6 +43,11 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         -1006 | -1007 if op != Op::Other => ErrorCode::Timeout,
         -1000 | -1001 | -1006 | -1007 | -1008 | -1016 => ErrorCode::Unreachable,
         -2010 if msg.contains("insufficient balance") => ErrorCode::InsufficientBalance,
+        // Решение 268 (Тигран 14.11), errors.md (https://github.com/binance/binance-spot-api-docs/blob/master/errors.md,
+        // «Filter failures»): −1013 с текстом «Filter failure: PERCENT_PRICE» (покрывает и «Filter failure:
+        // PERCENT_PRICE_BY_SIDE») — цена лимитного ордера вне коридора пары (PriceOutOfRange). Другие −1013 — как раньше.
+        // От операции не зависит; рыночная продажа код снимает (market_sell.rs).
+        -1013 if msg.contains("Filter failure: PERCENT_PRICE") => ErrorCode::PriceOutOfRange,
         // Решение 166: −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT «As your deposit has not reached the required block
         // confirmations, we have temporarily locked {0} asset» (Wallet → Error Code,
         // https://developers.binance.com/en/dev-docs/products/wallet/error-code) — временно заблокировано для вывода.

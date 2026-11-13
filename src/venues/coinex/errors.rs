@@ -44,6 +44,10 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         // «Request timed out» / «Internal error»: у денег итог неизвестен.
         "4002" | "4003" if op != Op::Other => ErrorCode::Timeout,
         "4002" | "4003" => ErrorCode::Unreachable,
+        // Решение 268 (Тигран 14.11), Error Handling (https://docs.coinex.com/api/v2/error): 3606, 3615, 3618, 3616, 3632,
+        // 3617, 3633 — отклонение цены ордера от последней / индексной цены и её границ: цена лимитного ордера вне
+        // диапазона биржи (PriceOutOfRange). От операции не зависит; рыночная продажа код снимает (market_sell.rs).
+        "3606" | "3615" | "3616" | "3617" | "3618" | "3632" | "3633" => ErrorCode::PriceOutOfRange,
         _ => rejected(op),
     };
     let msg = if msg.is_empty() {

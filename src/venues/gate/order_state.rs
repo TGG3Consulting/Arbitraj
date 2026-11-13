@@ -147,6 +147,19 @@ pub fn result(
 ) -> GatewayResult<TradeResult> {
     let orig = num::dec_opt(s, "amount")?.unwrap_or(sent);
     let filled = num::dec(s, "filled_amount")?;
+    // Решение 268 (Тигран 14.11): отдельной метки ошибки «цена вне диапазона» у Gate нет — ордер принят и снят биржей с
+    // finish_as = price_protect_cancelled («Cancelled due to price protection»,
+    // https://github.com/gate/gateapi-python/blob/master/docs/Order.md). Ничего не исполнено — код PriceOutOfRange
+    // (раньше — «не исполнился»); есть исполнение — обычный итог (частично). Рыночная продажа код снимает (market_sell.rs).
+    if filled.is_zero()
+        && num::text_opt(s, "finish_as").as_deref() == Some("price_protect_cancelled")
+    {
+        let m = format!(
+            "Gate: ордер {order_id} снят биржей без исполнения — защита цены (finish_as = price_protect_cancelled)"
+        );
+        let e = GatewayError::new(ErrorCode::PriceOutOfRange, None, m);
+        return Err(ctx.tag(e).with_raw(s.to_string()));
+    }
     let quote = num::dec_opt(s, "filled_total")?
         .or(num::dec_opt(s, "fill_price")?)
         .ok_or_else(|| errors::bad("нет filled_total", &s.to_string()))?;

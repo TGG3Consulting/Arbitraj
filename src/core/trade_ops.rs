@@ -77,7 +77,7 @@ pub async fn trade(
 ) -> Result<TradeResult, OpError> {
     let mut seen = None;
     trade_seen(
-        core, deal, v, a, side, qty, route, avg, plan_worst, cap, None, &mut seen, gas, None,
+        core, deal, v, a, side, qty, route, avg, plan_worst, cap, None, &mut seen, gas, None, false,
     )
     .await
 }
@@ -94,6 +94,10 @@ pub async fn trade(
 /// None — без пере-замера; у покупки не ставится.
 /// Решение 262: `plan_worst` — как у trade: у покупки на бирже лимит каждой попытки — он (стакан не берётся); не задан
 /// у покупки на бирже — ордер не ставится.
+/// Решение 268: `market` — продажа РЫНОЧНЫМ ордером биржи (контракт trade_market_sell) вместо лимитного; ставит только
+/// core/sell_range.rs после отказа «цена вне диапазона биржи». Всё остальное — тот же путь (худшая цена считается для
+/// запроса и хронологии, в рыночный ордер не идёт); рыночная продажа отправляется строго один раз — правило шлюза
+/// «Повторить» её не повторяет. У покупки не ставится.
 /// Ошибки: как trade; «стакан устарел» (worst.rs worst_order); покупка на бирже без худшего уровня плана.
 #[allow(clippy::too_many_arguments)]
 pub async fn trade_seen(
@@ -111,7 +115,10 @@ pub async fn trade_seen(
     seen: &mut Option<Worst>,
     mut gas: Option<&mut Vec<Wasted>>,
     remeasure: Option<crate::core::types::Remeasure>,
+    market: bool,
 ) -> Result<TradeResult, OpError> {
+    // Решение 268: рыночным ордером — только продажа.
+    let market = market && side == Side::Sell;
     let in_deal = gas.is_some();
     let mut add = |w: Vec<Wasted>| {
         if let Some(g) = gas.as_mut() {
@@ -189,7 +196,11 @@ pub async fn trade_seen(
                 match super::dex_account::venue_deal(core, deal, v).await {
                     Ok(x) => {
                         // Решение 247, п. В: продажа — выход из позиции (как exit_position), пороги входа не нужны.
-                        let res = if side == Side::Sell {
+                        let res = if market {
+                            // Решение 268: рыночная продажа биржи (ядро — sell_range.rs).
+                            let job = x.trade_market_sell(req.clone());
+                            crate::gateway::exit_scope::scope(Some(deal), job).await
+                        } else if side == Side::Sell {
                             crate::gateway::exit_scope::scope(Some(deal), x.trade(req.clone()))
                                 .await
                         } else {
@@ -250,7 +261,8 @@ pub async fn trade_seen(
             }
         };
         match rules_apply::on_error(core, op, v, Some(deal), &err, attempt).await {
-            Next::Retry { pause_ms } => {
+            // Решение 268: рыночная продажа — строго один раз, правило «Повторить» на неё не действует (ниже — как Stop).
+            Next::Retry { pause_ms } if !market => {
                 // Повтор после «исход неизвестен» (если так задано правилом): газ уже в факте — потрачен.
                 if err.code == ErrorCode::OutcomeUnknown
                     && let Some(tx) = &err.tx
@@ -259,7 +271,7 @@ pub async fn trade_seen(
                 }
                 tokio::time::sleep(Duration::from_millis(pause_ms)).await
             }
-            Next::Stop => {
+            Next::Retry { .. } | Next::Stop => {
                 // Решение 231: исход неизвестен — бот ищет ордер по «чем найти» из ошибки; нашёл — разбор как ответа.
                 // Отклонён площадкой — окончательно, ничего не исполнено: как обычный отказ ордера, без повтора.
                 if let Some(x) = x.as_ref().filter(|_| err.code == ErrorCode::OutcomeUnknown)

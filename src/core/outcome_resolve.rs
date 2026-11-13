@@ -124,7 +124,11 @@ pub fn definitive(e: &GatewayError) -> bool {
     cancelled
         || matches!(
             e.code,
-            ErrorCode::OrderRejected | ErrorCode::WithdrawRejected | ErrorCode::SwapReverted
+            ErrorCode::OrderRejected
+                | ErrorCode::WithdrawRejected
+                | ErrorCode::SwapReverted
+                // Решение 268: ордер отклонён или снят биржей из-за цены вне её диапазона — ничего не исполнено.
+                | ErrorCode::PriceOutOfRange
         )
 }
 

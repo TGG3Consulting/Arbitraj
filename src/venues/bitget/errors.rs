@@ -48,6 +48,13 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         // Сервер: у денег итог неизвестен.
         (500..=599, _) if op != Op::Other => ErrorCode::Timeout,
         (500..=599, _) => ErrorCode::Unreachable,
+        // Решение 268 (Тигран 14.11): 43008, 43009, 43039, 43040, 40815, 40816 — цена ордера вне диапазона биржи
+        // (PriceOutOfRange). Коды — по официальной V1-документации (https://bitgetlimited.github.io/apidoc/en/spot/); для
+        // v2 в официальной документации кодов нет — по V1-доке; для v2 не подтверждено живым ответом (docs/TASKS.md).
+        // От операции не зависит; рыночная продажа код снимает (market_sell.rs).
+        (_, "43008" | "43009" | "43039" | "43040" | "40815" | "40816") => {
+            ErrorCode::PriceOutOfRange
+        }
         _ => rejected(op),
     };
     let msg = if msg.is_empty() { "(без msg)" } else { msg };

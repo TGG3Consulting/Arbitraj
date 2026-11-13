@@ -41,6 +41,11 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // (Account / Wallet), 100441 «Account is abnormal or advanced identity verification is required» (Spot) — у
         // вывода аккаунт (AccountRestricted). Кодов «адрес / белый список» у вывода в таблице нет.
         100403 | 100441 if op == Op::Withdraw => ErrorCode::AccountRestricted,
+        // Решение 268 (Тигран 14.11), Spot Error Codes (https://github.com/BingX-API/api-ai-skills/blob/main/skills/
+        // references/error-codes.md): 100440 «Order price deviates too much from market price, triggering price
+        // protection. Adjust the price.» — цена лимитного ордера вне диапазона биржи (PriceOutOfRange). От операции не
+        // зависит; рыночная продажа код снимает (market_sell.rs).
+        100440 => ErrorCode::PriceOutOfRange,
         // «Система занята / запрос не выполнен»: для ордера и вывода итог неизвестен — Timeout
         // (нужна проверка), для остального — площадка недоступна.
         100500 if op != Op::Other => ErrorCode::Timeout,

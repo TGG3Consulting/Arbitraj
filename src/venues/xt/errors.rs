@@ -61,6 +61,14 @@ pub fn from_code(mc: &str, ma: &str, op: Op, raw: &str) -> GatewayError {
         "WITHDRAW_012" | "WITHDRAW_013" | "WITHDRAW_020" | "WITHDRAW_021" if op == Op::Withdraw => {
             ErrorCode::WithdrawLimit
         }
+        // Решение 268 (Тигран 14.11), таблица кодов (https://doc.xt.com/docs/spot/Access%20Description/ResponseCode):
+        // ORDER_F0501, ORDER_F0502, ORDER_F0503, ORDER_F0504, ORDER_F0401 — «Trigger PROTECTION_LIMIT Filter …»: цена
+        // лимитного ордера вне защитного диапазона пары (PriceOutOfRange). ORDER_F0601 «Trigger PROTECTION_MARKET
+        // Filter» (рыночный ордер) сюда НЕ входит — обычный отказ. От операции не зависит; рыночная продажа код снимает
+        // (market_sell.rs).
+        "ORDER_F0501" | "ORDER_F0502" | "ORDER_F0503" | "ORDER_F0504" | "ORDER_F0401" => {
+            ErrorCode::PriceOutOfRange
+        }
         // Выполнено ли — не сказано: у ордера и вывода — проверка по своему id (unsure → OutcomeUnknown).
         "COMMON_002" | "COMMON_003" if op != Op::Other => ErrorCode::Timeout,
         "COMMON_002" | "COMMON_003" => ErrorCode::Unreachable,

@@ -158,6 +158,8 @@ pub async fn on_error(
         // InvalidAddress и WithdrawLocked (у него — только свой повтор, решение 166); форма и API такое правило не
         // сохраняют, сохранённое раньше помечено «не действует».
         RuleAction::Retry { .. } if crate::gateway::rules::withdraw_refusal(err.code) => Next::Stop,
+        // Решение 268: цена ордера вне диапазона биржи — тот же ордер не повторяется и правилом Retry.
+        RuleAction::Retry { .. } if crate::gateway::rules::price_range(err.code) => Next::Stop,
         RuleAction::Retry { attempts, pause_ms } if attempt <= *attempts => Next::Retry {
             pause_ms: *pause_ms,
         },

@@ -18,7 +18,7 @@ pub struct CodeMeta {
     pub code: C,
     pub title: &'static str,
     /// «Повторить» для этого кода выбрать нельзя (gateway/rules.rs inactive_reason: решение 64 — «результат
-    /// неизвестен»; решение 230 — отказ вывода).
+    /// неизвестен»; решение 230 — отказ вывода; решение 268 — цена ордера вне диапазона биржи).
     pub no_retry: bool,
     /// Решение 230: действия, которые для этого кода не действуют, — вид действия → причина (форма их не предлагает,
     /// сохранённое раньше правило помечается «не действует: причина»).
@@ -73,6 +73,10 @@ pub fn codes() -> Vec<CodeMeta> {
         c(C::SecretsLocked, "Секреты не разблокированы паролем"),
         c(C::InsufficientBalance, "Не хватает средств"),
         c(C::OrderRejected, "Ордер отклонён площадкой"),
+        c(
+            C::PriceOutOfRange,
+            "Лимитный ордер отклонён: цена вне диапазона, разрешённого биржей (коридор от последней цены) — не повторяется; у продажи сделки один раз рыночный ордер, если продажа выгодна и включена sell.market_on_price_range (решение 268)",
+        ),
         c(C::OrderNotFilled, "Ордер отправлен, но не исполнился"),
         c(C::PartialFill, "Ордер исполнился частично"),
         c(
@@ -128,5 +132,5 @@ const _: fn(C) = |code| match code {
     C::NotApplicable | C::CoinNotChecked | C::CoinCheckFailed | C::NoRoute => {}
     C::QuoteMismatch | C::ChannelRejected | C::GasBelowChannelMin | C::TxNotIncluded => {}
     C::NonceConflict | C::WithdrawLocked | C::QueueHalted | C::AccountRestricted => {}
-    C::OutcomeUnknown | C::WithdrawLimit => {}
+    C::OutcomeUnknown | C::WithdrawLimit | C::PriceOutOfRange => {}
 };

@@ -73,6 +73,11 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // Дополнение t85 (Тигран 11.11): 131095 «Withdrawl amount exceeds the 24 hour platform limit» — суточный лимит,
         // сбросится сам: WithdrawLimit (площадка на паузу до ручного снятия, core/withdraw_limit_pause.rs).
         131095 if op == Op::Withdraw => ErrorCode::WithdrawLimit,
+        // Решение 268 (Тигран 14.11), Error Codes → Spot Trade (https://bybit-exchange.github.io/docs/v5/error): 170193
+        // «Buy order price cannot be higher than %s.», 170194 «Sell order price cannot be lower than %s.», 170192 «Order
+        // price cannot be higher than %s .», 170371, 170372 («… the price limitation») — цена лимитного ордера вне
+        // диапазона биржи (PriceOutOfRange). От операции не зависит; рыночная продажа код снимает (market_sell.rs).
+        170192 | 170193 | 170194 | 170371 | 170372 => ErrorCode::PriceOutOfRange,
         // Сервер: 10000 «Server Timeout», 10016 «Server error», 170001, 170007 «Timeout waiting for response from
         // backend server», 170146 «Order creation timeout», 170032, 170234, 131001, 131003, 131200, 131201, 131230.
         // Для ордера, вывода и перевода — итог неизвестен (Timeout → errors::unsure), для остального — недоступно.

@@ -134,6 +134,22 @@ pub async fn result(
     let orig = num::dec_opt(s, "origQty")?.unwrap_or(sent_qty);
     let filled = num::dec(s, "executedQty")?;
     let quote = num::dec(s, "cummulativeQuoteQty")?;
+    // Решение 268 (Тигран 14.11): ордер истёк без исполнения, потому что цена исполнения вне разрешённого диапазона —
+    // status EXPIRED и expiryReason EXECUTION_RULE_PRICE_RANGE_EXCEEDED (enums.md «Expiry Reasons»; правило —
+    // https://github.com/binance/binance-spot-api-docs/blob/master/faqs/price_range_execution_rules.md). Ничего не
+    // исполнено — код PriceOutOfRange (раньше — «не исполнился»); есть исполнение — обычный итог (частично).
+    // Рыночная продажа код снимает (market_sell.rs).
+    if filled.is_zero()
+        && num::text_opt(s, "status").as_deref() == Some("EXPIRED")
+        && num::text_opt(s, "expiryReason").as_deref()
+            == Some("EXECUTION_RULE_PRICE_RANGE_EXCEEDED")
+    {
+        let m = format!(
+            "Binance {symbol}: ордер {order_id} истёк без исполнения — цена вне разрешённого диапазона (expiryReason EXECUTION_RULE_PRICE_RANGE_EXCEEDED)"
+        );
+        let e = GatewayError::new(ErrorCode::PriceOutOfRange, None, m);
+        return Err(ctx.tag(e).with_raw(s.to_string()));
+    }
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
     } else if filled < orig {

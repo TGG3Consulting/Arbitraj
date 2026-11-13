@@ -46,8 +46,8 @@ pub async fn run(core: Core, venue: VenueId) {
     let deps = core.inner.deps.clone();
     // Решение 109: справочник сетей MEXC (config/getall) — ~5.6 МБ на ответ; опрос с частотой опроса статусов переводов
     // (2 с) качал и разбирал его 30 раз в минуту и каждый раз пересобирал справочник монет. Своя частота — отдельно.
-    let mut own = Pacer::new("venue.networks_poll_ms", Unit::Ms, Some(venue.0.clone()));
-    let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(venue.0.clone()));
+    let mut own = Pacer::new(NETWORKS_POLL, Unit::Ms, Some(venue.0.clone()));
+    let mut pacer = Pacer::new(STATUS_POLL, Unit::Ms, Some(venue.0.clone()));
     let mut last_err: Option<String> = None;
     // Решение 129: когда справочник получен последний раз — толчок (аномальный спред, ошибка вывода) внутри
     // venue.networks_fresh_ms ждёт конца окна, а не качает справочник заново (у MEXC ~5.6 МБ на ответ).
@@ -106,16 +106,42 @@ pub async fn run(core: Core, venue: VenueId) {
                 Err(_) => {}
             }
         }
-        let at = At {
-            venue: Some(&venue.0),
-            coin: None,
-        };
-        if deps.settings.integer("venue.networks_poll_ms", at).is_ok() {
+        if poll_name(&deps.settings, &venue) == NETWORKS_POLL {
             own.pause(&deps, &core.inner.kick_networks).await;
         } else {
             pacer.pause(&deps, &core.inner.kick_networks).await;
         }
     }
+}
+
+/// Своя частота опроса справочника сетей (решение 109).
+const NETWORKS_POLL: &str = "venue.networks_poll_ms";
+/// Частота опроса статусов переводов — действует для справочника сетей, если своя не задана.
+const STATUS_POLL: &str = "venue.status_poll_ms";
+
+/// Какая настройка задаёт интервал фонового опроса справочника сетей площадки: venue.networks_poll_ms, если задана,
+/// иначе venue.status_poll_ms (решение 109). Принимает: настройки, площадку. Ошибок нет.
+fn poll_name(s: &crate::settings::store::Store, venue: &VenueId) -> &'static str {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    if s.integer(NETWORKS_POLL, at).is_ok() {
+        NETWORKS_POLL
+    } else {
+        STATUS_POLL
+    }
+}
+
+/// Интервал фонового опроса справочника сетей площадки, мс — по тому же правилу, что у задачи опроса (poll_name).
+/// Решение 266 (precheck.networks_memory): предпроверка сделки берёт справочник из памяти, если запись моложе этого
+/// интервала (precheck_nets.rs). Принимает: настройки, площадку. Возвращает: None — интервал не задан. Ошибок нет.
+pub fn poll_ms(s: &crate::settings::store::Store, venue: &VenueId) -> Option<u64> {
+    let at = At {
+        venue: Some(&venue.0),
+        coin: None,
+    };
+    s.integer(poll_name(s, venue), at).ok()
 }
 
 /// Сравнивает статусы ввода и вывода по сети BSC (у записи есть адрес контракта) со старыми и уведомляет:

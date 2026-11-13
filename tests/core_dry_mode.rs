@@ -255,18 +255,30 @@ async fn precheck_replans_live() {
     use arb::core::step_timing::enabled;
     assert!(!enabled(&s), "не задана — выключено");
     // Будущее предпроверки большое — в кучу (тело теста лежит на стеке потока теста; у сделки — задача tokio в куче).
-    let e = Box::pin(precheck::run(&core, &dir, enabled(&s)))
-        .await
-        .unwrap_err();
+    let e = Box::pin(precheck::run(
+        &core,
+        &dir,
+        enabled(&s),
+        Default::default(),
+        None,
+    ))
+    .await
+    .unwrap_err();
     assert!(
         e.contains("(время: ") && !e.contains("Время по шагам"),
         "{e}"
     );
     set(&s, "log.step_timing", Some(json!(true))).await;
     assert!(enabled(&s), "на лету, без перезапуска");
-    let e = Box::pin(precheck::run(&core, &dir, enabled(&s)))
-        .await
-        .unwrap_err();
+    let e = Box::pin(precheck::run(
+        &core,
+        &dir,
+        enabled(&s),
+        Default::default(),
+        None,
+    ))
+    .await
+    .unwrap_err();
     assert!(e.contains("(время: "), "прежняя строка — всегда: {e}");
     set(&s, "log.step_timing", Some(json!(false))).await;
     assert!(!enabled(&s));

@@ -7,7 +7,11 @@
 //! многим кандидатам, и биржа блокирует частые запросы баланса (BingX, код 100410). Реальный свободный баланс
 //! читается ОДИН раз — прямо перед отправкой ордера покупки (free_now, вызывает executor.rs) и ограничивает списание.
 //! Решение 141: составляющие бюджета и какая ограничила — limits_parts.rs (budget — меньшее из них).
-//! Кто вызывает: core/profit.rs (budget), core/executor.rs (free_now); executor.rs ведёт учёт Exposure.
+//! Решение 266 (precheck.balance_first = да, изменяет решение 94 по указанию Тиграна 13.11): тот же один запрос
+//! делает предпроверка — прямо перед последним расчётом объёма (buy_free, precheck_balance.rs); перед ордером он не
+//! повторяется.
+//! Кто вызывает: core/profit.rs (budget), core/executor.rs (buy_cap), core/precheck_balance.rs (buy_free),
+//! core/precheck_withdraw.rs (free_now); executor.rs ведёт учёт Exposure.
 //! От чего зависит: engine.rs, deps.rs (шлюз), dry.rs, settings.
 //! Настройки: money.max_per_trade_usd, money.max_per_coin_usd, money.max_in_transit_usd, dry.enabled, dry.budget_usdt.
 
@@ -58,6 +62,22 @@ pub async fn buy_cap(
     budget: Decimal,
     acc: Option<&crate::core::types::DexAccountId>,
 ) -> Result<(Decimal, Decimal, String), String> {
+    let (free, quote) = buy_free(core, d, acc).await?;
+    if free <= Decimal::ZERO {
+        return Err(none_free(&d.buy_on, &quote));
+    }
+    Ok((budget.min(free), free, quote))
+}
+
+/// Чтение для buy_cap: котируемая монета A (venue.quote_asset) и её свободный баланс — один запрос. Решение 266
+/// (precheck.balance_first = да): тем же кодом баланс читает предпроверка (precheck_balance.rs) — до расчёта, один раз
+/// на сделку. Принимает: ядро, направление, счёт DEX сделки. Возвращает: (свободно, тикер котируемой монеты).
+/// Ошибки: не задан venue.quote_asset у A, сбой балансов.
+pub async fn buy_free(
+    core: &Core,
+    d: &crate::core::types::Direction,
+    acc: Option<&crate::core::types::DexAccountId>,
+) -> Result<(Decimal, String), String> {
     let at = At {
         venue: Some(&d.buy_on.0),
         coin: None,
@@ -69,10 +89,12 @@ pub async fn buy_cap(
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
     let free = free_now(core, &d.buy_on, acc, &quote).await?;
-    if free <= Decimal::ZERO {
-        return Err(format!("на {} свободно 0 {quote}", d.buy_on.0));
-    }
-    Ok((budget.min(free), free, quote))
+    Ok((free, quote))
+}
+
+/// Текст «свободно 0» (buy_cap; решение 266 — и предпроверка). Принимает: площадку A, котируемую монету. Ошибок нет.
+pub fn none_free(a: &VenueId, quote: &str) -> String {
+    format!("на {} свободно 0 {quote}", a.0)
 }
 
 /// Свободный баланс котируемой монеты на площадке — ОДИН запрос прямо перед ордером покупки (решение 94).

@@ -17,6 +17,8 @@
 //! Решение 246: кривая подбора знает бюджет — объём сверх бюджета отбрасывается до котировок B (costs.rs evaluate_capped).
 //! Решение 265: этапами подробного замера (calc_detail.rs, только при log.step_timing) стали и проверки до расчёта (делистинг, закрытые входы, свежесть налогов) и исполнимый
 //! объём у исполнителя в финальной котировке — их время видно в «Время по шагам» предпроверки (calc_steps.rs).
+//! Решение 266: пересчёт предпроверки при precheck.fast_recalc = да — сначала один финальный расчёт на объёме кандидата
+//! (precheck_fast.rs recalc_boxed, после параметров подбора и до самого подбора); не прошёл — полный подбор, как раньше.
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -47,16 +49,19 @@ pub enum Verdict {
 /// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
-    decide_capped(core, d, mode, None).await
+    decide_capped(core, d, mode, None, None).await
 }
 
 /// То же, но бюджет не больше `cap` (решение 103: свободный баланс A прямо перед ордером меньше бюджета — объём
-/// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел. Ошибок нет.
+/// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел, объём кандидата
+/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше).
+/// Ошибок нет.
 pub async fn decide_capped(
     core: &Core,
     d: &Direction,
     mode: &super::dry::Mode,
     cap: Option<Decimal>,
+    want: Option<&mut super::precheck_fast::Want>,
 ) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
     // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
@@ -111,6 +116,16 @@ pub async fn decide_capped(
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
+    // Решение 266: объём кандидата на свежих данных — один финальный расчёт; прошёл пороги — план без подбора, иначе
+    // (ошибка, ниже порога, внешний исполнитель) — полный подбор ниже, как раньше. Будущее — в куче и собирается не
+    // здесь (recalc_boxed): кадр расчёта кандидата не растёт; объём задан только у пересчёта предпроверки.
+    if let Some(w) = want {
+        let min = (min_usd, min_pct);
+        let fast = super::precheck_fast::recalc_boxed(core, &cx, w, budget, p.step, min);
+        if let Some(c) = fast.await {
+            return Verdict::Accept(c);
+        }
+    }
     // Решение 246: бюджет поиска — и у кривой: объём сверх него отбрасывается до котировок B (выбор тот же).
     let mut curve = CoreCurve {
         core,
@@ -195,7 +210,8 @@ pub async fn decide_capped(
 /// бюджет: если финальная цена хуже и списание вышло за бюджет (объём подобран впритык к бюджету по своей цене) —
 /// объём один раз ужимается пропорционально (qty × бюджет / списание, вниз до шага) и считается заново.
 /// Принимает: ядро, контекст, объём, бюджет, шаг количества. Возвращает: Calc. Ошибки: текст (отказ расчёта, бюджет).
-async fn final_calc(
+/// Решение 266: тем же расчётом считается объём кандидата в быстром пересчёте предпроверки (precheck_fast.rs).
+pub(super) async fn final_calc(
     core: &Core,
     cx: &DirCtx,
     qty: Decimal,
@@ -256,13 +272,7 @@ async fn final_calc(
 /// ядро адаптеры не знает). Свой сборщик — запросов к агрегатору нет, фильтр не нужен. None — 0, не задан, DEX нет
 /// или внешнего исполнителя нет. Ошибок нет.
 fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
-    let settings = &core.inner.deps.settings;
-    let external = rd(&core.inner.kinds).iter().any(|(v, k)| {
-        (v == &d.buy_on || v == &d.sell_on)
-            && *k == crate::gateway::contract::VenueKind::Dex
-            && crate::gateway::quote_stage::final_external(settings, v)
-    });
-    if !external {
+    if !final_external(core, d) {
         return None;
     }
     core.inner
@@ -271,6 +281,17 @@ fn final_gate(core: &Core, d: &Direction) -> Option<Decimal> {
         .decimal("kyber.final_gate_usd", At::default())
         .ok()
         .filter(|g| !g.is_zero())
+}
+
+/// Есть ли в направлении DEX, чья финальная котировка — у внешнего исполнителя (exec.via_kyber = да; признак фильтра
+/// final_gate). Решение 266: при нём быстрый пересчёт объёма кандидата не применяется (precheck_fast.rs). Ошибок нет.
+pub(super) fn final_external(core: &Core, d: &Direction) -> bool {
+    let settings = &core.inner.deps.settings;
+    rd(&core.inner.kinds).iter().any(|(v, k)| {
+        (v == &d.buy_on || v == &d.sell_on)
+            && *k == crate::gateway::contract::VenueKind::Dex
+            && crate::gateway::quote_stage::final_external(settings, v)
+    })
 }
 
 /// Сколько исполнитель реально исполнит на обеих сторонах (финальная котировка; меньшее из двух). Решение 111.

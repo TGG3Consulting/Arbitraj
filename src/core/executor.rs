@@ -29,6 +29,12 @@
 //! (precheck.rs); свободный баланс, подбор под остаток (со своими этапами), снимок рынка, ордер покупки целиком и
 //! каждый его HTTP-запрос (замер снаружи вызова шлюза — gateway/step_meter.rs), газ, учёт исполнения. Только при
 //! log.step_timing = да (читается один раз в начале сделки); выключено — ни замера, ни строк.
+//! Решение 266: включатели быстрой предпроверки precheck.fast_recalc и precheck.parallel читаются один раз в начале
+//! сделки (accepted, precheck_fast.rs read) и передаются предпроверке вместе с объёмом кандидата (Calc.qty); так же —
+//! precheck.networks_memory и precheck.balance_first. Часть 4 (precheck.balance_first = да, изменяет решение 94):
+//! свободный баланс A прочитан предпроверкой перед расчётом (precheck_balance.rs) — здесь он повторно не читается и
+//! объём под остаток не подбирается: предел списания ордера — min(бюджет плана, свободно) по прочитанному; биржа A
+//! баланс не отдала — ордер уходит на посчитанный объём с пределом = бюджет (строка об этом — в хронологии).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
@@ -95,8 +101,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     // Включатель log.step_timing — один раз на сделку (здесь); выключен — ни часов, ни обёрток, ни строк.
     let on = super::step_timing::enabled(&core.inner.deps.settings);
     let handed = on.then(Instant::now);
+    // Решение 266: включатели быстрой предпроверки — один раз на сделку (здесь); объём кандидата — Calc.qty.
+    let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
     tokio::spawn(urgency::scope(Urgency::Trade, async move {
-        run(&core, d.clone(), decided, (on, handed)).await;
+        run(&core, d.clone(), decided, (on, handed), fast).await;
         lk(&core.inner.active).remove(&key);
     }));
     Start::Started
@@ -114,12 +122,14 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
 
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты. Принимает: ядро, направление, момент решения
 /// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2), момент передачи исполнителю
-/// (решение 265: включён ли замер по шагам и момент передачи — None, если выключен).
+/// (решение 265: включён ли замер по шагам и момент передачи — None, если выключен), режим быстрой предпроверки
+/// (решение 266: объём кандидата и «одновременно» — precheck_fast.rs; всё выключено — как раньше).
 async fn run(
     core: &Core,
     d: Direction,
     decided: chrono::DateTime<chrono::Utc>,
     (on, handed): (bool, Option<Instant>),
+    fast: super::precheck_fast::Opts,
 ) {
     let deps = &core.inner.deps;
     // Решение 265: «Время по шагам» от положительного расчёта до исполненной покупки (step_timing.rs).
@@ -144,7 +154,7 @@ async fn run(
         let acc = super::dex_account::of_direction(deps, &d).await?;
         ts.mark(at, || "кошелёк DEX по маппингу".into());
         let at = ts.at();
-        let plan = super::precheck::run(core, &d, on).await?;
+        let plan = super::precheck::run(core, &d, on, fast, acc.as_ref()).await?;
         ts.mark(at, || "предпроверка".into());
         // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.
         let at = ts.at();
@@ -187,7 +197,7 @@ async fn run(
     };
     // Решение 141: составляющие бюджета — до открытия сделки (своя сделка ещё не в учёте лимитов).
     let at = ts.at();
-    let (plan, lines) = plan;
+    let (plan, lines, bal) = plan;
     let parts = super::limits_parts::parts(core, &d, &super::dry::Mode::Live).ok();
     // Решение 118 (Я-17): ID сделки выдаётся и занимается в учёте под одним замком — повтор невозможен.
     let mut deal = super::ledger::open(
@@ -215,6 +225,7 @@ async fn run(
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));
     }
     // Решение 265: время шагов предпроверки и этапов пересчёта — в хронологию (до сохранения; выключено — строк нет).
+    // Решение 266: первой — строка «План: …» быстрого пересчёта (только при precheck.fast_recalc = да).
     for l in lines {
         deal.note(l);
     }
@@ -233,26 +244,63 @@ async fn run(
     }
     // Решение 94: свободный баланс A — один запрос прямо перед ордером (не на каждый расчёт); предел списания —
     // меньшее из бюджета плана и свободного. Не хватает на объём плана — объём заново под остаток (решение 103).
-    let at = ts.at();
-    let free = super::limits::buy_cap(core, &d, budget, deal.dex_account.as_ref()).await;
-    ts.mark(at, || format!("свободный баланс {}", d.buy_on.0));
-    let cap = match free {
-        Ok((cap, free, q)) => {
-            deal.note(format!(
-                "Перед покупкой свободно на {}: {free} {q}; предел списания {cap}",
-                d.buy_on.0
-            ));
+    // Решение 266, часть 4 (precheck.balance_first = да): баланс уже прочитан предпроверкой перед расчётом (bal) —
+    // здесь запроса нет; заметка — тем же текстом; биржа баланс не отдала — предел = бюджет, строка об этом.
+    use super::precheck_balance::Read;
+    use rust_decimal::Decimal;
+    let before = |free: Decimal, q: &str, cap: Decimal| {
+        format!(
+            "Перед покупкой свободно на {}: {free} {q}; предел списания {cap}",
+            d.buy_on.0
+        )
+    };
+    let refit_note = |cap: Decimal, qty: Decimal, was: Decimal, profit: Decimal, old: Decimal| {
+        format!(
+            "Объём под свободный остаток {cap}: {qty} вместо {was}, прибыль {} USDT (было {})",
+            profit.round_dp(4),
+            old.round_dp(4)
+        )
+    };
+    let cap = match bal.as_ref().map(|b| &b.read) {
+        Some(Read::Got { free, quote }) => {
+            let cap = budget.min(*free);
+            deal.note(before(*free, quote, cap));
             cap
         }
-        Err(why) => {
-            let why = format!("перед покупкой: {why} — ордер не ставился");
-            note(&mut deal, ts.text(STAGE));
-            return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+        Some(Read::Missed(why)) => {
+            deal.note(super::precheck_balance::missed_note(&d, why));
+            budget
+        }
+        None => {
+            let at = ts.at();
+            let free = super::limits::buy_cap(core, &d, budget, deal.dex_account.as_ref()).await;
+            ts.mark(at, || format!("свободный баланс {}", d.buy_on.0));
+            match free {
+                Ok((cap, free, q)) => {
+                    deal.note(before(free, &q, cap));
+                    cap
+                }
+                Err(why) => {
+                    let why = format!("перед покупкой: {why} — ордер не ставился");
+                    note(&mut deal, ts.text(STAGE));
+                    return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+                }
+            }
         }
     };
+    // Часть 4: план уже посчитан под свободный остаток (свободного меньше списания кандидата) — та же заметка.
+    if let Some(c) = bal.as_ref().and_then(|b| b.refit) {
+        deal.note(refit_note(
+            cap,
+            plan.qty,
+            c.qty,
+            plan.profit_usd,
+            c.profit_usd,
+        ));
+    }
     // Решение 103: свободного меньше списания плана — объём подбирается заново под свободный остаток (все затраты,
-    // финальная котировка, пороги). Не выгодно — отказ до ордера.
-    let plan = if super::refit::needed(&plan, cap) {
+    // финальная котировка, пороги). Не выгодно — отказ до ордера. Часть 4 решения 266: подбор уже сделан предпроверкой.
+    let plan = if bal.is_none() && super::refit::needed(&plan, cap) {
         // Решение 265: подбор под остаток — шаг и свои этапы пересчёта.
         let at = ts.at();
         let refit = Box::pin(super::refit::plan(core, &d, cap));
@@ -264,12 +312,12 @@ async fn run(
         );
         match r {
             Ok(p) => {
-                deal.note(format!(
-                    "Объём под свободный остаток {cap}: {} вместо {}, прибыль {} USDT (было {})",
+                deal.note(refit_note(
+                    cap,
                     p.qty,
                     plan.qty,
-                    p.profit_usd.round_dp(4),
-                    plan.profit_usd.round_dp(4)
+                    p.profit_usd,
+                    plan.profit_usd,
                 ));
                 deal.plan = serde_json::to_value(&p).unwrap_or_default();
                 deal.plan_profit_usd = p.profit_usd;
@@ -351,7 +399,18 @@ async fn run(
     note(&mut deal, after.text("после покупки"));
     deal.buy = Some(r.clone());
     // Решение 141: зашли в сделку — фоновый расчёт «без потолка» с id сделки (путь не ждёт); решение 217 — по снимку.
-    super::uncapped_entry::deal(core, &deal.id, &plan, budget, Some(cap), parts, frozen);
+    // Часть 4 решения 266: бюджет плана уже урезан свободным балансом (расчёт шёл с пределом) — «бюджет плана до
+    // чтения баланса» — меньшее из составляющих бюджета (parts, та же формула, что limits::budget); баланс не получен —
+    // свободного остатка нет (None).
+    let (plan_budget, free_cap) = match bal.as_ref().map(|b| &b.read) {
+        None => (budget, Some(cap)),
+        Some(Read::Got { free, .. }) => {
+            let b = parts.as_ref().map_or(budget, |p| p.cap());
+            (b, Some(b.min(*free)))
+        }
+        Some(Read::Missed(_)) => (budget, None),
+    };
+    super::uncapped_entry::deal(core, &deal.id, &plan, plan_budget, free_cap, parts, frozen);
     let text = crate::notify::human::Msg::new(crate::notify::human::OK, "Куплено")
         .line(format!(
             "{} {} на {} по {}",

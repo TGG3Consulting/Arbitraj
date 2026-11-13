@@ -3,9 +3,9 @@
 //! (precheck.parallel = да). После стоп-условий одним tokio::join! в ТОЙ ЖЕ задаче сделки (не spawn: срочность Trade и
 //! замеры задачи — task_local, новая задача их не наследует) идут:
 //! (а) сторона A: биржа — справочник сетей (статус вывода); DEX — баланс BNB;
-//! (б) сторона B: биржа — справочник сетей (статус ввода) → сторона пары → адрес депозита, строго по очереди (адрес
-//!     депозита у части бирж создаётся этим запросом — KuCoin, Kraken; он остаётся после успеха «сетей B» и пары);
-//!     DEX — баланс BNB;
+//! (б) сторона B: биржа — справочник сетей (статус ввода) → сторона пары; DEX — баланс BNB. Адрес депозита биржи B в
+//!     одновременные шаги НЕ входит (у части бирж он создаётся этим запросом — KuCoin, Kraken): он запрашивается после
+//!     них, по очереди, только если сторона A, «сети B» и сторона пары B прошли — как в последовательном коде;
 //! (в) A — биржа: удержания вывода (precheck_withdraw.rs fetch — то, что не зависит от расчёта);
 //! (г) часть 4 (precheck.balance_first = да): свободный баланс котируемой A (precheck_balance.rs read) — его итог
 //!     разбирает precheck.rs на месте шага «свободный баланс» (после шагов сторон, перед расчётом); удержания (в) при
@@ -17,7 +17,8 @@
 //! с тем же текстом; уведомление risk.low_bnb — только если ошибка BNB первая по порядку (не больше одного). Итог (в)
 //! не разбирается здесь: его ошибка — на прежнем месте шага «удержания вывода» (после расчёта и проверки продажи).
 //! Время шагов — те же имена в прежнем порядке, до первой ошибки включительно; каждый шаг меряет себя сам.
-//! Отличие от последовательного кода: запросы стороны B и удержаний уходят, даже если сторона A откажет.
+//! Отличие от последовательного кода: запросы «сети B» (или BNB кошелька B), удержаний и свободного баланса уходят,
+//! даже если сторона A откажет (это чтения; адрес депозита B — нет).
 //! Кто вызывает: core/precheck.rs (steps, только при precheck.parallel = да).
 //! От чего зависит: core/precheck.rs (transfer_open, pair_side, bnb_ok), precheck_deposit.rs, precheck_withdraw.rs,
 //! trade_ops.rs (вид площадки).
@@ -102,6 +103,7 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
     };
     // Вид B: его ошибка встаёт на место стороны B (после шагов A) — запросов стороны B при ней нет.
     let kb = super::trade_ops::kind(core, b);
+    let b_cex = kb == Ok(VenueKind::Cex);
     let side_a = async {
         let at = Instant::now();
         match ka {
@@ -142,12 +144,8 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
                     }
                     m.push((step, at.elapsed().as_millis()));
                     r.map_err(Stop::Plain)?;
-                    pair_side(core, b, d, false).map_err(Stop::Plain)?;
-                    // Решение 118 (Я-5): адрес депозита — только после успеха сетей и пары B (как раньше).
-                    let at = Instant::now();
-                    let r = super::precheck_deposit::ready(core, d).await;
-                    m.push((format!("адрес депозита {}", b.0), at.elapsed().as_millis()));
-                    r.map_err(Stop::Plain)
+                    pair_side(core, b, d, false).map_err(Stop::Plain)
+                    // Адрес депозита B — не здесь: после join, только если сторона A прошла (ниже).
                 }
                 Ok(VenueKind::Dex) => {
                     let at = Instant::now();
@@ -197,7 +195,20 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
     marks.extend(marks_b);
     srcs.extend(src_b);
     match rb {
-        Ok(()) => (marks, srcs, Ok((held, free))),
+        Ok(()) => {
+            // Решение 118 (Я-5): адрес депозита биржи B — до покупки. Ревью решения 266: шаг вне join — по очереди и
+            // только когда сторона A, «сети B» и сторона пары B прошли (ровно условия последовательного кода): у
+            // KuCoin и Kraken этот запрос создаёт адрес, по несостоявшейся из-за A сделке он не создаётся.
+            if b_cex {
+                let at = Instant::now();
+                let r = super::precheck_deposit::ready(core, d).await;
+                marks.push((format!("адрес депозита {}", b.0), at.elapsed().as_millis()));
+                if let Err(e) = r {
+                    return (marks, srcs, Err(e));
+                }
+            }
+            (marks, srcs, Ok((held, free)))
+        }
         Err(Stop::Plain(e)) => (marks, srcs, Err(e)),
         Err(Stop::LowBnb(e)) => {
             core.inner.deps.notify("risk.low_bnb", Some(&b.0), &e).await;

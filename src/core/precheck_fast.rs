@@ -161,43 +161,72 @@ pub async fn recalc(
         )));
         return None;
     }
-    let qty = if step > Decimal::ZERO {
-        (w.qty / step).floor() * step
-    } else {
-        w.qty
-    };
-    if qty <= Decimal::ZERO {
-        w.path = Some(Path::Full(format!(
-            "объём кандидата {} вниз до шага количества {step} не больше нуля",
-            w.qty.normalize()
-        )));
-        return None;
-    }
-    let fin = super::profit::final_calc(core, cx, qty, budget, step);
-    let mut c = match stage(|| STAGE.into(), fin).await {
-        Ok(c) => c,
+    let qty = match floor_qty(w.qty, step) {
+        Ok(q) => q,
         Err(e) => {
             w.path = Some(Path::Full(e));
             return None;
         }
     };
+    let fin = super::profit::final_calc(core, cx, qty, budget, step);
+    let done = match stage(|| STAGE.into(), fin).await {
+        Ok(c) => accept(c, qty, budget, &d.asset.ticker, (min_usd, min_pct)),
+        Err(e) => Err(e),
+    };
+    match done {
+        Ok(c) => {
+            w.path = Some(Path::Used);
+            Some(c)
+        }
+        Err(e) => {
+            w.path = Some(Path::Full(e));
+            None
+        }
+    }
+}
+
+/// Объём кандидата вниз до шага количества. Принимает: объём, шаг. Возвращает: объём для финального расчёта (> 0).
+/// Ошибки (быстрый путь не считается — полный подбор, он сам откажет, как раньше): шаг не больше нуля; объём после
+/// округления не больше нуля.
+pub fn floor_qty(qty: Decimal, step: Decimal) -> Result<Decimal, String> {
+    if step <= Decimal::ZERO {
+        return Err(format!("шаг количества {step} не больше нуля"));
+    }
+    let q = (qty / step).floor() * step;
+    if q <= Decimal::ZERO {
+        return Err(format!(
+            "объём кандидата {} вниз до шага количества {step} не больше нуля",
+            qty.normalize()
+        ));
+    }
+    Ok(q)
+}
+
+/// Решение быстрого пути по готовому финальному расчёту: те же сравнения с порогами, что в конце profit.rs
+/// decide_capped (прибыль не ниже money.min_profit_usd и money.min_profit_pct); прошёл — расчёт с объяснением выбора
+/// (choice). Принимает: расчёт, запрошенный объём (после шага), бюджет пересчёта, тикер, пороги (USDT, %).
+/// Возвращает: план. Ошибки: текст — прибыль ниже порога (дальше — полный подбор).
+pub fn accept(
+    mut c: Calc,
+    asked: Decimal,
+    budget: Decimal,
+    ticker: &str,
+    (min_usd, min_pct): (Decimal, Decimal),
+) -> Result<Calc, String> {
     if c.profit_usd < min_usd {
-        w.path = Some(Path::Full(format!(
+        return Err(format!(
             "прибыль {} USDT ниже порога {min_usd}",
             c.profit_usd.round_dp(4)
-        )));
-        return None;
+        ));
     }
     if c.profit_pct < min_pct {
-        w.path = Some(Path::Full(format!(
+        return Err(format!(
             "прибыль {}% ниже порога {min_pct}%",
             c.profit_pct.round_dp(4)
-        )));
-        return None;
+        ));
     }
-    c.size = Some(choice(&c, qty, budget, &d.asset.ticker));
-    w.path = Some(Path::Used);
-    Some(c)
+    c.size = Some(choice(&c, asked, budget, ticker));
+    Ok(c)
 }
 
 /// Объяснение выбора объёма у быстрого пути — честно: подбора не было, посчитан один объём (сколько раз final_calc

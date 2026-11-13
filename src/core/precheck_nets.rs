@@ -11,9 +11,15 @@
 //! будущем (возраст определить нельзя). Возраст — по времени записи CoinNetworkInfo::updated_at: его ставит адаптер при
 //! разборе ответа биржи (и у фонового опроса, и у запроса предпроверки); берётся самая старая запись монеты.
 //! Статусы в памяти от фонового опроса — после сглаживания мигания (status_debounce.rs, venue.status_confirm_polls):
-//! смена статуса, ещё не подтверждённая нужным числом опросов, в памяти не видна, а запрос предпроверки её видел.
+//! смена статуса, ещё не подтверждённая нужным числом опросов, в памяти не видна (прежний статус со свежим временем).
+//! Поэтому память годна, только если у монеты на этой бирже нет ждущей подтверждения смены статуса
+//! (status_debounce.rs waiting); есть — запрос к бирже, как раньше (он видит сырой статус).
+//! Известное ограничение (код не менялся): фон заменяет справочник биржи целиком своим ответом (registry_sync.rs) —
+//! запись монеты, которую запрос предпроверки положил в память между получением ответа фона и его записью, затирается
+//! ответом фона (он старше), время записи при этом — время разбора ответа фона.
 //! Кто вызывает: core/precheck.rs (transfer_open).
-//! От чего зависит: core/registry_sync.rs (poll_ms), engine.rs (справочник сетей ядра), core/types.
+//! От чего зависит: core/registry_sync.rs (poll_ms), status_debounce.rs (waiting), engine.rs (справочник сетей ядра),
+//! core/types.
 //! Настройки: precheck.networks_memory (читает executor.rs через precheck_fast.rs read), venue.networks_poll_ms,
 //! venue.status_poll_ms (через registry_sync.rs).
 
@@ -55,6 +61,10 @@ pub fn recent(
     on: &str,
     contract: Option<Address>,
 ) -> Option<(Vec<CoinNetworkInfo>, i64)> {
+    // Смена статуса монеты ждёт подтверждения сглаживателя — в памяти прежний статус: только запрос.
+    if super::status_debounce::waiting(core, v, on) {
+        return None;
+    }
     let every = super::registry_sync::poll_ms(&core.inner.deps.settings, v)?;
     let every = i64::try_from(every).ok()?;
     let list: Vec<CoinNetworkInfo> = rd(&core.inner.networks)

@@ -414,7 +414,13 @@ async fn steps(
     let c = match (verdict, &read, short) {
         (Verdict::Accept(c), _, _) => c,
         // Часть 4: свободного меньше, чем нужно кандидату, и под остаток невыгодно — причина «свободный баланс».
-        (Verdict::Reject { reason, .. }, Some(Read::Got { free, quote }), Some(c)) => {
+        // Только отказ по порогам прибыли (money.min_profit_usd / pct) на объёме под остаток: его profit.rs отдаёт с
+        // расчётом, у которого записан выбор объёма (best с size — так помечается только он); прочие отказы
+        // пересчёта (делистинг, закрытые входы, налоги, нет цены, бюджет, отказ подбора и финальной котировки) —
+        // прежним текстом: по типу Verdict::Reject их от «не про баланс» не отличить.
+        (Verdict::Reject { reason, best }, Some(Read::Got { free, quote }), Some(c))
+            if best.as_ref().is_some_and(|b| b.size.is_some()) =>
+        {
             return Err(super::precheck_balance::short_reject(
                 d, *free, quote, &c, &reason,
             ));

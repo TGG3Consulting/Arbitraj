@@ -5,19 +5,35 @@
 //! Теперь новый статус монеты (ввод/вывод по сети) принимается, только если биржа отдаёт его
 //! venue.status_confirm_polls опросов подряд; до этого в справочнике остаётся прежний. Не задано, 0 или 1 — новый
 //! статус принимается сразу, как раньше. Первая загрузка справочника принимается целиком.
-//! Кто вызывает: core/registry_sync.rs (run — перед сравнением и записью справочника).
+//! Решение 266 (ревью части 3): пока смена статуса монеты ждёт подтверждения, в справочнике ядра лежит ПРЕЖНИЙ статус
+//! со свежим временем получения — предпроверка сделки (precheck.networks_memory, precheck_nets.rs) такой памяти верить
+//! не должна. Ключи ждущих смен каждой биржи пишутся в ядро (inner.status_pending) на каждом проходе apply; чтение —
+//! waiting.
+//! Кто вызывает: core/registry_sync.rs (run — перед сравнением и записью справочника), core/precheck_nets.rs (waiting).
 //! От чего зависит: core/types, engine.rs (справочник сетей).
 //! Настройки: venue.status_confirm_polls (по площадке).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::core::types::{CoinNetworkInfo, VenueId};
 use crate::settings::read::At;
 
-use super::engine::{Core, rd};
+use super::engine::{Core, rd, wr};
 
 /// Ключ: тикер и сеть.
 type Key = (String, String);
+
+/// Ждущие подтверждения смены статуса по биржам: биржа → ключи (тикер, сеть). Лежит в ядре (inner.status_pending).
+pub type Pending = HashMap<VenueId, HashSet<Key>>;
+
+/// Ждёт ли подтверждения смена статуса ввода/вывода монеты на бирже (в любой её сети): в справочнике ядра у такой
+/// монеты прежний статус, а последний ответ биржи фоновому опросу — другой. Принимает: ядро, биржу, тикер монеты на
+/// этой бирже. Ошибок нет.
+pub fn waiting(core: &Core, venue: &VenueId, ticker: &str) -> bool {
+    rd(&core.inner.status_pending)
+        .get(venue)
+        .is_some_and(|keys| keys.iter().any(|(t, _)| t == ticker))
+}
 
 /// Неподтверждённые смены статуса одной биржи: ключ → (новый статус ввода, вывода; опросов подряд).
 #[derive(Default)]
@@ -49,6 +65,7 @@ impl Debounce {
             let nets = rd(&core.inner.networks);
             let Some(prev) = nets.get(venue) else {
                 self.pending.clear();
+                wr(&core.inner.status_pending).remove(venue);
                 return list;
             };
             prev.iter()
@@ -80,6 +97,9 @@ impl Debounce {
         }
         // Остаются только смены, которые всё ещё ждут подтверждения; принятые и вернувшиеся — забываются.
         self.pending = seen;
+        // Решение 266 (ревью): ключи ждущих смен — в ядро, для предпроверки сделки (waiting).
+        let keys: HashSet<Key> = self.pending.keys().cloned().collect();
+        wr(&core.inner.status_pending).insert(venue.clone(), keys);
         list
     }
 }

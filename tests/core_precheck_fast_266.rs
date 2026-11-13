@@ -22,6 +22,13 @@
 //!    баланс …: свободно …, кандидату нужно …»;
 //! 8) все настройки «нет», все «да» и каждая по одной — предпроверка даёт ту же первую по порядку причину отказа.
 //!
+//! 9) ревью: смена статуса монеты ждёт подтверждения сглаживателя (status_debounce.rs, venue.status_confirm_polls) —
+//!    памяти не верим, запрос; подтверждена — память с новым статусом; решение быстрого пути по готовому расчёту CAKE
+//!    (precheck_fast::accept, floor_qty) — проход порогов даёт план с честным выбором объёма, ниже порога — причина;
+//!    шаг количества не больше нуля — быстрый путь не считается; «сторона A прошла, сторона B отказала» (сети из
+//!    памяти, пары — записанное состояние пары BingX) — по очереди и одновременно та же причина и те же шаги, шаг
+//!    «адрес депозита B» — только после прохода A и «сетей B»/пары B.
+//!
 //! Часть 4 с ПОЛУЧЕННЫМ балансом (хватает → быстрый путь; меньше → полный подбор под остаток; исполнитель не читает
 //! баланс повторно) здесь не проверяется: баланс читает адаптер площадки (в тесте реестр шлюза пуст, записей ответа
 //! балансов под контракт Venue::balance нет), а площадка-заглушка запрещена (CLAUDE.md).
@@ -38,7 +45,9 @@ use arb::core::Core;
 use arb::core::dirctx::DirCtx;
 use arb::core::precheck::{self, replan, replan_sized};
 use arb::core::precheck_balance::{self, BALANCE, Cand, Read};
-use arb::core::precheck_fast::{self, FAST, Opts, PARALLEL, Path, Want, choice, recalc};
+use arb::core::precheck_fast::{
+    self, FAST, Opts, PARALLEL, Path, Want, accept, choice, floor_qty, recalc,
+};
 use arb::core::precheck_nets::{self, MEMORY, Src};
 use arb::core::registry::Presence;
 use arb::core::risk::Mode;
@@ -635,5 +644,301 @@ async fn every_switch_combination_keeps_first_reason() {
                 .unwrap_err();
             assert_eq!(reason(&base), reason(&e), "{buy} → {sell}: {o:?}");
         }
+    }
+}
+
+/// Имена шагов из строки «(время: …)» отказа — в порядке записи.
+fn step_names(e: &str) -> Vec<String> {
+    let t = e.split(" (время: ").nth(1).unwrap_or_default();
+    let t = t.split("; шаги сетей").next().unwrap_or_default();
+    t.trim_end_matches(')')
+        .split(", ")
+        .filter(|p| !p.is_empty())
+        .map(|p| p.rsplitn(3, ' ').nth(2).unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn pending_status_change_forces_request() {
+    use arb::core::status_debounce::{Debounce, waiting};
+    let (core, st) = core_at("fast-266-pending").await;
+    let rec = Rec::load("fast-266-pending").await;
+    let ticker = rec.net.asset.ticker.clone();
+    let bingx = v("bingx");
+    let sc = || Scope::Venue("bingx".into());
+    st.set("venue.networks_poll_ms", sc(), Some(json!(60000)), "тест")
+        .await
+        .unwrap();
+    st.set("venue.status_confirm_polls", sc(), Some(json!(3)), "тест")
+        .await
+        .unwrap();
+    remember(&core, &rec, 100, true);
+    assert!(precheck_nets::recent(&core, &bingx, &ticker, Some(CAKE)).is_some());
+    // Ответ биржи фоновому опросу: вывод закрыт. Сглаживатель держит в справочнике прежний «открыт» (со свежим временем).
+    let raw = || {
+        let mut n = rec.net.clone();
+        n.venue = bingx.clone();
+        n.asset.bsc_contract = Some(CAKE);
+        n.withdraw_enabled = false;
+        n.updated_at = chrono::Utc::now();
+        vec![n]
+    };
+    let store = |list: Vec<_>| {
+        core.inner
+            .networks
+            .write()
+            .unwrap()
+            .insert(bingx.clone(), std::sync::Arc::new(list));
+    };
+    let mut deb = Debounce::default();
+    let kept = deb.apply(&core, &bingx, raw());
+    assert!(
+        kept[0].withdraw_enabled,
+        "смена не подтверждена — в памяти прежний статус"
+    );
+    store(kept);
+    // Смена ждёт подтверждения — памяти не верим: запрос к бирже (биржа не подключена — тот же отказ, что без настройки).
+    assert!(waiting(&core, &bingx, &ticker));
+    assert!(precheck_nets::recent(&core, &bingx, &ticker, Some(CAKE)).is_none());
+    let dd = Direction {
+        asset: Asset {
+            ticker: ticker.clone(),
+            bsc_contract: Some(CAKE),
+        },
+        buy_on: bingx.clone(),
+        sell_on: v("bsc_dex"),
+    };
+    let mem = Opts {
+        networks_memory: true,
+        ..Opts::default()
+    };
+    let plain = Box::pin(precheck::run(&core, &dd, false, Opts::default(), None))
+        .await
+        .unwrap_err();
+    let asked = Box::pin(precheck::run(&core, &dd, false, mem, None))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        reason(&plain),
+        reason(&asked),
+        "ждущая смена — запрос, а не память"
+    );
+    assert!(!asked.contains("вывод закрыт") && !waiting(&core, &v("mexc"), &ticker));
+    // Второй опрос — всё ещё ждёт; третий — смена принята: в памяти «закрыт», ждущих нет — память годна.
+    let kept = deb.apply(&core, &bingx, raw());
+    assert!(kept[0].withdraw_enabled);
+    store(kept);
+    assert!(waiting(&core, &bingx, &ticker));
+    let taken = deb.apply(&core, &bingx, raw());
+    assert!(!taken[0].withdraw_enabled);
+    store(taken);
+    assert!(!waiting(&core, &bingx, &ticker));
+    let closed = Box::pin(precheck::run(&core, &dd, false, mem, None))
+        .await
+        .unwrap_err();
+    assert_eq!(reason(&closed), format!("bingx: {ticker} вывод закрыт"));
+}
+
+#[tokio::test]
+async fn fast_path_decision_on_recorded_calc() {
+    let rec = Rec::load("fast-266-accept").await;
+    let c = size_common::calc::calc(&rec, d("10"));
+    let step = rec.pair.step_size;
+    // Округление до шага: вниз, не больше нуля — быстрый путь не считается; шаг не больше нуля — тоже.
+    let q = floor_qty(d("10") + step / d("2"), step).unwrap();
+    assert_eq!(q, d("10"));
+    assert!(
+        floor_qty(step / d("2"), step)
+            .unwrap_err()
+            .contains("не больше нуля")
+    );
+    for bad in [d("0"), d("-1")] {
+        let e = floor_qty(d("10"), bad).unwrap_err();
+        assert!(
+            e.starts_with("шаг количества ") && e.ends_with("не больше нуля"),
+            "{e}"
+        );
+    }
+    // Пороги пройдены (ровно на пороге — проходит: сравнения «меньше», как в profit.rs) — план без подбора.
+    let min = (c.profit_usd, c.profit_pct);
+    let plan = accept(c.clone(), q, d("20"), "CAKE", min).unwrap();
+    // Поля, которые читает исполнение, — те же, что у финального расчёта на этом объёме.
+    assert_eq!(
+        (
+            plan.qty,
+            plan.buy_worst,
+            plan.spend_max,
+            plan.spend_fee,
+            plan.sell_qty
+        ),
+        (c.qty, c.buy_worst, c.spend_max, c.spend_fee, c.sell_qty)
+    );
+    assert_eq!(
+        serde_json::to_string(&plan.costs).unwrap(),
+        serde_json::to_string(&c.costs).unwrap()
+    );
+    let s = plan.size.as_ref().unwrap();
+    assert_eq!((s.budget, s.qty, s.profit), (d("20"), c.qty, c.profit_usd));
+    assert_eq!(
+        (s.evals, s.peaks, s.capped, s.max_exact),
+        (1, 0, false, false)
+    );
+    assert!(
+        s.why.contains("повторный подбор объёма не выполнялся"),
+        "{}",
+        s.why
+    );
+    // Ниже порога USDT / % — причина теми же словами, что у полного пути; плана нет (дальше — полный подбор).
+    let e = accept(
+        c.clone(),
+        q,
+        d("20"),
+        "CAKE",
+        (c.profit_usd + d("0.01"), c.profit_pct),
+    )
+    .unwrap_err();
+    assert!(
+        e.starts_with("прибыль ") && e.contains(" USDT ниже порога "),
+        "{e}"
+    );
+    let e = accept(
+        c.clone(),
+        q,
+        d("20"),
+        "CAKE",
+        (c.profit_usd, c.profit_pct + d("0.01")),
+    )
+    .unwrap_err();
+    assert!(
+        e.starts_with("прибыль ") && e.contains("% ниже порога "),
+        "{e}"
+    );
+    // Шаг количества 0 — recalc не запускает расчёт: причина в запросе, дальше полный подбор.
+    let (core, _st) = core_at("fast-266-accept").await;
+    let mut w = Want::new(d("10"));
+    let got = Box::pin(recalc(&core, &cx(&rec), &mut w, d("20"), d("0"), min)).await;
+    assert!(got.is_none());
+    assert!(
+        matches!(&w.path, Some(Path::Full(t)) if t.starts_with("шаг количества ")),
+        "{:?}",
+        w.path
+    );
+}
+
+#[tokio::test]
+async fn side_a_passes_side_b_refuses_same_in_both_modes() {
+    use arb::gateway::events::MarketEvent;
+    let (core, st) = core_at("fast-266-ab").await;
+    let rec = Rec::load("fast-266-ab").await;
+    let ticker = rec.pair.ticker.clone();
+    let asset = Asset {
+        ticker: ticker.clone(),
+        bsc_contract: Some(CAKE),
+    };
+    for id in ["bingx", "mexc"] {
+        let sc = || Scope::Venue(id.into());
+        st.set("venue.networks_poll_ms", sc(), Some(json!(60000)), "тест")
+            .await
+            .unwrap();
+        st.set("venue.symbols_stale_s", sc(), Some(json!(600)), "тест")
+            .await
+            .unwrap();
+    }
+    // Память: сеть монеты на обеих биржах (записанная запись BingX), пары — записанное состояние пары BingX.
+    let net = |id: &str, deposit: bool| {
+        let mut n = rec.net.clone();
+        n.venue = v(id);
+        n.asset = asset.clone();
+        n.withdraw_enabled = true;
+        n.deposit_enabled = deposit;
+        n.updated_at = chrono::Utc::now();
+        n
+    };
+    let put = |id: &str, deposit: bool| {
+        core.inner
+            .networks
+            .write()
+            .unwrap()
+            .insert(v(id), std::sync::Arc::new(vec![net(id, deposit)]));
+    };
+    let pairs = |id: &str| {
+        core.inner
+            .market
+            .write()
+            .unwrap()
+            .apply(MarketEvent::SpotPairs {
+                venue: v(id),
+                tickers: vec![ticker.clone()],
+                pairs: vec![rec.pair.clone()],
+                loaded_at: chrono::Utc::now(),
+            });
+    };
+    put("bingx", true);
+    pairs("bingx");
+    let seq = Opts {
+        networks_memory: true,
+        ..Opts::default()
+    };
+    let par = Opts {
+        parallel: true,
+        ..seq
+    };
+    let run = |buy: &str, sell: &str, o: Opts| {
+        let dd = Direction {
+            asset: asset.clone(),
+            buy_on: v(buy),
+            sell_on: v(sell),
+        };
+        let core = core.clone();
+        async move {
+            Box::pin(precheck::run(&core, &dd, false, o, None))
+                .await
+                .unwrap_err()
+        }
+    };
+    // (1) B — DEX: A прошла (сети и пара), B отказала на BNB. (2) B — биржа, ввод закрыт. (3) B — биржа, пар нет.
+    // (4) B — биржа, сети и пара прошли — отказ на шаге «адрес депозита» (он — после A и «сетей B»).
+    let mut seen = Vec::new();
+    for case in 1..=4 {
+        let sell = if case == 1 { "bsc_dex" } else { "mexc" };
+        match case {
+            2 => put("mexc", false),
+            3 => put("mexc", true),
+            4 => pairs("mexc"),
+            _ => {}
+        }
+        let a = run("bingx", sell, seq).await;
+        let b = run("bingx", sell, par).await;
+        assert_eq!(reason(&a), reason(&b), "случай {case}");
+        assert_eq!(step_names(&a), step_names(&b), "случай {case}");
+        assert_eq!(step_names(&a)[0], "справочник сетей bingx", "A прошла: {a}");
+        assert!(step_names(&a).len() >= 2, "дошли до стороны B: {a}");
+        println!("случай {case}: {a}\n    {b}");
+        seen.push(a);
+    }
+    assert_eq!(reason(&seen[1]), format!("mexc: {ticker} ввод закрыт"));
+    for early in &seen[..3] {
+        assert!(!early.contains("адрес депозита"), "{early}");
+    }
+    assert_eq!(
+        step_names(&seen[3]),
+        [
+            "справочник сетей bingx",
+            "справочник сетей mexc",
+            "адрес депозита mexc"
+        ]
+    );
+    // Сторона A отказала (вывод закрыт), B при этом прошла бы до адреса: шага «адрес депозита» нет в обоих режимах.
+    let mut n = net("bingx", true);
+    n.withdraw_enabled = false;
+    core.inner
+        .networks
+        .write()
+        .unwrap()
+        .insert(v("bingx"), std::sync::Arc::new(vec![n]));
+    for o in [seq, par] {
+        let e = run("bingx", "mexc", o).await;
+        assert_eq!(reason(&e), format!("bingx: {ticker} вывод закрыт"));
+        assert_eq!(step_names(&e), ["справочник сетей bingx"]);
     }
 }

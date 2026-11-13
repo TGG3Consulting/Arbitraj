@@ -84,8 +84,8 @@ pub fn from_code_http(
         500 | 503 | 504 | 20002 | 11444 => ErrorCode::Unreachable,
         // Решение 268 (Тигран 14.11): 30087 «Order price exceeds allowed range» — цена лимитного ордера вне коридора
         // биржи (PriceOutOfRange). В таблице Error Code кода нет — по живому ответу MEXC на ордер продажи 13.11.2026
-        // (FAR, bsc_dex → mexc: {"msg":"Order price exceeds allowed range","code":30087}, tests/data/mexc/
-        // order_price_range_30087.json). Правило коридора — exchangeInfo, фильтр PERCENT_PRICE_BY_SIDE: sell «orderPrice
+        // (FAR, bsc_dex → mexc: {"msg":"Order price exceeds allowed range","code":30087},
+        // tests/data/mexc_price_range_2026-11-13/order_30087.json). Правило коридора — exchangeInfo, фильтр PERCENT_PRICE_BY_SIDE: sell «orderPrice
         // >= lastPrice * (1 - askMultiplierDown)», buy «orderPrice <= lastPrice * (1 + bidMultiplierUp)»
         // (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information). От операции не зависит —
         // пробный ордер (Op::Other) распознаёт так же; рыночная продажа код снимает (market_sell.rs).

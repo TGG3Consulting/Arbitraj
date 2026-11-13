@@ -15,6 +15,7 @@ pub mod balance_sell_report;
 pub mod balances_cache;
 pub mod balances_view;
 pub mod blacklist;
+pub mod busy_budget;
 pub mod busy_calc;
 pub mod busy_note;
 pub mod busy_sum;

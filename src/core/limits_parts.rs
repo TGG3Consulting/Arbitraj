@@ -2,8 +2,10 @@
 //! Что делает: составляющие бюджета сделки (limits.rs) — лимит на сделку, остаток лимита на монету, остаток лимита в
 //! пути, виртуальный бюджет сухого режима — и какая из них ограничила (решение 141: расчёт «без потолка» пишет, что
 //! срезало объём). Бюджет = меньшее из составляющих — та же формула, что и раньше в limits::budget (вынесена сюда).
-//! Кто вызывает: core/limits.rs (budget), core/uncapped.rs.
-//! От чего зависит: engine.rs (учёт Exposure), dry.rs (режим), settings.
+//! Решение 267: в теневом расчёте занятой монеты (busy_calc.rs; признак задачи busy_budget.rs) остатки лимита на
+//! монету и «в пути» считаются без вычета её текущей сделки; вне теневого расчёта — как раньше.
+//! Кто вызывает: core/limits.rs (budget), core/uncapped.rs, core/busy_calc.rs.
+//! От чего зависит: engine.rs (учёт Exposure), dry.rs (режим), busy_budget.rs, settings.
 //! Настройки: money.max_per_trade_usd [площадка A; решение 242 — площадка + тип направления, venue_dir.rs], money.max_per_coin_usd, money.max_in_transit_usd, dry.budget_usdt
 //! (через dry::Mode).
 
@@ -70,10 +72,14 @@ pub fn parts(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Result<Part
         super::dry::Mode::Live => None,
     };
     let ex = lk(&core.inner.exposure).clone();
-    Ok(Parts {
+    let mut p = Parts {
         per_trade,
         coin_left: per_coin - ex.per_coin.get(&d.asset).copied().unwrap_or_default(),
         transit_left: transit - ex.in_transit,
         dry,
-    })
+    };
+    // Решение 267: только в теневом расчёте занятой монеты (признак задачи busy_budget.rs) — без вычета её текущей
+    // сделки; у кандидата, предпроверки и всех остальных признака нет — ничего не меняется.
+    super::busy_budget::add_back(core, d, &mut p);
+    Ok(p)
 }

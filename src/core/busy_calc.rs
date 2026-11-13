@@ -3,8 +3,11 @@
 //! монете действует замок «одна сделка на монету» (решение 118, Я-2), очередь кандидатов её направления не считает
 //! (candidates.rs enqueue молча выходит) — бот не знает, выросла ли разница цен за время сделки. При window.busy_calc =
 //! да тик вместо молчаливого выхода ставит ТЕНЕВОЙ расчёт направления (не чаще одного за window.busy_calc_min_ms на
-//! направление, не больше одного одновременно): тот же profit::decide с теми же настройками и действующими лимитами,
-//! что у кандидата, но итог идёт ТОЛЬКО в сводку замера (busy_note.rs → окно монеты и журнал core.busy_calc).
+//! направление, не больше одного одновременно; ПЕРВЫЙ — не раньше чем через тот же интервал после того, как тик
+//! впервые принёс направление монеты при занятом замке: не идти одновременно с предпроверкой и ордером нашей сделки и
+//! не делить с ними счёт котировок DEX): тот же profit::decide с теми же настройками, что у кандидата; бюджет — по тем
+//! же лимитам, но БЕЗ вычета текущей сделки этой монеты (busy_budget.rs: «если бы мы не были заняты»; свободный баланс
+//! не читается, как у кандидата); итог идёт ТОЛЬКО в сводку замера (busy_note.rs → окно монеты и журнал core.busy_calc).
 //! Теневой расчёт НЕ вызывает исполнителя, не открывает и не продлевает окно как «прошедший кандидат», не трогает
 //! эпизоды, строку и карточку «Кандидатов», журнал отказов кандидатов, отказов исполнителя и расчёт «без потолка».
 //! Торговля не меняется: только наблюдение.
@@ -17,7 +20,8 @@
 //! Не задана или «нет» window.busy_calc — одно чтение этой настройки и выход: ни расчёта, ни памяти, ни записи.
 //! Задана «да», а window.busy_calc_min_ms не задана — замер не работает, одна запись в журнал на смену причины.
 //! Кто вызывает: core/candidates.rs (enqueue — монета занята; run — Shadows), core/inner.rs (State).
-//! От чего зависит: profit.rs (decide), dry.rs, limits_parts.rs, busy_sum.rs, busy_note.rs, gateway/urgency.rs, settings.
+//! От чего зависит: profit.rs (decide), dry.rs, limits_parts.rs, busy_budget.rs, busy_sum.rs, busy_note.rs,
+//! gateway/urgency.rs, settings.
 //! Настройки: window.busy_calc, window.busy_calc_min_ms; profit.calc_concurrency, profit.calc_timeout_ms (те же, что у
 //! очереди кандидатов).
 
@@ -54,12 +58,22 @@ struct Mark {
     running: bool,
 }
 
+/// Занятость монеты, как её видит замер: когда тик впервые принёс её направление при занятом замке, и её сделка.
+struct Seen {
+    since: Instant,
+    /// id открытой сделки монеты из учёта (None — ещё не видна: замок держит предпроверка).
+    deal: Option<String>,
+}
+
 /// Память замера (Inner.busy_calc).
 pub struct State {
     tx: mpsc::Sender<Direction>,
     /// Приёмник очереди теневых расчётов — забирает задача очереди кандидатов (candidates.rs run).
     rx: Mutex<Option<mpsc::Receiver<Direction>>>,
     marks: Mutex<HashMap<Direction, Mark>>,
+    /// С какого момента монета занята (первое обращение тика при занятом замке) — первый теневой расчёт не раньше
+    /// чем через интервал после него.
+    seen: Mutex<HashMap<CoinKey, Seen>>,
     /// Сводки направлений занятых монет (busy_note.rs).
     pub(super) sums: Mutex<HashMap<Direction, BusySum>>,
     /// Монеты, за концом занятости которых следит задача (busy_note.rs watch).
@@ -76,14 +90,17 @@ impl State {
             tx,
             rx: Mutex::new(Some(rx)),
             marks: Mutex::default(),
+            seen: Mutex::default(),
             sums: Mutex::default(),
             watching: Mutex::default(),
             off: Mutex::default(),
         }
     }
 
-    /// Забывает отметки направлений монеты, расчёт которых не идёт (монета освободилась). Ошибок нет.
+    /// Забывает начало занятости монеты и отметки её направлений, расчёт которых не идёт (монета освободилась).
+    /// Ошибок нет.
     pub(super) fn forget(&self, key: &CoinKey) {
+        lk(&self.seen).remove(key);
         lk(&self.marks).retain(|d, m| m.running || &CoinKey::of(&d.asset) != key);
     }
 }
@@ -112,6 +129,44 @@ pub fn enqueue(core: &Core, d: &Direction) {
     };
     lk(&st.off).take();
     let now = Instant::now();
+    let key = CoinKey::of(&d.asset);
+    {
+        // Первое обращение по занятой монете — только запомнить момент: первый теневой расчёт не раньше чем через
+        // интервал (не идти одновременно с предпроверкой и ордером нашей сделки). Конец занятости ловит задача монеты.
+        let mut seen = lk(&st.seen);
+        let Some(x) = seen.get(&key) else {
+            let since = Seen {
+                since: now,
+                deal: None,
+            };
+            seen.insert(key.clone(), since);
+            drop(seen);
+            return super::busy_note::watch_coin(core, key);
+        };
+        if now.duration_since(x.since) < min {
+            return;
+        }
+    }
+    if lk(&st.marks)
+        .get(d)
+        .is_some_and(|m| m.running || now.duration_since(m.last) < min)
+    {
+        return;
+    }
+    // Сделка монеты сменилась, а конец прежней занятости задача ещё не увидела — занятость считается заново.
+    let deal = super::busy_note::open_deal(core, &key).map(|x| x.id);
+    {
+        let mut seen = lk(&st.seen);
+        let Some(x) = seen.get_mut(&key) else { return };
+        if x.deal.is_some() && deal.is_some() && x.deal != deal {
+            x.since = now;
+            x.deal = deal;
+            return;
+        }
+        if deal.is_some() {
+            x.deal = deal;
+        }
+    }
     {
         let mut marks = lk(&st.marks);
         if marks
@@ -250,25 +305,30 @@ fn cap(core: &Core) -> Option<usize> {
 async fn one(core: &Core, d: &Direction) -> Outcome {
     let s = &core.inner.deps.settings;
     let mode = super::dry::mode(s);
-    let work = urgency::scope(Urgency::Background, profit::decide(core, d, &mode));
+    // Бюджет — без вычета текущей сделки монеты (busy_budget.rs: признак задачи, действует только здесь).
+    let calc = async {
+        match profit::decide(core, d, &mode).await {
+            Verdict::Accept(c) => Outcome::Accept(Box::new(best(core, &c, &mode))),
+            Verdict::Reject { reason, .. } => Outcome::Reject(reason),
+        }
+    };
+    let key = CoinKey::of(&d.asset);
+    let work = super::busy_budget::scope(key, urgency::scope(Urgency::Background, calc));
     let limit = s.integer("profit.calc_timeout_ms", At::default());
-    let verdict = match limit.ok().filter(|ms| *ms > 0) {
+    match limit.ok().filter(|ms| *ms > 0) {
         Some(ms) => match timeout(Duration::from_millis(ms), work).await {
             Ok(v) => v,
             Err(_) => {
                 let why = format!("расчёт не уложился в срок profit.calc_timeout_ms {ms} мс");
-                return Outcome::Reject(why);
+                Outcome::Reject(why)
             }
         },
         None => work.await,
-    };
-    match verdict {
-        Verdict::Accept(c) => Outcome::Accept(Box::new(best(core, &c, &mode))),
-        Verdict::Reject { reason, .. } => Outcome::Reject(reason),
     }
 }
 
-/// Числа прошедшего расчёта для сводки; составляющие лимита читаются сразу после расчёта (учёт ядра, без запросов).
+/// Числа прошедшего расчёта для сводки; составляющие лимита (уже без вычета текущей сделки монеты) и сама её доля
+/// читаются сразу после расчёта (учёт ядра, без запросов); вызывается внутри признака теневого расчёта.
 fn best(core: &Core, c: &Calc, mode: &Mode) -> BusyBest {
     BusyBest {
         profit_usd: c.profit_usd,
@@ -277,5 +337,6 @@ fn best(core: &Core, c: &Calc, mode: &Mode) -> BusyBest {
         at: c.at,
         budget: c.size.as_ref().map(|s| s.budget),
         limits: super::limits_parts::parts(core, &c.direction, mode).ok(),
+        freed: super::busy_budget::freed(core, &c.direction).map(|f| f.left),
     }
 }

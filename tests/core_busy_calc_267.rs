@@ -10,7 +10,9 @@
 //!    включено — теневой расчёт не чаще интервала, исполнитель не вызывается, обычных следов кандидата (очередь,
 //!    строка «Кандидатов», журнал отказов, сделки, окна) нет, сводка — в окне монеты; монета освободилась — одна
 //!    строка журнала core.busy_calc; обычный кандидат свободной монеты считается как раньше;
-//!    места расчёта: предел занят настоящими — теневой отбрасывается; настоящий занял место — теневой снимается.
+//!    места расчёта: предел занят настоящими — теневой отбрасывается; настоящий занял место — теневой снимается;
+//!    первый теневой расчёт — не раньше интервала после начала занятости; бюджет теневого расчёта — без вычета текущей
+//!    сделки монеты (limits_parts::parts под признаком busy_budget), обычный путь сделку вычитает, как раньше.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{busy_calc, busy_sum, candidates, window, deal}, arb::settings, arb::storage,
@@ -27,10 +29,13 @@ use arb::core::candidates;
 use arb::core::coin_key::CoinKey;
 use arb::core::costs::Calc;
 use arb::core::deal::Deal;
+use arb::core::deal::Step;
 use arb::core::deps::Deps;
+use arb::core::dry::Mode;
 use arb::core::engine::lk;
 use arb::core::types::{Direction, VenueId};
 use arb::core::window::{WindowInfo, Windows};
+use arb::core::{busy_budget, limits_parts};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -53,6 +58,7 @@ fn best(c: &Calc) -> Outcome {
         at: c.at,
         budget: None,
         limits: None,
+        freed: None,
     }))
 }
 
@@ -109,7 +115,20 @@ async fn summary_counts_and_keeps_maximum() {
         "{text}"
     );
     assert!(text.contains("(в 4 раз больше сделки)"), "{text}");
-    assert!(text.contains("наибольшее прибыльное вложение"), "{text}");
+    // Честная формулировка: это «сверх нашей сделки», и сумма «сделка + сверх» (до покупки — по плану сделки).
+    assert!(
+        text.contains("максимум прибыли СВЕРХ нашей сделки"),
+        "{text}"
+    );
+    assert!(
+        text.contains("наибольшее прибыльное вложение сверх нашей сделки"),
+        "{text}"
+    );
+    let total = (top.invested / d("4") + top.invested)
+        .round_dp(4)
+        .normalize();
+    let want = format!("итого сделка + сверх = {total} USDT (сделка — по плану");
+    assert!(text.contains(&want), "{text}");
     // Сводка — в открытое окно монеты: растёт на месте, другое начало — своя запись; окна нет — не пишется.
     let mut w = Windows::default();
     assert!(!w.note_busy(&s));
@@ -258,9 +277,19 @@ async fn on_shadow_calc_only_observes() {
     lk(&core.inner.active).insert(key.clone());
     let venue = [VenueId("bingx".into())];
     lk(&core.inner.windows).pass(&dir, "w".into(), false, Decimal::ONE, &venue, Utc::now());
+    // Первый теневой расчёт — не раньше чем через интервал после того, как тик впервые увидел монету занятой.
     for _ in 0..3 {
         candidates::enqueue(&core, &dir);
     }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    candidates::enqueue(&core, &dir);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        sum(&core, &dir).is_none(),
+        "внутри первого интервала расчёта нет"
+    );
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    candidates::enqueue(&core, &dir);
     until(|| sum(&core, &dir).is_some_and(|x| x.calcs == 1)).await;
     // Внутри интервала новый тик расчёт не ставит.
     candidates::enqueue(&core, &dir);
@@ -313,9 +342,57 @@ async fn on_shadow_calc_only_observes() {
     assert!(text.contains("прибыльных расчётов не было"), "{text}");
 }
 
+#[tokio::test]
+async fn shadow_budget_ignores_current_deal_only_in_shadow() {
+    // Лимиты: на сделку 100, на монету 100, в пути 150; наша сделка по монете — вложено 60, на шаге перевода.
+    let (core, s, _j) = start("budget").await;
+    let dir = direction();
+    for (name, v) in [
+        ("money.max_per_trade_usd", "100"),
+        ("money.max_per_coin_usd", "100"),
+        ("money.max_in_transit_usd", "150"),
+    ] {
+        set(&s, name, json!(v)).await;
+    }
+    let mut deal = Deal::new("d1".into(), dir.clone(), json!({}), d("0.5"));
+    deal.invested = d("60");
+    deal.step = Step::Transfer;
+    lk(&core.inner.deals).insert(deal.id.clone(), deal);
+    {
+        // Учёт денег в открытых сделках — как его ведёт ledger.rs (по монете сделки и «в пути»).
+        let mut ex = lk(&core.inner.exposure);
+        ex.per_coin.insert(dir.asset.clone(), d("60"));
+        ex.in_transit = d("60");
+    }
+    // Обычный путь (кандидат, предпроверка): сделка вычтена — как раньше.
+    let usual = limits_parts::parts(&core, &dir, &Mode::Live).unwrap();
+    assert_eq!((usual.coin_left, usual.transit_left), (d("40"), d("90")));
+    assert_eq!(usual.cap(), d("40"));
+    assert!(busy_budget::freed(&core, &dir).is_none());
+    // Теневой расчёт этой монеты: текущая сделка не вычтена — бюджет как без неё.
+    let key = CoinKey::of(&dir.asset);
+    let (free, freed) = busy_budget::scope(key, async {
+        let p = limits_parts::parts(&core, &dir, &Mode::Live).unwrap();
+        (p, busy_budget::freed(&core, &dir).unwrap())
+    })
+    .await;
+    assert_eq!((free.coin_left, free.transit_left), (d("100"), d("150")));
+    assert_eq!(free.cap(), d("100"));
+    assert_eq!(
+        (freed.left, freed.coin, freed.transit),
+        (d("60"), true, true)
+    );
+    // После теневого расчёта обычный путь снова видит сделку.
+    assert_eq!(
+        limits_parts::parts(&core, &dir, &Mode::Live).unwrap(),
+        usual
+    );
+}
+
 /// Стек потока для расчёта обычного кандидата в отладочной сборке: вложенные будущие calc_one (urgency → calc_meter →
 /// calc_timing → profit::decide) без оптимизации не помещаются в стек тестового потока по умолчанию (переполнение —
-/// в задаче candidates::run, по обратной трассе gdb); параметр теста, не настройка бота.
+/// в задаче candidates::run, по обратной трассе gdb; воспроизводится и на чистом f0bf5d6 — проверено сборкой того же
+/// теста против него); параметр теста, не настройка бота.
 const CALC_STACK: usize = 64 * 1024 * 1024;
 
 #[test]

@@ -72,8 +72,8 @@ function busyRatio(b) {
 /**
  * Сводки теневых расчётов окна «пока монета занята сделкой» (решение 267, сводка окна busy; замер включается
  * window.busy_calc) — строки для показа: направление, сделка, сколько расчётов и сколько прошло пороги, максимум
- * прибыли и вложение при нём со сравнением со сделкой, наибольшее прибыльное вложение; подсказка — бюджет расчёта,
- * время и последний отказ. Принимает: сводку. Возвращает: [{key, dir, text, full}].
+ * прибыли СВЕРХ нашей сделки и вложение при нём со сравнением со сделкой, наибольшее прибыльное вложение, «итого
+ * сделка + сверх»; подсказка — бюджет расчёта (без вычета нашей сделки из лимитов), время и последний отказ. Принимает: сводку. Возвращает: [{key, dir, text, full}].
  */
 export const winBusy = (w) =>
   (w.busy ?? []).map((b, i) => {
@@ -82,14 +82,21 @@ export const winBusy = (w) =>
       ? `сделкой ${b.deal.id} (вложено ${fmtUsd(b.deal.invested)}, план ${fmtUsd(b.deal.plan_profit_usd)})`
       : '(сделки в учёте не видно)';
     const dropped = b.dropped ? `, отброшено ${b.dropped}` : '';
+    // Рынок после нашей покупки сдвинут ею же: это «сверх нашей сделки», а не «какой была бы вся сделка».
+    const over = b.deal ? ' сверх нашей сделки' : '';
+    const fact = Number(b.deal?.invested);
+    const base = fact > 0 ? fact : Number(b.deal?.plan_invested);
+    const total = b.best && base > 0 ? `; итого сделка + сверх = ${fmtUsd(base + Number(b.best.invested))}${fact > 0 ? '' : ' (сделка — по плану)'}` : '';
     const top = b.best
-      ? `максимум прибыли ${fmtUsd(b.best.profit_usd)} при вложении ${fmtUsd(b.best.invested)}${busyRatio(b)}; наибольшее прибыльное вложение ${fmtUsd(b.max_invested)}`
+      ? `максимум прибыли${over} ${fmtUsd(b.best.profit_usd)} при вложении ${fmtUsd(b.best.invested)}${busyRatio(b)}; наибольшее прибыльное вложение${over} ${fmtUsd(b.max_invested)}${total}`
       : 'прибыльных расчётов не было';
+    const freed = b.best?.freed != null ? `наша сделка из лимитов не вычтена: ${fmtUsd(b.best.freed)}` : 'открытой сделки в учёте не было — вычитать нечего';
     const time = (t) => new Date(t).toLocaleTimeString('ru-RU');
     const full = [
       `с ${time(b.first_at)} по ${time(b.last_at)}`,
       b.best ? `максимум в ${time(b.best.at)}` : null,
-      b.best?.budget != null ? `бюджет расчёта ${fmtUsd(b.best.budget)}` : null,
+      b.best?.budget != null ? `бюджет расчёта ${fmtUsd(b.best.budget)} (${freed})` : null,
+      b.deal ? 'рынок после нашей покупки уже сдвинут ею: показано, что ещё можно было взять сверх сделки' : null,
       b.deal?.plan_invested != null ? `вложение плана сделки ${fmtUsd(b.deal.plan_invested)}` : null,
       b.last_reject ? `последний отказ: ${b.last_reject}` : null,
     ]

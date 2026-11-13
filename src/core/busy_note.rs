@@ -9,7 +9,9 @@
 //! сводка прежней сделки пишется в журнал, для новой начинается своя.
 //! Итог расчёта, пришедший после конца занятости, когда сводка уже записана, отбрасывается (второй строки нет).
 //! Перезапуск бота сводку в памяти не сохраняет (в окне — то, что было записано к последнему сохранению сводки окна).
-//! Кто вызывает: core/busy_calc.rs (record).
+//! Задача монеты запускается с первым обращением тика по занятой монете (busy_calc.rs enqueue) — она же забывает
+//! начало занятости, от которого отсчитывается первый теневой расчёт.
+//! Кто вызывает: core/busy_calc.rs (record, watch_coin, open_deal).
 //! От чего зависит: busy_calc.rs (State, min_ms, KIND), busy_sum.rs, window.rs (note_busy), deal.rs, coin_key.rs.
 //! Настройки: window.busy_calc_min_ms (через busy_calc.rs).
 
@@ -56,22 +58,27 @@ pub fn record(core: &Core, d: &Direction, o: Outcome) {
         (s.clone(), old)
     };
     lk(&core.inner.windows).note_busy(&sum);
-    let fresh = lk(&st.watching).insert(key.clone());
     // Из Drop при остановке рантайма задач не запускаем (строка журнала тогда не пишется).
-    let Ok(rt) = tokio::runtime::Handle::try_current() else {
-        return;
-    };
-    if let Some(old) = old {
+    if let (Some(old), Ok(rt)) = (old, tokio::runtime::Handle::try_current()) {
         let c = core.clone();
         rt.spawn(async move { log(&c, old).await });
     }
-    if fresh {
+    watch_coin(core, key);
+}
+
+/// Что делает: запускает задачу, ждущую конца занятости монеты, если её ещё нет (первое обращение тика по занятой
+/// монете или первый итог). Принимает: ядро, ключ монеты. Ошибок нет: рантайма нет (остановка) — ничего.
+pub(super) fn watch_coin(core: &Core, key: CoinKey) {
+    let Ok(rt) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    if lk(&core.inner.busy_calc.watching).insert(key.clone()) {
         rt.spawn(watch(core.clone(), key));
     }
 }
 
 /// Открытая сделка монеты из учёта ядра (последняя по началу) — для сравнения. Ошибок нет.
-fn open_deal(core: &Core, key: &CoinKey) -> Option<BusyDeal> {
+pub(super) fn open_deal(core: &Core, key: &CoinKey) -> Option<BusyDeal> {
     lk(&core.inner.deals)
         .values()
         .filter(|x| x.is_open() && &CoinKey::of(&x.direction.asset) == key)

@@ -9,6 +9,8 @@
 //! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
 //! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
+//! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
+//! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -67,6 +69,14 @@ pub async fn save(core: &Core, deal: &Deal) {
 /// Закрывает сделку: итог, план против факта, итог дня, статистика монеты, уведомление, пауза направления.
 /// Принимает: ядро, сделку, конечный шаг (Closed, Halted, TakenOver), причину.
 pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
+    finish_paused(core, deal, step, why, true).await
+}
+
+/// Что делает: finish с выбором, ставить ли паузу направления (signal.route_cooldown_s). Решение 266 (ответ Тиграна
+/// 13.11: «паузить направление из-за денег не нужно»): сделка закрыта потому, что биржа отклонила ордер покупки из-за
+/// нехватки средств, — паузы нет (executor.rs buy_refusal_pauses); всё остальное в закрытии — как у finish.
+/// Принимает: как finish и `pause` (true — как finish). Ошибок нет.
+pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, pause: bool) {
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);
     deal.step = step;
@@ -132,6 +142,9 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
         super::gas_stats::record_result(core, &d.asset, r).await;
     }
     super::daily_commit::announce(core, &trip).await;
+    if !pause {
+        return;
+    }
     let cooldown = deps
         .settings
         .integer("signal.route_cooldown_s", At::default());

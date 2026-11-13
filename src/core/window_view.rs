@@ -56,6 +56,7 @@ impl Core {
                         max_profit_unbounded: o.max_profit_unbounded,
                         dex_points: o.dex_points,
                         maxwins: o.maxwins.clone(),
+                        rejects: o.rejects.clone(),
                         ..w
                     },
                     None => w,
@@ -106,6 +107,8 @@ impl Core {
             .map_or(info.dex_points, |o| o.dex_points.max(info.dex_points));
         if let Some(o) = open {
             info.maxwins = o.maxwins;
+            // Решение 266: отказы предпроверки открытого окна — из памяти.
+            info.rejects = o.rejects;
         }
         let path = self.inner.window_files.path(id);
         let p = path.clone();

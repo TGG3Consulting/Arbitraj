@@ -79,6 +79,8 @@ pub async fn run(core: Core, venue: VenueId) {
                         .get(&venue)
                         .is_some_and(|old| same_lists(old, &list));
                     wr(&core.inner.networks).insert(venue.clone(), Arc::new(list));
+                    // Решение 266 (ревью): ключи принятых смен статуса снимаются только после записи справочника.
+                    debounce.publish(&core, &venue);
                     if !same {
                         core.request_rebuild();
                     }

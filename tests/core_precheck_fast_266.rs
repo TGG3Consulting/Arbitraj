@@ -731,7 +731,12 @@ async fn pending_status_change_forces_request() {
     assert!(waiting(&core, &bingx, &ticker));
     let taken = deb.apply(&core, &bingx, raw());
     assert!(!taken[0].withdraw_enabled);
+    // Смена принята, но в справочнике ядра ещё прежний «открыт» (фон пишет его после сравнения и уведомлений):
+    // ключ не снят — памяти по-прежнему не верим.
+    assert!(waiting(&core, &bingx, &ticker));
+    assert!(precheck_nets::recent(&core, &bingx, &ticker, Some(CAKE)).is_none());
     store(taken);
+    deb.publish(&core, &bingx);
     assert!(!waiting(&core, &bingx, &ticker));
     let closed = Box::pin(precheck::run(&core, &dd, false, mem, None))
         .await
@@ -813,6 +818,11 @@ async fn fast_path_decision_on_recorded_calc() {
         e.starts_with("прибыль ") && e.contains("% ниже порога "),
         "{e}"
     );
+    // Метка «баланс» у отказа под остаток — только отказ по порогам: его расчёт отдаёт с записанным выбором объёма
+    // (plan — расчёт с выбором), отказы без расчёта и с расчётом без выбора (c) — прежним текстом.
+    assert!(precheck_balance::by_thresholds(Some(&plan)));
+    assert!(!precheck_balance::by_thresholds(Some(&c)));
+    assert!(!precheck_balance::by_thresholds(None));
     // Шаг количества 0 — recalc не запускает расчёт: причина в запросе, дальше полный подбор.
     let (core, _st) = core_at("fast-266-accept").await;
     let mut w = Want::new(d("10"));

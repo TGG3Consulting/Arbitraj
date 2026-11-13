@@ -499,6 +499,7 @@ async fn recompute_end_to_end() {
         bytes: 0,
         dex_points: 0,
         maxwins: vec![],
+        rejects: vec![],
         stopped: None,
         close_reason: None,
     };

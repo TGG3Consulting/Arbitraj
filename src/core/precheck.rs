@@ -419,7 +419,7 @@ async fn steps(
         // пересчёта (делистинг, закрытые входы, налоги, нет цены, бюджет, отказ подбора и финальной котировки) —
         // прежним текстом: по типу Verdict::Reject их от «не про баланс» не отличить.
         (Verdict::Reject { reason, best }, Some(Read::Got { free, quote }), Some(c))
-            if best.as_ref().is_some_and(|b| b.size.is_some()) =>
+            if super::precheck_balance::by_thresholds(best.as_ref()) =>
         {
             return Err(super::precheck_balance::short_reject(
                 d, *free, quote, &c, &reason,

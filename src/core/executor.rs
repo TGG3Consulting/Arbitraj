@@ -110,6 +110,23 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     Start::Started
 }
 
+/// Пометка записи закрытия сделки: пауза направления не поставлена (решение 266, ответ Тиграна 13.11).
+pub const NO_PAUSE: &str =
+    " — пауза направления не поставлена: отказ биржи из-за нехватки средств (решение 266)";
+
+/// Что делает: ставить ли паузу направления (signal.route_cooldown_s) после отказа ордера покупки. Решение 266 (ответ
+/// Тиграна 13.11: «паузить направление из-за денег не нужно»): биржа A отклонила ордер покупки с кодом шлюза «не
+/// хватает средств» (InsufficientBalance) — паузы нет; любой другой отказ покупки и покупка на DEX (там этот код —
+/// нехватка BNB на газ и средств кошелька) — пауза как раньше. Действует всегда (не под включателем precheck.*).
+/// Принимает: вид площадки A, ошибку покупки. Ошибок нет.
+pub fn buy_refusal_pauses(
+    a: crate::gateway::contract::VenueKind,
+    e: &super::op_error::OpError,
+) -> bool {
+    let no_funds = e.code == Some(crate::gateway::errors::ErrorCode::InsufficientBalance);
+    !(a == crate::gateway::contract::VenueKind::Cex && no_funds)
+}
+
 /// Замок перед покупкой (решение 74): сухой режим включён — покупки нет. Ошибки: текст причины.
 pub fn buy_gate(core: &Core) -> Result<(), String> {
     match super::dry::blocks(&core.inner.deps.settings) {
@@ -178,6 +195,10 @@ async fn run(
                 "{} {} → {}: сделки нет — {e}",
                 d.asset.ticker, d.buy_on.0, d.sell_on.0
             );
+            // Решение 266 (ответ Тиграна 13.11): отказ предпроверки — в окно монеты (причина, счётчик повторов,
+            // метка «баланс»); окно открыто проходом расчёта до исполнителя (candidates.rs).
+            let balance = super::precheck_balance::is_balance(&d, &e);
+            super::window_run::rejected(core, &d, &e, balance);
             let note = super::reject_log::Note {
                 level: Level::Info,
                 kind: "core.precheck",
@@ -383,13 +404,15 @@ async fn run(
         Ok(r) => r,
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,
         Err(e) => {
-            return super::ledger::finish(
-                core,
-                &mut deal,
-                Step::Closed,
-                &format!("покупка не исполнилась: {e}"),
-            )
-            .await;
+            // Решение 266 (ответ Тиграна 13.11): биржа отклонила ордер покупки из-за нехватки средств — паузы
+            // направления нет (пометка — в записи закрытия); остальные отказы покупки — пауза как раньше.
+            let pause =
+                super::trade_ops::kind(core, &d.buy_on).map_or(true, |k| buy_refusal_pauses(k, &e));
+            let mut why = format!("покупка не исполнилась: {e}");
+            if !pause {
+                why.push_str(NO_PAUSE);
+            }
+            return super::ledger::finish_paused(core, &mut deal, Step::Closed, &why, pause).await;
         }
     };
     let at = ts.at();

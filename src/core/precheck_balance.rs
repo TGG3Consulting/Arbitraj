@@ -98,7 +98,7 @@ pub async fn read(core: &Core, d: &Direction, acc: Option<&DexAccountId>) -> Res
         Err(why) if super::trade_ops::kind(core, &d.buy_on) == Ok(VenueKind::Cex) => {
             Ok(Read::Missed(why))
         }
-        Err(why) => Err(format!("свободный баланс {} не получен: {why}", d.buy_on.0)),
+        Err(why) => Err(format!("{} не получен: {why}", head(d))),
     }
 }
 
@@ -115,9 +115,30 @@ pub fn missed_note(d: &Direction, why: &str) -> String {
 /// Принимает: направление, свободно, котируемую монету, числа кандидата, причину отказа расчёта. Ошибок нет.
 pub fn short_reject(d: &Direction, free: Decimal, quote: &str, c: &Cand, why: &str) -> String {
     format!(
-        "свободный баланс {}: свободно {free} {quote}, кандидату нужно {} — на свободный остаток {free} сделка \
-         невыгодна: {why}",
-        d.buy_on.0,
+        "{}: свободно {free} {quote}, кандидату нужно {} — на свободный остаток {free} сделка невыгодна: {why}",
+        head(d),
         c.spend_max.round_dp(4)
     )
+}
+
+/// Что делает: отказ пересчёта под свободный остаток — про прибыль на этом объёме? Да — только у отказа по порогам
+/// прибыли (money.min_profit_usd / pct): profit.rs отдаёт его с расчётом, у которого записан выбор объёма (Calc::size
+/// ставится перед сравнением с порогами; у отказов фильтра и финальной котировки расчёт — без выбора, у остальных
+/// расчёта нет). Только такой отказ предпроверка оформляет причиной «свободный баланс …» (short_reject); прочие —
+/// прежним текстом. Принимает: лучший расчёт из Verdict::Reject. Ошибок нет.
+pub fn by_thresholds(best: Option<&Calc>) -> bool {
+    best.is_some_and(|b| b.size.is_some())
+}
+
+/// Начало текста отказов этого файла: «свободный баланс X». Ошибок нет.
+fn head(d: &Direction) -> String {
+    format!("свободный баланс {}", d.buy_on.0)
+}
+
+/// Что делает: отказ предпроверки — из-за свободного баланса A? Да — у отказов, которые даёт часть 4: тексты этого
+/// файла (начинаются с head: баланс DEX не получен; под остаток невыгодно) и «на X свободно 0 …» (limits::none_free).
+/// По нему окно монеты ставит отказу метку «баланс» (window_run.rs rejected). Принимает: направление, текст отказа
+/// предпроверки. Ошибок нет.
+pub fn is_balance(d: &Direction, reason: &str) -> bool {
+    reason.starts_with(&head(d)) || reason.starts_with(&super::limits::none_free(&d.buy_on, ""))
 }

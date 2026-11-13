@@ -2,7 +2,8 @@
 //! Что делает: сводка окна (решение 125) — строка экрана «Окна» и JSON в SQLite (storage/windows_db.rs): монета,
 //! направления, биржи записи и что на них включено, начало и конец, наибольшая прибыль, наши сделки и их итог,
 //! счётчики записи, точки цены DEX (решение 241; решение 245 — и на объём сделки), окна максимального объёма
-//! направлений (решение 245), причина закрытия; подписи для журнала и Telegram (pairs, mark).
+//! направлений (решение 245), отказы предпроверки сделки (решение 266: причина, сколько раз, метка «баланс»),
+//! причина закрытия; подписи для журнала и Telegram (pairs, mark).
 //! Кто вызывает: core/window.rs (ведёт), window_close.rs, window_view.rs, window_cfg.rs, интерфейс (JSON).
 //! От чего зависит: core/types, gateway/tap.rs (TapInfo), chrono, rust_decimal, serde.
 //! Настройки: нет.
@@ -37,6 +38,23 @@ pub struct WinDeal {
     pub result_usd: Option<Decimal>,
 }
 
+/// Решение 266 (ответ Тиграна 13.11): отказ предпроверки сделки в окне — сделка по прошедшему расчёту не состоялась.
+/// Повторы одной причины (тот же вид текста без чисел — reject_shape.rs, как в журнале, решение 155) по одному
+/// направлению — одна запись со счётчиком.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WinReject {
+    pub direction: Direction,
+    /// Текст последнего отказа (как в журнале core.precheck после «сделки нет — »).
+    pub reason: String,
+    /// Вид причины (текст без чисел) — по нему склеиваются повторы.
+    pub shape: String,
+    pub count: u64,
+    pub first_at: DateTime<Utc>,
+    pub last_at: DateTime<Utc>,
+    /// Отказ из-за свободного баланса A (precheck_balance.rs is_balance).
+    pub balance: bool,
+}
+
 /// Сводка окна — строка экрана «Окна» (SQLite, storage/windows_db.rs).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WindowInfo {
@@ -68,6 +86,10 @@ pub struct WindowInfo {
     /// длинное, последнее, сколько. Старые сводки — пусто.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub maxwins: Vec<super::uncapped_maxwin::DirMaxWins>,
+    /// Решение 266 (ответ Тиграна 13.11): отказы предпроверки сделки за время окна (window.rs note_reject). Старые
+    /// сводки — пусто.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejects: Vec<WinReject>,
     /// Запись остановлена (лимит места) — почему.
     pub stopped: Option<String>,
     pub close_reason: Option<String>,

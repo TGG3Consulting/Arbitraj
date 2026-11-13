@@ -6,6 +6,7 @@
 //! CEX ↔ DEX — одна); у DEX стакана и ленты сделок нет.
 //! Торговый путь окно не трогает: оно только наблюдает.
 //! Решение 241: точка цены DEX (WinMsg::Dex) шлёт core/window_dex.rs через send.
+//! Решение 266: отказ предпроверки сделки — в сводку открытого окна монеты (rejected; вызывает core/executor.rs).
 //! Кто вызывает: core/candidates.rs (pass, fail), core/window_dex.rs (send), core/episode_run.rs (fail, sweep — общий путь «перестало
 //! проходить»), core/evaluate.rs (passing), core/card_job.rs (unbounded).
 //! От чего зависит: window.rs, window_cfg.rs (Cfg), inner.rs (каналы и память).
@@ -88,6 +89,16 @@ pub fn unbounded(core: &Core, d: &Direction, v: Option<Decimal>) {
     if let Some(v) = v {
         lk(&core.inner.windows).note_unbounded(d, v);
     }
+}
+
+/// Что делает: решение 266 (ответ Тиграна 13.11) — отказ предпроверки сделки записывается в открытое окно монеты
+/// (WindowInfo.rejects): причина, счётчик повторов той же причины (вид текста без чисел — reject_shape.rs), метка
+/// «баланс». Только память (сводка окна сохраняется при закрытии, экран читает открытое окно из памяти). Окна монеты
+/// нет (окна не пишутся) — ничего. Принимает: ядро, направление, текст отказа, отказ ли из-за свободного баланса.
+/// Ошибок нет.
+pub fn rejected(core: &Core, d: &Direction, reason: &str, balance: bool) {
+    let shape = super::reject_shape::shape(reason);
+    lk(&core.inner.windows).note_reject(d, shape, reason, balance, Utc::now());
 }
 
 /// Что делает: направления окон, которых больше нет в справочнике, перестали проходить. Принимает: ядро, живые

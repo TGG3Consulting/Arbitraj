@@ -17,7 +17,7 @@
 -->
 <script>
   import { get, seg } from '../lib/api.js';
-  import { msTime, nsTime, outcomeMark } from '../lib/windowLabels.js';
+  import { msTime, nsTime, outcomeMark, winRejects } from '../lib/windowLabels.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import Modal from './Modal.svelte';
   import PageSize from './PageSize.svelte';
@@ -98,6 +98,9 @@
     {#if mark}<span class={`tag ${mark.cls}`}>{mark.text}</span>{/if}
     · <a href={`/api/windows/${seg(win.id)}/file`} download>Скачать файл</a>
   </p>
+  {#each winRejects(info) as r (r.key)}
+    <div class="muted" title={r.full}>Сделки нет ×{r.count} ({r.dir}){#if r.balance} <span class="tag">баланс</span>{/if}: {r.text}</div>
+  {/each}
   {#each info.venues as v, vi (`${v.venue}|${vi}`)}
     <div class="muted">
       <code>{v.venue}</code> с {msTime(Date.parse(v.since))}:

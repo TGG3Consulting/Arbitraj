@@ -21,7 +21,7 @@ use crate::core::types::{Direction, VenueId};
 
 use super::coin_key::CoinKey;
 
-pub use super::window_info::{WinDeal, WinVenue, WindowInfo};
+pub use super::window_info::{WinDeal, WinReject, WinVenue, WindowInfo};
 
 /// Что сделать после прохода направления.
 #[derive(Debug, Clone, PartialEq)]
@@ -101,6 +101,7 @@ impl Windows {
             bytes: 0,
             dex_points: 0,
             maxwins: vec![],
+            rejects: vec![],
             stopped: None,
             close_reason: None,
         };
@@ -140,6 +141,45 @@ impl Windows {
             let m = &mut o.info.max_profit_unbounded;
             *m = Some(m.map_or(v, |x| x.max(v)));
         }
+    }
+
+    /// Что делает: решение 266 — отказ предпроверки сделки по направлению в открытое окно монеты: повтор той же
+    /// причины (вид текста без чисел) по тому же направлению — счётчик, последнее время и текст; новая — запись.
+    /// Принимает: направление, вид причины, текст, метку «баланс», время. Возвращает: записано ли (окно монеты
+    /// открыто). Ошибок нет.
+    pub fn note_reject(
+        &mut self,
+        d: &Direction,
+        shape: String,
+        reason: &str,
+        balance: bool,
+        now: DateTime<Utc>,
+    ) -> bool {
+        let Some(o) = self.open.get_mut(&CoinKey::of(&d.asset)) else {
+            return false;
+        };
+        let list = &mut o.info.rejects;
+        match list
+            .iter_mut()
+            .find(|r| &r.direction == d && r.shape == shape)
+        {
+            Some(r) => {
+                r.count += 1;
+                r.last_at = now;
+                r.reason = reason.to_string();
+                r.balance = balance;
+            }
+            None => list.push(WinReject {
+                direction: d.clone(),
+                reason: reason.to_string(),
+                shape,
+                count: 1,
+                first_at: now,
+                last_at: now,
+                balance,
+            }),
+        }
+        true
     }
 
     /// Что делает: окна, которые пора закрыть: ни одно направление не проходит дольше hold_ms и сделки по монете

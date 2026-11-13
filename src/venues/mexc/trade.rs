@@ -4,6 +4,7 @@
 //! Правила пары, округление, пределы и пробный ордер (POST /api/v3/order/test, venue.order_test_first [mexc]) —
 //! order_rules.rs: та же функция у проверки ордера без исполнения перед покупкой (решение 134).
 //! Кто вызывает: mod.rs (trade из контракта).
+//! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs (правила и пробный ордер), rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs.
 //! Настройки: venue.order_type [mexc] (в orderTypes пары; IOC/FOK — при LIMIT, решение 133), venue.order_test_first [mexc];
 //! ожидание итога — order_state.rs, venue.my_trades_limit — fills.rs (проверяются до отправки).
@@ -34,19 +35,18 @@ use super::{num, order_rules, order_state, rest};
 /// функция, что у проверки ордера без исполнения перед покупкой, решение 134). Ошибки: OrderRejected (пара не
 /// торгуется, сумма вне пределов, отказ пробного ордера, отказ MEXC), OutcomeUnknown — ордер мог быть принят, итог не
 /// получен (решение 64) — с «чем найти» (свой ID, ID ордера, если был; решение 231).
-pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
-    let p = order_rules::ready(ctx, symbols, &req).await?;
-    place(ctx, req, p).await
-}
-
-/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
-/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
-/// Возвращает и ошибки: как trade.
-pub(super) async fn place(
+/// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
+/// кодом; None — обычный лимитный ордер по правилам order_rules::ready.
+pub async fn trade(
     ctx: &Ctx,
+    symbols: &Symbols,
     req: TradeRequest,
-    p: order_rules::Prepared,
+    prepared: Option<order_rules::Prepared>,
 ) -> GatewayResult<TradeResult> {
+    let p = match prepared {
+        Some(p) => p,
+        None => order_rules::ready(ctx, symbols, &req).await?,
+    };
     let placed = rest::signed(ctx, Method::POST, "/api/v3/order", p.params, Op::Trade).await;
     // Решение 118, А-🟠3: HTTP успешен, а orderId нет — итог неизвестен (не обычный сбой: повтор дал бы второй ордер).
     let placed = placed.and_then(|r| {

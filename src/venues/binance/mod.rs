@@ -174,7 +174,7 @@ impl Venue for Binance {
         let ticker = req.asset.ticker.clone();
         // t89: время отправки ордера — событие остатков после него считается свежим (withdraw_ready.rs wait).
         let sent = tokio::time::Instant::now();
-        let r = trade::trade(&self.ctx, &self.symbols, req).await;
+        let r = trade::trade(&self.ctx, &self.symbols, req, None).await;
         // Решение 253, дополнение t89: своя сделка (покупка ИЛИ продажа) — начало окна «ещё не доступна для вывода»
         // (transfers.rs) и паузы ядра venue.withdraw_min_delay_ms — по монете сделки и котируемой монете (выручка USDT).
         if r.as_ref().is_ok_and(|t| t.filled_qty > Decimal::ZERO) {

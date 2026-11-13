@@ -261,7 +261,8 @@ async fn sale_alert_closes_entries_selling_on_that_exchange() {
 /// ставится в обоих случаях — второй раз ветка не идёт; строка — в хронологии и журнале core.sell_range.
 #[tokio::test]
 async fn branch_without_quote_goes_to_stuck_or_keeps_alert() {
-    use arb::core::sell_range::{Outcome, run};
+    use arb::core::sell_range::Outcome;
+    use arb::core::sell_range_run::run;
     use arb::core::stuck_reason::StuckReason;
     let d = dir("pr268-run");
     let (core, j) = start(&d, None).await;

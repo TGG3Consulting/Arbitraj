@@ -2,6 +2,7 @@
 //! Что делает: покупка или продажа на BingX лимитным ордером с худшей допустимой ценой
 //! и проверкой фактического исполнения (количество, средняя цена, комиссия).
 //! Кто вызывает: mod.rs (trade из контракта).
+//! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs (правила пары — общие с проверкой ордера без исполнения, решение 134), rest.rs,
 //! symbols.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force (например IOC — что не исполнилось сразу, отменяется биржей);
@@ -36,19 +37,18 @@ pub use super::order_rules::round;
 /// Ошибки: OrderRejected (пара не торгуется, количество или сумма вне пределов, отказ BingX),
 /// OutcomeUnknown — ордер мог быть принят, итог не получен или ответ без orderId (ядро не повторяет, решение 64;
 /// «чем найти» — решение 231).
-pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
-    let p = order_rules::ready(ctx, symbols, &req)?;
-    place(ctx, req, p).await
-}
-
-/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
-/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
-/// Возвращает и ошибки: как trade.
-pub(super) async fn place(
+/// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
+/// кодом; None — обычный лимитный ордер по правилам order_rules::ready.
+pub async fn trade(
     ctx: &Ctx,
+    symbols: &Symbols,
     req: TradeRequest,
-    p: order_rules::Prepared,
+    prepared: Option<order_rules::Prepared>,
 ) -> GatewayResult<TradeResult> {
+    let p = match prepared {
+        Some(p) => p,
+        None => order_rules::ready(ctx, symbols, &req)?,
+    };
     // Нет ответа на постановку — OutcomeUnknown (rest.rs, решение 64): ядро не повторяет. Решение 231: свой ID у каждой
     // постановки свой (решение 114) — ошибка несёт «чем найти» (newClientOrderId), и ядро ищет ордер само
     // (resolve.rs, Query Order details по clientOrderID); сразу здесь не ищем.

@@ -172,7 +172,7 @@ impl Venue for Mexc {
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        trade::trade(&self.ctx, &self.symbols, req).await
+        trade::trade(&self.ctx, &self.symbols, req, None).await
     }
 
     /// Решение 268: рыночная продажа — market_sell.rs (POST /api/v3/order, type MARKET).

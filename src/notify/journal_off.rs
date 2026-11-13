@@ -79,6 +79,7 @@ pub static OWN_RECORD: &[&str] = &[
     "coin.sell_slip",            // core.sell_slip_block (sell_slip.rs)
     "coin.exit_gap",             // core.exit_gap (exit_gap.rs)
     "coin.withdraw_refused",     // core.withdraw_block (withdraw_block.rs)
+    "coin.sell_blocked",         // core.sell_block (sell_block.rs)
     "venue.account_problem",     // core.withdraw_block (withdraw_block.rs)
     "venue.withdraw_limit",      // core.withdraw_limit (withdraw_limit_pause.rs)
     "dex.check_not_configured",  // dex.check_not_configured (bsc_dex/check/tax_pass.rs)

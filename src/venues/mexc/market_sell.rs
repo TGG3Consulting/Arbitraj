@@ -5,10 +5,10 @@
 //! Правила пары — те же, что у лимитного ордера (order_rules::check_rules: сторона через API, округление количества до
 //! шага, минимумы и максимум; сумма оценивается по худшей цене запроса — в ордер цена не идёт); тип MARKET должен быть
 //! в orderTypes пары — иначе NotApplicable с причиной. Постановка и итог — тем же кодом, что у лимитного ордера
-//! (trade::place → order_state.rs: исполнено — по executedQty и cumulativeQuoteQty, цена запроса не участвует).
+//! (trade::trade → order_state.rs: исполнено — по executedQty и cumulativeQuoteQty, цена запроса не участвует).
 //! Пробный ордер (venue.order_test_first) не делается. Ошибка рыночного ордера никогда не несёт PriceOutOfRange.
 //! Кто вызывает: mod.rs (trade_market_sell из контракта).
-//! От чего зависит: order_rules.rs, trade.rs (place), order_state.rs, fills.rs, symbols.rs, ctx.rs.
+//! От чего зависит: order_rules.rs, trade.rs (trade), order_state.rs, fills.rs, symbols.rs, ctx.rs.
 //! Настройки: ожидание итога — order_state.rs, venue.my_trades_limit — fills.rs (проверяются до отправки).
 //!
 //! Официальная документация:
@@ -18,6 +18,7 @@
 //! - orderTypes пары — GET /api/v3/exchangeInfo
 //!   https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information.
 //! - Отказы 30018 «market order is disabled», 30019 «api market order is disabled», 30041 — обычный OrderRejected.
+//!
 //! Не подтверждено живым ордером: применяет ли MEXC коридор PERCENT_PRICE_BY_SIDE к MARKET SELL (docs/TASKS.md).
 
 use rust_decimal::Decimal;
@@ -85,12 +86,12 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
     })
 }
 
-/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::place).
+/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::trade с готовым ордером).
 /// Принимает: окружение, справочник пар, запрос (сторона Sell). Возвращает: факт. Ошибки: как у trade, но без
 /// PriceOutOfRange (заменяется на OrderRejected); NotApplicable — см. ready.
 pub async fn sell(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = ready(ctx, symbols, &req)?;
-    super::trade::place(ctx, req, p)
+    super::trade::trade(ctx, symbols, req, Some(p))
         .await
         .map_err(GatewayError::no_price_range)
 }

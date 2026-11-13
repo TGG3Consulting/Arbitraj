@@ -3,11 +3,11 @@
 //! Ядро зовёт только после отказа лимитного ордера продажи «цена вне диапазона» (PriceOutOfRange), когда по свежему
 //! стакану продажа выгодна (core/sell_range.rs). Покупок рыночным ордером нет.
 //! Правила пары — те же, что у лимитного ордера (order_rules::check_rules: статус пары, округление количества, минимумы; сумма оценивается по худшей цене запроса — в ордер цена не
-//! идёт). Постановка и итог — тем же кодом, что у лимитного (trade::place → order_state.rs: исполнено — по vol_exec и средней цене price ответа; цена запроса в разборе итога не
+//! идёт). Постановка и итог — тем же кодом, что у лимитного (trade::trade → order_state.rs: исполнено — по vol_exec и средней цене price ответа; цена запроса в разборе итога не
 //! участвует; исполнено меньше запрошенного — частичное исполнение). Пробный ордер не делается. Ошибка рыночного
 //! ордера никогда не несёт PriceOutOfRange (заменяется на OrderRejected).
 //! Кто вызывает: mod.rs (trade_market_sell из контракта).
-//! От чего зависит: order_rules.rs, trade.rs (place), order_state.rs, symbols.rs, ctx.rs.
+//! От чего зависит: order_rules.rs, trade.rs (trade), order_state.rs, symbols.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force (только для общих правил пары), ожидание итога — order_state.rs.
 //!
 //! Официальная документация: POST /0/private/AddOrder (OpenAPI spot-rest.yaml, схема add — ссылка в
@@ -64,12 +64,12 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
     })
 }
 
-/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::place).
+/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::trade с готовым ордером).
 /// Принимает: окружение, справочник пар, запрос (сторона Sell). Возвращает: факт. Ошибки: как у trade, но без
 /// PriceOutOfRange (заменяется на OrderRejected); NotApplicable — см. ready.
 pub async fn sell(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = ready(ctx, symbols, &req)?;
-    super::trade::place(ctx, req, p)
+    super::trade::trade(ctx, symbols, req, Some(p))
         .await
         .map_err(GatewayError::no_price_range)
 }

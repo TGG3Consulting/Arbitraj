@@ -14,6 +14,9 @@
 //! Настройки: sell.block_entry_on_halt (вся система; не задана или нет — ничего не делает); пишет
 //! coin.entry_blocked_venues, coin.entry_blocked_note (по монете).
 
+use std::future::Future;
+use std::pin::Pin;
+
 use serde_json::Value;
 
 use crate::core::types::VenueId;
@@ -41,11 +44,25 @@ pub fn entry(venue: &VenueId) -> String {
 /// Что делает: продажа сделки на бирже остановлена алертом — закрыть входы монеты с продажей на ней (см. шапку).
 /// Принимает: ядро, сделку (монета, площадка, где лежат монеты, id), ошибку продажи (причина). Ошибок нет: сбой
 /// записи — журнал и уведомление «закройте вручную».
-pub async fn close(core: &Core, deal: &Deal, e: &OpError) {
-    let deps = &core.inner.deps;
-    if !deps.settings.flag(ON, At::default()).unwrap_or(false) {
-        return;
+///
+/// Не async: настройка читается сразу; выключена — готовое пустое будущее (без записи и без места в кадре стека задачи
+/// продажи); включена — будущее в коробке.
+#[inline(never)]
+pub fn close<'a>(
+    core: &'a Core,
+    deal: &'a Deal,
+    e: &'a OpError,
+) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    let on = core.inner.deps.settings.flag(ON, At::default());
+    if !on.unwrap_or(false) {
+        return Box::pin(std::future::ready(()));
     }
+    Box::pin(close_inner(core, deal, e))
+}
+
+/// Тело закрытия входов (настройка включена — проверена в close). Принимает: как close. Ошибок нет.
+async fn close_inner(core: &Core, deal: &Deal, e: &OpError) {
+    let deps = &core.inner.deps;
     if super::trade_ops::kind(core, &deal.at) != Ok(VenueKind::Cex) {
         return;
     }

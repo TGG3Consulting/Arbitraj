@@ -170,7 +170,7 @@ impl Venue for Phemex {
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        trade::trade(&self.ctx, &self.symbols, req).await
+        trade::trade(&self.ctx, &self.symbols, req, None).await
     }
 
     /// Решение 268: рыночная продажа — market_sell.rs (PUT /spot/orders/create, ordType Market).

@@ -3,6 +3,7 @@
 //! (venue.order_time_in_force, решение 135 — Тигран 04.11; что не исполнилось сразу — снимает биржа) и проверка факта (количество, средняя цена, комиссия — order_state.rs).
 //! Правила пары, округление и пределы — order_rules.rs: та же функция у проверки ордера без исполнения (решение 134).
 //! Кто вызывает: mod.rs (trade из контракта).
+//! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs, order_state.rs, rest.rs, symbols.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force [gate] (ioc или fok); ожидание итога и поиск — order_state.rs (проверяются до
 //! отправки).
@@ -27,19 +28,18 @@ use super::{num, order_rules, order_state, rest};
 
 /// Ставит ордер и возвращает фактический результат. Ошибки: OrderRejected (правила, отказ Gate), OutcomeUnknown —
 /// ордер мог быть принят, итог не получен (решение 64).
-pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
-    let p = order_rules::ready(ctx, symbols, &req).await?;
-    place(ctx, req, p).await
-}
-
-/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
-/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, запрос ядра, ордер после правил (параметры запроса).
-/// Возвращает и ошибки: как trade.
-pub(super) async fn place(
+/// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
+/// кодом; None — обычный лимитный ордер по правилам order_rules::ready.
+pub async fn trade(
     ctx: &Ctx,
+    symbols: &Symbols,
     req: TradeRequest,
-    p: order_rules::Prepared,
+    prepared: Option<order_rules::Prepared>,
 ) -> GatewayResult<TradeResult> {
+    let p = match prepared {
+        Some(p) => p,
+        None => order_rules::ready(ctx, symbols, &req).await?,
+    };
     let started_s = chrono::Utc::now().timestamp();
     let placed = rest::signed(
         ctx,

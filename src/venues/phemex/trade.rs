@@ -3,6 +3,7 @@
 //! FillOrKill (что не исполнилось сразу — снимает биржа); затем окончательное состояние и факт (количество, сумма,
 //! комиссия и её монета — order_state.rs). Правила — order_rules.rs (та же функция у check_order, решение 134).
 //! Кто вызывает: mod.rs (trade).
+//! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs, order_state.rs, rest.rs, symbols.rs, ctx.rs.
 //! Настройки: через order_rules.rs и order_state.rs.
 //!
@@ -32,20 +33,18 @@ use super::{errors, num, order_rules, order_state, rest};
 
 /// Ставит ордер и возвращает фактический результат. Ошибки: OrderRejected (правила, отказ Phemex),
 /// OutcomeUnknown — ордер мог быть принят, итог не получен (решение 64).
-pub async fn trade(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
-    let p = order_rules::ready(ctx, symbols, &req).await?;
-    place(ctx, symbols, req, p).await
-}
-
-/// Что делает: постановка уже подготовленного ордера и его итог (вынесено из trade без изменений — решение 268: тот же
-/// путь у рыночной продажи, market_sell.rs). Принимает: окружение, справочник пар (масштабы), запрос ядра, ордер после правил (параметры запроса).
-/// Возвращает и ошибки: как trade.
-pub(super) async fn place(
+/// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
+/// кодом; None — обычный лимитный ордер по правилам order_rules::ready.
+pub async fn trade(
     ctx: &Ctx,
     symbols: &Symbols,
     req: TradeRequest,
-    p: order_rules::Prepared,
+    prepared: Option<order_rules::Prepared>,
 ) -> GatewayResult<TradeResult> {
+    let p = match prepared {
+        Some(p) => p,
+        None => order_rules::ready(ctx, symbols, &req).await?,
+    };
     let path = "/spot/orders/create";
     let placed = rest::signed(ctx, Method::PUT, path, p.query.clone(), None, Op::Trade).await;
     match placed {

@@ -172,7 +172,7 @@ impl Venue for Htx {
 
     async fn trade(&self, req: TradeRequest) -> GatewayResult<TradeResult> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        trade::trade(&self.ctx, &self.symbols, &self.spot, req).await
+        trade::trade(&self.ctx, &self.symbols, &self.spot, req, None).await
     }
 
     /// Решение 268: рыночная продажа — market_sell.rs (POST /v1/order/orders/place, type sell-market).

@@ -58,6 +58,7 @@ async fn buy(
         &mut seen,
         None,
         None,
+        false,
     )
     .await;
     (r.unwrap_err().message, seen)

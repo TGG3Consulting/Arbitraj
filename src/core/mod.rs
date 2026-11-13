@@ -208,6 +208,7 @@ mod rules_stop;
 pub mod sell;
 pub mod sell_block;
 pub mod sell_range;
+pub mod sell_range_run;
 pub mod sell_slip;
 pub mod sell_unsent;
 pub mod signal;

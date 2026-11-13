@@ -32,12 +32,12 @@
 //! агрегатором DEX, если он включён и его маршрут лучше); sell_after_relay — PROFITABLE (только свой сборщик, как было).
 //! Решение 268 (Тигран 14.11, живой случай FAR 13.11 — MEXC 30087): лимитный ордер продажи отклонён биржей «цена вне
 //! разрешённого диапазона» (код шлюза PriceOutOfRange) — один раз на сделку: по свежему стакану продажа выгодна (у
-//! кнопки — без этой проверки) — рыночный ордер, иначе режим застрявшей монеты (sell_range.rs;
+//! кнопки — без этой проверки) — рыночный ордер, иначе режим застрявшей монеты (sell_range.rs, sell_range_run.rs;
 //! sell.market_on_price_range). Продажа на бирже закончилась алертом — новые входы с продажей на ней закрываются
 //! (sell_block.rs; sell.block_entry_on_halt). Обе настройки не заданы — как раньше.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
-//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_block.rs.
+//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_block.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154);
 //! через sell_range.rs — sell.market_on_price_range; через sell_block.rs — sell.block_entry_on_halt (решение 268).
 
@@ -177,7 +177,7 @@ async fn sell(
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
     let mut gas = Vec::new();
-    let res = super::trade_ops::trade_seen(
+    let mut res = super::trade_ops::trade_seen(
         core,
         &deal.id,
         &v,
@@ -204,18 +204,19 @@ async fn sell(
     // на сделку: свежий стакан и, если продажа выгодна (кнопка человека — без этой проверки), рыночный ордер; его итог
     // (факт или ошибка) разбирается ниже тем же кодом, что у лимитного. Невыгодно или нет котировки — режим застрявшей
     // монеты (как sell_or_stuck). Настройка выключена, DEX, повтор уже был — ветки нет, всё как раньше (sell_range.rs).
-    let res = match res {
-        Err(e) if super::sell_range::wanted(core, &deal, &e) => {
-            match super::sell_range::run(core, &mut deal, &e, why).await {
-                super::sell_range::Outcome::Sold(r) => Ok(r),
-                super::sell_range::Outcome::Failed(e) => Err(e),
-                super::sell_range::Outcome::Stuck(reason) => {
-                    return Box::pin(super::stuck::handle(core, deal, reason)).await;
-                }
+    if let Err(e) = &res
+        && super::sell_range::wanted(core, &deal, e)
+    {
+        // Итог ветки кладётся в то же место, что итог лимитного ордера (состояние задачи продажи не растёт).
+        let out = super::sell_range_run::run(core, &mut deal, e, why).await;
+        match out {
+            super::sell_range::Outcome::Sold(r) => res = Ok(*r),
+            super::sell_range::Outcome::Failed(e) => res = Err(e),
+            super::sell_range::Outcome::Stuck(reason) => {
+                return super::sell_range_run::stuck(core, deal, reason).await;
             }
         }
-        r => r,
-    };
+    }
     match res {
         Ok(r) => {
             super::fills::trade(core, &mut deal, &r).await;

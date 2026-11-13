@@ -5,11 +5,11 @@
 //! Правила пары — те же, что у лимитного ордера (order_rules::check_rules: статус и права, округление количества до
 //! шага LOT_SIZE, пределы; сумма NOTIONAL оценивается по худшей цене запроса — в ордер цена не идёт). Фильтр
 //! MARKET_LOT_SIZE адаптером не разбирается (symbols.rs) — нарушение даст отказ биржи; пара без MARKET в orderTypes —
-//! отказ биржи как есть. Постановка и итог — тем же кодом, что у лимитного (trade::place → order_state.rs: исполнено —
+//! отказ биржи как есть. Постановка и итог — тем же кодом, что у лимитного (trade::trade → order_state.rs: исполнено —
 //! по executedQty и cummulativeQuoteQty, цена запроса не участвует). Пробный ордер не делается. Ошибка рыночного ордера
 //! никогда не несёт PriceOutOfRange (и истечение EXECUTION_RULE_PRICE_RANGE_EXCEEDED — тоже: OrderRejected).
 //! Кто вызывает: mod.rs (trade_market_sell из контракта).
-//! От чего зависит: order_rules.rs, trade.rs (place), order_state.rs, fills.rs, symbols.rs, ctx.rs.
+//! От чего зависит: order_rules.rs, trade.rs (trade), order_state.rs, fills.rs, symbols.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force (только для общих правил пары), ожидание итога — order_state.rs,
 //! venue.my_trades_limit — fills.rs.
 //!
@@ -66,12 +66,12 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
     })
 }
 
-/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::place).
+/// Что делает: рыночная продажа — правила, постановка и итог тем же кодом, что у лимитного ордера (trade::trade с готовым ордером).
 /// Принимает: окружение, справочник пар, запрос (сторона Sell). Возвращает: факт. Ошибки: как у trade, но без
 /// PriceOutOfRange (заменяется на OrderRejected); NotApplicable — не продажа.
 pub async fn sell(ctx: &Ctx, symbols: &Symbols, req: TradeRequest) -> GatewayResult<TradeResult> {
     let p = ready(ctx, symbols, &req)?;
-    super::trade::place(ctx, req, p)
+    super::trade::trade(ctx, symbols, req, Some(p))
         .await
         .map_err(GatewayError::no_price_range)
 }

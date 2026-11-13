@@ -39,6 +39,7 @@
 | `reason_compact.rs` | Решение 251: длинный hex (> 16 знаков) → «0x1234…abcd», JSON-объект → «{…}» (полностью — в журнале) |
 | `reason_codes.rs` | Словарь кодов ошибок BingX, MEXC, Gate, Bybit, KuCoin → человеческие формулировки (смысл — из venues/*/errors.rs) |
 | `reason_codes_account.rs` | Решение 253, дополнение t82: человеческие причины отказов вывода «аккаунт» (AccountRestricted) и «адрес» (InvalidAddress) всех бирж — для алерта venue.account_problem; reason_codes.rs смотрит сюда первым |
+| `reason_codes_range.rs` | Решение 268: человеческая причина кодов бирж «цена лимитного ордера вне диапазона, разрешённого биржей» (те же коды, что в `venues/<биржа>/errors.rs` → PriceOutOfRange) |
 | `check.rs` | «Проверить подключение»: токен (getMe) и доступ к чату (getChat); у роли — ещё тестовое сообщение в её чат |
 | `settings_watch.rs` | Изменения настроек → событие `system.settings_changed`; решение 251 — пачка изменений одним сообщением со списком, 429 — повтор через retry_after |
 | `glue.rs` | Решение 251 (г): события связи площадки (`venue.disconnected` / `reconnected`, `venue.rate_limited`, `dex.receipts_stuck`, `venue.feed_conn_blocked`) — одно сообщение на площадку за пачку: первое сразу, пришедшие во время отправки — следующим одним; без окна-числа |

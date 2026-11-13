@@ -4,7 +4,8 @@
     нашей сделки), бот пишет сырые кадры стакана и каждую сделку биржи по этой монете. Строка: время начала, монета и
     направления, длительность (у открытого — идёт), наибольшая прибыль на бюджете и без бюджета, отметки «БЫЛА СДЕЛКА»
     и «плюсовая» / «минусовая», отказы предпроверки сделки (решение 266: «сделки нет ×N (направление): причина», метка
-    «баланс» — отказ из-за свободного баланса; полный текст — в подсказке), кадров (потеряно), размер файла; «Открыть» — страница окна (WindowView), «Скачать
+    «баланс» — отказ из-за свободного баланса; полный текст — в подсказке), сводки теневых расчётов «пока занято сделкой …»
+    (решение 267, замер window.busy_calc: сколько расчётов, сколько прошло пороги, максимум прибыли и вложение при нём), кадров (потеряно), размер файла; «Открыть» — страница окна (WindowView), «Скачать
     файл» — .jsonl.zst как есть. Фильтры: монета, со сделкой / без, плюсовая / минусовая; по страницам (сервер).
     Почему окна не пишутся (window.enabled = нет, не задана window.*) и сколько места занято — над списком.
     Данные — GET /api/windows?limit&offset&coin&deal&outcome (coin — тикер или адрес, решение 211); живое сообщение window обновляет строку на месте.
@@ -19,7 +20,7 @@
   import { onLive, lagFor } from '../lib/live.svelte.js';
   import { flight } from '../lib/flight.js';
   import { showTime } from '../lib/labels.js';
-  import { outcomeMark, winSecs, size, winDirs, winRejects } from '../lib/windowLabels.js';
+  import { outcomeMark, winSecs, size, winDirs, winRejects, winBusy } from '../lib/windowLabels.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import PageSize from '../components/PageSize.svelte';
   import ErrorText from '../components/ErrorText.svelte';
@@ -128,6 +129,9 @@
             {#if w.stopped}<div class="warn-text">{w.stopped}</div>{/if}
             {#each winRejects(w) as r (r.key)}
               <div class="muted" title={r.full}>сделки нет ×{r.count} ({r.dir}){#if r.balance} <span class="tag">баланс</span>{/if}: {r.text}</div>
+            {/each}
+            {#each winBusy(w) as b (b.key)}
+              <div class="muted" title={b.full}>{b.dir}: пока {b.text}</div>
             {/each}
           </td>
           <td class="num">{w.frames}{#if w.lost}<div class="warn-text">потеряно {w.lost}</div>{/if}</td>

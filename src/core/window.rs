@@ -7,8 +7,9 @@
 //! проходить — убирается из «проходящих»; когда не проходит ни одно, окно ждёт window.min_hold_ms (прошло снова —
 //! то же окно) и закрывается, если по монете нет открытой сделки; сделка идёт — окно ждёт её конца (что позже).
 //! Решение 241: у открытого окна — памятка последних точек цены пула DEX по направлениям (dex_slot, window_dex.rs).
+//! Решение 267: сводка теневых расчётов направления, пока монета занята сделкой, — в сводку открытого окна (note_busy).
 //! Кто вызывает: core/window_run.rs (pass, fail), core/window_worker.rs (closable, close, deadline), core/window_dex.rs
-//! (dex_slot), тесты.
+//! (dex_slot), core/busy_note.rs (note_busy), тесты.
 //! От чего зависит: core/types, coin_key.rs, window_info.rs (сводка окна), chrono, rust_decimal.
 //! Настройки: нет (min_hold_ms передаёт вызывающий из window.min_hold_ms).
 
@@ -102,6 +103,7 @@ impl Windows {
             dex_points: 0,
             maxwins: vec![],
             rejects: vec![],
+            busy: vec![],
             stopped: None,
             close_reason: None,
         };
@@ -178,6 +180,24 @@ impl Windows {
                 last_at: now,
                 balance,
             }),
+        }
+        true
+    }
+
+    /// Что делает: решение 267 — сводка теневых расчётов направления (busy_sum.rs) в открытое окно монеты: запись
+    /// того же направления с тем же началом заменяется (сводка растёт на месте), другая — добавляется.
+    /// Принимает: сводку. Возвращает: записано ли (окно монеты открыто). Ошибок нет.
+    pub fn note_busy(&mut self, s: &super::busy_sum::BusySum) -> bool {
+        let Some(o) = self.open.get_mut(&CoinKey::of(&s.direction.asset)) else {
+            return false;
+        };
+        let list = &mut o.info.busy;
+        match list
+            .iter_mut()
+            .find(|b| b.direction == s.direction && b.first_at == s.first_at)
+        {
+            Some(b) => *b = s.clone(),
+            None => list.push(s.clone()),
         }
         true
     }

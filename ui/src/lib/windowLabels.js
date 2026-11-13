@@ -1,9 +1,12 @@
 // Файл: ui/src/lib/windowLabels.js
 // Что делает: подписи окон (решение 125) — отметки «БЫЛА СДЕЛКА», «плюсовая» / «минусовая», длительность, размер,
-//   время из наносекунд с миллисекундами (время получения кадра ботом); отказы предпроверки сделки окна (решение 266).
+//   время из наносекунд с миллисекундами (время получения кадра ботом); отказы предпроверки сделки окна (решение 266);
+//   сводки теневых расчётов «пока монета занята сделкой» (решение 267).
 // Кто вызывает: pages/Windows.svelte, components/WindowView.svelte.
-// От чего зависит: ничего.
+// От чего зависит: lib/fmt.js (fmtUsd).
 // Настройки: нет.
+
+import { fmtUsd } from './fmt.js';
 
 /** Итог сделок окна → подпись и класс. Принимает: outcome сводки. Возвращает: {text, cls} или null. */
 export function outcomeMark(o) {
@@ -54,3 +57,48 @@ export const winRejects = (w) =>
     balance: r.balance,
     full: r.reason,
   }));
+
+/** Во сколько раз вложение теневого максимума больше / меньше вложения сделки (факт; до покупки — план). */
+function busyRatio(b) {
+  const v = Number(b.best?.invested);
+  const fact = Number(b.deal?.invested);
+  const base = fact > 0 ? fact : Number(b.deal?.plan_invested);
+  if (!(v > 0) || !(base > 0)) return '';
+  if (v > base) return ` (в ${(v / base).toFixed(2)} раз больше сделки)`;
+  if (v < base) return ` (в ${(base / v).toFixed(2)} раз меньше сделки)`;
+  return ' (как у сделки)';
+}
+
+/**
+ * Сводки теневых расчётов окна «пока монета занята сделкой» (решение 267, сводка окна busy; замер включается
+ * window.busy_calc) — строки для показа: направление, сделка, сколько расчётов и сколько прошло пороги, максимум
+ * прибыли и вложение при нём со сравнением со сделкой, наибольшее прибыльное вложение; подсказка — бюджет расчёта,
+ * время и последний отказ. Принимает: сводку. Возвращает: [{key, dir, text, full}].
+ */
+export const winBusy = (w) =>
+  (w.busy ?? []).map((b, i) => {
+    const dir = `${b.direction.buy_on} → ${b.direction.sell_on}`;
+    const deal = b.deal
+      ? `сделкой ${b.deal.id} (вложено ${fmtUsd(b.deal.invested)}, план ${fmtUsd(b.deal.plan_profit_usd)})`
+      : '(сделки в учёте не видно)';
+    const dropped = b.dropped ? `, отброшено ${b.dropped}` : '';
+    const top = b.best
+      ? `максимум прибыли ${fmtUsd(b.best.profit_usd)} при вложении ${fmtUsd(b.best.invested)}${busyRatio(b)}; наибольшее прибыльное вложение ${fmtUsd(b.max_invested)}`
+      : 'прибыльных расчётов не было';
+    const time = (t) => new Date(t).toLocaleTimeString('ru-RU');
+    const full = [
+      `с ${time(b.first_at)} по ${time(b.last_at)}`,
+      b.best ? `максимум в ${time(b.best.at)}` : null,
+      b.best?.budget != null ? `бюджет расчёта ${fmtUsd(b.best.budget)}` : null,
+      b.deal?.plan_invested != null ? `вложение плана сделки ${fmtUsd(b.deal.plan_invested)}` : null,
+      b.last_reject ? `последний отказ: ${b.last_reject}` : null,
+    ]
+      .filter(Boolean)
+      .join('; ');
+    return {
+      key: `${b.direction.buy_on}|${b.direction.sell_on}|${i}`,
+      dir,
+      text: `занято ${deal}: теневых расчётов ${b.calcs}, прошло пороги ${b.accepted}${dropped}; ${top}`,
+      full,
+    };
+  });

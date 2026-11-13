@@ -3,9 +3,9 @@
 //! направления, биржи записи и что на них включено, начало и конец, наибольшая прибыль, наши сделки и их итог,
 //! счётчики записи, точки цены DEX (решение 241; решение 245 — и на объём сделки), окна максимального объёма
 //! направлений (решение 245), отказы предпроверки сделки (решение 266: причина, сколько раз, метка «баланс»),
-//! причина закрытия; подписи для журнала и Telegram (pairs, mark).
+//! теневые расчёты, пока монета занята сделкой (решение 267, busy_sum.rs), причина закрытия; подписи для журнала и Telegram (pairs, mark).
 //! Кто вызывает: core/window.rs (ведёт), window_close.rs, window_view.rs, window_cfg.rs, интерфейс (JSON).
-//! От чего зависит: core/types, gateway/tap.rs (TapInfo), chrono, rust_decimal, serde.
+//! От чего зависит: core/types, gateway/tap.rs (TapInfo), uncapped_maxwin.rs, busy_sum.rs, chrono, rust_decimal, serde.
 //! Настройки: нет.
 
 use chrono::{DateTime, Utc};
@@ -90,6 +90,10 @@ pub struct WindowInfo {
     /// сводки — пусто.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rejects: Vec<WinReject>,
+    /// Решение 267: сводки теневых расчётов направлений, пока монета занята сделкой (window.rs note_busy; замер
+    /// включается window.busy_calc). Старые сводки и окна без замера — пусто (поле не пишется).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub busy: Vec<super::busy_sum::BusySum>,
     /// Запись остановлена (лимит места) — почему.
     pub stopped: Option<String>,
     pub close_reason: Option<String>,

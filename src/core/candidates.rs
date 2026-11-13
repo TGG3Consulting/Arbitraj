@@ -23,11 +23,14 @@
 //! Решение 147: исполнитель отказал на входе (направление не торгуемо, по монете занято) — точная причина в поле
 //! `start` строки «Кандидатов», в тексте карточки (журнал/Telegram deal.candidate) и в журнале core.start_refused
 //! (Warn, одна запись на смену причины по направлению; сделка запущена — память причины стирается).
+//! Решение 267: монета занята сделкой — при window.busy_calc = да вместо молчаливого выхода enqueue ставит теневой
+//! расчёт (busy_calc.rs: только наблюдение — ни исполнителя, ни окна, ни эпизода, ни строки «Кандидатов», ни журнала
+//! отказов); его очередь разбирает run после очереди кандидатов. Выключено / не задано — как раньше.
 //! Решение 141: прошедший без запущенной сделки и отклонённый с расчётом — в фоновый расчёт «без потолка»
 //! (uncapped_entry.rs, очередь не ждёт); прежний итог «без потолка» в строке остаётся до нового.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
-//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs.
+//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267).
 //! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs; journal.repeat_flush_ms (решение 155).
 
 use std::sync::Arc;
@@ -62,6 +65,9 @@ use crate::gateway::urgency::{self, Urgency};
 pub fn enqueue(core: &Core, d: &Direction) {
     // По монете уже идёт сделка — новый расчёт не нужен (решение 118, Я-2: одна сделка на монету).
     if lk(&core.inner.active).contains(&super::coin_key::CoinKey::of(&d.asset)) {
+        // Решение 267: включён замер window.busy_calc — теневой расчёт (только наблюдение, своя очередь); выключен
+        // или не задан — одно чтение настройки и тот же молчаливый выход.
+        super::busy_calc::enqueue(core, d);
         return;
     }
     if !lk(&core.inner.queued).insert(d.clone()) {
@@ -80,9 +86,25 @@ pub fn enqueue(core: &Core, d: &Direction) {
 /// Задача очереди: раздаёт расчёты параллельно — на каждый кандидат свой расчёт (решение 88), ни один не ждёт другого.
 /// Предел одновременных расчётов — profit.calc_concurrency (0 или не задана — без предела); достигнут — направление
 /// снимается из очереди, следующий тик поставит снова (как при полном канале). Работает, пока жив канал.
+/// Решение 267: та же задача разбирает очередь теневых расчётов занятых монет (busy_calc.rs Shadows) — под тем же
+/// пределом и только когда очередь кандидатов пуста; условие допуска кандидата прежнее (теневые в inflight не входят).
 pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
     let inflight = Arc::new(AtomicUsize::new(0));
-    while let Some((d, at)) = rx.recv().await {
+    // Решение 267: теневые расчёты занятых монет — своя очередь; берётся, только когда очередь кандидатов пуста
+    // (biased: кандидат всегда первый). Замер выключен — очередь теневых пуста всегда.
+    let mut shadows = super::busy_calc::Shadows::take(&core);
+    loop {
+        let (d, at) = tokio::select! {
+            biased;
+            m = rx.recv() => match m {
+                Some(m) => m,
+                None => return,
+            },
+            s = shadows.recv() => {
+                shadows.start(&core, s, inflight.load(Ordering::Acquire));
+                continue;
+            }
+        };
         let cap = core
             .inner
             .deps
@@ -97,6 +119,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
             continue;
         }
         inflight.fetch_add(1, Ordering::AcqRel);
+        // Решение 267: кандидат занял место — лишний теневой расчёт снимается (теневых нет — ничего).
+        shadows.give_way(cap, inflight.load(Ordering::Acquire));
         let core = core.clone();
         let inflight = inflight.clone();
         // Свой расчёт на каждый кандидат: тяжёлый счёт (в памяти) идёт параллельно, узел не нагружается

@@ -9,7 +9,8 @@
     DEX — точки котировки стороны DEX (core/window_dex.rs): у кадра стакана — последняя точка не позже его получения,
     и весь ряд таблицей; не пишется — причина (dex_off). Решение 245: у направления с нашей открытой сделкой — ещё точки
     на объём сделки (столбец «Объём чего»: «сделка … (план/факт)», запрошено; сбой — dex_deal_err); окна
-    максимального объёма направлений и «успели бы» (maxwin_view, MaxWinLine).
+    максимального объёма направлений и «успели бы» (maxwin_view, MaxWinLine). Решение 267: строки «Пока занято сделкой …» —
+    сводки теневых расчётов, пока монета была занята сделкой (замер window.busy_calc; подробности — в подсказке).
   Кто вызывает: pages/Windows.svelte.
   От чего зависит: lib/api.js, lib/coinNames.svelte.js, lib/windowLabels.js, components/Modal.svelte, DepthStepper.svelte, PageSize.svelte, ErrorText.svelte,
     MaxWinLine.svelte.
@@ -17,7 +18,7 @@
 -->
 <script>
   import { get, seg } from '../lib/api.js';
-  import { msTime, nsTime, outcomeMark, winRejects } from '../lib/windowLabels.js';
+  import { msTime, nsTime, outcomeMark, winRejects, winBusy } from '../lib/windowLabels.js';
   import { coinName } from '../lib/coinNames.svelte.js';
   import Modal from './Modal.svelte';
   import PageSize from './PageSize.svelte';
@@ -100,6 +101,9 @@
   </p>
   {#each winRejects(info) as r (r.key)}
     <div class="muted" title={r.full}>Сделки нет ×{r.count} ({r.dir}){#if r.balance} <span class="tag">баланс</span>{/if}: {r.text}</div>
+  {/each}
+  {#each winBusy(info) as b (b.key)}
+    <div class="muted" title={b.full}>{b.dir}: пока {b.text}</div>
   {/each}
   {#each info.venues as v, vi (`${v.venue}|${vi}`)}
     <div class="muted">

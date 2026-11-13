@@ -297,6 +297,7 @@ async fn scene(tag: &str) -> (SignalsSrc, PathBuf) {
         dex_points: 1,
         maxwins: vec![],
         rejects: vec![],
+        busy: vec![],
         stopped: None,
         close_reason: None,
     };

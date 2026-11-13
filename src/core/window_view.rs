@@ -57,6 +57,7 @@ impl Core {
                         dex_points: o.dex_points,
                         maxwins: o.maxwins.clone(),
                         rejects: o.rejects.clone(),
+                        busy: o.busy.clone(),
                         ..w
                     },
                     None => w,
@@ -109,6 +110,8 @@ impl Core {
             info.maxwins = o.maxwins;
             // Решение 266: отказы предпроверки открытого окна — из памяти.
             info.rejects = o.rejects;
+            // Решение 267: сводки теневых расчётов открытого окна — из памяти.
+            info.busy = o.busy;
         }
         let path = self.inner.window_files.path(id);
         let p = path.clone();

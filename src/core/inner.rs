@@ -172,6 +172,9 @@ pub struct Inner {
     pub withdraw_limit: super::withdraw_limit::State,
     /// Решение 238: снимки стакана по REST для ордера (exec_book.rs) — котировка и худшая цена видят один снимок.
     pub exec_books: super::exec_book::Cache,
+    /// Решение 267: замер «что было выгодно, пока монета занята сделкой» — очередь теневых расчётов, отметки
+    /// направлений и сводки (busy_calc.rs); при window.busy_calc = нет / не задана — пусто.
+    pub busy_calc: super::busy_calc::State,
 }
 
 impl Inner {
@@ -194,6 +197,7 @@ impl Inner {
         );
         Inner {
             live: Live::new(deps.buffer),
+            busy_calc: super::busy_calc::State::new(deps.buffer),
             deps,
             market: RwLock::default(),
             networks: RwLock::default(),

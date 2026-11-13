@@ -14,21 +14,21 @@
 //! может найти не самый большой объём — но бюджет проверяется в каждой точке (size_memo.rs), он не нарушается.
 //! Все расчёты — не больше size.max_evals: исчерпан на границах — отказ, дальше — лучший из посчитанных.
 //!
-//! Решение 265: границы, точки и уточнение — части замера этапа «подбор объёма» (calc_timing.rs).
+//! Решение 265: границы, точки и уточнение — части подробного замера этапа «подбор объёма» (calc_detail.rs, только при log.step_timing).
 //! Все объёмы кратны шагу количества (округление вниз). Вложение ≤ бюджета держит size_memo.rs.
 //! Кто вызывает: core/profit.rs, тесты (tests/core_size_optimum.rs — записанные стакан и пул).
-//! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs, core/calc_timing.rs.
+//! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs, core/calc_detail.rs.
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (через Params).
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use super::calc_timing::stage;
+use super::calc_detail::stage_detail;
 use super::size::{Curve, Fail, Found, Params, SizeChoice};
 use super::size_bounds::{lower, upper};
 use super::size_memo::Memo;
 
-/// Решение 265: имена частей замера подбора (calc_timing.rs) — их же ищет текст «Время по шагам» (precheck_timing.rs).
+/// Решение 265: имена частей замера подбора (calc_detail.rs) — их же ищет текст «Время по шагам» (calc_steps.rs).
 pub const BOUNDS: &str = "границы (бисекция)";
 pub const POINTS: &str = "точки (изломы и сетка)";
 pub const REFINE: &str = "уточнение";
@@ -52,14 +52,14 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
     let guess = m
         .units(p.guess.max(Decimal::ZERO))
         .ok_or_else(|| Fail::Stop(format!("объём {} слишком велик", p.guess)))?;
-    // Решение 265: этапы подбора — части замера (calc_timing.rs; вне замера — просто работа).
-    let (hi, max_exact, lo) = stage(|| BOUNDS.into(), async {
+    // Решение 265: этапы подбора — части подробного замера (calc_detail.rs; иначе — просто работа).
+    let (hi, max_exact, lo) = stage_detail(|| BOUNDS.into(), async {
         let (hi, max_exact) = upper(m, guess, p.bisect_steps).await?;
         let lo = lower(m, hi, p.bisect_steps).await?;
         Ok::<_, Fail>((hi, max_exact, lo))
     })
     .await?;
-    let ok = stage(|| POINTS.into(), points(m, p, lo, hi)).await?;
+    let ok = stage_detail(|| POINTS.into(), points(m, p, lo, hi)).await?;
     let tol = tolerance(hi, p.tolerance_pct);
     let mut peaks = 0u32;
     for i in 0..ok.len() {
@@ -75,7 +75,7 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         } else {
             ok[i + 1].0
         };
-        stage(|| REFINE.into(), refine(m, a, b, p.refine_steps, tol)).await?;
+        stage_detail(|| REFINE.into(), refine(m, a, b, p.refine_steps, tol)).await?;
     }
     let best = m
         .best()

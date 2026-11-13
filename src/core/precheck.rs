@@ -6,8 +6,9 @@
 //! продажи на объём плана (решение 134, precheck_sell.rs), продажа DEX B — симуляцией настоящей продажи кошельком сделки
 //! с пересчётом по её выходу (решение 234, precheck_dex_sell.rs); на бирже A хватит средств, которые можно вывести (решение 150,
 //! precheck_withdraw.rs).
-//! Решение 265: время шагов — «Время по шагам (предпроверка): …» и этапы пересчёта «Время по шагам (пересчёт с
-//! финальной котировкой, всего N мс): …» (step_timing.rs) — в журнал core.precheck и хронологию сделки (executor.rs).
+//! Решение 265 (включаемое, log.step_timing = да): кроме прежней строки «время: …» — «Время по шагам (предпроверка): …»
+//! и этапы пересчёта «Время по шагам (пересчёт с финальной котировкой, всего N мс): …» (step_timing.rs) — в журнал
+//! core.precheck и хронологию сделки (executor.rs); выключено — только прежняя строка, замера этапов нет.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: step_timing.rs, risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз).
 //! Настройки: risk.min_bnb_balance, venue.symbols_stale_s (+ всё, что читают risk.rs и profit.rs).
@@ -21,7 +22,6 @@ use crate::settings::read::At;
 use super::costs::{Calc, CostLine};
 use super::engine::{Core, wr};
 use super::profit::{self, Verdict};
-use super::step_timing::Steps;
 
 /// Статус ввода или вывода монеты по сети BSC прямо из API биржи. Ошибка — текст причины.
 async fn transfer_open(
@@ -141,19 +141,21 @@ pub fn gas_need(costs: &[CostLine], stages: &[&str]) -> Decimal {
         .sum()
 }
 
-/// Предпроверка. Возвращает: свежий расчёт для сделки и строки «Время по шагам» (шаги предпроверки; этапы пересчёта —
-/// решение 265) для хронологии сделки. Ошибки: текст причины отказа (с временем шагов).
+/// Предпроверка. Возвращает: свежий расчёт для сделки и строки «Время по шагам» для хронологии (решение 265: только при
+/// on — log.step_timing = да, иначе пусто). Ошибки: текст причины отказа (с временем шагов, как до решения 265).
 /// Решение 111: время каждого шага (справочник сетей биржи, баланс BNB, пересчёт с финальной котировкой) — в текст
 /// отказа и в журнал при успехе: 02.11 у RVV между кандидатом и отказом прошло 16 с, а на что — по журналу не видно.
-/// Решение 265: при успехе в журнал и хронологию — и этапы пересчёта по шагам (step_timing.rs, calc_steps.rs).
-pub async fn run(core: &Core, d: &Direction) -> Result<(Calc, Vec<String>), String> {
-    let mut t = Steps::default();
-    let mut calc = None;
-    let res = steps(core, d, &mut t, &mut calc).await;
-    let lines: Vec<String> = std::iter::once(t.text("предпроверка"))
-        .chain(calc)
-        .collect();
+/// Решение 265: при on к записи журнала добавляются и строки «Время по шагам» (стоп-условия; этапы пересчёта).
+/// Принимает: ядро, направление, включён ли замер по шагам (читает executor.rs один раз на сделку).
+pub async fn run(core: &Core, d: &Direction, on: bool) -> Result<(Calc, Vec<String>), String> {
+    let mut t = Timing {
+        on,
+        ..Timing::default()
+    };
+    let res = steps(core, d, &mut t).await;
+    let lines = t.lines();
     if res.is_ok() {
+        let extra: String = lines.iter().map(|l| format!(". {l}")).collect();
         core.inner
             .deps
             .log(
@@ -161,32 +163,75 @@ pub async fn run(core: &Core, d: &Direction) -> Result<(Calc, Vec<String>), Stri
                 "core.precheck",
                 Some(&d.buy_on.0),
                 format!(
-                    "{} {} → {}: предпроверка пройдена. {}",
+                    "{} {} → {}: предпроверка пройдена ({}){extra}",
                     d.asset.ticker,
                     d.buy_on.0,
                     d.sell_on.0,
-                    lines.join(". ")
+                    t.text()
                 ),
                 None,
             )
             .await
     }
+    // Решение 265 (при on): у отказа — и строка этапов пересчёта, если до него дошли.
+    let calc: String = t.calc.iter().map(|l| format!(". {l}")).collect();
     res.map(|c| (c, lines))
-        .map_err(|e| format!("{e} ({})", t.text("предпроверка")))
+        .map_err(|e| format!("{e} ({}){calc}", t.text()))
+}
+
+/// Время шагов предпроверки: (что, мс) — как до решения 265, всегда. Решение 265 (только при on): время стоп-условий и
+/// строка этапов пересчёта.
+#[derive(Default)]
+struct Timing {
+    steps: Vec<(String, u128)>,
+    on: bool,
+    stop_ms: Option<u128>,
+    calc: Option<String>,
+}
+
+impl Timing {
+    /// Запоминает шаг. Принимает: название, момент начала. Ошибок нет.
+    fn mark(&mut self, what: String, from: std::time::Instant) {
+        self.steps.push((what, from.elapsed().as_millis()));
+    }
+
+    /// «время: справочник сетей bingx 820 мс, пересчёт 14100 мс» (как до решения 265). Ошибок нет.
+    fn text(&self) -> String {
+        let parts: Vec<String> = self
+            .steps
+            .iter()
+            .map(|(w, ms)| format!("{w} {ms} мс"))
+            .collect();
+        format!("время: {}", parts.join(", "))
+    }
+
+    /// Решение 265: строки «Время по шагам (предпроверка): стоп-условия N мс; …» и этапов пересчёта; выключено — пусто.
+    /// Ошибок нет.
+    fn lines(&self) -> Vec<String> {
+        if !self.on {
+            return Vec::new();
+        }
+        let mut s = super::step_timing::Steps::new(true);
+        if let Some(ms) = self.stop_ms {
+            s.add(|| ("стоп-условия".into(), ms as i128));
+        }
+        for (w, ms) in &self.steps {
+            s.add(|| (w.clone(), *ms as i128));
+        }
+        s.text("предпроверка")
+            .into_iter()
+            .chain(self.calc.clone())
+            .collect()
+    }
 }
 
 /// Шаги предпроверки с замером времени. Ошибки: текст причины отказа.
-/// Решение 265: `calc` — строка этапов пересчёта (заполняется, если до пересчёта дошли).
-async fn steps(
-    core: &Core,
-    d: &Direction,
-    t: &mut Steps,
-    calc: &mut Option<String>,
-) -> Result<Calc, String> {
+async fn steps(core: &Core, d: &Direction, t: &mut Timing) -> Result<Calc, String> {
     use std::time::Instant;
-    let at = Instant::now();
+    // Решение 265: время стоп-условий — только при включённом замере по шагам.
+    let at = t.on.then(Instant::now);
     let r = super::risk::can_open(core, d);
-    t.mark("стоп-условия", at);
+    t.stop_ms = at.map(|a| a.elapsed().as_millis());
     r?;
     for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
         match super::trade_ops::kind(core, v)? {
@@ -217,9 +262,10 @@ async fn steps(
     }
     let at = Instant::now();
     // Будущее расчёта большое — в куче: обёртки замера иначе копируют его на стек (переполнение в отладочной сборке).
-    let (verdict, m) = super::step_timing::measure(Box::pin(replan(core, d))).await;
-    t.mark("пересчёт с финальной котировкой", at);
-    *calc = Some(m.calc_text("пересчёт с финальной котировкой"));
+    // Решение 265: этапы пересчёта по шагам — только при включённом замере (выключен — работа без обёрток).
+    let (verdict, m) = super::step_timing::measure_if(t.on, Box::pin(replan(core, d))).await;
+    t.mark("пересчёт с финальной котировкой".into(), at);
+    t.calc = m.map(|m| m.calc_text("пересчёт с финальной котировкой"));
     let c = match verdict {
         Verdict::Accept(c) => c,
         Verdict::Reject { reason, .. } => return Err(format!("пересчёт перед покупкой: {reason}")),

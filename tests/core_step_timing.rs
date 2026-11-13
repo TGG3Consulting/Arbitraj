@@ -5,7 +5,9 @@
 //! (2) HTTP-запрос общего обмена шлюза (gateway/http.rs exchange_full) под замером попадает в строку ордера по имени
 //! «метод путь» с кодом ответа, а обмен без журнала (exchange — узел BSC, агрегатор) — нет. Тело ответа — записанный
 //! ответ MEXC exchangeInfo (tests/data/mexc_2026-11-02/exchange_info.json), его отдаёт локальный сервер.
-//! Числа времени не проверяются — только названия шагов.
+//! (3) Решение 265, включаемое: выключено (log.step_timing) — measure_if без замера, журнала запросов step_meter на
+//! задаче нет, Steps не читает часы и строк не даёт; включено — есть. (4) Замер кандидата (решение 129) частей 265 не
+//! содержит. Числа времени не проверяются — только названия шагов.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{step_timing, calc_timing, size_search}, arb::gateway::http, tests/size_common.
 
@@ -14,9 +16,12 @@ mod size_common;
 use std::time::Duration;
 
 use arb::core::calc_timing::stage;
+use arb::core::size_memo::EVAL;
 use arb::core::size_search::search;
-use arb::core::step_timing::{HEAD, Steps, measure};
+use arb::core::size_search::{BOUNDS, POINTS, REFINE};
+use arb::core::step_timing::{HEAD, Steps, measure, measure_if};
 use arb::gateway::http::{Limits, exchange, exchange_full};
+use arb::gateway::step_meter;
 use rust_decimal::Decimal;
 use size_common::curve::{Dir, RecCurve};
 use size_common::{Rec, d, params};
@@ -119,9 +124,61 @@ async fn order_requests_are_listed() {
         !text.contains("secret") && !text.contains("/node"),
         "{text}"
     );
-    // Без замера журнала нет — обмен идёт как раньше.
-    exchange_full(http.get(&url), lim).await.unwrap();
-    let mut s = Steps::default();
-    s.mark("ордер покупки mexc", std::time::Instant::now());
-    assert!(s.text("исполнение до покупки").starts_with(HEAD));
+    // Флаг выключен (log.step_timing): журнала запросов на задаче нет, замера нет, строк нет; обмен идёт как раньше.
+    let (seen, off) = measure_if(false, async {
+        exchange_full(http.get(&url), lim).await.unwrap();
+        step_meter::active()
+    })
+    .await;
+    assert!(!seen && off.is_none(), "выключено — журнала запросов нет");
+    let (seen, on) = measure_if(true, async { step_meter::active() }).await;
+    assert!(seen && on.is_some_and(|m| m.reqs.is_empty()));
+    let mut s = Steps::new(false);
+    assert!(s.at().is_none(), "выключено — часы не читаются");
+    s.mark(Some(std::time::Instant::now()), || {
+        "ордер покупки mexc".into()
+    });
+    s.add(|| ("шаг".into(), 1));
+    assert!(
+        s.text("исполнение до покупки").is_none(),
+        "выключено — строки нет"
+    );
+    let mut s = Steps::new(true);
+    s.mark(s.at(), || "ордер покупки mexc".into());
+    let t = s.text("исполнение до покупки").unwrap();
+    assert!(
+        t.starts_with(HEAD) && t.contains("ордер покупки mexc"),
+        "{t}"
+    );
+}
+
+/// Замер «Кандидатов» (решение 129) — как до решения 265: обычный замер (Timing::new) частей подбора объёма решения
+/// 265 (границы, точки, уточнение, расчёт объёма) не содержит.
+#[tokio::test]
+async fn candidate_timing_has_no_detail_parts() {
+    use arb::core::calc_report::report;
+    use arb::core::calc_timing::{Timing, scope};
+    let rec = Rec::load("step-timing-129").await;
+    let p = params(&rec, Dir::DexToBingx, d("20000"));
+    let mut c = RecCurve {
+        rec: &rec,
+        dir: Dir::DexToBingx,
+        slip: Decimal::ONE,
+    };
+    let t = Timing::new(std::time::Instant::now());
+    let work = stage(|| "подбор объёма".into(), search(&mut c, &p));
+    scope(t.clone(), work).await.unwrap();
+    let r = report(&t);
+    let names: Vec<&str> = r
+        .stages
+        .iter()
+        .flat_map(|s| s.parts.iter().map(|p| p.name.as_str()))
+        .collect();
+    assert_eq!(r.stages.len(), 1, "этап «подбор объёма»");
+    for n in [BOUNDS, POINTS, REFINE, EVAL] {
+        assert!(
+            !names.contains(&n),
+            "часть 265 «{n}» в замере кандидата: {names:?}"
+        );
+    }
 }

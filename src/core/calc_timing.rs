@@ -4,10 +4,12 @@
 //! подбор объёма, финальная котировка) и его части (котировка стороны A/B у площадки, стоимость вывода, курсы затрат).
 //! Части одного имени складываются (подбор объёма считает десятки объёмов): сумма времени, сколько раз, запросы к
 //! узлу BSC и агрегатору (gateway/calc_meter.rs: вызовов, ожидание очереди, время запроса). Незакрытый этап — тот, на
-//! котором расчёт стоит сейчас: по нему причина отказа по сроку называет этап (calc_report.rs). Вне расчёта кандидата
-//! (предпроверка сделки) замера нет — `stage` просто выполняет работу.
-//! Кто вызывает: core/candidates.rs (scope, отчёт), core/profit.rs и core/costs.rs (stage, stage_sync),
-//! core/calc_report.rs (снимок).
+//! котором расчёт стоит сейчас: по нему причина отказа по сроку называет этап (calc_report.rs). Без замера на задаче
+//! `stage` просто выполняет работу. Решение 265: пересчёт сделки при log.step_timing = да тоже идёт под замером —
+//! подробным (Timing::detailed, `detail`): только в нём пишутся части calc_detail.rs; замер кандидата — как до 265.
+//! Кто вызывает: core/candidates.rs (scope, отчёт), core/step_timing.rs (scope, Timing::detailed, отчёт),
+//! core/profit.rs и core/costs.rs (stage, stage_sync), core/calc_detail.rs (detail, stage, stage_sync — части
+//! profit.rs, size_search.rs, size_memo.rs), core/calc_report.rs (снимок).
 //! От чего зависит: gateway/calc_meter.rs, tokio (task_local).
 //! Настройки: нет — замер всегда (на шаг: два чтения часов и одна короткая блокировка; дёшево против котировок).
 
@@ -54,6 +56,8 @@ pub struct Timing {
     pub queued_at: Instant,
     pub started: Instant,
     pub meter: Arc<Meter>,
+    /// Решение 265: подробный замер (сделка при log.step_timing = да) — пишутся и части `stage_detail`.
+    pub detail: bool,
     state: Mutex<State>,
 }
 
@@ -74,8 +78,18 @@ impl Timing {
             queued_at,
             started: Instant::now(),
             meter: Arc::new(Meter::default()),
+            detail: false,
             state: Mutex::new(State::default()),
         })
+    }
+
+    /// Решение 265: подробный замер (пересчёт сделки, core/step_timing.rs). Ошибок нет.
+    pub fn detailed(queued_at: Instant) -> Arc<Timing> {
+        let mut t = Timing::new(queued_at);
+        if let Some(x) = Arc::get_mut(&mut t) {
+            x.detail = true;
+        }
+        t
     }
 
     /// Снимок этапов. Ошибок нет.
@@ -183,4 +197,9 @@ pub fn stage_sync<T>(name: impl FnOnce() -> String, work: impl FnOnce() -> T) ->
     let out = work();
     t.close(id);
     out
+}
+
+/// Решение 265: подробный ли замер на задаче (Timing::detailed); замера нет или он обычный — нет. Ошибок нет.
+pub fn detail() -> bool {
+    TIMING.try_with(|t| t.detail).unwrap_or(false)
 }

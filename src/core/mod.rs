@@ -15,6 +15,7 @@ pub mod balance_sell_report;
 pub mod balances_cache;
 pub mod balances_view;
 pub mod blacklist;
+pub mod calc_detail;
 pub mod calc_report;
 pub mod calc_steps;
 pub mod calc_timing;

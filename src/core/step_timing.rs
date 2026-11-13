@@ -7,9 +7,13 @@
 //! видит только как HTTP-запросы общего обмена gateway/http.rs exchange_full — контракт шлюза не меняется; чего там
 //! нет (Bybit — свой обмен; задачи адаптера через spawn), входит в шаг ядра целиком.
 //! Кто вызывает: core/precheck.rs, core/executor.rs.
+//! measure ставит замер этапов «подробный» (calc_timing.rs Timing::detailed): только в нём пишутся части,
+//! добавленные решением 265; замер «Кандидатов» (решение 129) остаётся прежним.
 //! От чего зависит: core/calc_timing.rs, core/calc_report.rs, core/calc_steps.rs (текст этапов расчёта),
 //! gateway/calc_meter.rs, gateway/step_meter.rs.
-//! Настройки: нет — замер всегда (два чтения часов на шаг; дёшево против запросов к площадкам).
+//! Решение 265 (уточнение, Тигран 13.11): замер включаемый — log.step_timing = да; не задана или нет — ни часов, ни
+//! обёрток, ни строк (Steps пуст, measure_if — работа как есть).
+//! Настройки: log.step_timing (вся система; читает executor.rs один раз на сделку).
 
 use std::future::Future;
 use std::time::Instant;
@@ -20,35 +24,73 @@ use crate::gateway::step_meter::{self, Req};
 use super::calc_report::{self, Report};
 use super::calc_timing::{self, Timing};
 
-/// Шаги одного этапа сделки: (что, мс) по порядку.
+/// Имя настройки-включателя (решение 265, Тигран 13.11: замер по шагам — включаемый).
+pub const SETTING: &str = "log.step_timing";
+
+/// Включён ли замер по шагам: log.step_timing = да. Не задана или не читается — выключен (это не ошибка, журнала
+/// нет). Читается один раз на сделку (executor.rs). Принимает: хранилище настроек. Ошибок нет.
+pub fn enabled(s: &crate::settings::store::Store) -> bool {
+    s.flag(SETTING, crate::settings::read::At::default())
+        .unwrap_or(false)
+}
+
+/// Шаги одного этапа сделки: (что, мс) по порядку. Выключен (log.step_timing) — ничего не замеряет и не хранит.
 #[derive(Debug, Default, Clone)]
-pub struct Steps(pub Vec<(String, i128)>);
+pub struct Steps {
+    on: bool,
+    list: Vec<(String, i128)>,
+}
 
 impl Steps {
-    /// Запоминает шаг от момента `from` до сейчас. Принимает: название, начало. Ошибок нет.
-    pub fn mark(&mut self, what: impl Into<String>, from: Instant) {
-        self.0
-            .push((what.into(), from.elapsed().as_millis() as i128));
+    /// Новый список. Принимает: включён ли замер. Ошибок нет.
+    pub fn new(on: bool) -> Self {
+        Steps {
+            on,
+            list: Vec::new(),
+        }
     }
 
-    /// Запоминает шаг с готовым числом мс (разница часов UTC). Ошибок нет.
-    pub fn add(&mut self, what: impl Into<String>, ms: i128) {
-        self.0.push((what.into(), ms));
+    /// Начало шага: сейчас, если замер включён; иначе None (часы не читаются). Ошибок нет.
+    pub fn at(&self) -> Option<Instant> {
+        self.on.then(Instant::now)
+    }
+
+    /// Запоминает шаг от `from` до сейчас; from None (замер выключен) — ничего, имя не собирается.
+    /// Принимает: начало, имя (замыкание). Ошибок нет.
+    pub fn mark(&mut self, from: Option<Instant>, what: impl FnOnce() -> String) {
+        if let Some(f) = from {
+            self.list.push((what(), f.elapsed().as_millis() as i128));
+        }
+    }
+
+    /// Запоминает шаг с готовым числом мс (разница часов UTC), если замер включён. Ошибок нет.
+    pub fn add(&mut self, what: impl FnOnce() -> (String, i128)) {
+        if self.on {
+            self.list.push(what());
+        }
     }
 
     /// «шаг N мс; шаг N мс» (без заголовка). Ошибок нет.
     pub fn list(&self) -> String {
         let parts: Vec<String> = self
-            .0
+            .list
             .iter()
             .map(|(w, ms)| format!("{w} {ms} мс"))
             .collect();
         parts.join("; ")
     }
 
-    /// «Время по шагам (этап): шаг N мс; …». Принимает: название этапа. Ошибок нет.
-    pub fn text(&self, stage: &str) -> String {
-        format!("{HEAD} ({stage}): {}", self.list())
+    /// «Время по шагам (этап): шаг N мс; …»; замер выключен — None. Принимает: название этапа. Ошибок нет.
+    pub fn text(&self, stage: &str) -> Option<String> {
+        self.on
+            .then(|| format!("{HEAD} ({stage}): {}", self.list()))
+    }
+}
+
+/// Строка «Время по шагам» в хронологию сделки, если она есть (None — замер выключен). Ошибок нет.
+pub fn note(deal: &mut super::deal::Deal, line: Option<String>) {
+    if let Some(l) = line {
+        deal.note(l);
     }
 }
 
@@ -67,7 +109,7 @@ pub struct Measured {
 /// Принимает: работу. Возвращает: её результат и замер. Ошибок нет.
 pub async fn measure<F: Future>(work: F) -> (F::Output, Measured) {
     let t0 = Instant::now();
-    let t = Timing::new(t0);
+    let t = Timing::detailed(t0);
     let rec = step_meter::Rec::new();
     let out = calc_meter::scope(
         t.meter.clone(),
@@ -80,6 +122,16 @@ pub async fn measure<F: Future>(work: F) -> (F::Output, Measured) {
         ms: (t0.elapsed().as_micros() as f64 / 100.0).round() / 10.0,
     };
     (out, m)
+}
+
+/// Как measure, но только если замер включён (on); выключен — работа без обёрток замера, замера нет.
+/// Принимает: включён ли, работу. Возвращает: результат и замер (None — выключен). Ошибок нет.
+pub async fn measure_if<F: Future>(on: bool, work: F) -> (F::Output, Option<Measured>) {
+    if !on {
+        return (work.await, None);
+    }
+    let (out, m) = measure(work).await;
+    (out, Some(m))
 }
 
 impl Measured {

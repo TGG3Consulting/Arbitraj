@@ -3,7 +3,7 @@
 //! объём считается один раз. Здесь же держится инвариант бюджета: расчёт с вложением больше бюджета — не точка
 //! кривой, а Fail::TooLarge («вложение больше бюджета»), поэтому ни одна допустимая точка бюджет не превышает.
 //! Решение 246: текст отказа «вложение больше бюджета» — over_budget, общий с ранней проверкой costs.rs evaluate_capped.
-//! Решение 265: каждый расчёт объёма (at, beyond) — часть замера «расчёт объёма» (calc_timing.rs).
+//! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
 //! Кто вызывает: core/size_bounds.rs, core/size_search.rs; over_budget — ещё core/costs.rs.
 //! От чего зависит: core/size.rs, core/calc_timing.rs.
 //! Настройки: нет.
@@ -13,10 +13,10 @@ use std::collections::BTreeMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use super::calc_timing::stage;
+use super::calc_detail::stage_detail;
 use super::size::{Curve, Fail, Point};
 
-/// Решение 265: имя части замера «один расчёт объёма» (calc_timing.rs) — его же ищет precheck_timing.rs.
+/// Решение 265: имя части замера «один расчёт объёма» (calc_detail.rs) — его же ищет calc_steps.rs.
 pub const EVAL: &str = "расчёт объёма";
 
 /// Что делает: отказ «вложение больше бюджета» — один текст у проверки точки (Memo::at) и у ранней проверки расчёта
@@ -102,7 +102,7 @@ impl<'a, C: Curve> Memo<'a, C> {
             // потоки рантайма — голодали бы веб-сервер, обработка событий пулов и опрос блока.
             tokio::task::yield_now().await;
             // Решение 265: каждый расчёт объёма — часть замера (сколько раз и сколько в среднем).
-            match stage(|| EVAL.into(), self.curve.at(q)).await {
+            match stage_detail(|| EVAL.into(), self.curve.at(q)).await {
                 Ok(p) if p.invested > self.budget => Err(over_budget(q, p.invested, self.budget)),
                 r => r,
             }
@@ -117,7 +117,7 @@ impl<'a, C: Curve> Memo<'a, C> {
         let q = self.qty(n);
         // Уступаем поток перед тяжёлым вычислением точки (решение 90) — см. at().
         tokio::task::yield_now().await;
-        stage(|| EVAL.into(), self.curve.at(q)).await
+        stage_detail(|| EVAL.into(), self.curve.at(q)).await
     }
 
     /// Прибыль на n шагов; объём недопустим или предел расчётов исчерпан — None. Ошибки: Fail::Stop (расчёт

@@ -15,8 +15,8 @@
 //! Решение 253 (г): затем — входы по монете с биржи покупки не закрыты отказом вывода (withdraw_block.rs).
 //! Решение 234 (п. 3): затем — свежесть замера налогов на DEX-сторонах (tax_age.rs, tax.max_age_s).
 //! Решение 246: кривая подбора знает бюджет — объём сверх бюджета отбрасывается до котировок B (costs.rs evaluate_capped).
-//! Решение 265: этапами замера стали и проверки до расчёта (делистинг, закрытые входы, свежесть налогов) и исполнимый
-//! объём у исполнителя в финальной котировке — их время видно в «Время по шагам» предпроверки (precheck_timing.rs).
+//! Решение 265: этапами подробного замера (calc_detail.rs, только при log.step_timing) стали и проверки до расчёта (делистинг, закрытые входы, свежесть налогов) и исполнимый
+//! объём у исполнителя в финальной котировке — их время видно в «Время по шагам» предпроверки (calc_steps.rs).
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -27,6 +27,7 @@ use serde::Serialize;
 use crate::core::types::{Direction, Side};
 use crate::settings::read::At;
 
+use super::calc_detail::{stage_detail, stage_sync_detail};
 use super::calc_timing::{stage, stage_sync};
 use super::costs::Calc;
 use super::dirctx::DirCtx;
@@ -63,20 +64,20 @@ pub async fn decide_capped(
         return reject(e.clone(), None);
     }
     // Решение 175: монета в делистинге на любой стороне ближе delist.block_hours — сделки нет (до любого расчёта).
-    // Решение 265: проверки до расчёта — этапы замера (время каждой в «Время по шагам» предпроверки).
+    // Решение 265: проверки до расчёта — этапы подробного замера (calc_detail.rs; только при log.step_timing).
     let delist = super::delist_check::check(core, d, chrono::Utc::now());
-    if let Err(e) = stage(|| "делистинг".into(), delist).await {
+    if let Err(e) = stage_detail(|| "делистинг".into(), delist).await {
         return reject(e, None);
     }
     // Решение 253 (г): входы по монете с биржи покупки закрыты после окончательного отказа вывода с неё.
-    if let Err(e) = stage_sync(
+    if let Err(e) = stage_sync_detail(
         || "закрытые входы после отказа вывода".into(),
         || super::withdraw_block::check(core, d),
     ) {
         return reject(e, None);
     }
     // Решение 234 (п. 3): замер налогов монеты на DEX-сторонах не старше tax.max_age_s (не задана — проверки нет).
-    if let Err(e) = stage_sync(
+    if let Err(e) = stage_sync_detail(
         || "свежесть замера налогов".into(),
         || super::tax_age::check(core, d, chrono::Utc::now()),
     ) {
@@ -209,7 +210,7 @@ async fn final_calc(
     let (c, qty) = match eval(qty).await {
         Ok(c) => (c, qty),
         Err(super::size::Fail::TooLarge(t)) => {
-            let fill = stage(
+            let fill = stage_detail(
                 || "исполнимый объём у исполнителя".into(),
                 final_fillable(core, cx, qty),
             )

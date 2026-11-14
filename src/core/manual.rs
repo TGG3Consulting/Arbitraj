@@ -192,8 +192,7 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     deal.unsent_retries = 0;
     // Решение 268: и отметки «рыночный ордер отправлен» / «по коридору уходили в режим» — нажатие даёт кнопке свой
     // один рыночный повтор.
-    deal.range_market.clear();
-    deal.range_stuck.clear();
+    deal.clear_range();
     deal.step = Step::Selling;
     // Решение 177: тот же отказ — эта запись обновится, а не появится новая (raise_alert, manual_repeat.rs).
     deal.alert_was = Some(alert);

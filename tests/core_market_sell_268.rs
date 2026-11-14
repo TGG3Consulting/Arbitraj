@@ -385,8 +385,8 @@ fn profitable_sale_market_rejected_alerts_without_third_order() {
         assert_ne!(market["clientOrderId"], limit["clientOrderId"], "свой ID");
         let x = saved(&core, ID);
         let t = lines(&x);
-        assert_eq!(x.range_market, vec![xt()]);
-        assert!(x.range_stuck.is_empty());
+        assert_eq!(x.range_market(), vec![xt()]);
+        assert!(x.range_stuck().is_empty());
         assert!(
             t.iter().any(|l| l.starts_with(
                 "Биржа отклонила лимитный ордер продажи: цена вне разрешённого диапазона (XT, код ORDER_F0501"
@@ -496,7 +496,7 @@ fn limit_outcome_unknown_sends_no_market_order() {
         let x = saved(&core, ID);
         let t = lines(&x);
         assert_eq!(x.step, Step::Halted, "{t:#?}");
-        assert!(x.range_market.is_empty());
+        assert!(x.range_market().is_empty());
         assert!(
             t.iter().any(|l| l.contains("исход продажи неизвестен")),
             "{t:#?}"
@@ -521,7 +521,7 @@ fn entry_unprofitable_goes_to_mode_then_mode_sells_market() {
         let x = saved(&core, ID);
         let t = lines(&x);
         assert_eq!(
-            (x.range_stuck.clone(), x.range_market.clone()),
+            (x.range_stuck().to_vec(), x.range_market().to_vec()),
             (vec![xt()], vec![xt()])
         );
         assert!(
@@ -555,8 +555,8 @@ fn entry_unprofitable_mode_threshold_exceeded_alerts() {
         assert_eq!(types(&srv), vec!["LIMIT"]);
         let x = saved(&core, ID);
         assert_eq!(x.step, Step::WaitingHuman);
-        assert_eq!(x.range_stuck, vec![xt()]);
-        assert!(x.range_market.is_empty());
+        assert_eq!(x.range_stuck(), vec![xt()]);
+        assert!(x.range_market().is_empty());
     });
 }
 
@@ -588,9 +588,9 @@ fn mode_sale_within_threshold_goes_market_once() {
             let (sent, x) = mode_case(name, relay, false).await;
             assert_eq!(sent, vec!["LIMIT", "MARKET"], "{name}");
             let t = lines(&x);
-            assert_eq!(x.range_market, vec![xt()], "{name}");
+            assert_eq!(x.range_market(), vec![xt()], "{name}");
             assert!(
-                x.range_stuck.is_empty(),
+                x.range_stuck().is_empty(),
                 "{name}: в режим из-за коридора не уходили"
             );
             assert!(
@@ -617,7 +617,7 @@ fn mode_sale_above_threshold_on_fresh_quote_alerts() {
             assert_eq!(sent, vec!["LIMIT"], "{name}: MARKET не уходит");
             let t = lines(&x);
             assert!(
-                x.range_market.is_empty() && x.range_stuck.is_empty(),
+                x.range_market().is_empty() && x.range_stuck().is_empty(),
                 "{name}"
             );
             assert!(
@@ -735,7 +735,7 @@ fn setting_off_keeps_old_behaviour() {
             let x = saved(&core, ID);
             let t = lines(&x);
             assert!(
-                x.range_market.is_empty() && x.range_stuck.is_empty(),
+                x.range_market().is_empty() && x.range_stuck().is_empty(),
                 "{name}"
             );
             assert_eq!(x.step, Step::WaitingHuman, "{name}: {t:#?}");

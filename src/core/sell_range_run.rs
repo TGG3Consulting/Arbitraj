@@ -1,13 +1,13 @@
 //! Файл: core/sell_range_run.rs
 //! Что делает: решение 268 — исполнение ветки «лимитный ордер продажи отклонён: цена вне диапазона биржи» (когда идти в
-//! ветку и что делать — core/sell_range.rs): отметки сделки по площадке (Deal.range_market, range_stuck), свежая котировка
+//! ветку и что делать — core/sell_range.rs): отметки сделки по площадке (Deal.range: market, stuck), свежая котировка
 //! (trade_ops::deal_quote → exec_book.rs: память, если свежая, иначе REST), строка хронологии, журнал core.sell_range и
 //! уведомление deal.sell_market_range,
 //! рыночный ордер биржи (trade_ops::trade_seen с признаком market → контракт trade_market_sell) или переход в режим
 //! застрявшей монеты. Все будущие ветки собираются в коробки в отдельных не-async функциях: состояние ветки не занимает
 //! место в задаче продажи sell.rs и в задачах, которые её вкладывают (stuck.rs, relay.rs) — глубина стека у продажи
 //! без этой ветки не растёт (замер — docs/ROADMAP.md, «Техдолг»).
-//! Кто вызывает: core/sell.rs (run — после wanted; stuck — переход в режим застрявшей монеты).
+//! Кто вызывает: core/sell.rs (run — после wanted).
 //! От чего зависит: sell_range.rs (decide, Act, Outcome), trade_ops.rs (deal_quote, trade_seen), sell.rs (profitable,
 //! BUTTON), stuck.rs (handle), deal_gas.rs, ledger.rs, exec_book.rs, stuck_reason.rs, op_error.rs, deps.rs.
 //! Настройки: нет (включатель sell.market_on_price_range читает sell_range.rs).
@@ -38,25 +38,49 @@ pub struct Prev<'a> {
 
 /// Что делает: ветка решения 268 (вызывать только при wanted): свежая котировка, решение (sell_range::decide), отметка
 /// сделки на площадке, строка хронологии и журнал core.sell_range, уведомление deal.sell_market_range и рыночный ордер.
-/// Принимает: ядро, сделку (отметки, хронология и газ пишутся в неё), ошибку лимитного ордера, причину продажи (для
-/// текста), условие продажи, отклонённый лимитный ордер. Возвращает: Outcome. Ошибок нет.
+/// Принимает: ядро, сделку (отметки, хронология и газ пишутся в неё), итог лимитного ордера `res` (Err — отказ биржи;
+/// в него же кладётся итог ветки: факт рыночного ордера или ошибка, с которой sell.rs идёт дальше как с ошибкой
+/// продажи), причину продажи (для текста), условие продажи, котировку и худшую цену отклонённого лимитного ордера.
+/// Возвращает: true — сделка ушла в режим застрявшей монеты (он уже отработал здесь, продаже делать больше нечего);
+/// false — итог в `res`. Ошибок нет.
 ///
-/// Будущее сразу в коробке и собирается в отдельной функции (не async): его состояние (котировка, рыночный ордер) не
-/// занимает место в кадре стека задачи продажи sell.rs — у продажи без этой ветки глубина стека не растёт.
+/// Будущее сразу в коробке и собирается в отдельной функции (не async), итог пишется в уже существующее место `res`:
+/// состояние ветки не занимает место в задаче продажи sell.rs и в задачах, которые её вкладывают, — у продажи без этой
+/// ветки глубина стека не растёт.
 #[inline(never)]
 pub fn run<'a>(
     core: &'a Core,
     deal: &'a mut Deal,
-    e: &'a OpError,
+    res: &'a mut Result<TradeResult, OpError>,
     why: &'a str,
     rule: Rule,
-    prev: Prev<'a>,
-) -> Pin<Box<dyn Future<Output = Outcome> + Send + 'a>> {
-    Box::pin(run_inner(core, deal, e, why, rule, prev))
+    q: &'a Quote,
+    seen: &'a Option<super::trade_ops::Worst>,
+) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+    Box::pin(async move {
+        let Err(e) = &*res else {
+            return false;
+        };
+        let e = e.clone();
+        let prev = Prev {
+            q,
+            worst: seen.as_ref().map(|w| w.price),
+        };
+        match branch(core, deal, &e, why, rule, prev).await {
+            Outcome::Sold(r) => *res = Ok(*r),
+            Outcome::Failed(x) => *res = Err(x),
+            // Как sell::sell_or_stuck при «невыгодно»; сделка — копией: продажа после этого завершается.
+            Outcome::Stuck(reason) => {
+                stuck(core, deal.clone(), reason).await;
+                return true;
+            }
+        }
+        false
+    })
 }
 
-/// Тело ветки (см. run). Принимает и возвращает: как run. Ошибок нет.
-async fn run_inner(
+/// Тело ветки: решение и рыночный ордер. Принимает: как run, отказ биржи — `e`. Возвращает: Outcome. Ошибок нет.
+pub async fn branch(
     core: &Core,
     deal: &mut Deal,
     e: &OpError,
@@ -79,7 +103,7 @@ async fn run_inner(
             (Err(err.message), prev.q.clone(), None, prev.worst)
         }
         (Act::Stuck, quote) => {
-            deal.range_stuck.push(deal.at.clone());
+            deal.mark_range_stuck(deal.at.clone());
             let (what, why) = match quote {
                 Ok((v, _, _)) => (
                     format!("По стакану продажа здесь невыгодна (оценка выручки {v})"),
@@ -131,7 +155,7 @@ async fn run_inner(
     };
     let text =
         format!("{head}. {src} — {verdict}: {estimate} — продаём рыночным ордером (решение 268)");
-    deal.range_market.push(deal.at.clone());
+    deal.mark_range_market(deal.at.clone());
     note(core, deal, text).await;
     announce(core, deal, e, &verdict, &value).await;
     let v = deal.at.clone();
@@ -231,9 +255,9 @@ async fn announce(
 }
 
 /// Режим застрявшей монеты после ветки (stuck::handle, как sell::sell_or_stuck) — будущее в коробке, собранное вне
-/// кадра задачи продажи (глубина стека sell.rs не растёт). Принимает: ядро, сделку, причину. Ошибок нет.
+/// кадра ветки (глубина стека). Принимает: ядро, сделку, причину. Ошибок нет.
 #[inline(never)]
-pub fn stuck<'a>(
+fn stuck<'a>(
     core: &'a Core,
     deal: Deal,
     why: StuckReason,

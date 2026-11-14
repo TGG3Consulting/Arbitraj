@@ -3,7 +3,7 @@
 //! моков нет):
 //! - ветка ядра (core/sell_range.rs wanted): идёт только при коде PriceOutOfRange, на бирже, при включённой
 //!   sell.market_on_price_range (вся система или площадка продажи; значение площадки сильнее) и пока на этой площадке
-//!   ветка ещё может что-то сделать (отметки Deal.range_market / range_stuck — по площадке); не задана — нет;
+//!   ветка ещё может что-то сделать (отметки Deal.range: market / stuck — по площадке); не задана — нет;
 //!   сделка старого вида (без полей отметок) читается;
 //! - правила шлюза: «Повторить» для PriceOutOfRange не действует; своего правила нет — действует правило OrderRejected
 //!   (как до решения), запись в журнале об этом; счётчик ошибок площадки подряд не растёт;
@@ -97,10 +97,10 @@ async fn branch_needs_setting_cex_and_room_on_venue() {
     assert!(!wanted(&core, &deal, &other, Rule::Entry));
     // Отметки — по площадке: рыночный на mexc уже отправлялся — режим и кнопка больше не идут, обычная продажа ещё может
     // уйти в режим; уходили и в режим — ветки нет. На другой бирже (после перегона) — своя попытка.
-    deal.range_market.push(v("mexc"));
+    deal.mark_range_market(v("mexc"));
     assert!(!wanted(&core, &deal, &e, mode) && !wanted(&core, &deal, &e, Rule::Button));
     assert!(wanted(&core, &deal, &e, Rule::Entry));
-    deal.range_stuck.push(v("mexc"));
+    deal.mark_range_stuck(v("mexc"));
     assert!(!wanted(&core, &deal, &e, Rule::Entry));
     set(&core, on, Scope::Global, Some(json!(true))).await;
     deal.at = v("bingx");
@@ -112,13 +112,13 @@ async fn branch_needs_setting_cex_and_room_on_venue() {
     assert!(!wanted(&core, &deal, &e, Rule::Entry));
     // Запись сделки без полей отметок (до решения) читается; пустые отметки в запись не пишутся.
     let old = serde_json::to_value(doge("x")).unwrap();
-    assert!(old.get("range_market").is_none() && old.get("range_stuck").is_none());
+    assert!(old.get("range").is_none());
     let back: arb::core::deal::Deal = serde_json::from_value(old).unwrap();
-    assert!(back.range_market.is_empty() && back.range_stuck.is_empty());
+    assert!(back.range_market().is_empty() && back.range_stuck().is_empty());
     let kept: arb::core::deal::Deal =
         serde_json::from_value(serde_json::to_value(&deal).unwrap()).unwrap();
     assert_eq!(
-        (kept.range_market, kept.range_stuck),
+        (kept.range_market().to_vec(), kept.range_stuck().to_vec()),
         (vec![v("mexc")], vec![v("mexc")])
     );
 }
@@ -242,7 +242,7 @@ async fn retry_rule_does_not_apply_and_errors_not_counted() {
 #[tokio::test]
 async fn branch_without_quote() {
     use arb::core::sell_range::{Outcome, Rule};
-    use arb::core::sell_range_run::{Prev, run};
+    use arb::core::sell_range_run::{Prev, branch, run};
     use arb::core::stuck_reason::StuckReason;
     let d = dir("pr268-run");
     let (core, j) = start(&d, None).await;
@@ -270,12 +270,12 @@ async fn branch_without_quote() {
     };
     let prev = Prev { q: &q, worst: None };
     let mut deal = doge("20261113211300000FAR");
-    match run(&core, &mut deal, &e, "выгодно", Rule::Entry, prev).await {
+    match branch(&core, &mut deal, &e, "выгодно", Rule::Entry, prev).await {
         Outcome::Stuck(StuckReason::NoQuote(_)) => {}
         _ => panic!("ожидался режим застрявшей монеты без котировки"),
     }
-    assert_eq!(deal.range_stuck, vec![v("mexc")]);
-    assert!(deal.range_market.is_empty());
+    assert_eq!(deal.range_stuck(), vec![v("mexc")]);
+    assert!(deal.range_market().is_empty());
     let last = &deal.timeline.last().unwrap().1;
     assert!(
         last.starts_with("Биржа отклонила лимитный ордер продажи: цена вне разрешённого диапазона (MEXC, код 30087: Order price exceeds allowed range)"),
@@ -286,25 +286,24 @@ async fn branch_without_quote() {
         "{last}"
     );
     assert!(!entries(&j, "core.sell_range", &deal.id).await.is_empty());
-    // Режим застрявшей монеты и кнопка без худшей цены прежнего ордера: исходный отказ (код тот же) с причиной.
+    // Режим застрявшей монеты и кнопка без худшей цены прежнего ордера: исходный отказ (код тот же) с причиной —
+    // он же остаётся в итоге продажи (run: false — в режим не уходили).
     for (rule, why) in [
         (Rule::MaxLoss(Decimal::from(5)), "убыток в пороге"),
         (Rule::Button, arb::core::sell::BUTTON),
     ] {
         let mut deal = doge("20261113211400000FAR");
-        match run(&core, &mut deal, &e, why, rule, prev).await {
-            Outcome::Failed(x) => {
-                assert_eq!(x.code, Some(ErrorCode::PriceOutOfRange));
-                assert!(
-                    x.message
-                        .contains("рыночная продажа невозможна: нет котировки"),
-                    "{}",
-                    x.message
-                );
-            }
-            _ => panic!("ожидался исходный отказ"),
-        }
-        assert!(deal.range_market.is_empty() && deal.range_stuck.is_empty());
+        let mut res = Err(e.clone());
+        assert!(!run(&core, &mut deal, &mut res, why, rule, &q, &None).await);
+        let x = res.unwrap_err();
+        assert_eq!(x.code, Some(ErrorCode::PriceOutOfRange));
+        assert!(
+            x.message
+                .contains("рыночная продажа невозможна: нет котировки"),
+            "{}",
+            x.message
+        );
+        assert!(deal.range_market().is_empty() && deal.range_stuck().is_empty());
     }
 }
 

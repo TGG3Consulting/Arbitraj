@@ -34,6 +34,19 @@ pub enum Step {
 }
 
 /// Сделка.
+/// Решение 268: отметки сделки после отказа продажи «цена ордера вне диапазона биржи» (core/sell_range.rs).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RangeMarks {
+    /// Биржи, на которых в этой сделке уже отправлен РЫНОЧНЫЙ ордер продажи (core/sell_range_run.rs) — на площадке
+    /// автоматически не больше одного; после перегона на другую биржу там своя попытка.
+    #[serde(default)]
+    pub market: Vec<VenueId>,
+    /// Биржи, на которых обычная продажа после отказа оказалась невыгодной и сделка ушла в режим застрявшей монеты, —
+    /// не больше одного раза на площадку (второго круга режима из-за коридора нет).
+    #[serde(default)]
+    pub stuck: Vec<VenueId>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Deal {
     pub id: String,
@@ -73,16 +86,11 @@ pub struct Deal {
     /// stuck.relay_max_loss_pct (sell_unsent.rs → relay_here.rs), а не сразу к человеку.
     #[serde(default)]
     pub unsent_here: bool,
-    /// Решение 268: биржи, на которых в этой сделке уже отправлен РЫНОЧНЫЙ ордер продажи после отказа «цена ордера
-    /// вне диапазона биржи» (core/sell_range_run.rs) — на площадке автоматически не больше одного; после перегона на
-    /// другую биржу там своя попытка. Новое нажатие кнопки человека очищает (manual.rs, manual_halted.rs).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub range_market: Vec<VenueId>,
-    /// Решение 268: биржи, на которых после отказа «цена вне диапазона» обычная продажа оказалась невыгодной и сделка
-    /// ушла в режим застрявшей монеты, — не больше одного раза на площадку (второго круга режима из-за коридора нет).
-    /// Очищается вместе с range_market.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub range_stuck: Vec<VenueId>,
+    /// Решение 268: отметки ветки «цена ордера вне диапазона биржи» по площадкам (RangeMarks). В коробке и None, пока
+    /// отметок нет: сделка лежит по значению во всех задачах её пути — поле занимает один указатель (глубина стека).
+    /// Читать и ставить — range_market / range_stuck / mark_range_* / clear_range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<Box<RangeMarks>>,
     /// Итог сделки, USDT (когда закрыта): выручка − вложено − затраты − затраты возврата USDT (return_cost_usd).
     pub result_usd: Option<Decimal>,
     /// Решение 236: затраты возврата выручки USDT, уже вычтенные из result_usd, — по частям «вернулись»: отправлено −
@@ -164,8 +172,7 @@ impl Deal {
             return_usdt: false,
             unsent_retries: 0,
             unsent_here: false,
-            range_market: Vec::new(),
-            range_stuck: Vec::new(),
+            range: None,
             result_usd: None,
             return_cost_usd: None,
             closed_notice: None,
@@ -202,6 +209,37 @@ impl Deal {
             return Decimal::ZERO;
         }
         -self.result_if(value) / self.invested * Decimal::ONE_HUNDRED
+    }
+
+    /// Решение 268: биржи, где рыночный ордер после отказа «цена вне диапазона» уже отправлялся. Ошибок нет.
+    pub fn range_market(&self) -> &[VenueId] {
+        self.range.as_ref().map_or(&[], |r| r.market.as_slice())
+    }
+
+    /// Решение 268: биржи, где из-за отказа «цена вне диапазона» уже уходили в режим застрявшей монеты. Ошибок нет.
+    pub fn range_stuck(&self) -> &[VenueId] {
+        self.range.as_ref().map_or(&[], |r| r.stuck.as_slice())
+    }
+
+    /// Решение 268: отметка «рыночный ордер отправлен» на площадке. Ошибок нет.
+    pub fn mark_range_market(&mut self, v: VenueId) {
+        self.range
+            .get_or_insert_with(Default::default)
+            .market
+            .push(v);
+    }
+
+    /// Решение 268: отметка «из-за коридора ушли в режим застрявшей монеты» на площадке. Ошибок нет.
+    pub fn mark_range_stuck(&mut self, v: VenueId) {
+        self.range
+            .get_or_insert_with(Default::default)
+            .stuck
+            .push(v);
+    }
+
+    /// Решение 268: очистить отметки — новое нажатие кнопки человека (manual.rs, manual_halted.rs). Ошибок нет.
+    pub fn clear_range(&mut self) {
+        self.range = None;
     }
 
     /// Открыта ли сделка (у бота есть её монеты или идёт шаг).

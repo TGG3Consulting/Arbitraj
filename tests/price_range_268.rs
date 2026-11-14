@@ -532,11 +532,10 @@ fn rule_retry_forbidden_not_counted_listed() {
     assert_eq!((got.0.id, got.1), (3, false), "своё правило сильнее");
     // Запасного кода у других ошибок нет.
     assert!(pick_rule_or_fallback(&rules, C::OrderNotFilled, Some(&v)).is_none());
-    assert_eq!(
-        pick_rule_or_fallback(&rules, C::OrderRejected, Some(&v))
+    assert!(
+        !pick_rule_or_fallback(&rules, C::OrderRejected, Some(&v))
             .unwrap()
-            .1,
-        false
+            .1
     );
     // Не «исход неизвестен» и не отказ вывода: пауз «только человек» и запрета пауз нет.
     assert!(retry_allowed(C::PriceOutOfRange));

@@ -158,8 +158,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
     deal.unsent_retries = 0;
     // Решение 268: и отметки «рыночный ордер отправлен» / «по коридору уходили в режим» — нажатие даёт кнопке свой
     // один рыночный повтор.
-    deal.range_market.clear();
-    deal.range_stuck.clear();
+    deal.clear_range();
     if ret {
         // Решения 101 и 235: лучшая площадка после затрат перевода (manual_relay.rs), затем выручка USDT — на площадку
         // покупки (usdt_return.rs).

@@ -209,22 +209,10 @@ async fn sell(
     // площадку в сделке); его итог (факт или ошибка) разбирается ниже тем же кодом, что у лимитного. Обычная продажа
     // невыгодна — режим застрявшей монеты (раз на площадку); условие режима не выполнено, продажа без порога — как
     // раньше, алерт. Настройка выключена, DEX — ветки нет (sell_range.rs).
-    if let Err(e) = &res
-        && super::sell_range::wanted(core, &deal, e, rule)
-    {
-        // Итог ветки кладётся в то же место, что итог лимитного ордера (состояние задачи продажи не растёт).
-        let prev = super::sell_range_run::Prev {
-            q: &q,
-            worst: seen.as_ref().map(|w| w.price),
-        };
-        let out = super::sell_range_run::run(core, &mut deal, e, why, rule, prev).await;
-        match out {
-            super::sell_range::Outcome::Sold(r) => res = Ok(*r),
-            super::sell_range::Outcome::Failed(e) => res = Err(e),
-            super::sell_range::Outcome::Stuck(reason) => {
-                return super::sell_range_run::stuck(core, deal, reason).await;
-            }
-        }
+    let branch = matches!(&res, Err(e) if super::sell_range::wanted(core, &deal, e, rule));
+    // Итог ветки кладётся в то же место, что итог лимитного ордера; true — сделка ушла в режим застрявшей монеты.
+    if branch && super::sell_range_run::run(core, &mut deal, &mut res, why, rule, &q, &seen).await {
+        return;
     }
     match res {
         Ok(r) => {

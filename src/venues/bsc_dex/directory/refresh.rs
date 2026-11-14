@@ -8,6 +8,7 @@
 //! (решение 61; не задана — через index.refresh_s). Сырой ответ любого кода (и 404) — в сыром журнале (gt_http.rs).
 //! 404 по монете — не ошибка, а сведение «индексатор не знает пулов монеты» (решение 121, C2): пулов у индексатора
 //! нет, монета спрашивается снова через index.refresh_s, в журнал — Info один раз на переход.
+//! Пачка изменений index.* — один проход (решение 279: Watch::next_batch).
 //! Кто вызывает: pools/market.rs (задача подписки; при новой подписке прерывается).
 //! От чего зависит: ctx.rs, directory/{fetch,gt_http,store,mod}.rs, settings/live.rs.
 //! Настройки: index.refresh_s, index.error_retry_s, index.pages_per_token, index.page_size [bsc_dex]; через вызываемые — index.*.
@@ -72,7 +73,7 @@ pub async fn run(
         };
         tokio::select! {
             _ = sleep => {}
-            c = watch.next() => if c.is_none() { return },
+            c = watch.next_batch() => if c.is_none() { return },
         }
     }
 }

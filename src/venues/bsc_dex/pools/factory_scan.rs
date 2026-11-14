@@ -5,9 +5,9 @@
 //! (factory_calls.rs; виды вопросов — factory_ask.rs: V2, V3, Solidly, Algebra, DODO V2 — решение 122 F) пачками Multicall3 по dex.load_batch на одном теге latest. Найденный пул (ненулевой адрес) —
 //! в справочник (поле factory) и в ту же проверку на своём узле и тот же реестр, что пулы индексатора: монета уходит
 //! в канал «монета обновлена» (index_watch.rs → index::take → verify → attach). Фабрика даёт только адрес.
-//! Проход — при старте подписки и после изменения index.factory_scan или dex.* (без опроса); часть пачки без ответа
-//! узла — повтор прохода через dex.verify_retry_s. Найденное не стирается (пары у фабрики не удаляются); выключили —
-//! справочник фабрик очищается (уже подключённые пулы слушаются до новой подписки).
+//! Проход — при старте подписки и после изменения index.factory_scan или dex.* (без опроса; пачка изменений — один
+//! проход по итоговым настройкам, решение 279); часть без ответа узла — повтор через dex.verify_retry_s. Найденное не
+//! стирается (пары у фабрики не удаляются); выключили — справочник фабрик очищается (подключённые пулы слушаются).
 //! Кто вызывает: pools/index.rs (begin — задача рядом с обновлением индексатора).
 //! От чего зависит: ctx.rs, factory_calls.rs, node/call.rs (try_chunks: Multicall3), directory (Snap), settings/live.rs.
 //! Настройки: index.factory_scan, dex.load_batch, dex.verify_retry_s [bsc_dex]; через factory_calls — dex.factory,
@@ -51,7 +51,7 @@ pub async fn run(
         };
         tokio::select! {
             _ = pause => {}
-            c = w.next() => if c.is_none() { return },
+            c = w.next_batch() => if c.is_none() { return },
         }
     }
 }

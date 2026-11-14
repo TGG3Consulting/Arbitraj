@@ -41,7 +41,7 @@ pub struct Watch {
 }
 
 /// Работает постоянно: подписка на события создания, слушатели новых пулов. Изменение dex.* или источника событий
-/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы); нет подключённых DEX — подписки нет, ждём
+/// (bsc.pool_events_source, решение 68) — фильтры пересобираются (сессия закрывается и открывается заново без паузы; пачка изменений — одно переоткрытие, решение 279); нет подключённых DEX — подписки нет, ждём
 /// изменения dex.* (без переподключений впустую). Ошибок не возвращает: всё — в журнал.
 pub async fn run(p: Pools, w: Watch) {
     let mut changes = Changes::new(
@@ -58,7 +58,7 @@ pub async fn run(p: Pools, w: Watch) {
                 p.ctx.log(Level::Info, "dex.pool", msg, None).await;
                 told_empty = true;
             }
-            if changes.next().await.is_none() {
+            if changes.next_batch().await.is_none() {
                 return;
             }
             continue;
@@ -66,7 +66,7 @@ pub async fn run(p: Pools, w: Watch) {
         told_empty = false;
         let why = tokio::select! {
             why = session(&p, &w, list) => why,
-            c = changes.next() => match c {
+            c = changes.next_batch() => match c {
                 None => return,
                 Some(_) => continue, // настройки DEX изменились — новые фильтры сразу
             },

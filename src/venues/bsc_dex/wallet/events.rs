@@ -7,7 +7,8 @@
 //! Своё (транзакция от адреса кошелька: обмен, свой вывод) помечено own — это не зачисление и не «внешнее изменение».
 //! Токены вне справочника монет бота (спам), обёртка BNB и токены с неразобранными decimals не обрабатываются вовсе —
 //! ни запросов к узлу, ни событий ядру (счётчик — Debug в лог процесса).
-//! Выключено (venue.balance_events не «да») — подписки нет, ждём изменения настроек.
+//! Выключено (venue.balance_events не «да») — подписки нет, ждём изменения настроек. Пачка изменений — одно
+//! переоткрытие подписки (решение 279: Watch::next_batch).
 //! Кто вызывает: resubscribe_wallets.rs (задача подписки на рынок — по одной на кошелёк, решение 132).
 //! От чего зависит: node/source.rs, events_log.rs, events_tx.rs, events_native.rs, inflows.rs, signer.rs, pools/listen.rs.
 //! Настройки: venue.balance_events, send.deposit_confirmations, venue.ws_reconnect_pause_ms [bsc_dex];
@@ -52,7 +53,7 @@ pub async fn run(p: Pools, inflows: Inflows) {
                     told.clear();
                     tokio::select! {
                         why = session(&p, &inflows, wallet) => why,
-                        c = changes.next() => match c {
+                        c = changes.next_batch() => match c {
                             None => return,
                             Some(_) => continue, // настройки изменились — подписка заново сразу
                         },
@@ -80,7 +81,7 @@ pub async fn run(p: Pools, inflows: Inflows) {
         };
         tokio::select! {
             _ = wait => {}
-            c = changes.next() => if c.is_none() { return },
+            c = changes.next_batch() => if c.is_none() { return },
         }
     }
 }

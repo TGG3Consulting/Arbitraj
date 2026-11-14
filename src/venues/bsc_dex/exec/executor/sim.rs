@@ -57,7 +57,10 @@ pub async fn run(
         to: c.executor,
         input: c.data(),
     };
-    let res = simulate::run(ctx, &[call], simulate::Base::timed(at, now)).await?;
+    // Решение 272: продажа нативного BNB (executeNative, wrapIn) — с value вызова; иначе value нет, как раньше.
+    let value = c.value();
+    let values: &[(usize, U256)] = if value.is_zero() { &[] } else { &[(0, value)] };
+    let res = simulate::run_valued(ctx, &[call], values, simulate::Base::timed(at, now)).await?;
     res.into_iter()
         .next()
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))
@@ -77,7 +80,7 @@ pub fn judge(
     Ok((got, r.gas_used.to::<u64>()))
 }
 
-/// Возврат execute из итога симуляции. Ошибки: NoRoute (откат), StaleData (срок), BadResponse (не разбирается).
+/// Возврат execute из итога симуляции (у executeNative — тот же тип возврата uint256, решение 272: разбор общий). Ошибки: NoRoute (откат), StaleData (срок), BadResponse (не разбирается).
 pub fn received(ctx: &Ctx, r: &CallResult) -> GatewayResult<U256> {
     if !r.ok() {
         let text = r

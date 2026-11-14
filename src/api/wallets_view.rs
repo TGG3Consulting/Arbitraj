@@ -58,6 +58,8 @@ pub async fn view(st: &AppState) -> Value {
             "name": w.name,
             "secret": w.secret,
             "executor": w.executor,
+            // Решение 272: версия исполнителя по коду в сети («v1» / «v2»; null — не сверена).
+            "executor_version": w.executor_version,
             "address": address,
             "address_error": why,
             "rows": a.rows_of(&w.id),

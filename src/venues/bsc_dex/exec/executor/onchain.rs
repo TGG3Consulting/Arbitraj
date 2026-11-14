@@ -1,12 +1,15 @@
 //! Файл: venues/bsc_dex/exec/executor/onchain.rs
 //! Что делает: проверка развёрнутого исполнителя по адресу exec.executor_address (ревью 122, пункт 1) — адрес вводится
 //! руками, поэтому до любого approve и до сделки сверяется: код по адресу (eth_getCode) побайтно равен
-//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) и слот владельца (раскладка solc,
-//! code.rs::owner_slot) хранит кошелёк бота. Не совпало — ни разрешения, ни сделки, ошибка с точной причиной.
+//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v2 — или
+//! contracts/out/v1/ArbExecutor.bin-runtime — версия v1 (решение 272: развёрнутые до него исполнители работают как
+//! раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
+//! совпало — ни разрешения, ни сделки, ошибка с точной причиной. Сверенная версия записывается у кошелька
+//! (settings/accounts/edit_version.rs) — по ней котировка решает, идёт ли нативный BNB через исполнитель (mod.rs).
 //! Успешная проверка помнится по паре (адрес, кошелёк) — до смены настройки или кошелька (другая пара — проверка
 //! заново); отказ не запоминается. Кнопка «Проверить подключение» исполнителя (экран площадки DEX) — probe.
 //! Кто вызывает: exec/executor/{trade, dry}.rs (ensure), venue.rs (check_executor → probe).
-//! От чего зависит: exec/executor/{code, mod}.rs, node/rpc.rs, wallet/signer.rs.
+//! От чего зависит: exec/executor/{code, mod}.rs, node/rpc.rs, wallet/signer.rs, settings/accounts (версия у кошелька).
 //! Настройки: exec.executor_address [bsc_dex].
 //!
 //! eth_getCode / eth_getStorageAt — execution-apis 16caee27 src/eth/state.yaml.
@@ -22,22 +25,25 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::super::ctx::Ctx;
 use super::super::super::node::rpc;
 use super::super::super::wallet::signer;
-use super::code;
+use super::code::{self, Version};
 
-/// Последняя успешно проверенная пара (адрес исполнителя, кошелёк).
-static CHECKED: Mutex<Option<(Address, Address)>> = Mutex::new(None);
+/// Последняя успешно проверенная пара (адрес исполнителя, кошелёк) и версия кода по адресу.
+static CHECKED: Mutex<Option<(Address, Address, Version)>> = Mutex::new(None);
 
 /// Исполнитель по адресу — наш и принадлежит кошельку. Принимает: адрес исполнителя, кошелёк бота.
-/// Ошибки: InvalidAddress (нет кода / код не тот / владелец не кошелёк — текст причины), Internal (артефакт), узел.
-pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayResult<()> {
-    let key = (executor, wallet);
-    if *CHECKED.lock().unwrap_or_else(|p| p.into_inner()) == Some(key) {
-        return Ok(());
+/// Возвращает: версию кода (решение 272). Ошибки: InvalidAddress (нет кода / код не тот / владелец не кошелёк — текст
+/// причины), Internal (артефакт), узел.
+pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayResult<Version> {
+    if let Some((x, w, v)) = *CHECKED.lock().unwrap_or_else(|p| p.into_inner())
+        && (x, w) == (executor, wallet)
+    {
+        return Ok(v);
     }
     match inspect(ctx, executor, wallet).await? {
-        Ok(_) => {
-            *CHECKED.lock().unwrap_or_else(|p| p.into_inner()) = Some(key);
-            Ok(())
+        Ok((_, v)) => {
+            *CHECKED.lock().unwrap_or_else(|p| p.into_inner()) = Some((executor, wallet, v));
+            remember(ctx, executor, v).await;
+            Ok(v)
         }
         Err(why) => Err(ctx.err(
             ErrorCode::InvalidAddress,
@@ -49,24 +55,42 @@ pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayRes
     }
 }
 
-/// Сверка с узла (без памяти). Возвращает: Ok(описание) или Err(точная причина). Ошибки: Internal (артефакт), узел.
+/// Решение 272: сверенная версия — у записи кошелька окружения (если адрес исполнителя у него тот же). Сбой записи —
+/// в журнал (сделка не останавливается: версия в памяти CHECKED уже есть). Ошибок нет.
+async fn remember(ctx: &Ctx, executor: Address, v: Version) {
+    let Ok(w) = ctx.wallet() else { return };
+    let addr = format!("{executor:#x}");
+    let label = Some(v.label().to_string());
+    if let Err(e) = ctx
+        .settings
+        .accounts()
+        .set_executor_version(&w.id, &addr, label, "сверка кода исполнителя")
+        .await
+    {
+        let text = format!("версия исполнителя {addr} не записана у кошелька «{}»: {e}", w.name);
+        ctx.log(crate::storage::journal::Level::Error, "dex.executor", text, None).await;
+    }
+}
+
+/// Сверка с узла (без памяти). Возвращает: Ok((описание, версия)) или Err(точная причина). Ошибки: Internal
+/// (артефакт), узел.
 async fn inspect(
     ctx: &Ctx,
     executor: Address,
     wallet: Address,
-) -> GatewayResult<Result<String, String>> {
+) -> GatewayResult<Result<(String, Version), String>> {
     let want = code::runtime().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
     let have: Bytes = rpc::call(ctx, "eth_getCode", json!([executor, "latest"])).await?;
     if have.is_empty() {
         return Ok(Err(format!("по адресу {executor:#x} нет кода контракта")));
     }
-    if have != want {
+    let Some(version) = code::version_of(&have).map_err(|w| ctx.err(ErrorCode::Internal, w))? else {
         return Ok(Err(format!(
             "код по адресу {executor:#x} ({} байт) не совпал с contracts/out/ArbExecutor.bin-runtime ({} байт)",
             have.len(),
             want.len()
         )));
-    }
+    };
     let slot = code::owner_slot().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
     let word: B256 = rpc::call(ctx, "eth_getStorageAt", json!([executor, slot, "latest"])).await?;
     let owner = Address::from_word(word);
@@ -75,9 +99,20 @@ async fn inspect(
             "владелец исполнителя {owner:#x} — не кошелёк бота {wallet:#x}"
         )));
     }
-    Ok(Ok(format!(
-        "исполнитель {executor:#x}: код совпал с репозиторием, владелец — кошелёк бота {wallet:#x}"
-    )))
+    Ok(Ok((describe(executor, wallet, version), version)))
+}
+
+/// Текст успешной сверки с версией (решение 272). Ошибок нет.
+fn describe(executor: Address, wallet: Address, v: Version) -> String {
+    let what = match v {
+        Version::V2 => "версия v2 (нативный BNB монетой сделки идёт)",
+        Version::V1 => {
+            "версия v1 (нативный BNB через форки и виды «только исполнитель» не торгуется — переразверните исполнитель)"
+        }
+    };
+    format!(
+        "исполнитель {executor:#x}: код совпал с репозиторием, {what}, владелец — кошелёк бота {wallet:#x}"
+    )
 }
 
 /// Кнопка «Проверить подключение» исполнителя: «Подключено …» или точная причина (адрес не задан, ключ кошелька,
@@ -91,9 +126,11 @@ pub async fn probe(ctx: &Ctx) -> ConnectionCheck {
             ));
         };
         let wallet = signer::address(ctx).map_err(|e| e.message)?;
-        inspect(ctx, executor, wallet)
+        let (text, v) = inspect(ctx, executor, wallet)
             .await
-            .map_err(|e| e.message)?
+            .map_err(|e| e.message)??;
+        remember(ctx, executor, v).await;
+        Ok(text)
     }
     .await;
     match res {

@@ -13,6 +13,7 @@
 pub mod db;
 pub mod edit;
 pub mod edit_map;
+pub mod edit_version;
 pub mod migrate;
 
 use std::collections::BTreeMap;
@@ -38,6 +39,9 @@ pub struct Wallet {
     pub secret: String,
     /// Адрес исполнителя ArbExecutor этого кошелька (0x…); None — не развёрнут.
     pub executor: Option<String>,
+    /// Решение 272: версия исполнителя по коду в сети (exec/executor/onchain.rs записывает после сверки): «v1» — без
+    /// executeNative, «v2» — с ним. None — не сверена (так у всех, развёрнутых до решения 272) — как v1.
+    pub executor_version: Option<String>,
     /// Ключ строки очереди транзакций в storage/wallet_queue.rs.
     pub queue_key: String,
     pub created_at: String,

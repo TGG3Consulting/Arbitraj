@@ -11,6 +11,7 @@
 //! POST /api/venues/{id}/executor/deploy?wallet=W {sha256} → ExecutorDeployed; хеш не тот — 502 (QuoteMismatch)
 //! Решение 132: исполнитель — у кошелька W (его ключом, его очередью); код в сети совпал — адрес записывается у
 //! кошелька (settings/accounts/) и уходит уведомление wallet.executor_deployed. Без wallet — отказ «кошелёк не выбран».
+//! Решение 272: после записи адреса — сверка кода (check_executor): версия исполнителя записывается у кошелька.
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
@@ -79,6 +80,13 @@ pub async fn deploy(
                 "Исполнитель {addr} развёрнут, но не записан у кошелька: {e}"
             )));
         }
+        // Решение 272: сверка кода по новому адресу — версия (v2) записывается у кошелька (onchain.rs), иначе нативный
+        // BNB через исполнитель не пошёл бы до первой сверки. Сбой сверки — в ответ текстом, адрес уже записан.
+        let checked = venue
+            .check_executor()
+            .await
+            .map(|c| c.details)
+            .unwrap_or_else(|e| e.message);
         let name = a.wallet(wid).map(|x| x.name).unwrap_or_default();
         let text = format!(
             "Исполнитель кошелька «{name}» развёрнут: {addr} (tx {})",
@@ -87,6 +95,9 @@ pub async fn deploy(
         st.notifier
             .send("wallet.executor_deployed", None, &text)
             .await;
+        let mut d = d;
+        d.text = format!("{} Сверка: {checked}", d.text);
+        return Ok(Json(d));
     }
     Ok(Json(d))
 }

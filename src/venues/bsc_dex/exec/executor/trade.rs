@@ -13,7 +13,9 @@
 //! (exec/txs.rs), факт по событиям Transfer (fact.rs). Повторов нет (стартовое правило Тиграна).
 //! Отметка «идёт обмен» (wallet/inflows.rs) не нужна: минимум проверяет сам исполнитель по приросту баланса кошелька
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
-//! Нативная монета (решение 62) на краях маршрута через исполнитель не исполняется: вход и выход — только ERC-20.
+//! Нативная монета (решение 62) на краях маршрута через исполнитель v1 не исполняется: вход и выход — только ERC-20.
+//! Решение 272: исполнитель v2 (mod.rs::native_capable) — executeNative: продажа BNB с value (сверх резерва на газ,
+//! exec/native.rs::reserve_ok), покупка — BNB нативным на кошелёк; факт — по событию NativeSettled (fact.rs).
 //! Внутри шага STABLE_U256_BNB (пулы с меткой 0xEeee…) BNB есть — контракт разворачивает/заворачивает WBNB сам.
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
 //! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
@@ -23,7 +25,7 @@
 //! exec.dex_slippage_pct, verify.*, send.*, channel.*.
 //! Уведомление: dex.rebuilt_after_approve (как у прямого и умного пути).
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
 use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
@@ -32,7 +34,6 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::super::quote::path::Path;
 use super::super::super::quote::via::Via;
 use super::super::super::quote::{Quoting, direct, pool_tax};
-use super::super::super::wallet::approve_executor;
 use super::super::super::wallet::nonce::Nonces;
 use super::super::chain::{self, Step};
 use super::super::dry_paths::live_paths;
@@ -62,10 +63,16 @@ pub async fn trade(
 ) -> GatewayResult<TradeResult> {
     let ctx = &q.ctx;
     worst_positive(ctx, &req)?;
-    if native::is_native(ctx, &req.asset) {
+    let is_native = native::is_native(ctx, &req.asset);
+    if is_native && !super::native_capable(ctx) {
         let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
+    // Решение 272: (обёртка, продажа ли) для executeNative; обёртка — dex.native_wrapped (is_native её уже прочитал).
+    let nat = match native::wrapped(ctx) {
+        Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),
+        _ => None,
+    };
     let (coin, usdt, decs) = sides(q, &req).await?;
     let taxes = direct::taxes(q, &req.asset)?;
     let v = Via {
@@ -85,9 +92,16 @@ pub async fn trade(
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
     // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
-    onchain::ensure(ctx, executor, wallet).await?;
-    let (mut c, mut at) = build(q, &legs, executor).await?;
-    let need = approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in).await?;
+    let version = onchain::ensure(ctx, executor, wallet).await?;
+    if nat.is_some() && version != super::code::Version::V2 {
+        let why = format!(
+            "исполнитель {executor:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",
+            version.label()
+        );
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
+    let (mut c, mut at) = build(q, &legs, executor, nat).await?;
+    let need = super::approvals(ctx, &c, wallet, executor).await?;
     let approved = send_approvals(env, &slot, &need).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
     let out: GatewayResult<TradeResult> = async {
@@ -99,10 +113,8 @@ pub async fn trade(
         favour = fav;
         diag = sim::legs_text(&legs, &exp, &req, decs);
         model = exp;
-        (c, at) = build(q, &legs, executor).await?;
-        if !approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
-            .await?
-            .is_empty()
+        (c, at) = build(q, &legs, executor, nat).await?;
+        if !super::approvals(ctx, &c, wallet, executor).await?.is_empty()
         {
             let why = "после approve свежий маршрут требует нового разрешения исполнителю — своп не отправлен";
             return Err(ctx.err(ErrorCode::QuoteMismatch, why));
@@ -119,7 +131,12 @@ pub async fn trade(
     // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
     let tokens = (c.token_in, c.token_out);
     let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
-    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None)
+    // Решение 272: продажа нативного BNB — value = вход, только сверх резерва на газ (как прямой путь, swap_send.rs).
+    let value = c.value();
+    if !value.is_zero() {
+        native::reserve_ok(env, wallet, (executor, &c.data()), value).await?;
+    }
+    let d = txs::send(env, &slot, executor, c.data(), value, true, None)
         .await
         .map_err(|e| sc.attach(e))?;
     drop(slot);
@@ -128,7 +145,8 @@ pub async fn trade(
         ..sc
     };
     let mut r =
-        fact::result(ctx, req, d, (wallet, executor), tokens, decs).map_err(|e| sc.attach(e))?;
+        fact::result(ctx, req, d, (wallet, executor), tokens, decs, c.native.is_some())
+            .map_err(|e| sc.attach(e))?;
     // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
     if note.is_some() {
         r.executor = note;
@@ -189,15 +207,22 @@ pub async fn prepare(
     Ok((legs, note, exp, favour))
 }
 
-/// Вызов execute на текущем блоке. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как
-/// call::build, узел.
+/// Вызов execute (решение 272: при nat — executeNative) на текущем блоке. Принимает: доли, исполнитель, (обёртка,
+/// продажа ли) или None. Возвращает: вызов и (номер, время) блока (поверх него — проба). Ошибки: как call::build и
+/// ExecCall::with_native, узел.
 async fn build(
     q: &Quoting,
     legs: &[Vec<Step>],
     executor: Address,
+    nat: Option<(Address, bool)>,
 ) -> GatewayResult<(ExecCall, (u64, u64))> {
     let (at, now) = q.heads.at(&q.ctx).await?;
-    Ok((call::build(&q.ctx, legs, executor, now)?, (at, now)))
+    let c = call::build(&q.ctx, legs, executor, now)?;
+    let c = match nat {
+        Some((w, wrap_in)) => c.with_native(&q.ctx, w, wrap_in)?,
+        None => c,
+    };
+    Ok((c, (at, now)))
 }
 
 /// Ожидаемый выход доли по живому пересчёту: продажа — USDT, покупка — монеты. Ошибок нет.

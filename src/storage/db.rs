@@ -131,11 +131,13 @@ CREATE TABLE IF NOT EXISTS dex_wallet_history (
 /// (ALTER TABLE … ADD COLUMN), новая — так же сразу после CREATE TABLE. Решение 155: журнал — счётчик повторов одной
 /// причины (`repeats`) и время последнего повтора (`last_at`); у обычных записей оба NULL. Решение 211 (монета = адрес):
 /// адрес контракта монеты (`address`, 0x… в нижнем регистре) у окон и записей «без потолка»; у старых строк NULL.
+/// Решение 272: версия исполнителя кошелька (`executor_version`: «v1» / «v2», по коду в сети); NULL — не сверена (= v1).
 const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     ("journal", "repeats", "INTEGER"),
     ("journal", "last_at", "TEXT"),
     ("windows", "address", "TEXT"),
     ("uncapped", "address", "TEXT"),
+    ("dex_wallets", "executor_version", "TEXT"),
 ];
 
 /// Миграция: добавляет недостающие столбцы ADDED_COLUMNS. Принимает: соединение. Ошибки: SQLite.

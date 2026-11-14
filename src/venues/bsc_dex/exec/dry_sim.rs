@@ -191,6 +191,10 @@ async fn push_main(
                 to: x.call.executor,
                 input: x.call.data(),
             });
+            // Решение 272: продажа нативного BNB через executeNative — с value вызова.
+            if !x.call.value().is_zero() {
+                values.push((calls.len() - 1, x.call.value()));
+            }
             mains.push((calls.len() - 1, false));
         }
         Built::Many(b) => {

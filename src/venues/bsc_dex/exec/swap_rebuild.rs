@@ -72,6 +72,8 @@ pub fn rebuild(
     let (Some(wallet), Some(tokens), Some(decs)) = (c.wallet, c.tokens, c.decs) else {
         return Err(ctx.err(ErrorCode::Internal, "контекст разбора свопа неполный"));
     };
+    // Решение 272: вызов executeNative узнаётся по событию NativeSettled исполнителя (execute его не пишет).
+    let native = c.executor.is_some_and(|x| fact::settled(&r, x).is_some());
     let d = txs::Done {
         chain,
         receipt: Some(r),
@@ -80,7 +82,7 @@ pub fn rebuild(
         cancels: Vec::new(),
     };
     let out = match c.executor {
-        Some(x) => fact::result(ctx, req, d, (wallet, x), tokens, decs),
+        Some(x) => fact::result(ctx, req, d, (wallet, x), tokens, decs, native),
         None => result::result(ctx, req, d, wallet, tokens, decs, &c.native_routers),
     };
     // Решение 177: пометка «по квотеру» — как в пути (trade_direct.rs, executor/trade.rs: r.executor = note).

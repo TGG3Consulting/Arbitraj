@@ -8,6 +8,8 @@
 //!   с кошелька бота сейчас (CREATE: адрес из кошелька и его nonce, кода там нет — проверяется). Разрешение ERC-20 этому
 //!   адресу — первым вызовом той же симуляции. Так исполнитель проверяется на живых пулах, не будучи развёрнутым.
 //!
+//! Решение 272: монета — нативный BNB — вызов executeNative (nat): режим «через исполнитель» подставляет код v2 (есть
+//! всегда); «как сделка» — только у исполнителя v2 (onchain.rs). Продажа BNB — без разрешений (value).
 //! Кто вызывает: exec/dry_build.rs.
 //! От чего зависит: exec/executor/{call, code, deploy, onchain}.rs, check/simulate.rs (Override), wallet/approve.rs, node/rpc.rs.
 //! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited.
@@ -46,7 +48,8 @@ pub struct ExecTx {
 }
 
 /// Собирает вызов исполнителя. Принимает: доли (шаги exec/chain.rs с минимумами), кошелёк, время блока, режим, адрес из
-/// exec.executor_address (режим AsTrade). Ошибки: NoRoute (пул без шага исполнителя, адрес занят кодом), QuoteMismatch,
+/// exec.executor_address (режим AsTrade), (обёртка, продажа ли) — нативный BNB (решение 272) или None.
+/// Ошибки: NoRoute (пул без шага исполнителя, адрес занят кодом, исполнитель v1 при нативном BNB), QuoteMismatch,
 /// NotConfigured, Internal (артефакт не сверен по хешу), узел.
 pub async fn build(
     ctx: &Ctx,
@@ -54,14 +57,25 @@ pub async fn build(
     wallet: Address,
     now: u64,
     (mode, deployed): (DryMode, Option<Address>),
+    nat: Option<(Address, bool)>,
 ) -> GatewayResult<ExecTx> {
+    let native = |c: ExecCall| match nat {
+        Some((w, wrap_in)) => c.with_native(ctx, w, wrap_in),
+        None => Ok(c),
+    };
     let internal = |w: String| ctx.err(ErrorCode::Internal, w);
     match (mode, deployed) {
         (DryMode::AsTrade, Some(x)) => {
-            onchain::ensure(ctx, x, wallet).await?;
-            let call = call::build(ctx, legs, x, now)?;
-            let approvals =
-                approve_executor::missing(ctx, call.token_in, wallet, x, call.amount_in).await?;
+            let version = onchain::ensure(ctx, x, wallet).await?;
+            if nat.is_some() && version != super::code::Version::V2 {
+                let why = format!(
+                    "исполнитель {x:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",
+                    version.label()
+                );
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+            let call = native(call::build(ctx, legs, x, now)?)?;
+            let approvals = super::approvals(ctx, &call, wallet, x).await?;
             let form = format!("граф: исполнитель {x:#x}");
             Ok(ExecTx {
                 call,
@@ -93,8 +107,12 @@ pub async fn build(
                     B256::left_padding_from(wallet.as_slice()),
                 )],
             };
-            let call = call::build(ctx, legs, at, now)?;
-            let approvals = approve_executor::all(ctx, call.token_in, at, call.amount_in)?;
+            let call = native(call::build(ctx, legs, at, now)?)?;
+            let approvals = if call.value().is_zero() {
+                approve_executor::all(ctx, call.token_in, at, call.amount_in)?
+            } else {
+                Vec::new()
+            };
             let form = format!(
                 "через исполнитель: код подставлен в симуляцию по адресу {at:#x} (nonce {nonce})"
             );

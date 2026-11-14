@@ -8,7 +8,8 @@
 //! упала (паника) или отменена — очередь ОСТАНОВЛЕНА (send/settle.rs guarded / joined), вызывающий получает «исход
 //! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро. В «чем найти» — и хеши отправленных
 //! трекером отмен (журнал отмен send/track_util.rs CancelLog): позднее выяснение проверяет и их квитанции.
-//! Кто вызывает: exec/trade.rs, wallet/transfer.rs.
+//! Решение 273: send_capped — с пределом цены газа (пары Solidly с maxGasPrice): цена выше — транзакции нет.
+//! Кто вызывает: exec/trade.rs, wallet/transfer.rs; send_capped — exec/executor/trade.rs, exec/cycle_exec.rs.
 //! От чего зависит: exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
 //!
@@ -81,6 +82,20 @@ pub async fn send(
     with_tip: bool,
     keep: Option<SwapGuard>,
 ) -> GatewayResult<Done> {
+    send_capped(env, slot, (to, data, value), with_tip, keep, None).await
+}
+
+/// send с пределом цены газа (решение 273: пары Solidly с maxGasPrice фабрики, exec/solidly_gate.rs). Принимает: как
+/// send ((адрес, данные, сумма) — кортежем) и предел, wei (None — без предела). Ошибки: как send; NoRoute — цена газа
+/// транзакции выше предела (транзакция не подписана и не отправлена, nonce не занят).
+pub async fn send_capped(
+    env: &Env,
+    slot: &Slot,
+    (to, data, value): (impl Into<TxKind>, Bytes, U256),
+    with_tip: bool,
+    keep: Option<SwapGuard>,
+    cap: Option<U256>,
+) -> GatewayResult<Done> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
     let ready = send::select(ctx, &env.stats)?;
@@ -89,6 +104,10 @@ pub async fn send(
         .wei(ctx, &env.heads)
         .await?
         .max(send::gas_floor(&ready));
+    if let Some(c) = cap.filter(|c| price > *c) {
+        let why = format!("цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен");
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
     let from = slot.from;
     let to: TxKind = to.into();
     let nonce = slot.nonce(ctx).await?;

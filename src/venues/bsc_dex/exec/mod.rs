@@ -57,6 +57,7 @@ pub mod presell;
 pub mod quoter_favour;
 pub mod result;
 pub mod single_rebuild;
+pub mod solidly_gate;
 pub mod smart_legs;
 pub mod swap_ctx;
 pub mod swap_rebuild;

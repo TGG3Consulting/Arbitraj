@@ -14,6 +14,7 @@ pub mod maverick_math;
 pub mod maverick_swap;
 pub mod maverick_swap_math;
 pub mod maverick_tick_math;
+pub mod solidly_fee;
 pub mod solidly_math;
 pub mod solidly_v1_math;
 pub mod sqrt_price_math;

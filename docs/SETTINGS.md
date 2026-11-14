@@ -546,6 +546,14 @@ Universal Router, его формат и Permit2). Вид или адреса м
 | dex.v2_fee_pct | Комиссия пары при `fixed` (из кода пары своей DEX) | % | V2 |
 | dex.v2_fee_method | При `pool`: view-метод пары без аргументов, возвращающий целое, — сигнатура из кода пары (Biswap: `swapFee()`, BiswapPair.sol) | сигнатура | V2 |
 | dex.v2_fee_denominator | При `pool`: комиссия = значение / делитель (Biswap: 1000 — balance·1000 − amountIn·swapFee) | делитель | V2 |
+| dex.solidly_fee_source | Решение 273, Solidly (solidly_v1 / solidly_v2): откуда комиссия пула — `factory_pool` (getFee(pool, stable) фабрики), `factory_stable` (getFee(stable) фабрики), `pool` (метод пула dex.solidly_fee_method), `factory_by_type` (метод фабрики по типу пула: dex.solidly_fee_method_stable / _volatile). **Необязательная:** не задана — как раньше по виду пула (THENA V1 — getFee(stable), Topaz — getFee(pool, stable); правило «числитель над 10000»). Комиссия перечитывается перед каждым проходом сверки с квотером | выбор | Solidly |
+| dex.solidly_fee_method | При `pool`: view-метод пула без аргументов → комиссия целым, сигнатура как в коде пары (usdfi: `fee()`; veplus: `swapFee()`) | сигнатура | Solidly |
+| dex.solidly_fee_method_stable | При `factory_by_type`: view-метод фабрики без аргументов — комиссия стабильных пулов (magicfox: `stableFee()`) | сигнатура | Solidly |
+| dex.solidly_fee_method_volatile | При `factory_by_type`: view-метод фабрики без аргументов — комиссия волатильных пулов (magicfox: `volatileFee()`) | сигнатура | Solidly |
+| dex.solidly_fee_rule | При заданном источнике: как пара вычитает комиссию из входа — `numerator` (вход − вход·комиссия/dex.solidly_fee_denominator; veplus, magicfox) или `divisor` (вход − вход/комиссия; usdfi: 100 → 1%, 10000 → 0,01%) | выбор | Solidly |
+| dex.solidly_fee_denominator | При `numerator`: делитель комиссии (veplus, magicfox: 10000 — сверено с getAmountOut пар) | делитель | Solidly |
+| dex.solidly_pause_method | View-метод фабрики без аргументов → bool «на паузе» (usdfi: `isPaused()`): на паузе пул пуст, шаг не строится, перед отправкой проверяется заново. **Необязательная:** не задана — проверки нет | сигнатура | Solidly |
+| dex.solidly_max_gas_method | View-метод фабрики без аргументов → предел цены газа транзакции обмена, wei (usdfi: `maxGasPrice()`): цена газа плана выше — маршрут/цикл неисполним с причиной; цена газа самой транзакции выше — она не отправляется. **Необязательная:** не задана — проверки нет | сигнатура | Solidly |
 
 ## Справочник пулов (решение 58)
 

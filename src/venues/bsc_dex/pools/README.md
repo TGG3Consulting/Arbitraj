@@ -114,7 +114,9 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_woo.rs` | Состояние пары WooFi на блоке: state(base) оракула, paused, wooracle (= dex.oracle), реализация прокси. Своей математики нет |
 | `load_woo_ladder.rs` | Лесенка цен пула WooFi на блоке: query квотера контракта в обе стороны по dex.pmm_ladder_usd (Multicall3, откат — край лесенки) |
 | `load_maverick.rs` | Состояние пула Maverick V2 на блоке (решение 122 F): getState, tickSpacing, fee(true/false), tokenA, масштабы + PoolLens.getTicksAroundActive(dex.tick_radius) одной пачкой Multicall3 по dex.load_batch → PoolState::TickBin |
-| `load_solidly.rs` | Состояние пула Solidly на блоке (решения 80, 85): metadata() пула + getFee(pool,stable) фабрики → PoolState::Solidly (резервы, stable, decimals, комиссия) — по одному пулу |
+| `load_solidly.rs` | Состояние пула Solidly на блоке (решения 80, 85): metadata() пула + getFee(pool,stable) фабрики → PoolState::Solidly (резервы, stable, decimals, комиссия) — по одному пулу. Решение 273: комиссия по dex.solidly_fee_source (если задан) со своим правилом и ограничения обмена с фабрики (gate) |
+| `solidly_fee_read.rs` | Решение 273: комиссия пула Solidly по источнику из настроек (factory_pool / factory_stable / pool / factory_by_type; метод — keccak сигнатуры), правило (numerator над делителем / divisor), ограничения обмена с фабрики (пауза, предел цены газа) |
+| `solidly_refresh.rs` | Решение 273: перечитывание комиссии и ограничений пулов Solidly с источником из настроек перед каждым проходом сверки с квотером (без события пула; как своя комиссия пар V2) |
 | `load_slipstream.rs` | Состояние пула Slipstream (Topaz v3; решения 80, 85): slot0 форка + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens) → PoolState::V3 + карта тиков — по одному пулу |
 | `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах) |
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |

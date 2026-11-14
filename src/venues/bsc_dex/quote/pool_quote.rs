@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, maverick_swap, solidly_v1_math, stable_guard, stableswap_ng, stableswap_v1,
+    bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng, stableswap_v1,
     swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -248,9 +248,17 @@ pub fn swap(
                 decimals0,
                 decimals1,
                 fee,
+                gate,
             },
             _,
         ) => {
+            // Решение 273: пауза фабрики — обмен пары откатился бы (предел цены газа проверяет план сделки, exec/solidly_gate.rs).
+            if let Some(w) = solidly_fee::blocked(gate, None) {
+                return Err(why(&w));
+            }
+            // Решение 273: комиссия вычитается из входа по правилу пула (числитель/делитель) — дальше формулы контракта
+            // с нулевой комиссией (вход уже чистый; при правиле «числитель над 10000» — те же числа, что до решения 273).
+            let net = || solidly_fee::net_in(amount, fee).ok_or_else(none);
             let (r_in, r_out, dec_in, dec_out) = if zero_for_one {
                 (*reserve0, *reserve1, *decimals0, *decimals1)
             } else {
@@ -263,23 +271,9 @@ pub fn swap(
                     ));
                 }
                 let out = if e.family.proto == Proto::SolidlyV1 {
-                    solidly_v1_math::stable_amount_out(
-                        amount,
-                        r_in,
-                        r_out,
-                        dec_in,
-                        dec_out,
-                        U256::from(*fee),
-                    )
+                    solidly_v1_math::stable_amount_out(net()?, r_in, r_out, dec_in, dec_out, U256::ZERO)
                 } else {
-                    swap_solidly::get_amount_out(
-                        amount,
-                        r_in,
-                        r_out,
-                        dec_in,
-                        dec_out,
-                        U256::from(*fee),
-                    )
+                    swap_solidly::get_amount_out(net()?, r_in, r_out, dec_in, dec_out, U256::ZERO)
                 }
                 .ok_or_else(none)?;
                 Ok(Swapped {
@@ -288,10 +282,11 @@ pub fn swap(
                     complete: true,
                 })
             } else {
-                // Volatile: дробь после комиссии (10000−fee)/10000 — как контракт убирает fee из входа (Pool.sol).
-                let ratio = (U256::from(10_000u32 - *fee), U256::from(10_000u32));
+                // Volatile: дробь после комиссии по правилу пула ((10000−fee)/10000 у числителя над 10000; (fee−1)/fee у
+                // делителя) — только для обратной V2-формулы точного выхода.
+                let ratio = solidly_fee::keep_ratio(fee).ok_or_else(none)?;
                 if exact_in {
-                    solidly_v1_math::volatile_amount_out(amount, r_in, r_out, U256::from(*fee))
+                    solidly_v1_math::volatile_amount_out(net()?, r_in, r_out, U256::ZERO)
                         .map(|o| Swapped {
                             amount_in: amount,
                             amount_out: o,

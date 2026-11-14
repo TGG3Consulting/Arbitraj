@@ -89,6 +89,8 @@ pub mod load_maverick;
 pub mod load_saddle;
 pub mod load_slipstream;
 pub mod load_solidly;
+pub mod solidly_fee_read;
+pub mod solidly_refresh;
 pub mod load_stable_u;
 pub mod load_v2v3;
 pub mod load_woo;

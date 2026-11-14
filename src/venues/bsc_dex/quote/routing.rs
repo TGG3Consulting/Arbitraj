@@ -3,6 +3,8 @@
 //! граф-роутер с выбором котировки-на-сделку среди исполнимых (graph_route::merge, решение 84 вариант Б). Это CPU-часть
 //! котировки; она владеет своими данными, чтобы идти вне рабочих потоков tokio (quote/cpu.rs, решение 129 часть 2).
 //! Логика та же, что была в quote/mod.rs, — перенесена без изменений.
+//! Решение 271: классика ответила NoRoute (у монеты пулы только на форках / без классического пути), а
+//! dex.router_mode = graph — считается граф; его ИСПОЛНИМЫЙ маршрут и есть котировка, иначе — прежняя ошибка классики.
 //! Кто вызывает: quote/mod.rs (Quoting::quote через cpu::run).
 //! От чего зависит: quote/{smart_quote, classic_direct, graph_route, via, steps}.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: dex.router_mode [bsc_dex]; через вызываемые — dex.*, smart.* (см. их шапки).
@@ -11,7 +13,7 @@ use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, Quote, Side, TokenTaxes};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
@@ -42,7 +44,8 @@ pub struct Input {
 }
 
 /// Котировка маршрута. Принимает: котировку (клон), входные данные. Возвращает: котировку без газа разрешений и
-/// чаевых (их добавляет quote/mod.rs). Ошибки: как у smart_quote / classic_direct.
+/// чаевых (их добавляет quote/mod.rs). Ошибки: как у smart_quote / classic_direct (решение 271: NoRoute классики при
+/// dex.router_mode = graph — только если и граф не дал исполнимый маршрут).
 pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
     let ctx = &q.ctx;
     let v = Via {
@@ -61,19 +64,32 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
     };
     let (asset, qty, gas) = (&i.asset, i.qty, i.gas);
     // Классика (решения 29, 38): прямой или умный режим. При dex.router_mode = graph ниже сравним с графом.
-    let mut out = if i.smart {
-        smart_quote::quote(&v, &names, asset, qty, i.entries, &i.mids, gas).await?
+    let classic = if i.smart {
+        smart_quote::quote(&v, &names, asset, qty, i.entries, &i.mids, gas).await
     } else {
         // Форки из классического ПРЯМОГО пути исключаем (ревью #86): форк исполним ТОЛЬКО через graph→bundle
         // (свой роутер). Решение 121: так же — неисполнимые семейства (tradable = нет): они не выигрывают
         // котировку как Direct, а видны только как signal_route (quote/classic_direct.rs).
-        classic_direct::quote(&v, &names, asset, qty, i.entries, &i.mids, &|_| true, gas).await?
+        classic_direct::quote(&v, &names, asset, qty, i.entries, &i.mids, &|_| true, gas).await
+    };
+    let graph_on = ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
+    let mut out = match classic {
+        Ok(c) => c,
+        // Решение 271: классического пути нет (пулы монеты только на форках и т.п.), режим graph — котирует граф.
+        // Берём только ИСПОЛНИМЫЙ граф-маршрут; неисполнимый или ошибка графа — прежняя ошибка классики как есть.
+        Err(e) if graph_on && e.code == ErrorCode::NoRoute => {
+            return match graph_route::quote(&v, &names, asset, qty, gas).await {
+                Ok(g) if g.route.as_ref().is_some_and(|r| r.executable) => Ok(g),
+                _ => Err(e),
+            };
+        }
+        Err(e) => return Err(e),
     };
     // Граф-роутер (решение 80) за переключателем dex.router_mode: «не задано» / «classic» — поведение классики
     // неизменно; «graph» — считаем маршрут по графу и выбираем котировку-на-сделку среди ИСПОЛНИМЫХ маршрутов
     // (graph_route::merge, решение 84 вариант Б): неисполнимый граф-маршрут на сделку не идёт (остаётся лучшим
     // сигналом для карточки, PR 80.5b), поэтому graph-режим не исполняет хуже классики. Деньги не рискуют.
-    if ctx.text("dex.router_mode").ok().as_deref() == Some("graph") {
+    if graph_on {
         let g = graph_route::quote(&v, &names, asset, qty, gas).await;
         out = graph_route::merge(&q, out, g, i.side, i.usdt_dec).await;
     }

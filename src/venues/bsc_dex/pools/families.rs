@@ -428,7 +428,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                     ]),
                     _ => {}
                 }
-                if matches!(ctx.dex_text("dex.solidly_fee_rule", f.id).as_deref(), Ok("numerator")) {
+                if matches!(
+                    ctx.dex_text("dex.solidly_fee_rule", f.id).as_deref(),
+                    Ok("numerator")
+                ) {
                     list.push("dex.solidly_fee_denominator");
                 }
             }

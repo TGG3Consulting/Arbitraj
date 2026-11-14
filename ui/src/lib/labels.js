@@ -67,6 +67,12 @@ const CHOICE = {
   unsupported: 'не поддерживается',
   fixed: 'одна на DEX',
   pool: 'своя у пары',
+  // Решение 273: dex.solidly_fee_source (pool — «своя у пары», выше) и dex.solidly_fee_rule.
+  factory_pool: 'фабрика: getFee(pool, stable)',
+  factory_stable: 'фабрика: getFee(stable)',
+  factory_by_type: 'фабрика: метод по типу пула',
+  numerator: 'числитель над делителем',
+  divisor: 'делитель (вход / комиссия)',
   pancakeswap_infinity: 'Universal Router PancakeSwap Infinity',
 };
 const POOL_KIND = {

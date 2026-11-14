@@ -22,8 +22,8 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng, stableswap_v1,
-    swap_solidly, v2,
+    bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
@@ -271,7 +271,14 @@ pub fn swap(
                     ));
                 }
                 let out = if e.family.proto == Proto::SolidlyV1 {
-                    solidly_v1_math::stable_amount_out(net()?, r_in, r_out, dec_in, dec_out, U256::ZERO)
+                    solidly_v1_math::stable_amount_out(
+                        net()?,
+                        r_in,
+                        r_out,
+                        dec_in,
+                        dec_out,
+                        U256::ZERO,
+                    )
                 } else {
                     swap_solidly::get_amount_out(net()?, r_in, r_out, dec_in, dec_out, U256::ZERO)
                 }

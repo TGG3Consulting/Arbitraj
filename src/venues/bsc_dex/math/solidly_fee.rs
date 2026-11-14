@@ -55,6 +55,21 @@ pub fn pct(fee: &SolidlyFee) -> Option<Decimal> {
     }
 }
 
+/// Точная причина, почему pct = None (ревью 273): числитель — делитель правила 0; делитель — значение комиссии 0
+/// (контракт делил бы на ноль). Ошибок нет.
+pub fn no_pct(fee: &SolidlyFee) -> String {
+    match fee.rule {
+        FeeRule::Numerator { denominator } => format!(
+            "комиссия Solidly {}: правило «числитель над делителем», делитель {denominator} — процент не считается",
+            fee.value
+        ),
+        FeeRule::Divisor => format!(
+            "комиссия Solidly {}: правило «делитель» (вход − вход / комиссия), значение 0 — деление на ноль в контракте",
+            fee.value
+        ),
+    }
+}
+
 /// Доля входа после комиссии дробью (числитель, знаменатель) — для обратной V2-формулы точного выхода (getAmountIn у
 /// контракта нет). Числитель: (denominator − value, denominator); делитель: (value − 1, value). None — комиссия ≥ 100%.
 pub fn keep_ratio(fee: &SolidlyFee) -> Option<(U256, U256)> {

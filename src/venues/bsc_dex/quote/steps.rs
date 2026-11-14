@@ -20,6 +20,7 @@ use crate::core::types::{Cost, CostKind, PoolKind, PoolState, RouteStep, Side, T
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::math::solidly_fee;
 use super::super::num;
 use super::super::pools::mids::Mids;
 use super::super::pools::registry::Entry;
@@ -190,9 +191,8 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         // Solidly (Topaz v2, THENA V1; решения 80, 85): комиссия пула — числитель над 10000 (getFee) → проценты = fee/100
         // (одна комиссия на обе ветви stable/volatile; направление цены комиссию не меняет). Решение 273: по правилу
         // пула (math/solidly_fee.rs) — числитель над делителем; делитель (usdfi) → 100 / fee.
-        (PoolState::Solidly { fee, .. }, _) => super::super::math::solidly_fee::pct(fee).ok_or_else(|| {
-            ctx.err(ErrorCode::BadResponse, "комиссия Solidly: делитель 0")
-        }),
+        (PoolState::Solidly { fee, .. }, _) => solidly_fee::pct(fee)
+            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, solidly_fee::no_pct(fee))),
         // StableSwap (решение 122 F): комиссия — числитель над 10^10 (fee() пула) → проценты = fee / 10^8.
         (PoolState::StableSwap(d), _) => num::to_decimal(d.fee, 8).ok_or_else(|| {
             ctx.err(

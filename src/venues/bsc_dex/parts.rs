@@ -88,6 +88,7 @@ impl Parts {
             allow: self.allow.clone(),
             lag: self.lag.clone(),
             frozen_head: None,
+            plan_gas: None,
         }
     }
 

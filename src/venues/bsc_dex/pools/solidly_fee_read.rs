@@ -11,8 +11,11 @@
 //! Ограничения обмена (фабрика, методы без аргументов): dex.solidly_pause_method (bool; usdfi `isPaused()`),
 //! dex.solidly_max_gas_method (uint256 wei; usdfi `maxGasPrice()`); не заданы — ограничения нет.
 //! Селектор метода из настройки — первые 4 байта keccak256 сигнатуры (как dex.v2_fee_method, pools/verify_calls.rs).
+//! Ревью 273: fee_call / rule — вызов и правило комиссии отдельно (пачка pools/solidly_refresh.rs); ограничения обмена
+//! (gate, has_gate, max_gas) — pools/solidly_gate_read.rs, переэкспорт отсюда.
 //! Кто вызывает: pools/load_solidly.rs, pools/solidly_refresh.rs, exec/solidly_gate.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs, pools/abi_solidly.rs, families.rs, core/types (SolidlyFee, SolidlyGate).
+//! От чего зависит: ctx.rs, node/rpc.rs, pools/abi_solidly.rs, families.rs, math/solidly_math.rs (fee_denominator),
+//! core/types (SolidlyFee, SolidlyGate).
 //! Настройки: dex.solidly_fee_source, dex.solidly_fee_method, dex.solidly_fee_method_stable,
 //! dex.solidly_fee_method_volatile, dex.solidly_fee_rule, dex.solidly_fee_denominator, dex.solidly_pause_method,
 //! dex.solidly_max_gas_method [DEX].
@@ -22,20 +25,24 @@
 //! откатываются; пара BasePair: `amountIn -= amountIn / fee`, swap требует `!factory.isPaused()` и
 //! `tx.gasprice <= factory.maxGasPrice()`. eth_call — execution-apis (ссылка в node/call.rs).
 
-use alloy::sol_types::{SolType, SolValue};
+use alloy::sol_types::{SolCall, SolValue};
 use alloy_primitives::{Address, Bytes, U256, keccak256};
 use serde_json::json;
 
-use crate::core::types::{FeeRule, SolidlyFee, SolidlyGate};
+use crate::core::types::{FeeRule, SolidlyFee};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::math::solidly_math::fee_denominator;
 use super::super::node::rpc;
 use super::abi_solidly::{ISolidlyFactory, IThenaV1Factory};
-use super::families::Family;
+use super::families::{Family, Proto};
+
+/// Ограничения обмена пары (пауза, предел цены газа) — pools/solidly_gate_read.rs (вынесено: предел размера файла).
+pub use super::solidly_gate_read::{gate, has_gate, max_gas};
 
 /// Необязательная настройка DEX: не задана — None; иные ошибки хранилища — ошибка.
-fn optional(ctx: &Ctx, name: &str, id: &str) -> GatewayResult<Option<String>> {
+pub(super) fn optional(ctx: &Ctx, name: &str, id: &str) -> GatewayResult<Option<String>> {
     match ctx.dex_text(name, id) {
         Ok(s) if !s.trim().is_empty() => Ok(Some(s.trim().to_string())),
         Ok(_) => Ok(None),
@@ -49,24 +56,6 @@ pub fn source(ctx: &Ctx, f: &Family) -> GatewayResult<Option<String>> {
     optional(ctx, "dex.solidly_fee_source", f.id)
 }
 
-/// eth_call метода без аргументов по сигнатуре из настройки и разбор ответа как `T` (ABI). Ошибки: узел (откат —
-/// с текстом узла), BadResponse (ответ не по ABI).
-async fn view_sig<T: SolValue + From<<T::SolType as SolType>::RustType>>(
-    ctx: &Ctx,
-    to: Address,
-    sig: &str,
-    tag: &str,
-) -> GatewayResult<T> {
-    let data = Bytes::copy_from_slice(&keccak256(sig.as_bytes())[..4]);
-    let out: Bytes = rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?;
-    T::abi_decode(&out).map_err(|e| {
-        ctx.err(
-            ErrorCode::BadResponse,
-            format!("ответ {sig} у {to:#x} не по ABI: {e}"),
-        )
-    })
-}
-
 /// Комиссия пула по заданному источнику. Принимает: окружение, вид пула, источник, фабрику, пул, флаг stable, блок.
 /// Возвращает: значение и правило. Ошибки: NotConfigured (метод, правило, делитель; неизвестный источник), узел,
 /// BadResponse (значение не помещается или комиссия ≥ 100% по правилу).
@@ -77,44 +66,78 @@ pub async fn fee(
     (factory, pool, stable): (Address, Address, bool),
     tag: &str,
 ) -> GatewayResult<SolidlyFee> {
+    let rule = rule(ctx, f, Some(src))?;
+    let (to, data) = fee_call(ctx, f, Some(src), (factory, pool, stable))?;
+    let out: Bytes = rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?;
+    checked(ctx, word(ctx, to, &out)?, rule)
+}
+
+/// Вызов комиссии пула (контракт, данные) — для одного eth_call и для пачки (pools/solidly_refresh.rs). Источник
+/// задан — по нему (шапка); None — по виду пула, как до решения 273 (load_solidly.rs pool_fee: getFee(stable) у
+/// Solidly V1, getFee(pool, stable) у Solidly). Ошибки: NotConfigured (метод источника; неизвестный источник).
+pub fn fee_call(
+    ctx: &Ctx,
+    f: &Family,
+    src: Option<&str>,
+    (factory, pool, stable): (Address, Address, bool),
+) -> GatewayResult<(Address, Bytes)> {
     let need = |name: &str| {
-        optional(ctx, name, f.id)?.ok_or_else(|| ctx.not_set(name, format!("{}: не задана {name}", f.id)))
+        optional(ctx, name, f.id)?
+            .ok_or_else(|| ctx.not_set(name, format!("{}: не задана {name}", f.id)))
     };
-    let raw: U256 = match src {
-        "factory_pool" => {
-            let c = ISolidlyFactory::getFeeCall { pool, stable };
-            super::super::node::call::view(ctx, factory, &c, tag).await?
-        }
-        "factory_stable" => {
-            let c = IThenaV1Factory::getFeeCall { stable };
-            super::super::node::call::view(ctx, factory, &c, tag).await?
-        }
-        "pool" => view_sig(ctx, pool, &need("dex.solidly_fee_method")?, tag).await?,
-        "factory_by_type" => {
+    let sig = |s: String| Bytes::copy_from_slice(&selector(&s));
+    let v1 = || Bytes::from(IThenaV1Factory::getFeeCall { stable }.abi_encode());
+    let by_pool = || Bytes::from(ISolidlyFactory::getFeeCall { pool, stable }.abi_encode());
+    Ok(match src {
+        None if f.proto == Proto::SolidlyV1 => (factory, v1()),
+        None | Some("factory_pool") => (factory, by_pool()),
+        Some("factory_stable") => (factory, v1()),
+        Some("pool") => (pool, sig(need("dex.solidly_fee_method")?)),
+        Some("factory_by_type") => {
             let name = if stable {
                 "dex.solidly_fee_method_stable"
             } else {
                 "dex.solidly_fee_method_volatile"
             };
-            view_sig(ctx, factory, &need(name)?, tag).await?
+            (factory, sig(need(name)?))
         }
-        other => {
+        Some(other) => {
             let why = format!("{}: dex.solidly_fee_source = «{other}» неизвестен", f.id);
             return Err(ctx.not_set("dex.solidly_fee_source", why));
         }
-    };
-    let rule = match need("dex.solidly_fee_rule")?.as_str() {
-        "numerator" => FeeRule::Numerator {
-            denominator: u32::try_from(ctx.dex_int("dex.solidly_fee_denominator", f.id)?)
-                .map_err(|_| ctx.not_set("dex.solidly_fee_denominator", "делитель не помещается"))?,
-        },
-        "divisor" => FeeRule::Divisor,
+    })
+}
+
+/// Правило комиссии: источник задан — dex.solidly_fee_rule (numerator — над dex.solidly_fee_denominator | divisor);
+/// None — «числитель над fee_denominator()», как до решения 273. Ошибки: NotConfigured (правило, делитель).
+pub fn rule(ctx: &Ctx, f: &Family, src: Option<&str>) -> GatewayResult<FeeRule> {
+    if src.is_none() {
+        let denominator = fee_denominator().to::<u32>();
+        return Ok(FeeRule::Numerator { denominator });
+    }
+    let name = "dex.solidly_fee_rule";
+    let set = optional(ctx, name, f.id)?
+        .ok_or_else(|| ctx.not_set(name, format!("{}: не задана {name}", f.id)))?;
+    match set.as_str() {
+        "numerator" => Ok(FeeRule::Numerator {
+            denominator: u32::try_from(ctx.dex_int("dex.solidly_fee_denominator", f.id)?).map_err(
+                |_| ctx.not_set("dex.solidly_fee_denominator", "делитель не помещается"),
+            )?,
+        }),
+        "divisor" => Ok(FeeRule::Divisor),
         other => {
             let why = format!("{}: dex.solidly_fee_rule = «{other}» неизвестно", f.id);
-            return Err(ctx.not_set("dex.solidly_fee_rule", why));
+            Err(ctx.not_set(name, why))
         }
-    };
-    checked(ctx, raw, rule)
+    }
+}
+
+/// Ответ метода комиссии (uint256) по ABI. Принимает: контракт (для текста), байты. Ошибка BadResponse — не по ABI.
+pub fn word(ctx: &Ctx, to: Address, out: &[u8]) -> GatewayResult<U256> {
+    U256::abi_decode(out).map_err(|e| {
+        let why = format!("ответ комиссии Solidly у {to:#x} не по ABI: {e}");
+        ctx.err(ErrorCode::BadResponse, why)
+    })
 }
 
 /// Число комиссии в u32 и проверка по правилу: числитель — меньше делителя; делитель — больше 1 (1 — комиссия 100%,
@@ -134,29 +157,6 @@ pub fn checked(ctx: &Ctx, raw: U256, rule: FeeRule) -> GatewayResult<SolidlyFee>
         )));
     }
     Ok(SolidlyFee { value, rule })
-}
-
-/// Ограничения обмена с фабрики (пауза, предел цены газа) — по заданным методам; не задан метод — ограничения нет.
-/// Принимает: окружение, вид пула, фабрику, блок. Ошибки: узел, BadResponse (ответ не по ABI, предел больше u64).
-pub async fn gate(ctx: &Ctx, f: &Family, factory: Address, tag: &str) -> GatewayResult<SolidlyGate> {
-    let mut g = SolidlyGate::default();
-    if let Some(sig) = optional(ctx, "dex.solidly_pause_method", f.id)? {
-        g.paused = view_sig::<bool>(ctx, factory, &sig, tag).await?;
-    }
-    if let Some(sig) = optional(ctx, "dex.solidly_max_gas_method", f.id)? {
-        let max: U256 = view_sig(ctx, factory, &sig, tag).await?;
-        g.max_gas_price = Some(u64::try_from(max).map_err(|_| {
-            ctx.err(ErrorCode::BadResponse, format!("{sig} = {max} не помещается в u64"))
-        })?);
-    }
-    Ok(g)
-}
-
-/// Заданы ли у DEX методы ограничений обмена (пауза или предел газа). Ошибок нет (сбой хранилища — «не заданы»).
-pub fn has_gate(ctx: &Ctx, f: &Family) -> bool {
-    ["dex.solidly_pause_method", "dex.solidly_max_gas_method"]
-        .iter()
-        .any(|n| optional(ctx, n, f.id).ok().flatten().is_some())
 }
 
 /// Селектор вызова (для журнала и тестов): первые 4 байта keccak256 сигнатуры. Ошибок нет.

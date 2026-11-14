@@ -62,7 +62,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         // Решение 273: фабрика пары на паузе — обмен откатился бы, шаг не строится.
         ExecKind::Solidly => match &e.pool.state {
             PoolState::Solidly { gate, .. } if gate.paused => {
-                let why = format!("{}: фабрика пары на паузе (isPaused) — шаг не строится", e.family.id);
+                let why = format!(
+                    "{}: фабрика пары на паузе (isPaused) — шаг не строится",
+                    e.family.id
+                );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
             _ => Params::Solidly,

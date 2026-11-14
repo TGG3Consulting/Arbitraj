@@ -88,7 +88,7 @@ pub async fn trade(
     let sc = cycle_ref::ctx(wallet, base, dec, &r);
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
-    let cap = super::solidly_gate::fresh_cap(ctx, &used).await?;
+    let cap = super::solidly_gate::fresh_cap(q, &used).await?;
     let d = txs::send_capped(env, &slot, (executor, c.data(), U256::ZERO), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;

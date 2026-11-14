@@ -10,7 +10,8 @@
 //! Охват фазы A: только математика стабильного пула. Подключение семейств (Topaz v2-stable, THENA V1 stable),
 //! чтение состояния пула, события, квотер и исполнение — следующая фаза.
 //! Кто вызывает: math/swap_solidly.rs (get_amount_out); тесты (tests/bsc_dex_solidly_math.rs) — через переэкспорт.
-//! От чего зависит: alloy-primitives (U256). Настройки: нет (резервы, decimals, комиссия — с контракта пула, фаза B).
+//! От чего зависит: alloy-primitives (U256), core/types/pool_solidly.rs (GETFEE_DENOMINATOR).
+//! Настройки: нет (резервы, decimals, комиссия — с контракта пула, фаза B).
 //!
 //! Источник (официальный, решение 23): velodrome-finance/contracts (HEAD b3065d8b6702b14b094f9f6046b752cc9f78c43b),
 //! contracts/Pool.sol (pragma >=0.8.19): приватные `_f`, `_d`, `_get_y`. Solidity 0.8 проверяет всю арифметику
@@ -25,9 +26,10 @@ pub fn e18() -> U256 {
     U256::from(10u8).pow(U256::from(18u8))
 }
 
-/// Знаменатель комиссии пула (контракт: деление комиссии на 10000; getFee — доля над 10000). Ошибок нет.
+/// Знаменатель комиссии пула (контракт: деление комиссии на 10000; getFee — доля над 10000). Число — одно на проект:
+/// core/types/pool_solidly.rs GETFEE_DENOMINATOR (им же читаются записи до решения 273; ревью 273). Ошибок нет.
 pub fn fee_denominator() -> U256 {
-    U256::from(10_000u16)
+    U256::from(crate::core::types::pool_solidly::GETFEE_DENOMINATOR)
 }
 
 /// Pool._f: значение кривой `x³y + xy³` в масштабе 1e18 при текущих x0,y (оба нормализованы к 1e18).

@@ -53,8 +53,9 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    FeeRule, HookGroup, HookInfo, LadderPoint, OraclePmmData, PmmData, Pool, PoolKind, PoolRef, PoolState,
-    SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData, TickReserves,
+    FeeRule, HookGroup, HookInfo, LadderPoint, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
+    PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
+    TickReserves,
 };
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
 pub use presell::DexPresell;

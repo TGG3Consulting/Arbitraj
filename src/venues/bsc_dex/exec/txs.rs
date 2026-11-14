@@ -105,7 +105,9 @@ pub async fn send_capped(
         .await?
         .max(send::gas_floor(&ready));
     if let Some(c) = cap.filter(|c| price > *c) {
-        let why = format!("цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен");
+        let why = format!(
+            "цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен"
+        );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
     let from = slot.from;

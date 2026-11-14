@@ -26,4 +26,4 @@
 (у magicfox — null: узел не отдал состояние старого блока). Последний Sync каждой пары раньше блока state.json —
 её резервы в state.json равны данным Sync.
 
-Тест: tests/bsc_dex_solidly_fee_273.rs.
+Тесты: tests/bsc_dex_solidly_fee_273.rs, tests/bsc_dex_solidly_fee_273_cfg.rs (общее — tests/solidly273_common).

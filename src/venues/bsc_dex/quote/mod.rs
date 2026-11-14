@@ -9,7 +9,8 @@
 //! Нативная монета BNB (решение 62): газ обёртки — quote/native_gas.rs; у продажи BNB разрешений нет (approve_gas.rs).
 //! Выбор маршрута (классика, граф, merge) — quote/routing.rs, вне рабочих потоков tokio (quote/cpu.rs, решение 129).
 //! Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
-//! (executable = нет, причина; exec/solidly_gate.rs reason).
+//! (executable = нет, причина; exec/solidly_gate.rs reason). Ревью 273: такой пул исключается уже при выборе пулов
+//! (Quoting.plan_gas → quote/select.rs) — маршрут строится через другие пулы.
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов),
@@ -112,6 +113,9 @@ pub struct Quoting {
     pub lag: super::node::events_lag::EventsLag,
     /// Решение 217: блок головы на момент снимка (замороженный реестр, frozen.rs) — ключ кэша графа; живая — None.
     pub frozen_head: Option<u64>,
+    /// Ревью 273: плановая цена газа выбора маршрута, wei — пул Solidly с пределом цены газа фабрики ниже неё не
+    /// допускается (quote/select.rs), как пул на паузе. None — не проверяется (вне выбора маршрута и поиска циклов).
+    pub plan_gas: Option<U256>,
 }
 
 impl Quoting {
@@ -195,9 +199,13 @@ impl Quoting {
             usdt_ticker,
             smart: mode == "smart",
         };
-        let mut q = cpu::run(ctx, routing::run(self.clone(), input)).await?;
+        // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены газа исключаются при выборе пулов
+        // (quote/select.rs по plan_gas) — маршрут считается без них.
+        let mut pick = self.clone();
+        pick.plan_gas = Some(gas);
+        let mut q = cpu::run(ctx, routing::run(pick, input)).await?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
-        // (сигнал с причиной; exec/trade.rs не исполняет executable = нет).
+        // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {
             let used: Vec<_> = r
                 .legs

@@ -123,7 +123,7 @@ pub async fn trade(
     let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
-    let cap = super::super::solidly_gate::fresh_cap(ctx, &used).await?;
+    let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
     let d = txs::send_capped(env, &slot, (executor, c.data(), U256::ZERO), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;

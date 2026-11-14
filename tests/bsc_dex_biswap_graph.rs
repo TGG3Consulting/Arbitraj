@@ -519,7 +519,9 @@ async fn scene_with_signal_only() -> Parts {
         // Решение 273: комиссия с правилом (числитель над 10000 — как прежнее fee: 1), ограничений обмена нет.
         fee: arb::core::types::SolidlyFee {
             value: 1,
-            rule: arb::core::types::FeeRule::Numerator { denominator: 10_000 },
+            rule: arb::core::types::FeeRule::Numerator {
+                denominator: 10_000,
+            },
         },
         gate: Default::default(),
     };

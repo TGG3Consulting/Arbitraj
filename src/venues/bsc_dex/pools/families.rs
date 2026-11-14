@@ -122,6 +122,14 @@ pub enum Proto {
     /// подтверждает менеджер (poolIdToPoolKey) и список крючков dex.stable_hooks. Курсы монет могут идти от внешних
     /// оракулов без событий — перечитывание на каждом блоке. Математика — math/stableswap_ng.rs. Вид ядра — StableSwap.
     InfinityStable,
+    /// Curve StableSwap-NG (решение 275; curve-bsc): plain-пул фабрики NG (curvefi/stableswap-ng 3332cd4,
+    /// CurveStableSwapNG.vy v7.0.0) — отдельный контракт, 2..8 монет, A_PRECISION = 100, динамическая комиссия offpeg,
+    /// курсы монет stored_rates() (у оракульных / ERC4626 — внешний вызов на блоке; rebasing — balanceOf). Математика
+    /// — math/stableswap_ng.rs (та же, что у Infinity Stable: формулы обмена совпадают с NG v7.0.0). События NG
+    /// (массивы uint256[] — topic0 иные, чем у Curve 2020) — events_curve_ng.rs; перечитывание на каждом блоке; пул
+    /// подтверждает реестр фабрики (get_coins / is_meta, verify_curve_ng.rs); квотер — сам пул get_dy(int128, …);
+    /// исполнение — шаг CURVE исполнителя (exchange(int128, int128, dx, 0) — селектор есть у пула). Вид ядра — StableSwap.
+    CurveNg,
 }
 
 impl Proto {
@@ -134,6 +142,7 @@ impl Proto {
                 | Proto::ListaStable
                 | Proto::SaddleStable
                 | Proto::InfinityStable
+                | Proto::CurveNg
         )
     }
 
@@ -229,6 +238,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "solidly_v1" => (PoolKind::Solidly, Proto::SolidlyV1, true, false, false),
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
+        // Curve StableSwap-NG (решение 275): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
+        "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -417,6 +428,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
         // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.
         Proto::CurveStable => list.push("dex.stable_pools"),
+        // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул; версии реализации
+        // пула, с которыми сверена математика (version() пула — verify_curve_ng.rs).
+        Proto::CurveNg => list.extend(["dex.factory", "dex.curve_ng_versions"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

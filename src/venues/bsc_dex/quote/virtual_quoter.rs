@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/virtual_quoter.rs
 //! Что делает: решение 186 (Тигран, 05.11.2026: «нам нужны все DEX») — «виртуальный квотер» для DEX без своего
-//! квотера в документации (форки V3, Algebra, Slipstream). Код контракта contracts/VirtualQuoter.sol (собран
+//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274). Код контракта contracts/VirtualQuoter.sol (собран
 //! contracts/build.sh, артефакт contracts/out/VirtualQuoter.bin-runtime, хеш сверяется с VirtualQuoter.sha256)
 //! подставляется по своему адресу в eth_call переопределением кода счёта (state override, 3-й параметр eth_call geth:
 //! https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set). Квотер зовёт swap САМОГО пула,
@@ -45,7 +45,8 @@ const SHA: &str = include_str!(concat!(
 pub const SHORT: &str =
     "виртуальный квотер: пул взял не весь вход — ликвидности до предела цены не хватает";
 
-/// Виды пулов, чей swap вызывает uniswapV3SwapCallback / pancakeV3SwapCallback / algebraSwapCallback с подписью
+/// Виды пулов, чей swap вызывает uniswapV3SwapCallback / pancakeV3SwapCallback / algebraSwapCallback (или swapCallback
+/// форка SheepDex — вид v3_fork, решение 274) с подписью
 /// swap(address,bool,int256,uint160,bytes) — их квотер умеет. Ошибок нет.
 pub fn supports(p: Proto) -> bool {
     matches!(

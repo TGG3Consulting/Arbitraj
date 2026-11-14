@@ -27,7 +27,7 @@ use super::reload;
 pub fn needs(f: &Family) -> bool {
     matches!(
         f.proto,
-        Proto::ListaStable | Proto::WooPP | Proto::InfinityStable
+        Proto::ListaStable | Proto::WooPP | Proto::InfinityStable | Proto::CurveNg
     )
 }
 

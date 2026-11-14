@@ -95,7 +95,8 @@ pub fn request(
     // монет пары — из состояния). При rates ≠ 1e18 get_dy округляет комиссию иначе, чем exchange (math/stableswap_v1).
     // Infinity Stable (решение «122 (Infinity Stable, ответы)»): ОСНОВНОЙ квотер — CLQuoter Infinity (dex.quoter) с ключом
     // пула (ветка PoolKey::Infinity ниже: настоящий swap с крючком); get_dy крючка — дополнительный (quote/quoter_extra.rs).
-    if e.family.proto == Proto::CurveStable {
+    // Curve StableSwap-NG (решение 275): тоже сам пул get_dy(int128, int128, dx) (CurveStableSwapNG.vy L1702).
+    if matches!(e.family.proto, Proto::CurveStable | Proto::CurveNg) {
         let PoolRef::Contract(pool) = e.pool.reference else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
         };

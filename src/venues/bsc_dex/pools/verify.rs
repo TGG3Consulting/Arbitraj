@@ -6,11 +6,13 @@
 //! именно он подтверждает, что это пул этой фабрики (поддельный контракт может вернуть из factory() что угодно).
 //! V4/Infinity — verify_v4.rs. Вызовы — частями по dex.verify_batch: сбой узла на части — итог «не проверен» только
 //! у её пулов (повтор — pools/index.rs), откат вызова — это ответ (пул отклонён с причиной).
+//! V3: во второй проход — проба swapFee фабрики (решение 274, fee_probe.rs): фабрика берёт комиссию обмена, а
+//! dex.v3_fee_source не задана — пулы DEX не берутся с причиной.
 //! Кто вызывает: pools/index.rs, pools/created_log.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_check.rs, abi_v2v3.rs, discover.rs (Found), verify_rules.rs,
-//! verify_calls.rs, verify_v4.rs.
+//! verify_calls.rs, verify_v4.rs, fee_probe.rs.
 //! Настройки: dex.verify_batch, dex.multicall3 [bsc_dex]; dex.factory, dex.v2_fee_source, dex.v2_fee_method,
-//! dex.v2_fee_denominator [DEX].
+//! dex.v2_fee_denominator, dex.v3_fee_source [DEX].
 //!
 //! ABI — abi_check.rs (ссылки там); getPair / getPool — abi_v2v3.rs (IUniswapV2Factory.sol#L9, IUniswapV3Factory.sol#L48).
 
@@ -28,8 +30,8 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
 use super::{
-    verify_algebra, verify_curve, verify_dodo, verify_inf_stable, verify_maverick, verify_solidly,
-    verify_stable_u, verify_v4,
+    fee_probe, verify_algebra, verify_curve, verify_curve_ng, verify_dodo, verify_inf_stable,
+    verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
@@ -74,6 +76,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut algebra = Vec::new();
     let mut solidly = Vec::new();
     let mut curve = Vec::new();
+    let mut curve_ng = Vec::new();
     let mut stable_u = Vec::new();
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
@@ -85,6 +88,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Algebra | Proto::AlgebraIntegral => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             Proto::CurveStable => curve.push(i),
+            Proto::CurveNg => curve_ng.push(i),
             Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
                 stable_u.push(i)
             }
@@ -118,6 +122,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in solidly
         .into_iter()
         .zip(verify_solidly::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve StableSwap-NG (решение 275): реестр фабрики NG + монеты пула (verify_curve_ng.rs).
+    let list: Vec<Candidate> = curve_ng.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in curve_ng
+        .into_iter()
+        .zip(verify_curve_ng::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }
@@ -199,10 +211,14 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
         }
         first.push(r);
     }
-    // Второй проход: реестр фабрики должен вернуть тот же адрес.
-    let mut regs = call::try_chunks(ctx, &reg, "latest", size)
-        .await
-        .into_iter();
+    // Второй проход: реестр фабрики должен вернуть тот же адрес. В тот же проход — проба swapFee фабрик V3 (решение
+    // 274, fee_probe.rs): один вызов на DEX при первой проверке её пулов, дальше ответ фабрики берётся из памяти.
+    let (mut probes, asks) = fee_probe::plan(ctx, cands.iter().map(|c| &c.family));
+    let n = reg.len();
+    reg.extend(asks);
+    let mut regs = call::try_chunks(ctx, &reg, "latest", size).await;
+    probes.settle(&regs.split_off(n));
+    let mut regs = regs.into_iter();
     let mut out = Vec::new();
     for (c, r) in cands.iter().zip(first) {
         out.push(match r {
@@ -211,9 +227,12 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 None => Verdict::Failed("нет ответа реестра".into()),
                 Some(Err(node)) => Verdict::Failed(node),
                 Some(Ok(Err(rev))) => Verdict::Rejected(format!("реестр фабрики откатился: {rev}")),
-                Some(Ok(Ok(b))) => match registered(a, &b).and_then(|_| found(ctx, c, a, &read)) {
-                    Ok(f) => Verdict::Taken(Box::new(f)),
-                    Err(w) => Verdict::Rejected(w),
+                Some(Ok(Ok(b))) => match probes.check(c.family.id) {
+                    Err(v) => v,
+                    Ok(()) => match registered(a, &b).and_then(|_| found(ctx, c, a, &read)) {
+                        Ok(f) => Verdict::Taken(Box::new(f)),
+                        Err(w) => Verdict::Rejected(w),
+                    },
                 },
             },
         });

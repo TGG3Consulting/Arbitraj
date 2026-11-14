@@ -22,7 +22,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_dodo, load_elastic,
+    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dodo, load_elastic,
     load_inf_stable, load_maverick, load_saddle, load_slipstream, load_solidly, load_stable_u,
     load_v2v3, load_woo,
 };
@@ -86,6 +86,20 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул StableSwap не того вида", f.title),
+        ));
+    }
+    // Curve StableSwap-NG (решение 275): вид ядра StableSwap, пул — отдельный контракт, чтение своё (load_curve_ng.rs).
+    if f.proto == Proto::CurveNg {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_curve_ng::load(ctx, *a, pair, &tag).await?,
+                ticks: None,
+                bins: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Curve NG не того вида", f.title),
         ));
     }
     // PancakeSwap / Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: вид ядра StableSwap, свои чтения

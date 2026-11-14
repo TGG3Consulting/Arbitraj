@@ -84,7 +84,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "algebra_integral" => ExecKind::Algebra,
         "solidly_v2" | "solidly_v1" => ExecKind::Solidly,
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
-        "curve_stableswap" => ExecKind::Curve,
+        // Решение 275: Curve StableSwap-NG — exchange(int128, int128, dx, min_dy) с receiver = msg.sender по умолчанию
+        // (curvefi/stableswap-ng 3332cd4, CurveStableSwapNG.vy L504-L531): тот же шаг CURVE.
+        "curve_stableswap" | "curve_stableswap_ng" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,

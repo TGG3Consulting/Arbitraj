@@ -114,6 +114,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // StableSwap (Ellipsis; решение 122 F): фабрики с событием создания нет — новые пулы приходят только из
             // справочника и списка dex.stable_pools.
             Proto::CurveStable => continue,
+            // Curve StableSwap-NG (решение 275): событие фабрики PlainPoolDeployed адреса пула не содержит
+            // (CurveStableSwapFactoryNG.vy L52-L56) — новые пулы приходят из справочника индексатора.
+            Proto::CurveNg => continue,
             // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
             // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
             // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.

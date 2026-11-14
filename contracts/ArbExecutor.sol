@@ -12,7 +12,10 @@
 // не меняется; нет прокси, delegatecall, обновлений, произвольных вызовов, selfdestruct. Обратный вызов пула
 // платит только пулу текущего шага (адрес записан в transient на время вызова), не больше суммы шага и один раз.
 // BNB (receive) принимается только от одного адреса, записанного в transient на время одного вызова шага
-// STABLE_U256_BNB (обёртка WBNB при withdraw или пул шага при exchange); после транзакции BNB на контракте нет.
+// STABLE_U256_BNB (обёртка WBNB при withdraw или пул шага при exchange) и на время withdraw в executeNative;
+// после транзакции BNB на контракте нет.
+// Версии: v1 — только execute (артефакты contracts/out/v1/, развёрнутые до решения 272); v2 — + executeNative
+// (нативный BNB монетой сделки, решение 272). Селектор и ABI execute у v1 и v2 одинаковы.
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -71,6 +74,9 @@ contract ArbExecutor {
     // должен получить право на _pay (expToken/expMax прошлого шага).
     address transient bnbFrom;
 
+    // Решение 272: итог нативной стороны executeNative — пришло BNB (value) и ушло владельцу BNB (остаток / покупка).
+    event NativeSettled(uint256 nativeIn, uint256 nativeOut);
+
     constructor() {
         owner = msg.sender;
     }
@@ -101,24 +107,120 @@ contract ArbExecutor {
             _call(tokenIn, abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amountIn)));
         }
         uint256 before = IERC20(tokenOut).balanceOf(msg.sender);
+        _steps(tokenIn, tokenOut, steps, direct ? amountIn : 0, msg.sender);
+        _sweepAll(tokenIn, tokenOut, steps);
+        _sweepBnb();
+        received = IERC20(tokenOut).balanceOf(msg.sender) - before;
+        require(received >= minOut, "minOut");
+        locked = false;
+    }
+
+    // Решение 272 (исполнитель v2): маршрут с нативным BNB на краю — монета сделки BNB. Только владелец; вход/выход
+    // маршрута по-прежнему ERC-20 обёртка wnative (WBNB — бот передаёт dex.native_wrapped), а с кошельком — нативный BNB:
+    // wrapIn = true (продажа BNB): value транзакции = amountIn, tokenIn = wnative → wnative.deposit{value} до шагов →
+    //   шаги → выход tokenOut (ERC-20) владельцу, прирост его баланса ≥ minOut; несъеденный остаток wnative
+    //   разворачивается и возвращается владельцу нативным BNB.
+    // wrapIn = false (покупка BNB): value 0, tokenOut = wnative; вход ERC-20 — как у execute (прямой вход в пул первого
+    //   шага разрешён); выход шагов в wnative — исполнителю → withdraw всего → нативный BNB владельцу; прирост
+    //   нативного баланса владельца (газ списан до исполнения) ≥ minOut.
+    // Событие NativeSettled(nativeIn, nativeOut) — факт бота: продажа — продано nativeIn − nativeOut, покупка — куплено
+    // nativeOut (по событиям WBNB считать нельзя: шаг STABLE_U256_BNB сам делает withdraw/deposit исполнителем).
+    // Цикл (tokenIn = tokenOut) здесь не исполняется. Возвращает: получено владельцем (ERC-20 или wei BNB).
+    function executeNative(
+        address wnative,
+        bool wrapIn,
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 minOut,
+        uint256 deadline,
+        Step[] calldata steps
+    ) external payable returns (uint256 received) {
+        require(msg.sender == owner, "owner");
+        require(!locked, "lock");
+        locked = true;
+        require(block.timestamp <= deadline, "deadline");
+        require(wnative.code.length > 0, "token code");
+        require(tokenIn != tokenOut && amountIn > 0 && steps.length > 0, "native route");
+        if (wrapIn) {
+            require(tokenIn == wnative && msg.value == amountIn, "wrap");
+            received = _nativeIn(wnative, amountIn, tokenOut, steps);
+        } else {
+            require(tokenOut == wnative && msg.value == 0, "unwrap");
+            received = _nativeOut(wnative, tokenIn, amountIn, steps);
+        }
+        require(received >= minOut, "minOut");
+        locked = false;
+    }
+
+    // Продажа BNB: обернуть value, шаги, остаток обёртки — нативным BNB владельцу. Возвращает: прирост tokenOut владельца.
+    function _nativeIn(address w, uint256 amountIn, address tokenOut, Step[] calldata steps)
+        internal
+        returns (uint256 received)
+    {
+        IWBNB(w).deposit{value: amountIn}();
+        uint256 before = IERC20(tokenOut).balanceOf(msg.sender);
+        _steps(w, tokenOut, steps, 0, msg.sender);
+        uint256 left = IERC20(w).balanceOf(address(this));
+        if (left > 0) _unwrap(w, left);
+        _sweepAll(w, tokenOut, steps);
+        uint256 back = address(this).balance;
+        _sweepBnb();
+        received = IERC20(tokenOut).balanceOf(msg.sender) - before;
+        emit NativeSettled(amountIn, back);
+    }
+
+    // Покупка BNB: вход ERC-20 (прямой вход в пул — как у execute), выход в обёртке — исполнителю, развернуть всё,
+    // нативный BNB владельцу. Возвращает: прирост нативного баланса владельца (wei).
+    function _nativeOut(address w, address tokenIn, uint256 amountIn, Step[] calldata steps)
+        internal
+        returns (uint256 received)
+    {
+        bool direct = steps[0].tokenIn == tokenIn && steps[0].shareBps == BPS && _pushed(steps[0].kind);
+        if (!direct) {
+            _call(tokenIn, abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amountIn)));
+        }
+        uint256 before = msg.sender.balance;
+        _steps(tokenIn, w, steps, direct ? amountIn : 0, address(this));
+        uint256 got = IERC20(w).balanceOf(address(this));
+        if (got > 0) _unwrap(w, got);
+        _sweepAll(tokenIn, w, steps);
+        _sweepBnb();
+        received = msg.sender.balance - before;
+        emit NativeSettled(0, received);
+    }
+
+    // Шаги маршрута по порядку. Выход шага, чей tokenOut — выход маршрута, идёт outTo (execute — владельцу; покупка
+    // BNB — исполнителю, дальше withdraw); иначе исполнителю. Цикл (tokenIn = tokenOut) — ровно одна доля («loop»).
+    // fromOwner — вход первого шага прямо с владельца в пул (0 — с баланса исполнителя).
+    function _steps(address tokenIn, address tokenOut, Step[] calldata steps, uint256 fromOwner, address outTo)
+        internal
+    {
         bool loop = tokenIn == tokenOut;
         for (uint256 i = 0; i < steps.length; ++i) {
             if (loop) {
                 require(i == 0 ? steps[0].tokenIn == tokenIn && steps[0].shareBps == BPS : steps[i].tokenIn != tokenIn, "loop");
             }
-            address to = steps[i].tokenOut == tokenOut ? msg.sender : address(this);
-            _step(steps[i], to, i == 0 && direct ? amountIn : 0);
+            address to = steps[i].tokenOut == tokenOut ? outTo : address(this);
+            _step(steps[i], to, i == 0 ? fromOwner : 0);
         }
+    }
+
+    // Все токены маршрута с баланса исполнителя — владельцу.
+    function _sweepAll(address tokenIn, address tokenOut, Step[] calldata steps) internal {
         _sweep(tokenIn);
         _sweep(tokenOut);
         for (uint256 i = 0; i < steps.length; ++i) {
             _sweep(steps[i].tokenIn);
             _sweep(steps[i].tokenOut);
         }
-        _sweepBnb();
-        received = IERC20(tokenOut).balanceOf(msg.sender) - before;
-        require(received >= minOut, "minOut");
-        locked = false;
+    }
+
+    // Развернуть обёртку: BNB придёт от wnative (receive пускает только bnbFrom) на время withdraw.
+    function _unwrap(address w, uint256 amount) internal {
+        bnbFrom = w;
+        IWBNB(w).withdraw(amount);
+        bnbFrom = address(0);
     }
 
     // Один шаг: сумма = баланс исполнителя по tokenIn × shareBps / 10000 (или fromOwner — вход прямо с владельца в

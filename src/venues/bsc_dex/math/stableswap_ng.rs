@@ -72,7 +72,8 @@ pub fn get_d(xp: &[U256], amp: U256) -> Option<U256> {
     }
     let mut d = s;
     let ann = amp.checked_mul(n)?;
-    // pow_mod256(N_COINS, N_COINS) (L840): N ≤ 2 у крючка (MAX_COINS L133) — без переполнения.
+    // pow_mod256(N_COINS, N_COINS) (L840): N ≤ 8 (крючок — 2, MAX_COINS L133;
+    // пул NG — 8, CurveStableSwapNG.vy L152) — 8^8 без переполнения U256.
     let nn = n.pow(n);
     let one = U256::from(1u8);
     for _ in 0..MAX_ROUNDS {

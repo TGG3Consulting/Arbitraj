@@ -428,8 +428,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
         // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.
         Proto::CurveStable => list.push("dex.stable_pools"),
-        // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул.
-        Proto::CurveNg => list.push("dex.factory"),
+        // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул; версии реализации
+        // пула, с которыми сверена математика (version() пула — verify_curve_ng.rs).
+        Proto::CurveNg => list.extend(["dex.factory", "dex.curve_ng_versions"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

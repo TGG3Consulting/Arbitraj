@@ -59,6 +59,7 @@ pub mod factory_calls;
 pub mod factory_scan;
 pub mod families;
 pub mod fee_override;
+pub mod fee_probe;
 pub mod graph;
 pub mod graph_cache;
 pub mod group;

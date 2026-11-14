@@ -55,6 +55,7 @@ const CHOICE = {
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   solidly_v1: 'Solidly V1 (THENA V1)',
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
+  curve_stableswap_ng: 'Curve StableSwap-NG (plain-пул фабрики NG)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',
@@ -68,6 +69,14 @@ const CHOICE = {
   fixed: 'одна на DEX',
   pool: 'своя у пары',
   pancakeswap_infinity: 'Universal Router PancakeSwap Infinity',
+};
+// Подписи варианта, у которого смысл зависит от настройки (один вариант — разные настройки): `pool` у dex.v2_fee_source —
+// «своя у пары» (общая подпись выше), у dex.v3_fee_source (решение 274) — fee() пула.
+const CHOICE_BY_SETTING = {
+  'dex.v3_fee_source': {
+    pool: 'fee() пула',
+    factory_swap_fee: 'комиссия от фабрики swapFee (SheepDex)',
+  },
 };
 const POOL_KIND = {
   V2: 'V2',
@@ -87,8 +96,14 @@ export const kindLabel = (k) => KIND[k] ?? k;
 export const limitLabel = (l) => LIMIT[l] ?? l;
 /** Подпись вида области. Принимает: ScopeKind. Возвращает: строку. */
 export const scopeLabel = (s) => SCOPE[s] ?? s;
-/** Подпись варианта выбора. Принимает: вариант из схемы. Возвращает: «по-русски (вариант)» или вариант. */
-export const choiceLabel = (c) => (CHOICE[c] ? `${CHOICE[c]} (${c})` : c);
+/**
+ * Подпись варианта выбора. Принимает: вариант из схемы и (необязательно) имя настройки — у неё может быть своя подпись
+ * варианта (CHOICE_BY_SETTING). Возвращает: «по-русски (вариант)» или вариант.
+ */
+export const choiceLabel = (c, name) => {
+  const t = CHOICE_BY_SETTING[name]?.[c] ?? CHOICE[c];
+  return t ? `${t} (${c})` : c;
+};
 /** Подпись вида пула. Принимает: PoolKind. Возвращает: строку. */
 export const poolKindLabel = (k) => POOL_KIND[k] ?? k;
 /** Подпись способа отправки. Принимает: SendMethod. Возвращает: строку. */

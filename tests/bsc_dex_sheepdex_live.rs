@@ -10,9 +10,13 @@
 //!    на 1, 100 и 10000 долларов, в обе стороны (10 случаев из 12; два случая на 10000 $ уходят за записанные слова
 //!    битмапа ±6 — наша математика честно частичная, её выход не больше квотера).
 //! 4. Реальные логи Swap пулов — topic0 и данные события Swap Uniswap V3 (7 полей) — разбираются ABI IUniswapV3Pool.
+//! 5. Защита от забытой dex.v3_fee_source (fee_probe::answers) на ответах блока 133600177
+//!    (tests/data/sheepdex_2026-11-14/swap_fee_probe.json): фабрика SheepDex на swapFee(0x0, 0) и (0x0, 500) отвечает
+//!    uint24 — «отвечает»; фабрики Uniswap V3 и PancakeSwap V3 BSC откатываются — «не отвечает».
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::{math::swap_cl, pools::{abi_v2v3, fee_override, load_batch_v2v3, ticks}}.
+//! От чего зависит: arb::venues::bsc_dex::{math::swap_cl, pools::{abi_v2v3, fee_override, fee_probe, load_batch_v2v3,
+//! ticks}}.
 
 use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256, Bytes, LogData, U256};
@@ -21,6 +25,7 @@ use serde_json::Value;
 use arb::venues::bsc_dex::math::swap_cl::{self, ClState, Version};
 use arb::venues::bsc_dex::pools::abi_v2v3::IUniswapV3Pool;
 use arb::venues::bsc_dex::pools::fee_override;
+use arb::venues::bsc_dex::pools::fee_probe;
 use arb::venues::bsc_dex::pools::load_batch_v2v3::v3_ticks;
 use arb::venues::bsc_dex::pools::ticks::TickMap;
 
@@ -54,6 +59,34 @@ fn int24(raw: &str, i: usize) -> i32 {
 
 fn addr(raw: &str) -> Address {
     Address::from_slice(&hex(raw)[12..32])
+}
+
+/// Ответ JSON-RPC eth_call как у узла: result — ответ, error — откат с текстом.
+fn rpc_answer(v: &Value) -> Result<Bytes, String> {
+    match v["result"].as_str() {
+        Some(r) => Ok(Bytes::from(hex(r))),
+        None => Err(v["error"]["message"].as_str().unwrap().to_string()),
+    }
+}
+
+#[test]
+fn swap_fee_probe_tells_sheepdex_from_uniswap_and_pancake() {
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/data/sheepdex_2026-11-14/swap_fee_probe.json"
+    );
+    let d: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    let sf = &d["swap_fee"];
+    for (dex, want) in [
+        ("sheepdex", true),
+        ("uniswap_bsc", false),
+        ("pancakeswap_v3_bsc", false),
+    ] {
+        for k in ["swapFee(0x0,0)", "swapFee(0x0,500)"] {
+            let got = fee_probe::answers(&rpc_answer(&sf[dex][k]));
+            assert_eq!(got, want, "{dex} {k}");
+        }
+    }
 }
 
 #[test]

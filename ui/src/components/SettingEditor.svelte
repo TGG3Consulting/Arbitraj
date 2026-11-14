@@ -105,7 +105,7 @@
   {#if label}<span class="scope">{label}</span>{/if}
   <!-- Необязательная (def.optional) не задана — не «пробел», а выключенная часть функции (описание — ниже). -->
   <span class={current === undefined ? (def.optional || inherited ? 'muted' : 'unset') : 'value'}>
-    {current === undefined ? (def.optional ? 'не задано (необязательная)' : 'не задано') : def.kind === 'Choice' ? choiceLabel(current) : showValue(current)}
+    {current === undefined ? (def.optional ? 'не задано (необязательная)' : 'не задано') : def.kind === 'Choice' ? choiceLabel(current, def.name) : showValue(current)}
   </span>
   {#if current === undefined && inherited}<span class="muted">→ действует {inherited}</span>{/if}
   {#if def.kind === 'Integer' && def.max != null}<span class="muted">не больше {def.max}</span>{/if}
@@ -115,7 +115,7 @@
   {:else if def.kind === 'Choice'}
     <select value={draft ?? current ?? ''} onchange={(e) => (draft = e.currentTarget.value)}>
       <option value="" disabled>— выбрать —</option>
-      {#each uniq(def.choices.filter((c) => !only || only.includes(c))) as c (c)}<option value={c}>{choiceLabel(c)}</option>{/each}
+      {#each uniq(def.choices.filter((c) => !only || only.includes(c))) as c (c)}<option value={c}>{choiceLabel(c, def.name)}</option>{/each}
     </select>
     <button disabled={busy || draft === null || draft === current} onclick={() => save(draft)}>Сохранить</button>
   {:else if def.kind === 'TextList' && options}

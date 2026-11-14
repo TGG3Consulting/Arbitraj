@@ -10,7 +10,7 @@
 //! contracts/main/CurveStableSwapNG.vy (version "v7.0.0" L216): события L92-L145 (TokenExchange — 5 полей, как у
 //! Curve 2020; AddLiquidity / RemoveLiquidity / RemoveLiquidityImbalance — DynArray → uint256[] в ABI;
 //! RemoveLiquidityOne — 5 полей; RampA, StopRampA, ApplyNewFee), N_COINS L157 (public immutable), coins L162 (public
-//! immutable DynArray → coins(uint256)), fee L169, offpeg_fee_multiplier L170, get_dy L1702, A_precise L1781,
+//! immutable DynArray → coins(uint256)), version L216, fee L169, offpeg_fee_multiplier L170, get_dy L1702, A_precise L1781,
 //! balances L1787 (`_balances()` — без доли админа; у пула с rebasing-монетой — balanceOf − admin), stored_rates L1805
 //! (`_stored_rates()` — курсы монет, у оракульных и ERC4626 — внешний вызов на этом блоке);
 //! contracts/main/CurveStableSwapFactoryNG.vy: get_coins L175, is_meta L430. На BSC: фабрика
@@ -33,6 +33,7 @@ alloy::sol! {
         function fee() external view returns (uint256);
         function offpeg_fee_multiplier() external view returns (uint256);
         function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
+        function version() external view returns (string memory);
 
         event TokenExchange(address indexed buyer, int128 sold_id, uint256 tokens_sold, int128 bought_id, uint256 tokens_bought);
         event AddLiquidity(address indexed provider, uint256[] token_amounts, uint256[] fees, uint256 invariant, uint256 token_supply);

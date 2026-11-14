@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решения 274/275 (SheepDex, Curve NG, с доработками по ревью 14.11): файлы сверх ориентира 200 строк, выросшие в
+  ветке t107 — src/venues/bsc_dex/math/stableswap_ng.rs 204 (было 200), src/venues/bsc_dex/pools/families.rs 486,
+  src/venues/bsc_dex/pools/load.rs 361, src/venues/bsc_dex/pools/verify.rs 278 (проба swapFee — +9),
+  src/venues/bsc_dex/pools/created_log.rs 313, src/venues/bsc_dex/quote/quoter_calls.rs 375. Делить — отдельной
+  задачей (families.rs — список required() по видам; verify.rs — ветки видов в свои файлы).
 - Решение 268: src/core/sell.rs 335 строк (было 314), src/core/trade_ops.rs 456 (было 435), src/core/sell_range_run.rs 328,
   src/core/sell_range.rs 202, src/core/deal.rs 249 (было 199), src/core/rules_apply.rs 236 (было 217) — sell.rs,
   trade_ops.rs и rules_apply.rs были сверх ориентира 200 и до решения. У 14 адаптеров trade (trade.rs) принимает

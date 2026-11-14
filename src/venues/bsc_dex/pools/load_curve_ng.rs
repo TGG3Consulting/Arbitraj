@@ -7,12 +7,16 @@
 //! CurveStableSwapNG.vy v7.0.0, разбор — docs/notes/curve-ng-2026-11-14.md). Курсы и rebasing-балансы меняются без
 //! событий пула — вид перечитывается на каждом блоке (pools/per_block.rs). Откат stored_rates() (оракул курса не
 //! отвечает) — обмен откатился бы тоже: пул «остановлен» (halted) до следующего удачного чтения.
+//! N_COINS — неизменяемое (public immutable) — читается один раз на пул и держится в памяти до перезапуска.
 //! Кто вызывает: pools/load.rs (ветка Proto::CurveNg).
 //! От чего зависит: ctx.rs, node/call.rs, abi_curve_ng.rs, math/stableswap_ng.rs (A_PRECISION, MAX_ROUNDS).
 //! Настройки: dex.multicall3 [bsc_dex] (не задан — пачкой JSON-RPC, call::try_many).
 //!
 //! Источник — curvefi/stableswap-ng 3332cd4, contracts/main/CurveStableSwapNG.vy (строки — abi_curve_ng.rs):
 //! `_stored_rates` L433-L469, `_balances` L473-L500, `_A` L1187-L1205, `_xp_mem` L1209-L1218.
+
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -25,6 +29,31 @@ use super::super::math::stableswap_ng::{A_PRECISION, MAX_ROUNDS};
 use super::super::node::call;
 use super::abi_curve_ng::{ICurveNgPool as P, NG_MAX_COINS};
 
+/// N_COINS прочитанных пулов (неизменяемое у пула — CurveStableSwapNG.vy L157, public immutable).
+static N_COINS: Mutex<Option<HashMap<Address, usize>>> = Mutex::new(None);
+
+/// N_COINS пула: из памяти или с узла (один раз на пул). Принимает: окружение, пул, блок-тег. Ошибки: узел, ответ не
+/// по ABI, N_COINS вне 2..=8 (не запоминается).
+async fn n_coins(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<usize> {
+    let known = N_COINS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .and_then(|m| m.get(&pool).copied());
+    if let Some(n) = known {
+        return Ok(n);
+    }
+    let n = call::view(ctx, pool, &P::N_COINSCall {}, tag).await?;
+    if n < U256::from(2u8) || n > U256::from(NG_MAX_COINS) {
+        let what = format!("Curve NG {pool}: N_COINS = {n} вне 2..={NG_MAX_COINS}");
+        return Err(ctx.err(ErrorCode::BadResponse, what));
+    }
+    let n = n.to::<usize>();
+    let mut g = N_COINS.lock().unwrap_or_else(|e| e.into_inner());
+    g.get_or_insert_with(HashMap::new).insert(pool, n);
+    Ok(n)
+}
+
 /// Состояние пула на блоке. Принимает: окружение, адрес пула, пару (token0, token1), блок-тег. Ошибки: узел, ответ не
 /// по ABI, N_COINS вне 2..=8, нет монеты пары среди монет пула.
 pub async fn load(
@@ -34,11 +63,7 @@ pub async fn load(
     tag: &str,
 ) -> GatewayResult<PoolState> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Curve NG {pool}: {what}"));
-    let n = call::view(ctx, pool, &P::N_COINSCall {}, tag).await?;
-    if n < U256::from(2u8) || n > U256::from(NG_MAX_COINS) {
-        return Err(bad(format!("N_COINS = {n} вне 2..={NG_MAX_COINS}")));
-    }
-    let n = n.to::<usize>();
+    let n = n_coins(ctx, pool, tag).await?;
     let mut calls: Vec<Bytes> = vec![
         P::A_preciseCall {}.abi_encode().into(),
         P::feeCall {}.abi_encode().into(),

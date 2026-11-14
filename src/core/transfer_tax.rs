@@ -3,15 +3,17 @@
 //! DEX-площадки по адресу контракта (market.coin_check, TokenTaxes.transfer_pct; несколько DEX — наибольший).
 //! Неизвестен: получатель — DEX — ошибка (проверка там обязательна, монета без неё в чёрном списке); биржа ↔ биржа —
 //! по настройке cex_cex.untaxed_ok («да» — 0, «нет» или не задана — направления нет). Нативная монета — 0.
+//! Решение 277: налог перевода котируемой монеты (USDT) — тоже замер: проверка налогов служебной монеты DEX
+//! (venues/bsc_dex/check/service_tax.rs) шлёт ядру CoinCheck USDT; is_quote — такая проверка (её нет в справочнике монет).
 //! Кто вызывает: core/dirctx.rs (налог вывода с A в расчёте), credit_expect.rs (ожидаемый приход),
-//! rebuild_blacklist.rs (направления биржа ↔ биржа).
+//! rebuild_blacklist.rs (направления биржа ↔ биржа), tick.rs (is_quote).
 //! От чего зависит: market_state.rs (проверки налогов), native.rs, engine.rs, settings.
 //! Настройки: cex_cex.untaxed_ok (вся система, необязательная).
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, CheckState, VenueId};
+use crate::core::types::{Asset, CheckState, CoinCheck, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -40,6 +42,14 @@ pub fn measured(
             },
         )
         .max()
+}
+
+/// Решение 277: проверка налогов котируемой монеты (адрес USDT ядра, core/inner.rs usdt) — нужна только налогу
+/// перевода (measured), не справочнику монет и не экрану «Монеты» (USDT там нет). Принимает: ядро, проверку.
+/// Возвращает: да — это проверка USDT; адрес USDT ядру ещё не известен — нет. Ошибок нет.
+pub fn is_quote(core: &Core, c: &CoinCheck) -> bool {
+    let usdt = rd(&core.inner.usdt).clone().ok();
+    usdt.is_some() && c.asset.bsc_contract == usdt
 }
 
 /// Можно ли биржа ↔ биржа без измеренного налога (cex_cex.untaxed_ok = да). Не задана — нет. Ошибок нет.

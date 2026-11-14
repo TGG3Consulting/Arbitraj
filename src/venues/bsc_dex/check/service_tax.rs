@@ -8,8 +8,11 @@
 //! газ). Промежуточные монеты (решение 52) проверяет цикл налогов монет — они в его списке (pools/market_mids.rs).
 //! Газ перевода меряется на пустой адрес — это верхняя оценка (запись в пустую ячейку баланса дороже, чем в
 //! непустую, как у депозитного адреса биржи): ошибка — в безопасную сторону.
-//! Итог — в checks под тикером USDT (его читает wallet/transfer_cost.rs) и строка в журнал при смене итога. Ядру
-//! USDT как монета не сообщается. Пока налог не измерен ни разу — «не проверено» (возврат USDT отклоняется с причиной);
+//! Итог — в checks под адресом USDT (его читает wallet/transfer_cost.rs) и строка в журнал при смене итога. Решение 277:
+//! итог — и ядру событием CoinCheck (как у монет, check/tax_pass.rs): налог перевода USDT при возврате с биржи на
+//! кошелёк берётся из этого замера (core/transfer_tax.rs measured → credit_expect.rs), а не «не проверен». В справочник
+//! монет ядра USDT не входит (котируемая монета), экрану и пересборке справочника это событие не передаётся (core/tick.rs).
+//! Пока налог не измерен ни разу — «не проверено» (возврат USDT отклоняется с причиной);
 //! сбой перепроверки прошлый измеренный налог не стирает (как check/tax_pass.rs), меняется только причина ожидания.
 //! Нет пула-источника — повтор по «пул готов»; сбой узла, не задана настройка — через tax.retry_s; известен —
 //! перепроверка раз в tax.recheck_interval_s.
@@ -26,6 +29,7 @@ use chrono::Utc;
 
 use crate::core::types::{Asset, CheckState, CoinCheck, TokenTaxes};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::events::MarketEvent;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
@@ -82,7 +86,7 @@ pub async fn run(p: Pools) {
         }
         last_log = msg;
         if !ticker.is_empty() {
-            remember(&p, &ticker, &res);
+            remember(&p, &ticker, &res).await;
         }
         let wait = if res.is_ok() {
             "tax.recheck_interval_s"
@@ -108,9 +112,11 @@ pub async fn run(p: Pools) {
     }
 }
 
-/// Итог в checks под адресом USDT (решение 211; раньше — под тикером). Адреса USDT нет (не задан) — не пишется. Сбой перепроверки (429, таймаут, нет источника) прошлый измеренный налог не
-/// стирает (как check/tax_pass.rs): остаётся Known, меняется только причина ожидания. Ошибок нет.
-fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
+/// Итог в checks под адресом USDT (решение 211; раньше — под тикером) и ядру событием CoinCheck (решение 277). Адреса
+/// USDT нет (не задан) — не пишется. Сбой перепроверки (429, таймаут, нет источника) прошлый измеренный налог не
+/// стирает (как check/tax_pass.rs): остаётся Known, меняется только причина ожидания. Ошибок нет (канал ядра закрыт —
+/// событие не доставлено, подписка и так заканчивается: цикл run выходит по p.out.is_closed()).
+async fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
     let Ok(usdt) = p.tokens.usdt(&p.ctx) else {
         return;
     };
@@ -122,7 +128,7 @@ fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
             _ => (CheckState::NotChecked, None),
         },
     };
-    p.checks.set_coin(CoinCheck {
+    let c = CoinCheck {
         venue: p.ctx.venue(),
         asset: Asset {
             ticker: ticker.to_string(),
@@ -132,7 +138,10 @@ fn remember(p: &Pools, ticker: &str, res: &Result<TokenTaxes, String>) {
         source: SOURCE.into(),
         checked_at,
         wait: res.as_ref().err().cloned(),
-    });
+    };
+    p.checks.set_coin(c.clone());
+    // Решение 277: с ожиданием места в канале, как check/tax_pass.rs — итог не теряется, когда ядро занято.
+    let _ = p.out.send(MarketEvent::CoinCheck(c)).await;
 }
 
 /// Проба переводов USDT. Возвращает: налоги (из пула, в пул, на адрес) и газ перевода — в checks; None — нет

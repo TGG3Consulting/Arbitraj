@@ -5,6 +5,18 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 277 (14.11.2026, ветка t110/credit-usdt-mexc-fee от f28f06f) — сделано, ждёт приёмки.** Налог перевода
+  USDT при возврате биржа → кошелёк DEX — из замера пробы переводов (check/service_tax.rs → CoinCheck ядру), ожидание
+  зачисления регистрируется, ложного Warn core.balance_external нет. **Открыто:**
+  1. MEXC: Warn core.usdt_return «газ возврата не пересчитан в USDT (нет живой цены USDT-BSC …)» — НЕ исправлено.
+     Комиссия вывода MEXC берётся из поля `coin` записи withdraw/history (venues/mexc/transfers.rs transfer). Официальная
+     документация (Withdraw History (supporting network)) в примере даёт `"coin": "EOS", "network": "EOS"` — суффикса
+     сети нет, правила «МОНЕТА-СЕТЬ» нет; записанных ответов withdraw/history MEXC в tests/data нет. Что «USDT-BSC»
+     пришло из `coin`, следует из кода (другого источника тикера у этой затраты нет), но сырого ответа нет. Нужны
+     сырые ответы MEXC с сервера (zstd): GET /api/v3/capital/withdraw/history по этим 6 выводам (все поля записи:
+     coin, network, transactionFee) и GET /api/v3/capital/config/getall по USDT (coin, networkList[].netWork/network/
+     name) — по ним решить, как приводить тикер комиссии к тикеру монеты. На итог сделки не влияет (комиссия учтена
+     как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
 - **Решение 270 (14.11.2026, ветка t103/fst-wrapper от b517985) — сделано, ждёт приёмки.** Обёртка нативной монеты —
   только dex.native_wrapped; чужой WETH() роутера V2 (fstswap: 0x0EFb5fD2402A0967b92551d6AF54de148504A115) не «BNB».
   **Открыто:**

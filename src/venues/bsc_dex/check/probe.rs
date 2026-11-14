@@ -21,7 +21,7 @@
 //! (check/probe_buy.rs), а не весь баланс: на кошельке сделки могут лежать её монеты.
 //! Кто вызывает: check/taxes.rs.
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_buy.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
-//! quote/quoter_calls.rs, wallet/approve.rs, pools/registry.rs.
+//! quote/v2_pair_probe.rs (квотер DEX или, у V2-форка без роутера, резервы пары — решение 280), wallet/approve.rs, pools/registry.rs.
 //! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s).
 //!
 //! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Квотер DEX выдаёт выход БЕЗ налога
@@ -44,7 +44,7 @@ use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
-use super::super::quote::quoter_calls;
+use super::super::quote::v2_pair_probe;
 use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
 use super::probe_buy;
@@ -113,7 +113,7 @@ pub async fn run(
         now,
     )
     .await?;
-    let (qto, qdata) = quoter_calls::request(ctx, e, usdt, usdt_amount)?;
+    let (qto, qdata) = v2_pair_probe::request_any(ctx, e, usdt, usdt_amount)?;
     let mut list = vec![pc::transfer(source, usdt, wallet, usdt_amount)];
     list.extend(buy_aps.iter().map(|(to, d)| Call {
         from: wallet,
@@ -132,13 +132,17 @@ pub async fn run(
     let first = simulate::run(ctx, &list, at).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
+        // Решение 280: V2-форк без роутера — откат покупки через исполнитель — свойство пула, не монеты.
+        if let Some(why) = v2_pair_probe::buy_unmeasured(e, i, q, r) {
+            return Err(ctx.err(ErrorCode::SwapReverted, why));
+        }
         return pc::buy_revert(ctx, i, r, q).map(Err);
     }
     // Кто меняет (решение 59): обмен должен сделать сам этот пул — иначе пул исключён, проверка «не проверено».
     // Через исполнитель (tradable = false) — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
     probe_exec::emitter(ctx, e, &first[x].logs).await?;
     let (Some(buy_expected), Some(bought)) = (
-        quoter_calls::decode(e, &first[q].return_data),
+        v2_pair_probe::decode_any(ctx, e, &first[q].return_data, usdt, usdt_amount),
         probe_buy::bought(&first[h.before], &first[h.after]),
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
@@ -165,7 +169,7 @@ pub async fn run(
     // Настоящая продажа (Universal Router, исполнитель, роутер форка) идёт без перевода монеты перед ней в том же блоке;
     // у монеты с отражением (reflection, форк SafeMoon) перевод перед продажей поднял бы balanceOf пары выше резерва, и
     // пара V2 (вход = balanceOf − резерв) засчитала бы продаже лишний вход — налог продажи пробы занижен.
-    let (sq_to, sq_data) = quoter_calls::request(ctx, e, coin, rest)?;
+    let (sq_to, sq_data) = v2_pair_probe::request_any(ctx, e, coin, rest)?;
     let base = list.len();
     let t = pc::sell_tail(
         &mut list,
@@ -208,7 +212,7 @@ pub async fn run(
     Ok(Ok(Measured {
         buy_expected,
         buy_got: bought,
-        sell: pc::sell_result(e, &all[t.quote..t.quote + 4], sold),
+        sell: pc::sell_result(ctx, e, &all[t.quote..t.quote + 4], (sold, rest)),
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),

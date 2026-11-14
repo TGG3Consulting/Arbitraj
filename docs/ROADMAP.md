@@ -26,6 +26,10 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 280 (t112): src/venues/bsc_dex/pools/families.rs 499 строк (было 486), check/probe.rs 261 (было 257),
+  check/taxes.rs 224 (было 218) — все были сверх ориентира 200 и до правки; новые файлы quote/v2_pair_{quote,sim,probe}.rs
+  уложены в 200. Ревью 280: exec/bundle.rs 361 (было 349; отказ ноги без своего пути), check/taxes.rs 228 (было 224);
+  quote/v2_pair_{quote,sim,probe,calls}.rs, check/pool_taxes.rs и новые тесты — в пределах 200.
 - Решение 271 (дополнение, t108): src/venues/bsc_dex/exec/bundle.rs 349 строк (было 330), exec/bundle_send.rs 269
   (было 263) — оба были сверх ориентира 200 и до правки; quote/graph_route.rs уложен в 200 (decimals → graph_legs.rs).
 - Решения 274/275 (SheepDex, Curve NG, с доработками по ревью 14.11): файлы сверх ориентира 200 строк, выросшие в

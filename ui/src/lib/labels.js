@@ -51,6 +51,7 @@ const CHOICE = {
   loss_limit: 'порог убытка',
   relay: 'перегон',
   v2_fork: 'форк V2',
+  v2_fork_executor: 'форк V2 без роутера (через исполнитель)',
   v3_fork: 'форк V3 (ABI Uniswap)',
   v3_fork_pancake: 'форк V3 (ABI PancakeSwap)',
   solidly_v1: 'Solidly V1 (THENA V1)',

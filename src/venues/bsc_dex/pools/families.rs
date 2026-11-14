@@ -3,6 +3,7 @@
 //! (id области настроек «DEX»), её вид — настройка dex.kind: PancakeSwap V2 / V3 / Infinity CL / Infinity Bin,
 //! Uniswap V2 / V3 / V4 (их пулы исполняет Universal Router своей фабрики — graphable и tradable, не форк), V2-форк
 //! (Biswap и прочие — graphable, tradable и fork: исполняется СВОИМ роутером бандлом, решения 59, 82, фаза 80.9b),
+//! V2-форк без известного роутера (v2_fork_executor, решение 280: в графе и сигналах, исполнение — шаг V2 исполнителя),
 //! V3-форки (решение 122 F: в графе и сигналах — математика и чтение как у V3 своего ABI; исполнение — через
 //! контракт-исполнитель) или «не поддерживается». Списка DEX в коде нет: виды — перечень модулей
 //! адаптера, а какие DEX каким видом считать и их адреса — вводит Тигран. Подключена ли DEX (classify): вид с путём
@@ -199,6 +200,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "v2_fork" => (PoolKind::V2, Proto::V2, true, true, true),
+        // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
+        // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
+        // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
+        // Сверка расчёта — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs), а не getAmountsOut роутера.
+        "v2_fork_executor" => (PoolKind::V2, Proto::V2, true, false, true),
         // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
         // (Uniswap / PancakeSwap: фабрика getPool, TickLens, QuoterV2 — настройки этой DEX). tradable=false: своего
         // пути через Universal Router нет; исполнение — шаг V3 контракта-исполнителя (exec_kind::via_executor).
@@ -369,7 +375,8 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
 
 /// Настройки DEX, без которых её пул нельзя проверить, слушать или исполнить (по виду). Universal Router и Permit2
 /// нужны только для исполнения (tradable): у форка (tradable=false) их нет — ему достаточно фабрики, роутера и
-/// источника комиссии, чтобы проверить пул, слушать и сверить с его собственным роутером (getAmountsOut). Ошибок нет.
+/// источника комиссии, чтобы проверить пул, слушать и сверить с его собственным роутером (getAmountsOut). V2-форку без
+/// роутера (v2_fork_executor, решение 280) роутер не нужен: сверка — обмен через исполнитель в симуляции. Ошибок нет.
 pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     let mut list = Vec::new();
     // Universal Router и Permit2 — только у НЕ-форка (поддержанного DEX): форк исполняется своим роутером (dex.router)
@@ -383,7 +390,13 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
     }
     match f.proto {
         Proto::V2 => {
-            list.extend(["dex.factory", "dex.router"]);
+            list.push("dex.factory");
+            // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
+            // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
+            // через контракт-исполнитель (quote/v2_pair_quote.rs).
+            if f.tradable {
+                list.push("dex.router");
+            }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {
                 Ok("pool") => list.extend(["dex.v2_fee_method", "dex.v2_fee_denominator"]),
                 Ok(_) => list.push("dex.v2_fee_pct"),

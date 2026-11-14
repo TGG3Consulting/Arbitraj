@@ -27,7 +27,7 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::{rate, select};
+use super::super::quote::{rate, select, v2_pair_quote};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
 use super::pool_taxes;
@@ -139,6 +139,9 @@ async fn run(
     // misses — почему не измерен налог продажи (откатилась ли продажа, причина).
     let (mut measured, mut zero, mut misses) = (Vec::new(), false, Vec::new());
     let (mut failed, mut config) = (Vec::new(), Vec::new());
+    // Решение 280 (ревью): пулы вида без роутера, где пара отклонила пробную покупку, — «налоги пула не измерены»: это
+    // свойство пула, не помеха окружения (pool_taxes::outcome их помехой не считает).
+    let mut unmeasured = Vec::new();
     for e in &pools {
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
@@ -206,6 +209,12 @@ async fn run(
             Err(err) if err.code == ErrorCode::NotConfigured => {
                 config.push((err.message, err.setting))
             }
+            // Решение 280: V2-форк без роутера — пара отклонила покупку через исполнитель: налоги ПУЛА не измерены (пул
+            // в маршрут не идёт, решение 146); монета ни «не прошла», ни помеха — вердикт по остальным пулам.
+            Err(err) if err.code == ErrorCode::SwapReverted && v2_pair_quote::on(e) => {
+                checks.update_pool(&e.pool.reference, |f| f.taxes = None);
+                unmeasured.push(err.message)
+            }
             Err(err) => env.push(format!("{}: {}", e.family.title, err.message)),
         }
     }
@@ -214,5 +223,6 @@ async fn run(
         zero,
         &misses,
         (failed, env, config),
+        &unmeasured,
     ))
 }

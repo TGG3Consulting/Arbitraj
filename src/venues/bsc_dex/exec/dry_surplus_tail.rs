@@ -6,7 +6,9 @@
 //! состояние не меняет, поэтому базовый блок = их состояние в момент обмена симуляции. Квотер исполняет настоящий код
 //! пула и откатывается (или view) — состояние не меняется, оба вызова в одной симуляции независимы.
 //! Кто вызывает: exec/dry_surplus_cut.rs.
-//! От чего зависит: check/simulate.rs (run_with, Override), quote/{quoter_calls, virtual_quoter}.rs, exec/chain.rs (Step).
+//! От чего зависит: check/simulate.rs (run_with, Override), quote/{v2_pair_probe, virtual_quoter}.rs, exec/chain.rs (Step).
+//! Решение 280: шаг V2-форка без роутера — getReserves пары + формула V2 с dex.v2_fee_pct (комиссию проверяет сам обмен
+//! исполнителем в этой же сухой сделке).
 //! Настройки: через вызываемые — dex.router / dex.quoter [DEX], dex.quoter_virtual [DEX].
 
 use alloy_primitives::{Address, U256};
@@ -16,7 +18,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::check::simulate::{self, Base, Call, Override};
 use super::super::ctx::Ctx;
-use super::super::quote::{quoter_calls, virtual_quoter};
+use super::super::quote::{v2_pair_probe, virtual_quoter};
 use super::chain::Step;
 
 /// Выход хвоста доли (шаги по порядку) на две суммы входа — квотер каждого шага в eth_simulateV1 на базовом блоке
@@ -44,7 +46,7 @@ pub async fn tail(
                     virtual_quoter::data(pool, zero, v),
                 )
             } else {
-                quoter_calls::request(ctx, e, s.order.token_in, v)?
+                v2_pair_probe::request_any(ctx, e, s.order.token_in, v)?
             };
             calls.push(Call {
                 from: Address::ZERO,
@@ -75,7 +77,7 @@ pub async fn tail(
                     None => None,
                 }
             } else {
-                quoter_calls::decode(e, &c.return_data)
+                v2_pair_probe::decode_any(ctx, e, &c.return_data, s.order.token_in, a[k])
             };
             a[k] = got.ok_or_else(|| {
                 ctx.err(

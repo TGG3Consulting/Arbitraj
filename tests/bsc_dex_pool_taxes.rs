@@ -111,25 +111,25 @@ fn outcome_when_no_pool_measured_sell() {
     let reverted = [(true, "V2: пробная продажа откатилась".to_string())];
     let none = || (Vec::new(), Vec::new(), Vec::new());
     assert!(matches!(
-        pool_taxes::outcome(&only_buy, false, &reverted, none()),
+        pool_taxes::outcome(&only_buy, false, &reverted, none(), &[]),
         Outcome::Failed(w) if w.contains("налог продажи не измерен")
     ));
     // Помеха на другом пуле — вердикта нет.
     let env = (Vec::new(), vec!["V3: узел 429".to_string()], Vec::new());
     assert!(matches!(
-        pool_taxes::outcome(&only_buy, false, &reverted, env),
+        pool_taxes::outcome(&only_buy, false, &reverted, env, &[]),
         Outcome::Wait(_)
     ));
     // Квотер продажи не ответил — помеха, не вердикт.
     let no_quote = [(false, "V2: квотер продажи не ответил".to_string())];
     assert!(matches!(
-        pool_taxes::outcome(&only_buy, false, &no_quote, none()),
+        pool_taxes::outcome(&only_buy, false, &no_quote, none(), &[]),
         Outcome::Wait(_)
     ));
     // Продажа измерена хоть в одном пуле — налоги известны.
     let both = [pool("0", None, "0"), pool("0.3", Some("0.3"), "0")];
     assert!(matches!(
-        pool_taxes::outcome(&both, false, &reverted, none()),
+        pool_taxes::outcome(&both, false, &reverted, none(), &[]),
         Outcome::Known(t) if t.sell_pct == d("0.3")
     ));
 }

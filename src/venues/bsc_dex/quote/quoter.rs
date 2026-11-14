@@ -14,6 +14,7 @@
 //! (перед сделкой), quote/mixed_quoter.rs (less_hook, diff_pct), quote/quoter_extra.rs (judge).
 //! От чего зависит: node/rpc.rs, quote/quoter_calls.rs, quote/virtual_quoter.rs, pools/registry.rs.
 //! Решение 186: dex.quoter_virtual [DEX] = да — квотер DEX не нужен, выход считает код самого пула (virtual_quoter.rs).
+//! Решение 280: V2-форк без роутера (v2_fork_executor) — обмен через код исполнителя в eth_simulateV1 (v2_pair_quote.rs).
 //! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула], dex.quoter_virtual [DEX], dex.quoter_max_diff_pct [bsc_dex].
 //!
 //! Источники: шапка node/abi_dex.rs; «When to use quoter: сверка локального расчёта, финальная проверка» —
@@ -51,6 +52,10 @@ pub async fn out_at(
     // Решение 186: DEX без своего квотера — выход по коду самого пула (quote/virtual_quoter.rs).
     if super::virtual_quoter::on(ctx, e.family.id, e.family.proto) {
         return super::virtual_quoter::out_at(ctx, e, token_in, amount, block).await;
+    }
+    // Решение 280: V2-форк без роутера — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs).
+    if super::v2_pair_quote::on(e) {
+        return super::v2_pair_quote::out_at(ctx, e, token_in, amount, block).await;
     }
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let raw: Bytes =

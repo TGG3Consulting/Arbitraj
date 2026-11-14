@@ -71,10 +71,10 @@ impl ExecKind {
 /// решение 122 F, 3) шаг WOO пока НЕ получает: своей котировки нет (развёрнутый код закрыт), шаг включается только
 /// после сухой сделки на живом пуле (сверка подписи swap развёрнутой реализации, селектор 0x7dc20382 в байткоде).
 /// PancakeSwap / Lista StableSwap (exchange с индексами uint256) — STABLE_U256, Saddle / Nerve (swap(uint8, uint8, …,
-/// deadline)) — SADDLE (решение 122 X, стейблсвапы). Ошибок нет.
+/// deadline)) — SADDLE (решение 122 X, стейблсвапы). V2-форк без роутера (v2_fork_executor, решение 280) — V2. Ошибок нет.
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" | "v2_fork" => ExecKind::V2,
+        "pancakeswap_v2" | "uniswap_v2" | "v2_fork" | "v2_fork_executor" => ExecKind::V2,
         "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream" => {
             ExecKind::V3
         }

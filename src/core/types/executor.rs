@@ -32,8 +32,11 @@ pub struct ExecutorDeployQuote {
     /// SHA-256 кода создания (contracts/out/ArbExecutor.bin) — подтверждение отправляет его обратно.
     pub bytecode_sha256: String,
     pub solc: String,
-    /// Байт кода создания.
+    /// Байт данных транзакции создания (код создания + аргумент конструктора — адрес обёртки, ревью 272 А1).
     pub bytecode_len: usize,
+    /// Ревью 272 (А1): адрес обёртки нативной монеты (dex.native_wrapped), который уйдёт аргументом конструктора и
+    /// навсегда запишется в исполнитель (сеттера нет) — показывается в окне подтверждения.
+    pub wnative: Address,
     pub note: Option<String>,
 }
 

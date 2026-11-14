@@ -42,6 +42,17 @@
   блок 273 (п. 1–7): исходник пула magicfox; канал с минимумом газа выше maxGasPrice usdfi; событие паузы не слушается;
   живой сделки нет; плановая и фактическая цена газа расходятся только во времени; граф строится без учёта паузы/предела
   (dex.route_max_pools_per_edge); пути вне выбора котировки и поиска циклов — без отбора по plan_gas.
+- Решение 272: contracts/ArbExecutor.sol — 420 строк (было 319, уже сверх ориентира 200): executeNative (нативный BNB
+  монетой сделки) добавлен в тот же контракт — развёртывание одним файлом; дробить на библиотеки — отдельное решение
+  (меняет байткод и развёртывание). Сверх ориентира после решения: exec/executor/trade.rs 246 (было 221),
+  exec/dry_sim.rs 212 (было 208), call.rs 203 (было 149), native_probe.rs 206 (было 197), dry_swap.rs 205 (было 201), dry_build.rs
+  202 (было 196); tests/bsc_dex_executor_v2.rs 300. Также (ревью 272): quote/graph_route.rs 229 (было 219 до решения),
+  storage/db.rs 230 (было 226).
+- Ревью 272: contracts/ArbExecutor.sol 448 (было 420); exec/executor/onchain.rs 209 (было 156; обёртка из слота, память
+  с восстановлением записи), code.rs 204 (было 182; слот wnative, код с аргументом конструктора), trade.rs 254 (было
+  246), check/native_probe.rs 222 (было 206), venue.rs 574 (было 537 — и так сверх); tests/bsc_dex_executor_v2.rs 326,
+  tests/bsc_dex_executor_v2_review.rs 515 (один бинарник теста — сборка одним линковщиком, памяти мало);
+  contracts/evmtest/review.mjs 201.
 - Решение 268: src/core/sell.rs 335 строк (было 314), src/core/trade_ops.rs 456 (было 435), src/core/sell_range_run.rs 328,
   src/core/sell_range.rs 202, src/core/deal.rs 249 (было 199), src/core/rules_apply.rs 236 (было 217) — sell.rs,
   trade_ops.rs и rules_apply.rs были сверх ориентира 200 и до решения. У 14 адаптеров trade (trade.rs) принимает

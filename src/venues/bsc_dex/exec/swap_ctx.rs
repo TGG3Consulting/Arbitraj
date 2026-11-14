@@ -48,6 +48,9 @@ pub struct SwapCtx {
     /// Адрес своего исполнителя (его возврат остатка входа — executor/fact.rs); None — не исполнитель.
     #[serde(default)]
     pub executor: Option<Address>,
+    /// Ревью 272 (Б4): вызов исполнителя — executeNative (монета сделки — нативный BNB, факт по NativeSettled).
+    #[serde(default)]
+    pub executor_native: bool,
     /// Пометка исполнения («— продажа по квотеру», решение 177).
     #[serde(default)]
     pub note: Option<String>,

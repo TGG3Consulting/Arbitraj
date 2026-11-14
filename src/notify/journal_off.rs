@@ -100,6 +100,7 @@ pub static OWN_RECORD: &[&str] = &[
     "wallet.added",              // wallets.changed (settings/accounts — добавление и перенос)
     "wallet.mapping_changed",    // wallets.changed (settings/accounts/edit_map.rs)
     "wallet.executor_deployed",  // wallets.changed (settings/accounts/edit.rs set_executor)
+    "wallet.executor_v1",        // dex.executor (bsc_dex/exec/executor/v1_notice.rs)
     "system.started",            // system.started (main.rs), core.control (commands.rs)
     "system.stopped",            // core.control (commands.rs)
     "system.secrets_unlocked",   // secrets «Секреты разблокированы» (api/secrets.rs)

@@ -21,6 +21,7 @@ pub mod onchain;
 pub mod remeasure;
 pub mod sim;
 pub mod trade;
+pub mod v1_notice;
 
 use alloy_primitives::Address;
 
@@ -38,13 +39,81 @@ pub fn address(ctx: &Ctx) -> GatewayResult<Option<Address>> {
     ctx.executor()
 }
 
+/// Решение 272: идёт ли нативный BNB монетой сделки через исполнитель кошелька окружения — native_block пуст. Ошибок нет.
+pub fn native_capable(ctx: &Ctx) -> bool {
+    native_block(ctx).is_none()
+}
+
+/// Решение 272 (+ ревью А1): почему нативный BNB монетой сделки НЕ идёт через исполнитель кошелька окружения. None —
+/// идёт: исполнитель задан, сверен как v2 (onchain.rs → запись кошелька) и обёртка, записанная в его конструкторе
+/// (слот wnative, прочитан при сверке), равна dex.native_wrapped. Иначе — точная причина (v1 / не сверен / обёртка не
+/// та / настройка не задана); поведение — как до решения 272 (ERC-20 путь не затронут). Ошибок нет.
+pub fn native_block(ctx: &Ctx) -> Option<String> {
+    let w = match ctx.wallet() {
+        Ok(w) => w,
+        Err(e) => return Some(e.message),
+    };
+    let Some(x) = w.executor.as_deref() else {
+        return Some(format!("у кошелька «{}» не развёрнут исполнитель", w.name));
+    };
+    match w.executor_version.as_deref().and_then(code::Version::parse) {
+        Some(code::Version::V2) => {}
+        Some(code::Version::V1) => {
+            return Some(format!(
+                "у кошелька «{}» исполнитель {x} версии v1 (executeNative нет) — переразверните исполнитель",
+                w.name
+            ));
+        }
+        None => {
+            return Some(format!(
+                "исполнитель {x} кошелька «{}» не сверен — нажмите «Проверить подключение» исполнителя",
+                w.name
+            ));
+        }
+    }
+    let Ok(want) = ctx.addr("dex.native_wrapped") else {
+        return Some(
+            "не задана dex.native_wrapped — нативный BNB через исполнитель не идёт".into(),
+        );
+    };
+    match w.executor_wrapped.as_deref().map(str::parse::<Address>) {
+        Some(Ok(have)) if have == want => None,
+        Some(Ok(have)) => Some(format!(
+            "обёртка в исполнителе {x} кошелька «{}» — {have:#x}, а dex.native_wrapped — {want:#x}: нативный BNB через \
+             этот исполнитель не идёт (переразверните исполнитель при верной dex.native_wrapped)",
+            w.name
+        )),
+        _ => Some(format!(
+            "обёртка исполнителя {x} кошелька «{}» не прочитана — нажмите «Проверить подключение» исполнителя",
+            w.name
+        )),
+    }
+}
+
+/// Недостающие разрешения ERC-20 исполнителю для вызова (wallet/approve_executor.rs). Решение 272: продажа нативного
+/// BNB (value вызова > 0) платит BNB транзакции — разрешений нет. Принимает: вызов, кошелёк, исполнитель.
+/// Возвращает: список разрешений. Ошибки: как approve_executor::missing.
+pub async fn approvals(
+    ctx: &Ctx,
+    c: &call::ExecCall,
+    wallet: Address,
+    executor: Address,
+) -> GatewayResult<Vec<super::super::wallet::approve::Approval>> {
+    if !c.value().is_zero() {
+        return Ok(Vec::new());
+    }
+    super::super::wallet::approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
+        .await
+}
+
 /// Пойдёт ли маршрут через исполнитель: графовый маршрут формы «бандл» (не один Universal Router, не прямой) при
-/// заданном exec.executor_address, монета не нативная и каждый шаг — вид исполнителя (pools/exec_kind.rs::via_executor
+/// заданном exec.executor_address, монета не нативная (решение 272: или нативная при исполнителе v2 — native_capable)
+/// и каждый шаг — вид исполнителя (pools/exec_kind.rs::via_executor
 /// и entry.rs::supported, та же
 /// проверка, что исполнимость графа quote/graph_exec.rs); иначе — бандл, как раньше. Принимает: маршрут, нативная ли
 /// монета. Возвращает: адрес исполнителя или None. Ошибки: как у address.
 pub fn takes(ctx: &Ctx, route: &DexRoute, native: bool) -> GatewayResult<Option<Address>> {
-    if native
+    if (native && !native_capable(ctx))
         || route.mode != RouteMode::Graph
         || graph_route::graph_form(ctx, route) != GraphForm::Bundle
     {

@@ -149,10 +149,23 @@ pub async fn set_executor(
         let v = dex_for(&st, &id).await?;
         let c = v.check_executor().await.map_err(ApiError::gateway)?;
         if !c.ok {
-            // Проверка не прошла — прежний адрес обратно.
+            // Проверка не прошла — прежний адрес обратно. Ревью 272 (Б2): и прежняя сверенная версия с обёрткой — смена
+            // адреса их сбросила, а память сверки (onchain.rs) осталась при старом адресе: без восстановления нативный
+            // BNB через исполнитель молча выключился бы до перезапуска.
             let _ = a
-                .set_executor(&id, before.executor, "интерфейс (откат)")
+                .set_executor(&id, before.executor.clone(), "интерфейс (откат)")
                 .await;
+            if let Some(old) = before.executor.as_deref() {
+                let _ = a
+                    .set_executor_version(
+                        &id,
+                        old,
+                        before.executor_version.clone(),
+                        before.executor_wrapped.clone(),
+                        "интерфейс (откат)",
+                    )
+                    .await;
+            }
             return Err(ApiError::bad(format!(
                 "Исполнитель не записан: {}",
                 c.details

@@ -7,6 +7,8 @@
 //! входов долей; минимум сделки — сумма минимумов долей (контракт проверяет то, что реально получил кошелёк).
 //! Кто вызывает: exec/executor/{trade, dry}.rs.
 //! От чего зависит: exec/executor/{abi, kind, entry}.rs, exec/chain.rs (Step), ctx.rs.
+//! Решение 272: нативный BNB монетой сделки (исполнитель v2) — тот же вызов в режиме executeNative (with_native):
+//! продажа — wrapIn (value = вход), покупка — разворачивание выхода; шаги и минимум — те же.
 //! Настройки: dex.deadline_s [bsc_dex] (срок транзакции, как у Universal Router).
 
 use alloy::sol_types::SolCall;
@@ -31,11 +33,62 @@ pub struct ExecCall {
     pub min_out: U256,
     pub deadline: U256,
     pub steps: Vec<ArbExecutor::Step>,
+    /// Решение 272: Some((обёртка, wrapIn)) — вызов executeNative исполнителя v2 (монета сделки — нативный BNB);
+    /// None — execute, как раньше. Обёртка (dex.native_wrapped) в данные не идёт (ревью 272 А1: у контракта она из
+    /// конструктора) — по ней with_native сверяет край маршрута.
+    pub native: Option<(Address, bool)>,
 }
 
 impl ExecCall {
-    /// Данные транзакции: execute(tokenIn, amountIn, tokenOut, minOut, deadline, steps). Ошибок нет.
+    /// Режим нативного BNB (решение 272): продажа (wrap_in = true) — вход маршрута должен быть обёрткой, value = вход;
+    /// покупка — выход маршрута должен быть обёрткой. Принимает: окружение, обёртку (dex.native_wrapped), wrap_in.
+    /// Возвращает: тот же вызов в режиме executeNative. Ошибки: NoRoute — край маршрута не обёртка.
+    pub fn with_native(
+        mut self,
+        ctx: &Ctx,
+        wnative: Address,
+        wrap_in: bool,
+    ) -> GatewayResult<ExecCall> {
+        let edge = if wrap_in {
+            self.token_in
+        } else {
+            self.token_out
+        };
+        if edge != wnative {
+            let why = format!(
+                "исполнитель: нативный BNB — край маршрута {edge:#x} не обёртка dex.native_wrapped {wnative:#x}"
+            );
+            return Err(ctx.err(ErrorCode::NoRoute, why));
+        }
+        self.native = Some((wnative, wrap_in));
+        Ok(self)
+    }
+
+    /// BNB транзакции (wei): продажа нативного BNB — вход маршрута; иначе 0. Ошибок нет.
+    pub fn value(&self) -> U256 {
+        match self.native {
+            Some((_, true)) => self.amount_in,
+            _ => U256::ZERO,
+        }
+    }
+
+    /// Данные транзакции: execute(tokenIn, amountIn, tokenOut, minOut, deadline, steps) или (решение 272, ревью А1)
+    /// executeNative(wrapIn, tokenIn, amountIn, tokenOut, minOut, deadline, steps). Ошибок нет.
     pub fn data(&self) -> Bytes {
+        if let Some((_, wrap_in)) = self.native {
+            return Bytes::from(
+                ArbExecutor::executeNativeCall {
+                    wrapIn: wrap_in,
+                    tokenIn: self.token_in,
+                    amountIn: self.amount_in,
+                    tokenOut: self.token_out,
+                    minOut: self.min_out,
+                    deadline: self.deadline,
+                    steps: self.steps.clone(),
+                }
+                .abi_encode(),
+            );
+        }
         Bytes::from(
             ArbExecutor::executeCall {
                 tokenIn: self.token_in,
@@ -129,6 +182,7 @@ pub fn build(
         min_out,
         deadline: U256::from(now + ctx.int("dex.deadline_s")?),
         steps,
+        native: None,
     })
 }
 

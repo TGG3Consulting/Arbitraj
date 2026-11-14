@@ -127,12 +127,18 @@ pub async fn build(
     let takes = shape == RouteMode::Graph && executor::takes(ctx, route, is_native)?.is_some();
     let via_exec = mode == DryMode::Executor || takes;
     if via_exec {
-        if is_native {
+        // Решение 272: нативный BNB — executeNative: в режиме «через исполнитель» (код v2 подставлен) или у
+        // развёрнутого исполнителя v2; у v1 — как раньше, отказ.
+        if is_native && mode != DryMode::Executor && !executor::native_capable(ctx) {
             let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";
             return Err(ctx.err(ErrorCode::NoRoute, why));
         }
+        let nat = match native::wrapped(ctx) {
+            Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),
+            _ => None,
+        };
         let (at, now) = q.heads.at(ctx).await?;
-        let x = executor::dry::build(ctx, &legs, wallet, now, (mode, deployed)).await?;
+        let x = executor::dry::build(ctx, &legs, wallet, now, (mode, deployed), nat).await?;
         let form = format!("{form} → {}", x.form);
         let built = Built::Exec(x);
         return Ok(Ready {

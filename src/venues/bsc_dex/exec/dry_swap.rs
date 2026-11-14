@@ -112,11 +112,15 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
     r.min_out = dec(min_units, out_dec);
     let io = io(&ready, r.side, is_native, (coin, usdt_t));
     // Продажа BNB (решение 62): BNB уходит value транзакции — в симуляции он не пополняется.
-    if let Built::One(p) = &ready.built
-        && !p.value().is_zero()
-    {
+    // Решение 272: и у вызова исполнителя executeNative (value = вход продажи).
+    let value = match &ready.built {
+        Built::One(p) => p.value(),
+        Built::Exec(x) => x.call.value(),
+        _ => U256::ZERO,
+    };
+    if !value.is_zero() {
         let have = balances::bnb(ctx, wallet).await?;
-        let need = dec(p.value(), num::BNB_DECIMALS).unwrap_or_default();
+        let need = dec(value, num::BNB_DECIMALS).unwrap_or_default();
         if have < need {
             let why = format!(
                 "продажа BNB: у кошелька {have} BNB, нужно {need} — BNB в симуляции не пополняется, проверьте на сумме не больше баланса"

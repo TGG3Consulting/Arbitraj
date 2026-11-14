@@ -5,7 +5,9 @@
     строки маппинга, незавершённые сделки, BNB и USDT (GET /api/wallets/{id}/balances), «Проверить подключение»
     (POST /api/check/wallet/{id}), исполнитель ArbExecutor: адрес или «не развёрнут», «Развернуть исполнитель»
     (components/ExecutorDeploy.svelte), записать адрес уже развёрнутого (PUT /api/wallets/{id}/executor — только после
-    проверки «код совпал, владелец — этот кошелёк»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
+    проверки «код совпал, владелец — этот кошелёк»), версия исполнителя (решение 272: «v2» / «v1 — нативный BNB через
+    форки не торгуется, переразверните» / «не сверена» — по коду в сети, поле executor_version; ревью 272 А1: у v2 —
+    обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
   Кто вызывает: components/WalletList.svelte.
   От чего зависит: lib/api.js, components/{CheckConnection,ExecutorDeploy,CopyAddr,ErrorText}.svelte.
@@ -21,6 +23,9 @@
 
   /** w — кошелёк из GET /api/wallets; dex — id площадки DEX; unlocked — секреты разблокированы; onchange. */
   let { w, dex, unlocked, onchange } = $props();
+  // Ревью 272 (А1): нативный BNB через исполнитель — v2 и обёртка в нём = dex.native_wrapped (как бот, native_block).
+  let nativeOk = $derived(w.executor_version === 'v2' && !!w.executor_wrapped && !!w.native_wrapped
+    && w.executor_wrapped.toLowerCase() === w.native_wrapped.toLowerCase());
 
   let bal = $state(null);
   let error = $state('');
@@ -88,6 +93,11 @@
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>
+  {#if w.executor}
+    <!-- Решение 272: версия по коду в сети (сверка — «Проверить подключение» исполнителя, сделка, развёртывание). -->
+    <!-- Ревью 272 (А1): у v2 — обёртка из конструктора; ≠ dex.native_wrapped — BNB через исполнитель не идёт. -->
+    <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}v2 — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){:else if w.executor_version === 'v2'}v2, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
+  {/if}
   {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя (0x…)" />

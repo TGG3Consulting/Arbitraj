@@ -1,0 +1,17 @@
+{
+  "name": "arb-contracts-evmtest",
+  "private": true,
+  "version": "0.1.0",
+  "description": "EVM-тест ArbExecutor (решение 272): реальные PancakePair/Factory, WETH9 v2-periphery, EVM ethereumjs",
+  "type": "module",
+  "devDependencies": {
+    "@ethereumjs/common": "4.4.0",
+    "@ethereumjs/evm": "3.1.1",
+    "@ethereumjs/statemanager": "2.4.0",
+    "@ethereumjs/util": "9.1.0",
+    "ethers": "6.13.4",
+    "solc": "0.8.37",
+    "solc-0.5.16": "npm:solc@0.5.16",
+    "solc-0.6.6": "npm:solc@0.6.6"
+  }
+}

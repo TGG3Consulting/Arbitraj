@@ -3,6 +3,8 @@
 //! (развёртывание), код в сети (подставляется в симуляцию сухой сделки, сверяется с развёрнутым), слот владельца в
 //! хранилище (из раскладки solc) и проверка хеша: SHA-256 каждого файла должен совпасть с записанным в
 //! ArbExecutor.sha256 — иначе байткод не используется (кто-то поменял артефакт без пересборки).
+//! Решение 272: версии исполнителя — v1 (contracts/out/v1/, только execute; развёрнутые до решения 272) и v2
+//! (contracts/out/, + executeNative). Развёртывается и подставляется в симуляцию только v2; код в сети сверяется с обеими.
 //! Кто вызывает: exec/executor/{deploy, dry}.rs, тесты.
 //! От чего зависит: sha2, serde_json, contracts/out/*.
 //! Настройки: нет.
@@ -31,6 +33,66 @@ const SHA: &str = include_str!(concat!(
     "/contracts/out/ArbExecutor.sha256"
 ));
 
+/// Решение 272: код в сети версии v1 (до executeNative) и его хеши — не пересобираются.
+const RUNTIME_V1: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/contracts/out/v1/ArbExecutor.bin-runtime"
+));
+const SHA_V1: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/contracts/out/v1/ArbExecutor.sha256"
+));
+
+/// Версия исполнителя по коду в сети (решение 272).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Version {
+    /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
+    V1,
+    /// execute + executeNative (contracts/out/): нативный BNB монетой сделки идёт.
+    V2,
+}
+
+impl Version {
+    /// Метка версии для записи кошелька и интерфейса: «v1» / «v2». Ошибок нет.
+    pub fn label(self) -> &'static str {
+        match self {
+            Version::V1 => "v1",
+            Version::V2 => "v2",
+        }
+    }
+
+    /// Версия по метке записи кошелька. None — метки нет (не сверена) или незнакомая. Ошибок нет.
+    pub fn parse(s: &str) -> Option<Version> {
+        match s {
+            "v1" => Some(Version::V1),
+            "v2" => Some(Version::V2),
+            _ => None,
+        }
+    }
+}
+
+/// Версия исполнителя по коду в сети: побайтно равен коду v2 или v1 из репозитория. Принимает: код по адресу.
+/// Возвращает: Some(версия) или None — код не наш. Ошибки (текст): артефакт не сверен по хешу.
+pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
+    if *have == runtime()? {
+        return Ok(Some(Version::V2));
+    }
+    if *have == runtime_v1()? {
+        return Ok(Some(Version::V1));
+    }
+    Ok(None)
+}
+
+/// Код в сети версии v1 (решение 272). Ошибки: как checked (хеш — из contracts/out/v1/ArbExecutor.sha256).
+pub fn runtime_v1() -> Result<Bytes, String> {
+    checked_in(
+        SHA_V1,
+        "v1/ArbExecutor.bin-runtime",
+        "ArbExecutor.bin-runtime",
+        RUNTIME_V1,
+    )
+}
+
 /// Версия компилятора из ArbExecutor.sha256. Ошибок нет (пусто — строки нет).
 pub fn solc() -> &'static str {
     SHA.lines()
@@ -46,7 +108,12 @@ pub fn creation_sha256() -> String {
 
 /// Записанный хеш файла из ArbExecutor.sha256. Ошибок нет (None — строки нет).
 fn recorded(name: &str) -> Option<&'static str> {
-    SHA.lines()
+    recorded_in(SHA, name)
+}
+
+/// Записанный хеш файла из данного файла хешей. Ошибок нет (None — строки нет).
+fn recorded_in(sha: &'static str, name: &str) -> Option<&'static str> {
+    sha.lines()
         .filter_map(|l| l.split_once("  "))
         .find(|(_, n)| *n == name)
         .map(|(h, _)| h)
@@ -54,24 +121,46 @@ fn recorded(name: &str) -> Option<&'static str> {
 
 /// Содержимое файла после сверки хеша и разбор hex. Ошибки (текст): хеш не записан или не совпал, не hex.
 fn checked(name: &str, text: &str) -> Result<Bytes, String> {
+    checked_in(SHA, name, name, text)
+}
+
+/// То же по данному файлу хешей. Принимает: файл хешей, путь для текста (от contracts/out/), имя в файле хешей, текст.
+fn checked_in(sha: &'static str, path: &str, name: &str, text: &str) -> Result<Bytes, String> {
     let have = hex::encode(Sha256::digest(text.as_bytes()));
-    match recorded(name) {
+    match recorded_in(sha, name) {
         Some(want) if want == have => {}
         Some(want) => {
             return Err(format!(
-                "contracts/out/{name}: SHA-256 {have} ≠ записанному {want} — пересоберите contracts/build.sh"
+                "contracts/out/{path}: SHA-256 {have} ≠ записанному {want} — пересоберите contracts/build.sh"
             ));
         }
-        None => return Err(format!("contracts/out/ArbExecutor.sha256: нет хеша {name}")),
+        None => {
+            let file = path
+                .rsplit_once('/')
+                .map_or("ArbExecutor.sha256".to_string(), |(d, _)| {
+                    format!("{d}/ArbExecutor.sha256")
+                });
+            return Err(format!("contracts/out/{file}: нет хеша {name}"));
+        }
     }
     hex::decode(text.trim())
         .map(Bytes::from)
-        .map_err(|e| format!("contracts/out/{name}: не hex ({e})"))
+        .map_err(|e| format!("contracts/out/{path}: не hex ({e})"))
 }
 
-/// Код создания исполнителя (конструктор без аргументов: владелец = развёртывающий кошелёк). Ошибки: как checked.
+/// Код создания исполнителя без аргументов конструктора (его SHA-256 видит человек). Ревью 272 (А1): конструктор v2
+/// принимает адрес обёртки — полный код транзакции создания собирает creation_with. Ошибки: как checked.
 pub fn creation() -> Result<Bytes, String> {
     checked("ArbExecutor.bin", BIN)
+}
+
+/// Код транзакции создания: код создания + аргумент конструктора constructor(address wnative_) в кодировке ABI (слово
+/// 32 байта, адрес справа — Solidity ABI spec, «Formal Specification of the Encoding», address = uint160). Владелец —
+/// развёртывающий кошелёк. Принимает: адрес обёртки (dex.native_wrapped). Ошибки: как checked.
+pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String> {
+    let mut v = creation()?.to_vec();
+    v.extend_from_slice(B256::left_padding_from(wnative.as_slice()).as_slice());
+    Ok(Bytes::from(v))
 }
 
 /// Код исполнителя в сети. Ошибки: как checked.
@@ -82,22 +171,34 @@ pub fn runtime() -> Result<Bytes, String> {
 /// Слот хранилища переменной `owner` (раскладка solc; смещение в слоте должно быть 0). Ошибки (текст): раскладка не
 /// сверена по хешу, не разбирается, нет `owner` или смещение не 0.
 pub fn owner_slot() -> Result<B256, String> {
+    slot_of("owner")
+}
+
+/// Ревью 272 (А1): слот хранилища переменной `wnative` (адрес обёртки из конструктора v2; у v1 её нет). Сухая сделка
+/// подставляет его (dry.rs), сверка читает (onchain.rs). Ошибки (текст): как owner_slot.
+pub fn wnative_slot() -> Result<B256, String> {
+    slot_of("wnative")
+}
+
+/// Слот переменной хранилища по имени (раскладка solc v2, смещение 0). Ошибки (текст): раскладка не сверена по хешу,
+/// не разбирается, нет переменной или смещение не 0.
+fn slot_of(label: &str) -> Result<B256, String> {
     let have = hex::encode(Sha256::digest(LAYOUT.as_bytes()));
     if recorded("ArbExecutor.layout.json") != Some(have.as_str()) {
         return Err("contracts/out/ArbExecutor.layout.json: SHA-256 не совпал с записанным".into());
     }
     let v: serde_json::Value =
         serde_json::from_str(LAYOUT).map_err(|e| format!("раскладка хранилища: {e}"))?;
-    let owner = v["storage"]
+    let var = v["storage"]
         .as_array()
-        .and_then(|a| a.iter().find(|s| s["label"] == "owner"))
-        .ok_or("раскладка хранилища: нет переменной owner")?;
-    if owner["offset"].as_u64() != Some(0) {
-        return Err("раскладка хранилища: owner не с начала слота".into());
+        .and_then(|a| a.iter().find(|s| s["label"] == label))
+        .ok_or_else(|| format!("раскладка хранилища: нет переменной {label}"))?;
+    if var["offset"].as_u64() != Some(0) {
+        return Err(format!("раскладка хранилища: {label} не с начала слота"));
     }
-    let slot: U256 = owner["slot"]
+    let slot: U256 = var["slot"]
         .as_str()
         .and_then(|s| s.parse().ok())
-        .ok_or("раскладка хранилища: слот owner не число")?;
+        .ok_or_else(|| format!("раскладка хранилища: слот {label} не число"))?;
     Ok(B256::from(slot))
 }

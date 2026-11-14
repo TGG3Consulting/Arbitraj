@@ -33,3 +33,4 @@ Thumbs.db
 
 # Служебные данные Claude Code (worktrees, кэш сессий) — не артефакт проекта
 .claude/
+/contracts/evmtest/node_modules/

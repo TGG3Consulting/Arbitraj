@@ -8,7 +8,9 @@
 //! Кто вызывает: venue.rs (контракт dex_executor_quote / dex_executor_deploy), exec/executor/dry.rs (next_nonce).
 //! От чего зависит: exec/executor/code.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
 //! node/rpc.rs, num.rs.
-//! Настройки: через вызываемые — send.*, channel.*, dex.native_wrapped (цена в USDT), venue.quote_asset.
+//! Настройки: dex.native_wrapped — адрес обёртки, аргумент конструктора v2 (ревью 272, А1: пишется в исполнитель один раз,
+//! сеттера нет; не задана — развёртывания нет, NotConfigured), он же — цена в USDT; через вызываемые — send.*, channel.*,
+//! venue.quote_asset.
 //! Уведомление: executor.deployed (журнал и Telegram, если событие включено).
 //!
 //! Адрес контракта CREATE = keccak256(rlp([отправитель, nonce]))[12:] — Ethereum Yellow Paper, раздел 7 (alloy
@@ -38,16 +40,25 @@ pub async fn next_nonce(ctx: &Ctx, wallet: Address) -> GatewayResult<u64> {
     Ok(n.to::<u64>())
 }
 
-/// Код создания после сверки хеша. Ошибки: Internal (артефакт не сверен).
-fn bytecode(ctx: &Ctx) -> GatewayResult<Bytes> {
-    code::creation().map_err(|w| ctx.err(ErrorCode::Internal, w))
+/// Код транзакции создания после сверки хеша: код создания + адрес обёртки (конструктор v2, ревью 272 А1).
+/// Возвращает: (код, адрес обёртки). Ошибки: NotConfigured (dex.native_wrapped не задана), Internal (артефакт не сверен).
+fn bytecode(ctx: &Ctx) -> GatewayResult<(Bytes, Address)> {
+    let w = ctx.addr("dex.native_wrapped").map_err(|_| {
+        ctx.not_set(
+            "dex.native_wrapped",
+            "развёртывание исполнителя: не задана dex.native_wrapped — адрес обёртки WBNB навсегда пишется в исполнитель \
+             при развёртывании (сеттера нет); задайте её («Настройки» → DEX) и запросите оценку заново",
+        )
+    })?;
+    let bin = code::creation_with(w).map_err(|m| ctx.err(ErrorCode::Internal, m))?;
+    Ok((bin, w))
 }
 
 /// Оценка развёртывания — ничего не отправляет. Ошибки: ключ кошелька, каналы, узел (оценка газа откатилась — текст).
 pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote> {
     let ctx = &q.ctx;
     let wallet = signer::address(ctx)?;
-    let bin = bytecode(ctx)?;
+    let (bin, wnative) = bytecode(ctx)?;
     let nonce = next_nonce(ctx, wallet).await?;
     let gas = tx::limit(ctx, wallet, TxKind::Create, &bin, U256::ZERO).await?;
     let ready = send::select(ctx, &env.stats)?;
@@ -82,6 +93,7 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         bytecode_sha256: code::creation_sha256(),
         solc: code::solc().to_string(),
         bytecode_len: bin.len(),
+        wnative,
         note,
     })
 }
@@ -107,7 +119,7 @@ pub async fn deploy(
     confirmed_sha256: &str,
 ) -> GatewayResult<ExecutorDeployed> {
     let ctx = &q.ctx;
-    let bin = bytecode(ctx)?;
+    let (bin, wnative) = bytecode(ctx)?;
     if !confirmed_sha256.eq_ignore_ascii_case(&code::creation_sha256()) {
         let why = "байткод исполнителя не тот, что подтверждён (SHA-256 не совпал) — запросите оценку заново";
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));
@@ -120,8 +132,9 @@ pub async fn deploy(
     let code_ok = d.chain.outcome == TxOutcome::Included && on_chain_ok(ctx, address).await?;
     let text = match (d.chain.outcome, code_ok) {
         (TxOutcome::Included, true) => format!(
-            "Исполнитель развёрнут: {address:#x} (tx {}). Код в сети совпал с репозиторием. Адрес записан у кошелька \
-             (экран «Маппинг кошельков», решение 132) — маршруты через разные DEX идут одной транзакцией",
+            "Исполнитель развёрнут: {address:#x} (tx {}). Код в сети совпал с репозиторием, обёртка в конструкторе \
+             {wnative:#x}. Адрес записан у кошелька (экран «Маппинг кошельков», решение 132) — маршруты через разные DEX \
+             идут одной транзакцией",
             d.chain.hash
         ),
         (TxOutcome::Included, false) => format!(

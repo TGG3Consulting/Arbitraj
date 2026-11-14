@@ -42,8 +42,17 @@ impl ExecCall {
     /// Режим нативного BNB (решение 272): продажа (wrap_in = true) — вход маршрута должен быть обёрткой, value = вход;
     /// покупка — выход маршрута должен быть обёрткой. Принимает: окружение, обёртку (dex.native_wrapped), wrap_in.
     /// Возвращает: тот же вызов в режиме executeNative. Ошибки: NoRoute — край маршрута не обёртка.
-    pub fn with_native(mut self, ctx: &Ctx, wnative: Address, wrap_in: bool) -> GatewayResult<ExecCall> {
-        let edge = if wrap_in { self.token_in } else { self.token_out };
+    pub fn with_native(
+        mut self,
+        ctx: &Ctx,
+        wnative: Address,
+        wrap_in: bool,
+    ) -> GatewayResult<ExecCall> {
+        let edge = if wrap_in {
+            self.token_in
+        } else {
+            self.token_out
+        };
         if edge != wnative {
             let why = format!(
                 "исполнитель: нативный BNB — край маршрута {edge:#x} не обёртка dex.native_wrapped {wnative:#x}"

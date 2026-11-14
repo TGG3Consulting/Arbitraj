@@ -85,7 +85,12 @@ pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
 
 /// Код в сети версии v1 (решение 272). Ошибки: как checked (хеш — из contracts/out/v1/ArbExecutor.sha256).
 pub fn runtime_v1() -> Result<Bytes, String> {
-    checked_in(SHA_V1, "v1/ArbExecutor.bin-runtime", "ArbExecutor.bin-runtime", RUNTIME_V1)
+    checked_in(
+        SHA_V1,
+        "v1/ArbExecutor.bin-runtime",
+        "ArbExecutor.bin-runtime",
+        RUNTIME_V1,
+    )
 }
 
 /// Версия компилятора из ArbExecutor.sha256. Ошибок нет (пусто — строки нет).
@@ -132,7 +137,9 @@ fn checked_in(sha: &'static str, path: &str, name: &str, text: &str) -> Result<B
         None => {
             let file = path
                 .rsplit_once('/')
-                .map_or("ArbExecutor.sha256".to_string(), |(d, _)| format!("{d}/ArbExecutor.sha256"));
+                .map_or("ArbExecutor.sha256".to_string(), |(d, _)| {
+                    format!("{d}/ArbExecutor.sha256")
+                });
             return Err(format!("contracts/out/{file}: нет хеша {name}"));
         }
     }

@@ -44,7 +44,8 @@ pub fn address(ctx: &Ctx) -> GatewayResult<Option<Address>> {
 pub fn native_capable(ctx: &Ctx) -> bool {
     ctx.wallet().is_ok_and(|w| {
         w.executor.is_some()
-            && w.executor_version.as_deref().and_then(code::Version::parse) == Some(code::Version::V2)
+            && w.executor_version.as_deref().and_then(code::Version::parse)
+                == Some(code::Version::V2)
     })
 }
 
@@ -60,7 +61,8 @@ pub async fn approvals(
     if !c.value().is_zero() {
         return Ok(Vec::new());
     }
-    super::super::wallet::approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in).await
+    super::super::wallet::approve_executor::missing(ctx, c.token_in, wallet, executor, c.amount_in)
+        .await
 }
 
 /// Пойдёт ли маршрут через исполнитель: графовый маршрут формы «бандл» (не один Universal Router, не прямой) при

@@ -28,7 +28,9 @@
 ## Техдолг
 - Решение 272: contracts/ArbExecutor.sol — 420 строк (было 319, уже сверх ориентира 200): executeNative (нативный BNB
   монетой сделки) добавлен в тот же контракт — развёртывание одним файлом; дробить на библиотеки — отдельное решение
-  (меняет байткод и развёртывание).
+  (меняет байткод и развёртывание). Сверх ориентира после решения: exec/executor/trade.rs 246 (было 221),
+  exec/dry_sim.rs 212 (было 208), call.rs 203 (было 149), native_probe.rs 206 (было 197), dry_swap.rs 205 (было 201), dry_build.rs
+  202 (было 196); tests/bsc_dex_executor_v2.rs 300.
 - Решение 268: src/core/sell.rs 335 строк (было 314), src/core/trade_ops.rs 456 (было 435), src/core/sell_range_run.rs 328,
   src/core/sell_range.rs 202, src/core/deal.rs 249 (было 199), src/core/rules_apply.rs 236 (было 217) — sell.rs,
   trade_ops.rs и rules_apply.rs были сверх ориентира 200 и до решения. У 14 адаптеров trade (trade.rs) принимает

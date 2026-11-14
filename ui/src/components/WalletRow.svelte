@@ -5,7 +5,8 @@
     строки маппинга, незавершённые сделки, BNB и USDT (GET /api/wallets/{id}/balances), «Проверить подключение»
     (POST /api/check/wallet/{id}), исполнитель ArbExecutor: адрес или «не развёрнут», «Развернуть исполнитель»
     (components/ExecutorDeploy.svelte), записать адрес уже развёрнутого (PUT /api/wallets/{id}/executor — только после
-    проверки «код совпал, владелец — этот кошелёк»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
+    проверки «код совпал, владелец — этот кошелёк»), версия исполнителя (решение 272: «v2» / «v1 — нативный BNB через
+    форки не торгуется, переразверните» / «не сверена» — по коду в сети, поле executor_version); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
   Кто вызывает: components/WalletList.svelte.
   От чего зависит: lib/api.js, components/{CheckConnection,ExecutorDeploy,CopyAddr,ErrorText}.svelte.
@@ -88,6 +89,10 @@
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>
+  {#if w.executor}
+    <!-- Решение 272: версия по коду в сети (сверка — «Проверить подключение» исполнителя, сделка, развёртывание). -->
+    <p class={w.executor_version === 'v2' ? 'ok' : 'warn-text'}>Версия: {#if w.executor_version === 'v2'}v2 — нативный BNB монетой сделки идёт через исполнитель{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
+  {/if}
   {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя (0x…)" />

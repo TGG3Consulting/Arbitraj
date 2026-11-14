@@ -57,7 +57,9 @@ pub async fn run(
         )));
     }
     let Some((_, w)) = native::wrapped(ctx) else {
-        return Ok(Err("не заданы dex.native_ticker / dex.native_wrapped".into()));
+        return Ok(Err(
+            "не заданы dex.native_ticker / dex.native_wrapped".into()
+        ));
     };
     let half = usdt_amount / U256::from(2u8);
     let (sell_amt, send_amt) = (m.buy_got / U256::from(4u8), m.buy_got / U256::from(8u8));
@@ -108,10 +110,13 @@ pub async fn run(
     let values = [(b + 3, sell_n.value()), (b + 4, send_amt)];
     let res = simulate::run_valued(ctx, &list, &values, at).await?;
     if let Some((i, r)) = res.iter().enumerate().find(|(_, r)| !r.ok()) {
-        return Ok(Err(format!("шаг {i} пробы через исполнитель откатился: {}", r.why())));
+        return Ok(Err(format!(
+            "шаг {i} пробы через исполнитель откатился: {}",
+            r.why()
+        )));
     }
-    for i in b..b + 4 {
-        if let Err(err) = probe_exec::emitter(ctx, e, &res[i].logs).await {
+    for r in res.iter().skip(b).take(4) {
+        if let Err(err) = probe_exec::emitter(ctx, e, &r.logs).await {
             return Ok(Err(err.message));
         }
     }

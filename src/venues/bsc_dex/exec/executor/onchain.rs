@@ -67,8 +67,17 @@ async fn remember(ctx: &Ctx, executor: Address, v: Version) {
         .set_executor_version(&w.id, &addr, label, "сверка кода исполнителя")
         .await
     {
-        let text = format!("версия исполнителя {addr} не записана у кошелька «{}»: {e}", w.name);
-        ctx.log(crate::storage::journal::Level::Error, "dex.executor", text, None).await;
+        let text = format!(
+            "версия исполнителя {addr} не записана у кошелька «{}»: {e}",
+            w.name
+        );
+        ctx.log(
+            crate::storage::journal::Level::Error,
+            "dex.executor",
+            text,
+            None,
+        )
+        .await;
     }
 }
 
@@ -84,7 +93,8 @@ async fn inspect(
     if have.is_empty() {
         return Ok(Err(format!("по адресу {executor:#x} нет кода контракта")));
     }
-    let Some(version) = code::version_of(&have).map_err(|w| ctx.err(ErrorCode::Internal, w))? else {
+    let Some(version) = code::version_of(&have).map_err(|w| ctx.err(ErrorCode::Internal, w))?
+    else {
         return Ok(Err(format!(
             "код по адресу {executor:#x} ({} байт) не совпал с contracts/out/ArbExecutor.bin-runtime ({} байт)",
             have.len(),

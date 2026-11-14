@@ -103,7 +103,10 @@ fn native_result(
     let receipt = d.receipt.clone();
     let mut t = result::result(ctx, req, d, wallet, (tin, tout), decs, &[])?;
     let unknown = |why: &str| {
-        let e = ctx.err(ErrorCode::OutcomeUnknown, format!("Обмен в блоке, но {why}"));
+        let e = ctx.err(
+            ErrorCode::OutcomeUnknown,
+            format!("Обмен в блоке, но {why}"),
+        );
         match t.chain.clone() {
             Some(c) => e.with_tx(c),
             None => e,
@@ -116,18 +119,34 @@ fn native_result(
         return Err(unknown("события NativeSettled исполнителя в квитанции нет"));
     };
     let (units, usdt_u) = match t.request.side {
-        Side::Sell => (n_in.saturating_sub(n_out), fill::moved(&r, tout, None, Some(wallet))),
+        Side::Sell => (
+            n_in.saturating_sub(n_out),
+            fill::moved(&r, tout, None, Some(wallet)),
+        ),
         Side::Buy => (
             n_out,
-            fill::moved(&r, tin, Some(wallet), None)
-                .saturating_sub(fill::moved(&r, tin, Some(executor), Some(wallet))),
+            fill::moved(&r, tin, Some(wallet), None).saturating_sub(fill::moved(
+                &r,
+                tin,
+                Some(executor),
+                Some(wallet),
+            )),
         ),
     };
-    let (Some(coins), Some(usdt)) = (num::to_decimal(units, decs.0), num::to_decimal(usdt_u, decs.1)) else {
-        return Err(unknown(&format!("суммы не переводятся в числа: BNB {units} wei, USDT {usdt_u}")));
+    let (Some(coins), Some(usdt)) = (
+        num::to_decimal(units, decs.0),
+        num::to_decimal(usdt_u, decs.1),
+    ) else {
+        return Err(unknown(&format!(
+            "суммы не переводятся в числа: BNB {units} wei, USDT {usdt_u}"
+        )));
     };
     t.filled_qty = coins;
-    t.avg_price = if coins > Decimal::ZERO { usdt / coins } else { Decimal::ZERO };
+    t.avg_price = if coins > Decimal::ZERO {
+        usdt / coins
+    } else {
+        Decimal::ZERO
+    };
     t.status = if coins.is_zero() {
         TradeStatus::NotFilled
     } else if coins < t.request.qty {
@@ -139,7 +158,10 @@ fn native_result(
 }
 
 /// Событие NativeSettled(nativeIn, nativeOut) исполнителя в квитанции. None — нет. Ошибок нет.
-pub fn settled(r: &super::super::super::send::track::Receipt, executor: Address) -> Option<(U256, U256)> {
+pub fn settled(
+    r: &super::super::super::send::track::Receipt,
+    executor: Address,
+) -> Option<(U256, U256)> {
     r.logs
         .iter()
         .filter(|l| l.address() == executor)

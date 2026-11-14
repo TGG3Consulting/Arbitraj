@@ -15,6 +15,7 @@
 // От чего зависит: lib.mjs, contracts/*, vendor/*, fixtures/*.
 // Настройки: нет.
 
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Interface } from 'ethers';
 import * as L from './lib.mjs';
@@ -25,6 +26,8 @@ const OWNER = '0x' + 'a1'.repeat(20);
 const LP = '0x' + 'b2'.repeat(20);
 const OTHER = '0x' + 'c3'.repeat(20);
 const FAR = 2n ** 40n;
+// Запись для тестов бота (tests/data/executor_v2_evm_2026-11-14/): события executeNative настоящего байткода v2.
+const record = { note: 'EVM ethereumjs Cancun, contracts/out/ArbExecutor.bin-runtime v2 — contracts/evmtest/run.mjs', cases: {} };
 
 // 1) Сборка и сверка с out/.
 const opt = { optimizer: { enabled: true, runs: 200 }, evmVersion: 'cancun' };
@@ -92,6 +95,7 @@ async function v2Out(c, pair, tin, amt) {
   check((await bal(c, usdt, OWNER)) - before === exp, 'продажа BNB: USDT владельцу = getAmountOut пары');
   const s = settled(r, ex);
   check(s && s[0] === E18 && s[1] === 0n, 'продажа BNB: NativeSettled(1 BNB, 0)');
+  record.cases.sell = { executor: ex, owner: OWNER, wbnb: w, usdt, value: E18.toString(), usdt_got: exp.toString(), logs: r.logs };
   check((await L.balance(c, ex)) === 0n && (await bal(c, w, ex)) === 0n, 'продажа BNB: на исполнителе нет ни BNB, ни WBNB');
 }
 // 3) Продажа с остатком.
@@ -101,6 +105,7 @@ async function v2Out(c, pair, tin, amt) {
   const r = await L.call(c, OWNER, ex, nat(w, true, w, E18, usdt, 1n, [v2Step(pair, w, usdt, 5000)]), E18);
   const s = settled(r, ex);
   check(r.ok && s[0] === E18 && s[1] === E18 / 2n, 'продажа доли 5000 bps: NativeSettled(1, 0,5) — остаток развёрнут');
+  record.cases.sell_left = { executor: ex, owner: OWNER, wbnb: w, usdt, value: E18.toString(), returned: (E18 / 2n).toString(), logs: r.logs };
   check(nb - (await L.balance(c, OWNER)) === E18 / 2n, 'продажа доли: владелец потратил ровно 0,5 BNB (остаток вернулся нативным)');
   check((await bal(c, w, OWNER)) === 0n, 'продажа доли: WBNB на кошельке не осталось');
 }
@@ -120,6 +125,7 @@ async function v2Out(c, pair, tin, amt) {
   check(ub - (await bal(c, usdt, OWNER)) === amt, 'покупка BNB: списано ровно amountIn USDT');
   const s = settled(r, ex);
   check(s && s[0] === 0n && s[1] === exp, 'покупка BNB: NativeSettled(0, получено)');
+  record.cases.buy = { executor: ex, owner: OWNER, wbnb: w, usdt, usdt_spent: amt.toString(), bnb_got: exp.toString(), logs: r.logs };
   check((await bal(c, w, OWNER)) === 0n && (await bal(c, w, ex)) === 0n, 'покупка BNB: WBNB нигде не остался');
   const e2 = await v2Out(c, pair, w, E18);
   const s2 = await L.call(c, OWNER, ex, nat(w, true, w, E18, usdt, e2 + 1n, [v2Step(pair, w, usdt)]), E18);
@@ -188,4 +194,7 @@ for (const [name, art] of [['v2', v2], ['v1', v1]]) {
   const n = await L.call(c, OWNER, ex, nat(w, true, w, E18, usdt, 1n, [v2Step(pair, w, usdt)]), E18);
   check(name === 'v2' ? n.ok : !n.ok, `${name}: executeNative ${name === 'v2' ? 'есть' : 'нет (откат)'}`);
 }
+const out = join(L.here, '..', '..', 'tests', 'data', 'executor_v2_evm_2026-11-14');
+mkdirSync(out, { recursive: true });
+writeFileSync(join(out, 'native_settled.json'), JSON.stringify(record, null, 2) + '\n');
 console.log('ВСЕ ПРОВЕРКИ ПРОШЛИ');

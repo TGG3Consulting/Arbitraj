@@ -3,8 +3,8 @@
 //! - «как сделка»: графовый маршрут формы «бандл» при заданном exec.executor_address — вызов развёрнутого исполнителя
 //!   (разрешения — недостающие, с узла), как пойдёт сделка (exec/trade.rs);
 //! - «через исполнитель» (режим проверки ДО развёртывания): ЛЮБОЙ маршрут котировки собирается шагами исполнителя, а в
-//!   симуляцию eth_simulateV1 подставляются код исполнителя (contracts/out/ArbExecutor.bin-runtime, хеш сверен) и слот
-//!   владельца = кошелёк бота (stateOverrides) на свободном адресе — том, который исполнитель получит при развёртывании
+//!   симуляцию eth_simulateV1 подставляются код исполнителя (contracts/out/ArbExecutor.bin-runtime, хеш сверен), слот
+//!   владельца = кошелёк бота и слот обёртки = dex.native_wrapped (ревью 272 А1; stateOverrides) на свободном адресе — том, который исполнитель получит при развёртывании
 //!   с кошелька бота сейчас (CREATE: адрес из кошелька и его nonce, кода там нет — проверяется). Разрешение ERC-20 этому
 //!   адресу — первым вызовом той же симуляции. Так исполнитель проверяется на живых пулах, не будучи развёрнутым.
 //!
@@ -74,6 +74,10 @@ pub async fn build(
                 );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
+            // Ревью 272 (А1): обёртка в конструкторе исполнителя ≠ dex.native_wrapped — нативный BNB не исполняется.
+            if let (Some(_), Some(why)) = (nat, super::native_block(ctx)) {
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
             let call = native(call::build(ctx, legs, x, now)?)?;
             let approvals = super::approvals(ctx, &call, wallet, x).await?;
             let form = format!("граф: исполнитель {x:#x}");
@@ -99,13 +103,22 @@ pub async fn build(
                 );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
+            // Ревью 272 (А1): слот обёртки (конструктор v2) = dex.native_wrapped — как запишет развёртывание; не задана —
+            // слот не подставляется (execute его не читает, executeNative без обёртки здесь не собирается: nat пуст).
+            let mut state = vec![(
+                code::owner_slot().map_err(internal)?,
+                B256::left_padding_from(wallet.as_slice()),
+            )];
+            if let Ok(w) = ctx.addr("dex.native_wrapped") {
+                state.push((
+                    code::wnative_slot().map_err(internal)?,
+                    B256::left_padding_from(w.as_slice()),
+                ));
+            }
             let over = Override {
                 address: at,
                 code: code::runtime().map_err(internal)?,
-                state: vec![(
-                    code::owner_slot().map_err(internal)?,
-                    B256::left_padding_from(wallet.as_slice()),
-                )],
+                state,
             };
             let call = native(call::build(ctx, legs, at, now)?)?;
             let approvals = if call.value().is_zero() {

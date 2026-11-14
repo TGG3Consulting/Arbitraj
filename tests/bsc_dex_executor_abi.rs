@@ -263,12 +263,13 @@ fn stable_bnb_contract_rules_present() {
         "bnbFrom = s.tokenIn;",
         "bnbFrom = s.pool;",
         "IStableSwapU256(s.pool).exchange{value: amount}(i, j, amount, 0);",
-        "IWBNB(s.tokenOut).deposit{value: address(this).balance}();",
+        // Ревью 272 (А3): в обёртку — только BNB, пришедший от пула этим шагом (разность баланса).
+        "IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();",
         "_sweepBnb();",
     ] {
         assert!(src.contains(must), "нет в контракте: {must}");
     }
-    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (три установки — три обнуления; третья — _unwrap
+    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (три установки — три обнуления; третья — _unwrapAll
     // executeNative, решение 272).
     assert_eq!(src.matches("bnbFrom = address(0);").count(), 3);
     let abi = abi();
@@ -305,6 +306,16 @@ fn artifacts_match_recorded_hashes() {
     // Код создания = конструктор + код в сети (solc кладёт deployedBytecode в хвост кода создания).
     assert!(bin.windows(runtime.len()).any(|w| w == runtime.as_ref()));
     assert_eq!(code::owner_slot().unwrap(), B256::ZERO);
+    // Ревью 272 (А1): обёртка из конструктора — слот 1 (owner остаётся в слоте 0 — сверка onchain.rs и сухая сделка).
+    assert_eq!(code::wnative_slot().unwrap(), B256::with_last_byte(1));
+    // Код транзакции создания = код создания + адрес обёртки словом ABI (32 байта, адрес справа).
+    let w = alloy_primitives::Address::repeat_byte(0xbb);
+    let full = code::creation_with(w).unwrap();
+    assert_eq!(&full[..bin.len()], bin.as_ref());
+    assert_eq!(
+        &full[bin.len()..],
+        B256::left_padding_from(w.as_slice()).as_slice()
+    );
     assert!(code::solc().starts_with("0.8.37+"));
     assert_eq!(code::creation_sha256().len(), 64);
 }

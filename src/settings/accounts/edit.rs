@@ -57,6 +57,7 @@ impl Accounts {
             secret: secret.to_string(),
             executor: None,
             executor_version: None,
+            executor_wrapped: None,
             queue_key: queue_key.to_string(),
             created_at: Utc::now().to_rfc3339(),
         };
@@ -122,7 +123,8 @@ impl Accounts {
         let (i, x) = (id.to_string(), executor.clone());
         self.commit(h, by, move |tx| {
             tx.execute(
-                "UPDATE dex_wallets SET executor = ?2, executor_version = NULL WHERE id = ?1",
+                "UPDATE dex_wallets SET executor = ?2, executor_version = NULL, executor_wrapped = NULL \
+                 WHERE id = ?1",
                 params![i, x],
             )
             .map(|_| ())
@@ -133,6 +135,7 @@ impl Accounts {
         w.executor = executor;
         // Решение 272: новый адрес — версия не сверена, пока onchain.rs не сверит код (edit_version.rs).
         w.executor_version = None;
+        w.executor_wrapped = None;
         self.put(w.clone());
         self.say(text).await;
         Ok(w)

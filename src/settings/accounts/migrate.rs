@@ -120,6 +120,7 @@ impl Accounts {
             secret: l.secret.to_string(),
             executor: None,
             executor_version: None,
+            executor_wrapped: None,
             queue_key: l.queue_key.to_string(),
             created_at: Utc::now().to_rfc3339(),
         };

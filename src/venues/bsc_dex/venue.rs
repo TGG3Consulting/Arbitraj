@@ -480,9 +480,46 @@ impl Venue for BscDex {
         scope(Class::Trade, run).await
     }
 
-    /// «Проверить подключение» исполнителя ArbExecutor (ревью 122) — exec/executor/onchain.rs. Ошибок нет.
+    /// «Проверить подключение» исполнителя ArbExecutor (ревью 122) — exec/executor/onchain.rs. Её же зовут после
+    /// развёртывания и «Записать после проверки». Ревью 272: v1 — уведомление один раз (Б5, v1_notice.rs); кошелёк
+    /// строки «Пробы и сигналы» теперь годен для BNB через исполнитель — внеочередная перепроверка монеты BNB (та же,
+    /// что «Перепроверить», POST /api/coins/recheck): проба её пулов перемеряет газ обёртки через исполнитель (Б3), не
+    /// дожидаясь планового прохода tax.recheck_interval_s. Ошибок нет.
     async fn check_executor(&self) -> GatewayResult<ConnectionCheck> {
-        Ok(exec::executor::onchain::probe(&self.p.ctx).await)
+        let ctx = &self.p.ctx;
+        let c = exec::executor::onchain::probe(ctx).await;
+        let Ok(w) = ctx.wallet() else { return Ok(c) };
+        if let Some(v) = w
+            .executor_version
+            .as_deref()
+            .and_then(exec::executor::code::Version::parse)
+        {
+            exec::executor::v1_notice::once(ctx, &self.p.stats, v).await;
+        }
+        let probe_row = ctx
+            .settings
+            .accounts()
+            .row(crate::settings::accounts::ROW_PROBE);
+        if c.ok
+            && probe_row.as_deref() == Some(w.id.as_str())
+            && exec::executor::native_capable(ctx)
+            && let Some((ticker, wbnb)) = exec::native::wrapped(ctx)
+        {
+            self.p.wake.coins(&[wbnb]);
+            let text = format!(
+                "исполнитель кошелька проб «{}» сверен (v2, обёртка = dex.native_wrapped) — внеочередная перепроверка {ticker}: \
+                 газ обёртки через исполнитель перемеряется пробой пулов",
+                w.name
+            );
+            ctx.log(
+                crate::storage::journal::Level::Info,
+                "dex.native_probe",
+                text,
+                None,
+            )
+            .await;
+        }
+        Ok(c)
     }
 
     /// Каналы отправки (id области «канал») — send/channels.rs. Ошибок нет.

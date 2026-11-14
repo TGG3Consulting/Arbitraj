@@ -3,6 +3,7 @@
 //! - версия по коду в сети: код v2 (contracts/out/) и v1 (contracts/out/v1/, развёрнутые до решения 272) узнаются,
 //!   чужой — нет; хеш кода v1 — тот, что был в репозитории до решения (коммит 2180cf9);
 //! - execute не изменился: подпись, селектор и запись ABI у v1 и v2 одинаковы; в v2 есть executeNative и NativeSettled;
+//!   обёртка (ревью 272 А1) — аргумент конструктора v2, геттер wnative(), слот 1;
 //! - вызов: with_native — данные executeNativeCall, value = вход у продажи и 0 у покупки, край маршрута не обёртка —
 //!   отказ; без режима — execute, как раньше;
 //! - факт: событие NativeSettled и Transfer USDT по ЗАПИСИ исполнения настоящего байткода v2 на EVM ethereumjs
@@ -90,7 +91,15 @@ fn execute_unchanged_and_execute_native_added() {
     assert_eq!(n.selector(), ArbExecutor::executeNativeCall::SELECTOR);
     assert_eq!(
         n.signature(),
-        "executeNative(address,bool,address,uint256,address,uint256,uint256,(uint8,address,address,address,uint16,bytes)[])"
+        "executeNative(bool,address,uint256,address,uint256,uint256,(uint8,address,address,address,uint16,bytes)[])"
+    );
+    // Ревью 272 (А1): обёртка — аргумент конструктора v2 и геттер wnative(); у v1 конструктор без аргументов.
+    let ctor = |a: &JsonAbi| a.constructor.as_ref().map(|c| c.inputs.len());
+    assert_eq!((ctor(&v1), ctor(&v2)), (Some(0), Some(1)));
+    assert!(v2.function("wnative").is_some() && v1.function("wnative").is_none());
+    assert_eq!(
+        code::wnative_slot().unwrap(),
+        alloy_primitives::B256::from(U256::from(1u8))
     );
     assert_eq!(
         n.state_mutability,
@@ -143,8 +152,8 @@ async fn native_call_encoding_and_value() {
     assert_eq!(n.value(), amt, "value = вход");
     let d = ArbExecutor::executeNativeCall::abi_decode(&n.data()).expect("executeNative");
     assert_eq!(
-        (d.wnative, d.wrapIn, d.tokenIn, d.amountIn, d.tokenOut),
-        (WBNB, true, WBNB, amt, USDT)
+        (d.wrapIn, d.tokenIn, d.amountIn, d.tokenOut),
+        (true, WBNB, amt, USDT)
     );
     assert_eq!(
         (d.minOut, d.deadline, d.steps.len()),
@@ -270,10 +279,26 @@ async fn quote_gates_follow_executor_version() {
         native_exec::edge_ok(&q.ctx, PoolKind::V2, solidly),
         "V2/V3 — как native::pool_ok"
     );
-    // Сверенная версия v2 у кошелька.
+    // Сверенная версия v2 у кошелька, обёртка в исполнителе = dex.native_wrapped (ревью 272 А1).
     let a = p.ctx.settings.accounts();
     let w = a.wallets().into_iter().find(|w| w.name == "тест").unwrap();
-    a.set_executor_version(&w.id, EXECUTOR, Some("v2".into()), "тест")
+    let wb = Some(format!("{WBNB:#x}"));
+    a.set_executor_version(&w.id, EXECUTOR, Some("v2".into()), wb.clone(), "тест")
+        .await
+        .unwrap();
+    assert!(
+        !executor::native_capable(&q.ctx),
+        "dex.native_wrapped не задана — нет"
+    );
+    let v = Scope::Venue("bsc_dex".into());
+    p.ctx
+        .settings
+        .set(
+            "dex.native_wrapped",
+            v,
+            Some(json!(WBNB.to_string())),
+            "тест",
+        )
         .await
         .unwrap();
     assert!(executor::native_capable(&q.ctx));
@@ -294,7 +319,7 @@ async fn quote_gates_follow_executor_version() {
     .unwrap();
     assert!(!executor::native_capable(&q.ctx));
     // Версия записывается только для того адреса, что сверяли.
-    a.set_executor_version(&w.id, EXECUTOR, Some("v2".into()), "тест")
+    a.set_executor_version(&w.id, EXECUTOR, Some("v2".into()), wb, "тест")
         .await
         .unwrap();
     assert!(!executor::native_capable(&q.ctx));

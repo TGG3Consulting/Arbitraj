@@ -1,6 +1,12 @@
 [
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "wnative_",
+        "type": "address"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "constructor"
   },
@@ -124,11 +130,6 @@
   },
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "wnative",
-        "type": "address"
-      },
       {
         "internalType": "bool",
         "name": "wrapIn",
@@ -316,6 +317,19 @@
     "name": "uniswapV3SwapCallback",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "wnative",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

@@ -53,12 +53,30 @@ export function artifact(dir) {
   return { bin: r('ArbExecutor.bin'), runtime: r('ArbExecutor.bin-runtime'), abi: JSON.parse(r('ArbExecutor.abi')) };
 }
 
-/// Цепь: EVM Cancun и счета с балансом.
+/// Цепь: EVM Cancun и счета с балансом. Поле ts (bigint) — время блока вызовов (проверка deadline); не задано —
+/// блок по умолчанию ethereumjs (время 0).
 export async function chain() {
   const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Cancun });
   const sm = new DefaultStateManager();
   const evm = await EVM.create({ common, stateManager: sm });
-  return { evm, sm };
+  return { evm, sm, ts: undefined };
+}
+
+/// Блок с заданным временем — те же поля, что defaultBlock() @ethereumjs/evm 3.1.1 (dist/esm/evm.js), кроме timestamp.
+function blockAt(ts) {
+  return {
+    header: {
+      number: 0n,
+      cliqueSigner: () => Address.zero(),
+      coinbase: Address.zero(),
+      timestamp: ts,
+      difficulty: 0n,
+      prevRandao: new Uint8Array(32),
+      gasLimit: 0n,
+      baseFeePerGas: undefined,
+      getBlobGasPrice: () => undefined,
+    },
+  };
 }
 
 export const addr = (h) => Address.fromString(h);
@@ -71,6 +89,13 @@ export async function balance(c, a) {
   return (await c.sm.getAccount(addr(a)))?.balance ?? 0n;
 }
 
+/// Баланс счёта без вызова (код и хранилище не трогаются) — как BNB, присланный в обход receive (selfdestruct).
+export async function setBalance(c, a, wei) {
+  const acc = await c.sm.getAccount(addr(a));
+  acc.balance = wei;
+  await c.sm.putAccount(addr(a), acc);
+}
+
 /// Вызов. Принимает: цепь, от кого, кому (null — создание), данные hex, value. Возвращает: { ok, ret, reason, logs,
 /// created, gas }. Ошибок нет (откат — ok = false и текст причины Error(string)).
 export async function call(c, from, to, data, value = 0n) {
@@ -81,6 +106,7 @@ export async function call(c, from, to, data, value = 0n) {
     data: hexToBytes(data.startsWith('0x') ? data : '0x' + data),
     value,
     gasLimit: 30_000_000n,
+    block: c.ts === undefined ? undefined : blockAt(c.ts),
   });
   const e = r.execResult;
   const ret = bytesToHex(e.returnValue);

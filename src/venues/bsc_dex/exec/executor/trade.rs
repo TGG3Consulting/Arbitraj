@@ -93,11 +93,17 @@ pub async fn trade(
     let wallet = slot.from;
     // Ревью 122, пункт 1: адрес вписан руками — до approve и сделки код и владелец сверяются с узлом.
     let version = onchain::ensure(ctx, executor, wallet).await?;
+    // Ревью 272 (Б5): v1 — уведомление один раз на кошелёк и адрес (v1_notice.rs).
+    super::v1_notice::once(ctx, &env.stats, version).await;
     if nat.is_some() && version != super::code::Version::V2 {
         let why = format!(
             "исполнитель {executor:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",
             version.label()
         );
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
+    // Ревью 272 (А1): v2, но обёртка в его конструкторе ≠ dex.native_wrapped — нативный BNB не исполняется.
+    if let (Some(_), Some(why)) = (nat, super::native_block(ctx)) {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
     let (mut c, mut at) = build(q, &legs, executor, nat).await?;
@@ -130,7 +136,9 @@ pub async fn trade(
     }
     // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
     let tokens = (c.token_in, c.token_out);
-    let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
+    let mut sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
+    // Ревью 272 (Б4): вызов executeNative — признаком в контексте (позднее выяснение не гадает по событию).
+    sc.executor_native = c.native.is_some();
     // Решение 272: продажа нативного BNB — value = вход, только сверх резерва на газ (как прямой путь, swap_send.rs).
     let value = c.value();
     if !value.is_zero() {

@@ -34,7 +34,8 @@ pub struct ExecCall {
     pub deadline: U256,
     pub steps: Vec<ArbExecutor::Step>,
     /// Решение 272: Some((обёртка, wrapIn)) — вызов executeNative исполнителя v2 (монета сделки — нативный BNB);
-    /// None — execute, как раньше.
+    /// None — execute, как раньше. Обёртка (dex.native_wrapped) в данные не идёт (ревью 272 А1: у контракта она из
+    /// конструктора) — по ней with_native сверяет край маршрута.
     pub native: Option<(Address, bool)>,
 }
 
@@ -71,13 +72,12 @@ impl ExecCall {
         }
     }
 
-    /// Данные транзакции: execute(tokenIn, amountIn, tokenOut, minOut, deadline, steps) или (решение 272)
-    /// executeNative(wnative, wrapIn, tokenIn, amountIn, tokenOut, minOut, deadline, steps). Ошибок нет.
+    /// Данные транзакции: execute(tokenIn, amountIn, tokenOut, minOut, deadline, steps) или (решение 272, ревью А1)
+    /// executeNative(wrapIn, tokenIn, amountIn, tokenOut, minOut, deadline, steps). Ошибок нет.
     pub fn data(&self) -> Bytes {
-        if let Some((wnative, wrap_in)) = self.native {
+        if let Some((_, wrap_in)) = self.native {
             return Bytes::from(
                 ArbExecutor::executeNativeCall {
-                    wnative,
                     wrapIn: wrap_in,
                     tokenIn: self.token_in,
                     amountIn: self.amount_in,

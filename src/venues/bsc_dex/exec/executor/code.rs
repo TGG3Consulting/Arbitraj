@@ -148,9 +148,19 @@ fn checked_in(sha: &'static str, path: &str, name: &str, text: &str) -> Result<B
         .map_err(|e| format!("contracts/out/{path}: не hex ({e})"))
 }
 
-/// Код создания исполнителя (конструктор без аргументов: владелец = развёртывающий кошелёк). Ошибки: как checked.
+/// Код создания исполнителя без аргументов конструктора (его SHA-256 видит человек). Ревью 272 (А1): конструктор v2
+/// принимает адрес обёртки — полный код транзакции создания собирает creation_with. Ошибки: как checked.
 pub fn creation() -> Result<Bytes, String> {
     checked("ArbExecutor.bin", BIN)
+}
+
+/// Код транзакции создания: код создания + аргумент конструктора constructor(address wnative_) в кодировке ABI (слово
+/// 32 байта, адрес справа — Solidity ABI spec, «Formal Specification of the Encoding», address = uint160). Владелец —
+/// развёртывающий кошелёк. Принимает: адрес обёртки (dex.native_wrapped). Ошибки: как checked.
+pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String> {
+    let mut v = creation()?.to_vec();
+    v.extend_from_slice(B256::left_padding_from(wnative.as_slice()).as_slice());
+    Ok(Bytes::from(v))
 }
 
 /// Код исполнителя в сети. Ошибки: как checked.
@@ -161,22 +171,34 @@ pub fn runtime() -> Result<Bytes, String> {
 /// Слот хранилища переменной `owner` (раскладка solc; смещение в слоте должно быть 0). Ошибки (текст): раскладка не
 /// сверена по хешу, не разбирается, нет `owner` или смещение не 0.
 pub fn owner_slot() -> Result<B256, String> {
+    slot_of("owner")
+}
+
+/// Ревью 272 (А1): слот хранилища переменной `wnative` (адрес обёртки из конструктора v2; у v1 её нет). Сухая сделка
+/// подставляет его (dry.rs), сверка читает (onchain.rs). Ошибки (текст): как owner_slot.
+pub fn wnative_slot() -> Result<B256, String> {
+    slot_of("wnative")
+}
+
+/// Слот переменной хранилища по имени (раскладка solc v2, смещение 0). Ошибки (текст): раскладка не сверена по хешу,
+/// не разбирается, нет переменной или смещение не 0.
+fn slot_of(label: &str) -> Result<B256, String> {
     let have = hex::encode(Sha256::digest(LAYOUT.as_bytes()));
     if recorded("ArbExecutor.layout.json") != Some(have.as_str()) {
         return Err("contracts/out/ArbExecutor.layout.json: SHA-256 не совпал с записанным".into());
     }
     let v: serde_json::Value =
         serde_json::from_str(LAYOUT).map_err(|e| format!("раскладка хранилища: {e}"))?;
-    let owner = v["storage"]
+    let var = v["storage"]
         .as_array()
-        .and_then(|a| a.iter().find(|s| s["label"] == "owner"))
-        .ok_or("раскладка хранилища: нет переменной owner")?;
-    if owner["offset"].as_u64() != Some(0) {
-        return Err("раскладка хранилища: owner не с начала слота".into());
+        .and_then(|a| a.iter().find(|s| s["label"] == label))
+        .ok_or_else(|| format!("раскладка хранилища: нет переменной {label}"))?;
+    if var["offset"].as_u64() != Some(0) {
+        return Err(format!("раскладка хранилища: {label} не с начала слота"));
     }
-    let slot: U256 = owner["slot"]
+    let slot: U256 = var["slot"]
         .as_str()
         .and_then(|s| s.parse().ok())
-        .ok_or("раскладка хранилища: слот owner не число")?;
+        .ok_or_else(|| format!("раскладка хранилища: слот {label} не число"))?;
     Ok(B256::from(slot))
 }

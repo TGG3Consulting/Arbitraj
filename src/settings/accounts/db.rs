@@ -30,7 +30,8 @@ impl Accounts {
             .call(|c| {
                 let mut wallets = BTreeMap::new();
                 let mut q = c.prepare(
-                    "SELECT id, name, secret, executor, queue_key, created_at, executor_version FROM dex_wallets",
+                    "SELECT id, name, secret, executor, queue_key, created_at, executor_version, executor_wrapped \
+                     FROM dex_wallets",
                 )?;
                 let rows = q.query_map([], |r| {
                     Ok(Wallet {
@@ -41,6 +42,7 @@ impl Accounts {
                         queue_key: r.get(4)?,
                         created_at: r.get(5)?,
                         executor_version: r.get(6)?,
+                        executor_wrapped: r.get(7)?,
                     })
                 })?;
                 for w in rows {

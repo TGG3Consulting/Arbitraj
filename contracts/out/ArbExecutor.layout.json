@@ -7,6 +7,14 @@
       "offset": 0,
       "slot": "0",
       "type": "t_address"
+    },
+    {
+      "astId": 74,
+      "contract": "ArbExecutor.sol:ArbExecutor",
+      "label": "wnative",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_address"
     }
   ],
   "types": {

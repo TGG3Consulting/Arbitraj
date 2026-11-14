@@ -111,6 +111,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "wallet.added" => (INFO, "Кошелёк DEX добавлен"),
         "wallet.mapping_changed" => (INFO, "Привязка кошельков изменена"),
         "wallet.executor_deployed" => (OK, "Исполнитель кошелька развёрнут"),
+        "wallet.executor_v1" => (WARN, "Исполнитель кошелька v1 — BNB через форки не торгуется"),
         "system.started" => (OK, "Бот запущен"),
         "system.stopped" => (STOP, "Бот остановлен"),
         "system.secrets_unlocked" => (OK, "Секреты разблокированы"),

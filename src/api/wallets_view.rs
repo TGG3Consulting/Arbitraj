@@ -36,6 +36,14 @@ pub async fn view(st: &AppState) -> Value {
     let a = st.settings.accounts();
     let unlocked = st.vault.status().unlocked;
     let dex = dex_id(st).await.ok().map(|d| d.0);
+    // Ревью 272 (А1): обёртка из настроек DEX — экран сравнивает её с обёрткой в исполнителе v2 кошелька.
+    let native_wrapped = dex.as_deref().and_then(|d| {
+        let at = crate::settings::read::At {
+            venue: Some(d),
+            coin: None,
+        };
+        st.settings.text("dex.native_wrapped", at).ok()
+    });
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -60,6 +68,9 @@ pub async fn view(st: &AppState) -> Value {
             "executor": w.executor,
             // Решение 272: версия исполнителя по коду в сети («v1» / «v2»; null — не сверена).
             "executor_version": w.executor_version,
+            // Ревью 272 (А1): обёртка из хранилища исполнителя v2 (null — не v2 / не сверен) и dex.native_wrapped.
+            "executor_wrapped": w.executor_wrapped,
+            "native_wrapped": native_wrapped,
             "address": address,
             "address_error": why,
             "rows": a.rows_of(&w.id),

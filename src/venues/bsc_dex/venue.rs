@@ -335,7 +335,9 @@ impl Venue for BscDex {
             .await?
             .max(send::planned_floor(&q.ctx)?);
         // Решение 131: поиск циклов — счёт CPU, вне рабочих потоков tokio (quote/cpu.rs).
-        let qc = q.clone();
+        // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены — не в циклы (quote/select.rs plan_gas).
+        let mut qc = q.clone();
+        qc.plan_gas = Some(gas);
         let signals = quote::cpu::run(
             &q.ctx,
             async move { quote::cycle_scan::scan(&qc, gas).await },

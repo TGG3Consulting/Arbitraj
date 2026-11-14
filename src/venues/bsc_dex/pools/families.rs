@@ -425,7 +425,28 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.
         // Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         // Solidly V1 (THENA V1, решение 122 F) — то же: фабрика getPair(a, b, stable) / getFee(stable) / PairCreated.
-        Proto::Solidly | Proto::SolidlyV1 => list.push("dex.factory"),
+        // Решение 273: задан источник комиссии dex.solidly_fee_source — ещё правило и то, что нужно источнику (метод
+        // пула / методы фабрики по типу; делитель — при правиле numerator). Не задан — только фабрика, как раньше.
+        Proto::Solidly | Proto::SolidlyV1 => {
+            list.push("dex.factory");
+            if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {
+                list.push("dex.solidly_fee_rule");
+                match src.as_str() {
+                    "pool" => list.push("dex.solidly_fee_method"),
+                    "factory_by_type" => list.extend([
+                        "dex.solidly_fee_method_stable",
+                        "dex.solidly_fee_method_volatile",
+                    ]),
+                    _ => {}
+                }
+                if matches!(
+                    ctx.dex_text("dex.solidly_fee_rule", f.id).as_deref(),
+                    Ok("numerator")
+                ) {
+                    list.push("dex.solidly_fee_denominator");
+                }
+            }
+        }
         // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.
         Proto::CurveStable => list.push("dex.stable_pools"),
         // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул; версии реализации

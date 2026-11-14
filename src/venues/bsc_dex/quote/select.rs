@@ -4,8 +4,10 @@
 //! и в допуске (hooks.max_impact_b_pct / _c_pct); пул сверен с квотером без расхождения (любой пул, с крючком тоже); газ стороны измерен
 //! пробным обменом; налог монеты нужной стороны ИМЕННО в этом пуле измерен пробой и не больше tax.max_buy_pct /
 //! tax.max_sell_pct (решение 146); глубина нужного направления в полосе цены не ниже dex.min_pool_liquidity_usd (решение 73).
+//! Ревью 273: задана плановая цена газа (Quoting.plan_gas) — пул Solidly с пределом цены газа фабрики ниже неё не
+//! допущен (math/solidly_fee.rs blocked), как пул на паузе.
 //! Кто вызывает: quote/direct.rs и все сборщики ног маршрута (graph_legs, via_pools, smart_ways, cycle*, verify_decide, exec/live*).
-//! От чего зависит: check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
+//! От чего зависит: math/solidly_fee.rs, check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
 //! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
 //! tax.max_buy_pct, tax.max_sell_pct (не задан порог — пул не используется с причиной «не задана настройка», как у
 //! порогов ядра core/blacklist.rs: монета на DEX не торгуется),
@@ -19,11 +21,12 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{CheckState, HookGroup, Side};
+use crate::core::types::{CheckState, HookGroup, PoolState, Side};
 use crate::settings::read::At;
 
 use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
+use super::super::math::solidly_fee;
 use super::super::pools::families::{self, Proto};
 use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::verify_inf_stable;
@@ -52,6 +55,13 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     // Пустой пул — по живому состоянию, не дожидаясь сверки с квотером (quote/emptiness.rs).
     if super::emptiness::empty(e) {
         return Err(super::emptiness::EMPTY.into());
+    }
+    // Ревью 273: предел цены газа фабрики пары Solidly (usdfi maxGasPrice) ниже плановой цены газа выбора маршрута —
+    // обмен откатился бы; пул исключается при выборе, как пул на паузе (а не после выбора маршрута).
+    if let (Some(price), PoolState::Solidly { gate, .. }) = (q.plan_gas, &e.pool.state)
+        && let Some(why) = solidly_fee::blocked(gate, Some(price))
+    {
+        return Err(why);
     }
     if let Some(why) = deep_side(ctx, &q.reg, &q.tokens, e, usdt_decimals, Need::Side(side))? {
         return Err(why);

@@ -11,6 +11,8 @@
 //! Разбор exec/executor/fact.rs («возврат неистраченного входа») к циклу не применяется: вход и выход — один токен.
 //! Исход транзакции цикла неизвестен — «исход неизвестен» с «чем найти» цикла (exec/cycle_ref.rs, решение 233,
 //! дополнение, п. 4): ядро выясняет исход само (resolve_cycle.rs).
+//! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
+//! предел — по цене самой транзакции (exec/txs.rs send_capped).
 //! Кто вызывает: exec/cycle_trade.rs.
 //! От чего зависит: exec/executor/{call, onchain, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
@@ -84,7 +86,10 @@ pub async fn trade(
     // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
     // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.
     let sc = cycle_ref::ctx(wallet, base, dec, &r);
-    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None)
+    // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
+    let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
+    let cap = super::solidly_gate::fresh_cap(q, &used).await?;
+    let d = txs::send_capped(env, &slot, (executor, c.data(), U256::ZERO), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;
     drop(slot);

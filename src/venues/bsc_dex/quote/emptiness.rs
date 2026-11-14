@@ -47,9 +47,13 @@ pub fn empty(e: &Entry) -> bool {
         // односторонний DVM с Q=0 продаёт котируемую за базовую; стороны фильтрует глубина, решение 73).
         PoolState::Pmm(d) => d.b.is_zero() && d.q.is_zero(),
         // Solidly (Topaz v2, THENA V1; решения 80, 85): пуст при нулевом любом резерве (как V2 — обмен невозможен).
+        // Решение 273: фабрика на паузе — пуст (обмен откатился бы), как StableSwap halted.
         PoolState::Solidly {
-            reserve0, reserve1, ..
-        } => reserve0.is_zero() || reserve1.is_zero(),
+            reserve0,
+            reserve1,
+            gate,
+            ..
+        } => gate.paused || reserve0.is_zero() || reserve1.is_zero(),
         // StableSwap (решение 122 F): пуст, если нулевой баланс любой монеты пары (обмен по паре невозможен).
         // Решение 122 F, 3: пул на паузе или выключен (kill) — пуст (обмен откатился бы).
         PoolState::StableSwap(d) => d.halted || [d.i0, d.i1]

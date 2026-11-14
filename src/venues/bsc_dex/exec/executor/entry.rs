@@ -9,6 +9,7 @@
 //! (PancakeSwap Stable, Lista) и SADDLE (Nerve) — решение 122 X, стейблсвапы; пул с halted — не исполняется.
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
+//! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
 //! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии).
@@ -58,7 +59,17 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         },
         ExecKind::V3 => Params::V3,
         ExecKind::Algebra => Params::Algebra,
-        ExecKind::Solidly => Params::Solidly,
+        // Решение 273: фабрика пары на паузе — обмен откатился бы, шаг не строится.
+        ExecKind::Solidly => match &e.pool.state {
+            PoolState::Solidly { gate, .. } if gate.paused => {
+                let why = format!(
+                    "{}: фабрика пары на паузе (isPaused) — шаг не строится",
+                    e.family.id
+                );
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+            _ => Params::Solidly,
+        },
         ExecKind::Dodo => Params::Dodo,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,

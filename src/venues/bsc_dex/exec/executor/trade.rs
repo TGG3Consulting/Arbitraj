@@ -15,6 +15,8 @@
 //! внутри транзакции, а не по базе, прочитанной до подписи (как BALANCE_CHECK_ERC20 Universal Router).
 //! Нативная монета (решение 62) на краях маршрута через исполнитель не исполняется: вход и выход — только ERC-20.
 //! Внутри шага STABLE_U256_BNB (пулы с меткой 0xEeee…) BNB есть — контракт разворачивает/заворачивает WBNB сам.
+//! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
+//! предел — по цене самой транзакции (exec/txs.rs send_capped).
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
 //! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
 //! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{swap_ctx,chain, dry_paths, leg_min, native, order, precheck_quoter, swap_send, txs,
@@ -119,7 +121,10 @@ pub async fn trade(
     // Решение 231 (дополнение): контекст разбора (с адресом исполнителя — его возврат) — в «чем найти» (exec/swap_ctx.rs).
     let tokens = (c.token_in, c.token_out);
     let sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
-    let d = txs::send(env, &slot, executor, c.data(), U256::ZERO, true, None)
+    // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
+    let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
+    let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
+    let d = txs::send_capped(env, &slot, (executor, c.data(), U256::ZERO), true, None, cap)
         .await
         .map_err(|e| sc.attach(e))?;
     drop(slot);

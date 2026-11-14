@@ -5,6 +5,7 @@
 | `account.rs` | DexAccountId — абстрактный id счёта (кошелька) DEX, решение 132: ядро знает только id, адреса и ключи — у адаптера |
 | `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
 | `pool.rs` | PoolKind (V2/V3/Cl/Bin/Pmm/Solidly/StableSwap/TickBin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |
+| `pool_solidly.rs` | SolidlyFee, FeeRule, SolidlyGate — комиссия пула Solidly со своим правилом (числитель над делителем / делитель) и ограничения обмена пары (пауза фабрики, предел цены газа), решение 273 |
 | `pool_tick_bin.rs` | TickBinData, TickReserves — состояние пула TickBin (решение 122 F, Maverick V2): тики около активного, комиссии по направлениям, масштабы токенов, доля протокола |
 | `trade.rs` | Side, Quote (котировка на объём + затраты + маршрут DEX), TradeRequest, TradeStatus, TradeResult (комиссия — список `Fee` по монетам, решение 219; старые записи fee/fee_asset читаются; `Fee.usd` — стоимость в USDT из документации площадки у монеты без рынка, баллы HTX) |
 | `fee.rs` | Fee — часть фактической комиссии ордера (монета, сумма; `usd` — стоимость в USDT из документации площадки у монеты без рынка, баллы HTX); вынесена из `trade.rs` |

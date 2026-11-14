@@ -15,6 +15,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
+pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
 
 /// Вид пула — по его математике, без названия конкретной DEX (ядро не знает площадок).
@@ -140,8 +141,9 @@ pub enum PoolState {
     /// комиссия пула — всё, что нужно обеим ветвям математики. `metadata()`/`getReserves()` пула + `getFee(pool, stable)`
     /// фабрики (Pool.sol, PoolFactory.sol, velodrome-finance). `decimals0`/`decimals1` — это 10^decimals токена (как в
     /// контракте: dec0 = 10**decimals0), нужны стабильному инварианту math/swap_solidly.rs для нормализации к 1e18.
-    /// `fee` — числитель комиссии над 10000 (как возвращает getFee контракта). stable=false → math/v2.rs,
-    /// stable=true → math/swap_solidly.rs.
+    /// `fee` — число комиссии с контракта и правило его применения (решение 273: числитель над делителем — getFee
+    /// Velodrome/THENA V1, делитель — usdfi). `gate` — ограничения обмена, проверяемые контрактом пары (пауза фабрики,
+    /// предел цены газа; решение 273). stable=false → math/v2.rs, stable=true → math/swap_solidly.rs.
     Solidly {
         reserve0: U256,
         reserve1: U256,
@@ -150,8 +152,11 @@ pub enum PoolState {
         decimals0: U256,
         /// 10^decimals токена1.
         decimals1: U256,
-        /// Комиссия пула — числитель над 10000 (getFee(pool, stable)).
-        fee: u32,
+        /// Комиссия пула: значение с контракта и правило (core/types/pool_solidly.rs).
+        fee: SolidlyFee,
+        /// Ограничения обмена пары (пауза фабрики, предел цены газа); по умолчанию — нет.
+        #[serde(default)]
+        gate: SolidlyGate,
     },
     /// StableSwap (решение 122 F): балансы всех монет пула, множители точности, A и комиссия — всё, что нужно
     /// инварианту. Боксируется (много U256), как Pmm. Поля — в StableData.

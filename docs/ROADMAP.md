@@ -33,6 +33,15 @@
   src/venues/bsc_dex/pools/load.rs 361, src/venues/bsc_dex/pools/verify.rs 278 (проба swapFee — +9),
   src/venues/bsc_dex/pools/created_log.rs 313, src/venues/bsc_dex/quote/quoter_calls.rs 375. Делить — отдельной
   задачей (families.rs — список required() по видам; verify.rs — ветки видов в свои файлы).
+- Решение 273 (с ревью): файлы сверх ориентира 200 строк (было до решения 273 → стало) — quote/mod.rs 239 → 263,
+  quote/select.rs 221 → 231, quote/steps.rs 213 → 216, venue.rs 537 → 539, exec/executor/trade.rs 221 → 226,
+  exec/txs.rs 212 → 231 (send_capped), quote/pool_quote.rs 454 → 449 (все были сверх ориентира и до решения; пути в
+  src/venues/bsc_dex/). Новые файлы в пределах: pools/solidly_fee_read.rs 162, pools/solidly_gate_read.rs 95,
+  pools/solidly_refresh.rs 107, exec/solidly_gate.rs 94, math/solidly_fee.rs 95, core/types/pool_solidly.rs 69; тест
+  разнесён (tests/bsc_dex_solidly_fee_273.rs 156, _cfg.rs 173, tests/solidly273_common/mod.rs 114). Открытые пункты — docs/TASKS.md,
+  блок 273 (п. 1–7): исходник пула magicfox; канал с минимумом газа выше maxGasPrice usdfi; событие паузы не слушается;
+  живой сделки нет; плановая и фактическая цена газа расходятся только во времени; граф строится без учёта паузы/предела
+  (dex.route_max_pools_per_edge); пути вне выбора котировки и поиска циклов — без отбора по plan_gas.
 - Решение 268: src/core/sell.rs 335 строк (было 314), src/core/trade_ops.rs 456 (было 435), src/core/sell_range_run.rs 328,
   src/core/sell_range.rs 202, src/core/deal.rs 249 (было 199), src/core/rules_apply.rs 236 (было 217) — sell.rs,
   trade_ops.rs и rules_apply.rs были сверх ориентира 200 и до решения. У 14 адаптеров trade (trade.rs) принимает

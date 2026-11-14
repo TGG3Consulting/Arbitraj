@@ -13,6 +13,8 @@
 //! WBNB ≈ BNB, quote/rate.rs); прочие базовые — лучший пул «базовая — USDT»; нет пула — расчёта нет (NoRoute).
 //! Газ разрешений бандла (Permit2 каждого участка) здесь не оценивается — его меряет симуляция перед отправкой, и
 //! проверка чистой прибыли после симуляции его учитывает (exec/cycle_trade.rs).
+//! Решение 273: пул Solidly цикла на паузе фабрики или цена газа плана выше его maxGasPrice — NoRoute с причиной
+//! (exec/solidly_gate.rs planned).
 //! Кто вызывает: venue.rs (dex_cycle_quote), exec/{cycle_trade, cycle_dry}.rs.
 //! От чего зависит: quote/{cycle, rate, route_calc}.rs, exec/{cycle_gate, cycle_steps}.rs, send/mod.rs, wallet/{balances, signer}.rs,
 //! check/state.rs (газ разрешения), num.rs, tokens.rs.
@@ -94,6 +96,8 @@ pub async fn quote(
         .wei(ctx, &q.heads)
         .await?
         .max(send::planned_floor(ctx)?);
+    // Решение 273: пауза фабрики / предел цены газа пары Solidly по цене газа плана — цикл неисполним с причиной.
+    super::super::exec::solidly_gate::planned(ctx, legs.iter().map(|l| &l.entry), wei)?;
     let swap_units: u64 = path.hops.iter().map(|h| h.usable.gas).sum();
     let approve_units = approve_units(q, legs, form, base, input).await?;
     let gas = wei.saturating_mul(U256::from(swap_units.saturating_add(approve_units)));

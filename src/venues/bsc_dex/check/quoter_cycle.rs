@@ -21,6 +21,7 @@
 //! Журнал: первый проход — одна сводка (прошли, исключены, частые причины), когда ни один пул не читается и все
 //! прочитанные сверены (застрявшие из-за незаданной настройки не держат, решение 63); дальше — запись только при смене
 //! состояния пула (прошла ↔ не прошла, сменилась причина; цифры в причине не в счёт — progress::reason_key).
+//! Решение 273: перед проходом — комиссия и ограничения пулов Solidly с источником из настроек (pools/solidly_refresh.rs).
 //! Кто вызывает: pools/market.rs.
 //! От чего зависит: check/quoter_one.rs (сверка одного пула), check/quoter_side.rs (side_ready), check/fresh.rs,
 //! check/state.rs, check/quoter_tally.rs (сводка), pools/listen.rs (Pools), pools/progress.rs.
@@ -55,6 +56,8 @@ pub async fn run(p: Pools, queue: Queue) {
     loop {
         // Своя комиссия пар V2 (dex.v2_fee_source = pool) — заново с пары перед сверкой (pools/index_watch.rs).
         index_watch::refresh_fees(&p).await;
+        // Решение 273: комиссия и ограничения обмена пулов Solidly с источником из настроек — заново (без события).
+        super::super::pools::solidly_refresh::refresh(&p).await;
         // Полный проход — раз в dex.quoter_check_s; при старте все пулы и так новые для цикла.
         if full {
             for r in p.reg.refs() {

@@ -45,9 +45,10 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         (_, "500" | "603" | "415" | "24201") | (500..=599, _) => ErrorCode::Unreachable,
         // Решение 268 (Тигран 14.11), Error Codes (https://api-docs.poloniex.com/spot/error-code): 21310 «Order price must
         // be less than max price», 21311 «Order price must be greater than min price» — цена лимитного ордера вне
-        // диапазона биржи (PriceOutOfRange). 21356 и cancelReason сюда не входят. От операции не зависит; рыночная
+        // диапазона биржи (PriceOutOfRange). 21356 и cancelReason сюда не входят. Только у операции ордера; рыночная
         // продажа код снимает (market_sell.rs).
-        (_, "21310" | "21311") => ErrorCode::PriceOutOfRange,
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        (_, "21310" | "21311") if op == Op::Trade => ErrorCode::PriceOutOfRange,
         _ => rejected(op),
     };
     let msg = if msg.is_empty() {

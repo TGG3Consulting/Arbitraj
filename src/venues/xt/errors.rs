@@ -64,9 +64,12 @@ pub fn from_code(mc: &str, ma: &str, op: Op, raw: &str) -> GatewayError {
         // Решение 268 (Тигран 14.11), таблица кодов (https://doc.xt.com/docs/spot/Access%20Description/ResponseCode):
         // ORDER_F0501, ORDER_F0502, ORDER_F0503, ORDER_F0504, ORDER_F0401 — «Trigger PROTECTION_LIMIT Filter …»: цена
         // лимитного ордера вне защитного диапазона пары (PriceOutOfRange). ORDER_F0601 «Trigger PROTECTION_MARKET
-        // Filter» (рыночный ордер) сюда НЕ входит — обычный отказ. От операции не зависит; рыночная продажа код снимает
+        // Filter» (рыночный ордер) сюда НЕ входит — обычный отказ. Только у операции ордера; рыночная продажа код снимает
         // (market_sell.rs).
-        "ORDER_F0501" | "ORDER_F0502" | "ORDER_F0503" | "ORDER_F0504" | "ORDER_F0401" => {
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        "ORDER_F0501" | "ORDER_F0502" | "ORDER_F0503" | "ORDER_F0504" | "ORDER_F0401"
+            if op == Op::Trade =>
+        {
             ErrorCode::PriceOutOfRange
         }
         // Выполнено ли — не сказано: у ордера и вывода — проверка по своему id (unsure → OutcomeUnknown).

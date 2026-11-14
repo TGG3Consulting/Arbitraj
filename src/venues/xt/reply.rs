@@ -116,7 +116,10 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op, raw: Raw) -> GatewayResul
                 on_limit(ctx, raw == Raw::Write);
             }
             let ma = v.get("ma").map(Value::to_string).unwrap_or_default();
-            Err(errors::from_code(mc, &ma, op, text))
+            // Дополнение 268 (ревью 2): при HTTP 5XX код PriceOutOfRange не присваивается (как до решения 268 — OrderRejected):
+            // по ответу с ошибкой сервера рыночный ордер не ставится.
+            let e = errors::from_code(mc, &ma, op, text);
+            Err(if status >= 500 { e.no_price_range() } else { e })
         }
         None if status >= 400 => Err(errors::from_http(status, text, "")),
         None => Err(errors::bad("в ответе нет rc", text)),

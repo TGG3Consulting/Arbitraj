@@ -165,6 +165,10 @@ async fn test(ctx: &Ctx, symbol: &str, params: Vec<(&'static str, String)>) -> G
         .map(|_| ())
         .map_err(|e| {
             let code = match e.code {
+                // Решение 268: пробный ордер отклонён по коридору цены — тот же код, что у настоящего ордера.
+                ErrorCode::BadResponse if super::errors::probe_price_range(&e) => {
+                    ErrorCode::PriceOutOfRange
+                }
                 ErrorCode::BadResponse => ErrorCode::OrderRejected,
                 c => c,
             };

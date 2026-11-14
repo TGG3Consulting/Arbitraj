@@ -2,7 +2,8 @@
 //! Что делает: решение 268 — исполнение ветки «лимитный ордер продажи отклонён: цена вне диапазона биржи» (когда идти в
 //! ветку и что делать — core/sell_range.rs): отметки сделки по площадке (Deal.range: market, stuck), свежая котировка
 //! (trade_ops::deal_quote → exec_book.rs: память, если свежая, иначе REST), строка хронологии, журнал core.sell_range и
-//! уведомление deal.sell_market_range,
+//! уведомление deal.sell_market_range (журнал и уведомление — ПОСЛЕ рыночного ордера: до него только запись сделки с
+//! отметкой, ревью 2),
 //! рыночный ордер биржи (trade_ops::trade_seen с признаком market → контракт trade_market_sell) или переход в режим
 //! застрявшей монеты. Все будущие ветки собираются в коробки в отдельных не-async функциях: состояние ветки не занимает
 //! место в задаче продажи sell.rs и в задачах, которые её вкладывают (stuck.rs, relay.rs) — глубина стека у продажи
@@ -155,13 +156,20 @@ pub async fn branch(
     };
     let text =
         format!("{head}. {src} — {verdict}: {estimate} — продаём рыночным ордером (решение 268)");
+    // Ревью 2: между проверкой условия по котировке и рыночным ордером (предела цены у него нет) — только запись
+    // сделки с отметкой (она нужна ДО ордера: один рыночный ордер на площадку). Журнал и Telegram — после ордера.
     deal.mark_range_market(deal.at.clone());
-    note(core, deal, text).await;
-    announce(core, deal, e, &verdict, &value).await;
+    deal.note(text.clone());
+    super::ledger::save(core, deal).await;
     let v = deal.at.clone();
     let (mut seen, mut gas) = (None, Vec::new());
     let res = market_order(core, deal, &q, book, given, &mut seen, &mut gas).await;
     super::deal_gas::charge(core, deal, &v, &mut gas).await;
+    journal(core, deal, &text).await;
+    // Уведомление — по факту: ордер ушёл на биржу (исполнен или итог неизвестен); не ушёл / отклонён — обычный алерт.
+    if res.as_ref().map_or_else(|m| m.sent, |_| true) {
+        announce(core, deal, e, &verdict, &value).await;
+    }
     match res {
         Ok(r) => {
             deal.note(format!(
@@ -221,7 +229,7 @@ fn unmet(rule: Rule, m: Marks, fresh: Option<Fresh>, value: Decimal) -> String {
 }
 
 /// Уведомление deal.sell_market_range (решение 268, п. 7): биржа отклонила ордер по цене, какое условие проверено по
-/// стакану, оценка выручки, продаём рыночным ордером. Принимает: ядро, сделку, отказ биржи, условие словами, оценку
+/// стакану, оценка выручки, отправлен рыночный ордер (шлётся ПОСЛЕ ордера — ревью 2). Принимает: ядро, сделку, отказ биржи, условие словами, оценку
 /// выручки (Err — оценки нет, причина). Ошибок нет.
 async fn announce(
     core: &Core,
@@ -236,7 +244,7 @@ async fn announce(
     };
     let text = Msg::new(
         h::WARN,
-        "Биржа отклонила ордер по цене — продаём рыночным ордером",
+        "Биржа отклонила ордер по цене — отправлен рыночный ордер",
     )
     .card(super::deal_card::card(deal))
     .reason(&e.message)
@@ -244,7 +252,7 @@ async fn announce(
     .kv("Оценка выручки", estimate)
     .kv(
         "Что бот делает",
-        "продаёт рыночным ордером биржи (один раз)",
+        "отправил рыночный ордер продажи на биржу (один раз); итог — отдельным сообщением",
     )
     .id(&deal.id)
     .render();
@@ -315,6 +323,11 @@ fn market_order<'a>(
 async fn note(core: &Core, deal: &mut Deal, text: String) {
     deal.note(text.clone());
     super::ledger::save(core, deal).await;
+    journal(core, deal, &text).await;
+}
+
+/// Строка в журнал core.sell_range. Принимает: ядро, сделку, текст. Ошибок нет.
+async fn journal(core: &Core, deal: &Deal, text: &str) {
     core.inner
         .deps
         .log(

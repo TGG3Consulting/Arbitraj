@@ -54,9 +54,12 @@ pub fn from_code(status: u16, code: &str, msg: &str, op: Op, raw: &str) -> Gatew
         // Решение 268 (Тигран 14.11), Error Code (https://huobiapi.github.io/docs/spot/v1/en/): order-limitorder-price-min-error
         // «Sell price cannot be lower than specific price…», order-limitorder-price-max-error «Buy price cannot be higher
         // than specific price…» — цена лимитного ордера вне диапазона биржи (PriceOutOfRange). order-price-greater-than-limit
-        // / order-price-less-than-limit («before market opens») и order-invalid-price сюда НЕ входят. От операции не
-        // зависит; рыночная продажа код снимает (market_sell.rs).
-        (_, "order-limitorder-price-min-error" | "order-limitorder-price-max-error") => {
+        // / order-price-less-than-limit («before market opens») и order-invalid-price сюда НЕ входят. Только у операции
+        // ордера; рыночная продажа код снимает (market_sell.rs).
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        (_, "order-limitorder-price-min-error" | "order-limitorder-price-max-error")
+            if op == Op::Trade =>
+        {
             ErrorCode::PriceOutOfRange
         }
         _ => rejected(op),

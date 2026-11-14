@@ -46,8 +46,9 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // Решение 268 (Тигран 14.11), errors.md (https://github.com/binance/binance-spot-api-docs/blob/master/errors.md,
         // «Filter failures»): −1013 с текстом «Filter failure: PERCENT_PRICE» (покрывает и «Filter failure:
         // PERCENT_PRICE_BY_SIDE») — цена лимитного ордера вне коридора пары (PriceOutOfRange). Другие −1013 — как раньше.
-        // От операции не зависит; рыночная продажа код снимает (market_sell.rs).
-        -1013 if msg.contains("Filter failure: PERCENT_PRICE") => ErrorCode::PriceOutOfRange,
+        // Только у операции ордера; рыночная продажа код снимает (market_sell.rs).
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        -1013 if op == Op::Trade && price_range(-1013, msg) => ErrorCode::PriceOutOfRange,
         // Решение 166: −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT «As your deposit has not reached the required block
         // confirmations, we have temporarily locked {0} asset» (Wallet → Error Code,
         // https://developers.binance.com/en/dev-docs/products/wallet/error-code) — временно заблокировано для вывода.
@@ -95,6 +96,21 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         format!("Binance, код {code}: {msg}"),
     )
     .with_raw(raw)
+}
+
+/// Решение 268: отказ «цена вне коридора пары» по коду и тексту — −1013 «Filter failure: PERCENT_PRICE…» (errors.md,
+/// «Filter failures»). Принимает: код, msg. Ошибок нет.
+pub fn price_range(code: i64, msg: &str) -> bool {
+    code == -1013 && msg.contains("Filter failure: PERCENT_PRICE")
+}
+
+/// Решение 268 (дополнение, ревью 2): отказ ПРОБНОГО ордера (POST /api/v3/order/test идёт как Op::Other — код ордера
+/// по операции ему не присваивается) — «цена вне коридора пары» по сырому ответу ({"code": …, "msg": …}).
+/// Зовёт order_rules.rs. Возвращает: да / нет (сырого ответа нет или он не разбирается — нет). Ошибок нет.
+pub fn probe_price_range(e: &GatewayError) -> bool {
+    let v: Option<serde_json::Value> = e.raw.as_deref().and_then(|r| serde_json::from_str(r).ok());
+    let msg = v.as_ref().and_then(|v| v.get("msg")?.as_str());
+    matches!((code_of(e), msg), (Some(c), Some(m)) if price_range(c, m))
 }
 
 /// Решение 253: код Binance (поле code) из сырого ответа ошибки ({"code": −4026, "msg": …}). Возвращает: None — сырого

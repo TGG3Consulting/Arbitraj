@@ -269,6 +269,8 @@ pub async fn trade_seen(
                 e
             }
         };
+        // Решение 268 (ревью 2): ошибка рыночного ордера код PriceOutOfRange не несёт никогда — и у найденного исхода.
+        let err = market_code(market, err);
         match rules_apply::on_error(core, op, v, Some(deal), &err, attempt).await {
             // Решение 268: рыночная продажа — строго один раз, правило «Повторить» на неё не действует (ниже — как Stop).
             Next::Retry { pause_ms } if !market => {
@@ -293,6 +295,7 @@ pub async fn trade_seen(
                             continue;
                         }
                         Err(rejected) => {
+                            let rejected = market_code(market, rejected);
                             // Газ найденного факта (откат, отмена, занявшая nonce) — в статистику, как обычный путь.
                             if let Some(tx) = &rejected.tx {
                                 super::gas_stats::record_tx_as(core, a, tx, in_deal).await;
@@ -312,6 +315,13 @@ pub async fn trade_seen(
             }
         }
     }
+}
+
+/// Решение 268 (ревью 2): ошибка РЫНОЧНОГО ордера (market) никогда не несёт код PriceOutOfRange — он заменяется на
+/// OrderRejected (GatewayError::no_price_range): покрывает и ответ адаптера, и исход, найденный ботом
+/// (outcome_resolve.rs → order_state адаптера). Принимает: рыночный ли ордер, ошибку. Возвращает: ошибку. Ошибок нет.
+pub fn market_code(market: bool, e: GatewayError) -> GatewayError {
+    if market { e.no_price_range() } else { e }
 }
 
 /// Решение 220: сколько получим, если продать ВСЕ монеты сделки там, где они лежат (deal.at), — котировка кошельком

@@ -91,8 +91,9 @@ pub fn from_code(code: &str, msg: &str, op: Op, raw: &str) -> GatewayError {
         // Решение 268 (Тигран 14.11), Error Code (https://www.okx.com/docs-v5/en/): 51006 «Order price is not within the
         // price limit (max buy price…, min sell price…)», 51137 «The highest price limit for buy orders is {param0}.»,
         // 51138 «The lowest price limit for sell orders is {param0}.» — цена лимитного ордера вне диапазона биржи
-        // (PriceOutOfRange). От операции не зависит; рыночная продажа код снимает (market_sell.rs).
-        "51006" | "51137" | "51138" => ErrorCode::PriceOutOfRange,
+        // (PriceOutOfRange). Только у операции ордера; рыночная продажа код снимает (market_sell.rs).
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        "51006" | "51137" | "51138" if op == Op::Trade => ErrorCode::PriceOutOfRange,
         _ => rejected(op),
     };
     let msg = if msg.is_empty() { "(без msg)" } else { msg };

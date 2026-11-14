@@ -40,16 +40,32 @@ fn mexc_recorded_30087_is_price_out_of_range() {
     let v: Value = serde_json::from_str(raw.trim()).unwrap();
     let (code, msg) = (v["code"].as_i64().unwrap(), v["msg"].as_str().unwrap());
     assert_eq!((code, msg), (30087, "Order price exceeds allowed range"));
-    // Настоящий ордер и пробный ордер (Op::Other) распознают одинаково.
-    for op in [mexc::errors::Op::Trade, mexc::errors::Op::Other] {
+    // Ревью 2: новый код — только у операции ордера; у прочих операций — как до решения 268 (отказ по операции).
+    use mexc::errors::Op as MO;
+    let e = mexc::errors::from_code(code, msg, MO::Trade, raw.trim());
+    assert_eq!(e.code, C::PriceOutOfRange);
+    assert_eq!(
+        e.message,
+        "MEXC, код 30087: Order price exceeds allowed range"
+    );
+    assert_eq!(e.raw.as_deref(), Some(raw.trim()));
+    for (op, want) in [
+        (MO::Other, C::BadResponse),
+        (MO::Move, C::BadResponse),
+        (MO::Withdraw, C::WithdrawRejected),
+    ] {
         let e = mexc::errors::from_code(code, msg, op, raw.trim());
-        assert_eq!(e.code, C::PriceOutOfRange, "{op:?}");
-        assert_eq!(
-            e.message,
-            "MEXC, код 30087: Order price exceeds allowed range"
-        );
-        assert_eq!(e.raw.as_deref(), Some(raw.trim()));
+        assert_eq!(e.code, want, "{op:?}");
+        // Пробный ордер (идёт как Op::Other) узнаёт отказ по сырому ответу (order_rules.rs → probe_price_range).
+        assert!(mexc::errors::probe_price_range(&e));
     }
+    let other = mexc::errors::from_code(
+        30018,
+        "market order is disabled",
+        MO::Other,
+        "{\"code\":30018}",
+    );
+    assert!(!mexc::errors::probe_price_range(&other));
     // Ревью A1: тот же код при HTTP 5XX («issue on the MEXC server side», решение 263) — не отказ по цене, а сбой
     // сервера: у ордера Timeout (→ «итог неизвестен»), у прочего — Unreachable.
     use mexc::errors::{Op as M, from_code_http};
@@ -81,11 +97,14 @@ fn mexc_recorded_30087_is_price_out_of_range() {
 #[test]
 fn bingx_binance_bybit_codes() {
     let m = "Order price deviates too much from market price, triggering price protection. Adjust the price.";
-    for op in [bingx::errors::Op::Trade, bingx::errors::Op::Other] {
-        assert_eq!(
-            bingx::errors::from_code(100440, m, op, "{}").code,
-            C::PriceOutOfRange
-        );
+    // Ревью 2: только у операции ордера; у прочих — как до решения 268.
+    use bingx::errors::Op as X;
+    for (op, want) in [
+        (X::Trade, C::PriceOutOfRange),
+        (X::Other, C::BadResponse),
+        (X::Withdraw, C::WithdrawRejected),
+    ] {
+        assert_eq!(bingx::errors::from_code(100440, m, op, "{}").code, want);
     }
     use binance::errors::{Op as B, from_code as bn};
     for m in [
@@ -93,7 +112,11 @@ fn bingx_binance_bybit_codes() {
         "Filter failure: PERCENT_PRICE_BY_SIDE",
     ] {
         assert_eq!(bn(-1013, m, B::Trade, "{}").code, C::PriceOutOfRange, "{m}");
-        assert_eq!(bn(-1013, m, B::Other, "{}").code, C::PriceOutOfRange, "{m}");
+        // Ревью 2: у прочих операций — как до решения 268; пробный ордер (Op::Other) — по сырому ответу.
+        let raw = serde_json::json!({"code": -1013, "msg": m}).to_string();
+        let e = bn(-1013, m, B::Other, &raw);
+        assert_eq!(e.code, C::BadResponse, "{m}");
+        assert!(binance::errors::probe_price_range(&e), "{m}");
     }
     // Другие −1013 — как раньше.
     for m in ["Filter failure: LOT_SIZE", "Filter failure: NOTIONAL", ""] {
@@ -211,6 +234,22 @@ fn xt_poloniex_okx_htx_coinex_bitget_codes() {
         bitget::errors::from_code(400, "43012", "x", bitget::errors::Op::Trade, "{}").code,
         C::OrderRejected
     );
+}
+
+/// Ревью 2: ядро на пути рыночного ордера снимает код и у найденного исхода (trade_ops::market_code).
+#[test]
+fn core_market_path_never_keeps_the_new_code() {
+    use arb::core::trade_ops::market_code;
+    use arb::gateway::errors::GatewayError;
+    let e = || GatewayError::new(C::PriceOutOfRange, None, "x").with_raw("{}");
+    let m = market_code(true, e());
+    assert_eq!(
+        (m.code, m.message.as_str(), m.raw.as_deref()),
+        (C::OrderRejected, "x", Some("{}"))
+    );
+    assert_eq!(market_code(false, e()).code, C::PriceOutOfRange);
+    let other = GatewayError::new(C::OutcomeUnknown, None, "x");
+    assert_eq!(market_code(true, other).code, C::OutcomeUnknown);
 }
 
 #[test]

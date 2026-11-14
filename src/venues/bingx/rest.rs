@@ -192,7 +192,10 @@ fn parse(ctx: &Ctx, path: &str, status: u16, text: String, op: Op) -> GatewayRes
         Some(0) => Ok(v.get("data").cloned().unwrap_or(v)),
         Some(code) => {
             let msg = v.get("msg").and_then(Value::as_str).unwrap_or_default();
-            Err(errors::from_code(code, msg, op, &text))
+            // Дополнение 268 (ревью 2): при HTTP 5XX код PriceOutOfRange не присваивается (как до решения 268 — OrderRejected):
+            // по ответу с ошибкой сервера рыночный ордер не ставится.
+            let e = errors::from_code(code, msg, op, &text);
+            Err(if status >= 500 { e.no_price_range() } else { e })
         }
         // Без поля code: успешный ответ отдаётся целиком (например {"listenKey": …} или {"transferId": …}).
         None if status < 400 => Ok(v),

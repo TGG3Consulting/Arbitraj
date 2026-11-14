@@ -76,8 +76,9 @@ pub fn from_code(code: i64, msg: &str, op: Op, raw: &str) -> GatewayError {
         // Решение 268 (Тигран 14.11), Error Codes → Spot Trade (https://bybit-exchange.github.io/docs/v5/error): 170193
         // «Buy order price cannot be higher than %s.», 170194 «Sell order price cannot be lower than %s.», 170192 «Order
         // price cannot be higher than %s .», 170371, 170372 («… the price limitation») — цена лимитного ордера вне
-        // диапазона биржи (PriceOutOfRange). От операции не зависит; рыночная продажа код снимает (market_sell.rs).
-        170192 | 170193 | 170194 | 170371 | 170372 => ErrorCode::PriceOutOfRange,
+        // диапазона биржи (PriceOutOfRange). Только у операции ордера; рыночная продажа код снимает (market_sell.rs).
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        170192 | 170193 | 170194 | 170371 | 170372 if op == Op::Trade => ErrorCode::PriceOutOfRange,
         // Сервер: 10000 «Server Timeout», 10016 «Server error», 170001, 170007 «Timeout waiting for response from
         // backend server», 170146 «Order creation timeout», 170032, 170234, 131001, 131003, 131200, 131201, 131230.
         // Для ордера, вывода и перевода — итог неизвестен (Timeout → errors::unsure), для остального — недоступно.

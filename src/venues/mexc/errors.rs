@@ -87,11 +87,12 @@ pub fn from_code_http(
         // (FAR, bsc_dex → mexc: {"msg":"Order price exceeds allowed range","code":30087},
         // tests/data/mexc_price_range_2026-11-13/order_30087.json). Правило коридора — exchangeInfo, фильтр PERCENT_PRICE_BY_SIDE: sell «orderPrice
         // >= lastPrice * (1 - askMultiplierDown)», buy «orderPrice <= lastPrice * (1 + bidMultiplierUp)»
-        // (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information). От операции не зависит —
-        // пробный ордер (Op::Other) распознаёт так же; рыночная продажа код снимает (market_sell.rs).
+        // (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information). Пробный ордер (Op::Other) —
+        // по сырому ответу (probe_price_range, order_rules.rs); рыночная продажа код снимает (market_sell.rs).
         // Дополнение 268 (ревью A1): только без HTTP 5XX — при 5XX («issue on the MEXC server side», решение 263) ответ
         // с этим кодом, как любой код не из списка, — «итог неизвестен» (ветки ниже), а не отказ.
-        30087 if server.is_none() => ErrorCode::PriceOutOfRange,
+        // Дополнение 268 (ревью 2): только у операции ордера (Op::Trade); у прочих операций — как до решения 268.
+        30087 if server.is_none() && op == Op::Trade => ErrorCode::PriceOutOfRange,
         // Ордер не найден (-2011 «Unknown order sent»).
         -2011 => ErrorCode::BadResponse,
         // Решение 263: код не из списка при HTTP 5XX («issue on the MEXC server side») — как «сервер занят» выше.
@@ -103,6 +104,15 @@ pub fn from_code_http(
     let http = server.map(|s| format!(" (HTTP {s})")).unwrap_or_default();
     let text = format!("MEXC, код {code}{http}: {msg}");
     GatewayError::new(unified, Some(venue()), text).with_raw(raw)
+}
+
+/// Решение 268 (дополнение, ревью 2): отказ ПРОБНОГО ордера (POST /api/v3/order/test идёт как Op::Other — код ордера
+/// по операции ему не присваивается) — 30087 «цена вне коридора» по сырому ответу ({"code": 30087, …}). Зовёт
+/// order_rules.rs — только для BadResponse (при HTTP 5XX у Op::Other код другой — Unreachable). Возвращает: да / нет
+/// (сырого ответа нет или он не разбирается — нет). Ошибок нет.
+pub fn probe_price_range(e: &GatewayError) -> bool {
+    let v: Option<serde_json::Value> = e.raw.as_deref().and_then(|r| serde_json::from_str(r).ok());
+    v.and_then(|v| v.get("code")?.as_i64()) == Some(30087)
 }
 
 /// Код отказа по операции: ордер — OrderRejected, вывод — WithdrawRejected, остальное — BadResponse. Ошибок нет.

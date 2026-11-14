@@ -138,7 +138,8 @@ pub struct GatewayError {
 
 impl GatewayError {
     /// Решение 268: ошибка РЫНОЧНОГО ордера никогда не несёт код PriceOutOfRange (иначе ядро повторяло бы по кругу) —
-    /// он заменяется на OrderRejected, текст и сырой ответ те же. Зовёт адаптер на пути рыночной продажи. Ошибок нет.
+    /// он заменяется на OrderRejected, текст и сырой ответ те же. Зовёт адаптер на пути рыночной продажи и при ответе
+    /// HTTP 5XX (дополнение, ревью 2), ядро — на пути рыночного ордера (trade_ops.rs: и найденный исход). Ошибок нет.
     pub fn no_price_range(mut self) -> Self {
         if self.code == ErrorCode::PriceOutOfRange {
             self.code = ErrorCode::OrderRejected;

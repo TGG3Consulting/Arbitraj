@@ -41,7 +41,16 @@
   sell → stuck → relay создаются на стеке. Ветка решения 268 собрана так, чтобы состояние задач sell / trade_seen
   росло минимально: будущие — в коробках из не-async функций, итог ветки пишется в место итога лимитного ордера,
   одна точка ожидания ордера, отметки сделки — одно поле Deal.range (Option<Box<RangeMarks>>). Остаток роста —
-  условие продажи (Rule) в задаче sell и поле Deal.range. Для релизной сборки замера нет.
+  условие продажи (Rule) в задаче sell и поле Deal.range.
+  Стек в release (замер 14.11: `cargo test --release`, профиль release по умолчанию — в Cargo.toml своего профиля нет,
+  CARGO_PROFILE_RELEASE_DEBUG=0; порог — перебором размера стека потока, на котором идёт продажа): tests/core_exec_book_238.rs
+  stuck_without_book_stale_ms_halts_at_once — ≈ 371 КиБ и на ef2c8a4, и после решения;
+  xter_case_sells_by_rest_without_empty_retries — ≈ 339 КиБ и там, и там. Пути решения 268
+  (tests/core_market_sell_268.rs, размер стека потока теста на время замера задавался переменной окружения):
+  entry_unprofitable_goes_to_mode_then_mode_sells_market — ≈ 730 КиБ,
+  button_goes_market_without_condition_and_second_refusal_alerts — ≈ 826 КиБ, mode_sale_within_threshold_goes_market_once
+  — ≈ 710 КиБ, market_filled_closes_deal_with_proceeds — ≈ 419 КиБ. Запас до 2048 КиБ (поток tokio по умолчанию) у
+  самого глубокого из замеренных — ≈ 1222 КиБ. В замер входит и подготовка теста (запуск ядра) на том же потоке.
 - Решение 267: src/core/busy_calc.rs 342 строки, src/core/busy_sum.rs 263, src/core/window.rs 271 (было 251),
   src/core/candidates.rs 341 (было 317) — сверх ориентира 200. Сводки замера «пока монета занята сделкой» живут в
   памяти: после перезапуска бота у незакрытой сделки они теряются (строки журнала нет; в окне — то, что было к

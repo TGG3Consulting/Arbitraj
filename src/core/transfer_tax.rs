@@ -3,15 +3,19 @@
 //! DEX-площадки по адресу контракта (market.coin_check, TokenTaxes.transfer_pct; несколько DEX — наибольший).
 //! Неизвестен: получатель — DEX — ошибка (проверка там обязательна, монета без неё в чёрном списке); биржа ↔ биржа —
 //! по настройке cex_cex.untaxed_ok («да» — 0, «нет» или не задана — направления нет). Нативная монета — 0.
+//! Решение 277: налог перевода котируемой монеты (USDT) — тоже замер: проверка налогов служебной монеты DEX
+//! (venues/bsc_dex/check/service_tax.rs) шлёт ядру CoinCheck USDT; is_quote — такая проверка (её нет в справочнике монет).
+//! Замер USDT действует только для получателя-DEX (возврат биржа → кошелёк DEX): для получателя-биржи налог USDT —
+//! как до решения 277 (cex_cex.untaxed_ok), т. к. события биржи приходят без хеша и сопоставляются только по сумме.
 //! Кто вызывает: core/dirctx.rs (налог вывода с A в расчёте), credit_expect.rs (ожидаемый приход),
-//! rebuild_blacklist.rs (направления биржа ↔ биржа).
+//! rebuild_blacklist.rs (направления биржа ↔ биржа), tick.rs (is_quote).
 //! От чего зависит: market_state.rs (проверки налогов), native.rs, engine.rs, settings.
 //! Настройки: cex_cex.untaxed_ok (вся система, необязательная).
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, CheckState, VenueId};
+use crate::core::types::{Asset, CheckState, CoinCheck, VenueId};
 use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -42,6 +46,18 @@ pub fn measured(
         .max()
 }
 
+/// Решение 277: проверка налогов котируемой монеты (адрес USDT ядра, core/inner.rs usdt) — нужна только налогу
+/// перевода (measured), не справочнику монет и не экрану «Монеты» (USDT там нет). Принимает: ядро, проверку.
+/// Возвращает: да — это проверка USDT; адрес USDT ядру ещё не известен — нет. Ошибок нет.
+pub fn is_quote(core: &Core, c: &CoinCheck) -> bool {
+    c.asset.bsc_contract.is_some_and(|t| quote_token(core, t))
+}
+
+/// Адрес — USDT ядра (core/inner.rs usdt). Адрес USDT ещё не известен — нет. Ошибок нет.
+fn quote_token(core: &Core, token: Address) -> bool {
+    rd(&core.inner.usdt).as_ref().is_ok_and(|u| *u == token)
+}
+
 /// Можно ли биржа ↔ биржа без измеренного налога (cex_cex.untaxed_ok = да). Не задана — нет. Ошибок нет.
 pub fn untaxed_ok(s: &Store) -> bool {
     s.flag("cex_cex.untaxed_ok", At::default()).unwrap_or(false)
@@ -50,7 +66,7 @@ pub fn untaxed_ok(s: &Store) -> bool {
 /// Налог перевода при выводе с биржи на площадку `to`, %. Принимает: ядро, получателя, монету.
 /// Возвращает: процент (0 — нативная монета или биржа ↔ биржа с cex_cex.untaxed_ok = да).
 /// Ошибки: текст — нет адреса контракта; налог не измерен (получатель DEX — проверка не закончена; биржа ↔ биржа —
-/// cex_cex.untaxed_ok не «да»).
+/// cex_cex.untaxed_ok не «да»). Решение 277: замер налога USDT учитывается только у получателя-DEX.
 pub fn pct(core: &Core, to: &VenueId, asset: &Asset) -> Result<Decimal, String> {
     // Решение 211 (ревью К1): нативная — по тикеру И адресу обёртки (native::is_native), не любой токен с этим тикером.
     if super::native::is_native(core, asset) {
@@ -63,10 +79,12 @@ pub fn pct(core: &Core, to: &VenueId, asset: &Asset) -> Result<Decimal, String> 
         )
     })?;
     let kinds = rd(&core.inner.kinds).clone();
-    if let Some(p) = measured(&rd(&core.inner.market), &kinds, token) {
+    let to_dex = kinds.iter().any(|(v, k)| v == to && *k == VenueKind::Dex);
+    // Решение 277 (ревью): замер налога USDT — только получателю-DEX; получателю-биржи — как до решения 277.
+    let use_measured = to_dex || !quote_token(core, token);
+    if use_measured && let Some(p) = measured(&rd(&core.inner.market), &kinds, token) {
         return Ok(p);
     }
-    let to_dex = kinds.iter().any(|(v, k)| v == to && *k == VenueKind::Dex);
     if to_dex {
         return Err(format!("{}: налог перевода не проверен", asset.ticker));
     }

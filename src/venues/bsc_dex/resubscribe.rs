@@ -8,7 +8,7 @@
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
 //! С подпиской живут задачи событий баланса — по одной на кошелёк (wallet/events.rs, решение 76; решение 132: у
 //! каждого кошелька своя очередь и свои события). Изменение кошельков или маппинга пересобирает подписку.
-//! Настройки: dex.intermediate_*, dex.native_ticker (следит за изменениями).
+//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped (следит за изменениями).
 
 use std::sync::{Arc, Mutex};
 
@@ -65,7 +65,12 @@ impl Subs {
         tokio::spawn(async move {
             let mut w = Watch::new(
                 rx,
-                vec!["dex.intermediate_".into(), "dex.native_ticker".into()],
+                vec![
+                    "dex.intermediate_".into(),
+                    "dex.native_ticker".into(),
+                    // Решение 270: смена обёртки на лету меняет, какой WETH() нативный, — список пересобирается.
+                    "dex.native_wrapped".into(),
+                ],
             );
             // Решение 132: кошельки или маппинг изменились — пересобираются только задачи кошельков (пулы не трогаем).
             let mut acc = p.ctx.settings.accounts().subscribe();

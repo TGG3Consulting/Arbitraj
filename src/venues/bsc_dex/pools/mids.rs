@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/pools/mids.rs
 //! Что делает: промежуточные монеты (решение 52) — переключатель dex.intermediate_enabled и список адресов
 //! dex.intermediate_tokens [bsc_dex]; у каждой — тикер для затрат: тикер биржи по адресу (монета из подписки ядра)
-//! или тикер нативной монеты на бирже (dex.native_ticker), если адрес — её обёртка (WETH() роутера V2 своей DEX; ядро
-//! пересчитывает WBNB как BNB 1:1). Настройка не задана — обёртка не используется (причина в журнал).
+//! или тикер нативной монеты на бирже (dex.native_ticker), если адрес — её обёртка: dex.native_wrapped (решение 270;
+//! не задана — WETH() любого роутера V2, как раньше); ядро пересчитывает WBNB как BNB 1:1. WETH() роутера, не равный
+//! dex.native_wrapped (чужая обёртка), тикер не получает. dex.native_ticker не задан — обёртка не используется (журнал).
 //! Тикер неизвестен — монета не используется (ядро не пересчитает её затраты в USDT), причина — в журнал.
 //! Промежуточная монета с любым налогом (покупки, продажи, перевода) в маршруте не используется — решение техлида
 //! (Issue #7), проверка — quote/via_pools.rs.
@@ -10,6 +11,7 @@
 //! Решение 239: pinned — копия списка на момент снимка котировки (venues/bsc_dex/frozen.rs).
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
+//! Решение 270 — деление WETH() на нативную и чужую: pools/wrapped.rs.
 //! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
 //! 205: известная обёртка, если WETH() роутеров не прочитан); dex.router [вид пула V2] (WETH()).
 //!
@@ -28,6 +30,7 @@ use super::super::node::abi_dex::IV2Router;
 use super::super::node::call;
 use super::super::tokens::Tokens;
 use super::families::{self, Proto};
+use super::wrapped;
 
 /// Промежуточная монета: адрес и тикер для затрат.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,8 +97,10 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
     // Решение 205: обёртка — WETH() роутеров V2 и dex.native_wrapped (решение 62). У части форков (mdex_bsc, julswap,
     // журнал 06.11: «WETH() роутера не прочитан: execution reverted») WETH() нет — без настройки обёртка терялась бы,
     // и промежуточная WBNB выпадала, если остальные роутеры не ответили.
-    let mut wrapped = wrapped_native(ctx).await;
-    if let Ok(w) = ctx.addr("dex.native_wrapped")
+    // Решение 270: нативной считается только dex.native_wrapped; чужой WETH() роутера (fstswap) тикера BNB не получает.
+    let configured = ctx.addr("dex.native_wrapped").ok();
+    let (mut wrapped, foreign) = wrapped::split(router_weths(ctx).await, configured);
+    if let Some(w) = configured
         && !wrapped.contains(&w)
     {
         wrapped.push(w);
@@ -107,8 +112,12 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
             Some(t) => Ok(t),
             None if wrapped.contains(&address) => native.clone().map_err(|e| e.message),
             None => Err(
-                "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2, dex.native_wrapped)"
-                    .to_string(),
+                if let Some((title, _)) = foreign.iter().find(|(_, a)| *a == address) {
+                    wrapped::foreign_fact(title, address)
+                } else {
+                    "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2, dex.native_wrapped)"
+                        .to_string()
+                },
             ),
         };
         match ticker {
@@ -124,9 +133,9 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
     Ok(out)
 }
 
-/// Адреса обёртки нативной монеты: WETH() роутеров включённых видов V2. Сбой вида — в журнал, вид пропускается.
-/// Нужна и «Проверить подключение» (connection_extra.rs: dex.native_wrapped = WETH() роутеров, решение 62).
-pub async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
+/// WETH() роутеров включённых видов V2 (DEX, адрес). Сбой вида — в журнал, вид пропускается. Делить на нативную и
+/// чужую — wrapped::split (решение 270). Нужна и «Проверить подключение» (connection_extra.rs, решение 62).
+pub async fn router_weths(ctx: &Ctx) -> Vec<(String, Address)> {
     let mut out = Vec::new();
     for f in families::all(ctx)
         .into_iter()
@@ -140,7 +149,7 @@ pub async fn wrapped_native(ctx: &Ctx) -> Vec<Address> {
             Err(e) => Err(e),
         };
         match res {
-            Ok(a) => out.push(a),
+            Ok(a) => out.push((f.title.to_string(), a)),
             Err(e) => {
                 // Решение 205: у роутера нет WETH() (форк без этой функции) — не помеха маршруту: обёртка известна из
                 // других роутеров и dex.native_wrapped (read). Предупреждение — только если настройка не задана.

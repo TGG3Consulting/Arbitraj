@@ -122,3 +122,4 @@ pub mod verify_solidly;
 pub mod verify_stable_u;
 pub mod verify_v4;
 pub mod verify_woo;
+pub mod wrapped;

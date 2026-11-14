@@ -147,7 +147,8 @@ pub async fn router_weths(ctx: &Ctx) -> Vec<(String, Address)> {
     let mut out = Vec::new();
     for f in families::all(ctx)
         .into_iter()
-        .filter(|f| f.proto == Proto::V2)
+        // Решение 280: у V2-форка без роутера (tradable = нет) WETH() спросить не у кого — пропускается молча.
+        .filter(|f| f.proto == Proto::V2 && f.tradable)
     {
         if families::classify(ctx, f.id).is_err() {
             continue;

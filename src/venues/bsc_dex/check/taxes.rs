@@ -27,7 +27,7 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::{rate, select};
+use super::super::quote::{rate, select, v2_pair_quote};
 use super::super::tokens::Tokens;
 use super::super::wallet::signer;
 use super::pool_taxes;
@@ -205,6 +205,12 @@ async fn run(
             }
             Err(err) if err.code == ErrorCode::NotConfigured => {
                 config.push((err.message, err.setting))
+            }
+            // Решение 280: V2-форк без роутера — покупка через исполнитель откатилась: налоги ПУЛА не измерены (пул в
+            // маршрут не идёт, решение 146), монета не «не прошла» — причина в «не проверено».
+            Err(err) if err.code == ErrorCode::SwapReverted && v2_pair_quote::on(e) => {
+                checks.update_pool(&e.pool.reference, |f| f.taxes = None);
+                env.push(err.message)
             }
             Err(err) => env.push(format!("{}: {}", e.family.title, err.message)),
         }

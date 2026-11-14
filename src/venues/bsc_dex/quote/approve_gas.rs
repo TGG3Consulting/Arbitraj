@@ -83,6 +83,11 @@ pub async fn units(
     }
     // Решение 271 (ревью): первый хоп — форк (граф, без исполнителя) — нога форка в бандле: одно ERC-20 approve роутеру
     // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
+    // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
+    // бы исполнителю — газ, измеренный пробой (dex.router не читается).
+    if super::v2_pair_quote::on(&e) {
+        return measured(q, &e.pool.reference, quote.side);
+    }
     if route.mode == RouteMode::Graph && e.family.fork {
         let router = ctx.dex_addr("dex.router", e.family.id)?;
         let wallet = signer::address(ctx)?;

@@ -3,7 +3,7 @@
 //! Кто вызывает: check/probe.rs.
 //! Там же: хвост второй симуляции пробы — продажа, затем пробный перевод (sell_tail, решение 252); итог пробной продажи — пара «квотер / пришло» или почему налог продажи не измерен (sell_result, решение 146),
 //! откат шага пробной покупки — вердикт по монете или помеха (buy_revert; срок транзакции вышел — помеха, у Universal Router и у исполнителя).
-//! От чего зависит: check/simulate.rs (Call), check/probe.rs (SellMiss), node/abi.rs, quote/quoter_calls.rs, quote/quoter_revert.rs.
+//! От чего зависит: check/simulate.rs (Call), check/probe.rs (SellMiss), node/abi.rs, quote/v2_pair_probe.rs (квотер или резервы пары), quote/quoter_revert.rs.
 //! Настройки: нет.
 //!
 //! ERC-20 — https://eips.ethereum.org/EIPS/eip-20 .
@@ -17,7 +17,7 @@ use super::super::ctx::Ctx;
 use super::super::exec::ur;
 use super::super::node::abi::IERC20;
 use super::super::pools::registry::Entry;
-use super::super::quote::{quoter_calls, quoter_revert};
+use super::super::quote::{quoter_revert, v2_pair_probe};
 use super::super::wallet::approve::Approval;
 use super::probe::SellMiss;
 use super::simulate::{Call, CallResult};
@@ -97,10 +97,16 @@ pub fn u256(r: &CallResult) -> Option<U256> {
 }
 
 /// Итог пробной продажи (решение 146). Принимает: пул, четыре итога подряд — квотер на продажу остатка, баланс
-/// встречного токена кошелька до продажи, продажа, баланс после; прошла ли продажа с её разрешениями.
+/// встречного токена кошелька до продажи, продажа, баланс после; (прошла ли продажа с её разрешениями, сколько монет
+/// продано — для «ожидалось» V2-форка без роутера, решение 280).
 /// Возвращает: Ok((ответ квотера, прирост баланса)) или Err(SellMiss) — налог продажи НЕ ИЗМЕРЕН: продажа откатилась
 /// (reverted = true, вердикт по пулу) или квотер не ответил / ответ не по ABI (помеха). Ошибок иных нет.
-pub fn sell_result(e: &Entry, r: &[CallResult], sold: bool) -> Result<(U256, U256), SellMiss> {
+pub fn sell_result(
+    ctx: &Ctx,
+    e: &Entry,
+    r: &[CallResult],
+    (sold, rest): (bool, U256),
+) -> Result<(U256, U256), SellMiss> {
     let miss = |reverted, why: String| SellMiss { reverted, why };
     let [quote, before, swap, after] = r else {
         return Err(miss(false, "итогов пробной продажи не четыре".into()));
@@ -121,7 +127,7 @@ pub fn sell_result(e: &Entry, r: &[CallResult], sold: bool) -> Result<(U256, U25
         ));
     }
     match (
-        quoter_calls::decode(e, &quote.return_data),
+        v2_pair_probe::decode_any(ctx, e, &quote.return_data, e.coin, rest),
         u256(before),
         u256(after),
     ) {

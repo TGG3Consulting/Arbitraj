@@ -4,6 +4,8 @@
 //! в пуле стороны BNB каждой доли (продажа — первый пул, покупка — последний); обёртка одна на транзакцию — берётся
 //! наибольший замер долей. Не измерено — котировки нет («не торгуем вслепую»). Графовый маршрут бандлом (решение 122
 //! R3): обёртка — в execute каждого Universal Router бандла, поэтому газ = сумма по роутерам наибольшего замера их долей.
+//! Решение 272: маршрут через исполнитель v2 (executeNative) — одна транзакция: наибольший замер долей; замер пулов,
+//! через которые BNB идёт только исполнителем, — check/native_probe_exec.rs (не измерен — CoinNotChecked, как раньше).
 //! Кто вызывает: quote/mod.rs.
 //! От чего зависит: check/state.rs, exec/native.rs, pools/families.rs (classify), pools/registry.rs, num.rs, core/types.
 //! Настройки: через exec/native.rs — dex.native_ticker, dex.native_wrapped [bsc_dex]; dex.universal_router [DEX]
@@ -32,7 +34,8 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
         .route
         .as_ref()
         .ok_or_else(|| ctx.err(ErrorCode::Internal, "у котировки нет маршрута"))?;
-    // Наибольший замер по каждому роутеру (графовый маршрут) или один на всю транзакцию (прямой/умный).
+    // Наибольший замер по каждому роутеру (графовый маршрут) или один на всю транзакцию (прямой/умный, исполнитель).
+    let via_exec = matches!(super::super::exec::executor::takes(ctx, route, true), Ok(Some(_)));
     let mut per: Vec<(Option<Address>, u64)> = Vec::new();
     for leg in &route.legs {
         let hop = match quote.side {
@@ -66,7 +69,8 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
         };
         // Роутер не читается (форк без UR) — такая доля в бандл с BNB не идёт (quote/graph_exec.rs); считаем её одной
         // группой «без роутера», чтобы котировка не падала.
-        let router = (route.mode == RouteMode::Graph)
+        // Решение 272: маршрут идёт через исполнитель (executeNative) — одна транзакция, одна обёртка: одна группа.
+        let router = (route.mode == RouteMode::Graph && !via_exec)
             .then(|| families::classify(ctx, &hop.family).ok())
             .flatten()
             .and_then(|f| ctx.dex_addr("dex.universal_router", f.id).ok());

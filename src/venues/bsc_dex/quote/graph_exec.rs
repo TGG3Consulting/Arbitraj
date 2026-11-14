@@ -58,7 +58,9 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
     // Решение 122 (часть X): задан exec.executor_address и каждый шаг — вид исполнителя (pools/exec_kind.rs) — маршрут
     // не формы Universal Router (graph_form = бандл) идёт одной транзакцией через исполнитель: бандловые каналы не
     // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
-    if !native && graph_executor::all_via(ctx, legs) && !graph_executor::ur_form(ctx, legs) {
+    // Решение 272: исполнитель v2 (executeNative) — и нативная монета; v1 или не сверен — как раньше.
+    let native_via = !native || super::super::exec::executor::native_capable(ctx);
+    if native_via && graph_executor::all_via(ctx, legs) && !graph_executor::ur_form(ctx, legs) {
         return graph_executor::tax(legs);
     }
     // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.

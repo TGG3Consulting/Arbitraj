@@ -28,7 +28,8 @@ use crate::core::types::{Asset, Quote, RouteMode, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
-use super::super::exec::native;
+use super::super::ctx::Ctx;
+use super::super::exec::{native, native_exec};
 use super::graph_split::{self, Cand};
 use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
@@ -74,7 +75,7 @@ pub async fn quote(
     // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
     // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
     if native::is_native(ctx, asset) {
-        paths.retain(|p| native_ok(v.coin, p));
+        paths.retain(|p| native_ok_at(ctx, v.coin, p));
     }
     if paths.is_empty() {
         return Err(ctx.err(
@@ -188,6 +189,15 @@ pub async fn merge(
             classic
         }
     }
+}
+
+/// Решение 272: то же, что native_ok, с исполнителем v2 — пул на стороне BNB годится и шагом исполнителя (exec/native_exec.rs::edge_ok);
+/// исполнитель v1 или не сверен — ровно native_ok. Принимает: окружение, монету (обёртку), путь. Ошибок нет.
+pub fn native_ok_at(ctx: &Ctx, coin: Address, path: &RoutePath) -> bool {
+    path.steps.iter().all(|s| {
+        let touches = s.token_in == coin || s.token_out == coin;
+        !touches || native_exec::edge_ok(ctx, s.edge.entry.pool.kind, s.edge.entry.family)
+    })
 }
 
 /// Решение 62: путь не маршрутизирует нативную монету `coin` (BNB) через V4 / Infinity — все хопы, касающиеся монеты,

@@ -9,6 +9,8 @@
 //! Налога у нативного перевода нет: это не вызов контракта токена (value транзакции), налог взять некому.
 //! Пул, через который сделки BNB нет (форк V2 со своим classic V2 Router, вид только с исполнителем —
 //! exec/native.rs::trade_path), не пробуется: в факты пула и журнал (Info, один раз) — точная причина.
+//! Решение 272: у кошелька проб исполнитель v2 и пул исполним шагом исполнителя (exec/native_exec.rs::exec_ok) — такой
+//! пул пробуется через executeNative (check/native_probe_exec.rs) вместо отказа; v1 — как раньше.
 //! Кто вызывает: check/taxes.rs (после удачной пробы пула нативной монеты).
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe.rs (Measured), check/probe_calls.rs, check/emitter.rs,
 //! check/state.rs, exec/plan.rs, exec/native.rs, wallet/balances.rs, pools/registry.rs.
@@ -25,7 +27,7 @@ use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::super::exec::native;
+use super::super::exec::{native, native_exec};
 use super::super::exec::plan::{self, Order, Plan};
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
@@ -54,13 +56,15 @@ pub async fn after(
         bsc_contract: Some(e.coin),
     };
     // Только V2/V3 (exec/native.rs::pool_ok): через V4 / Infinity BNB не торгуется — и мерить нечего.
-    if !native::is_native(ctx, &asset) || !native::pool_ok(e.pool.kind) {
+    // Решение 272: и любой вид с шагом исполнителя v2 (exec/native_exec.rs::edge_ok; при v1 — ровно pool_ok).
+    if !native::is_native(ctx, &asset) || !native_exec::edge_ok(ctx, e.pool.kind, e.family) {
         return;
     }
     // Сделки BNB через пул форка V2 или вида только с исполнителем нет (exec/native.rs::trade_path) — мерить нечего:
     // проба не запускается (раньше шла через Universal Router и требовала dex.universal_router у форка). Причина — в
     // факты пула и в журнал один раз (при смене).
-    if let Err(why) = native::trade_path(e.family) {
+    let via_exec = native::trade_path(e.family).is_err() && native_exec::exec_ok(ctx, e.family);
+    if let (Err(why), false) = (native::trade_path(e.family), via_exec) {
         let same = matches!(&checks.pool(&e.pool.reference).wrap_gas, Some(Err(w)) if *w == why);
         if !same {
             let msg = format!(
@@ -72,7 +76,12 @@ pub async fn after(
         checks.update_pool(&e.pool.reference, |f| f.wrap_gas = Some(Err(why)));
         return;
     }
-    let res = match run(ctx, e, source, wallet, usdt_amount, heads, m).await {
+    let probed = if via_exec {
+        super::native_probe_exec::run(ctx, e, (source, wallet), usdt_amount, heads, m).await
+    } else {
+        run(ctx, e, source, wallet, usdt_amount, heads, m).await
+    };
+    let res = match probed {
         Ok(Ok((buy, sell, transfer))) => {
             checks.set_native_transfer_gas(e.coin, transfer);
             Ok((buy, sell))

@@ -13,6 +13,7 @@ pub mod emitter;
 pub mod fresh;
 pub mod hooks_probe;
 pub mod native_probe;
+pub mod native_probe_exec;
 pub mod pool_taxes;
 pub mod probe;
 pub mod probe_buy;

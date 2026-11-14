@@ -2,10 +2,11 @@
 //! Что делает: части пачечного чтения (load_batch.rs): вызовы и разбор ступени 1 (V2 getReserves, V3 slot0 + liquidity;
 //! CL — load_batch_cl.rs), слова тиков V3 через TickLens и выполнение ступени (все вызовы всех пулов вместе через
 //! node/call.rs try_chunks, ответы — обратно по пулам). Те же функции и разбор по ABI, что у load_v2v3.rs.
-//! Решение 274: у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 добавлены swapFee фабрики (fee_override.rs).
+//! Решение 274: у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 добавлены swapFee фабрики (fee_override.rs);
+//! решение 281: при pool_fee_each_read — fee() пула последним вызовом (fee_fresh.rs; отделяет load_batch.rs).
 //! Кто вызывает: pools/load_batch.rs.
 //! От чего зависит: node/call.rs (try_chunks, decode), pools/abi_v2v3.rs, load_batch_cl.rs, load_batch.rs (Want).
-//! Настройки: dex.tick_lens [вид пула V3].
+//! Настройки: dex.tick_lens, dex.v3_fee_source [вид пула V3].
 //!
 //! getReserves / slot0 / liquidity / TickLens.getPopulatedTicksInWord — research/flow/bsc_dex.md, раздел 3
 //! (IPancakeV3PoolState.sol#L21-L48, IUniswapV3PoolState.sol#L21-L32, ITickLens.sol#L6-L24; как в load_v2v3.rs).
@@ -21,6 +22,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_v2v3::{IPancakeV3Pool, ITickLens, IUniswapV3Pool, IV2Pair, IV3Pool};
 use super::families::Proto;
+use super::fee_fresh;
 use super::fee_override;
 use super::load_batch::{Answers, Stage, Want};
 use super::load_batch::{Miss, miss};
@@ -55,6 +57,10 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
             // Решение 274 (SheepDex): своя комиссия получателя у фабрики — swapFee(кошелёк/исполнитель, 0).
             if fee_override::on(ctx, w.family) {
                 l.extend(fee_override::calls(ctx, w.family)?);
+            }
+            // Решение 281 (SquadSwap V3): свежая fee() пула последним вызовом — load_batch.rs отделяет её до parse_head.
+            if fee_fresh::on(ctx, w.family) {
+                l.push(fee_fresh::call(*a));
             }
             Ok(l)
         }

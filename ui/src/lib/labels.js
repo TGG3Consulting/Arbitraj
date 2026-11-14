@@ -76,6 +76,7 @@ const CHOICE_BY_SETTING = {
   'dex.v3_fee_source': {
     pool: 'fee() пула',
     factory_swap_fee: 'комиссия от фабрики swapFee (SheepDex)',
+    pool_fee_each_read: 'fee() пула при каждом чтении (SquadSwap V3)',
   },
 };
 const POOL_KIND = {

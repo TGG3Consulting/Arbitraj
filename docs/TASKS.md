@@ -29,6 +29,26 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 281 (15.11.2026, ветка t113/squadswap-v3 от rel/dex-all) — сделано, ждёт приёмки.** SquadSwap V3
+  (squadswap-v3-bsc): вид `v3_fork_pancake` + ключ реестра `dex.v3_registry_fee_method` + свежая fee()
+  `dex.v3_fee_source = pool_fee_each_read` + события менеджера `dex.v3_fee_manager`. **Открыто:**
+  1. **Исполнение:** у ArbExecutor v1 нет обратного вызова `squadV3SwapCallback(int256,int256,bytes)` (селектор
+     0xc4e21d86, SquadV3Pool.sol L794, L800) — пул Squad в шаге V3 откатится. Нужно добавить его в ArbExecutor v2
+     (ветка t105; тело — как pancakeV3SwapCallback: проверка msg.sender = пул шага и оплата долга), пересобрать и
+     переразвернуть. До этого пулы Squad — только граф и сигналы.
+  2. Значения настроек (экран «Контракты DEX», id DEX `squadswap-v3-bsc`): dex.kind = v3_fork_pancake, dex.factory =
+     0x10d8612D9D8269e322AB551C18a307cB4D6BC07B, dex.tick_lens = 0x7C9C9220B563A09167943fd327d50e858C0A6373,
+     dex.quoter = 0xAF78c3C4100070337DBa8C79065339CfB77CFe7F, dex.v3_registry_fee_method = defaultFee(),
+     dex.v3_fee_source = pool_fee_each_read, dex.v3_fee_manager = 0x391eaa90f931c6330132efe6c73ebdf77d782ef5,
+     dex.pool_enabled = да (по желанию — dex.quoter_virtual = да: виртуальный квотер со squadV3SwapCallback).
+  3. Живого лога SetCustomFee / ToggleCustomFee / UpdatePoolManager в доступной истории узла нет (блоки
+     129918817–133618816) — разбор событий (pools/abi_squad.rs pool_of) тестом на записанном логе не покрыт; при
+     первом событии на сервере проверить запись журнала «Комиссия пула …: … → …».
+  4. Тестами на записанных данных не покрыты: подписка fee_watch.rs (сеть), чтение fee() по одному (load.rs) —
+     пачечный путь (fee_fresh::split + parse_head) покрыт.
+  5. Пулы тонкие (USDT/WBNB ≈1,5 тыс. $, сторона USDT почти пуста): на записи WBNB → USDT уже на 1 $ уводит цену
+     за слова битмапа ±10 (расчёт бота частичный, если загрузчик читает столько же слов), USDT → WBNB на 10000 $ —
+     пул не берёт весь вход. Сверка 1 в 1 — 14 случаев из 18.
 - **Решение 275 (14.11.2026, ветка t107/sheepdex-curve-ng от rel/dex-all) — сделано, ждёт приёмки.** Curve
   StableSwap-NG: новый вид `curve_stableswap_ng`. **Открыто:**
   1. Значения настроек (id DEX `curve-bsc`): dex.kind = curve_stableswap_ng, dex.factory =

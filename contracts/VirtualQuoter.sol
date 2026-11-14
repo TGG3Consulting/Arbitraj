@@ -12,7 +12,10 @@
 //   ICLPoolActions.sol L131-L137) и обратные вызовы uniswapV3SwapCallback / pancakeV3SwapCallback / algebraSwapCallback,
 //   а также swapCallback пула SheepDex (решение 274: SpePool — форк Uniswap V3 с тем же swap, обратный вызов
 //   ISpeSwapCallback.swapCallback(int256,int256,bytes); verified-исходник Sourcify partial_match 56/0x1978…5f62,
-//   SpePool.sol L1757-L1762, вызов в swap L2447, L2453).
+//   SpePool.sol L1757-L1762, вызов в swap L2447, L2453), и squadV3SwapCallback пула SquadSwap V3 (решение 281: SquadV3Pool —
+//   форк PancakeSwap V3 с тем же swap, обратный вызов ISquadV3SwapCallback.squadV3SwapCallback(int256,int256,bytes),
+//   селектор 0xc4e21d86; verified-исходник Sourcify partial_match 56/0x9fb9815ca1417b06466aaa86521a28ba83d0bd33,
+//   SquadV3Pool.sol (sha256 88dd3da0…9283) — swap L603, вызов L794, L800).
 // Настройки: нет. Пределы цены — TickMath.MIN_SQRT_RATIO + 1 / MAX_SQRT_RATIO - 1 (те же числа в v3-core TickMath.sol L14, L16).
 pragma solidity 0.8.37;
 
@@ -61,4 +64,5 @@ contract VirtualQuoter {
     function pancakeV3SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
+    function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
 }

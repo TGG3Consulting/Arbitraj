@@ -4,10 +4,10 @@
 //! V2 — Router.getAmountsOut; V3 — QuoterV2.quoteExactInputSingle; Infinity CL/Bin — CLQuoter/BinQuoter;
 //! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые); KyberSwap Elastic — свой QuoterV2
 //! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81); Maverick V2 — MaverickV2Quoter.calculateSwap
-//! (quote/quoter_maverick.rs, решение 122 F).
+//! (quote/quoter_maverick.rs, решение 122 F). V3 с dex.v3_registry_fee_method (решение 281) — fee квотера = ключ реестра.
 //! Кто вызывает: quote/quoter.rs, check/probe.rs.
-//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, ctx.rs.
-//! Настройки: dex.router (V2), dex.quoter (V3, V4) [вид пула].
+//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, pools/registry_key.rs, ctx.rs.
+//! Настройки: dex.router (V2), dex.quoter (V3, V4), dex.v3_registry_fee_method (V3) [вид пула].
 //!
 //! Сигнатуры — шапка node/abi_dex.rs (официальные интерфейсы Uniswap v2/v3, pancake-v3, infinity-periphery, v4-periphery).
 
@@ -33,6 +33,7 @@ use super::super::pools::families::Proto;
 use super::super::pools::key::PoolKey;
 use super::super::pools::load_dodo::FEE_TRADER;
 use super::super::pools::registry::Entry;
+use super::super::pools::registry_key;
 
 /// Адрес и данные вызова квотера. Ошибки: NotConfigured (адрес), NoRoute (сумма больше uint128 у V4), Internal (нет ключа).
 pub fn request(
@@ -256,10 +257,16 @@ pub fn request(
             ));
         }
         (PoolKind::V3, _) => {
+            // QuoterV2 ищет пул через фабрику по параметру fee: обычно это fee_pips пула; у DEX с
+            // dex.v3_registry_fee_method (решение 281, SquadSwap V3) — ключ реестра (defaultFee), иначе квотер откатится.
+            let set = registry_key::method(ctx, e.family).is_some();
+            let key = match e.pool.reference {
+                PoolRef::Contract(a) => registry_key::get(a),
+                _ => None,
+            };
             let fee = U24::from(
-                e.pool
-                    .fee_pips
-                    .ok_or_else(|| ctx.err(ErrorCode::Internal, "у пула V3 нет fee"))?,
+                registry_key::quoter_fee(set, key, e.pool.fee_pips)
+                    .map_err(|w| ctx.err(ErrorCode::Internal, w))?,
             );
             let p = IQuoterV2::QuoteExactInputSingleParams {
                 tokenIn: token_in,

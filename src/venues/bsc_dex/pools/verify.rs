@@ -7,12 +7,13 @@
 //! V4/Infinity — verify_v4.rs. Вызовы — частями по dex.verify_batch: сбой узла на части — итог «не проверен» только
 //! у её пулов (повтор — pools/index.rs), откат вызова — это ответ (пул отклонён с причиной).
 //! V3: во второй проход — проба swapFee фабрики (решение 274, fee_probe.rs): фабрика берёт комиссию обмена, а
-//! dex.v3_fee_source не задана — пулы DEX не берутся с причиной.
+//! dex.v3_fee_source не задана — пулы DEX не берутся с причиной. V3 с dex.v3_registry_fee_method (решение 281,
+//! SquadSwap V3): реестр спрашивается по значению её метода, ключ — в память (registry_key.rs), fee_pips — fee().
 //! Кто вызывает: pools/index.rs, pools/created_log.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_check.rs, abi_v2v3.rs, discover.rs (Found), verify_rules.rs,
-//! verify_calls.rs, verify_v4.rs, fee_probe.rs.
+//! verify_calls.rs, verify_v4.rs, fee_probe.rs, registry_key.rs.
 //! Настройки: dex.verify_batch, dex.multicall3 [bsc_dex]; dex.factory, dex.v2_fee_source, dex.v2_fee_method,
-//! dex.v2_fee_denominator, dex.v3_fee_source [DEX].
+//! dex.v2_fee_denominator, dex.v3_fee_source, dex.v3_registry_fee_method [DEX].
 //!
 //! ABI — abi_check.rs (ссылки там); getPair / getPool — abi_v2v3.rs (IUniswapV2Factory.sol#L9, IUniswapV3Factory.sol#L48).
 
@@ -27,7 +28,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call::{self, Piece};
 use super::discover::Found;
 use super::families::{Family, Proto};
-pub use super::verify_calls::{fee_method, field_calls, registry_call};
+pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
 use super::{
     fee_probe, verify_algebra, verify_curve, verify_curve_ng, verify_dodo, verify_inf_stable,
@@ -42,6 +43,10 @@ pub struct Candidate {
     pub coin: Address,
     pub quote: Address,
 }
+
+/// Прочитанное с пула V2/V3 в первом проходе: адрес, поля и ключ реестра V3 (решение 281; None — без
+/// dex.v3_registry_fee_method).
+type Fields = (Address, Read, Option<u32>);
 
 /// Итог проверки пула.
 #[derive(Debug, Clone)]
@@ -193,7 +198,7 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
     }
     let got = call::try_chunks(ctx, &calls, "latest", size).await;
     // Первый проход: поля пула и сверка с настройками.
-    let mut first: Vec<Result<(Address, Read), Verdict>> = Vec::new();
+    let mut first: Vec<Result<Fields, Verdict>> = Vec::new();
     let mut reg = Vec::new();
     for (c, plan) in cands.iter().zip(plans) {
         let r = match plan {
@@ -201,13 +206,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
             Ok((a, at, n)) => match answers(&got[at..at + n]) {
                 Err(node) => Err(Verdict::Failed(node)),
                 Ok(list) => fields(ctx, c, &list)
-                    .map(|read| (a, read))
+                    .and_then(|read| Ok((a, read, super::registry_key::from_answers(&list)?)))
                     .map_err(Verdict::Rejected),
             },
         };
-        if let Ok((_, read)) = &r {
+        if let Ok((_, read, key)) = &r {
             let factory = ctx.dex_addr("dex.factory", c.family.id).unwrap_or_default();
-            reg.push((factory, registry_call(c.family, read)));
+            reg.push((factory, registry_call_with(c.family, read, *key)));
         }
         first.push(r);
     }
@@ -223,13 +228,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
     for (c, r) in cands.iter().zip(first) {
         out.push(match r {
             Err(v) => v,
-            Ok((a, read)) => match regs.next() {
+            Ok((a, read, key)) => match regs.next() {
                 None => Verdict::Failed("нет ответа реестра".into()),
                 Some(Err(node)) => Verdict::Failed(node),
                 Some(Ok(Err(rev))) => Verdict::Rejected(format!("реестр фабрики откатился: {rev}")),
                 Some(Ok(Ok(b))) => match probes.check(c.family.id) {
                     Err(v) => v,
-                    Ok(()) => match registered(a, &b).and_then(|_| found(ctx, c, a, &read)) {
+                    Ok(()) => match registered(a, &b).and_then(|_| found(ctx, c, a, &read, key)) {
                         Ok(f) => Verdict::Taken(Box::new(f)),
                         Err(w) => Verdict::Rejected(w),
                     },
@@ -251,8 +256,15 @@ fn fields(ctx: &Ctx, c: &Candidate, list: &[Result<Bytes, String>]) -> Result<Re
     Ok(read)
 }
 
-/// Найденный пул V2/V3 по прочитанному. Ошибка — не задан делитель комиссии или комиссия неверна.
-fn found(ctx: &Ctx, c: &Candidate, pool: Address, r: &Read) -> Result<Found, String> {
+/// Найденный пул V2/V3 по прочитанному (key — ключ реестра V3, решение 281). Ошибка — не задан делитель комиссии
+/// или комиссия неверна.
+fn found(
+    ctx: &Ctx,
+    c: &Candidate,
+    pool: Address,
+    r: &Read,
+    key: Option<u32>,
+) -> Result<Found, String> {
     let fee_pips = match (c.family.proto, r.v2_fee) {
         (Proto::V2, Some(v)) => {
             let den = ctx
@@ -263,6 +275,10 @@ fn found(ctx: &Ctx, c: &Candidate, pool: Address, r: &Read) -> Result<Found, Str
         (Proto::V2, None) => None,
         _ => r.fee,
     };
+    // Решение 281: ключ реестра подтверждён реестром фабрики (registered) — в память для QuoterV2 (quoter_calls.rs).
+    if let Some(k) = key {
+        super::registry_key::remember(pool, k);
+    }
     Ok(Found {
         family: c.family,
         reference: PoolRef::Contract(pool),

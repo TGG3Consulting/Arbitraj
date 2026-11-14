@@ -6,7 +6,7 @@
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
 //! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
-//! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs, directory/refresh.rs (справочник пулов, решение 58).
+//! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs, fee_watch.rs (решение 281), directory/refresh.rs (справочник пулов, решение 58).
 //! Настройки: venue.quote_asset [bsc_dex] (тикер USDT в списке ядра), dex.pools_per_sub; через вызываемые — dex.*,
 //! dex.intermediate_enabled, dex.intermediate_tokens.
 //!
@@ -31,7 +31,7 @@ use super::batches::chunks;
 use super::created::{self, Watch};
 use super::discover::{self, Scanned};
 use super::listen::{self, Pools};
-use super::{history_v4, index, index_watch, market_mids, mids};
+use super::{fee_watch, history_v4, index, index_watch, market_mids, mids};
 use crate::gateway::urgency::{Urgency as Class, scope};
 
 /// Запускает всё для подписки на рынок.
@@ -139,6 +139,8 @@ pub async fn subscribe(
     for w in &watches {
         tasks.push(tokio::spawn(created::run(p.clone(), w.clone())));
     }
+    // Комиссия пулов V3-форка от менеджера (решение 281, SquadSwap V3): события смены — перечтение fee() в реестр.
+    tasks.push(tokio::spawn(fee_watch::run(p.clone())));
     // Справочник обновил монеты — проверка их пулов и подключение новых (решение 58).
     tasks.push(tokio::spawn(index_watch::watch(
         p.clone(),

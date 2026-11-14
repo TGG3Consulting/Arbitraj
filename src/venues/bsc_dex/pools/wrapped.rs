@@ -4,9 +4,11 @@
 //! fstswap WETH() = 0x0EFb5fD2402A0967b92551d6AF54de148504A115, имя «Wrapped BNB», это НЕ WBNB 0xbb4C…), — чужой
 //! токен: ему тикер BNB не даётся, маршруты через него не берутся. dex.native_wrapped не задана — делить не с чем,
 //! все WETH() — нативные (поведение до решения 270). У DEX с WETH() = dex.native_wrapped результат тот же, что был.
+//! natives — какие адреса получают тикер нативной монеты (при dex.intermediate_dex_priced = да — только
+//! dex.native_wrapped, решение 270 дополнение 2).
 //! Кто вызывает: pools/mids.rs (тикер промежуточной монеты), connection_extra.rs («Проверить подключение»).
 //! От чего зависит: alloy_primitives.
-//! Настройки: dex.native_wrapped (передаётся параметром).
+//! Настройки: dex.native_wrapped, dex.intermediate_dex_priced (передаются параметрами).
 
 use alloy_primitives::Address;
 
@@ -22,6 +24,27 @@ pub fn split(list: Vec<RouterWeth>, native: Option<Address>) -> (Vec<Address>, V
     };
     let (own, foreign): (Vec<_>, Vec<_>) = list.into_iter().partition(|(_, a)| *a == n);
     (own.into_iter().map(|(_, a)| a).collect(), foreign)
+}
+
+/// Нативные обёртки для тикера промежуточной монеты (pools/mids.rs). Принимает: WETH() роутеров, dex.native_wrapped
+/// (None — не задана), dex.intermediate_dex_priced. Возвращает: (адреса, которым дать тикер нативной монеты; чужие
+/// WETH() — для текста отказа). Флаг нет: split и плюс dex.native_wrapped (решение 205: у части форков WETH() нет) —
+/// как до решения 276, включая «не задана — все WETH() нативные». Флаг да (решение 270, дополнение 2): нативная —
+/// только dex.native_wrapped (не задана — ни одной); остальные WETH() идут веткой решения 276. Чистая, ошибок нет.
+pub fn natives(
+    list: Vec<RouterWeth>,
+    configured: Option<Address>,
+    dex_priced: bool,
+) -> (Vec<Address>, Vec<RouterWeth>) {
+    let (mut own, foreign) = split(list, configured);
+    if dex_priced {
+        own = configured.into_iter().collect();
+    } else if let Some(w) = configured
+        && !own.contains(&w)
+    {
+        own.push(w);
+    }
+    (own, foreign)
 }
 
 /// Факт о чужой обёртке для журнала и экрана. Чистая, ошибок нет.

@@ -5,7 +5,7 @@
 //! с возвратом USDT «в каждой сделке» и σ > 0 — в плане есть строки запаса на движение цены (PriceMoveReserve) и
 //! «возврат USDT». Строка возврата источника — записанная комиссия вывода USDT BEP20 у BingX 0.15
 //! (tests/data/bingx_2026-10-24/config_getall.json, withdrawFee); σ — 0.00002 (как tests/core_price_reserve.rs).
-//! Кто вызывает: tests/report_results.rs.
+//! Кто вызывает: tests/report_results.rs, tests/core_plan_worst_262.rs, tests/core_mid_dex_cost.rs (plan_edit).
 //! От чего зависит: arb::core::{costs, dirctx, registry, uncapped_replay}, tests/size_common.
 #![allow(dead_code)]
 
@@ -13,10 +13,11 @@ use arb::core::costs::{self, Calc};
 use arb::core::costs_types::RETURN_STAGE;
 use arb::core::dirctx::DirCtx;
 use arb::core::registry::Presence;
+use arb::core::size::Fail;
 use arb::core::types::{Asset, Direction, OrderBook, VenueId};
 use arb::core::uncapped_replay::{Plan, Replay};
 use chrono::Utc;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::size_common::{CAKE, Rec, USDT, d};
 
@@ -78,8 +79,15 @@ fn cx(rec: &Rec) -> DirCtx {
 
 /// Настоящий план (см. шапку). Возвращает: расчёт ядра на 10 CAKE.
 pub async fn plan() -> Calc {
+    plan_edit(|_| {}).await.unwrap()
+}
+
+/// Тот же расчёт с правкой JSON плана до пересчёта (tests/core_mid_dex_cost.rs: строка затрат котировки DEX).
+/// Принимает: правку. Возвращает: расчёт ядра на 10 CAKE. Ошибки: Fail расчёта ядра.
+pub async fn plan_edit(edit: impl FnOnce(&mut Value)) -> Result<Calc, Fail> {
     let rec = Rec::load("res-plan").await;
     let mut pj = serde_json::to_value(crate::size_common::calc::calc(&rec, d("10"))).unwrap();
+    edit(&mut pj);
     pj["costs"].as_array_mut().unwrap().push(json!({
         "kind": "WithdrawFee", "stage": RETURN_STAGE, "amount": "0.15", "asset": "USDT", "usdt": "0.15",
         "in_price": false, "in_qty": false, "step": null
@@ -94,7 +102,5 @@ pub async fn plan() -> Calc {
         received_at: Utc::now(),
     };
     let src = Replay::new(&dir(), &plan, book, None, ["USDT", "USDT"]).unwrap();
-    costs::evaluate_with(&cx(&rec), d("10"), &src)
-        .await
-        .unwrap()
+    costs::evaluate_with(&cx(&rec), d("10"), &src).await
 }

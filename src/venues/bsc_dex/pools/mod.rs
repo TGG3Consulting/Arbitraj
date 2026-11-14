@@ -96,6 +96,7 @@ pub mod load_woo_ladder;
 pub mod loading;
 pub mod market;
 pub mod market_mids;
+pub mod mid_dex;
 pub mod mids;
 pub mod order;
 pub mod per_block;

@@ -3,11 +3,12 @@
 //! (tests/data/fstswap_weth_2026-11-14/calls.json: ответ WETH() роутера fstswap). Проверка: fstswap при заданной
 //! dex.native_wrapped = WBNB — чужая обёртка; роутер с WETH() = WBNB — нативная (поведение прежнее); не задана — все
 //! нативные. Итог «Проверить подключение» (verdict): три ветки — совпало + чужая, ни один не вернул, роутеров нет.
+//! natives (решение 270, дополнение 2): при dex.intermediate_dex_priced = да нативная — только dex.native_wrapped.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::wrapped, serde_json.
 
 use alloy_primitives::Address;
-use arb::venues::bsc_dex::pools::wrapped::{foreign_fact, split, verdict};
+use arb::venues::bsc_dex::pools::wrapped::{foreign_fact, natives, split, verdict};
 
 const WBNB: &str = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
@@ -73,4 +74,24 @@ fn verdict_three_branches() {
             .unwrap()
             .contains("сверить с WETH() не с чем")
     );
+}
+
+/// Решение 270 (дополнение 2, ревью): natives при dex.intermediate_dex_priced. Флаг да — нативная только
+/// dex.native_wrapped (не задана — ни одной), WETH() fstswap тикера нативной не получает; флаг нет — как раньше
+/// (не задана — все WETH() нативные; задана — split плюс сама настройка).
+#[test]
+fn natives_by_flag() {
+    let (_, weth) = fixture();
+    let wbnb: Address = WBNB.parse().unwrap();
+    let list = || vec![("fstswap".to_string(), weth), ("mdex".to_string(), wbnb)];
+    assert_eq!(natives(list(), None, true).0, Vec::<Address>::new());
+    assert_eq!(natives(list(), Some(wbnb), true).0, vec![wbnb]);
+    let only_fst = vec![("fstswap".to_string(), weth)];
+    assert_eq!(natives(only_fst.clone(), Some(wbnb), true).0, vec![wbnb]);
+    // Флаг нет — байт в байт как до решения 276.
+    assert_eq!(natives(list(), None, false), split(list(), None));
+    assert_eq!(natives(only_fst.clone(), None, false).0, vec![weth]);
+    let (own, foreign) = natives(only_fst, Some(wbnb), false);
+    assert_eq!(own, vec![wbnb]);
+    assert_eq!(foreign, vec![("fstswap".to_string(), weth)]);
 }

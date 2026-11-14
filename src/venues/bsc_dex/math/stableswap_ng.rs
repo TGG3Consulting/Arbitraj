@@ -6,6 +6,9 @@
 //! (2) в get_D произведение D_P делится на каждый x, а на N^N — один раз в конце (у Curve 2020 — на x·N каждым шагом:
 //! округления разные); (3) D считается один раз до get_y и передаётся в него; (4) несходимость за 255 раундов
 //! откатывает обмен (`raise`) → здесь None.
+//! Решение 275: те же формулы у plain-пула Curve StableSwap-NG v7.0.0 (curvefi/stableswap-ng 3332cd4,
+//! CurveStableSwapNG.vy: `_dynamic_fee` L887-L901, `__exchange` L904-L940, `get_y` L1009-L1074, `get_D` L1079-L1125) —
+//! построчная сверка в docs/notes/curve-ng-2026-11-14.md; вид curve_stableswap_ng считает этим же модулем.
 //! Кто вызывает: quote/pool_quote.rs (ветка StableSwap с шаблоном NG); тесты.
 //! От чего зависит: math/stableswap_v1.rs (xp, precision, fee_denominator), alloy-primitives (U256).
 //! Настройки: нет (балансы, rates, A, fee, offpeg — с крючка на блоке, pools/load_inf_stable.rs).

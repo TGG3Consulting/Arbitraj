@@ -2,6 +2,7 @@
 //! Что делает: части пачечного чтения (load_batch.rs): вызовы и разбор ступени 1 (V2 getReserves, V3 slot0 + liquidity;
 //! CL — load_batch_cl.rs), слова тиков V3 через TickLens и выполнение ступени (все вызовы всех пулов вместе через
 //! node/call.rs try_chunks, ответы — обратно по пулам). Те же функции и разбор по ABI, что у load_v2v3.rs.
+//! Решение 274: у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 добавлены swapFee фабрики (fee_override.rs).
 //! Кто вызывает: pools/load_batch.rs.
 //! От чего зависит: node/call.rs (try_chunks, decode), pools/abi_v2v3.rs, load_batch_cl.rs, load_batch.rs (Want).
 //! Настройки: dex.tick_lens [вид пула V3].
@@ -20,6 +21,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_v2v3::{IPancakeV3Pool, ITickLens, IUniswapV3Pool, IV2Pair, IV3Pool};
 use super::families::Proto;
+use super::fee_override;
 use super::load_batch::{Answers, Stage, Want};
 use super::load_batch::{Miss, miss};
 use super::load_batch_cl as cl;
@@ -46,10 +48,15 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
                 Proto::UniswapV3 => IUniswapV3Pool::slot0Call {}.abi_encode(),
                 _ => return Err(miss(format!("{}: не V3", w.family.title))),
             };
-            Ok(vec![
+            let mut l = vec![
                 enc(*a, slot0),
                 enc(*a, IV3Pool::liquidityCall {}.abi_encode()),
-            ])
+            ];
+            // Решение 274 (SheepDex): своя комиссия получателя у фабрики — swapFee(кошелёк/исполнитель, 0).
+            if fee_override::on(ctx, w.family) {
+                l.extend(fee_override::calls(ctx, w.family)?);
+            }
+            Ok(l)
         }
         (PoolKind::Cl, PoolRef::Singleton { .. }) => {
             w.spacing
@@ -83,6 +90,8 @@ pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
                 (U256::from(s.sqrtPriceX96), s.tick.as_i32())
             };
             let liquidity = call::decode::<IV3Pool::liquidityCall>(&b[1]).map_err(m)?;
+            // Ответы swapFee (решение 274) идут после slot0 и liquidity — только у DEX с dex.v3_fee_source.
+            fee_override::check(w.family.title, &b[2..])?;
             Ok(PoolStateTick::Ticked(
                 PoolState::V3 {
                     sqrt_price_x96: sqrt,

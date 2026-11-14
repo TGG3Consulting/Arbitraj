@@ -28,7 +28,7 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call};
 pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
 use super::{
-    verify_algebra, verify_curve, verify_dodo, verify_inf_stable, verify_maverick, verify_solidly,
+    verify_algebra, verify_curve, verify_curve_ng, verify_dodo, verify_inf_stable, verify_maverick, verify_solidly,
     verify_stable_u, verify_v4,
 };
 
@@ -74,6 +74,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut algebra = Vec::new();
     let mut solidly = Vec::new();
     let mut curve = Vec::new();
+    let mut curve_ng = Vec::new();
     let mut stable_u = Vec::new();
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
@@ -85,6 +86,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Algebra | Proto::AlgebraIntegral => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             Proto::CurveStable => curve.push(i),
+            Proto::CurveNg => curve_ng.push(i),
             Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
                 stable_u.push(i)
             }
@@ -118,6 +120,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in solidly
         .into_iter()
         .zip(verify_solidly::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve StableSwap-NG (решение 275): реестр фабрики NG + монеты пула (verify_curve_ng.rs).
+    let list: Vec<Candidate> = curve_ng.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in curve_ng
+        .into_iter()
+        .zip(verify_curve_ng::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

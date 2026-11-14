@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/pools/load_v2v3.rs
 //! Что делает: чтение состояния пулов V2 и V3 на заданном блоке: V2 — резервы; V3 — slot0, liquidity и
 //! инициализированные тики через TickLens в словах битмапа вокруг текущего тика.
+//! Решение 274: DEX с dex.v3_fee_source = factory_swap_fee — ещё проверка swapFee фабрики (fee_override.rs).
 //! Кто вызывает: pools/load.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v2v3.rs, ticks.rs, discover.rs (Found).
 //! Настройки: dex.tick_words, dex.depth_band_pct [bsc_dex] (сколько слов в каждую сторону — больше из двух, решение 73),
@@ -21,6 +22,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_v2v3::{IPancakeV3Pool, ITickLens, IUniswapV3Pool, IV2Pair, IV3Pool};
 use super::families::{Family, Proto};
+use super::fee_override;
 use super::ticks::{TickData, TickMap};
 
 /// Резервы пары V2 на блоке. Ошибки: узел, ответ не по ABI.
@@ -54,6 +56,10 @@ pub async fn v3(
         _ => return Err(ctx.err(ErrorCode::Internal, format!("{}: не V3", f.title))),
     };
     let liquidity = call::view(ctx, pool, &IV3Pool::liquidityCall {}, tag).await?;
+    // Решение 274 (SheepDex): своя комиссия получателя у фабрики — пул не читается, если она есть.
+    if fee_override::on(ctx, f) {
+        fee_override::verify(ctx, f, tag).await?;
+    }
     let ticks = v3_ticks(ctx, f, pool, spacing, tick, tag).await?;
     let state = PoolState::V3 {
         sqrt_price_x96: sqrt,

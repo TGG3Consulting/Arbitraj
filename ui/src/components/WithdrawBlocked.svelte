@@ -5,8 +5,6 @@
     core/withdraw_block.rs). У каждой биржи — «Открыть» (биржа убирается из списка; последняя — обе настройки
     очищаются). Работает через обычный PUT /api/settings (область «монета»), изменения видны сразу во всех вкладках и
     пишутся в историю настроек.
-    Решение 268: в том же списке — записи «sell:<биржа>» (входы с ПРОДАЖЕЙ на бирже закрыты после остановки продажи
-    алертом; пишет core/sell_block.rs при sell.block_entry_on_halt = да) — показываются и снимаются так же.
   Кто вызывает: pages/Coins.svelte.
   От чего зависит: lib/settings.svelte.js, lib/coinNames.svelte.js, components/ErrorText.svelte.
   Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (src/settings/catalog/trade.rs).
@@ -57,7 +55,7 @@
 </script>
 
 <section class="card">
-  <h2>Входы закрыты после отказа вывода или остановки продажи</h2>
+  <h2>Входы закрыты после отказа вывода</h2>
   {#if !defOf(VENUES) || !defOf(NOTE)}
     <p class="err">Настроек {VENUES} / {NOTE} нет в схеме бэкенда.</p>
   {:else}

@@ -73,11 +73,16 @@ pub struct Deal {
     /// stuck.relay_max_loss_pct (sell_unsent.rs → relay_here.rs), а не сразу к человеку.
     #[serde(default)]
     pub unsent_here: bool,
-    /// Решение 268: у сделки уже был отказ продажи «цена ордера вне диапазона биржи» (PriceOutOfRange), обработанный
-    /// веткой core/sell_range.rs (рыночный ордер или режим застрявшей монеты), — второй раз ветка не идёт: такой отказ
-    /// ведёт к алерту человеку, как раньше. Новое нажатие кнопки человека начинает заново (manual.rs, manual_halted.rs).
-    #[serde(default)]
-    pub price_range_tried: bool,
+    /// Решение 268: биржи, на которых в этой сделке уже отправлен РЫНОЧНЫЙ ордер продажи после отказа «цена ордера
+    /// вне диапазона биржи» (core/sell_range_run.rs) — на площадке автоматически не больше одного; после перегона на
+    /// другую биржу там своя попытка. Новое нажатие кнопки человека очищает (manual.rs, manual_halted.rs).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub range_market: Vec<VenueId>,
+    /// Решение 268: биржи, на которых после отказа «цена вне диапазона» обычная продажа оказалась невыгодной и сделка
+    /// ушла в режим застрявшей монеты, — не больше одного раза на площадку (второго круга режима из-за коридора нет).
+    /// Очищается вместе с range_market.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub range_stuck: Vec<VenueId>,
     /// Итог сделки, USDT (когда закрыта): выручка − вложено − затраты − затраты возврата USDT (return_cost_usd).
     pub result_usd: Option<Decimal>,
     /// Решение 236: затраты возврата выручки USDT, уже вычтенные из result_usd, — по частям «вернулись»: отправлено −
@@ -159,7 +164,8 @@ impl Deal {
             return_usdt: false,
             unsent_retries: 0,
             unsent_here: false,
-            price_range_tried: false,
+            range_market: Vec::new(),
+            range_stuck: Vec::new(),
             result_usd: None,
             return_cost_usd: None,
             closed_notice: None,

@@ -190,8 +190,10 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     // Решение 247, п. А (Тигран 10.11: согласовано): нажатие — новая цепочка повторов кнопки: счётчик автоматики
     // (Deal.unsent_retries) не наследуется, иначе после исчерпания автоматики кнопка давала одну попытку и Exhausted.
     deal.unsent_retries = 0;
-    // Решение 268: и отметка «отказ "цена вне диапазона" уже обработан» — нажатие даёт кнопке свой один рыночный повтор.
-    deal.price_range_tried = false;
+    // Решение 268: и отметки «рыночный ордер отправлен» / «по коридору уходили в режим» — нажатие даёт кнопке свой
+    // один рыночный повтор.
+    deal.range_market.clear();
+    deal.range_stuck.clear();
     deal.step = Step::Selling;
     // Решение 177: тот же отказ — эта запись обновится, а не появится новая (raise_alert, manual_repeat.rs).
     deal.alert_was = Some(alert);

@@ -81,6 +81,25 @@ pub fn pick_rule<'a>(
         .find(|r| r.scope == RuleScope::All)
 }
 
+/// Решение 268 (дополнение, ревью A2): правило для ошибки с запасным кодом. Для «цена ордера вне диапазона биржи»
+/// (PriceOutOfRange) своего правила может не быть — до решения 268 такой отказ шёл как OrderRejected: тогда действует
+/// правило, заданное для OrderRejected (площадки, затем общее). Своё правило PriceOutOfRange, если задано, сильнее.
+/// Принимает: как pick_rule. Возвращает: правило и признак «взято правило OrderRejected» (для честной записи в журнале);
+/// None — нет ни того, ни другого. Ошибок нет.
+pub fn pick_rule_or_fallback<'a>(
+    rules: &'a [Rule],
+    code: ErrorCode,
+    venue: Option<&VenueId>,
+) -> Option<(&'a Rule, bool)> {
+    if let Some(r) = pick_rule(rules, code, venue) {
+        return Some((r, false));
+    }
+    if !price_range(code) {
+        return None;
+    }
+    pick_rule(rules, ErrorCode::OrderRejected, venue).map(|r| (r, true))
+}
+
 /// Можно ли повторять операцию по этому коду. «Результат неизвестен» (OutcomeUnknown: ордер, вывод или транзакция
 /// отправлены, итог не получен) — никогда, какие бы правила ни были заданы: стартовое правило Тиграна «ордер отправлен
 /// и не исполнился — отменяем, больше не пробуем» (CLAUDE.md, решение 64). Вместо повтора — остановка сделки

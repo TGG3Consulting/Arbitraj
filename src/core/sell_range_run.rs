@@ -18,17 +18,19 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{Quote, Side, TradeResult};
 use crate::gateway::errors::ErrorCode;
+use crate::notify::human::{self as h, Msg};
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
 use super::engine::Core;
 use super::op_error::OpError;
-use super::sell_range::{Act, Outcome, decide};
+use super::sell_range::{Act, Fresh, Marks, Outcome, Rule, decide, marks};
 use super::stuck_reason::StuckReason;
 
-/// Что делает: ветка решения 268 (вызывать только при wanted): отметка сделки, свежая котировка, решение, строка
-/// хронологии и журнал core.sell_range, рыночный ордер. Принимает: ядро, сделку (отметка, хронология и газ пишутся в
-/// неё), ошибку лимитного ордера, причину продажи (sell::BUTTON — кнопка). Возвращает: Outcome. Ошибок нет.
+/// Что делает: ветка решения 268 (вызывать только при wanted): свежая котировка, решение (sell_range::decide), отметка
+/// сделки на площадке, строка хронологии и журнал core.sell_range, уведомление deal.sell_market_range и рыночный ордер.
+/// Принимает: ядро, сделку (отметки, хронология и газ пишутся в неё), ошибку лимитного ордера, причину продажи (для
+/// текста), условие продажи. Возвращает: Outcome. Ошибок нет.
 ///
 /// Будущее сразу в коробке и собирается в отдельной функции (не async): его состояние (котировка, рыночный ордер) не
 /// занимает место в кадре стека задачи продажи sell.rs — у продажи без этой ветки глубина стека не растёт.
@@ -38,52 +40,56 @@ pub fn run<'a>(
     deal: &'a mut Deal,
     e: &'a OpError,
     why: &'a str,
+    rule: Rule,
 ) -> Pin<Box<dyn Future<Output = Outcome> + Send + 'a>> {
-    Box::pin(run_inner(core, deal, e, why))
+    Box::pin(run_inner(core, deal, e, why, rule))
 }
 
 /// Тело ветки (см. run). Принимает и возвращает: как run. Ошибок нет.
-async fn run_inner(core: &Core, deal: &mut Deal, e: &OpError, why: &str) -> Outcome {
-    deal.price_range_tried = true;
-    let button = why == super::sell::BUTTON;
+async fn run_inner(core: &Core, deal: &mut Deal, e: &OpError, why: &str, rule: Rule) -> Outcome {
     let head =
         format!("Биржа отклонила лимитный ордер продажи: цена вне разрешённого диапазона ({e})");
     let quote = quote_boxed(core, deal).await;
-    let good = quote
-        .as_ref()
-        .ok()
-        .map(|(v, _, _)| super::sell::profitable(deal, *v));
-    let act = decide(e.code, e.sent, true, true, false, button, good);
+    let fresh = quote.as_ref().ok().map(|(v, _, _)| Fresh {
+        profitable: super::sell::profitable(deal, *v),
+        loss_pct: deal.loss_pct_if(*v),
+    });
+    let act = decide(e.code, e.sent, true, true, rule, marks(deal), fresh);
     let (value, q, book) = match (act, quote) {
         (Act::Market, Ok(x)) => x,
-        (Act::Stuck, Ok((v, _, _))) => {
-            let text = format!(
-                "{head}. По стакану продажа здесь невыгодна (оценка выручки {v}) — режим застрявшей монеты (решение 268)"
-            );
+        (Act::Stuck, quote) => {
+            deal.range_stuck.push(deal.at.clone());
+            let (what, why) = match quote {
+                Ok((v, _, _)) => (
+                    format!("По стакану продажа здесь невыгодна (оценка выручки {v})"),
+                    StuckReason::Unprofitable,
+                ),
+                Err(err) => (
+                    format!("Котировку продажи получить нельзя: {err}"),
+                    StuckReason::NoQuote(err.message),
+                ),
+            };
+            let text = format!("{head}. {what} — режим застрявшей монеты (решение 268)");
             note(core, deal, text).await;
-            return Outcome::Stuck(StuckReason::Unprofitable);
-        }
-        (Act::Stuck, Err(err)) => {
-            let text = format!(
-                "{head}. Котировку продажи получить нельзя: {err} — режим застрявшей монеты (решение 268)"
-            );
-            note(core, deal, text).await;
-            return Outcome::Stuck(StuckReason::NoQuote(err.message));
+            return Outcome::Stuck(why);
         }
         (_, Err(err)) => {
             let m = format!("{e} — рыночная продажа невозможна: нет котировки ({err})");
-            note(
-                core,
-                deal,
-                format!("{head}. Котировки нет: {err} (решение 268)"),
-            )
-            .await;
+            let text = format!("{head}. Котировки нет: {err} — рыночного ордера нет (решение 268)");
+            note(core, deal, text).await;
             return Outcome::Failed(OpError {
                 message: m,
                 ..e.clone()
             });
         }
-        (_, Ok(_)) => return Outcome::Failed(e.clone()),
+        (_, Ok((v, _, _))) => {
+            let text = format!(
+                "{head}. {} — рыночного ордера нет (решение 268)",
+                unmet(rule, marks(deal), fresh, v)
+            );
+            note(core, deal, text).await;
+            return Outcome::Failed(e.clone());
+        }
     };
     let src = match &book {
         Some(b) => {
@@ -97,16 +103,14 @@ async fn run_inner(core: &Core, deal: &mut Deal, e: &OpError, why: &str) -> Outc
         }
         None => "По котировке".to_string(),
     };
-    let verdict = if button {
-        "кнопка человека — без проверки выгодности"
-    } else {
-        "продажа выгодна"
-    };
+    let verdict = met(rule, fresh, why);
     let text = format!(
         "{head}. {src} {verdict}: оценка выручки {value} USDT (средняя {}) — продаём рыночным ордером (решение 268)",
         q.avg_price
     );
+    deal.range_market.push(deal.at.clone());
     note(core, deal, text).await;
+    announce(core, deal, e, &verdict, value).await;
     let v = deal.at.clone();
     let (mut seen, mut gas) = (None, Vec::new());
     let res = market_order(core, deal, &q, book, &mut seen, &mut gas).await;
@@ -129,6 +133,63 @@ async fn run_inner(core: &Core, deal: &mut Deal, e: &OpError, why: &str) -> Outc
             ..m
         }),
     }
+}
+
+/// Какое условие выполнено на свежей котировке — словами (хронология и Telegram). Принимает: условие продажи, свежую
+/// котировку, причину продажи (у режима — в ней его порог и настройка). Ошибок нет.
+fn met(rule: Rule, fresh: Option<Fresh>, why: &str) -> String {
+    match (rule, fresh) {
+        (Rule::Button, _) => "кнопка человека — без проверки выгодности".to_string(),
+        (Rule::MaxLoss(max), Some(f)) if !max.is_zero() => format!(
+            "условие режима застрявшей монеты выполнено и на свежей котировке — {} (решено продать: {why})",
+            h::loss_vs_max(f.loss_pct, max, true)
+        ),
+        (Rule::MaxLoss(_), _) => {
+            format!(
+                "условие режима застрявшей монеты «{why}» выполнено и на свежей котировке — продажа выгодна"
+            )
+        }
+        _ => "продажа выгодна".to_string(),
+    }
+}
+
+/// Почему рыночного ордера нет, хотя котировка есть, — словами. Принимает: условие, отметки, свежую котировку, оценку
+/// выручки. Ошибок нет.
+fn unmet(rule: Rule, m: Marks, fresh: Option<Fresh>, value: Decimal) -> String {
+    match (rule, fresh) {
+        _ if m.market => {
+            "Рыночный ордер на этой площадке в этой сделке уже отправлялся".to_string()
+        }
+        (Rule::MaxLoss(max), Some(f)) if !max.is_zero() => format!(
+            "По свежей котировке {} (оценка выручки {value})",
+            h::loss_vs_max(f.loss_pct, max, false)
+        ),
+        _ => format!("По свежей котировке продажа невыгодна (оценка выручки {value})"),
+    }
+}
+
+/// Уведомление deal.sell_market_range (решение 268, п. 7): биржа отклонила ордер по цене, какое условие проверено по
+/// стакану, оценка выручки, продаём рыночным ордером. Принимает: ядро, сделку, отказ биржи, условие словами, оценку
+/// выручки. Ошибок нет.
+async fn announce(core: &Core, deal: &Deal, e: &OpError, verdict: &str, value: Decimal) {
+    let text = Msg::new(
+        h::WARN,
+        "Биржа отклонила ордер по цене — продаём рыночным ордером",
+    )
+    .card(super::deal_card::card(deal))
+    .reason(&e.message)
+    .kv("По стакану", verdict)
+    .kv("Оценка выручки", h::usd(value))
+    .kv(
+        "Что бот делает",
+        "продаёт рыночным ордером биржи (один раз)",
+    )
+    .id(&deal.id)
+    .render();
+    core.inner
+        .deps
+        .notify("deal.sell_market_range", Some(&deal.at.0), &text)
+        .await;
 }
 
 /// Режим застрявшей монеты после ветки (stuck::handle, как sell::sell_or_stuck) — будущее в коробке, собранное вне

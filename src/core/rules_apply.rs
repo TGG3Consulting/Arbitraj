@@ -28,7 +28,7 @@ use serde_json::json;
 
 use crate::core::types::VenueId;
 use crate::gateway::errors::{ErrorCode, GatewayError};
-use crate::gateway::rules::{RuleAction, pick_rule};
+use crate::gateway::rules::RuleAction;
 use crate::storage::journal::Level;
 
 use crate::notify::human::{self as h, Msg};
@@ -142,7 +142,22 @@ pub async fn on_error(
             return Next::Stop;
         }
     };
-    let Some(rule) = pick_rule(&rules, err.code, Some(venue)) else {
+    // Решение 268 (дополнение): своего правила для PriceOutOfRange нет — действует правило OrderRejected (как до 268).
+    let picked = crate::gateway::rules::pick_rule_or_fallback(&rules, err.code, Some(venue));
+    if let Some((r, true)) = picked {
+        deps.log(
+            Level::Info,
+            "core.rules",
+            Some(&venue.0),
+            format!(
+                "Правила для {:?} нет — применено правило шлюза №{} для OrderRejected (повтор по этому коду не действует, решение 268)",
+                err.code, r.id
+            ),
+            None,
+        )
+        .await;
+    }
+    let Some(rule) = picked.map(|(r, _)| r) else {
         deps.log(
             Level::Warn,
             "core.rules",

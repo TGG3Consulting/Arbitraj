@@ -89,7 +89,9 @@ pub fn from_code_http(
         // >= lastPrice * (1 - askMultiplierDown)», buy «orderPrice <= lastPrice * (1 + bidMultiplierUp)»
         // (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information). От операции не зависит —
         // пробный ордер (Op::Other) распознаёт так же; рыночная продажа код снимает (market_sell.rs).
-        30087 => ErrorCode::PriceOutOfRange,
+        // Дополнение 268 (ревью A1): только без HTTP 5XX — при 5XX («issue on the MEXC server side», решение 263) ответ
+        // с этим кодом, как любой код не из списка, — «итог неизвестен» (ветки ниже), а не отказ.
+        30087 if server.is_none() => ErrorCode::PriceOutOfRange,
         // Ордер не найден (-2011 «Unknown order sent»).
         -2011 => ErrorCode::BadResponse,
         // Решение 263: код не из списка при HTTP 5XX («issue on the MEXC server side») — как «сервер занят» выше.

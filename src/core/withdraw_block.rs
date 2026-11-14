@@ -19,8 +19,6 @@
 //! закрывает и алерта «проблема в аккаунте» не шлёт: площадка уже на паузе с алертом venue.withdraw_limit
 //! (core/withdraw_limit_pause.rs из rules_apply.rs). Алерт venue.account_problem уходит и в чат «Аккаунты»
 //! (notify.accounts_chat), если он задан (notify/routes.rs).
-//! Решение 268, п. 6: в том же списке — записи «sell:<биржа>» (пишет core/sell_block.rs: продажа сделки на бирже
-//! остановлена алертом) — check закрывает ими входы с ПРОДАЖЕЙ на бирже; записи решения 253 работают как раньше.
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -54,15 +52,6 @@ pub fn check(core: &Core, d: &Direction) -> Result<(), String> {
         coin: Some(&coin),
     };
     let list = s.list(VENUES, at).unwrap_or_default();
-    // Решение 268, п. 6: запись «sell:<биржа>» (sell_block.rs) — входы с ПРОДАЖЕЙ на бирже закрыты после остановки
-    // продажи алертом. Записи решения 253 («<биржа>» — покупка на ней) проверяются ниже, как раньше.
-    if !list.contains(&d.buy_on.0) && list.contains(&super::sell_block::entry(&d.sell_on)) {
-        let note = s.text(NOTE, at).unwrap_or_default();
-        return Err(format!(
-            "{}: входы с продажей на {} закрыты после остановки продажи ({VENUES}; снять — экран «Монеты»): {note}",
-            d.asset.ticker, d.sell_on.0
-        ));
-    }
     if !list.contains(&d.buy_on.0) {
         return Ok(());
     }

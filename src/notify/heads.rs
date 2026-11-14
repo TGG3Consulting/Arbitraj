@@ -74,7 +74,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "venue.account_problem" => (WARN, "Проблема в аккаунте биржи — исправьте"),
         "venue.withdraw_limit" => (STOP, "Лимит вывода биржи исчерпан — биржа на паузе"),
         "coin.withdraw_refused" => (WARN, "Вывод монеты с биржи отклонён — входы с неё закрыты"),
-        "coin.sell_blocked" => (WARN, "Продажа монеты на бирже остановлена — входы с продажей на ней закрыты"),
+        "deal.sell_market_range" => (WARN, "Биржа отклонила ордер по цене — продаём рыночным ордером"),
         "coin.unblacklisted" => (OK, "Монета убрана из чёрного списка"),
         "dex.check_not_configured" => (WARN, "Проверка налогов DEX не настроена"),
         "pool.hook_excluded" => (INFO, "Пул исключён"),

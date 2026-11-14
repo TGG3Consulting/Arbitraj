@@ -24,12 +24,16 @@ use reqwest::Method;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::core::types::{Fee, TradeRequest, TradeResult, TradeStatus};
+use crate::core::types::{Fee, Side, TradeRequest, TradeResult, TradeStatus};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
 use super::{num, rest};
+
+/// Настройка ядра «рыночная продажа после отказа "цена вне диапазона"» (решение 268; имя — core/sell_range.rs ON):
+/// по ней итог «снят защитой цены без исполнения» у продажи отдаётся кодом PriceOutOfRange (см. result).
+const MARKET_ON_PRICE_RANGE: &str = "sell.market_on_price_range";
 
 /// Окончательные состояния ордера по документации.
 const FINAL: [&str; 2] = ["closed", "cancelled"];
@@ -151,8 +155,13 @@ pub fn result(
     // finish_as = price_protect_cancelled («Cancelled due to price protection»,
     // https://github.com/gate/gateapi-python/blob/master/docs/Order.md). Ничего не исполнено — код PriceOutOfRange
     // (раньше — «не исполнился»); есть исполнение — обычный итог (частично). Рыночная продажа код снимает (market_sell.rs).
+    // Дополнение 268 (п. 5): только у ПРОДАЖИ и только при sell.market_on_price_range = да (площадка или вся система —
+    // та же настройка, по которой ядро ведёт ветку решения 268, core/sell_range.rs); у покупки и при не заданной
+    // настройке — как до решения: «не исполнился» (повторы решения 182, правило и уведомление OrderNotFilled).
     if filled.is_zero()
+        && req.side == Side::Sell
         && num::text_opt(s, "finish_as").as_deref() == Some("price_protect_cancelled")
+        && ctx.flag(MARKET_ON_PRICE_RANGE).unwrap_or(false)
     {
         let m = format!(
             "Gate: ордер {order_id} снят биржей без исполнения — защита цены (finish_as = price_protect_cancelled)"

@@ -31,15 +31,15 @@
 //! 10.11: согласовано): у этих путей t78 — порог remeasure::PROFITABLE_OPEN (та же граница; продажа может идти и
 //! агрегатором DEX, если он включён и его маршрут лучше); sell_after_relay — PROFITABLE (только свой сборщик, как было).
 //! Решение 268 (Тигран 14.11, живой случай FAR 13.11 — MEXC 30087): лимитный ордер продажи отклонён биржей «цена вне
-//! разрешённого диапазона» (код шлюза PriceOutOfRange) — один раз на сделку: по свежему стакану продажа выгодна (у
-//! кнопки — без этой проверки) — рыночный ордер, иначе режим застрявшей монеты (sell_range.rs, sell_range_run.rs;
-//! sell.market_on_price_range). Продажа на бирже закончилась алертом — новые входы с продажей на ней закрываются
-//! (sell_block.rs; sell.block_entry_on_halt). Обе настройки не заданы — как раньше.
+//! разрешённого диапазона» (код шлюза PriceOutOfRange) — свежий стакан и то же условие, по которому продажа решена
+//! (выгодно / порог убытка режима застрявшей монеты; у кнопки — без проверки): выполнено — рыночный ордер, не больше
+//! одного на площадку в сделке; обычная продажа невыгодна — режим застрявшей монеты; иначе алерт, как раньше
+//! (sell_range.rs, sell_range_run.rs; sell.market_on_price_range). Настройка не задана — как раньше.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
-//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_block.rs.
+//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154);
-//! через sell_range.rs — sell.market_on_price_range; через sell_block.rs — sell.block_entry_on_halt (решение 268).
+//! через sell_range.rs — sell.market_on_price_range (решение 268).
 
 use rust_decimal::Decimal;
 
@@ -50,6 +50,7 @@ use crate::core::types::{Quote, Side};
 use super::deal::{Deal, Step};
 use super::engine::Core;
 use super::remeasure::Guard;
+use super::sell_range::Rule;
 use super::stuck_reason::StuckReason;
 
 /// Причина продажи кнопкой «Продать сейчас» / «Продать и перегнать» (manual.rs, manual_halted.rs, manual_relay.rs).
@@ -86,7 +87,7 @@ async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
     match value {
         Ok((v, q, b)) if profitable(&deal, v) => {
             let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
-            sell(core, deal, q, b, "выгодно", f).await
+            sell(core, deal, q, b, "выгодно", f, Rule::Entry).await
         }
         // Решение 220: в режим застрявшей монеты — с настоящей причиной.
         Ok(_) => Box::pin(super::stuck::handle(core, deal, StuckReason::Unprofitable)).await,
@@ -124,7 +125,9 @@ pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
         match super::trade_ops::deal_quote(core, &deal).await {
             Ok((v, q, b)) => {
                 let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
-                sell(core, deal, q, b, why, f).await
+                // Решение 268: условие, по которому продажа решена (кнопка / порог режима / без порога).
+                let rule = super::sell_range::rule_of(why, g);
+                sell(core, deal, q, b, why, f, rule).await
             }
             Err(e) => {
                 let mut deal = deal;
@@ -173,6 +176,7 @@ async fn sell(
     book: Option<super::exec_book::Book>,
     why: &str,
     floor: Option<crate::core::types::Remeasure>,
+    rule: Rule,
 ) {
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
@@ -200,15 +204,16 @@ async fn sell(
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).
     deal.note(quote_note(&q, deal.qty, seen.as_ref()));
-    // Решение 268 (Тигран 14.11): биржа отклонила лимитный ордер продажи «цена вне разрешённого диапазона» — один раз
-    // на сделку: свежий стакан и, если продажа выгодна (кнопка человека — без этой проверки), рыночный ордер; его итог
-    // (факт или ошибка) разбирается ниже тем же кодом, что у лимитного. Невыгодно или нет котировки — режим застрявшей
-    // монеты (как sell_or_stuck). Настройка выключена, DEX, повтор уже был — ветки нет, всё как раньше (sell_range.rs).
+    // Решение 268 (Тигран 14.11): биржа отклонила лимитный ордер продажи «цена вне разрешённого диапазона» — свежий
+    // стакан и то же условие, по которому продажа решена (rule): выполнено — рыночный ордер (не больше одного на
+    // площадку в сделке); его итог (факт или ошибка) разбирается ниже тем же кодом, что у лимитного. Обычная продажа
+    // невыгодна — режим застрявшей монеты (раз на площадку); условие режима не выполнено, продажа без порога — как
+    // раньше, алерт. Настройка выключена, DEX — ветки нет (sell_range.rs).
     if let Err(e) = &res
-        && super::sell_range::wanted(core, &deal, e)
+        && super::sell_range::wanted(core, &deal, e, rule)
     {
         // Итог ветки кладётся в то же место, что итог лимитного ордера (состояние задачи продажи не растёт).
-        let out = super::sell_range_run::run(core, &mut deal, e, why).await;
+        let out = super::sell_range_run::run(core, &mut deal, e, why, rule).await;
         match out {
             super::sell_range::Outcome::Sold(r) => res = Ok(*r),
             super::sell_range::Outcome::Failed(e) => res = Err(e),
@@ -328,9 +333,6 @@ async fn sell(
                 .await
             }
             r => {
-                // Решение 268: продажа на бирже остановлена алертом — закрыть новые входы с продажей на ней
-                // (sell.block_entry_on_halt; не задана или нет — ничего не делает).
-                super::sell_block::close(core, &deal, &e).await;
                 // Решение 177: итог кнопки — после алерта (запись уже обновлена или поставлена).
                 let d = deal.clone();
                 super::sell_unsent::alert(core, deal, &e, &r).await;

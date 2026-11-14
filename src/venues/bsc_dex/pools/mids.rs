@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/pools/mids.rs
 //! Что делает: промежуточные монеты (решение 52) — переключатель dex.intermediate_enabled и список адресов
 //! dex.intermediate_tokens [bsc_dex]; у каждой — тикер для затрат: тикер биржи по адресу (монета из подписки ядра)
-//! или тикер нативной монеты на бирже (dex.native_ticker), если адрес — её обёртка (WETH() роутера V2 своей DEX; ядро
-//! пересчитывает WBNB как BNB 1:1). Настройка не задана — обёртка не используется (причина в журнал).
+//! или тикер нативной монеты на бирже (dex.native_ticker), если адрес — её обёртка: dex.native_wrapped (решение 270;
+//! не задана — WETH() любого роутера V2, как раньше); ядро пересчитывает WBNB как BNB 1:1. WETH() роутера, не равный
+//! dex.native_wrapped (чужая обёртка), тикер не получает. dex.native_ticker не задан — обёртка не используется (журнал).
 //! Тикер неизвестен — монета не используется (ядро не пересчитает её затраты в USDT), причина — в журнал.
 //! Промежуточная монета с любым налогом (покупки, продажи, перевода) в маршруте не используется — решение техлида
 //! (Issue #7), проверка — quote/via_pools.rs.
@@ -10,7 +11,7 @@
 //! Решение 239: pinned — копия списка на момент снимка котировки (venues/bsc_dex/frozen.rs).
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
-//! Решение 270: нативная обёртка — только dex.native_wrapped (pools/wrapped.rs), чужой WETH() роутера в «BNB» не идёт.
+//! Решение 270 — деление WETH() на нативную и чужую: pools/wrapped.rs.
 //! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
 //! 205: известная обёртка, если WETH() роутеров не прочитан); dex.router [вид пула V2] (WETH()).
 //!
@@ -110,13 +111,13 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
         let ticker = match tokens.ticker_of(address) {
             Some(t) => Ok(t),
             None if wrapped.contains(&address) => native.clone().map_err(|e| e.message),
-            None if foreign.iter().any(|(_, a)| *a == address) => {
-                let (title, _) = foreign.iter().find(|(_, a)| *a == address).unwrap();
-                Err(wrapped::foreign_fact(title, address))
-            }
             None => Err(
-                "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2, dex.native_wrapped)"
-                    .to_string(),
+                if let Some((title, _)) = foreign.iter().find(|(_, a)| *a == address) {
+                    wrapped::foreign_fact(title, address)
+                } else {
+                    "биржа не знает этот адрес и это не обёртка нативной монеты (WETH() роутера V2, dex.native_wrapped)"
+                        .to_string()
+                },
             ),
         };
         match ticker {

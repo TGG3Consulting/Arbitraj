@@ -101,7 +101,7 @@ pub async fn multicall3(ctx: &Ctx) -> Result<String, String> {
 }
 
 /// Обёртка нативной монеты (решение 62): по адресу dex.native_wrapped есть контракт, и он совпадает с WETH() роутеров
-/// включённых DEX вида V2; WETH() другой обёртки — факт, не ошибка (решение 270). Не задано — BNB не торгуется,
+/// включённых DEX вида V2; чужой WETH() — факт, если хоть один роутер вернул её, иначе ошибка (решение 270). Не задано — BNB не торгуется,
 /// это не ошибка. Возвращает: описание или текст причины.
 pub async fn native_wrapped(ctx: &Ctx) -> Result<String, String> {
     let Ok(addr) = ctx.addr("dex.native_wrapped") else {
@@ -115,28 +115,9 @@ pub async fn native_wrapped(ctx: &Ctx) -> Result<String, String> {
             "по адресу {addr} нет контракта — проверьте dex.native_wrapped"
         ));
     }
-    // Решение 270: чужой WETH() (другая обёртка, fstswap) — не ошибка подключения, а факт: маршруты через неё не берутся.
-    let (own, foreign) = wrapped::split(mids::router_weths(ctx).await, Some(addr));
-    let facts: Vec<String> = foreign
-        .iter()
-        .map(|(t, a)| wrapped::foreign_fact(t, *a))
-        .collect();
-    let tail = if facts.is_empty() {
-        String::new()
-    } else {
-        format!("; {}", facts.join("; "))
-    };
-    if !own.is_empty() {
-        Ok(format!(
-            "контракт {addr} есть, совпадает с WETH() роутеров V2{tail}"
-        ))
-    } else if foreign.is_empty() {
-        Ok(format!(
-            "контракт {addr} есть (сверить с WETH() не с чем: нет включённых DEX вида V2 с dex.router)"
-        ))
-    } else {
-        Ok(format!("контракт {addr} есть{tail}"))
-    }
+    // Решение 270: чужой WETH() (другая обёртка, fstswap) — факт, не ошибка, если хоть один роутер вернул
+    // dex.native_wrapped; ни один не вернул — ошибка, как раньше (pools/wrapped.rs::verdict).
+    wrapped::verdict(addr, mids::router_weths(ctx).await)
 }
 
 /// Сверка сети с BSC mainnet. Ошибка — текст.

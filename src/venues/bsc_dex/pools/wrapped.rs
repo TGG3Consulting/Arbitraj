@@ -30,3 +30,28 @@ pub fn foreign_fact(title: &str, weth: Address) -> String {
         "WETH() роутера {title} = {weth}, это не dex.native_wrapped — маршруты через эту обёртку не берутся"
     )
 }
+
+/// Итог «Проверить подключение» по обёртке (решение 270). Принимает: dex.native_wrapped (контракт по адресу есть) и
+/// WETH() роутеров V2. Возвращает: Ok(описание) — хотя бы один роутер вернул dex.native_wrapped (чужие — фактом в
+/// описании) или сверять не с чем (роутеров нет); Err(причина) — роутеры есть, и ни один её не вернул: адрес в
+/// настройке, вероятно, вписан неверно (как до решения 270). Чистая функция.
+pub fn verdict(addr: Address, list: Vec<RouterWeth>) -> Result<String, String> {
+    let (own, foreign) = split(list, Some(addr));
+    match (own.is_empty(), foreign.first()) {
+        (true, Some((_, w))) => Err(format!(
+            "WETH() роутера V2 = {w}, а dex.native_wrapped = {addr} — проверьте адрес"
+        )),
+        (true, None) => Ok(format!(
+            "контракт {addr} есть (сверить с WETH() не с чем: нет включённых DEX вида V2 с dex.router)"
+        )),
+        (false, _) => {
+            let tail: String = foreign
+                .iter()
+                .map(|(t, a)| format!("; {}", foreign_fact(t, *a)))
+                .collect();
+            Ok(format!(
+                "контракт {addr} есть, совпадает с WETH() роутеров V2{tail}"
+            ))
+        }
+    }
+}

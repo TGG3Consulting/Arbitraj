@@ -6,6 +6,7 @@
 //! текст в текст; флаг = да — монета в списке с подписью адресом; (2) чужая обёртка при флаге = да: dex.native_wrapped
 //! задана (WBNB) — обёртка fstswap получает подпись, а не тикер нативной монеты, WBNB — тикер нативной; не задана —
 //! подпись; (3) busy: занятыми оказываются dex.native_ticker, venue.quote_asset и venue.price_assets биржи.
+//! (4) resubscribe.rs rebuild_on: venue.price_assets / venue.quote_asset пересобирают подписку только при флаге = да.
 //! Деление WETH() роутеров при флаге (wrapped::natives) на записанном WETH() fstswap — tests/bsc_dex_wrapped.rs.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools, parts}, arb::settings, tests/mid_dex_common.
@@ -20,6 +21,7 @@ use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::pools::mid_dex;
 use arb::venues::bsc_dex::pools::mids::{self, Mid};
+use arb::venues::bsc_dex::resubscribe::rebuild_on;
 
 mod mid_dex_common;
 use mid_dex_common::ctx;
@@ -147,4 +149,31 @@ async fn busy_has_settings() {
     let (label, why) = mid_dex::pick(s, wrapper, &busy, Some(16));
     assert_eq!(label, format!("{wrapper:#x}"));
     assert_eq!(why, Some(mid_dex::Why::Taken("WBNB".into())));
+}
+
+/// Решение 276 (ревью): смена venue.price_assets / venue.quote_asset пересобирает подписку DEX только при
+/// dex.intermediate_dex_priced = да (resubscribe.rs rebuild_on); прежнее слежение — всегда, как раньше.
+#[tokio::test]
+async fn rebuild_only_with_flag() {
+    let p = Parts::new(ctx("mid-dex-rebuild", false).await);
+    let c = &p.ctx;
+    let old = [
+        "dex.intermediate_enabled",
+        "dex.intermediate_tokens",
+        "dex.intermediate_dex_priced",
+        "dex.native_ticker",
+        "dex.native_wrapped",
+    ];
+    let label = ["venue.price_assets", "venue.quote_asset"];
+    for flag in [None, Some(false), Some(true)] {
+        if let Some(f) = flag {
+            set(c, "dex.intermediate_dex_priced", dex(), json!(f)).await;
+        }
+        for n in old {
+            assert!(rebuild_on(c, n), "{flag:?} {n}");
+        }
+        for n in label {
+            assert_eq!(rebuild_on(c, n), flag == Some(true), "{flag:?} {n}");
+        }
+    }
 }

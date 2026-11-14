@@ -8,8 +8,10 @@
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
 //! С подпиской живут задачи событий баланса — по одной на кошелёк (wallet/events.rs, решение 76; решение 132: у
 //! каждого кошелька своя очередь и свои события). Изменение кошельков или маппинга пересобирает подписку.
-//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped, venue.price_assets, venue.quote_asset
-//! (следит за изменениями).
+//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped (следит за изменениями, как раньше);
+//! venue.price_assets, venue.quote_asset — решение 276 (ревью): занятые тикеры подписи промежуточной без биржи
+//! (pools/mid_dex.rs busy); их смена пересобирает подписку ТОЛЬКО при dex.intermediate_dex_priced = да (rebuild_on),
+//! флаг нет/не задан — ни пересборки, ни записи журнала, как до решения 276.
 
 use std::sync::{Arc, Mutex};
 
@@ -22,6 +24,7 @@ use crate::gateway::events::MarketEvent;
 use crate::settings::live::{Change, Watch};
 use crate::storage::journal::Level;
 
+use super::ctx::Ctx;
 use super::parts::Parts;
 use super::pools;
 
@@ -93,6 +96,9 @@ impl Subs {
                     },
                 };
                 let name = c.name;
+                if !rebuild_on(&p.ctx, &name) {
+                    continue;
+                }
                 let last = me.last.lock().unwrap_or_else(|x| x.into_inner()).clone();
                 let Some((assets, out)) = last else { continue };
                 let msg = match me.subscribe(&p, assets, out).await {
@@ -109,4 +115,16 @@ impl Subs {
             }
         })
     }
+}
+
+/// Решение 276 (ревью): настройки, нужные только подписи промежуточной без биржи (pools/mid_dex.rs busy).
+const LABEL_ONLY: [&str; 2] = ["venue.price_assets", "venue.quote_asset"];
+
+/// Пересобирать ли подписку на изменение настройки name (имя уже прошло префиксы Watch). Принимает: окружение, имя.
+/// Возвращает: false — имя из LABEL_ONLY (тем же сравнением по префиксу, что у Watch), а dex.intermediate_dex_priced
+/// не «да» (нет, не задана или не читается); иначе true — прежнее слежение (dex.intermediate_*, dex.native_ticker,
+/// dex.native_wrapped) не меняется. Ошибок нет.
+pub fn rebuild_on(ctx: &Ctx, name: &str) -> bool {
+    !LABEL_ONLY.iter().any(|p| name.starts_with(p))
+        || matches!(ctx.flag("dex.intermediate_dex_priced"), Ok(true))
 }

@@ -5,6 +5,8 @@
 //! не задана — WETH() любого роутера V2, как раньше); ядро пересчитывает WBNB как BNB 1:1. WETH() роутера, не равный
 //! dex.native_wrapped (чужая обёртка), тикер не получает. dex.native_ticker не задан — обёртка не используется (журнал).
 //! Тикер неизвестен — монета не используется (ядро не пересчитает её затраты в USDT), причина — в журнал.
+//! Решение 276: dex.intermediate_dex_priced = да — такая монета (и чужая обёртка, 270 дополнение) используется с
+//! подписью с цепи (pools/mid_dex.rs), её затраты — «в цене», цена — пулом с USDT; цену BNB 1:1 она не получает.
 //! Промежуточная монета с любым налогом (покупки, продажи, перевода) в маршруте не используется — решение техлида
 //! (Issue #7), проверка — quote/via_pools.rs.
 //! Список найденных промежуточных монет хранится в памяти (Mids) — котировка и сделка читают его.
@@ -12,7 +14,7 @@
 //! Кто вызывает: pools/market.rs (при подписке), quote/*, exec/*.
 //! От чего зависит: ctx.rs, tokens.rs, node/call.rs, node/abi_dex.rs, pools/families.rs.
 //! Решение 270 — деление WETH() на нативную и чужую: pools/wrapped.rs.
-//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
+//! Настройки: dex.intermediate_enabled, dex.intermediate_tokens, dex.intermediate_dex_priced, dex.native_ticker, dex.native_wrapped [bsc_dex] (решение
 //! 205: известная обёртка, если WETH() роутеров не прочитан); dex.router [вид пула V2] (WETH()).
 //!
 //! WETH() — IUniswapV2Router01.sol#L5 (v2-periphery ed249913), IPancakeRouter01.sol#L5 (pancake-swap-periphery
@@ -30,7 +32,7 @@ use super::super::node::abi_dex::IV2Router;
 use super::super::node::call;
 use super::super::tokens::Tokens;
 use super::families::{self, Proto};
-use super::wrapped;
+use super::{mid_dex, wrapped};
 
 /// Промежуточная монета: адрес и тикер для затрат.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,11 +108,23 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Mid>> {
         wrapped.push(w);
     }
     let native = ctx.text("dex.native_ticker");
-    let mut out = Vec::new();
+    // Решение 276: необязательная; не задана — как «нет», поведение прежнее.
+    let dex_priced = ctx.flag("dex.intermediate_dex_priced").unwrap_or(false);
+    let mut out: Vec<Mid> = Vec::new();
     for address in list {
         let ticker = match tokens.ticker_of(address) {
             Some(t) => Ok(t),
             None if wrapped.contains(&address) => native.clone().map_err(|e| e.message),
+            // Решение 276 (и 270, дополнение — чужая обёртка): подпись с цепи, цена — пулом с USDT.
+            None if dex_priced => {
+                let taken: Vec<String> = out.iter().map(|m| m.ticker.clone()).collect();
+                let label = mid_dex::label(ctx, tokens, address, &taken).await;
+                let msg = format!(
+                    "Промежуточная {address}: биржа не знает адрес — подпись {label} с цепи, цена — пулом с USDT (dex.intermediate_dex_priced)"
+                );
+                ctx.log(Level::Info, "dex.intermediate", msg, None).await;
+                Ok(label)
+            }
             None => Err(
                 if let Some((title, _)) = foreign.iter().find(|(_, a)| *a == address) {
                     wrapped::foreign_fact(title, address)

@@ -8,7 +8,8 @@
 //! При подписке очередь кошелька восстанавливается из SQLite (wallet/queue_store.rs); остановленная — событие ядру.
 //! С подпиской живут задачи событий баланса — по одной на кошелёк (wallet/events.rs, решение 76; решение 132: у
 //! каждого кошелька своя очередь и свои события). Изменение кошельков или маппинга пересобирает подписку.
-//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped (следит за изменениями).
+//! Настройки: dex.intermediate_*, dex.native_ticker, dex.native_wrapped, venue.price_assets, venue.quote_asset
+//! (следит за изменениями).
 
 use std::sync::{Arc, Mutex};
 
@@ -70,6 +71,9 @@ impl Subs {
                     "dex.native_ticker".into(),
                     // Решение 270: смена обёртки на лету меняет, какой WETH() нативный, — список пересобирается.
                     "dex.native_wrapped".into(),
+                    // Решение 276 (ревью): занятые тикеры подписи промежуточной без биржи (pools/mid_dex.rs busy).
+                    "venue.price_assets".into(),
+                    "venue.quote_asset".into(),
                 ],
             );
             // Решение 132: кошельки или маппинг изменились — пересобираются только задачи кошельков (пулы не трогаем).

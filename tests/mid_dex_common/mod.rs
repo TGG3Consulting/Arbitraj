@@ -2,8 +2,12 @@
 //! Что делает: окружение теста tests/bsc_dex_mid_dex.rs (решение 276) — настоящая SQLite во временной папке с
 //! настройками котировки, пара V2 с записанными резервами, проверка монеты без налогов, допуск пулов. Тот же порядок,
 //! что в tests/bsc_dex_via.rs; адреса строки DEX (роутер, фабрика, Universal Router) — условные: сеть в тесте не нужна.
-//! Кто вызывает: tests/bsc_dex_mid_dex.rs.
+//! Кто вызывает: tests/bsc_dex_mid_dex.rs, tests/bsc_dex_mid_dex_pick.rs, tests/bsc_dex_mid_dex_read.rs (каждому нужна
+//! своя часть — отсюда allow(dead_code)); чтение записи — rec.rs.
 //! От чего зависит: arb::venues::bsc_dex::{ctx, parts, pools, check}, arb::settings, arb::storage.
+#![allow(dead_code)]
+
+pub mod rec;
 
 use alloy_primitives::{Address, U256};
 use chrono::Utc;
@@ -62,7 +66,8 @@ pub async fn ctx(name: &str, quoting: bool) -> Ctx {
             ("tax.max_sell_pct", Scope::Global, json!("5")),
             ("dex.kind", dx.clone(), json!("pancakeswap_v2")),
             ("dex.pool_enabled", dx.clone(), json!(true)),
-            ("dex.v2_fee_pct", dx.clone(), json!("0.25")),
+            // Комиссия пар fstswap 0,3 % — факт (tests/bsc_dex_fstswap_fee.rs, запись fee_check.json).
+            ("dex.v2_fee_pct", dx.clone(), json!("0.3")),
             ("dex.universal_router", dx.clone(), a.clone()),
             (
                 "dex.universal_router_version",

@@ -3,7 +3,8 @@
 //! CL — load_batch_cl.rs), слова тиков V3 через TickLens и выполнение ступени (все вызовы всех пулов вместе через
 //! node/call.rs try_chunks, ответы — обратно по пулам). Те же функции и разбор по ABI, что у load_v2v3.rs.
 //! Решение 274: у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 добавлены swapFee фабрики (fee_override.rs);
-//! решение 281: при pool_fee_each_read — fee() пула последним вызовом (fee_fresh.rs; отделяет load_batch.rs).
+//! решение 281: при pool_fee_each_read — fee() пула последним вызовом (fee_fresh.rs; отделяет load_batch.rs). Какие
+//! добавки — признак Extras, вычисленный при сборке пачки (ревью 281, В1); разбор проверяет число ответов до индексов.
 //! Кто вызывает: pools/load_batch.rs.
 //! От чего зависит: node/call.rs (try_chunks, decode), pools/abi_v2v3.rs, load_batch_cl.rs, load_batch.rs (Want).
 //! Настройки: dex.tick_lens, dex.v3_fee_source [вид пула V3].
@@ -22,7 +23,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_v2v3::{IPancakeV3Pool, ITickLens, IUniswapV3Pool, IV2Pair, IV3Pool};
 use super::families::Proto;
-use super::fee_fresh;
+use super::fee_fresh::{self, Extras};
 use super::fee_override;
 use super::load_batch::{Answers, Stage, Want};
 use super::load_batch::{Miss, miss};
@@ -35,8 +36,9 @@ pub enum PoolStateTick {
     Ticked(PoolState, i32),
 }
 
-/// Вызовы ступени 1 одного пула. Ошибки: причина (нет tickSpacing, нет адреса настройки, ссылка не того вида).
-pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
+/// Вызовы ступени 1 одного пула; x — добавки V3 (Extras::of, вычислены вызывающим один раз; тот же x — в разбор).
+/// Ошибки: причина (нет tickSpacing, нет адреса настройки, ссылка не того вида).
+pub fn head(ctx: &Ctx, w: &Want, x: Extras) -> Result<Vec<(Address, Bytes)>, Miss> {
     let enc = |to: Address, d: Vec<u8>| (to, Bytes::from(d));
     match (w.family.kind, w.reference) {
         (PoolKind::V2, PoolRef::Contract(a)) => {
@@ -55,11 +57,11 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
                 enc(*a, IV3Pool::liquidityCall {}.abi_encode()),
             ];
             // Решение 274 (SheepDex): своя комиссия получателя у фабрики — swapFee(кошелёк/исполнитель, 0).
-            if fee_override::on(ctx, w.family) {
+            if x.swap_fee {
                 l.extend(fee_override::calls(ctx, w.family)?);
             }
             // Решение 281 (SquadSwap V3): свежая fee() пула последним вызовом — load_batch.rs отделяет её до parse_head.
-            if fee_fresh::on(ctx, w.family) {
+            if x.fresh {
                 l.push(fee_fresh::call(*a));
             }
             Ok(l)
@@ -76,11 +78,18 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
     }
 }
 
-/// Разбор ступени 1. Ошибки: причина (ответ не по ABI).
+/// Ответов не меньше `n` — иначе «пул не прочитан» (а не выход за границу). Ошибки: причина.
+pub fn need(w: &Want, b: &[Bytes], n: usize) -> Result<(), Miss> {
+    let (t, got) = (w.family.title, b.len());
+    (got >= n).then_some(()).ok_or_else(|| miss(format!("{t}: пул не прочитан — ответов головы {got}, нужно {n}")))
+}
+
+/// Разбор ступени 1 (fee() 281 уже отделена, fee_fresh::split). Ошибки: причина (ответов мало, ответ не по ABI).
 pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
     let m = |e: Miss| e;
     match w.family.kind {
         PoolKind::V2 => {
+            need(w, b, 1)?;
             let r = call::decode::<IV2Pair::getReservesCall>(&b[0]).map_err(m)?;
             Ok(PoolStateTick::V2(PoolState::V2 {
                 reserve0: U256::from(r.reserve0),
@@ -88,6 +97,7 @@ pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
             }))
         }
         PoolKind::V3 => {
+            need(w, b, 2)?;
             let (sqrt, tick) = if w.family.proto == Proto::PancakeV3 {
                 let s = call::decode::<IPancakeV3Pool::slot0Call>(&b[0]).map_err(m)?;
                 (U256::from(s.sqrtPriceX96), s.tick.as_i32())

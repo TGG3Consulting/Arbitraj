@@ -29,7 +29,8 @@
 - Решение 281 (SquadSwap V3, t113): файлы сверх ориентира 200 строк, выросшие в ветке — src/venues/bsc_dex/pools/load.rs
   391 (было 361: поле Loaded.fee_pips в 13 литералах + чтение fee()), pools/load_batch.rs 229 (было 219),
   pools/verify.rs 294 (было 278), quote/quoter_calls.rs 382 (было 375). Делить — отдельной задачей (load.rs — ветки
-  видов в свои файлы; Loaded — конструктор вместо литералов).
+  видов в свои файлы; Loaded — конструктор вместо литералов). Ревью 281: pools/load_batch.rs осталась 229 (Extras
+  вместо второго чтения настройки); тесты tests/bsc_dex_squadswap_v3_live.rs 313 и tests/bsc_dex_batch_load.rs (+4) — сверх ориентира.
 - Решение 271 (дополнение, t108): src/venues/bsc_dex/exec/bundle.rs 349 строк (было 330), exec/bundle_send.rs 269
   (было 263) — оба были сверх ориентира 200 и до правки; quote/graph_route.rs уложен в 200 (decimals → graph_legs.rs).
 - Решения 274/275 (SheepDex, Curve NG, с доработками по ревью 14.11): файлы сверх ориентира 200 строк, выросшие в

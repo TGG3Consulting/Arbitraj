@@ -47,7 +47,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `factory_ask.rs` | Вид вопроса к реестру фабрики при поиске пулов (решения 121 C3, 122 F): V2 getPair, V3 getPool(fee), Solidly getPool / Solidly V1 getPair (по stable), Algebra poolByPair, DODO V2 getDODOPoolBidirection; данные вызова и разбор ответа в список адресов |
 | `factory_calls.rs` | Вызовы реестра фабрик: V2 getPair(монета, встречный), V3 getPool(…, fee) по dex.v3_fee_tiers; заметки по DEX (не подключена, не задана dex.v3_fee_tiers); разбор ответа |
 | `families.rs` | DEX из таблицы сопоставления (dex.kind): вид, протокол; подключена ли DEX (classify), исполняет ли её умный роутер |
-| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO / CURVE / MAVERICK / STABLE_U256 (PancakeSwap Stable, Lista) / SADDLE (Nerve); `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал) |
+| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO / CURVE / MAVERICK / STABLE_U256 (PancakeSwap Stable, Lista) / SADDLE (Nerve); `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал); ревью 281 — и обратный вызов dex.v3_swap_callback есть у исполнителя (exec_callback.rs) |
 | `graph.rs` | Граф токенов в ОЗУ по всем пулам (решение 80): снимок реестра, рёбра — пулы, фильтр по достоверности/глубине (решение 73), не больше dex.route_max_pools_per_edge на пару; индекс «токен → рёбра» для перебора путей |
 | `graph_cache.rs` | Кэш графа маршрутов: один граф на состояние реестра и блок, одно построение за раз (решения 129, 131); решение 217 — закреплённый набор путей у замороженного реестра (`pinned`) |
 | `abi_check.rs` | ABI проверки пула: поля пула V2/V3, ключ у менеджера Infinity и у PositionManager Uniswap V4 |
@@ -55,10 +55,12 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_batch.rs` | Чтение состояния многих пулов на одном блоке ступенями через Multicall3 (решение 61): головы (V2 резервы, V3/CL slot0 + liquidity) → слова тиков → данные тиков CL; частями по dex.load_batch; Bin — по одному |
 | `load_batch_v2v3.rs` | Вызовы и разбор ступеней V2/V3 (TickLens) и выполнение ступени: все вызовы всех пулов вместе, ответы — по пулам; у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 — swapFee фабрики (решение 274) |
 | `fee_override.rs` | Решение 274 (SheepDex): комиссию задаёт фабрика по адресу получателя — swapFee(кошелёк/исполнитель, 0) читается вместе с пулом; не 0 — пул не прочитан с причиной |
-| `fee_probe.rs` | Решение 274 (защита): при проверке пулов V3 — проба `swapFee(0x0, 0)` фабрики (один вызов на DEX, ответ в памяти до перезапуска); фабрика отвечает, а dex.v3_fee_source не задана — пулы DEX не берутся с причиной |
+| `fee_probe.rs` | Решение 274 (защита): при проверке пулов V3 — проба `swapFee(0x0, 0)` фабрики (один вызов на DEX, ответ в памяти до перезапуска); фабрика отвечает, а dex.v3_fee_source не задана — пулы DEX не берутся с причиной. Ревью 281: проба пропускается только при factory_swap_fee; менеджер комиссии (dex.v3_registry_fee_method / dex.v3_fee_manager) без pool_fee_each_read — пулы не берутся |
 | `registry_key.rs` | Решение 281 (SquadSwap V3): ключ реестра фабрики — метод пула dex.v3_registry_fee_method (defaultFee()) читается при проверке, getPool и QuoterV2 — по нему; ключ в памяти по адресу пула |
 | `fee_fresh.rs` | Решение 281: dex.v3_fee_source = pool_fee_each_read — fee() пула с каждой головой V3 (пачка и по одному), свежая комиссия — в запись (Loaded.fee_pips) |
 | `fee_watch.rs` | Решение 281: подписка на события менеджера комиссии (dex.v3_fee_manager: SetCustomFee / ToggleCustomFee) и UpdatePoolManager фабрики — fee() пула перечитывается в реестр |
+| `fee_refresh.rs` | Решение 281 (ревью): перечтение fee() одного пула (событие менеджера) и всех пулов DEX пачкой (начало каждой сессии fee_watch, смена менеджера) в реестр |
+| `exec_callback.rs` | Ревью 281, В4: dex.v3_swap_callback — селектор обратного вызова пула в коде исполнителя (ArbExecutor.bin-runtime); нет — пулы DEX без пути исполнения |
 | `abi_squad.rs` | Решение 281: ABI событий комиссии SquadSwap V3, фильтры подписки, пул из события |
 | `load_batch_cl.rs` | Вызовы и разбор ступеней 1–2 CL (Infinity CL у менеджера, Uniswap V4 через StateView) |
 | `load_batch_ticks.rs` | Ступень 3: данные установленных тиков CL всех ждущих пулов вместе |

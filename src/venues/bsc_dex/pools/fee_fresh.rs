@@ -9,7 +9,9 @@
 //! считается по комиссии блока верификации, устаревшей комиссии в расчёте сделки быть не может. События менеджера
 //! (fee_watch.rs) — ускорение для сигналов между чтениями, а не единственный источник.
 //! Не задана (или pool / factory_swap_fee) — вызова нет, поведение и число обращений к узлу прежние.
-//! Кто вызывает: pools/load_batch_v2v3.rs (head), pools/load_batch.rs (split), pools/load.rs (V3 по одному).
+//! Ревью 281 (В1): добавки к голове V3 в пачке (swapFee 274 и fee() 281) — `Extras`: dex.v3_fee_source читается ОДИН раз
+//! на пул при сборке пачки, и тот же признак идёт в разбор (настройку могут сменить на лету, пока пачка в пути).
+//! Кто вызывает: pools/load_batch_v2v3.rs (head), pools/load_batch.rs (Extras, split), pools/load.rs (V3 по одному).
 //! От чего зависит: ctx.rs, node/call.rs, abi_check.rs (fee()), families.rs, load_batch.rs (Miss).
 //! Настройки: dex.v3_fee_source [DEX] (значение pool_fee_each_read; необязательная).
 //!
@@ -25,6 +27,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_check::IPoolImmutables as P;
 use super::families::{Family, Proto};
+use super::fee_override::FACTORY;
 use super::load_batch::Miss;
 
 /// Значение dex.v3_fee_source, при котором fee() пула читается при каждом чтении его состояния.
@@ -37,6 +40,32 @@ pub fn on(ctx: &Ctx, f: &Family) -> bool {
         && ctx
             .dex_text("dex.v3_fee_source", f.id)
             .is_ok_and(|v| v == EACH_READ)
+}
+
+/// Добавки к голове пула V3 в пачке: признаки — из одного чтения dex.v3_fee_source при сборке пачки; тем же значением
+/// разбирается ответ (раскладка ответов = раскладка вызовов, даже если настройку сменили, пока пачка в пути).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Extras {
+    /// swapFee фабрики для получателей после slot0 и liquidity (решение 274, fee_override.rs).
+    pub swap_fee: bool,
+    /// fee() пула последним вызовом (решение 281).
+    pub fresh: bool,
+}
+
+impl Extras {
+    /// Признаки вида: не V3 (ABI Uniswap / PancakeSwap) или настройка не задана — оба нет (как раньше). Ошибок нет.
+    pub fn of(ctx: &Ctx, f: &Family) -> Extras {
+        if !matches!(f.proto, Proto::UniswapV3 | Proto::PancakeV3) {
+            return Extras::default();
+        }
+        match ctx.dex_text("dex.v3_fee_source", f.id) {
+            Ok(v) => Extras {
+                swap_fee: v == FACTORY,
+                fresh: v == EACH_READ,
+            },
+            Err(_) => Extras::default(),
+        }
+    }
 }
 
 /// Вызов fee() пула для пачки (последним в голове пула). Ошибок нет.

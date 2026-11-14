@@ -8,12 +8,14 @@
 //! из dex.v3_fee_manager (оба события) и на фабрику DEX (UpdatePoolManager). Событие менеджера → пул из данных, если он в
 //! реестре — fee() пула перечитывается на узле и записывается в реестр (сигналы сразу считают по новой комиссии).
 //! UpdatePoolManager → предупреждение в журнал (задать новый dex.v3_fee_manager) и перечтение fee() всех пулов этой
-//! DEX в реестре. При открытии подписки poolManager() фабрики сверяется с настройкой — расхождение в журнал.
+//! DEX в реестре. При открытии подписки poolManager() фабрики сверяется с настройкой — расхождение в журнал; после
+//! подписки (в начале КАЖДОЙ сессии, и после обрыва) fee() всех пулов DEX перечитывается пачкой (fee_refresh.rs).
+//! Лог менеджера не по ABI — Warn; venue.ws_reconnect_pause_ms не задана — ожидание настройки (settings_wait.rs).
 //! Это ускорение: сделка всё равно считается по fee(), перечитанной на блоке верификации (fee_fresh.rs,
 //! dex.v3_fee_source = pool_fee_each_read). Нет DEX с dex.v3_fee_manager — подписки нет.
 //! Кто вызывает: pools/market.rs.
 //! От чего зависит: ctx.rs, node/source.rs (Link), node/call.rs, families.rs, registry.rs, listen.rs (Pools),
-//! fee_fresh.rs (read), abi_squad.rs (ABI событий, фильтры, пул из события).
+//! fee_refresh.rs (перечтение fee()), abi_squad.rs (ABI событий, фильтры, пул из события), settings_wait.rs.
 //! Настройки: dex.v3_fee_manager, dex.factory [DEX]; bsc.pool_events_source, venue.ws_reconnect_pause_ms [bsc_dex].
 //!
 //! Источник (verified, Sourcify partial_match, chain 56): SquadV3PoolManager 0x391eaa90f931c6330132efe6c73ebdf77d782ef5
@@ -31,9 +33,9 @@ use crate::storage::journal::Level;
 
 use super::super::node::call;
 use super::super::node::source::Link;
-use super::abi_squad::{ISquadV3Factory, filters, pool_of};
+use super::abi_squad::{ISquadV3Factory, filters, is_manager_event, pool_of};
 use super::families::{self, Family, Proto};
-use super::fee_fresh;
+use super::fee_refresh;
 use super::listen::Pools;
 
 /// DEX с менеджером комиссии: (вид, менеджер, фабрика) — только подключённые V3 с dex.v3_fee_manager. Ошибок нет.
@@ -71,10 +73,13 @@ pub async fn run(p: Pools) {
         };
         let msg = format!("Комиссии пулов (менеджер): {why}");
         p.ctx.log(Level::Warn, "venue.ws", msg, None).await;
-        match p.ctx.int("venue.ws_reconnect_pause_ms") {
-            Ok(ms) => tokio::time::sleep(Duration::from_millis(ms)).await,
-            Err(_) => return,
-        }
+        // Не задана — ждём её на лету (как пулы, listen.rs: settings_wait), а не завершаемся навсегда молча.
+        let read = || p.ctx.int("venue.ws_reconnect_pause_ms");
+        let what = "Комиссии пулов (менеджер)";
+        let Some(ms) = super::super::settings_wait::until_ok(&p.ctx, what, "venue.ws", read).await else {
+            return;
+        };
+        tokio::time::sleep(Duration::from_millis(ms)).await;
     }
 }
 
@@ -113,6 +118,10 @@ async fn session(p: &Pools, list: &[(&'static Family, Address, Address)]) -> Str
         }
     }
     drop(tx);
+    // Ревью 281 (В2): подписка открыта — fee() всех пулов DEX заново (смена во время обрыва иначе потеряна).
+    for (f, _, _) in list {
+        fee_refresh::all(p, f, "перечтение после подписки").await;
+    }
     while let Some(raw) = rx.recv().await {
         on_log(p, list, &raw).await;
     }
@@ -138,7 +147,13 @@ async fn on_log(p: &Pools, list: &[(&'static Family, Address, Address)], raw: &s
         return;
     };
     if let Some(pool) = pool_of(t0, log.data()) {
-        refresh(p, PoolRef::Contract(pool)).await;
+        fee_refresh::one(p, PoolRef::Contract(pool)).await;
+        return;
+    }
+    // Ревью 281 (В2): событие менеджера не по ABI — не молча.
+    if is_manager_event(t0) {
+        let msg = format!("Комиссия пула: лог менеджера {:#x} не разобран по ABI (решение 281)", log.address());
+        p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
         return;
     }
     if t0 != ISquadV3Factory::UpdatePoolManager::SIGNATURE_HASH {
@@ -156,28 +171,6 @@ async fn on_log(p: &Pools, list: &[(&'static Family, Address, Address)], raw: &s
         f.title
     );
     p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
-    for e in p.reg.all().into_iter().filter(|e| e.family.id == f.id) {
-        refresh(p, e.pool.reference.clone()).await;
-    }
+    fee_refresh::all(p, f, "смена менеджера").await;
 }
 
-/// Перечитывает fee() пула на узле и пишет в реестр, если пул в нём есть. Ошибок нет: сбой узла — в журнал.
-async fn refresh(p: &Pools, r: PoolRef) {
-    let PoolRef::Contract(pool) = r else { return };
-    if !p.reg.contains(&r) {
-        return;
-    }
-    match fee_fresh::read(&p.ctx, pool, "latest").await {
-        Ok(fee) => {
-            let old = p.reg.update(&r, |e| e.pool.fee_pips.replace(fee)).flatten();
-            let msg = format!(
-                "Комиссия пула {pool:#x}: {old:?} → {fee} из 1e6 (событие менеджера, решение 281)"
-            );
-            p.ctx.log(Level::Info, "dex.pool", msg, None).await;
-        }
-        Err(e) => {
-            let msg = format!("Комиссия пула {pool:#x} не перечитана: {}", e.message);
-            p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
-        }
-    }
-}

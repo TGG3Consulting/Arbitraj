@@ -26,7 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
-use super::fee_fresh;
+use super::fee_fresh::{self, Extras};
 use super::load::{self, Loaded};
 use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
@@ -107,13 +107,14 @@ pub async fn states(
             out[i] = Some(r);
         }
     }
-    // Ступень 1: головы.
+    // Ступень 1: головы. Добавки V3 (swapFee 274, fee() 281) — один раз на пул: тот же признак и в разбор (ревью 281).
+    let extras: Vec<Extras> = wants.iter().map(|w| Extras::of(ctx, w.family)).collect();
     let first: Stage = wants
         .iter()
         .enumerate()
         .map(|(i, w)| match out[i] {
             Some(_) => Vec::new(),
-            None => head(ctx, w).unwrap_or_else(|why| {
+            None => head(ctx, w, extras[i]).unwrap_or_else(|why| {
                 out[i] = Some(Err(why));
                 Vec::new()
             }),
@@ -128,11 +129,10 @@ pub async fn states(
         if out[i].is_some() {
             continue;
         }
-        let on = fee_fresh::on(ctx, w.family);
         let head = heads[i]
             .as_ref()
             .map_err(|t| miss(t.clone()))
-            .and_then(|b| fee_fresh::split(on, b))
+            .and_then(|b| fee_fresh::split(extras[i].fresh, b))
             .and_then(|(b, fee)| {
                 fees[i] = fee;
                 parse_head(w, b)

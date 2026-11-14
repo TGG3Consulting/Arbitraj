@@ -43,6 +43,12 @@ pub fn filters(list: &[(&'static Family, Address, Address)]) -> Vec<Value> {
     out
 }
 
+/// Событие ли это менеджера комиссии (SetCustomFee / ToggleCustomFee) по topic0. Ошибок нет.
+pub fn is_manager_event(topic0: B256) -> bool {
+    topic0 == ISquadV3PoolManager::SetCustomFee::SIGNATURE_HASH
+        || topic0 == ISquadV3PoolManager::ToggleCustomFee::SIGNATURE_HASH
+}
+
 /// Пул из события менеджера (первое поле данных — address pool у обоих событий). Принимает: topic0, данные события.
 /// Возвращает: None — не событие менеджера или данные не по ABI. Ошибок нет.
 pub fn pool_of(topic0: B256, data: &LogData) -> Option<Address> {

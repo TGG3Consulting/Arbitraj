@@ -11,7 +11,8 @@
 //! quote/graph_exec.rs: неисполнимый — сигнал/карточка, авто-сделкой не исполняется (exec/trade.rs отказывает).
 //! Нативную монету (BNB) не маршрутизирует через V4 / Infinity (решение 62, native_ok). Выбор котировки-на-сделку
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
-//! Кто вызывает: quote/mod.rs за переключателем dex.router_mode (merge, quote); тесты.
+//! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
+//! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs, quote/graph_split.rs,
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
 //! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,

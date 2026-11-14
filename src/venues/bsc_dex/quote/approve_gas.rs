@@ -3,9 +3,12 @@
 //! разрешения ERC-20 → Permit2 и Permit2 → Universal Router маршрута на сумму сделки; нет — газ, измеренный пробным
 //! обменом в первом пуле маршрута (разрешения одни на токен входа первого шага, от пула не зависят).
 //! Маршрут через исполнитель ArbExecutor (решение 122, часть X): ERC-20 allowance кошелька исполнителю (память).
+//! Решение 271 (ревью): графовый маршрут, первый хоп которого — форк, без исполнителя идёт бандлом, и нога форка
+//! берёт ERC-20 approve РОУТЕРУ ФОРКА (dex.router, без Permit2 — exec/bundle.rs, wallet/approve.rs::fork_missing):
+//! ERC-20 allowance кошелька роутеру форка (память); dex.universal_router у форка не нужен и не читается.
 //! Кто вызывает: quote/mod.rs.
 //! От чего зависит: exec/executor/mod.rs (takes), wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
-//! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), smart.universal_router, smart.permit2
+//! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), dex.router [форк первого хопа], smart.universal_router, smart.permit2
 //! [bsc_dex] (умный); через approve.rs — dex.approve_unlimited, dex.permit2_expiration_s.
 
 use crate::core::types::{Quote, RouteMode, Side};
@@ -63,6 +66,16 @@ pub async fn units(
     if let Some(x) = super::super::exec::executor::takes(ctx, route, native)? {
         let wallet = signer::address(ctx)?;
         if q.allow.erc20(ctx, token, wallet, x).await? >= amount {
+            return Ok(None);
+        }
+        return measured(q, &e.pool.reference, quote.side);
+    }
+    // Решение 271 (ревью): первый хоп — форк (граф, без исполнителя) — нога форка в бандле: одно ERC-20 approve роутеру
+    // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
+    if route.mode == RouteMode::Graph && e.family.fork {
+        let router = ctx.dex_addr("dex.router", e.family.id)?;
+        let wallet = signer::address(ctx)?;
+        if q.allow.erc20(ctx, token, wallet, router).await? >= amount {
             return Ok(None);
         }
         return measured(q, &e.pool.reference, quote.side);

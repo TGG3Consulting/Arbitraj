@@ -8,9 +8,11 @@
 //! захвачены, поэтому узлы графа — условные адреса в том же порядке сортировки, что реальные
 //! (CAKE < USDT < BTCB < WBNB), чтобы ориентация token0/token1 у V3 совпадала с записанным sqrtPriceX96.
 //! Пары пулов — по тегам записи (авторитетная топология).
-//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs.
+//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs. Сцена решения 271 (пул только на форке) — fork.rs.
 //! От чего зависит: arb::venues::bsc_dex::{pools, parts, ctx}, abi_v2v3; arb::settings; arb::storage.
 #![allow(dead_code)]
+
+pub mod fork;
 
 use std::collections::{BTreeMap, HashMap};
 

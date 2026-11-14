@@ -89,14 +89,18 @@ pub fn miss(m: &Measured, dex: &str) -> (bool, String) {
 pub type Others = (Vec<String>, Vec<String>, Vec<(String, Option<String>)>);
 
 /// Итог проверки монеты по пробам всех пулов. Принимает: налоги пулов с удачной пробой, был ли пул с выходом 0,
-/// причины неизмеренной продажи, причины остальных пулов. Возвращает: Known — налоги по пулам (coin); покупка где-то
-/// измерена, продажа нигде — sell_verdict (Failed / Wait); иначе как до решения 146: выход 0 — Failed; настройка —
-/// Config; помеха на любом пуле — Wait (вердикт — только если каждый пул дал вердикт); иначе Failed. Ошибок нет.
+/// причины неизмеренной продажи, причины остальных пулов, причины пулов «налоги пула не измерены» (решение 280: пара
+/// вида без роутера отклонила пробную покупку — свойство пула, НЕ помеха). Возвращает: Known — налоги по пулам (coin);
+/// покупка где-то измерена, продажа нигде — sell_verdict (Failed / Wait); иначе как до решения 146: выход 0 — Failed;
+/// настройка — Config; помеха на любом пуле — Wait (вердикт — только если каждый пул дал вердикт); вердиктов нет, а
+/// пулы «не измерены» — Wait с их причинами (монету пробовать больше негде); иначе Failed. Пустой список «не
+/// измерены» — итог буква в букву как раньше. Ошибок нет.
 pub fn outcome(
     measured: &[PoolTaxes],
     zero: bool,
     misses: &[(bool, String)],
     (failed, env, config): Others,
+    unmeasured: &[String],
 ) -> Outcome {
     if let Some(t) = coin(measured) {
         return Outcome::Known(t);
@@ -120,6 +124,9 @@ pub fn outcome(
     }
     if !env.is_empty() {
         return Outcome::Wait(env.join("; "));
+    }
+    if failed.is_empty() && !unmeasured.is_empty() {
+        return Outcome::Wait(unmeasured.join("; "));
     }
     Outcome::Failed(failed.join("; "))
 }

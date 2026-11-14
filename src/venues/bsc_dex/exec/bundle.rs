@@ -219,13 +219,25 @@ pub async fn build(
 }
 
 /// Адрес роутера форка ноги и её семейство. Все шаги — один форк и один его роутер (dex.router): межроутерную ногу
-/// (форк + не-форк или два форка) один вызов не исполнит. Ошибки: NoRoute (нет шагов, смешанная/межроутерная нога),
-/// NotConfigured (dex.router форка не задан).
+/// (форк + не-форк или два форка) один вызов не исполнит. Ошибки: NoRoute (нет шагов, у шага нет своего пути
+/// исполнения — tradable = нет, смешанная/межроутерная нога), NotConfigured (dex.router форка не задан).
 fn fork_router(ctx: &Ctx, leg: &[Step]) -> GatewayResult<(Address, &'static Family)> {
     let first = leg
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "нога форка без шагов"))?;
     let family = first.entry.family;
+    // Ревью 280: нога без своего пути исполнения (tradable = нет: v2_fork_executor, v3_fork — исполняются только шагом
+    // исполнителя) в бандл попасть не должна; попала (исполнитель исчез между котировкой и сделкой) — отказ ДО чтения
+    // dex.router: оставшийся от прежнего вида или ошибочный роутер мог бы исполнить своп чужой фабрикой.
+    if let Some(s) = leg.iter().find(|s| !s.entry.family.tradable) {
+        return Err(ctx.err(
+            ErrorCode::NoRoute,
+            format!(
+                "у DEX {} нет своего пути исполнения — нужен исполнитель у кошелька (exec.executor_address)",
+                s.entry.family.title
+            ),
+        ));
+    }
     let router = ctx.dex_addr("dex.router", family.id)?;
     for s in leg {
         if !s.entry.family.fork {

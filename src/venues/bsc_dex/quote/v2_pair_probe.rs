@@ -5,9 +5,9 @@
 //! симуляции + формула V2 (math/v2.rs) с комиссией шага исполнителя (dex.v2_fee_pct; quote/v2_pair_quote.rs fee).
 //! Комиссию здесь проверяет сам обмен через исполнитель в той же симуляции: пара откатила покупку — налоги ПУЛА не
 //! измерены (пул в маршрут не идёт, решение 146), монета не голосует «не прошла» (buy_unmeasured → SwapReverted,
-//! check/taxes.rs). Остальные виды — как раньше (quote/quoter_calls.rs, буква в букву).
+//! check/taxes.rs); откат перевода монеты из пары («…: TRANSFER_FAILED») — механика монеты, голосует как у всех. Остальные виды — как раньше (quote/quoter_calls.rs, буква в букву).
 //! Кто вызывает: check/probe.rs, check/probe_calls.rs, exec/dry_surplus_tail.rs.
-//! От чего зависит: quote/{quoter_calls, v2_pair_quote}.rs, math/v2.rs, pools/abi_v2v3.rs, check/{simulate, probe_calls}.rs.
+//! От чего зависит: quote/{quoter_calls, v2_pair_quote, v2_pair_sim}.rs, math/v2.rs, pools/abi_v2v3.rs, check/{simulate, probe_calls}.rs.
 //! Настройки: через v2_pair_quote::fee — dex.v2_fee_pct [DEX].
 
 use alloy::sol_types::SolCall;
@@ -22,6 +22,7 @@ use super::super::math::v2;
 use super::super::pools::abi_v2v3::IV2Pair;
 use super::super::pools::registry::Entry;
 use super::v2_pair_quote::{fee, on, pair};
+use super::v2_pair_sim;
 
 /// «Ожидалось без налога» у вида без роутера: вызов getReserves пары. Ошибки: NotConfigured (комиссия — проверяется
 /// заранее, чтобы разбор не молчал), Internal (пул не контракт).
@@ -83,17 +84,19 @@ pub fn decode_any(
 }
 
 /// Откат первой симуляции пробы у пула вида без роутера: «ожидалось» (getReserves) или покупка шагом V2 исполнителя
-/// (номер шага ≥ шага «ожидалось») — свойство ПУЛА (комиссия пары выше dex.v2_fee_pct, swap нестандартный), не
-/// монеты: налоги пула не измерены. Срок транзакции (deadline исполнителя) и шаги до «ожидалось» (перевод USDT,
-/// разрешения) — как у всех (check/probe_calls.rs buy_revert). Принимает: пул, номер отката, номер «ожидалось», итог.
-/// Возвращает: причину или None — решать как у всех. Ошибок нет.
+/// (номер шага ≥ шага «ожидалось») — свойство ПУЛА (пара отклонила обмен: K — комиссия пары выше dex.v2_fee_pct, или
+/// обмен нестандартный), не монеты: налоги пула не измерены. Откат перевода монеты из пары (Error(string)
+/// «…: TRANSFER_FAILED» — _safeTransfer пары V2: монета отказала в переводе — запрет торговли, антибот; ревью 280) —
+/// механика МОНЕТЫ: голосует как у обычных пулов (None → check/probe_calls.rs buy_revert). Срок транзакции (deadline
+/// исполнителя) и шаги до «ожидалось» (перевод USDT, разрешения) — как у всех. Принимает: пул, номер отката, номер
+/// «ожидалось», итог. Возвращает: причину или None — решать как у всех. Ошибок нет.
 pub fn buy_unmeasured(e: &Entry, i: usize, quote: usize, r: &CallResult) -> Option<String> {
-    if !on(e) || i < quote || probe_calls::late(r) {
+    if !on(e) || i < quote || probe_calls::late(r) || v2_pair_sim::coin_transfer(r) {
         return None;
     }
     Some(format!(
         "{}: пробная покупка шагом V2 исполнителя откатилась (шаг {i}) — налоги пула не измерены, пул в маршрут не идёт \
-         (комиссия пары выше dex.v2_fee_pct или swap нестандартный, решение 280): {}",
+         (пара отклонила обмен: комиссия пары выше dex.v2_fee_pct или обмен нестандартный, решение 280): {}",
         e.family.title,
         r.why()
     ))

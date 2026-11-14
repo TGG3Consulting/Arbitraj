@@ -73,6 +73,7 @@ pub mod tick_bin_spot;
 pub mod verify;
 pub mod verify_decide;
 pub mod via;
+pub mod v2_pair_calls;
 pub mod v2_pair_probe;
 pub mod v2_pair_quote;
 pub mod v2_pair_sim;

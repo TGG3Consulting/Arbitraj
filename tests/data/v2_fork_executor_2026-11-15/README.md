@@ -12,7 +12,9 @@ keccak256("arb.v2_pair_quote.owner")[12..] (как quote/v2_pair_quote.rs), сл
 наибольшим резервом USDT / BUSD / USDC; `factory.getPair(token0, token1)` = пара (поле `getPair`). Вход — стейбл пары,
 сумма = 1% его резерва (`amount_in`).
 
-Симуляция — ровно вызовы quote/v2_pair_quote.rs `calls`: 0 getReserves → 1 пара переводит вход владельцу подмены →
+После ревью 280 сверка собирается другой раскладкой (quote/v2_pair_calls.rs; запись
+`tests/data/v2_executor_balance_2026-11-15`); здесь — прежняя раскладка (комиссии и отказ «K» по-прежнему факт; откат
+`below_1pip_last` dao_swap используется тестами пробы налогов). Прежняя симуляция — вызовы quote/v2_pair_quote.rs `calls`: 0 getReserves → 1 пара переводит вход владельцу подмены →
 2 sync() → 3 getReserves → 4 approve исполнителю → 5 execute(вход, сумма, выход, 1, uint256.max, [шаг V2, feePips]).
 Комиссия — поиск делением: наименьшие `feePips`, при которых шаг 5 проходит (`min_fee_pips`). `ok` — итоги при ней
 (status / returnData / gasUsed; события опущены), `below_1pip_last` — итог шага 5 при `min_fee_pips − 1` (шаги 0–4

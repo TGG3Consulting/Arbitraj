@@ -15,7 +15,7 @@
 | `events_native.rs` | BNB по блокам, пока ожидается BNB: баланс и nonce на «голова − подтверждения»; своя транзакция в блоках — не раскладываем, решает опрос |
 | `balances.rs` | Балансы: BNB (`eth_getBalance`) и известные токены (`balanceOf`); WBNB нативной монеты (решение 62) — в locked строки BNB |
 | `balances_mc.rs` | Все балансы кошелька одним eth_call Multicall3: getEthBalance + balanceOf, частями по dex.load_batch (решение 113) |
-| `allow_cache.rs` | Разрешения кошелька для котировки в памяти до любой его транзакции (решение 61): котировка не читает их с узла на каждом тике; с решения 122 — и ERC-20 allowance исполнителю ArbExecutor (`erc20`) |
+| `allow_cache.rs` | Разрешения кошелька для котировки в памяти до любой его транзакции (решение 61): котировка не читает их с узла на каждом тике; с решения 122 — и ERC-20 allowance исполнителю ArbExecutor (`erc20`) и (решение 271) роутеру форка; очищается после любой транзакции кошелька — exec/txs.rs и бандл exec/bundle_send.rs |
 | `approve.rs` | Разрешения ERC-20 → Permit2 и Permit2 → Universal Router: каких не хватает (`dex.approve_unlimited`, `dex.permit2_expiration_s`); прямой ERC-20 approve роутеру форка |
 | `approve_executor.rs` | Решение 122 (часть X): разрешения своему исполнителю ArbExecutor — прямой ERC-20 approve без Permit2 (`missing`, `all`), `allowance` для памяти котировки |
 | `transfer.rs` | Перевод монеты из кошелька на адрес (вывод на биржу); BNB (решение 62) — нативный перевод value, сверх резерва на газ; «вытеснена» — OutcomeUnknown с «чем найти» и хешами отмен (выяснение — resolve_withdraw.rs) |

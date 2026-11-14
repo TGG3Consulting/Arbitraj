@@ -15,6 +15,7 @@
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
 //! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
 
+pub mod approve_bundle;
 pub mod approve_gas;
 pub mod classic_direct;
 pub mod costs;

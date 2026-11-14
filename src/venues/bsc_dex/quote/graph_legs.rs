@@ -3,15 +3,17 @@
 //! ориентирует хопы (покупка — порядок пути USDT→монета, продажа — обратный), берёт допуск каждого пула
 //! (quote/select.rs) по стороне ПУЛА (направлению свопа на этом хопе, не всей сделки) и decimals токенов из кэша.
 //! Фаза 80, PR 80.4 — оценка пути и сплит (бэклог §7.3).
+//! decimals всех токенов путей (decimals — вынесено из quote/graph_route.rs).
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg), quote/route_paths.rs (RoutePath), quote/select.rs, pools/registry.rs.
 //! Настройки: через select.rs — см. его шапку.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 
 use crate::core::types::Side;
+use crate::gateway::errors::GatewayResult;
 
 use super::super::pools::registry::Entry;
 use super::Quoting;
@@ -72,4 +74,23 @@ pub fn legs_for(
         });
     }
     Ok(legs)
+}
+
+/// decimals всех токенов путей — из кэша или узла один раз (вынесено из quote/graph_route.rs). Ошибки: узел (decimals).
+pub async fn decimals(
+    v: &super::via::Via<'_>,
+    paths: &[RoutePath],
+) -> GatewayResult<HashMap<Address, u8>> {
+    let mut set: HashSet<Address> = HashSet::new();
+    for p in paths {
+        for s in &p.steps {
+            set.insert(s.token_in);
+            set.insert(s.token_out);
+        }
+    }
+    let mut m = HashMap::new();
+    for t in set {
+        m.insert(t, v.q.tokens.decimals(&v.q.ctx, t).await?);
+    }
+    Ok(m)
 }

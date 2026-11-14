@@ -13,13 +13,13 @@
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
-//! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs, quote/graph_split.rs,
+//! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs,
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
 //! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -82,7 +82,7 @@ pub async fn quote(
             format!("{}: граф не нашёл путей USDT ↔ монета", asset.ticker),
         ));
     }
-    let dec = decimals(v, &paths).await?;
+    let dec = graph_legs::decimals(v, &paths).await?;
     // R1 (решение 122): газ пути в USDT для выбора — только при dex.route_gas_aware = да.
     let gas_aware = route_gas::enabled(ctx);
     let conv = if gas_aware {
@@ -197,23 +197,4 @@ pub fn native_ok(coin: Address, path: &RoutePath) -> bool {
         let touches = s.token_in == coin || s.token_out == coin;
         !touches || native::pool_ok(s.edge.entry.pool.kind)
     })
-}
-
-/// decimals всех токенов путей — из кэша или узла один раз. Ошибки: узел (decimals).
-async fn decimals(
-    v: &Via<'_>,
-    paths: &[route_paths::RoutePath],
-) -> GatewayResult<HashMap<Address, u8>> {
-    let mut set: HashSet<Address> = HashSet::new();
-    for p in paths {
-        for s in &p.steps {
-            set.insert(s.token_in);
-            set.insert(s.token_out);
-        }
-    }
-    let mut m = HashMap::new();
-    for t in set {
-        m.insert(t, v.q.tokens.decimals(&v.q.ctx, t).await?);
-    }
-    Ok(m)
 }

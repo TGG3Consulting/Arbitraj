@@ -6,8 +6,11 @@
 //! Решение 271 (ревью): графовый маршрут, первый хоп которого — форк, без исполнителя идёт бандлом, и нога форка
 //! берёт ERC-20 approve РОУТЕРУ ФОРКА (dex.router, без Permit2 — exec/bundle.rs, wallet/approve.rs::fork_missing):
 //! ERC-20 allowance кошелька роутеру форка (память); dex.universal_router у форка не нужен и не читается.
+//! Решение 271 (дополнение): ИСПОЛНИМЫЙ граф формы «бандл» без исполнителя — газ разрешений по ВСЕМ группам бандла
+//! (группы Universal Router и пары «токен — роутер форка», как exec/bundle.rs) — quote/approve_bundle.rs; ветка
+//! «первый хоп — форк» ниже остаётся только у неисполнимого графа (сигнал).
 //! Кто вызывает: quote/mod.rs.
-//! От чего зависит: exec/executor/mod.rs (takes), wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
+//! От чего зависит: quote/approve_bundle.rs, quote/graph_exec.rs (graph_form), exec/executor/mod.rs (takes), wallet/approve.rs, wallet/allow_cache.rs, wallet/signer.rs, check/state.rs, pools/registry.rs, num.rs.
 //! Настройки: dex.universal_router, dex.permit2 [вид пула] (прямой маршрут), dex.router [форк первого хопа], smart.universal_router, smart.permit2
 //! [bsc_dex] (умный); через approve.rs — dex.approve_unlimited, dex.permit2_expiration_s.
 
@@ -70,6 +73,14 @@ pub async fn units(
         }
         return measured(q, &e.pool.reference, quote.side);
     }
+    // Решение 271 (дополнение): исполнимый граф формы «бандл» без исполнителя (exec/trade.rs → exec/bundle_trade.rs) —
+    // разрешения по всем группам бандла, а не только по первому хопу первой доли (quote/approve_bundle.rs).
+    if route.mode == RouteMode::Graph
+        && route.executable
+        && super::graph_exec::graph_form(ctx, route) == super::graph_exec::GraphForm::Bundle
+    {
+        return super::approve_bundle::units(q, quote, route, (coin_dec, usdt_dec)).await;
+    }
     // Решение 271 (ревью): первый хоп — форк (граф, без исполнителя) — нога форка в бандле: одно ERC-20 approve роутеру
     // форка на токен входа (exec/bundle.rs, wallet/approve.rs::fork_missing — тот же allowance(кошелёк, роутер)).
     if route.mode == RouteMode::Graph && e.family.fork {
@@ -102,7 +113,8 @@ pub async fn units(
 }
 
 /// Газ разрешений, измеренный пробным обменом в пуле (сторона покупки или продажи). Ошибки: CoinNotChecked — не измерен.
-fn measured(
+/// Зовёт также quote/approve_bundle.rs.
+pub(super) fn measured(
     q: &Quoting,
     pool: &crate::core::types::PoolRef,
     side: Side,

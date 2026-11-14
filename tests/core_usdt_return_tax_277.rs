@@ -1,227 +1,148 @@
 //! Файл: tests/core_usdt_return_tax_277.rs
-//! Что делает: решение 277 — налог перевода котируемой монеты USDT при возврате с биржи на кошелёк DEX берётся из
-//! замера проверки налогов служебной монеты (venues/bsc_dex/check/service_tax.rs → событие CoinCheck ядру), а не
-//! «налог перевода не проверен». Живой бот 14.11.2026: 6 возвратов USDT (bingx ×3, mexc ×3) шли «зачисление USDT только
-//! по опросу статуса — USDT: налог перевода не проверен», и поступление на кошелёк писалось Warn core.balance_external.
-//! Данные — только записанные: справочник сетей BingX (tests/data/bingx_2026-10-24/config_getall.json: USDT BEP20,
-//! комиссия вывода 0.15, адрес 0x55d3…7955) и живой ответ узла на пробу переводов USDT
-//! (tests/data/service_tax_2026-10-25/responses.json: налоги 0, разбор service_tax::read — как в адаптере).
+//! Что делает: решение 277 — налог перевода USDT при возврате с биржи на кошелёк DEX берётся из замера проверки налогов
+//! служебной монеты (venues/bsc_dex/check/service_tax.rs → событие CoinCheck ядру), а не «налог перевода не проверен».
+//! Живой бот 14.11.2026: 6 возвратов USDT (bingx ×3, mexc ×3) шли «зачисление USDT только по опросу статуса — USDT:
+//! налог перевода не проверен», поступление на кошелёк писалось Warn core.balance_external.
 //! - налог USDT не измерен: ожидания нет (как раньше), причина — «налог перевода не проверен»;
-//! - налог измерен: ожидание регистрируется, приход = сумма − комиссия вывода, поступление на кошелёк прикрепляется к
-//!   возврату (не внешнее изменение);
-//! - проверка USDT — is_quote (экрану «Монеты» и пересборке не передаётся, core/tick.rs), проверка другой монеты — нет.
+//! - налог измерен: ожидание регистрируется, приход = сумма − комиссия вывода, поступление прикрепляется к возврату;
+//! - ненулевой налог USDT: ожидаемый приход уменьшен на налог (значение налога подставлено в записанную проверку:
+//!   у реального USDT замер даёт 0, записи ненулевого налога USDT нет — проверяется формула credit_expect.rs);
+//! - измерено, затем сбой перепроверки: прежний налог сохраняется (service_tax::outcome), ожидание регистрируется;
+//! - service_tax::deliver кладёт итог в checks и отправляет событие CoinCheck в канал ядра;
+//! - проверка USDT — is_quote, проверка другой монеты — нет.
+//!
+//! Данные — tests/usdt277_common (записи BingX config_getall и ответа узла на пробу переводов USDT).
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core, arb::venues::{bingx, bsc_dex}, arb::settings, arb::storage. Моков нет: площадок в
-//! шлюзе нет — проверяется решение ядра (комиссия вывода — из справочника сетей ядра, credit_expect.rs).
+//! От чего зависит: arb::core, arb::venues::bsc_dex::check::{service_tax, state}, tests/usdt277_common. Моков нет:
+//! площадок в шлюзе нет — проверяется решение ядра (комиссия вывода — из справочника сетей ядра, credit_expect.rs).
 
-use alloy_primitives::{Address, U256, address};
-use chrono::Utc;
+mod usdt277_common;
+
+use alloy_primitives::address;
 use rust_decimal::Decimal;
-use serde_json::{Value, json};
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
-use arb::core::Core;
-use arb::core::deps::Deps;
-use arb::core::types::{
-    Asset, BalanceChange, BalanceKind, CheckState, CoinCheck, CoinNetworkInfo, VenueId,
-};
+use arb::core::types::{BalanceChange, BalanceKind, CheckState};
 use arb::core::{credit_event, credit_expect, transfer_tax};
-use arb::gateway::contract::VenueKind;
 use arb::gateway::events::MarketEvent;
-use arb::gateway::registry::Registry;
-use arb::notify::dispatch::Notifier;
-use arb::settings::store::Store;
-use arb::settings::value::Scope;
-use arb::storage::db::Db;
-use arb::storage::journal::Journal;
 use arb::venues::bsc_dex::check::service_tax;
-use arb::venues::bsc_dex::check::simulate::CallResult;
+use arb::venues::bsc_dex::check::state::Checks;
+use usdt277_common::*;
 
-/// USDT BSC — адрес USDT у BingX в сети BEP20 (config_getall.json, contractAddress).
-const USDT: Address = address!("0x55d398326f99059fF775485246999027B3197955");
-
-fn v(s: &str) -> VenueId {
-    VenueId(s.into())
+/// Ожидаемый приход возврата bingx → bsc_dex суммы `qty`.
+async fn arrival(core: &arb::core::Core, qty: Decimal) -> Result<Decimal, String> {
+    let (_, net) = bingx_usdt();
+    credit_expect::arrival(core, &v("bingx"), &v("bsc_dex"), &usdt(), &net.network, qty).await
 }
 
-fn usdt() -> Asset {
-    Asset {
-        ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
-    }
-}
-
-fn json_file(path: &str) -> Value {
-    serde_json::from_str(&std::fs::read_to_string(path).expect("файл записи")).expect("JSON")
-}
-
-/// Сеть USDT BEP20 BingX из записи (разбор адаптера BingX).
-fn bingx_usdt() -> (Vec<CoinNetworkInfo>, CoinNetworkInfo) {
-    let b = json_file("tests/data/bingx_2026-10-24/config_getall.json");
-    let list =
-        arb::venues::bingx::wallet::parse_networks(&b["data"], "BEP20", &v("bingx")).unwrap();
-    let one = list
-        .iter()
-        .find(|n| n.asset == usdt())
-        .expect("USDT BEP20 в записи")
-        .clone();
-    (list, one)
-}
-
-/// Проверка налогов USDT из живого ответа узла — тем же разбором, что адаптер (service_tax::read); сумма пробы — как в
-/// tests/bsc_dex_service_tax.rs (5·10^18).
-fn usdt_check() -> CoinCheck {
-    let rec = json_file("tests/data/service_tax_2026-10-25/responses.json");
-    let r: Vec<CallResult> =
-        serde_json::from_value(rec["response"]["result"][0]["calls"].clone()).unwrap();
-    let amount = U256::from(5u8) * U256::from(10u8).pow(U256::from(18u8));
-    let (t, _) = service_tax::read(&r, amount, 18).unwrap();
-    CoinCheck {
-        venue: v("bsc_dex"),
-        asset: usdt(),
-        taxes: CheckState::Known(t),
-        source: arb::venues::bsc_dex::check::taxes::SOURCE.into(),
-        checked_at: Some(Utc::now()),
-        wait: None,
-    }
-}
-
-/// Ядро на базе во временной папке: виды площадок, справочник сетей BingX, адрес USDT; у DEX — события баланса,
-/// допуск 0 и закрытие по событию (решение 76).
-async fn start(name: &str) -> Core {
-    let d = std::env::temp_dir().join(format!("arb-t277-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    let db = Db::open(&d.join("t.sqlite")).unwrap();
-    let (changes, _) = broadcast::channel(64);
-    let (jtx, _) = broadcast::channel(64);
-    let journal = Journal::new(db.clone(), jtx);
-    let settings = Store::load(db.clone(), changes.clone(), journal.clone())
-        .await
-        .unwrap();
-    let dex = Scope::Venue("bsc_dex".into());
-    for (n, val) in [
-        ("venue.balance_events", json!(true)),
-        ("transfer.credit_amount_tolerance_pct", json!("0")),
-        ("transfer.credit_by_event", json!(true)),
-    ] {
-        settings
-            .set(n, dex.clone(), Some(val), "тест")
-            .await
-            .unwrap();
-    }
-    let notifier = Notifier {
-        http: reqwest::Client::new(),
-        settings: settings.clone(),
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        journal: journal.clone(),
-    };
-    let core = Core::start(Deps {
-        gw: Registry::new(),
-        settings,
-        journal,
-        notifier,
-        db,
-        changes,
-        buffer: 64,
-        data_dir: d.to_path_buf(),
-    })
-    .await;
-    *core.inner.kinds.write().unwrap() =
-        vec![(v("bingx"), VenueKind::Cex), (v("bsc_dex"), VenueKind::Dex)];
-    core.inner
-        .networks
-        .write()
-        .unwrap()
-        .insert(v("bingx"), std::sync::Arc::new(bingx_usdt().0));
-    *core.inner.usdt.write().unwrap() = Ok(USDT);
-    core
-}
-
-/// Поступление USDT на кошелёк DEX (событие баланса без хеша).
-fn deposit(delta: Decimal) -> BalanceChange {
-    BalanceChange {
-        venue: v("bsc_dex"),
-        asset: usdt(),
-        delta,
-        kind: BalanceKind::Deposit,
-        own: false,
-        tx_hash: None,
-        at: Utc::now(),
-        source: "тест".into(),
-        account: None,
-    }
+/// Ожидание зачисления возврата bingx → bsc_dex суммы `qty`.
+async fn ticket(core: &arb::core::Core, qty: Decimal) -> Option<arb::core::credit_watch::Ticket> {
+    let (_, net) = bingx_usdt();
+    credit_expect::ticket(
+        core,
+        "d1",
+        &v("bingx"),
+        &v("bsc_dex"),
+        &usdt(),
+        &net.network,
+        qty,
+    )
+    .await
 }
 
 #[tokio::test]
 async fn unmeasured_usdt_tax_keeps_poll_only() {
     let core = start("off").await;
-    let (_, net) = bingx_usdt();
     let qty = Decimal::new(100, 0);
-    let e = credit_expect::arrival(
-        &core,
-        &v("bingx"),
-        &v("bsc_dex"),
-        &usdt(),
-        &net.network,
-        qty,
-    )
-    .await
-    .unwrap_err();
+    let e = arrival(&core, qty).await.unwrap_err();
     assert!(e.contains("налог перевода не проверен"), "{e}");
-    let t = credit_expect::ticket(
-        &core,
-        "d1",
-        &v("bingx"),
-        &v("bsc_dex"),
-        &usdt(),
-        &net.network,
-        qty,
-    )
-    .await;
-    assert!(t.is_none(), "без замера налога — только опрос, как раньше");
+    assert!(
+        ticket(&core, qty).await.is_none(),
+        "без замера налога — только опрос, как раньше"
+    );
 }
 
 #[tokio::test]
 async fn measured_usdt_tax_registers_and_matches() {
     let core = start("on").await;
-    core.inner
-        .market
-        .write()
-        .unwrap()
-        .apply(MarketEvent::CoinCheck(usdt_check()));
-    let (_, net) = bingx_usdt();
+    apply(&core, usdt_check());
     let qty = Decimal::new(100, 0);
-    let fee = net.fee_for(qty).unwrap();
+    let fee = bingx_usdt().1.fee_for(qty).unwrap();
     // Налог USDT измерен живым узлом — 0: приход = сумма − комиссия вывода BingX.
-    let got = credit_expect::arrival(
-        &core,
-        &v("bingx"),
-        &v("bsc_dex"),
-        &usdt(),
-        &net.network,
-        qty,
-    )
-    .await
-    .unwrap();
+    let got = arrival(&core, qty).await.unwrap();
     assert_eq!(got, qty - fee);
-    let t = credit_expect::ticket(
-        &core,
-        "d1",
-        &v("bingx"),
-        &v("bsc_dex"),
-        &usdt(),
-        &net.network,
-        qty,
-    )
-    .await
-    .expect("ожидание зачисления зарегистрировано");
-    credit_event::on_change(&core, deposit(got)).await;
+    let t = ticket(&core, qty)
+        .await
+        .expect("ожидание зачисления зарегистрировано");
+    let dep = BalanceChange {
+        venue: v("bsc_dex"),
+        asset: usdt(),
+        delta: got,
+        kind: BalanceKind::Deposit,
+        own: false,
+        tx_hash: None,
+        at: chrono::Utc::now(),
+        source: "тест".into(),
+        account: None,
+    };
+    credit_event::on_change(&core, dep).await;
     assert!(
         t.has_event(),
         "поступление прикреплено к возврату, не внешнее изменение"
     );
+}
+
+#[tokio::test]
+async fn nonzero_usdt_tax_reduces_expected() {
+    let core = start("tax").await;
+    let mut t = usdt_taxes();
+    t.transfer_pct = Decimal::new(5, 1);
+    let pct = t.transfer_pct;
+    apply(&core, usdt_check_with(t));
+    let qty = Decimal::new(100, 0);
+    let fee = bingx_usdt().1.fee_for(qty).unwrap();
+    let got = arrival(&core, qty).await.unwrap();
+    assert_eq!(
+        got,
+        (qty - fee) * (Decimal::ONE - pct / Decimal::ONE_HUNDRED)
+    );
+    assert!(got < qty - fee, "налог уменьшил ожидаемый приход");
+}
+
+#[tokio::test]
+async fn recheck_failure_keeps_measured_and_delivers() {
+    let core = start("keep").await;
+    let checks = Checks::default();
+    let (tx, mut rx) = mpsc::channel(4);
+    let ok = service_tax::outcome(&checks, v("bsc_dex"), "USDT", USDT, &Ok(usdt_taxes()));
+    service_tax::deliver(&checks, &tx, ok.clone()).await;
+    // Сбой перепроверки (текст причины — как у сбоя узла; значение не важно, важен Err).
+    let err: Result<_, String> = Err("узел: таймаут".into());
+    let kept = service_tax::outcome(&checks, v("bsc_dex"), "USDT", USDT, &err);
+    assert!(
+        matches!(&kept.taxes, CheckState::Known(t) if *t == usdt_taxes()),
+        "прежний налог"
+    );
+    assert_eq!(kept.checked_at, ok.checked_at, "время прежнего замера");
+    assert_eq!(kept.wait.as_deref(), Some("узел: таймаут"));
+    service_tax::deliver(&checks, &tx, kept.clone()).await;
+    // Оба итога ушли в канал ядра; в checks — последний.
+    for want in [&ok, &kept] {
+        match rx.try_recv() {
+            Ok(MarketEvent::CoinCheck(c)) => assert_eq!(c.wait, want.wait),
+            other => panic!("ожидалось событие CoinCheck, пришло {:?}", other.is_ok()),
+        }
+    }
+    assert_eq!(checks.coin(&USDT).unwrap().wait, kept.wait);
+    apply(&core, kept);
+    assert!(
+        ticket(&core, Decimal::new(100, 0)).await.is_some(),
+        "ожидание по прежнему замеру"
+    );
+    // Сбой без прошлого замера — «не проверено».
+    let none = service_tax::outcome(&Checks::default(), v("bsc_dex"), "USDT", USDT, &err);
+    assert!(matches!(none.taxes, CheckState::NotChecked));
 }
 
 #[tokio::test]

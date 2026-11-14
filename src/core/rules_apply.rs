@@ -18,6 +18,8 @@
 //! заблокирован паузу не ставят вовсе. Постановка пауз — rules_stop.rs.
 //! Решение 253, дополнение t85: исчерпан лимит вывода аккаунта (WithdrawLimit) — пауза площадки до ручного снятия и
 //! алерт venue.withdraw_limit (withdraw_limit_pause.rs; у ручной команды тоже), правила шлюза — как у отказа вывода.
+//! Решение 268: «цена ордера вне диапазона биржи» (PriceOutOfRange) правилом Retry не повторяется; своего правила для
+//! кода нет — действует правило OrderRejected (gateway/rules.rs pick_rule_or_fallback), запись core.rules об этом.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
 //! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, rules_stop.rs,
 //! withdraw_limit_pause.rs, deps.rs.

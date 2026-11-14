@@ -7,8 +7,11 @@
 //! - ошибка рыночного ордера никогда не несёт PriceOutOfRange (GatewayError::no_price_range);
 //! - тело / параметры запроса рыночной продажи у каждого из 14 адаптеров (venues/<биржа>/market_sell.rs) — поля по
 //!   постановке решения (официальная документация бирж);
-//! - решение ядра (core/sell_range.rs decide): код, биржа / DEX, настройка, был ли повтор, выгодно / нет, кнопка →
-//!   рынок / застрявшая монета / как раньше (алерт);
+//! - решение ядра (core/sell_range.rs decide): код, биржа / DEX, настройка, условие продажи (обычная / порог режима /
+//!   без порога / кнопка), отметки по площадке, свежая котировка → рынок / застрявшая монета / как раньше (алерт),
+//!   включая «сначала невыгодно → режим → снова отказ → в пороге → рыночный» и «… → выше порога → алерт»;
+//! - MEXC 30087 при HTTP 5XX — не отказ по цене, а «итог неизвестен»; правило шлюза для PriceOutOfRange — своё или,
+//!   если его нет, правило OrderRejected;
 //! - правило шлюза «Повторить» для нового кода запрещено; ошибкой площадки подряд не считается; код есть в справочнике
 //!   формы правил; человеческая причина в словаре уведомлений.
 //!
@@ -19,7 +22,7 @@
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use arb::core::sell_range::{Act, applies, decide};
+use arb::core::sell_range::{Act, Fresh, Marks, Rule, applies, decide, holds, possible, rule_of};
 use arb::gateway::errors::{ErrorCode as C, GatewayError};
 use arb::venues::{
     binance, bingx, bitget, bybit, coinex, gate, htx, kraken, kucoin, mexc, okx, phemex, poloniex,
@@ -47,6 +50,23 @@ fn mexc_recorded_30087_is_price_out_of_range() {
         );
         assert_eq!(e.raw.as_deref(), Some(raw.trim()));
     }
+    // Ревью A1: тот же код при HTTP 5XX («issue on the MEXC server side», решение 263) — не отказ по цене, а сбой
+    // сервера: у ордера Timeout (→ «итог неизвестен»), у прочего — Unreachable.
+    use mexc::errors::{Op as M, from_code_http};
+    let at = |op, st| from_code_http(code, msg, op, raw.trim(), st).code;
+    assert_eq!(at(M::Trade, Some(500)), C::Timeout);
+    assert_eq!(at(M::Trade, Some(503)), C::Timeout);
+    assert_eq!(at(M::Other, Some(502)), C::Unreachable);
+    assert_eq!(at(M::Trade, Some(400)), C::PriceOutOfRange);
+    assert_eq!(at(M::Trade, Some(200)), C::PriceOutOfRange);
+    assert_eq!(
+        mexc::errors::unsure(
+            from_code_http(code, msg, M::Trade, raw.trim(), Some(500)),
+            M::Trade
+        )
+        .code,
+        C::OutcomeUnknown
+    );
     // Отказы рыночного ордера — обычный отказ.
     for (c, m) in [
         (30018, "market order is disabled"),
@@ -336,65 +356,144 @@ fn market_sell_requests_by_exchange() {
     }
 }
 
+fn fresh(profitable: bool, loss: &str) -> Option<Fresh> {
+    Some(Fresh {
+        profitable,
+        loss_pct: d(loss),
+    })
+}
+
+const NONE: Marks = Marks {
+    market: false,
+    stuck: false,
+};
+const SENT: Marks = Marks {
+    market: true,
+    stuck: false,
+};
+const MODE: Marks = Marks {
+    market: false,
+    stuck: true,
+};
+const BOTH: Marks = Marks {
+    market: true,
+    stuck: true,
+};
+
 #[test]
 fn core_decision_table() {
     let code = Some(C::PriceOutOfRange);
-    // (код, ушёл, биржа, настройка, был повтор, кнопка, выгодно) → действие.
-    let t =
-        |code, sent, cex, on, done, button, good| decide(code, sent, cex, on, done, button, good);
+    let t = |rule, m, f| decide(code, false, true, true, rule, m, f);
+    let (good, bad) = (fresh(true, "-3"), fresh(false, "4"));
+    // Обычная продажа: выгодно — рыночный; невыгодно или нет котировки — режим застрявшей монеты.
+    assert_eq!(t(Rule::Entry, NONE, good), Act::Market);
+    assert_eq!(t(Rule::Entry, NONE, bad), Act::Stuck);
+    assert_eq!(t(Rule::Entry, NONE, None), Act::Stuck);
+    // В режим из-за коридора на этой площадке уже уходили: выгодно — рыночный (ещё не отправлялся); иначе алерт.
+    assert_eq!(t(Rule::Entry, MODE, good), Act::Market);
+    assert_eq!(t(Rule::Entry, MODE, bad), Act::Keep);
+    assert_eq!(t(Rule::Entry, MODE, None), Act::Keep);
+    // Рыночный на этой площадке уже отправлялся: второго нет; невыгодно — в режим (если ещё не уходили).
+    assert_eq!(t(Rule::Entry, SENT, good), Act::Keep);
+    assert_eq!(t(Rule::Entry, SENT, bad), Act::Stuck);
+    assert_eq!(t(Rule::Entry, BOTH, good), Act::Keep);
+    assert_eq!(t(Rule::Entry, BOTH, bad), Act::Keep);
+    // Режим застрявшей монеты решил продать здесь: то же условие режима на свежей котировке.
+    let five = Rule::MaxLoss(d("5"));
+    assert_eq!(t(five, NONE, bad), Act::Market, "убыток 4% при пороге 5%");
+    assert_eq!(t(five, NONE, fresh(false, "5")), Act::Market, "ровно порог");
     assert_eq!(
-        t(code, false, true, true, false, false, Some(true)),
-        Act::Market
+        t(five, NONE, fresh(false, "5.01")),
+        Act::Keep,
+        "выше порога — алерт"
+    );
+    assert_eq!(t(five, NONE, None), Act::Keep, "нет котировки — алерт");
+    assert_eq!(
+        t(five, MODE, bad),
+        Act::Market,
+        "сначала невыгодно → режим → отказ → в пороге → рыночный"
     );
     assert_eq!(
-        t(code, false, true, true, false, false, Some(false)),
-        Act::Stuck
+        t(five, MODE, fresh(false, "9")),
+        Act::Keep,
+        "… → выше порога → алерт"
     );
-    assert_eq!(t(code, false, true, true, false, false, None), Act::Stuck);
-    // Кнопка человека — без проверки «выгодно»; без котировки — как раньше (алерт).
+    assert_eq!(t(five, SENT, bad), Act::Keep, "рыночный уже отправлялся");
+    // «Ожидание: стало выгодно» — порог 0: условие «выгодно».
+    let zero = Rule::MaxLoss(Decimal::ZERO);
+    assert_eq!(t(zero, NONE, good), Act::Market);
     assert_eq!(
-        t(code, false, true, true, false, true, Some(false)),
-        Act::Market
+        t(zero, NONE, fresh(false, "0")),
+        Act::Keep,
+        "невыгодно при убытке 0% — не «выгодно»"
     );
-    assert_eq!(
-        t(code, false, true, true, false, true, Some(true)),
-        Act::Market
-    );
-    assert_eq!(t(code, false, true, true, false, true, None), Act::Keep);
-    // Настройка выключена, DEX, повтор уже был, ордер ушёл в сеть — как раньше.
-    for button in [false, true] {
-        assert_eq!(
-            t(code, false, true, false, false, button, Some(true)),
-            Act::Keep
-        );
-        assert_eq!(
-            t(code, false, false, true, false, button, Some(true)),
-            Act::Keep
-        );
-        assert_eq!(
-            t(code, false, true, true, true, button, Some(true)),
-            Act::Keep
-        );
-        assert_eq!(
-            t(code, true, true, true, false, button, Some(true)),
-            Act::Keep
-        );
+    assert!(holds(Decimal::ZERO, fresh(true, "0").unwrap()));
+    // Продажа без порога («Ожидание» истекло, частичная покупка) — рыночного нет никогда.
+    for f in [good, bad, None] {
+        assert_eq!(t(Rule::NoThreshold, NONE, f), Act::Keep);
     }
-    // Любой другой код (в том числе отказ рыночного ордера) — как раньше.
-    for other in [
-        Some(C::OrderRejected),
-        Some(C::OrderNotFilled),
-        Some(C::OutcomeUnknown),
-        Some(C::InsufficientBalance),
-        None,
-    ] {
+    // Кнопка человека — без проверки условия и даже без котировки; второй раз без нового нажатия — нет.
+    for f in [good, bad, None] {
+        assert_eq!(t(Rule::Button, NONE, f), Act::Market);
+        assert_eq!(t(Rule::Button, MODE, f), Act::Market);
+        assert_eq!(t(Rule::Button, SENT, f), Act::Keep);
+    }
+    // Настройка выключена, DEX, ордер ушёл в сеть, другой код — как раньше при любом условии.
+    for rule in [Rule::Entry, five, Rule::Button] {
         assert_eq!(
-            t(other, false, true, true, false, false, Some(true)),
+            decide(code, false, true, false, rule, NONE, good),
             Act::Keep
         );
-        assert!(!applies(other, false, true, true, false));
+        assert_eq!(
+            decide(code, false, false, true, rule, NONE, good),
+            Act::Keep
+        );
+        assert_eq!(decide(code, true, true, true, rule, NONE, good), Act::Keep);
+        for other in [
+            Some(C::OrderRejected),
+            Some(C::OrderNotFilled),
+            Some(C::OutcomeUnknown),
+            None,
+        ] {
+            assert_eq!(
+                decide(other, false, true, true, rule, NONE, good),
+                Act::Keep
+            );
+            assert!(!applies(other, false, true, true));
+        }
     }
-    assert!(applies(code, false, true, true, false));
+    assert!(applies(code, false, true, true));
+    // Котировка берётся, только если ветка ещё может что-то сделать.
+    assert!(
+        possible(Rule::Entry, NONE) && possible(Rule::Entry, SENT) && possible(Rule::Entry, MODE)
+    );
+    assert!(!possible(Rule::Entry, BOTH));
+    assert!(possible(five, MODE) && !possible(five, SENT));
+    assert!(possible(Rule::Button, NONE) && !possible(Rule::Button, SENT));
+    assert!(!possible(Rule::NoThreshold, NONE));
+}
+
+/// Условие продажи по причине и порогу, с которыми её запускают sell::market_guarded (stuck.rs, relay_here.rs,
+/// executor.rs, кнопка).
+#[test]
+fn rule_by_reason_and_guard() {
+    use arb::core::remeasure::{Guard, PROFITABLE, PROFITABLE_OPEN};
+    let button = arb::core::sell::BUTTON;
+    assert_eq!(rule_of(button, Guard::Any), Rule::Button);
+    assert_eq!(
+        rule_of("порог", Guard::MaxLoss(d("5"))),
+        Rule::MaxLoss(d("5"))
+    );
+    assert_eq!(
+        rule_of("ожидание: стало выгодно", PROFITABLE),
+        Rule::MaxLoss(Decimal::ZERO)
+    );
+    // «Ожидание» по истечении и частичная покупка (PROFITABLE_OPEN) — продажа без порога.
+    assert_eq!(
+        rule_of("ждали — выгодно не стало", PROFITABLE_OPEN),
+        Rule::NoThreshold
+    );
+    assert_eq!(rule_of("x", Guard::Off), Rule::NoThreshold);
 }
 
 #[test]
@@ -407,6 +506,38 @@ fn rule_retry_forbidden_not_counted_listed() {
     for kind in ["StopVenue", "StopAll", "CancelNoRetry", "NotifyOnly"] {
         assert_eq!(inactive_reason(C::PriceOutOfRange, kind), None, "{kind}");
     }
+    // Ревью A2: своего правила нет — действует правило OrderRejected (площадки, затем общее); своё — сильнее.
+    use arb::core::types::VenueId;
+    use arb::gateway::rules::{Rule as GwRule, RuleAction, RuleScope, pick_rule_or_fallback};
+    let rule = |id, event, scope| GwRule {
+        id,
+        event,
+        condition: None,
+        action: RuleAction::StopVenue,
+        scope,
+        enabled: true,
+    };
+    let v = VenueId("mexc".into());
+    let mut rules = vec![
+        rule(1, C::OrderRejected, RuleScope::All),
+        rule(2, C::OrderRejected, RuleScope::Venue(v.clone())),
+    ];
+    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&v)).unwrap();
+    assert_eq!((got.0.id, got.1), (2, true));
+    let other = VenueId("gate".into());
+    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&other)).unwrap();
+    assert_eq!((got.0.id, got.1), (1, true));
+    rules.push(rule(3, C::PriceOutOfRange, RuleScope::All));
+    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&v)).unwrap();
+    assert_eq!((got.0.id, got.1), (3, false), "своё правило сильнее");
+    // Запасного кода у других ошибок нет.
+    assert!(pick_rule_or_fallback(&rules, C::OrderNotFilled, Some(&v)).is_none());
+    assert_eq!(
+        pick_rule_or_fallback(&rules, C::OrderRejected, Some(&v))
+            .unwrap()
+            .1,
+        false
+    );
     // Не «исход неизвестен» и не отказ вывода: пауз «только человек» и запрета пауз нет.
     assert!(retry_allowed(C::PriceOutOfRange));
     assert!(!withdraw_refusal(C::PriceOutOfRange));

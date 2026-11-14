@@ -213,7 +213,11 @@ async fn sell(
         && super::sell_range::wanted(core, &deal, e, rule)
     {
         // Итог ветки кладётся в то же место, что итог лимитного ордера (состояние задачи продажи не растёт).
-        let out = super::sell_range_run::run(core, &mut deal, e, why, rule).await;
+        let prev = super::sell_range_run::Prev {
+            q: &q,
+            worst: seen.as_ref().map(|w| w.price),
+        };
+        let out = super::sell_range_run::run(core, &mut deal, e, why, rule, prev).await;
         match out {
             super::sell_range::Outcome::Sold(r) => res = Ok(*r),
             super::sell_range::Outcome::Failed(e) => res = Err(e),

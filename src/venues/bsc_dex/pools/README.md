@@ -22,6 +22,8 @@ DEX — строки таблицы сопоставления (решение 5
    Ликвидность индексатора не участвует ни в чём. Пул, который Universal Router не исполняет сам (check/emitter.rs), исключён.
    Второй источник (решение 121, C3) — поиск по фабрикам на своём узле (`factory_scan.rs`, включается `index.factory_scan`):
    V2 getPair, V3 getPool по `dex.v3_fee_tiers` DEX; пачки Multicall3 `dex.load_batch`; найденное — та же проверка и подписка.
+   Решение 292: тем же проходом — пулы из `dex.stable_pools` видов saddle_stableswap / curve_stableswap (`stable_list.rs`):
+   монеты читаются у самого пула, кандидат — каждая пара (монета, встречный), обе монеты которой в пуле.
    История V4 (`history_v4.rs`) — необязательна (`dex.history_scan`): нужна только для пулов Uniswap V4 без позиций через
    PositionManager; из памяти → из SQLite (`history_store.rs`) → от блока развёртывания (`deploy_block.rs`), куски
    `dex.logs_block_batch`, найденное подключается раз в `dex.scan_progress_s`. У V4 PoolId сверяется с событием.
@@ -143,8 +145,9 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_izi.rs` | Состояние пула iZiSwap / Biswap V3 на блоке (решение 286): tokenX, tokenY, state() (sqrtPrice_96) и лесенка ответов пула через quoteIzi; ядро OraclePmm, pool_token0 = tokenX |
 | `load_stable_u.rs` | Состояние пула PancakeSwap / Lista StableSwap на блоке (у Lista — A по рампе на время блока, проверка цены, пауза) |
 | `load_inf_stable.rs` | Состояние пула Infinity Stable у крючка одним Multicall3: N_COINS, coins, balances, stored_rates (внешние курсы), A_precise, fee, offpeg_fee_multiplier, pool_manager (сверка с dex.pool_manager); откат stored_rates — пул стоит |
+| `stable_list.rs` | Решение 292: пулы StableSwap из dex.stable_pools (Saddle — getToken(k), Curve 2020 — coins(k)) — кандидаты справочника при поиске по фабрикам без индексатора; разбор пачки — sort (ответы пула вычитываются целиком); вызывает factory_scan.rs |
 | `stable_native.rs` | Нативный BNB в пулах PancakeSwap Stable / Lista («122 X (нативный BNB в стейблсвапах)»): метка 0xEeee… ↔ обёртка dex.native_wrapped — монеты пула в пару, индекс метки (StableData.native), пара для реестра фабрики; без сети |
-| `load_saddle.rs` | Состояние пула Saddle (Nerve) на блоке (A_PRECISION, 256 раундов, откат при несходимости, пауза) |
+| `load_saddle.rs` | Состояние пула Saddle (Nerve) на блоке (A_PRECISION, 256 раундов, откат при несходимости, пауза); разбор без сети — calls / parse / build (ревью 292) |
 | `load_woo.rs` | Состояние пары WooFi на блоке: state(base) оракула, paused, wooracle (= dex.oracle), реализация прокси. Своей математики нет |
 | `load_woo_ladder.rs` | Лесенка цен пула WooFi на блоке: query квотера контракта в обе стороны по dex.pmm_ladder_usd (Multicall3, откат — край лесенки) |
 | `load_maverick.rs` | Состояние пула Maverick V2 на блоке (решение 122 F): getState, tickSpacing, fee(true/false), tokenA, масштабы + PoolLens.getTicksAroundActive(dex.tick_radius) одной пачкой Multicall3 по dex.load_batch → PoolState::TickBin |

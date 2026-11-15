@@ -149,6 +149,7 @@ pub mod session;
 pub mod solidly_fee_read;
 pub mod solidly_gate_read;
 pub mod solidly_refresh;
+pub mod stable_list;
 pub mod stable_native;
 pub mod ticks;
 pub mod verify;

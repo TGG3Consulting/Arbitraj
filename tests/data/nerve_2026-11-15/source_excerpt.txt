@@ -1,0 +1,90 @@
+# Выдержка исходника Nerve 3pool (официальный nerve-finance/contracts bda7578; развёрнутый Swap.sol на Sourcify chain 56 0x1B3771a66ee31180906972580adE9b81AFc5fCDc — full match, SHA-256 содержимого совпадает с bda7578 Swap.sol).
+# SwapUtils.sol развёрнутый отличается от bda7578 только в addLiquidity (строки 875-960: кеш lpTotalSupply) и в конце setDevAddress (1324-1328); строки ниже (до 875) совпадают дословно.
+
+== Swap.sol
+L125:         require(_pooledTokens.length <= 32, "_pooledTokens.length > 32");
+L126:         require(
+L231:     function getToken(uint8 index) public view returns (IERC20) {
+L232:         require(index < swapStorage.pooledTokens.length, "Out of range");
+L233:         return swapStorage.pooledTokens[index];
+L264:     function getTokenBalance(uint8 index) external view returns (uint256) {
+L265:         require(index < swapStorage.pooledTokens.length, "Index out of range");
+L266:         return swapStorage.balances[index];
+L285:     function calculateSwap(
+L286:         uint8 tokenIndexFrom,
+L287:         uint8 tokenIndexTo,
+L288:         uint256 dx
+L289:     ) external view returns (uint256) {
+L290:         return swapStorage.calculateSwap(tokenIndexFrom, tokenIndexTo, dx);
+L291:     }
+== SwapUtils.sol
+L130:     uint256 private constant FEE_DENOMINATOR = 10**10;
+L150:     uint256 private constant MAX_LOOP_LIMIT = 256;
+L153:     uint256 public constant A_PRECISION = 100;
+L594:     function calculateSwap(
+L595:         Swap storage self,
+L596:         uint8 tokenIndexFrom,
+L597:         uint8 tokenIndexTo,
+L598:         uint256 dx
+L599:     ) external view returns (uint256 dy) {
+L600:         (dy, ) = _calculateSwap(self, tokenIndexFrom, tokenIndexTo, dx);
+L601:     }
+L602: 
+L603:     /**
+L604:      * @notice Internally calculates a swap between two tokens.
+L605:      *
+L606:      * @dev The caller is expected to transfer the actual amounts (dx and dy)
+L607:      * using the token contracts.
+L608:      *
+L609:      * @param self Swap struct to read from
+L610:      * @param tokenIndexFrom the token to sell
+L611:      * @param tokenIndexTo the token to buy
+L612:      * @param dx the number of tokens to sell. If the token charges a fee on transfers,
+L613:      * use the amount that gets transferred after the fee.
+L614:      * @return dy the number of tokens the user will get
+L615:      * @return dyFee the associated fee
+L616:      */
+L617:     function _calculateSwap(
+L618:         Swap storage self,
+L619:         uint8 tokenIndexFrom,
+L620:         uint8 tokenIndexTo,
+L621:         uint256 dx
+L622:     ) internal view returns (uint256 dy, uint256 dyFee) {
+L623:         uint256[] memory xp = _xp(self);
+L624:         require(
+L625:             tokenIndexFrom < xp.length && tokenIndexTo < xp.length,
+L626:             "Token index out of range"
+L627:         );
+L628:         uint256 x =
+L629:             dx.mul(self.tokenPrecisionMultipliers[tokenIndexFrom]).add(
+L630:                 xp[tokenIndexFrom]
+L631:             );
+L632:         uint256 y = getY(self, tokenIndexFrom, tokenIndexTo, x, xp);
+L633:         dy = xp[tokenIndexTo].sub(y).sub(1);
+L634:         dyFee = dy.mul(self.swapFee).div(FEE_DENOMINATOR);
+L635:         dy = dy.sub(dyFee).div(self.tokenPrecisionMultipliers[tokenIndexTo]);
+L636:     }
+L637: 
+L638:     /**
+L639:      * @notice A simple method to calculate amount of each underlying
+L640:      * tokens that is returned upon burning given amount of
+L641:      * LP tokens
+L642:      *
+L643:      * @param account the address that is removing liquidity. required for withdraw fee calculation
+L644:      * @param amount the amount of LP tokens that would to be burned on
+L645:      * withdrawal
+L646:      * @return array of amounts of tokens user will receive
+L647:      */
+L648:     function calculateRemoveLiquidity(
+L649:         Swap storage self,
+L650:         address account,
+L651:         uint256 amount
+L652:     ) external view returns (uint256[] memory) {
+L653:         return _calculateRemoveLiquidity(self, account, amount);
+L654:     }
+L655: 
+L656:     function _calculateRemoveLiquidity(
+L657:         Swap storage self,
+L658:         address account,
+L659:         uint256 amount
+L660:     ) internal view returns (uint256[] memory) {

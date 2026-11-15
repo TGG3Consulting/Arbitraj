@@ -5,6 +5,26 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 292 (15.11.2026, ветка t123/saddle-from-list от 52ca0c10) — сделано, ждёт приёмки.** Пулы
+  `saddle_stableswap` / `curve_stableswap` из `dex.stable_pools` попадают в бот без индексатора при `index.factory_scan` = да
+  (pools/stable_list.rs; DECISIONS 292). Математика = квотер живого пула: Nerve 3pool calculateSwap 18/18, Ellipsis 3pool
+  get_dy 18/18 (tests/bsc_dex_stable_list_live.rs). Открыто:
+  1. Пул с 3 монетами — одна пара в реестре, какая — не задано кодом (первый кандидат обхода HashMap справочника; при
+     перепроверке по одной монете запись может перейти к её паре). Все пары пула — общий ключ справочника/реестра (TASKS 289 п. 7).
+  2. Устаревшие тексты в запретных для t123 местах (не трогал): комментарий pools/families.rs у pancake / lista / saddle —
+     «шага исполнителя нет» (шаги есть: exec_kind.rs StableU256 / Saddle); описание `dex.kind` (catalog/dex.rs и
+     docs/SETTINGS.md) — у Saddle / PancakeSwap / Lista «шага исполнителя нет (сигнал)», у THENA Fusion, Solidly,
+     Slipstream — «исполнения пока нет», хотя они в списке «виды с шагом контракта-исполнителя» того же текста; исправлена
+     только фраза про DODO.
+  3. Nerve BTC Pool `0x6C341938…270c` и ETH Pool `0x146CD24d…A9C0` (та же страница документации) на цепи не проверены и
+     математикой не сверены; метапулы Nerve (RUSD, fUSDT, UST) — другой код (MetaSwap), не подключать.
+  4. ~~#[ignore]-тест Nerve в tests/bsc_dex_stable_families.rs~~ — **закрыто ревью 292**: убран, сверка Nerve —
+     tests/bsc_dex_stable_list_live.rs (состояние собирает load_saddle на записи tests/data/nerve_2026-11-15).
+  5. Ellipsis 3pool у GeckoTerminal есть (dex ellipsis_finance, пара BUSD / USDC): для пары с USDT справочник индексатора
+     его не даёт — нужен источник решения 292 или промежуточная USDC.
+  6. Факт кода (ревью 292): load::state получает пару строго (token0, token1), token0 < token1 — путь: load.rs load
+     (Found) / refresh (Entry.pool ← load::built ← Found) / load_batch.rs states (Want из Entry.pool или Found);
+     Found видов Saddle и Curve 2020 строит discover::sorted(coin, quote). Индексы i0 / i1 состояния — по этой паре.
 - **Задача t122 (15.11.2026, ветка t122/small-fixes от 12040c4c) — малые правки перед сборкой, ждёт приёмки.**
   Сделано: (1) повторная проверка пути исполнения после onchain::ensure — по версии из её результата
   (exec/executor/callback_at.rs missing_at; trade.rs, check/probe_exec.rs). Исход меняется, только когда запись версии

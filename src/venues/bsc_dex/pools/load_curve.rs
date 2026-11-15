@@ -4,7 +4,8 @@
 //! coins(k) — конец списка монет: у Vyper-массива вне границ геттер откатывается), A(), fee(). Множители точности
 //! монет — правило Curve `10^(36 − decimals)` по decimals монет (tokens.rs). Индексы пары token0/token1 — по
 //! адресам монет пула. Собирает PoolState::StableSwap. Карт тиков/бинов нет.
-//! Кто вызывает: pools/load.rs (ветка Proto::CurveStable).
+//! Кто вызывает: pools/load.rs (ветка Proto::CurveStable); calls / parse / build без сети — ещё
+//! tests/bsc_dex_stable_list_live.rs (ревью 292). Пара — (token0, token1), token0 < token1 (TASKS 292 п. 6).
 //! От чего зависит: ctx.rs, node/call.rs (try_many), tokens.rs, abi_curve.rs, math/stableswap_v1.rs.
 //! Настройки: нет (dex.multicall3 — через node/call.rs).
 //!
@@ -14,13 +15,28 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolState, StableData};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::stableswap_v1::rate_for_decimals;
 use super::super::node::call;
 use super::super::tokens::Tokens;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
+
+/// Вызовы чтения: coins(k), balances(k) через один для k < MAX_COINS, затем A(), fee(). Возвращает: вызовы и индекс
+/// A(). Ошибок нет.
+pub fn calls(pool: Address) -> (Vec<(Address, Bytes)>, usize) {
+    let mut calls: Vec<(Address, Bytes)> = Vec::new();
+    for k in 0..MAX_COINS {
+        let i = U256::from(k);
+        calls.push((pool, IStableSwapV1::coinsCall { i }.abi_encode().into()));
+        calls.push((pool, IStableSwapV1::balancesCall { i }.abi_encode().into()));
+    }
+    let tail = calls.len();
+    calls.push((pool, IStableSwapV1::ACall {}.abi_encode().into()));
+    calls.push((pool, IStableSwapV1::feeCall {}.abi_encode().into()));
+    (calls, tail)
+}
 
 /// Состояние пула на блоке. Принимает: окружение, токены (decimals), адрес пула, пару (token0, token1), блок-тег.
 /// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals монеты > 36, A/fee откатились.
@@ -31,37 +47,52 @@ pub async fn load(
     pair: (Address, Address),
     tag: &str,
 ) -> GatewayResult<PoolState> {
-    let mut calls: Vec<(Address, Bytes)> = Vec::new();
-    for k in 0..MAX_COINS {
-        let i = U256::from(k);
-        calls.push((pool, IStableSwapV1::coinsCall { i }.abi_encode().into()));
-        calls.push((pool, IStableSwapV1::balancesCall { i }.abi_encode().into()));
-    }
-    calls.push((pool, IStableSwapV1::ACall {}.abi_encode().into()));
-    calls.push((pool, IStableSwapV1::feeCall {}.abi_encode().into()));
+    let (calls, tail) = calls(pool);
     let got = call::try_many(ctx, &calls, tag).await?;
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("StableSwap {pool}: {what}"));
     if got.len() != calls.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), calls.len())));
     }
+    let (coins, balances, amp, fee, i0, i1) = parse(&got[..tail], &got[tail..], pair, &bad)?;
+    let mut decimals = Vec::with_capacity(coins.len());
+    for c in &coins {
+        decimals.push(tokens.decimals(ctx, *c).await?);
+    }
+    build(balances, amp, fee, (i0, i1), &decimals, &bad)
+}
+
+/// Разобранные ответы: монеты, балансы, A, fee, индексы пары.
+pub type Parsed = (Vec<Address>, Vec<U256>, U256, U256, u8, u8);
+
+/// Разбор ответов без сети (тест ловит изменения загрузки — ревью 292). Принимает: ответы coins(k) / balances(k)
+/// через один (до первого отката coins), ответы A() и fee(), пару (token0, token1), конструктор ошибки.
+/// Ошибки: ответ не по ABI, откат balances / A / fee, монеты пары нет в пуле.
+pub fn parse(
+    head: &[Result<Bytes, String>],
+    tail: &[Result<Bytes, String>],
+    pair: (Address, Address),
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<Parsed> {
     let mut coins = Vec::new();
     let mut balances = Vec::new();
     for k in 0..MAX_COINS {
-        let Ok(c) = &got[2 * k] else { break };
+        let Some(Ok(c)) = head.get(2 * k) else { break };
         let coin = call::decode::<IStableSwapV1::coinsCall>(c)?;
-        let b = got[2 * k + 1]
-            .as_ref()
-            .map_err(|r| bad(format!("balances({k}) откатился: {r}")))?;
+        let b = match head.get(2 * k + 1) {
+            Some(Ok(b)) => b,
+            Some(Err(r)) => return Err(bad(format!("balances({k}) откатился: {r}"))),
+            None => return Err(bad(format!("нет ответа balances({k})"))),
+        };
         coins.push(coin);
         balances.push(call::decode::<IStableSwapV1::balancesCall>(b)?);
     }
-    let tail = |i: usize, name: &str| {
-        got[i]
-            .as_ref()
-            .map_err(|r| bad(format!("{name} откатился: {r}")))
+    let ok = |i: usize, name: &str| match tail.get(i) {
+        Some(Ok(b)) => Ok(b),
+        Some(Err(r)) => Err(bad(format!("{name} откатился: {r}"))),
+        None => Err(bad(format!("нет ответа {name}"))),
     };
-    let amp = call::decode::<IStableSwapV1::ACall>(tail(2 * MAX_COINS, "A()")?)?;
-    let fee = call::decode::<IStableSwapV1::feeCall>(tail(2 * MAX_COINS + 1, "fee()")?)?;
+    let amp = call::decode::<IStableSwapV1::ACall>(ok(0, "A()")?)?;
+    let fee = call::decode::<IStableSwapV1::feeCall>(ok(1, "fee()")?)?;
     let index = |t: Address| {
         coins
             .iter()
@@ -70,9 +101,20 @@ pub async fn load(
             .ok_or_else(|| bad(format!("монеты {t} нет среди coins пула")))
     };
     let (i0, i1) = (index(pair.0)?, index(pair.1)?);
-    let mut rates = Vec::with_capacity(coins.len());
-    for c in &coins {
-        let d = tokens.decimals(ctx, *c).await?;
+    Ok((coins, balances, amp, fee, i0, i1))
+}
+
+/// Состояние из разбора и decimals монет пула (по порядку coins). Ошибки: decimals > 36.
+pub fn build(
+    balances: Vec<U256>,
+    amp: U256,
+    fee: U256,
+    (i0, i1): (u8, u8),
+    decimals: &[u8],
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<PoolState> {
+    let mut rates = Vec::with_capacity(decimals.len());
+    for &d in decimals {
         rates.push(rate_for_decimals(d).ok_or_else(|| bad(format!("decimals {d} > 36")))?);
     }
     Ok(PoolState::StableSwap(Box::new(StableData {

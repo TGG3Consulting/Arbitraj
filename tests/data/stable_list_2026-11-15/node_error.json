@@ -1,0 +1,25 @@
+{
+ "rpc": "https://bsc-rpc.publicnode.com",
+ "at": "2026-11-15T12:38Z",
+ "note": "eth_call на старом блоке 0x7f87983 (133724547) после ухода блока из окна публичного узла — отказ узла, не откат контракта",
+ "request": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "eth_call",
+  "params": [
+   {
+    "to": "0x1B3771a66ee31180906972580adE9b81AFc5fCDc",
+    "data": "0x82b866000000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "0x7f87983"
+  ]
+ },
+ "response": {
+  "jsonrpc": "2.0",
+  "error": {
+   "code": -32602,
+   "message": "Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"
+  },
+  "id": 1
+ }
+}

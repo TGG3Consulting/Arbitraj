@@ -86,8 +86,12 @@ fn forest_journal_text_explained() {
     let line = explain(&[], FOREST).expect("AllowanceExpired распознан по тексту узла");
     assert!(line.contains("AllowanceExpired"), "{line}");
     assert!(line.contains("12.11.2026 17:37:21 UTC"), "{line}");
-    // Сделка FOREST — позже срока: разрешение действительно истекло к моменту пробы.
-    assert!(DEAL_TIME > EXPIRED);
+    // Срок — аргумент отката из записанной строки журнала (последнее слово 32 байта); сделка FOREST — позже срока:
+    // разрешение действительно истекло к моменту пробы.
+    let word = &FOREST[FOREST.len() - 64..];
+    let deadline = U256::from_be_slice(&hex::decode(word).unwrap());
+    assert_eq!(deadline, U256::from(EXPIRED));
+    assert!(U256::from(DEAL_TIME) > deadline);
     // Откат SMARS (журнал 10.11, V2TooLittleReceived) — не Permit2.
     assert!(explain(&[], "execution reverted: 0x849eaf98").is_none());
 }

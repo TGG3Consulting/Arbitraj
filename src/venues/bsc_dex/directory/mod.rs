@@ -121,7 +121,9 @@ impl Directory {
             // Остальные взятые пары того же контракта (только у Multi). Задумано: запрет — по контракту, поэтому снимается и
             // запись того же контракта под другим id DEX или с ссылкой Contract (site() тот же) — проверка «кто меняет»
             // осудила контракт, а не пару.
-            if matches!(r, PoolRef::Multi { .. }) {
+            // Решение 305: пара WooFi (Member) при dex.multi_pair = да взята под ключом с парой (multi_pair::dir_key),
+            // не под pool_key — снимается тем же поиском по физическому пулу (у Member site() = сама пара).
+            if matches!(r, PoolRef::Multi { .. } | PoolRef::Member { .. }) {
                 let site = r.site();
                 let same: Vec<String> = s
                     .taken

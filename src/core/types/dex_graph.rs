@@ -18,6 +18,8 @@ pub struct DexGraphRound {
     pub ms: f64,
     /// Пулов оценено (изменённые и зависимые по курсу встречного токена).
     pub evaluated: usize,
+    /// Из них изменённых в реестре (остальные — зависимые по курсу; ревью №1 R).
+    pub changed: usize,
     /// Пар, у которых пересобран топ (состав ребра).
     pub pairs: usize,
     /// Рёбер в опубликованном снимке.
@@ -34,8 +36,12 @@ pub struct DexGraphFull {
     pub at: DateTime<Utc>,
     /// Почему (запуск, настройки, переподключение лент, кнопка, срок самопроверки).
     pub reason: String,
-    /// Длительность сборки с нуля и доводки, мс.
+    /// Длительность всего (сборка с нуля + доводка), мс.
     pub ms: f64,
+    /// Сборка с нуля, мс (ревью №2 C).
+    pub build_ms: f64,
+    /// Доводка до текущей версии и сверка, мс (ревью №2 C): в это время снимок не обновляется накопительно.
+    pub reconcile_ms: f64,
     /// Пулов в реестре на момент сборки.
     pub pools: usize,
     pub edges: usize,
@@ -67,8 +73,11 @@ pub struct DexGraphState {
     pub age_ms: Option<u64>,
     /// Отставание снимка от реестра сейчас, мс (None — отставания нет).
     pub lag_ms: Option<u64>,
-    /// Наибольшее отставание при публикации за последний час, мс.
-    pub lag_max_hour_ms: Option<u64>,
+    /// Наибольшее отставание снимка, которое ВИДЕЛ РАСЧЁТ (на каждом чтении снимка), за последний час, мс — по ней
+    /// подбирается dex.graph_max_lag_ms (ревью №2 C: включает доводку, ступень Б и время после перезапуска).
+    pub reader_lag_max_hour_ms: Option<u64>,
+    /// Наибольшее отставание в момент публикации накопительного круга за последний час, мс.
+    pub publish_lag_max_hour_ms: Option<u64>,
     /// Изменённых пулов ждут круга.
     pub pending: usize,
     pub edges: Option<usize>,
@@ -77,8 +86,12 @@ pub struct DexGraphState {
     pub mismatches: u64,
     pub last_mismatch_at: Option<DateTime<Utc>>,
     pub last_mismatch: Option<String>,
+    /// Котировок, получивших «маршрута графа нет» от предохранителя, за час / сутки.
     pub fuse_hour: u64,
     pub fuse_day: u64,
+    /// Эпизодов предохранителя (переходов «в пределе → отстал») за час / сутки (ревью №2 I).
+    pub fuse_episodes_hour: u64,
+    pub fuse_episodes_day: u64,
     pub stale_settings_hour: u64,
     pub stale_settings_day: u64,
     pub restarts: u64,

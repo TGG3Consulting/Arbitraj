@@ -19,6 +19,8 @@
 //! venue.quote_asset.
 
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use tokio::sync::mpsc;
@@ -39,13 +41,17 @@ use super::{graph_finish, graph_guard, graph_step};
 pub const STOP: &str = "рассылка настроек закрыта — система останавливается";
 
 /// Настройки, смена которых будит владельца (имена — те, от которых зависит снимок; как у resubscribe.rs).
-const WATCH: [&str; 6] = [
+/// Настройка, влияющая на курс встречного токена (ревью №1 P).
+const FEE: &str = "dex.v2_fee_pct";
+
+const WATCH: [&str; 7] = [
     "dex.graph_",
     "dex.route_max_pools_per_edge",
     "dex.depth_band_pct",
     "dex.min_pool_liquidity_usd",
     "dex.depth_hysteresis_pct",
     "venue.quote_asset",
+    FEE,
 ];
 
 /// Окружение владельца. Дешёво клонируется.
@@ -66,6 +72,15 @@ pub(super) struct FullJob {
     pub(super) reason: String,
     pub(super) started: Instant,
     pub(super) basis: Basis,
+    /// Ревью №2 (B): отмена — сборка заменена новой или режим выключен; поток останавливается на ближайшем пуле.
+    pub(super) cancel: Arc<AtomicBool>,
+}
+
+impl FullJob {
+    /// Отменить сборку (поток остановится на ближайшем пуле, итог не нужен). Ошибок нет.
+    pub(super) fn stop(&self) {
+        self.cancel.store(true, Ordering::Release);
+    }
 }
 
 /// Состояние владельца.
@@ -73,6 +88,12 @@ pub(super) struct St {
     pub(super) work: Option<Work>,
     pub(super) full: Option<FullJob>,
     pub(super) next_verify: Option<tokio::time::Instant>,
+    /// Ревью №2 (G): значение dex.graph_verify_s, по которому назначен срок (сменилось — срок назначается заново).
+    pub(super) verify_s: Option<u64>,
+    /// Ревью №2 (E): запрос полной пересборки, пришедший во время идущей сборки, — после неё.
+    pub(super) again: Option<String>,
+    /// Ревью №1 (O): не раньше этого момента повторять неудавшуюся полную сборку (dex.graph_retry_pause_s).
+    pub(super) retry_at: Option<tokio::time::Instant>,
 }
 
 /// Итог потока полной сборки: карта и пулов в реестре, или причина; JoinError — поток упал.
@@ -81,7 +102,8 @@ pub(super) type FullResult = Result<Result<(Work, usize), String>, JoinError>;
 /// Что разбудило владельца.
 enum Ev {
     Wake,
-    Settings,
+    /// Изменились настройки; true — среди них dex.v2_fee_pct (ревью №1 P).
+    Settings(bool),
     Stop,
     /// За Box: итог сборки (карта) много больше остальных вариантов (clippy::large_enum_variant).
     Full(Box<FullResult>),
@@ -102,11 +124,7 @@ pub fn ensure(ctx: &Ctx, reg: &Registry, tokens: &Tokens, out: mpsc::Sender<Mark
         bg.request_full("пересборка подписки DEX на рынок — ленты пулов переподключены");
         return;
     }
-    rt.spawn(graph_guard::supervise(
-        ctx.clone(),
-        reg.clone(),
-        tokens.clone(),
-    ));
+    rt.spawn(graph_guard::keep(ctx.clone(), reg.clone(), tokens.clone()));
 }
 
 /// Цикл владельца (см. шапку). Принимает: окружение. Возвращает: причину выхода (STOP — система останавливается;
@@ -121,6 +139,9 @@ pub async fn run(o: Owner) -> String {
         work: None,
         full: None,
         next_verify: None,
+        verify_s: None,
+        again: None,
+        retry_at: None,
     };
     bg.request_full("запуск фоновой задачи графа");
     loop {
@@ -130,13 +151,31 @@ pub async fn run(o: Owner) -> String {
         let ev = tokio::select! {
             _ = bg.changes.notified() => Ev::Wake,
             _ = bg.rebuild_notified() => Ev::Wake,
-            r = watch.next_batch() => if r.is_some() { Ev::Settings } else { Ev::Stop },
+            r = watch.next() => match r {
+                Some(c) => {
+                    let mut fee = c.name.starts_with(FEE);
+                    while let Some(c) = watch.try_next() {
+                        fee |= c.name.starts_with(FEE);
+                    }
+                    Ev::Settings(fee)
+                }
+                None => Ev::Stop,
+            },
             r = full_done(&mut st.full) => Ev::Full(Box::new(r)),
             _ = sleep_until(st.next_verify) => Ev::Verify,
+            _ = sleep_until(st.retry_at) => Ev::Wake,
         };
         match ev {
             Ev::Wake => {}
-            Ev::Settings => st.next_verify = None,
+            // Ревью №2 (G): срок самопроверки сбрасывается только при смене самой dex.graph_verify_s (graph_step.rs).
+            Ev::Settings(fee_changed) => {
+                // Ревью №1 (P): dex.v2_fee_pct входит в курс встречного токена (pool_quote::v2_fee_pct → rate::best_in), а не в
+                // ключ книги глубины: смена — переводы в USD пересчитываются (Book::invalidate) и полная пересборка.
+                if fee_changed {
+                    o.reg.depth().invalidate();
+                    bg.request_full("смена dex.v2_fee_pct — курс встречного токена");
+                }
+            }
             Ev::Stop => return STOP.to_string(),
             Ev::Full(r) => {
                 if let Err(why) = graph_finish::finish(&o, &bg, &mut st, *r).await {

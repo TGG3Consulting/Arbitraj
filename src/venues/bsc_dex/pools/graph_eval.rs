@@ -69,23 +69,31 @@ pub fn eval(
     rec
 }
 
-/// Оценка набора пулов по текущему реестру: пул есть — Some(Rec), пропал — None. Принимает: как eval, набор ссылок.
-/// Возвращает: пары (ссылка, оценка). Ошибки (текст): настройки глубины не заданы или неверны (Book::prep).
+/// Оценка набора пулов по текущему реестру: пул есть — Some(Rec), пропал — None. Принимает: как eval, набор ссылок,
+/// `alive` — жива ли работа (ревью №2 B: брошенная сторожем или заменённая работа останавливается на ближайшем пуле).
+/// Возвращает: пары (ссылка, оценка). Ошибки (текст): настройки глубины не заданы или неверны (Book::prep); работа
+/// отменена (CANCELLED).
 pub fn evaluate(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
     usdt_dec: u8,
     refs: &HashSet<PoolRef>,
+    alive: &dyn Fn() -> bool,
 ) -> Result<Vec<(PoolRef, Option<Rec>)>, String> {
     let prep = Book::prep(ctx, tokens)?;
-    Ok(refs
-        .iter()
-        .map(|r| {
-            let rec = reg
-                .entry(r)
-                .map(|e| eval(ctx, reg, tokens, usdt_dec, &prep, &e));
-            (r.clone(), rec)
-        })
-        .collect())
+    let mut out = Vec::with_capacity(refs.len());
+    for r in refs {
+        if !alive() {
+            return Err(CANCELLED.to_string());
+        }
+        let rec = reg
+            .entry(r)
+            .map(|e| eval(ctx, reg, tokens, usdt_dec, &prep, &e));
+        out.push((r.clone(), rec));
+    }
+    Ok(out)
 }
+
+/// Текст ошибки «работа отменена» (сторож перезапустил владельца или сборка заменена новой).
+pub const CANCELLED: &str = "работа графа отменена (новое поколение владельца или новая сборка)";

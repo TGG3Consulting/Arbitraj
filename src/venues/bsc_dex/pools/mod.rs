@@ -91,6 +91,7 @@ pub mod graph_finish;
 pub mod graph_full;
 pub mod graph_guard;
 pub mod graph_owner;
+pub mod graph_publish;
 pub mod graph_read;
 pub mod graph_round;
 pub mod graph_snap;

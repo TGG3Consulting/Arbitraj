@@ -27,10 +27,14 @@ pub struct RoundOut {
     pub evaluated: HashSet<PoolRef>,
     /// Пар с пересобранным топом.
     pub pairs: usize,
+    /// Из оценённых — изменённых в реестре (остальные — зависимые по курсу встречного токена; ревью №1 R).
+    pub changed: usize,
 }
 
-/// Накопительный круг. Принимает: окружение, реестр, токены, карту, изменённые пулы, dex.route_max_pools_per_edge.
-/// Возвращает: новый граф и счётчики. Ошибки (текст): настройки глубины не заданы или неверны.
+/// Накопительный круг. Принимает: окружение, реестр, токены, карту, изменённые пулы, dex.route_max_pools_per_edge,
+/// признак «работа жива». Возвращает: новый граф и счётчики. Ошибки: (изменённые пулы — вызывающий вернёт их в доводку
+/// или пересборку, ревью №2 E; текст): настройки глубины не заданы или неверны, работа отменена. Карта при ошибке не
+/// меняется.
 pub fn round(
     ctx: &Ctx,
     reg: &Registry,
@@ -38,10 +42,16 @@ pub fn round(
     w: &mut Work,
     refs: HashSet<PoolRef>,
     per_edge: usize,
-) -> Result<RoundOut, String> {
+    alive: &dyn Fn() -> bool,
+) -> Result<RoundOut, (HashSet<PoolRef>, String)> {
+    let changed = refs.len();
     let mut all = HashSet::new();
     w.expand(reg, &refs, &mut all);
-    for (r, rec) in graph_eval::evaluate(ctx, reg, tokens, w.basis.usdt_dec, &all)? {
+    let evals = match graph_eval::evaluate(ctx, reg, tokens, w.basis.usdt_dec, &all, alive) {
+        Ok(v) => v,
+        Err(why) => return Err((all, why)),
+    };
+    for (r, rec) in evals {
         w.apply(r, rec);
     }
     let (graph, pairs) = w.publish(per_edge);
@@ -49,5 +59,6 @@ pub fn round(
         graph,
         evaluated: all,
         pairs,
+        changed,
     })
 }

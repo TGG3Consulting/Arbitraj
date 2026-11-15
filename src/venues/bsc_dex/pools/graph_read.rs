@@ -4,14 +4,16 @@
 //! замка построения и без ожидания; сами граф не строят никогда (И1 проекта docs/notes/graph-snapshot-design-2026-11-16.md).
 //! Ступени (п. 7 проекта; принцип Тиграна 16.11 — маршрут должен быть, отказ — последний рубеж):
 //! - А: снимок на текущих настройках, отставание ≤ dex.graph_max_lag_ms (или предел не задан) — отдаётся;
-//! - Б: снимок на прежних настройках графа (идёт полная пересборка после их смены) — отдаётся (цена всё равно по свежему
-//!   состоянию: гидратация route_cache::fresh), счётчик и запись журнала на переход (graph_alarm.rs);
-//! - В: снимка нет, он для другого USDT/decimals, или отставание > dex.graph_max_lag_ms (предохранитель) — ошибка,
+//! - Б: снимок на прежних настройках графа (идёт полная пересборка после их смены) или догоняющая полная сборка /
+//!   доводка (карты нет после перезапуска, доводка не даёт кругам идти) — отдаётся и отставшим не считается (цена всё
+//!   равно по свежему состоянию: гидратация route_cache::fresh), счётчик и запись журнала на переход (graph_alarm.rs);
+//! - В: снимка нет, он для другого USDT/decimals, или (вне ступени Б) отставание > dex.graph_max_lag_ms — ошибка,
 //!   котировка идёт по классике (graph_route::merge). Текст ошибки начинается с QUIET: graph_route::failed такие ошибки
 //!   в журнал не пишет (иначе запись на каждую котировку) — их журнал без спама ведёт graph_alarm.rs.
 //!
+//! Отставание, которое увидел расчёт, — в счётчики экрана (graph_stats.rs reader_lag; ревью №2 C).
 //! Кто вызывает: graph_cache.rs (cached), route_cache.rs и quote/cycle_scan.rs (active — гидратация), graph_owner.rs и
-//! graph_guard.rs (background, max_lag), graph_stats.rs, quote/graph_route.rs (QUIET).
+//! graph_stats.rs, quote/graph_route.rs (QUIET).
 //! От чего зависит: graph_snap.rs, graph_cache.rs (graph_settings), graph_alarm.rs, registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.graph_background, dex.graph_max_lag_ms [bsc_dex] (обе необязательные).
 
@@ -81,14 +83,28 @@ pub fn current(
             "снимок собран для другого USDT — ждёт пересборки, котировка по классике".into(),
         ));
     }
-    // Ступень Б: настройки графа сменились, новый снимок ещё собирается — прежний годится (цена — по свежему состоянию).
-    let same = s.basis.settings == graph_settings(ctx);
-    if !same {
+    // Ревью №2 (C): отставание, которое видит расчёт, — метрика подбора dex.graph_max_lag_ms (все интервалы, включая
+    // доводку, ступень Б и время после перезапуска).
+    let lag = bg.changes.lag();
+    bg.stats
+        .reader_lag(lag.map_or(0, |l| u64::try_from(l.as_millis()).unwrap_or(u64::MAX)));
+    // Ступень Б (ревью №2 A, B): прежние настройки графа или догоняющая полная сборка / доводка — действующий снимок
+    // отдаётся и отставшим не считается (цена — по свежему состоянию, устаревшая топология — не «вслепую»).
+    let stage = if s.basis.settings != graph_settings(ctx) {
         bg.changes.poke();
+        Some("настройки графа сменились, новый снимок собирается")
+    } else if bg.catching_up() {
+        Some("идёт полная пересборка без накопительной карты или её доводка")
+    } else {
+        None
+    };
+    graph_alarm::stage_b(ctx, bg, stage);
+    if stage.is_some() {
+        graph_alarm::fresh_again(ctx, bg);
+        return Ok(s.graph.clone());
     }
-    graph_alarm::settings_stage(ctx, bg, !same);
     if let Some(limit) = max_lag(ctx)
-        && let Some(lag) = bg.changes.lag()
+        && let Some(lag) = lag
         && lag > limit
     {
         graph_alarm::fuse(ctx, bg, lag, limit, s.version, reg.version());

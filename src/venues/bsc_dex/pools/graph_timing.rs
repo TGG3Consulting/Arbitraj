@@ -94,7 +94,13 @@ pub struct BgMeasure {
     /// Причина полной пересборки.
     pub reason: Option<String>,
     pub ms: f64,
+    /// Полная пересборка: сборка с нуля, мс (ревью №2 C).
+    pub build_ms: Option<f64>,
+    /// Полная пересборка: доводка и сверка, мс (ревью №2 C).
+    pub reconcile_ms: Option<f64>,
     pub evaluated: usize,
+    /// Из оценённых — изменённых в реестре (остальные — зависимые по курсу; ревью №1 R). None — полная пересборка.
+    pub changed: Option<usize>,
     pub pairs: usize,
     pub edges: usize,
     /// Отставание в момент публикации, мс.
@@ -120,11 +126,17 @@ pub fn report_bg(ctx: &Ctx, m: &BgMeasure) {
         return;
     };
     let msg = format!(
-        "граф (фон, {}): {:.1} мс; пулов оценено {}, пар пересобрано {}, рёбер {}; отставание при публикации {} мс, \
-         ждут следующего круга {}{}{}{}",
+        "граф (фон, {}): {:.1} мс; пулов оценено {}{}, пар пересобрано {}, рёбер {}; отставание при публикации {} мс, \
+         ждут следующего круга {}{}{}{}{}",
         m.kind,
         m.ms,
         m.evaluated,
+        m.changed
+            .map(|c| format!(
+                " (изменённых {c}, зависимых по курсу {})",
+                m.evaluated.saturating_sub(c)
+            ))
+            .unwrap_or_default(),
         m.pairs,
         m.edges,
         m.lag_ms,
@@ -139,12 +151,19 @@ pub fn report_bg(ctx: &Ctx, m: &BgMeasure) {
         m.differences
             .map(|n| format!("; отличий сверки {n}"))
             .unwrap_or_default(),
+        match (m.build_ms, m.reconcile_ms) {
+            (Some(b), Some(r)) => format!("; сборка {b:.1} мс, доводка {r:.1} мс"),
+            _ => String::new(),
+        },
     );
     let data = json!({
         "kind": m.kind,
         "reason": m.reason,
         "ms": m.ms,
+        "build_ms": m.build_ms,
+        "reconcile_ms": m.reconcile_ms,
         "evaluated": m.evaluated,
+        "changed": m.changed,
         "pairs": m.pairs,
         "edges": m.edges,
         "lag_ms": m.lag_ms,

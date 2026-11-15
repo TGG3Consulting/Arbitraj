@@ -10,7 +10,8 @@
     dex.graph / dex.graph_build (живой поток) — без таймеров.
   Кто вызывает: pages/Venues.svelte (у DEX).
   От чего зависит: lib/api.js (get, request, seg), lib/live.svelte.js (onLive), components/ErrorText.svelte.
-  Настройки: dex.graph_background, dex.graph_max_lag_ms, dex.graph_verify_s, dex.graph_alert_min_s (показ имён; задаются
+  Настройки: dex.graph_background, dex.graph_max_lag_ms, dex.graph_hang_ms, dex.graph_retry_pause_s, dex.graph_verify_s,
+    dex.graph_alert_min_s (показ имён; задаются
     ниже, в «Настройках площадки», раздел «DEX»).
 -->
 <script>
@@ -77,12 +78,12 @@
     <table>
       <tbody>
         <tr><td>Снимок</td><td>{st.ready ? `версия ${st.snapshot_version} (реестр — ${st.registry_version}), №${st.seq}, ${st.snapshot_full ? 'собран с нуля' : 'накопительный'}, возраст ${ms(st.age_ms)}, рёбер ${st.edges}` : '—'}</td></tr>
-        <tr><td>Отставание от реестра</td><td>сейчас {st.lag_ms === null ? 'нет' : ms(st.lag_ms)}; наибольшее за час при публикации {ms(st.lag_max_hour_ms)}; ждут круга: {st.pending}</td></tr>
-        <tr><td>Последний круг</td><td>{st.last_round ? `${at(st.last_round.at)}: ${ms(st.last_round.ms)}, пулов оценено ${st.last_round.evaluated}, пар пересобрано ${st.last_round.pairs}, рёбер ${st.last_round.edges}, отставание ${ms(st.last_round.lag_ms)}, ждали ${st.last_round.pending_after}` : '—'}</td></tr>
-        <tr><td>Полная пересборка</td><td>{st.last_full ? `${at(st.last_full.at)} — ${st.last_full.reason}: ${ms(st.last_full.ms)}, пулов ${st.last_full.pools}, рёбер ${st.last_full.edges}, ${st.last_full.compared ? `отличий сверки ${st.last_full.differences}` : 'сравнивать было не с чем'}; итог: ${st.last_full.outcome}` : '—'}</td></tr>
+        <tr><td>Отставание от реестра</td><td>сейчас {st.lag_ms === null ? 'нет' : ms(st.lag_ms)}; наибольшее, которое видел расчёт, за час — {ms(st.reader_lag_max_hour_ms)} (по нему задаётся dex.graph_max_lag_ms); наибольшее при публикации круга за час — {ms(st.publish_lag_max_hour_ms)}; ждут круга: {st.pending}</td></tr>
+        <tr><td>Последний круг</td><td>{st.last_round ? `${at(st.last_round.at)}: ${ms(st.last_round.ms)}, пулов оценено ${st.last_round.evaluated} (изменённых ${st.last_round.changed}, зависимых по курсу ${st.last_round.evaluated - st.last_round.changed}), пар пересобрано ${st.last_round.pairs}, рёбер ${st.last_round.edges}, отставание ${ms(st.last_round.lag_ms)}, ждали ${st.last_round.pending_after}` : '—'}</td></tr>
+        <tr><td>Полная пересборка</td><td>{st.last_full ? `${at(st.last_full.at)} — ${st.last_full.reason}: ${ms(st.last_full.ms)} (сборка ${ms(st.last_full.build_ms)}, доводка ${ms(st.last_full.reconcile_ms)}), пулов ${st.last_full.pools}, рёбер ${st.last_full.edges}, ${st.last_full.compared ? `отличий сверки ${st.last_full.differences}` : 'сравнивать было не с чем'}; итог: ${st.last_full.outcome}` : '—'}</td></tr>
         <tr><td>Расхождений самопроверки</td><td class={st.mismatches ? 'err' : ''}>{st.mismatches}{st.last_mismatch_at ? ` (последнее ${at(st.last_mismatch_at)})` : ''}</td></tr>
-        <tr><td>Предохранитель (dex.graph_max_lag_ms)</td><td class={st.fuse_hour ? 'err' : ''}>за час {st.fuse_hour}, за сутки {st.fuse_day} — в штатной работе должно быть 0</td></tr>
-        <tr><td>Снимок на прежних настройках</td><td>за час {st.stale_settings_hour}, за сутки {st.stale_settings_day}</td></tr>
+        <tr><td>Предохранитель (dex.graph_max_lag_ms)</td><td class={st.fuse_hour ? 'err' : ''}>эпизодов: за час {st.fuse_episodes_hour}, за сутки {st.fuse_episodes_day}; котировок без маршрута графа: за час {st.fuse_hour}, за сутки {st.fuse_day} — в штатной работе должно быть 0</td></tr>
+        <tr><td>Снимок без накопительного обновления (прежние настройки, догоняющая сборка, доводка)</td><td>выдач котировкам: за час {st.stale_settings_hour}, за сутки {st.stale_settings_day}</td></tr>
         <tr><td>Перезапусков фоновой задачи</td><td class={st.restarts ? 'err' : ''}>{st.restarts}{st.last_restart ? ` — ${st.last_restart}` : ''}</td></tr>
       </tbody>
     </table>

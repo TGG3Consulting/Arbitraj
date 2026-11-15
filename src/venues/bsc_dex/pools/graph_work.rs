@@ -48,6 +48,17 @@ pub struct Work {
     dirty: HashSet<Pair>,
 }
 
+/// Убрать пул из множества по ключу; опустевшее множество — убрать целиком (ревью №1 Q: карта не копит пустые записи).
+/// Ошибок нет.
+fn drop_from<K: std::hash::Hash + Eq>(m: &mut HashMap<K, HashSet<PoolRef>>, k: &K, r: &PoolRef) {
+    if let Some(s) = m.get_mut(k) {
+        s.remove(r);
+        if s.is_empty() {
+            m.remove(k);
+        }
+    }
+}
+
 impl Work {
     /// Пустая карта на basis. Ошибок нет.
     pub fn new(basis: Basis) -> Work {
@@ -74,16 +85,12 @@ impl Work {
     /// Новая оценка пула `r` (None — пула больше нет). Ошибок нет.
     pub fn apply(&mut self, r: PoolRef, rec: Option<Rec>) {
         if let Some(old) = self.recs.remove(&r) {
-            if old.cand.is_some()
-                && let Some(s) = self.pairs.get_mut(&old.pair)
-            {
-                s.remove(&r);
+            if old.cand.is_some() {
+                drop_from(&mut self.pairs, &old.pair, &r);
             }
             self.dirty.insert(old.pair);
-            if old.counter != self.basis.usdt
-                && let Some(s) = self.deps.get_mut(&old.counter)
-            {
-                s.remove(&r);
+            if old.counter != self.basis.usdt {
+                drop_from(&mut self.deps, &old.counter, &r);
             }
         }
         let Some(rec) = rec else {

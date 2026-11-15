@@ -65,6 +65,9 @@ pub struct Bg {
     out: Mutex<Option<mpsc::Sender<MarketEvent>>>,
     round_since: Mutex<Option<Instant>>,
     why_none: Mutex<Option<String>>,
+    /// Ревью №2 (A, B): накопительной карты нет или она не обновляется (идёт полная сборка после перезапуска,
+    /// доводка полной сборки) — действующий снимок отдаётся и отставшим не считается (graph_read.rs).
+    catching_up: AtomicBool,
 }
 
 impl Bg {
@@ -81,10 +84,14 @@ impl Bg {
     /// Опубликовать снимок, если `generation` — текущее поколение владельца; затем отметка «опубликовано» в наборе изменений.
     /// Возвращает: опубликован ли. Ошибок нет.
     pub fn publish(&self, generation: u64, s: Snapshot) -> bool {
+        // Ревью №1 (Q): проверка поколения и запись — под одним замком: сторож меняет поколение до запуска нового
+        // владельца, итог старого после этой проверки не запишется.
+        let mut slot = self.snap.write().unwrap_or_else(|p| p.into_inner());
         if self.generation.load(Ordering::Acquire) != generation {
             return false;
         }
-        *self.snap.write().unwrap_or_else(|p| p.into_inner()) = Some(Arc::new(s));
+        *slot = Some(Arc::new(s));
+        drop(slot);
         *self.lock_why() = None;
         self.changes.published();
         true
@@ -111,8 +118,25 @@ impl Bg {
         self.started.load(Ordering::Acquire)
     }
 
+    /// Текущее ли поколение `g` (брошенная сторожем работа видит «нет» и останавливается — ревью №2 B). Ошибок нет.
+    pub fn is_current(&self, g: u64) -> bool {
+        self.generation.load(Ordering::Acquire) == g
+    }
+
+    /// Ревью №2 (A, B): снимок временно не обновляется накопительно (полная сборка без карты, доводка). Ошибок нет.
+    pub fn set_catching_up(&self, on: bool) {
+        self.catching_up.store(on, Ordering::Release);
+    }
+
+    /// Идёт ли догоняющая полная сборка/доводка (см. set_catching_up). Ошибок нет.
+    pub fn catching_up(&self) -> bool {
+        self.catching_up.load(Ordering::Acquire)
+    }
+
     /// Новое поколение владельца (сторож — перед каждым запуском). Ошибок нет.
     pub fn next_gen(&self) -> u64 {
+        // Под замком снимка (как проверка в publish): публикация старого поколения либо уже записана, либо не запишется.
+        let _slot = self.snap.write().unwrap_or_else(|p| p.into_inner());
         self.generation.fetch_add(1, Ordering::AcqRel) + 1
     }
 

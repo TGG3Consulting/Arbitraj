@@ -20,9 +20,10 @@ use super::super::ctx::Ctx;
 use super::graph_read;
 use super::registry::Registry;
 
-/// Минут в окне «за час» (единица показа).
+/// Минут в окне «за час». Не настройка поведения: окна «за час / за сутки» задал Тигран как единицы показа на экране
+/// (поручение 16.11, п. 3), на торговлю и на работу графа они не влияют — это перевод часа в минуты (ревью №2 J).
 const HOUR_MIN: i64 = 60;
-/// Минут в окне «за сутки» (единица показа; старше — выбрасывается).
+/// Минут в окне «за сутки» (единица показа, как HOUR_MIN; старше суток значения выбрасываются — память ограничена окном).
 const DAY_MIN: i64 = 24 * 60;
 
 /// Счётчики. Один на реестр (в Bg).
@@ -34,6 +35,8 @@ pub struct GraphStats {
 #[derive(Default)]
 struct Inner {
     fuse: Buckets,
+    episodes: Buckets,
+    reader: Buckets,
     stale: Buckets,
     lag: Buckets,
     mismatches: u64,
@@ -95,6 +98,16 @@ impl GraphStats {
         self.lock().fuse.put(1, false);
     }
 
+    /// Начался эпизод предохранителя (ревью №2 I). Ошибок нет.
+    pub fn fuse_episode(&self) {
+        self.lock().episodes.put(1, false);
+    }
+
+    /// Отставание, которое увидел расчёт при чтении снимка, мс (ревью №2 C). Ошибок нет.
+    pub fn reader_lag(&self, ms: u64) {
+        self.lock().reader.put(ms, true);
+    }
+
     /// Отдан снимок на прежних настройках графа (ступень Б). Ошибок нет.
     pub fn stale_settings(&self) {
         self.lock().stale.put(1, false);
@@ -151,7 +164,8 @@ pub fn view(ctx: &Ctx, reg: &Registry) -> DexGraphState {
         snapshot_full: snap.as_ref().map(|s| s.full),
         age_ms: snap.as_ref().map(|s| ms(s.at.elapsed())),
         lag_ms: bg.changes.lag().map(ms),
-        lag_max_hour_ms: m.lag.top(HOUR_MIN),
+        reader_lag_max_hour_ms: m.reader.top(HOUR_MIN),
+        publish_lag_max_hour_ms: m.lag.top(HOUR_MIN),
         pending: bg.changes.pending(),
         edges: snap.as_ref().map(|s| s.graph.len()),
         last_round: m.round.clone(),
@@ -161,6 +175,8 @@ pub fn view(ctx: &Ctx, reg: &Registry) -> DexGraphState {
         last_mismatch: m.last_mismatch.as_ref().map(|x| x.1.clone()),
         fuse_hour: m.fuse.sum(HOUR_MIN),
         fuse_day: m.fuse.sum(DAY_MIN),
+        fuse_episodes_hour: m.episodes.sum(HOUR_MIN),
+        fuse_episodes_day: m.episodes.sum(DAY_MIN),
         stale_settings_hour: m.stale.sum(HOUR_MIN),
         stale_settings_day: m.stale.sum(DAY_MIN),
         restarts: m.restarts,

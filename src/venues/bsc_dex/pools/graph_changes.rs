@@ -79,6 +79,30 @@ impl Changes {
         }
     }
 
+    /// Вернуть в набор пулы, забранные кругом или доводкой, которые не удалось применить (ревью №1 N, №2 E) —
+    /// следующий круг их повторит. Ошибок нет.
+    pub fn remark(&self, refs: impl IntoIterator<Item = PoolRef>) {
+        if !self.tracking() {
+            return;
+        }
+        let mut any = false;
+        {
+            let mut m = self.lock();
+            let now = Instant::now();
+            for r in refs {
+                m.set.insert(r);
+                any = true;
+            }
+            if any {
+                m.pending_since.get_or_insert(now);
+                m.unpublished_since.get_or_insert(now);
+            }
+        }
+        if any {
+            self.wake.notify_one();
+        }
+    }
+
     /// Забрать набор (только владелец). Возвращает: пулы, изменённые после прошлого drain, и когда отмечен самый
     /// старый из них (None — набор пуст) — для отставания в момент публикации. Ошибок нет.
     pub fn drain(&self) -> (HashSet<PoolRef>, Option<Instant>) {

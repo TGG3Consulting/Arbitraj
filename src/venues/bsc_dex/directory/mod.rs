@@ -139,6 +139,9 @@ pub fn pool_key(r: &PoolRef) -> String {
         PoolRef::Singleton { id, .. } => format!("{id}"),
         // Пара общего контракта (решение 122 F, 3): индексатор и поиск по фабрике пишут адрес общего контракта.
         PoolRef::Member { contract, .. } => format!("{contract:#x}"),
+        // Решение 295: пара многомонетного пула — ключ строки справочника с парой (тот же формат, что
+        // multi_pair::dir_key у DEX в режиме dex.multi_pair).
+        PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x}|{token0:#x}|{token1:#x}"),
     }
 }
 

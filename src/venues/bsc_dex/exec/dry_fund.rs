@@ -67,7 +67,7 @@ pub async fn source(
         .filter(|e| !route.contains(&e.pool.reference))
         .filter_map(|e| match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
-            PoolRef::Singleton { .. } | PoolRef::Member { .. } => None,
+            PoolRef::Singleton { .. } | PoolRef::Member { .. } | PoolRef::Multi { .. } => None,
         })
         .collect();
     if pools.is_empty() {

@@ -40,6 +40,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         PoolRef::Contract(a) => Ok((k, *a)),
         // Пара общего контракта (WooPPV2, решение 122 F, 3): исполнитель вызывает сам общий контракт (шаг WOO).
         PoolRef::Member { contract, .. } => Ok((k, *contract)),
+        // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
+        PoolRef::Multi { contract, .. } => Ok((k, *contract)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id

@@ -193,6 +193,8 @@ pub(super) fn pools(q: &Quote) -> Vec<String> {
             PoolRef::Contract(a) => format!("{a:#x}"),
             PoolRef::Singleton { manager, id } => format!("{manager:#x}:{id:#x}"),
             PoolRef::Member { contract, coin } => format!("{contract:#x}:{coin:#x}"),
+            // Решение 295: строка с парой — разные пары одного пула не дают одинаковых ключей строк интерфейса.
+            PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x}:{token0:#x}:{token1:#x}"),
         };
         if !out.contains(&t) {
             out.push(t);

@@ -57,12 +57,14 @@ const GROUP = {
 /** Группа крючка (решение 32). Принимает: HookGroup. Возвращает: строку. */
 export const hookGroupLabel = (g) => GROUP[g] ?? g;
 
-/** Ссылка на пул: адрес контракта, PoolId в менеджере или пара общего контракта. Принимает: PoolRef. Возвращает: строку. */
+/** Ссылка на пул: адрес контракта, PoolId в менеджере, пара общего контракта или пара многомонетного пула. Принимает: PoolRef. Возвращает: строку. */
 export function poolRefText(p) {
   if (p?.Contract) return p.Contract;
   if (p?.Singleton) return `${p.Singleton.id} в ${p.Singleton.manager}`;
   // Пара общего контракта (WooFi, решение 122 F, 3): контракт и базовая монета.
   if (p?.Member) return `${p.Member.coin} в ${p.Member.contract}`;
+  // Пара многомонетного пула (решение 295): контракт и пара — у разных пар одного пула разные строки.
+  if (p?.Multi) return `${p.Multi.contract} (${p.Multi.token0}/${p.Multi.token1})`;
   return JSON.stringify(p);
 }
 

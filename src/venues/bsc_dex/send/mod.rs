@@ -201,7 +201,7 @@ async fn classify(
                 ctx.log(
                     Level::Warn,
                     "send.channel_rejected",
-                    reject_log::line(id, &e, txs, method, max_block),
+                    reject_log::line(ctx, id, &e, txs, method, max_block),
                     None,
                 )
                 .await;

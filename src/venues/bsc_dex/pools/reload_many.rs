@@ -12,6 +12,7 @@ use crate::gateway::errors::GatewayError;
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load_batch::{self, Want};
+use super::registry::Registry;
 use super::{http_wait, listen_log, load};
 
 /// Чтение многих пулов пачками (load_batch.rs) группами: у каждой группы — свежий блок (последний известный, не
@@ -67,7 +68,8 @@ pub fn fresh_each(f: &Found) -> bool {
     load_batch::one_by_one(f.family) && !matches!(f.reference, PoolRef::Multi { .. })
 }
 
-/// Что делает: пулы на свежем блоке (последний известный, не раньше `min_block`) — ждёт узел HTTP до него и читает
+/// Что делает: пулы на свежем блоке (последний известный, не раньше `min_block` и synced_block их записей) — ждёт
+/// узел HTTP до него и читает
 /// одной группой (load_group). Принимает: (пул, тикер), наименьший блок. Возвращает: по каждому Ok или причину (узел
 /// HTTP не дошёл — та же причина у всех). Ошибки: End — ядро закрыло канал.
 async fn at_fresh(
@@ -75,14 +77,25 @@ async fn at_fresh(
     items: &[(&Found, &str)],
     min_block: u64,
 ) -> Result<Vec<Result<(), GatewayError>>, End> {
-    let block = p
-        .heads
-        .latest()
-        .map_or(min_block, |h| h.number.max(min_block));
+    // Ревью 298: не раньше учтённой позиции записей (synced_block) — события WS, уже применённые к записи (в т.ч. к
+    // недостоверной, ждущей повтора, и отмеченные stale_read::defer), могут быть новее головы узла HTTP; чтение ниже
+    // откатило бы запись (load.rs renewed) и потеряло их. Узел HTTP до такого блока — ждём (http_reached).
+    let floor = floor_block(&p.reg, items, min_block);
+    let block = p.heads.latest().map_or(floor, |h| h.number.max(floor));
     match http_wait::http_reached(p, block).await {
         Ok(()) => load_group(p, items, block).await,
         Err(e) => Ok(items.iter().map(|_| Err(e.clone())).collect()),
     }
+}
+
+/// Что делает: ревью 298 — наименьший блок чтения пулов: `min_block` и synced_block их записей в реестре (чтение ниже
+/// откатило бы запись и потеряло применённые события). Принимает: реестр, (пул, тикер), наименьший блок.
+/// Возвращает: наибольшее из них (записи нет — только `min_block`). Ошибок нет.
+pub fn floor_block(reg: &Registry, items: &[(&Found, &str)], min_block: u64) -> u64 {
+    items
+        .iter()
+        .filter_map(|(f, _)| reg.get(&f.reference).map(|e| e.synced_block))
+        .fold(min_block, u64::max)
 }
 
 /// Одна группа на одном блоке: пачечное чтение и отправка ядру. Решение 295: пары одного многомонетного пула в группе

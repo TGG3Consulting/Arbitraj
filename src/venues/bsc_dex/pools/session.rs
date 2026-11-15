@@ -218,8 +218,10 @@ async fn on_log(
             .topic0()
             .is_some_and(|t| events::topics(family).contains(t))
         {
-            // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше.
-            if listen_log::on_log(p, log).await? {
+            // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше;
+            // пока ждёт — события без перечитывания.
+            let waiting = super::stale_read::waiting(&m.missing, i);
+            if listen_log::on_log(p, log, waiting).await? {
                 super::stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
             }
         }

@@ -7,22 +7,31 @@
 //! - групповое чтение (reload_many::fresh_each): пулы видов, читаемых по одному (thena-v3 algebra_integral — запись
 //!   algebra_integral_2026-11-06; metric-bsc metric_omm — запись metric_2026-11-15), — свой свежий блок; пулы ступеней
 //!   Multicall3 (PancakeSwap V2/V3, Uniswap V3 — запись node_calls_3_2026-10-24) и пары многомонетного пула
-//!   (PoolRef::Multi, nerve — запись nerve_2026-11-15) — в группе на одном блоке, как раньше.
+//!   (PoolRef::Multi, nerve — запись nerve_2026-11-15) — в группе на одном блоке, как раньше;
+//! - ревью 298 на парах Nerve 3pool (PoolRef::Multi, состояние из записи nerve_2026-11-15, блок записи 133724547):
+//!   пара в очереди повтора — позиция лога отмечается (stale_read::defer), раньше учтённая не откатывается; блок
+//!   повтора не ниже synced_block записей (reload_many::floor_block) — событие новее головы HTTP не теряется.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{errors, pools::{stale_read, reload_many, load_batch, families, discover}}.
 
+mod multi_common;
+
 use alloy_primitives::Address;
+use chrono::Utc;
 use serde_json::Value;
 
-use arb::core::types::PoolRef;
+use arb::core::types::{Pool, PoolRef, VenueId};
 use arb::gateway::errors::ErrorCode;
 use arb::venues::bsc_dex::errors::{Op, from_rpc};
 use arb::venues::bsc_dex::pools::discover::Found;
 use arb::venues::bsc_dex::pools::families::{self, Family};
+use arb::venues::bsc_dex::pools::registry::{Entry, Registry};
 use arb::venues::bsc_dex::pools::reload::Missing;
 use arb::venues::bsc_dex::pools::revive::Abandoned;
-use arb::venues::bsc_dex::pools::{load_batch, reload_many, stale_read};
+use arb::venues::bsc_dex::pools::{load_batch, load_saddle, reload_many, stale_read};
+
+use multi_common::{PAIRS3, bad, decimals, loader_answers, pair};
 
 fn rec(path: &str) -> Value {
     let p = format!("{}/tests/data/{path}", env!("CARGO_MANIFEST_DIR"));
@@ -187,4 +196,109 @@ fn fresh_block_only_for_one_by_one_kinds() {
         t1,
     );
     assert!(!reload_many::fresh_each(&multi));
+}
+
+/// Пары Nerve 3pool из записи: (найденный пул, запись реестра с отметкой synced_block = блок записи).
+fn nerve_pairs() -> Vec<(Found, Entry)> {
+    let probe = multi_common::rec("nerve_2026-11-15", "probe.json");
+    let pool: Address = probe["pool"].as_str().unwrap().parse().unwrap();
+    let at = probe["block_dec"].as_u64().unwrap();
+    let (calls, tail) = load_saddle::calls(pool);
+    let (head, t) = loader_answers(
+        &probe,
+        &calls,
+        tail,
+        ["nerve getToken", "nerve getTokenBalance"],
+        &[
+            "nerve getAPrecise()",
+            "nerve swapStorage()",
+            "nerve paused()",
+        ],
+    );
+    let dec = decimals(&probe, "nerve", "getToken", 3);
+    let n = head.len();
+    let raw = load_saddle::Raw {
+        pool,
+        got: head.iter().cloned().chain(t.iter().cloned()).collect(),
+        tail: n,
+        decimals: dec,
+    };
+    let fam = families::make("nerve", "saddle_stableswap").unwrap();
+    PAIRS3
+        .iter()
+        .map(|(a, b)| {
+            let (t0, t1) = pair("nerve_2026-11-15", a, b);
+            let reference = PoolRef::Multi {
+                contract: pool,
+                token0: t0,
+                token1: t1,
+            };
+            let e = Entry {
+                family: fam,
+                pool: Pool {
+                    venue: VenueId("bsc_dex".into()),
+                    family: fam.id.into(),
+                    kind: fam.kind,
+                    reference: reference.clone(),
+                    token0: t0,
+                    token1: t1,
+                    fee_pips: None,
+                    tick_spacing: None,
+                    bin_step: None,
+                    hooks: None,
+                    state: load_saddle::state_with(&raw, (t0, t1), &bad).unwrap(),
+                    block: at,
+                    received_at: Utc::now(),
+                },
+                ticker: (*a).into(),
+                coin: t0,
+                usdt: t1,
+                key: None,
+                ticks: None,
+                bins: None,
+                synced_block: at,
+                synced_log: None,
+                valid: false,
+                asleep: false,
+            };
+            (found(fam, reference, t0, t1), e)
+        })
+        .collect()
+}
+
+#[test]
+fn multi_pair_waiting_defers_and_floor_keeps_events() {
+    let pairs = nerve_pairs();
+    let at = pairs[0].1.synced_block;
+    let reg = Registry::default();
+    for (_, e) in &pairs {
+        reg.put(e.clone());
+    }
+    // Пара 0 ждёт повтора (индекс в пачке 0), пары 1–2 — нет.
+    let missing = vec![Missing { i: 0, tries: 0 }];
+    assert!(stale_read::waiting(&missing, 0));
+    assert!(!stale_read::waiting(&missing, 1));
+    // Лог пула на блоке новее записи — у ждущей пары позиция отмечается, узел не спрашивается.
+    let r0 = &pairs[0].0.reference;
+    stale_read::defer(&reg, r0, at + 3, 7);
+    let e0 = reg.get(r0).unwrap();
+    assert_eq!((e0.synced_block, e0.synced_log), (at + 3, Some(7)));
+    assert!(e0.has_applied(at + 3, 7) && !e0.has_applied(at + 3, 8));
+    assert!(!e0.valid, "отметка позиции не делает пару достоверной");
+    // Более ранний лог отметку не откатывает.
+    stale_read::defer(&reg, r0, at + 1, 99);
+    assert_eq!(reg.get(r0).unwrap().synced_block, at + 3);
+    // Блок повтора: не ниже synced_block записей (голова HTTP, например, ещё на блоке записи).
+    let items: Vec<(&Found, &str)> = pairs.iter().map(|(f, _)| (f, "")).collect();
+    assert_eq!(reload_many::floor_block(&reg, &items, at), at + 3);
+    assert_eq!(reload_many::floor_block(&reg, &items[1..], at), at);
+    assert_eq!(
+        reload_many::floor_block(&reg, &items[1..], at + 10),
+        at + 10
+    );
+    // Пула нет в реестре — только наименьший блок.
+    assert_eq!(
+        reload_many::floor_block(&Registry::default(), &items, at),
+        at
+    );
 }

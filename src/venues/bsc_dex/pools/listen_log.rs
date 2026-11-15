@@ -35,11 +35,13 @@ use super::listen::{End, Pools};
 use super::registry::Entry;
 use super::{load, load_bin, load_lb_bins};
 
-/// Один лог: найти пул, применить или перечитать, отправить ядру.
+/// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
+/// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
+/// события, требующего перечитывания, отмечается (stale_read::defer), повтор прочитает пул не раньше неё.
 /// Возвращает: true — чтение на блоке события опоздало (StaleData, решение 298): пул недостоверен, Invalidated ушло,
 /// вызывающий ставит пул в очередь повтора (stale_read::requeue); false — обработан как раньше.
 /// Ошибки: End — прочая ошибка чтения (пул недостоверен), лог без позиции, ядро закрыло канал.
-pub async fn on_log(p: &Pools, log: &Log) -> Result<bool, End> {
+pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
     let r = match log.topics().get(1) {
         Some(id)
             if p.reg.contains(&PoolRef::Singleton {
@@ -74,6 +76,14 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<bool, End> {
     };
     let res = match applied {
         Applied::Ignored => return Ok(false),
+        // Решение 298: пул ждёт повтора — не читаем (повтор на новых блоках прочитает его не раньше этого события).
+        Applied::Refresh(_) if waiting => {
+            if !log.removed {
+                super::stale_read::defer(&p.reg, &r, block, index);
+            }
+            return Ok(false);
+        }
+        Applied::Updated | Applied::Bins(_) if waiting => Ok(()),
         // Цена ушла так, что полоса глубины вышла за прочитанные слова (решение 73) — карта вокруг нового тика сразу,
         // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
         Applied::Updated => match p.reg.get(&r) {

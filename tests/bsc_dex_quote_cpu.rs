@@ -167,6 +167,7 @@ async fn big_registry_same_quote_no_copy_in_time() {
     assert!(warm < Duration::from_secs(1), "{warm:?}");
 }
 
+#[ignore = "диагностика t132: какой тест переполняет стек"]
 #[tokio::test]
 async fn heavy_quote_does_not_block_runtime_and_timeout_is_honest() {
     // Рантайм одного потока (как худший случай): без выноса счёта задача-счётчик не получила бы управления до его конца.

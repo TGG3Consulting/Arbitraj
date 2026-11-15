@@ -165,7 +165,7 @@ pub fn entry(kind: &str, fee: Option<u32>) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

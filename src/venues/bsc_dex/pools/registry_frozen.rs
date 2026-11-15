@@ -89,7 +89,7 @@ impl Registry {
             graph: pinned.map_or_else(Cache::default, |(k, v)| Cache::pinned(k, v)),
             // Решение 301 (е2): поколения снимка сохраняются; новые (если бы были записи) — после самого старшего.
             gens: Arc::new(AtomicU64::new(
-                snap.entries.iter().map(|e| e.gen).max().unwrap_or(0),
+                snap.entries.iter().map(|e| e.state_gen).max().unwrap_or(0),
             )),
         }
     }

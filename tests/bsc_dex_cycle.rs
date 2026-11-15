@@ -117,7 +117,7 @@ fn base_entry(
         synced_log: None,
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

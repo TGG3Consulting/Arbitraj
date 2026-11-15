@@ -115,7 +115,7 @@ fn entry(state: PoolState) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

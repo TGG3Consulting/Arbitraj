@@ -81,7 +81,7 @@ fn coin_usdt(p: &Parts, id: &str, kind: &str) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

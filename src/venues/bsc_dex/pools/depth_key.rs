@@ -2,7 +2,7 @@
 //! Что делает: ключ кэша глубины пула (решение 73, pools/depth_book.rs): глубина пересчитывается, если сменилось
 //! состояние пула (блок, logIndex последнего учтённого события), настройки глубины (полоса, порог, гистерезис) или
 //! курс встречного токена к USDT — состояние пулов «промежуточная — USDT» (пул с BNB, решение 52).
-//! Решение 301 (е2): состояние пула и пулов «промежуточная — USDT» — поколение состояния записи (Entry.gen,
+//! Решение 301 (е2): состояние пула и пулов «промежуточная — USDT» — поколение состояния записи (Entry.state_gen,
 //! pools/state_gen.rs) вместо (блок, logIndex): перечитанный на новом блоке пул без смены состояния ключ не меняет.
 //! Поколение 0 (запись вне реестра) — ключ не совпадает ни с каким, глубина считается заново.
 //! Кто вызывает: pools/depth_book.rs.
@@ -24,7 +24,7 @@ use super::registry::{Entry, Registry};
 /// поколения пулов «промежуточная — USDT», по которым глубина переводится в USDT (пусто — встречный токен USDT).
 #[derive(Debug, Clone)]
 pub struct Key {
-    gen: u64,
+    state_gen: u64,
     band: Decimal,
     min: Decimal,
     hyst: Decimal,
@@ -35,8 +35,8 @@ pub struct Key {
 /// Равенство ключей: поколение 0 (запись вне реестра) не равно никакому — такая глубина всегда считается заново.
 impl PartialEq for Key {
     fn eq(&self, o: &Key) -> bool {
-        self.gen != 0
-            && self.gen == o.gen
+        self.state_gen != 0
+            && self.state_gen == o.state_gen
             && self.band == o.band
             && self.min == o.min
             && self.hyst == o.hyst
@@ -56,7 +56,7 @@ impl Key {
         hyst: Decimal,
     ) -> Key {
         Key {
-            gen: e.gen,
+            state_gen: e.state_gen,
             band,
             min,
             hyst,
@@ -128,7 +128,7 @@ impl Prep {
             _ => Arc::default(),
         };
         Key {
-            gen: e.gen,
+            state_gen: e.state_gen,
             band: self.band,
             min: self.min,
             hyst: self.hyst,

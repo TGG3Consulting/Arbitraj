@@ -253,7 +253,7 @@ fn v2_entry(block: u64, log: u64, r0: U256, r1: U256) -> Entry {
         synced_log: Some(log),
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

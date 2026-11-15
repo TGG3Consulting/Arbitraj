@@ -158,7 +158,7 @@ async fn stable_steps_take_indices_from_state() {
             synced_log: None,
             valid: true,
             asleep: false,
-            gen: 0,
+            state_gen: 0,
         }
     };
     let e = make("saddle_stableswap", false);

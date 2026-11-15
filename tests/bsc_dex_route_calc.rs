@@ -93,7 +93,7 @@ fn pair(addr: Address, x: Address, y: Address, rx: u128, ry: u128) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
-        gen: 0,
+        state_gen: 0,
     }
 }
 

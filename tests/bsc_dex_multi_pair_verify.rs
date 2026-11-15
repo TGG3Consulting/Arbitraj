@@ -3,7 +3,9 @@
 //! verify_* (judge — то, что вызывает verify после ответов узла) на ЖИВЫХ записанных ответах:
 //! - Ellipsis 3pool: verify_curve::judge на coins(0..7) (tests/data/stable_list_2026-11-15/token_calls.json);
 //! - Nerve 3pool: verify_stable_u::judge на getToken(0..31) (та же запись) и dex.stable_pools;
-//! - Balancer ACSI (пулы на 4 и 5 токенов): verify_balancer::judge на ответах второго прохода (значения probe.json);
+//! - Balancer ACSI (пулы на 4 и 5 токенов): verify_balancer::judge на ответах второго прохода — ответы ПЕРЕКОДИРОВАНЫ
+//!   abi_encode из записанных значений probe.json (getPool, getPoolTokens, isPoolFromFactory), сырых байтов узла в записи
+//!   нет (как tests/bsc_dex_balancer_acsi_live.rs second);
 //! - Curve NG (трёхмонетный пул): verify_curve_ng::judge на get_coins / is_meta / version (probe.json).
 //!
 //! При dex.multi_pair = да — ссылка Multi с парой кандидата и монеты пула в справочнике (pool_tokens); без настройки —

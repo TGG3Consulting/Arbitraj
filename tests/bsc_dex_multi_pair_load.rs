@@ -105,8 +105,13 @@ fn late_pairs_follow_their_contract() {
     // Ревью 295, п. 2: поздние пулы с парами Multi — сначала пары контракта открытой пачки, затем группами по контракту.
     let nerve = Address::from_str(rec("nerve_2026-11-15", "probe.json")["pool"].as_str().unwrap()).unwrap();
     let ell = Address::from_str(rec("ellipsis_2026-11-15", "probe.json")["pool"].as_str().unwrap()).unwrap();
-    let f = families::make("nerve", "saddle_stableswap").unwrap();
+    // Семейство — по записи пула: Nerve — saddle_stableswap, Ellipsis — curve_stableswap.
     let found = |contract: Address, dir: &str, a: &str, b: &str| {
+        let f = if dir.starts_with("nerve") {
+            families::make("nerve", "saddle_stableswap").unwrap()
+        } else {
+            families::make("ellipsis", "curve_stableswap").unwrap()
+        };
         let (t0, t1) = pair(dir, a, b);
         let r = PoolRef::Multi { contract, token0: t0, token1: t1 };
         (arb::venues::bsc_dex::pools::verify_woo::found(&arb::venues::bsc_dex::pools::verify::Candidate { family: f, pool: format!("{contract:#x}"), coin: t0, quote: t1 }, r), String::new())
@@ -120,4 +125,22 @@ fn late_pairs_follow_their_contract() {
     let open = std::collections::HashSet::from([PoolRef::Contract(nerve)]);
     let got: Vec<Address> = arb::venues::bsc_dex::pools::attach::by_site(list, &open).iter().map(|(f, _)| f.reference.address()).collect();
     assert_eq!(got, vec![nerve, nerve, ell, ell], "пары контракта открытой пачки — первыми, затем подряд по контракту");
+}
+
+#[test]
+fn mixed_batch_routes_log_to_both() {
+    // Повторное ревью 295, п. 1: в пачке Contract(адрес) и Multi того же адреса (смена dex.multi_pair на лету) — лог
+    // адреса находит Contract по индексу (group::index), и адрес есть среди контрактов Multi (group::multi_sites), поэтому
+    // session.rs передаёт его и в listen_site.
+    use arb::venues::bsc_dex::pools::{group, verify::Candidate, verify_woo};
+    let pool = Address::from_str(rec("nerve_2026-11-15", "probe.json")["pool"].as_str().unwrap()).unwrap();
+    let f = families::make("nerve", "saddle_stableswap").unwrap();
+    let (t0, t1) = pair("nerve_2026-11-15", "BUSD", "USDT");
+    let c = Candidate { family: f, pool: format!("{pool:#x}"), coin: t0, quote: t1 };
+    let multi = PoolRef::Multi { contract: pool, token0: t0, token1: t1 };
+    let pools = vec![(verify_woo::found(&c, PoolRef::Contract(pool)), String::new()), (verify_woo::found(&c, multi), String::new())];
+    assert_eq!(group::index(&pools).get(&PoolRef::Contract(pool)), Some(&0));
+    assert!(group::multi_sites(&pools).contains(&pool));
+    // Пачка без пар Multi — множество пусто (путь лога прежний).
+    assert!(group::multi_sites(&pools[..1]).is_empty());
 }

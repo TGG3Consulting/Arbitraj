@@ -118,7 +118,9 @@ impl Directory {
             s.taken.remove(&key);
             s.status
                 .insert(key, DirectoryStatus::Rejected(why.to_string()));
-            // Остальные взятые пары того же контракта (только у Multi; у прочих ссылок таких нет).
+            // Остальные взятые пары того же контракта (только у Multi). Задумано: запрет — по контракту, поэтому снимается и
+            // запись того же контракта под другим id DEX или с ссылкой Contract (site() тот же) — проверка «кто меняет»
+            // осудила контракт, а не пару.
             if matches!(r, PoolRef::Multi { .. }) {
                 let site = r.site();
                 let same: Vec<String> = s

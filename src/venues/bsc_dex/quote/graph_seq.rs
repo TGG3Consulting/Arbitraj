@@ -12,6 +12,7 @@
 //! Доля без общих пулов не меняется и никого не меняет — считается и остаётся как раньше (побайтно).
 //! Общий пул вида без расчёта состояния после обмена (pool_after::appliable = нет) — маршрут не считается (NoRoute), сплит
 //! такую вторую долю не открывает (quote/graph_split.rs).
+//! Решение 295: общий пул долей — по физическому пулу (PoolRef::site): разные пары одного многомонетного пула — общий.
 //! Кто вызывает: quote/graph_split.rs (сплит и итог), quote/verify_decide.rs (свежие доли и минимумы),
 //! exec/dry_paths.rs и exec/bundle_trade.rs (живые доли перед сделкой — resequence).
 //! От чего зависит: quote/route_calc.rs (Leg, eval, keep), quote/pool_after.rs, quote/pool_quote.rs, quote/pool_tax.rs
@@ -31,16 +32,18 @@ use super::path::Path;
 use super::route_calc::{self, Leg, keep};
 use super::{pool_after, pool_quote, pool_tax};
 
-/// Пулы, через которые идут две доли и больше. Принимает: ноги долей. Ошибок нет.
+/// Пулы, через которые идут две доли и больше. Решение 295: по физическому пулу (`PoolRef::site`) — разные пары одного
+/// многомонетного пула в двух долях — общий пул; у прочих ссылок site() = сама ссылка. Принимает: ноги долей.
+/// Возвращает: физические пулы. Ошибок нет.
 pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
-    let mut seen: HashSet<&PoolRef> = HashSet::new();
+    let mut seen: HashSet<PoolRef> = HashSet::new();
     let mut out = HashSet::new();
     for legs in shares {
-        // Пул внутри одной доли не повторяется (путь без повторов токенов), но берём множество — на всякий случай.
-        let mine: HashSet<&PoolRef> = legs.iter().map(|l| &l.entry.pool.reference).collect();
+        // Пул внутри одной доли не повторяется (путь без повторов токенов и площадок), но берём множество — на всякий случай.
+        let mine: HashSet<PoolRef> = legs.iter().map(|l| l.entry.pool.reference.site()).collect();
         for r in mine {
-            if !seen.insert(r) {
-                out.insert(r.clone());
+            if !seen.insert(r.clone()) {
+                out.insert(r);
             }
         }
     }
@@ -51,7 +54,7 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
 /// или None. Ошибок нет.
 pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<String> {
     shares.iter().flat_map(|l| l.iter()).find_map(|l| {
-        (common.contains(&l.entry.pool.reference) && !pool_after::appliable(&l.entry)).then(|| {
+        (common.contains(&l.entry.pool.reference.site()) && !pool_after::appliable(&l.entry)).then(|| {
             format!(
                 "через пул {} {:?} идут две доли и больше, а состояние этого вида пула после обмена не считается — \
                  доли общего пула не считаются как независимые (решение 223)",
@@ -81,7 +84,7 @@ pub fn eval(
     for (legs, qty) in shares {
         if !legs
             .iter()
-            .any(|l| common.contains(&l.entry.pool.reference))
+            .any(|l| common.contains(&l.entry.pool.reference.site()))
         {
             let tax_keep = pool_tax::coin_keep(legs, side, t);
             out.push(route_calc::eval(ctx, legs, side, *qty, tax_keep)?);
@@ -117,7 +120,7 @@ pub fn resequence(
         .filter(|&i| {
             refs[i]
                 .iter()
-                .any(|l| common.contains(&l.entry.pool.reference))
+                .any(|l| common.contains(&l.entry.pool.reference.site()))
         })
         .collect();
     let input: Vec<(&[Leg], Decimal)> = idx.iter().map(|&i| (refs[i], shares[i].1)).collect();
@@ -148,7 +151,7 @@ fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>) -> Vec<Leg> {
     legs.iter()
         .map(|l| {
             let mut l = l.clone();
-            if let Some(s) = after.get(&l.entry.pool.reference) {
+            if let Some(s) = after.get(&l.entry.pool.reference.site()) {
                 l.entry.pool.state = s.clone();
             }
             l
@@ -179,10 +182,11 @@ fn advance(
         .swapped
         .amount_in;
     for (i, leg) in legs.iter().enumerate() {
-        let r = &leg.entry.pool.reference;
-        let s = if common.contains(r) {
+        // Решение 295: ключ состояния после обмена — физический пул (site; у парных — сама ссылка).
+        let r = leg.entry.pool.reference.site();
+        let s = if common.contains(&r) {
             let (s, st) = pool_after::apply(ctx, &leg.entry, leg.token_in, amount)?;
-            after.insert(r.clone(), st);
+            after.insert(r, st);
             s
         } else {
             pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?

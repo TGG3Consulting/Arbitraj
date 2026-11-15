@@ -74,6 +74,13 @@ pub struct Snap {
     /// DEX индексатора с пулами, но не подключённые — для одной записи журнала на смену списка.
     pub unconnected: BTreeSet<String>,
     pub error: Option<String>,
+    /// Решение 295: DEX в режиме dex.multi_pair = да на последнем проходе take (ключи строк справочника — с парой,
+    /// multi_pair::dir_key). Пусто — режим нигде не включён: ключи — строка пула, как до решения.
+    pub multi_dex: HashSet<String>,
+    /// Решение 295: монеты многомонетного пула (строка адреса пула → монеты), запомненные его проверкой в режиме.
+    pub pool_tokens: HashMap<String, Vec<Address>>,
+    /// Решение 295: развёрнутые пары многомонетных пулов по монете (multi_pair::expand) — источник справочника.
+    pub multi: HashMap<Address, Vec<IndexedPool>>,
 }
 
 /// Справочник пулов. Дешёво клонируется.
@@ -112,16 +119,18 @@ impl Directory {
         })
     }
 
-    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора, событий создания
-    /// и поиска по фабрикам (решение 121, C3).
+    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора, событий создания,
+    /// поиска по фабрикам (решение 121, C3) и развёртки многомонетных пулов (решение 295).
     /// Возвращает: (монета, по которой спрашивали, пул). Ошибок нет.
     pub fn relevant(&self) -> Vec<(Address, IndexedPool)> {
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut out = Vec::new();
         let events = s.events.iter().map(|(a, l)| (a, l.as_slice()));
         let factory = s.factory.iter().map(|(a, l)| (a, l.as_slice()));
+        // Решение 295: развёрнутые пары многомонетных пулов (multi_pair::expand) — после прочих источников.
+        let multi = s.multi.iter().map(|(a, l)| (a, l.as_slice()));
         let lists = s.tokens.iter().map(|(a, t)| (a, t.pools.as_slice()));
-        for (token, list) in lists.chain(events).chain(factory) {
+        for (token, list) in lists.chain(events).chain(factory).chain(multi) {
             for p in list {
                 if is_relevant(*token, p, &s.quotes) {
                     out.push((*token, p.clone()));

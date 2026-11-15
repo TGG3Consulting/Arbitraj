@@ -8,7 +8,8 @@
 //! Нативный BNB (решение «122 X (нативный BNB в стейблсвапах)», pools/stable_native.rs): монета пула 0xEeee… в паре —
 //! dex.native_wrapped (WBNB), decimals метки = 18 по initialize пула (decimals() у неё не вызывается — кода нет),
 //! индекс метки — StableData.native (шаг исполнителя STABLE_U256_BNB).
-//! Кто вызывает: pools/load.rs (ветки Proto::PancakeStable, Proto::ListaStable).
+//! Кто вызывает: pools/load.rs (ветки Proto::PancakeStable, Proto::ListaStable); части (answers, head, indices, rates,
+//! finish) — pools/load_site.rs (решение 295: одно чтение пула PancakeSwap StableSwap на все его пары).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, tokens.rs, abi_curve.rs, abi_stable_u.rs,
 //! stable_native.rs, math/stableswap_v1.rs.
 //! Настройки: dex.multicall3 [bsc_dex] (у Lista обязателен — время блока); dex.native_wrapped [bsc_dex] (пул с BNB).
@@ -20,7 +21,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolState, StableData, StableGuard};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::stableswap_v1::rate_for_decimals;
@@ -33,6 +34,8 @@ use super::stable_native::{self, NATIVE, NATIVE_DECIMALS};
 /// Состояние пула на блоке. Принимает: окружение, токены, пул, пару, true — Lista (иначе PancakeSwap), блок-тег.
 /// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 36, не задан dex.multicall3 (Lista); BadResponse —
 /// у пула нативная монета 0xEeee…, а dex.native_wrapped не задана или обёртка тоже среди монет пула.
+/// Порядок шагов (решение 295 разделил тело на части, порядок прежний): вызовы → ответы → монеты и балансы → fee() →
+/// индексы пары → decimals монет → сборка.
 pub async fn load(
     ctx: &Ctx,
     tokens: &Tokens,
@@ -42,6 +45,27 @@ pub async fn load(
     tag: &str,
 ) -> GatewayResult<PoolState> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("StableSwap {pool}: {what}"));
+    let (got, tail) = answers(ctx, pool, lista, tag).await?;
+    let (coins, balances) = head(&got, &bad)?;
+    // fee() разбирается до индексов пары — как до разделения (ошибка отката fee() — первой).
+    let tail_ok = got[tail]
+        .as_ref()
+        .map_err(|r| bad(format!("вызов {tail} откатился: {r}")))?;
+    call::decode::<IStableSwapV1::feeCall>(tail_ok)?;
+    let (i0, i1) = indices(ctx, &coins, pair, &bad)?;
+    let rates = rates(ctx, tokens, &coins, &bad).await?;
+    finish(&got, tail, lista, &coins, balances, rates, (i0, i1), &bad)
+}
+
+/// Что делает: вызовы чтения и ответы узла одним try_many. Принимает: окружение, пул, Lista ли, блок-тег.
+/// Возвращает: (ответы, индекс fee() в них). Ошибки: не задан dex.multicall3 (Lista), узел, ответов не столько, сколько
+/// вызовов.
+pub async fn answers(
+    ctx: &Ctx,
+    pool: Address,
+    lista: bool,
+    tag: &str,
+) -> GatewayResult<(Vec<Result<Bytes, String>>, usize)> {
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for k in 0..MAX_COINS {
         let i = U256::from(k);
@@ -83,8 +107,18 @@ pub async fn load(
     }
     let got = call::try_many(ctx, &calls, tag).await?;
     if got.len() != calls.len() {
-        return Err(bad(format!("ответов {} из {}", got.len(), calls.len())));
+        let what = format!("StableSwap {pool}: ответов {} из {}", got.len(), calls.len());
+        return Err(ctx.err(ErrorCode::BadResponse, what));
     }
+    Ok((got, tail))
+}
+
+/// Что делает: монеты и балансы пула по ответам coins(k) / balances(k) (до первого отката coins). Без сети.
+/// Ошибки: ответ не по ABI, откат balances(k).
+pub fn head(
+    got: &[Result<Bytes, String>],
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<(Vec<Address>, Vec<U256>)> {
     let mut coins = Vec::new();
     let mut balances = Vec::new();
     for k in 0..MAX_COINS {
@@ -95,14 +129,18 @@ pub async fn load(
             .map_err(|r| bad(format!("balances({k}) откатился: {r}")))?;
         balances.push(call::decode::<IStableSwapV1::balancesCall>(b)?);
     }
-    let ok = |i: usize| {
-        got[i]
-            .as_ref()
-            .map_err(|r| bad(format!("вызов {i} откатился: {r}")))
-    };
-    let fee = call::decode::<IStableSwapV1::feeCall>(ok(tail)?)?;
-    // Монеты пары: метка нативной монеты — это обёртка (stable_native.rs); индексы — по порядку монет пула.
-    let paired = stable_native::pair_coins(&coins, stable_native::wrapped(ctx)).map_err(bad)?;
+    Ok((coins, balances))
+}
+
+/// Что делает: индексы пары среди монет пула — метка нативной монеты = обёртка (stable_native.rs). Без сети.
+/// Ошибки: метка без dex.native_wrapped или обёртка тоже в пуле; монеты пары нет среди coins.
+pub fn indices(
+    ctx: &Ctx,
+    coins: &[Address],
+    pair: (Address, Address),
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<(u8, u8)> {
+    let paired = stable_native::pair_coins(coins, stable_native::wrapped(ctx)).map_err(bad)?;
     let index = |t: Address| {
         paired
             .iter()
@@ -110,9 +148,19 @@ pub async fn load(
             .map(|p| p as u8)
             .ok_or_else(|| bad(format!("монеты {t} нет среди coins пула")))
     };
-    let (i0, i1) = (index(pair.0)?, index(pair.1)?);
+    Ok((index(pair.0)?, index(pair.1)?))
+}
+
+/// Что делает: множители точности монет (10^(36 − decimals); у метки BNB — 18 знаков). Принимает: окружение, токены,
+/// монеты. Ошибки: узел (decimals), decimals > 36.
+pub async fn rates(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    coins: &[Address],
+    bad: &(dyn Fn(String) -> GatewayError + Sync),
+) -> GatewayResult<Vec<U256>> {
     let mut rates = Vec::with_capacity(coins.len());
-    for c in &coins {
+    for c in coins {
         let d = if *c == NATIVE {
             NATIVE_DECIMALS
         } else {
@@ -120,6 +168,29 @@ pub async fn load(
         };
         rates.push(rate_for_decimals(d).ok_or_else(|| bad(format!("decimals {d} > 36")))?);
     }
+    Ok(rates)
+}
+
+/// Что делает: сборка состояния из ответов (без сети): fee, A (у Lista — рампа по времени блока, проверка цены,
+/// пауза), остановка пула. Принимает: ответы, индекс fee(), Lista ли, монеты, балансы, множители, индексы пары,
+/// конструктор ошибки. Ошибки: откат обязательного вызова, ответ не по ABI, рампа A не считается.
+#[allow(clippy::too_many_arguments)]
+pub fn finish(
+    got: &[Result<Bytes, String>],
+    tail: usize,
+    lista: bool,
+    coins: &[Address],
+    balances: Vec<U256>,
+    rates: Vec<U256>,
+    (i0, i1): (u8, u8),
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<PoolState> {
+    let ok = |i: usize| {
+        got[i]
+            .as_ref()
+            .map_err(|r| bad(format!("вызов {i} откатился: {r}")))
+    };
+    let fee = call::decode::<IStableSwapV1::feeCall>(ok(tail)?)?;
     let base = tail + 1;
     let (amp, amp_precision, guard, halted) = if lista {
         let w = |i: usize| -> GatewayResult<U256> {
@@ -166,7 +237,7 @@ pub async fn load(
         guard,
         halted,
         ng: None,
-        native: stable_native::native_index(&coins),
+        native: stable_native::native_index(coins),
         input_fee: false,
     })))
 }

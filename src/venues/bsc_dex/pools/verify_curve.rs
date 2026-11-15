@@ -21,6 +21,7 @@ use super::super::node::call;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::discover::{Found, sorted};
 use super::load_curve::coins_of;
+use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 
 /// Проверка пачки кандидатов StableSwap (MAX_COINS вызовов coins(k) на кандидата). Возвращает: итог по каждому.
@@ -54,7 +55,12 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         out.push(match answers {
             Err(node) => Verdict::Failed(node),
             Ok(a) => match decide(c, pool, &a) {
-                Ok(f) => Verdict::Taken(Box::new(f)),
+                // Решение 295: в режиме dex.multi_pair — ссылка с парой и монеты пула для развёртки.
+                Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(
+                    ctx,
+                    f,
+                    &coins_of(&a).unwrap_or_default(),
+                ))),
                 Err(w) => Verdict::Rejected(w),
             },
         });

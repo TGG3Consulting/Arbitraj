@@ -137,3 +137,21 @@ async fn paired_directory_unchanged() {
     fill(&c);
     check("directory_2026-10-24", &snapshot(&c).await);
 }
+
+/// Решение 295, (д) с настройкой: dex.multi_pair = да у парной DEX (настройку не читает) и у подключённой многомонетной
+/// DEX (Ellipsis, пулов в записи нет) — режим включён (Snap.multi_dex не пуст), а итог по парным пулам — тот же снимок.
+#[tokio::test]
+async fn paired_directory_unchanged_with_multi_pair() {
+    let c = ctx("dir-mp").await;
+    configure(&c).await;
+    let e = Scope::Dex("ellipsis".into());
+    set(&c, "dex.kind", e.clone(), json!("curve_stableswap")).await;
+    set(&c, "dex.pool_enabled", e.clone(), json!(true)).await;
+    set(&c, "dex.stable_pools", e.clone(), json!([])).await;
+    set(&c, "dex.multi_pair", e, json!(true)).await;
+    set(&c, "dex.multi_pair", Scope::Dex("pancakeswap-v3-bsc".into()), json!(true)).await;
+    fill(&c);
+    let text = snapshot(&c).await;
+    assert_eq!(c.index.with(|s| s.multi_dex.clone()), HashSet::from(["ellipsis".to_string()]));
+    check("directory_2026-10-24", &text);
+}

@@ -29,6 +29,9 @@ use super::families::{self, Family, Proto};
 use super::load_curve::coins_of;
 use super::load_saddle::tokens_of;
 
+/// Хвост заметки прохода без режима dex.multi_pair (решение 295 меняет его у DEX в режиме — scan).
+const ONE_PAIR: &str = "в реестр попадёт одна пара пула (TASKS 289 п. 7)";
+
 /// Итог источника за проход: найденные кандидаты по монете, заметки, вызовов без ответа узла, всего вызовов.
 #[derive(Debug, Default)]
 pub struct Extra {
@@ -164,6 +167,13 @@ pub async fn scan(
     }
     let answers = call::try_chunks(ctx, &calls, "latest", size).await;
     let mut out = sort(&pools, answers, coins, quotes);
+    // Решение 295: у DEX в режиме dex.multi_pair в реестр идут все пары пула — заметка прохода об этом.
+    for f in pools.iter().map(|(f, _)| *f).filter(|f| super::multi_pair::enabled(ctx, f)) {
+        let mine = format!("{}: пул ", f.id);
+        for n in out.notes.iter_mut().filter(|n| n.starts_with(&mine)) {
+            *n = n.replace(ONE_PAIR, "в реестр — все пары пула (dex.multi_pair, решение 295)");
+        }
+    }
     out.notes.splice(0..0, notes);
     out.calls = calls.len();
     out
@@ -197,9 +207,10 @@ pub fn sort(
                 continue;
             }
         };
-        // factory_scan.rs берёт одну запись на адрес пула внутри монеты, реестр — одну на пул (TASKS 289 п. 7).
+        // Без dex.multi_pair: factory_scan.rs берёт одну запись на адрес пула внутри монеты, реестр — одну на пул
+        // (TASKS 289 п. 7); в режиме — запись на пару (решение 295).
         x.notes.push(format!(
-            "{}: пул {pool:#x} из dex.stable_pools — пар построено {}, в реестр попадёт одна пара пула (TASKS 289 п. 7)",
+            "{}: пул {pool:#x} из dex.stable_pools — пар построено {}, {ONE_PAIR}",
             f.id,
             list.len()
         ));

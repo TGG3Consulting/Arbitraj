@@ -31,7 +31,7 @@ use super::batches::chunks;
 use super::created::{self, Watch};
 use super::discover::{self, Scanned};
 use super::listen::{self, Pools};
-use super::{fee_watch, history_v4, index, index_watch, market_mids, mids};
+use super::{fee_watch, history_v4, index, index_watch, market_mids, mids, multi_pair};
 use crate::gateway::urgency::{Urgency as Class, scope};
 
 /// Запускает всё для подписки на рынок.
@@ -84,9 +84,12 @@ pub async fn subscribe(
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     found.extend(via.into_iter().filter(|f| seen.insert(f.reference.clone())));
     let is_mid = |a: &Address| mid_list.iter().any(|m| m.address == *a);
+    // Решение 295: запись многомонетного вида, чья ссылка не совпадает с режимом dex.multi_pair (сменили на лету),
+    // снимается (multi_pair::entry_fits; у прочих видов — всегда да).
     p.reg.retain(|e| {
-        (e.usdt == usdt && all.contains_key(&e.coin))
-            || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt)
+        ((e.usdt == usdt && all.contains_key(&e.coin))
+            || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt))
+            && multi_pair::entry_fits(&p.ctx, e)
     });
     let msg = format!(
         "DEX: пулов из справочника (проверены на узле) с {quote} и промежуточными монетами ({}): {} по {} монетам",

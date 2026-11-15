@@ -25,6 +25,8 @@
 //!   (PairParameterHelper.updateReferences L412-L421) — состояние всех пулов одной пачкой на блок (per_block_lb.rs).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
+//! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
+//! (reload_many::load_group → load_site.rs); Balancer — per_block_balancer.rs (тоже по контракту).
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs.
 //! Настройки: нет (через вызываемые — dex.*).
@@ -37,7 +39,7 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::{per_block_balancer, per_block_lb, reload};
+use super::{per_block_balancer, per_block_lb, reload, reload_many};
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -83,9 +85,19 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
     let usdt = p.tokens.usdt(&p.ctx).ok();
     let mut balancer = Vec::new();
     let mut lb = Vec::new();
+    // Решение 295: пары многомонетного пула (PoolRef::Multi) прочих видов — одно чтение на контракт (sites).
+    let mut sites: Vec<(PoolRef, Vec<(&Found, &str)>)> = Vec::new();
     for x in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
         let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
+            continue;
+        }
+        if matches!(f.reference, PoolRef::Multi { .. }) && f.family.proto != Proto::BalancerV2 {
+            let site = f.reference.site();
+            match sites.iter_mut().find(|(s, _)| *s == site) {
+                Some((_, list)) => list.push((f, t.as_str())),
+                None => sites.push((site, vec![(f, t.as_str())])),
+            }
             continue;
         }
         // Ревью 289: пулы Balancer V2 — все вместе одной пачкой после остальных (per_block_balancer.rs).
@@ -100,6 +112,13 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         }
         if reload::load_one(p, f, t, block).await?.is_err() {
             p.reg.update(&f.reference, |e| e.valid = false);
+        }
+    }
+    for (_, items) in sites {
+        for ((f, _), r) in items.iter().zip(reload_many::load_group(p, &items, block).await?) {
+            if r.is_err() {
+                p.reg.update(&f.reference, |e| e.valid = false);
+            }
         }
     }
     per_block_balancer::on_head(p, &balancer, block).await?;

@@ -54,6 +54,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `graph_cache.rs` | Кэш графа маршрутов: один граф на состояние реестра и блок, одно построение за раз (решения 129, 131); решение 217 — закреплённый набор путей у замороженного реестра (`pinned`) |
 | `abi_check.rs` | ABI проверки пула: поля пула V2/V3, ключ у менеджера Infinity и у PositionManager Uniswap V4 |
 | `index.rs` | Справочник → пулы подписки: сопоставление, проверка, итог по пулу (взят / отклонён / не проверен) |
+| `index_pass.rs` | Решение 295: проход проверки справочника (take_with): режим dex.multi_pair, ключ строки с парой (multi_pair::dir_key), развёртка пар многомонетного пула и вторая проверка; проверка кандидатов — параметром (на узле — verify::verify) |
 | `load_batch.rs` | Чтение состояния многих пулов на одном блоке ступенями через Multicall3 (решение 61): головы (V2 резервы, V3/CL slot0 + liquidity) → слова тиков → данные тиков CL; частями по dex.load_batch; Bin — по одному |
 | `load_batch_v2v3.rs` | Вызовы и разбор ступеней V2/V3 (TickLens) и выполнение ступени: все вызовы всех пулов вместе, ответы — по пулам; у DEX с dex.v3_fee_source = factory_swap_fee к голове V3 — swapFee фабрики (решение 274) |
 | `fee_override.rs` | Решение 274 (SheepDex): комиссию задаёт фабрика по адресу получателя — swapFee(кошелёк/исполнитель, 0) читается вместе с пулом; не 0 — пул не прочитан с причиной |
@@ -148,6 +149,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `stable_list.rs` | Решение 292: пулы StableSwap из dex.stable_pools (Saddle — getToken(k), Curve 2020 — coins(k)) — кандидаты справочника при поиске по фабрикам без индексатора; разбор пачки — sort (ответы пула вычитываются целиком); вызывает factory_scan.rs |
 | `stable_native.rs` | Нативный BNB в пулах PancakeSwap Stable / Lista («122 X (нативный BNB в стейблсвапах)»): метка 0xEeee… ↔ обёртка dex.native_wrapped — монеты пула в пару, индекс метки (StableData.native), пара для реестра фабрики; без сети |
 | `load_saddle.rs` | Состояние пула Saddle (Nerve) на блоке (A_PRECISION, 256 раундов, откат при несходимости, пауза); разбор без сети — calls / parse / build (ревью 292) |
+| `load_site.rs` | Решение 295: состояние всех пар многомонетного пула (PoolRef::Multi) одним чтением на контракт (read загрузчика вида + state каждой пары); группы пачечного чтения по контракту (groups) |
 | `load_woo.rs` | Состояние пары WooFi на блоке: state(base) оракула, paused, wooracle (= dex.oracle), реализация прокси. Своей математики нет |
 | `load_woo_ladder.rs` | Лесенка цен пула WooFi на блоке: query квотера контракта в обе стороны по dex.pmm_ladder_usd (Multicall3, откат — край лесенки) |
 | `load_maverick.rs` | Состояние пула Maverick V2 на блоке (решение 122 F): getState, tickSpacing, fee(true/false), tokenA, масштабы + PoolLens.getTicksAroundActive(dex.tick_radius) одной пачкой Multicall3 по dex.load_batch → PoolState::TickBin |
@@ -175,12 +177,14 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_solidly.rs` | События Solidly (решения 80, 85): Sync(uint256,uint256) → новые резервы в PoolState::Solidly (stable/decimals/комиссия сохраняются) |
 | `listen.rs` | Слушатель пачки пулов |
 | `listen_log.rs` | Один лог: применить, перечитать, отправить ядру |
+| `listen_site.rs` | Решение 295: лог контракта пар многомонетного пула — одна перечитка всех глубоких пар (reload_many::load_group), мелкие — пробуждение по событию ликвидности |
 | `created.rs` | Новые пулы в реальном времени |
 | `market.rs` | Подписка на рынок целиком |
 | `batches.rs` | Раскладка пулов по пачкам подписки: по виду (и менеджеру V4), не больше dex.pools_per_sub |
 | `market_mids.rs` | Пулы «монета — промежуточная» и наблюдатели новых таких пулов (решение 52) |
 | `wrapped.rs` | Решение 270: WETH() роутеров V2 — нативная обёртка только dex.native_wrapped, чужая (fstswap) не «BNB»; `natives` — кому тикер нативной (при dex.intermediate_dex_priced = да — только dex.native_wrapped, 270 дополнение 2); `verdict` — итог «Проверить подключение» |
 | `mids.rs` | Промежуточные монеты: настройки, тикер (биржа по адресу или «BNB» для обёртки dex.native_wrapped; не задана — для WETH() роутера V2; чужой WETH() — без тикера, решение 270; решение 276 — при dex.intermediate_dex_priced = да тикер нативной только у dex.native_wrapped, монета без биржи и любой другой WETH() — с подписью с цепи, `mid_dex.rs`); решение 239 — `pinned`: копия списка на момент снимка котировки |
+| `multi_pair.rs` | Решение 295: режим dex.multi_pair [DEX] — все нужные пары многомонетного пула (Curve 2020, Curve NG, Balancer V2, Saddle, PancakeSwap StableSwap): ссылка `PoolRef::Multi` (adopt), ключ строки справочника с парой (dir_key), смена режима на лету (retune, fits, entry_fits), развёртка недостающих пар по монетам пула (expand) |
 | `mid_dex.rs` | Решение 276: подпись промежуточной без биржи — symbol() с цепи, если он из A–Z, a–z, 0–9, «.», «_», «-», не длиннее dex.intermediate_label_max_len и не совпадает с занятым тикером (BNB, монеты подписки DEX, промежуточные, dex.native_ticker, venue.quote_asset, venue.price_assets бирж; `busy`); иначе — адрес; причина — в журнал (сбой symbol() — Warn); `pick` — чистая |
 | `registry.rs` | Реестр пулов в памяти |
 | `registry_index.rs` | Записи реестра за `Arc` и индексы «пара → пулы», «монета (адрес) → пулы» (решение 129: без прохода всего реестра; решение 211 — ключ адрес, не тикер) |

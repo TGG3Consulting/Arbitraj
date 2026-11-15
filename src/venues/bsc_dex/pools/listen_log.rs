@@ -170,8 +170,8 @@ async fn reread_bins(p: &Pools, r: &PoolRef, ids: &[u32], block: u64) -> Gateway
     Ok(())
 }
 
-/// Текущий номер блока узла (HTTP).
-async fn latest(p: &Pools) -> GatewayResult<u64> {
+/// Текущий номер блока узла (HTTP). Ещё — listen_site.rs (реорг у пар многомонетного пула, решение 295).
+pub async fn latest(p: &Pools) -> GatewayResult<u64> {
     let b: U64 = rpc::call(&p.ctx, "eth_blockNumber", json!([])).await?;
     Ok(b.to())
 }

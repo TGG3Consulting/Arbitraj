@@ -132,7 +132,8 @@ pub fn request(
     // пула (ветка PoolKey::Infinity ниже: настоящий swap с крючком); get_dy крючка — дополнительный (quote/quoter_extra.rs).
     // Curve StableSwap-NG (решение 275): тоже сам пул get_dy(int128, int128, dx) (CurveStableSwapNG.vy L1702).
     if matches!(e.family.proto, Proto::CurveStable | Proto::CurveNg) {
-        let PoolRef::Contract(pool) = e.pool.reference else {
+        // Решение 295: и пара многомонетного пула (PoolRef::Multi) — квотер тот же контракт, индексы — из состояния пары.
+        let Some(pool) = e.pool.reference.own_contract() else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
         };
         let PoolState::StableSwap(d) = &e.pool.state else {
@@ -177,7 +178,8 @@ pub fn request(
         e.family.proto,
         Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable
     ) {
-        let PoolRef::Contract(pool) = e.pool.reference else {
+        // Решение 295: и пара многомонетного пула (PoolRef::Multi; у Lista её не бывает — вид не многомонетный).
+        let Some(pool) = e.pool.reference.own_contract() else {
             return Err(ctx.err(ErrorCode::Internal, "ссылка на пул StableSwap не того вида"));
         };
         let PoolState::StableSwap(d) = &e.pool.state else {

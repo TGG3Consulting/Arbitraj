@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/reload_many.rs
 //! Что делает: чтение многих пулов пачками (решение 61) — приём пачки и повтор чтения: группы пулов, у каждой свежий
 //! блок, внутри — ступени load_batch.rs; прочитанные пулы — в реестр и ядру (как reload::load_one).
-//! Кто вызывает: pools/admit.rs, pools/reload.rs (retry).
+//! Кто вызывает: pools/admit.rs, pools/reload.rs (retry); load_group — ещё per_block.rs, listen_site.rs (решение 295).
 //! От чего зависит: load_batch.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
 //! Настройки: dex.load_batch [bsc_dex]; через load_batch.rs — dex.multicall3, dex.tick_words, dex.tick_lens, dex.state_view.
 
@@ -42,8 +42,10 @@ pub async fn load_many(
     Ok(out)
 }
 
-/// Одна группа на одном блоке: пачечное чтение и отправка ядру. Ошибки: End — ядро закрыло канал.
-async fn load_group(
+/// Одна группа на одном блоке: пачечное чтение и отправка ядру. Решение 295: пары одного многомонетного пула в группе
+/// читаются одним чтением (load_batch.rs → load_site.rs) — так их перечитывают per_block.rs и listen_site.rs.
+/// Принимает: (пул, тикер), блок. Возвращает: по каждому Ok или причину. Ошибки: End — ядро закрыло канал.
+pub async fn load_group(
     p: &Pools,
     items: &[(&Found, &str)],
     block: u64,

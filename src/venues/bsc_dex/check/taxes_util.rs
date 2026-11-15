@@ -72,6 +72,8 @@ pub async fn quote_source(
             let pools: Vec<Address> = reg
                 .refs()
                 .into_iter()
+                // Решение 295: пары многомонетного пула (PoolRef::Multi) источником USDT не берутся — как пары
+                // общего контракта (Member): только пул со своим контрактом и ссылкой Contract.
                 .filter_map(|r| match (&r, reg.get(&r)) {
                     (PoolRef::Contract(a), Some(e)) if e.valid && e.usdt == usdt && deep(&e) => {
                         Some(*a)

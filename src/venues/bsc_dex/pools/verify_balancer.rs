@@ -26,6 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_balancer::{IBalancerFactory as F, IBalancerPool as P, IBalancerVault as V};
 use super::discover::{Found, sorted};
+use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 
 /// Адреса проверки: пул, хранилище, фабрика весовых, фабрика стейблсвапов (может быть не задана).
@@ -73,7 +74,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 match part.into_iter().collect::<Result<Vec<_>, String>>() {
                     Err(node) => Verdict::Failed(node),
                     Ok(a) => match decide(c, p, &a) {
-                        Ok(f) => Verdict::Taken(Box::new(f)),
+                        // Решение 295: в режиме dex.multi_pair — ссылка с парой и токены пула для развёртки.
+                        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens(&a)))),
                         Err(w) => Verdict::Rejected(w),
                     },
                 }
@@ -197,4 +199,15 @@ pub fn decide(c: &Candidate, p: Plan, a: &[Result<Bytes, String>]) -> Result<Fou
         key: None,
         hooks: None,
     })
+}
+
+/// Токены пула по ответу getPoolTokens хранилища (решение 295, развёртка пар). Принимает: ответы второго прохода
+/// (второй — getPoolTokens). Возвращает: токены; ответ не по ABI или нет — пусто. Ошибок нет.
+fn tokens(answers: &[Result<Bytes, String>]) -> Vec<Address> {
+    answers
+        .get(1)
+        .and_then(|a| a.as_ref().ok())
+        .and_then(|b| V::getPoolTokensCall::abi_decode_returns(b).ok())
+        .map(|pt| pt.tokens)
+        .unwrap_or_default()
 }

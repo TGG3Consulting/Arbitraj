@@ -36,6 +36,7 @@ use super::families::Proto;
 use super::load_curve::coins_of;
 use super::load_saddle::tokens_of;
 use super::stable_native;
+use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 use super::verify_woo;
 
@@ -134,7 +135,10 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
             "пул {pool:#x} не подтверждён: нет в реестре фабрики dex.factory и нет в dex.stable_pools DEX {id}"
         )));
     }
-    Ok(Ok(verify_woo::found(c, PoolRef::Contract(pool))))
+    // Решение 295: Saddle и PancakeSwap StableSwap в режиме dex.multi_pair — ссылка с парой и монеты пула (с обёрткой
+    // вместо метки BNB) для развёртки; Lista — не многомонетный вид (adopt не меняет).
+    let found = verify_woo::found(c, PoolRef::Contract(pool));
+    Ok(Ok(multi_pair::adopt(ctx, found, &coins)))
 }
 
 /// Вызовы проверки и число вызовов «монеты пула» в начале. Ошибка — причина отказа (не задана настройка).

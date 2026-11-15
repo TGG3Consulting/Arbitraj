@@ -13,6 +13,12 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde_json::Value;
 
 use arb::gateway::errors::{ErrorCode, GatewayError};
+use arb::settings::scope::Scope;
+use arb::settings::store::Store;
+use arb::storage::db::Db;
+use arb::storage::journal::Journal;
+use arb::storage::raw_log::RawLog;
+use arb::venues::bsc_dex::ctx::Ctx;
 
 /// Ответы пула по порядку вызовов.
 pub type Answers = Vec<Result<Bytes, String>>;
@@ -120,3 +126,34 @@ pub fn pair(dir: &str, a: &str, b: &str) -> (Address, Address) {
 
 /// Три пары 3pool (BUSD, USDC, USDT) в порядке перебора. Ошибок нет.
 pub const PAIRS3: [(&str, &str); 3] = [("BUSD", "USDC"), ("BUSD", "USDT"), ("USDC", "USDT")];
+
+/// Окружение на настоящей SQLite без настроек. Принимает: метку папки. Ошибок нет (паника теста).
+pub async fn ctx(tag: &str) -> Ctx {
+    let d = std::env::temp_dir().join(format!("arb-mp-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let db = Db::open(&d.join("t.sqlite")).unwrap();
+    let (changes, _) = tokio::sync::broadcast::channel(64);
+    let (jtx, _) = tokio::sync::broadcast::channel(64);
+    let journal = Journal::new(db.clone(), jtx);
+    let settings = Store::load(db, changes, journal.clone()).await.unwrap();
+    Ctx {
+        raw: RawLog::start(d.join("raw"), settings.clone()),
+        pace: Default::default(),
+        failover: Default::default(),
+        account: None,
+        index: Default::default(),
+        settings,
+        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+        http: reqwest::Client::new(),
+        journal,
+    }
+}
+
+/// Задаёт настройку DEX `id`. Ошибок нет (паника теста).
+pub async fn set_dex(c: &Ctx, id: &str, name: &str, v: Value) {
+    c.settings
+        .set(name, Scope::Dex(id.into()), Some(v), "тест")
+        .await
+        .unwrap();
+}

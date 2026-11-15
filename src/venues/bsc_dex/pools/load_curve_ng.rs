@@ -62,6 +62,20 @@ pub async fn load(
     pair: (Address, Address),
     tag: &str,
 ) -> GatewayResult<PoolState> {
+    state(ctx, &read(ctx, pool, tag).await?, pair)
+}
+
+/// Решение 295: ответы пула, прочитанные ОДИН раз для всех его пар (pools/load_site.rs): пул, N_COINS, ответы.
+pub struct Raw {
+    pub pool: Address,
+    pub n: usize,
+    pub got: Vec<Result<Bytes, String>>,
+}
+
+/// Что делает: сетевое чтение пула без пары (первая половина load, решение 295): N_COINS и одна пачка вызовов.
+/// Принимает: окружение, пул, блок-тег. Возвращает: Raw. Ошибки: узел, N_COINS вне 2..=8, ответов не столько, сколько
+/// вызовов.
+pub async fn read(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<Raw> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Curve NG {pool}: {what}"));
     let n = n_coins(ctx, pool, tag).await?;
     let mut calls: Vec<Bytes> = vec![
@@ -80,6 +94,15 @@ pub async fn load(
     if got.len() != calls.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), calls.len())));
     }
+    Ok(Raw { pool, n, got })
+}
+
+/// Что делает: состояние пары из прочитанного (вторая половина load, без сети; решение 295 — одно чтение на все
+/// пары). Принимает: окружение (текст ошибки), Raw, пару (token0, token1). Ошибки: откат вызова, ответ не по ABI, нет
+/// монеты пары среди монет пула.
+pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
+    let (pool, n, got) = (raw.pool, raw.n, &raw.got);
+    let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Curve NG {pool}: {what}"));
     let ok = |i: usize| {
         got[i]
             .as_ref()

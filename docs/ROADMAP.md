@@ -29,6 +29,9 @@
 - Задача t114: exec/executor/trade.rs 268 строк (было 259; причина native_block и повторная проверка обратного вызова
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
+- Решение 284 (Nomiswap Stable, t117): файлы сверх ориентира 200 строк, выросшие в ветке — src/venues/bsc_dex/pools/load.rs
+  406 (было 391: ветка Proto::NomiStable), pools/families.rs 532 (было 520), quote/pool_quote.rs 469 (было 456),
+  quote/quoter_calls.rs 399 (было 382), contracts/ArbExecutor.sol 458 (было 452). Новые файлы — в пределах 200.
 - Решение 280 (t112): src/venues/bsc_dex/pools/families.rs 499 строк (было 486), check/probe.rs 261 (было 257),
   check/taxes.rs 224 (было 218) — все были сверх ориентира 200 и до правки; новые файлы quote/v2_pair_{quote,sim,probe}.rs
   уложены в 200. Ревью 280: exec/bundle.rs 361 (было 349; отказ ноги без своего пути), check/taxes.rs 228 (было 224);

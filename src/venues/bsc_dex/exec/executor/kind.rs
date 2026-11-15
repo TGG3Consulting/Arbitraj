@@ -3,7 +3,8 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11; сверяет тест tests/bsc_dex_executor_abi.rs с исходником); раскладка data — комментарий Step в
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
@@ -55,6 +56,9 @@ pub enum Params {
     /// bnb_in — монета i нативная (вход: WBNB.withdraw → exchange{value}); иначе монета j (выход: BNB → WBNB.deposit).
     /// Токены шага — WBNB и встречная монета.
     StableU256Bnb { i: u8, j: u8, bnb_in: bool },
+    /// Пара Nomiswap Stable (решение 284; только исполнитель v2): вход переводом, выход — getAmountOut(tokenIn, вход)
+    /// самой пары, swap как у V2. Данных нет.
+    NomiStable,
 }
 
 impl Params {
@@ -73,6 +77,7 @@ impl Params {
             Params::StableU256 { .. } => 9,
             Params::Saddle { .. } => 10,
             Params::StableU256Bnb { .. } => 11,
+            Params::NomiStable => 12,
         }
     }
 

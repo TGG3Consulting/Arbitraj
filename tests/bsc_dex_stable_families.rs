@@ -126,6 +126,7 @@ async fn stable_steps_take_indices_from_state() {
             i0: 2,
             i1: 1,
             native: None,
+            input_fee: false,
         };
         Entry {
             family: f,

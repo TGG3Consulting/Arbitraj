@@ -73,6 +73,14 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Dodo => Params::Dodo,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,
+        // Решение 284: пара Nomiswap Stable — шаг без данных; остановленная пара (состояние не прочитано) не исполняется.
+        ExecKind::NomiStable => match &e.pool.state {
+            PoolState::StableSwap(d) if !d.halted => Params::NomiStable,
+            _ => {
+                let why = format!("{}: у пары нет состояния Nomiswap Stable", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

@@ -34,6 +34,9 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
                 l.push(Bytes::copy_from_slice(&keccak256(sig.as_bytes())[..4]));
             }
         }
+        // Nomiswap Stable (решение 284): только factory/token0/token1 (как пара V2); комиссия и A читаются с состоянием
+        // (load_nomi.rs), реестр — getPair (registry_call_with).
+        Proto::NomiStable => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
@@ -81,7 +84,8 @@ pub fn registry_call(f: &Family, r: &Read) -> Bytes {
 /// как registry_call. Ошибок нет.
 pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
     match f.proto {
-        Proto::V2 => Bytes::from(
+        // Nomiswap Stable (решение 284): фабрика getPair(a, b) — как UniswapV2Factory (NomiswapStableFactory L1189).
+        Proto::V2 | Proto::NomiStable => Bytes::from(
             IV2Factory::getPairCall {
                 tokenA: r.token0,
                 tokenB: r.token1,

@@ -100,6 +100,8 @@ fn kinds_match_contract_constants() {
                 bnb_in: true,
             },
         ),
+        // Решение 284: пара Nomiswap Stable — только v2.
+        ("NOMI_STABLE", Params::NomiStable),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

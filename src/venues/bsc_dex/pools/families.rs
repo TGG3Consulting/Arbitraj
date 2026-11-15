@@ -131,10 +131,17 @@ pub enum Proto {
     /// подтверждает реестр фабрики (get_coins / is_meta, verify_curve_ng.rs); квотер — сам пул get_dy(int128, …);
     /// исполнение — шаг CURVE исполнителя (exchange(int128, int128, dx, 0) — селектор есть у пула). Вид ядра — StableSwap.
     CurveNg,
+    /// Nomiswap Stable (решение 284; nomiswap_stable): пара NomiswapStablePair (verified Sourcify 56/0x1e40…60f1) — две
+    /// монеты, стейблсвап с A·100 (рампа по времени блока), комиссия swapFee над 100000 СО ВХОДА; фабрика, поля пары,
+    /// события Sync/Swap/Mint/Burn и обмен swap(out0, out1, to, data) — как у V2 (проверка и поиск — путём V2:
+    /// getPair / PairCreated). Квотер — сама пара getAmountOut(address, uint256); математика — math/stableswap_nomi.rs
+    /// (StableData.input_fee). swapFee и A меняются без события — перечитывание каждым блоком. Исполнение — шаг
+    /// NOMI_STABLE исполнителя v2. Вид ядра — StableSwap.
+    NomiStable,
 }
 
 impl Proto {
-    /// Семейство StableSwap (все шаблоны: Curve 2020 Ellipsis, PancakeSwap, Lista, Saddle). Ошибок нет.
+    /// Семейство StableSwap (все шаблоны: Curve 2020 Ellipsis, PancakeSwap, Lista, Saddle, NG, Nomiswap). Ошибок нет.
     pub fn is_stable(self) -> bool {
         matches!(
             self,
@@ -144,6 +151,7 @@ impl Proto {
                 | Proto::SaddleStable
                 | Proto::InfinityStable
                 | Proto::CurveNg
+                | Proto::NomiStable
         )
     }
 
@@ -246,6 +254,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "curve_stableswap" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Curve StableSwap-NG (решение 275): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
+        // Nomiswap Stable (решение 284): в графе и сигналах; исполнение — шаг NOMI_STABLE контракта-исполнителя (только v2).
+        "nomiswap_stable" => (PoolKind::StableSwap, Proto::NomiStable, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -465,6 +475,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул; версии реализации
         // пула, с которыми сверена математика (version() пула — verify_curve_ng.rs).
         Proto::CurveNg => list.extend(["dex.factory", "dex.curve_ng_versions"]),
+        // Nomiswap Stable (решение 284): фабрика — реестр getPair (проверка пары), поиск по getPair и событие PairCreated.
+        Proto::NomiStable => list.push("dex.factory"),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

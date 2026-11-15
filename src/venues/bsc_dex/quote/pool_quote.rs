@@ -23,7 +23,7 @@ use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
     bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
-    stableswap_v1, swap_solidly, v2,
+    stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
@@ -339,6 +339,19 @@ pub fn swap(
             // Шаблон StableSwap-NG (Infinity Stable, решение «122 (Infinity Stable)»): динамическая комиссия и D по
             // формуле NG — выход _exchange_received крючка (math/stableswap_ng.rs).
             let out = match &d.ng {
+                // Решение 284: шаблон «комиссия со входа» (Nomiswap Stable) — выход getAmountOut пары
+                // (math/stableswap_nomi.rs).
+                _ if d.input_fee => stableswap_nomi::amount_out(
+                    i,
+                    j,
+                    amount,
+                    &d.balances,
+                    &d.rates,
+                    d.amp,
+                    d.fee,
+                    d.amp_precision,
+                    d.max_rounds,
+                ),
                 Some(ng) => stableswap_ng::exchange_received(
                     i,
                     j,

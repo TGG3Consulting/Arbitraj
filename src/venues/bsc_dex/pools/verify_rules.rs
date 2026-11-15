@@ -50,6 +50,8 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
             r.v2_fee = Some(U256::from_be_slice(&b[..32]));
         }
         Proto::V2 => {}
+        // Nomiswap Stable (решение 284): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::NomiStable => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
         Proto::KyberElastic => {
             r.fee = Some(

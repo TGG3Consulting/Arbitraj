@@ -239,6 +239,11 @@ pub struct StableData {
     /// (dex.native_wrapped). None — все монеты пула — токены ERC-20.
     #[serde(default)]
     pub native: Option<u8>,
+    /// Шаблон «комиссия со входа» (решение 284): комиссия `fee` (над 10^10) снимается со ВХОДА до расчёта y, y
+    /// округляется вверх, выход = (xp[j] − y) / множитель без вычета 1; две монеты, A·A_PRECISION. false — шаблоны с
+    /// комиссией с выхода (Curve 2020, NG). Математика — в адаптере. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub input_fee: bool,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

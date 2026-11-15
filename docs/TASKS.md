@@ -53,6 +53,17 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 284 (15.11.2026, ветка t117/exec-nomi-metric от t114 3e185eb0) — сделано, ждёт приёмки.** Nomiswap Stable:
+  вид `nomiswap_stable`, шаг исполнителя v2 NOMI_STABLE = 12 (контракт v2 изменён: код в сети 13 498 байт). **Открыто:**
+  1. Значения настроек (id DEX `nomiswap_stable` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/nomiswap_stable/pools
+     отдаёт эти 3 пары, USDT/USDC ≈835 тыс. $): dex.kind = nomiswap_stable,
+     dex.factory = 0xc6b7ee49d386bae4fd501f2d2f8d18828f1f6285, dex.pool_enabled = да.
+  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: новый SHA-256 кода создания ddd35499…349546) —
+     до этого пулы Nomiswap Stable только сигнал («исполнитель v1 не знает шаг исполнителя NOMI_STABLE»).
+  3. Сухая сделка через исполнитель на живой паре — после выкладки (на цепи проверено только eth_call с подменой кода,
+     tests/data/nomiswap_stable_2026-11-15/exec_sim.json).
+  4. Пары тонкие, кроме USDT/USDC (≈629 тыс. USDT / 206 тыс. USDC на блоке 133650877); USDT/BUSD ≈2,6 тыс. / 0,8 тыс.,
+     USDC/BUSD — единицы долларов; BUSD больше не выпускается — польза для арбитража — в основном USDT/USDC.
 - **Задача t114 (15.11.2026, ветка t114/executor-v2-steps от rel/dex-all f16a0fcf) — сделано, ждёт приёмки.**
   (0) проверка слияния: tests/bsc_dex_squadswap_review.rs — пятый аргумент pool_taxes::outcome, своя временная папка у
   каждого теста; (1) dex.v3_swap_callback

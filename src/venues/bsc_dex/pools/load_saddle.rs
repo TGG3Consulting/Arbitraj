@@ -113,5 +113,6 @@ pub async fn load(
         halted: paused,
         ng: None,
         native: None,
+        input_fee: false,
     })))
 }

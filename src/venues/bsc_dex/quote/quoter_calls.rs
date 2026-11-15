@@ -25,6 +25,7 @@ use super::super::node::abi_dex::{
 };
 use super::super::pools::abi_curve::IStableSwapV1;
 use super::super::pools::abi_dodo::IDodoPool;
+use super::super::pools::abi_nomi::INomiStablePair;
 use super::super::pools::abi_saddle::ISaddleSwap;
 use super::super::pools::abi_solidly::ISolidlyPool;
 use super::super::pools::abi_stable_u::IPancakeStable;
@@ -116,6 +117,22 @@ pub fn request(
             i: i as i128,
             j: j as i128,
             dx: amount,
+        }
+        .abi_encode();
+        return Ok((pool, Bytes::from(data)));
+    }
+    // Nomiswap Stable (решение 284): квотер — сама пара getAmountOut(address tokenIn, uint256 amountIn)
+    // (NomiswapStablePair.sol L251, Sourcify 56/0x1e40…60f1; ответ — одно слово, разбор decode — как у StableSwap).
+    if e.family.proto == Proto::NomiStable {
+        let PoolRef::Contract(pool) = e.pool.reference else {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "ссылка на пару Nomiswap Stable не того вида",
+            ));
+        };
+        let data = INomiStablePair::getAmountOutCall {
+            tokenIn: token_in,
+            amountIn: amount,
         }
         .abi_encode();
         return Ok((pool, Bytes::from(data)));

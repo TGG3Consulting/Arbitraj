@@ -7,7 +7,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов, обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — тринадцати: NOMI_STABLE, решение 284), обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186: виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле) |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
@@ -38,8 +38,8 @@
   `out/ArbExecutor.abi`) и контракта не могут разойтись по смыслу параметра. Бот читает слот при сверке и сравнивает с
   `dex.native_wrapped`: не совпало — нативный BNB через этот исполнитель не идёт (причина — в «Проверить подключение» и
   на карточке кошелька), ERC-20 путь не затронут. Конструктор v1 — без аргумента: развёрнутые v1 не затрагиваются.
-- **Размер кода в сети v2: 13 296 байт** (задача t114, + squadV3SwapCallback; было 13 285 после ревью 272, 13 134 до него;
-  предел EIP-170 — 24 576, запас 11 280 байт). Код в сети v1 — 11 117 байт (не меняется).
+- **Размер кода в сети v2: 13 498 байт** (решение 284, + шаг NOMI_STABLE; было 13 296 после задачи t114, 13 285 после
+  ревью 272, 13 134 до него; предел EIP-170 — 24 576, запас 11 078 байт). Код в сети v1 — 11 117 байт (не меняется).
   Печатает `evmtest/run.mjs` второй строкой.
 
 ## Вызов
@@ -70,7 +70,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 так последняя доля по токену берёт всё, без пыли). Выход шага, чей `tokenOut` — токен выхода маршрута, идёт сразу
 кошельку; иначе — исполнителю (вход следующих шагов). В конце все токены маршрута с баланса исполнителя — кошельку.
 
-Прямой вход в пул: если ПЕРВЫЙ шаг — вид «вход переводом в пул» (V2, SOLIDLY, DODO, WOO), его `tokenIn` — вход
+Прямой вход в пул: если ПЕРВЫЙ шаг — вид «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE — только v2), его `tokenIn` — вход
 маршрута, `shareBps` = 10000 и маршрут не цикл (`tokenIn ≠ tokenOut`), — исполнитель вход к себе не забирает, а
 переводит его `transferFrom(владелец → пул, amountIn)` прямо в пул шага. Монета с налогом на перевод платит его один
 раз (как у Universal Router через Permit2). У остальных видов (вход платится в обратном вызове или через approve
@@ -89,6 +89,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | `STABLE_U256` | 9 | PancakeSwap Stable Swap, Lista StableSwap | `approve(pool, сумма)` + `exchange(uint256 i, uint256 j, сумма, 0)` (селектор `0x5b41b908`; payable — BNB не шлём); пул списывает `transferFrom(исполнитель, пул, dx)`, выход — исполнителю (msg.sender), выход должен вырасти; затем разрешение = 0 | pancakeswap/pancake-smart-contracts@cb079908 `projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol` L425-L466 (репозиторий закрыт — форк migo557, 1:1 с verified BscScan пула 0x6D8f…CE5A5, tintinweb/smart-contract-sanctuary-bsc); lista-dao/moolah@eb7d73a `src/dex/StableSwapPool.sol` L478-L519 (`whenNotPaused`, `checkPriceDiff`) |
 | `STABLE_U256_BNB` | 11 | PancakeSwap Stable Swap, Lista — пул, у которого монета пары — нативный BNB (`coins(k)` = BNB_ADDRESS 0xEeee…) | data = `(uint256 i, uint256 j, bool bnbIn)`; токены шага — WBNB и встречная монета. `bnbIn`: `WBNB.withdraw(сумма)` (bnbFrom = WBNB) → `exchange{value: сумма}(i, j, сумма, 0)` без approve; иначе `approve(pool, сумма)` → `exchange(i, j, сумма, 0)` (bnbFrom = пул: пул шлёт BNB `msg.sender.call{gas: bnb_gas, value}`) → разрешение 0 → весь BNB исполнителя → `WBNB.deposit`. Оба: выход (tokenOut) исполнителя должен вырасти | PancakeStableSwapTwoPool.sol L39, L425-L466, L644-L663 (ThreePool — те же строки); StableSwapPool.sol L54, L478-L520, L697-L716; WBNB = WETH9: gnosis/canonical-weth@0dd1ea3e `WETH9.sol` L25-L42 (withdraw — `msg.sender.transfer`, 2300 газа); moolah `IWBNB.sol` L5-L7 |
 | `SADDLE` | 10 | Nerve (форк Saddle) | `approve(pool, сумма)` + `swap(uint8 from, uint8 to, сумма, 0, block.timestamp)`; пул списывает `transferFrom`, вход = сколько дошло (`transferredDx` — налог учтён), выход — исполнителю; затем разрешение = 0 | nerve-finance/contracts@bda7578 `contracts/Swap.sol` L389-L402, `SwapUtils.sol` L800-L850 |
+| `NOMI_STABLE` | 12 | Nomiswap Stable (решение 284; **только v2** — у v1 вида нет, откат «kind») | перевод входа в пару; вход = баланс − резерв; выход = `pair.getAmountOut(tokenIn, вход)` (порядок аргументов обратный SOLIDLY — у пары нет getAmountOut(uint256,address), шаг SOLIDLY по ней откатывается); `pair.swap(out0, out1, to, "")` (подпись V2). Проба на цепи — eth_call с подменой кода v2 (tests/data/nomiswap_stable_2026-11-15/exec_sim.json): получено = getAmountOut пары; EVM — evmtest/nomi.mjs | Sourcify full match 56/0x1e40450f8e21bb68490d7d91ab422888fb3d60f1 `NomiswapStablePair.sol` L132-L176 (swap), L251-L274 (getAmountOut), L276 (getReserves) |
 | `ELASTIC` | 8 | KyberSwap Elastic | `pool.swap(to, +сумма, isToken0, MIN+1 / MAX−1, "")` + `swapCallback` | KyberNetwork/ks-elastic-sc@4ab08c0a `IPoolActions.sol` L88-L94, `ISwapCallback.sol` L16, `Pool.sol` L328-L366 |
 
 Пределы цены — `TickMath.MIN_SQRT_RATIO + 1` / `MAX_SQRT_RATIO − 1` (те же числа у Uniswap/Pancake V3, Slipstream,
@@ -152,6 +153,6 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 не делегировать; если понадобится — сначала новая версия исполнителя.
 
 ## Техдолг
-`ArbExecutor.sol` — 452 строки (задача t114: + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
+`ArbExecutor.sol` — 458 строк (решение 284: + NOMI_STABLE; задача t114 — 452, + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
 «native step», учёт по разности балансов): контракт не дробится, пока развёртывание — один файл; запись в
 docs/ROADMAP.md (Техдолг).

@@ -9,7 +9,7 @@
 //! (решение 81) тоже по одному (load_elastic.rs): обход связного списка тиков — не битмап, под ступени по словам
 //! не ложится.
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) одного контракта — одно чтение на все (load_site.rs).
-//! Кто вызывает: pools/reload.rs (load_many).
+//! Кто вызывает: pools/reload.rs (load_many); one_by_one — ещё reload_many.rs (решение 298).
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
 //! load_v2v3.rs (word_range), ticks.rs, fee_fresh.rs (решение 281: свежая fee() V3 — в Loaded.fee_pips).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex] (без него — пачка JSON-RPC); через вызываемые — dex.tick_words,
@@ -96,23 +96,7 @@ pub async fn states(
         if out[i].is_some() {
             continue;
         }
-        if w.family.kind == PoolKind::Bin
-            || w.family.proto == Proto::KyberElastic
-            || w.family.proto.is_dodo()
-            || w.family.proto == Proto::Algebra
-            || w.family.proto == Proto::AlgebraIntegral
-            || w.family.proto.is_solidly()
-            || w.family.proto == Proto::Slipstream
-            || w.family.proto.is_stable()
-            || w.family.proto == Proto::WooPP
-            || w.family.proto == Proto::Maverick
-            || w.family.proto == Proto::MetricOmm
-            || matches!(w.family.proto, Proto::IziSwap | Proto::BiswapV3)
-            || w.family.proto == Proto::KyberDmm
-            || w.family.proto == Proto::Smardex
-            || w.family.proto == Proto::BalancerV2
-            || w.family.proto == Proto::LbV21
-        {
+        if one_by_one(w.family) {
             let r = load::state(
                 ctx,
                 tokens,
@@ -236,6 +220,28 @@ pub async fn states(
     out.into_iter()
         .map(|o| o.unwrap_or_else(|| Err(miss("состояние пула не собрано (внутренняя ошибка)"))))
         .collect()
+}
+
+/// Что делает: вид читается по одному последовательными eth_call (load::state), а не ступенями Multicall3 — список и
+/// причины см. в states. Ещё — reload_many.rs (решение 298: такому пулу — свой свежий блок).
+/// Принимает: вид пула. Возвращает: true — по одному. Ошибок нет.
+pub fn one_by_one(f: &Family) -> bool {
+    f.kind == PoolKind::Bin
+        || f.proto == Proto::KyberElastic
+        || f.proto.is_dodo()
+        || f.proto == Proto::Algebra
+        || f.proto == Proto::AlgebraIntegral
+        || f.proto.is_solidly()
+        || f.proto == Proto::Slipstream
+        || f.proto.is_stable()
+        || f.proto == Proto::WooPP
+        || f.proto == Proto::Maverick
+        || f.proto == Proto::MetricOmm
+        || matches!(f.proto, Proto::IziSwap | Proto::BiswapV3)
+        || f.proto == Proto::KyberDmm
+        || f.proto == Proto::Smardex
+        || f.proto == Proto::BalancerV2
+        || f.proto == Proto::LbV21
 }
 
 /// Размер части пачки: dex.load_batch (вызовов в одном eth_call Multicall3). Ошибки: NotConfigured (не задана или 0).

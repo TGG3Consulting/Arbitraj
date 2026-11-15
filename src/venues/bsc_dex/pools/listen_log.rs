@@ -2,11 +2,13 @@
 //! Что делает: один лог подписки пулов — найти пул (по адресу или по PoolId у менеджера), отбросить уже учтённое
 //! (позиция (блок, logIndex) не позже последней учтённой), применить событие, перечитать бины или весь пул (реорг,
 //! расхождение), отправить
-//! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается.
+//! пул ядру. Ошибка чтения — пул недостоверен, событие Invalidated, сессия переподключается; кроме StaleData (у узла
+//! уже нет состояния блока события, решение 298, stale_read.rs) — тогда сессия идёт дальше, пул ждёт повтора.
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
-//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
+//! stale_read.rs (решение 298).
 //! Настройки: через вызываемые.
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
@@ -33,8 +35,13 @@ use super::listen::{End, Pools};
 use super::registry::Entry;
 use super::{load, load_bin, load_lb_bins};
 
-/// Один лог: найти пул, применить или перечитать, отправить ядру.
-pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
+/// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
+/// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
+/// события, требующего перечитывания, отмечается (stale_read::defer), повтор прочитает пул не раньше неё.
+/// Возвращает: true — чтение на блоке события опоздало (StaleData, решение 298): пул недостоверен, Invalidated ушло,
+/// вызывающий ставит пул в очередь повтора (stale_read::requeue); false — обработан как раньше.
+/// Ошибки: End — прочая ошибка чтения (пул недостоверен), лог без позиции, ядро закрыло канал.
+pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
     let r = match log.topics().get(1) {
         Some(id)
             if p.reg.contains(&PoolRef::Singleton {
@@ -50,7 +57,7 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
         _ => PoolRef::Contract(log.address()),
     };
     let Some(entry) = p.reg.get(&r) else {
-        return Ok(());
+        return Ok(false);
     };
     let (Some(block), Some(index)) = (log.block_number, log.log_index) else {
         return Err(End::Broken(
@@ -58,7 +65,7 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
         ));
     };
     if !log.removed && entry.has_applied(block, index) {
-        return Ok(());
+        return Ok(false);
     }
     let applied = if log.removed {
         Applied::Refresh("реорг: событие отменено (removed)".into())
@@ -68,7 +75,15 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
             .unwrap_or(Applied::Ignored)
     };
     let res = match applied {
-        Applied::Ignored => return Ok(()),
+        Applied::Ignored => return Ok(false),
+        // Решение 298: пул ждёт повтора — не читаем (повтор на новых блоках прочитает его не раньше этого события).
+        Applied::Refresh(_) if waiting => {
+            if !log.removed {
+                super::stale_read::defer(&p.reg, &r, block, index);
+            }
+            return Ok(false);
+        }
+        Applied::Updated | Applied::Bins(_) if waiting => Ok(()),
         // Цена ушла так, что полоса глубины вышла за прочитанные слова (решение 73) — карта вокруг нового тика сразу,
         // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
         Applied::Updated => match p.reg.get(&r) {
@@ -115,14 +130,19 @@ pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
     if let Err(e) = res {
         p.reg.update(&r, |x| x.valid = false);
         super::invalidated::send(p, entry.coin, entry.ticker.clone());
+        // Решение 298: состояния блока события у узла уже нет — сессию пачки не рвём, пул перечитается на новых блоках.
+        if super::stale_read::is_stale(&e) {
+            super::stale_read::note(p, &entry, block, &e).await;
+            return Ok(true);
+        }
         return Err(End::Broken(e.message));
     }
     match p.reg.get(&r) {
         Some(e) => {
             note_refill(p, &e);
-            emit(p, e.pool)
+            emit(p, e.pool).map(|()| false)
         }
-        None => Ok(()),
+        None => Ok(false),
     }
 }
 

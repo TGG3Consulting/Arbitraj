@@ -10,9 +10,11 @@
 //! настройка exec.executor_address; обратного вызова пула dex.v3_swap_callback нет в коде исполнителя — не настройка,
 //! ревью 281, pools/exec_callback.rs) и проверка «кто меняет» для обмена через исполнитель.
 //! Задача t114: после сверки исполнителя (onchain::ensure пишет версию у кошелька) обратный вызов пула ещё раз
-//! проверяется по сверенной версии (pools/exec_callback.rs) — нет: NoRoute (no_path), а не проба с откатом.
+//! проверяется по сверенной версии (pools/exec_callback.rs) — нет: NoRoute, а не проба с откатом. Задача t122 (п. 1):
+//! версия — прямо из результата onchain::ensure (exec/executor/callback_at.rs missing_at), не из записи у кошелька;
+//! причина отказа — её текст (no_route).
 //! Кто вызывает: check/probe.rs (part, emitter).
-//! От чего зависит: exec/executor/{mod, call, entry, onchain}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
+//! От чего зависит: exec/executor/{mod, call, callback_at, entry, onchain}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
 //! wallet/approve_executor.rs, pools/exec_kind.rs, pools/abi_balancer.rs (событие Swap хранилища Balancer, решение 289),
 //! check/emitter.rs, check/simulate.rs (SimLog).
 //! Настройки: exec.executor_address [bsc_dex]; dex.vault [DEX вида balancer_v2]; через вызываемые — dex.deadline_s,
@@ -34,7 +36,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::chain::Step;
-use super::super::exec::executor::{self, call, entry, onchain};
+use super::super::exec::executor::{self, call, callback_at, entry, onchain};
 use super::super::exec::plan::Order;
 use super::super::pools::abi_balancer::IBalancerVault;
 use super::super::pools::{exec_callback, exec_kind};
@@ -64,10 +66,11 @@ pub async fn part(
         return Err(no_path(ctx, e));
     };
     // Ревью 122, пункт 1: адрес вписан руками — до разрешений код и владелец сверяются с узлом (успех помнится).
-    onchain::ensure(ctx, x, wallet).await?;
-    // Задача t114: после сверки версия у кошелька — по коду в сети; обратного вызова нет в ней — не проба (NoRoute).
-    if exec_callback::missing(ctx, e.family).is_some() {
-        return Err(no_path(ctx, e));
+    let version = onchain::ensure(ctx, x, wallet).await?;
+    // Задача t114: обратного вызова (или вида шага) нет в сверенной версии — не проба (NoRoute). Задача t122 (п. 1):
+    // версия — из результата ensure, причина — её текст.
+    if let Some(why) = callback_at::missing_at(ctx, e.family, version) {
+        return Err(no_route(ctx, e, &why));
     }
     let step = Step {
         entry: e.clone(),
@@ -89,7 +92,7 @@ pub fn no_path(ctx: &Ctx, e: &Entry) -> GatewayError {
     let t = e.family.title;
     // Ревью 281 (В4): обратного вызова пула нет у исполнителя — не настройка и не вердикт по монете (NoRoute).
     if let Some(why) = e.family.executor_kind.and(exec_callback::missing(ctx, e.family)) {
-        return ctx.err(ErrorCode::NoRoute, format!("{t}: без пути исполнения: {why}; налог — по другим пулам монеты"));
+        return no_route(ctx, e, &why);
     }
     match e.family.executor_kind {
         Some(k) => ctx.err(
@@ -109,6 +112,16 @@ pub fn no_path(ctx: &Ctx, e: &Entry) -> GatewayError {
             ),
         ),
     }
+}
+
+/// Причина «у исполнителя нет пути для этого пула» (ревью 281 В4; задача t122 — общий текст для no_path и part).
+/// Принимает: окружение, пул, причину. Возвращает: NoRoute (не настройка и не вердикт по монете). Ошибок иных нет.
+fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
+    let t = e.family.title;
+    ctx.err(
+        ErrorCode::NoRoute,
+        format!("{t}: без пути исполнения: {why}; налог — по другим пулам монеты"),
+    )
 }
 
 /// «Кто меняет» (решение 59) для обмена пробы. Пул со своим путём (Universal Router / роутер форка) — check/emitter.rs

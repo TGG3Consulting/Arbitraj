@@ -218,10 +218,21 @@ impl Heads {
                 .then(|| super::head_age::check(&ctx, self.block_time_ms()));
             age_log.step(&ctx, age.as_ref()).await;
             // Решение 282: номер стоит дольше bsc.node_stall_alert_s — одно событие; вырос — одно (node/head_stall.rs).
-            let fresh = self.fresh(&ctx).err().map(|e| e.message);
+            // Задача t122 (п. 5): порог читается ДО fresh(); не задан — fresh() для уведомления не зовётся.
+            let limit = super::head_stall::Stall::limit(&ctx);
+            let fresh = limit
+                .and_then(|_| self.fresh(&ctx).err())
+                .map(|e| e.message);
             let (latest, bt) = (self.latest(), self.block_time_ms());
             self.stall
-                .step(&ctx, latest, bt, last_err.as_deref(), fresh.as_deref())
+                .step_with(
+                    &ctx,
+                    limit,
+                    latest,
+                    bt,
+                    last_err.as_deref(),
+                    fresh.as_deref(),
+                )
                 .await;
             tokio::time::sleep(every).await;
         }

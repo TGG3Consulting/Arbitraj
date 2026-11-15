@@ -128,10 +128,14 @@ pub async fn build(
     let via_exec = mode == DryMode::Executor || takes;
     if via_exec {
         // Решение 272: нативный BNB — executeNative: в режиме «через исполнитель» (код v2 подставлен) или у
-        // развёрнутого исполнителя v2; у v1 — как раньше, отказ.
-        if is_native && mode != DryMode::Executor && !executor::native_capable(ctx) {
-            let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";
-            return Err(ctx.err(ErrorCode::NoRoute, why));
+        // развёрнутого исполнителя v2; иначе отказ. Задача t122 (п. 4): причина — native_block, как в сделке
+        // (exec/executor/trade.rs, задача t114): не сверен / v1 — «переразверните исполнитель» / обёртка не та.
+        if is_native
+            && mode != DryMode::Executor
+            && let Some(why) = executor::native_block(ctx)
+        {
+            // Ревью t122: тот же текст, что в боевой сделке (executor::native_refusal).
+            return Err(ctx.err(ErrorCode::NoRoute, executor::native_refusal(&why)));
         }
         let nat = match native::wrapped(ctx) {
             Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),

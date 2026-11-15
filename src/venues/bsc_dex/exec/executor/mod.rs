@@ -11,6 +11,7 @@
 
 pub mod abi;
 pub mod call;
+pub mod callback_at;
 pub mod code;
 pub mod deploy;
 pub mod dry;
@@ -88,6 +89,12 @@ pub fn native_block(ctx: &Ctx) -> Option<String> {
             w.name
         )),
     }
+}
+
+/// Ревью t122: текст отказа «нативная монета через исполнитель» — один для сделки (trade.rs) и сухой сделки
+/// (exec/dry_build.rs). Принимает: причину native_block. Возвращает: текст. Ошибок нет.
+pub fn native_refusal(why: &str) -> String {
+    format!("нативная монета через исполнитель не исполняется: {why}")
 }
 
 /// Недостающие разрешения ERC-20 исполнителю для вызова (wallet/approve_executor.rs). Решение 272: продажа нативного

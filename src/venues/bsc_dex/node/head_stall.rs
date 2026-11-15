@@ -9,8 +9,15 @@
 //! второго сообщения о том же простое не будет. Настройка не задана — ничего не отправляется и не пишется (как раньше).
 //! Каждое сообщение пишется и в журнал (вид venue.head_stall) — выключенное событие второй записи не делает
 //! (notify/journal_off.rs OWN_RECORD).
-//! Кто вызывает: node/heads.rs (run — каждый круг опроса, и при сбое опроса тоже); parts.rs (set_out — канал ядру).
-//! От чего зависит: ctx.rs, node/heads.rs (Head), node/head_stall_text.rs (текст), gateway/events.rs
+//! Задача t122 (п. 5): круг опроса читает порог ДО проверки свежести (limit → heads.rs: fresh() — только при заданном
+//! пороге); «сообщено» ставится ПОСЛЕ того, как событие ушло в канал ядру (или встало в очередь отдельной задачей):
+//! канала нет или он закрыт — «сообщено» не меняется, следующий круг молча пробует отправить снова; запись журнала с
+//! текстом и запись «не ушло» — по одному разу на простой / восстановление (ревью t122: флаг State.said). Состояние
+//! под асинхронным замком на всё время отправки — две задачи опроса (старая живёт до удачной пересборки подписки) не
+//! шлют одно и то же дважды.
+//! Кто вызывает: node/heads.rs (run — каждый круг опроса, и при сбое опроса тоже: limit, step_with); parts.rs (set_out
+//! — канал ядру); tests/bsc_dex_head_stall.rs (step).
+//! От чего зависит: ctx.rs, node/heads.rs (Head), node/head_stall_text.rs (текст), node/head_stall_send.rs (отправка), gateway/events.rs
 //! (MarketEvent::Notice), storage/journal.
 //! Настройки: bsc.node_stall_alert_s (вся система, необязательная); включение событий — notify.event.* с областью
 //! события (экран «Уведомления»).
@@ -47,8 +54,8 @@ pub enum Change {
 /// Состояние уведомления. Дешёво клонируется (живёт в Heads).
 #[derive(Clone, Default)]
 pub struct Stall {
-    /// Голова, о простое на которой уже сообщено; None — не сообщалось.
-    told: Arc<Mutex<Option<Head>>>,
+    /// «Сообщено» и «записано в журнал». Асинхронный замок — держится на время журнала и отправки (задача t122, п. 5).
+    state: Arc<tokio::sync::Mutex<State>>,
     /// Канал событий ядру (задаётся при подписке на рынок).
     out: Arc<Mutex<Option<mpsc::Sender<MarketEvent>>>>,
 }
@@ -92,15 +99,29 @@ pub fn decide(
     (None, None)
 }
 
+/// Состояние под замком Stall.
+#[derive(Default)]
+struct State {
+    /// Голова, о простое на которой уже сообщено (событие ушло); None — не сообщалось.
+    told: Option<Head>,
+    /// Ревью t122: (код события, номер блока) перехода, уже записанного в журнал, но ещё не ушедшего ядру — повторная
+    /// попытка отправки журнал не пишет. Сбрасывается, когда событие ушло или переход пропал.
+    said: Option<(&'static str, u64)>,
+}
+
 impl Stall {
     /// Канал событий ядру (parts.rs при подписке на рынок). Принимает: канал. Ошибок нет.
     pub fn set_out(&self, out: mpsc::Sender<MarketEvent>) {
         *self.out.lock().unwrap_or_else(|p| p.into_inner()) = Some(out);
     }
 
-    /// Один круг опроса: переход и, если есть, сообщение в журнал и ядру (Telegram по коду события).
-    /// Принимает: окружение, последнюю голову, время блока (Heads::block_time_ms), последнюю ошибку опроса, ошибку
-    /// проверки свежести. Ошибок не возвращает.
+    /// Порог простоя из настройки (задача t122, п. 5: круг опроса читает его ДО fresh()). Принимает: окружение.
+    /// Возвращает: секунды; None — не задан (или не читается) — функции нет. Ошибок нет.
+    pub fn limit(ctx: &Ctx) -> Option<u64> {
+        ctx.settings.integer(SETTING, At::default()).ok()
+    }
+
+    /// Один круг опроса с порогом из настройки (limit, затем step_with). Принимает и ошибок — как step_with.
     pub async fn step(
         &self,
         ctx: &Ctx,
@@ -109,57 +130,56 @@ impl Stall {
         poll_err: Option<&str>,
         fresh_err: Option<&str>,
     ) {
-        let limit = ctx.settings.integer(SETTING, At::default()).ok();
-        let change = {
-            let mut told = self.told.lock().unwrap_or_else(|p| p.into_inner());
-            let (next, change) = decide(told.as_ref(), latest.as_ref(), limit, Utc::now());
-            *told = next;
-            change
-        };
+        let limit = Self::limit(ctx);
+        self.step_with(ctx, limit, latest, block_time, poll_err, fresh_err)
+            .await;
+    }
+
+    /// Один круг опроса: переход и, если есть, сообщение в журнал и ядру (Telegram по коду события). «Сообщено»
+    /// меняется сразу, если сообщать нечего, и только после ушедшего события, если есть что (задача t122, п. 5).
+    /// Принимает: окружение, порог (Stall::limit), последнюю голову, время блока (Heads::block_time_ms), последнюю
+    /// ошибку опроса, ошибку проверки свежести. Ошибок не возвращает.
+    pub async fn step_with(
+        &self,
+        ctx: &Ctx,
+        limit: Option<u64>,
+        latest: Option<Head>,
+        block_time: Option<(u64, u64)>,
+        poll_err: Option<&str>,
+        fresh_err: Option<&str>,
+    ) {
+        let mut st = self.state.lock().await;
+        let (next, change) = decide(st.told.as_ref(), latest.as_ref(), limit, Utc::now());
         let (Some(c), Some(limit)) = (change, limit) else {
+            (st.told, st.said) = (next, None);
             return;
         };
         let msg = text(&c, limit, block_time, poll_err, fresh_err);
-        let (level, code, head) = match c {
-            Change::Stalled { .. } => (Level::Warn, CODE_STALLED, "Узел BSC: блок не растёт"),
-            Change::Resumed { .. } => (Level::Info, CODE_RESUMED, "Узел BSC: блоки снова идут"),
+        let (level, code, head, n) = match &c {
+            Change::Stalled { head, .. } => (
+                Level::Warn,
+                CODE_STALLED,
+                "Узел BSC: блок не растёт",
+                head.number,
+            ),
+            Change::Resumed { was, .. } => (
+                Level::Info,
+                CODE_RESUMED,
+                "Узел BSC: блоки снова идут",
+                was.number,
+            ),
         };
-        let journal = format!("{head}\n{msg}");
-        ctx.log(level, "venue.head_stall", journal, None).await;
-        self.send(ctx, code, msg).await;
-    }
-
-    /// Событие ядру без молчаливой потери (как node/receipts_notice.rs): канал полон — отдельной задачей; канала нет
-    /// или закрыт — запись в журнал, что событие не ушло. Принимает: окружение, код, текст. Ошибок нет.
-    async fn send(&self, ctx: &Ctx, code: &str, text: String) {
-        use tokio::sync::mpsc::error::TrySendError;
+        // Ревью t122: журнал — один раз на переход; повторная попытка после «не ушло» — молча.
+        let first = st.said != Some((code, n));
+        if first {
+            let journal = format!("{head}\n{msg}");
+            ctx.log(level, "venue.head_stall", journal, None).await;
+        }
         let out = self.out.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        let ev = MarketEvent::Notice {
-            venue: ctx.venue(),
-            code: code.into(),
-            text,
-        };
-        let lost = match out {
-            None => Some("канал событий ядру ещё не открыт"),
-            Some(out) => match out.try_send(ev) {
-                Ok(()) => None,
-                Err(TrySendError::Full(ev)) => {
-                    let (ctx, code) = (ctx.clone(), code.to_string());
-                    tokio::spawn(async move {
-                        if out.send(ev).await.is_err() {
-                            let msg =
-                                format!("Уведомление {code} не ушло — канал событий ядру закрыт");
-                            ctx.log(Level::Warn, "venue.head_stall", msg, None).await;
-                        }
-                    });
-                    None
-                }
-                Err(TrySendError::Closed(_)) => Some("канал событий ядру закрыт"),
-            },
-        };
-        if let Some(why) = lost {
-            let msg = format!("Уведомление {code} не ушло — {why}");
-            ctx.log(Level::Warn, "venue.head_stall", msg, None).await;
+        if super::head_stall_send::send(out, ctx, code, msg, first).await {
+            (st.told, st.said) = (next, None);
+        } else {
+            st.said = Some((code, n));
         }
     }
 }

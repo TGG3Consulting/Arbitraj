@@ -9,6 +9,7 @@
 //!   ничего не меняет.
 //!   Сырой битмап Algebra (шаг 1): THENA Fusion в записях нет — функция окна зависит только от числа тика, берутся тики
 //!   той же записи.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/tick_band_common, tests/depth_common, arb::venues::bsc_dex::pools::{load_v2v3, load_algebra}.
 //! Настройки теста: dex.tick_words = 2 (значение сервера 15.11, как в tests/data/fit_volume — README ветки t125),

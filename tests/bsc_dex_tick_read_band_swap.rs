@@ -8,6 +8,7 @@
 //! - глубина пула в полосе dex.depth_band_pct (2%) и признак «полоса прочитана целиком» одинаковы при ±2, ±6 и ±8
 //!   словах — полоса чтения не влияет на глубину и, значит, на фильтр dex.min_pool_liquidity_usd (pools/depth_book.rs
 //!   считает его по этой глубине, quote/depth_band.rs band_depth → band_units).
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/tick_band_common, tests/depth_common, arb::venues::bsc_dex::{pools::load_v2v3, quote}.
 //! Настройки теста: dex.tick_words = 2 (значение сервера 15.11), dex.depth_band_pct = 2, dex.tick_read_band_pct = 10.
@@ -59,10 +60,12 @@ async fn swap_goes_past_old_edge_and_depth_is_unchanged() {
         } else {
             "покупка AAVE"
         };
-        // Сумма, на которой ±2 слова кончаются: удваиваем от 1 единицы токена (10^18) до первого complete = false.
-        let mut amount = U256::from(10u64).pow(U256::from(18));
+        // Сумма, на которой ±2 слова кончаются: удваиваем от 1 минимальной единицы до первого complete = false. Пул почти
+        // пустой (liquidity ≈ 7,96·10¹⁵, установленных тиков в ±8 словах нет, balanceOf USDT = 0 на блоке записи) —
+        // 1 целый токен (10¹⁸) за ±2 слова уже не помещается, поэтому старт с 1, а не с 10¹⁸.
+        let mut amount = U256::from(1u64);
         let (mut fits, mut past) = (None, None);
-        for _ in 0..80 {
+        for _ in 0..128 {
             let o = pool_quote::swap(&c, &old, token_in, true, amount).unwrap();
             if o.complete {
                 fits = Some((amount, o.amount_out));

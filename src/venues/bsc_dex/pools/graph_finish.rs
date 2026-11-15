@@ -158,7 +158,7 @@ pub(super) async fn finish(
         return Ok(());
     }
     // Четвёртое ревью п. 1: снимок на текущих настройках опубликован — ступень Б кончилась (отсчёты и признаки сброшены).
-    bg.end_stage_b();
+    bg.end_stage_b_for(o.generation);
     graph_alarm::full_ok(bg);
     st.verify_s = ctx.int("dex.graph_verify_s").ok();
     st.next_verify = st

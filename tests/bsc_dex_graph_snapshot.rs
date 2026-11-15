@@ -383,6 +383,8 @@ async fn stage_b_ends_on_publish_without_quotes() {
     );
     assert!(!bg.stage_b_overdue() && !bg.stage_b_restarted());
     let v = graph_stats::view(&p.ctx, &p.registry);
+    // Пятое ревью (а): котировка действительно застала ступень Б — иначе тест ничего не проверял бы.
+    assert!(v.stale_settings_hour >= 1, "котировка застала ступень Б");
     assert_eq!(v.restarts, 0, "перезапуска нет");
     assert!(v.stage_b_now_ms.is_none() && !v.stage_b_overdue);
 }

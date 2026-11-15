@@ -92,6 +92,21 @@ impl Bg {
         self.clear_stage_b_marks();
     }
 
+    /// То же, что end_stage_b, только для текущего поколения: проверка и сброс — под замком признака догоняющей сборки,
+    /// который держит смена поколения (пятое ревью б). Ошибок нет.
+    pub fn end_stage_b_for(&self, generation: u64) {
+        let mut c = self
+            .catching_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        if !self.is_current(generation) {
+            return;
+        }
+        *c = None;
+        *self.stale_since.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        self.clear_stage_b_marks();
+    }
+
     /// Четвёртое ревью (а): переход режима «выкл → вкл» (true ровно один раз на переход). Ошибок нет.
     pub fn mode_switched_on(&self, on: bool) -> bool {
         !self.mode_on.swap(on, Ordering::AcqRel) && on

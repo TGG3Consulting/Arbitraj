@@ -111,18 +111,22 @@ impl Pools {
         Some(out)
     }
 
-    /// Оставляет записи, для которых `keep` — да; индексы снятых записей правятся. Ошибок нет.
-    pub fn retain(&mut self, keep: impl Fn(&Entry) -> bool) {
+    /// Оставляет записи, для которых `keep` — да; индексы снятых записей правятся. Возвращает: ссылки снятых записей
+    /// (решение 308 — отметка изменений для фонового графа). Ошибок нет.
+    pub fn retain(&mut self, keep: impl Fn(&Entry) -> bool) -> Vec<PoolRef> {
         let gone: Vec<(PoolRef, Arc<Entry>)> = self
             .map
             .iter()
             .filter(|(_, e)| !keep(e))
             .map(|(r, e)| (r.clone(), e.clone()))
             .collect();
+        let mut refs = Vec::with_capacity(gone.len());
         for (r, e) in gone {
             self.unindex(&r, &e);
             self.map.remove(&r);
+            refs.push(r);
         }
+        refs
     }
 
     /// Ставит пул в индексы. Ошибок нет.

@@ -28,7 +28,12 @@ impl Book {
     /// (счётчик calcs, признак `recomputed`), неудача запоминается, удача снимает прежнюю неудачу.
     /// Принимает: запись, ключ (поколение, полоса), признак «считалось заново». Возвращает: кривую.
     /// Ошибки (текст): полоса вне 0–100%, расчёт по состоянию пула невозможен (depth_band.rs band_units).
-    pub(super) fn units(&self, e: &Entry, key: UnitsKey, recomputed: &mut bool) -> Result<Units, String> {
+    pub(super) fn units(
+        &self,
+        e: &Entry,
+        key: UnitsKey,
+        recomputed: &mut bool,
+    ) -> Result<Units, String> {
         let r = &e.pool.reference;
         if let Some(why) = self.fails.get(r, &key) {
             return Err(why);

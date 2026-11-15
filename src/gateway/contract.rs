@@ -456,6 +456,27 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Решение 308: состояние фонового владельца графа маршрутов DEX (снимок, отставание, круг, полная пересборка со
+    /// сверкой, предохранитель, перезапуски) — экран «Площадки». Ошибки: NotApplicable — не DEX.
+    async fn dex_graph_state(&self) -> GatewayResult<crate::core::types::DexGraphState> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет графа маршрутов",
+        ))
+    }
+
+    /// Решение 308: полная пересборка графа маршрутов со сверкой по команде человека. Принимает: кто (для журнала).
+    /// Ошибки: NotApplicable — не DEX; NotConfigured — режим выключен; VenueNotConnected — нет подписки на рынок.
+    async fn dex_graph_rebuild(&self, by: &str) -> GatewayResult<()> {
+        let _ = by;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет графа маршрутов",
+        ))
+    }
+
     /// Пулы DEX глазами адаптера (решение 73): глубина по направлениям в полосе цены, спит ли пул, сверка с квотером,
     /// tickSpacing — для экрана «Монеты». Ошибки: NotApplicable — не DEX.
     async fn pool_depths(&self) -> GatewayResult<Vec<crate::core::types::PoolDepth>> {

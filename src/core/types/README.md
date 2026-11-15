@@ -25,6 +25,7 @@
 | `executor.rs` | ExecutorDeployQuote, ExecutorDeployed — развёртывание своего исполнителя ArbExecutor (решение 122, часть X): оценка перед подтверждением и итог |
 | `pool_depth.rs` | PoolDepth, CrossCheck — пул DEX глазами адаптера для экрана «Монеты»: глубина по направлениям, вердикт, спит ли, независимая сверка расчёта (перечисление), подробности площадки строками (решение 73) |
 | `dex_cycle.rs` | DexCycle, DexCycleHop — сигнал замкнутого цикла DEX ↔ DEX для «Живого экрана» (решение 85, фаза сигнала): базовая монета, вложено/получено, валовая и чистая прибыль, газ/чаевые (BNB) и их перевод в базовую, маршрут по хопам, флаг исполнимости и причина, блок |
+| `dex_graph.rs` | Решение 308: DexGraphState, DexGraphRound, DexGraphFull — состояние фонового владельца графа маршрутов DEX для экрана «Площадки» (снимок, отставание, круг, полная пересборка со сверкой, расхождения, предохранитель за час/сутки, перезапуски) |
 | `cycle_trade.rs` | CycleQuote, CycleTradeRequest, CycleTradeResult — исполнение цикла DEX ↔ DEX (решение 124): расчёт на вход для подбора размера, запрос сделки (вход и граница minOut ядра), итог (своп «базовая → базовая» и курсы для учёта) |
 | `control.rs` | CoinGasStats, StuckAlert, ManualHolding, ManualAction, ManualCommand, CommandSource |
 | `window.rs` | TapView, TradeTick, TapDecoded — разобранный кадр окна (стакан или сделки, время площадки) для страницы окна (решение 125); outcome — «plus»/«minus»/«zero» |

@@ -68,8 +68,9 @@
 Файлы (новые, каждый — одна задача, ≤ ~200 строк): pools/graph_changes.rs (изменённые пулы, отставание),
 pools/graph_eval.rs (оценка одного пула — общая для накопительной и полной сборки), pools/graph_work.rs (накопительная
 карта: пулы, пары, топ-K, зависимости по курсу; сборка Graph), pools/graph_diff.rs (сравнение карт множествами),
-pools/graph_snap.rs (снимок и его публикация, счётчики для экрана), pools/graph_owner.rs (владелец: пробуждения,
-круги), pools/graph_full.rs (полная пересборка, сверка, самоисцеление), pools/graph_guard.rs (сторож: паника,
+pools/graph_snap.rs (снимок и его публикация), pools/graph_stats.rs (счётчики экрана), pools/graph_owner.rs (владелец:
+цикл пробуждений), pools/graph_step.rs (одно пробуждение, накопительный круг и публикация), pools/graph_round.rs (CPU-часть
+круга), pools/graph_full.rs (сборка с нуля и доводка/сверка), pools/graph_finish.rs (окончание полной сборки, самоисцеление), pools/graph_guard.rs (сторож: паника,
 зависание, перезапуск), pools/graph_read.rs (читатель: снимок, ступени, предохранитель), pools/graph_alarm.rs
 (журнал без спама и события Telegram). Изменяются: registry.rs (метка изменений), graph.rs (рёбра за Arc внутри),
 graph_cache.rs (переключатель режима, общий «basis»), route_cache.rs и cycle_scan.rs (гидратация), graph_route.rs

@@ -5,6 +5,7 @@
 //!   CAKE–WBNB пересчитана (курс другой), но кривая из памяти: счётчик расчётов кривой (Book::calcs) не вырос;
 //! - глубина после этого равна глубине, посчитанной заново без памяти (новый реестр с теми же записями) — бит в бит;
 //! - картина графа «пара → (пул, глубина)» равна расчёту заново.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::{graph, registry, depth_book}, tests/route_common.
 
@@ -33,7 +34,10 @@ async fn rate_change_keeps_curve() {
     let reg = &p.registry;
     graph::build(&p.ctx, reg, &p.tokens, 18).unwrap();
     let cake_wbnb = PoolRef::Contract(CAKE_WBNB_PCS);
-    let before = reg.depth().last(&cake_wbnb).expect("глубина CAKE–WBNB посчитана");
+    let before = reg
+        .depth()
+        .last(&cake_wbnb)
+        .expect("глубина CAKE–WBNB посчитана");
     // Курс WBNB: пул WBNB–USDT — состояние записи следующего дня.
     let r = PoolRef::Contract(WBNB_USDT_V2);
     let mut n = reg.get(&r).unwrap();
@@ -42,7 +46,11 @@ async fn rate_change_keeps_curve() {
     let calcs = reg.depth().calcs();
     let e = reg.get(&cake_wbnb).unwrap();
     let d = reg.depth().depth(&p.ctx, reg, &p.tokens, &e, 18).unwrap();
-    assert_eq!(reg.depth().calcs(), calcs, "кривая CAKE–WBNB из памяти — сменился только курс");
+    assert_eq!(
+        reg.depth().calcs(),
+        calcs,
+        "кривая CAKE–WBNB из памяти — сменился только курс"
+    );
     assert_ne!(d.band, before.band, "курс другой — глубина в USDT другая");
     // Без памяти — то же число.
     let f = fresh_copy(&p);

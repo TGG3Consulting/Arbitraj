@@ -30,6 +30,7 @@ use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::super::exec::{native, native_exec};
+use super::super::pools::graph_read;
 use super::graph_split::{self, Cand};
 use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
@@ -188,6 +189,10 @@ pub async fn merge(
 pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError) {
     // Решение 301 (в): брошенный расчёт (срок вышел) — его итог никто не читает, запись журнала не нужна.
     if abandon::is_set() {
+        return;
+    }
+    // Решение 308: «снимка графа нет / отстал» журналирует без спама pools/graph_alarm.rs — не на каждую котировку.
+    if e.message.starts_with(graph_read::QUIET) {
         return;
     }
     q.ctx

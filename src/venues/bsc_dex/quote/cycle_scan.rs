@@ -16,6 +16,8 @@
 //! Первичный фильтр BingX ↔ DEX (монета на бирже / выводится по BSC) к DEX ↔ DEX НЕ применяется (решение 85): нужна
 //! только ликвидность пулов и совпадение адресов токенов в пулах (это обеспечивает граф и реестр).
 //! Сам поиск сделок не запускает: сигналы забирает ядро (core/cycle_watch.rs, решение 124) и интерфейс.
+//! Решение 308: при dex.graph_background = да граф — снимок фонового владельца, пути циклов гидратируются
+//! (route_cache::hydrate — состояние пулов свежее из реестра, а не копии из графа).
 //! Кто вызывает: venue.rs (dex_cycles — ядро и «Живой экран»); тесты — напрямую quote/cycle.rs.
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
 //! send/mod.rs (чаевые канала), exec/cycle_gate.rs (форма исполнения), num.rs.
@@ -33,11 +35,11 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::exec::cycle_gate::{self, Form};
 use super::super::num;
-use super::super::pools::graph;
 use super::super::pools::registry::Registry;
+use super::super::pools::{graph, graph_read};
 use super::Quoting;
 use super::cycle::{self, CycleSignal};
-use super::{cycle_opt, rate, route_paths};
+use super::{cycle_opt, rate, route_cache, route_paths};
 
 /// Включено ли направление DEX ↔ DEX (решение 85). Не задано — выключено (как dry.enabled). Ошибок нет.
 pub fn enabled(ctx: &Ctx) -> bool {
@@ -102,6 +104,12 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let mut out = Vec::new();
     for base in bases {
         let cycles = route_paths::enumerate_cycles(&g, base, max_len, max_cycles);
+        // Решение 308: в режиме «граф без ожидания» состояние пулов цикла — свежее из реестра (снимок — топология).
+        let cycles = if graph_read::active(ctx, &q.reg) {
+            route_cache::hydrate(&q.reg, &cycles)
+        } else {
+            cycles
+        };
         let base_ticker = tickers
             .get(&base)
             .cloned()

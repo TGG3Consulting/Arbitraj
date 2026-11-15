@@ -13,7 +13,8 @@
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/dex.svelte.js, components/CheckConnection.svelte,
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
     ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js),
-    CexCexDeny.svelte (решение 249: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»).
+    CexCexDeny.svelte (решение 249: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»),
+    DexGraph.svelte (решение 308: у DEX — блок «Граф маршрутов (фон)» и кнопка «Пересобрать граф»).
   Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies). Решение 283: у биржи не показываются
     настройки с venue_for «Dex» в схеме (их значение читает только площадка DEX); у DEX — всё, как раньше.
 -->
@@ -28,6 +29,7 @@
   import DexFamilies from '../components/DexFamilies.svelte';
   import VenueChannels from '../components/VenueChannels.svelte';
   import PoolDirectory from '../components/PoolDirectory.svelte';
+  import DexGraph from '../components/DexGraph.svelte';
   import ErrorText from '../components/ErrorText.svelte';
   import DayVenues from '../components/DayVenues.svelte';
   import Delistings from '../components/Delistings.svelte';
@@ -99,6 +101,7 @@
     <ErrorText text={d?.directoryError} />
     {#if d?.families}<DexFamilies families={d.families} dir={d.directory} />{/if}
     <ErrorText text={d?.familiesError} />
+    {#if d?.families}<DexGraph venue={id} />{/if}
     {#if d?.channels}<VenueChannels venue={id} channels={d.channels} />{/if}
     <ErrorText text={d?.channelsError} />
     {#if d?.families}

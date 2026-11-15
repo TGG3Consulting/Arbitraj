@@ -13,7 +13,7 @@
 //! промежуточную (нога из 2+ хопов) шаг, у пула которого налог монеты на стороне шага > 0, — только пул V2
 //! (quote/pool_tax.rs v2_only, как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
 //! Решение 122, часть X: маршрут через свой исполнитель — правила в quote/graph_executor.rs (без адреса — как раньше).
-//! Кто вызывает: quote/graph_route.rs (executable), exec/trade.rs (graph_form).
+//! Кто вызывает: quote/graph_route.rs (executable), quote/graph_fit.rs (executable, exec_router — решение 300), exec/trade.rs (graph_form).
 //! От чего зависит: quote/graph_executor.rs, quote/pool_tax.rs (v2_only), pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
@@ -103,8 +103,9 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
 }
 
 /// Исполняющий роутер хопа: у форка — его собственный classic V2 Router (dex.router), иначе — Universal Router своей
-/// фабрики (dex.universal_router). Так collectable и exec/bundle.rs считают роутеры одинаково. Ошибки: NotConfigured.
-fn exec_router(ctx: &Ctx, f: &Family) -> GatewayResult<Address> {
+/// фабрики (dex.universal_router). Так collectable и exec/bundle.rs считают роутеры одинаково (решение 300 — и
+/// подмножество S3 quote/graph_fit.rs). Ошибки: NotConfigured.
+pub(super) fn exec_router(ctx: &Ctx, f: &Family) -> GatewayResult<Address> {
     if f.fork {
         ctx.dex_addr("dex.router", f.id)
     } else {

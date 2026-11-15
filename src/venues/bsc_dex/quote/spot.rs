@@ -74,6 +74,12 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         // (D18 → единицы токенов — множители масштаба). Оценка размера пробы (решение 73.19), не сверяемая величина.
         PoolState::TickBin(d) => super::tick_bin_spot::coins_for(d, coin0, amount),
         // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
+        // Пара с фиктивными резервами (SmarDex, решение 288): цена для сизинга пробы — отношение фиктивных резервов (по ним
+        // формула x·y=k первого шага; оценка размера пробы, решение 73.19, не сверяемая величина).
+        PoolState::Fictive(d) => {
+            let (fc, fu) = if coin0 { (d.fictive0, d.fictive1) } else { (d.fictive1, d.fictive0) };
+            (!fu.is_zero()).then(|| mul_div(amount, fc, fu)).flatten()
+        }
         PoolState::AmpV2(d) => {
             let (vc, vu) = if coin0 {
                 (d.v_reserve0, d.v_reserve1)

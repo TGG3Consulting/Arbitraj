@@ -55,6 +55,8 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
         Proto::NomiStable => {}
         // KyberSwap Classic DMM (решение 287): полей сверх factory/token0/token1 нет (verify_calls.rs).
         Proto::KyberDmm => {}
+        // SmarDex (решение 288): полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::Smardex => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
         Proto::KyberElastic => {
             r.fee = Some(

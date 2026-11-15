@@ -51,6 +51,9 @@ contract ArbExecutor {
     // Решение 287 (только v2): пул KyberSwap Classic DMM — вход переводом в пул, выход по getTradeInfo() пула (виртуальные
     // резервы и комиссия этого блока, формула DMMLibrary.getAmountOut), swap как у V2 (та же подпись).
     uint8 internal constant KYBER_DMM = 15;
+    // Решение 288 (только v2): пара SmarDex — swap(to, zeroForOne по порядку адресов, +сумма, «») + smardexSwapCallback →
+    // _pay (пара платит выход до обратного вызова, затем проверяет, что вход пришёл). data пусто.
+    uint8 internal constant SMARDEX = 16;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -293,6 +296,9 @@ contract ArbExecutor {
             require(amount <= type(uint128).max, "int");
             if (zeroIn) IIziPool(s.pool).swapX2Y(to, uint128(amount), type(int24).min, "");
             else IIziPool(s.pool).swapY2X(to, uint128(amount), type(int24).max, "");
+        } else if (k == SMARDEX) {
+            _expect(s.pool, s.tokenIn, amount);
+            ISmardexPair(s.pool).swap(to, zeroIn, _int(amount), "");
         } else if (k == ELASTIC) {
             _expect(s.pool, s.tokenIn, amount);
             IElasticPool(s.pool).swap(to, _int(amount), zeroIn, zeroIn ? MIN_PRICE : MAX_PRICE, "");
@@ -435,6 +441,8 @@ contract ArbExecutor {
     // Решение 286: iZiSwap / Biswap V3 — x / y: сколько исполнитель платит (IiZiSwapCallback.sol L19-L39); тот же _pay.
     function swapX2YCallback(uint256 x, uint256, bytes calldata) external { _pay(_int(x)); }
     function swapY2XCallback(uint256, uint256 y, bytes calldata) external { _pay(_int(y)); }
+    // Решение 288: SmarDex — дельты пары (ISmardexSwapCallback.sol L21), положительная — долг; тот же _pay.
+    function smardexSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
 

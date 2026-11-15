@@ -60,6 +60,9 @@ pub enum ExecKind {
     /// KyberSwap Classic DMM (решение 287): перевод входа в пул + выход по getTradeInfo() пула (виртуальные резервы и
     /// комиссия блока, формула DMMLibrary.getAmountOut) в контракте + `pool.swap` (подпись V2). Только исполнитель v2.
     KyberDmm,
+    /// SmarDex (решение 288): `pair.swap(to, zeroForOne по порядку адресов, +вход, «»)` + обратный вызов
+    /// `smardexSwapCallback` → _pay. Только исполнитель v2.
+    Smardex,
 }
 
 impl ExecKind {
@@ -80,6 +83,7 @@ impl ExecKind {
             ExecKind::Metric => "METRIC",
             ExecKind::Izi => "IZI",
             ExecKind::KyberDmm => "KYBER_DMM",
+            ExecKind::Smardex => "SMARDEX",
         }
     }
 }
@@ -118,6 +122,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "iziswap" | "biswap_v3" => ExecKind::Izi,
         // Решение 287: swap пула — подпись V2 без белого списка (DMMPool.sol L162-L210: проверок вызывающего нет); шаг 15, только v2.
         "kyber_dmm" => ExecKind::KyberDmm,
+        // Решение 288: swap пары без белого списка (SmardexPair.sol L155-L319: только lock и «to» не токен пары); шаг 16, v2.
+        "smardex" => ExecKind::Smardex,
         _ => return None,
     })
 }

@@ -1,0 +1,636 @@
+# Выдержки официального исходника SmarDex (пары фабрики BSC 0xA8EF6FEa013034E62E2C4A9Ec1CDb059fE23Af33) —
+# github.com/SmarDex-Ecosystem/dex-smart-contracts@74d0444 deployments/bsc/solcInputs/1a3e5ed825e3a0bcaf935206aae1ecd3.json
+# (= Sourcify match фабрики; тексты совпали без \r; см. README.md)
+
+=== contracts/core/libraries/SmardexLibrary.sol L11-L25
+  11      /// @notice base of the FEES
+  12      uint256 public constant FEES_BASE = 1_000_000;
+  13  
+  14      /// @notice max fees of feesLP and feesPool sum, 10% FEES_BASE
+  15      uint256 public constant FEES_MAX = FEES_BASE / 10;
+  16  
+  17      /// @notice precision for approxEq, not in percent but in APPROX_PRECISION_BASE
+  18      uint256 public constant APPROX_PRECISION = 1;
+  19  
+  20      /// @notice base of the APPROX_PRECISION
+  21      uint256 public constant APPROX_PRECISION_BASE = 1_000_000;
+  22  
+  23      /// @notice number of seconds to reset priceAverage
+  24      uint256 private constant MAX_BLOCK_DIFF_SECONDS = 300;
+  25  
+
+=== contracts/core/libraries/SmardexLibrary.sol L45-L63
+  45      function approxEq(uint256 _x, uint256 _y) internal pure returns (bool) {
+  46          if (_x > _y) {
+  47              return _x < (_y + (_y * APPROX_PRECISION) / APPROX_PRECISION_BASE);
+  48          } else {
+  49              return _y < (_x + (_x * APPROX_PRECISION) / APPROX_PRECISION_BASE);
+  50          }
+  51      }
+  52  
+  53      /**
+  54       * @notice check if 2 ratio are approximately equal: _xNum _/ xDen ~= _yNum / _yDen
+  55       * @param _xNum numerator of the first ratio to compare
+  56       * @param _xDen denominator of the first ratio to compare
+  57       * @param _yNum numerator of the second ratio to compare
+  58       * @param _yDen denominator of the second ratio to compare
+  59       * @return true if ratio are approximately equal, false otherwise
+  60       */
+  61      function ratioApproxEq(uint256 _xNum, uint256 _xDen, uint256 _yNum, uint256 _yDen) internal pure returns (bool) {
+  62          return approxEq(_xNum * _yDen, _xDen * _yNum);
+  63      }
+
+=== contracts/core/libraries/SmardexLibrary.sol L76-L140
+  76      function getUpdatedPriceAverage(
+  77          uint256 _fictiveReserveIn,
+  78          uint256 _fictiveReserveOut,
+  79          uint256 _priceAverageLastTimestamp,
+  80          uint256 _priceAverageIn,
+  81          uint256 _priceAverageOut,
+  82          uint256 _currentTimestamp
+  83      ) internal pure returns (uint256 newPriceAverageIn_, uint256 newPriceAverageOut_) {
+  84          require(_currentTimestamp >= _priceAverageLastTimestamp, "SmardexPair: INVALID_TIMESTAMP");
+  85  
+  86          // very first time
+  87          if (_priceAverageLastTimestamp == 0) {
+  88              newPriceAverageIn_ = _fictiveReserveIn;
+  89              newPriceAverageOut_ = _fictiveReserveOut;
+  90          }
+  91          // another tx has been done in the same timestamp
+  92          else if (_priceAverageLastTimestamp == _currentTimestamp) {
+  93              newPriceAverageIn_ = _priceAverageIn;
+  94              newPriceAverageOut_ = _priceAverageOut;
+  95          }
+  96          // need to compute new linear-average price
+  97          else {
+  98              // compute new price:
+  99              uint256 _timeDiff = Math.min(_currentTimestamp - _priceAverageLastTimestamp, MAX_BLOCK_DIFF_SECONDS);
+ 100  
+ 101              newPriceAverageIn_ = _fictiveReserveIn;
+ 102              newPriceAverageOut_ =
+ 103                  (((MAX_BLOCK_DIFF_SECONDS - _timeDiff) * _priceAverageOut * newPriceAverageIn_) /
+ 104                      _priceAverageIn +
+ 105                      _timeDiff *
+ 106                      _fictiveReserveOut) /
+ 107                  MAX_BLOCK_DIFF_SECONDS;
+ 108          }
+ 109      }
+ 110  
+ 111      /**
+ 112       * @notice compute the firstTradeAmountIn so that the price reach the price Average
+ 113       * @param _param contain all params required from struct GetAmountParameters
+ 114       * @return firstAmountIn_ the first amount of in-token
+ 115       *
+ 116       * @dev if the trade is going in the direction that the price will never reach the priceAverage, or if _amountIn
+ 117       * is not big enough to reach the priceAverage or if the price is already equal to the priceAverage, then
+ 118       * firstAmountIn_ will be set to _amountIn
+ 119       */
+ 120      function computeFirstTradeQtyIn(GetAmountParameters memory _param) internal pure returns (uint256 firstAmountIn_) {
+ 121          // default value
+ 122          firstAmountIn_ = _param.amount;
+ 123  
+ 124          // if trade is in the good direction
+ 125          if (_param.fictiveReserveOut * _param.priceAverageIn > _param.fictiveReserveIn * _param.priceAverageOut) {
+ 126              // pre-compute all operands
+ 127              uint256 _toSub = _param.fictiveReserveIn * ((FEES_BASE * 2) - (_param.feesPool * 2) - _param.feesLP);
+ 128              uint256 _toDiv = (FEES_BASE - _param.feesPool) * 2;
+ 129              uint256 _inSqrt = (((_param.fictiveReserveIn * _param.fictiveReserveOut) * 4) / _param.priceAverageOut) *
+ 130                  _param.priceAverageIn *
+ 131                  ((FEES_BASE - _param.feesPool - _param.feesLP) * (FEES_BASE - _param.feesPool)) +
+ 132                  ((_param.fictiveReserveIn * _param.fictiveReserveIn) * (_param.feesLP * _param.feesLP));
+ 133  
+ 134              // reverse sqrt check to only compute sqrt if really needed
+ 135              uint256 _inSqrtCompare = _toSub + _param.amount * _toDiv;
+ 136              if (_inSqrt < _inSqrtCompare * _inSqrtCompare) {
+ 137                  firstAmountIn_ = (Math.sqrt(_inSqrt) - _toSub) / _toDiv;
+ 138              }
+ 139          }
+ 140      }
+
+=== contracts/core/libraries/SmardexLibrary.sol L187-L245
+ 187      function computeFictiveReserves(
+ 188          uint256 _reserveIn,
+ 189          uint256 _reserveOut,
+ 190          uint256 _fictiveReserveIn,
+ 191          uint256 _fictiveReserveOut
+ 192      ) internal pure returns (uint256 newFictiveReserveIn_, uint256 newFictiveReserveOut_) {
+ 193          if (_reserveOut * _fictiveReserveIn < _reserveIn * _fictiveReserveOut) {
+ 194              uint256 _temp = (((_reserveOut * _reserveOut) / _fictiveReserveOut) * _fictiveReserveIn) / _reserveIn;
+ 195              newFictiveReserveIn_ =
+ 196                  (_temp * _fictiveReserveIn) /
+ 197                  _fictiveReserveOut +
+ 198                  (_reserveOut * _fictiveReserveIn) /
+ 199                  _fictiveReserveOut;
+ 200              newFictiveReserveOut_ = _reserveOut + _temp;
+ 201          } else {
+ 202              newFictiveReserveIn_ = (_fictiveReserveIn * _reserveOut) / _fictiveReserveOut + _reserveIn;
+ 203              newFictiveReserveOut_ = (_reserveIn * _fictiveReserveOut) / _fictiveReserveIn + _reserveOut;
+ 204          }
+ 205  
+ 206          // div all values by 4
+ 207          newFictiveReserveIn_ /= 4;
+ 208          newFictiveReserveOut_ /= 4;
+ 209      }
+ 210  
+ 211      /**
+ 212       * @notice apply k const rule using fictive reserve, when the amountIn is specified
+ 213       * @param _param contain all params required from struct GetAmountParameters
+ 214       * @return amountOut_ qty of token that leaves in the contract
+ 215       * @return newReserveIn_ new reserve of the in-token after the transaction
+ 216       * @return newReserveOut_ new reserve of the out-token after the transaction
+ 217       * @return newFictiveReserveIn_ new fictive reserve of the in-token after the transaction
+ 218       * @return newFictiveReserveOut_ new fictive reserve of the out-token after the transaction
+ 219       */
+ 220      function applyKConstRuleOut(
+ 221          GetAmountParameters memory _param
+ 222      )
+ 223          internal
+ 224          pure
+ 225          returns (
+ 226              uint256 amountOut_,
+ 227              uint256 newReserveIn_,
+ 228              uint256 newReserveOut_,
+ 229              uint256 newFictiveReserveIn_,
+ 230              uint256 newFictiveReserveOut_
+ 231          )
+ 232      {
+ 233          // k const rule
+ 234          uint256 _amountInWithFee = _param.amount * (FEES_BASE - _param.feesLP - _param.feesPool);
+ 235          uint256 _numerator = _amountInWithFee * _param.fictiveReserveOut;
+ 236          uint256 _denominator = _param.fictiveReserveIn * FEES_BASE + _amountInWithFee;
+ 237          amountOut_ = _numerator / _denominator;
+ 238  
+ 239          // update new reserves and add lp-fees to pools
+ 240          uint256 _amountInWithFeeLp = (_amountInWithFee + (_param.amount * _param.feesLP)) / FEES_BASE;
+ 241          newReserveIn_ = _param.reserveIn + _amountInWithFeeLp;
+ 242          newFictiveReserveIn_ = _param.fictiveReserveIn + _amountInWithFeeLp;
+ 243          newReserveOut_ = _param.reserveOut - amountOut_;
+ 244          newFictiveReserveOut_ = _param.fictiveReserveOut - amountOut_;
+ 245      }
+
+=== contracts/core/libraries/SmardexLibrary.sol L292-L406
+ 292      function getAmountOut(
+ 293          GetAmountParameters memory _param
+ 294      )
+ 295          internal
+ 296          pure
+ 297          returns (
+ 298              uint256 amountOut_,
+ 299              uint256 newReserveIn_,
+ 300              uint256 newReserveOut_,
+ 301              uint256 newFictiveReserveIn_,
+ 302              uint256 newFictiveReserveOut_
+ 303          )
+ 304      {
+ 305          require(_param.amount != 0, "SmarDexLibrary: INSUFFICIENT_INPUT_AMOUNT");
+ 306          require(
+ 307              _param.reserveIn != 0 &&
+ 308                  _param.reserveOut != 0 &&
+ 309                  _param.fictiveReserveIn != 0 &&
+ 310                  _param.fictiveReserveOut != 0,
+ 311              "SmarDexLibrary: INSUFFICIENT_LIQUIDITY"
+ 312          );
+ 313  
+ 314          uint256 _amountInWithFees = (_param.amount * (FEES_BASE - _param.feesPool - _param.feesLP)) / FEES_BASE;
+ 315          uint256 _firstAmountIn = computeFirstTradeQtyIn(
+ 316              SmardexLibrary.GetAmountParameters({
+ 317                  amount: _amountInWithFees,
+ 318                  reserveIn: _param.reserveIn,
+ 319                  reserveOut: _param.reserveOut,
+ 320                  fictiveReserveIn: _param.fictiveReserveIn,
+ 321                  fictiveReserveOut: _param.fictiveReserveOut,
+ 322                  priceAverageIn: _param.priceAverageIn,
+ 323                  priceAverageOut: _param.priceAverageOut,
+ 324                  feesLP: _param.feesLP,
+ 325                  feesPool: _param.feesPool
+ 326              })
+ 327          );
+ 328  
+ 329          // if there is 2 trade: 1st trade mustn't re-compute fictive reserves, 2nd should
+ 330          if (
+ 331              _firstAmountIn == _amountInWithFees &&
+ 332              ratioApproxEq(
+ 333                  _param.fictiveReserveIn,
+ 334                  _param.fictiveReserveOut,
+ 335                  _param.priceAverageIn,
+ 336                  _param.priceAverageOut
+ 337              )
+ 338          ) {
+ 339              (_param.fictiveReserveIn, _param.fictiveReserveOut) = computeFictiveReserves(
+ 340                  _param.reserveIn,
+ 341                  _param.reserveOut,
+ 342                  _param.fictiveReserveIn,
+ 343                  _param.fictiveReserveOut
+ 344              );
+ 345          }
+ 346  
+ 347          // avoid stack too deep
+ 348          {
+ 349              uint256 _firstAmountInNoFees = (_firstAmountIn * FEES_BASE) / (FEES_BASE - _param.feesPool - _param.feesLP);
+ 350              (
+ 351                  amountOut_,
+ 352                  newReserveIn_,
+ 353                  newReserveOut_,
+ 354                  newFictiveReserveIn_,
+ 355                  newFictiveReserveOut_
+ 356              ) = applyKConstRuleOut(
+ 357                  SmardexLibrary.GetAmountParameters({
+ 358                      amount: _firstAmountInNoFees,
+ 359                      reserveIn: _param.reserveIn,
+ 360                      reserveOut: _param.reserveOut,
+ 361                      fictiveReserveIn: _param.fictiveReserveIn,
+ 362                      fictiveReserveOut: _param.fictiveReserveOut,
+ 363                      priceAverageIn: _param.priceAverageIn,
+ 364                      priceAverageOut: _param.priceAverageOut,
+ 365                      feesLP: _param.feesLP,
+ 366                      feesPool: _param.feesPool
+ 367                  })
+ 368              );
+ 369  
+ 370              // update amountIn in case there is a second trade
+ 371              _param.amount -= _firstAmountInNoFees;
+ 372          }
+ 373  
+ 374          // if we need a second trade
+ 375          if (_firstAmountIn < _amountInWithFees) {
+ 376              // in the second trade ALWAYS recompute fictive reserves
+ 377              (newFictiveReserveIn_, newFictiveReserveOut_) = computeFictiveReserves(
+ 378                  newReserveIn_,
+ 379                  newReserveOut_,
+ 380                  newFictiveReserveIn_,
+ 381                  newFictiveReserveOut_
+ 382              );
+ 383  
+ 384              uint256 _secondAmountOutNoFees;
+ 385              (
+ 386                  _secondAmountOutNoFees,
+ 387                  newReserveIn_,
+ 388                  newReserveOut_,
+ 389                  newFictiveReserveIn_,
+ 390                  newFictiveReserveOut_
+ 391              ) = applyKConstRuleOut(
+ 392                  SmardexLibrary.GetAmountParameters({
+ 393                      amount: _param.amount,
+ 394                      reserveIn: newReserveIn_,
+ 395                      reserveOut: newReserveOut_,
+ 396                      fictiveReserveIn: newFictiveReserveIn_,
+ 397                      fictiveReserveOut: newFictiveReserveOut_,
+ 398                      priceAverageIn: _param.priceAverageIn,
+ 399                      priceAverageOut: _param.priceAverageOut,
+ 400                      feesLP: _param.feesLP,
+ 401                      feesPool: _param.feesPool
+ 402                  })
+ 403              );
+ 404              amountOut_ += _secondAmountOutNoFees;
+ 405          }
+ 406      }
+
+=== contracts/core/SmardexPair.sol L34-L38
+  34  
+  35      // smardex pair fees numerators, denominator is 1_000_000
+  36      uint128 internal feesLP = 1; // numerator of fees sent to lp, min 1,
+  37      uint128 internal feesPool; // numerator of fees sent to pool
+  38  
+
+=== contracts/core/SmardexPair.sol L72-L112
+  72      function initialize(address _token0, address _token1, uint128 _feesLP, uint128 _feesPool) external override {
+  73          require(msg.sender == factory, "SmarDex: FORBIDDEN"); // sufficient check
+  74          token0 = _token0;
+  75          token1 = _token1;
+  76          _setFees(_feesLP, _feesPool);
+  77      }
+  78  
+  79      ///@inheritdoc ISmardexPair
+  80      function getReserves() external view override returns (uint256 reserve0_, uint256 reserve1_) {
+  81          reserve0_ = IERC20(token0).balanceOf(address(this)) - feeToAmount0;
+  82          reserve1_ = IERC20(token1).balanceOf(address(this)) - feeToAmount1;
+  83      }
+  84  
+  85      ///@inheritdoc ISmardexPair
+  86      function getFictiveReserves() external view override returns (uint256 fictiveReserve0_, uint256 fictiveReserve1_) {
+  87          fictiveReserve0_ = fictiveReserve0;
+  88          fictiveReserve1_ = fictiveReserve1;
+  89      }
+  90  
+  91      ///@inheritdoc ISmardexPair
+  92      function getFeeToAmounts() external view override returns (uint256 fees0_, uint256 fees1_) {
+  93          fees0_ = feeToAmount0;
+  94          fees1_ = feeToAmount1;
+  95      }
+  96  
+  97      ///@inheritdoc ISmardexPair
+  98      function getPairFees() external view override returns (uint128 feesLP_, uint128 feesPool_) {
+  99          feesLP_ = feesLP;
+ 100          feesPool_ = feesPool;
+ 101      }
+ 102  
+ 103      ///@inheritdoc ISmardexPair
+ 104      function getPriceAverage()
+ 105          external
+ 106          view
+ 107          returns (uint256 priceAverage0_, uint256 priceAverage1_, uint256 priceAverageLastTimestamp_)
+ 108      {
+ 109          priceAverage0_ = priceAverage0;
+ 110          priceAverage1_ = priceAverage1;
+ 111          priceAverageLastTimestamp_ = priceAverageLastTimestamp;
+ 112      }
+
+=== contracts/core/SmardexPair.sol L155-L319
+ 155      function swap(
+ 156          address _to,
+ 157          bool _zeroForOne,
+ 158          int256 _amountSpecified,
+ 159          bytes calldata _data
+ 160      ) external override lock returns (int256 amount0_, int256 amount1_) {
+ 161          require(_amountSpecified != 0, "SmarDex: ZERO_AMOUNT");
+ 162  
+ 163          ISmardexPair.SwapParams memory _params = SwapParams({
+ 164              amountCalculated: 0,
+ 165              fictiveReserveIn: 0,
+ 166              fictiveReserveOut: 0,
+ 167              priceAverageIn: 0,
+ 168              priceAverageOut: 0,
+ 169              token0: token0,
+ 170              token1: token1,
+ 171              balanceIn: 0,
+ 172              balanceOut: 0
+ 173          });
+ 174  
+ 175          require(_to != _params.token0 && _to != _params.token1, "SmarDex: INVALID_TO");
+ 176          (
+ 177              _params.balanceIn,
+ 178              _params.balanceOut,
+ 179              _params.fictiveReserveIn,
+ 180              _params.fictiveReserveOut,
+ 181              _params.priceAverageIn,
+ 182              _params.priceAverageOut
+ 183          ) = _zeroForOne
+ 184              ? (
+ 185                  IERC20(_params.token0).balanceOf(address(this)) - feeToAmount0,
+ 186                  IERC20(_params.token1).balanceOf(address(this)) - feeToAmount1,
+ 187                  fictiveReserve0,
+ 188                  fictiveReserve1,
+ 189                  priceAverage0,
+ 190                  priceAverage1
+ 191              )
+ 192              : (
+ 193                  IERC20(_params.token1).balanceOf(address(this)) - feeToAmount1,
+ 194                  IERC20(_params.token0).balanceOf(address(this)) - feeToAmount0,
+ 195                  fictiveReserve1,
+ 196                  fictiveReserve0,
+ 197                  priceAverage1,
+ 198                  priceAverage0
+ 199              );
+ 200  
+ 201          // compute new price average
+ 202          (_params.priceAverageIn, _params.priceAverageOut) = SmardexLibrary.getUpdatedPriceAverage(
+ 203              _params.fictiveReserveIn,
+ 204              _params.fictiveReserveOut,
+ 205              priceAverageLastTimestamp,
+ 206              _params.priceAverageIn,
+ 207              _params.priceAverageOut,
+ 208              block.timestamp
+ 209          );
+ 210  
+ 211          // SSTORE new price average
+ 212          (priceAverage0, priceAverage1, priceAverageLastTimestamp) = _zeroForOne
+ 213              ? (_params.priceAverageIn.toUint128(), _params.priceAverageOut.toUint128(), uint40(block.timestamp))
+ 214              : (_params.priceAverageOut.toUint128(), _params.priceAverageIn.toUint128(), uint40(block.timestamp));
+ 215  
+ 216          uint128 _feesPool = feesPool; // caching feesPool to save gas
+ 217  
+ 218          if (_amountSpecified > 0) {
+ 219              uint256 _temp;
+ 220              (_temp, , , _params.fictiveReserveIn, _params.fictiveReserveOut) = SmardexLibrary.getAmountOut(
+ 221                  SmardexLibrary.GetAmountParameters({
+ 222                      amount: _amountSpecified.toUint256(),
+ 223                      reserveIn: _params.balanceIn,
+ 224                      reserveOut: _params.balanceOut,
+ 225                      fictiveReserveIn: _params.fictiveReserveIn,
+ 226                      fictiveReserveOut: _params.fictiveReserveOut,
+ 227                      priceAverageIn: _params.priceAverageIn,
+ 228                      priceAverageOut: _params.priceAverageOut,
+ 229                      feesLP: feesLP,
+ 230                      feesPool: _feesPool
+ 231                  })
+ 232              );
+ 233              _params.amountCalculated = _temp.toInt256();
+ 234          } else {
+ 235              uint256 _temp;
+ 236              (_temp, , , _params.fictiveReserveIn, _params.fictiveReserveOut) = SmardexLibrary.getAmountIn(
+ 237                  SmardexLibrary.GetAmountParameters({
+ 238                      amount: (-_amountSpecified).toUint256(),
+ 239                      reserveIn: _params.balanceIn,
+ 240                      reserveOut: _params.balanceOut,
+ 241                      fictiveReserveIn: _params.fictiveReserveIn,
+ 242                      fictiveReserveOut: _params.fictiveReserveOut,
+ 243                      priceAverageIn: _params.priceAverageIn,
+ 244                      priceAverageOut: _params.priceAverageOut,
+ 245                      feesLP: feesLP,
+ 246                      feesPool: _feesPool
+ 247                  })
+ 248              );
+ 249              _params.amountCalculated = _temp.toInt256();
+ 250          }
+ 251  
+ 252          (amount0_, amount1_) = _zeroForOne
+ 253              ? (
+ 254                  _amountSpecified > 0
+ 255                      ? (_amountSpecified, -_params.amountCalculated)
+ 256                      : (_params.amountCalculated, _amountSpecified)
+ 257              )
+ 258              : (
+ 259                  _amountSpecified > 0
+ 260                      ? (-_params.amountCalculated, _amountSpecified)
+ 261                      : (_amountSpecified, _params.amountCalculated)
+ 262              );
+ 263  
+ 264          if (_zeroForOne) {
+ 265              if (amount1_ < 0) {
+ 266                  TransferHelper.safeTransfer(_params.token1, _to, uint256(-amount1_));
+ 267              }
+ 268              ISmardexSwapCallback(msg.sender).smardexSwapCallback(amount0_, amount1_, _data);
+ 269              uint256 _balanceInBefore = _params.balanceIn;
+ 270              _params.balanceIn = IERC20(token0).balanceOf(address(this));
+ 271              require(
+ 272                  _balanceInBefore + feeToAmount0 + (amount0_).toUint256() <= _params.balanceIn,
+ 273                  "SmarDex: INSUFFICIENT_TOKEN0_INPUT_AMOUNT"
+ 274              );
+ 275              _params.balanceOut = IERC20(token1).balanceOf(address(this));
+ 276          } else {
+ 277              if (amount0_ < 0) {
+ 278                  TransferHelper.safeTransfer(_params.token0, _to, uint256(-amount0_));
+ 279              }
+ 280              ISmardexSwapCallback(msg.sender).smardexSwapCallback(amount0_, amount1_, _data);
+ 281              uint256 _balanceInBefore = _params.balanceIn;
+ 282              _params.balanceIn = IERC20(token1).balanceOf(address(this));
+ 283              require(
+ 284                  _balanceInBefore + feeToAmount1 + (amount1_).toUint256() <= _params.balanceIn,
+ 285                  "SmarDex: INSUFFICIENT_TOKEN1_INPUT_AMOUNT"
+ 286              );
+ 287              _params.balanceOut = IERC20(token0).balanceOf(address(this));
+ 288          }
+ 289  
+ 290          // update feeTopart
+ 291          bool _feeOn = ISmardexOwnableFactory(factory).feeTo() != address(0);
+ 292          if (_zeroForOne) {
+ 293              if (_feeOn) {
+ 294                  feeToAmount0 += ((uint256(amount0_) * _feesPool) / SmardexLibrary.FEES_BASE).toUint104();
+ 295              }
+ 296              _update(
+ 297                  _params.balanceIn,
+ 298                  _params.balanceOut,
+ 299                  _params.fictiveReserveIn,
+ 300                  _params.fictiveReserveOut,
+ 301                  _params.priceAverageIn,
+ 302                  _params.priceAverageOut
+ 303              );
+ 304          } else {
+ 305              if (_feeOn) {
+ 306                  feeToAmount1 += ((uint256(amount1_) * _feesPool) / SmardexLibrary.FEES_BASE).toUint104();
+ 307              }
+ 308              _update(
+ 309                  _params.balanceOut,
+ 310                  _params.balanceIn,
+ 311                  _params.fictiveReserveOut,
+ 312                  _params.fictiveReserveIn,
+ 313                  _params.priceAverageOut,
+ 314                  _params.priceAverageIn
+ 315              );
+ 316          }
+ 317  
+ 318          emit Swap(msg.sender, _to, amount0_, amount1_);
+ 319      }
+
+=== contracts/core/SmardexPair.sol L322-L374
+ 322      function setFees(uint128 _feesLP, uint128 _feesPool) external onlyFactoryOwner {
+ 323          _setFees(_feesLP, _feesPool);
+ 324      }
+ 325  
+ 326      /**
+ 327       * @notice set feesLP and feesPool of the pair
+ 328       * @notice sum of new feesLp and feesPool must be <= 100_000
+ 329       * @param _feesLP new numerator of fees sent to LP, must be >= 1
+ 330       * @param _feesPool new numerator of fees sent to Pool, could be = 0
+ 331       */
+ 332      function _setFees(uint128 _feesLP, uint128 _feesPool) internal {
+ 333          require(_feesLP != 0, "SmarDex: ZERO_FEES_LP");
+ 334          require(_feesLP + _feesPool <= SmardexLibrary.FEES_MAX, "SmarDex: FEES_MAX");
+ 335          feesLP = _feesLP;
+ 336          feesPool = _feesPool;
+ 337  
+ 338          emit FeesChanged(_feesLP, _feesPool);
+ 339      }
+ 340  
+ 341      /**
+ 342       * @notice update fictive reserves and emit the Sync event
+ 343       * @param _balance0 the new balance of token0
+ 344       * @param _balance1 the new balance of token1
+ 345       * @param _fictiveReserve0 the new fictive reserves of token0
+ 346       * @param _fictiveReserve1 the new fictive reserves of token1
+ 347       * @param _priceAverage0 the new priceAverage of token0
+ 348       * @param _priceAverage1 the new priceAverage of token1
+ 349       */
+ 350      function _update(
+ 351          uint256 _balance0,
+ 352          uint256 _balance1,
+ 353          uint256 _fictiveReserve0,
+ 354          uint256 _fictiveReserve1,
+ 355          uint256 _priceAverage0,
+ 356          uint256 _priceAverage1
+ 357      ) private {
+ 358          require(_fictiveReserve0 != 0 && _fictiveReserve1 != 0, "SmarDex: FICTIVE_RESERVES_TOO_LOW");
+ 359          require(_fictiveReserve0 <= type(uint128).max && _fictiveReserve1 <= type(uint128).max, "SmarDex: OVERFLOW");
+ 360          fictiveReserve0 = uint128(_fictiveReserve0);
+ 361          fictiveReserve1 = uint128(_fictiveReserve1);
+ 362  
+ 363          emit Sync(
+ 364              _balance0 - feeToAmount0,
+ 365              _balance1 - feeToAmount1,
+ 366              _fictiveReserve0,
+ 367              _fictiveReserve1,
+ 368              _priceAverage0,
+ 369              _priceAverage1
+ 370          );
+ 371      }
+ 372  
+ 373      /**
+ 374       * @notice transfers feeToAmount of tokens 0 and 1 to feeTo, and reset feeToAmounts
+
+=== contracts/core/interfaces/ISmardexSwapCallback.sol L13-L23
+  13      }
+  14  
+  15      /**
+  16       * @notice callback data for swap
+  17       * @param _amount0Delta amount of token0 for the swap (negative is incoming, positive is required to pay to pair)
+  18       * @param _amount1Delta amount of token1 for the swap (negative is incoming, positive is required to pay to pair)
+  19       * @param _data for Router path and payer for the swap (see router for details)
+  20       */
+  21      function smardexSwapCallback(int256 _amount0Delta, int256 _amount1Delta, bytes calldata _data) external;
+  22  }
+
+=== contracts/core/interfaces/ISmardexPair.sol L41-L87
+  41      event Mint(address indexed sender, address indexed to, uint256 amount0, uint256 amount1);
+  42  
+  43      /**
+  44       * @notice emitted at each burn
+  45       * @param sender address calling the burn function (usually the Router contract)
+  46       * @param to address that receives the tokens
+  47       * @param amount0 amount of token0 to be withdrawn
+  48       * @param amount1 amount of token1 to be withdrawn
+  49       * @dev the amount of LP-token sent can be caught using the transfer event of the pair
+  50       */
+  51      event Burn(address indexed sender, address indexed to, uint256 amount0, uint256 amount1);
+  52  
+  53      /**
+  54       * @notice emitted at each swap
+  55       * @param sender address calling the swap function (usually the Router contract)
+  56       * @param to address that receives the out-tokens
+  57       * @param amount0 amount of token0 to be swapped
+  58       * @param amount1 amount of token1 to be swapped
+  59       * @dev one of the 2 amount is always negative, the other one is always positive. The positive one is the one that
+  60       * the user send to the contract, the negative one is the one that the contract send to the user.
+  61       */
+  62      event Swap(address indexed sender, address indexed to, int256 amount0, int256 amount1);
+  63  
+  64      /**
+  65       * @notice emitted each time the fictive reserves are changed (mint, burn, swap)
+  66       * @param reserve0 the new reserve of token0
+  67       * @param reserve1 the new reserve of token1
+  68       * @param fictiveReserve0 the new fictive reserve of token0
+  69       * @param fictiveReserve1 the new fictive reserve of token1
+  70       * @param priceAverage0 the new priceAverage of token0
+  71       * @param priceAverage1 the new priceAverage of token1
+  72       */
+  73      event Sync(
+  74          uint256 reserve0,
+  75          uint256 reserve1,
+  76          uint256 fictiveReserve0,
+  77          uint256 fictiveReserve1,
+  78          uint256 priceAverage0,
+  79          uint256 priceAverage1
+  80      );
+  81  
+  82      /**
+  83       * @notice emitted each time feesLP and feesPool are changed
+  84       * @param feesLP new feesLP
+  85       * @param feesPool new feesPool
+  86       */
+  87      event FeesChanged(uint256 indexed feesLP, uint256 indexed feesPool);
+
+=== contracts/core/SmardexFactory.sol L35-L49
+  35      function createPair(address _tokenA, address _tokenB) external returns (address pair_) {
+  36          require(_tokenA != _tokenB, "SmarDex: IDENTICAL_ADDRESSES");
+  37          (address _token0, address _token1) = _tokenA < _tokenB ? (_tokenA, _tokenB) : (_tokenB, _tokenA);
+  38          require(_token0 != address(0), "SmarDex: ZERO_ADDRESS");
+  39          require(getPair[_token0][_token1] == address(0), "SmarDex: PAIR_EXISTS"); // single check is sufficient
+  40          bytes32 _salt = keccak256(abi.encodePacked(_token0, _token1));
+  41          SmardexPair _pair = new SmardexPair{ salt: _salt }();
+  42          _pair.initialize(_token0, _token1, feesLP, feesPool);
+  43          pair_ = address(_pair);
+  44          getPair[_token0][_token1] = pair_;
+  45          getPair[_token1][_token0] = pair_; // populate mapping in the reverse direction
+  46          allPairs.push(pair_);
+  47  
+  48          emit PairCreated(_token0, _token1, pair_, allPairs.length);
+  49      }

@@ -7,6 +7,7 @@
 | --- | --- |
 | `run.mjs` | Проверки (список — шапка файла): сборка = `contracts/out/` и размер кода в сети (EIP-170), продажа/покупка BNB `executeNative`, остаток, minOut, обёртка из конструктора, не владелец, повторный вход из токена, STABLE_U256_BNB, BNB напрямую, `execute` v2 и v1; затем сценарии `review.mjs` |
 | `dmm.mjs` | Решение 287 — шаг KYBER_DMM (вид 15): обмен через пул-фикстуру KyberSwap DMM с усилением (выход = DMMLibrary.getAmountOut по getTradeInfo пула), прямой вход, второй шаг (пул без усиления), minOut, исполнитель v1 — «kind»; запускается из run.mjs |
+| `smardex.mjs` | Решение 288 — шаг SMARDEX (вид 16): обмен через пару-фикстуру SmarDex в обе стороны (zeroForOne по порядку адресов), оплата в smardexSwapCallback, minOut, посторонний обратный вызов — «pool», исполнитель v1 — «kind»; запускается из run.mjs |
 | `izi.mjs` | Решение 286 — шаг IZI (вид 14): обмен через пул-фикстуру iZiSwap в обе стороны (swapX2Y / swapY2X по порядку адресов), оплата в swapX2YCallback / swapY2XCallback, остаток входа — владельцу, посторонний обратный вызов — «pool», исполнитель v1 — «kind»; запускается из run.mjs |
 | `metric.mjs` | Решение 285 — шаг METRIC (вид 13): обмен через пул-фикстуру с оплатой в metricOmmSwapCallback, токены пула «не по адресу», неверный флаг — откат, посторонний обратный вызов — «pool», исполнитель v1 — «kind»; запускается из run.mjs |
 | `nomi.mjs` | Решение 284 — шаг NOMI_STABLE (вид 12): прямой вход, второй шаг (баланс исполнителя), minOut, шаг SOLIDLY по той же паре — откат, исполнитель v1 — откат «kind»; запускается из run.mjs |
@@ -22,6 +23,7 @@
 | `fixtures/EvilV3Pool.sol` | ФИКСТУРА: пул вида V3 (форма обмена Uniswap V3, курс 1:1; официального кода V3 в репозитории нет) с режимами: честный, обратный вызов дважды, долг больше суммы шага, взял и не отдал |
 | `fixtures/FakeWrapper.sol` | ФИКСТУРА: поддельная обёртка — deposit принимает, при withdraw BNB не отдаёт |
 | `fixtures/DmmFixture.sol` | ФИКСТУРА: пул вида KyberSwap Classic DMM — getTradeInfo и строки swap DMMPool (dmm-smart-contracts@e557b57: выход меньше реального резерва, вход = баланс − резерв, проверка K по виртуальным резервам со снятой со входа комиссией), комиссия постоянная (EMA не моделируется) |
+| `fixtures/SmardexFixture.sol` | ФИКСТУРА: пара вида SmarDex — подпись swap и порядок обмена SmardexPair (выход до обратного вызова, smardexSwapCallback с дельтами, проверка входа после вызова), курс 99 % |
 | `fixtures/IziFixture.sol` | ФИКСТУРА: пул вида iZiSwap — подписи swapX2Y / swapY2X и оплата в swapX2YCallback / swapY2XCallback (iZiSwap-core@3fe21eba), курс 1:1, пул берёт сумму − 1 wei (настоящий пул берёт меньше на остаток, которого не хватает на 1 единицу выхода) |
 | `fixtures/MetricFixture.sol` | ФИКСТУРА: пул вида Metric OMM — подпись swap и оплата в metricOmmSwapCallback (как установлено на цепи), курс 1:1, порядок токенов — как задан |
 | `fixtures/NomiStableFixture.sol` | ФИКСТУРА: пара вида Nomiswap Stable — строки обмена NomiswapStablePair (вход = баланс − резерв, комиссия со входа, getAmountOut(address, uint256)), кривая 1:1 (кривую проверяют тесты бота на записанных ответах настоящих пар) |

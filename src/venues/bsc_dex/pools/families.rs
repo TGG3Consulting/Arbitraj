@@ -164,6 +164,13 @@ pub enum Proto {
     /// квотер — DMMRouter02.getAmountsOut (dex.quoter). Перечитывание каждым блоком. Исполнение — шаг KYBER_DMM
     /// исполнителя v2. Вид ядра — AmpV2.
     KyberDmm,
+    /// SmarDex (решение 288; smardex, DEX smardex-bsc): пара SmardexPair (фабрика BSC — Sourcify match = официальный
+    /// репозиторий SmarDex-Ecosystem/dex-smart-contracts, deployments/bsc) — x·y=k по фиктивным резервам, обмен делится на
+    /// два шага по средней цене, которая пересчитывается к block.timestamp обмена; комиссии — в паре (getPairFees). Фабрика
+    /// getPair / PairCreated и поля пары — как у V2 (проверка и поиск — путём V2). Обмен swap(to, zeroForOne, сумма, data)
+    /// и обратный вызов smardexSwapCallback. Математика — math/smardex.rs, квотер — только виртуальный (quoteSmardex). Перечитывание
+    /// каждым блоком. Исполнение — шаг SMARDEX исполнителя v2. Вид ядра — Fictive.
+    Smardex,
 }
 
 impl Proto {
@@ -294,6 +301,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "biswap_v3" => (PoolKind::OraclePmm, Proto::BiswapV3, true, false, false),
         // KyberSwap Classic DMM (решение 287): в графе и сигналах (своя формула); исполнение — шаг KYBER_DMM (только v2).
         "kyber_dmm" => (PoolKind::AmpV2, Proto::KyberDmm, true, false, false),
+        // SmarDex (решение 288): в графе и сигналах (своя формула по времени блока); исполнение — шаг SMARDEX (только v2).
+        "smardex" => (PoolKind::Fictive, Proto::Smardex, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -524,6 +533,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // KyberSwap Classic DMM (решение 287): фабрика (factory() пула, реестр getPools, PoolCreated) и квотер сверки —
         // DMMRouter02 (getAmountsOut по пути из одного пула; адрес — официальная документация KyberSwap).
         Proto::KyberDmm => list.extend(["dex.factory", "dex.quoter"]),
+        // SmarDex (решение 288): фабрика (getPair / PairCreated — как V2); квотер — только виртуальный (quoteSmardex,
+        // dex.quoter_virtual = да убирает dex.quoter): официального квотера пары у SmarDex нет.
+        Proto::Smardex => list.extend(["dex.factory", "dex.quoter"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

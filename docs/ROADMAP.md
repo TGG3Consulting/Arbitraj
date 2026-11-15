@@ -32,6 +32,15 @@
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
 - Решение 282 (t115): src/venues/bsc_dex/node/heads.rs 246 строк (было 237 — сверх ориентира 200 и до правки: +поле stall и вызов шага уведомления); новые node/head_stall.rs (164) и head_stall_text.rs (60) — в пределах 200; тест tests/bsc_dex_head_stall.rs 246 — сверх ориентира (после rustfmt).
+- Решение 288 (SmarDex, t119): (а) глубина полосы пары SmarDex — оценка x·y=k по фиктивным резервам (деление обмена на
+  два шага по средней цене не учитывается); (б) котировка — на времени блока чтения: замерить на живых сделках расхождение
+  факта с котировкой из-за сдвига средней цены к следующему блоку; (в) состояние после обмена доли (pool_after.rs) для
+  Fictive не считается — вторая доля через ту же пару не допускается; (г) файлы сверх ориентира 200 строк —
+  pools/load.rs 460 (было 448), pools/families.rs 591 (было 579), quote/quoter_calls.rs 427 (было 420),
+  quote/pool_quote.rs 495 (было 485), quote/depth_band.rs 438 (было 414), quote/virtual_quoter.rs 233 (было 225),
+  quote/steps.rs 224 (было 220), pools/created_log.rs 334, pools/factory_calls.rs 250, pools/load_batch.rs 233,
+  exec/executor/entry.rs 220 (было 211), core/types/pool.rs 377 (было 369), contracts/ArbExecutor.sol 510 (было 502);
+  новые файлы кода — в пределах 200.
 - Решение 287 (KyberSwap Classic DMM, t119): (а) пулы KSFactory со статической комиссией (KyberSwap Classic «Static Fee»,
   фабрика 0x1c758af0688502e49140230f6b0ebd376d429be5 по официальной документации; в справочнике GeckoTerminal
   `kyberswap_classic_bsc` их 2 из 13) — другой вид пула (KSPool), не подключён: проверка видом kyber_dmm их отклоняет по

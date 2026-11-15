@@ -13,7 +13,7 @@
 //   11) execute (ERC-20) v2 — как раньше; 12) исполнитель v1 (contracts/out/v1/) — execute работает, executeNative нет.
 //   Сценарии ревью 272 (А4: замок locked, обратные вызовы, злой пул V3, поддельная обёртка, подкинутый BNB, правило
 //   «native step», многошаговые маршруты и доли, V3, deadline) — review.mjs, запускаются отсюда. Шаг NOMI_STABLE
-//   (решение 284: пара-фикстура Nomiswap Stable, v1 — «kind») — nomi.mjs; шаг METRIC (решение 285) — metric.mjs; шаг IZI (решение 286) — izi.mjs; шаг KYBER_DMM (решение 287) — dmm.mjs;
+//   (решение 284: пара-фикстура Nomiswap Stable, v1 — «kind») — nomi.mjs; шаг METRIC (решение 285) — metric.mjs; шаг IZI (решение 286) — izi.mjs; шаг KYBER_DMM (решение 287) — dmm.mjs; шаг SMARDEX (решение 288) — smardex.mjs;
 //   тоже отсюда.
 // Кто вызывает: человек или агент: `cd contracts/evmtest && npm ci && node run.mjs` (README.md папки).
 // От чего зависит: lib.mjs, world.mjs, review.mjs, contracts/*, vendor/*, fixtures/*.
@@ -28,6 +28,7 @@ import { nomi } from './nomi.mjs';
 import { metric } from './metric.mjs';
 import { izi } from './izi.mjs';
 import { dmm } from './dmm.mjs';
+import { smardex } from './smardex.mjs';
 
 const { check, must, view } = L;
 const { E18, OWNER, LP, OTHER, ERC20, FACT, PAIR, WETH, RE, v2, v1, world, v2Step, stStep, nat, exe, settled, bal, v2Out } = W;
@@ -156,6 +157,7 @@ await nomi();
 await metric();
 await izi();
 await dmm();
+await smardex();
 const out = join(L.here, '..', '..', 'tests', 'data', 'executor_v2_evm_2026-11-14');
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'native_settled.json'), JSON.stringify(record, null, 2) + '\n');

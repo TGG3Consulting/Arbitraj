@@ -108,6 +108,8 @@ fn kinds_match_contract_constants() {
         ("IZI", Params::Izi),
         // Решение 287: пул KyberSwap Classic DMM — только v2.
         ("KYBER_DMM", Params::KyberDmm),
+        // Решение 288: пара SmarDex — только v2.
+        ("SMARDEX", Params::Smardex),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

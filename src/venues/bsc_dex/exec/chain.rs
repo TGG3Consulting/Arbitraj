@@ -158,5 +158,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "KyberSwap DMM не исполняется Universal Router (шаг KYBER_DMM контракта-исполнителя)",
         )),
+        // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
+        PoolKind::Fictive => Err(ctx.err(
+            ErrorCode::Internal,
+            "SmarDex не исполняется Universal Router (шаг SMARDEX контракта-исполнителя)",
+        )),
     }
 }

@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, dmm, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    bin_swap, dmm, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -443,6 +443,16 @@ pub fn swap(
             };
             r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
                 .ok_or_else(none)
+        }
+        // Пара с фиктивными резервами (SmarDex, решение 288): порт SmardexLibrary.getAmountOut со средней ценой, приведённой
+        // к времени блока чтения (math/smardex_swap.rs swap_out). Только точный вход (обратной формулы у пары нет в обмене по входу).
+        (PoolState::Fictive(d), PoolKind::Fictive) => {
+            if !exact_in {
+                return Err(why("SmarDex: точный выход не поддерживается"));
+            }
+            let p = smardex_swap::side(d, zero_for_one);
+            let out = smardex_swap::swap_out(&p, d.price_average_ts, d.block_ts, amount).ok_or_else(none)?;
+            Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
         }
         _ => Err(none()),
     }

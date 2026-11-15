@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/virtual_quoter.rs
 //! Что делает: решение 186 (Тигран, 05.11.2026: «нам нужны все DEX») — «виртуальный квотер» для DEX без своего
-//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274; SquadSwap V3 — squadV3SwapCallback, решение 281; Metric OMM — quoteMetric + metricOmmSwapCallback, решение 285). Код контракта contracts/VirtualQuoter.sol (собран
+//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274; SquadSwap V3 — squadV3SwapCallback, решение 281; Metric OMM — quoteMetric + metricOmmSwapCallback, решение 285; SmarDex — quoteSmardex + smardexSwapCallback, решение 288). Код контракта contracts/VirtualQuoter.sol (собран
 //! contracts/build.sh, артефакт contracts/out/VirtualQuoter.bin-runtime, хеш сверяется с VirtualQuoter.sha256)
 //! подставляется по своему адресу в eth_call переопределением кода счёта (state override, 3-й параметр eth_call geth:
 //! https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set). Квотер зовёт swap САМОГО пула,
@@ -33,6 +33,8 @@ alloy::sol! {
     /// Решение 286: пул iZiSwap / Biswap V3 (x2y — вход tokenX); used = amountIn, если пул не дошёл до своей крайней
     /// точки (leftMostPt / rightMostPt), иначе — сколько пул взял (меньше amountIn → «не хватает ликвидности»).
     function quoteIzi(address pool, bool x2y, uint256 amountIn) external returns (uint256 used, uint256 out);
+    /// Решение 288: пара SmarDex (swap(address,bool,int256,bytes) + smardexSwapCallback); ответ — тот же, что quoteExactIn.
+    function quoteSmardex(address pool, bool zeroForOne, uint256 amountIn) external returns (uint256 used, uint256 out);
 }
 
 /// Код в сети (deployedBytecode solc).
@@ -64,6 +66,7 @@ pub fn supports(p: Proto) -> bool {
             | Proto::MetricOmm
             | Proto::IziSwap
             | Proto::BiswapV3
+            | Proto::Smardex
     )
 }
 
@@ -168,6 +171,11 @@ pub fn request(e: &Entry, token_in: Address, amount: U256) -> Result<(Address, B
             return Err("виртуальный квотер: у пула Metric не прочитан порядок токенов");
         };
         return Ok((pool, data_metric(pool, token_in == t0, amount)));
+    }
+    // Решение 288: SmarDex — token0 пары записи = token0 пары (фабрика сортирует пару, SmardexFactory.sol L37).
+    if e.family.proto == Proto::Smardex {
+        let data = quoteSmardexCall { pool, zeroForOne: token_in == e.pool.token0, amountIn: amount };
+        return Ok((pool, Bytes::from(data.abi_encode())));
     }
     // Решение 286: iZiSwap / Biswap V3 — tokenX = token0 пары записи (фабрика сортирует пару, verify_izi.rs).
     if e.family.proto.is_izi() {

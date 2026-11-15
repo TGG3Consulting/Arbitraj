@@ -351,6 +351,30 @@ fn side(
                 }
             }
         }
+        // Пара с фиктивными резервами (SmarDex, решение 288): оценка — x·y=k по фиктивным резервам без комиссии (формула
+        // первого шага обмена пары); выход не доходит до резерва пары — тогда до него и full = false. Деление обмена на два
+        // шага по средней цене здесь не учитывается (глубина — оценка для порога, котировку считает math/smardex.rs).
+        (PoolState::Fictive(d), PoolKind::Fictive) => {
+            let s = super::super::math::smardex_swap::side(d, zfo);
+            let grow = if buy {
+                (1.0 + b).sqrt() - 1.0
+            } else {
+                1.0 / (1.0 - b).sqrt() - 1.0
+            };
+            let f = U256::from((grow * SCALE) as u128);
+            let eff = s.fictive_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            let one = (U256::from(1u8), U256::from(1u8));
+            let out = v2::amount_out(eff, s.fictive_in, s.fictive_out, one).unwrap_or(U256::ZERO);
+            if out.is_zero() {
+                return Ok((U256::ZERO, true));
+            }
+            if out < s.reserve_out {
+                return Ok((pick(eff, out), true));
+            }
+            let o = s.reserve_out.saturating_sub(U256::from(1u8));
+            let i = v2::amount_in(o, s.fictive_in, s.fictive_out, one).ok_or("расчёт глубины пары SmarDex невозможен")?;
+            Ok((pick(i, o), false))
+        }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
             let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;

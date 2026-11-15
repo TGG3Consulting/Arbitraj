@@ -1,0 +1,301 @@
+{
+ "block": 133685263,
+ "block_timestamp": 1794723017,
+ "multicall3_getCurrentBlockTimestamp": "1794723017",
+ "pairs": [
+  {
+   "pool": "0xe7b89cbd4e833510f393ccfbe7d433edbb137ab2",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "getReserves": [
+    "4387804388557134717719",
+    "7220802799872564809564017"
+   ],
+   "getFictiveReserves": [
+    "2268168049243060365347",
+    "3492625801771271196116436"
+   ],
+   "getPriceAverage": [
+    "2189266523390882786621",
+    "3488392619881323720882812",
+    "1794711433"
+   ],
+   "getPairFees": [
+    "1500",
+    "900"
+   ],
+   "getFeeToAmounts": [
+    "3182180384893420371",
+    "6321060939120614763501"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "438780438855713471",
+     "vq_used": "438780438855713471",
+     "vq_out": "673902029152021184490"
+    },
+    {
+     "dir": 0,
+     "amount_in": "43878043885571347177",
+     "vq_used": "43878043885571347177",
+     "vq_out": "66127647256968119784809"
+    },
+    {
+     "dir": 0,
+     "amount_in": "438780438855713471771",
+     "vq_used": "438780438855713471771",
+     "vq_out": "565039890086288014197422"
+    },
+    {
+     "dir": 1,
+     "amount_in": "722080279987256480956",
+     "vq_used": "722080279987256480956",
+     "vq_out": "467702213752088489"
+    },
+    {
+     "dir": 1,
+     "amount_in": "72208027998725648095640",
+     "vq_used": "72208027998725648095640",
+     "vq_out": "45772109377075744137"
+    },
+    {
+     "dir": 1,
+     "amount_in": "722080279987256480956401",
+     "vq_used": "722080279987256480956401",
+     "vq_out": "383348786011757432426"
+    }
+   ],
+   "factory": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33",
+   "code_bytes": 19403,
+   "push4_swap_0x1f18b371": true,
+   "push4_smardexSwapCallback_0xa1dab4eb": true
+  },
+  {
+   "pool": "0x4357b88061db22dfec01346c06347b93bf1c2985",
+   "token0": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token1": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "getReserves": [
+    "66760031918777135",
+    "675783636852870446075395"
+   ],
+   "getFictiveReserves": [
+    "35323962649284561",
+    "320238903949174265790603"
+   ],
+   "getPriceAverage": [
+    "30600588263666896",
+    "277904864134458619199510",
+    "1794704660"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ],
+   "getFeeToAmounts": [
+    "13812089955255",
+    "178967546216118483543"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "6676003191877",
+     "vq_used": "6676003191877",
+     "vq_out": "59906666956403296605"
+    },
+    {
+     "dir": 0,
+     "amount_in": "667600319187771",
+     "vq_used": "667600319187771",
+     "vq_out": "5881743023071123157938"
+    },
+    {
+     "dir": 0,
+     "amount_in": "6676003191877713",
+     "vq_used": "6676003191877713",
+     "vq_out": "50474370632806523057993"
+    },
+    {
+     "dir": 1,
+     "amount_in": "67578363685287044607",
+     "vq_used": "67578363685287044607",
+     "vq_out": "7377970289055"
+    },
+    {
+     "dir": 1,
+     "amount_in": "6757836368528704460753",
+     "vq_used": "6757836368528704460753",
+     "vq_out": "721147827376712"
+    },
+    {
+     "dir": 1,
+     "amount_in": "67578363685287044607539",
+     "vq_used": "67578363685287044607539",
+     "vq_out": "5983902446828272"
+    }
+   ],
+   "factory": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33",
+   "code_bytes": 19403,
+   "push4_swap_0x1f18b371": true,
+   "push4_smardexSwapCallback_0xa1dab4eb": true
+  },
+  {
+   "pool": "0xc5dc2b1b41e21772a620101910a08aee55e83872",
+   "token0": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token1": "0xfdc66a08b0d0dc44c17bbd471b88f49f50cdd20f",
+   "getReserves": [
+    "6699005053410494",
+    "743895376917946105048448"
+   ],
+   "getFictiveReserves": [
+    "3525929909530019",
+    "353900413070336211673613"
+   ],
+   "getPriceAverage": [
+    "3152175753342787",
+    "322816537795548206285453",
+    "1794711433"
+   ],
+   "getPairFees": [
+    "1500",
+    "900"
+   ],
+   "getFeeToAmounts": [
+    "14818343636450",
+    "1845350011153649532420"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "669900505341",
+     "vq_used": "669900505341",
+     "vq_out": "67064373681404423099"
+    },
+    {
+     "dir": 0,
+     "amount_in": "66990050534104",
+     "vq_used": "66990050534104",
+     "vq_out": "6582995766780270441991"
+    },
+    {
+     "dir": 0,
+     "amount_in": "669900505341049",
+     "vq_used": "669900505341049",
+     "vq_out": "56393555053157339157884"
+    },
+    {
+     "dir": 1,
+     "amount_in": "74389537691794610504",
+     "vq_used": "74389537691794610504",
+     "vq_out": "739197025554"
+    },
+    {
+     "dir": 1,
+     "amount_in": "7438953769179461050484",
+     "vq_used": "7438953769179461050484",
+     "vq_out": "72261211619349"
+    },
+    {
+     "dir": 1,
+     "amount_in": "74389537691794610504844",
+     "vq_used": "74389537691794610504844",
+     "vq_out": "600192556854767"
+    }
+   ],
+   "factory": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33",
+   "code_bytes": 19403,
+   "push4_swap_0x1f18b371": true,
+   "push4_smardexSwapCallback_0xa1dab4eb": true
+  },
+  {
+   "pool": "0x07df47f536a3bb6051703612aec8ad9f101e66d1",
+   "token0": "0x81b9a47bb9820e96a0ae98f0dded0070e0933904",
+   "token1": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "getReserves": [
+    "54915227271256384129508",
+    "685324750235818009"
+   ],
+   "getFictiveReserves": [
+    "26929400258267919268691",
+    "325071085281100196"
+   ],
+   "getPriceAverage": [
+    "27997087445508996954407",
+    "336018489448899410",
+    "1794672771"
+   ],
+   "getPairFees": [
+    "9000",
+    "1000"
+   ],
+   "getFeeToAmounts": [
+    "14937183724255234910",
+    "93573240252585"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "5491522727125638412",
+     "vq_used": "5491522727125638412",
+     "vq_out": "65613784550609"
+    },
+    {
+     "dir": 0,
+     "amount_in": "549152272712563841295",
+     "vq_used": "549152272712563841295",
+     "vq_out": "6437317627363741"
+    },
+    {
+     "dir": 0,
+     "amount_in": "5491522727125638412950",
+     "vq_used": "5491522727125638412950",
+     "vq_out": "54931142810083240"
+    },
+    {
+     "dir": 1,
+     "amount_in": "68532475023581",
+     "vq_used": "68532475023581",
+     "vq_out": "5619395271798132868"
+    },
+    {
+     "dir": 1,
+     "amount_in": "6853247502358180",
+     "vq_used": "6853247502358180",
+     "vq_out": "550598231511509647823"
+    },
+    {
+     "dir": 1,
+     "amount_in": "68532475023581800",
+     "vq_used": "68532475023581800",
+     "vq_out": "4652379997371616038063"
+    }
+   ],
+   "factory": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33",
+   "code_bytes": 19403,
+   "push4_swap_0x1f18b371": true,
+   "push4_smardexSwapCallback_0xa1dab4eb": true
+  }
+ ],
+ "rpc": "https://bsc-rpc.publicnode.com (только чтение и eth_call с подменой кода)",
+ "factory": {
+  "address": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33",
+  "sourcify": "match contracts/core/SmardexFactory.sol (solc 0.8.17); тексты SmardexPair.sol / SmardexLibrary.sol / SmardexFactory.sol (без \\r) = github.com/SmarDex-Ecosystem/dex-smart-contracts@74d0444 deployments/bsc/solcInputs/1a3e5ed825e3a0bcaf935206aae1ecd3.json",
+  "official_deployment": "deployments/bsc/SmardexFactory.json: address 0xA8EF6FEa013034E62E2C4A9Ec1CDb059fE23Af33, receipt.blockNumber 30036610 = Sourcify deployment.blockNumber",
+  "allPairsLength": "57",
+  "pairs_factory_eq": "factory() всех 57 пар = фабрика",
+  "pair_fees_distribution": {
+   "9000/1000": 46,
+   "1500/900": 3,
+   "700/300": 2,
+   "300/100": 1,
+   "8500/1500": 1,
+   "1600/400": 1,
+   "9700/300": 1,
+   "2000/500": 1,
+   "300/32200": 1
+  }
+ },
+ "geckoterminal_dex_id": "smardex-bsc (GET /networks/bsc/dexes — 200; /dexes/smardex-bsc/pools — 200, 16 пулов, все 16 — пары этой фабрики (allPairs))",
+ "virtual_quoter": "contracts/out/VirtualQuoter.bin-runtime решения 288 (quoteSmardex 0x02a1308b, sha256 байтов ffe23c64703c8646…) — eth_call с подменой кода по адресу 0x…00a1; vq_used = amount_in во всех 24",
+ "note": "getReserves = баланс − feeToAmount; getPriceAverage = [priceAverage0, priceAverage1, priceAverageLastTimestamp]; getPairFees = [feesLP, feesPool] над FEES_BASE 1e6; dir 0 — вход token0; vq_out — выход пары своим кодом на этом блоке (время блока block_timestamp)"
+}

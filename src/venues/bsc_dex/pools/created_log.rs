@@ -46,7 +46,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         }
         let (setting, t0, v4) = match f.proto {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
-            Proto::V2 | Proto::NomiStable => (
+            // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
+            Proto::V2 | Proto::NomiStable | Proto::Smardex => (
                 "dex.factory",
                 IV2Factory::PairCreated::SIGNATURE_HASH,
                 false,
@@ -249,7 +250,7 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
-        Proto::V2 | Proto::NomiStable => {
+        Proto::V2 | Proto::NomiStable | Proto::Smardex => {
             let e = IV2Factory::PairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PairCreated не по ABI: {e}"))?;
             (e.token0, e.token1, e.pair)

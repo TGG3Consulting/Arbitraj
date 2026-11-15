@@ -2,7 +2,7 @@
 
 > **ЧЕРНОВИК ДО ФИНАЛЬНОЙ ВЕРСИИ КОНТРАКТА. Переразвёртывать ещё РАНО.** В контракт v2 до развёртывания войдут
 > дополнительные шаги для других DEX (решение владельца: одно переразвёртывание на всё). Хеш байткода ниже — версии
-> после решения 287 (задача t119: вид шага KYBER_DMM = 15 — KyberSwap Classic DMM; до него — решение 286, задача t118: вид шага IZI = 14 + swapX2YCallback / swapY2XCallback — iZiSwap и Biswap V3; до него —
+> после решения 288 (задача t119: вид шага SMARDEX = 16 + smardexSwapCallback — SmarDex, и KYBER_DMM = 15 — KyberSwap Classic DMM, решение 287; до них — решение 286, задача t118: вид шага IZI = 14 + swapX2YCallback / swapY2XCallback — iZiSwap и Biswap V3; до него —
 > задача t117: NOMI_STABLE = 12 — Nomiswap Stable, решение 284, и METRIC = 13 + metricOmmSwapCallback — Metric OMM,
 > решение 285; задача t114, `squadV3SwapCallback`); после следующих правок контракта он сменится, и этот документ будет обновлён.
 
@@ -25,7 +25,7 @@ Algebra, Solidly, DODO, StableSwap, Maverick и Slipstream. Старые исп�
    шлёт уведомление `wallet.executor_v1` («у кошелька X исполнитель v1 — нативный BNB через форки не торгуется»;
    включается на экране «Уведомления», группа «Кошельки DEX»).
 2. Нажмите **«Развернуть исполнитель»**. В окне проверьте: кошелёк (владелец) — этот кошелёк; стоимость; **«Обёртка BNB
-   (навсегда)»** — адрес WBNB из `dex.native_wrapped`; SHA-256 байткода — `be0f73fb78bbb418f5b5f946e2647246f4bca2d81041883c5def25ee806fb26a`
+   (навсегда)»** — адрес WBNB из `dex.native_wrapped`; SHA-256 байткода — `34e40929616c66b46f3e0347fdd5ba01826746605905c5c9f01a806e510bbf80`
    (код создания v2 без аргумента конструктора, `contracts/out/ArbExecutor.sha256`); solc 0.8.37.
 3. **«Подтвердить и отправить»** (задача t114: вместе с хешем уходит адрес обёртки из окна; если `dex.native_wrapped`
    сменили после оценки — отказ «обёртка BNB для конструктора сейчас … а подтверждена … — запросите оценку заново»,
@@ -100,10 +100,10 @@ Algebra, Solidly, DODO, StableSwap, Maverick и Slipstream. Старые исп�
 2. «Настройки» → DEX: проверить `dex.native_wrapped` = адрес WBNB. Для SquadSwap V3 (id DEX `squadswap-v3-bsc`) —
    `dex.v3_swap_callback = squadV3SwapCallback(int256,int256,bytes)` (остальные значения — docs/TASKS.md, решение 281). Nomiswap Stable (решение 284) — значения настроек в docs/TASKS.md; её шаг NOMI_STABLE (вид 12) есть
    только у исполнителя v2 — у кошелька с v1 пулы DEX «без пути исполнения: исполнитель v1 не знает шаг исполнителя
-   NOMI_STABLE …». Metric OMM (решение 285, id `metric-bsc`) — шаг METRIC (вид 13), тоже только v2. iZiSwap / Biswap V3 (решение 286, id `iziswap-bsc`, `biswap-v3`, `biswap-v3-1`) — шаг IZI (вид 14), тоже только v2. KyberSwap Classic DMM (решение 287, id `kyberswap_classic_bsc`) — шаг KYBER_DMM (вид 15), тоже только v2.
+   NOMI_STABLE …». Metric OMM (решение 285, id `metric-bsc`) — шаг METRIC (вид 13), тоже только v2. iZiSwap / Biswap V3 (решение 286, id `iziswap-bsc`, `biswap-v3`, `biswap-v3-1`) — шаг IZI (вид 14), тоже только v2. KyberSwap Classic DMM (решение 287, id `kyberswap_classic_bsc`) — шаг KYBER_DMM (вид 15), тоже только v2. SmarDex (решение 288, id `smardex-bsc`) — шаг SMARDEX (вид 16), тоже только v2.
 3. На каждом кошельке («Кошельки» → карточка → «Исполнитель ArbExecutor»): «Проверить подключение» → строка «Версия»
    v1 / v2. Кошелёк на v1 → «Развернуть исполнитель» → в окне сверить кошелёк, стоимость, обёртку (= WBNB), SHA-256
-   `be0f73fb…6fb26a` → «Подтвердить и отправить» → дождаться «Код в сети совпал с репозиторием … версия v2, обёртка … =
+   `34e40929…0bbf80` → «Подтвердить и отправить» → дождаться «Код в сети совпал с репозиторием … версия v2, обёртка … =
    dex.native_wrapped».
 4. Первым — кошелёк строки «Пробы и сигналы» (газ обёртки BNB перемеряется сам после его сверки v2), затем кошельки
    бирж и «DEX ↔ DEX» — в любом порядке.

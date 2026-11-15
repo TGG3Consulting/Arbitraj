@@ -75,6 +75,13 @@ pub fn request(
             format!("{}: iZiSwap / Biswap V3 сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
         ));
     }
+    // SmarDex (решение 288): официального квотера пары нет — только виртуальный (quoteSmardex).
+    if e.family.proto == Proto::Smardex {
+        return Err(ctx.not_set(
+            "dex.quoter_virtual",
+            format!("{}: SmarDex сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
+        ));
+    }
     // KyberSwap Classic DMM (решение 287): квотер — DMMRouter02.getAmountsOut по пути из одного пула (quoter_dmm.rs).
     if e.family.proto == Proto::KyberDmm {
         return super::quoter_dmm::request(ctx, e, token_in, amount);

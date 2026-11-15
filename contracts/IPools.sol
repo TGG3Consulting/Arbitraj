@@ -52,6 +52,17 @@ interface IMetricOmmPool {
         returns (int128, int128);
 }
 
+// SmarDex (решение 288): пара SmardexPair — фабрика BSC 0xA8EF6FEa013034E62E2C4A9Ec1CDb059fE23Af33, Sourcify match =
+// SmarDex-Ecosystem/dex-smart-contracts@74d0444 deployments/bsc (solcInputs/1a3e5ed8…), contracts/core/SmardexPair.sol
+// L155-L319 swap(to, zeroForOne, amountSpecified, data): amountSpecified > 0 — точный вход; выход переводится `to`, затем
+// ISmardexSwapCallback(msg.sender).smardexSwapCallback(amount0, amount1, data) (ISmardexSwapCallback.sol L21) —
+// положительная дельта — долг пары, проверка баланса входа после вызова (L268-L274, L280-L286). Вызывающий не ограничен.
+interface ISmardexPair {
+    function swap(address to, bool zeroForOne, int256 amountSpecified, bytes calldata data)
+        external
+        returns (int256 amount0, int256 amount1);
+}
+
 // Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
 // KyberSwap Classic DMM (решение 287): KyberNetwork/dmm-smart-contracts@e557b57 contracts/DMMPool.sol L240-L265
 // getTradeInfo (реальные и виртуальные резервы, комиссия блока над 1e18; при ampBps = BPS виртуальные = реальные), L162

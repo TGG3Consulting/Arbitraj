@@ -292,3 +292,43 @@ async fn owner_publishes_and_follows_registry() {
     );
     assert_eq!(p.registry.graph_cache().builds(), 0);
 }
+
+/// Третье ревью (п. 1): предел ступени Б меньше времени сборки — НЕ петля перезапусков. Предел 1 мс (любая сборка
+/// дольше): первое превышение — один перезапуск, повторное в той же ступени снимает льготу, а не владельца; сборка
+/// доходит до конца, снимок публикуется, перезапусков не больше одного.
+#[tokio::test]
+async fn stage_b_limit_does_not_loop() {
+    let p = route_common::parts_from("tests/data/routes_2026-10-29").await;
+    for (n, v) in [
+        ("dex.graph_background", json!(true)),
+        ("dex.graph_stage_b_max_ms", json!(1)),
+        ("dex.graph_retry_pause_s", json!(1)),
+    ] {
+        p.ctx
+            .settings
+            .set(n, Scope::Venue("bsc_dex".into()), Some(v), "тест")
+            .await
+            .unwrap();
+    }
+    let (tx, _rx) = tokio::sync::mpsc::channel(64);
+    let _pools = p.pools(tx);
+    let bg = p.registry.graph_cache().bg().clone();
+    let mut ok = false;
+    for _ in 0..1000 {
+        if bg.load().is_some() {
+            ok = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        ok,
+        "снимок опубликован, несмотря на предел ступени Б меньше времени сборки"
+    );
+    let v = graph_stats::view(&p.ctx, &p.registry);
+    assert!(
+        v.restarts <= 1,
+        "перезапусков по пределу ступени Б не больше одного: {}",
+        v.restarts
+    );
+}

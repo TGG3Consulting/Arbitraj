@@ -13,6 +13,9 @@
 //! — в «монеты в симуляции» журнала core.precheck и в причину отказа).
 //! Нативная BNB (решение 62): продаётся value транзакции, в симуляции не пополняется — у кошелька меньше суммы —
 //! NotApplicable с причиной (у нативной монеты нет контракта, налога токена нет).
+//! Решение 303 (t134): план продажи прямого и умного пути собран с разрешениями, которых не хватает СЕЙЧАС
+//! (wallet/approve.rs lacking: сумма или истёкший срок Permit2) — строка журнала dex.presell_approve: перед продажей
+//! уйдёт approve и обмен подождёт его блока. Заранее разрешения не отправляются (вопрос Тиграну, docs/TASKS.md 303).
 //! Кто вызывает: venue.rs (контракт dex_presell).
 //! От чего зависит: exec/{dry_build, dry_sim, dry_swap (io), trade (sides), native}.rs, quote/{direct, pool_tax}.rs,
 //! wallet/{signer, balances}.rs, num.rs.
@@ -23,6 +26,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{DexPresell, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::storage::journal::Level;
 
 use super::super::num;
 use super::super::quote::{Quoting, direct, pool_tax};
@@ -49,6 +53,19 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
         .clone()
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "в плане продажи нет маршрута DEX"))?;
     let ready = dry_build::build(q, &req, &route, wallet, DryMode::AsTrade).await?;
+    // Решение 303: продаже сейчас не хватает разрешений (сумма или срок Permit2 истёк) — видно до покупки.
+    if let Built::One(p) = &ready.built
+        && !p.approvals.is_empty()
+    {
+        let msg = format!(
+            "{} {}: продаже на DEX не хватает разрешений ({} шт.: сумма меньше продажи или срок Permit2 истёк) — \
+             перед обменом уйдёт approve и обмен подождёт его блока; заранее не отправляется (решение 303)",
+            req.deal_id,
+            req.asset.ticker,
+            p.approvals.len()
+        );
+        ctx.log(Level::Info, "dex.presell_approve", msg, None).await;
+    }
     let (coin, usdt, decs) = trade::sides(q, &req).await?;
     let is_native = native::is_native(ctx, &req.asset);
     let bad = || {

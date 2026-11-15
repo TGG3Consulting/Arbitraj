@@ -31,6 +31,27 @@ interface ISolidlyPair {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
 }
 
+// Nomiswap Stable (решение 284): пара NomiswapStablePair — verified-исходник Sourcify full match, chain 56, адрес
+// 0x1e40450f8e21bb68490d7d91ab422888fb3d60f1 (те же исходники у 0x3a66…da87, 0xca25…a7ec), contracts/NomiswapStablePair.sol
+// L132 swap (подпись как у пары V2), L251 getAmountOut(address tokenIn, uint256 amountIn) — порядок аргументов обратный
+// Solidly (селектор 0xca706bcf), L276 getReserves (uint112). Вход — переводом в пару до swap (L146-L151).
+interface INomiStablePair {
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function getAmountOut(address tokenIn, uint256 amountIn) external view returns (uint256);
+    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
+}
+
+// Metric OMM (решение 285): исходник пулов BSC не опубликован; подпись swap — ABI официального SDK Metric (npm
+// @nradko/metric-omm-sdk-v1@0.4.5 src/abis/MetricOmmPool.ts, github.com/Metric-OMM/metric-sdk), селектор 0xe24f0884 есть
+// в коде пулов BSC (PUSH4; tests/data/metric_2026-11-15). amountSpecified > 0 — точный вход; пул зовёт у вызывающего
+// metricOmmSwapCallback(int256,int256,bytes) (0xc3251075, PUSH32 в коде пула), положительная дельта — долг пулу (факт:
+// eth_call с подменой кода — пробный контракт заплатил положительную дельту, обмен прошёл; пределы цены 0 / uint128.max).
+interface IMetricOmmPool {
+    function swap(address recipient, bool zeroForOne, int128 amountSpecified, uint128 priceLimitX64, bytes calldata callbackData, bytes calldata extensionData)
+        external
+        returns (int128, int128);
+}
+
 // Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
 // Uniswap/v3-core@5ea68a77 contracts/interfaces/pool/IUniswapV3PoolActions.sol L75-L81;
 // pancakeswap/pancake-v3-contracts@98684794 projects/v3-core/contracts/interfaces/pool/IPancakeV3PoolActions.sol L75-L81;

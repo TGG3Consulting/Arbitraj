@@ -60,10 +60,16 @@ pub fn tax(legs: &[Path]) -> Result<(), String> {
     }
     let first = legs.first().and_then(|p| p.hops.first());
     match first.and_then(|h| h.entry.family.executor_kind) {
-        Some(ExecKind::V2 | ExecKind::Solidly | ExecKind::Dodo | ExecKind::Woo) => Ok(()),
+        Some(
+            ExecKind::V2
+            | ExecKind::Solidly
+            | ExecKind::Dodo
+            | ExecKind::Woo
+            | ExecKind::NomiStable,
+        ) => Ok(()),
         k => Err(format!(
             "у монеты налог на входе: первый шаг исполнителя {} — вход через исполнитель (налог дважды, пул откатит \
-             обмен); прямой вход только у V2 / SOLIDLY / DODO / WOO — сигнал",
+             обмен); прямой вход только у V2 / SOLIDLY / DODO / WOO / NOMI_STABLE — сигнал",
             k.map(ExecKind::name).unwrap_or("—")
         )),
     }

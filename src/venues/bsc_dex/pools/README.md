@@ -47,7 +47,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `factory_ask.rs` | Вид вопроса к реестру фабрики при поиске пулов (решения 121 C3, 122 F): V2 getPair, V3 getPool(fee), Solidly getPool / Solidly V1 getPair (по stable), Algebra poolByPair, DODO V2 getDODOPoolBidirection; данные вызова и разбор ответа в список адресов |
 | `factory_calls.rs` | Вызовы реестра фабрик: V2 getPair(монета, встречный), V3 getPool(…, fee) по dex.v3_fee_tiers; заметки по DEX (не подключена, не задана dex.v3_fee_tiers); разбор ответа |
 | `families.rs` | DEX из таблицы сопоставления (dex.kind): вид, протокол; подключена ли DEX (classify), исполняет ли её умный роутер |
-| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO / CURVE / MAVERICK / STABLE_U256 (PancakeSwap Stable, Lista) / SADDLE (Nerve); `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал); ревью 281 — и обратный вызов dex.v3_swap_callback есть у исполнителя (exec_callback.rs) |
+| `exec_kind.rs` | Вид шага контракта-исполнителя у вида пула (решение 122 F): V2 / V3 / ALGEBRA / SOLIDLY / DODO / CURVE / MAVERICK / STABLE_U256 (PancakeSwap Stable, Lista) / SADDLE (Nerve) / NOMI_STABLE (решение 284, только v2) / METRIC (решение 285, только v2); `via_executor` — вид шага есть И задан exec.executor_address (без адреса — сигнал); ревью 281 — и обратный вызов dex.v3_swap_callback есть у исполнителя (exec_callback.rs) |
 | `graph.rs` | Граф токенов в ОЗУ по всем пулам (решение 80): снимок реестра, рёбра — пулы, фильтр по достоверности/глубине (решение 73), не больше dex.route_max_pools_per_edge на пару; индекс «токен → рёбра» для перебора путей |
 | `graph_cache.rs` | Кэш графа маршрутов: один граф на состояние реестра и блок, одно построение за раз (решения 129, 131); решение 217 — закреплённый набор путей у замороженного реестра (`pinned`) |
 | `abi_check.rs` | ABI проверки пула: поля пула V2/V3, ключ у менеджера Infinity и у PositionManager Uniswap V4 |
@@ -60,7 +60,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `fee_fresh.rs` | Решение 281: dex.v3_fee_source = pool_fee_each_read — fee() пула с каждой головой V3 (пачка и по одному), свежая комиссия — в запись (Loaded.fee_pips) |
 | `fee_watch.rs` | Решение 281: подписка на события менеджера комиссии (dex.v3_fee_manager: SetCustomFee / ToggleCustomFee) и UpdatePoolManager фабрики — fee() пула перечитывается в реестр |
 | `fee_refresh.rs` | Решение 281 (ревью): перечтение fee() одного пула (событие менеджера) и всех пулов DEX пачкой (начало каждой сессии fee_watch, смена менеджера) в реестр |
-| `exec_callback.rs` | Ревью 281, В4: dex.v3_swap_callback — селектор обратного вызова пула в коде исполнителя ТОЙ версии, что сверена у кошелька (задача t114: v2 — contracts/out/ArbExecutor.bin-runtime, v1 — contracts/out/v1/; не сверен — нет пути с причиной); нет — пулы DEX без пути исполнения |
+| `exec_callback.rs` | Ревью 281, В4: dex.v3_swap_callback — селектор обратного вызова пула в коде исполнителя ТОЙ версии, что сверена у кошелька (задача t114: v2 — contracts/out/ArbExecutor.bin-runtime, v1 — contracts/out/v1/; не сверен — нет пути с причиной); нет — пулы DEX без пути исполнения; решение 284 — вид шага только v2 (NOMI_STABLE) у кошелька с исполнителем v1 — тоже без пути (`step_missing`) |
 | `abi_squad.rs` | Решение 281: ABI событий комиссии SquadSwap V3, фильтры подписки, пул из события |
 | `load_batch_cl.rs` | Вызовы и разбор ступеней 1–2 CL (Infinity CL у менеджера, Uniswap V4 через StateView) |
 | `load_batch_ticks.rs` | Ступень 3: данные установленных тиков CL всех ждущих пулов вместе |
@@ -74,6 +74,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify_dodo.rs` | Проверка пула DODO PMM (решение 86b): реестр фабрики DVM/DPP/DSP (getDODOPoolBidirection) содержит пул |
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_curve_ng.rs` | Проверка пула Curve StableSwap-NG (решение 275): реестр фабрики dex.factory — get_coins(pool) не пуст, is_meta = false, пара среди монет |
+| `verify_metric.rs` | Проверка пула Metric OMM (решение 285): isPool фабрики dex.factory + getImmutables (фабрика, токены пары; порядок токенов пула любой) |
 | `verify_stable_u.rs` | Проверка пулов PancakeSwap Stable (реестр фабрики V2 getPairInfo/getThreePoolPairInfo или dex.stable_pools), Lista Stable (getPairInfos), Saddle/Nerve (dex.stable_pools) и пар WooFi (общий контракт dex.pmm_pool: quoteToken, wooracle = dex.oracle, реализация = dex.pool_implementation, цена оракула; ссылка PoolRef::Member) — решение 122 F, 3 |
 | `verify_inf_stable.rs` | Проверка пула PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): PoolId → poolIdToPoolKey менеджера, крючок в dex.stable_hooks, флаги beforeSwap + ReturnsDelta, валюты; сборка Found из ключа (ссылка — адрес крючка, ключ — для обмена) |
 | `verify_woo.rs` | Решение по паре WooFi (quoteToken, wooracle = dex.oracle, реализация прокси = dex.pool_implementation, цена оракула) и сборка найденного пула |
@@ -85,6 +86,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_dodo.rs` | ABI пула/фабрики DODO PMM (решение 86b): getPMMStateForCall/getUserFeeRate/_BASE_TOKEN_/_QUOTE_TOKEN_/querySellBase/querySellQuote, DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan, getDODOPoolBidirection, NewDVM/NewDPP/NewDSP |
 | `abi_curve.rs` | ABI пула StableSwap шаблона Curve 2020 — Ellipsis (решение 122 F): coins/balances/A/fee/get_dy/exchange, события; topic0 событий с массивами uint256[N] — по числу монет (topics_for), MAX_COINS = 8 |
 | `abi_curve_ng.rs` | ABI пула Curve StableSwap-NG v7.0.0 и фабрики NG (curvefi/stableswap-ng 3332cd4): геттеры, get_dy, события с uint256[], get_coins/is_meta |
+| `abi_nomi.rs` | ABI пары Nomiswap Stable (решение 284; Sourcify full match 56/0x1e40…60f1): getReserves, swapFee, getA, множители, getAmountOut(address, uint256) — 0xca706bcf; события Sync/Swap/Mint/Burn (подписи V2), RampA/StopRampA; константы MAX_FEE, A_PRECISION, MAX_LOOP_LIMIT |
+| `abi_metric.rs` | ABI пула Metric OMM и фабрики (решение 285; SDK @nradko/metric-omm-sdk-v1@0.4.5 + селекторы в коде пулов BSC): getImmutables (24 поля), getSellAndBuyPrices, swap, isPool; topic0 событий — из записанных логов |
 | `abi_stable_u.rs` | ABI PancakeSwap / Lista StableSwap (индексы uint256, is_killed / paused, A с точностью и проверка цены Lista, реестры фабрик, события) — решение 122 F, 3 |
 | `abi_inf_stable.rs` | ABI крючка CLStableSwapHook (verified-код BscScan 0x86c3DC08…): геттеры состояния, get_dy, события TokenExchange / ликвидность / RampA / ApplyNewFee |
 | `abi_saddle.rs` | ABI пула Saddle — Nerve (getToken/getTokenBalance uint8, getAPrecise, swapStorage, paused, calculateSwap, swap с deadline, события) |
@@ -118,6 +121,9 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_dodo.rs` | Состояние пула DODO PMM на блоке (решение 86b): getPMMStateForCall + getUserFeeRate(0) + _BASE_TOKEN_/_QUOTE_TOKEN_ → PoolState::Pmm; net_after_fees, rstate — по одному пулу |
 | `load_curve.rs` | Состояние пула StableSwap на блоке (решение 122 F): coins(k)/balances(k) до первого отката, A(), fee() одним Multicall3 + rates по decimals монет → PoolState::StableSwap |
 | `load_curve_ng.rs` | Состояние пула Curve NG на блоке одним Multicall3: N_COINS, coins/balances, stored_rates, A_precise, fee, offpeg → StableSwap с шаблоном NG |
+| `load_nomi.rs` | Состояние пары Nomiswap Stable на блоке одним Multicall3: token0, getReserves, swapFee, getA, множители → StableSwap шаблона input_fee (решение 284) |
+| `load_metric.rs` | Состояние пула Metric OMM на блоке (решение 285): getImmutables (token0 пула), getSellAndBuyPrices (пригодна ли цена провайдера) → OraclePmm с лесенкой |
+| `load_metric_ladder.rs` | Лесенка ответов пула Metric через виртуальный квотер quoteMetric (решение 285; суммы dex.pmm_ladder_usd, только пары с USDT) |
 | `load_stable_u.rs` | Состояние пула PancakeSwap / Lista StableSwap на блоке (у Lista — A по рампе на время блока, проверка цены, пауза) |
 | `load_inf_stable.rs` | Состояние пула Infinity Stable у крючка одним Multicall3: N_COINS, coins, balances, stored_rates (внешние курсы), A_precise, fee, offpeg_fee_multiplier, pool_manager (сверка с dex.pool_manager); откат stored_rates — пул стоит |
 | `stable_native.rs` | Нативный BNB в пулах PancakeSwap Stable / Lista («122 X (нативный BNB в стейблсвапах)»): метка 0xEeee… ↔ обёртка dex.native_wrapped — монеты пула в пару, индекс метки (StableData.native), пара для реестра фабрики; без сети |
@@ -136,6 +142,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_dodo.rs` | События DODO PMM (решение 86b): любое событие кривой (DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan) → перечитывание пула (событие не несёт пост-состояние кривой) |
 | `events_curve.rs` | События StableSwap (решение 122 F): любое событие пула (обмен, ликвидность, комиссия, A) → перечитывание |
 | `events_curve_ng.rs` | События Curve NG (решение 275): любое событие пула → перечитать (ещё — каждый блок) |
+| `events_nomi.rs` | События пары Nomiswap Stable (решение 284): любое событие пары → перечитать (ещё — каждый блок: swapFee без события, рампа A) |
+| `events_metric.rs` | События пула Metric OMM (решение 285): topic0 из записанных логов → перечитать (ещё — каждый блок) |
 | `events_stable_u.rs` | События PancakeSwap / Lista Stable, Saddle, WooFi и крючка Infinity Stable: любое известное → перечитать |
 | `per_block.rs` | Перечитывание Lista Stable и WooFi на каждом новом блоке (оракул без событий пула) и всех пар общего контракта по его логу |
 | `events_maverick.rs` | События Maverick V2 (решение 122 F): PoolSwap / PoolAddLiquidity / PoolRemoveLiquidity / PoolMigrateBinsUpStack / PoolSetVariableFee → перечитывание пула |

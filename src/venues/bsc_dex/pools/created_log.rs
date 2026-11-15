@@ -44,7 +44,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             continue;
         }
         let (setting, t0, v4) = match f.proto {
-            Proto::V2 => (
+            // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
+            Proto::V2 | Proto::NomiStable => (
                 "dex.factory",
                 IV2Factory::PairCreated::SIGNATURE_HASH,
                 false,
@@ -117,6 +118,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Curve StableSwap-NG (решение 275): событие фабрики PlainPoolDeployed адреса пула не содержит
             // (CurveStableSwapFactoryNG.vy L52-L56) — новые пулы приходят из справочника индексатора.
             Proto::CurveNg => continue,
+            // Metric OMM (решение 285): событие создания пула фабрики BSC — не установлено (createPool BSC ≠ SDK, исходника
+            // нет) — новые пулы приходят из справочника индексатора.
+            Proto::MetricOmm => continue,
             // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
             // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
             // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.
@@ -234,7 +238,7 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
-        Proto::V2 => {
+        Proto::V2 | Proto::NomiStable => {
             let e = IV2Factory::PairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PairCreated не по ABI: {e}"))?;
             (e.token0, e.token1, e.pair)

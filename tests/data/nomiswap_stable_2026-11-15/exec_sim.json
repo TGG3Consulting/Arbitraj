@@ -1,0 +1,7 @@
+{"block":133650877,
+ "what":"eth_call (state override) ArbExecutor v2 runtime contracts/out/ArbExecutor.bin-runtime (sha256 байтов 101aa8477d6a45d4…, 13498 байт) по адресу 0x…0e0e0e, слот 0 = владелец 0x…0b0b; баланс USDT исполнителя = 1000e18 (USDT 0x55d3…7955: mapping балансов в слоте 1 — сверено: keccak(pair,1) = balanceOf(pair) = 629189480763490520199539)",
+ "calldata_execute":"execute(USDT, 0, USDC, 1, 4102444800, [(12, 0x1e40450f8e21bb68490d7d91ab422888fb3d60f1, USDT, USDC, 10000, 0x)])",
+ "nomi_step_kind12_received":"999479008927162877349",
+ "pair_getAmountOut_usdt_1000e18":"999479008927162877349",
+ "solidly_step_kind3_same_route":"execution reverted (у пары нет getAmountOut(uint256,address): PUSH4 0xf140a35a в коде пары нет; 0xca706bcf и swap 0x022c0d9f — есть)",
+ "pair_code_hex_len":35602}

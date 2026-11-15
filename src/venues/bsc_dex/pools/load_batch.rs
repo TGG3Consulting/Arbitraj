@@ -91,6 +91,7 @@ pub async fn states(
             || w.family.proto.is_stable()
             || w.family.proto == Proto::WooPP
             || w.family.proto == Proto::Maverick
+            || w.family.proto == Proto::MetricOmm
         {
             let r = load::state(
                 ctx,

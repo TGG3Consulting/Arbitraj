@@ -8,6 +8,8 @@
 //! • PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): курсы монет с оракулом курса или ERC4626 крючок
 //!   берёт внешними вызовами на каждом обмене (stored_rates), вид монеты не читается — перечитывается всегда; рампа A —
 //!   по времени блока.
+//! • Metric OMM (решение 285): цена провайдера меняется каждым блоком (лесенка ответов пула — на каждом блоке).
+//! • Nomiswap Stable (решение 284): setSwapFee пары события не шлёт, A — рампа по времени блока (getA).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Кто вызывает: pools/session.rs.
@@ -27,7 +29,12 @@ use super::reload;
 pub fn needs(f: &Family) -> bool {
     matches!(
         f.proto,
-        Proto::ListaStable | Proto::WooPP | Proto::InfinityStable | Proto::CurveNg
+        Proto::ListaStable
+            | Proto::WooPP
+            | Proto::InfinityStable
+            | Proto::CurveNg
+            | Proto::NomiStable
+            | Proto::MetricOmm
     )
 }
 

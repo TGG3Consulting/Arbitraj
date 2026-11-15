@@ -17,6 +17,8 @@
 //! Кто вызывает: pools/exec_kind.rs (via_executor, describe), check/probe_exec.rs (no_path).
 //! От чего зависит: ctx.rs, ctx_wallet.rs (кошелёк окружения), families.rs, registry_key.rs (selector),
 //! exec/executor/code.rs (runtime, runtime_v1, Version).
+//! Решение 284: то же правило для вида шага, которого нет в исполнителе v1 (NOMI_STABLE = 12 — только v2): у кошелька
+//! v1 — пулы DEX без пути исполнения с причиной «переразверните исполнитель»; версия не сверена — «не сверен».
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
 use std::collections::HashMap;
@@ -24,6 +26,7 @@ use std::sync::Mutex;
 
 use super::super::ctx::Ctx;
 use super::super::exec::executor::code::{self, Version};
+use super::exec_kind::ExecKind;
 use super::families::Family;
 use super::registry_key;
 
@@ -65,9 +68,9 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
     }
 }
 
-/// Версия исполнителя кошелька окружения. Возвращает: Ok(None) — кошелька или исполнителя нет (проверку решает
+/// Версия исполнителя кошелька окружения. Принимает: окружение, что проверяем (текст причины). Возвращает: Ok(None) — кошелька или исполнителя нет (проверку решает
 /// executor_set); Ok(Some(версия)) — сверена; Err(причина) — исполнитель есть, версия не сверена. Ошибок иных нет.
-fn wallet_version(ctx: &Ctx, sig: &str) -> Result<Option<Version>, String> {
+fn wallet_version(ctx: &Ctx, what: &str) -> Result<Option<Version>, String> {
     let Ok(w) = ctx.wallet() else { return Ok(None) };
     let Some(x) = w.executor.as_deref() else {
         return Ok(None);
@@ -75,7 +78,7 @@ fn wallet_version(ctx: &Ctx, sig: &str) -> Result<Option<Version>, String> {
     match w.executor_version.as_deref().and_then(Version::parse) {
         Some(v) => Ok(Some(v)),
         None => Err(format!(
-            "исполнитель {x} кошелька «{}» не сверен — обратный вызов {sig} не проверить (сверка — при первой сделке или \
+            "исполнитель {x} кошелька «{}» не сверен — {what} не проверить (сверка — при первой сделке или \
              пробе через исполнитель, или кнопкой «Проверить подключение» исполнителя)",
             w.name
         )),
@@ -86,11 +89,15 @@ fn wallet_version(ctx: &Ctx, sig: &str) -> Result<Option<Version>, String> {
 /// Возвращает: None — настройка не задана, у кошелька нет исполнителя или вызов есть в коде сверенной версии;
 /// Some — причина (вызова нет в этой версии / версия не сверена). Ошибок нет.
 pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
+    // Решение 284: вид шага, которого нет у исполнителя v1, — та же причина «без пути исполнения».
+    if let Some(why) = step_missing(ctx, f) {
+        return Some(why);
+    }
     let sig = ctx.dex_text(SETTING, f.id).ok()?.trim().to_string();
     if sig.is_empty() {
         return None;
     }
-    let v = match wallet_version(ctx, &sig) {
+    let v = match wallet_version(ctx, &format!("обратный вызов {sig}")) {
         Ok(Some(v)) => v,
         Ok(None) => return None,
         Err(why) => return Some(why),
@@ -100,6 +107,28 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
         .entry((v, sig.clone()))
         .or_insert_with(|| check(v, &sig))
         .clone()
+}
+
+/// Решение 284: вид шага есть только в исполнителе v2 (номер вида добавлен в contracts/ArbExecutor.sol после v1:
+/// NOMI_STABLE = 12; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
+pub fn v2_only(k: ExecKind) -> bool {
+    matches!(k, ExecKind::NomiStable | ExecKind::Metric)
+}
+
+/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решение 284). Принимает: окружение, вид. Возвращает:
+/// None — вид шага есть у обеих версий, кошелёк без исполнителя (решает executor_set) или исполнитель v2; Some —
+/// причина (исполнитель v1 / версия не сверена). Ошибок нет.
+pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
+    let k = f.executor_kind.filter(|k| v2_only(*k))?;
+    let what = format!("шаг исполнителя {}", k.name());
+    match wallet_version(ctx, &what) {
+        Ok(Some(Version::V1)) => Some(format!(
+            "исполнитель v1 не знает {what} (вид шага есть только в v2) — переразверните исполнитель кошелька \
+             (экран «Маппинг кошельков»)"
+        )),
+        Ok(_) => None,
+        Err(why) => Some(why),
+    }
 }
 
 #[cfg(test)]

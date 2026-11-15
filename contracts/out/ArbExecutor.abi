@@ -238,6 +238,29 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "d0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "d1",
+        "type": "int256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "metricOmmSwapCallback",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "owner",
     "outputs": [

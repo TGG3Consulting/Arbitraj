@@ -21,6 +21,7 @@ pub mod sqrt_price_math;
 pub mod stable_guard;
 pub mod stableswap_exchange;
 pub mod stableswap_ng;
+pub mod stableswap_nomi;
 pub mod stableswap_v1;
 pub mod swap_algebra;
 pub mod swap_cl;

@@ -90,6 +90,7 @@ pub async fn load(
         halted: false,
         ng: None,
         native: None,
+        input_fee: false,
     })))
 }
 

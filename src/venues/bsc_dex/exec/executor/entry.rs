@@ -73,6 +73,24 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Dodo => Params::Dodo,
         ExecKind::Woo => Params::Woo,
         ExecKind::Maverick => Params::Maverick,
+        // Решение 284: пара Nomiswap Stable — шаг без данных; остановленная пара (состояние не прочитано) не исполняется.
+        ExecKind::NomiStable => match &e.pool.state {
+            PoolState::StableSwap(d) if !d.halted => Params::NomiStable,
+            _ => {
+                let why = format!("{}: у пары нет состояния Nomiswap Stable", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
+        // Решение 285: пул Metric — направление в порядке токенов самого пула (OraclePmmData.pool_token0, load_metric.rs).
+        ExecKind::Metric => match &e.pool.state {
+            PoolState::OraclePmm(d) if d.pool_token0.is_some() => Params::Metric {
+                zero_for_one: d.pool_token0 == Some(token_in),
+            },
+            _ => {
+                let why = format!("{}: у пула Metric не прочитан порядок токенов", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

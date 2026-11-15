@@ -145,6 +145,7 @@ fn entry(kind: &str) -> Entry {
         i1: 1,
         ng: None,
         native: None,
+        input_fee: false,
     };
     Entry {
         family: f,

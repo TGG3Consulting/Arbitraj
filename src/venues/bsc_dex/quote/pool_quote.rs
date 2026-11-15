@@ -23,7 +23,7 @@ use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
     bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
-    stableswap_v1, swap_solidly, v2,
+    stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
@@ -339,6 +339,19 @@ pub fn swap(
             // Шаблон StableSwap-NG (Infinity Stable, решение «122 (Infinity Stable)»): динамическая комиссия и D по
             // формуле NG — выход _exchange_received крючка (math/stableswap_ng.rs).
             let out = match &d.ng {
+                // Решение 284: шаблон «комиссия со входа» (Nomiswap Stable) — выход getAmountOut пары
+                // (math/stableswap_nomi.rs).
+                _ if d.input_fee => stableswap_nomi::amount_out(
+                    i,
+                    j,
+                    amount,
+                    &d.balances,
+                    &d.rates,
+                    d.amp,
+                    d.fee,
+                    d.amp_precision,
+                    d.max_rounds,
+                ),
                 Some(ng) => stableswap_ng::exchange_received(
                     i,
                     j,
@@ -381,7 +394,7 @@ pub fn swap(
         // выше последней точки — неисполнимо. Только точный вход.
         (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
             if !exact_in {
-                return Err(why("WooFi: точный выход по лесенке не поддерживается"));
+                return Err(why("PMM от оракула (WooFi / Metric): точный выход по лесенке не поддерживается"));
             }
             // zero_for_one — вход token0; продаём базовую, если она token0 и вход token0 (или наоборот).
             let points = if zero_for_one == d.base_is_token0 {
@@ -391,11 +404,11 @@ pub fn swap(
             };
             if points.is_empty() {
                 return Err(why(
-                    "WooFi: лесенки цен пула нет (dex.pmm_ladder_usd не задана, пауза, цена оракула непригодна или реализация не та)",
+                    "лесенки цен пула нет (dex.pmm_ladder_usd не задана, пауза, цена оракула / провайдера непригодна, реализация не та или пул откатил квотер)",
                 ));
             }
             let out = super::pmm_ladder::out(points, amount).ok_or_else(|| {
-                why("WooFi: объём больше последней точки лесенки цен пула — неисполнимо")
+                why("объём больше последней точки лесенки цен пула — неисполнимо")
             })?;
             Ok(Swapped {
                 amount_in: amount,

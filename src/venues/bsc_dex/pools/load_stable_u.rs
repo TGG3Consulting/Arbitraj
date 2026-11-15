@@ -167,6 +167,7 @@ pub async fn load(
         halted,
         ng: None,
         native: stable_native::native_index(&coins),
+        input_fee: false,
     })))
 }
 

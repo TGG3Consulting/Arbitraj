@@ -26,8 +26,8 @@ use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
     load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dodo,
-    load_elastic, load_inf_stable, load_maverick, load_saddle, load_slipstream, load_solidly,
-    load_stable_u, load_v2v3, load_woo,
+    load_elastic, load_inf_stable, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream,
+    load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -109,6 +109,36 @@ pub async fn state(
         return Err(ctx.err(
             ErrorCode::Internal,
             format!("{}: ссылка на пул Curve NG не того вида", f.title),
+        ));
+    }
+    // Metric OMM (решение 285): вид ядра OraclePmm, пул — отдельный контракт, лесенка ответов пула (load_metric.rs).
+    if f.proto == Proto::MetricOmm {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_metric::load(ctx, tokens, f, *a, pair, usdt, &tag).await?,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Metric не того вида", f.title),
+        ));
+    }
+    // Nomiswap Stable (решение 284): вид ядра StableSwap (шаблон input_fee), пара — отдельный контракт (load_nomi.rs).
+    if f.proto == Proto::NomiStable {
+        if let PoolRef::Contract(a) = reference {
+            return Ok(Loaded {
+                state: load_nomi::load(ctx, *a, pair, &tag).await?,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пару Nomiswap Stable не того вида", f.title),
         ));
     }
     // PancakeSwap / Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: вид ядра StableSwap, свои чтения

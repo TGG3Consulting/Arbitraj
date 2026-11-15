@@ -25,6 +25,15 @@ interface IV3LikePool {
         returns (int256 amount0, int256 amount1);
 }
 
+// Metric OMM (решение 285): swap(address,bool,int128,uint128,bytes,bytes) + metricOmmSwapCallback(int256,int256,bytes) —
+// ABI SDK @nradko/metric-omm-sdk-v1@0.4.5 (src/abis/MetricOmmPool.ts, MetricOmmSimpleRouter.ts), селекторы есть в коде
+// пулов BSC (tests/data/metric_2026-11-15). Пределы цены 0 / uint128.max — как проба на цепи.
+interface IMetricOmmPoolQ {
+    function swap(address recipient, bool zeroForOne, int128 amountSpecified, uint128 priceLimitX64, bytes calldata callbackData, bytes calldata extensionData)
+        external
+        returns (int128, int128);
+}
+
 contract VirtualQuoter {
     uint160 internal constant MIN_SQRT_RATIO_PLUS_1 = 4295128740;
     uint160 internal constant MAX_SQRT_RATIO_MINUS_1 = 1461446703485210103287273052203988822378723970341;
@@ -52,6 +61,28 @@ contract VirtualQuoter {
         }
     }
 
+    // Решение 285: выход пула Metric OMM на точный вход (как quoteExactIn): swap → откат в metricOmmSwapCallback с
+    // дельтами. Возвращает: (взял входа, отдаст).
+    function quoteMetric(address pool, bool zeroForOne, uint256 amountIn) external returns (uint256 used, uint256 out) {
+        require(amountIn <= uint256(uint128(type(int128).max)), "amount");
+        try IMetricOmmPoolQ(pool).swap(
+            address(this), zeroForOne, int128(int256(amountIn)), zeroForOne ? 0 : type(uint128).max, hex"01", ""
+        ) {
+            revert("VQ: no callback");
+        } catch (bytes memory r) {
+            if (r.length != 64) {
+                assembly {
+                    revert(add(r, 32), mload(r))
+                }
+            }
+            (int256 d0, int256 d1) = abi.decode(r, (int256, int256));
+            int256 paid = zeroForOne ? d0 : d1;
+            int256 got = zeroForOne ? d1 : d0;
+            used = paid > 0 ? uint256(paid) : 0;
+            out = got < 0 ? uint256(-got) : 0;
+        }
+    }
+
     function _back(int256 d0, int256 d1) internal pure {
         assembly {
             mstore(0, d0)
@@ -65,4 +96,5 @@ contract VirtualQuoter {
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
+    function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
 }

@@ -194,6 +194,10 @@ pub struct OraclePmmData {
     pub ladder_quote_in: Vec<LadderPoint>,
     /// Лесенка: вход базовой → выход котируемой, по возрастанию входа.
     pub ladder_base_in: Vec<LadderPoint>,
+    /// token0 САМОГО пула, когда порядок токенов пула не по адресу (решение 285: пул Metric OMM — обмену нужен его
+    /// zeroForOne). None — у вида порядок не нужен (WooFi). `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub pool_token0: Option<Address>,
 }
 
 /// Точка лесенки цен пула: точный вход и ответ квотера контракта (выход) на нём.
@@ -239,6 +243,11 @@ pub struct StableData {
     /// (dex.native_wrapped). None — все монеты пула — токены ERC-20.
     #[serde(default)]
     pub native: Option<u8>,
+    /// Шаблон «комиссия со входа» (решение 284): комиссия `fee` (над 10^10) снимается со ВХОДА до расчёта y, y
+    /// округляется вверх, выход = (xp[j] − y) / множитель без вычета 1; две монеты, A·A_PRECISION. false — шаблоны с
+    /// комиссией с выхода (Curve 2020, NG). Математика — в адаптере. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub input_fee: bool,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

@@ -4,7 +4,8 @@
 //! getAPrecise() (A·A_PRECISION с рампой на блоке), swapStorage() (swapFee над 10^10), paused(). Множители точности —
 //! 10^(18 − decimals) монеты (конструктор Swap.sol), как rate = multiplier·1e18 = 10^(36 − decimals) в общей
 //! математике. Собирает PoolState::StableSwap (A_PRECISION = 100, 256 раундов, откат при несходимости).
-//! Кто вызывает: pools/load.rs (ветка Proto::SaddleStable).
+//! Кто вызывает: pools/load.rs (ветка Proto::SaddleStable); calls / parse / build без сети — ещё
+//! tests/bsc_dex_stable_list_live.rs (ревью 292). Пара — (token0, token1), token0 < token1 (TASKS 292 п. 6).
 //! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_saddle.rs, math/stableswap_v1.rs.
 //! Настройки: нет (dex.multicall3 — через node/call.rs).
 //!
@@ -17,7 +18,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolState, StableData};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::stableswap_v1::rate_for_decimals;
@@ -39,16 +40,9 @@ pub fn tokens_of(answers: &[Result<Bytes, String>]) -> Result<Vec<Address>, Stri
     Ok(out)
 }
 
-/// Состояние пула на блоке. Принимает: окружение, токены, пул, пару (token0, token1), блок-тег.
-/// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 18.
-pub async fn load(
-    ctx: &Ctx,
-    tokens: &Tokens,
-    pool: Address,
-    pair: (Address, Address),
-    tag: &str,
-) -> GatewayResult<PoolState> {
-    let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Saddle {pool}: {what}"));
+/// Вызовы чтения: getToken(k), getTokenBalance(k) через один для k < MAX_TOKENS, затем getAPrecise, swapStorage,
+/// paused. Возвращает: вызовы и индекс первого из трёх последних. Ошибок нет.
+pub fn calls(pool: Address) -> (Vec<(Address, Bytes)>, usize) {
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for k in 0..MAX_TOKENS {
         let index = k as u8;
@@ -59,28 +53,73 @@ pub async fn load(
     calls.push((pool, S::getAPreciseCall {}.abi_encode().into()));
     calls.push((pool, S::swapStorageCall {}.abi_encode().into()));
     calls.push((pool, S::pausedCall {}.abi_encode().into()));
+    (calls, tail)
+}
+
+/// Состояние пула на блоке. Принимает: окружение, токены, пул, пару (token0, token1), блок-тег.
+/// Ошибки: узел, ответ не по ABI, монеты пары нет в пуле, decimals > 18.
+pub async fn load(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    pool: Address,
+    pair: (Address, Address),
+    tag: &str,
+) -> GatewayResult<PoolState> {
+    let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Saddle {pool}: {what}"));
+    let (calls, tail) = calls(pool);
     let got = call::try_many(ctx, &calls, tag).await?;
     if got.len() != calls.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), calls.len())));
     }
+    let p = parse(&got[..tail], &got[tail..], pair, &bad)?;
+    let mut decimals = Vec::with_capacity(p.coins.len());
+    for c in &p.coins {
+        decimals.push(tokens.decimals(ctx, *c).await?);
+    }
+    build(p, &decimals, &bad)
+}
+
+/// Разобранные ответы пула (до decimals монет): монеты, балансы, A·A_PRECISION, swapFee, пауза, индексы пары.
+#[derive(Debug, Clone)]
+pub struct Parsed {
+    pub coins: Vec<Address>,
+    pub balances: Vec<U256>,
+    pub amp: U256,
+    pub fee: U256,
+    pub paused: bool,
+    pub i0: u8,
+    pub i1: u8,
+}
+
+/// Разбор ответов без сети (тест ловит изменения загрузки — ревью 292). Принимает: ответы getToken(k) /
+/// getTokenBalance(k) через один (до первого отката getToken), ответы getAPrecise, swapStorage, paused, пару
+/// (token0, token1), конструктор ошибки. Ошибки: ответ не по ABI, откат обязательного вызова, монеты пары нет в пуле.
+pub fn parse(
+    head: &[Result<Bytes, String>],
+    tail: &[Result<Bytes, String>],
+    pair: (Address, Address),
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<Parsed> {
     let mut coins = Vec::new();
     let mut balances = Vec::new();
     for k in 0..MAX_TOKENS {
-        let Ok(c) = &got[2 * k] else { break };
+        let Some(Ok(c)) = head.get(2 * k) else { break };
         coins.push(call::decode::<S::getTokenCall>(c)?);
-        let b = got[2 * k + 1]
-            .as_ref()
-            .map_err(|r| bad(format!("getTokenBalance({k}) откатился: {r}")))?;
+        let b = match head.get(2 * k + 1) {
+            Some(Ok(b)) => b,
+            Some(Err(r)) => return Err(bad(format!("getTokenBalance({k}) откатился: {r}"))),
+            None => return Err(bad(format!("нет ответа getTokenBalance({k})"))),
+        };
         balances.push(call::decode::<S::getTokenBalanceCall>(b)?);
     }
-    let ok = |i: usize| {
-        got[i]
-            .as_ref()
-            .map_err(|r| bad(format!("вызов {i} откатился: {r}")))
+    let ok = |i: usize| match tail.get(i) {
+        Some(Ok(b)) => Ok(b),
+        Some(Err(r)) => Err(bad(format!("вызов {} откатился: {r}", head.len() + i))),
+        None => Err(bad(format!("нет ответа {}", head.len() + i))),
     };
-    let amp = call::decode::<S::getAPreciseCall>(ok(tail)?)?;
-    let fee = call::decode::<S::swapStorageCall>(ok(tail + 1)?)?.swapFee;
-    let paused = call::decode::<S::pausedCall>(ok(tail + 2)?)?;
+    let amp = call::decode::<S::getAPreciseCall>(ok(0)?)?;
+    let fee = call::decode::<S::swapStorageCall>(ok(1)?)?.swapFee;
+    let paused = call::decode::<S::pausedCall>(ok(2)?)?;
     let index = |t: Address| {
         coins
             .iter()
@@ -89,9 +128,25 @@ pub async fn load(
             .ok_or_else(|| bad(format!("монеты {t} нет среди getToken пула")))
     };
     let (i0, i1) = (index(pair.0)?, index(pair.1)?);
-    let mut rates = Vec::with_capacity(coins.len());
-    for c in &coins {
-        let d = tokens.decimals(ctx, *c).await?;
+    Ok(Parsed {
+        coins,
+        balances,
+        amp,
+        fee,
+        paused,
+        i0,
+        i1,
+    })
+}
+
+/// Состояние из разбора и decimals монет пула (по порядку coins). Ошибки: decimals > 18.
+pub fn build(
+    p: Parsed,
+    decimals: &[u8],
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<PoolState> {
+    let mut rates = Vec::with_capacity(decimals.len());
+    for &d in decimals {
         if d > 18 {
             return Err(bad(format!(
                 "decimals {d} > 18 (Swap.sol: «Token decimals exceeds max»)"
@@ -99,6 +154,15 @@ pub async fn load(
         }
         rates.push(rate_for_decimals(d).ok_or_else(|| bad(format!("decimals {d}")))?);
     }
+    let Parsed {
+        balances,
+        amp,
+        fee,
+        paused,
+        i0,
+        i1,
+        ..
+    } = p;
     Ok(PoolState::StableSwap(Box::new(StableData {
         balances,
         rates,

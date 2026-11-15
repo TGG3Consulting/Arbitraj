@@ -18,11 +18,13 @@
      только фраза про DODO.
   3. Nerve BTC Pool `0x6C341938…270c` и ETH Pool `0x146CD24d…A9C0` (та же страница документации) на цепи не проверены и
      математикой не сверены; метапулы Nerve (RUSD, fUSDT, UST) — другой код (MetaSwap), не подключать.
-  4. #[ignore]-тест `nerve_math_matches_live_calculate_swap` в tests/bsc_dex_stable_families.rs ждёт
-     tests/data/nerve/responses.json в старом формате; та же сверка теперь идёт по tests/data/nerve_2026-11-15 в
-     tests/bsc_dex_stable_list_live.rs — старый тест можно перевести на новую запись или убрать (решение за координатором).
+  4. ~~#[ignore]-тест Nerve в tests/bsc_dex_stable_families.rs~~ — **закрыто ревью 292**: убран, сверка Nerve —
+     tests/bsc_dex_stable_list_live.rs (состояние собирает load_saddle на записи tests/data/nerve_2026-11-15).
   5. Ellipsis 3pool у GeckoTerminal есть (dex ellipsis_finance, пара BUSD / USDC): для пары с USDT справочник индексатора
      его не даёт — нужен источник решения 292 или промежуточная USDC.
+  6. Факт кода (ревью 292): load::state получает пару строго (token0, token1), token0 < token1 — путь: load.rs load
+     (Found) / refresh (Entry.pool ← load::built ← Found) / load_batch.rs states (Want из Entry.pool или Found);
+     Found видов Saddle и Curve 2020 строит discover::sorted(coin, quote). Индексы i0 / i1 состояния — по этой паре.
 - **Задача t122 (15.11.2026, ветка t122/small-fixes от 12040c4c) — малые правки перед сборкой, ждёт приёмки.**
   Сделано: (1) повторная проверка пути исполнения после onchain::ensure — по версии из её результата
   (exec/executor/callback_at.rs missing_at; trade.rs, check/probe_exec.rs). Исход меняется, только когда запись версии

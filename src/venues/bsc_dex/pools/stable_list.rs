@@ -1,13 +1,10 @@
 //! Файл: venues/bsc_dex/pools/stable_list.rs
-//! Что делает: решение 292 — пулы StableSwap из списка dex.stable_pools как источник справочника при поиске по
-//! фабрикам (index.factory_scan = да), без индексатора. Для видов saddle_stableswap (Nerve) и curve_stableswap
-//! (Ellipsis, шаблон Curve 2020) у каждого адреса списка читаются монеты самого пула (Saddle — getToken(k), Curve —
-//! coins(k), до первого отката — тем же ABI и разбором, что у проверки и загрузки: load_saddle::tokens_of,
-//! load_curve::coins_of). Пул становится кандидатом для каждой пары (монета подписки, встречный / промежуточный
-//! токен), обе монеты которой среди монет пула. Дальше кандидат идёт обычным путём: справочник фабрик → index::take →
-//! проверка на своём узле (verify_stable_u.rs / verify_curve.rs — dex.stable_pools + пара среди монет пула) →
-//! реестр. Список не задан или пуст — ничего не делается (как до решения 292). Одна пачка Multicall3 на проход.
-//! Кто вызывает: pools/factory_scan.rs (pass).
+//! Что делает: решение 292 — пулы dex.stable_pools видов saddle_stableswap (Nerve) и curve_stableswap (Ellipsis,
+//! Curve 2020) — источник справочника при поиске по фабрикам (index.factory_scan = да), без индексатора: монеты пула
+//! читаются у самого пула (getToken(k) / coins(k) до первого отката — load_saddle::tokens_of, load_curve::coins_of),
+//! кандидат — каждая пара (монета подписки, встречный), обе монеты которой в пуле; дальше — index::take → проверка
+//! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
+//! Кто вызывает: pools/factory_scan.rs (pass); sort — ещё tests/bsc_dex_stable_list_sort.rs.
 //! От чего зависит: ctx.rs, families.rs (all, classify, Proto), abi_saddle.rs, abi_curve.rs, load_saddle.rs,
 //! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool).
 //! Настройки: dex.stable_pools [DEX] (через classify — dex.kind, dex.pool_enabled); dex.load_batch [bsc_dex] —
@@ -155,25 +152,38 @@ pub async fn scan(
     size: usize,
 ) -> Extra {
     let (pools, notes) = listed(ctx);
-    let mut x = Extra {
-        notes,
-        ..Extra::default()
-    };
-    let mut calls = Vec::new();
-    for (f, pool) in &pools {
-        calls.extend(token_calls(f.proto, *pool));
-    }
+    let calls: Vec<(Address, Bytes)> = pools
+        .iter()
+        .flat_map(|(f, pool)| token_calls(f.proto, *pool))
+        .collect();
     if calls.is_empty() {
-        return x;
+        return Extra {
+            notes,
+            ..Extra::default()
+        };
     }
-    x.calls = calls.len();
-    let mut got = call::try_chunks(ctx, &calls, "latest", size)
-        .await
-        .into_iter();
-    for (f, pool) in &pools {
+    let answers = call::try_chunks(ctx, &calls, "latest", size).await;
+    let mut out = sort(&pools, answers, coins, quotes);
+    out.notes.splice(0..0, notes);
+    out.calls = calls.len();
+    out
+}
+
+/// Разбор ответов пачки (без сети): по каждому пулу — ровно его token_calls ответов (вычитываются целиком, даже если
+/// среди них сбой узла — иначе следующий пул взял бы чужие ответы; ревью 292). Принимает: пулы по порядку вызовов,
+/// ответы try_chunks, монеты подписки, встречные. Возвращает: Extra (calls = 0 — считает scan). Ошибок нет.
+pub fn sort(
+    pools: &[(&'static Family, Address)],
+    answers: Vec<call::Piece>,
+    coins: &HashMap<Address, String>,
+    quotes: &[Address],
+) -> Extra {
+    let mut x = Extra::default();
+    let mut got = answers.into_iter();
+    for (f, pool) in pools {
         let n = token_calls(f.proto, *pool).len();
-        let part: Result<Vec<_>, String> = got.by_ref().take(n).collect();
-        let Ok(answers) = part else {
+        let part: Vec<call::Piece> = got.by_ref().take(n).collect();
+        let Ok(answers) = part.into_iter().collect::<Result<Vec<_>, String>>() else {
             x.no_answer += n;
             continue;
         };
@@ -187,8 +197,9 @@ pub async fn scan(
                 continue;
             }
         };
+        // factory_scan.rs берёт одну запись на адрес пула внутри монеты, реестр — одну на пул (TASKS 289 п. 7).
         x.notes.push(format!(
-            "{}: пул {pool:#x} из dex.stable_pools — пар-кандидатов {}",
+            "{}: пул {pool:#x} из dex.stable_pools — пар построено {}, в реестр попадёт одна пара пула (TASKS 289 п. 7)",
             f.id,
             list.len()
         ));

@@ -6,8 +6,9 @@
 //! (stableswap_v1::Template): A_PRECISION = 100 с A·100 даёт ровно то же, что сырой A (формулы Lista/Saddle сводятся к
 //! Curve 2020 точно); рампа A Lista (get_A); проверка цены Lista после обмена (stable_guard): малый обмен в
 //! сбалансированном пуле проходит, обмен, уводящий цену за порог, — нет; (3) сверка своей математики с квотером пула
-//! на ЖИВОЙ записи узла — ждёт записей tests/data/{pancake_stable,lista_stable,nerve}/responses.json (запрос —
-//! tests/README.md), пока записей нет — #[ignore]. WooFi своей математики не имеет (развёрнутый код закрыт).
+//! на ЖИВОЙ записи узла — ждёт записей tests/data/{pancake_stable,lista_stable}/responses.json (запрос —
+//! tests/README.md), пока записей нет — #[ignore]; Nerve — tests/bsc_dex_stable_list_live.rs (ревью 292). WooFi
+//! своей математики не имеет (развёрнутый код закрыт).
 //! Кто вызывает: cargo test (живые — cargo test --test bsc_dex_stable_families -- --ignored, когда записи есть).
 //! От чего зависит: arb::venues::bsc_dex (families, exec_kind, math::stableswap_v1, math::stable_guard,
 //! pools::load_stable_u::ramp), arb::core::types.
@@ -399,8 +400,5 @@ fn lista_math_matches_live_get_dy() {
     live("lista_stable/responses.json", &aprec(255, false), true);
 }
 
-#[test]
-#[ignore = "нет записи tests/data/nerve/responses.json — запрос в tests/README.md (решение 122 F, 3)"]
-fn nerve_math_matches_live_calculate_swap() {
-    live("nerve/responses.json", &aprec(256, true), false);
-}
+// Nerve (Saddle): сверка с calculateSwap живого 3pool — tests/bsc_dex_stable_list_live.rs (запись
+// tests/data/nerve_2026-11-15, состояние собирает load_saddle; ревью 292 — прежний #[ignore]-тест убран).

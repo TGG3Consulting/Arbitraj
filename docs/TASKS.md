@@ -5,6 +5,21 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 302 (15.11.2026, ветка t133/presell-fund-override от rel/dex-all) — сделано, ждёт ревью и приёмки.**
+  Необязательная `presell.fund_fallback` [bsc_dex] = `singleton`: нет пула-источника V2/V3 — пополнение в симуляции от
+  Uniswap V4 PoolManager / Infinity Vault (DECISIONS 302). Не задана — 1 в 1 как раньше. Открыто:
+  1. **Вопрос Тиграну:** пул маршрута в том же держателе с крючком обмена (before/after swap) сейчас запрещает держатель
+     (крючок мог бы читать баланс держателя). Есть ли у пула GAIB 0x5c1b4d20…fbbbf2 крючок обмена — не установлено.
+     Если есть — GAIB так и не пройдёт; ослаблять ли правило (например для групп крючков A/B, решение 32)?
+  2. **Записать с узла** (для теста на записи): на блоке из строки журнала предпроверки GAIB («блок N»):
+     (а) eth_call balanceOf(0x28e2ea090877bf75740558f6bfb36a5ffee9e9df) у токена GAIB; (б) PoolKey / hooks пула
+     0x5c1b4d202437dabcacbee41d382dd0f5fa281c0f58c6bfb8b36afd3625fbbbf2 (StateView / poolKeys менеджера); (в) сырой
+     запрос и ответ eth_simulateV1 предпроверки с presell.fund_fallback = singleton (перевод 3460500000000000000000 GAIB
+     от PoolManager на кошелёк → balanceOf → USDT до → разрешения → execute UR → USDT после) — включить настройку и
+     сохранить из сырого журнала узла. Сейчас покрыта только чистая логика (tests/bsc_dex_dry_fund_holder.rs).
+  3. Для Infinity CL / Bin нужен `dex.vault` у этих DEX (сейчас обязателен только у Infinity Stable и Balancer) — без него
+     держатель Infinity не известен (отказ с причиной).
+
 - **Решение 297 (15.11.2026, ветка t128/ladder-usdt-only от rel/dex-all) — сделано, ждёт ревью и приёмки.** Лесенка
   dex.pmm_ladder_usd (WooFi, Metric OMM, iZiSwap, Biswap V3) — только у пары, где встречный токен = USDT площадки
   (DECISIONS 297; ошибка живого бота: ложная пауза CYBER/WBNB iziswap-bsc и ETC/WBNB biswap-v3-1). Открыто:

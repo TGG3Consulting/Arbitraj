@@ -57,6 +57,9 @@ pub enum ExecKind {
     /// iZiSwap / Biswap V3 (решение 286): `swapX2Y(to, вход, int24.min, «»)` при tokenIn < tokenOut, иначе
     /// `swapY2X(to, вход, int24.max, «»)` + обратный вызов swapX2YCallback / swapY2XCallback → _pay. Только исполнитель v2.
     Izi,
+    /// KyberSwap Classic DMM (решение 287): перевод входа в пул + выход по getTradeInfo() пула (виртуальные резервы и
+    /// комиссия блока, формула DMMLibrary.getAmountOut) в контракте + `pool.swap` (подпись V2). Только исполнитель v2.
+    KyberDmm,
 }
 
 impl ExecKind {
@@ -76,6 +79,7 @@ impl ExecKind {
             ExecKind::NomiStable => "NOMI_STABLE",
             ExecKind::Metric => "METRIC",
             ExecKind::Izi => "IZI",
+            ExecKind::KyberDmm => "KYBER_DMM",
         }
     }
 }
@@ -112,6 +116,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "metric_omm" => ExecKind::Metric,
         // Решение 286: swap любым контрактом (проба на цепи — три фабрики, tests/data/izi_2026-11-15). Шаг 14, только v2.
         "iziswap" | "biswap_v3" => ExecKind::Izi,
+        // Решение 287: swap пула — подпись V2 без белого списка (DMMPool.sol L162-L210: проверок вызывающего нет); шаг 15, только v2.
+        "kyber_dmm" => ExecKind::KyberDmm,
         _ => return None,
     })
 }

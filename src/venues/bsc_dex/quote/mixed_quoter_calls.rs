@@ -137,5 +137,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Maverick V2 не исполняется умным маршрутом (только шаг MAVERICK контракта-исполнителя)",
             ));
         }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): MixedQuoter его пулов не знает — сверка DMMRouter02.
+        PoolKind::AmpV2 => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "KyberSwap DMM не исполняется умным маршрутом (только шаг KYBER_DMM контракта-исполнителя)",
+            ));
+        }
     })
 }

@@ -75,6 +75,10 @@ pub fn request(
             format!("{}: iZiSwap / Biswap V3 сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
         ));
     }
+    // KyberSwap Classic DMM (решение 287): квотер — DMMRouter02.getAmountsOut по пути из одного пула (quoter_dmm.rs).
+    if e.family.proto == Proto::KyberDmm {
+        return super::quoter_dmm::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -376,6 +380,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::Maverick {
         return super::quoter_maverick::decode(out);
+    }
+    if e.family.proto == Proto::KyberDmm {
+        return super::quoter_dmm::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
     // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).

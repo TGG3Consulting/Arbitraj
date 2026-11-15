@@ -48,6 +48,9 @@ contract ArbExecutor {
     // меньший адрес, фабрики сортируют пару), иначе swapY2X(to, сумма, int24.max, «»); пределы точек пул сам обрезает до
     // leftMostPt / rightMostPt. Оплата — swapX2YCallback (x) / swapY2XCallback (y) → _pay. data пусто.
     uint8 internal constant IZI = 14;
+    // Решение 287 (только v2): пул KyberSwap Classic DMM — вход переводом в пул, выход по getTradeInfo() пула (виртуальные
+    // резервы и комиссия этого блока, формула DMMLibrary.getAmountOut), swap как у V2 (та же подпись).
+    uint8 internal constant KYBER_DMM = 15;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -59,6 +62,8 @@ contract ArbExecutor {
     // Доли и комиссии: 10000 bps = весь баланс; комиссия V2 — в долях 1e-6 (как Pool.fee_pips бота).
     uint256 internal constant BPS = 10000;
     uint256 internal constant PIPS = 1000000;
+    // Точность комиссии пула KyberSwap DMM (dmm-smart-contracts@e557b57 MathExt.sol L9: PRECISION = 10**18).
+    uint256 internal constant DMM_PRECISION = 1e18;
 
     // Шаг маршрута. shareBps — доля ТЕКУЩЕГО баланса исполнителя по tokenIn (10000 — весь остаток).
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
@@ -103,7 +108,7 @@ contract ArbExecutor {
 
     // Исполняет маршрут. Вход amountIn токена tokenIn забирается у владельца (нужен approve на этот контракт);
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
-    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
+    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
@@ -269,10 +274,10 @@ contract ArbExecutor {
         require(amount > 0, "amount");
         bool zeroIn = s.tokenIn < s.tokenOut; // token0 < token1 — пулы сортируют токены по адресу (фабрики V2/V3)
         uint8 k = s.kind;
-        if (k == V2 || k == SOLIDLY || k == NOMI_STABLE) {
+        if (k == V2 || k == SOLIDLY || k == NOMI_STABLE || k == KYBER_DMM) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
-            uint256 out = k == V2 ? _v2Out(s, zeroIn) : _pairOut(s, zeroIn, k == NOMI_STABLE);
-            // swap(uint256,uint256,address,bytes) — одна подпись у пары V2, Solidly и Nomiswap Stable (IPools.sol).
+            uint256 out = k == V2 ? _v2Out(s, zeroIn) : k == KYBER_DMM ? _dmmOut(s, zeroIn) : _pairOut(s, zeroIn, k == NOMI_STABLE);
+            // swap(uint256,uint256,address,bytes) — одна подпись у пары V2, Solidly, Nomiswap Stable и KyberSwap DMM (IPools.sol).
             IV2Pair(s.pool).swap(zeroIn ? 0 : out, zeroIn ? out : 0, to, "");
         } else if (k == V3 || k == ALGEBRA) {
             _expect(s.pool, s.tokenIn, amount);
@@ -391,6 +396,21 @@ contract ArbExecutor {
         return inFee * rOut / (rIn * PIPS + inFee);
     }
 
+    // Выход KyberSwap DMM (решение 287): вход = баланс пула − реальный резерв (как в swap пула, DMMPool.sol L188-L193),
+    // формула DMMLibrary.getAmountOut (DMMLibrary.sol L75-L91): вход·(1e18 − комиссия)/1e18, затем x·y=k по виртуальным
+    // резервам. Комиссия — getTradeInfo этого же блока (та, которую пул применит в проверке K). Выход ≥ реального резерва
+    // пул откатит («DMM: INSUFFICIENT_LIQUIDITY»).
+    function _dmmOut(Step calldata s, bool zeroIn) internal view returns (uint256) {
+        (uint256 r0, uint256 r1, uint256 v0, uint256 v1, uint256 fee) = IDmmPool(s.pool).getTradeInfo();
+        uint256 got = IERC20(s.tokenIn).balanceOf(s.pool) - (zeroIn ? r0 : r1);
+        return zeroIn ? _dmmFormula(got, v0, v1, fee) : _dmmFormula(got, v1, v0, fee);
+    }
+
+    function _dmmFormula(uint256 got, uint256 vIn, uint256 vOut, uint256 fee) internal pure returns (uint256) {
+        uint256 inFee = got * (DMM_PRECISION - fee) / DMM_PRECISION;
+        return inFee * vOut / (vIn + inFee);
+    }
+
     // Выход Solidly / Nomiswap Stable: вход = баланс пары − резерв, выход — getAmountOut самой пары (её комиссия и
     // кривая). Резервы — первые два слова getReserves у обеих (uint256 Solidly, uint112 Nomiswap — ABI-слово то же).
     // Nomiswap: getAmountOut(tokenIn, amountIn) (NomiswapStablePair.sol L251); Solidly: getAmountOut(amountIn, tokenIn).
@@ -455,7 +475,7 @@ contract ArbExecutor {
 
     // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).
     function _pushed(uint8 k) internal pure returns (bool) {
-        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE;
+        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM;
     }
 
     // Вход в пул: с баланса исполнителя или прямо с владельца (первый шаг, весь вход маршрута).

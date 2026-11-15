@@ -1,0 +1,53 @@
+{
+ "block": 133682402,
+ "executor": "eth_call с подменой кода ArbExecutor v2 решения 287 (14 960 байт, sha256 байтов 354e3f81ab111372…) по адресу 0x…e0e0e0 от владельца 0x…0b0b (слот 0), слот 1 = WBNB; вход — баланс исполнителя (amountIn = 0, подмена баланса токена: USDT и BUSD — слот 1 mapping, WBNB — слот 3; balance_set — balanceOf исполнителя под той же подменой = balance_in)",
+ "execute": [
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "step": "(15, пул, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "163802455949795737",
+   "router_out": "163802455949795737"
+  },
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "step": "(15, пул, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000",
+   "balance_set": true,
+   "received": "58616491644888292910",
+   "router_out": "58616491644888292910"
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "step": "(15, пул, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "99812231557906097155",
+   "router_out": "99812231557906097155"
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "token_in": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "step": "(15, пул, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "99922920883201096820",
+   "router_out": "99922920883201096820"
+  },
+  {
+   "pool": "0xf81e106c5b44ba9a993fc1f456a4c8e54c47cf34",
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "step": "(15, пул, tokenIn → tokenOut, 10000, «»)",
+   "balance_in": "10000000000000000000",
+   "balance_set": true,
+   "received": "585032222317172202347526",
+   "router_out": "585032222317172202347526",
+   "token_out": "0x633237c6fa30fae46cc5bb22014da30e50a718cc"
+  }
+ ],
+ "v2_kind_0": "тот же маршрут шагом V2 (вид 0, комиссия 3000) — откат во всех 5 случаях (у пула getReserves из 2 слов, не V2)"
+}

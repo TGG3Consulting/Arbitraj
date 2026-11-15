@@ -53,6 +53,17 @@ interface IMetricOmmPool {
 }
 
 // Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
+// KyberSwap Classic DMM (решение 287): KyberNetwork/dmm-smart-contracts@e557b57 contracts/DMMPool.sol L240-L265
+// getTradeInfo (реальные и виртуальные резервы, комиссия блока над 1e18; при ampBps = BPS виртуальные = реальные), L162
+// swap (подпись и селектор как у пары V2 — IV2Pair). Код BSC: фабрика 0x878dfe97…934c — Sourcify match (DMMPool в том же
+// файле); вход — переводом в пул до swap (вход = баланс − резерв, L188-L193).
+interface IDmmPool {
+    function getTradeInfo()
+        external
+        view
+        returns (uint112 reserve0, uint112 reserve1, uint112 vReserve0, uint112 vReserve1, uint256 feeInPrecision);
+}
+
 // Uniswap/v3-core@5ea68a77 contracts/interfaces/pool/IUniswapV3PoolActions.sol L75-L81;
 // pancakeswap/pancake-v3-contracts@98684794 projects/v3-core/contracts/interfaces/pool/IPancakeV3PoolActions.sol L75-L81;
 // velodrome-finance/slipstream@193a6b85 contracts/core/interfaces/pool/ICLPoolActions.sol L131-L137;

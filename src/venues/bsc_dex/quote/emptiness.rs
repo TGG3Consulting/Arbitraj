@@ -63,5 +63,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::OraclePmm(d) => d.paused || !d.feasible || d.price.is_zero(),
         // TickBin (Maverick V2, решение 122 F): пуст при нулевом любом резерве пула (обмен в одну из сторон невозможен).
         PoolState::TickBin(d) => d.reserve0.is_zero() || d.reserve1.is_zero(),
+        // V2 с усилением (решение 287): пуст при нулевом реальном резерве (выход должен быть меньше реального резерва).
+        PoolState::AmpV2(d) => d.reserve0.is_zero() || d.reserve1.is_zero(),
     }
 }

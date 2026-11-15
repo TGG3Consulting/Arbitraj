@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    bin_swap, dmm, maverick_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -426,6 +426,22 @@ pub fn swap(
                     amount_out: r.amount_out,
                     complete: r.complete,
                 })
+                .ok_or_else(none)
+        }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): формула DMMLibrary по виртуальным резервам и комиссии блока
+        // (math/dmm.rs); выход ограничен реальным резервом (иначе контракт откатит).
+        (PoolState::AmpV2(d), PoolKind::AmpV2) => {
+            let s = if zero_for_one {
+                dmm::Side { r_in: d.reserve0, r_out: d.reserve1, v_in: d.v_reserve0, v_out: d.v_reserve1 }
+            } else {
+                dmm::Side { r_in: d.reserve1, r_out: d.reserve0, v_in: d.v_reserve1, v_out: d.v_reserve0 }
+            };
+            let r = if exact_in {
+                dmm::amount_out(amount, s, d.fee).map(|o| (amount, o))
+            } else {
+                dmm::amount_in(amount, s, d.fee).map(|i| (i, amount))
+            };
+            r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
                 .ok_or_else(none)
         }
         _ => Err(none()),

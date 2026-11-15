@@ -8,6 +8,7 @@
 pub mod bin_price;
 pub mod bin_swap;
 pub mod curve_math;
+pub mod dmm;
 pub mod dodo_math;
 pub mod full_math;
 pub mod maverick_math;

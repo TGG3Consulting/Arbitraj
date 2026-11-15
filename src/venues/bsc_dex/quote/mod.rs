@@ -55,6 +55,7 @@ pub mod pool_tax;
 pub mod quoter;
 pub mod quoter_calls;
 pub mod quoter_extra;
+pub mod quoter_dmm;
 pub mod quoter_maverick;
 pub mod quoter_revert;
 pub mod rate;

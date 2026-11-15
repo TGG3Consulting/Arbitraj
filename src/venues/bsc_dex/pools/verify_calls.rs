@@ -14,6 +14,7 @@ use alloy_primitives::{Bytes, keccak256};
 
 use super::super::ctx::Ctx;
 use super::abi_check::IPoolImmutables as P;
+use super::abi_dmm::IDmmFactory;
 use super::abi_elastic::{IElasticFactory, IElasticPool};
 use super::abi_slipstream::ICLFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
@@ -37,6 +38,9 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
         // Nomiswap Stable (решение 284): только factory/token0/token1 (как пара V2); комиссия и A читаются с состоянием
         // (load_nomi.rs), реестр — getPair (registry_call_with).
         Proto::NomiStable => {}
+        // KyberSwap Classic DMM (решение 287): только factory/token0/token1 (DMMPool.sol L35-L37); усиление и комиссия —
+        // в getTradeInfo с состоянием (load_dmm.rs), реестр — getPools (registry_call_with).
+        Proto::KyberDmm => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
@@ -89,6 +93,15 @@ pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
             IV2Factory::getPairCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
+            }
+            .abi_encode(),
+        ),
+        // KyberSwap Classic DMM (решение 287): у пары может быть несколько пулов — getPools(token0, token1) (DMMFactory.sol
+        // L94-L105); пул подтверждён, если он в списке (verify_rules::registered_for).
+        Proto::KyberDmm => Bytes::from(
+            IDmmFactory::getPoolsCall {
+                token0: r.token0,
+                token1: r.token1,
             }
             .abi_encode(),
         ),

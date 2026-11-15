@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dodo,
+    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
     load_elastic, load_inf_stable, load_izi, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -140,6 +140,18 @@ pub async fn state(
             ErrorCode::Internal,
             format!("{}: ссылка на пул iZiSwap не того вида", f.title),
         ));
+    }
+    // KyberSwap Classic DMM (решение 287): вид ядра AmpV2, пул — отдельный контракт, одно чтение getTradeInfo (load_dmm.rs).
+    if f.proto == Proto::KyberDmm {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул DMM не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_dmm::load(ctx, *a, &tag).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
     }
     // Nomiswap Stable (решение 284): вид ядра StableSwap (шаблон input_fee), пара — отдельный контракт (load_nomi.rs).
     if f.proto == Proto::NomiStable {

@@ -84,6 +84,19 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 287 (15.11.2026, ветка t119/exec-kyber-smardex от rel/dex-all 4e214db4) — сделано, ждёт приёмки.** KyberSwap
+  Classic DMM: вид `kyber_dmm` (ядро AmpV2), порт DMMLibrary.getAmountOut (= DMMRouter02 в 24 из 24 ответов цепи),
+  сверка DMMRouter02.getAmountsOut, шаг исполнителя v2 KYBER_DMM = 15 (код в сети v2 14 960 байт). **Открыто:**
+  1. Значения настроек (id DEX `kyberswap_classic_bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/
+     kyberswap_classic_bsc/pools — 200): dex.kind = kyber_dmm, dex.factory = 0x878dfe971d44e9122048308301f540910bbd934c,
+     dex.quoter = 0x78df70615ffc8066cc0887917f2cd72092c86409 (DMMRouter02), dex.pool_enabled = да. dex.quoter_virtual не
+     нужна (у вида виртуального квотера нет).
+  2. Ликвидность малая: USDT/WBNB 0xec30…6381 — 6 730 USD, USDT/BUSD ×400 0xc3da…3b55 — 517 USD (GeckoTerminal 15.11).
+  3. 2 из 13 пулов справочника — фабрика KSFactory (статическая комиссия, другой вид KSPool) — будут отклонены проверкой
+     (factory() ≠ dex.factory); подключение KSPool — отдельная задача (docs/ROADMAP.md, техдолг 287).
+  4. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 287 —
+     be0f73fb…6fb26a); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/kyber_dmm_2026-11-15/exec_sim.json).
 - **Решение 286 (15.11.2026, ветка t118/exec-izi от 9688044a) — сделано, ждёт приёмки.** iZiSwap и Biswap V3: виды
   `iziswap` и `biswap_v3`, лесенка ответов пула через виртуальный квотер quoteIzi, шаг исполнителя v2 IZI = 14 (код в сети
   v2 14 365 байт). **Открыто:**
@@ -101,7 +114,7 @@
      (котировка тогда завышена). Защита — minOut бандла и сверка перед сделкой.
   4. Фабрика biswap-v3-1 0x4d17… на Sourcify нет: совпадение с BiswapFactoryV3 — по длине кода, селектору реестра и
      ответам реестра на записанных пулах (байтового сравнения кода фабрик не делалось).
-  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания 8ae3496b…becde4); сухая
+  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: актуальный SHA-256 кода создания — там; после решения 287 — be0f73fb…6fb26a); сухая
      сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода, exec_sim.json).
   6. Ликвидность: iziswap-bsc ≈2,8 тыс. USD, biswap-v3 ≈2,5 тыс. USD, biswap-v3-1 ≈0,31 млн USD (GeckoTerminal 15.11).
   7. Ревью t118: каждым блоком перечитываются только пулы этих видов с USDT в паре (per_block::each_block; пулы без USDT
@@ -133,7 +146,7 @@
   1. Значения настроек (id DEX `nomiswap_stable` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/nomiswap_stable/pools
      отдаёт эти 3 пары, USDT/USDC ≈835 тыс. $): dex.kind = nomiswap_stable,
      dex.factory = 0xc6b7ee49d386bae4fd501f2d2f8d18828f1f6285, dex.pool_enabled = да.
-  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 286 — 8ae3496b…becde4) —
+  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: актуальный SHA-256 кода создания — там; после решения 287 — be0f73fb…6fb26a) —
      до этого пулы Nomiswap Stable только сигнал («исполнитель v1 не знает шаг исполнителя NOMI_STABLE»).
   3. Сухая сделка через исполнитель на живой паре — после выкладки (на цепи проверено только eth_call с подменой кода,
      tests/data/nomiswap_stable_2026-11-15/exec_sim.json).

@@ -73,6 +73,15 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         // getTickSqrtPriceAndL, math/maverick_tick_math.rs) в D18-масштабе пула: цена tokenA в tokenB = sqrtPrice²/1e18
         // (D18 → единицы токенов — множители масштаба). Оценка размера пробы (решение 73.19), не сверяемая величина.
         PoolState::TickBin(d) => super::tick_bin_spot::coins_for(d, coin0, amount),
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
+        PoolState::AmpV2(d) => {
+            let (vc, vu) = if coin0 {
+                (d.v_reserve0, d.v_reserve1)
+            } else {
+                (d.v_reserve1, d.v_reserve0)
+            };
+            (!vu.is_zero()).then(|| mul_div(amount, vc, vu)).flatten()
+        }
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

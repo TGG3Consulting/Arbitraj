@@ -32,6 +32,16 @@
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
 - Решение 282 (t115): src/venues/bsc_dex/node/heads.rs 246 строк (было 237 — сверх ориентира 200 и до правки: +поле stall и вызов шага уведомления); новые node/head_stall.rs (164) и head_stall_text.rs (60) — в пределах 200; тест tests/bsc_dex_head_stall.rs 246 — сверх ориентира (после rustfmt).
+- Решение 287 (KyberSwap Classic DMM, t119): (а) пулы KSFactory со статической комиссией (KyberSwap Classic «Static Fee»,
+  фабрика 0x1c758af0688502e49140230f6b0ebd376d429be5 по официальной документации; в справочнике GeckoTerminal
+  `kyberswap_classic_bsc` их 2 из 13) — другой вид пула (KSPool), не подключён: проверка видом kyber_dmm их отклоняет по
+  factory(); (б) состояние пула после обмена доли (pool_after.rs) для AmpV2 не считается — вторая доля через тот же пул
+  DMM не допускается (как у прочих видов кроме V2/V3); (в) файлы сверх ориентира 200 строк — pools/load.rs 448 (было 436),
+  pools/families.rs 579 (было 567), quote/quoter_calls.rs 420 (было 413), quote/pool_quote.rs 485 (было 469),
+  quote/depth_band.rs 414 (было 387), pools/created_log.rs 333 (было 320), pools/factory_ask.rs 217 (было 202),
+  pools/factory_calls.rs 249 (было 247), pools/load_batch.rs 232 (было 231), quote/steps.rs 220 (было 216),
+  exec/executor/entry.rs 211 (было 203), core/types/pool.rs 369 (было 362), contracts/ArbExecutor.sol 502 (было 482);
+  новые файлы кода — в пределах 200.
 - Решение 286 (iZiSwap / Biswap V3, t118): (а) подписка на NewPool фабрик и поиск пулов по реестру pool(x, y, fee) не
   подключены — новые пулы только из справочника индексатора (created_log.rs, как Metric); (б) лесенка — только пары с USDT
   (load_metric_ladder.rs: суммы dex.pmm_ladder_usd в USDT): на странице 1 GeckoTerminal у biswap-v3-1 9 из 20 пулов без

@@ -1,6 +1,6 @@
 //! Файл: core/types/pool.rs
 //! Что делает: типы пулов DEX — вид пула (V2, V3, V4 с концентрированной ликвидностью, V4 Bin, PMM, Solidly,
-//! StableSwap, TickBin, PMM от оракула),
+//! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287),
 //! ссылка на пул, состояние пула на уровне «текущая цена и комиссия», крючок V4 и его группа A/B/C.
 //! Кто вызывает: адаптер DEX (создаёт), ядро и интерфейс (показывают, учитывают группу крючка).
 //! От чего зависит: core/types/market.rs, alloy-primitives.
@@ -15,6 +15,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
+pub use super::pool_amp::AmpV2Data;
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
 
@@ -50,6 +51,9 @@ pub enum PoolKind {
     /// контракт на пул; решение 122 F, Maverick V2). Комиссия — своя у каждого направления. Своп идёт по тикам от
     /// активного (по возрастанию — вход token0, по убыванию — вход token1). Состояние — TickBinData.
     TickBin,
+    /// V2 с усилением (решение 287): формула x·y=k по ВИРТУАЛЬНЫМ (усиленным) резервам, выход ограничен реальным
+    /// резервом, комиссия динамическая (своя на каждом блоке). Свой контракт на пул. Состояние — AmpV2Data.
+    AmpV2,
 }
 
 /// Как найти пул в сети.
@@ -167,6 +171,9 @@ pub enum PoolState {
     /// PMM от оракула (решение 122 F, 3): состояние оракула и пары общего контракта. Боксируется (много U256), как Pmm.
     /// Поля — в OraclePmmData.
     OraclePmm(Box<OraclePmmData>),
+    /// V2 с усилением (решение 287): реальные и виртуальные резервы и комиссия блока. Боксируется, как Pmm. Поля — в
+    /// AmpV2Data (core/types/pool_amp.rs).
+    AmpV2(Box<AmpV2Data>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

@@ -1,0 +1,223 @@
+{
+ "block": 133682402,
+ "rpc": "https://bsc-rpc.publicnode.com (только чтение и eth_call с подменой кода)",
+ "factory": {
+  "address": "0x878dfe971d44e9122048308301f540910bbd934c",
+  "sourcify": "match DMMFactory.sol (solc 0.6.12)",
+  "code_bytes": 24063,
+  "push4_getPools_0x5b1dc86f": true,
+  "allPoolsLength": "133",
+  "getPools_USDT_WBNB": [
+   "0xd754bd4dd62d6bb937848cbaa7ca4fe8b9be0096",
+   "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "0x65bcdbaec11ff86d3da8849af781ca267442ccc5",
+   "0x2732d16a9e106d28266c3f5966590c0f3b1a20f4"
+  ]
+ },
+ "router": {
+  "address": "0x78df70615ffc8066cc0887917f2cd72092c86409",
+  "sourcify": "match DMMRouter02.sol",
+  "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+  "source_of_address": "docs.kyberswap.com Classic Contract Addresses, BSC, Dynamic Fee"
+ },
+ "geckoterminal_dex_id": "kyberswap_classic_bsc (GET /networks/bsc/dexes — 200; /dexes/kyberswap_classic_bsc/pools — 200, 13 пулов; 0xfd3b…00ac и 0x0e4b…5ab3 — не из фабрики DMM (getPools/allPools их не содержат) — пулы KSFactory со статической комиссией)",
+ "pools": [
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "ampBps": "15000",
+   "code_bytes": 19176,
+   "push4_getTradeInfo_0xd6694027": true,
+   "push4_swap_0x022c0d9f": true,
+   "getTradeInfo": [
+    "3531242774057311726936",
+    "5645430960599527182",
+    "4188549403198952533668",
+    "7035085567664306877",
+    "1504278085484906"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "353124277405731172",
+     "router_out": "592165319846669"
+    },
+    {
+     "dir": 0,
+     "amount_in": "35312427740573117269",
+     "router_out": "58727150304865241"
+    },
+    {
+     "dir": 0,
+     "amount_in": "353124277405731172693",
+     "router_out": "546233133941485216"
+    },
+    {
+     "dir": 1,
+     "amount_in": "564543096059952",
+     "router_out": "335585177616441400"
+    },
+    {
+     "dir": 1,
+     "amount_in": "56454309605995271",
+     "router_out": "33294431429047525189"
+    },
+    {
+     "dir": 1,
+     "amount_in": "564543096059952718",
+     "router_out": "310715638953714126930"
+    }
+   ]
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "ampBps": "4000000",
+   "code_bytes": 19176,
+   "push4_getTradeInfo_0xd6694027": true,
+   "push4_swap_0x022c0d9f": true,
+   "getTradeInfo": [
+    "287050165626589866422",
+    "224857203047544906493",
+    "88866512846777585122675",
+    "88817250717240817165226",
+    "200511939079136"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "28705016562658986",
+     "router_out": "28683342495646717"
+    },
+    {
+     "dir": 0,
+     "amount_in": "2870501656265898664",
+     "router_out": "2868242546573605364"
+    },
+    {
+     "dir": 0,
+     "amount_in": "28705016562658986642",
+     "router_out": "28674091518923549878"
+    },
+    {
+     "dir": 1,
+     "amount_in": "22485720304754490",
+     "router_out": "22493675069108998"
+    },
+    {
+     "dir": 1,
+     "amount_in": "2248572030475449064",
+     "router_out": "2249311142235817562"
+    },
+    {
+     "dir": 1,
+     "amount_in": "22485720304754490649",
+     "router_out": "22487988656352427464"
+    }
+   ]
+  },
+  {
+   "pool": "0xf8e61e301a44df4e2dbaba570d2cb09039289b31",
+   "token0": "0x3944ac66b9b9b40a6474022d6962b6caa001b5e3",
+   "token1": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "ampBps": "10000",
+   "code_bytes": 19176,
+   "push4_getTradeInfo_0xd6694027": true,
+   "push4_swap_0x022c0d9f": true,
+   "getTradeInfo": [
+    "23322174062921051705771504",
+    "21370211900387024103174",
+    "23322174062921051705771504",
+    "21370211900387024103174",
+    "1503840785344245"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "2332217406292105170577",
+     "router_out": "2133594411831423762"
+    },
+    {
+     "dir": 0,
+     "amount_in": "233221740629210517057715",
+     "router_out": "211271210122795295484"
+    },
+    {
+     "dir": 0,
+     "amount_in": "2332217406292105170577150",
+     "router_out": "1940090190081351250479"
+    },
+    {
+     "dir": 1,
+     "amount_in": "2137021190038702410",
+     "router_out": "2328477625039691392357"
+    },
+    {
+     "dir": 1,
+     "amount_in": "213702119003870241031",
+     "router_out": "230568791733813566157128"
+    },
+    {
+     "dir": 1,
+     "amount_in": "2137021190038702410317",
+     "router_out": "2117298664222576921012190"
+    }
+   ]
+  },
+  {
+   "pool": "0xa23b26fb74b1d11bf1112bc46607d6ffc6e6557a",
+   "token0": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+   "token1": "0xe7c04392a3a426d532f83ca968bcc0341e99583d",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "ampBps": "100000",
+   "code_bytes": 19176,
+   "push4_getTradeInfo_0xd6694027": true,
+   "push4_swap_0x022c0d9f": true,
+   "getTradeInfo": [
+    "21398930898161783786",
+    "111473499868298050350",
+    "604717046393028087502",
+    "694791615363164354067",
+    "501277874502294"
+   ],
+   "quotes": [
+    {
+     "dir": 0,
+     "amount_in": "2139893089816178",
+     "router_out": "2457395966769435"
+    },
+    {
+     "dir": 0,
+     "amount_in": "213989308981617837",
+     "router_out": "245653580751569625"
+    },
+    {
+     "dir": 0,
+     "amount_in": "2139893089816178378",
+     "router_out": "2448743710105678909"
+    },
+    {
+     "dir": 1,
+     "amount_in": "11147349986829805",
+     "router_out": "9697159920032683"
+    },
+    {
+     "dir": 1,
+     "amount_in": "1114734998682980503",
+     "router_out": "968178959040414839"
+    },
+    {
+     "dir": 1,
+     "amount_in": "11147349986829805035",
+     "router_out": "9544262481611120178"
+    }
+   ]
+  }
+ ],
+ "note": "getTradeInfo: [reserve0, reserve1, vReserve0, vReserve1, feeInPrecision]; quotes: router.getAmountsOut(amount_in, [pool], [token_in, token_out]).amounts[1] на том же блоке; dir 0 — вход token0"
+}

@@ -63,6 +63,7 @@
 | `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) Infinity Stable — CLQuoter (основной). |
 | `quoter_extra.rs` | Дополнительный квотер сверки — get_dy крючка Infinity Stable, параллельно с основным (решение «122 (Infinity Stable, ответы)»): расхождение, откат или сбой — сделки нет; решение 261 — на блоке сверки пула, перед сделкой односторонне |
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
+| `quoter_dmm.rs` | Сверка KyberSwap Classic DMM (решение 287): DMMRouter02.getAmountsOut(сумма, [пул], [вход, выход]) — dex.quoter; выход — последний элемент |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 

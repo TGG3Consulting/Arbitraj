@@ -16,6 +16,7 @@
 //! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
 //! настроек, токенов и (через устаревание) блока — всё это в ключе кэша.
 //! Кэш графа (cached, один на состояние реестра) — pools/graph_cache.rs.
+//! Решение 301 (в): брошенный расчёт (quote/abandon.rs) прерывает построение на ближайшем пуле — граф не кладётся в кэш.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build).
 //! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
@@ -30,6 +31,7 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::quote::abandon;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
@@ -89,7 +91,8 @@ impl Graph {
 /// Построение графа из реестра (решение 80). Берёт достоверные, не спящие пулы торгуемых DEX, глубокие хотя бы по
 /// одной стороне (решение 73), и оставляет на пару токенов не больше dex.route_max_pools_per_edge самых глубоких.
 /// Принимает: окружение, реестр, токены, знаки USDT. Возвращает: граф (может быть пустым — путей нет).
-/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge).
+/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge); Timeout — расчёт брошен
+/// (решение 301, quote/abandon.rs).
 pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> GatewayResult<Graph> {
     if let Some(name) = depth_book::missing_setting(ctx) {
         return Err(ctx.not_set(&name, format!("граф маршрутов: не задана {name}")));
@@ -110,6 +113,8 @@ pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> Gatewa
         return Ok(Graph::default());
     };
     for e in reg.snapshot() {
+        // Решение 301 (в): срок расчёта вышел — дальше не строим (атомарное чтение признака на пул).
+        abandon::check(ctx, "построение графа")?;
         // graphable, не tradable (решение 82): V2-форк входит в граф для поиска/сигналов, хотя авто-сделкой не
         // исполняется (допуск к сделке — quote/graph_route::executable). Исключены недостоверные, спящие и не-graphable.
         if !e.valid || e.asleep || !e.family.graphable {

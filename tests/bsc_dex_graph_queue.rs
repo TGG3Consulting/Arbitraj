@@ -6,7 +6,9 @@
 //!     заново (счётчик построений Cache::builds); запрос с более новой версией, более высоким блоком головы или другими
 //!     настройками графа — строит, как раньше;
 //! (б) неудачная глубина пула (расчёт невозможен) считается один раз на ключ глубины: повторные построения графа её не
-//!     пересчитывают (счётчик Book::calcs), причина та же; сменилось состояние пула (ключ) — пересчёт.
+//!     пересчитывают (счётчик Book::calcs), причина та же; сменилось состояние пула (ключ) — пересчёт;
+//! (в) брошенный расчёт (признак quote/abandon.rs поднят — срок расчёта вышел) не ждёт замок и не строит граф
+//!     (Timeout, счётчик построений не растёт); живой расчёт в той же обёртке строит как обычно.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::{graph, registry}, tests/route_common.
 
@@ -17,8 +19,10 @@ use std::sync::Arc;
 use serde_json::json;
 
 use arb::core::types::PoolRef;
+use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::pools::graph;
+use arb::venues::bsc_dex::quote::abandon;
 
 use route_common::{CAKE_USDT_PCS, WBNB_USDT_V2};
 
@@ -69,7 +73,11 @@ async fn waiter_takes_newer_graph_without_rebuild() {
         .await
         .unwrap();
     graph::cached_as_of(&p.ctx, reg, &p.tokens, 18, HEAD, asked).unwrap();
-    assert_eq!(cache.builds(), 4, "другие настройки графа — новое построение");
+    assert_eq!(
+        cache.builds(),
+        4,
+        "другие настройки графа — новое построение"
+    );
 }
 
 #[tokio::test]
@@ -96,7 +104,11 @@ async fn failed_depth_counted_once_per_key() {
     let g1 = graph::build(&p.ctx, reg, &p.tokens, 18).unwrap();
     let mid = book.calcs();
     let g2 = graph::build(&p.ctx, reg, &p.tokens, 18).unwrap();
-    assert_eq!(book.calcs(), mid, "второе построение не пересчитывает ни одной глубины");
+    assert_eq!(
+        book.calcs(),
+        mid,
+        "второе построение не пересчитывает ни одной глубины"
+    );
     assert_eq!(g1.len(), g2.len());
     assert!(
         g2.between(e.coin, e.usdt)
@@ -116,4 +128,32 @@ async fn failed_depth_counted_once_per_key() {
     let before = book.calcs();
     assert!(book.depth(&p.ctx, reg, &p.tokens, &e, 18).is_ok());
     assert_eq!(book.calcs(), before + 1);
+}
+
+#[tokio::test]
+async fn abandoned_calc_does_not_build() {
+    let p = route_common::parts().await;
+    let reg = &p.registry;
+    let cache = reg.graph_cache();
+    // Срок вышел (страж брошен) — граф не строится, ошибка Timeout.
+    let (g, flag) = abandon::guard();
+    drop(g);
+    let got = abandon::scope(flag, async {
+        graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD)
+    })
+    .await;
+    assert_eq!(got.err().map(|e| e.code), Some(ErrorCode::Timeout));
+    assert_eq!(cache.builds(), 0, "брошенный расчёт граф не строит");
+    // Живой расчёт (страж держится) — граф строится; итог равен построению без обёртки.
+    let (_g, flag) = abandon::guard();
+    let live = abandon::scope(flag, async {
+        graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD)
+    })
+    .await
+    .unwrap();
+    assert_eq!(cache.builds(), 1);
+    assert_eq!(
+        live.len(),
+        graph::build(&p.ctx, reg, &p.tokens, 18).unwrap().len()
+    );
 }

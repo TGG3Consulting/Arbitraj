@@ -13,7 +13,7 @@
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
-//! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs,
+//! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
 //! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
@@ -35,7 +35,9 @@ use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
-use super::{Quoting, costs, graph_exec, graph_legs, pick, route_best, route_cache, route_paths};
+use super::{
+    Quoting, abandon, costs, graph_exec, graph_legs, pick, route_best, route_cache, route_paths,
+};
 
 pub use super::graph_exec::{GraphForm, graph_form};
 
@@ -115,6 +117,8 @@ pub async fn quote(
             ),
         ));
     }
+    // Решение 301 (в): срок расчёта вышел — отбор и сплит не считаем.
+    abandon::check(ctx, "отбор путей и сплит графа")?;
     if cap.is_some() {
         cands = route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)?;
         if cands.is_empty() {
@@ -127,6 +131,7 @@ pub async fn quote(
             ));
         }
     }
+    abandon::check(ctx, "сплит графа")?;
     let legs = graph_split::split(ctx, &mut cands, v.side, qty, v.taxes, gas_aware)?;
     // Решения 39 и 146: налоговые правила исполнимости — по налогу ПУЛА каждого шага (Usable.tax_pct), не монеты.
     let exec = graph_exec::executable(ctx, &legs, native::is_native(ctx, asset));
@@ -184,6 +189,10 @@ pub async fn merge(
 /// Запись в журнал «граф-роутер не дал маршрут — котировка по классике» (Warn dex.router_graph). Общая для merge и
 /// route_fit.rs merge (решение 294). Принимает: расчёт, ошибку графа. Ошибок нет.
 pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError) {
+    // Решение 301 (в): брошенный расчёт (срок вышел) — его итог никто не читает, запись журнала не нужна.
+    if abandon::is_set() {
+        return;
+    }
     q.ctx
         .log(
             Level::Warn,

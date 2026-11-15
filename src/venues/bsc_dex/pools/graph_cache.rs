@@ -16,6 +16,8 @@
 //! реестра, настроек и токенов (build блока не читает; блок в ключе — только чтобы граф не жил дольше блока): «не
 //! торгуем вслепую» не нарушается. Блок: граф, построенный при голове не ниже запрошенной, годится; голова запроса выше —
 //! граф строится заново, как раньше. builds — счётчик построений (замер, без настроек).
+//! Решение 301 (в): брошенный расчёт (quote/abandon.rs — срок расчёта вышел) не ждёт замок и не строит: признак
+//! проверяется до ожидания замка и после его получения.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (через graph::cached); pools/registry.rs (хранит Cache).
 //! От чего зависит: graph.rs (build), registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct
@@ -33,6 +35,7 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::quote::abandon;
 use super::super::tokens::Tokens;
 use super::graph::{Graph, build};
 use super::registry::Registry;
@@ -127,7 +130,7 @@ type Built = (Stamp, Arc<Graph>);
 
 /// Граф текущего состояния: из кэша, если граф там не старше текущих реестра и блока головы и построен на тех же
 /// настройках графа (решение 301), иначе строится заново (build) и кладётся в кэш. Принимает: окружение, реестр,
-/// токены, знаки USDT, номер блока головы. Возвращает: граф. Ошибки: как у build.
+/// токены, знаки USDT, номер блока головы. Возвращает: граф. Ошибки: как у build; Timeout — расчёт брошен (abandon).
 pub fn cached(
     ctx: &Ctx,
     reg: &Registry,
@@ -142,7 +145,7 @@ pub fn cached(
 /// То же, что cached, для версии реестра, прочитанной вызывающим раньше (решение 301: так граф видит тот, кто ждал
 /// замок построения, пока версия росла; этим же проверяется очередь построений — tests/bsc_dex_graph_queue.rs).
 /// Принимает: окружение, реестр, токены, знаки USDT, блок головы, версию реестра запроса. Возвращает: граф не старше
-/// запроса. Ошибки: как у build.
+/// запроса. Ошибки: как у build; Timeout — расчёт брошен (quote/abandon.rs).
 pub fn cached_as_of(
     ctx: &Ctx,
     reg: &Registry,
@@ -184,12 +187,15 @@ pub fn cached_as_of(
     if let Some(g) = hit() {
         return Ok(g);
     }
+    // Решение 301 (в): срок расчёта вышел — замок не ждём.
+    abandon::check(ctx, "ожидание построения графа")?;
     // Одно построение за раз; дождавшийся берёт граф, построенный другим, если он не старше запроса (решение 301).
     // Вызывается из счёта котировки вне рабочих потоков tokio (quote/cpu.rs) — ожидание замка рантайм не держит.
     let _one = cache.building.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(g) = hit() {
         return Ok(g);
     }
+    abandon::check(ctx, "построение графа")?;
     cache.builds.fetch_add(1, Ordering::Relaxed);
     let slot = &cache.slot;
     let g = Arc::new(build(ctx, reg, tokens, usdt_dec)?);

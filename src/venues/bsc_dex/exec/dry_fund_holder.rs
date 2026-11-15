@@ -15,6 +15,7 @@
 //!   sync / _settle (VaultReserve), учёт пулов reservesOfApp меняется дельтами; CLPool.swap
 //!   (src/pool-cl/libraries/CLPool.sol) и BinPool.swap (src/pool-bin/libraries/BinPool.sol) — по своему состоянию
 //!   (slot0, liquidity, ticks / reserveOfBin), без чтения балансов.
+//!
 //! Значит изъятие монеты у держателя цену обмена не меняет; нехватка у держателя токена, который сделка забирает (take),
 //! может дать только откат (отказ), но не завышенный выход. Честность НЕ гарантируется и держатель НЕ берётся, если в
 //! маршруте есть пул в этом же держателе: (1) не V4 / Infinity CL / Infinity Bin (например Infinity Stable — StableSwap в

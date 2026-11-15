@@ -84,7 +84,7 @@ impl Graph {
             .get(&token)
             .into_iter()
             .flatten()
-            .map(move |&i| &*self.edges[i])
+            .map(move |&i| self.edges[i].as_ref())
     }
 
     /// Рёбра между парой токенов (концы в любом порядке). Ошибок нет.

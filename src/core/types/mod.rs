@@ -27,6 +27,7 @@ pub mod pool_fictive;
 pub mod pool_depth;
 pub mod pool_solidly;
 pub mod pool_tick_bin;
+pub mod pool_vault;
 pub mod presell;
 pub mod send;
 pub mod trade;
@@ -57,7 +58,7 @@ pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
     AmpV2Data, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
     PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
-    TickReserves,
+    TickReserves, VaultCurve, VaultPoolData,
 };
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
 pub use presell::DexPresell;

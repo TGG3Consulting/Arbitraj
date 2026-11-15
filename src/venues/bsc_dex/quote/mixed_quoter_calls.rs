@@ -144,6 +144,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "KyberSwap DMM не исполняется умным маршрутом (только шаг KYBER_DMM контракта-исполнителя)",
             ));
         }
+        // Пул в общем хранилище (Balancer V2, решение 289): MixedQuoter его не знает — сверка Vault.queryBatchSwap.
+        PoolKind::VaultPool => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Balancer V2 не исполняется умным маршрутом (только шаг BALANCER контракта-исполнителя)",
+            ));
+        }
         // Пара с фиктивными резервами (SmarDex, решение 288): MixedQuoter её не знает — сверка виртуальным квотером.
         PoolKind::Fictive => {
             return Err(ctx.err(

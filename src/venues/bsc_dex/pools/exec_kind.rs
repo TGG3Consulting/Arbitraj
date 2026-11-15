@@ -63,6 +63,9 @@ pub enum ExecKind {
     /// SmarDex (решение 288): `pair.swap(to, zeroForOne по порядку адресов, +вход, «»)` + обратный вызов
     /// `smardexSwapCallback` → _pay. Только исполнитель v2.
     Smardex,
+    /// Balancer V2 (решение 289): approve хранилищу ровно на шаг + `Vault.swap(GIVEN_IN, poolId, вход, получатель)`;
+    /// пул шага — хранилище, data = abi.encode(bytes32 poolId). Только исполнитель v2.
+    Balancer,
 }
 
 impl ExecKind {
@@ -84,6 +87,7 @@ impl ExecKind {
             ExecKind::Izi => "IZI",
             ExecKind::KyberDmm => "KYBER_DMM",
             ExecKind::Smardex => "SMARDEX",
+            ExecKind::Balancer => "BALANCER",
         }
     }
 }
@@ -124,6 +128,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "kyber_dmm" => ExecKind::KyberDmm,
         // Решение 288: swap пары без белого списка (SmardexPair.sol L155-L319: только lock и «to» не токен пары); шаг 16, v2.
         "smardex" => ExecKind::Smardex,
+        // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
+        // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
+        "balancer_v2" => ExecKind::Balancer,
         _ => return None,
     })
 }

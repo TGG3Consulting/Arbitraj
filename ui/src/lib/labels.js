@@ -63,6 +63,7 @@ const CHOICE = {
   biswap_v3: 'Biswap V3 (форк iZiSwap, лесенка ответов пула)',
   kyber_dmm: 'KyberSwap Classic DMM (усиление amp, динамическая комиссия)',
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
+  balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',
@@ -102,6 +103,7 @@ const POOL_KIND = {
   TickBin: 'Тики-бины (Maverick V2)',
   AmpV2: 'V2 с усилением (KyberSwap DMM)',
   Fictive: 'Фиктивные резервы (SmarDex)',
+  VaultPool: 'Пул в хранилище (Balancer V2)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

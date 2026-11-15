@@ -79,6 +79,16 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let (fc, fu) = if coin0 { (d.fictive0, d.fictive1) } else { (d.fictive1, d.fictive0) };
             (!fu.is_zero()).then(|| mul_div(amount, fc, fu)).flatten()
         }
+        // Пул в общем хранилище (Balancer V2, решение 289): цена малой пробы (1/10^6 баланса встречного токена) по формуле
+        // пула без комиссии (math/balancer_math.rs) — оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::VaultPool(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let mut nf = (**d).clone();
+            nf.fee = U256::ZERO;
+            let probe = *d.balances.get(iu as usize)? / U256::from(1_000_000u32);
+            let out = super::super::math::balancer_math::amount_out(&nf, iu.into(), ic.into(), probe)?;
+            (!probe.is_zero()).then(|| mul_div(amount, out, probe)).flatten()
+        }
         // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
         PoolState::AmpV2(d) => {
             let (vc, vu) = if coin0 {

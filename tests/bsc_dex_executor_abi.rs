@@ -110,6 +110,8 @@ fn kinds_match_contract_constants() {
         ("KYBER_DMM", Params::KyberDmm),
         // Решение 288: пара SmarDex — только v2.
         ("SMARDEX", Params::Smardex),
+        // Решение 289: пул Balancer V2 — только v2.
+        ("BALANCER", Params::Balancer { pool_id: B256::ZERO }),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -151,6 +153,11 @@ fn step_data_layouts() {
         <(U256, U256, bool)>::abi_decode_params(&b).unwrap(),
         (U256::ZERO, U256::from(1u8), false)
     );
+    // BALANCER (решение 289) — abi.encode(bytes32 poolId): одно слово, id как есть.
+    let id = B256::repeat_byte(0x7e);
+    let bl = Params::Balancer { pool_id: id }.data();
+    assert_eq!(bl.len(), 32);
+    assert_eq!(B256::abi_decode(&bl).unwrap(), id);
     let sd = Params::Saddle { i: 2, j: 1 }.data();
     assert_eq!(sd.len(), 64);
     assert_eq!((sd[31], sd[63]), (2, 1));

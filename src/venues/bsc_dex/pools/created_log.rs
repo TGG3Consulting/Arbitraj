@@ -126,6 +126,10 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // iZiSwap / Biswap V3 (решение 286): подписка на NewPool фабрики не подключена (техдолг, docs/ROADMAP.md) —
             // новые пулы приходят из справочника индексатора.
             Proto::IziSwap | Proto::BiswapV3 => continue,
+            // Balancer V2 (решение 289): пул регистрирует хранилище (PoolRegistered — от адреса Vault, токены — отдельным
+            // TokensRegistered, IVault.sol L235, L273); подписка на них не подключена (техдолг, docs/ROADMAP.md) — новые
+            // пулы приходят из справочника индексатора.
+            Proto::BalancerV2 => continue,
             // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
             // (DMMFactory.sol L22-L28, L60).
             Proto::KyberDmm => (

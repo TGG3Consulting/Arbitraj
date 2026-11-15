@@ -1,6 +1,7 @@
 //! Файл: core/types/pool.rs
 //! Что делает: типы пулов DEX — вид пула (V2, V3, V4 с концентрированной ликвидностью, V4 Bin, PMM, Solidly,
-//! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287, пара с фиктивными резервами — решение 288),
+//! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287, пара с фиктивными резервами — решение 288, пул в
+//! общем хранилище — решение 289),
 //! ссылка на пул, состояние пула на уровне «текущая цена и комиссия», крючок V4 и его группа A/B/C.
 //! Кто вызывает: адаптер DEX (создаёт), ядро и интерфейс (показывают, учитывают группу крючка).
 //! От чего зависит: core/types/market.rs, alloy-primitives.
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
 pub use super::pool_fictive::FictiveData;
+pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
 
@@ -59,6 +61,10 @@ pub enum PoolKind {
     /// два шага в зависимости от средней цены, которая пересчитывается к времени блока обмена. Свой контракт на пару.
     /// Состояние — FictiveData.
     Fictive,
+    /// Пул в общем хранилище (решение 289): токены всех пулов лежат в одном контракте-хранилище, обмен — через
+    /// хранилище по id пула, формула — контракта пула (весовая или стейблсвап). N токенов в пуле; ребро графа — пара
+    /// токенов (индексы в состоянии). Состояние — VaultPoolData.
+    VaultPool,
 }
 
 /// Как найти пул в сети.
@@ -182,6 +188,9 @@ pub enum PoolState {
     /// Пара с фиктивными резервами (решение 288): резервы, фиктивные резервы, средняя цена, комиссии и время блока.
     /// Боксируется, как Pmm. Поля — в FictiveData (core/types/pool_fictive.rs).
     Fictive(Box<FictiveData>),
+    /// Пул в общем хранилище (решение 289): id пула, балансы и множители точности токенов, комиссия, кривая, индексы
+    /// пары. Боксируется, как Pmm. Поля — в VaultPoolData (core/types/pool_vault.rs).
+    VaultPool(Box<VaultPoolData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

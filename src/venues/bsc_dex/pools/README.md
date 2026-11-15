@@ -74,6 +74,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify_dodo.rs` | Проверка пула DODO PMM (решение 86b): реестр фабрики DVM/DPP/DSP (getDODOPoolBidirection) содержит пул |
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_curve_ng.rs` | Проверка пула Curve StableSwap-NG (решение 275): реестр фабрики dex.factory — get_coins(pool) не пуст, is_meta = false, пара среди монет |
+| `verify_balancer.rs` | Проверка пула Balancer V2 (решение 289): getVault = dex.vault, getPool(getPoolId) хранилища = этот адрес (самозванец отсекается), isPoolFromFactory у dex.factory / dex.balancer_stable_factory, пара — среди getPoolTokens |
 | `verify_metric.rs` | Проверка пула Metric OMM (решение 285): isPool фабрики dex.factory + getImmutables (фабрика, токены пары; порядок токенов пула любой) |
 | `verify_izi.rs` | Проверка пула iZiSwap / Biswap V3 (решение 286): поля пула factory = dex.factory, tokenX / tokenY = пара, fee; реестр фабрики pool(x, y, fee) = пул (uint24 у iZiSwap, uint16 у Biswap V3) |
 | `verify_stable_u.rs` | Проверка пулов PancakeSwap Stable (реестр фабрики V2 getPairInfo/getThreePoolPairInfo или dex.stable_pools), Lista Stable (getPairInfos), Saddle/Nerve (dex.stable_pools) и пар WooFi (общий контракт dex.pmm_pool: quoteToken, wooracle = dex.oracle, реализация = dex.pool_implementation, цена оракула; ссылка PoolRef::Member) — решение 122 F, 3 |
@@ -90,6 +91,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_nomi.rs` | ABI пары Nomiswap Stable (решение 284; Sourcify full match 56/0x1e40…60f1): getReserves, swapFee, getA, множители, getAmountOut(address, uint256) — 0xca706bcf; события Sync/Swap/Mint/Burn (подписи V2), RampA/StopRampA; константы MAX_FEE, A_PRECISION, MAX_LOOP_LIMIT |
 | `abi_dmm.rs` | ABI KyberSwap Classic DMM (решение 287; dmm-smart-contracts@e557b57, фабрика BSC — Sourcify match): пул getTradeInfo и события (Sync с виртуальными резервами, Swap, Mint, Burn, UpdateEMA), фабрика getPools / isPool / PoolCreated, роутер DMMRouter02.getAmountsOut (квотер сверки) |
 | `abi_smardex.rs` | ABI пары SmarDex (решение 288; фабрика BSC — Sourcify match = SmarDex-Ecosystem/dex-smart-contracts deployments/bsc): getReserves, getFictiveReserves, getPriceAverage, getPairFees, события пары; Multicall3.getCurrentBlockTimestamp; реестр и поля пары — как V2 |
+| `abi_balancer.rs` | ABI Balancer V2 (решение 289; ACSI Finance BSC, исходник — balancer-deployments 20210418-vault / 20210418-weighted-pool / 20210624-stable-pool = Sourcify): Vault — getPool, getPoolTokens, queryBatchSwap; пул — getVault, getPoolId, getSwapFeePercentage, getPausedState, getNormalizedWeights, getAmplificationParameter, события (комиссия, пауза, рампа A); фабрика — isPoolFromFactory |
 | `abi_metric.rs` | ABI пула Metric OMM и фабрики (решение 285; SDK @nradko/metric-omm-sdk-v1@0.4.5 + селекторы в коде пулов BSC): getImmutables (24 поля), getSellAndBuyPrices, swap, isPool; topic0 событий — из записанных логов |
 | `abi_izi.rs` | ABI пулов iZiSwap и Biswap V3 (решение 286): геттеры пула, реестр фабрики (две подписи), state(), topic0 событий обоих видов (исходник iZiSwap-core@3fe21eba, Sourcify BiswapPoolV3 / BiswapFactoryV3, факт цепи tests/data/izi_2026-11-15) |
 | `abi_stable_u.rs` | ABI PancakeSwap / Lista StableSwap (индексы uint256, is_killed / paused, A с точностью и проверка цены Lista, реестры фабрик, события) — решение 122 F, 3 |
@@ -128,6 +130,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_nomi.rs` | Состояние пары Nomiswap Stable на блоке одним Multicall3: token0, getReserves, swapFee, getA, множители → StableSwap шаблона input_fee (решение 284) |
 | `load_dmm.rs` | Состояние пула KyberSwap Classic DMM на блоке одним getTradeInfo (решение 287): реальные и виртуальные резервы, комиссия блока → PoolState::AmpV2; перечитывается каждым блоком (комиссия по номеру блока) |
 | `load_smardex.rs` | Состояние пары SmarDex на блоке одной пачкой (решение 288): резервы, фиктивные резервы, средняя цена и её время, комиссии, время блока → PoolState::Fictive; перечитывается каждым блоком |
+| `load_balancer.rs` | Состояние пула Balancer V2 на блоке одной пачкой (решение 289): getPoolTokens хранилища, комиссия, пауза, веса / A; id, вид кривой (фабрика) и decimals — один раз на пул; PoolState::VaultPool |
+| `load_balancer_fixed.rs` | Неизменяемое у пула Balancer V2 (решение 289): id, вид кривой (какая фабрика создала — isPoolFromFactory), множители точности по decimals; один раз на пул, в памяти |
 | `load_metric.rs` | Состояние пула Metric OMM на блоке (решение 285): getImmutables (token0 пула), getSellAndBuyPrices (пригодна ли цена провайдера) → OraclePmm с лесенкой |
 | `load_metric_ladder.rs` | Лесенка ответов пула Metric через виртуальный квотер quoteMetric (решение 285; суммы dex.pmm_ladder_usd, только пары с USDT); общий проход read_with — и для iZiSwap (quoteIzi, решение 286) |
 | `load_izi.rs` | Состояние пула iZiSwap / Biswap V3 на блоке (решение 286): tokenX, tokenY, state() (sqrtPrice_96) и лесенка ответов пула через quoteIzi; ядро OraclePmm, pool_token0 = tokenX |
@@ -152,6 +156,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_nomi.rs` | События пары Nomiswap Stable (решение 284): любое событие пары → перечитать (ещё — каждый блок: swapFee без события, рампа A) |
 | `events_dmm.rs` | События пула KyberSwap Classic DMM (решение 287): любое известное событие (Sync, Swap, UpdateEMA, Mint, Burn) → перечитать пул (getTradeInfo) |
 | `events_smardex.rs` | События пары SmarDex (решение 288): любое известное событие (Sync, Swap, FeesChanged, Mint, Burn) → перечитать пару |
+| `events_balancer.rs` | События пула Balancer V2 (решение 289): SwapFeePercentageChanged, PausedStateChanged, AmpUpdateStarted / Stopped → перечитать; балансы меняет хранилище — перечитывание каждым блоком |
 | `events_metric.rs` | События пула Metric OMM (решение 285): topic0 из записанных логов → перечитать (ещё — каждый блок) |
 | `events_izi.rs` | События пулов iZiSwap / Biswap V3 (решение 286): любое известное событие → перечитать пул (ещё — каждым блоком, per_block.rs) |
 | `events_stable_u.rs` | События PancakeSwap / Lista Stable, Saddle, WooFi и крючка Infinity Stable: любое известное → перечитать |

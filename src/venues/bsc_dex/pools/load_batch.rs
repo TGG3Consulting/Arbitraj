@@ -95,6 +95,7 @@ pub async fn states(
             || matches!(w.family.proto, Proto::IziSwap | Proto::BiswapV3)
             || w.family.proto == Proto::KyberDmm
             || w.family.proto == Proto::Smardex
+            || w.family.proto == Proto::BalancerV2
         {
             let r = load::state(
                 ctx,

@@ -158,6 +158,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "KyberSwap DMM не исполняется Universal Router (шаг KYBER_DMM контракта-исполнителя)",
         )),
+        // Пул в общем хранилище (Balancer V2, решение 289): только шаг BALANCER исполнителя v2.
+        PoolKind::VaultPool => Err(ctx.err(
+            ErrorCode::Internal,
+            "Balancer V2 не исполняется Universal Router (шаг BALANCER контракта-исполнителя)",
+        )),
         // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
         PoolKind::Fictive => Err(ctx.err(
             ErrorCode::Internal,

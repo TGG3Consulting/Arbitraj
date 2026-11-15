@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 294 (t125): src/core/profit.rs 375 строк (было 354 — сверх ориентира 200 и до правки: чтение
+  size.final_fit_steps и ветка NoRoute в final_calc; дробить — вынести final_calc / final_fillable в отдельный файл),
+  src/core/prices.rs 221 (было 209: QuoteErr и вызов fit_volume.rs retry), src/core/precheck_fast.rs 264 (было 263),
+  tests/core_fit_volume_294.rs 297, tests/route_common/mod.rs 465 (было 459; load / v3 / v2 / ctx стали pub). В пределах
+  200 — новые core/fit_volume.rs 153, core/final_fit.rs 91.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

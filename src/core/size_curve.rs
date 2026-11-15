@@ -72,8 +72,8 @@ impl<S: Source> Curve for SourceCurve<'_, S> {
 }
 
 /// Точка кривой из расчёта. Бюджет — по наибольшему списанию (худшая цена покупки), не по средней (решение 66).
-/// Ошибок нет.
-fn point(qty: Decimal, c: Calc) -> Point<Calc> {
+/// Ошибок нет. Решение 294: та же точка — у финального расчёта с уменьшением объёма (final_fit.rs).
+pub(super) fn point(qty: Decimal, c: Calc) -> Point<Calc> {
     Point {
         qty,
         invested: c.spend_max,

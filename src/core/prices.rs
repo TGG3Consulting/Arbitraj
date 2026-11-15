@@ -16,7 +16,9 @@
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, signal_probe.rs, settings.
 //! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms,
-//! signal.probe_usd (решение 260, та же область, что у потолка).
+//! signal.probe_usd (решение 260, та же область, что у потолка), signal.fit_halvings (решение 294, fit_volume.rs).
+//! Решение 294: котировка на объёме проверки не поместилась (код шлюза NoRoute) и задана signal.fit_halvings — повтор
+//! на объёме вдвое меньше до минимумов площадок (fit_volume.rs retry); не задана — как раньше.
 
 use rust_decimal::Decimal;
 
@@ -25,6 +27,7 @@ use crate::settings::read::At;
 
 use super::deps::Deps;
 use super::engine::{Core, lk, rd};
+use super::fit_volume::QuoteErr;
 use super::signal::Prices;
 use crate::gateway::contract::VenueKind;
 
@@ -49,8 +52,13 @@ pub async fn quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote
     Ok((back(&dir.buy_on, qa), back(&dir.sell_on, qb)))
 }
 
-/// Котировки обеих сторон на тике: сторона DEX — из памяти, если годится (решение 109). Ошибки: как у quotes.
-async fn tick_quotes(core: &Core, dir: &Direction, qty: Decimal) -> Result<(Quote, Quote), String> {
+/// Котировки обеих сторон на тике: сторона DEX — из памяти, если годится (решение 109). Ошибки: как у quotes, с
+/// признаком «объём не помещается» (решение 294, fit_volume.rs QuoteErr).
+pub(super) async fn tick_quotes(
+    core: &Core,
+    dir: &Direction,
+    qty: Decimal,
+) -> Result<(Quote, Quote), QuoteErr> {
     let (qa, qb) = tokio::join!(
         side_quote(core, dir, Side::Buy, qty),
         side_quote(core, dir, Side::Sell, qty)
@@ -64,7 +72,7 @@ async fn side_quote(
     dir: &Direction,
     side: Side,
     qty: Decimal,
-) -> Result<Quote, String> {
+) -> Result<Quote, QuoteErr> {
     let deps = &core.inner.deps;
     let venue = if side == Side::Buy {
         &dir.buy_on
@@ -99,7 +107,7 @@ async fn side_quote(
     let q = a
         .quote(&on, side, qty)
         .await
-        .map_err(|e| format!("{}: {}", venue.0, e.message))?;
+        .map_err(|e| QuoteErr::of(&venue.0, &e))?;
     let q = super::venue_ticker::quote_back(core, &dir.asset, venue, q);
     if let Some((key, generation, ttl)) = cached {
         lk(&core.inner.quote_cache).put(key, qty, q.clone(), generation, ttl);
@@ -141,7 +149,11 @@ pub async fn for_direction(
     };
     // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).
     let generation = super::window_dex::generation(core, dir);
-    let (qa, qb) = tick_quotes(core, dir, want).await?;
+    // Решение 294: не поместилось (NoRoute) и задана signal.fit_halvings — объём проверки вдвое меньше (fit_volume.rs).
+    let (qa, qb, want) = match tick_quotes(core, dir, want).await {
+        Ok((qa, qb)) => (qa, qb, want),
+        Err(e) => super::fit_volume::retry(core, dir, ref_price, want, e).await?,
+    };
     // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87; решение 260 — не выше объёма
     // проверки). fillable_qty ≤ запрошенного, поэтому меньшая из глубин обеих сторон уже в его пределах. Требовать
     // полного заполнения потолка нельзя: тонкие пулы тогда умирают здесь и не доходят до подбора объёма (66).

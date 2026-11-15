@@ -124,7 +124,9 @@ pub mod feed_watch_logic;
 #[cfg(test)]
 mod feed_watch_tests;
 pub mod fills;
+pub mod final_fit;
 pub mod first_pass;
+pub mod fit_volume;
 pub mod frozen;
 pub mod gas_stats;
 pub mod ids;

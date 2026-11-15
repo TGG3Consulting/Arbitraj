@@ -5,6 +5,9 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 295 (15.11.2026, ветка t126/multi-pair от cab52fda) — в работе.** Все нужные пары многомонетного пула
+  (`PoolRef::Multi`, настройка `dex.multi_pair` [DEX]). Шаг 0 сделан: эталонные снимки парных пулов до правки
+  (tests/data/multi_pair_2026-11-15, tests/bsc_dex_multi_pair_golden_*.rs, снимок в tests/bsc_dex_batch_load.rs).
 - **Решение 292 (15.11.2026, ветка t123/saddle-from-list от 52ca0c10) — сделано, ждёт приёмки.** Пулы
   `saddle_stableswap` / `curve_stableswap` из `dex.stable_pools` попадают в бот без индексатора при `index.factory_scan` = да
   (pools/stable_list.rs; DECISIONS 292). Математика = квотер живого пула: Nerve 3pool calculateSwap 18/18, Ellipsis 3pool

@@ -20,7 +20,7 @@
 //! Решение 217: seeded — книга замороженного реестра (registry_frozen.rs); прошлый вердикт гистерезиса — копия на
 //! момент снимка (verdicts).
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
-//! pools/depth_facts.rs (экран «Монеты»).
+//! pools/depth_facts.rs (экран «Монеты»), pools/graph.rs (build_measured — depth_prep_r, решение 301 д).
 //! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_fail.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s, dex.min_pool_liquidity_usd [bsc_dex].
 

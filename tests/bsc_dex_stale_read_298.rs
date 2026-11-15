@@ -260,6 +260,7 @@ fn nerve_pairs() -> Vec<(Found, Entry)> {
                 synced_log: None,
                 valid: false,
                 asleep: false,
+                state_gen: 0,
             };
             (found(fam, reference, t0, t1), e)
         })

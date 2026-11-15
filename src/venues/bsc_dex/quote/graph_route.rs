@@ -170,6 +170,8 @@ pub async fn quote_fit(
     }
     let found = match pool {
         Some(pool) if failed => {
+            // Ревью t132 (В3): брошенный расчёт не тратит ядро на повтор графа (до трёх сплитов).
+            abandon::check(ctx, "повтор графа (решение 300)")?;
             let a = graph_fit::Ask {
                 v,
                 names,

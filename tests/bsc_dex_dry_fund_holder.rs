@@ -128,7 +128,7 @@ fn infinity_stable_in_route_blocks_vault() {
         swap_hook: swap_hook(None),
         label: "pancake-infinity-stable".into(),
     };
-    let e = route_ok(VAULT, &[stable.clone()]).unwrap_err();
+    let e = route_ok(VAULT, std::slice::from_ref(&stable)).unwrap_err();
     assert!(e.contains("не только по своему состоянию"), "{e}");
     // Источник — другой держатель (V4 PoolManager): пул Infinity Stable в Vault ему не мешает.
     assert!(route_ok(V4_MANAGER, &[stable]).is_ok());

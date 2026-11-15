@@ -165,7 +165,13 @@ async fn self_check_catches_lost_change() {
     .unwrap();
     let d = rec.diff.expect("было с чем сравнивать");
     assert!(!d.is_empty(), "потерянное изменение найдено сверкой");
-    assert!(d.iter().any(|l| l.contains(&depth_label(&r))), "{d:?}");
+    // Отличие — у пула курса или у пулов со встречным WBNB (их глубина в USD — по курсу WBNB).
+    let touched =
+        [WBNB_USDT_V2, CAKE_WBNB_PCS, BTCB_WBNB_PCS].map(|a| depth_label(&PoolRef::Contract(a)));
+    assert!(
+        d.iter().any(|l| touched.iter().any(|t| l.contains(t))),
+        "{d:?}"
+    );
     let again = full(&p);
     assert!(
         graph_diff::diff(&rec.work.picture(), &again.picture()).is_empty(),

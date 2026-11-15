@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/exec/dry_sim.rs
 //! Что делает: симуляция сухой сделки DEX (решение 121, C4) — одна последовательность eth_simulateV1 поверх блока
-//! сборки от имени кошелька бота: [перевод входа от пула-источника, если у кошелька не хватает — exec/dry_fund.rs] →
+//! сборки от имени кошелька бота: [перевод входа от пула-источника (решение 302: или держателя-синглтона при
+//! presell.fund_fallback), если у кошелька не хватает — exec/dry_fund.rs] →
 //! balanceOf входа (сколько у кошелька) → баланс выхода до → разрешения (approve / Permit2, если нужны) → обмен
 //! (execute Universal Router; у бандла — все его транзакции по порядку, разметка exec/bundle_sim.rs) → баланс выхода
 //! после. При пополнении (решение 252, вариант «б», Тигран 10.11) — ещё замер излишка пар первого шага (balanceOf −
@@ -80,7 +81,7 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         if have >= io.need {
             sim.funding = Some(format!("баланс кошелька ({have} ≥ {} единиц)", io.need));
         } else {
-            let (src, amount) = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
+            let f = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
                 Ok(v) => v,
                 Err(why) => {
                     sim.reason = Some(why);
@@ -91,12 +92,13 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
             watch = dry_surplus::around(
                 &mut calls,
                 (r, wallet, t),
-                pc::transfer(src, t, wallet, amount),
+                pc::transfer(f.src, t, wallet, f.amount),
             );
-            funded = amount;
+            funded = f.amount;
+            // Источник виден в журнале (решение 302): «из пула …» или «из держателя-синглтона (…) …».
             sim.funding = Some(format!(
-                "перевод {amount} единиц из пула {src:#x} внутри симуляции (у кошелька {have}, нужно {})",
-                io.need
+                "перевод {} единиц из {} {:#x} внутри симуляции (у кошелька {have}, нужно {})",
+                f.amount, f.what, f.src, io.need
             ));
         }
         calls.push(pc::balance(wallet, t, wallet));

@@ -176,6 +176,7 @@ pub mod solidly_gate_read;
 pub mod solidly_refresh;
 pub mod stable_list;
 pub mod stable_native;
+pub mod stale_read;
 pub mod state_gen;
 pub mod ticks;
 pub mod verify;

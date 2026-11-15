@@ -90,6 +90,7 @@ impl Parts {
             lag: self.lag.clone(),
             frozen_head: None,
             plan_gas: None,
+            exec_quote: false,
         }
     }
 

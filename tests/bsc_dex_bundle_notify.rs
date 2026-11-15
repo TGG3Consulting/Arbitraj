@@ -47,17 +47,33 @@ fn sim_reverted_text_carries_reason() {
 fn sent_text_carries_channels_and_max_block() {
     let t = bn::sent_text(
         &["bloxroute".to_string(), "48club".to_string()],
+        &[],
         130_556_920,
     );
     assert!(t.contains("bloxroute"), "нет канала: {t}");
     assert!(t.contains("48club"), "нет второго канала: {t}");
     assert!(t.contains("130556920"), "нет maxBlockNumber: {t}");
+    assert!(
+        !t.contains("исключены"),
+        "исключённых нет — строки нет: {t}"
+    );
+}
+
+/// Решение 299: исключённые одиночные каналы видны в тексте «отправлен».
+#[test]
+fn sent_text_carries_skipped_single() {
+    let t = bn::sent_text(&["club48".to_string()], &["BlockRazor RPC".to_string()], 7);
+    assert!(t.contains("club48"), "нет канала: {t}");
+    assert!(
+        t.contains("одиночные исключены") && t.contains("BlockRazor RPC"),
+        "нет исключённого: {t}"
+    );
 }
 
 /// Отправлен без явных каналов (ни один не ответил ясно) — прочерк, но предел блока есть.
 #[test]
 fn sent_text_empty_channels() {
-    let t = bn::sent_text(&[], 100);
+    let t = bn::sent_text(&[], &[], 100);
     assert!(t.contains("100"), "нет maxBlockNumber: {t}");
     assert!(t.contains('—'), "нет прочерка для пустых каналов: {t}");
 }

@@ -11,7 +11,8 @@
 //! Тиграна). Кто исполнил и почему — TradeResult.executor и начало текста ошибки (хронология сделки), журнал dex.best_of.
 //! Кто вызывает: venue.rs (trade при exec.via_kyber = да и exec.dex_best_of = да).
 //! От чего зависит: kyberswap/{trade, trade_prep}.rs, exec/trade.rs, exec/{swap_ctx, swap_rebuild}.rs (причина выбора), quote/mod.rs, best_of/{choose, extra}.rs.
-//! Настройки: через вызываемые — kyber.*, exec.*, dex.*, send.*.
+//! Решение 300 (ревью): своя котировка — внутри gateway::patience::exec_scope (котировка для исполнения; graph_fit.rs).
+//! Настройки: через вызываемые — kyber.*, exec.*, dex.*, send.*, dex.graph_exec_fallback.
 
 use crate::core::types::{Quote, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -36,7 +37,14 @@ pub async fn trade(
     let q = p.quoting();
     let (k, o) = tokio::join!(
         kyberswap::trade_prep::prepare(kyber, &req),
-        scope(Class::Trade, q.quote(&req.asset, req.side, req.qty))
+        // Решение 300 (ревью): своя свежая котировка — котировка для исполнения (patience::exec_scope): при
+        // dex.graph_exec_fallback = да в ней тоже ищется лучший исполнимый маршрут графа, как в финальной котировке
+        // плана (best_of/quote.rs под final_scope) — без расхождения «план — граф, сделка — классика». Признак читает
+        // только quote/mod.rs (Quoting.exec_quote → graph_fit.rs); без настройки — 1 в 1 как раньше.
+        crate::gateway::patience::exec_scope(scope(
+            Class::Trade,
+            q.quote(&req.asset, req.side, req.qty)
+        ))
     );
     let (ke, oe) = tokio::join!(
         async {

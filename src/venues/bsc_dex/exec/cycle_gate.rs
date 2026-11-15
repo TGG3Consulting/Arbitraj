@@ -6,11 +6,13 @@
 //!   проверка, что у маршрута ноги — exec/executor/mod.rs::takes) — предпочтительно: атомарна сама, любые семейства,
 //!   без пыли; (a) бандл свопов cycle_bundle (решения 84, 86) — если все шаги идут через Universal Router (tradable, не
 //!   форк, задан dex.universal_router) и ВСЕ включённые каналы отправки бандловые (решение 121 B3,
-//!   send::planned_bundle_ok); иначе — NoRoute с причинами обеих форм (цикл остаётся сигналом).
+//!   send::planned_bundle_ok; решение 299: при send.bundle_skip_single = да — хотя бы один бандловый, одиночные
+//!   исключаются из отправки бандла); иначе — NoRoute с причинами обеих форм (цикл остаётся сигналом).
 //!
 //! Кто вызывает: exec/{cycle_trade, cycle_dry, cycle_bundle}.rs, quote/cycle_cost.rs.
 //! От чего зависит: exec/executor/{mod, entry}.rs, pools/{exec_kind, families}.rs, quote/route_calc.rs (Leg), send/mod.rs.
-//! Настройки: dex_dex.execute, exec.executor_address [bsc_dex]; dex.universal_router [DEX]; channel.* (через send).
+//! Настройки: dex_dex.execute, exec.executor_address [bsc_dex]; dex.universal_router [DEX]; channel.*,
+//! send.bundle_skip_single (через send).
 
 use alloy_primitives::Address;
 

@@ -156,7 +156,8 @@ pub fn build_measured(
         if !e.valid || e.asleep || !e.family.graphable {
             continue;
         }
-        // Глубина на живом состоянии; не посчиталась (устаревший блок, нет курса промежуточной) — ребро пропускаем.
+        // Глубина на живом состоянии; не посчиталась (расчёт по состоянию пула невозможен, нет курса встречного
+        // токена к USDT — depth_book.rs depth_prep_r, quote/depth_band.rs) — ребро пропускаем.
         let mut fresh = false;
         let d = reg
             .depth()

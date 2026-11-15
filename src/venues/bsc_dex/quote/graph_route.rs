@@ -11,6 +11,7 @@
 //! quote/graph_exec.rs: неисполнимый — сигнал/карточка, авто-сделкой не исполняется (exec/trade.rs отказывает).
 //! Нативную монету (BNB) не маршрутизирует через V4 / Infinity (решение 62, native_ok). Выбор котировки-на-сделку
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
+//! Решение 300: quote_fit — при неисполнимом лучшем маршруте ещё лучший исполнимый (quote/graph_fit.rs); quote — без него.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
@@ -37,7 +38,8 @@ use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
 use super::{
-    Quoting, abandon, costs, graph_exec, graph_legs, pick, route_best, route_cache, route_paths,
+    Quoting, abandon, costs, graph_exec, graph_fit, graph_legs, pick, route_best, route_cache,
+    route_paths,
 };
 
 pub use super::graph_exec::{GraphForm, graph_form};
@@ -52,6 +54,22 @@ pub async fn quote(
     qty: Decimal,
     gas: U256,
 ) -> GatewayResult<Quote> {
+    quote_fit(v, names, asset, qty, gas, false)
+        .await
+        .map(|(q, _)| q)
+}
+
+/// Решение 300: как quote; `fit` = да и лучший маршрут неисполним — ещё лучший ИСПОЛНИМЫЙ (quote/graph_fit.rs).
+/// Возвращает: котировку графа и лучший исполнимый (None — не искали, лучший исполним или исполнимого нет).
+/// Ошибки: как quote.
+pub async fn quote_fit(
+    v: &Via<'_>,
+    names: &Names<'_>,
+    asset: &Asset,
+    qty: Decimal,
+    gas: U256,
+    fit: bool,
+) -> GatewayResult<(Quote, Option<graph_fit::Fit>)> {
     let ctx = &v.q.ctx;
     // Решение 129: граф — один на состояние реестра (pools/graph.rs cached), а не новый на каждую котировку.
     // Свежесть головы проверяет вызывающий (quote/mod.rs). Решение 301 (е): номер блока в ключ графа больше не входит
@@ -117,6 +135,8 @@ pub async fn quote(
     }
     // Решение 301 (в): срок расчёта вышел — отбор и сплит не считаем.
     abandon::check(ctx, "отбор путей и сплит графа")?;
+    // Решение 300: снимок путей до отбора — только когда повтор возможен (иначе без затрат).
+    let pool = fit.then(|| graph_fit::snapshot(&cands));
     if cap.is_some() {
         cands = route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)?;
         if cands.is_empty() {
@@ -144,11 +164,30 @@ pub async fn quote(
         gas,
         names,
     )?;
+    let failed = exec.is_err();
     if let Some(r) = quote.route.as_mut() {
         r.executable = exec.is_ok();
         r.exec_note = exec.err();
     }
-    Ok(quote)
+    let found = match pool {
+        Some(pool) if failed => {
+            // Ревью t132 (В3): брошенный расчёт не тратит ядро на повтор графа (до трёх сплитов).
+            abandon::check(ctx, "повтор графа (решение 300)")?;
+            let a = graph_fit::Ask {
+                v,
+                names,
+                asset,
+                qty,
+                gas,
+                cap,
+                max_paths,
+                gas_aware,
+            };
+            graph_fit::best(&a, &pool, &quote).await
+        }
+        _ => None,
+    };
+    Ok((quote, found))
 }
 
 /// Выбор котировки-НА-СДЕЛКУ при dex.router_mode = graph (решение 84, вариант Б): среди ИСПОЛНИМЫХ маршрутов — лучший.

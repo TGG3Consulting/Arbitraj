@@ -27,6 +27,11 @@
 
 ## Техдолг
 - Решение 308 (t137; размеры по wc -l после пятого ревью): сверх ориентира 200 строк — pools/graph_cache.rs 256 (было 230 до t137: кэш t132 + переключатель режима; после приёмки 308 и отказа от пути t132 — удалить замок building и кэш по Stamp), pools/graph_owner.rs 213, pools/graph_finish.rs 209, pools/graph_alarm.rs 203, pools/graph_stats.rs 203 (вынести Buckets в graph_buckets.rs), pools/graph_snap.rs 202, pools/graph.rs 202, venue.rs ~610 (до правки 578).
+- Решение 301 (t132, после слияния с rel/dex-all; `wc -l` на итоговом коде): файлы сверх ориентира 200 строк
+  (до t132 → стало) — pools/depth_book.rs 240 → 286 (depth_prep_r, книга неудач depth_fail, счётчик calcs),
+  pools/graph_cache.rs 159 → 230 (очередь построений cached_as_of, замер), quote/graph_route.rs 216 → 261 (в релизе
+  254 после решения 300; t132 — проверки abandon), pools/registry.rs 174 → 203 (поколение состояния state_gen),
+  quote/depth_band.rs 457 → 472 (band_from_units).
 - Решение 296 (t127): тест на записи SHOPINX/WBNB (fit_volume_2026-11-15, ветка t125) — после её слияния (TASKS 296 п. 2); off_map перецентрирует карту только по полосе глубины, не по полосе чтения (TASKS 296 п. 4). Размеры: load_v2v3.rs 156, load_algebra.rs 120 строк — в ориентире.
 - Решение 292 (t123, с ревью): src/venues/bsc_dex/pools/factory_scan.rs 216 строк (было 207; вызов источника
   stable_list.rs и счёт вызовов) — сверх ориентира 200 и до правки; pools/stable_list.rs 211 (ревью: разбор пачки sort

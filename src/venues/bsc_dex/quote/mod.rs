@@ -11,6 +11,7 @@
 //! Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
 //! (executable = нет, причина; exec/solidly_gate.rs reason). Ревью 273: такой пул исключается уже при выборе пулов
 //! (Quoting.plan_gas → quote/select.rs) — маршрут строится через другие пулы.
+//! Решение 300: Quoting.exec_quote — котировка решения/исполнения (финальная или для исполнения) — для quote/graph_fit.rs.
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов),
@@ -39,6 +40,7 @@ pub mod fills;
 pub mod gas;
 pub mod graph_exec;
 pub mod graph_executor;
+pub mod graph_fit;
 pub mod graph_legs;
 pub mod graph_route;
 pub mod graph_seq;
@@ -128,6 +130,10 @@ pub struct Quoting {
     /// Ревью 273: плановая цена газа выбора маршрута, wei — пул Solidly с пределом цены газа фабрики ниже неё не
     /// допускается (quote/select.rs), как пул на паузе. None — не проверяется (вне выбора маршрута и поиска циклов).
     pub plan_gas: Option<U256>,
+    /// Решение 300: котировка решения/исполнения — финальная котировка ядра (gateway::quote_stage::is_final) или
+    /// котировка для исполнения (gateway::patience::is_exec); ставит priced. Только при ней — лучший исполнимый маршрут
+    /// графа (quote/graph_fit.rs). false — подбор объёма, экран, пробы.
+    pub exec_quote: bool,
 }
 
 impl Quoting {
@@ -215,6 +221,9 @@ impl Quoting {
         // (quote/select.rs по plan_gas) — маршрут считается без них.
         let mut pick = self.clone();
         pick.plan_gas = Some(gas);
+        // Решение 300: признаки задачи tokio — здесь (счёт маршрута уходит в другой поток, quote/cpu.rs их не переносит).
+        pick.exec_quote =
+            crate::gateway::quote_stage::is_final() || crate::gateway::patience::is_exec();
         let mut q = cpu::run(ctx, routing::run(pick, input)).await?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.

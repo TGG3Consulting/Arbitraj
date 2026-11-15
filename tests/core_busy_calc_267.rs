@@ -405,7 +405,10 @@ fn free_coin_candidate_goes_as_before() {
         set(&s, "window.busy_calc_min_ms", json!(400)).await;
         candidates::enqueue(&core, &dir);
         until(|| lk(&core.inner.candidates).contains_key(&dir)).await;
-        assert!(lk(&core.inner.queued).is_empty());
+        // Строку «Кандидатов» пишет publish изнутри calc_one, а из очереди направление снимает задача расчёта уже после
+        // возврата calc_one (candidates.rs run) — между ними есть await (журнал отказа), поэтому очередь ждём тем же
+        // сроком: в итоге она обязана опустеть.
+        until(|| lk(&core.inner.queued).is_empty()).await;
         assert!(logged(&j, KIND).await.is_empty());
     };
     let run = move || {

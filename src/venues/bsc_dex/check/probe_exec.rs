@@ -7,7 +7,8 @@
 //! (exec/executor/call.rs, вид шага — exec/executor/entry.rs) и обычное ERC-20 approve кошелька исполнителю
 //! (wallet/approve_executor.rs) — в той же симуляции eth_simulateV1 от кошелька, код не подставляется.
 //! Здесь же: причина «пробу собрать нечем» (вида шага нет — не настройка; шаг есть, адрес исполнителя не задан —
-//! настройка exec.executor_address) и проверка «кто меняет» для обмена через исполнитель.
+//! настройка exec.executor_address; обратного вызова пула dex.v3_swap_callback нет в коде исполнителя — не настройка,
+//! ревью 281, pools/exec_callback.rs) и проверка «кто меняет» для обмена через исполнитель.
 //! Кто вызывает: check/probe.rs (part, emitter).
 //! От чего зависит: exec/executor/{mod, call, entry, onchain}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
 //! wallet/approve_executor.rs, pools/exec_kind.rs, check/emitter.rs, check/simulate.rs (SimLog).
@@ -30,7 +31,7 @@ use super::super::ctx::Ctx;
 use super::super::exec::chain::Step;
 use super::super::exec::executor::{self, call, entry, onchain};
 use super::super::exec::plan::Order;
-use super::super::pools::exec_kind;
+use super::super::pools::{exec_callback, exec_kind};
 use super::super::pools::registry::Entry;
 use super::super::wallet::approve::Approval;
 use super::super::wallet::approve_executor;
@@ -76,6 +77,10 @@ pub async fn part(
 /// Принимает: окружение, пул. Возвращает: ошибку. Ошибок иных нет.
 pub fn no_path(ctx: &Ctx, e: &Entry) -> GatewayError {
     let t = e.family.title;
+    // Ревью 281 (В4): обратного вызова пула нет у исполнителя — не настройка и не вердикт по монете (NoRoute).
+    if let Some(why) = e.family.executor_kind.and(exec_callback::missing(ctx, e.family)) {
+        return ctx.err(ErrorCode::NoRoute, format!("{t}: без пути исполнения: {why}; налог — по другим пулам монеты"));
+    }
     match e.family.executor_kind {
         Some(k) => ctx.err(
             ErrorCode::NotConfigured,

@@ -7,7 +7,8 @@
 //! раньше, по family.tradable). Списка DEX в коде нет: соответствие — по перечню модулей адаптера (dex.kind).
 //! Кто вызывает: pools/families.rs (make — поле Family.executor_kind), quote/* и exec/* (via_executor — части R и X).
 //! От чего зависит: ctx.rs, pools/families.rs (Family).
-//! Настройки: exec.executor_address [bsc_dex] (заводит часть X; не задана — исполнителя нет).
+//! Настройки: exec.executor_address [bsc_dex] (заводит часть X; не задана — исполнителя нет); через exec_callback.rs —
+//! dex.v3_swap_callback [DEX] (ревью 281: обратного вызова пула нет в коде исполнителя — пулы DEX без пути исполнения).
 //!
 //! PancakeSwap Infinity (CL, Bin и Infinity Stable — пул в крючке CL, решение «122 (Infinity Stable)») и Uniswap V4
 //! (общий PoolManager) исполняются своим Universal Router (часть R2) — вида шага исполнителя у них нет. KyberSwap Elastic вида шага пока не получает: его `swap(recipient, swapQty, isToken0,
@@ -15,6 +16,7 @@
 //! amountSpecified, sqrtPriceLimitX96, data)` — вопрос Тиграну (отчёт части F).
 
 use super::super::ctx::Ctx;
+use super::exec_callback;
 use super::families::Family;
 
 /// Вид шага исполнителя (по официальному интерфейсу контракта DEX; кодировщик — exec/executor/*, часть X).
@@ -101,14 +103,19 @@ pub fn executor_set(ctx: &Ctx) -> bool {
 }
 
 /// Исполнимы ли пулы этого вида через контракт-исполнитель: у вида есть шаг исполнителя И задан
-/// exec.executor_address. Без адреса — false: семейство остаётся сигналом (если у него нет своего пути —
+/// exec.executor_address (и обратный вызов dex.v3_swap_callback, если задан, есть у исполнителя — exec_callback.rs).
+/// Без адреса — false: семейство остаётся сигналом (если у него нет своего пути —
 /// family.tradable). Принимает: окружение, вид пула. Ошибок нет.
 pub fn via_executor(ctx: &Ctx, f: &Family) -> bool {
-    f.executor_kind.is_some() && executor_set(ctx)
+    // Ревью 281 (В4): у DEX с dex.v3_swap_callback обратный вызов должен быть в коде исполнителя (exec_callback.rs).
+    f.executor_kind.is_some() && executor_set(ctx) && exec_callback::missing(ctx, f).is_none()
 }
 
 /// Строка для интерфейса (список DEX, решение 122 F): как исполняются пулы этого вида. Ошибок нет.
 pub fn describe(ctx: &Ctx, f: &Family) -> String {
+    if let (Some(k), Some(why)) = (f.executor_kind, exec_callback::missing(ctx, f)) {
+        return format!("исполнитель: шаг {} — без пути исполнения: {why}", k.name());
+    }
     match (f.executor_kind, executor_set(ctx)) {
         (Some(k), true) => format!(
             "исполнитель: шаг {} — исполнимо через ArbExecutor",

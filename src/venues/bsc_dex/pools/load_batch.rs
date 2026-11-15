@@ -10,7 +10,7 @@
 //! не ложится.
 //! Кто вызывает: pools/reload.rs (load_many).
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
-//! load_v2v3.rs (word_range), ticks.rs.
+//! load_v2v3.rs (word_range), ticks.rs, fee_fresh.rs (решение 281: свежая fee() V3 — в Loaded.fee_pips).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex] (без него — пачка JSON-RPC); через вызываемые — dex.tick_words,
 //! dex.tick_lens, dex.state_view, dex.bin_depth_usd.
 //!
@@ -26,6 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
+use super::fee_fresh::{self, Extras};
 use super::load::{self, Loaded};
 use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
@@ -106,13 +107,14 @@ pub async fn states(
             out[i] = Some(r);
         }
     }
-    // Ступень 1: головы.
+    // Ступень 1: головы. Добавки V3 (swapFee 274, fee() 281) — один раз на пул: тот же признак и в разбор (ревью 281).
+    let extras: Vec<Extras> = wants.iter().map(|w| Extras::of(ctx, w.family)).collect();
     let first: Stage = wants
         .iter()
         .enumerate()
         .map(|(i, w)| match out[i] {
             Some(_) => Vec::new(),
-            None => head(ctx, w).unwrap_or_else(|why| {
+            None => head(ctx, w, extras[i]).unwrap_or_else(|why| {
                 out[i] = Some(Err(why));
                 Vec::new()
             }),
@@ -121,6 +123,8 @@ pub async fn states(
     let heads = run(ctx, &first, &tag, size).await;
     // Разобранные головы V3/CL: состояние, тик, tickSpacing.
     let mut parsed: Vec<Option<(PoolState, i32, i32)>> = wants.iter().map(|_| None).collect();
+    // Свежая fee() пула (решение 281, fee_fresh.rs): только у DEX с dex.v3_fee_source = pool_fee_each_read.
+    let mut fees: Vec<Option<u32>> = wants.iter().map(|_| None).collect();
     for (i, w) in wants.iter().enumerate() {
         if out[i].is_some() {
             continue;
@@ -128,13 +132,18 @@ pub async fn states(
         let head = heads[i]
             .as_ref()
             .map_err(|t| miss(t.clone()))
-            .and_then(|b| parse_head(w, b));
+            .and_then(|b| fee_fresh::split(extras[i].fresh, b))
+            .and_then(|(b, fee)| {
+                fees[i] = fee;
+                parse_head(w, b)
+            });
         match head {
             Ok(PoolStateTick::V2(state)) => {
                 out[i] = Some(Ok(Loaded {
                     state,
                     ticks: None,
                     bins: None,
+                    fee_pips: None,
                 }))
             }
             Ok(PoolStateTick::Ticked(s, tick)) => match w.spacing {
@@ -192,6 +201,7 @@ pub async fn states(
                     words,
                 }),
                 bins: None,
+                fee_pips: fees[i],
             }));
         } else {
             match cl::set_ticks(w, ranges[i].0, ans, spacing) {

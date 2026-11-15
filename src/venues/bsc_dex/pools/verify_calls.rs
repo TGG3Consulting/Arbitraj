@@ -1,9 +1,10 @@
 //! Файл: venues/bsc_dex/pools/verify_calls.rs
 //! Что делает: данные вызовов проверки пула V2/V3 (решение 58): поля пула по виду (factory, token0, token1; V3 — fee,
-//! tickSpacing, lmPool; V2 со своей комиссией — метод dex.v2_fee_method) и реестр фабрики (getPair / getPool).
+//! tickSpacing, lmPool; V2 со своей комиссией — метод dex.v2_fee_method; V3 с ключом реестра — метод
+//! dex.v3_registry_fee_method, решение 281) и реестр фабрики (getPair / getPool; V3 с ключом — getPool по его значению).
 //! Кто вызывает: pools/verify.rs, pools/index_watch.rs (fee_method).
-//! От чего зависит: ctx.rs, abi_check.rs, abi_v2v3.rs, families.rs, verify_rules.rs (Read).
-//! Настройки: dex.v2_fee_source, dex.v2_fee_method [DEX].
+//! От чего зависит: ctx.rs, abi_check.rs, abi_v2v3.rs, families.rs, verify_rules.rs (Read), registry_key.rs.
+//! Настройки: dex.v2_fee_source, dex.v2_fee_method, dex.v3_registry_fee_method [DEX].
 //!
 //! ABI и ссылки на официальные исходники — abi_check.rs, abi_v2v3.rs.
 
@@ -17,6 +18,7 @@ use super::abi_elastic::{IElasticFactory, IElasticPool};
 use super::abi_slipstream::ICLFactory;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::families::{Family, Proto};
+use super::registry_key;
 use super::verify_rules::Read;
 
 /// Вызовы полей пула по виду. Ошибка — текст (не задан метод комиссии).
@@ -43,6 +45,11 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
             l.push(Bytes::from(P::feeCall {}.abi_encode()));
             l.push(Bytes::from(P::tickSpacingCall {}.abi_encode()));
             l.push(Bytes::from(P::lmPoolCall {}.abi_encode()));
+            // Решение 281 (SquadSwap V3): ключ реестра фабрики — метод пула из dex.v3_registry_fee_method (седьмой
+            // вызов). Не задана — вызова нет (то же число обращений, что раньше).
+            if let Some(sig) = registry_key::method(ctx, f) {
+                l.push(registry_key::selector(&sig));
+            }
         }
     }
     Ok(l)
@@ -67,6 +74,12 @@ pub fn fee_method(ctx: &Ctx, f: &Family) -> Result<Option<String>, String> {
 /// Вызов реестра фабрики: V2 getPair(token0, token1), V3 getPool(token0, token1, fee),
 /// Slipstream getPool(token0, token1, int24 tickSpacing). Ошибок нет.
 pub fn registry_call(f: &Family, r: &Read) -> Bytes {
+    registry_call_with(f, r, None)
+}
+
+/// То же с ключом реестра V3 (решение 281, registry_key.rs): Some — getPool(token0, token1, ключ) вместо fee; None —
+/// как registry_call. Ошибок нет.
+pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
     match f.proto {
         Proto::V2 => Bytes::from(
             IV2Factory::getPairCall {
@@ -94,11 +107,12 @@ pub fn registry_call(f: &Family, r: &Read) -> Bytes {
             }
             .abi_encode(),
         ),
+        // V3: ключ getPool — fee(); у DEX с dex.v3_registry_fee_method — значение её метода (решение 281).
         _ => Bytes::from(
             IV3Factory::getPoolCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
-                fee: U24::from(r.fee.unwrap_or_default()),
+                fee: U24::from(key.or(r.fee).unwrap_or_default()),
             }
             .abi_encode(),
         ),

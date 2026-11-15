@@ -106,6 +106,7 @@ pub async fn finish(
                 words,
             }),
             bins: None,
+            fee_pips: None,
         }));
     }
 }

@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/virtual_quoter.rs
 //! Что делает: решение 186 (Тигран, 05.11.2026: «нам нужны все DEX») — «виртуальный квотер» для DEX без своего
-//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274). Код контракта contracts/VirtualQuoter.sol (собран
+//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274; SquadSwap V3 — squadV3SwapCallback, решение 281). Код контракта contracts/VirtualQuoter.sol (собран
 //! contracts/build.sh, артефакт contracts/out/VirtualQuoter.bin-runtime, хеш сверяется с VirtualQuoter.sha256)
 //! подставляется по своему адресу в eth_call переопределением кода счёта (state override, 3-й параметр eth_call geth:
 //! https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set). Квотер зовёт swap САМОГО пула,

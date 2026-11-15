@@ -3,7 +3,9 @@
 //! из найденного пула; перечитывание записи (после реорга, обрыва или расхождения карты с событием).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, registry.rs, discover.rs, tokens.rs.
-//! Настройки: через вызываемые файлы (dex.tick_words, dex.bin_depth_usd, dex.tick_lens, dex.state_view).
+//! Решение 281: у DEX с dex.v3_fee_source = pool_fee_each_read fee() пула V3 читается с состоянием (fee_fresh.rs) и
+//! заменяет комиссию записи (built, renewed).
+//! Настройки: через вызываемые файлы (dex.tick_words, dex.bin_depth_usd, dex.tick_lens, dex.state_view, dex.v3_fee_source).
 
 use alloy_primitives::Address;
 use chrono::Utc;
@@ -18,13 +20,14 @@ use super::bins::BinMap;
 use super::discover::Found;
 use super::families::Family;
 use super::families::Proto;
+use super::fee_fresh;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dodo, load_elastic,
-    load_inf_stable, load_maverick, load_saddle, load_slipstream, load_solidly, load_stable_u,
-    load_v2v3, load_woo,
+    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dodo,
+    load_elastic, load_inf_stable, load_maverick, load_saddle, load_slipstream, load_solidly,
+    load_stable_u, load_v2v3, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -32,6 +35,9 @@ pub struct Loaded {
     pub state: PoolState,
     pub ticks: Option<TickMap>,
     pub bins: Option<BinMap>,
+    /// Свежая fee() пула V3 на том же блоке (решение 281, fee_fresh.rs; dex.v3_fee_source = pool_fee_each_read).
+    /// None — не читалась: в записи остаётся комиссия из проверки пула.
+    pub fee_pips: Option<u32>,
 }
 
 /// Чтение состояния пула на блоке.
@@ -66,6 +72,7 @@ pub async fn state(
                 state: load_dodo::load(ctx, *a, &tag).await?,
                 ticks: None,
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -81,6 +88,7 @@ pub async fn state(
                 state: load_curve::load(ctx, tokens, *a, pair, &tag).await?,
                 ticks: None,
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -95,6 +103,7 @@ pub async fn state(
                 state: load_curve_ng::load(ctx, *a, pair, &tag).await?,
                 ticks: None,
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -135,6 +144,7 @@ pub async fn state(
             state,
             ticks: None,
             bins: None,
+            fee_pips: None,
         });
     }
     // Maverick V2 (решение 122 F): вид ядра TickBin, чтение своё (load_maverick.rs): состояние, тики и кривая квотера.
@@ -150,6 +160,7 @@ pub async fn state(
             state,
             ticks: None,
             bins: None,
+            fee_pips: None,
         });
     }
     // KyberSwap Elastic (решение 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_elastic.rs).
@@ -161,6 +172,7 @@ pub async fn state(
                 state,
                 ticks: Some(t),
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -182,6 +194,7 @@ pub async fn state(
                 state,
                 ticks: Some(t),
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -198,6 +211,7 @@ pub async fn state(
                 state: load_solidly::load(ctx, f, *a, &tag).await?,
                 ticks: None,
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -217,6 +231,7 @@ pub async fn state(
                 state,
                 ticks: Some(t),
                 bins: None,
+                fee_pips: None,
             });
         }
         return Err(ctx.err(
@@ -229,14 +244,22 @@ pub async fn state(
             state: load_v2v3::v2(ctx, *a, &tag).await?,
             ticks: None,
             bins: None,
+            fee_pips: None,
         }),
         (PoolKind::V3, PoolRef::Contract(a)) => {
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
             let (state, t) = load_v2v3::v3(ctx, f, *a, sp, &tag).await?;
+            // Решение 281: свежая fee() пула на том же блоке — только у DEX с dex.v3_fee_source = pool_fee_each_read.
+            let fee_pips = if fee_fresh::on(ctx, f) {
+                Some(fee_fresh::read(ctx, *a, &tag).await?)
+            } else {
+                None
+            };
             Ok(Loaded {
                 state,
                 ticks: Some(t),
                 bins: None,
+                fee_pips,
             })
         }
         (PoolKind::Cl, PoolRef::Singleton { manager, id }) => {
@@ -246,6 +269,7 @@ pub async fn state(
                 state,
                 ticks: Some(t),
                 bins: None,
+                fee_pips: None,
             })
         }
         (PoolKind::Bin, PoolRef::Singleton { manager, id }) => {
@@ -259,6 +283,7 @@ pub async fn state(
                 state,
                 ticks: None,
                 bins: Some(b),
+                fee_pips: None,
             })
         }
         _ => Err(ctx.err(
@@ -295,7 +320,8 @@ pub async fn entry(
 
 /// Запись реестра из найденного пула и уже прочитанного состояния (и пачечное чтение, load_batch.rs). Ошибок нет.
 pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: Loaded) -> Entry {
-    let fee_pips = p.fee_pips.filter(|f| *f != DYNAMIC_FEE_FLAG);
+    // Свежая fee() пула (решение 281) — вместо комиссии из проверки; без неё — как раньше.
+    let fee_pips = l.fee_pips.or(p.fee_pips.filter(|f| *f != DYNAMIC_FEE_FLAG));
     let pool = Pool {
         venue: ctx.venue(),
         family: p.family.id.to_string(),
@@ -350,6 +376,10 @@ pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> Gatew
 pub fn renewed(e: &Entry, block: u64, l: Loaded) -> Entry {
     let mut out = e.clone();
     out.pool.state = l.state;
+    // Свежая fee() пула на этом блоке (решение 281); None — комиссия записи прежняя.
+    if let Some(fee) = l.fee_pips {
+        out.pool.fee_pips = Some(fee);
+    }
     out.pool.block = block;
     out.pool.received_at = Utc::now();
     out.ticks = l.ticks;

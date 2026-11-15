@@ -59,8 +59,9 @@ pub fn head(ctx: &Ctx, w: &Want) -> Result<Vec<(Address, Bytes)>, Miss> {
     Ok(vec![(to, Bytes::from(a)), (to, Bytes::from(b))])
 }
 
-/// Разбор slot0 и liquidity. Ошибки: причина (ответ не по ABI).
+/// Разбор slot0 и liquidity. Ошибки: причина (ответов меньше двух, ответ не по ABI).
 pub fn parse_head(w: &Want, b: &[Bytes]) -> Result<PoolStateTick, Miss> {
+    super::load_batch_v2v3::need(w, b, 2)?;
     let m = |e: Miss| e;
     let (sqrt, tick, pf, lf, liquidity) = if w.family.proto == Proto::InfinityCl {
         let s = call::decode::<IInfinityCl::getSlot0Call>(&b[0]).map_err(m)?;

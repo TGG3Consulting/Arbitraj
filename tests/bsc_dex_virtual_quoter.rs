@@ -1,7 +1,8 @@
 //! Файл: tests/bsc_dex_virtual_quoter.rs
 //! Что проверяет: решение 186 — виртуальный квотер: код из contracts/out проходит сверку хеша; адрес подмены
 //! постоянный; ответ (used, out) разбирается — взял весь вход → выход, меньше → «не хватает ликвидности»; виды пулов.
-//! Живая сверка с официальным QuoterV2 на узле — промпт серверу (docs/TASKS.md, решение 186).
+//! Живая сверка с официальным QuoterV2 на узле — промпт серверу (docs/TASKS.md, решение 186). Решение 281: в коде есть
+//! обратный вызов squadV3SwapCallback (SquadSwap V3); живая сверка — tests/bsc_dex_squadswap_v3_live.rs.
 //! Кто вызывает: cargo test.
 
 use alloy_primitives::U256;
@@ -39,4 +40,11 @@ fn supported_kinds() {
     assert!(vq::supports(Proto::Algebra));
     assert!(vq::supports(Proto::Slipstream));
     assert!(!vq::supports(Proto::V2));
+}
+
+/// Решение 281: селектор squadV3SwapCallback(int256,int256,bytes) = 0xc4e21d86 — в диспетчере кода квотера.
+#[test]
+fn runtime_has_squad_callback() {
+    let code = vq::runtime().unwrap();
+    assert!(code.windows(4).any(|w| w == [0xc4, 0xe2, 0x1d, 0x86]));
 }

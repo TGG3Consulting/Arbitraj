@@ -32,6 +32,7 @@ use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::node::multicall;
 use arb::venues::bsc_dex::pools::families;
+use arb::venues::bsc_dex::pools::fee_fresh::Extras;
 use arb::venues::bsc_dex::pools::load_batch::{Stage, Want};
 use arb::venues::bsc_dex::pools::load_batch_v2v3::{self as v23, PoolStateTick};
 use arb::venues::bsc_dex::pools::load_v2v3::word_range;
@@ -240,7 +241,10 @@ async fn batch_stages_match_recorded_calls_and_single_answers() {
     let pools = pools();
     let wants: Vec<Want> = pools.iter().map(want).collect();
     // Ступень 1.
-    let s1: Stage = wants.iter().map(|w| v23::head(&c, w).unwrap()).collect();
+    let s1: Stage = wants
+        .iter()
+        .map(|w| v23::head(&c, w, Extras::of(&c, w.family)).unwrap())
+        .collect();
     let a1 = check_stage(&s1, &singles(&list, 1));
     let heads: Vec<PoolStateTick> = wants
         .iter()

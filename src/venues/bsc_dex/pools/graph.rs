@@ -17,7 +17,9 @@
 //! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
 //! настроек и токенов — всё это в ключе кэша.
 //! Кэш графа (cached, один на состояние реестра) — pools/graph_cache.rs.
-//! Решение 301 (в): брошенный расчёт (quote/abandon.rs) прерывает построение на ближайшем пуле — граф не кладётся в кэш.
+//! Решение 301 (в), уточнение t137 (В1 ревью t132): начатое построение брошенный расчёт НЕ прерывает — получивший замок
+//! достраивает граф и кладёт его в кэш (работа не пропадает, следующий ждущий берёт готовый); проверка признака — до
+//! ожидания замка и после построения (pools/graph_cache.rs).
 //! Решение 308: при dex.graph_background = да граф строит фоновый владелец (graph_owner.rs, накопительно — graph_work.rs,
 //! с нуля — graph_full.rs); build остаётся путём при выключенной настройке и для реестра без владельца.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build), graph_work.rs (from_edges).
@@ -34,7 +36,6 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::quote::abandon;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
@@ -107,8 +108,7 @@ impl Graph {
 /// Построение графа из реестра (решение 80). Берёт достоверные, не спящие пулы торгуемых DEX, глубокие хотя бы по
 /// одной стороне (решение 73), и оставляет на пару токенов не больше dex.route_max_pools_per_edge самых глубоких.
 /// Принимает: окружение, реестр, токены, знаки USDT. Возвращает: граф (может быть пустым — путей нет).
-/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge); Timeout — расчёт брошен
-/// (решение 301, quote/abandon.rs).
+/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge).
 pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> GatewayResult<Graph> {
     build_measured(ctx, reg, tokens, usdt_dec).map(|(g, _)| g)
 }
@@ -149,8 +149,6 @@ pub fn build_measured(
     let snap = reg.snapshot();
     stats.pools = snap.len();
     for e in snap {
-        // Решение 301 (в): срок расчёта вышел — дальше не строим (атомарное чтение признака на пул).
-        abandon::check(ctx, "построение графа")?;
         // graphable, не tradable (решение 82): V2-форк входит в граф для поиска/сигналов, хотя авто-сделкой не
         // исполняется (допуск к сделке — quote/graph_route::executable). Исключены недостоверные, спящие и не-graphable.
         if !e.valid || e.asleep || !e.family.graphable {

@@ -6,7 +6,8 @@
 //!   содержанию;
 //! - граф и глубины с памятью по поколению (живой реестр после перечитываний) равны графу и глубинам, посчитанным
 //!   заново без памяти (новый реестр с теми же записями): пара → отсортированный список (пул, глубина);
-//! - смена состояния (резервы пары V2 по записи 10-30) — новое поколение и пересчёт.
+//! - смена состояния (резервы пары V2 по записи 10-30) — новое поколение и пересчёт;
+//! - решение 301 (е3): update пула, которого нет в реестре, версию реестра не меняет.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::{graph, registry, depth_book}, tests/route_common.
 
@@ -115,4 +116,17 @@ async fn state_change_gives_new_generation() {
     let f = fresh_copy(&p);
     let g_fresh = graph::build(&p.ctx, &f, &p.tokens, 18).unwrap();
     assert_eq!(picture(&g, &p.registry), picture(&g_fresh, &f));
+}
+
+#[tokio::test]
+async fn update_of_missing_pool_keeps_version() {
+    let p = route_common::parts().await;
+    let v = p.registry.version();
+    let missing = PoolRef::Contract(Address::repeat_byte(0x11));
+    assert!(p.registry.update(&missing, |e| e.valid = false).is_none());
+    assert_eq!(p.registry.version(), v, "пула нет — версия прежняя");
+    p.registry
+        .update(&PoolRef::Contract(WBNB_USDT_V2), |e| e.synced_log = Some(3))
+        .unwrap();
+    assert_eq!(p.registry.version(), v + 1, "запись существующего пула — версия растёт");
 }

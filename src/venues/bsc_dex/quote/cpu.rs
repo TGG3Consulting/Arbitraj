@@ -66,6 +66,13 @@ where
     let meter = calc_meter::current();
     let fin = quote_stage::is_final();
     let rt = tokio::runtime::Handle::current();
+    // Работа — в куче (Box::pin), до замыкания потока счёта. Иначе будущее работы (routing::run: классика, граф,
+    // повтор графа решения 300) лежит по значению на стеке потока блокирующих задач (2 МиБ по умолчанию): замыкание
+    // переносится на его стек при запуске, block_on закрепляет будущее там же, а каждая обёртка-признак ниже —
+    // async fn, которая хранит и аргумент, и будущее, его содержащее, — размер до двух раз на обёртку (их четыре;
+    // поведение rustc — rust-lang/rust#62958). Переполнение стека в tests/bsc_dex_quote_cpu.rs (run 43774848962)
+    // появилось только в сочетании t131 (повтор графа в routing::run) + t132 (четвёртая обёртка abandon::scope).
+    let work = Box::pin(work);
     let job = tokio::task::spawn_blocking(move || {
         let _held = held;
         rt.block_on(abandon::scope(

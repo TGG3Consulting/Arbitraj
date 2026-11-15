@@ -14,6 +14,7 @@
 //! Настройки: это и есть их список.
 //!
 //! Новая настройка: строка в docs/SETTINGS.md + строка в нужном файле этой папки + поле в интерфейсе.
+//! Решение 283: значение области «площадка» читается только у площадки DEX — .dex_venue() (поле venue_for, только показ).
 
 mod base;
 mod binance;
@@ -35,7 +36,7 @@ mod uncapped;
 mod window;
 mod xt;
 
-use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueRole};
+use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole};
 use super::venue_dir::DirKind;
 
 /// Короткая запись одной настройки. Принимает: группу, имя, тип, ограничение, единицу, области, описание.
@@ -66,6 +67,8 @@ const fn d(
             DexId::None
         },
         venue_role: VenueRole::Venue,
+        // Решение 283: какие площадки читают значение области «площадка» (показ в интерфейсе) — .dex_venue().
+        venue_for: VenueFor::Any,
         optional: false,
         // Решение 242: область «площадка + тип направления» задаётся .dir_kinds(…).
         dir_kinds: &[],
@@ -157,6 +160,10 @@ mod tests {
                 "{}",
                 s.name
             );
+            // Решение 283: пометка «только DEX» имеет смысл лишь у настройки с областью «площадка».
+            if s.venue_for == VenueFor::Dex {
+                assert!(s.scopes.contains(&S::Venue), "{}", s.name);
+            }
             assert_eq!(
                 s.scopes.contains(&S::VenueDir),
                 !s.dir_kinds.is_empty(),

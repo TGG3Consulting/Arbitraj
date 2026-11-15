@@ -8,6 +8,8 @@
 use serde::Serialize;
 
 use super::venue_dir::DirKind;
+// Решение 283: перечисление вынесено в settings/venue_for.rs; путь schema::VenueFor сохранён.
+pub use super::venue_for::VenueFor;
 
 /// Тип значения настройки.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -130,6 +132,8 @@ pub struct SettingDef {
     pub dex_id: DexId,
     /// Смысл области «площадка»: обычная или источник перевода (решение 51).
     pub venue_role: VenueRole,
+    /// Решение 283: площадки какого вида читают значение области «площадка» (только показ в интерфейсе).
+    pub venue_for: VenueFor,
     /// Необязательная: не задана — функция работает, отключается только то, что описано (например
     /// dex.depth_log_min_s — записи о смене глубины, решение 73). Интерфейс не считает её «не задано».
     pub optional: bool,
@@ -169,6 +173,15 @@ impl SettingDef {
     pub const fn pair_venue(self) -> Self {
         SettingDef {
             venue_role: VenueRole::PairVenue,
+            ..self
+        }
+    }
+
+    /// Решение 283: значение области «площадка» читается только у площадки вида DEX (VenueFor::Dex). Только описание
+    /// для интерфейса — чтение и запись не меняются. Возвращает: описание с пометкой.
+    pub const fn dex_venue(self) -> Self {
+        SettingDef {
+            venue_for: VenueFor::Dex,
             ..self
         }
     }

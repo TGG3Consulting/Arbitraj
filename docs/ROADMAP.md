@@ -26,6 +26,8 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 283 (t116): src/settings/schema.rs 210 строк (было 197; поле venue_for и .dex_venue()). Перечисление VenueFor
+  вынесено в settings/venue_for.rs; дальше дробить — вынести билдеры SettingDef (impl) в отдельный файл.
 - Решение 280 (t112): src/venues/bsc_dex/pools/families.rs 499 строк (было 486), check/probe.rs 261 (было 257),
   check/taxes.rs 224 (было 218) — все были сверх ориентира 200 и до правки; новые файлы quote/v2_pair_{quote,sim,probe}.rs
   уложены в 200. Ревью 280: exec/bundle.rs 361 (было 349; отказ ноги без своего пути), check/taxes.rs 228 (было 224);

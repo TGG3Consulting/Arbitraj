@@ -14,11 +14,12 @@
     SecretRow.svelte, SettingEditor.svelte, PoolDirectory.svelte, DexFamilies.svelte, VenueChannels.svelte,
     ErrorText.svelte, DayVenues.svelte (lib/control.svelte.js), Delistings.svelte (lib/delist.svelte.js),
     CexCexDeny.svelte (решение 249: у venue.cex_cex биржи — список «не взаимодействовать», окно «Настроить список»).
-  Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies).
+  Настройки: все с областью Venue; у DEX — с областями Dex (через DexFamilies). Решение 283: у биржи не показываются
+    настройки с venue_for «Dex» в схеме (их значение читает только площадка DEX); у DEX — всё, как раньше.
 -->
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
-  import { store } from '../lib/settings.svelte.js';
+  import { store, shownAtVenue } from '../lib/settings.svelte.js';
   import { secrets, TELEGRAM_TOKEN } from '../lib/secrets.svelte.js';
   import { dex } from '../lib/dex.svelte.js';
   import CheckConnection from '../components/CheckConnection.svelte';
@@ -45,6 +46,14 @@
     }
     return [...out];
   });
+
+  /**
+   * Решение 283: группы настроек одной площадки — без настроек, которые у неё никто не читает (venue_for «Dex» у биржи;
+   * lib/settings.svelte.js shownAtVenue). Только показ: сохранённые значения не меняются. Пустая группа не показывается.
+   * Принимает: id площадки. Возвращает: [[группа, [описания]]].
+   */
+  const groupsFor = (id) =>
+    groups.map(([g, defs]) => [g, defs.filter((d) => shownAtVenue(d, id))]).filter(([, defs]) => defs.length);
 
   /** Имена секретов, которые показаны в блоке каналов площадки. */
   const channelSecrets = (id) => new Set((dex.byVenue[id]?.channels ?? []).map((c) => c.info.secret).filter(Boolean));
@@ -97,7 +106,7 @@
     {/if}
 
     <h3>Настройки площадки</h3>
-    {#each groups as [group, defs] (group)}
+    {#each groupsFor(id) as [group, defs] (group)}
       <h4>{group}</h4>
       {#each defs as def (def.name)}
         <div class="setting-line">

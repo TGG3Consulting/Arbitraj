@@ -3,7 +3,8 @@
 //   заданные значения (GET /api/settings), список площадок (GET /api/venues) и их вид (GET /api/venues/kinds).
 //   Значения обновляются на лету из живого потока ({"type":"settings"}), при «lagged» — перечитываются.
 //   Значений по умолчанию нет: не задано — значит в values нет записи.
-// Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte.
+// Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte,
+//   components/SettingCard.svelte и pages/Venues.svelte (shownAtVenue, решение 283).
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: читает и показывает любые.
 
@@ -74,6 +75,17 @@ export async function setValue(name, scope, value) {
 
 /** Описание настройки по имени. Принимает: имя. Возвращает: описание или undefined. */
 export const defOf = (name) => store.schema?.settings.find((d) => d.name === name);
+
+/**
+ * Решение 283: показывать ли настройку области «площадка» у этой площадки (только показ; чтение и запись не меняются).
+ * В схеме поле venue_for: «Dex» — значение читается только у площадки DEX, у биржи (вид «Cex» из GET /api/venues/kinds)
+ * строка не показывается; вид площадки неизвестен или venue_for другое — показывается, как раньше.
+ * Принимает: описание настройки, id площадки. Возвращает: bool.
+ */
+export function shownAtVenue(def, v) {
+  if (def.venue_for !== 'Dex') return true;
+  return store.venueKinds.find((x) => x.id === v)?.kind !== 'Cex';
+}
 
 /**
  * Подпись области «площадка» у настройки. Решение 118 (Я-4, Я-23): время в пути = отправка у источника + зачисление у

@@ -149,7 +149,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `stable_list.rs` | Решение 292: пулы StableSwap из dex.stable_pools (Saddle — getToken(k), Curve 2020 — coins(k)) — кандидаты справочника при поиске по фабрикам без индексатора; разбор пачки — sort (ответы пула вычитываются целиком); вызывает factory_scan.rs |
 | `stable_native.rs` | Нативный BNB в пулах PancakeSwap Stable / Lista («122 X (нативный BNB в стейблсвапах)»): метка 0xEeee… ↔ обёртка dex.native_wrapped — монеты пула в пару, индекс метки (StableData.native), пара для реестра фабрики; без сети |
 | `load_saddle.rs` | Состояние пула Saddle (Nerve) на блоке (A_PRECISION, 256 раундов, откат при несходимости, пауза); разбор без сети — calls / parse / build (ревью 292) |
-| `load_site.rs` | Решение 295: состояние всех пар многомонетного пула (PoolRef::Multi) одним чтением на контракт (read загрузчика вида + state каждой пары); группы пачечного чтения по контракту (groups) |
+| `load_site.rs` | Решение 295: состояние пар многомонетного пула (PoolRef::Multi), читаемых вместе (load_batch: приём / повтор пачки, каждый блок, лог), одним чтением на контракт (read загрузчика вида + state каждой пары); группы по контракту (groups). Одиночное чтение пары (reload::load_one) — через load.rs, своей парой |
 | `load_woo.rs` | Состояние пары WooFi на блоке: state(base) оракула, paused, wooracle (= dex.oracle), реализация прокси. Своей математики нет |
 | `load_woo_ladder.rs` | Лесенка цен пула WooFi на блоке: query квотера контракта в обе стороны по dex.pmm_ladder_usd (Multicall3, откат — край лесенки) |
 | `load_maverick.rs` | Состояние пула Maverick V2 на блоке (решение 122 F): getState, tickSpacing, fee(true/false), tokenA, масштабы + PoolLens.getTicksAroundActive(dex.tick_radius) одной пачкой Multicall3 по dex.load_batch → PoolState::TickBin |
@@ -177,7 +177,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_solidly.rs` | События Solidly (решения 80, 85): Sync(uint256,uint256) → новые резервы в PoolState::Solidly (stable/decimals/комиссия сохраняются) |
 | `listen.rs` | Слушатель пачки пулов |
 | `listen_log.rs` | Один лог: применить, перечитать, отправить ядру |
-| `listen_site.rs` | Решение 295: лог контракта пар многомонетного пула — одна перечитка всех глубоких пар (reload_many::load_group), мелкие — пробуждение по событию ликвидности |
+| `listen_site.rs` | Решение 295: лог контракта пар многомонетного пула — пропуск только если учтён у всех глубоких пар пачки, иначе одна перечитка неучтённых (stale → reload_many::load_group); мелкие — пробуждение по событию ликвидности, не больше раза на лог |
 | `created.rs` | Новые пулы в реальном времени |
 | `market.rs` | Подписка на рынок целиком |
 | `batches.rs` | Раскладка пулов по пачкам подписки: по виду (и менеджеру V4), не больше dex.pools_per_sub |

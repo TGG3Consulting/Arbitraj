@@ -1,10 +1,13 @@
 //! Файл: venues/bsc_dex/pools/listen_site.rs
 //! Что делает: решение 295 — лог контракта многомонетного пула, у которого в пачке пары `PoolRef::Multi`: одна
-//! перечитка на контракт для всех глубоких пар (событие у этих видов — только «перечитать», events_curve.rs,
-//! events_curve_ng.rs, events_balancer.rs, events_stable_u.rs), мелкие пары — пробуждение по событию ликвидности (как
-//! мелкий пул со своим контрактом). Правила лога — как у listen_log.rs: уже учтённый лог пропускается (synced_block
-//! первой глубокой пары — все пары пишутся вместе), реорг (removed) — перечитка на текущем блоке, иначе — на блоке лога;
-//! сбой чтения — все пары контракта недостоверны и событие Invalidated по их монетам, конец сессии с причиной.
+//! перечитка на контракт для глубоких пар, у которых лог ещё не учтён (событие у этих видов — только «перечитать»,
+//! events_curve.rs, events_curve_ng.rs, events_balancer.rs, events_stable_u.rs); мелкие пары — пробуждение по событию
+//! ликвидности (как мелкий пул со своим контрактом), не больше одного раза на лог. Правила лога — как у listen_log.rs,
+//! но по КАЖДОЙ паре (ревью 295, 1а): лог пропускается, только если он учтён у всех глубоких пар контракта в пачке
+//! (отметки пар могут разойтись — reload::load_one при пробуждении / повторе читает одну пару); реорг (removed) — все
+//! глубокие пары на текущем блоке, иначе — неучтённые на блоке лога (stale). Пары одного адреса в двух пачках
+//! подписки: каждая пачка получает лог своей подпиской и перечитывает свои пары. Сбой чтения — перечитываемые пары
+//! недостоверны и событие Invalidated по их монетам, конец сессии с причиной.
 //! Кто вызывает: pools/session.rs (on_log: лог не нашёл пул по Singleton / Contract).
 //! От чего зависит: admit.rs (wake, Members), events.rs, listen_log.rs (latest), reload_many.rs (load_group),
 //! registry.rs, invalidated.rs.
@@ -19,6 +22,7 @@ use super::admit::{self, Members};
 use super::events::{self, Applied};
 use super::group::Group;
 use super::listen::{End, Pools};
+use super::registry::Entry;
 use super::{listen_log, reload_many};
 
 /// Что делает: лог контракта пар Multi. Принимает: окружение, пачку, её пулы, лог. Возвращает: false — пар Multi с
@@ -47,22 +51,34 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         .copied()
         .filter(|&i| m.deep.get(i).copied().unwrap_or(true))
         .collect();
-    // Мелкие пары — пробуждение по событию ликвидности (мелкий пул со своим контрактом слушается только им).
+    // Мелкие пары — пробуждение по событию ликвидности (мелкий пул со своим контрактом слушается только им). Лог
+    // одного контракта может прийти дважды (глубокая пара в полной подписке, мелкая — в подписке ликвидности,
+    // group.rs): пара, уже прочитанная на этом логе или позже (has_applied — пробуждение читает на блоке лога), второй
+    // раз не будится — один лог, одно действие на пару.
     if !log.removed && topic.is_some_and(|t| events::liquidity_topics(family).contains(&t)) {
-        for &i in mine.iter().filter(|i| !deep.contains(i)) {
+        for i in mine.iter().copied().filter(|i| !deep.contains(i)) {
+            let r = &m.pools[i].0.reference;
+            if p.reg.get(r).is_some_and(|e| e.has_applied(block, index)) {
+                continue;
+            }
             admit::wake(p, g, m, i, block).await?;
         }
     }
     if deep.is_empty() || !topic.is_some_and(|t| events::topics(family).contains(&t)) {
         return Ok(true);
     }
-    let r0 = m.pools[deep[0]].0.reference.clone();
-    let Some(entry) = p.reg.get(&r0) else {
+    // Ревью 295 (1а): лог пропускается, только если он учтён у ВСЕХ глубоких пар контракта в пачке; перечитываются
+    // пары, у которых он не учтён (у каждой своя отметка synced_block / synced_log — load_one мог поднять одну пару).
+    let entries: Vec<(usize, Entry)> = deep
+        .iter()
+        .filter_map(|&i| p.reg.get(&m.pools[i].0.reference).map(|e| (i, e)))
+        .collect();
+    let list: Vec<Entry> = entries.iter().map(|(_, e)| e.clone()).collect();
+    let pick = stale(&list, block, index, log.removed);
+    let Some(&k0) = pick.first() else {
         return Ok(true);
     };
-    if !log.removed && entry.has_applied(block, index) {
-        return Ok(true);
-    }
+    let r0 = entries[k0].1.pool.reference.clone();
     let applied = if log.removed {
         Applied::Refresh("реорг: событие отменено (removed)".into())
     } else {
@@ -76,6 +92,7 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         // У многомонетных видов точечного применения нет (только перечитка) — на всякий случай тоже перечитка.
         Applied::Updated | Applied::Bins(_) => "событие пула".into(),
     };
+    let deep: Vec<usize> = pick.iter().map(|&k| entries[k].0).collect();
     let msg = format!(
         "{} {addr:#x}: {why} — перечитываю пары пула одним чтением ({})",
         family.title,
@@ -101,4 +118,16 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     }
     p.signals.pool_ready();
     Ok(true)
+}
+
+/// Что делает: какие глубокие пары контракта перечитать на лог (ревью 295, 1а): реорг — все; иначе — пары, у которых
+/// лог ещё не учтён (Entry::has_applied). Пусто — лог учтён у всех, пропуск. Принимает: записи пар, блок и номер лога,
+/// отменён ли лог. Возвращает: индексы записей. Ошибок нет.
+pub fn stale(entries: &[Entry], block: u64, index: u64, removed: bool) -> Vec<usize> {
+    entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| removed || !e.has_applied(block, index))
+        .map(|(k, _)| k)
+        .collect()
 }

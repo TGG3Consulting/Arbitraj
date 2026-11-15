@@ -63,6 +63,7 @@ pub struct Snap {
     /// Отказы, уже записанные в журнал (пул и причина) — каждый один раз.
     pub logged: HashSet<String>,
     /// Пулы, исключённые проверкой «кто меняет» (Universal Router меняет в другом пуле, check/emitter.rs): причина.
+    /// Ключ — физический пул `PoolRef::site()` (решение 295; у парных пулов — сама ссылка).
     pub banned: HashMap<PoolRef, String>,
     /// Пулы из событий создания (не от индексатора) по монете — тоже в справочнике и в проверке (pools/index.rs).
     pub events: HashMap<Address, Vec<IndexedPool>>,
@@ -103,19 +104,35 @@ impl Directory {
             .read()
             .unwrap_or_else(|p| p.into_inner())
             .banned
-            .get(r)
+            .get(&r.site())
             .cloned()
     }
 
     /// Исключить пул: Universal Router его DEX меняет в другом пуле (check/emitter.rs). Пул снимается со «взятых»,
     /// в справочнике — «отклонён» с причиной. Возвращает: true — исключён впервые (для одной записи журнала).
+    /// Решение 295 (ревью, 6): запрет — по физическому пулу (`PoolRef::site`): у пары многомонетного пула он действует
+    /// на все пары контракта и на форму ссылки после смены dex.multi_pair; у прочих ссылок site() = ссылка — ключ прежний.
     pub fn ban(&self, r: &PoolRef, why: &str) -> bool {
         self.with(|s| {
             let key = pool_key(r);
             s.taken.remove(&key);
             s.status
                 .insert(key, DirectoryStatus::Rejected(why.to_string()));
-            s.banned.insert(r.clone(), why.to_string()).is_none()
+            // Остальные взятые пары того же контракта (только у Multi; у прочих ссылок таких нет).
+            if matches!(r, PoolRef::Multi { .. }) {
+                let site = r.site();
+                let same: Vec<String> = s
+                    .taken
+                    .iter()
+                    .filter(|(_, f)| f.reference.site() == site)
+                    .map(|(k, _)| k.clone())
+                    .collect();
+                for k in same {
+                    s.taken.remove(&k);
+                    s.status.insert(k, DirectoryStatus::Rejected(why.to_string()));
+                }
+            }
+            s.banned.insert(r.site(), why.to_string()).is_none()
         })
     }
 

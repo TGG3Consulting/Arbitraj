@@ -59,7 +59,6 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         Ok(a) => a,
         Err(_) => return Ok(Err(format!("«{}» — не адрес контракта пула", c.pool))),
     };
-    let id = c.family.id;
     let (calls, n_coins) = match plan(ctx, c, pool) {
         Ok(p) => p,
         Err(why) => return Ok(Err(why)),
@@ -72,27 +71,39 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
     if c.family.proto == Proto::WooPP {
         return verify_woo::woo(ctx, c, pool, &got).await;
     }
+    Ok(judge(ctx, c, pool, &got, n_coins))
+}
+
+/// Что делает: итог по ответам проверки (без сети) — PancakeSwap / Lista StableSwap и Saddle: монеты пула, пара среди
+/// них, подтверждение пула (dex.stable_pools / реестр фабрики) и — решение 295 — multi_pair::adopt. Принимает:
+/// окружение, кандидата, пул, ответы plan по порядку, сколько из них — «монеты пула». Возвращает: Ok(пул) или причину
+/// отказа. Ошибок иных нет.
+pub fn judge(
+    ctx: &Ctx,
+    c: &Candidate,
+    pool: Address,
+    got: &[Result<Bytes, String>],
+    n_coins: usize,
+) -> Result<Found, String> {
+    let id = c.family.id;
     let coins = match c.family.proto {
         Proto::SaddleStable => tokens_of(&got[..n_coins]),
         _ => coins_of(&got[..n_coins]),
     };
-    let coins = match coins {
-        Ok(list) => list,
-        Err(why) => return Ok(Err(why)),
-    };
+    let coins = coins?;
     // PancakeSwap / Lista: метка нативной монеты 0xEeee… — это обёртка в паре (stable_native.rs).
     let coins = match c.family.proto {
         Proto::SaddleStable => coins,
         _ => match stable_native::pair_coins(&coins, stable_native::wrapped(ctx)) {
             Ok(list) => list,
-            Err(why) => return Ok(Err(format!("пул {pool:#x}: {why}"))),
+            Err(why) => return Err(format!("пул {pool:#x}: {why}")),
         },
     };
     if !coins.contains(&c.coin) || !coins.contains(&c.quote) {
-        return Ok(Err(format!(
+        return Err(format!(
             "среди монет пула {pool:#x} нет пары {} / {}",
             c.coin, c.quote
-        )));
+        ));
     }
     let listed = ctx
         .dex_list("dex.stable_pools", id)
@@ -131,14 +142,14 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
         _ => false,
     };
     if !ok {
-        return Ok(Err(format!(
+        return Err(format!(
             "пул {pool:#x} не подтверждён: нет в реестре фабрики dex.factory и нет в dex.stable_pools DEX {id}"
-        )));
+        ));
     }
     // Решение 295: Saddle и PancakeSwap StableSwap в режиме dex.multi_pair — ссылка с парой и монеты пула (с обёрткой
     // вместо метки BNB) для развёртки; Lista — не многомонетный вид (adopt не меняет).
     let found = verify_woo::found(c, PoolRef::Contract(pool));
-    Ok(Ok(multi_pair::adopt(ctx, found, &coins)))
+    Ok(multi_pair::adopt(ctx, found, &coins))
 }
 
 /// Вызовы проверки и число вызовов «монеты пула» в начале. Ошибка — причина отказа (не задана настройка).

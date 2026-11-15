@@ -99,3 +99,25 @@ fn one_read_gives_every_pair() {
         assert_eq!(load_curve::state_with(&raw, pr, &bad).unwrap(), old, "ellipsis {a}/{b}");
     }
 }
+
+#[test]
+fn late_pairs_follow_their_contract() {
+    // Ревью 295, п. 2: поздние пулы с парами Multi — сначала пары контракта открытой пачки, затем группами по контракту.
+    let nerve = Address::from_str(rec("nerve_2026-11-15", "probe.json")["pool"].as_str().unwrap()).unwrap();
+    let ell = Address::from_str(rec("ellipsis_2026-11-15", "probe.json")["pool"].as_str().unwrap()).unwrap();
+    let f = families::make("nerve", "saddle_stableswap").unwrap();
+    let found = |contract: Address, dir: &str, a: &str, b: &str| {
+        let (t0, t1) = pair(dir, a, b);
+        let r = PoolRef::Multi { contract, token0: t0, token1: t1 };
+        (arb::venues::bsc_dex::pools::verify_woo::found(&arb::venues::bsc_dex::pools::verify::Candidate { family: f, pool: format!("{contract:#x}"), coin: t0, quote: t1 }, r), String::new())
+    };
+    let list = vec![
+        found(ell, "ellipsis_2026-11-15", "BUSD", "USDT"),
+        found(nerve, "nerve_2026-11-15", "BUSD", "USDT"),
+        found(ell, "ellipsis_2026-11-15", "USDC", "USDT"),
+        found(nerve, "nerve_2026-11-15", "USDC", "USDT"),
+    ];
+    let open = std::collections::HashSet::from([PoolRef::Contract(nerve)]);
+    let got: Vec<Address> = arb::venues::bsc_dex::pools::attach::by_site(list, &open).iter().map(|(f, _)| f.reference.address()).collect();
+    assert_eq!(got, vec![nerve, nerve, ell, ell], "пары контракта открытой пачки — первыми, затем подряд по контракту");
+}

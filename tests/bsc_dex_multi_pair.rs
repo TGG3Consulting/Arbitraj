@@ -2,9 +2,8 @@
 //! Что делает: решение 295, тест (а) — пул с 3 и более монетами при dex.multi_pair = да даёт в справочнике и во «взятых»
 //! ВСЕ нужные пары (каждая — своя `PoolRef::Multi`), без настройки — одна запись `Contract`, как до решения. Проход —
 //! настоящий index::take_with (режим, ключ строки с парой, развёртка недостающих пар по монетам пула, вторая проверка);
-//! проверка кандидата — те же разборы, что на узле (verify_curve::decide, verify_balancer::decide,
-//! verify_curve_ng::decide; Saddle — verify_woo::found, как verify_stable_u.rs) на ЖИВЫХ записанных ответах, плюс
-//! multi_pair::adopt. Индексатор даёт одну пару пула (строка справочника: первая монета пула — встречный).
+//! проверка кандидата — настоящие разборы после ответов узла (verify_curve / verify_stable_u / verify_balancer /
+//! verify_curve_ng ::judge, включая multi_pair::adopt) на ЖИВЫХ записанных ответах. Индексатор даёт одну пару пула (строка справочника: первая монета пула — встречный).
 //! Данные: ellipsis_/nerve_2026-11-15 (3pool), balancer_acsi_2026-11-15 (4 и 5 токенов), curve_ng_2026-11-14 (3 монеты).
 //! Кто вызывает: cargo test --test bsc_dex_multi_pair.
 //! От чего зависит: tests/multi_common (записи, окружение), arb::venues::bsc_dex::{pools, directory}.
@@ -27,7 +26,7 @@ use arb::venues::bsc_dex::directory::TokenEntry;
 use arb::venues::bsc_dex::directory::gt_parse::IndexedPool;
 use arb::venues::bsc_dex::pools::verify::{Candidate, Verdict};
 use arb::venues::bsc_dex::pools::{
-    index_pass, load_curve, load_saddle, multi_pair, verify_balancer, verify_curve, verify_curve_ng, verify_woo,
+    index_pass, verify_balancer, verify_curve, verify_curve_ng, verify_stable_u,
 };
 
 use multi_common::{answer, ctx, rec, set_dex};
@@ -67,38 +66,36 @@ fn ng_answers(p: &Value) -> Vec<Result<Bytes, String>> {
     vec![h(&p["factory"]["get_coins"]), h(&p["factory"]["is_meta"]), h(&p["calls"]["version"])]
 }
 
-/// Решение по кандидату — разбор проверки его вида на записанных ответах + multi_pair::adopt. Ошибок нет.
+/// Решение по кандидату — настоящий разбор проверки его вида после ответов узла (verify_*::judge, включая
+/// multi_pair::adopt) на записанных ответах. Ошибок нет.
 fn decide(ctx: &Ctx, c: &Candidate) -> Verdict {
     let pool = Address::from_str(&c.pool).unwrap();
-    let r = match c.family.id {
-        "ellipsis" => {
-            let a = ellipsis_answers();
-            verify_curve::decide(c, pool, &a).map(|f| (f, load_curve::coins_of(&a).unwrap()))
-        }
+    let to_v = |r: Result<_, String>| match r {
+        Ok(f) => Verdict::Taken(Box::new(f)),
+        Err(w) => Verdict::Rejected(w),
+    };
+    match c.family.id {
+        "ellipsis" => verify_curve::judge(ctx, c, pool, &ellipsis_answers()),
         "nerve" => {
-            let p = rec("nerve_2026-11-15", "probe.json");
-            let a: Vec<_> = (0..4).map(|k| answer(&p, &format!("nerve getToken({k})"))).collect();
-            let t = load_saddle::tokens_of(&a).unwrap();
-            let ok = t.contains(&c.coin) && t.contains(&c.quote);
-            ok.then(|| (verify_woo::found(c, PoolRef::Contract(pool)), t)).ok_or("нет пары".to_string())
+            // getToken(0..31) — те же вызовы, что verify_stable_u plan (stable_list_2026-11-15/token_calls.json).
+            let r = rec("stable_list_2026-11-15", "token_calls.json");
+            let a: Vec<_> = r["calls"].as_array().unwrap().iter().filter(|x| x["name"].as_str().unwrap().starts_with("nerve getToken(")).map(|x| match x["response"]["result"].as_str() {
+                Some(h) => Ok(Bytes::from(alloy_primitives::hex::decode(h).unwrap())),
+                None => Err(x["response"]["error"]["message"].to_string()),
+            }).collect();
+            to_v(verify_stable_u::judge(ctx, c, pool, &a, a.len()))
         }
         "acsi-finance" => {
             let probe = rec("balancer_acsi_2026-11-15", "probe.json");
             let p = probe["pools"].as_array().unwrap().iter().find(|p| p["pool"] == c.pool.as_str()).unwrap();
             let plan = (pool, addr(&probe["vault"]["address"]), addr(&probe["factories"]["weighted"]["address"]), Some(addr(&probe["factories"]["stable"]["address"])));
-            let t: Vec<Address> = p["tokens"].as_array().unwrap().iter().map(addr).collect();
-            verify_balancer::decide(c, plan, &balancer_answers(p)).map(|f| (f, t))
+            verify_balancer::judge(ctx, c, plan, &balancer_answers(p))
         }
         _ => {
             let probe = rec("curve_ng_2026-11-14", "probe.json");
             let p = probe["pools"].as_array().unwrap().iter().find(|p| p["pool"] == c.pool.as_str()).unwrap();
-            let t: Vec<Address> = p["coins"].as_array().unwrap().iter().map(addr).collect();
-            verify_curve_ng::decide(c, pool, &["v7.0.0".to_string()], &ng_answers(p)).map(|f| (f, t))
+            verify_curve_ng::judge(ctx, c, pool, &["v7.0.0".to_string()], &ng_answers(p))
         }
-    };
-    match r {
-        Ok((f, t)) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &t))),
-        Err(w) => Verdict::Rejected(w),
     }
 }
 

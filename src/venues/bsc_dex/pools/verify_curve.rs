@@ -54,18 +54,24 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         let answers: Result<Vec<_>, String> = part.into_iter().collect();
         out.push(match answers {
             Err(node) => Verdict::Failed(node),
-            Ok(a) => match decide(c, pool, &a) {
-                // Решение 295: в режиме dex.multi_pair — ссылка с парой и монеты пула для развёртки.
-                Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(
-                    ctx,
-                    f,
-                    &coins_of(&a).unwrap_or_default(),
-                ))),
-                Err(w) => Verdict::Rejected(w),
-            },
+            Ok(a) => judge(ctx, c, pool, &a),
         });
     }
     out
+}
+
+/// Что делает: итог по ответам coins(k) (без сети): decide и — решение 295 — в режиме dex.multi_pair ссылка с парой и
+/// монеты пула для развёртки (multi_pair::adopt). Принимает: окружение, кандидата, пул, ответы. Возвращает: итог.
+/// Ошибок нет.
+pub fn judge(ctx: &Ctx, c: &Candidate, pool: Address, answers: &[Result<Bytes, String>]) -> Verdict {
+    match decide(c, pool, answers) {
+        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(
+            ctx,
+            f,
+            &coins_of(answers).unwrap_or_default(),
+        ))),
+        Err(w) => Verdict::Rejected(w),
+    }
 }
 
 /// Адрес пула кандидата, если он в dex.stable_pools этой DEX. Возвращает: адрес или причину отказа. Ошибок нет.

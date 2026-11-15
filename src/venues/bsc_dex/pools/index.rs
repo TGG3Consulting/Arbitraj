@@ -89,7 +89,7 @@ pub async fn record(ctx: &Ctx, cands: &[Candidate], verdicts: Vec<Verdict>) -> u
             // Решение 295: ключ строки — с парой у DEX в режиме dex.multi_pair, иначе строка пула (как до решения).
             let key = multi_pair::dir_key(&s.multi_dex, c.family.id, &c.pool, c.coin, c.quote);
             let st = match v {
-                Verdict::Taken(f) => match s.banned.get(&f.reference) {
+                Verdict::Taken(f) => match s.banned.get(&f.reference.site()) {
                     Some(why) => DirectoryStatus::Rejected(why.clone()),
                     None => {
                         s.taken.insert(key.clone(), *f);

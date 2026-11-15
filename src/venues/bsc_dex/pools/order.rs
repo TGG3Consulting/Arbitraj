@@ -28,7 +28,8 @@ pub fn order(ctx: &Ctx, found: Vec<Found>) -> Vec<Found> {
         found
             .into_iter()
             .map(|f| {
-                let key = pool_key(&f.reference);
+                // Решение 295 (ревью, 7): у пары многомонетного пула — строка контракта, как у индексатора.
+                let key = pool_key(&f.reference.site());
                 let list = s.tokens.get(&f.coin).map(|t| t.pools.as_slice());
                 let events = s.events.get(&f.coin).map(|v| v.as_slice());
                 (

@@ -4,7 +4,8 @@
 //! load_balancer — `read`), затем сборка состояния каждой пары без сети (`state` — индексы пары среди монет пула).
 //! Группы (контракт → пары) для пачечного чтения — `groups` (load_batch.rs). Ссылки Contract / Singleton / Member сюда
 //! не попадают: их чтение — прежнее (load.rs, load_batch.rs).
-//! Кто вызывает: pools/load_batch.rs (states), pools/reload_site.rs (события и каждый блок).
+//! Кто вызывает: pools/load_batch.rs (states; через него — reload_many.rs load_group: per_block.rs, listen_site.rs,
+//! приём и повтор пачки).
 //! От чего зависит: load.rs (Loaded), families.rs, load_curve.rs, load_saddle.rs, load_curve_ng.rs, load_stable_u.rs,
 //! load_balancer.rs, tokens.rs, node/call.rs (block_tag).
 //! Настройки: через загрузчики — dex.vault, dex.factory (Balancer), dex.native_wrapped (PancakeSwap StableSwap).

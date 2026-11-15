@@ -93,10 +93,9 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             "dex_dex.enabled = да, а список dex_dex.base_tokens пуст",
         ));
     }
-    // Решение 131: граф — тот же кэш на состояние реестра и блок, что у котировки (pools/graph.rs cached), а не новое
-    // построение на каждый толчок поиска (каждое событие пула).
-    let head = q.heads.latest().map_or(0, |h| h.number);
-    let g = graph::cached(ctx, &q.reg, &q.tokens, usdt_dec, head)?;
+    // Решение 131: граф — тот же кэш на состояние реестра, что у котировки (pools/graph.rs cached), а не новое
+    // построение на каждый толчок поиска (каждое событие пула). Решение 301 (е): блок в ключ графа не входит.
+    let g = graph::cached(ctx, &q.reg, &q.tokens, usdt_dec)?;
     let wbnb = ctx.addr("dex.native_wrapped").ok();
     let tickers = coin_tickers(&q.reg);
     let tip = tip_bnb(ctx);

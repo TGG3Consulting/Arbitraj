@@ -52,12 +52,9 @@ pub async fn quote(
     gas: U256,
 ) -> GatewayResult<Quote> {
     let ctx = &v.q.ctx;
-    // Решение 129: граф — один на состояние реестра и блок (pools/graph.rs cached), а не новый на каждую котировку.
-    // Свежесть головы проверяет вызывающий (quote/mod.rs); здесь номер блока — только ключ кэша (нет головы — 0).
-    // Решение 217: у замороженного реестра — блок момента снимка (frozen.rs).
-    let head =
-        v.q.frozen_head
-            .unwrap_or_else(|| v.q.heads.latest().map_or(0, |h| h.number));
+    // Решение 129: граф — один на состояние реестра (pools/graph.rs cached), а не новый на каждую котировку.
+    // Свежесть головы проверяет вызывающий (quote/mod.rs). Решение 301 (е): номер блока в ключ графа больше не входит
+    // (build его не читает) — граф не перестраивается на каждом блоке без смены реестра.
     let allowed: HashSet<Address> = v.q.mids.active(ctx).iter().map(|m| m.address).collect();
     let (max_hops, max_paths) = route_paths::limits(ctx)?;
     // Решение 187: задан предел перебора — короткие пути первыми, затем отбор max_paths лучших (route_best.rs);
@@ -73,7 +70,7 @@ pub async fn quote(
         max_paths,
         cap,
     };
-    let mut paths = route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, head, &search)?;
+    let mut paths = route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, &search)?;
     // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
     // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
     if native::is_native(ctx, asset) {

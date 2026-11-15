@@ -3,8 +3,8 @@
 //! РЕАЛЬНОЙ записи маршрута CAKE (tests/route_common, routes_2026-10-29, блок 130521896):
 //! (а) очередь построений графа: запрос, прочитавший версию реестра раньше, чем граф был построен на более новой
 //!     версии (так видит кэш дождавшийся замка построения, пока версия росла), берёт готовый граф и НЕ строит его
-//!     заново (счётчик построений Cache::builds); запрос с более новой версией, более высоким блоком головы или другими
-//!     настройками графа — строит, как раньше;
+//!     заново (счётчик построений Cache::builds); запрос с более новой версией или другими настройками графа — строит,
+//!     как раньше (решение 301 (е): блок головы в ключ графа не входит);
 //! (б) неудачная глубина пула (расчёт невозможен) считается один раз на ключ глубины: повторные построения графа её не
 //!     пересчитывают (счётчик Book::calcs), причина та же; сменилось состояние пула (ключ) — пересчёт;
 //! (в) брошенный расчёт (признак quote/abandon.rs поднят — срок расчёта вышел) не ждёт замок и не строит граф
@@ -26,9 +26,6 @@ use arb::venues::bsc_dex::quote::abandon;
 
 use route_common::{CAKE_USDT_PCS, WBNB_USDT_V2};
 
-/// Блок записи routes_2026-10-29.
-const HEAD: u64 = 130_521_896;
-
 #[tokio::test]
 async fn waiter_takes_newer_graph_without_rebuild() {
     let p = route_common::parts().await;
@@ -38,29 +35,26 @@ async fn waiter_takes_newer_graph_without_rebuild() {
     let asked = reg.version();
     // Запись в реестр (то же состояние пула) — версия выросла, как от события пула во время ожидания.
     let r = PoolRef::Contract(WBNB_USDT_V2);
-    reg.update(&r, |_| ()).expect("пул записи");
+    reg.update(&r, |e| e.synced_log = Some(1)).expect("пул записи");
     assert!(reg.version() > asked);
-    let built = graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD).unwrap();
+    let built = graph::cached(&p.ctx, reg, &p.tokens, 18).unwrap();
     assert_eq!(cache.builds(), 1);
     assert!(!built.is_empty(), "граф записи не пуст");
-    // Дождавшийся с более старой версией (и тем же или более старым блоком) — тот же граф, без построения.
-    for head in [HEAD, HEAD - 1, 0] {
-        let g = graph::cached_as_of(&p.ctx, reg, &p.tokens, 18, head, asked).unwrap();
-        assert!(Arc::ptr_eq(&g, &built), "граф не старше запроса — из кэша");
-    }
+    // Дождавшийся с более старой версией — тот же граф, без построения.
+    let g = graph::cached_as_of(&p.ctx, reg, &p.tokens, 18, asked).unwrap();
+    assert!(Arc::ptr_eq(&g, &built), "граф не старше запроса — из кэша");
+    // Решение 301 (е): блока в ключе нет — повторный запрос на той же версии тоже из кэша.
+    let same = graph::cached(&p.ctx, reg, &p.tokens, 18).unwrap();
+    assert!(Arc::ptr_eq(&same, &built));
     assert_eq!(cache.builds(), 1, "повторного построения нет");
     // Граф новее запроса равен построенному заново на текущем реестре (те же рёбра).
     let fresh = graph::build(&p.ctx, reg, &p.tokens, 18).unwrap();
     assert_eq!(built.len(), fresh.len());
-    // Голова запроса выше, чем у графа, — строится заново (как раньше).
-    let up = graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD + 1).unwrap();
-    assert!(!Arc::ptr_eq(&up, &built));
-    assert_eq!(cache.builds(), 2);
     // Версия запроса выше, чем у графа, — строится заново.
-    reg.update(&r, |_| ()).unwrap();
-    let newer = graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD + 1).unwrap();
-    assert!(!Arc::ptr_eq(&newer, &up));
-    assert_eq!(cache.builds(), 3);
+    reg.update(&r, |e| e.synced_log = Some(2)).unwrap();
+    let newer = graph::cached(&p.ctx, reg, &p.tokens, 18).unwrap();
+    assert!(!Arc::ptr_eq(&newer, &built));
+    assert_eq!(cache.builds(), 2);
     // Сменилась настройка графа — строится заново даже при старой версии запроса.
     p.ctx
         .settings
@@ -72,10 +66,10 @@ async fn waiter_takes_newer_graph_without_rebuild() {
         )
         .await
         .unwrap();
-    graph::cached_as_of(&p.ctx, reg, &p.tokens, 18, HEAD, asked).unwrap();
+    graph::cached_as_of(&p.ctx, reg, &p.tokens, 18, asked).unwrap();
     assert_eq!(
         cache.builds(),
-        4,
+        3,
         "другие настройки графа — новое построение"
     );
 }
@@ -139,7 +133,7 @@ async fn abandoned_calc_does_not_build() {
     let (g, flag) = abandon::guard();
     drop(g);
     let got = abandon::scope(flag, async {
-        graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD)
+        graph::cached(&p.ctx, reg, &p.tokens, 18)
     })
     .await;
     assert_eq!(got.err().map(|e| e.code), Some(ErrorCode::Timeout));
@@ -147,7 +141,7 @@ async fn abandoned_calc_does_not_build() {
     // Живой расчёт (страж держится) — граф строится; итог равен построению без обёртки.
     let (_g, flag) = abandon::guard();
     let live = abandon::scope(flag, async {
-        graph::cached(&p.ctx, reg, &p.tokens, 18, HEAD)
+        graph::cached(&p.ctx, reg, &p.tokens, 18)
     })
     .await
     .unwrap();

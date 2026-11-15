@@ -118,6 +118,7 @@ pub(super) async fn finish(
         graph_full::reconcile(&c, &reg, &t, inc, full, refs, per_edge, &alive)
     })
     .await;
+    // Снятый владелец: забранные пулы обратно не возвращает (четвёртое ревью в) — новый начинает с полной сборки.
     if !bg.is_current(o.generation) {
         return Ok(());
     }
@@ -156,6 +157,8 @@ pub(super) async fn finish(
     if !bg.publish(o.generation, snap) {
         return Ok(());
     }
+    // Четвёртое ревью п. 1: снимок на текущих настройках опубликован — ступень Б кончилась (отсчёты и признаки сброшены).
+    bg.end_stage_b();
     graph_alarm::full_ok(bg);
     st.verify_s = ctx.int("dex.graph_verify_s").ok();
     st.next_verify = st

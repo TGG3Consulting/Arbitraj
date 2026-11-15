@@ -57,13 +57,15 @@ pub(super) async fn round(
         (w, out)
     })
     .await;
-    // Третье ревью п. 3: снятый владелец не трогает пульс круга нового.
+    // Третье ревью п. 3: снятый владелец не трогает пульс круга нового. Забранные им пулы обратно в набор не
+    // возвращаются (четвёртое ревью в): новый владелец начинает с полной сборки — она читает весь реестр заново.
     if !bg.is_current(o.generation) {
         return Ok(());
     }
     bg.round_end();
     let (w, out) = res.map_err(|e| format!("накопительный круг графа упал: {e}"))?;
     let snap_basis = w.basis.clone();
+    let stale = snap_basis.settings != basis.settings;
     st.work = Some(w);
     let out = match out {
         Ok(x) => x,
@@ -93,6 +95,8 @@ pub(super) async fn round(
     if !bg.publish(o.generation, snap) {
         return Ok(());
     }
+    // Четвёртое ревью п. 1: снимок на прежних настройках (круги ступени Б) — отсчёт идёт; на текущих — ступени нет.
+    bg.set_stale_for(o.generation, stale);
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
     let lag_ms = oldest.map_or(0, |t| {
         u64::try_from(t.elapsed().as_millis()).unwrap_or(u64::MAX)

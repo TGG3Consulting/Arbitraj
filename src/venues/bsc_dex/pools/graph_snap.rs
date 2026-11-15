@@ -77,6 +77,12 @@ pub struct Bg {
     pub(super) stage_b_restarted: AtomicBool,
     /// Третье ревью п. 1: ступень Б просрочена после перезапуска — льгота снята (предохранитель снова действует).
     pub(super) stage_b_overdue: AtomicBool,
+    /// Четвёртое ревью п. 1: с какого момента действующий снимок собран на прежних настройках графа (определяет владелец,
+    /// не котировки) — второй отсчёт ступени Б.
+    pub(super) stale_since: Mutex<Option<Instant>>,
+    /// Четвёртое ревью (а): режим dex.graph_background был включён на прошлом шаге владельца (любого экземпляра) —
+    /// сброс переводов в USD книги глубины ровно на переход «выкл → вкл».
+    pub(super) mode_on: AtomicBool,
 }
 
 impl Bg {
@@ -110,6 +116,8 @@ impl Bg {
     pub fn clear(&self, why: Option<String>) {
         *self.snap.write().unwrap_or_else(|p| p.into_inner()) = None;
         *self.lock_why() = why;
+        // Четвёртое ревью п. 1: снимка нет — ступени Б нет: отсчёты и признаки сброшены.
+        self.end_stage_b();
     }
 
     /// Почему снимка нет (None — причина не записана: ещё собирается). Ошибок нет.

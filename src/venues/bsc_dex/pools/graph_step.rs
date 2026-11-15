@@ -50,14 +50,17 @@ pub(super) async fn step(o: &Owner, bg: &Arc<Bg>, st: &mut St) -> Result<(), Str
             st.again = None;
             bg.set_catching_for(o.generation, false);
         }
-        st.mode_on = false;
+        let _ = bg.mode_switched_on(false);
+        // Четвёртое ревью п. 1: режим выключен — ступени Б нет.
+        bg.end_stage_b();
         let _ = bg.take_full();
         return Ok(());
     }
     // Третье ревью п. 6: режим только что включён — переводы в USD могли посчитаться по прежней dex.v2_fee_pct (её смену
     // при выключенном режиме книга не видела): пересчитать при следующем запросе.
-    if !st.mode_on {
-        st.mode_on = true;
+    // Признак — в Bg (четвёртое ревью а): ровно на переход «выкл → вкл», а не на каждый экземпляр владельца. На старте
+    // бота при включённом режиме сброс тоже один раз — книга тогда пуста, сброс ничего не стоит и не меняет итогов.
+    if bg.mode_switched_on(true) {
         o.reg.depth().invalidate();
     }
     bg.changes.track(true);
@@ -99,6 +102,12 @@ pub(super) async fn step(o: &Owner, bg: &Arc<Bg>, st: &mut St) -> Result<(), Str
     {
         st.work = None;
     }
+    // Четвёртое ревью п. 1: ступень «снимок на прежних настройках» определяет владелец по basis действующего снимка.
+    bg.set_stale_for(
+        o.generation,
+        bg.load()
+            .is_some_and(|s| s.basis.settings != basis.settings),
+    );
     schedule_verify(ctx, st);
     let req = bg.take_full();
     let need = st.work.as_ref().is_none_or(|w| w.basis != basis);

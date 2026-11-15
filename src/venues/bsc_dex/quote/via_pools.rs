@@ -5,11 +5,15 @@
 //! Решение 295: обе ноги через промежуточную — пары одного многомонетного пула (одна площадка) — не путь.
 //! Кто вызывает: quote/direct_route.rs, quote/smart.rs, exec/live.rs.
 //! От чего зависит: quote/via.rs, quote/select.rs, check/state.rs, pools/registry.rs, pools/mids.rs.
-//! Настройки: через вызываемые — см. их шапки.
+//! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да — помещающаяся часть
+//! (quote/route_fit.rs) идёт кандидатом пути с coins < qty (как неполная котировка одного пула).
+//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути);
+//! через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, Side};
+use crate::gateway::errors::{ErrorCode, GatewayError};
 
 use super::super::exec::native;
 use super::super::pools::mids::Mid;
@@ -141,15 +145,46 @@ impl Via<'_> {
                             best = Some(p)
                         }
                         Ok(_) => {}
-                        Err(e) => why.push(format!(
-                            "{} → {}: {}",
-                            a.0.family.title, b.0.family.title, e.message
-                        )),
+                        Err(e) => match self.partial(&e, m, *dec, a, b, qty) {
+                            // Решение 294: помещающаяся часть пути (route_fit.rs) — кандидат, как полный путь.
+                            Some(p) if best.as_ref().is_none_or(|x| better(&p, x, self.side)) => {
+                                best = Some(p)
+                            }
+                            Some(_) => {}
+                            None => why.push(format!(
+                                "{} → {}: {}",
+                                a.0.family.title, b.0.family.title, e.message
+                            )),
+                        },
                     }
                 }
             }
         }
         best.ok_or(why)
+    }
+}
+
+impl Via<'_> {
+    /// Решение 294: путь не исполним целиком — помещающаяся часть (route_fit.rs), только если NoRoute и
+    /// dex.intermediate_partial_fill = да (в обоих режимах dex.router_mode; в режиме graph неполная классика дальше
+    /// идёт в route_fit.rs merge — routing.rs). Иначе None без расчётов: включатель читается только в этой ветке ошибки.
+    /// Принимает: ошибку пути, промежуточную, её decimals, P1, P2, количество. Возвращает: путь или None. Ошибок нет.
+    fn partial(
+        &self,
+        e: &GatewayError,
+        m: &Mid,
+        dec: u8,
+        p1: &Ok2,
+        p2: &Ok2,
+        qty: Decimal,
+    ) -> Option<Path> {
+        let ctx = &self.q.ctx;
+        if e.code != ErrorCode::NoRoute
+            || !ctx.flag("dex.intermediate_partial_fill").unwrap_or(false)
+        {
+            return None;
+        }
+        self.fit(m, dec, p1, p2, qty)
     }
 }
 

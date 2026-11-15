@@ -1,7 +1,7 @@
 //! Файл: settings/catalog/mod.rs
 //! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
 //! Список разбит по файлам: base.rs (базовые), trade.rs (налоги, крючки, возврат USDT, застрявшие монеты,
-//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), index.rs (справочник пулов от индексатора, решение 58),
+//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), index.rs (справочник пулов от индексатора, решение 58),
 //! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
 //! «без потолка» — решение 141), window.rs (окна —
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
@@ -23,6 +23,7 @@ mod bingx;
 mod bitget;
 mod coinex;
 pub mod dex;
+mod dex_fit;
 mod feed_watch;
 mod gate;
 mod htx;
@@ -126,6 +127,7 @@ static PARTS: &[&[SettingDef]] = &[
     coinex::COINEX,
     htx::HTX,
     dex::DEX,
+    dex_fit::DEX_FIT,
     index::INDEX,
     kyber::KYBER,
     send::SEND,

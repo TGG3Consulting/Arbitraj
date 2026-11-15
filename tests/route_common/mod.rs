@@ -8,7 +8,8 @@
 //! захвачены, поэтому узлы графа — условные адреса в том же порядке сортировки, что реальные
 //! (CAKE < USDT < BTCB < WBNB), чтобы ориентация token0/token1 у V3 совпадала с записанным sqrtPriceX96.
 //! Пары пулов — по тегам записи (авторитетная топология).
-//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs. Сцена решения 271 (пул только на форке) — fork.rs.
+//! Кто вызывает: tests/bsc_dex_split.rs, tests/bsc_dex_verify.rs, tests/core_fit_volume_294.rs (load, v3, v2, ctx — запись
+//! fit_volume_2026-11-15). Сцена решения 271 (пул только на форке) — fork.rs.
 //! От чего зависит: arb::venues::bsc_dex::{pools, parts, ctx}, abi_v2v3; arb::settings; arb::storage.
 #![allow(dead_code)]
 
@@ -53,7 +54,9 @@ pub const WBNB_USDT_V2: Address = address!("0x16b9a82891338f9ba80e2d6970fdda79d1
 pub const CAKE_BTCB_UNI: Address = address!("0x8e8410f4878079fc03a287a7ded4a65afb87cc06");
 pub const BTCB_WBNB_PCS: Address = address!("0x6bbc40579ad1bbd243895ca0acb086bb6300d636");
 
-fn load(dir: &str) -> HashMap<String, Vec<u8>> {
+/// Ответы записи `dir/responses.json` по имени вызова (решение 294: и запись fit_volume_2026-11-15). Ошибок нет (паника
+/// теста на битой записи).
+pub fn load(dir: &str) -> HashMap<String, Vec<u8>> {
     let v: Value =
         serde_json::from_str(&std::fs::read_to_string(format!("{dir}/responses.json")).unwrap())
             .unwrap();
@@ -110,7 +113,8 @@ fn base(kind: &str, fee: Option<u32>, addr: Address, coin: Address, counter: Add
 }
 
 #[allow(clippy::too_many_arguments)]
-fn v3(
+/// Пул V3 записи: slot0, liquidity, слова TickLens `words` (решение 294: и запись fit_volume_2026-11-15).
+pub fn v3(
     got: &HashMap<String, Vec<u8>>,
     tag: &str,
     pancake: bool,
@@ -168,7 +172,8 @@ fn v3(
     e
 }
 
-fn v2(
+/// Пара V2 записи (getReserves). Узлы — в порядке сортировки адресов.
+pub fn v2(
     got: &HashMap<String, Vec<u8>>,
     tag: &str,
     addr: Address,
@@ -212,7 +217,8 @@ fn dex_row(id: &str, version: &str, v3: bool) -> Vec<(String, Scope, Value)> {
         .collect()
 }
 
-async fn ctx() -> Ctx {
+/// Окружение на настоящей SQLite со строками DEX и настройками котировки (решение 294: и запись fit_volume_2026-11-15).
+pub async fn ctx() -> Ctx {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let uniq = format!(

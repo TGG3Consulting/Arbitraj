@@ -175,20 +175,26 @@ pub async fn merge(
             out
         }
         Err(e) => {
-            q.ctx
-                .log(
-                    Level::Warn,
-                    "dex.router_graph",
-                    format!(
-                        "граф-роутер не дал маршрут — котировка по классике: {}",
-                        e.message
-                    ),
-                    None,
-                )
-                .await;
+            failed(q, &e).await;
             classic
         }
     }
+}
+
+/// Запись в журнал «граф-роутер не дал маршрут — котировка по классике» (Warn dex.router_graph). Общая для merge и
+/// route_fit.rs merge (решение 294). Принимает: расчёт, ошибку графа. Ошибок нет.
+pub async fn failed(q: &Quoting, e: &crate::gateway::errors::GatewayError) {
+    q.ctx
+        .log(
+            Level::Warn,
+            "dex.router_graph",
+            format!(
+                "граф-роутер не дал маршрут — котировка по классике: {}",
+                e.message
+            ),
+            None,
+        )
+        .await;
 }
 
 /// Решение 272: то же, что native_ok, с исполнителем v2 — пул на стороне BNB годится и шагом исполнителя (exec/native_exec.rs::edge_ok);

@@ -33,6 +33,12 @@
   load_saddle.rs 181, load_curve.rs 150. Дробить factory_scan.rs — вынести sort / off / failed в отдельный файл;
   stable_list.rs — вынести sort (разбор пачки) в stable_list_sort.rs.
 - Решение 293 (t124, с двумя ревью; `wc -l` на итоговом коде): src/venues/bingx/symbols.rs — 222 строки (было 215, сверх ориентира 200 и до правки: поле qty_store, вызов take / warn_bad); дальше дробить — вынести parse / api_flag в symbols_parse.rs (как у других бирж). core/sell_unsent.rs — 243 (было 237), core/ledger.rs — 203 (было 211: пауза вынесена в route_pause.rs); тест tests/core_sell_reject_293.rs — 326 (сверх ориентира). В пределах 200 — symbols_qty.rs 166, pairs.rs 155, pairs_watch.rs 127, route_pause.rs 97, settings/catalog/bingx.rs, тесты bingx_minqty_293.rs 128, bingx_minqty_coin_293.rs 143, bingx_293_common/mod.rs 174.
+- Решение 294 (t125; `wc -l`): в пределах 200 — новые quote/route_fit.rs 184, settings/catalog/dex_fit.rs 16,
+  tests/fit_common/mod.rs 167, tests/core_fit_volume_294.rs 116, tests/bsc_dex_fit_graph_294.rs 187; quote/via_pools.rs
+  189 (было 154), quote/routing.rs 148 (было 138), settings/catalog/mod.rs 177 (было 175). Сверх ориентира —
+  quote/graph_route.rs 216 (было 210 и до правки: запись «граф не дал маршрут» вынесена в failed, общая с
+  route_fit.rs), tests/route_common/mod.rs 465 (было 459: load / v3 / v2 / ctx стали pub). route_fit.rs повторяет
+  сборку хопов Via::calc (8 строк) — via.rs в этой задаче не трогался; общий сборщик хопов — отдельной правкой.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

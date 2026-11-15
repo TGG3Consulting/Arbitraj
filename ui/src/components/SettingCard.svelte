@@ -16,13 +16,15 @@
     (components/VenueDirMoney.svelte) — здесь ссылка и сколько таких значений задано.
     Решение 249: у venue.cex_cex под значением каждой биржи — список «не взаимодействовать» и кнопка «Настроить список»
     (components/CexCexDeny.svelte); у самой venue.cex_cex_deny — только ссылка на это окно и «История».
+    Решение 283: у настройки с venue_for «Dex» в схеме строк бирж (вид Cex) нет — значение читает только площадка DEX;
+    уже сохранённое у биржи значение не показывается и не меняется (видно в «Истории» и экспорте).
   Кто вызывает: pages/Settings.svelte.
   От чего зависит: lib/settings.svelte.js, lib/dex.svelte.js, lib/labels.js, lib/coinNames.svelte.js, components/SettingEditor.svelte, SettingHistory.svelte, CexCexDeny.svelte.
   Настройки: любая — по описанию из схемы; dex.id_max_len (через checkDexId).
 -->
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
-  import { store, venueScopeLabel } from '../lib/settings.svelte.js';
+  import { store, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
   import { dex, dexIdsFor, allChannels, whyNoDex, checkDexId } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import { href } from '../lib/router.svelte.js';
@@ -120,13 +122,18 @@
     <!-- Решение 249: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
     <p class="muted">Задаётся кнопкой «Настроить список» в карточке venue.cex_cex (у каждой биржи).</p>
   {:else if def.scopes.includes('Venue')}
-    {#each uniq(store.venues) as v (v)}
+    <!-- Решение 283: у настройки venue_for «Dex» строки бирж не показываются (shownAtVenue); значения не трогаются. -->
+    {#each uniq(store.venues).filter((v) => shownAtVenue(def, v)) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
       {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
         <CexCexDeny venue={v} />
       {/if}
     {:else}
-      <p class="muted">Площадок в шлюзе нет — значение по площадке задать не для чего.</p>
+      <p class="muted">
+        {store.venues.length
+          ? 'Площадки DEX в шлюзе нет — значение этой настройки читает только площадка DEX.'
+          : 'Площадок в шлюзе нет — значение по площадке задать не для чего.'}
+      </p>
     {/each}
   {/if}
   {#if def.scopes.includes('Coin')}

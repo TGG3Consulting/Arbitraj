@@ -3,7 +3,8 @@
 //   заданные значения (GET /api/settings), список площадок (GET /api/venues) и их вид (GET /api/venues/kinds).
 //   Значения обновляются на лету из живого потока ({"type":"settings"}), при «lagged» — перечитываются.
 //   Значений по умолчанию нет: не задано — значит в values нет записи.
-// Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte.
+// Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte,
+//   components/SettingCard.svelte и pages/Venues.svelte (shownAtVenue, решение 283).
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: читает и показывает любые.
 

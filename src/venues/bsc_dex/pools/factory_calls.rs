@@ -63,7 +63,10 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
         let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3);
         let mut qs: Vec<Q> = match f.proto {
             // Nomiswap Stable (решение 284): реестр фабрики getPair(a, b) — как у V2.
-            Proto::V2 | Proto::NomiStable => vec![Q::V2],
+            // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
+            Proto::V2 | Proto::NomiStable | Proto::Smardex => vec![Q::V2],
+            // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
+            Proto::KyberDmm => vec![Q::Dmm],
             Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),
             p if p.is_solidly() => {
                 let v1 = p == Proto::SolidlyV1;

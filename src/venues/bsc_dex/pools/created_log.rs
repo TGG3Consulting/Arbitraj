@@ -20,6 +20,7 @@ use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
 use super::abi_algebra::IAlgebraFactory;
+use super::abi_dmm::IDmmFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
 use super::abi_maverick::IMaverickV2Factory;
@@ -45,7 +46,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         }
         let (setting, t0, v4) = match f.proto {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
-            Proto::V2 | Proto::NomiStable => (
+            // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
+            Proto::V2 | Proto::NomiStable | Proto::Smardex => (
                 "dex.factory",
                 IV2Factory::PairCreated::SIGNATURE_HASH,
                 false,
@@ -124,6 +126,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // iZiSwap / Biswap V3 (решение 286): подписка на NewPool фабрики не подключена (техдолг, docs/ROADMAP.md) —
             // новые пулы приходят из справочника индексатора.
             Proto::IziSwap | Proto::BiswapV3 => continue,
+            // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
+            // (DMMFactory.sol L22-L28, L60).
+            Proto::KyberDmm => (
+                "dex.factory",
+                IDmmFactory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
             // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
             // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
             // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.
@@ -241,7 +250,7 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
-        Proto::V2 | Proto::NomiStable => {
+        Proto::V2 | Proto::NomiStable | Proto::Smardex => {
             let e = IV2Factory::PairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PairCreated не по ABI: {e}"))?;
             (e.token0, e.token1, e.pair)
@@ -291,6 +300,11 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
         Proto::Slipstream => {
             let e = ICLFactory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Slipstream) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pool)
+        }
+        Proto::KyberDmm => {
+            let e = IDmmFactory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (KyberSwap DMM) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
         }
         Proto::Maverick => {

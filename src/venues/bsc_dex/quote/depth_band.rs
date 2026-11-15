@@ -29,7 +29,7 @@ use super::super::ctx::Ctx;
 use super::super::math::swap_cl::{self, ClState, Version};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK, sqrt_ratio_at_tick};
-use super::super::math::{bin_swap, v2};
+use super::super::math::{bin_swap, dmm, v2};
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
@@ -323,6 +323,57 @@ fn side(
             let (i, o, full) = super::tick_bin_spot::depth(d, a_in, n, U256::from(u128::MAX))
                 .ok_or("расчёт глубины пула Maverick V2 невозможен")?;
             Ok((pick(i, o), full))
+        }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): та же формула пары x·y=k, что V2, по ВИРТУАЛЬНЫМ резервам и
+        // без комиссии; выход не может дойти до реального резерва — тогда глубина до него и full = false.
+        (PoolState::AmpV2(d), PoolKind::AmpV2) => {
+            let s = if zfo {
+                dmm::Side { r_in: d.reserve0, r_out: d.reserve1, v_in: d.v_reserve0, v_out: d.v_reserve1 }
+            } else {
+                dmm::Side { r_in: d.reserve1, r_out: d.reserve0, v_in: d.v_reserve1, v_out: d.v_reserve0 }
+            };
+            let grow = if buy {
+                (1.0 + b).sqrt() - 1.0
+            } else {
+                1.0 / (1.0 - b).sqrt() - 1.0
+            };
+            let f = U256::from((grow * SCALE) as u128);
+            let eff = s.v_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            if eff.is_zero() || s.r_out.is_zero() {
+                return Ok((U256::ZERO, true));
+            }
+            match dmm::amount_out(eff, s, U256::ZERO) {
+                Some(o) => Ok((pick(eff, o), true)),
+                None => {
+                    let o = s.r_out - U256::from(1u8);
+                    let i = dmm::amount_in(o, s, U256::ZERO).ok_or("расчёт глубины пула DMM невозможен")?;
+                    Ok((pick(i, o), false))
+                }
+            }
+        }
+        // Пара с фиктивными резервами (SmarDex, решение 288): оценка — x·y=k по фиктивным резервам без комиссии (формула
+        // первого шага обмена пары); выход не доходит до резерва пары — тогда до него и full = false. Деление обмена на два
+        // шага по средней цене здесь не учитывается (глубина — оценка для порога, котировку считает math/smardex.rs).
+        (PoolState::Fictive(d), PoolKind::Fictive) => {
+            let s = super::super::math::smardex_swap::side(d, zfo);
+            let grow = if buy {
+                (1.0 + b).sqrt() - 1.0
+            } else {
+                1.0 / (1.0 - b).sqrt() - 1.0
+            };
+            let f = U256::from((grow * SCALE) as u128);
+            let eff = s.fictive_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
+            let one = (U256::from(1u8), U256::from(1u8));
+            let out = v2::amount_out(eff, s.fictive_in, s.fictive_out, one).unwrap_or(U256::ZERO);
+            if out.is_zero() {
+                return Ok((U256::ZERO, true));
+            }
+            if out < s.reserve_out {
+                return Ok((pick(eff, out), true));
+            }
+            let o = s.reserve_out.saturating_sub(U256::from(1u8));
+            let i = v2::amount_in(o, s.fictive_in, s.fictive_out, one).ok_or("расчёт глубины пары SmarDex невозможен")?;
+            Ok((pick(i, o), false))
         }
         // Bin: до края прочитанных бинов (полосы нет — см. шапку), без комиссии.
         (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {

@@ -47,6 +47,16 @@ interface IIziPoolQ {
     function rightMostPt() external view returns (int24);
 }
 
+// SmarDex (решение 288): swap(address,bool,int256,bytes) 0x1f18b371 + smardexSwapCallback(int256,int256,bytes) 0xa1dab4eb —
+// исходник пары BSC (фабрика 0xA8EF…Af33, Sourcify match = SmarDex-Ecosystem/dex-smart-contracts@74d0444
+// deployments/bsc): SmardexPair.sol swap L155-L319 (выход переводится получателю, затем обратный вызов у вызывающего с
+// дельтами amount0, amount1: положительная — долг пары), ISmardexSwapCallback.sol L21. Предела цены у обмена нет.
+interface ISmardexPairQ {
+    function swap(address to, bool zeroForOne, int256 amountSpecified, bytes calldata data)
+        external
+        returns (int256 amount0, int256 amount1);
+}
+
 contract VirtualQuoter {
     uint160 internal constant MIN_SQRT_RATIO_PLUS_1 = 4295128740;
     uint160 internal constant MAX_SQRT_RATIO_MINUS_1 = 1461446703485210103287273052203988822378723970341;
@@ -81,6 +91,26 @@ contract VirtualQuoter {
         try IMetricOmmPoolQ(pool).swap(
             address(this), zeroForOne, int128(int256(amountIn)), zeroForOne ? 0 : type(uint128).max, hex"01", ""
         ) {
+            revert("VQ: no callback");
+        } catch (bytes memory r) {
+            if (r.length != 64) {
+                assembly {
+                    revert(add(r, 32), mload(r))
+                }
+            }
+            (int256 d0, int256 d1) = abi.decode(r, (int256, int256));
+            int256 paid = zeroForOne ? d0 : d1;
+            int256 got = zeroForOne ? d1 : d0;
+            used = paid > 0 ? uint256(paid) : 0;
+            out = got < 0 ? uint256(-got) : 0;
+        }
+    }
+
+    // Решение 288: выход пары SmarDex на точный вход (как quoteExactIn): swap → откат в smardexSwapCallback с дельтами.
+    // Пара считает выход своим кодом по времени ЭТОГО блока (средняя цена к block.timestamp). Возвращает: (взял, отдаст).
+    function quoteSmardex(address pool, bool zeroForOne, uint256 amountIn) external returns (uint256 used, uint256 out) {
+        require(amountIn <= uint256(type(int256).max), "amount");
+        try ISmardexPairQ(pool).swap(address(this), zeroForOne, int256(amountIn), hex"01") {
             revert("VQ: no callback");
         } catch (bytes memory r) {
             if (r.length != 64) {
@@ -164,4 +194,5 @@ contract VirtualQuoter {
     function swapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
+    function smardexSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
 }

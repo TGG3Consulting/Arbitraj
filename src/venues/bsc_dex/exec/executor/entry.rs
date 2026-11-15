@@ -101,6 +101,23 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 287: пул KyberSwap DMM — шаг без данных; без прочитанного состояния AmpV2 не строится.
+        ExecKind::KyberDmm => match &e.pool.state {
+            PoolState::AmpV2(_) => Params::KyberDmm,
+            _ => {
+                let why = format!("{}: у пула нет состояния KyberSwap DMM", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
+        // Решение 288: пара SmarDex — направление контракт берёт по порядку адресов (пара сортирует токены); без
+        // прочитанного состояния Fictive шаг не строится.
+        ExecKind::Smardex => match &e.pool.state {
+            PoolState::Fictive(_) => Params::Smardex,
+            _ => {
+                let why = format!("{}: у пары нет состояния SmarDex", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

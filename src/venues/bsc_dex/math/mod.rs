@@ -8,6 +8,7 @@
 pub mod bin_price;
 pub mod bin_swap;
 pub mod curve_math;
+pub mod dmm;
 pub mod dodo_math;
 pub mod full_math;
 pub mod maverick_math;
@@ -17,6 +18,8 @@ pub mod maverick_tick_math;
 pub mod solidly_fee;
 pub mod solidly_math;
 pub mod solidly_v1_math;
+pub mod smardex;
+pub mod smardex_swap;
 pub mod sqrt_price_math;
 pub mod stable_guard;
 pub mod stableswap_exchange;

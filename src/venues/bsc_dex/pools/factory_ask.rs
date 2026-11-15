@@ -20,13 +20,16 @@
 //!   с base = token1; оба — пулы этой пары;
 //! - Maverick V2 lookup(IERC20 _tokenA, IERC20 _tokenB, uint256 startIndex, uint256 endIndex) → пулы[] —
 //!   maverickprotocol/v2-common d91e871, IMaverickV2Factory.sol L352-L357 (постраничный список пулов пары —
-//!   maverick-v2-examples 68e4d2f README.md L8-L25); endIndex — dex.pair_lookup_max.
+//!   maverick-v2-examples 68e4d2f README.md L8-L25); endIndex — dex.pair_lookup_max;
+//! - KyberSwap Classic DMM getPools(token0, token1) → пулы[] — KyberNetwork/dmm-smart-contracts@e557b57, DMMFactory.sol
+//!   L94-L105 (решение 287).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::I24;
 use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
+use super::abi_dmm::IDmmFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
@@ -62,6 +65,8 @@ pub enum Q {
     Woo(Address),
     /// Maverick V2: lookup(tokenA, tokenB, 0, предел) — все пулы пары (предел — dex.pair_lookup_max).
     Maverick(u32),
+    /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
+    Dmm,
 }
 
 impl Q {
@@ -80,6 +85,7 @@ impl Q {
             Q::ListaStable => "getPairInfos",
             Q::Woo(_) => "state(base)",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
+            Q::Dmm => "getPools",
         }
     }
 }
@@ -121,6 +127,13 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         .abi_encode()
         .into(),
         Q::Woo(_) => IWooracle::stateCall { base: coin }.abi_encode().into(),
+        // KyberSwap Classic DMM: реестр заполнен в обе стороны токенов (DMMFactory.sol createPool L52-L53) — порядок любой.
+        Q::Dmm => IDmmFactory::getPoolsCall {
+            token0: coin,
+            token1: quote,
+        }
+        .abi_encode()
+        .into(),
         // Maverick V2: tokenA < tokenB (IMaverickV2Pool.sol L231-L233; фабрика create откатывает обратный порядок —
         // FactoryInvalidTokenOrder, IMaverickV2Factory.sol L17), поэтому пара — по возрастанию адреса.
         Q::Maverick(end) => {
@@ -169,6 +182,8 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
         ],
         Q::Maverick(_) => IMaverickV2Factory::lookupCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ lookup(tokenA, tokenB) не по ABI: {e}"))?,
+        Q::Dmm => IDmmFactory::getPoolsCall::abi_decode_returns(out)
+            .map_err(|e| format!("ответ getPools не по ABI: {e}"))?,
         Q::Dodo => {
             let r = IDodoFactory::getDODOPoolBidirectionCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ getDODOPoolBidirection не по ABI: {e}"))?;

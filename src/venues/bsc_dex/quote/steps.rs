@@ -211,6 +211,14 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
                 )
             })
         }
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): комиссия блока над 10^18 → проценты = fee / 10^16.
+        (PoolState::AmpV2(d), _) => num::to_decimal(d.fee, 16).ok_or_else(|| {
+            ctx.err(ErrorCode::BadResponse, "комиссия KyberSwap DMM не помещается в Decimal")
+        }),
+        // Пара с фиктивными резервами (SmarDex, решение 288): комиссии feesLP + feesPool над 10^6 → проценты = сумма / 10^4.
+        (PoolState::Fictive(d), _) => num::to_decimal(d.fees_lp.saturating_add(d.fees_pool), 4).ok_or_else(|| {
+            ctx.err(ErrorCode::BadResponse, "комиссия SmarDex не помещается в Decimal")
+        }),
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

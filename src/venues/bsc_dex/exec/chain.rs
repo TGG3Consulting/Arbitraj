@@ -153,5 +153,15 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Maverick V2 не исполняется Universal Router (шаг MAVERICK контракта-исполнителя)",
         )),
+        // V2 с усилением (KyberSwap Classic DMM, решение 287): только шаг KYBER_DMM исполнителя v2.
+        PoolKind::AmpV2 => Err(ctx.err(
+            ErrorCode::Internal,
+            "KyberSwap DMM не исполняется Universal Router (шаг KYBER_DMM контракта-исполнителя)",
+        )),
+        // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
+        PoolKind::Fictive => Err(ctx.err(
+            ErrorCode::Internal,
+            "SmarDex не исполняется Universal Router (шаг SMARDEX контракта-исполнителя)",
+        )),
     }
 }

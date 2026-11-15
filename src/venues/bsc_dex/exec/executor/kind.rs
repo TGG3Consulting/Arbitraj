@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -66,6 +66,12 @@ pub enum Params {
     /// Пул iZiSwap / Biswap V3 (решение 286; только исполнитель v2): swapX2Y / swapY2X по порядку адресов токенов шага
     /// + обратный вызов. Данных нет.
     Izi,
+    /// Пул KyberSwap Classic DMM (решение 287; только исполнитель v2): вход переводом в пул, выход — по getTradeInfo() пула
+    /// (формула DMMLibrary.getAmountOut в контракте), swap как у V2. Данных нет.
+    KyberDmm,
+    /// Пара SmarDex (решение 288; только исполнитель v2): swap(to, zeroForOne по порядку адресов, +вход, «») +
+    /// smardexSwapCallback. Данных нет.
+    Smardex,
 }
 
 impl Params {
@@ -87,6 +93,8 @@ impl Params {
             Params::NomiStable => 12,
             Params::Metric { .. } => 13,
             Params::Izi => 14,
+            Params::KyberDmm => 15,
+            Params::Smardex => 16,
         }
     }
 

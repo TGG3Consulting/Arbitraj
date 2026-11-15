@@ -1,0 +1,330 @@
+# Выдержки официального исходника KyberSwap Classic DMM — github.com/KyberNetwork/dmm-smart-contracts @ e557b57
+# (код пула/фабрики в BSC совпал с этим исходником без пробелов, кроме DMMPool._mintFee — доля протокола при mint/burn; см. README.md)
+
+=== contracts/DMMPool.sol L50-L61
+  50      event Mint(address indexed sender, uint256 amount0, uint256 amount1);
+  51      event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to);
+  52      event Swap(
+  53          address indexed sender,
+  54          uint256 amount0In,
+  55          uint256 amount1In,
+  56          uint256 amount0Out,
+  57          uint256 amount1Out,
+  58          address indexed to,
+  59          uint256 feeInPrecision
+  60      );
+  61      event Sync(uint256 vReserve0, uint256 vReserve1, uint256 reserve0, uint256 reserve1);
+
+=== contracts/DMMPool.sol L160-L211
+ 160      /// @dev this low-level function should be called from a contract
+ 161      /// @dev which performs important safety checks
+ 162      function swap(
+ 163          uint256 amount0Out,
+ 164          uint256 amount1Out,
+ 165          address to,
+ 166          bytes calldata callbackData
+ 167      ) external override nonReentrant {
+ 168          require(amount0Out > 0 || amount1Out > 0, "DMM: INSUFFICIENT_OUTPUT_AMOUNT");
+ 169          (bool isAmpPool, ReserveData memory data) = getReservesData(); // gas savings
+ 170          require(
+ 171              amount0Out < data.reserve0 && amount1Out < data.reserve1,
+ 172              "DMM: INSUFFICIENT_LIQUIDITY"
+ 173          );
+ 174  
+ 175          ReserveData memory newData;
+ 176          {
+ 177              // scope for _token{0,1}, avoids stack too deep errors
+ 178              IERC20 _token0 = token0;
+ 179              IERC20 _token1 = token1;
+ 180              require(to != address(_token0) && to != address(_token1), "DMM: INVALID_TO");
+ 181              if (amount0Out > 0) _token0.safeTransfer(to, amount0Out); // optimistically transfer tokens
+ 182              if (amount1Out > 0) _token1.safeTransfer(to, amount1Out); // optimistically transfer tokens
+ 183              if (callbackData.length > 0)
+ 184                  IDMMCallee(to).dmmSwapCall(msg.sender, amount0Out, amount1Out, callbackData);
+ 185              newData.reserve0 = _token0.balanceOf(address(this));
+ 186              newData.reserve1 = _token1.balanceOf(address(this));
+ 187              if (isAmpPool) {
+ 188                  newData.vReserve0 = data.vReserve0.add(newData.reserve0).sub(data.reserve0);
+ 189                  newData.vReserve1 = data.vReserve1.add(newData.reserve1).sub(data.reserve1);
+ 190              }
+ 191          }
+ 192          uint256 amount0In = newData.reserve0 > data.reserve0 - amount0Out
+ 193              ? newData.reserve0 - (data.reserve0 - amount0Out)
+ 194              : 0;
+ 195          uint256 amount1In = newData.reserve1 > data.reserve1 - amount1Out
+ 196              ? newData.reserve1 - (data.reserve1 - amount1Out)
+ 197              : 0;
+ 198          require(amount0In > 0 || amount1In > 0, "DMM: INSUFFICIENT_INPUT_AMOUNT");
+ 199          uint256 feeInPrecision = verifyBalanceAndUpdateEma(
+ 200              amount0In,
+ 201              amount1In,
+ 202              isAmpPool ? data.vReserve0 : data.reserve0,
+ 203              isAmpPool ? data.vReserve1 : data.reserve1,
+ 204              isAmpPool ? newData.vReserve0 : newData.reserve0,
+ 205              isAmpPool ? newData.vReserve1 : newData.reserve1
+ 206          );
+ 207  
+ 208          _update(isAmpPool, newData);
+ 209          emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to, feeInPrecision);
+ 210      }
+ 211  
+
+=== contracts/DMMPool.sol L239-L266
+ 239      /// @dev returns data to calculate amountIn, amountOut
+ 240      function getTradeInfo()
+ 241          external
+ 242          virtual
+ 243          override
+ 244          view
+ 245          returns (
+ 246              uint112 _reserve0,
+ 247              uint112 _reserve1,
+ 248              uint112 _vReserve0,
+ 249              uint112 _vReserve1,
+ 250              uint256 feeInPrecision
+ 251          )
+ 252      {
+ 253          // gas saving to read reserve data
+ 254          _reserve0 = reserve0;
+ 255          _reserve1 = reserve1;
+ 256          uint32 _ampBps = ampBps;
+ 257          _vReserve0 = vReserve0;
+ 258          _vReserve1 = vReserve1;
+ 259          if (_ampBps == BPS) {
+ 260              _vReserve0 = _reserve0;
+ 261              _vReserve1 = _reserve1;
+ 262          }
+ 263          uint256 rFactorInPrecision = getRFactor(block.number);
+ 264          feeInPrecision = getFinalFee(FeeFomula.getFee(rFactorInPrecision), _ampBps);
+ 265      }
+ 266  
+
+=== contracts/DMMPool.sol L285-L309
+ 285      function verifyBalanceAndUpdateEma(
+ 286          uint256 amount0In,
+ 287          uint256 amount1In,
+ 288          uint256 beforeReserve0,
+ 289          uint256 beforeReserve1,
+ 290          uint256 afterReserve0,
+ 291          uint256 afterReserve1
+ 292      ) internal virtual returns (uint256 feeInPrecision) {
+ 293          // volume = beforeReserve0 * amount1In / beforeReserve1 + amount0In (normalized into amount in token 0)
+ 294          uint256 volume = beforeReserve0.mul(amount1In).div(beforeReserve1).add(amount0In);
+ 295          uint256 rFactorInPrecision = recordNewUpdatedVolume(block.number, volume);
+ 296          feeInPrecision = getFinalFee(FeeFomula.getFee(rFactorInPrecision), ampBps);
+ 297          // verify balance update matches with fomula
+ 298          uint256 balance0Adjusted = afterReserve0.mul(PRECISION);
+ 299          balance0Adjusted = balance0Adjusted.sub(amount0In.mul(feeInPrecision));
+ 300          balance0Adjusted = balance0Adjusted / PRECISION;
+ 301          uint256 balance1Adjusted = afterReserve1.mul(PRECISION);
+ 302          balance1Adjusted = balance1Adjusted.sub(amount1In.mul(feeInPrecision));
+ 303          balance1Adjusted = balance1Adjusted / PRECISION;
+ 304          require(
+ 305              balance0Adjusted.mul(balance1Adjusted) >= beforeReserve0.mul(beforeReserve1),
+ 306              "DMM: K"
+ 307          );
+ 308      }
+ 309  
+
+=== contracts/DMMPool.sol L364-L374
+ 364      function getFinalFee(uint256 feeInPrecision, uint32 _ampBps) internal pure returns (uint256) {
+ 365          if (_ampBps <= 20000) {
+ 366              return feeInPrecision;
+ 367          } else if (_ampBps <= 50000) {
+ 368              return (feeInPrecision * 20) / 30;
+ 369          } else if (_ampBps <= 200000) {
+ 370              return (feeInPrecision * 10) / 30;
+ 371          } else {
+ 372              return (feeInPrecision * 4) / 30;
+ 373          }
+ 374      }
+
+=== contracts/libraries/DMMLibrary.sol L74-L111
+  74      // given an input amount of an asset and pool reserves, returns the maximum output amount of the other asset
+  75      function getAmountOut(
+  76          uint256 amountIn,
+  77          uint256 reserveIn,
+  78          uint256 reserveOut,
+  79          uint256 vReserveIn,
+  80          uint256 vReserveOut,
+  81          uint256 feeInPrecision
+  82      ) internal pure returns (uint256 amountOut) {
+  83          require(amountIn > 0, "DMMLibrary: INSUFFICIENT_INPUT_AMOUNT");
+  84          require(reserveIn > 0 && reserveOut > 0, "DMMLibrary: INSUFFICIENT_LIQUIDITY");
+  85          uint256 amountInWithFee = amountIn.mul(PRECISION.sub(feeInPrecision)).div(PRECISION);
+  86          uint256 numerator = amountInWithFee.mul(vReserveOut);
+  87          uint256 denominator = vReserveIn.add(amountInWithFee);
+  88          amountOut = numerator.div(denominator);
+  89          require(reserveOut > amountOut, "DMMLibrary: INSUFFICIENT_LIQUIDITY");
+  90      }
+  91  
+  92      // given an output amount of an asset and pool reserves, returns a required input amount of the other asset
+  93      function getAmountIn(
+  94          uint256 amountOut,
+  95          uint256 reserveIn,
+  96          uint256 reserveOut,
+  97          uint256 vReserveIn,
+  98          uint256 vReserveOut,
+  99          uint256 feeInPrecision
+ 100      ) internal pure returns (uint256 amountIn) {
+ 101          require(amountOut > 0, "DMMLibrary: INSUFFICIENT_OUTPUT_AMOUNT");
+ 102          require(reserveIn > 0 && reserveOut > amountOut, "DMMLibrary: INSUFFICIENT_LIQUIDITY");
+ 103          uint256 numerator = vReserveIn.mul(amountOut);
+ 104          uint256 denominator = vReserveOut.sub(amountOut);
+ 105          amountIn = numerator.div(denominator).add(1);
+ 106          // amountIn = floor(amountIN *PRECISION / (PRECISION - feeInPrecision));
+ 107          numerator = amountIn.mul(PRECISION);
+ 108          denominator = PRECISION.sub(feeInPrecision);
+ 109          amountIn = numerator.add(denominator - 1).div(denominator);
+ 110      }
+ 111  
+
+=== contracts/libraries/MathExt.sol L1-L9
+   1  // SPDX-License-Identifier: MIT
+   2  pragma solidity 0.6.12;
+   3  
+   4  import "@openzeppelin/contracts/math/SafeMath.sol";
+   5  
+   6  library MathExt {
+   7      using SafeMath for uint256;
+   8  
+   9      uint256 public constant PRECISION = (10**18);
+
+=== contracts/VolumeTrendRecorder.sol L24
+  24      event UpdateEMA(uint256 shortEMA, uint256 longEMA, uint128 lastBlockVolume, uint256 skipBlock);
+
+=== contracts/VolumeTrendRecorder.sol L48-L99
+  48      /// @dev records a new trade, update ema and returns current rFactor for this trade
+  49      /// @return rFactor in Precision for this trade
+  50      function recordNewUpdatedVolume(uint256 blockNumber, uint256 value)
+  51          internal
+  52          returns (uint256)
+  53      {
+  54          // this can not be underflow because block.number always increases
+  55          uint256 skipBlock = blockNumber - lastTradeBlock;
+  56          if (skipBlock == 0) {
+  57              currentBlockVolume = safeUint128(
+  58                  uint256(currentBlockVolume).add(value),
+  59                  "volume exceeds valid range"
+  60              );
+  61              return calculateRFactor(uint256(shortEMA), uint256(longEMA));
+  62          }
+  63          uint128 _currentBlockVolume = currentBlockVolume;
+  64          uint256 _shortEMA = newEMA(shortEMA, SHORT_ALPHA, currentBlockVolume);
+  65          uint256 _longEMA = newEMA(longEMA, LONG_ALPHA, currentBlockVolume);
+  66          // ema = ema * (1-aplha) ^(skipBlock -1)
+  67          _shortEMA = _shortEMA.mulInPrecision(
+  68              (PRECISION - SHORT_ALPHA).unsafePowInPrecision(skipBlock - 1)
+  69          );
+  70          _longEMA = _longEMA.mulInPrecision(
+  71              (PRECISION - LONG_ALPHA).unsafePowInPrecision(skipBlock - 1)
+  72          );
+  73          shortEMA = safeUint128(_shortEMA);
+  74          longEMA = safeUint128(_longEMA);
+  75          currentBlockVolume = safeUint128(value);
+  76          lastTradeBlock = safeUint128(blockNumber);
+  77  
+  78          emit UpdateEMA(_shortEMA, _longEMA, _currentBlockVolume, skipBlock);
+  79  
+  80          return calculateRFactor(_shortEMA, _longEMA);
+  81      }
+  82  
+  83      /// @return rFactor in Precision for this trade
+  84      function getRFactor(uint256 blockNumber) internal view returns (uint256) {
+  85          // this can not be underflow because block.number always increases
+  86          uint256 skipBlock = blockNumber - lastTradeBlock;
+  87          if (skipBlock == 0) {
+  88              return calculateRFactor(shortEMA, longEMA);
+  89          }
+  90          uint256 _shortEMA = newEMA(shortEMA, SHORT_ALPHA, currentBlockVolume);
+  91          uint256 _longEMA = newEMA(longEMA, LONG_ALPHA, currentBlockVolume);
+  92          _shortEMA = _shortEMA.mulInPrecision(
+  93              (PRECISION - SHORT_ALPHA).unsafePowInPrecision(skipBlock - 1)
+  94          );
+  95          _longEMA = _longEMA.mulInPrecision(
+  96              (PRECISION - LONG_ALPHA).unsafePowInPrecision(skipBlock - 1)
+  97          );
+  98          return calculateRFactor(_shortEMA, _longEMA);
+  99      }
+
+=== contracts/DMMFactory.sol L22-L28
+  22      event PoolCreated(
+  23          IERC20 indexed token0,
+  24          IERC20 indexed token1,
+  25          address pool,
+  26          uint32 ampBps,
+  27          uint256 totalPool
+  28      );
+
+=== contracts/DMMFactory.sol L36-L62
+  36      function createPool(
+  37          IERC20 tokenA,
+  38          IERC20 tokenB,
+  39          uint32 ampBps
+  40      ) external override returns (address pool) {
+  41          require(tokenA != tokenB, "DMM: IDENTICAL_ADDRESSES");
+  42          (IERC20 token0, IERC20 token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+  43          require(address(token0) != address(0), "DMM: ZERO_ADDRESS");
+  44          require(ampBps >= BPS, "DMM: INVALID_BPS");
+  45          // only exist 1 unamplified pool of a pool.
+  46          require(
+  47              ampBps != BPS || getUnamplifiedPool[token0][token1] == address(0),
+  48              "DMM: UNAMPLIFIED_POOL_EXISTS"
+  49          );
+  50          pool = address(new DMMPool());
+  51          DMMPool(pool).initialize(token0, token1, ampBps);
+  52          // populate mapping in the reverse direction
+  53          tokenPools[token0][token1].add(pool);
+  54          tokenPools[token1][token0].add(pool);
+  55          if (ampBps == BPS) {
+  56              getUnamplifiedPool[token0][token1] = pool;
+  57              getUnamplifiedPool[token1][token0] = pool;
+  58          }
+  59          allPools.push(pool);
+  60  
+  61          emit PoolCreated(token0, token1, pool, ampBps, allPools.length);
+  62      }
+
+=== contracts/DMMFactory.sol L94-L125
+  94      function getPools(IERC20 token0, IERC20 token1)
+  95          external
+  96          override
+  97          view
+  98          returns (address[] memory _tokenPools)
+  99      {
+ 100          uint256 length = tokenPools[token0][token1].length();
+ 101          _tokenPools = new address[](length);
+ 102          for (uint256 i = 0; i < length; i++) {
+ 103              _tokenPools[i] = tokenPools[token0][token1].at(i);
+ 104          }
+ 105      }
+ 106  
+ 107      function getPoolsLength(IERC20 token0, IERC20 token1) external view returns (uint256) {
+ 108          return tokenPools[token0][token1].length();
+ 109      }
+ 110  
+ 111      function getPoolAtIndex(
+ 112          IERC20 token0,
+ 113          IERC20 token1,
+ 114          uint256 index
+ 115      ) external view returns (address pool) {
+ 116          return tokenPools[token0][token1].at(index);
+ 117      }
+ 118  
+ 119      function isPool(
+ 120          IERC20 token0,
+ 121          IERC20 token1,
+ 122          address pool
+ 123      ) external override view returns (bool) {
+ 124          return tokenPools[token0][token1].contains(pool);
+ 125      }
+
+=== contracts/periphery/DMMRouter02.sol L625-L632
+ 625      function getAmountsOut(
+ 626          uint256 amountIn,
+ 627          address[] calldata poolsPath,
+ 628          IERC20[] calldata path
+ 629      ) external override view returns (uint256[] memory amounts) {
+ 630          verifyPoolsPathSwap(poolsPath, path);
+ 631          return DMMLibrary.getAmountsOut(amountIn, poolsPath, path);
+ 632      }

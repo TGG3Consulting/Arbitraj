@@ -29,7 +29,7 @@ use super::super::node::call::{self, Piece};
 use super::discover::Found;
 use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
-pub use super::verify_rules::{Read, check, fill, registered, v2_fee_pips, v3_abi};
+pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
     fee_probe, verify_algebra, verify_curve, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
     verify_maverick, verify_solidly, verify_stable_u, verify_v4,
@@ -251,7 +251,7 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 Some(Ok(Err(rev))) => Verdict::Rejected(format!("реестр фабрики откатился: {rev}")),
                 Some(Ok(Ok(b))) => match probes.check(c.family.id) {
                     Err(v) => v,
-                    Ok(()) => match registered(a, &b).and_then(|_| found(ctx, c, a, &read, key)) {
+                    Ok(()) => match registered_for(c.family, a, &b).and_then(|_| found(ctx, c, a, &read, key)) {
                         Ok(f) => Verdict::Taken(Box::new(f)),
                         Err(w) => Verdict::Rejected(w),
                     },

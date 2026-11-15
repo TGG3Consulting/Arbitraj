@@ -133,7 +133,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_dmm.rs` | Состояние пула KyberSwap Classic DMM на блоке одним getTradeInfo (решение 287): реальные и виртуальные резервы, комиссия блока → PoolState::AmpV2; перечитывается каждым блоком (комиссия по номеру блока) |
 | `load_smardex.rs` | Состояние пары SmarDex на блоке одной пачкой (решение 288): резервы, фиктивные резервы, средняя цена и её время, комиссии, время блока → PoolState::Fictive; перечитывается каждым блоком |
 | `load_lb.rs` | Состояние пула Liquidity Book V2.1 на блоке (решение 290): getActiveId, параметры комиссии, getTokenX, getBinStep и время блока одной пачкой + полоса бинов; calls / decode — для пачки всех пулов каждым блоком; PoolState::LbBin |
-| `load_lb_bins.rs` | Полоса бинов пула Liquidity Book V2.1 (решение 290): getNextNonEmptyBin / getBin пула в обе стороны до dex.bin_depth_usd (у пары без USDT — до конца) |
+| `load_lb_bins.rs` | Полоса бинов пула Liquidity Book V2.1 (решение 290): getNextNonEmptyBin / getBin пула в обе стороны до dex.bin_depth_usd (у пары без USDT — до конца); many — затронутые событием бины одной пачкой getBin (ревью 290) |
 | `load_balancer.rs` | Состояние пула Balancer V2 на блоке одной пачкой (решение 289): getPoolTokens хранилища, комиссия, пауза пула и хранилища (ревью 289), веса / A; calls / decode — для пачки всех пулов; id, вид кривой (фабрика) и decimals — один раз на пул; PoolState::VaultPool |
 | `load_balancer_fixed.rs` | Неизменяемое у пула Balancer V2 (решение 289): id, вид кривой (какая фабрика создала — isPoolFromFactory), множители точности по decimals; один раз на пул, в памяти |
 | `per_block_lb.rs` | Решение 290: состояние всех пулов Liquidity Book V2.1 на новом блоке одной пачкой (load_lb::calls / decode + одно время блока), бины записи — как есть (меняют только события пула) |
@@ -162,7 +162,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_nomi.rs` | События пары Nomiswap Stable (решение 284): любое событие пары → перечитать (ещё — каждый блок: swapFee без события, рампа A) |
 | `events_dmm.rs` | События пула KyberSwap Classic DMM (решение 287): любое известное событие (Sync, Swap, UpdateEMA, Mint, Burn) → перечитать пул (getTradeInfo) |
 | `events_smardex.rs` | События пары SmarDex (решение 288): любое известное событие (Sync, Swap, FeesChanged, Mint, Burn) → перечитать пару |
-| `events_lb.rs` | События пула Liquidity Book V2.1 (решение 290): Swap, Deposited/WithdrawnFromBins, CompositionFees, CollectedProtocolFees, FlashLoan, StaticFeeParametersSet, ForcedDecay → перечитать пул |
+| `events_lb.rs` | События пула Liquidity Book V2.1 (решение 290, ревью 290): Swap (бин и новый активный), Deposited/WithdrawnFromBins, CompositionFees, FlashLoan → перечитать только затронутые бины; CollectedProtocolFees — без изменений; StaticFeeParametersSet, ForcedDecay → перечитать пул |
 | `events_balancer.rs` | События пула Balancer V2 (решение 289): SwapFeePercentageChanged, PausedStateChanged, AmpUpdateStarted / Stopped → перечитать; балансы меняет хранилище — перечитывание каждым блоком |
 | `events_metric.rs` | События пула Metric OMM (решение 285): topic0 из записанных логов → перечитать (ещё — каждый блок) |
 | `events_izi.rs` | События пулов iZiSwap / Biswap V3 (решение 286): любое известное событие → перечитать пул (ещё — каждым блоком, per_block.rs) |

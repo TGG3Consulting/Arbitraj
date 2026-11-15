@@ -323,8 +323,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
-        // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
-        // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
+        // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
+        // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
+        // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
         "pancake_stableswap" => (
             PoolKind::StableSwap,
             Proto::PancakeStable,

@@ -27,9 +27,20 @@ execute (как есть), received; getSwapOut тех же пулов на то
 ликвидности откатились LBPair__OutOfLiquidity (0xd36bfd88); шаг LB в пару PancakeSwap V2 — откат. Состояние пулов на этом
 блоке — probe.json.
 
+`probe_time.json` (ревью 290, блок 133732452, время блока 1794744263; SHA-256 строки JSON c84195b1…6d176bd4) — состояние
+четырёх пулов (0xaec9…060c, 0x717d…073d, 0x3208…2f67, 0x023f…3fd5: параметры комиссии, все непустые бины) и getSwapOut с
+переопределением времени блока (eth_call, 4-й параметр geth blockOverrides.time; состояние настоящее): time =
+timeOfLastUpdate + filterPeriod/2 (dt < filterPeriod), + (filterPeriod + decayPeriod)/2 (между filterPeriod и decayPeriod) и
+время блока — по 3 суммы в обе стороны, 72 ответа; у трёх пулов накопитель ненулевой (10000, 20000, 40000). `direct` — шаг
+LB исполнителя v2 (тот же код, sha256 байтов be076146…) с прямым входом владелец → пул: amountIn > 0, подмена баланса и
+allowance владельца (слоты mapping owner_balance_slot / owner_allowance_slot), 3 вызова — получено = getSwapOut.
+
+`swap_log.json` (ревью 290) — настоящий лог Swap пула BTC.b/WBNB (блок 133727176; единственный лог пяти пулов в блоках
+133726818–133732817): затронутый бин 8399652.
+
 `source_excerpt.txt` — дословные выдержки v2.1.0 с номерами строк: LBPair (геттеры, getSwapIn, getSwapOut, swap, аргументы
 клона, _getNextNonEmptyBin), PairParameterHelper, FeeHelper, Constants, BinHelper (getAmounts, received), PriceHelper,
 Uint128x128Math.pow, Uint256x256Math (mulShift / shiftDiv), TreeMath (findFirstRight / findFirstLeft), LBFactory
 (getLBPairInformation), ILBFactory, ILBPair (события).
 
-Используется: tests/bsc_dex_lb_v21_live.rs (решение 290).
+Используется: tests/bsc_dex_lb_v21_live.rs (решение 290, ревью 290).

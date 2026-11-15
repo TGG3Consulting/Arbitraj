@@ -31,7 +31,7 @@ use arb::venues::bsc_dex::pools::abi_lb::{self, ILBPair};
 use arb::venues::bsc_dex::pools::bins::BinMap;
 use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
 use arb::venues::bsc_dex::pools::verify::Candidate;
-use arb::venues::bsc_dex::pools::{exec_callback, families, load_lb, verify_lb};
+use arb::venues::bsc_dex::pools::{events_lb, exec_callback, families, load_lb, verify_lb};
 use arb::venues::bsc_dex::quote::quoter_lb;
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/lb_v21_2026-11-15/");
@@ -184,8 +184,9 @@ fn exec_state_step_calldata_and_received() {
         if c["err"].is_null() {
             assert!(complete, "{c}");
             assert_eq!(U256::from(amount), dec(&c["received"]), "{c}");
+            // Наша формула = getSwapOut пула на последнем шаге (наш код против ответа цепи, не два поля JSON).
             let last = c["getSwapOut"].as_array().unwrap().last().unwrap();
-            assert_eq!(dec(&c["received"]), dec(&last[2]));
+            assert_eq!(U256::from(amount), dec(&last[2]), "{c}");
             ok += 1;
         } else {
             // Вход больше ликвидности пула: исполнитель откатил с LBPair__OutOfLiquidity, у нас — неполный обмен.
@@ -312,4 +313,113 @@ fn kind_step_and_events() {
     .map(keccak256)
     .collect();
     assert_eq!(abi_lb::topics(), want);
+}
+
+/// Ревью 290: ветки изменчивой комиссии по времени (PairParameterHelper.updateReferences L412-L421) на настоящем
+/// состоянии четырёх пулов (probe_time.json, блок 133732452): getSwapOut с временем блока timeOfLastUpdate + filterPeriod/2
+/// (dt < filterPeriod — опорные значения прежние), + (filterPeriod + decayPeriod)/2 (опорный id = активный, опорная
+/// волатильность = накопитель · reductionFactor / 10000) и само время блока (dt ≥ decayPeriod — опорная 0). Наша формула
+/// на то же время = ответу пула в 72 из 72.
+#[test]
+fn formula_equals_get_swap_out_on_time_branches() {
+    let pt = json("probe_time.json");
+    let mut seen = std::collections::BTreeMap::new();
+    for p in pt["pools"].as_array().unwrap() {
+        let d = state(&pt, p);
+        let b = bins(p);
+        let (fp, dp) = (u64::from(d.filter_period), u64::from(d.decay_period));
+        for q in p["quotes"].as_array().unwrap() {
+            let t = q["time"].as_u64().unwrap();
+            let dt = t - d.time_of_last_update;
+            let branch = q["branch"].as_str().unwrap();
+            let want_branch = if dt < fp {
+                "lt_filter"
+            } else if dt < dp {
+                "filter_decay"
+            } else {
+                "block"
+            };
+            assert_eq!(branch, want_branch, "{q}");
+            let for_y = q["swapForY"].as_bool().unwrap();
+            let r = lb_swap::swap_out(&d, &b, t, for_y, u128s(&q["amountIn"])).expect("расчёт");
+            let o = &q["out"];
+            assert_eq!(
+                (r.in_left, r.out, r.fee),
+                (u128s(&o[0]), u128s(&o[1]), u128s(&o[2])),
+                "{} {q}",
+                p["pool"]
+            );
+            *seen.entry(branch.to_string()).or_insert(0) += 1;
+        }
+    }
+    assert_eq!(seen.values().sum::<i32>(), 72);
+    assert!(
+        seen.len() == 3 && seen.values().all(|n| *n == 24),
+        "{seen:?}"
+    );
+}
+
+/// Ревью 290: прямой вход владелец → пул (amountIn > 0, первый шаг 18 берёт весь вход — transferFrom владельца прямо в
+/// пул): calldata нашего кодировщика побайтно = записанной, получено = наша формула на состоянии того же блока (3 из 3).
+#[test]
+fn direct_input_step_calldata_and_received() {
+    let pt = json("probe_time.json");
+    let ts = pt["timestamp"].as_u64().unwrap();
+    let mut n = 0;
+    for c in pt["direct"].as_array().unwrap() {
+        let h = &c["steps"][0];
+        let spec = StepSpec {
+            params: Params::Lb,
+            pool: addr(&h[0]),
+            token_in: addr(&h[1]),
+            token_out: addr(&h[2]),
+            share_bps: ALL_BPS,
+        };
+        let call = ArbExecutor::executeCall {
+            tokenIn: addr(&c["token_in"]),
+            amountIn: dec(&c["amount"]),
+            tokenOut: addr(&c["token_out"]),
+            minOut: U256::ZERO,
+            deadline: U256::from(4_102_444_800u64),
+            steps: vec![kind::encode(&spec).unwrap()],
+        };
+        let want = alloy_primitives::hex::decode(c["calldata"].as_str().unwrap()).unwrap();
+        assert_eq!(call.abi_encode(), want, "{}", c["steps"]);
+        let p = pool_of(&pt, h[0].as_str().unwrap());
+        let d = state(&pt, p);
+        let for_y = addr(&h[1]) == addr(&p["tokenX"]);
+        let r = lb_swap::swap_out(&d, &bins(p), ts, for_y, u128s(&c["amount"])).unwrap();
+        assert!(r.complete);
+        assert_eq!(U256::from(r.out), dec(&c["received"]), "{c}");
+        n += 1;
+    }
+    assert_eq!(n, 3);
+}
+
+/// Ревью 290: настоящий лог Swap пула (swap_log.json) — наш разбор события даёт затронутый бин и новый активный бин
+/// (id события); тот же бин в probe_time.json изменился ровно на amountsIn.X события.
+#[test]
+fn swap_log_gives_touched_bin() {
+    let l = &json("swap_log.json")["logs"][0];
+    let topics: Vec<alloy_primitives::B256> = l["topics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t.as_str().unwrap().parse().unwrap())
+        .collect();
+    let data = alloy_primitives::LogData::new(
+        topics.clone(),
+        Bytes::from(alloy_primitives::hex::decode(l["data"].as_str().unwrap()).unwrap()),
+    )
+    .unwrap();
+    let (ids, active) = events_lb::bins_of(topics[0], &data)
+        .unwrap()
+        .expect("событие про бины");
+    assert_eq!((ids, active), (vec![8_399_652], Some(8_399_652)));
+    let (probe, pt) = (json("probe.json"), json("probe_time.json"));
+    let pool = "0x717d06b4d8bc6b71d5a2c45d8cc417930aec073d";
+    let before = &pool_of(&probe, pool)["bins"]["8399652"][0];
+    let after = &pool_of(&pt, pool)["bins"]["8399652"][0];
+    let amounts_in = U256::from_be_slice(&data.data[32..64]);
+    assert_eq!(dec(after) - dec(before), amounts_in);
 }

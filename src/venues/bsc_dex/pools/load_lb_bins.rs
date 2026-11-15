@@ -3,7 +3,7 @@
 //! что у Infinity Bin (load_bin.rs), но геттерами самого пула LBPair: getBin(id) и getNextNonEmptyBin(swapForY, id).
 //! Сторона читается, пока стоимость прочитанных бинов в USDT не достигнет dex.bin_depth_usd (или бины не кончатся). У
 //! пары без USDT стоимость в USDT не считается — сторона читается до конца (точно; ограничение — DECISIONS 290).
-//! Кто вызывает: pools/load_lb.rs.
+//! Кто вызывает: pools/load_lb.rs (band), pools/listen_log.rs (many — бины события, ревью 290).
 //! От чего зависит: ctx.rs, node/call.rs, abi_lb.rs, bins.rs, load_bin.rs (usdt_value), tokens.rs.
 //! Настройки: dex.bin_depth_usd [bsc_dex].
 //!
@@ -96,4 +96,38 @@ pub async fn band(
 pub async fn bin(ctx: &Ctx, pool: Address, id: u32, tag: &str) -> GatewayResult<(u128, u128)> {
     let r = call::view(ctx, pool, &P::getBinCall { id: U24::from(id) }, tag).await?;
     Ok((r.binReserveX, r.binReserveY))
+}
+
+/// Ревью 290: резервы нескольких бинов ОДНОЙ пачкой (Multicall3 / JSON-RPC, node/call.rs try_many) — перечитывание
+/// затронутых событием бинов (events_lb.rs → listen_log.rs). Принимает: окружение, пул, id бинов, тег блока.
+/// Возвращает: (id, X, Y) по каждому. Ошибки: узел, откат getBin, ответ не по ABI.
+pub async fn many(
+    ctx: &Ctx,
+    pool: Address,
+    ids: &[u32],
+    tag: &str,
+) -> GatewayResult<Vec<(u32, u128, u128)>> {
+    let calls: Vec<(Address, alloy_primitives::Bytes)> = ids
+        .iter()
+        .map(|id| {
+            let c = P::getBinCall { id: U24::from(*id) };
+            (
+                pool,
+                alloy_primitives::Bytes::from(alloy::sol_types::SolCall::abi_encode(&c)),
+            )
+        })
+        .collect();
+    let got = call::try_many(ctx, &calls, tag).await?;
+    let mut out = Vec::with_capacity(ids.len());
+    for (id, r) in ids.iter().zip(got) {
+        let b = r.map_err(|w| {
+            ctx.err(
+                crate::gateway::errors::ErrorCode::BadResponse,
+                format!("LB {pool}: getBin({id}) откатился: {w}"),
+            )
+        })?;
+        let v = call::decode::<P::getBinCall>(&b)?;
+        out.push((*id, v.binReserveX, v.binReserveY));
+    }
+    Ok(out)
 }

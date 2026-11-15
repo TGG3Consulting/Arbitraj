@@ -78,7 +78,8 @@ async fn log_rereads_every_unapplied_pair() {
     assert_eq!(format!("{:#x}", log.address()), p["pool"].as_str().unwrap(), "лог — этого пула");
     let (block, index) = (log.block_number.unwrap(), log.log_index.unwrap());
     let coins: Vec<Address> = p["coins"].as_array().unwrap().iter().map(|c| Address::from_slice(&hex(c)[12..32])).collect();
-    // Пара A прочитана load_one позже лога (пробуждение / повтор), пара B — до лога.
+    // Пара A прочитана load_one позже лога (пробуждение / повтор), пара B — до лога. Блоки отметок «лог + 5» и «лог − 1»
+    // ЗАДАНЫ ТЕСТОМ (не из записи): из записи — только лог (блок, номер) и состояние пула; проверяется решение о пропуске.
     let a = pair(p, coins[0], coins[1], block + 5).await;
     let mut b = pair(p, coins[0], coins[2], block - 1).await;
     assert!(a.has_applied(block, index) && !b.has_applied(block, index));

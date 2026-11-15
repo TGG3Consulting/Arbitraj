@@ -12,7 +12,9 @@
 //!
 //! Подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use alloy_primitives::Address;
 
 use alloy::rpc::types::Log;
 use tokio::sync::mpsc;
@@ -95,6 +97,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     // Пропуск блока лентой (решение 77): перечитать состояние своих пулов на голове без разрыва подписки.
     let mut resync = p.feed.resync_watch();
     let mut idx = group::index(&m.pools);
+    let mut sites = group::multi_sites(&m.pools);
     loop {
         tokio::select! {
             msg = g.rx.recv() => {
@@ -106,7 +109,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     Ok(l) => l,
                     Err(e) => return (End::Broken(format!("лог не разобран: {e}")), true),
                 };
-                if let Err(end) = on_log(p, g, m, &idx, &log).await {
+                if let Err(end) = on_log(p, g, m, (&idx, &sites), &log).await {
                     return (end, true);
                 }
             }
@@ -118,6 +121,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     return (end, true);
                 }
                 idx = group::index(&m.pools);
+                sites = group::multi_sites(&m.pools);
             }
             changed = resync.changed() => {
                 if changed.is_err() {
@@ -180,7 +184,7 @@ async fn on_log(
     p: &Pools,
     g: &mut Group,
     m: &mut Members,
-    index: &HashMap<PoolRef, usize>,
+    (index, sites): (&HashMap<PoolRef, usize>, &HashSet<Address>),
     log: &Log,
 ) -> Result<(), End> {
     let single = log.topics().get(1).map(|id| PoolRef::Singleton {
@@ -190,6 +194,12 @@ async fn on_log(
     let found = single
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())));
+    // Ревью 295: в пачке и Contract(адрес), и пары Multi того же адреса (смена dex.multi_pair на лету: старая подписка
+    // ещё жива, index_watch уже подключил пары нового вида в её позднюю пачку — attach.rs) — пары Multi тоже получают
+    // лог. У пачек без пар Multi множество пусто — путь прежний.
+    if found.is_some() && sites.contains(&log.address()) {
+        listen_site::on_log(p, g, m, log).await?;
+    }
     let Some(&i) = found else {
         // Решение 295: пары многомонетного пула (PoolRef::Multi) — одна перечитка всех пар контракта (listen_site.rs).
         if listen_site::on_log(p, g, m, log).await? {

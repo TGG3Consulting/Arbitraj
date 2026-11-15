@@ -394,7 +394,7 @@ pub fn swap(
         // выше последней точки — неисполнимо. Только точный вход.
         (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
             if !exact_in {
-                return Err(why("WooFi: точный выход по лесенке не поддерживается"));
+                return Err(why("PMM от оракула (WooFi / Metric): точный выход по лесенке не поддерживается"));
             }
             // zero_for_one — вход token0; продаём базовую, если она token0 и вход token0 (или наоборот).
             let points = if zero_for_one == d.base_is_token0 {
@@ -404,11 +404,11 @@ pub fn swap(
             };
             if points.is_empty() {
                 return Err(why(
-                    "WooFi: лесенки цен пула нет (dex.pmm_ladder_usd не задана, пауза, цена оракула непригодна или реализация не та)",
+                    "лесенки цен пула нет (dex.pmm_ladder_usd не задана, пауза, цена оракула / провайдера непригодна, реализация не та или пул откатил квотер)",
                 ));
             }
             let out = super::pmm_ladder::out(points, amount).ok_or_else(|| {
-                why("WooFi: объём больше последней точки лесенки цен пула — неисполнимо")
+                why("объём больше последней точки лесенки цен пула — неисполнимо")
             })?;
             Ok(Swapped {
                 amount_in: amount,

@@ -109,5 +109,6 @@ pub async fn load(
         base_is_token0: pair.0 == coin,
         ladder_quote_in,
         ladder_base_in,
+        pool_token0: None,
     })))
 }

@@ -194,6 +194,10 @@ pub struct OraclePmmData {
     pub ladder_quote_in: Vec<LadderPoint>,
     /// Лесенка: вход базовой → выход котируемой, по возрастанию входа.
     pub ladder_base_in: Vec<LadderPoint>,
+    /// token0 САМОГО пула, когда порядок токенов пула не по адресу (решение 285: пул Metric OMM — обмену нужен его
+    /// zeroForOne). None — у вида порядок не нужен (WooFi). `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub pool_token0: Option<Address>,
 }
 
 /// Точка лесенки цен пула: точный вход и ответ квотера контракта (выход) на нём.

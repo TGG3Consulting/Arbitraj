@@ -1,0 +1,244 @@
+{
+ "block": 133656733,
+ "factory": "0x2a53833cc95548cf52c7b159110e22d3a9018f32",
+ "nextPoolIdx": "386",
+ "note": "getImmutables — слова ответа по порядку (0x-слова без ведущих нулей; пусто = 0); prices — getSellAndBuyPrices (sellPriceX64, buyPriceX64) десятично; swaps — проба MetricProbe (eth_call с подменой кода): вход USDT (целые USDT) → выход монеты (wei)",
+ "pools": [
+  {
+   "pool": "0xf3eb104c0773d79f69cabf1da938153ce0efafd6",
+   "idx": 130,
+   "isPool": true,
+   "pair": "WBNB/USDT",
+   "immutables": [
+    "2a53833cc95548cf52c7b159110e22d3a9018f32",
+    "bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+    "55d398326f99059ff775485246999027b3197955",
+    "1",
+    "1",
+    "4f4288654a654",
+    "de0b6b3a7640000",
+    "2abf42ee",
+    "e5450aadc8c71c417b28a4e3fc803d955ab46886",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec",
+    "13",
+    "f1463419c4ac04aa1ac7fcc7b7930e1f61844c16",
+    "e4038fa09f0bb9963068afaf97be0c045155090d",
+    "ebc53e61078976118e384f110c262a263decb84b",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "19",
+    "a"
+   ],
+   "prices": [
+    "10879221880547741954115",
+    "10892786859366119668922"
+   ],
+   "swaps_usdt_in": [
+    [
+     10,
+     "16934824849549776"
+    ],
+    [
+     1000,
+     "1693479621831202459"
+    ],
+    [
+     100000,
+     "108516759303924768673"
+    ]
+   ]
+  },
+  {
+   "pool": "0x720117a6d678ef37cf9792df051da87f5809d117",
+   "idx": 75,
+   "isPool": true,
+   "pair": "NVDAB/USDT",
+   "immutables": [
+    "2a53833cc95548cf52c7b159110e22d3a9018f32",
+    "2fca66c1d1afb4e2a7884261eb00f63598a7436",
+    "55d398326f99059ff775485246999027b3197955",
+    "1",
+    "1",
+    "41cb4eeddc39701",
+    "3b5eea10f93993560",
+    "337ef4",
+    "57239c21c447fccf6c20171f67c15a7beffb8837",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce",
+    "31",
+    "e4038fa09f0bb9963068afaf97be0c045155090d",
+    "ebc53e61078976118e384f110c262a263decb84b",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "2",
+    "1"
+   ],
+   "prices": [
+    "2956000869028478742886",
+    "2957556134520412101359"
+   ],
+   "swaps_usdt_in": [
+    [
+     10,
+     "62371576745771266"
+    ],
+    [
+     1000,
+     "6237153279739550543"
+    ],
+    [
+     100000,
+     "623675833741520042979"
+    ]
+   ]
+  },
+  {
+   "pool": "0xb3adeb4a72948f68ccdc8c958a0be4bcea3c0677",
+   "idx": 126,
+   "isPool": true,
+   "pair": "USDC/USDT",
+   "immutables": [
+    "2a53833cc95548cf52c7b159110e22d3a9018f32",
+    "8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+    "55d398326f99059ff775485246999027b3197955",
+    "1",
+    "1",
+    "ddc4ff3fd112f7c",
+    "de0b6b3a7640000",
+    "f4719",
+    "c1f2e541ec6bc21bda3fd0538d04258faececb71",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb0",
+    "4f",
+    "e4038fa09f0bb9963068afaf97be0c045155090d",
+    "ebc53e61078976118e384f110c262a263decb84b",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "2",
+    "1"
+   ],
+   "prices": [
+    "18454759035084773510",
+    "18454980677991201588"
+   ],
+   "swaps_usdt_in": [
+    [
+     10,
+     "9995536917442111112"
+    ],
+    [
+     1000,
+     "999553659797236876475"
+    ],
+    [
+     100000,
+     "99954936579893627573154"
+    ]
+   ]
+  },
+  {
+   "pool": "0xff2857eef9563e92e9be9550989a80878d97676d",
+   "idx": 96,
+   "isPool": true,
+   "pair": "QQQB/USDT",
+   "immutables": [
+    "2a53833cc95548cf52c7b159110e22d3a9018f32",
+    "205812cdbed920aff76c6580abd681a46d11efc7",
+    "55d398326f99059ff775485246999027b3197955",
+    "1",
+    "1",
+    "248fe6e06d01e9b",
+    "6ad6b6d0716c0117d",
+    "5caaf6",
+    "1951d35f682aa4f916672ad4108275262935f696",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffce",
+    "31",
+    "e4038fa09f0bb9963068afaf97be0c045155090d",
+    "ebc53e61078976118e384f110c262a263decb84b",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "2",
+    "1"
+   ],
+   "prices_revert": "0x46a14930 (PriceProviderFailed(bytes))",
+   "swaps_usdt_in_revert": "0x46a14930 (PriceProviderFailed(bytes)) на 10 / 1000 / 100000 USDT"
+  }
+ ],
+ "logs_topic0": {
+  "block_range": "133653733..133656733",
+  "pools": [
+   "0xf3eb104c0773d79f69cabf1da938153ce0efafd6",
+   "0x720117a6d678ef37cf9792df051da87f5809d117"
+  ],
+  "total": 592,
+  "topics": [
+   {
+    "topic0": "0xcad09799f755048f0fd388c6b2fcc8e0cebefd15756c6903522cc2a95f661f70",
+    "n_topics": 1,
+    "data_words": 3,
+    "count": 299
+   },
+   {
+    "topic0": "0x9734819749a91fc3be03ea83205f924ee08479bd3f0da48efc91d94d050cac1e",
+    "n_topics": 3,
+    "data_words": 3,
+    "count": 291
+   },
+   {
+    "topic0": "0xf53d04bdbda6d88dd536895ec533833d3e09d0cbe2474fae32a368c5f83fc610",
+    "n_topics": 3,
+    "data_words": 58,
+    "count": 1
+   },
+   {
+    "topic0": "0xa55772434bee2a347743b1e8086fa44bac69a060e124ec92ab6b9cc7fc5268af",
+    "n_topics": 3,
+    "data_words": 22,
+    "count": 1
+   }
+  ]
+ },
+ "code_selectors": {
+  "pool_0x3e3c27d1_push4": "0f743953,1e2eaeaf,1f21638c,35fd631a,372aa224,3ff20c8a,5dd9a4c5,658b6cb7,943f3b1a,97962ef9,bcdb4dad,d8306786,dbd035ff,e24f0884,ec069057,fbde1732",
+  "pool_push32_selectors_include": "c3251075 (metricOmmSwapCallback), a9059cbb (transfer), 70a08231 (balanceOf); 68ee158d (NotAllowedToSwap) — нет",
+  "sdk_v1_absent_in_pool": "5cced60b (simulateSwapAndRevert SDK)",
+  "factory_push4_present": "810d36d9 nextPoolIdx, 158b67fa idxToPool, 5b16ebb7 isPool, 3119049a poolDeployer, 4b737da4 poolFeeConfig, 6c3eab47 poolToIdx; 5685fc23 createPool SDK — нет"
+ },
+ "survey": {
+  "pools": 385,
+  "getImmutables_24_words": 385,
+  "with_extensions": 364,
+  "tokens": 82,
+  "extensions_top": {
+   "0xe4038fa09f0bb9963068afaf97be0c045155090d": 332,
+   "0xebc53e61078976118e384f110c262a263decb84b": 207,
+   "0x65fba4ee8f50772ab384f19e5520dda420b1b47d": 21
+  },
+  "swap_probe_any_contract": "USDT → монета через пробный контракт прошёл у SKHYB, AAPLB, NVDAB, WBNB, USDC (5 из 6 крупнейших пулов с USDT); QQQB — откат PriceProviderFailed (0x46a14930)"
+ }
+}

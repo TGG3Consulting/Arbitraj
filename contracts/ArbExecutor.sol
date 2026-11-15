@@ -40,6 +40,10 @@ contract ArbExecutor {
     // Решение 284 (только v2): пара Nomiswap Stable — вход переводом в пару, выход = getAmountOut(tokenIn, вход) самой
     // пары (порядок аргументов обратный SOLIDLY), swap как у V2.
     uint8 internal constant NOMI_STABLE = 12;
+    // Решение 285 (только v2): пул Metric OMM — swap(to, zeroForOne, +сумма, предел 0 / uint128.max, «01», «») +
+    // metricOmmSwapCallback; data = abi.encode(bool zeroForOne) — порядок токенов пула не по адресу (бот знает его по
+    // getImmutables пула). Неверный флаг — пул спросит другой токен, _pay платит только tokenIn шага → откат.
+    uint8 internal constant METRIC = 13;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -269,6 +273,12 @@ contract ArbExecutor {
         } else if (k == V3 || k == ALGEBRA) {
             _expect(s.pool, s.tokenIn, amount);
             IV3Pool(s.pool).swap(to, zeroIn, _int(amount), zeroIn ? MIN_PRICE : MAX_PRICE, "");
+        } else if (k == METRIC) {
+            _expect(s.pool, s.tokenIn, amount);
+            bool zf = abi.decode(s.data, (bool));
+            require(amount <= uint256(uint128(type(int128).max)), "int");
+            // Непустые callbackData — как у пробного вызова на цепи (пустые не проверялись).
+            IMetricOmmPool(s.pool).swap(to, zf, int128(int256(amount)), zf ? 0 : type(uint128).max, hex"01", "");
         } else if (k == ELASTIC) {
             _expect(s.pool, s.tokenIn, amount);
             IElasticPool(s.pool).swap(to, _int(amount), zeroIn, zeroIn ? MIN_PRICE : MAX_PRICE, "");
@@ -391,6 +401,8 @@ contract ArbExecutor {
     function uniswapV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function pancakeV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
+    // Решение 285: Metric OMM — тот же _pay (только пул текущего шага, долг ≤ суммы шага, токен входа шага).
+    function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
 

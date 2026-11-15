@@ -41,6 +41,17 @@ interface INomiStablePair {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
 }
 
+// Metric OMM (решение 285): исходник пулов BSC не опубликован; подпись swap — ABI официального SDK Metric (npm
+// @nradko/metric-omm-sdk-v1@0.4.5 src/abis/MetricOmmPool.ts, github.com/Metric-OMM/metric-sdk), селектор 0xe24f0884 есть
+// в коде пулов BSC (PUSH4; tests/data/metric_2026-11-15). amountSpecified > 0 — точный вход; пул зовёт у вызывающего
+// metricOmmSwapCallback(int256,int256,bytes) (0xc3251075, PUSH32 в коде пула), положительная дельта — долг пулу (факт:
+// eth_call с подменой кода — пробный контракт заплатил положительную дельту, обмен прошёл; пределы цены 0 / uint128.max).
+interface IMetricOmmPool {
+    function swap(address recipient, bool zeroForOne, int128 amountSpecified, uint128 priceLimitX64, bytes calldata callbackData, bytes calldata extensionData)
+        external
+        returns (int128, int128);
+}
+
 // Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
 // Uniswap/v3-core@5ea68a77 contracts/interfaces/pool/IUniswapV3PoolActions.sol L75-L81;
 // pancakeswap/pancake-v3-contracts@98684794 projects/v3-core/contracts/interfaces/pool/IPancakeV3PoolActions.sol L75-L81;

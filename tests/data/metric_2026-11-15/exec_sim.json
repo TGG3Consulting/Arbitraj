@@ -1,0 +1,14 @@
+{"block":133656733,
+ "virtual_quoter":"contracts/out/VirtualQuoter.bin-runtime решения 285 (quoteMetric 0x9229d10b) — eth_call с подменой кода по адресу 0x…00a1",
+ "quoteMetric":[
+  {"pool":"0x720117a6d678ef37cf9792df051da87f5809d117","zeroForOne":false,"amountIn":"1000000000000000000000","used":"1000000000000000000000","out":"6237153279739550543"},
+  {"pool":"0x720117a6d678ef37cf9792df051da87f5809d117","zeroForOne":false,"amountIn":"10000000000000000000","used":"10000000000000000000","out":"62371576745771266"},
+  {"pool":"0x720117a6d678ef37cf9792df051da87f5809d117","zeroForOne":false,"amountIn":"100000000000000000000000","used":"100000000000000000000000","out":"623675833741520042979"},
+  {"pool":"0xf3eb104c0773d79f69cabf1da938153ce0efafd6","zeroForOne":true,"amountIn":"1000000000000000000","used":"1000000000000000000","out":"589763203670055905412"},
+  {"pool":"0xf3eb104c0773d79f69cabf1da938153ce0efafd6","zeroForOne":false,"amountIn":"1000000000000000000000","used":"1000000000000000000000","out":"1693479621831202459"}],
+ "executor":"eth_call с подменой кода ArbExecutor v2 решения 285 (13 948 байт, sha256 байтов b48eb1f492f431fc…) по адресу 0x…0e0e0e, слот 0 = владелец 0x…0b0b; вход — баланс исполнителя (amountIn = 0), override баланса токена (USDT — слот 1 mapping, WBNB — слот 3 mapping WETH9)",
+ "execute":[
+  {"step":"(13, NVDAB/USDT 0x7201…d117, USDT → NVDAB, 10000, abi.encode(false))","balance_in":"1000000000000000000000","received":"6237153279739550543"},
+  {"step":"(13, WBNB/USDT 0xf3eb…afd6, WBNB → USDT, 10000, abi.encode(true))","balance_in":"1000000000000000000","received":"589763203670055905412"},
+  {"step":"тот же WBNB → USDT с abi.encode(false) (неверный флаг)","revert":"0xbe795921 IncorrectDelta() (ошибка из ABI SDK)"}],
+ "probe_contract":"MetricProbe (пробный контракт: swap + оплата положительной дельты в metricOmmSwapCallback) — те же числа, probe.json swaps_usdt_in"}

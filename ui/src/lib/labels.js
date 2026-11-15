@@ -58,6 +58,7 @@ const CHOICE = {
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
   curve_stableswap_ng: 'Curve StableSwap-NG (plain-пул фабрики NG)',
   nomiswap_stable: 'Nomiswap Stable (стейбл-пара, комиссия со входа)',
+  metric_omm: 'Metric OMM (цена провайдера, лесенка ответов пула)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',

@@ -112,7 +112,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 /// Решение 284: вид шага есть только в исполнителе v2 (номер вида добавлен в contracts/ArbExecutor.sol после v1:
 /// NOMI_STABLE = 12; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
 pub fn v2_only(k: ExecKind) -> bool {
-    matches!(k, ExecKind::NomiStable)
+    matches!(k, ExecKind::NomiStable | ExecKind::Metric)
 }
 
 /// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решение 284). Принимает: окружение, вид. Возвращает:

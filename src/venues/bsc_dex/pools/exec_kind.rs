@@ -51,6 +51,9 @@ pub enum ExecKind {
     /// (как SOLIDLY, порядок аргументов getAmountOut обратный). Вид шага 12 есть ТОЛЬКО у исполнителя v2
     /// (exec_callback.rs: у v1 — без пути исполнения с причиной).
     NomiStable,
+    /// Metric OMM (решение 285): `pool.swap(to, zeroForOne, +вход, предел, «01», «»)` + обратный вызов
+    /// `metricOmmSwapCallback`; zeroForOne — в data (порядок токенов пула не по адресу). Только исполнитель v2.
+    Metric,
 }
 
 impl ExecKind {
@@ -68,6 +71,7 @@ impl ExecKind {
             ExecKind::StableU256 => "STABLE_U256",
             ExecKind::Saddle => "SADDLE",
             ExecKind::NomiStable => "NOMI_STABLE",
+            ExecKind::Metric => "METRIC",
         }
     }
 }
@@ -99,6 +103,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,
+        // Решение 285: любой контракт может звать swap пула Metric (проба на цепи — без белого списка у проверенных
+        // пулов; пул с белым списком откатит и квотер — лесенки и котировки у него не будет). Шаг 13, только v2.
+        "metric_omm" => ExecKind::Metric,
         _ => return None,
     })
 }

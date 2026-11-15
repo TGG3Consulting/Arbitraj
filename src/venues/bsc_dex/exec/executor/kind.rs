@@ -3,10 +3,11 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
-//! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), остальные — пусто.
+//! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
+//! остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -59,6 +60,9 @@ pub enum Params {
     /// Пара Nomiswap Stable (решение 284; только исполнитель v2): вход переводом, выход — getAmountOut(tokenIn, вход)
     /// самой пары, swap как у V2. Данных нет.
     NomiStable,
+    /// Пул Metric OMM (решение 285; только исполнитель v2): swap + metricOmmSwapCallback; zero_for_one — направление в
+    /// порядке токенов САМОГО пула (getImmutables), data = abi.encode(bool).
+    Metric { zero_for_one: bool },
 }
 
 impl Params {
@@ -78,6 +82,7 @@ impl Params {
             Params::Saddle { .. } => 10,
             Params::StableU256Bnb { .. } => 11,
             Params::NomiStable => 12,
+            Params::Metric { .. } => 13,
         }
     }
 
@@ -95,6 +100,7 @@ impl Params {
             Params::StableU256Bnb { i, j, bnb_in } => {
                 Bytes::from((U256::from(i), U256::from(j), bnb_in).abi_encode_params())
             }
+            Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             _ => Bytes::new(),
         }
     }

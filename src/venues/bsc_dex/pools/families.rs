@@ -138,6 +138,14 @@ pub enum Proto {
     /// (StableData.input_fee). swapFee и A меняются без события — перечитывание каждым блоком. Исполнение — шаг
     /// NOMI_STABLE исполнителя v2. Вид ядра — StableSwap.
     NomiStable,
+    /// Metric OMM (решение 285; metric_omm, DEX metric-bsc): пул MetricOmmPool фабрики Metric — цена от провайдера
+    /// (меняется каждым блоком), бины ликвидности, расширения (хуки). Исходник BSC не опубликован — своей математики нет:
+    /// котировка и глубина — лесенка ответов САМОГО пула через виртуальный квотер (quoteMetric, решение 186;
+    /// dex.pmm_ladder_usd), как WooFi. Порядок токенов пула не по адресу (token0 из getImmutables — OraclePmmData.
+    /// pool_token0). Проверка — реестр фабрики isPool + getImmutables (verify_metric.rs); новые пулы — из справочника;
+    /// перечитывание каждым блоком. Исполнение — шаг METRIC исполнителя v2 (swap + metricOmmSwapCallback). Вид ядра —
+    /// OraclePmm.
+    MetricOmm,
 }
 
 impl Proto {
@@ -256,6 +264,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
         // Nomiswap Stable (решение 284): в графе и сигналах; исполнение — шаг NOMI_STABLE контракта-исполнителя (только v2).
         "nomiswap_stable" => (PoolKind::StableSwap, Proto::NomiStable, true, false, false),
+        // Metric OMM (решение 285): в графе и сигналах по лесенке ответов пула; исполнение — шаг METRIC (только v2).
+        "metric_omm" => (PoolKind::OraclePmm, Proto::MetricOmm, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -477,6 +487,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::CurveNg => list.extend(["dex.factory", "dex.curve_ng_versions"]),
         // Nomiswap Stable (решение 284): фабрика — реестр getPair (проверка пары), поиск по getPair и событие PairCreated.
         Proto::NomiStable => list.push("dex.factory"),
+        // Metric OMM (решение 285): фабрика (isPool, getImmutables().factory); квотер — только виртуальный
+        // (dex.quoter_virtual = да убирает dex.quoter, как у Algebra Integral): своего квотера в официальном SDK для BSC нет.
+        Proto::MetricOmm => list.extend(["dex.factory", "dex.quoter"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

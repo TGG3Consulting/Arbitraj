@@ -61,6 +61,13 @@ pub fn request(
             format!("{}: Algebra Integral сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
         ));
     }
+    // Metric OMM (решение 285): квотера в официальном SDK для BSC нет — только виртуальный квотер (quoteMetric).
+    if e.family.proto == Proto::MetricOmm {
+        return Err(ctx.not_set(
+            "dex.quoter_virtual",
+            format!("{}: Metric сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
+        ));
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает

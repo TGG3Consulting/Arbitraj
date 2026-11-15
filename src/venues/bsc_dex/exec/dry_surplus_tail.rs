@@ -13,7 +13,6 @@
 
 use alloy_primitives::{Address, U256};
 
-use crate::core::types::PoolRef;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::check::simulate::{self, Base, Call, Override};
@@ -37,14 +36,10 @@ pub async fn tail(
         let mut over = Vec::new();
         for v in a {
             let (to, input) = if virt {
-                let PoolRef::Contract(pool) = e.pool.reference else {
-                    return Err(ctx.err(ErrorCode::Internal, "виртуальный квотер: пул не контракт"));
-                };
-                let zero = s.order.token_in == e.pool.token0;
-                (
-                    virtual_quoter::address(),
-                    virtual_quoter::data(pool, zero, v),
-                )
+                // Решение 285: Metric — направление в порядке токенов самого пула (virtual_quoter::request).
+                let (_, input) = virtual_quoter::request(e, s.order.token_in, v)
+                    .map_err(|m| ctx.err(ErrorCode::Internal, m))?;
+                (virtual_quoter::address(), input)
             } else {
                 v2_pair_probe::request_any(ctx, e, s.order.token_in, v)?
             };

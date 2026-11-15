@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/virtual_quoter.rs
 //! Что делает: решение 186 (Тигран, 05.11.2026: «нам нужны все DEX») — «виртуальный квотер» для DEX без своего
-//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274; SquadSwap V3 — squadV3SwapCallback, решение 281). Код контракта contracts/VirtualQuoter.sol (собран
+//! квотера в документации (форки V3, Algebra, Slipstream; SheepDex — обратный вызов swapCallback, решение 274; SquadSwap V3 — squadV3SwapCallback, решение 281; Metric OMM — quoteMetric + metricOmmSwapCallback, решение 285). Код контракта contracts/VirtualQuoter.sol (собран
 //! contracts/build.sh, артефакт contracts/out/VirtualQuoter.bin-runtime, хеш сверяется с VirtualQuoter.sha256)
 //! подставляется по своему адресу в eth_call переопределением кода счёта (state override, 3-й параметр eth_call geth:
 //! https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects#state-override-set). Квотер зовёт swap САМОГО пула,
@@ -18,7 +18,7 @@ use alloy_primitives::{Address, Bytes, U256, keccak256};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::core::types::PoolRef;
+use crate::core::types::{PoolRef, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
@@ -28,6 +28,8 @@ use super::super::pools::registry::Entry;
 
 alloy::sol! {
     function quoteExactIn(address pool, bool zeroForOne, uint256 amountIn) external returns (uint256 used, uint256 out);
+    /// Решение 285: пул Metric OMM (swap(address,bool,int128,uint128,bytes,bytes) + metricOmmSwapCallback); ответ — тот же.
+    function quoteMetric(address pool, bool zeroForOne, uint256 amountIn) external returns (uint256 used, uint256 out);
 }
 
 /// Код в сети (deployedBytecode solc).
@@ -56,6 +58,7 @@ pub fn supports(p: Proto) -> bool {
             | Proto::Algebra
             | Proto::AlgebraIntegral
             | Proto::Slipstream
+            | Proto::MetricOmm
     )
 }
 
@@ -121,6 +124,37 @@ pub fn data(pool: Address, zero_for_one: bool, amount: U256) -> Bytes {
     )
 }
 
+/// Вход вызова quoteMetric (решение 285: пул Metric OMM; zero_for_one — в порядке токенов САМОГО пула). Ошибок нет.
+pub fn data_metric(pool: Address, zero_for_one: bool, amount: U256) -> Bytes {
+    Bytes::from(
+        quoteMetricCall {
+            pool,
+            zeroForOne: zero_for_one,
+            amountIn: amount,
+        }
+        .abi_encode(),
+    )
+}
+
+/// Пул и вход вызова квотера для записи пула (V3-подобные — quoteExactIn по token0 пары; Metric — quoteMetric по
+/// token0 самого пула, OraclePmmData.pool_token0). Принимает: запись, токен входа, сумму. Возвращает: (пул, данные) или
+/// текст причины (пул не контракт; у пула Metric не прочитан порядок токенов). Ошибок иных нет.
+pub fn request(e: &Entry, token_in: Address, amount: U256) -> Result<(Address, Bytes), &'static str> {
+    let PoolRef::Contract(pool) = e.pool.reference else {
+        return Err("виртуальный квотер: пул не контракт");
+    };
+    if e.family.proto == Proto::MetricOmm {
+        let Some(t0) = (match &e.pool.state {
+            PoolState::OraclePmm(d) => d.pool_token0,
+            _ => None,
+        }) else {
+            return Err("виртуальный квотер: у пула Metric не прочитан порядок токенов");
+        };
+        return Ok((pool, data_metric(pool, token_in == t0, amount)));
+    }
+    Ok((pool, data(pool, token_in == e.pool.token0, amount)))
+}
+
 /// Выход пула на точный вход по его собственному коду. Принимает: окружение, запись пула, токен входа, сумму.
 /// Ошибки: Internal (код квотера, ссылка пула не контракт, вид не поддержан), узел (откат пула — его текст),
 /// BadResponse (ответ не по ABI), SwapReverted с текстом SHORT — ликвидности не хватает.
@@ -146,11 +180,8 @@ pub async fn out_at(
             ),
         ));
     }
-    let PoolRef::Contract(pool) = e.pool.reference else {
-        return Err(ctx.err(ErrorCode::Internal, "виртуальный квотер: пул не контракт"));
-    };
+    let (_, data) = request(e, token_in, amount).map_err(|m| ctx.err(ErrorCode::Internal, m))?;
     let code = runtime().map_err(|m| ctx.err(ErrorCode::Internal, m))?;
-    let data = data(pool, token_in == e.pool.token0, amount);
     let at = address();
     let raw: Bytes = rpc::call(
         ctx,

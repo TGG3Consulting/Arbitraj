@@ -3,7 +3,8 @@
 //! состоянию лучшего достоверного пула «промежуточная — USDT» реестра — локальной математикой пула (та же, что
 //! у котировки). Нужен там, где сумма задана в USDT, а пул — с промежуточной монетой: сумма пробы
 //! (check.probe_usdt) и ликвидность пула против dex.min_pool_liquidity_usd.
-//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs; best_in — quote/route_gas.rs.
+//! Кто вызывает: check/taxes.rs, check/hooks_probe.rs, check/quoter_cycle.rs, quote/select.rs; best_in — quote/route_gas.rs,
+//! pools/ladder_counter.rs (решение 306: суммы лесенки цен пула во встречном токене).
 //! От чего зависит: pools/registry.rs, quote/pool_quote.rs, ctx.rs.
 //! Настройки: через pool_quote — dex.v2_fee_pct [вид пула V2].
 

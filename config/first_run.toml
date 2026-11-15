@@ -3283,7 +3283,7 @@ intro = "Необязательно. Пары WooFi / Metric OMM / iZiSwap / Bis
 
 [[section.rec]]
 name = "dex.pmm_ladder_counter"
-area = "по DEX (woofi_v2, metric_omm, iziswap, biswap_v3)"
+area = "по id DEX (области «DEX», например metric-bsc, iziswap-bsc, biswap-v3, biswap-v3-1 — DEX видов woofi_v2, metric_omm, iziswap, biswap_v3)"
 unit = "да/нет"
 source = "Решение 306"
 method = "Необязательна. При первом запуске не задавать; «да» у DEX, где задана dex.pmm_ladder_usd, — после приёмки решения 306 и проверки нагрузки на узел. Решает Тигран."

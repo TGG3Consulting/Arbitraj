@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, dmm, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, dmm, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -465,6 +465,23 @@ pub fn swap(
             };
             r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
                 .ok_or_else(none)
+        }
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): порт getSwapOut по прочитанной полосе бинов на
+        // времени блока чтения (math/lb_swap.rs). Только точный вход (шаг исполнителя — вход переводом и swap).
+        (PoolState::LbBin(d), PoolKind::LbBin) => {
+            if !exact_in {
+                return Err(why("Liquidity Book: точный выход не поддерживается"));
+            }
+            let bins = e.bins.as_ref().ok_or_else(none)?;
+            let amount: u128 = amount.try_into().map_err(|_| none())?;
+            // X — token0 записи (x_is_token0) или token1; swapForY — отдаём X.
+            let for_y = zero_for_one == d.x_is_token0;
+            let r = lb_swap::swap_out(d, bins, d.block_ts, for_y, amount).ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: U256::from(amount - r.in_left),
+                amount_out: U256::from(r.out),
+                complete: r.complete,
+            })
         }
         _ => Err(none()),
     }

@@ -66,11 +66,12 @@ pub fn tax(legs: &[Path]) -> Result<(), String> {
             | ExecKind::Dodo
             | ExecKind::Woo
             | ExecKind::NomiStable
-            | ExecKind::KyberDmm,
+            | ExecKind::KyberDmm
+            | ExecKind::Lb,
         ) => Ok(()),
         k => Err(format!(
             "у монеты налог на входе: первый шаг исполнителя {} — вход через исполнитель (налог дважды, пул откатит \
-             обмен); прямой вход только у V2 / SOLIDLY / DODO / WOO / NOMI_STABLE / KYBER_DMM — сигнал",
+             обмен); прямой вход только у V2 / SOLIDLY / DODO / WOO / NOMI_STABLE / KYBER_DMM / LB — сигнал",
             k.map(ExecKind::name).unwrap_or("—")
         )),
     }

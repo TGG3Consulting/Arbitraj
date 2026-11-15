@@ -1,7 +1,7 @@
 {
   "storage": [
     {
-      "astId": 93,
+      "astId": 96,
       "contract": "ArbExecutor.sol:ArbExecutor",
       "label": "owner",
       "offset": 0,
@@ -9,7 +9,7 @@
       "type": "t_address"
     },
     {
-      "astId": 95,
+      "astId": 98,
       "contract": "ArbExecutor.sol:ArbExecutor",
       "label": "wnative",
       "offset": 0,

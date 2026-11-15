@@ -179,6 +179,14 @@ pub enum Proto {
     /// перечитывание каждым блоком (балансы меняют события хранилища, не пула). Квотер — Vault.queryBatchSwap
     /// (dex.vault). Исполнение — шаг BALANCER исполнителя v2. Вид ядра — VaultPool.
     BalancerV2,
+    /// Liquidity Book V2.1 (решение 290; lb_v21, DEX traderjoe-v2-1-bsc — LFJ / Trader Joe на BSC): пул LBPair — свой
+    /// контракт (клон реализации фабрики), бины с резервами X и Y, порядок X/Y — создателя пула; комиссия = база +
+    /// изменчивая часть (растёт с пройденными бинами, затухает по времени блока). Фабрика LBFactory (dex.factory) —
+    /// реестр getLBPairInformation (Sourcify exact_match = lfj-gg/joe-v2@v2.1.0). Проверка — getFactory / getTokenX /
+    /// getTokenY / getBinStep пула и реестр фабрики (verify_lb.rs); новые пулы — из справочника. Математика — порт
+    /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
+    /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
+    LbV21,
 }
 
 impl Proto {
@@ -313,8 +321,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "smardex" => (PoolKind::Fictive, Proto::Smardex, true, false, false),
         // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
-        // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
-        // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
+        // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
+        "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
+        // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
+        // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
         "pancake_stableswap" => (
             PoolKind::StableSwap,
             Proto::PancakeStable,
@@ -550,6 +561,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // пулов (isPoolFromFactory). Фабрика стейблсвапов dex.balancer_stable_factory — по желанию (не задана — только
         // весовые пулы).
         Proto::BalancerV2 => list.extend(["dex.vault", "dex.factory"]),
+        // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
+        // пул getSwapOut (адрес не нужен).
+        Proto::LbV21 => list.push("dex.factory"),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

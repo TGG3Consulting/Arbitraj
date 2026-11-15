@@ -24,6 +24,7 @@ pub mod market;
 pub mod pool;
 pub mod pool_amp;
 pub mod pool_fictive;
+pub mod pool_lb;
 pub mod pool_depth;
 pub mod pool_solidly;
 pub mod pool_tick_bin;
@@ -56,7 +57,7 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    AmpV2Data, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
+    AmpV2Data, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
     PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData,
 };

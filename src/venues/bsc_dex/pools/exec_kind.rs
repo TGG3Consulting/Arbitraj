@@ -66,6 +66,9 @@ pub enum ExecKind {
     /// Balancer V2 (решение 289): approve хранилищу ровно на шаг + `Vault.swap(GIVEN_IN, poolId, вход, получатель)`;
     /// пул шага — хранилище, data = abi.encode(bytes32 poolId). Только исполнитель v2.
     Balancer,
+    /// Liquidity Book V2.1 (решение 290): перевод входа в пул + `pair.swap(swapForY = (getTokenX() пула == вход), to)`;
+    /// без обратного вызова, data пусто. Только исполнитель v2.
+    Lb,
 }
 
 impl ExecKind {
@@ -88,6 +91,7 @@ impl ExecKind {
             ExecKind::KyberDmm => "KYBER_DMM",
             ExecKind::Smardex => "SMARDEX",
             ExecKind::Balancer => "BALANCER",
+            ExecKind::Lb => "LB",
         }
     }
 }
@@ -131,6 +135,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
         "balancer_v2" => ExecKind::Balancer,
+        // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
+        // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
+        // шаг 18, v2.
+        "lb_v21" => ExecKind::Lb,
         _ => return None,
     })
 }

@@ -110,7 +110,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 }
 
 /// Решение 284: вид шага есть только в исполнителе v2 (номер вида добавлен в contracts/ArbExecutor.sol после v1:
-/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288, BALANCER = 17 — решение 289; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
+/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288, BALANCER = 17 — решение 289, LB = 18 — решение 290; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
 pub fn v2_only(k: ExecKind) -> bool {
     matches!(
         k,
@@ -120,6 +120,7 @@ pub fn v2_only(k: ExecKind) -> bool {
             | ExecKind::KyberDmm
             | ExecKind::Smardex
             | ExecKind::Balancer
+            | ExecKind::Lb
     )
 }
 

@@ -6,7 +6,7 @@
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
-//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, registry.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs.
 //! Настройки: через вызываемые.
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
@@ -31,7 +31,7 @@ use super::discover::Found;
 use super::events::{self, Applied};
 use super::listen::{End, Pools};
 use super::registry::Entry;
-use super::{load, load_bin};
+use super::{load, load_bin, load_lb_bins};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру.
 pub async fn on_log(p: &Pools, log: &Log) -> Result<(), End> {
@@ -142,11 +142,23 @@ pub fn note_refill(p: &Pools, e: &Entry) {
 
 /// Перечитывает резервы бинов на блоке события.
 async fn reread_bins(p: &Pools, r: &PoolRef, ids: &[u32], block: u64) -> GatewayResult<()> {
+    let tag = block_tag(block);
+    let uniq: BTreeSet<u32> = ids.iter().copied().collect();
+    // Ревью 290: пул Liquidity Book V2.1 (свой контракт) — затронутые бины одной пачкой getBin (load_lb_bins::many).
+    if let PoolRef::Contract(pool) = r {
+        let list: Vec<u32> = uniq.into_iter().collect();
+        for (bin, x, y) in load_lb_bins::many(&p.ctx, *pool, &list, &tag).await? {
+            p.reg.update(r, |e| {
+                if let Some(b) = e.bins.as_mut() {
+                    b.set(bin, x, y);
+                }
+            });
+        }
+        return Ok(());
+    }
     let PoolRef::Singleton { manager, id } = r else {
         return Ok(());
     };
-    let tag = block_tag(block);
-    let uniq: BTreeSet<u32> = ids.iter().copied().collect();
     for bin in uniq {
         let (x, y) = load_bin::bin(&p.ctx, *manager, *id, bin, &tag).await?;
         p.reg.update(r, |e| {

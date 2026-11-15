@@ -163,6 +163,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Balancer V2 не исполняется Universal Router (шаг BALANCER контракта-исполнителя)",
         )),
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): только шаг LB исполнителя v2.
+        PoolKind::LbBin => Err(ctx.err(
+            ErrorCode::Internal,
+            "Liquidity Book не исполняется Universal Router (шаг LB контракта-исполнителя)",
+        )),
         // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
         PoolKind::Fictive => Err(ctx.err(
             ErrorCode::Internal,

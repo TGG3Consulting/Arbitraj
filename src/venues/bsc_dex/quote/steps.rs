@@ -223,6 +223,11 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         (PoolState::Fictive(d), _) => num::to_decimal(d.fees_lp.saturating_add(d.fees_pool), 4).ok_or_else(|| {
             ctx.err(ErrorCode::BadResponse, "комиссия SmarDex не помещается в Decimal")
         }),
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): полная комиссия активного бина на времени блока
+        // чтения над 10^18 → проценты = fee / 10^16 (дальше по бинам изменчивая часть растёт — её считает котировка).
+        (PoolState::LbBin(d), _) => super::super::math::lb_fee::active_fee(d)
+            .and_then(|f| num::to_decimal(U256::from(f), 16))
+            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия Liquidity Book не считается")),
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

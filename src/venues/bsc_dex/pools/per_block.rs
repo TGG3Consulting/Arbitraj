@@ -21,6 +21,8 @@
 //!   PoolBalanceManaged — лог от адреса Vault с id пула, Swaps.sol L297, PoolBalances.sol), подписка по адресу пула их
 //!   не видит; A стейблсвапа во время рампы меняется по времени блока без событий (StablePool.sol L628-L651) —
 //!   перечитываются все пулы — одной пачкой на блок (ревью 289, per_block_balancer.rs).
+//! • Liquidity Book V2.1 (решение 290): изменчивая часть комиссии считается от времени блока обмена
+//!   (PairParameterHelper.updateReferences L412-L421) — состояние всех пулов одной пачкой на блок (per_block_lb.rs).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Кто вызывает: pools/session.rs.
@@ -35,7 +37,7 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::{per_block_balancer, reload};
+use super::{per_block_balancer, per_block_lb, reload};
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -52,6 +54,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::KyberDmm
             | Proto::Smardex
             | Proto::BalancerV2
+            | Proto::LbV21
     )
 }
 
@@ -79,6 +82,7 @@ pub fn each_block(f: &Found, usdt: Option<Address>) -> bool {
 pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
     let usdt = p.tokens.usdt(&p.ctx).ok();
     let mut balancer = Vec::new();
+    let mut lb = Vec::new();
     for x in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
         let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
@@ -89,11 +93,17 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             balancer.push(x);
             continue;
         }
+        // Решение 290: пулы Liquidity Book V2.1 — все вместе одной пачкой (per_block_lb.rs).
+        if f.family.proto == Proto::LbV21 {
+            lb.push(x);
+            continue;
+        }
         if reload::load_one(p, f, t, block).await?.is_err() {
             p.reg.update(&f.reference, |e| e.valid = false);
         }
     }
-    per_block_balancer::on_head(p, &balancer, block).await
+    per_block_balancer::on_head(p, &balancer, block).await?;
+    per_block_lb::on_head(p, &lb, block).await
 }
 
 /// Лог общего контракта (пары PoolRef::Member): перечитать на блоке лога все пары контракта. Возвращает: true — лог

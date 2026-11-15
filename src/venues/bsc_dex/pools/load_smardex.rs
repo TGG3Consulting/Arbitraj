@@ -78,7 +78,7 @@ static BLOCK_TIME: Mutex<Option<(u64, u64)>> = Mutex::new(None);
 
 /// Время блока (секунды Unix): из памяти, если этот блок уже спрашивали, иначе eth_getBlockByNumber (node/head_age.rs).
 /// Принимает: окружение, номер блока. Ошибки: узел; BadResponse (узел не знает блок).
-async fn block_secs(ctx: &Ctx, block: u64) -> GatewayResult<u64> {
+pub async fn block_secs(ctx: &Ctx, block: u64) -> GatewayResult<u64> {
     let hit = *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner());
     if let Some((n, t)) = hit
         && n == block

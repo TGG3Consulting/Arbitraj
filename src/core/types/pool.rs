@@ -1,7 +1,7 @@
 //! Файл: core/types/pool.rs
 //! Что делает: типы пулов DEX — вид пула (V2, V3, V4 с концентрированной ликвидностью, V4 Bin, PMM, Solidly,
 //! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287, пара с фиктивными резервами — решение 288, пул в
-//! общем хранилище — решение 289),
+//! общем хранилище — решение 289, бины с изменчивой комиссией — решение 290),
 //! ссылка на пул, состояние пула на уровне «текущая цена и комиссия», крючок V4 и его группа A/B/C.
 //! Кто вызывает: адаптер DEX (создаёт), ядро и интерфейс (показывают, учитывают группу крючка).
 //! От чего зависит: core/types/market.rs, alloy-primitives.
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
 pub use super::pool_fictive::FictiveData;
+pub use super::pool_lb::LbBinData;
 pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
@@ -66,6 +67,10 @@ pub enum PoolKind {
     /// на пул (индексы в состоянии): запись реестра — одна на ссылку пула (ревью 289 — DECISIONS 289, ограничение).
     /// Состояние — VaultPoolData.
     VaultPool,
+    /// Бины с изменчивой комиссией (решение 290, Liquidity Book V2.1): свой контракт на пул (не менеджер), токен X/Y — по
+    /// порядку создателя пула; комиссия = база + изменчивая часть, которая растёт с каждым пройденным бином и затухает
+    /// по времени блока. Резервы бинов — в адаптере (как у Bin). Состояние — LbBinData.
+    LbBin,
 }
 
 /// Как найти пул в сети.
@@ -192,6 +197,9 @@ pub enum PoolState {
     /// Пул в общем хранилище (решение 289): id пула, балансы и множители точности токенов, комиссия, кривая, индексы
     /// пары. Боксируется, как Pmm. Поля — в VaultPoolData (core/types/pool_vault.rs).
     VaultPool(Box<VaultPoolData>),
+    /// Бины с изменчивой комиссией (решение 290): активный бин, шаг, порядок X/Y, параметры комиссии и время блока.
+    /// Боксируется, как Pmm. Поля — в LbBinData (core/types/pool_lb.rs).
+    LbBin(Box<LbBinData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

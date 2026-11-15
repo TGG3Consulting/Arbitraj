@@ -71,5 +71,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::VaultPool(d) => d.paused || [d.i0, d.i1]
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
+        // Бины с изменчивой комиссией (решение 290): пуст, когда в прочитанной полосе нет непустых бинов (как Bin).
+        PoolState::LbBin(_) => e.bins.as_ref().is_some_and(|b| b.reserves.is_empty()),
     }
 }

@@ -133,7 +133,7 @@ pub async fn bin(
 
 /// Стоимость бина в USDT: резерв USDT + резерв монеты по цене бина.
 /// Ошибки: BadResponse — цена не считается (как откат контракта) или сумма не помещается в Decimal.
-fn usdt_value(
+pub fn usdt_value(
     ctx: &Ctx,
     x: u128,
     y: u128,

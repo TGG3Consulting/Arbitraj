@@ -67,7 +67,7 @@ fn basis(p: &Parts) -> Basis {
 
 /// Карта с нуля по текущему реестру, топ собран.
 fn full(p: &Parts) -> Work {
-    let (mut w, _) = graph_full::build(&p.ctx, &p.registry, &p.tokens, basis(p)).unwrap();
+    let (mut w, _) = graph_full::build(&p.ctx, &p.registry, &p.tokens, basis(p), &|| true).unwrap();
     w.publish(per_edge(p));
     w
 }
@@ -101,7 +101,16 @@ fn sets(g: &Graph) -> BTreeMap<(Address, Address), Vec<String>> {
 fn step_and_check(p: &Parts, inc: &mut Work, what: &str) {
     let (refs, _) = p.registry.graph_cache().bg().changes.drain();
     assert!(!refs.is_empty(), "{what}: реестр отметил изменение");
-    let out = graph_round::round(&p.ctx, &p.registry, &p.tokens, inc, refs, per_edge(p)).unwrap();
+    let out = graph_round::round(
+        &p.ctx,
+        &p.registry,
+        &p.tokens,
+        inc,
+        refs,
+        per_edge(p),
+        &|| true,
+    )
+    .unwrap();
     let f = full(p);
     let d = graph_diff::diff(&inc.picture(), &f.picture());
     assert!(d.is_empty(), "{what}: накопительная ≠ с нуля: {d:?}");
@@ -151,7 +160,7 @@ async fn self_check_catches_lost_change() {
     p.registry.put(later.registry.get(&r).unwrap());
     // Отметка потеряна: накопительная карта о записи не узнала.
     let _ = bg.changes.drain();
-    let (f, _) = graph_full::build(&p.ctx, &p.registry, &p.tokens, basis(&p)).unwrap();
+    let (f, _) = graph_full::build(&p.ctx, &p.registry, &p.tokens, basis(&p), &|| true).unwrap();
     let rec = graph_full::reconcile(
         &p.ctx,
         &p.registry,
@@ -160,8 +169,9 @@ async fn self_check_catches_lost_change() {
         f,
         HashSet::new(),
         per_edge(&p),
+        &|| true,
     )
-    .map_err(|e| e.1.clone())
+    .map_err(|e| e.2.clone())
     .unwrap();
     let d = rec.diff.expect("было с чем сравнивать");
     assert!(!d.is_empty(), "потерянное изменение найдено сверкой");

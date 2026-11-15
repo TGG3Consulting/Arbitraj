@@ -29,6 +29,8 @@
 - Задача t114: exec/executor/trade.rs 268 строк (было 259; причина native_block и повторная проверка обратного вызова
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
+- Решение 285 (ревью t117): лесенка Metric — полное перечитывание каждого пула на каждом блоке последовательно в
+  per_block::on_head; задержка не мерилась — замер на сервере после выкладки (docs/TASKS.md, решение 285, п. 7).
 - Решение 285 (Metric OMM, t117): файлы сверх ориентира 200 строк — pools/load.rs 421 (было 406), pools/families.rs 545
   (было 532), quote/quoter_calls.rs 406 (было 399), pools/verify.rs 304 (было 294), pools/load_batch.rs 230 (было 229),
   quote/virtual_quoter.rs 204 (было 173), contracts/ArbExecutor.sol 470 (было 458). Новые файлы — в пределах 200.

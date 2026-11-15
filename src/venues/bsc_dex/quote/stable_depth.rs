@@ -11,8 +11,24 @@
 
 use alloy_primitives::U256;
 
+use crate::core::types::StableData;
+
 use super::super::math::full_math::mul_div;
 use super::super::math::stableswap_v1::{Template, exchange_out_t, get_d_t, precision, xp};
+
+/// A для формул шаблона Curve (get_d_t / get_y_t / price: Ann = A·N). Ревью t117, решение 284: у пары Nomiswap Stable
+/// (StableData.input_fee) инвариант считается с N_A = A·4 = A·N^N (NomiswapStablePair.sol L340 `uint256 N_A = A * 4;`,
+/// L358 то же; Sourcify 56/0x1e40…60f1), а формулы шаблона Curve — с Ann = A·N = A·2: тот же инвариант получается при
+/// A шаблона = getA()·2 (N = 2; проверено на записанных ответах пар — tests/bsc_dex_nomiswap_stable_live.rs). Остальные
+/// шаблоны — A как есть (поведение прежнее). Принимает: состояние пула. Возвращает: A для шаблона. Ошибок нет
+/// (переполнение — A как есть: у пары A ≤ MAX_A·100 = 10^8, L23).
+pub fn curve_amp(d: &StableData) -> U256 {
+    if d.input_fee {
+        d.amp.checked_mul(U256::from(2u8)).unwrap_or(d.amp)
+    } else {
+        d.amp
+    }
+}
 
 /// Максимум удвоений при поиске верхней границы объёма (предел итераций, не порог торговли).
 const MAX_DOUBLE: u32 = 192;

@@ -58,8 +58,16 @@ fn state_of(p: &Value) -> PoolState {
         p["swapFee"].as_str().unwrap().parse().unwrap(),
         dec(&p["getA"]),
         (
-            p["token0PrecisionMultiplier"].as_str().unwrap().parse().unwrap(),
-            p["token1PrecisionMultiplier"].as_str().unwrap().parse().unwrap(),
+            p["token0PrecisionMultiplier"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap(),
+            p["token1PrecisionMultiplier"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap(),
         ),
     )
     .expect("состояние")
@@ -164,4 +172,43 @@ fn executor_step_and_family() {
         d.max_rounds,
     );
     assert_eq!(ours, Some(got));
+}
+
+/// Ревью t117 (п. 1): глубина пар Nomiswap считается общими формулами шаблона Curve (quote/stable_depth.rs, Ann = A·N),
+/// а пара — с N_A = A·4. С A шаблона = stable_depth::curve_amp (getA·2 у input_fee) формула Curve без комиссии на входе
+/// после снятия комиссии пары даёт ТОТ ЖЕ выход, что getAmountOut пары, — 24 из 24 записанных ответов; с getA как есть
+/// (прежний расчёт глубины) — расходится.
+#[test]
+fn depth_template_uses_pair_invariant() {
+    use arb::venues::bsc_dex::math::stableswap_v1::{Template, exchange_out_t};
+    use arb::venues::bsc_dex::quote::stable_depth::curve_amp;
+    let probe = json("probe.json");
+    let (mut same, mut old_diff) = (0, 0);
+    for p in probe["pairs"].as_array().unwrap() {
+        let PoolState::StableSwap(d) = state_of(p) else {
+            panic!("не StableSwap")
+        };
+        let t = Template {
+            amp_precision: d.amp_precision,
+            max_rounds: d.max_rounds,
+            strict: d.strict,
+        };
+        let fee: u64 = p["swapFee"].as_str().unwrap().parse().unwrap();
+        for g in p["getAmountOut"].as_array().unwrap() {
+            let side = g[0].as_u64().unwrap() as usize;
+            let (i, j) = if side == 0 { (0, 1) } else { (1, 0) };
+            let (dx, want) = (dec(&g[1]), dec(&g[2]));
+            // Вход после комиссии пары — как в getAmountOut (L257).
+            let net = dx * U256::from(100_000 - fee) / U256::from(100_000u64);
+            let out = |amp| exchange_out_t(i, j, net, &d.balances, &d.rates, amp, U256::ZERO, &t);
+            if out(curve_amp(&d)) == Some(want) {
+                same += 1;
+            }
+            if out(d.amp) != Some(want) {
+                old_diff += 1;
+            }
+        }
+    }
+    assert_eq!(same, 24);
+    assert!(old_diff > 0);
 }

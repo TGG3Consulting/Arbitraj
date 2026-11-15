@@ -54,8 +54,9 @@ pub async fn read(
     Ok((quote_in, base_in))
 }
 
-/// Один проход: quoteMetric(пул, направление, сумма) по суммам; точки — до первого отката, неполного входа или нуля.
-/// Принимает: окружение, пул, zeroForOne пула, суммы, тег. Ошибки: узел (вся пачка), Internal (код квотера).
+/// Один проход: quoteMetric(пул, направление, сумма) по суммам; точки — до первого отката пула, неполного входа или нуля.
+/// Принимает: окружение, пул, zeroForOne пула, суммы, тег. Ошибки: узел (вся пачка или элемент — не откат пула),
+/// BadResponse (ответ не по ABI), Internal (код квотера).
 async fn pass(
     ctx: &Ctx,
     pool: Address,
@@ -81,13 +82,30 @@ async fn pass(
     let got = rpc::batch(ctx, &params).await?;
     let mut out: Vec<LadderPoint> = Vec::new();
     for (a, r) in amounts.iter().zip(got) {
-        // Откат пула (его причина — в тексте ошибки узла) — край лесенки.
-        let Ok(raw) = r else { break };
-        let Ok(b) = serde_json::from_str::<Bytes>(raw.get()) else {
-            break;
+        // Ревью t117: откат пула — ответ узла с текстом «execution reverted» (geth core/vm/errors.go; venues/bsc_dex
+        // errors.rs from_rpc → SwapReverted) — край лесенки. Любая другая ошибка элемента пачки (связь, состояние блока
+        // удалено, лимит узла) — лесенка недостоверна: ошибка наверх (пул не прочитан → valid = false до следующего чтения).
+        let raw = match r {
+            Ok(raw) => raw,
+            Err(e) if e.code == ErrorCode::SwapReverted => break,
+            Err(e) => return Err(e),
         };
-        let Some(Ok(o)) = virtual_quoter::decode(&b, *a) else {
-            break;
+        let b = serde_json::from_str::<Bytes>(raw.get()).map_err(|e| {
+            ctx.err(
+                ErrorCode::BadResponse,
+                format!("квотер Metric: ответ не bytes: {e}"),
+            )
+        })?;
+        let o = match virtual_quoter::decode(&b, *a) {
+            Some(Ok(o)) => o,
+            // Пул взял не весь вход — ликвидность кончилась: край лесенки.
+            Some(Err(_)) => break,
+            None => {
+                return Err(ctx.err(
+                    ErrorCode::BadResponse,
+                    "квотер Metric: ответ не по ABI quoteMetric",
+                ));
+            }
         };
         if o.is_zero() || a.is_zero() || out.last().is_some_and(|p| p.amount_in >= *a) {
             break;

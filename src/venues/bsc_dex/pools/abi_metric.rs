@@ -71,15 +71,16 @@ pub fn topics() -> Vec<B256> {
         b256!("0xcad09799f755048f0fd388c6b2fcc8e0cebefd15756c6903522cc2a95f661f70"),
         // 3 темы (две индексированные), 3 слова — на каждом обмене (291 из 592).
         b256!("0x9734819749a91fc3be03ea83205f924ee08479bd3f0da48efc91d94d050cac1e"),
-        // 3 темы, 58 и 22 слова — по одному логу (по форме — изменение ликвидности).
+        // 3 темы, 58 и 22 слова — по одному логу (что это за события — не установлено).
         b256!("0xf53d04bdbda6d88dd536895ec533833d3e09d0cbe2474fae32a368c5f83fc610"),
         b256!("0xa55772434bee2a347743b1e8086fa44bac69a060e124ec92ab6b9cc7fc5268af"),
     ]
 }
 
-/// topic0 «изменения ликвидности» — по форме записанных логов (см. topics); мелкие пулы слушают только их. Ошибок нет.
+/// topic0 для мелких пулов (pools/group.rs Topics::Liquidity). Ревью t117: какое из 4 событий — изменение ликвидности,
+/// не установлено (исходника нет) — мелкие пулы слушают все 4 (без догадки). Ошибок нет.
 pub fn liquidity_topics() -> Vec<B256> {
-    topics().split_off(2)
+    topics()
 }
 
 #[cfg(test)]
@@ -103,6 +104,6 @@ mod tests {
             IMetricOmmFactory::isPoolCall::SELECTOR,
             [0x5b, 0x16, 0xeb, 0xb7]
         );
-        assert_eq!(liquidity_topics().len(), 2);
+        assert_eq!(liquidity_topics(), topics());
     }
 }

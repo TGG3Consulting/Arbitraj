@@ -114,13 +114,16 @@ fn ladder_points_are_pool_answers() {
         .collect::<Vec<_>>();
     let mut pts = pts;
     pts.sort_by_key(|p| p.amount_in);
-    let state = load_metric::state(pair, coin, pool_t0, Some(1), pts.clone(), Vec::new());
+    // Цена продажи провайдера (sellPriceX64) пула NVDAB/USDT на блоке 133656733 — записанный ответ getSellAndBuyPrices.
+    let sell: u128 = nv["prices"][0].as_str().unwrap().parse().unwrap();
+    let state = load_metric::state(pair, coin, pool_t0, Some(sell), pts.clone(), Vec::new());
     let PoolState::OraclePmm(d) = state else {
         panic!("не OraclePmm")
     };
     assert_eq!(d.pool_token0, Some(pool_t0));
     assert_eq!(d.base_is_token0, pair.0 == coin);
     assert!(d.feasible);
+    assert_eq!(d.price, U256::from(sell));
     for p in &pts {
         assert_eq!(
             pmm_ladder::out(&d.ladder_quote_in, p.amount_in),
@@ -175,5 +178,5 @@ fn executor_step_and_family() {
         let t0: alloy_primitives::B256 = t["topic0"].as_str().unwrap().parse().unwrap();
         assert!(topics.contains(&t0));
     }
-    assert_eq!(abi_metric::liquidity_topics().len(), 2);
+    assert_eq!(abi_metric::liquidity_topics(), abi_metric::topics());
 }

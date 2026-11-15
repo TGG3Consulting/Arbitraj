@@ -14,7 +14,8 @@
 //! (тот же NomiswapStablePair.sol у 0x3a667100…da87 и 0xca25f030…a7ec; solc 0.8.15): contracts/NomiswapStablePair.sol
 //! `getAmountOut` L251-L274, `_computeLiquidityFromAdjustedBalances` L337-L355, `_getY` L357-L374;
 //! contracts/libraries/MathUtils.sol `within1` L12-L19, `divRoundUp` L21-L23. Проверено на 24 ответах getAmountOut
-//! трёх пар на блоке 133650877 (tests/bsc_dex_nomiswap_stable_live.rs).
+//! трёх пар на блоке 133650877 (tests/bsc_dex_nomiswap_stable_live.rs). Строки исходника дословно —
+//! tests/data/nomiswap_stable_2026-11-15/source_excerpt.txt (ревью t117).
 
 use alloy_primitives::U256;
 
@@ -45,6 +46,7 @@ pub fn get_d(xp0: U256, xp1: U256, amp: U256, ap: U256, rounds: u16) -> Option<U
             .checked_div(xp1)?
             / U256::from(4u8);
         let prev = d;
+        // L349 дословно: D = (((N_A * s) / A_PRECISION + 2 * dP) * D) / ((N_A / A_PRECISION - 1) * D + 3 * dP);
         let num =
             (n_a.checked_mul(s)?.checked_div(ap)?).checked_add(dp.checked_mul(U256::from(2u8))?)?;
         let den = (n_a.checked_div(ap)?.checked_sub(U256::from(1u8))?)

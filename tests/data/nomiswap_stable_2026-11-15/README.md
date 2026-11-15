@@ -14,6 +14,9 @@
   десятичная запись слова ответа);
 - два лога пары USDT/USDC (Sync 0x1c411e9a…, Swap 0xd78ad95f…; у Swap — данные в десятичной записи).
 
+`source_excerpt.txt` — строки NomiswapStablePair.sol (getAmountOut, D, y) и MathUtils.sol дословно, с номерами строк
+(для сверки порта math/stableswap_nomi.rs; ревью t117).
+
 `exec_sim.json` — проба шага NOMI_STABLE (вид 12) ArbExecutor v2 на этом блоке через eth_call с подменой кода
 (state override): исполнитель получил ровно getAmountOut пары; тот же маршрут шагом SOLIDLY (вид 3) — откат.
 

@@ -69,6 +69,10 @@
      у акций вне торговых часов — откат PriceProviderFailed (пул без котировки).
   6. Переразвернуть исполнитель v2 (новый SHA-256 кода создания — docs/notes/executor-v2-redeploy.md); сухая сделка на
      живом пуле — после выкладки.
+  7. Ревью t117: лесенка Metric перечитывается целиком на каждом блоке, пулы — по очереди в per_block::on_head
+     (per_block.rs on_head; на пул — 2 вызова + 2 пачки eth_call квотера по числу сумм dex.pmm_ladder_usd,
+     load_metric_ladder.rs read). Задержку на блок на сервере не мерили — замерить после выкладки (сколько пулов Metric в
+     подписке × время чтения одного пула против интервала между блоками).
 - **Решение 284 (15.11.2026, ветка t117/exec-nomi-metric от t114 3e185eb0) — сделано, ждёт приёмки.** Nomiswap Stable:
   вид `nomiswap_stable`, шаг исполнителя v2 NOMI_STABLE = 12 (контракт v2 изменён: код в сети 13 498 байт). **Открыто:**
   1. Значения настроек (id DEX `nomiswap_stable` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/nomiswap_stable/pools

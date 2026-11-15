@@ -95,7 +95,8 @@ pub(super) async fn finish(
     let rec = match res.map_err(|e| format!("доводка полной пересборки графа упала: {e}"))?
     {
         Ok(x) => x,
-        Err((inc, why)) => {
+        Err(e) => {
+            let (inc, why) = *e;
             st.work = inc;
             graph_alarm::full_failed(ctx, bg, &job.reason, &why);
             note(bg, &job.reason, ms(job.started), pools, 0, None, why);

@@ -161,7 +161,7 @@ async fn self_check_catches_lost_change() {
         HashSet::new(),
         per_edge(&p),
     )
-    .map_err(|e| e.1)
+    .map_err(|e| e.1.clone())
     .unwrap();
     let d = rec.diff.expect("было с чем сравнивать");
     assert!(!d.is_empty(), "потерянное изменение найдено сверкой");

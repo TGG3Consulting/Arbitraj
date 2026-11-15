@@ -59,8 +59,8 @@ pub fn build(
 
 /// Доводка и сверка (см. шапку). Принимает: окружение, реестр, токены, накопительную карту (None — нет или другие
 /// настройки), карту с нуля, пулы, изменённые за время сборки, dex.route_max_pools_per_edge. Возвращает: Reconciled.
-/// Ошибки: настройки глубины не заданы или неверны — с возвратом накопительной карты (она остаётся действующей).
-#[allow(clippy::result_large_err)]
+/// Ошибки: настройки глубины не заданы или неверны — с возвратом накопительной карты (она остаётся действующей); за
+/// Box — карта велика (clippy::result_large_err).
 pub fn reconcile(
     ctx: &Ctx,
     reg: &Registry,
@@ -69,7 +69,7 @@ pub fn reconcile(
     mut full: Work,
     refs: HashSet<PoolRef>,
     per_edge: usize,
-) -> Result<Reconciled, (Option<Work>, String)> {
+) -> Result<Reconciled, Box<(Option<Work>, String)>> {
     let mut inc = inc;
     let mut all = HashSet::new();
     full.expand(reg, &refs, &mut all);
@@ -78,7 +78,7 @@ pub fn reconcile(
     }
     let evals = match graph_eval::evaluate(ctx, reg, tokens, full.basis.usdt_dec, &all) {
         Ok(v) => v,
-        Err(why) => return Err((inc, why)),
+        Err(why) => return Err(Box::new((inc, why))),
     };
     for (r, rec) in evals {
         if let Some(i) = inc.as_mut() {

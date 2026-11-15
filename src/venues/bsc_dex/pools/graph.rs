@@ -37,7 +37,7 @@ use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
 
-pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached};
+pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached, cached_as_of};
 
 /// Ребро графа: пул между токенами `a` и `b`. `entry` — КОПИЯ записи реестра на момент build (снимок, не живая
 /// ссылка); перед сделкой состояние перечитывается точечным Multicall3 (решение 83).

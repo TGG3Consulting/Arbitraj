@@ -26,6 +26,7 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 293 (t124): src/venues/bingx/symbols.rs — 217 строк (было 215, сверх ориентира 200 и до правки: шапка поля minQty и вызов symbols_qty::take); новые symbols_qty.rs (66) и settings/catalog/bingx.rs — в пределах 200; tests/bingx_minqty_293.rs — 202. Дальше дробить symbols.rs — вынести parse / api_flag в symbols_parse.rs (как у других бирж).
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

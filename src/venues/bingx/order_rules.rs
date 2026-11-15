@@ -4,6 +4,8 @@
 //! apiStateSell), количество — вниз до stepSize, цена — до tickSize в безопасную сторону (покупка — вниз, продажа —
 //! вверх), количество в пределах minQty / maxQty, сумма в пределах minNotional / maxNotional, задан
 //! venue.order_time_in_force. Правила в одном месте — проверка до покупки и ордер не расходятся.
+//! Решение 293: при venue.ignore_deprecated_qty пределов количества у пары нет (их убирает symbols_qty.rs при разборе
+//! справочника) — проверка количества здесь пропускается сама (min_qty / max_qty = None), сумма проверяется как раньше.
 //! Пробного ордера (test order) у спота BingX НЕТ: в официальном справочнике спотовой торговли перечислены order,
 //! batchOrders, cancel*, cancelReplace, query, openOrders, historyOrders, myTrades — test есть только у бессрочных
 //! фьючерсов (POST /openApi/swap/v2/trade/order/test), фьючерсов в проекте нет. Поэтому у BingX — только правила.

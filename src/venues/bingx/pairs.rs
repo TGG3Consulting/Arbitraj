@@ -103,12 +103,21 @@ impl Snapshot {
     }
 }
 
-/// Состояние пары коротко: «нет пары», «status N», «API: покупка да/нет, продажа да/нет». Ошибок нет.
+/// Состояние пары коротко: «нет пары», «status N», «API: покупка да/нет, продажа да/нет» (решение 293: без пределов
+/// количества — с пометкой «без minQty/maxQty», чтобы смена venue.ignore_deprecated_qty была видна в журнале). Ошибок нет.
 fn describe(p: Option<&SpotPairState>) -> String {
     let yn = |b: bool| if b { "да" } else { "нет" };
     match p {
         None => "нет пары".into(),
         Some(p) if !p.online => format!("status {}", p.status),
-        Some(p) => format!("API: покупка {}, продажа {}", yn(p.api_buy), yn(p.api_sell)),
+        Some(p) => {
+            let no_qty = p.min_qty.is_none() && p.max_qty.is_none();
+            format!(
+                "API: покупка {}, продажа {}{}",
+                yn(p.api_buy),
+                yn(p.api_sell),
+                if no_qty { ", без minQty/maxQty" } else { "" }
+            )
+        }
     }
 }

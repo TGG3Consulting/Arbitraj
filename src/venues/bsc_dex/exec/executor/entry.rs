@@ -91,6 +91,8 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 286: iZiSwap / Biswap V3 — направление контракт берёт сам (tokenIn < tokenOut → swapX2Y); данных нет.
+        ExecKind::Izi => Params::Izi,
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

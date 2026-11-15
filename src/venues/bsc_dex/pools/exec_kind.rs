@@ -54,6 +54,9 @@ pub enum ExecKind {
     /// Metric OMM (решение 285): `pool.swap(to, zeroForOne, +вход, предел, «01», «»)` + обратный вызов
     /// `metricOmmSwapCallback`; zeroForOne — в data (порядок токенов пула не по адресу). Только исполнитель v2.
     Metric,
+    /// iZiSwap / Biswap V3 (решение 286): `swapX2Y(to, вход, int24.min, «»)` при tokenIn < tokenOut, иначе
+    /// `swapY2X(to, вход, int24.max, «»)` + обратный вызов swapX2YCallback / swapY2XCallback → _pay. Только исполнитель v2.
+    Izi,
 }
 
 impl ExecKind {
@@ -72,6 +75,7 @@ impl ExecKind {
             ExecKind::Saddle => "SADDLE",
             ExecKind::NomiStable => "NOMI_STABLE",
             ExecKind::Metric => "METRIC",
+            ExecKind::Izi => "IZI",
         }
     }
 }
@@ -106,6 +110,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 285: любой контракт может звать swap пула Metric (проба на цепи — без белого списка у проверенных
         // пулов; пул с белым списком откатит и квотер — лесенки и котировки у него не будет). Шаг 13, только v2.
         "metric_omm" => ExecKind::Metric,
+        // Решение 286: swap любым контрактом (проба на цепи — три фабрики, tests/data/izi_2026-11-15). Шаг 14, только v2.
+        "iziswap" | "biswap_v3" => ExecKind::Izi,
         _ => return None,
     })
 }

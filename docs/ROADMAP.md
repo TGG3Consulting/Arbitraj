@@ -32,6 +32,16 @@
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
 - Решение 282 (t115): src/venues/bsc_dex/node/heads.rs 246 строк (было 237 — сверх ориентира 200 и до правки: +поле stall и вызов шага уведомления); новые node/head_stall.rs (164) и head_stall_text.rs (60) — в пределах 200; тест tests/bsc_dex_head_stall.rs 246 — сверх ориентира (после rustfmt).
+- Решение 286 (iZiSwap / Biswap V3, t118): (а) подписка на NewPool фабрик и поиск пулов по реестру pool(x, y, fee) не
+  подключены — новые пулы только из справочника индексатора (created_log.rs, как Metric); (б) лесенка — только пары с USDT
+  (load_metric_ladder.rs: суммы dex.pmm_ladder_usd в USDT): на странице 1 GeckoTerminal у biswap-v3-1 9 из 20 пулов без
+  USDT (XRP/WBNB, BTCB/WBNB, ETH/BTCB, ETH/WBNB, SOL/WBNB, DOGE/WBNB, ETC/WBNB, BSW/WBNB, WBNB/BUSD) — такие пулы без
+  котировки; своей математики точек iZiSwap (порт SwapMathX2Y/Y2X, точки и лимитные ордера) нет; (в) лесенка каждым
+  блоком — как у Metric (последовательно в per_block::on_head); (г) файлы сверх ориентира 200 строк — pools/load.rs 436
+  (было 421), pools/families.rs 567 (было 545), quote/quoter_calls.rs 413 (было 406), pools/verify.rs 311 (было 304),
+  pools/load_batch.rs 231 (было 230), pools/created_log.rs 320 (было 317), quote/virtual_quoter.rs 225 (было 204),
+  contracts/ArbExecutor.sol 482 (было 470); тест tests/bsc_dex_izi_live.rs — 214 (после rustfmt). Новые файлы кода — в
+  пределах 200.
 - Решение 285 (ревью t117): лесенка Metric — полное перечитывание каждого пула на каждом блоке последовательно в
   per_block::on_head; задержка не мерилась — замер на сервере после выкладки (docs/TASKS.md, решение 285, п. 7).
 - Решение 285 (Metric OMM, t117): файлы сверх ориентира 200 строк — pools/load.rs 421 (было 406), pools/families.rs 545

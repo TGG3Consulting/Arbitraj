@@ -68,6 +68,13 @@ pub fn request(
             format!("{}: Metric сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
         ));
     }
+    // iZiSwap / Biswap V3 (решение 286): официальный квотер в код не подключён — только виртуальный (quoteIzi).
+    if e.family.proto.is_izi() {
+        return Err(ctx.not_set(
+            "dex.quoter_virtual",
+            format!("{}: iZiSwap / Biswap V3 сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
+        ));
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает

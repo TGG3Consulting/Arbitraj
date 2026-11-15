@@ -104,6 +104,8 @@ fn kinds_match_contract_constants() {
         ("NOMI_STABLE", Params::NomiStable),
         // Решение 285: пул Metric OMM — только v2.
         ("METRIC", Params::Metric { zero_for_one: true }),
+        // Решение 286: пул iZiSwap / Biswap V3 — только v2.
+        ("IZI", Params::Izi),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

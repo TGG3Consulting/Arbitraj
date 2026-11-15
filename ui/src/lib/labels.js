@@ -59,6 +59,8 @@ const CHOICE = {
   curve_stableswap_ng: 'Curve StableSwap-NG (plain-пул фабрики NG)',
   nomiswap_stable: 'Nomiswap Stable (стейбл-пара, комиссия со входа)',
   metric_omm: 'Metric OMM (цена провайдера, лесенка ответов пула)',
+  iziswap: 'iZiSwap (точки и лимитные ордера, лесенка ответов пула)',
+  biswap_v3: 'Biswap V3 (форк iZiSwap, лесенка ответов пула)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',

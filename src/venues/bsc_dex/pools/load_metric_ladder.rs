@@ -5,7 +5,8 @@
 //! contracts/VirtualQuoter.sol quoteMetric: пул исполняет свой swap, квотер откатывает всё в metricOmmSwapCallback с
 //! дельтами), пачкой eth_call с подменой кода на одном блоке. Точка, где пул откатил (протухшая цена провайдера,
 //! пауза, белый список расширения) или взял не весь вход (ликвидность кончилась), — край лесенки. Своих формул нет.
-//! Кто вызывает: pools/load_metric.rs.
+//! Решение 286: тот же проход для пулов iZiSwap / Biswap V3 (read_with с quoteIzi — load_izi.rs).
+//! Кто вызывает: pools/load_metric.rs, pools/load_izi.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs, tokens.rs, quote/virtual_quoter.rs, load_woo_ladder.rs (usd), core/types.
 //! Настройки: dex.pmm_ladder_usd [DEX] (не задана — лесенки нет, пул без котировки).
 
@@ -38,6 +39,35 @@ pub async fn read(
     pool_token0: Address,
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
+    let q = Quoter { name: "Metric", func: "quoteMetric", data: virtual_quoter::data_metric };
+    read_with(ctx, tokens, id, pool, coin, quote, usdt, pool_token0, tag, q).await
+}
+
+/// Вызов виртуального квотера для прохода лесенки: имя вида (в тексте ошибок) и вход вызова (пул, zeroForOne в
+/// порядке токенов пула, сумма) — quoteMetric (решение 285) или quoteIzi (решение 286; x2y = вход tokenX).
+#[derive(Clone, Copy)]
+pub struct Quoter {
+    pub name: &'static str,
+    /// Имя функции квотера (в тексте ошибки «ответ не по ABI …»).
+    pub func: &'static str,
+    pub data: fn(Address, bool, U256) -> Bytes,
+}
+
+/// Как read, но с заданным вызовом квотера (решение 286). Принимает: те же аргументы и квотер. Возвращает и ошибки —
+/// как у read.
+#[allow(clippy::too_many_arguments)]
+pub async fn read_with(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    id: &str,
+    pool: Address,
+    coin: Address,
+    quote: Address,
+    usdt: Address,
+    pool_token0: Address,
+    tag: &str,
+    q: Quoter,
+) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let ladder = load_woo_ladder::usd(ctx, id)?;
     if ladder.is_empty() || quote != usdt {
         return Ok((Vec::new(), Vec::new()));
@@ -48,9 +78,9 @@ pub async fn read(
         .iter()
         .filter_map(|v| (*v * unit).trunc().to_u128().map(U256::from))
         .collect();
-    let quote_in = pass(ctx, pool, quote == pool_token0, &amounts, tag).await?;
+    let quote_in = pass(ctx, pool, quote == pool_token0, &amounts, tag, q).await?;
     let base_amounts: Vec<U256> = quote_in.iter().map(|p| p.amount_out).collect();
-    let base_in = pass(ctx, pool, coin == pool_token0, &base_amounts, tag).await?;
+    let base_in = pass(ctx, pool, coin == pool_token0, &base_amounts, tag, q).await?;
     Ok((quote_in, base_in))
 }
 
@@ -63,6 +93,7 @@ async fn pass(
     zero_for_one: bool,
     amounts: &[U256],
     tag: &str,
+    q: Quoter,
 ) -> GatewayResult<Vec<LadderPoint>> {
     if amounts.is_empty() {
         return Ok(Vec::new());
@@ -72,7 +103,7 @@ async fn pass(
     let params: Vec<(&str, Value)> = amounts
         .iter()
         .map(|a| {
-            let data = virtual_quoter::data_metric(pool, zero_for_one, *a);
+            let data = (q.data)(pool, zero_for_one, *a);
             (
                 "eth_call",
                 json!([{ "to": at, "input": data }, tag, { at.to_string(): { "code": code } }]),
@@ -93,7 +124,7 @@ async fn pass(
         let b = serde_json::from_str::<Bytes>(raw.get()).map_err(|e| {
             ctx.err(
                 ErrorCode::BadResponse,
-                format!("квотер Metric: ответ не bytes: {e}"),
+                format!("квотер {}: ответ не bytes: {e}", q.name),
             )
         })?;
         let o = match virtual_quoter::decode(&b, *a) {
@@ -103,7 +134,7 @@ async fn pass(
             None => {
                 return Err(ctx.err(
                     ErrorCode::BadResponse,
-                    "квотер Metric: ответ не по ABI quoteMetric",
+                    format!("квотер {}: ответ не по ABI {}", q.name, q.func),
                 ));
             }
         };

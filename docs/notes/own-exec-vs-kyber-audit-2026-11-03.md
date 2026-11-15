@@ -107,6 +107,8 @@ determined by the KyberSwap Aggregator algorithm»). Страницу специ
      baryon_network, howswap, jswap_bsc, uncain-x;
    - V3-форки, у которых пока нет исполнения (`v3_fork` — только справочник): biswap-v3, biswap-v3-1, squadswap-v3-bsc,
      sushiswap-v3-bsc;
+     (Поправка 15.11.2026, решение 286: biswap-v3 и biswap-v3-1 — не V3-форки, а форк iZiSwap (BiswapPoolV3, факт цепи
+     и Sourcify) — вид `biswap_v3`; iziswap-bsc — вид `iziswap`.)
    - thena-v3 — версия Algebra не установлена, спросить;
    - своей математики или семейства нет: curve-bsc, nomiswap_stable, maverick-v2-bsc, traderjoe-v2-1-bsc,
      iziswap-bsc, kyberswap_classic_bsc;

@@ -92,6 +92,7 @@ pub async fn states(
             || w.family.proto == Proto::WooPP
             || w.family.proto == Proto::Maverick
             || w.family.proto == Proto::MetricOmm
+            || matches!(w.family.proto, Proto::IziSwap | Proto::BiswapV3)
         {
             let r = load::state(
                 ctx,

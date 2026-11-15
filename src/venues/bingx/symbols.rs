@@ -77,11 +77,11 @@ impl Symbols {
     /// неверные значения venue.ignore_deprecated_qty — Warn, symbols_qty::warn_bad). Возвращает: число пар.
     /// Ошибки: связь, ответ BingX, настройки.
     pub async fn refresh(&self, ctx: &Ctx) -> GatewayResult<usize> {
-        // Настройка до сети: не задана venue.quote_asset — без запроса, как раньше.
-        ctx.text("venue.quote_asset")?;
+        // Настройка до сети: не задана venue.quote_asset — без запроса, как раньше; читается один раз.
+        let quote = ctx.text("venue.quote_asset")?;
         let data = rest::public(ctx, "/openApi/spot/v1/common/symbols", vec![]).await?;
         // Решение 293: разбор и загрузка — symbols_qty.rs (пределы по настройке снимаются при чтении).
-        let n = super::symbols_qty::take(ctx, self, &data, Utc::now())?;
+        let n = super::symbols_qty::take_quoted(ctx, self, &data, &quote, Utc::now())?;
         super::symbols_qty::warn_bad(ctx).await;
         Ok(n)
     }

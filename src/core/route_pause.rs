@@ -1,6 +1,7 @@
 //! Файл: core/route_pause.rs
 //! Что делает: пауза направления сделки (signal.route_cooldown_s) — одна функция у двух мест: закрытие сделки (ledger.rs
-//! finish_paused, как было) и решение 293 (ревью) — продажа на БИРЖЕ отклонена (OrderRejected) и сделка ушла человеку
+//! finish_paused, как было) и решение 293 (ревью) — продажа на бирже отклонена (OrderRejected: биржей или правилами
+//! ордера адаптера до отправки) и сделка ушла человеку
 //! (sell_unsent.rs alert → after_reject), только при необязательной stuck.reject_route_pause = да (область — система
 //! или площадка, где отклонена продажа). Не задана или «нет» — как раньше: паузы нет, записей в журнале нет.
 //! Что именно делает пауза (факт кода): ровно одно направление — монета, площадка покупки, площадка продажи сделки
@@ -31,33 +32,50 @@ use super::op_error::OpError;
 pub const REJECT_PAUSE: &str = "stuck.reject_route_pause";
 
 /// Что делает: ставит паузу направления на signal.route_cooldown_s. Принимает: ядро, направление.
-/// Возвращает: ничего. Ошибок нет: настройка не задана или неверна — паузы нет, запись Warn в журнал core.ledger.
-pub(super) async fn pause(core: &Core, d: &Direction) {
+/// Возвращает: на сколько секунд поставлена пауза; None — не поставлена (ledger.rs результат не читает).
+/// Ошибок нет: настройка не задана или неверна — паузы нет, запись Warn в журнал core.ledger.
+pub(super) async fn pause(core: &Core, d: &Direction) -> Option<u64> {
     let deps = &core.inner.deps;
     match deps
         .settings
         .integer("signal.route_cooldown_s", At::default())
     {
-        Ok(s) => lk(&core.inner.signals).cooldown(d, s, Utc::now()),
+        Ok(s) => {
+            lk(&core.inner.signals).cooldown(d, s, Utc::now());
+            Some(s)
+        }
         Err(e) => {
             deps.log(Level::Warn, "core.ledger", None, e.message, None)
-                .await
+                .await;
+            None
         }
     }
 }
 
-/// Что делает: решение 293 (ревью) — продажа отклонена биржей и ушла человеку: пауза направления сделки, если включена
-/// stuck.reject_route_pause. Принимает: ядро, сделку, ошибку продажи. Возвращает: true — пауза поставлена (или
-/// попытка: signal.route_cooldown_s не задана — Warn). Ошибок нет.
+/// Что делает: решение 293 (ревью) — продажа отклонена (биржей или правилами ордера адаптера до отправки) и ушла
+/// человеку: пауза направления сделки, если включена stuck.reject_route_pause; поставлена — запись Info в журнал
+/// core.ledger (монета, направление, секунды). Принимает: ядро, сделку, ошибку продажи. Возвращает: true — пауза
+/// поставлена (или попытка: signal.route_cooldown_s не задана — Warn, без Info). Ошибок нет.
 pub async fn after_reject(core: &Core, deal: &Deal, e: &OpError) -> bool {
     if !rejected_on_cex(core, deal, e) || !enabled(core, &deal.at.0) {
         return false;
     }
-    pause(core, &deal.direction).await;
+    let d = &deal.direction;
+    if let Some(secs) = pause(core, d).await {
+        let m = format!(
+            "{}: пауза направления {} {} → {} на {secs} с — продажа на {} отклонена (stuck.reject_route_pause, решение 293)",
+            deal.id, d.asset.ticker, d.buy_on.0, d.sell_on.0, deal.at.0
+        );
+        core.inner
+            .deps
+            .log(Level::Info, "core.ledger", Some(&deal.at.0), m, None)
+            .await;
+    }
     true
 }
 
-/// Что делает: продажа отклонена биржей — OrderRejected, монеты сделки на площадке вида «биржа» (Cex).
+/// Что делает: продажа отклонена — OrderRejected (ответ биржи или правила ордера адаптера до отправки, например
+/// venues/bingx/order_rules.rs ready), монеты сделки на площадке вида «биржа» (Cex).
 /// Принимает: ядро, сделку, ошибку. Возвращает: да/нет. Ошибок нет (площадки нет в реестре — нет).
 pub fn rejected_on_cex(core: &Core, deal: &Deal, e: &OpError) -> bool {
     e.code == Some(ErrorCode::OrderRejected)

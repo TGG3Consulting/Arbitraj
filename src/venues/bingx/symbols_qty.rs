@@ -5,7 +5,8 @@
 //! settings/scope.rs coin_id): адрес контракта BSC строчными; адрес берётся из монеты запроса ядра (Asset.bsc_contract:
 //! ордер — TradeRequest.asset, состояние пары — монеты подписки). Адреса у монеты нет — значение монеты не
 //! применяется, действует значение площадки. Старое значение по тикеру («coin:SHOPINX») читается только после
-//! переноса на адрес (core/coin_scope_migrate.rs) или через тикеры-синонимы адреса (settings/store.rs resolve).
+//! переноса на адрес (core/coin_scope_migrate.rs): тикеры-синонимы адреса settings/store.rs resolve применяет только
+//! для coin.blocked = да, у этой настройки старое значение по тикеру без переноса не действует.
 //! «Да» у пары — её правила без пределов количества (min_qty, max_qty = None); остаются minNotional / maxNotional,
 //! шаги, статус, apiStateBuy / apiStateSell. Справочник хранится как ответил BingX; пределы снимаются при чтении:
 //! Symbols::get_for — правила ордера (order_rules.rs: лимитный ордер, рыночная продажа market_sell.rs, проверка без
@@ -104,13 +105,26 @@ impl Symbols {
     }
 }
 
-/// Что делает: разбирает ответ «Spot trading symbols» (поле data) и ставит справочник в память с временем получения;
-/// запоминает хранилище настроек для state_for. Тот же путь у Symbols::refresh и у тестов на записанном ответе.
+/// Что делает: читает venue.quote_asset и разбирает ответ (take_quoted). Для тестов на записанном ответе.
 /// Принимает: окружение, справочник пар, data ответа, время получения. Возвращает: число пар.
 /// Ошибки: NotConfigured (venue.quote_asset), BadResponse (формат ответа).
 pub fn take(ctx: &Ctx, symbols: &Symbols, data: &Value, at: DateTime<Utc>) -> GatewayResult<usize> {
     let quote = ctx.text("venue.quote_asset")?;
-    let map = parse_list(data, &quote)?;
+    take_quoted(ctx, symbols, data, &quote, at)
+}
+
+/// Что делает: разбирает ответ «Spot trading symbols» (поле data) по котируемой монете и ставит справочник в память с
+/// временем получения; запоминает хранилище настроек для state_for. Вызывает Symbols::refresh (котируемую монету он
+/// прочитал до запроса к сети) и take. Принимает: окружение, справочник пар, data ответа, котируемую монету, время.
+/// Возвращает: число пар. Ошибки: BadResponse (формат ответа).
+pub fn take_quoted(
+    ctx: &Ctx,
+    symbols: &Symbols,
+    data: &Value,
+    quote: &str,
+    at: DateTime<Utc>,
+) -> GatewayResult<usize> {
+    let map = parse_list(data, quote)?;
     let n = map.len();
     symbols.load(map, at);
     *symbols.qty_store.write().unwrap_or_else(|e| e.into_inner()) = Some(ctx.settings.clone());

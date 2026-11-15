@@ -6,7 +6,7 @@
 //! локальная проверка при «да → нет»). Путь: sell_unsent::decide = Retry::No → alert → сделка ждёт человека.
 //! 1) stuck.reject_route_pause не задана — как на 52ca0c10: паузы нет и записей core.ledger нет (и при заданной
 //!    signal.route_cooldown_s); «да» у системы и «нет» у площадки — паузы нет (площадка сильнее);
-//! 2) «да» — пауза ровно одного направления сделки (DEX → BingX, SHOPINX): на ценах, где до отказа был «кандидат»,
+//! 2) «да» — пауза ровно одного направления сделки (DEX → BingX, SHOPINX) и одна запись Info core.ledger о ней: на ценах, где до отказа был «кандидат»,
 //!    фильтр сигнала даёт Cooldown (новая сделка — только из Candidate, core/evaluate.rs); обратное — не на паузе;
 //! 3) «да», а signal.route_cooldown_s не задана — паузы нет, Warn в журнале core.ledger (как ledger::finish_paused);
 //! 4) rejected_on_cex: площадки нет в реестре — нет; площадка вида DEX — нет; BingX — да.
@@ -47,6 +47,8 @@ use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
 const DATA: &str = "tests/data/bingx_minqty_2026-11-15";
+/// Количество продажи — задано тестом: меньше записанного minQty 57505 SHOPINX-USDT (не данные биржи).
+const QTY: &str = "11000";
 
 fn d(s: &str) -> Decimal {
     Decimal::from_str(s).unwrap()
@@ -100,8 +102,9 @@ async fn start(p: &Path) -> (Core, Store, Journal, String) {
         venue: VenueId("bingx".into()),
         asset: asset(),
         side: Side::Sell,
-        qty: d("11000"),
-        worst_price: d("0.00870"),
+        qty: d(QTY),
+        // Записанный bid bookTicker SHOPINX-USDT 15.11 (tests/data/bingx_minqty_2026-11-15).
+        worst_price: bingx_293_common::bid("SHOPINX-USDT"),
         deal_id: "t293".into(),
         route: None,
         exit_position: true,
@@ -157,7 +160,7 @@ fn deal(at: &str) -> Deal {
         Decimal::ZERO,
     );
     x.at = VenueId(at.into());
-    x.qty = d("11000");
+    x.qty = d(QTY);
     x.step = Step::Selling;
     x
 }
@@ -251,7 +254,7 @@ async fn not_set_is_as_before() {
 #[tokio::test]
 async fn yes_pauses_one_direction() {
     let p = dir("pause");
-    let (core, s, _, why) = start(&p).await;
+    let (core, s, journal, why) = start(&p).await;
     assert!(why.contains("minQty 57505"), "{why}");
     put(&s, "signal.route_cooldown_s", Scope::Global, json!(600)).await;
     put(
@@ -265,6 +268,22 @@ async fn yes_pauses_one_direction() {
     assert_eq!(state(&core, &dir), State::Candidate);
     assert_eq!(reject_and_alert(&core, &why).await.step, Step::WaitingHuman);
     assert!(matches!(state(&core, &dir), State::Cooldown { .. }));
+    // Пауза поставлена — одна запись Info в журнале core.ledger: монета, направление, секунды.
+    let log = journal.list(500, None).await.unwrap();
+    let info: Vec<_> = log
+        .iter()
+        .filter(|j| {
+            j.kind == "core.ledger"
+                && j.level == Level::Info
+                && j.message.contains("пауза направления")
+        })
+        .collect();
+    assert_eq!(info.len(), 1);
+    assert!(
+        info[0].message.contains("SHOPINX bsc_dex → bingx на 600 с"),
+        "{}",
+        info[0].message
+    );
     // Обратное направление (BingX → DEX) не на паузе.
     let back = Direction {
         asset: asset(),

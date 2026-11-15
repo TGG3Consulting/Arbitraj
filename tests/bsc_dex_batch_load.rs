@@ -16,6 +16,8 @@
 //! (настоящая SQLite во временной папке). Настройки теста — значения записи (dex.tick_words = 2, адреса TickLens
 //! и StateView — официальные страницы адресов, research/flow/bsc_dex.md и bsc_v4.md).
 
+mod golden_common;
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -299,6 +301,21 @@ async fn batch_stages_match_recorded_calls_and_single_answers() {
         n += check_aggregates(&list, k, &calls, &single, 200);
     }
     assert_eq!(n, 58 + 115 + 879);
+    // Решение 295, шаг 0: эталонный снимок разобранных состояний и карт тиков парных пулов (до правки многомонетных).
+    let mut snap = Vec::new();
+    for (i, w) in wants.iter().enumerate() {
+        let head = match &heads[i] {
+            PoolStateTick::V2(s) => format!("V2 {s:?}"),
+            PoolStateTick::Ticked(s, t) => format!("Ticked {t} {s:?}"),
+        };
+        let map = match w.family.kind {
+            arb::core::types::PoolKind::V3 => format!("{:?}", v23::v3_ticks(&a2[i]).unwrap()),
+            arb::core::types::PoolKind::Cl => format!("{:?}", t3::tick_data(w, &set[i], &a3[i]).unwrap()),
+            _ => "-".into(),
+        };
+        snap.push(format!("{:?} {} {head} ticks={map}", w.reference, w.family.id));
+    }
+    golden_common::check("batch_load_2026-10-25", &golden_common::sorted(snap));
 }
 
 #[test]

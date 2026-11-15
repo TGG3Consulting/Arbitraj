@@ -7,13 +7,17 @@
 //! eth_blockNumber в час и тысячи соединений.
 //! Кто вызывает: pools/created.rs (новые пулы), pools/history_v4.rs (пулы V4 по мере загрузки истории).
 //! От чего зависит: listen.rs, session.rs (канал пачки), market.rs (виды), created.rs (Watch), node/subs.rs.
+//! Решение 295 (ревью): поздняя пара многомонетного пула идёт в открытую пачку, где уже есть её контракт, пока там есть
+//! место; пачки, открытые при старте подписки (market.rs), канала новых пулов не имеют — пара их контракта, найденная
+//! позже, идёт в позднюю пачку (два слушателя одного адреса, каждый перечитывает свои пары — listen_site.rs).
 //! Настройки: dex.pools_per_sub [bsc_dex].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc;
 
+use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
@@ -28,6 +32,9 @@ pub struct Open {
     tx: mpsc::UnboundedSender<Vec<(Found, String)>>,
     count: usize,
     seq: usize,
+    /// Решение 295 (ревью, 2): контракты пар многомонетных пулов (PoolRef::Multi) в пачке — поздняя пара того же
+    /// контракта идёт сюда же (одно чтение и одна подписка на контракт), пока есть место.
+    sites: HashSet<PoolRef>,
 }
 
 /// Открытые пачки по ключу вида (batches::by_family). Дешёво клонируется.
@@ -86,6 +93,12 @@ pub fn split(open: Option<usize>, n: usize, per: usize) -> (usize, Vec<usize>) {
 fn place(p: &Pools, w: &Watch, key: &str, family: &str, list: Vec<(Found, String)>, per: usize) {
     let mut late = w.late.lock().unwrap_or_else(|x| x.into_inner());
     let mut rest = list;
+    // Решение 295: пары Multi — сначала пары контрактов открытой пачки (попадут в неё, пока есть место), затем
+    // остальные, сгруппированные по контракту. Без пар Multi порядок прежний.
+    if rest.iter().any(|(f, _)| matches!(f.reference, PoolRef::Multi { .. })) {
+        let open_sites = late.get(key).map(|o| o.sites.clone()).unwrap_or_default();
+        rest = by_site(rest, &open_sites);
+    }
     let open = late.get(key).filter(|o| !o.tx.is_closed()).map(|o| o.count);
     let (into_open, new) = split(open, rest.len(), per);
     if into_open > 0
@@ -93,6 +106,7 @@ fn place(p: &Pools, w: &Watch, key: &str, family: &str, list: Vec<(Found, String
     {
         let part: Vec<_> = rest.drain(..into_open).collect();
         o.count += part.len();
+        o.sites.extend(multi_sites(&part));
         // Сессия пачки кончилась между проверкой и отправкой — пулы уходят в новую пачку ниже.
         if let Err(back) = o.tx.send(part) {
             rest.splice(0..0, back.0);
@@ -116,7 +130,35 @@ fn place(p: &Pools, w: &Watch, key: &str, family: &str, list: Vec<(Found, String
                 tx,
                 count: part.len(),
                 seq,
+                sites: multi_sites(&part),
             },
         );
     }
+}
+
+/// Контракты пар Multi среди пулов (решение 295). Ошибок нет.
+fn multi_sites(list: &[(Found, String)]) -> HashSet<PoolRef> {
+    list.iter()
+        .filter(|(f, _)| matches!(f.reference, PoolRef::Multi { .. }))
+        .map(|(f, _)| f.reference.site())
+        .collect()
+}
+
+/// Порядок поздних пулов с парами Multi (решение 295): сначала пулы, чей контракт уже в открытой пачке, затем
+/// остальные группами по контракту (порядок первого появления). Ошибок нет.
+pub fn by_site(list: Vec<(Found, String)>, open: &HashSet<PoolRef>) -> Vec<(Found, String)> {
+    let mut order: Vec<PoolRef> = Vec::new();
+    let mut by: HashMap<PoolRef, Vec<(Found, String)>> = HashMap::new();
+    for x in list {
+        let site = x.0.reference.site();
+        if !by.contains_key(&site) {
+            order.push(site.clone());
+        }
+        by.entry(site).or_default().push(x);
+    }
+    order.sort_by_key(|s| !open.contains(s));
+    order
+        .into_iter()
+        .flat_map(|s| by.remove(&s).unwrap_or_default())
+        .collect()
 }

@@ -25,6 +25,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_curve_ng::{ICurveNgFactory as F, ICurveNgPool as P};
 use super::discover::{Found, sorted};
+use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 
 /// Вызовов на кандидата: get_coins, is_meta (фабрика), version (пул).
@@ -60,10 +61,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         let answers: Result<Vec<_>, String> = part.into_iter().collect();
         out.push(match answers {
             Err(node) => Verdict::Failed(node),
-            Ok(a) => match decide(c, pool, &versions, &a) {
-                Ok(f) => Verdict::Taken(Box::new(f)),
-                Err(w) => Verdict::Rejected(w),
-            },
+            Ok(a) => judge(ctx, c, pool, &versions, &a),
         });
     }
     out
@@ -149,4 +147,30 @@ pub fn decide(
         key: None,
         hooks: None,
     })
+}
+
+/// Что делает: итог по ответам проверки (без сети): decide и — решение 295 — в режиме dex.multi_pair ссылка с парой и
+/// монеты пула (get_coins) для развёртки. Принимает: окружение, кандидата, пул, версии, ответы. Возвращает: итог.
+/// Ошибок нет.
+pub fn judge(
+    ctx: &Ctx,
+    c: &Candidate,
+    pool: Address,
+    versions: &[String],
+    answers: &[Result<Bytes, String>],
+) -> Verdict {
+    match decide(c, pool, versions, answers) {
+        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &coins(answers)))),
+        Err(w) => Verdict::Rejected(w),
+    }
+}
+
+/// Монеты пула по ответу get_coins фабрики (решение 295, развёртка пар). Принимает: ответы проверки (первый —
+/// get_coins). Возвращает: монеты; ответ не по ABI или нет — пусто. Ошибок нет.
+fn coins(answers: &[Result<Bytes, String>]) -> Vec<Address> {
+    answers
+        .first()
+        .and_then(|a| a.as_ref().ok())
+        .and_then(|b| F::get_coinsCall::abi_decode_returns(b).ok())
+        .unwrap_or_default()
 }

@@ -247,8 +247,12 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
         reserve_usd: None,
     };
     p.ctx.index.with(|s| {
+        // Решение 295: у DEX в режиме dex.multi_pair строки одного пула с разными парами — разные (dir_key); у прочих
+        // ключ — строка пула, как до решения.
+        let key = |x: &IndexedPool| super::multi_pair::dir_key(&s.multi_dex, &x.dex_id, &x.pool, x.base, x.quote);
+        let want = key(&item);
         let list = s.events.entry(c.coin).or_default();
-        if !list.iter().any(|x| x.pool == item.pool) {
+        if !list.iter().any(|x| key(x) == want) {
             list.push(item);
         }
     });

@@ -61,6 +61,54 @@ pub async fn load(
     build(balances, amp, fee, (i0, i1), &decimals, &bad)
 }
 
+/// Решение 295: ответы пула и decimals его монет, прочитанные ОДИН раз для всех пар пула (pools/load_site.rs).
+pub struct Raw {
+    pub pool: Address,
+    /// Ответы calls по порядку.
+    pub got: Vec<Result<Bytes, String>>,
+    /// Индекс A() в ответах (calls).
+    pub tail: usize,
+    /// decimals монет пула по порядку coins.
+    pub decimals: Vec<u8>,
+}
+
+/// Что делает: сетевое чтение пула без пары (решение 295): те же вызовы, что load, и decimals всех монет пула.
+/// Принимает: окружение, токены, пул, блок-тег. Возвращает: Raw. Ошибки: узел, ответов не столько, сколько вызовов,
+/// ответ coins() не по ABI.
+pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> GatewayResult<Raw> {
+    let (calls, tail) = calls(pool);
+    let got = call::try_many(ctx, &calls, tag).await?;
+    if got.len() != calls.len() {
+        let what = format!("StableSwap {pool}: ответов {} из {}", got.len(), calls.len());
+        return Err(ctx.err(ErrorCode::BadResponse, what));
+    }
+    let mut decimals = Vec::new();
+    for k in 0..MAX_COINS {
+        let Some(Ok(c)) = got.get(2 * k) else { break };
+        let coin = call::decode::<IStableSwapV1::coinsCall>(c)?;
+        decimals.push(tokens.decimals(ctx, coin).await?);
+    }
+    Ok(Raw { pool, got, tail, decimals })
+}
+
+/// Что делает: состояние пары из прочитанного (решение 295, без сети) — тот же разбор и сборка, что у load.
+/// Принимает: окружение (текст ошибки), Raw, пару (token0, token1). Ошибки: как у parse / build.
+pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
+    let pool = raw.pool;
+    state_with(raw, pair, &|what: String| ctx.err(ErrorCode::BadResponse, format!("StableSwap {pool}: {what}")))
+}
+
+/// Что делает: state с заданным конструктором ошибки (тесты на записанных ответах — без окружения).
+/// Принимает: Raw, пару, конструктор ошибки. Ошибки: как у parse / build.
+pub fn state_with(
+    raw: &Raw,
+    pair: (Address, Address),
+    bad: &dyn Fn(String) -> GatewayError,
+) -> GatewayResult<PoolState> {
+    let (_, balances, amp, fee, i0, i1) = parse(&raw.got[..raw.tail], &raw.got[raw.tail..], pair, bad)?;
+    build(balances, amp, fee, (i0, i1), &raw.decimals, bad)
+}
+
 /// Разобранные ответы: монеты, балансы, A, fee, индексы пары.
 pub type Parsed = (Vec<Address>, Vec<U256>, U256, U256, u8, u8);
 

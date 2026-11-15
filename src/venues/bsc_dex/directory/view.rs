@@ -4,6 +4,7 @@
 //! итогом адаптера по каждому; пулы, найденные фабриками на своём узле, и итог поиска по фабрикам (решение 121, C3).
 //! Кто вызывает: mod.rs адаптера (pool_directory), tests.
 //! От чего зависит: directory/mod.rs (Directory, Snap, is_relevant, is_native), core/types (directory.rs), ctx.rs.
+//! Решение 295: строки развёртки многомонетных пулов (Snap.multi), ключ строки — pools/multi_pair.rs dir_key.
 //! Настройки: index.api_url, index.network, index.attribution_text, index.attribution_url [bsc_dex].
 
 use crate::core::types::{
@@ -11,6 +12,7 @@ use crate::core::types::{
 };
 
 use super::super::ctx::Ctx;
+use super::super::pools::multi_pair::dir_key;
 use super::gt_parse::IndexedPool;
 use super::{Directory, NATIVE, is_native, is_relevant};
 
@@ -43,14 +45,18 @@ impl Directory {
                 .get(addr)
                 .map(|v| v.as_slice())
                 .unwrap_or_default();
+            // Решение 295: развёрнутые пары многомонетных пулов; ключ строки — с парой у DEX в режиме dex.multi_pair
+            // (multi_pair::dir_key), у прочих — строка пула, как до решения.
+            let from_multi = s.multi.get(addr).map(|v| v.as_slice()).unwrap_or_default();
+            let key = |p: &IndexedPool| dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
             let mut seen = std::collections::HashSet::new();
-            let all = t.pools.iter().chain(from_events).chain(from_factory);
-            for p in all.filter(shown).filter(|p| seen.insert(p.pool.clone())) {
+            let all = t.pools.iter().chain(from_events).chain(from_factory).chain(from_multi);
+            for p in all.filter(shown).filter(|p| seen.insert(key(p))) {
                 let status = if is_native(*addr, p) {
                     DirectoryStatus::Unsupported(NATIVE.into())
                 } else {
                     s.status
-                        .get(&p.pool)
+                        .get(&key(p))
                         .cloned()
                         .unwrap_or(DirectoryStatus::Unchecked)
                 };
@@ -91,7 +97,10 @@ fn factory_view(s: &super::Snap) -> FactoryScan {
         .factory
         .values()
         .flatten()
-        .filter(|p| s.status.get(&p.pool) == Some(&DirectoryStatus::Taken))
+        .filter(|p| {
+            let k = dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
+            s.status.get(&k) == Some(&DirectoryStatus::Taken)
+        })
         .count();
     v
 }

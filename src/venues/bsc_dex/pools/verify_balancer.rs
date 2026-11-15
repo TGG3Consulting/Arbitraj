@@ -26,10 +26,11 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_balancer::{IBalancerFactory as F, IBalancerPool as P, IBalancerVault as V};
 use super::discover::{Found, sorted};
+use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 
 /// Адреса проверки: пул, хранилище, фабрика весовых, фабрика стейблсвапов (может быть не задана).
-type Plan = (Address, Address, Address, Option<Address>);
+pub type Plan = (Address, Address, Address, Option<Address>);
 
 /// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (не задана настройка, пул не прошёл — отказ с
 /// причиной; сбой узла — Failed).
@@ -72,10 +73,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                     second.by_ref().take(second_calls(&p, id).len()).collect();
                 match part.into_iter().collect::<Result<Vec<_>, String>>() {
                     Err(node) => Verdict::Failed(node),
-                    Ok(a) => match decide(c, p, &a) {
-                        Ok(f) => Verdict::Taken(Box::new(f)),
-                        Err(w) => Verdict::Rejected(w),
-                    },
+                    Ok(a) => judge(ctx, c, p, &a),
                 }
             }
         });
@@ -197,4 +195,25 @@ pub fn decide(c: &Candidate, p: Plan, a: &[Result<Bytes, String>]) -> Result<Fou
         key: None,
         hooks: None,
     })
+}
+
+/// Что делает: итог второго прохода (без сети): decide и — решение 295 — в режиме dex.multi_pair ссылка с парой и
+/// токены пула (getPoolTokens) для развёртки. Принимает: окружение, кандидата, план, ответы. Возвращает: итог.
+/// Ошибок нет.
+pub fn judge(ctx: &Ctx, c: &Candidate, p: Plan, answers: &[Result<Bytes, String>]) -> Verdict {
+    match decide(c, p, answers) {
+        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens(answers)))),
+        Err(w) => Verdict::Rejected(w),
+    }
+}
+
+/// Токены пула по ответу getPoolTokens хранилища (решение 295, развёртка пар). Принимает: ответы второго прохода
+/// (второй — getPoolTokens). Возвращает: токены; ответ не по ABI или нет — пусто. Ошибок нет.
+fn tokens(answers: &[Result<Bytes, String>]) -> Vec<Address> {
+    answers
+        .get(1)
+        .and_then(|a| a.as_ref().ok())
+        .and_then(|b| V::getPoolTokensCall::abi_decode_returns(b).ok())
+        .map(|pt| pt.tokens)
+        .unwrap_or_default()
 }

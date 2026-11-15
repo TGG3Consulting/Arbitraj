@@ -43,6 +43,8 @@ pub fn pool(p: &PoolRef) -> String {
         PoolRef::Contract(a) => format!("{a:#x}"),
         PoolRef::Singleton { manager, id } => format!("менеджер {manager:#x}, пул {id:#x}"),
         PoolRef::Member { contract, coin } => format!("{contract:#x} (монета {coin:#x})"),
+        // Решение 295: пара многомонетного пула — контракт и пара.
+        PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x} (пара {token0:#x}/{token1:#x})"),
     }
 }
 

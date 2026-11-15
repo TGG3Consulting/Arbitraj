@@ -8,6 +8,7 @@
 //! поиск непустых бинов последовательный — следующий вызов зависит от ответа предыдущего. KyberSwap Elastic
 //! (решение 81) тоже по одному (load_elastic.rs): обход связного списка тиков — не битмап, под ступени по словам
 //! не ложится.
+//! Решение 295: пары многомонетного пула (PoolRef::Multi) одного контракта — одно чтение на все (load_site.rs).
 //! Кто вызывает: pools/reload.rs (load_many).
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
 //! load_v2v3.rs (word_range), ticks.rs, fee_fresh.rs (решение 281: свежая fee() V3 — в Loaded.fee_pips).
@@ -28,6 +29,7 @@ use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
 use super::fee_fresh::{self, Extras};
 use super::load::{self, Loaded};
+use super::load_site;
 use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
 use super::load_batch_v2v3::{PoolStateTick, head, parse_head, run, v3_ticks, words};
@@ -75,12 +77,25 @@ pub async fn states(
         Err(e) => return wants.iter().map(|_| Err(e.clone())).collect(),
     };
     let mut out: Out = wants.iter().map(|_| None).collect();
+    // Решение 295: пары многомонетного пула (PoolRef::Multi) — одно чтение на контракт для всех его пар в пачке
+    // (load_site.rs); остальные ссылки сюда не попадают (группы пусты — чтение прежнее).
+    for (contract, idx) in load_site::groups(wants) {
+        let w0 = &wants[idx[0]];
+        let pairs: Vec<(Address, Address)> = idx.iter().map(|&i| (wants[i].token0, wants[i].token1)).collect();
+        let got = load_site::states(ctx, tokens, w0.family, contract, &pairs, block).await;
+        for (i, r) in idx.into_iter().zip(got) {
+            out[i] = Some(r);
+        }
+    }
     // Bin, KyberSwap Elastic, DODO PMM, Algebra, Solidly и Slipstream — по одному (см. шапку; у Elastic обход списка
     // тиков не ложится на ступени по словам, у DODO чтение кривой — свой набор вызовов, у Algebra сырой битмап tickTable
     // индексирует сам тик — не компрессированные слова V3/CL; у Solidly свой Pair-интерфейс (metadata + getFee фабрики);
     // у Slipstream — форк Uni V3, но slot0 без feeProtocol и тики прямыми геттерами tickBitmap/ticks, а не через
     // TickLens, как ступени V3; под общие ступени V2/V3 не ложится; load_slipstream.rs).
     for (i, w) in wants.iter().enumerate() {
+        if out[i].is_some() {
+            continue;
+        }
         if w.family.kind == PoolKind::Bin
             || w.family.proto == Proto::KyberElastic
             || w.family.proto.is_dodo()

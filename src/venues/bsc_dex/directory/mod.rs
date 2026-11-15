@@ -63,6 +63,7 @@ pub struct Snap {
     /// Отказы, уже записанные в журнал (пул и причина) — каждый один раз.
     pub logged: HashSet<String>,
     /// Пулы, исключённые проверкой «кто меняет» (Universal Router меняет в другом пуле, check/emitter.rs): причина.
+    /// Ключ — физический пул `PoolRef::site()` (решение 295; у парных пулов — сама ссылка).
     pub banned: HashMap<PoolRef, String>,
     /// Пулы из событий создания (не от индексатора) по монете — тоже в справочнике и в проверке (pools/index.rs).
     pub events: HashMap<Address, Vec<IndexedPool>>,
@@ -74,6 +75,13 @@ pub struct Snap {
     /// DEX индексатора с пулами, но не подключённые — для одной записи журнала на смену списка.
     pub unconnected: BTreeSet<String>,
     pub error: Option<String>,
+    /// Решение 295: DEX в режиме dex.multi_pair = да на последнем проходе take (ключи строк справочника — с парой,
+    /// multi_pair::dir_key). Пусто — режим нигде не включён: ключи — строка пула, как до решения.
+    pub multi_dex: HashSet<String>,
+    /// Решение 295: монеты многомонетного пула (строка адреса пула → монеты), запомненные его проверкой в режиме.
+    pub pool_tokens: HashMap<String, Vec<Address>>,
+    /// Решение 295: развёрнутые пары многомонетных пулов по монете (multi_pair::expand) — источник справочника.
+    pub multi: HashMap<Address, Vec<IndexedPool>>,
 }
 
 /// Справочник пулов. Дешёво клонируется.
@@ -96,32 +104,50 @@ impl Directory {
             .read()
             .unwrap_or_else(|p| p.into_inner())
             .banned
-            .get(r)
+            .get(&r.site())
             .cloned()
     }
 
     /// Исключить пул: Universal Router его DEX меняет в другом пуле (check/emitter.rs). Пул снимается со «взятых»,
     /// в справочнике — «отклонён» с причиной. Возвращает: true — исключён впервые (для одной записи журнала).
+    /// Решение 295 (ревью, 6): запрет — по физическому пулу (`PoolRef::site`): у пары многомонетного пула он действует
+    /// на все пары контракта и на форму ссылки после смены dex.multi_pair; у прочих ссылок site() = ссылка — ключ прежний.
     pub fn ban(&self, r: &PoolRef, why: &str) -> bool {
         self.with(|s| {
             let key = pool_key(r);
             s.taken.remove(&key);
             s.status
                 .insert(key, DirectoryStatus::Rejected(why.to_string()));
-            s.banned.insert(r.clone(), why.to_string()).is_none()
+            // Остальные взятые пары того же контракта (только у Multi; у прочих ссылок таких нет).
+            if matches!(r, PoolRef::Multi { .. }) {
+                let site = r.site();
+                let same: Vec<String> = s
+                    .taken
+                    .iter()
+                    .filter(|(_, f)| f.reference.site() == site)
+                    .map(|(k, _)| k.clone())
+                    .collect();
+                for k in same {
+                    s.taken.remove(&k);
+                    s.status.insert(k, DirectoryStatus::Rejected(why.to_string()));
+                }
+            }
+            s.banned.insert(r.site(), why.to_string()).is_none()
         })
     }
 
-    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора, событий создания
-    /// и поиска по фабрикам (решение 121, C3).
+    /// Пулы, которые нужны подписке: пара «монета — USDT / промежуточная» по данным индексатора, событий создания,
+    /// поиска по фабрикам (решение 121, C3) и развёртки многомонетных пулов (решение 295).
     /// Возвращает: (монета, по которой спрашивали, пул). Ошибок нет.
     pub fn relevant(&self) -> Vec<(Address, IndexedPool)> {
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut out = Vec::new();
         let events = s.events.iter().map(|(a, l)| (a, l.as_slice()));
         let factory = s.factory.iter().map(|(a, l)| (a, l.as_slice()));
+        // Решение 295: развёрнутые пары многомонетных пулов (multi_pair::expand) — после прочих источников.
+        let multi = s.multi.iter().map(|(a, l)| (a, l.as_slice()));
         let lists = s.tokens.iter().map(|(a, t)| (a, t.pools.as_slice()));
-        for (token, list) in lists.chain(events).chain(factory) {
+        for (token, list) in lists.chain(events).chain(factory).chain(multi) {
             for p in list {
                 if is_relevant(*token, p, &s.quotes) {
                     out.push((*token, p.clone()));
@@ -139,6 +165,9 @@ pub fn pool_key(r: &PoolRef) -> String {
         PoolRef::Singleton { id, .. } => format!("{id}"),
         // Пара общего контракта (решение 122 F, 3): индексатор и поиск по фабрике пишут адрес общего контракта.
         PoolRef::Member { contract, .. } => format!("{contract:#x}"),
+        // Решение 295: пара многомонетного пула — ключ строки справочника с парой (тот же формат, что
+        // multi_pair::dir_key у DEX в режиме dex.multi_pair).
+        PoolRef::Multi { contract, token0, token1 } => format!("{contract:#x}|{token0:#x}|{token1:#x}"),
     }
 }
 

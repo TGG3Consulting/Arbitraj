@@ -3,6 +3,7 @@
 //! JSON-RPC, частями по dex.load_batch), а не пулом за пулом: вызовы пула — load_balancer::calls (PER_POOL на пул),
 //! разбор — load_balancer::decode; запись в реестр и отправка ядру — как reload::load_one. Пул, чьё неизменяемое ещё не
 //! в памяти (load_balancer_fixed::cached), — обычным путём reload::load_one. Не прочитался — valid = false.
+//! Решение 295: пары многомонетного пула (PoolRef::Multi) — вызовы один раз на адрес пула, разбор — по паре каждой записи.
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_balancer.rs, load_balancer_fixed.rs, load.rs (renewed, Loaded), load_batch.rs (batch),
 //! node/call.rs (try_chunks, block_tag), listen_log.rs, loading (через Pools), reload.rs.
@@ -20,18 +21,26 @@ use super::load_balancer::{self as lb, PER_POOL};
 use super::load_balancer_fixed::{Fixed, cached};
 use super::{listen_log, load_batch, reload};
 
-/// Пул пачки: запись, неизменяемое, хранилище.
-type Item<'a> = (&'a Found, Fixed, Address);
+/// Пул пачки: записи (у пула со своим контрактом — одна; у многомонетного пула в режиме dex.multi_pair — все его пары,
+/// решение 295), неизменяемое, хранилище, адрес пула.
+type Item<'a> = (Vec<&'a Found>, Fixed, Address, Address);
 
-/// Все пулы вида на блоке одной пачкой. Принимает: пулы (с тикерами), номер блока. Ошибки: End — ядро закрыло канал.
+/// Все пулы вида на блоке одной пачкой; вызовы — один раз на адрес пула (у пар одного пула — общие ответы, разбор —
+/// по паре каждой записи). Принимает: пулы (с тикерами), номер блока. Ошибки: End — ядро закрыло канал.
 pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Result<(), End> {
     let mut items: Vec<Item> = Vec::new();
     for (f, t) in pools.iter().copied() {
-        let PoolRef::Contract(a) = f.reference else {
+        let Some(a) = f.reference.own_contract() else {
             continue;
         };
+        if matches!(f.reference, PoolRef::Multi { .. })
+            && let Some(it) = items.iter_mut().find(|it| it.3 == a && matches!(it.0[0].reference, PoolRef::Multi { .. }))
+        {
+            it.0.push(f);
+            continue;
+        }
         match (cached(a), p.ctx.dex_addr("dex.vault", f.family.id)) {
-            (Some(fx), Ok(v)) => items.push((f, fx, v)),
+            (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
             _ => {
                 if reload::load_one(p, f, t, block).await?.is_err() {
                     p.reg.update(&f.reference, |e| e.valid = false);
@@ -44,33 +53,37 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     }
     let calls: Vec<(Address, Bytes)> = items
         .iter()
-        .flat_map(|(f, fx, v)| lb::calls(*v, f.reference.address(), fx))
+        .flat_map(|(_, fx, v, a)| lb::calls(*v, *a, fx))
         .collect();
     let size = load_batch::batch(&p.ctx).unwrap_or(calls.len()).max(1);
     let got = call::try_chunks(&p.ctx, &calls, &call::block_tag(block), size).await;
-    for ((f, fx, _), part) in items.iter().zip(got.chunks(PER_POOL)) {
+    for ((list, fx, _, _), part) in items.iter().zip(got.chunks(PER_POOL)) {
         let answers: Result<Vec<_>, String> = part.iter().cloned().collect();
-        let Some(e) = p.reg.get(&f.reference) else {
-            continue;
-        };
-        let st = answers.and_then(|a| lb::decode(fx, &a, (e.pool.token0, e.pool.token1)));
-        let Ok(state) = st else {
-            p.reg.update(&f.reference, |e| e.valid = false);
-            continue;
-        };
-        let loaded = Loaded {
-            state,
-            ticks: None,
-            bins: None,
-            fee_pips: None,
-        };
-        let e = load::renewed(&e, block, loaded);
-        listen_log::note_refill(p, &e);
-        let pool = e.pool.clone();
-        p.reg.put(e);
-        p.loading.done(&f.reference);
-        p.loading.publish(p).await;
-        listen_log::emit(p, pool)?;
+        for f in list {
+            let Some(e) = p.reg.get(&f.reference) else {
+                continue;
+            };
+            let st = answers
+                .clone()
+                .and_then(|a| lb::decode(fx, &a, (e.pool.token0, e.pool.token1)));
+            let Ok(state) = st else {
+                p.reg.update(&f.reference, |e| e.valid = false);
+                continue;
+            };
+            let loaded = Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            };
+            let e = load::renewed(&e, block, loaded);
+            listen_log::note_refill(p, &e);
+            let pool = e.pool.clone();
+            p.reg.put(e);
+            p.loading.done(&f.reference);
+            p.loading.publish(p).await;
+            listen_log::emit(p, pool)?;
+        }
     }
     Ok(())
 }

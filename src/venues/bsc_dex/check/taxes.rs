@@ -146,6 +146,8 @@ async fn run(
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
             PoolRef::Member { contract, .. } => Some(contract),
+            // Решение 295: пара многомонетного пула — исключается контракт пула.
+            PoolRef::Multi { contract, .. } => Some(contract),
             PoolRef::Singleton { .. } => None,
         };
         // Пул с промежуточной монетой (решение 52): сумма пробы — в ней, по живому пулу «промежуточная — USDT».

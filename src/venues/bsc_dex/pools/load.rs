@@ -82,10 +82,11 @@ pub async fn state(
     }
     // StableSwap (Ellipsis; решение 122 F): вид ядра StableSwap, пул — отдельный контракт, чтение своё (load_curve.rs):
     // coins/balances/A/fee одним Multicall3 + decimals монет. Карт тиков/бинов нет.
+    // Решение 295: и пара многомонетного пула (PoolRef::Multi) — тот же контракт, состояние этой пары.
     if f.proto == Proto::CurveStable {
-        if let PoolRef::Contract(a) = reference {
+        if let Some(a) = reference.own_contract() {
             return Ok(Loaded {
-                state: load_curve::load(ctx, tokens, *a, pair, &tag).await?,
+                state: load_curve::load(ctx, tokens, a, pair, &tag).await?,
                 ticks: None,
                 bins: None,
                 fee_pips: None,
@@ -98,9 +99,9 @@ pub async fn state(
     }
     // Curve StableSwap-NG (решение 275): вид ядра StableSwap, пул — отдельный контракт, чтение своё (load_curve_ng.rs).
     if f.proto == Proto::CurveNg {
-        if let PoolRef::Contract(a) = reference {
+        if let Some(a) = reference.own_contract() {
             return Ok(Loaded {
-                state: load_curve_ng::load(ctx, *a, pair, &tag).await?,
+                state: load_curve_ng::load(ctx, a, pair, &tag).await?,
                 ticks: None,
                 bins: None,
                 fee_pips: None,
@@ -155,11 +156,12 @@ pub async fn state(
     }
     // Balancer V2 (решение 289): вид ядра VaultPool, пул — отдельный контракт, токены — в хранилище (load_balancer.rs).
     if f.proto == Proto::BalancerV2 {
-        let PoolRef::Contract(a) = reference else {
+        // Решение 295: и пара многомонетного пула (PoolRef::Multi).
+        let Some(a) = reference.own_contract() else {
             return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Balancer не того вида", f.title)));
         };
         return Ok(Loaded {
-            state: load_balancer::load(ctx, f, *a, pair, &tag).await?,
+            state: load_balancer::load(ctx, f, a, pair, &tag).await?,
             ticks: None,
             bins: None,
             fee_pips: None,
@@ -209,8 +211,12 @@ pub async fn state(
     );
     if stable || f.proto == Proto::WooPP {
         let state = match (f.proto, reference) {
-            (Proto::SaddleStable, PoolRef::Contract(a)) => {
+            // Решение 295: Saddle и PancakeSwap — и пара многомонетного пула (PoolRef::Multi); Lista — только Contract.
+            (Proto::SaddleStable, PoolRef::Contract(a) | PoolRef::Multi { contract: a, .. }) => {
                 load_saddle::load(ctx, tokens, *a, pair, &tag).await?
+            }
+            (Proto::PancakeStable, PoolRef::Multi { contract, .. }) => {
+                load_stable_u::load(ctx, tokens, *contract, pair, false, &tag).await?
             }
             (Proto::PancakeStable | Proto::ListaStable, PoolRef::Contract(a)) => {
                 load_stable_u::load(ctx, tokens, *a, pair, f.proto == Proto::ListaStable, &tag)

@@ -5,6 +5,7 @@
 //! Не прочитавшийся пул перечитывается на новых блоках (reload.rs); брошенный (попытки исчерпаны) — снова, когда
 //! задали настройку, из-за которой он не прочитался (revive.rs, решения 61, 63). Смена порога или полосы глубины —
 //! пересчёт вердикта пулов сразу (depth_sync.rs). Связь с узлом WS — pools/link.rs.
+//! Решение 295: лог контракта пар многомонетного пула (PoolRef::Multi) — listen_site.rs (одна перечитка на контракт).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
 //! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd).
@@ -24,7 +25,7 @@ use super::events;
 use super::group::{self, Group, Msg};
 use super::listen::{End, Pools};
 use super::revive;
-use super::{link, listen_log, per_block, reload};
+use super::{link, listen_log, listen_site, per_block, reload};
 
 /// Канал пулов, найденных после старта пачки.
 pub type Adds = mpsc::UnboundedReceiver<Vec<(Found, String)>>;
@@ -190,6 +191,10 @@ async fn on_log(
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())));
     let Some(&i) = found else {
+        // Решение 295: пары многомонетного пула (PoolRef::Multi) — одна перечитка всех пар контракта (listen_site.rs).
+        if listen_site::on_log(p, g, m, log).await? {
+            return Ok(());
+        }
         // Пары общего контракта (WooFi, PoolRef::Member): лог от адреса контракта — перечитать все его пары.
         per_block::on_member_log(p, &m.pools, log).await?;
         return Ok(());

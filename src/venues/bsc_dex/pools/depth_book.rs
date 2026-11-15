@@ -234,5 +234,7 @@ pub fn label(r: &PoolRef) -> String {
         PoolRef::Contract(a) => a.to_string(),
         PoolRef::Singleton { id, .. } => id.to_string(),
         PoolRef::Member { contract, coin } => format!("{contract}/{coin}"),
+        // Решение 295: пара многомонетного пула — контракт и пара.
+        PoolRef::Multi { contract, token0, token1 } => format!("{contract}/{token0}/{token1}"),
     }
 }

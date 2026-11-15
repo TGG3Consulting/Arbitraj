@@ -190,6 +190,20 @@ pub enum Proto {
 }
 
 impl Proto {
+    /// Многомонетный вид (решение 295): пул держит 2..8 монет в одном контракте и может дать боту несколько пар —
+    /// Curve 2020 (Ellipsis), Curve StableSwap-NG, Balancer V2, Saddle (Nerve), PancakeSwap StableSwap. Lista (форк
+    /// TwoPool), Infinity Stable (N_COINS = 2) и Nomiswap Stable (пара) — не входят. Ошибок нет.
+    pub fn is_multi_coin(self) -> bool {
+        matches!(
+            self,
+            Proto::CurveStable
+                | Proto::CurveNg
+                | Proto::BalancerV2
+                | Proto::SaddleStable
+                | Proto::PancakeStable
+        )
+    }
+
     /// Семейство StableSwap (все шаблоны: Curve 2020 Ellipsis, PancakeSwap, Lista, Saddle, NG, Nomiswap). Ошибок нет.
     pub fn is_stable(self) -> bool {
         matches!(

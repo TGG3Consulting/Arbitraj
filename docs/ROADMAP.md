@@ -44,7 +44,17 @@
   после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
   squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
 - Решение 282 (t115): src/venues/bsc_dex/node/heads.rs 246 строк (было 237 — сверх ориентира 200 и до правки: +поле stall и вызов шага уведомления); новые node/head_stall.rs (164) и head_stall_text.rs (60) — в пределах 200; тест tests/bsc_dex_head_stall.rs 246 — сверх ориентира (после rustfmt).
-- Ревью 289 (Balancer V2): (а) пул с 3–6 токенами даёт в графе одну пару — справочник берёт у пула пару base/quote
+- Решение 295 (t126, все пары многомонетного пула): файлы сверх ориентира 200 строк (`wc -l` до → после): pools/load_saddle.rs
+  182 → 230 (read / state для одного чтения на пул), pools/load_stable_u.rs 190 → 261 (тело load разделено на части
+  answers / head / indices / rates / finish, порядок шагов прежний), pools/load_batch.rs 235 → 250, pools/stable_list.rs
+  211 → 222, pools/verify_balancer.rs 200 → 213, pools/verify_stable_u.rs 214 → 218, pools/families.rs 619 → 633,
+  pools/load.rs 481 → 487, pools/created_log.rs 342 → 346, pools/factory_scan.rs 216 → 220, pools/session.rs 237 → 242,
+  quote/route_paths.rs 241 → 266, quote/route_best.rs 235 → 249, quote/graph_seq.rs 200 → 204, quote/graph_split.rs
+  261 → 263, quote/quoter_calls.rs 441 → 443, core/types/pool.rs 395 → 427. Новые файлы кода и тестов — в пределах
+  200 (multi_pair.rs, load_site.rs, listen_site.rs, index_pass.rs; tests/bsc_dex_multi_pair*.rs). Дробить: read / state
+  загрузчиков — в load_site.rs (с Raw), части load_stable_u — в load_stable_u_parts.rs.
+- Ревью 289 (Balancer V2): (а) ~~пул с 3–6 токенами даёт в графе одну пару~~ — закрыто решением 295 (`dex.multi_pair`);
+  было: пул с 3–6 токенами даёт в графе одну пару — справочник берёт у пула пару base/quote
   индексатора и один кандидат на адрес (pools/index.rs L78), реестр — одна запись на ссылку (registry_index.rs L89-L95);
   все пары — только сменой общего ключа справочника/реестра (своя ссылка «пул + пара» для VaultPool и чтение пула один раз
   на блок на пул) — отдельная задача; (б) память неизменяемого пула FIXED (load_balancer_fixed.rs) живёт до перезапуска,

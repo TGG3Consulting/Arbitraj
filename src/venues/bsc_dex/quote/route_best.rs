@@ -16,6 +16,7 @@
 //!
 //! Дальше — прежний сплит (quote/graph_split.rs) и прежняя сборка котировки: деньги и исполнение не меняются.
 //! Не задана dex.route_search_max_paths — ТОЧНО как раньше (первые dex.route_max_paths путей обхода, без отбора).
+//! Решение 295: один многомонетный пул (PoolRef::site) — не больше одного шага пути (как route_paths.rs).
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs (RoutePath, Step), quote/graph_split.rs (Cand, score, better),
 //! quote/route_calc.rs (eval), quote/pool_tax.rs (coin_keep).
@@ -28,7 +29,7 @@ use std::collections::HashSet;
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Side, TokenTaxes};
+use crate::core::types::{PoolRef, Side, TokenTaxes};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
@@ -36,7 +37,7 @@ use super::super::pools::graph::Graph;
 use super::graph_split::{Cand, better, score};
 use super::pool_tax;
 use super::route_calc;
-use super::route_paths::{RoutePath, Step};
+use super::route_paths::{RoutePath, Step, multi_site};
 
 /// Предел перебора путей (dex.route_search_max_paths). None — не задана: поведение как раньше.
 /// Ошибки: NotConfigured — задана, но не больше нуля.
@@ -73,6 +74,7 @@ pub fn enumerate(
             break;
         }
         let mut visited = HashSet::from([from]);
+        let mut sites = HashSet::new();
         let mut steps = Vec::new();
         let w = Walk {
             graph,
@@ -81,7 +83,7 @@ pub fn enumerate(
             len,
             cap,
         };
-        w.dfs(from, &mut visited, &mut steps, &mut out);
+        w.dfs(from, &mut visited, &mut sites, &mut steps, &mut out);
     }
     out
 }
@@ -97,17 +99,23 @@ struct Walk<'a> {
 
 impl Walk<'_> {
     /// Из `node` (пройдено steps.len() рёбер): последнее ребро — только в цель, внутренние — в разрешённую
-    /// промежуточную, где ещё не были. Ошибок нет.
+    /// промежуточную, где ещё не были. Решение 295: другая пара уже пройденного многомонетного пула (`sites`) в путь не
+    /// идёт — как в route_paths::enumerate. Ошибок нет.
     fn dfs(
         &self,
         node: Address,
         visited: &mut HashSet<Address>,
+        sites: &mut HashSet<PoolRef>,
         steps: &mut Vec<Step>,
         out: &mut Vec<RoutePath>,
     ) {
         for edge in self.graph.edges_from(node) {
             if out.len() >= self.cap {
                 return;
+            }
+            let multi = multi_site(&edge.entry.pool.reference);
+            if multi.as_ref().is_some_and(|s| sites.contains(s)) {
+                continue;
             }
             let next = edge.other(node);
             let step = Step {
@@ -126,9 +134,15 @@ impl Walk<'_> {
                 }
             } else if next != self.to && self.allowed.contains(&next) && !visited.contains(&next) {
                 visited.insert(next);
+                if let Some(s) = &multi {
+                    sites.insert(s.clone());
+                }
                 steps.push(step);
-                self.dfs(next, visited, steps, out);
+                self.dfs(next, visited, sites, steps, out);
                 steps.pop();
+                if let Some(s) = &multi {
+                    sites.remove(s);
+                }
                 visited.remove(&next);
             }
         }

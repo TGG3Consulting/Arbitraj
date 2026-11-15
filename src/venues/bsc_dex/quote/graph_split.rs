@@ -17,6 +17,7 @@
 //! него в общем пуле теряют — это входит в отдачу). Путь без общих пулов с открытыми долями считается как раньше
 //! (побайтно). Общий пул вида без расчёта состояния после обмена (quote/pool_after.rs) — вторая доля через него не
 //! открывается. Итоговые доли с общими пулами — пересчёт по порядку на последовательных состояниях.
+//! Решение 295: «общий пул» двух долей — по физическому пулу (PoolRef::site).
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg, eval), quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs (Path),
 //! quote/graph_seq.rs (общие пулы, решение 223).
@@ -186,8 +187,9 @@ fn partners(cands: &[Cand], i: usize) -> bool {
         j != i
             && c.got.is_some()
             && c.legs.iter().any(|a| {
+                // Решение 295: по физическому пулу (site) — пары одного многомонетного пула тоже «общий пул».
                 mine.iter()
-                    .any(|b| a.entry.pool.reference == b.entry.pool.reference)
+                    .any(|b| a.entry.pool.reference.site() == b.entry.pool.reference.site())
             })
     })
 }

@@ -41,11 +41,24 @@ pub async fn load(
     pair: (Address, Address),
     tag: &str,
 ) -> GatewayResult<PoolState> {
+    let (fx, got) = read(ctx, f, pool, tag).await?;
+    decode(&fx, &got, pair)
+        .map_err(|w| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}")))
+}
+
+/// Что делает: сетевое чтение пула без пары (первая половина load; решение 295 — одно чтение на все пары пула,
+/// pools/load_site.rs). Принимает: окружение, вид DEX, пул, блок-тег. Возвращает: неизменяемое пула и ответы calls.
+/// Ошибки: NotConfigured (dex.vault, dex.factory), узел, ответ не по ABI.
+pub async fn read(
+    ctx: &Ctx,
+    f: &Family,
+    pool: Address,
+    tag: &str,
+) -> GatewayResult<(Fixed, Vec<Result<Bytes, String>>)> {
     let vault = ctx.dex_addr("dex.vault", f.id)?;
     let fx = fixed(ctx, f, vault, pool, tag).await?;
     let got = call::try_many(ctx, &calls(vault, pool, &fx), tag).await?;
-    decode(&fx, &got, pair)
-        .map_err(|w| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}")))
+    Ok((fx, got))
 }
 
 /// Вызовы пачки чтения пула (PER_POOL штук, порядок — как разбирает decode). Пауза хранилища — getPausedState Vault

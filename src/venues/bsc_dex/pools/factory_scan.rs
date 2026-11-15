@@ -99,10 +99,14 @@ async fn pass(
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();
         for (coin, list) in found {
+            // Решение 295: у DEX в режиме dex.multi_pair строки одного пула с разными парами — разные (dir_key); у
+            // прочих ключ — строка пула, как до решения.
+            let multi = s.multi_dex.clone();
+            let key = |x: &IndexedPool| super::multi_pair::dir_key(&multi, &x.dex_id, &x.pool, x.base, x.quote);
             let have = s.factory.entry(coin).or_default();
             let before = have.len();
             for p in list {
-                if !have.iter().any(|x| x.pool == p.pool) {
+                if !have.iter().any(|x| key(x) == key(&p)) {
                     have.push(p);
                 }
             }

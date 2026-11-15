@@ -75,6 +75,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_curve_ng.rs` | Проверка пула Curve StableSwap-NG (решение 275): реестр фабрики dex.factory — get_coins(pool) не пуст, is_meta = false, пара среди монет |
 | `verify_metric.rs` | Проверка пула Metric OMM (решение 285): isPool фабрики dex.factory + getImmutables (фабрика, токены пары; порядок токенов пула любой) |
+| `verify_izi.rs` | Проверка пула iZiSwap / Biswap V3 (решение 286): поля пула factory = dex.factory, tokenX / tokenY = пара, fee; реестр фабрики pool(x, y, fee) = пул (uint24 у iZiSwap, uint16 у Biswap V3) |
 | `verify_stable_u.rs` | Проверка пулов PancakeSwap Stable (реестр фабрики V2 getPairInfo/getThreePoolPairInfo или dex.stable_pools), Lista Stable (getPairInfos), Saddle/Nerve (dex.stable_pools) и пар WooFi (общий контракт dex.pmm_pool: quoteToken, wooracle = dex.oracle, реализация = dex.pool_implementation, цена оракула; ссылка PoolRef::Member) — решение 122 F, 3 |
 | `verify_inf_stable.rs` | Проверка пула PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): PoolId → poolIdToPoolKey менеджера, крючок в dex.stable_hooks, флаги beforeSwap + ReturnsDelta, валюты; сборка Found из ключа (ссылка — адрес крючка, ключ — для обмена) |
 | `verify_woo.rs` | Решение по паре WooFi (quoteToken, wooracle = dex.oracle, реализация прокси = dex.pool_implementation, цена оракула) и сборка найденного пула |
@@ -88,6 +89,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_curve_ng.rs` | ABI пула Curve StableSwap-NG v7.0.0 и фабрики NG (curvefi/stableswap-ng 3332cd4): геттеры, get_dy, события с uint256[], get_coins/is_meta |
 | `abi_nomi.rs` | ABI пары Nomiswap Stable (решение 284; Sourcify full match 56/0x1e40…60f1): getReserves, swapFee, getA, множители, getAmountOut(address, uint256) — 0xca706bcf; события Sync/Swap/Mint/Burn (подписи V2), RampA/StopRampA; константы MAX_FEE, A_PRECISION, MAX_LOOP_LIMIT |
 | `abi_metric.rs` | ABI пула Metric OMM и фабрики (решение 285; SDK @nradko/metric-omm-sdk-v1@0.4.5 + селекторы в коде пулов BSC): getImmutables (24 поля), getSellAndBuyPrices, swap, isPool; topic0 событий — из записанных логов |
+| `abi_izi.rs` | ABI пулов iZiSwap и Biswap V3 (решение 286): геттеры пула, реестр фабрики (две подписи), state(), topic0 событий обоих видов (исходник iZiSwap-core@3fe21eba, Sourcify BiswapPoolV3 / BiswapFactoryV3, факт цепи tests/data/izi_2026-11-15) |
 | `abi_stable_u.rs` | ABI PancakeSwap / Lista StableSwap (индексы uint256, is_killed / paused, A с точностью и проверка цены Lista, реестры фабрик, события) — решение 122 F, 3 |
 | `abi_inf_stable.rs` | ABI крючка CLStableSwapHook (verified-код BscScan 0x86c3DC08…): геттеры состояния, get_dy, события TokenExchange / ликвидность / RampA / ApplyNewFee |
 | `abi_saddle.rs` | ABI пула Saddle — Nerve (getToken/getTokenBalance uint8, getAPrecise, swapStorage, paused, calculateSwap, swap с deadline, события) |
@@ -123,7 +125,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_curve_ng.rs` | Состояние пула Curve NG на блоке одним Multicall3: N_COINS, coins/balances, stored_rates, A_precise, fee, offpeg → StableSwap с шаблоном NG |
 | `load_nomi.rs` | Состояние пары Nomiswap Stable на блоке одним Multicall3: token0, getReserves, swapFee, getA, множители → StableSwap шаблона input_fee (решение 284) |
 | `load_metric.rs` | Состояние пула Metric OMM на блоке (решение 285): getImmutables (token0 пула), getSellAndBuyPrices (пригодна ли цена провайдера) → OraclePmm с лесенкой |
-| `load_metric_ladder.rs` | Лесенка ответов пула Metric через виртуальный квотер quoteMetric (решение 285; суммы dex.pmm_ladder_usd, только пары с USDT) |
+| `load_metric_ladder.rs` | Лесенка ответов пула Metric через виртуальный квотер quoteMetric (решение 285; суммы dex.pmm_ladder_usd, только пары с USDT); общий проход read_with — и для iZiSwap (quoteIzi, решение 286) |
+| `load_izi.rs` | Состояние пула iZiSwap / Biswap V3 на блоке (решение 286): tokenX, tokenY, state() (sqrtPrice_96) и лесенка ответов пула через quoteIzi; ядро OraclePmm, pool_token0 = tokenX |
 | `load_stable_u.rs` | Состояние пула PancakeSwap / Lista StableSwap на блоке (у Lista — A по рампе на время блока, проверка цены, пауза) |
 | `load_inf_stable.rs` | Состояние пула Infinity Stable у крючка одним Multicall3: N_COINS, coins, balances, stored_rates (внешние курсы), A_precise, fee, offpeg_fee_multiplier, pool_manager (сверка с dex.pool_manager); откат stored_rates — пул стоит |
 | `stable_native.rs` | Нативный BNB в пулах PancakeSwap Stable / Lista («122 X (нативный BNB в стейблсвапах)»): метка 0xEeee… ↔ обёртка dex.native_wrapped — монеты пула в пару, индекс метки (StableData.native), пара для реестра фабрики; без сети |
@@ -144,6 +147,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_curve_ng.rs` | События Curve NG (решение 275): любое событие пула → перечитать (ещё — каждый блок) |
 | `events_nomi.rs` | События пары Nomiswap Stable (решение 284): любое событие пары → перечитать (ещё — каждый блок: swapFee без события, рампа A) |
 | `events_metric.rs` | События пула Metric OMM (решение 285): topic0 из записанных логов → перечитать (ещё — каждый блок) |
+| `events_izi.rs` | События пулов iZiSwap / Biswap V3 (решение 286): любое известное событие → перечитать пул (ещё — каждым блоком, per_block.rs) |
 | `events_stable_u.rs` | События PancakeSwap / Lista Stable, Saddle, WooFi и крючка Infinity Stable: любое известное → перечитать |
 | `per_block.rs` | Перечитывание Lista Stable и WooFi на каждом новом блоке (оракул без событий пула) и всех пар общего контракта по его логу |
 | `events_maverick.rs` | События Maverick V2 (решение 122 F): PoolSwap / PoolAddLiquidity / PoolRemoveLiquidity / PoolMigrateBinsUpStack / PoolSetVariableFee → перечитывание пула |

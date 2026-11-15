@@ -1,0 +1,13 @@
+{"block":133668333,
+ "virtual_quoter":"contracts/out/VirtualQuoter.bin-runtime решения 286 (quoteIzi 0xc782d469) — eth_call с подменой кода по адресу 0x…00a1; ответы — probe.json quoteIzi_raw",
+ "executor":"eth_call с подменой кода ArbExecutor v2 решения 286 (14 365 байт, sha256 байтов 9f83c75a96164167…) по адресу 0x…0e0e0e, слот 0 = владелец 0x…0b0b, слот 1 = WBNB; вход — баланс исполнителя (amountIn = 0), подмена баланса токена (USDT, USDC, BTCB — слот 1 mapping, WBNB — слот 3)",
+ "execute":[
+  {"dex":"iziswap-bsc","step":"(14, 0x1ce3…29ac, USDT → WBNB, 10000, «»)","balance_in":"100000000000000000000","received":"21217869341805544","quoteIzi_out":"21217869341805544"},
+  {"dex":"iziswap-bsc","step":"(14, 0x1ce3…29ac, WBNB → USDT, 10000, «»)","balance_in":"100000000000000000","received":"43484790984599527609","quoteIzi_out":"43484790984599527609"},
+  {"dex":"biswap-v3","step":"(14, 0x7600…076b, USDT → USDC, 10000, «»)","balance_in":"100000000000000000000","received":"99795471580267878884","quoteIzi_out":"99795471580267878884"},
+  {"dex":"biswap-v3","step":"(14, 0x7600…076b, USDC → USDT, 10000, «»)","balance_in":"100000000000000000000","received":"99832612117375366642","quoteIzi_out":"99832612117375366642"},
+  {"dex":"biswap-v3-1","step":"(14, 0xd647…a61c, USDT → WBNB, 10000, «»)","balance_in":"1000000000000000000000","received":"1677331942960008743","quoteIzi_out":"1677331942960008743"},
+  {"dex":"biswap-v3-1","step":"(14, 0xd647…a61c, WBNB → USDT, 10000, «»)","balance_in":"1000000000000000000","received":"591618104752579645153","quoteIzi_out":"591618104752579645153"},
+  {"dex":"biswap-v3-1","step":"(14, 0xbf2a…9f79, USDT → BTCB, 10000, «»)","balance_in":"1000000000000000000000","received":"14327641555422232","quoteIzi_out":"14327641555422232"},
+  {"dex":"biswap-v3-1","step":"(14, 0xbf2a…9f79, BTCB → USDT, 10000, «»)","balance_in":"10000000000000000","received":"613528391178085877146","quoteIzi_out":"613528391178085877146"},
+  {"dex":"iziswap-bsc","step":"тот же USDT → WBNB видом V3 (1)","revert":"execution reverted (у пула iZiSwap нет swap V3)"}]}

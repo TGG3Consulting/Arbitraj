@@ -44,6 +44,10 @@ contract ArbExecutor {
     // metricOmmSwapCallback; data = abi.encode(bool zeroForOne) — порядок токенов пула не по адресу (бот знает его по
     // getImmutables пула). Неверный флаг — пул спросит другой токен, _pay платит только tokenIn шага → откат.
     uint8 internal constant METRIC = 13;
+    // Решение 286 (только v2): пул iZiSwap / Biswap V3 — swapX2Y(to, сумма, int24.min, «») при tokenIn < tokenOut (tokenX —
+    // меньший адрес, фабрики сортируют пару), иначе swapY2X(to, сумма, int24.max, «»); пределы точек пул сам обрезает до
+    // leftMostPt / rightMostPt. Оплата — swapX2YCallback (x) / swapY2XCallback (y) → _pay. data пусто.
+    uint8 internal constant IZI = 14;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -279,6 +283,11 @@ contract ArbExecutor {
             require(amount <= uint256(uint128(type(int128).max)), "int");
             // Непустые callbackData — как у пробного вызова на цепи (пустые не проверялись).
             IMetricOmmPool(s.pool).swap(to, zf, int128(int256(amount)), zf ? 0 : type(uint128).max, hex"01", "");
+        } else if (k == IZI) {
+            _expect(s.pool, s.tokenIn, amount);
+            require(amount <= type(uint128).max, "int");
+            if (zeroIn) IIziPool(s.pool).swapX2Y(to, uint128(amount), type(int24).min, "");
+            else IIziPool(s.pool).swapY2X(to, uint128(amount), type(int24).max, "");
         } else if (k == ELASTIC) {
             _expect(s.pool, s.tokenIn, amount);
             IElasticPool(s.pool).swap(to, _int(amount), zeroIn, zeroIn ? MIN_PRICE : MAX_PRICE, "");
@@ -403,6 +412,9 @@ contract ArbExecutor {
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     // Решение 285: Metric OMM — тот же _pay (только пул текущего шага, долг ≤ суммы шага, токен входа шага).
     function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
+    // Решение 286: iZiSwap / Biswap V3 — x / y: сколько исполнитель платит (IiZiSwapCallback.sol L19-L39); тот же _pay.
+    function swapX2YCallback(uint256 x, uint256, bytes calldata) external { _pay(_int(x)); }
+    function swapY2XCallback(uint256, uint256 y, bytes calldata) external { _pay(_int(y)); }
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
 

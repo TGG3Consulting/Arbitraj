@@ -91,6 +91,16 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 286: iZiSwap / Biswap V3 — направление контракт берёт сам (tokenIn < tokenOut → swapX2Y); данных нет.
+        // Ревью t118: шаг строится только у прочитанного пула, у которого tokenX = token0 пары записи (load_izi.rs) —
+        // на этом порядке стоит выбор swapX2Y / swapY2X в контракте.
+        ExecKind::Izi => match &e.pool.state {
+            PoolState::OraclePmm(d) if d.pool_token0 == Some(e.pool.token0) => Params::Izi,
+            _ => {
+                let why = format!("{}: у пула iZiSwap не прочитано состояние (tokenX)", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

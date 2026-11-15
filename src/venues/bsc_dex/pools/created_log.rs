@@ -121,6 +121,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Metric OMM (решение 285): событие создания пула фабрики BSC — не установлено (createPool BSC ≠ SDK, исходника
             // нет) — новые пулы приходят из справочника индексатора.
             Proto::MetricOmm => continue,
+            // iZiSwap / Biswap V3 (решение 286): подписка на NewPool фабрики не подключена (техдолг, docs/ROADMAP.md) —
+            // новые пулы приходят из справочника индексатора.
+            Proto::IziSwap | Proto::BiswapV3 => continue,
             // Решение 122 F, 3: PancakeSwap / Lista StableSwap — новые пулы из справочника и поиска по реестру фабрики
             // (getPairInfo / getPairInfos, factory_ask.rs); подписка на NewStableSwapPair — техдолг (docs/ROADMAP.md).
             // Saddle (Nerve) — фабрики нет; WooFi — общий контракт, новые базовые монеты — через поиск по оракулу.

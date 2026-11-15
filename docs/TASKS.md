@@ -84,6 +84,30 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 286 (15.11.2026, ветка t118/exec-izi от 9688044a) — сделано, ждёт приёмки.** iZiSwap и Biswap V3: виды
+  `iziswap` и `biswap_v3`, лесенка ответов пула через виртуальный квотер quoteIzi, шаг исполнителя v2 IZI = 14 (код в сети
+  v2 14 365 байт). **Открыто:**
+  1. Значения настроек (id DEX — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/{id}/pools отдаёт пулы):
+     iziswap-bsc — dex.kind = iziswap, dex.factory = 0x93bb94a0d5269cb437a1f71ff3a77ab753844422;
+     biswap-v3 — dex.kind = biswap_v3, dex.factory = 0x7c3d53606f9c03e7f54abddffc3868e1c5466863;
+     biswap-v3-1 — dex.kind = biswap_v3, dex.factory = 0x4d175f2cfe3e2215c1b55865b07787b751cedd36;
+     у всех трёх: dex.quoter_virtual = да, dex.pmm_ladder_usd = суммы USDT по возрастанию (числа — решение Тиграна; без
+     неё пулы без котировки), dex.pool_enabled = да.
+  2. Пулы без USDT (у biswap-v3-1 на странице 1 GeckoTerminal — 9 из 20: XRP/WBNB, BTCB/WBNB, ETH/BTCB …) — без котировки
+     (лесенка только у пар с USDT); своей математики точек iZiSwap нет (техдолг, docs/ROADMAP.md).
+  3. Biswap V3: скидка комиссии фабрики feeDiscount(пользователь, пул) ≤ 50 % — какой адрес считается «пользователем»,
+     не установлено (модуль обмена не опубликован). Косвенно (не факт): скидка выдаётся адресу и меньшую комиссию
+     означает; факт обмена может оказаться хуже котировки, только если скидка выдана адресу виртуального квотера
+     (котировка тогда завышена). Защита — minOut бандла и сверка перед сделкой.
+  4. Фабрика biswap-v3-1 0x4d17… на Sourcify нет: совпадение с BiswapFactoryV3 — по длине кода, селектору реестра и
+     ответам реестра на записанных пулах (байтового сравнения кода фабрик не делалось).
+  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания 8ae3496b…becde4); сухая
+     сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода, exec_sim.json).
+  6. Ликвидность: iziswap-bsc ≈2,8 тыс. USD, biswap-v3 ≈2,5 тыс. USD, biswap-v3-1 ≈0,31 млн USD (GeckoTerminal 15.11).
+  7. Ревью t118: каждым блоком перечитываются только пулы этих видов с USDT в паре (per_block::each_block; пулы без USDT
+     лесенки не получают никогда — состояние без лесенки = «без котировки», события их перечитывают). После выкладки —
+     замерить на сервере длительность per_block::on_head: на пул с USDT за блок 1–3 + 2N eth_call (N — точек
+     dex.pmm_ladder_usd), пулы по очереди.
 - **Решение 285 (15.11.2026, ветка t117/exec-nomi-metric) — сделано, ждёт приёмки.** Metric OMM: вид `metric_omm`,
   лесенка ответов пула через виртуальный квотер, шаг исполнителя v2 METRIC = 13 (код в сети v2 13 948 байт). **Открыто:**
   1. Значения настроек (id DEX `metric-bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/metric-bsc/pools отдаёт
@@ -109,7 +133,7 @@
   1. Значения настроек (id DEX `nomiswap_stable` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/nomiswap_stable/pools
      отдаёт эти 3 пары, USDT/USDC ≈835 тыс. $): dex.kind = nomiswap_stable,
      dex.factory = 0xc6b7ee49d386bae4fd501f2d2f8d18828f1f6285, dex.pool_enabled = да.
-  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 285 — a1081379…74cbb5) —
+  2. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 286 — 8ae3496b…becde4) —
      до этого пулы Nomiswap Stable только сигнал («исполнитель v1 не знает шаг исполнителя NOMI_STABLE»).
   3. Сухая сделка через исполнитель на живой паре — после выкладки (на цепи проверено только eth_call с подменой кода,
      tests/data/nomiswap_stable_2026-11-15/exec_sim.json).

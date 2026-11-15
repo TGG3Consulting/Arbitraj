@@ -130,3 +130,17 @@ interface IMaverickV2Pool {
     function swap(address recipient, SwapParams memory params, bytes calldata data)
         external returns (uint256 amountIn, uint256 amountOut);
 }
+
+// iZiSwap (решение 286): izumiFinance/iZiSwap-core@3fe21eba contracts/iZiSwapPool.sol L383-L438 (swapY2X / swapX2Y —
+// delegatecall в модуль), contracts/swapX2Y.sol L123-L131 (lowPt = max(lowPt, leftMostPt)), L321-L328 (выход —
+// recipient до обратного вызова; оплата x в swapX2YCallback, проверка balanceX() ≥ bx + amountX), swapY2X.sol
+// L123-L131, L290-L297 (то же для y и swapY2XCallback); interfaces/IiZiSwapCallback.sol L19-L39. Biswap V3
+// (BiswapPoolV3, verified Sourcify exact_match 56/0x76008e4007ab26142dbeafee24d6113de47eb76b, BiswapPoolV3.sol
+// L422-L476): те же селекторы swapX2Y 0x857f812f / swapY2X 0x2c481252 и те же обратные вызовы (проба на цепи
+// tests/data/izi_2026-11-15), но возвращает три значения (amountX, amountY, accFee) — возврат не читается, поэтому
+// в интерфейсе его нет. tokenX < tokenY — фабрики сортируют пару (iZiSwapFactory.sol L101-L104, BiswapFactoryV3.sol
+// L116-L119).
+interface IIziPool {
+    function swapX2Y(address recipient, uint128 amount, int24 lowPt, bytes calldata data) external;
+    function swapY2X(address recipient, uint128 amount, int24 highPt, bytes calldata data) external;
+}

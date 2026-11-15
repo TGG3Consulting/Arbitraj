@@ -146,6 +146,17 @@ pub enum Proto {
     /// перечитывание каждым блоком. Исполнение — шаг METRIC исполнителя v2 (swap + metricOmmSwapCallback). Вид ядра —
     /// OraclePmm.
     MetricOmm,
+    /// iZiSwap (решение 286; iziswap, DEX iziswap-bsc): пул iZiSwapPool (izumiFinance/iZiSwap-core) — дискретные точки
+    /// с ликвидностью и лимитными ордерами, обмен swapX2Y / swapY2X (tokenX < tokenY) + обратные вызовы
+    /// swapX2YCallback / swapY2XCallback. Своей математики точек нет — котировка и глубина по лесенке ответов САМОГО
+    /// пула через виртуальный квотер (quoteIzi; dex.pmm_ladder_usd), как Metric. Проверка — поля пула + реестр фабрики
+    /// pool(x, y, uint24 fee) (verify_izi.rs); новые пулы — из справочника; перечитывание каждым блоком и на события.
+    /// Исполнение — шаг IZI исполнителя v2. Вид ядра — OraclePmm.
+    IziSwap,
+    /// Biswap V3 (решение 286; biswap_v3, DEX biswap-v3 и biswap-v3-1): форк iZiSwap (BiswapPoolV3, Sourcify) — те же
+    /// swapX2Y / swapY2X и обратные вызовы (факт цепи), но реестр фабрики pool(x, y, uint16 fee), иные события (Swap со
+    /// структурами, ChangeFeeVote — голосуемая комиссия) и возврат обмена из трёх значений. Всё прочее — как IziSwap.
+    BiswapV3,
 }
 
 impl Proto {
@@ -171,6 +182,11 @@ impl Proto {
     /// Семейство Solidly (ve(3,3)-форки: Topaz v2 — Solidly, THENA V1 — SolidlyV1). Ошибок нет.
     pub fn is_solidly(self) -> bool {
         matches!(self, Proto::Solidly | Proto::SolidlyV1)
+    }
+
+    /// Семейство iZiSwap (iZiSwap и форк Biswap V3, решение 286). Ошибок нет.
+    pub fn is_izi(self) -> bool {
+        matches!(self, Proto::IziSwap | Proto::BiswapV3)
     }
 }
 
@@ -266,6 +282,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "nomiswap_stable" => (PoolKind::StableSwap, Proto::NomiStable, true, false, false),
         // Metric OMM (решение 285): в графе и сигналах по лесенке ответов пула; исполнение — шаг METRIC (только v2).
         "metric_omm" => (PoolKind::OraclePmm, Proto::MetricOmm, true, false, false),
+        // iZiSwap и Biswap V3 (решение 286): в графе и сигналах по лесенке ответов пула; исполнение — шаг IZI (только v2).
+        "iziswap" => (PoolKind::OraclePmm, Proto::IziSwap, true, false, false),
+        "biswap_v3" => (PoolKind::OraclePmm, Proto::BiswapV3, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -490,6 +509,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Metric OMM (решение 285): фабрика (isPool, getImmutables().factory); квотер — только виртуальный
         // (dex.quoter_virtual = да убирает dex.quoter, как у Algebra Integral): своего квотера в официальном SDK для BSC нет.
         Proto::MetricOmm => list.extend(["dex.factory", "dex.quoter"]),
+        // iZiSwap / Biswap V3 (решение 286): фабрика (factory() пула и реестр pool(x, y, fee)); квотер — только
+        // виртуальный (dex.quoter_virtual = да убирает dex.quoter): официальный квотер в код не подключён.
+        Proto::IziSwap | Proto::BiswapV3 => list.extend(["dex.factory", "dex.quoter"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

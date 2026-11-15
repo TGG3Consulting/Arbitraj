@@ -7,8 +7,8 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — четырнадцати: NOMI_STABLE, решение 284; METRIC, решение 285), обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285), приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `VirtualQuoter.sol` | Решение 186: виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075) |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — пятнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286), обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `VirtualQuoter.sol` | Решение 186: виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле) |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
 | `build.sh` | `npm ci` (solc ровно из `package-lock.json`) + `node build.mjs` |
@@ -38,8 +38,8 @@
   `out/ArbExecutor.abi`) и контракта не могут разойтись по смыслу параметра. Бот читает слот при сверке и сравнивает с
   `dex.native_wrapped`: не совпало — нативный BNB через этот исполнитель не идёт (причина — в «Проверить подключение» и
   на карточке кошелька), ERC-20 путь не затронут. Конструктор v1 — без аргумента: развёрнутые v1 не затрагиваются.
-- **Размер кода в сети v2: 13 948 байт** (решение 285, + шаг METRIC и metricOmmSwapCallback; 13 498 после решения 284,
-  13 296 после задачи t114, 13 285 после ревью 272, 13 134 до него; предел EIP-170 — 24 576, запас 10 628 байт). Код в сети v1 — 11 117 байт (не меняется).
+- **Размер кода в сети v2: 14 365 байт** (решение 286, + шаг IZI и swapX2YCallback / swapY2XCallback; 13 948 после решения 285,
+  13 498 после решения 284, 13 296 после задачи t114, 13 285 после ревью 272, 13 134 до него; предел EIP-170 — 24 576, запас 10 211 байт). Код в сети v1 — 11 117 байт (не меняется).
   Печатает `evmtest/run.mjs` второй строкой.
 
 ## Вызов
@@ -91,6 +91,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | `SADDLE` | 10 | Nerve (форк Saddle) | `approve(pool, сумма)` + `swap(uint8 from, uint8 to, сумма, 0, block.timestamp)`; пул списывает `transferFrom`, вход = сколько дошло (`transferredDx` — налог учтён), выход — исполнителю; затем разрешение = 0 | nerve-finance/contracts@bda7578 `contracts/Swap.sol` L389-L402, `SwapUtils.sol` L800-L850 |
 | `NOMI_STABLE` | 12 | Nomiswap Stable (решение 284; **только v2** — у v1 вида нет, откат «kind») | перевод входа в пару; вход = баланс − резерв; выход = `pair.getAmountOut(tokenIn, вход)` (порядок аргументов обратный SOLIDLY — у пары нет getAmountOut(uint256,address), шаг SOLIDLY по ней откатывается); `pair.swap(out0, out1, to, "")` (подпись V2). Проба на цепи — eth_call с подменой кода v2 (tests/data/nomiswap_stable_2026-11-15/exec_sim.json): получено = getAmountOut пары; EVM — evmtest/nomi.mjs | Sourcify full match 56/0x1e40450f8e21bb68490d7d91ab422888fb3d60f1 `NomiswapStablePair.sol` L132-L176 (swap), L251-L274 (getAmountOut), L276 (getReserves) |
 | `METRIC` | 13 | Metric OMM (решение 285; **только v2**) | `_expect(pool, tokenIn, сумма)` + `pool.swap(to, zeroForOne, +сумма, 0 / uint128.max, «01», «»)` + `metricOmmSwapCallback` → `_pay` (та же проверка, что у V3); data = `abi.encode(bool zeroForOne)` — порядок токенов пула не по адресу (бот берёт token0 из getImmutables); неверный флаг — откат (IncorrectDelta на цепи). Проба на цепи — tests/data/metric_2026-11-15/exec_sim.json; EVM — evmtest/metric.mjs | Исходник BSC не опубликован: ABI SDK npm @nradko/metric-omm-sdk-v1@0.4.5 `src/abis/MetricOmmPool.ts` (swap), `MetricOmmSimpleRouter.ts` (metricOmmSwapCallback); селекторы 0xe24f0884 и 0xc3251075 — в коде пулов BSC |
+| `IZI` | 14 | iZiSwap, Biswap V3 (решение 286; **только v2**) | `_expect(pool, tokenIn, сумма)` + `pool.swapX2Y(to, сумма, int24.min, «»)` при tokenIn < tokenOut (tokenX — меньший адрес, фабрики сортируют пару), иначе `pool.swapY2X(to, сумма, int24.max, «»)` (пределы точек пул обрезает до leftMostPt / rightMostPt) + `swapX2YCallback(x, y, data)` → `_pay(x)` / `swapY2XCallback` → `_pay(y)`; сумма ≤ uint128; data пусто; пул может взять меньше на остаток, которого не хватает на 1 единицу выхода (выход вниз, оплата вверх — tests/data/izi_2026-11-15/source_excerpt.txt; на цепи недобор 296 346 866 wei из 1e20) — остаток уходит владельцу. Проба на цепи — tests/data/izi_2026-11-15/exec_sim.json (3 фабрики, 4 пула, обе стороны); EVM — evmtest/izi.mjs | izumiFinance/iZiSwap-core@3fe21eba `contracts/iZiSwapPool.sol` L383-L438, `swapX2Y.sol` L123-L131, L323-L331, `swapY2X.sol` L290-L297, `interfaces/IiZiSwapCallback.sol` L19-L39; Biswap V3 — Sourcify exact_match 56/0x76008e…076b `BiswapPoolV3.sol` L422-L476 (возврат из 3 значений не читается) |
 | `ELASTIC` | 8 | KyberSwap Elastic | `pool.swap(to, +сумма, isToken0, MIN+1 / MAX−1, "")` + `swapCallback` | KyberNetwork/ks-elastic-sc@4ab08c0a `IPoolActions.sol` L88-L94, `ISwapCallback.sol` L16, `Pool.sol` L328-L366 |
 
 Пределы цены — `TickMath.MIN_SQRT_RATIO + 1` / `MAX_SQRT_RATIO − 1` (те же числа у Uniswap/Pancake V3, Slipstream,
@@ -154,6 +155,6 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 не делегировать; если понадобится — сначала новая версия исполнителя.
 
 ## Техдолг
-`ArbExecutor.sol` — 470 строк (решение 285: + METRIC; решение 284 — 458, + NOMI_STABLE; задача t114 — 452, + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
+`ArbExecutor.sol` — 482 строки (решение 286: + IZI; решение 285 — 470, + METRIC; решение 284 — 458, + NOMI_STABLE; задача t114 — 452, + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
 «native step», учёт по разности балансов): контракт не дробится, пока развёртывание — один файл; запись в
 docs/ROADMAP.md (Техдолг).

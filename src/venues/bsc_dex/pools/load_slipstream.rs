@@ -12,8 +12,8 @@
 //! Кто вызывает: pools/load.rs (и через него pools/load_batch.rs для Slipstream).
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_slipstream.rs, pools/load_cl.rs (set_ticks, i24),
 //! load_v2v3.rs (word_range), ticks.rs.
-//! Настройки: dex.tick_words, dex.depth_band_pct [bsc_dex] (сколько слов битмапа вокруг тика — решение 73, через
-//! word_range).
+//! Настройки: dex.tick_words, dex.depth_band_pct, dex.tick_read_band_pct [bsc_dex] (сколько слов битмапа вокруг тика —
+//! решения 73, 296, через word_range).
 //!
 //! Геттеры — официальный Slipstream velodrome-finance/slipstream (HEAD 193a6b8, решение 23): CLPool.slot0/liquidity
 //! (contracts/core/CLPool.sol#L69-L105), tickBitmap(int16)/ticks(int24) (CLPool.sol#L110-L112). Тик из бита:

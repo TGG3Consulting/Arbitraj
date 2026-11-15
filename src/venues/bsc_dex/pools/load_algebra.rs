@@ -8,7 +8,8 @@
 //! Кто вызывает: pools/load.rs (и через него load_batch.rs для Algebra).
 //! От чего зависит: ctx.rs, node/call.rs (view/view_many, Multicall3 — решение 83), pools/abi_algebra.rs, load_cl.rs
 //! (i24), ticks.rs, core/types (PoolState).
-//! Настройки: dex.tick_words [bsc_dex] (сколько слов сырого битмапа читать в каждую сторону от текущего).
+//! Настройки: dex.tick_words [bsc_dex] (сколько слов сырого битмапа читать в каждую сторону от текущего);
+//! dex.tick_read_band_pct [bsc_dex] (необязательная, решение 296: не меньше слов полосы чтения при шаге сырого битмапа 1).
 //!
 //! Геттеры — @cryptoalgebra/v1.9-core (решение 23): globalState/liquidity/ticks/tickTable — IAlgebraPoolState.sol.
 //! СЫРОЙ битмап (ключевое отличие от V3): TickTable индексирует сам тик — rowNumber = tick >> 8, bitNumber = tick & 0xFF
@@ -30,6 +31,7 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_algebra::IAlgebraPool;
 use super::load_cl::i24;
+use super::load_v2v3::read_band_words;
 use super::ticks::{TickData, TickMap};
 
 /// Состояние и карта тиков пула Algebra на блоке.
@@ -46,7 +48,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
         fee: u32::from(gs.fee),
     };
     // Окно СЫРЫХ слов битмапа вокруг текущего тика: слово тика = tick >> 8 (TickTable.sol), по n = dex.tick_words
-    // в каждую сторону. Полоса цены dex.depth_band_pct для Algebra не разворачивается в число слов (слово сырого
+    // в каждую сторону (решение 296: не меньше слов полосы чтения dex.tick_read_band_pct, если задана). Полоса цены dex.depth_band_pct для Algebra не разворачивается в число слов (слово сырого
     // битмапа = 256 тиков ≈ 2,56% цены — заметно шире компрессированного слова V3): если полоса выйдет за окно,
     // math/swap_algebra вернёт частичный итог (complete = false), и граф занизит глубину в безопасную сторону.
     let (lo, hi) = raw_word_range(ctx, tick)?;
@@ -88,10 +90,14 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
 }
 
 /// Сырые слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16, где w = tick >> 8 (TickTable.sol:
-/// rowNumber = shr(8, tick)), n = dex.tick_words. Для СЫРОГО тика деления на tickSpacing нет. Ошибки: NotConfigured
-/// (dex.tick_words).
+/// rowNumber = shr(8, tick)), n = dex.tick_words. Для СЫРОГО тика деления на tickSpacing нет. Решение 296: n не меньше
+/// слов полосы чтения dex.tick_read_band_pct при шаге 1 (слово сырого битмапа — 256 тиков, как слово V3 при
+/// tickSpacing 1; окно расширяется у всех пулов Algebra независимо от их tickSpacing и может сделать глубину по окну
+/// полнее, если dex.depth_band_pct шире прежнего окна); не задана — n = dex.tick_words, как раньше. Ошибки:
+/// NotConfigured (dex.tick_words).
 pub fn raw_word_range(ctx: &Ctx, tick: i32) -> GatewayResult<(i16, i16)> {
     let n = ctx.int("dex.tick_words")?.min(i16::MAX as u64) as i32;
+    let n = n.max(read_band_words(ctx, 1));
     // tick >> 8 в Rust для i32 — арифметический сдвиг (floor(tick/256)); совпадает с shr(8, tick) EVM после усечения
     // в int16 для диапазона тиков Algebra (±887272): отрицательный тик даёт отрицательное слово.
     let w = tick >> 8;

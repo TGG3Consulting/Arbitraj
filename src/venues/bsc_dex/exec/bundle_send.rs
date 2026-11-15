@@ -14,6 +14,8 @@
 //! тот же первый nonce; очередь НЕ останавливается по таймауту (ревью #82). Отмен у бандла нет.
 //! Этапы шлют уведомления жизненного цикла (exec/bundle_notify.rs, 80.8c-iii, только отображение): симуляция прошла/
 //! откатилась, отправлен (каналы + maxBlockNumber), включён (блок + хеши) / не попал в блок (истёк — очередь свободна).
+//! Решение 299: send.bundle_skip_single = да — одиночные каналы исключаются из этой отправки (send/bundle_pick.rs),
+//! граница газа — по бандловым каналам; исключённые — в журнале (send.bundle_skip_single) и в bundle.sent.
 //! Классику/одиночную отправку не трогает. Решение 271 (дополнение): после отправки и после итога — очистка памяти
 //! разрешений котировки (env.allow, wallet/allow_cache.rs), как exec/txs.rs.
 //! Решение 233: итог не установлен за send.queue_max_wait_s (Pending: узел молчал, квитанции не читались — бандл мог
@@ -24,7 +26,8 @@
 //! От чего зависит: exec/bundle.rs, exec/bundle_sim.rs, exec/bundle_notify.rs, exec/txs.rs (Env), check/{simulate,emitter}.rs,
 //! send/{mod,receipt,settle,track_util}.rs, wallet/nonce.rs, wallet/signer.rs, node/heads.rs, gateway/urgency.rs.
 //! Настройки: send.gas_limit_margin_pct, send.bundle_max_blocks, send.queue_max_wait_s, feed.stale_after_ms [bsc_dex]
-//! (через SendCfg); цена газа — через quote/gas.rs; каналы — channel.* (bundle).
+//! (через SendCfg), send.bundle_skip_single [bsc_dex] (через send/bundle_pick.rs); цена газа — через quote/gas.rs;
+//! каналы — channel.* (bundle).
 
 use std::time::Instant;
 
@@ -33,6 +36,7 @@ use alloy_primitives::{B256, Bytes};
 use crate::core::types::TxOutcome;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency as priority;
+use crate::storage::journal::Level;
 
 use super::super::check::simulate::{self, SimLog};
 use super::super::check::{emitter, sim_base};
@@ -80,7 +84,9 @@ pub async fn send(
 ) -> GatewayResult<Sent> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
-    let ready = send::select(ctx, &env.stats)?;
+    // Решение 299: при send.bundle_skip_single = да — только бандловые каналы (одиночные исключены), иначе все как есть.
+    let picked = send::bundle_pick::pick(ctx, send::select(ctx, &env.stats)?)?;
+    let ready = picked.ready;
     let wallet = slot.from;
     let price = env
         .gas
@@ -122,7 +128,22 @@ pub async fn send(
     let max_block = head.number + cfg.bundle_max;
     let raw: Vec<Bytes> = signed.iter().map(|t| t.raw.clone()).collect();
     let dispatched = send::dispatch_slice(ctx, &env.stats, &ready, &raw, max_block).await?;
-    bundle_notify::sent(&env.stats, ctx, &dispatched.all(), max_block);
+    if !picked.skipped.is_empty() {
+        let text = format!(
+            "бандл отправлен только в бандловые каналы ({}); одиночные исключены (send.bundle_skip_single): {}",
+            dispatched.all().join(", "),
+            picked.skipped.join(", ")
+        );
+        ctx.log(Level::Info, "send.bundle_skip_single", text, None)
+            .await;
+    }
+    bundle_notify::sent(
+        &env.stats,
+        ctx,
+        &dispatched.all(),
+        &picked.skipped,
+        max_block,
+    );
     let hashes: Vec<B256> = signed.iter().map(|t| t.hash).collect();
     // Очередь кошелька: ждёт итога по последнему nonce бандла (решение 45). Отмен нет — приватный бандл истекает.
     let last_nonce = bundle.first_nonce + (signed.len() as u64) - 1;

@@ -102,13 +102,18 @@ pub fn topics(p: Proto) -> Vec<B256> {
     }
 }
 
-/// topic0 изменения ликвидности и комиссии (мелкие пулы, pools/group.rs Topics::Liquidity): всё, кроме Swap и Flash.
-/// Ошибок нет.
+/// topic0 Swap обоих видов и Flash (одна подпись у обоих) — события, не меняющие ликвидность и комиссию.
+const IZI_SWAP: B256 = b256!("0x0fe977d619f8172f7fdbe8bb8928ef80952817d96936509f67d66346bc4cd10f");
+const BISWAP_SWAP: B256 =
+    b256!("0xde449b421e7f751324933a2c4afee2ea35f7c7d2b6bdf310e7a7017b4d67bb91");
+const FLASH: B256 = b256!("0xbdbdb71d7860376ba52b25a5028beea23581364a40522f6bcfb86bb1f2dca633");
+
+/// topic0 изменения ликвидности и комиссии (мелкие пулы, pools/group.rs Topics::Liquidity): всё, кроме Swap и Flash
+/// (отсекаются по значению topic0, ревью t118). Ошибок нет.
 pub fn liquidity_topics(p: Proto) -> Vec<B256> {
-    let all = topics(p);
-    let skip = [all.first().copied(), all.last().copied()];
-    all.into_iter()
-        .filter(|t| !skip.contains(&Some(*t)))
+    topics(p)
+        .into_iter()
+        .filter(|t| ![IZI_SWAP, BISWAP_SWAP, FLASH].contains(t))
         .collect()
 }
 

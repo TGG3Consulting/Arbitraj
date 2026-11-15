@@ -5,7 +5,7 @@
 //   L290-L297; IiZiSwapCallback.sol L19-L39): swapX2Y(recipient, amount, lowPt, data) / swapY2X(recipient, amount,
 //   highPt, data); выход переводится получателю, затем у вызывающего swapX2YCallback(x, y, data) (платить x) /
 //   swapY2XCallback(x, y, data) (платить y); проверка «баланс входа вырос на долг» (XE / YE). Курс 1:1, но пул берёт
-//   amount − 1 (как остаток округления точек у настоящего пула на цепи). tokenX < tokenY. В сети не разворачивается.
+//   amount − 1 (настоящий пул берёт меньше на остаток, которого не хватает на 1 единицу выхода — tests/data/izi_2026-11-15/source_excerpt.txt). tokenX < tokenY. В сети не разворачивается.
 // Кто вызывает: contracts/evmtest/izi.mjs.
 // От чего зависит: ничего.
 pragma solidity 0.8.37;

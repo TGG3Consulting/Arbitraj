@@ -97,7 +97,9 @@ contract VirtualQuoter {
     }
 
     // Решение 286: выход пула iZiSwap / Biswap V3 на точный вход. x2y — продажа tokenX (меньший адрес пары). Пул может
-    // взять чуть меньше суммы (округление точек — остаток у вызывающего), поэтому «взял весь вход» решает не сравнение
+    // взять меньше на остаток, которого не хватает на 1 единицу выхода (выход округляется вниз, оплата вверх; обмен кончается
+    // с остатком — tests/data/izi_2026-11-15/source_excerpt.txt: SwapMathX2Y.sol L29-L73, L184-L190; на цепи недобор
+    // 296 346 866 wei из 1e20 — probe.json quoteIzi_raw[0]), остаток у вызывающего; поэтому «взял весь вход» решает не сравнение
     // сумм, а край пула: обмен дошёл до leftMostPt (x2y) / rightMostPt (y2x) — ликвидность кончилась, used = сколько пул
     // взял на самом деле (бот видит used < amountIn — «не хватает ликвидности»); иначе used = amountIn. out — выход пула.
     function quoteIzi(address pool, bool x2y, uint256 amountIn) external returns (uint256 used, uint256 out) {
@@ -128,7 +130,7 @@ contract VirtualQuoter {
     }
 
     // Обратные вызовы iZiSwap: откат ровно 64 байтами — (оплата | край << 255, выход). Край — точка пула после обмена
-    // (state() записан до обратного вызова: swapX2Y.sol L319-L328) на границе leftMostPt / rightMostPt.
+    // (state() записан до обратного вызова: swapX2Y.sol L323-L331 — source_excerpt.txt) на границе leftMostPt / rightMostPt.
     function swapX2YCallback(uint256 x, uint256 y, bytes calldata) external view {
         (, int24 pt) = IIziPoolQ(msg.sender).state();
         _izi(x, y, pt <= IIziPoolQ(msg.sender).leftMostPt());

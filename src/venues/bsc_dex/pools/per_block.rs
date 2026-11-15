@@ -10,7 +10,8 @@
 //!   по времени блока.
 //! • Metric OMM (решение 285): цена провайдера меняется каждым блоком (лесенка ответов пула — на каждом блоке).
 //! • iZiSwap / Biswap V3 (решение 286): лесенка ответов пула; у Biswap V3 комиссия голосуемая, событие
-//!   ChangeLiquidityState не слушается — перечитывание на каждом блоке (и на события пула, events_izi.rs).
+//!   ChangeLiquidityState не слушается — перечитывание на каждом блоке (и на события пула, events_izi.rs). Ревью t118:
+//!   только пулы с USDT в паре (each_block) — у остальных лесенки нет никогда, перечитывать нечего.
 //! • Nomiswap Stable (решение 284): setSwapFee пары события не шлёт, A — рампа по времени блока (getA).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
@@ -19,6 +20,7 @@
 //! Настройки: нет (через вызываемые — dex.*).
 
 use alloy::rpc::types::Log;
+use alloy_primitives::Address;
 
 use crate::core::types::PoolRef;
 
@@ -47,10 +49,25 @@ pub fn any(pools: &[(Found, String)]) -> bool {
     pools.iter().any(|(f, _)| needs(f.family))
 }
 
+/// Перечитывать ли этот пул на каждом блоке. Ревью t118 (решение 286): пул iZiSwap / Biswap V3 без USDT в паре лесенки
+/// не получает никогда (load_metric_ladder.rs read_with: котируемая не USDT — пусто) — каждым блоком не перечитывается
+/// (состояние без лесенки = «без котировки», устаревать нечему; события пула его по-прежнему перечитывают). USDT не
+/// задан — так же (лесенки нет). Прочие виды (Metric, WooFi …) — как раньше, по needs. Принимает: пул, USDT. Ошибок нет.
+pub fn each_block(f: &Found, usdt: Option<Address>) -> bool {
+    if !needs(f.family) {
+        return false;
+    }
+    if f.family.proto.is_izi() {
+        return usdt.is_some_and(|u| f.token0 == u || f.token1 == u);
+    }
+    true
+}
+
 /// Новый блок: перечитать на нём прочитанные пулы этих видов (не прочитанные ведёт reload::retry). Не прочитался —
 /// пул недостоверен (valid = false) до следующего удачного чтения. Ошибки: End — ядро закрыло канал.
 pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
-    for (f, t) in pools.iter().filter(|(f, _)| needs(f.family)) {
+    let usdt = p.tokens.usdt(&p.ctx).ok();
+    for (f, t) in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
         if p.reg.get(&f.reference).is_none() {
             continue;
         }

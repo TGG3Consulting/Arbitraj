@@ -13,12 +13,18 @@ eth_call с подменой кода — в сеть ничего не уход
 - `callback_probe` — какой обратный вызов зовёт пул (пробный контракт): swapX2YCallback 0x18780684 (платить x),
   swapY2XCallback 0xd3e1c284 (платить y) у всех трёх; вызывающий — любой контракт (белого списка нет);
 - `event_topics` — topic0 записанных логов и PUSH32 в коде пулов;
+- `quoteIzi_raw_edges` (блок 133677207, дописано по ревью t118) — края пула в недостающие стороны: x2y у biswap-v3 и
+  biswap-v3-1, y2x у iziswap-bsc (used < amountIn = оплата пробного контракта), плюс не-край и откат «dc»;
 - `quoteIzi_raw` — сырые ответы VirtualQuoter.quoteIzi (код решения 286) и выход пробного контракта на тех же суммах:
   out квотера = выход пробы во всех 12 ответах; used = amountIn, кроме края пула (used < amountIn); откат «dc» —
   ошибка узла.
 
 `exec_sim.json` — шаг IZI (вид 14) ArbExecutor v2 через eth_call с подменой кода: получено ровно quoteIzi_out во всех
 8 случаях (3 DEX, 4 пула, обе стороны); тот же маршрут видом V3 — откат.
+
+`source_excerpt.txt` — дословные выдержки официальных исходников iZiSwap-core@3fe21eba с номерами строк (swapX2Y.sol,
+swapY2X.sol, iZiSwapPool.sol, IiZiSwapCallback.sol, libraries/SwapMathX2Y.sol): обрезка точек, оплата в обратном
+вызове, revertDCData, округление выхода вниз и оплаты вверх, окончание обмена с остатком.
 
 Исходники: iZiSwap — github.com/izumiFinance/iZiSwap-core (коммит 3fe21eba, contracts/iZiSwapPool.sol, swapX2Y.sol,
 swapY2X.sol, iZiSwapFactory.sol, interfaces/IiZiSwapCallback.sol); Biswap V3 — Sourcify chain 56: BiswapPoolV3

@@ -92,7 +92,8 @@ fn pool_verified_by_fields_and_registry() {
         assert!(verify_izi::registered(&found, pool, &word_addr(reg)).is_ok());
         assert!(verify_izi::registered(&found, pool, &word_addr(factory)).is_err());
         // Селектор реестра — по виду (чужой селектор на цепи откатывается, probe.json factories).
-        let (to, data) = verify_izi::registry_call(fam.proto, factory, x, y, f);
+        let (to, data) =
+            verify_izi::registry_call(fam.proto, factory, x, y, f).expect("вызов реестра");
         assert_eq!(to, factory);
         let sel = if fam.proto == Proto::BiswapV3 {
             [0x06, 0x68, 0xc8, 0xa2]
@@ -107,8 +108,14 @@ fn pool_verified_by_fields_and_registry() {
 #[test]
 fn quoter_answers_decode_to_pool_output() {
     let probe = json("probe.json");
-    let mut edge = 0;
-    for q in probe["quoteIzi_raw"].as_array().unwrap() {
+    let mut edges: Vec<(String, bool)> = Vec::new();
+    // Ответы блока 133668333 и края пула в недостающие стороны (блок 133677207, ревью t118).
+    let all = probe["quoteIzi_raw"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(probe["quoteIzi_raw_edges"]["answers"].as_array().unwrap());
+    for q in all {
         let Some(raw) = q["raw"].as_str() else {
             assert!(q["error"].as_str().unwrap().contains("reverted"));
             continue;
@@ -123,7 +130,11 @@ fn quoter_answers_decode_to_pool_output() {
                 assert_eq!(why, virtual_quoter::SHORT);
                 // Край пула: used — сколько пул взял на самом деле (= оплата пробного контракта).
                 assert_eq!(U256::from_be_slice(&raw[..32]), paid);
-                edge += 1;
+                assert!(paid < amount);
+                edges.push((
+                    q["dex"].as_str().unwrap().to_string(),
+                    q["x2y"].as_bool().unwrap(),
+                ));
             }
         }
         // Вход вызова quoteIzi — селектор 0xc782d469.
@@ -131,7 +142,20 @@ fn quoter_answers_decode_to_pool_output() {
         let d = virtual_quoter::data_izi(pool, q["x2y"].as_bool().unwrap(), amount);
         assert_eq!(&d[..4], &[0xc7, 0x82, 0xd4, 0x69]);
     }
-    assert_eq!(edge, 2, "два записанных края пула");
+    // Край пула записан в обе стороны у обоих видов (ревью t118): x2y и y2x — iZiSwap и Biswap V3.
+    for want in [
+        ("iziswap-bsc", true),
+        ("iziswap-bsc", false),
+        ("biswap-v3", true),
+        ("biswap-v3", false),
+        ("biswap-v3-1", true),
+    ] {
+        assert!(
+            edges.iter().any(|(d, x)| d == want.0 && *x == want.1),
+            "край {want:?}"
+        );
+    }
+    assert_eq!(edges.len(), 5);
 }
 
 #[test]
@@ -211,4 +235,59 @@ fn executor_step_and_family() {
     assert!(abi_izi::topics(Proto::IziSwap).contains(&izi_swap));
     assert!(abi_izi::topics(Proto::BiswapV3).contains(&bis_swap));
     assert!(!abi_izi::liquidity_topics(Proto::BiswapV3).contains(&bis_swap));
+}
+
+/// Ревью t118: fee пула Biswap V3 больше uint16 — вызова реестра нет, пул отклоняется с причиной; у iZiSwap (uint24) —
+/// вызов строится. liquidity_topics отсекают Swap и Flash по значению topic0. Перечитывание каждым блоком: пул iZiSwap
+/// без USDT — нет, с USDT — да; USDT не задан — нет.
+#[test]
+fn review_t118_rules() {
+    use arb::core::types::PoolRef;
+    use arb::venues::bsc_dex::pools::discover::Found;
+    use arb::venues::bsc_dex::pools::per_block;
+    let (f, x, y) = (
+        Address::ZERO,
+        addr(USDT),
+        addr("0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"),
+    );
+    let big = u32::from(u16::MAX) + 1;
+    let err = verify_izi::registry_call(Proto::BiswapV3, f, x, y, big).unwrap_err();
+    assert!(err.contains("uint16"), "{err}");
+    assert!(verify_izi::registry_call(Proto::BiswapV3, f, x, y, u32::from(u16::MAX)).is_ok());
+    assert!(verify_izi::registry_call(Proto::IziSwap, f, x, y, big).is_ok());
+    let flash: B256 = "0xbdbdb71d7860376ba52b25a5028beea23581364a40522f6bcfb86bb1f2dca633"
+        .parse()
+        .unwrap();
+    for p in [Proto::IziSwap, Proto::BiswapV3] {
+        let liq = abi_izi::liquidity_topics(p);
+        assert!(!liq.contains(&flash));
+        assert_eq!(liq.len(), abi_izi::topics(p).len() - 2);
+    }
+    let fam = families::make("biswap-v3-1", "biswap_v3").expect("вид");
+    let btcb = addr("0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c");
+    let found = |t0: Address, t1: Address| Found {
+        family: fam,
+        reference: PoolRef::Contract(Address::ZERO),
+        token0: t0,
+        token1: t1,
+        coin: t1,
+        fee_pips: None,
+        tick_spacing: None,
+        bin_step: None,
+        key: None,
+        hooks: None,
+    };
+    assert!(per_block::each_block(&found(x, y), Some(x)));
+    assert!(
+        !per_block::each_block(&found(btcb, y), Some(x)),
+        "пул без USDT — не каждым блоком"
+    );
+    assert!(!per_block::each_block(&found(x, y), None));
+    let metric = families::make("metric-bsc", "metric_omm").expect("вид");
+    let mut m = found(btcb, y);
+    m.family = metric;
+    assert!(
+        per_block::each_block(&m, Some(x)),
+        "Metric — как раньше (needs)"
+    );
 }

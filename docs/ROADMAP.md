@@ -37,7 +37,9 @@
   (load_metric_ladder.rs: суммы dex.pmm_ladder_usd в USDT): на странице 1 GeckoTerminal у biswap-v3-1 9 из 20 пулов без
   USDT (XRP/WBNB, BTCB/WBNB, ETH/BTCB, ETH/WBNB, SOL/WBNB, DOGE/WBNB, ETC/WBNB, BSW/WBNB, WBNB/BUSD) — такие пулы без
   котировки; своей математики точек iZiSwap (порт SwapMathX2Y/Y2X, точки и лимитные ордера) нет; (в) лесенка каждым
-  блоком — как у Metric (последовательно в per_block::on_head); (г) файлы сверх ориентира 200 строк — pools/load.rs 436
+  блоком — как у Metric (последовательно в per_block::on_head; ревью t118 — только пулы с USDT, per_block::each_block):
+  замерить на сервере после выкладки длительность on_head — на каждый пул iZiSwap / Biswap V3 с USDT за блок 1–3 + 2N
+  eth_call (N — точек dex.pmm_ladder_usd), пулы по очереди; (г) файлы сверх ориентира 200 строк — pools/load.rs 436
   (было 421), pools/families.rs 567 (было 545), quote/quoter_calls.rs 413 (было 406), pools/verify.rs 311 (было 304),
   pools/load_batch.rs 231 (было 230), pools/created_log.rs 320 (было 317), quote/virtual_quoter.rs 225 (было 204),
   contracts/ArbExecutor.sol 482 (было 470); тест tests/bsc_dex_izi_live.rs — 214 (после rustfmt). Новые файлы кода — в

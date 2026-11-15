@@ -2,7 +2,7 @@
 // Что делает: решение 286 — шаг IZI (вид 14) ArbExecutor на EVM ethereumjs (Cancun) с пулом-фикстурой
 //   fixtures/IziFixture.sol (подписи swapX2Y / swapY2X и оплата в swapX2YCallback / swapY2XCallback, как у iZiSwap):
 //   I1) v2: execute в обе стороны (USDT → COIN и COIN → USDT) шагом 14 — направление по адресам (tokenIn < tokenOut →
-//       swapX2Y), владелец получил выход пула, остаток округления (1 wei входа) вернулся владельцу, на исполнителе пусто;
+//       swapX2Y), владелец получил выход пула, остаток входа (фикстура берёт сумму − 1 wei) вернулся владельцу, на исполнителе пусто;
 //   I2) посторонний зовёт swapX2YCallback / swapY2XCallback исполнителя — откат «pool»;
 //   I3) исполнитель v1 — шаг 14 откатывается «kind».
 //   Проба на настоящих пулах трёх фабрик на цепи — tests/data/izi_2026-11-15/exec_sim.json.

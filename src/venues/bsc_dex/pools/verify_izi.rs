@@ -64,9 +64,13 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             Err(node) => out.push(Some(Verdict::Failed(node))),
             Ok(a) => match fields(c, pool, factory, &a) {
                 Ok((found, fee)) => {
-                    let q = registry_call(c.family.proto, factory, found.token0, found.token1, fee);
-                    second.push((i, pool, found, q));
-                    out.push(None);
+                    match registry_call(c.family.proto, factory, found.token0, found.token1, fee) {
+                        Ok(q) => {
+                            second.push((i, pool, found, q));
+                            out.push(None);
+                        }
+                        Err(w) => out.push(Some(Verdict::Rejected(w))),
+                    }
                 }
                 Err(w) => out.push(Some(Verdict::Rejected(w))),
             },
@@ -92,19 +96,23 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
 }
 
 /// Вызов реестра фабрики по виду: iZiSwap — pool(x, y, uint24), Biswap V3 — pool(x, y, uint16). Принимает: протокол,
-/// фабрику, tokenX, tokenY, fee пула. Возвращает: (фабрика, данные вызова). Ошибок нет.
+/// фабрику, tokenX, tokenY, fee пула. Возвращает: (фабрика, данные вызова). Ошибки (текст): у Biswap V3 fee больше
+/// uint16 (ревью t118: реестр фабрики хранит пул под uint16 fee — такой пул не из реестра, отказ с причиной).
 pub fn registry_call(
     p: Proto,
     factory: Address,
     x: Address,
     y: Address,
     fee: u32,
-) -> (Address, Bytes) {
+) -> Result<(Address, Bytes), String> {
     let data = if p == Proto::BiswapV3 {
+        let fee = u16::try_from(fee).map_err(|_| {
+            format!("fee() пула Biswap V3 = {fee} — больше uint16 (реестр фабрики pool(x, y, uint16 fee)), пул не берётся")
+        })?;
         BF::poolCall {
             tokenX: x,
             tokenY: y,
-            fee: fee as u16,
+            fee,
         }
         .abi_encode()
     } else {
@@ -115,7 +123,7 @@ pub fn registry_call(
         }
         .abi_encode()
     };
-    (factory, data.into())
+    Ok((factory, data.into()))
 }
 
 /// Решение по полям пула (без сети): factory, tokenX, tokenY, fee по порядку (откат — Err с текстом). Принимает:

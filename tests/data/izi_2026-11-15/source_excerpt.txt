@@ -1,0 +1,384 @@
+# Выдержки официальных исходников iZiSwap — github.com/izumiFinance/iZiSwap-core, коммит 3fe21eba6e39d6e362d399b54a6719244eb89929 (6 июня 2024), дословно, с номерами строк.
+# Используются: DECISIONS 286, contracts/VirtualQuoter.sol (quoteIzi), contracts/README.md (шаг IZI), tests/bsc_dex_izi_live.rs.
+
+=== contracts/swapX2Y.sol — начало swapX2Y, обрезка lowPt, шаг лимитного ордера (amountNoFee, x2YAtPrice, finished, amount -= costX + feeAmount) L123-L175
+123:     function swapX2Y(
+124:         address recipient,
+125:         uint128 amount,
+126:         int24 lowPt,
+127:         bytes calldata data
+128:     ) external returns (uint256 amountX, uint256 amountY) {
+129:         require(amount > 0, "AP");
+130: 
+131:         lowPt = MaxMinMath.max(lowPt, leftMostPt);
+132:         amountX = 0;
+133:         amountY = 0;
+134:         State memory st = state;
+135:         SwapCache memory cache;
+136:         cache.currFeeScaleX_128 = feeScaleX_128;
+137:         cache.currFeeScaleY_128 = feeScaleY_128;
+138:         cache.finished = false;
+139:         cache._sqrtRate_96 = sqrtRate_96;
+140:         cache.pointDelta = pointDelta;
+141:         cache.currentOrderOrEndpt = orderOrEndpoint.getOrderOrEndptVal(st.currentPoint, cache.pointDelta);
+142:         cache.startPoint = st.currentPoint;
+143:         cache.startLiquidity = st.liquidity;
+144:         cache.timestamp = uint32(block.timestamp);
+145: 
+146:         while (lowPt <= st.currentPoint && !cache.finished) {
+147: 
+148:             // step1: fill limit order 
+149:             if (cache.currentOrderOrEndpt & 2 > 0) {
+150:                 // amount <= uint128.max
+151:                 uint128 amountNoFee = uint128(uint256(amount) * (1e6 - fee) / 1e6);
+152:                 if (amountNoFee > 0) {
+153:                     LimitOrder.Data storage od = limitOrderData[st.currentPoint];
+154:                     uint128 currY = od.sellingY;
+155:                     (uint128 costX, uint128 acquireY) = SwapMathX2Y.x2YAtPrice(
+156:                         amountNoFee, st.sqrtPrice_96, currY
+157:                     );
+158:                     if (acquireY < currY || costX >= amountNoFee) {
+159:                         cache.finished = true;
+160:                     }
+161:                     uint128 feeAmount;
+162:                     if (costX >= amountNoFee) {
+163:                         feeAmount = amount - costX;
+164:                     } else {
+165:                         // costX <= amountX <= uint128.max
+166:                         feeAmount = uint128(uint256(costX) * fee / (1e6 - fee));
+167:                         uint256 mod = uint256(costX) * fee % (1e6 - fee);
+168:                         if (mod > 0) {
+169:                             feeAmount += 1;
+170:                         }
+171:                     }
+172:                     totalFeeXCharged += feeAmount;
+173:                     amount -= (costX + feeAmount);
+174:                     amountX = amountX + costX + feeAmount;
+175:                     amountY += acquireY;
+
+=== contracts/swapX2Y.sol — шаг диапазона (x2YRange, finished), запись состояния, выход получателю, swapX2YCallback, проверка XE L262-L331
+262:                 // st.liquidityX must be 0
+263:                 cache.currentOrderOrEndpt = nextVal;
+264:             } else {
+265:                 // amount > 0
+266:                 // amountNoFee <= amount <= uint128.max
+267:                 uint128 amountNoFee = uint128(uint256(amount) * (1e6 - fee) / 1e6);
+268:                 if (amountNoFee > 0) {
+269:                     SwapMathX2Y.RangeRetState memory retState = SwapMathX2Y.x2YRange(
+270:                         st, nextPt, cache._sqrtRate_96, amountNoFee
+271:                     );
+272:                     cache.finished = retState.finished;
+273:                     uint128 feeAmount;
+274:                     if (retState.costX >= amountNoFee) {
+275:                         feeAmount = amount - retState.costX;
+276:                     } else {
+277:                         // feeAmount <= retState.costX <= amount <= uint128.max
+278:                         feeAmount = uint128(uint256(retState.costX) * fee / (1e6 - fee));
+279:                         uint256 mod = uint256(retState.costX) * fee % (1e6 - fee);
+280:                         if (mod > 0) {
+281:                             feeAmount += 1;
+282:                         }
+283:                     }
+284:                     amountY += retState.acquireY;
+285:                     amountX = amountX + retState.costX + feeAmount;
+286:                     amount -= (retState.costX + feeAmount);
+287: 
+288:                     uint256 chargedFeeAmount = uint256(feeAmount) * feeChargePercent / 100;
+289:                     totalFeeXCharged += chargedFeeAmount;
+290:                     
+291:                     cache.currFeeScaleX_128 = cache.currFeeScaleX_128 + MulDivMath.mulDivFloor(feeAmount - chargedFeeAmount, TwoPower.Pow128, st.liquidity);
+292:                     st.currentPoint = retState.finalPt;
+293:                     st.sqrtPrice_96 = retState.sqrtFinalPrice_96;
+294:                     st.liquidityX = retState.liquidityX;
+295:                 } else {
+296:                     cache.finished = true;
+297:                 }
+298:                 if (st.currentPoint == nextPt) {
+299:                     cache.currentOrderOrEndpt = nextVal;
+300:                 } else {
+301:                     // not necessary, because finished must be true
+302:                     cache.currentOrderOrEndpt = 0;
+303:                 }
+304:             }
+305:             if (st.currentPoint <= lowPt) {
+306:                 break;
+307:             }
+308:         }
+309: 
+310:         if (cache.startPoint != st.currentPoint) {
+311:             (st.observationCurrentIndex, st.observationQueueLen) = observations.append(
+312:                 st.observationCurrentIndex,
+313:                 cache.timestamp,
+314:                 cache.startPoint,
+315:                 st.observationQueueLen,
+316:                 st.observationNextQueueLen
+317:             );
+318:         }
+319: 
+320:         // write back fee scale, no fee of y
+321:         feeScaleX_128 = cache.currFeeScaleX_128;
+322:         // write back state
+323:         state = st;
+324:         require(amountY > 0, "PR");
+325:         // transfer y to trader
+326:         TokenTransfer.transferToken(tokenY, recipient, amountY);
+327:         // trader pay x
+328:         require(amountX > 0, "PP");
+329:         uint256 bx = balanceX();
+330:         IiZiSwapCallback(msg.sender).swapX2YCallback(amountX, amountY, data);
+331:         require(balanceX() >= bx + amountX, "XE");
+
+=== contracts/swapY2X.sol — начало swapY2X, обрезка highPt L123-L131
+123:     function swapY2X(
+124:         address recipient,
+125:         uint128 amount,
+126:         int24 highPt,
+127:         bytes calldata data
+128:     ) external returns (uint256 amountX, uint256 amountY) {
+129:         require(amount > 0, "AP");
+130: 
+131:         highPt = MaxMinMath.min(highPt, rightMostPt);
+
+=== contracts/swapY2X.sol — выход получателю, swapY2XCallback, проверка YE L286-L297
+286:         // write back fee scale, no fee of x
+287:         feeScaleY_128 = cache.currFeeScaleY_128;
+288:         // write back state
+289:         state = st;
+290:         require(amountX > 0, "PR");
+291:         // transfer x to trader
+292:         TokenTransfer.transferToken(tokenX, recipient, amountX);
+293:         // trader pay y
+294:         require(amountY > 0, "PP");
+295:         uint256 by = balanceY();
+296:         IiZiSwapCallback(msg.sender).swapY2XCallback(amountX, amountY, data);
+297:         require(balanceY() >= by + amountY, "YE");
+
+=== contracts/iZiSwapPool.sol — revertDCData (откат модуля пробрасывается как есть только длиной 64 байта) L175-L192
+175:     function revertDCData(bytes memory data) private pure {
+176:         if (data.length != 64) {
+177:             if (data.length < 68) revert('dc');
+178:             assembly {
+179:                 data := add(data, 0x04)
+180:             }
+181:             revert(abi.decode(data, (string)));
+182:         }
+183:         assembly {
+184:             data:= add(data, 0x20)
+185:             let w := mload(data)
+186:             let t := mload(0x40)
+187:             mstore(t, w)
+188:             let w2 := mload(add(data, 0x20))
+189:             mstore(add(t, 0x20), w2)
+190:             revert(t, 64)
+191:         }
+192:     }
+
+=== contracts/iZiSwapPool.sol — swapY2X / swapY2XDesireX / swapX2Y (delegatecall в модуль) L383-L438
+383:     function swapY2X(
+384:         address recipient,
+385:         uint128 amount,
+386:         int24 highPt,
+387:         bytes calldata data
+388:     ) external override noDelegateCall lock returns (uint256 amountX, uint256 amountY) {
+389:         (bool success, bytes memory d) = swapModuleY2X.delegatecall(
+390:             abi.encodeWithSignature("swapY2X(address,uint128,int24,bytes)", 
+391:             recipient, amount, highPt, data)
+392:         );
+393:         if (success) {
+394:             (amountX, amountY) = abi.decode(d, (uint256, uint256));
+395:             emit Swap(tokenX, tokenY, fee, false, amountX, amountY, state.currentPoint);
+396:         } else {
+397:             revertDCData(d);
+398:         }
+399:     }
+400: 
+401:     /// @inheritdoc IiZiSwapPool
+402:     function swapY2XDesireX(
+403:         address recipient,
+404:         uint128 desireX,
+405:         int24 highPt,
+406:         bytes calldata data
+407:     ) external override noDelegateCall lock returns (uint256 amountX, uint256 amountY) {
+408:         (bool success, bytes memory d) = swapModuleY2X.delegatecall(
+409:             abi.encodeWithSignature("swapY2XDesireX(address,uint128,int24,bytes)", 
+410:             recipient, desireX, highPt, data)
+411:         );
+412:         if (success) {
+413:             (amountX, amountY) = abi.decode(d, (uint256, uint256));
+414:             emit Swap(tokenX, tokenY, fee, false, amountX, amountY, state.currentPoint);
+415:         } else {
+416:             revertDCData(d);
+417:         }
+418:     }
+419: 
+420:     /// @inheritdoc IiZiSwapPool
+421:     function swapX2Y(
+422:         address recipient,
+423:         uint128 amount,
+424:         int24 lowPt,
+425:         bytes calldata data
+426:     ) external override noDelegateCall lock returns (uint256 amountX, uint256 amountY) {
+427:         (bool success, bytes memory d) = swapModuleX2Y.delegatecall(
+428:             abi.encodeWithSignature("swapX2Y(address,uint128,int24,bytes)", 
+429:             recipient, amount, lowPt, data)
+430:         );
+431:         if (success) {
+432:             (amountX, amountY) = abi.decode(d, (uint256, uint256));
+433:             emit Swap(tokenX, tokenY, fee, true, amountX, amountY, state.currentPoint);
+434:         } else {
+435:             revertDCData(d);
+436:         }
+437:     }
+438: 
+
+=== contracts/interfaces/IiZiSwapCallback.sol — swapY2XCallback / swapX2YCallback L19-L39
+19: 
+20:     /// @notice Called to msg.sender in iZiSwapPool#swapY2X(DesireX) call
+21:     /// @param x Amount of tokenX trader will acquire
+22:     /// @param y Amount of tokenY trader will pay
+23:     /// @param data Any dadta passed though by the msg.sender via the iZiSwapPool#swapY2X(DesireX) call
+24:     function swapY2XCallback(
+25:         uint256 x,
+26:         uint256 y,
+27:         bytes calldata data
+28:     ) external;
+29: 
+30:     /// @notice Called to msg.sender in iZiSwapPool#swapX2Y(DesireY) call
+31:     /// @param x Amount of tokenX trader will pay
+32:     /// @param y Amount of tokenY trader will require
+33:     /// @param data Any dadta passed though by the msg.sender via the iZiSwapPool#swapX2Y(DesireY) call
+34:     function swapX2YCallback(
+35:         uint256 x,
+36:         uint256 y,
+37:         bytes calldata data
+38:     ) external;
+39: 
+
+=== contracts/libraries/SwapMathX2Y.sol — x2YAtPrice / x2YAtPriceLiquidity: выход округляется вниз (mulDivFloor), оплата — вверх (mulDivCeil) L29-L73
+29:     function x2YAtPrice(
+30:         uint128 amountX,
+31:         uint160 sqrtPrice_96,
+32:         uint128 currY
+33:     ) internal pure returns (uint128 costX, uint128 acquireY) {
+34:         uint256 l = MulDivMath.mulDivFloor(amountX, sqrtPrice_96, TwoPower.Pow96);
+35:         acquireY = Converter.toUint128(MulDivMath.mulDivFloor(l, sqrtPrice_96, TwoPower.Pow96));
+36:         if (acquireY > currY) {
+37:             acquireY = currY;
+38:         }
+39:         l = MulDivMath.mulDivCeil(acquireY, TwoPower.Pow96, sqrtPrice_96);
+40:         uint256 cost = MulDivMath.mulDivCeil(l, TwoPower.Pow96, sqrtPrice_96);
+41:         // costX <= amountX <= uint128.max
+42:         costX = uint128(cost);
+43:     }
+44: 
+45:     function mulDivCeil(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
+46:         uint256 v = a * b;
+47:         if (v % c == 0) {
+48:             return v / c;
+49:         }
+50:         return v / c + 1;
+51:     }
+52: 
+53:     function x2YAtPriceLiquidity(
+54:         uint128 amountX,
+55:         uint160 sqrtPrice_96,
+56:         uint128 liquidity,
+57:         uint128 liquidityX
+58:     ) internal pure returns (uint128 costX, uint256 acquireY, uint128 newLiquidityX) {
+59:         uint256 liquidityY = uint256(liquidity - liquidityX);
+60:         uint256 maxTransformLiquidityX = MulDivMath.mulDivFloor(amountX, sqrtPrice_96, TwoPower.Pow96);
+61:         // transformLiquidityX <= liquidityY <= uint128.max
+62:         uint128 transformLiquidityX = uint128(MaxMinMath.min256(maxTransformLiquidityX, liquidityY));
+63: 
+64:         // 1. transformLiquidityX * TwoPower.Pow96 < 2^128 * 2^96 < 2^224 < 2^256
+65:         // 2. transformLiquidityX <= floor(amountX * sqrtPrice_96 / TwoPower.Pow96)
+66:         // ceil(transformLiquidityX * sqrtPrice_96 / TwoPower.Pow96) <=
+67:         // ceil(floor(amountX * sqrtPrice_96 / TwoPower.Pow96) * sqrtPrice_96 / TwoPower.Pow96) <=
+68:         // ceil(amountX * sqrtPrice_96 / TwoPower.Pow96 * sqrtPrice_96 / TwoPower.Pow96) =
+69:         // ceil(amountX) = amountX <= uint128.max
+70:         costX = uint128(mulDivCeil(transformLiquidityX, TwoPower.Pow96, sqrtPrice_96));
+71:         acquireY = MulDivMath.mulDivFloor(transformLiquidityX, sqrtPrice_96, TwoPower.Pow96);
+72:         newLiquidityX = liquidityX + transformLiquidityX;
+73:     }
+
+=== contracts/libraries/SwapMathX2Y.sol — x2YRange: когда обмен заканчивается (finished) L167-L245
+167:     function x2YRange(
+168:         State memory currentState,
+169:         int24 leftPt,
+170:         uint160 sqrtRate_96,
+171:         uint128 amountX
+172:     ) internal pure returns (
+173:         RangeRetState memory retState
+174:     ) {
+175:         retState.costX = 0;
+176:         retState.acquireY = 0;
+177:         retState.finished = false;
+178: 
+179:         bool currentHasY = (currentState.liquidityX < currentState.liquidity);
+180:         if (currentHasY && (currentState.liquidityX > 0 || leftPt == currentState.currentPoint)) {
+181:             (retState.costX, retState.acquireY, retState.liquidityX) = x2YAtPriceLiquidity(
+182:                 amountX, currentState.sqrtPrice_96, currentState.liquidity, currentState.liquidityX
+183:             );
+184:             if (retState.liquidityX < currentState.liquidity ||  retState.costX >= amountX) {
+185:                 // remaining x is not enough to down current price to price / 1.0001
+186:                 // but x may remain, so we cannot simply use (costX == amountX)
+187:                 retState.finished = true;
+188:                 retState.finalPt = currentState.currentPoint;
+189:                 retState.sqrtFinalPrice_96 = currentState.sqrtPrice_96;
+190:             } else {
+191:                 amountX -= retState.costX;
+192:             }
+193:         } else if (currentHasY) { // all y
+194:             currentState.currentPoint = currentState.currentPoint + 1;
+195:             // sqrt(price) + sqrt(price) * (1.0001 - 1) == sqrt(price) * 1.0001
+196:             currentState.sqrtPrice_96 = uint160(
+197:                 uint256(currentState.sqrtPrice_96) +
+198:                 uint256(currentState.sqrtPrice_96) * (uint256(sqrtRate_96) - TwoPower.Pow96) / TwoPower.Pow96
+199:             );
+200:         } else {
+201:             retState.liquidityX = currentState.liquidityX;
+202:         }
+203: 
+204:         if (retState.finished) {
+205:             return retState;
+206:         }
+207: 
+208:         if (leftPt < currentState.currentPoint) {
+209:             uint160 sqrtPriceL_96 = LogPowMath.getSqrtPrice(leftPt);
+210:             RangeCompRet memory ret = x2YRangeComplete(
+211:                 Range({
+212:                     liquidity: currentState.liquidity,
+213:                     sqrtPriceL_96: sqrtPriceL_96,
+214:                     leftPt: leftPt, 
+215:                     sqrtPriceR_96: currentState.sqrtPrice_96, 
+216:                     rightPt: currentState.currentPoint, 
+217:                     sqrtRate_96: sqrtRate_96
+218:                 }),
+219:                 amountX
+220:             );
+221:             retState.costX += ret.costX;
+222:             amountX -= ret.costX;
+223:             retState.acquireY += ret.acquireY;
+224:             if (ret.completeLiquidity) {
+225:                 retState.finished = (amountX == 0);
+226:                 retState.finalPt = leftPt;
+227:                 retState.sqrtFinalPrice_96 = sqrtPriceL_96;
+228:                 retState.liquidityX = currentState.liquidity;
+229:             } else {
+230:                 uint128 locCostX;
+231:                 uint256 locAcquireY;
+232:                 (locCostX, locAcquireY, retState.liquidityX) = x2YAtPriceLiquidity(amountX, ret.sqrtLoc_96, currentState.liquidity, 0);
+233:                 retState.costX += locCostX;
+234:                 retState.acquireY += locAcquireY;
+235:                 retState.finished = true;
+236:                 retState.sqrtFinalPrice_96 = ret.sqrtLoc_96;
+237:                 retState.finalPt = ret.locPt;
+238:             }
+239:         } else {
+240:             // finishd must be false
+241:             // retState.finished == false;
+242:             // liquidityX has been set
+243:             retState.finalPt = currentState.currentPoint;
+244:             retState.sqrtFinalPrice_96 = currentState.sqrtPrice_96;
+245:         }
+

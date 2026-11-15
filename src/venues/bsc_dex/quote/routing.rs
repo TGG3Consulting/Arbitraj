@@ -9,7 +9,7 @@
 //! (Via::mid_ok, та же проверка, что у исполнения: exec/live.rs, exec/live_hops.rs; классика её делает в via_pools.rs).
 //! Решение 294: при dex.intermediate_partial_fill = да и неполной классике (fillable < qty) в режиме graph — выбор
 //! route_fit.rs merge (исполнимый граф с mids_ok наравне с классикой по pick, неисполнимый — signal_route, ошибка
-//! графа — классика без записи журнала); не задана / «нет» / объём помещается — graph_route::merge, как было.
+//! графа NoRoute — классика без записи журнала, другая ошибка графа — прежняя запись); не задана / «нет» / объём помещается — graph_route::merge, как было.
 //! Кто вызывает: quote/mod.rs (Quoting::quote через cpu::run).
 //! От чего зависит: quote/{smart_quote, classic_direct, graph_route, via, steps}.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: dex.router_mode, dex.intermediate_partial_fill (решение 294; только при неполной классике) [bsc_dex]; через вызываемые — dex.*, smart.* (см. их шапки).
@@ -104,7 +104,7 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
     if graph_on {
         let g = graph_route::quote(&v, &names, asset, qty, gas).await;
         // Решение 294: классика неполная (fillable < qty) и dex.intermediate_partial_fill = да — выбор среди
-        // исполнимых без записи Warn об ошибке графа на каждую котировку (route_fit.rs merge). Иначе — merge, как было.
+        // исполнимых; ошибка графа NoRoute — без записи Warn на каждую котировку (route_fit.rs merge). Иначе — merge, как было.
         if out.fillable_qty < qty && ctx.flag("dex.intermediate_partial_fill").unwrap_or(false) {
             let ok = g.as_ref().ok().and_then(|g| g.route.as_ref());
             let ok = ok.is_some_and(|r| r.executable && mids_ok(&v, r, &i.mids));

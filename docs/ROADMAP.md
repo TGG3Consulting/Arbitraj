@@ -26,11 +26,12 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 294 (t125; `wc -l`): в пределах 200 — новые quote/route_fit.rs 176, settings/catalog/dex_fit.rs 16,
-  tests/fit_common/mod.rs 167, tests/core_fit_volume_294.rs 116, tests/bsc_dex_fit_graph_294.rs 165; quote/via_pools.rs
+- Решение 294 (t125; `wc -l`): в пределах 200 — новые quote/route_fit.rs 184, settings/catalog/dex_fit.rs 16,
+  tests/fit_common/mod.rs 167, tests/core_fit_volume_294.rs 116, tests/bsc_dex_fit_graph_294.rs 187; quote/via_pools.rs
   189 (было 154), quote/routing.rs 148 (было 138), settings/catalog/mod.rs 177 (было 175). Сверх ориентира —
-  tests/route_common/mod.rs 465 (было 459: load / v3 / v2 / ctx стали pub). route_fit.rs повторяет сборку хопов
-  Via::calc (8 строк) — via.rs в этой задаче не трогался; общий сборщик хопов — отдельной правкой.
+  quote/graph_route.rs 216 (было 210 и до правки: запись «граф не дал маршрут» вынесена в failed, общая с
+  route_fit.rs), tests/route_common/mod.rs 465 (было 459: load / v3 / v2 / ctx стали pub). route_fit.rs повторяет
+  сборку хопов Via::calc (8 строк) — via.rs в этой задаче не трогался; общий сборщик хопов — отдельной правкой.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

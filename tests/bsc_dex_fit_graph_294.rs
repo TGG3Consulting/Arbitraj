@@ -6,7 +6,8 @@
 //! - граф исполним (канал bundle + исполнитель кошелька проб): без dex.intermediate_partial_fill и с «нет» — часть
 //!   графа (решение 271), 1 в 1; «да» — точная часть классики (больше части графа по шагу сплита);
 //! - граф неисполним (канала нет): без настройки и «нет» — прежний NoRoute; «да» — классика;
-//! - граф с ошибкой (dex.route_max_hops снята): «да» — классика, записей журнала «dex.router_graph» не прибавилось;
+//! - ошибка графа: NoRoute (dex.route_max_hops = 1) — «да» даёт классику без записи журнала; NotConfigured (снята) —
+//!   классику и прежнюю запись Warn «dex.router_graph»;
 //! - 1000 SHOPINX (помещается): 1 в 1 с настройкой и без, в обоих режимах;
 //! - финальная котировка (gateway::quote_stage::final_scope) — тот же итог (адаптер ветвится по ней только при
 //!   exec.via_kyber, venue.rs).
@@ -116,32 +117,52 @@ async fn unexecutable_graph_gives_classic() {
             let on = full(&q, side, d("57000")).await.unwrap();
             assert_eq!(on.fillable_qty, fit(side));
             assert_eq!(on.route.as_ref().map(|r| r.mode), Some(RouteMode::Direct));
+            // Граф неисполним и его часть меньше классики — pick выбирает классику, signal_route не ставится
+            // (route_fit.rs merge, ветка «граф неисполним»).
+            assert!(on.signal_route.is_none());
         }
     }
 }
 
+/// Ошибка графа при «да» и неполной классике: с кодом NoRoute (dex.route_max_hops = 1 — путь через WBNB длиннее,
+/// путей нет) — классика без записи журнала; другая (dex.route_max_hops снята — NotConfigured) — классика и прежняя
+/// запись Warn «dex.router_graph» (graph_route.rs failed).
 #[tokio::test]
-async fn graph_error_gives_classic_without_warn() {
-    let p = graph_scene("5", true).await;
-    set(&p, "dex.route_max_hops", None).await;
-    let q = p.quoting();
-    for side in [Side::Sell, Side::Buy] {
-        let w0 = graph_warns(&p).await;
-        partial(&p, None).await;
-        let off = full(&q, side, d("57000")).await.unwrap_err();
-        assert_eq!(off.code, ErrorCode::NoRoute);
-        partial(&p, Some(true)).await;
-        let on = full(&q, side, d("57000")).await.unwrap();
-        assert_eq!(on.fillable_qty, fit(side));
-        assert_eq!(graph_warns(&p).await, w0);
-    }
-    // Объём помещается, граф с ошибкой — прежний merge: запись журнала графа есть (с настройкой и без одинаково).
-    for on in [None, Some(true)] {
-        partial(&p, on).await;
-        let w0 = graph_warns(&p).await;
-        let r = full(&q, Side::Sell, d("1000")).await.unwrap();
-        assert_eq!(r.fillable_qty, d("1000"));
-        assert_eq!(graph_warns(&p).await, w0 + 1, "{on:?}");
+async fn graph_error_no_route_silent_other_logged() {
+    for (hops, code, logged) in [
+        (Some(json!(1)), ErrorCode::NoRoute, 0),
+        (None, ErrorCode::NotConfigured, 1),
+    ] {
+        let p = graph_scene("5", true).await;
+        set(&p, "dex.route_max_hops", hops.clone()).await;
+        let q = p.quoting();
+        for side in [Side::Sell, Side::Buy] {
+            // Код ошибки графа на этой сцене — прямым вызовом выбора маршрута не виден; его даёт merge без настройки
+            // при помещающейся классике (запись журнала с текстом ошибки графа).
+            partial(&p, None).await;
+            let off = full(&q, side, d("57000")).await.unwrap_err();
+            assert_eq!(off.code, ErrorCode::NoRoute);
+            partial(&p, Some(true)).await;
+            let w0 = graph_warns(&p).await;
+            let on = full(&q, side, d("57000")).await.unwrap();
+            assert_eq!(on.fillable_qty, fit(side));
+            assert_eq!(on.route.as_ref().map(|r| r.mode), Some(RouteMode::Direct));
+            assert_eq!(graph_warns(&p).await, w0 + logged, "{code:?} {side:?}");
+        }
+        // Объём помещается — прежний merge: запись есть всегда (с настройкой и без одинаково).
+        for on in [None, Some(true)] {
+            partial(&p, on).await;
+            let w0 = graph_warns(&p).await;
+            let r = full(&q, Side::Sell, d("1000")).await.unwrap();
+            assert_eq!(r.fillable_qty, d("1000"));
+            assert_eq!(graph_warns(&p).await, w0 + 1, "{code:?} {on:?}");
+        }
+        let last = p.ctx.journal.list(10_000, None).await.unwrap();
+        let text = last
+            .iter()
+            .find(|e| e.kind == "dex.router_graph")
+            .map(|e| e.message.clone());
+        println!("{code:?}: {text:?}");
     }
 }
 

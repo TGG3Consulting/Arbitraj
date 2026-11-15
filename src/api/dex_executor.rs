@@ -8,7 +8,9 @@
 //! Настройки: нет (адрес исполнителя после развёртывания Тигран вписывает в exec.executor_address сам).
 //!
 //! GET  /api/venues/{id}/executor/quote?wallet=W  → ExecutorDeployQuote (ничего не отправляет); биржа — 400
-//! POST /api/venues/{id}/executor/deploy?wallet=W {sha256} → ExecutorDeployed; хеш не тот — 502 (QuoteMismatch)
+//! POST /api/venues/{id}/executor/deploy?wallet=W {sha256, wnative} → ExecutorDeployed; хеш или обёртка не те — 502
+//! (QuoteMismatch). Задача t114 (3в): wnative — адрес обёртки из оценки (аргумент конструктора, навсегда в исполнителе);
+//! нет или не адрес — 400.
 //! Решение 132: исполнитель — у кошелька W (его ключом, его очередью); код в сети совпал — адрес записывается у
 //! кошелька (settings/accounts/) и уходит уведомление wallet.executor_deployed. Без wallet — отказ «кошелёк не выбран».
 //! Решение 272: после записи адреса — сверка кода (check_executor): версия исполнителя записывается у кошелька.
@@ -32,6 +34,9 @@ pub struct WalletQuery {
 pub struct DeployReq {
     /// SHA-256 кода создания из оценки, которую подтвердил человек.
     pub sha256: String,
+    /// Задача t114 (3в): адрес обёртки из той же оценки (ExecutorDeployQuote.wnative). Option — чтобы отсутствие дало
+    /// понятный 400, а не отказ разбора тела.
+    pub wnative: Option<String>,
 }
 
 /// Оценка развёртывания (шлюз `dex_executor_quote`). Ошибки: 400 — не DEX; 404 — площадка не подключена; 502 — сбой.
@@ -61,11 +66,17 @@ pub async fn deploy(
     if b.sha256.trim().is_empty() {
         return Err(ApiError::bad("нет sha256 подтверждённого байткода"));
     }
+    let wnative: alloy_primitives::Address = b
+        .wnative
+        .as_deref()
+        .map(str::trim)
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| ApiError::bad("нет адреса обёртки (wnative) из подтверждённой оценки"))?;
     let venue = super::wallets_dex::venue_as(&st, &id, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
     let d = venue
-        .dex_executor_deploy(b.sha256.trim().to_string())
+        .dex_executor_deploy(b.sha256.trim().to_string(), wnative)
         .await
         .map_err(ApiError::gateway)?;
     // Решение 132: код в сети совпал — адрес у кошелька (владелец — он: развёрнуто его ключом).

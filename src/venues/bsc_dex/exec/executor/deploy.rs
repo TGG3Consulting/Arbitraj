@@ -3,7 +3,10 @@
 //! человека с подтверждением (действие с деньгами): оценка (eth_estimateGas транзакции создания, цена газа как у сделки,
 //! стоимость в BNB и в USDT по пулу WBNB — USDT реестра) и отправка транзакции создания через очередь кошелька
 //! (решение 45) существующими каналами (exec/txs.rs). Байткод — только из репозитория (contracts/out/, хеш сверен,
-//! code.rs); подтверждение несёт SHA-256, который видел человек, — не совпал — не отправляем. После блока: код по адресу
+//! code.rs); подтверждение несёт SHA-256, который видел человек, — не совпал — не отправляем. Задача t114 (3в):
+//! подтверждение несёт и адрес обёртки (аргумент конструктора), который человек видел в окне: хеш считается по коду
+//! создания БЕЗ аргумента, поэтому без этой сверки смена dex.native_wrapped между оценкой и подтверждением ушла бы в
+//! конструктор молча (навсегда — сеттера нет). Не совпал с текущей dex.native_wrapped — не отправляем. После блока: код по адресу
 //! (eth_getCode) сверяется с ArbExecutor.bin-runtime. Адрес в exec.executor_address Тигран вписывает сам.
 //! Кто вызывает: venue.rs (контракт dex_executor_quote / dex_executor_deploy), exec/executor/dry.rs (next_nonce).
 //! От чего зависит: exec/executor/code.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
@@ -109,21 +112,35 @@ async fn usdt_of(q: &Quoting, wei: U256) -> GatewayResult<rust_decimal::Decimal>
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "сумма USDT не переводится в число"))
 }
 
-/// Развёртывание. Принимает: котировку, окружение отправки, очередь кошелька, SHA-256 байткода, который подтвердил
-/// человек. Возвращает: итог (адрес, транзакция, совпал ли код). Ошибки: QuoteMismatch (байткод не тот, что
-/// подтверждён), Internal (артефакт), ключ, каналы, узел, OutcomeUnknown (исход транзакции неизвестен).
+/// Задача t114 (3в): совпадает ли то, что подтвердил человек, с тем, что уйдёт в транзакцию создания. Принимает:
+/// подтверждённые (SHA-256 кода создания, адрес обёртки), текущий адрес обёртки (dex.native_wrapped). Возвращает: Ok
+/// или причину (хеш не тот / обёртка не та). Ошибок иных нет.
+pub fn confirm(confirmed: (&str, Address), wnative: Address) -> Result<(), String> {
+    if !confirmed.0.eq_ignore_ascii_case(&code::creation_sha256()) {
+        return Err("байткод исполнителя не тот, что подтверждён (SHA-256 не совпал) — запросите оценку заново".into());
+    }
+    if confirmed.1 != wnative {
+        return Err(format!(
+            "обёртка BNB для конструктора сейчас {wnative:#x} (dex.native_wrapped), а подтверждена {:#x} — настройку \
+             сменили после оценки; запросите оценку заново",
+            confirmed.1
+        ));
+    }
+    Ok(())
+}
+
+/// Развёртывание. Принимает: котировку, окружение отправки, очередь кошелька, подтверждённые человеком SHA-256 байткода
+/// и адрес обёртки (задача t114, 3в). Возвращает: итог (адрес, транзакция, совпал ли код). Ошибки: QuoteMismatch
+/// (байткод или обёртка не те, что подтверждены), Internal (артефакт), ключ, каналы, узел, OutcomeUnknown.
 pub async fn deploy(
     q: &Quoting,
     env: &Env,
     nonces: &Nonces,
-    confirmed_sha256: &str,
+    confirmed: (&str, Address),
 ) -> GatewayResult<ExecutorDeployed> {
     let ctx = &q.ctx;
     let (bin, wnative) = bytecode(ctx)?;
-    if !confirmed_sha256.eq_ignore_ascii_case(&code::creation_sha256()) {
-        let why = "байткод исполнителя не тот, что подтверждён (SHA-256 не совпал) — запросите оценку заново";
-        return Err(ctx.err(ErrorCode::QuoteMismatch, why));
-    }
+    confirm(confirmed, wnative).map_err(|why| ctx.err(ErrorCode::QuoteMismatch, why))?;
     let slot = nonces.acquire(ctx).await?;
     let nonce = slot.nonce(ctx).await?;
     let address = slot.from.create(nonce);
@@ -168,4 +185,21 @@ async fn on_chain_ok(ctx: &Ctx, address: Address) -> GatewayResult<bool> {
     let want = code::runtime().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
     let have: Bytes = rpc::call(ctx, "eth_getCode", json!([address, "latest"])).await?;
     Ok(have == want)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Задача t114 (3в): подтверждение, выданное для одной обёртки, при другой dex.native_wrapped не проходит; хеш —
+    /// настоящий SHA-256 кода создания из contracts/out/ArbExecutor.bin.
+    #[test]
+    fn confirmation_bound_to_wrapper() {
+        let sha = code::creation_sha256();
+        let (a, b) = (Address::repeat_byte(0x01), Address::repeat_byte(0x02));
+        assert!(confirm((&sha, a), a).is_ok());
+        assert!(confirm((&sha.to_uppercase(), a), a).is_ok());
+        assert!(confirm((&sha, a), b).is_err_and(|w| w.contains("обёртка")));
+        assert!(confirm(("00", a), a).is_err_and(|w| w.contains("SHA-256")));
+    }
 }

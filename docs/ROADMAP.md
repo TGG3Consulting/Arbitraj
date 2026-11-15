@@ -26,6 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Задача t114: exec/executor/trade.rs 268 строк (было 259; причина native_block и повторная проверка обратного вызова
+  после сверки), exec/executor/deploy.rs 205 (было 171; confirm и его тест), contracts/ArbExecutor.sol 452 (было 448;
+  squadV3SwapCallback) — сверх ориентира 200; trade.rs и ArbExecutor.sol были сверх и до правки.
 - Решение 280 (t112): src/venues/bsc_dex/pools/families.rs 499 строк (было 486), check/probe.rs 261 (было 257),
   check/taxes.rs 224 (было 218) — все были сверх ориентира 200 и до правки; новые файлы quote/v2_pair_{quote,sim,probe}.rs
   уложены в 200. Ревью 280: exec/bundle.rs 361 (было 349; отказ ноги без своего пути), check/taxes.rs 228 (было 224);

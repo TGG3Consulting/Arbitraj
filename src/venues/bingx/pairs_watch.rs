@@ -84,6 +84,9 @@ pub async fn run(
             changes.len(),
             if books_changed {
                 " — пересподписка стаканов"
+            } else if now.only_qty_changed(&last) {
+                // Решение 293 (ревью): например смена venue.ignore_deprecated_qty.
+                " — только пределы количества (minQty / maxQty)"
             } else {
                 " — только покупка/продажа через API"
             }

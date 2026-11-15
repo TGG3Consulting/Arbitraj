@@ -10,7 +10,9 @@
 //! 3) core/signal_probe::floor_qty / qty — объём проверки при signal.probe_usd = 10 и потолке = maxNotional пары (1029):
 //!    без настройки 57 505 монет, с настройкой 10 / цена. Минимумы вывода / депозита SHOPINX не учтены: записанного
 //!    ответа capital/config/getall по SHOPINX нет (подписанный запрос; отчёт решения 293);
-//! 4) факт выборки: у скольких из 9 пар minQty × bid больше minNotional (7).
+//! 4) факт выборки: у скольких из 9 пар minQty × bid больше minNotional (7);
+//! 5) ревью 293: значение монеты сильнее значения площадки (все 9 пар одним справочником); «да → нет» — пределы
+//!    вернулись; смена видна в журнале (pairs.rs changes, only_qty_changed).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bingx (symbols, symbols_qty, order_rules, market_sell, ctx), arb::core::signal_probe,
@@ -93,6 +95,34 @@ async fn set(s: &Store, name: &str, v: Option<Value>) {
         .unwrap();
 }
 
+/// Задать venue.ignore_deprecated_qty у монеты (область «монета», ревью 293).
+async fn set_coin(s: &Store, ticker: &str, v: bool) {
+    let sc = Scope::Coin(ticker.into());
+    s.set(symbols_qty::SETTING, sc, Some(json!(v)), "тест")
+        .await
+        .unwrap();
+}
+
+/// Справочник всех 9 пар: массивы symbols записанных ответов подряд (одним ответом), тем же путём, что refresh.
+fn load_all(c: &Ctx) -> Symbols {
+    let mut all = vec![];
+    for pair in PAIRS {
+        let v = read(&format!("symbols_{pair}.json"));
+        all.extend(v["data"]["symbols"].as_array().unwrap().iter().cloned());
+    }
+    let s = Symbols::default();
+    let at = Utc.timestamp_millis_opt(SYMBOLS_AT_MS).unwrap();
+    let data = json!({ "symbols": all });
+    assert_eq!(symbols_qty::take(c, &s, &data, at).unwrap(), PAIRS.len());
+    s
+}
+
+/// Есть ли у пары монеты пределы количества (minQty и maxQty).
+fn has_qty(s: &Symbols, c: &Ctx, ticker: &str) -> bool {
+    let r = s.get(c, ticker).unwrap();
+    r.min_qty.is_some() && r.max_qty.is_some()
+}
+
 /// Справочник пар из записанного ответа SHOPINX тем же путём, что Symbols::refresh.
 fn load(c: &Ctx) -> Symbols {
     let s = Symbols::default();
@@ -129,7 +159,10 @@ async fn symbols_without_and_with_setting() {
     assert_eq!(r.max_qty, Some(d("575043128.24")));
     // «Нет» — тоже как раньше.
     set(&c.settings, symbols_qty::SETTING, Some(json!(false))).await;
-    assert_eq!(load(&c).get(&c, "SHOPINX").unwrap().min_qty, Some(d("57505")));
+    assert_eq!(
+        load(&c).get(&c, "SHOPINX").unwrap().min_qty,
+        Some(d("57505"))
+    );
     // «Да» — пределов количества нет, сумма и шаги на месте; ядро видит то же.
     set(&c.settings, symbols_qty::SETTING, Some(json!(true))).await;
     let s = load(&c);
@@ -200,4 +233,62 @@ fn sample_min_qty_above_min_notional() {
     }
     assert_eq!(above.len(), 7, "{above:?}");
     assert!(!above.contains(&"MUBARAK-USDT") && !above.contains(&"BANANAS31-USDT"));
+}
+
+#[tokio::test]
+async fn coin_value_beats_venue_value() {
+    let c = ctx("coin").await;
+    let others = [
+        "CAKE",
+        "BNB",
+        "TWT",
+        "SFP",
+        "BTC",
+        "DOGE",
+        "MUBARAK",
+        "BANANAS31",
+    ];
+    // «Да» только у SHOPINX — пределы сняты только у неё.
+    set_coin(&c.settings, "SHOPINX", true).await;
+    let s = load_all(&c);
+    assert!(!has_qty(&s, &c, "SHOPINX"));
+    assert!(others.iter().all(|t| has_qty(&s, &c, t)));
+    // «Да» у площадки и «нет» у SHOPINX — у SHOPINX пределы остались, у остальных сняты.
+    set(&c.settings, symbols_qty::SETTING, Some(json!(true))).await;
+    set_coin(&c.settings, "SHOPINX", false).await;
+    let s = load_all(&c);
+    assert!(has_qty(&s, &c, "SHOPINX"));
+    assert!(others.iter().all(|t| !has_qty(&s, &c, t)));
+}
+
+#[tokio::test]
+async fn yes_then_no_returns_limits_and_journal_text() {
+    use arb::venues::bingx::pairs::Snapshot;
+    let c = ctx("back").await;
+    let assets = [Asset {
+        ticker: "SHOPINX".into(),
+        bsc_contract: None,
+    }];
+    let before = Snapshot::build(&load(&c), &assets);
+    set(&c.settings, symbols_qty::SETTING, Some(json!(true))).await;
+    let on = Snapshot::build(&load(&c), &assets);
+    // Смена видна в журнале venue.symbols и отличается только пределами количества.
+    assert!(on.only_qty_changed(&before));
+    assert_eq!(
+        on.changes(&before),
+        vec![
+            "SHOPINX: API: покупка да, продажа да → API: покупка да, продажа да, пределов количества нет"
+        ]
+    );
+    // «Да → нет» — пределы вернулись со следующим чтением справочника.
+    set(&c.settings, symbols_qty::SETTING, Some(json!(false))).await;
+    let s = load(&c);
+    let r = s.get(&c, "SHOPINX").unwrap();
+    assert_eq!(
+        (r.min_qty, r.max_qty),
+        (Some(d("57505")), Some(d("575043128.24")))
+    );
+    let off = Snapshot::build(&s, &assets);
+    assert_eq!(off, before);
+    assert!(!off.only_qty_changed(&before));
 }

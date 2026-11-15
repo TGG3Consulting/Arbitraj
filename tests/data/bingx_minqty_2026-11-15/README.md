@@ -4,6 +4,11 @@
 `curl` из среды разработки к `open-api.bingx.com` закрыт прокси — CONNECT 403). Зачем: показать фактом, у скольких пар
 minQty × цена больше minNotional, и проверить код решения 293 на ответе по SHOPINX-USDT.
 
+> **ВНИМАНИЕ: это НЕ сырые ответы BingX.** Данные получены через WebFetch — ответ пересказан моделью; правило
+> «тесты только на реально записанных данных» выполнено условно. **При первой возможности (после выкладки) —
+> перезаписать папку сырыми ответами BingX командами из `commands.txt` (curl с сервера, публичные GET без ключа) и
+> сверить с текущими значениями** (docs/TASKS.md, решение 293).
+
 ## Как записано (важно)
 
 WebFetch отдаёт ответ через модель-пересказчик. Поэтому:
@@ -47,7 +52,14 @@ symbols — status 0, bookTicker — код 100204 «symbol is not found.» (в 
 одной). maxQty × цена против maxNotional: у CAKE 10689.471 × 1.627 ≈ 17 392 < 173 228 — maxQty строже maxNotional; у
 SHOPINX maxNotional 1029 строже (maxQty × цена ≈ 5 млн).
 
-Чужие продажи SHOPINX на BingX 13–15.11 по 8 362 … 11 756 монет (≈100 USDT, публичная лента исполнений) прошли при
-minQty 57 505 — разбор в docs/DECISIONS.md, решение 293.
+В публичной ленте исполнений BingX 13–15.11 есть сделки SHOPINX на 8 362 … 11 756 монет (≈100 USDT) при minQty 57 505;
+запись ленты — не размер ордера, чьи это ордера и шли ли они через API — не установлено. Ручной лимитный ордер BUY
+10 000 SHOPINX через сайт BingX 15.11 принят (сайт, не API). Разбор — docs/DECISIONS.md, решение 293.
 
-Кто читает: tests/bingx_minqty_293.rs.
+Документация: docs-v3 «Spot trading symbols» — minQty «Deprecated; can be calculated using minQty=minNotional/price»;
+api-ai-skills skills/spot-market/api-reference.md (тоже официальный) — minQty «Minimum order quantity (base asset)» без
+пометки. Противоречие источников не снято (как в venues/bingx/symbols.rs, шапка поля min_qty).
+
+`commands.txt` — команды curl для перезаписи сырыми ответами.
+
+Кто читает: tests/bingx_minqty_293.rs, tests/core_sell_reject_293.rs.

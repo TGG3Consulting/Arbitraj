@@ -6,10 +6,12 @@
 //! «Продано вручную» — manual.rs, решение 100); у цепочки решения 229 — сначала продажа здесь по порогу
 //! (relay_here.rs, решение 220). Всё остальное (ушедшая в сеть и не исполненная продажа без подтверждённой отмены,
 //! nonce, нет связи) — как раньше, алерт человеку.
+//! Решение 293 (ревью): продажа отклонена биржей (OrderRejected) и ушла человеку — пауза направления сделки
+//! (route_pause.rs, signal.route_cooldown_s), чтобы следующие сделки этой монеты не застревали так же.
 //! Кто вызывает: sell.rs.
 //! От чего зависит: op_error.rs, deal.rs, stuck.rs, manual.rs, trade_ops.rs, ledger.rs, deps.rs, relay_here.rs,
 //! remain_fact.rs.
-//! Настройки: stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154); через relay_here.rs —
+//! Настройки: signal.route_cooldown_s (через route_pause.rs, решение 293); stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154); через relay_here.rs —
 //! stuck.relay_max_loss_pct, stuck.no_quote_wait_ms (решение 229).
 //!
 //! Когда повтор:
@@ -217,10 +219,25 @@ pub async fn alert(core: &Core, deal: Deal, e: &OpError, r: &Retry) {
         Retry::Off(off) => format!("продажа не прошла: {e} — {off}"),
         Retry::No | Retry::Go { .. } | Retry::Here { .. } => format!("продажа не прошла: {e}"),
     };
+    // Решение 293 (ревью): биржа отклонила продажу — пауза направления сделки (route_pause.rs), чтобы следующие
+    // сделки этой монеты не покупали её снова, пока человек разбирается. Не задана signal.route_cooldown_s — как раньше.
+    if rejected_on_cex(core, &deal, e) {
+        super::route_pause::pause(core, &deal.direction).await;
+    }
     // Хронологию пишет raise_alert («… — ждём решения человека»): своей строки здесь нет — без дубля (решение 154).
     let value = super::trade_ops::deal_value(core, &deal).await;
     let loss = value.ok().map(|(x, _)| deal.loss_pct_if(x));
     super::manual::raise_alert(core, deal, loss, why, Some(e.message.clone())).await;
+}
+
+/// Решение 293 (ревью): продажа отклонена биржей (OrderRejected на площадке вида «биржа», где лежат монеты сделки).
+/// Принимает: ядро, сделку, ошибку. Открыта для тестов. Ошибок нет (вид площадки не известен — нет).
+pub fn rejected_on_cex(core: &Core, deal: &Deal, e: &OpError) -> bool {
+    e.code == Some(crate::gateway::errors::ErrorCode::OrderRejected)
+        && matches!(
+            super::trade_ops::kind(core, &deal.at),
+            Ok(crate::gateway::contract::VenueKind::Cex)
+        )
 }
 
 /// Предел повторов продажи, не ушедшей в сеть (stuck.unsent_retries_max). Не задано — 0: без повторов, сразу алерт.

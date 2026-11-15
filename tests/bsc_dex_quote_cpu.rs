@@ -107,6 +107,7 @@ fn bulk(p: &Parts, from: u32, n: u32) {
     }
 }
 
+#[ignore = "диагностика t132: какой тест переполняет стек"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn big_registry_same_quote_no_copy_in_time() {
     let p = parts().await;

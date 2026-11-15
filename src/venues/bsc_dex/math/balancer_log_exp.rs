@@ -3,7 +3,7 @@
 //! контракте пула: те же константы, те же шаги и то же целочисленное деление со знаком (Solidity: частное к нулю,
 //! остаток со знаком делимого). Нужен весовой формуле (FixedPoint.powUp, math/balancer_math.rs).
 //! Кто вызывает: math/balancer_math.rs.
-//! От чего зависит: alloy-primitives (I256, U256).
+//! От чего зависит: alloy-primitives (I256, U256), math/balancer_log_exp_table.rs (x_n, a_n).
 //! Настройки: нет (константы — свойства протокола, ссылки на строки ниже).
 //!
 //! Источник (решение 23): balancer/balancer-deployments@b55dc2b8 v2/deprecated/20210418-weighted-pool/build-info/
@@ -15,9 +15,11 @@
 
 use alloy_primitives::{I256, U256};
 
-/// Целое со знаком из десятичной строки константы протокола. Строки ниже — числа исходника, разбор не падает.
-fn c(s: &str) -> I256 {
-    I256::from_dec_str(s).unwrap_or(I256::ZERO)
+use super::balancer_log_exp_table::table;
+
+/// Целое без знака как I256 (малые константы протокола: 2, 100, 41, 130). Ошибок нет.
+fn int(n: u64) -> I256 {
+    I256::from_raw(U256::from(n))
 }
 
 /// 10^n как I256. Ошибок нет (n ≤ 36).
@@ -49,33 +51,6 @@ fn mul(a: I256, b: I256) -> Option<I256> {
     a.checked_mul(b)
 }
 
-/// x_n и a_n исходника (L61-L86): x0, x1 — без десятичных (e^x в целых), x2…x11 — 20 знаков.
-fn table() -> [(I256, I256); 12] {
-    [
-        (
-            c("128000000000000000000"),
-            c("38877084059945950922200000000000000000000000000000000000"),
-        ),
-        (c("64000000000000000000"), c("6235149080811616882910000000")),
-        (
-            c("3200000000000000000000"),
-            c("7896296018268069516100000000000000"),
-        ),
-        (
-            c("1600000000000000000000"),
-            c("888611052050787263676000000"),
-        ),
-        (c("800000000000000000000"), c("298095798704172827474000")),
-        (c("400000000000000000000"), c("5459815003314423907810")),
-        (c("200000000000000000000"), c("738905609893065022723")),
-        (c("100000000000000000000"), c("271828182845904523536")),
-        (c("50000000000000000000"), c("164872127070012814685")),
-        (c("25000000000000000000"), c("128402541668774148407")),
-        (c("12500000000000000000"), c("113314845306682631683")),
-        (c("6250000000000000000"), c("106449445891785942956")),
-    ]
-}
-
 /// LogExpMath.pow (L93-L139): x^y, оба — фикс-точка 18 знаков. Возвращает: результат или None — как откат
 /// (X_OUT_OF_BOUNDS, Y_OUT_OF_BOUNDS, PRODUCT_OUT_OF_BOUNDS) или переполнение. Ошибок иных нет.
 pub fn pow(x: U256, y: U256) -> Option<U256> {
@@ -101,7 +76,7 @@ pub fn pow(x: U256, y: U256) -> Option<U256> {
     };
     lxy = sdiv(lxy, one18)?;
     // MIN_NATURAL_EXPONENT = −41e18, MAX_NATURAL_EXPONENT = 130e18 (L50-L51).
-    if lxy < mul(c("-41"), one18)? || lxy > mul(c("130"), one18)? {
+    if lxy < mul(-int(41), one18)? || lxy > mul(int(130), one18)? {
         return None;
     }
     Some(exp(lxy)?.into_raw())
@@ -111,7 +86,7 @@ pub fn pow(x: U256, y: U256) -> Option<U256> {
 /// переполнение.
 fn exp(mut x: I256) -> Option<I256> {
     let (one18, one20) = (ten(18), ten(20));
-    if x < mul(c("-41"), one18)? || x > mul(c("130"), one18)? {
+    if x < mul(-int(41), one18)? || x > mul(int(130), one18)? {
         return None;
     }
     if x.is_negative() {
@@ -127,7 +102,7 @@ fn exp(mut x: I256) -> Option<I256> {
     } else {
         I256::ONE
     };
-    x = mul(x, c("100"))?;
+    x = mul(x, int(100))?;
     let mut product = one20;
     for (xn, an) in t.iter().take(10).skip(2) {
         if x >= *xn {
@@ -142,7 +117,7 @@ fn exp(mut x: I256) -> Option<I256> {
         term = sdiv(sdiv(mul(term, x)?, one20)?, I256::try_from(n).ok()?)?;
         sum += term;
     }
-    sdiv(mul(sdiv(mul(product, sum)?, one20)?, first)?, c("100"))
+    sdiv(mul(sdiv(mul(product, sum)?, one20)?, first)?, int(100))
 }
 
 /// LogExpMath.ln (L286-L421): натуральный логарифм, a > 0 — фикс-точка 18 знаков. None — a ≤ 0 или переполнение.
@@ -162,8 +137,8 @@ fn ln(mut a: I256) -> Option<I256> {
             sum += *xn;
         }
     }
-    sum = mul(sum, c("100"))?;
-    a = mul(a, c("100"))?;
+    sum = mul(sum, int(100))?;
+    a = mul(a, int(100))?;
     for (xn, an) in t.iter().skip(2) {
         if a >= *an {
             a = sdiv(mul(a, one20)?, *an)?;
@@ -178,8 +153,8 @@ fn ln(mut a: I256) -> Option<I256> {
         num = sdiv(mul(num, z2)?, one20)?;
         series += sdiv(num, I256::try_from(d).ok()?)?;
     }
-    series = mul(series, c("2"))?;
-    sdiv(sum + series, c("100"))
+    series = mul(series, int(2))?;
+    sdiv(sum + series, int(100))
 }
 
 /// LogExpMath.ln_36 (L456-L503): логарифм с 36 знаками для x около 1 (LN_36_LOWER/UPPER_BOUND, L55-L56). None —
@@ -195,5 +170,5 @@ fn ln_36(x: I256) -> Option<I256> {
         num = sdiv(mul(num, z2)?, one36)?;
         series += sdiv(num, I256::try_from(d).ok()?)?;
     }
-    mul(series, c("2"))
+    mul(series, int(2))
 }

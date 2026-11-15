@@ -1,12 +1,14 @@
 //! Файл: venues/bsc_dex/pools/load_balancer.rs
 //! Что делает: решение 289 — чтение состояния пула Balancer V2 на блоке одной пачкой (Multicall3 / JSON-RPC):
-//! Vault.getPoolTokens(id) (токены и полные балансы), getSwapFeePercentage, getPausedState и параметр кривой —
-//! getNormalizedWeights (весовой) или getAmplificationParameter (стейблсвап, A на блоке с рампой по времени). Неизменяемое
+//! Vault.getPoolTokens(id) (токены и полные балансы), getSwapFeePercentage, getPausedState пула и хранилища (ревью 289:
+//! Vault.swap — whenNotPaused) и параметр кривой — getNormalizedWeights (весовой) или getAmplificationParameter
+//! (стейблсвап, A на блоке с рампой по времени). Неизменяемое
 //! у пула — id, вид кривой (какая фабрика его создала: dex.factory — весовой, dex.balancer_stable_factory — стейблсвап;
 //! isPoolFromFactory) и decimals токенов (множители точности) — читается один раз на пул и держится в памяти до
 //! перезапуска. Собирает PoolState::VaultPool. Балансы меняет хранилище своими событиями — вид перечитывается каждым
 //! блоком (per_block.rs).
-//! Кто вызывает: pools/load.rs (ветка Proto::BalancerV2).
+//! Кто вызывает: pools/load.rs (ветка Proto::BalancerV2), pools/per_block_balancer.rs (calls / decode — все пулы вида за
+//! блок одной пачкой).
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer.rs, load_balancer_fixed.rs (неизменяемое у пула).
 //! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory [DEX]; dex.multicall3 [bsc_dex].
 //!
@@ -24,7 +26,11 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_balancer::{IBalancerPool as P, IBalancerVault as V};
 use super::families::Family;
-use super::load_balancer_fixed::fixed;
+use super::load_balancer_fixed::{Fixed, fixed};
+
+/// Вызовов на пул в пачке чтения (calls): getPoolTokens, getSwapFeePercentage, getPausedState пула, параметр кривой,
+/// getPausedState хранилища.
+pub const PER_POOL: usize = 5;
 
 /// Состояние пула на блоке. Принимает: окружение, вид DEX, адрес пула, пару (token0, token1), блок-тег. Ошибки:
 /// NotConfigured (dex.vault, dex.factory), узел, ответ не по ABI, состояние несогласовано (BadResponse).
@@ -37,12 +43,20 @@ pub async fn load(
 ) -> GatewayResult<PoolState> {
     let vault = ctx.dex_addr("dex.vault", f.id)?;
     let fx = fixed(ctx, f, vault, pool, tag).await?;
+    let got = call::try_many(ctx, &calls(vault, pool, &fx), tag).await?;
+    decode(&fx, &got, pair)
+        .map_err(|w| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}")))
+}
+
+/// Вызовы пачки чтения пула (PER_POOL штук, порядок — как разбирает decode). Пауза хранилища — getPausedState Vault
+/// (Vault.swap — whenNotPaused, Swaps.sol L66; TemporarilyPausable.sol L70-L83). Ошибок нет.
+pub fn calls(vault: Address, pool: Address, fx: &Fixed) -> Vec<(Address, Bytes)> {
     let curve: Bytes = if fx.weighted {
         P::getNormalizedWeightsCall {}.abi_encode().into()
     } else {
         P::getAmplificationParameterCall {}.abi_encode().into()
     };
-    let calls: Vec<(Address, Bytes)> = vec![
+    vec![
         (
             vault,
             V::getPoolTokensCall { poolId: fx.id }.abi_encode().into(),
@@ -50,28 +64,43 @@ pub async fn load(
         (pool, P::getSwapFeePercentageCall {}.abi_encode().into()),
         (pool, P::getPausedStateCall {}.abi_encode().into()),
         (pool, curve),
-    ];
-    let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}"));
-    let got = call::try_many(ctx, &calls, tag).await?;
-    let ok = |i: usize| {
-        got.get(i)
-            .and_then(|r| r.as_ref().ok())
-            .ok_or_else(|| bad(format!("вызов {i} откатился")))
+        (vault, P::getPausedStateCall {}.abi_encode().into()),
+    ]
+}
+
+/// Разбор ответов пачки (без сети). Принимает: неизменяемое пула, ответы calls по порядку, пару. Возвращает: VaultPool;
+/// пул или хранилище на паузе — paused = true (котировки нет). Ошибки (текст): откат вызова, ответ не по ABI, точность A
+/// ≠ 1000, токены пула изменились, несогласованное состояние (state).
+pub fn decode(
+    fx: &Fixed,
+    got: &[Result<Bytes, String>],
+    pair: (Address, Address),
+) -> Result<PoolState, String> {
+    let ok = |i: usize| match got.get(i) {
+        Some(Ok(b)) => Ok(b),
+        Some(Err(r)) => Err(format!("вызов {i} откатился: {r}")),
+        None => Err(format!("нет ответа на вызов {i}")),
     };
-    let pt = call::decode::<V::getPoolTokensCall>(ok(0)?)?;
-    let fee = call::decode::<P::getSwapFeePercentageCall>(ok(1)?)?;
-    let paused = call::decode::<P::getPausedStateCall>(ok(2)?)?.paused;
+    let dec = |e: alloy::sol_types::Error| format!("ответ не по ABI: {e}");
+    let pt = V::getPoolTokensCall::abi_decode_returns(ok(0)?).map_err(dec)?;
+    let fee = P::getSwapFeePercentageCall::abi_decode_returns(ok(1)?).map_err(dec)?;
+    let paused = P::getPausedStateCall::abi_decode_returns(ok(2)?)
+        .map_err(dec)?
+        .paused;
+    let vault_paused = P::getPausedStateCall::abi_decode_returns(ok(4)?)
+        .map_err(dec)?
+        .paused;
     let curve = if fx.weighted {
         VaultCurve::Weighted {
-            weights: call::decode::<P::getNormalizedWeightsCall>(ok(3)?)?,
+            weights: P::getNormalizedWeightsCall::abi_decode_returns(ok(3)?).map_err(dec)?,
         }
     } else {
-        let a = call::decode::<P::getAmplificationParameterCall>(ok(3)?)?;
+        let a = P::getAmplificationParameterCall::abi_decode_returns(ok(3)?).map_err(dec)?;
         if a.precision != U256::from(1_000u32) {
-            return Err(bad(format!(
+            return Err(format!(
                 "точность A {} ≠ 1000 (_AMP_PRECISION StableMath.sol L31)",
                 a.precision
-            )));
+            ));
         }
         VaultCurve::Stable { amp: a.value }
     };
@@ -80,19 +109,17 @@ pub async fn load(
         .iter()
         .map(|t| fx.scaling.get(t).copied())
         .collect();
-    let scaling = scaling
-        .ok_or_else(|| bad("токены пула в хранилище изменились — перезапуск чтения".into()))?;
+    let scaling = scaling.ok_or("токены пула в хранилище изменились — перезапуск чтения")?;
     state(
         fx.id,
         &pt.tokens,
         pt.balances,
         scaling,
         fee,
-        paused,
+        paused || vault_paused,
         curve,
         pair,
     )
-    .map_err(bad)
 }
 
 /// Сборка состояния (без сети; её же зовут тесты на записанных ответах). Принимает: id, токены и балансы хранилища,

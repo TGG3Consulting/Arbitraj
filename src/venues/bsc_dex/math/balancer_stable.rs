@@ -9,10 +9,12 @@
 //!
 //! Источник (решение 23): balancer/balancer-deployments@b55dc2b8 v2/deprecated/20210624-stable-pool/build-info/
 //! StablePoolFactory.json → contracts/StableMath.sol (= Sourcify пулов ACSI 0xa22f3e51, 0xe901c4e9, exact_match):
-//! _AMP_PRECISION = 1e3 (L31), _calculateInvariant L49-L105 (255 раундов, несходимость — откат
-//! STABLE_INVARIANT_DIDNT_CONVERGE), _calcOutGivenIn L109-L147 (D с округлением вверх, выход − 1), _calcInGivenOut
-//! L152-L190 (вход + 1), _getTokenBalanceGivenInvariantAndAllOtherBalances L465-L515 (255 раундов, несходимость —
-//! откат STABLE_GET_BALANCE_DIDNT_CONVERGE; у пула ACSI 0xe901c4e9 так откатываются все запросы — записано, BAL#322).
+//! _AMP_PRECISION = 1e3 (L31), _calculateInvariant L49-L105 (255 раундов, несходимость — откат L104
+//! Errors.STABLE_GET_BALANCE_DIDNT_CONVERGE = BAL#322), _calcOutGivenIn L109-L147 (D с округлением вверх, выход − 1),
+//! _calcInGivenOut L152-L190 (вход + 1), _getTokenBalanceGivenInvariantAndAllOtherBalances L465-L515 (255 раундов,
+//! несходимость — откат L514, тот же BAL#322). Пул ACSI 0xe901c4e9: все записанные запросы хранилища откатываются BAL#322;
+//! наш invariant() на записанных балансах блока 133699740 не сходится уже на инварианте (тест
+//! tests/bsc_dex_balancer_acsi_live.rs).
 //! Math.mul / Math.divUp / Math.divDown / FixedPoint.add / sub — с откатом (здесь None); умножения `*` без Math (Solidity
 //! 0.7 без проверки) — здесь с проверкой: в пределах пула переполнения нет, переполнение — None.
 

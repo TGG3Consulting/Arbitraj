@@ -108,3 +108,13 @@ pub async fn fixed(
         .insert(pool, x.clone());
     Ok(x)
 }
+
+/// Неизменяемое пула из памяти без обращения к узлу (пачка каждого блока, per_block_balancer.rs). None — пул ещё не
+/// читался. Ошибок нет.
+pub fn cached(pool: Address) -> Option<Fixed> {
+    FIXED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .and_then(|m| m.get(&pool).cloned())
+}

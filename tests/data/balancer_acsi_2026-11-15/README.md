@@ -31,6 +31,14 @@ ArbExecutor.bin-runtime, 15 946 байт; совпадение кода пров
 стейблсвапы GENERAL, обе стороны) и маршрут USDT → BUSD (стейбл) → WBNB (весовой); шаг с poolId чужого пула — откат
 BAL#521. Тест сверяет received с НАШЕЙ формулой (math/balancer_math.rs) на состоянии probe.json того же блока.
 
+`exec_state.json` (ревью 289, блок 133711501) — состояние и исполнение на ОДНОМ блоке: шесть пулов (getPoolId, getPoolTokens,
+getSwapFeePercentage, getPausedState, веса / A, decimals), getPausedState хранилища; те же 10 случаев шага 17 исполнителя
+v2 с кодом ревью 289 (15 946 байт, sha256 байтов 2167c3953adc0036…) — calldata eth_call (селектор и слова по 32 байта
+десятичными: hex в ответе вкладки не выводится), слот баланса токена, received = queryBatchSwap того же блока в 10 из 10;
+`foreign` — настоящий пул PancakeSwap V2 USDT/WBNB 0x16b9…0dae: getVault() и getPoolId() откатываются. Совпадение
+переписанного с ответом вкладки — SHA-256 строки JSON 9f203b7c…059744. Тест сверяет calldata с нашим кодировщиком шага и
+received — с нашей формулой на состоянии этого же блока.
+
 `source_excerpt.txt` — дословные выдержки build-info с номерами строк: IVault (getPool, getPoolTokens, swap, SingleSwap,
 BatchSwapStep, FundManagement, queryBatchSwap, события), PoolRegistry (registerPool, getPool, раскладка id), Swaps (swap,
 _swapWithPool, полные балансы в onSwap, queryBatchSwap), AssetTransfersHandler (_receiveAsset), FixedPoint, LogExpMath,

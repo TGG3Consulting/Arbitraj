@@ -75,7 +75,7 @@ contract ArbExecutor {
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
     // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
-// zeroForOne); BALANCER — abi.encode(bytes32 poolId); остальные — пусто.
+    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -358,7 +358,7 @@ contract ArbExecutor {
 
     // Balancer V2 (решение 289): s.pool — Vault, data — poolId. Vault сам списывает вход transferFrom(исполнитель → Vault,
     // сумма шага) (Swaps.sol L100, AssetTransfersHandler.sol L76) — approve ровно на шаг; выход Vault переводит `to`
-    // (Swaps.sol L101). GIVEN_IN = 0 (IVault.sol L498), limit 1 — нулевой выход откатывает (Swaps.sol L97), итог маршрута
+    // (Swaps.sol L101). GIVEN_IN = 0 (IVault.sol L498), limit 1 — нулевой выход откатывает (Swaps.sol L98), итог маршрута
     // проверяет minOut; срок — block.timestamp (срок транзакции проверен в execute). Разрешение после шага — 0.
     function _balancer(Step calldata s, uint256 amount, address to) internal {
         bytes32 poolId = abi.decode(s.data, (bytes32));

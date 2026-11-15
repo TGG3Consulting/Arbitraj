@@ -16,8 +16,15 @@ use super::super::math::balancer_math;
 
 /// Шагов деления пополам (точность — 2^-64 от верхней границы поиска); не настройка — свойство алгоритма поиска.
 const STEPS: u32 = 64;
-/// Доля баланса входа для пробы цены: 1/10^6 (малая сумма, по которой берётся цена p0). Свойство алгоритма.
-const PROBE_DIV: u64 = 1_000_000;
+/// Доля баланса входа для пробы цены: 1/10^6 (малая сумма, по которой берётся цена p0 — сдвиг цены пула от неё много
+/// меньше полосы dex.depth_band_pct). Свойство алгоритма оценки, не порог торговли. Её же берёт spot.rs (цена для
+/// размера пробы).
+pub const PROBE_DIV: u64 = 1_000_000;
+/// Потолок поиска глубины стейблсвапа — во столько раз больше баланса входа. Предела входа у StableMath в исходнике нет
+/// (MAX_IN_RATIO 30 % — только у весового, WeightedMath.sol L36), поэтому граница поиска — свойство алгоритма (как 64
+/// шага в stable_depth.rs, StableMath.sol L29-L33 — только пределы A и числа токенов): на потолке средняя цена ещё в
+/// полосе — глубина до потолка и full = false.
+const STABLE_CAP_BALANCES: u8 = 10;
 
 /// Одно направление. Принимает: состояние пула, индексы входа и выхода, полосу b (0..1), покупка ли (вход — встречный
 /// токен). Возвращает: (сумма встречного токена: покупка — вход, продажа — выход; полоса прочитана целиком) или None —
@@ -52,13 +59,15 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
             o.checked_mul(probe)?.checked_mul(ten_k)? >= p_out.checked_mul(x)?.checked_mul(lim)?
         })
     };
-    // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — 10 балансов входа.
+    // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — STABLE_CAP_BALANCES балансов.
     let cap = match &d.curve {
         crate::core::types::VaultCurve::Weighted { .. } => balancer_math::mul_down(
             bal_in,
             U256::from(3u8) * U256::from(10u8).pow(U256::from(17u8)),
         )?,
-        crate::core::types::VaultCurve::Stable { .. } => bal_in.checked_mul(U256::from(10u8))?,
+        crate::core::types::VaultCurve::Stable { .. } => {
+            bal_in.checked_mul(U256::from(STABLE_CAP_BALANCES))?
+        }
     };
     if within(cap).unwrap_or(false) {
         let o = balancer_math::amount_out(&nf, i, j, cap)?;

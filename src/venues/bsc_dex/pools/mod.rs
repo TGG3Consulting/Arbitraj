@@ -130,6 +130,7 @@ pub mod mid_dex;
 pub mod mids;
 pub mod order;
 pub mod per_block;
+pub mod per_block_balancer;
 pub mod progress;
 pub mod registry;
 pub mod registry_frozen;

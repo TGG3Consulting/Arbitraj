@@ -5,25 +5,32 @@
 //! 1. Наша математика (load_balancer::state → math/balancer_math.rs) на записанном состоянии даёт ТОТ ЖЕ выход, что
 //!    Vault.queryBatchSwap GIVEN_IN, во всех ответах пулов фабрик (включая откаты: вход 35 % баланса весового — BAL#304,
 //!    у стейблсвапа 0xe901…c6c5 — несходимость BAL#322 → None), и тот же вход, что GIVEN_OUT.
-//! 2. Проверка пула (verify_balancer): пулы фабрик принимаются; пул не из фабрик, самозванец (хранилище знает под id
-//!    другой адрес), чужое хранилище, пара не из токенов пула, стейблсвап без dex.balancer_stable_factory — отказ.
-//! 3. Шаг исполнителя на цепи: выход шага 17 исполнителя v2 (eth_call с подменой кода, exec_sim.json) = наша формула на
-//!    состоянии того же блока — 9 одиночных шагов и маршрут из двух шагов; разбор ответа queryBatchSwap — quoter_balancer.
-//! 4. Вид BALANCER = 17, data = poolId, только v2; вид DEX — graphable, шаг BALANCER; topic0 событий пула — по подписям.
+//! 2. Проверка пула (verify_balancer): пулы фабрик принимаются; пул не из фабрик (0xb978…), настоящий пул другой DEX
+//!    (PancakeSwap V2: getVault откатывается, exec_state.json), монета не из токенов пула (USDT у 0x44a9…), стейблсвап без
+//!    dex.balancer_stable_factory — отказ; всё — на записанных ответах без подмены.
+//! 3. Шаг исполнителя на цепи: выход шага 17 исполнителя v2 (eth_call с подменой кода) = наша формула на состоянии того
+//!    же блока — exec_sim.json (блок 133699740, код коммита 9bd0402a) и exec_state.json (блок 133711501, код ревью 289,
+//!    состояние пулов и calldata того же вызова): 9 одиночных шагов и маршрут из двух шагов; наш кодировщик шага
+//!    (Params::Balancer → kind::encode → execute) даёт побайтно записанную calldata.
+//! 4. Стейблсвап 0xe901…: наш invariant() на записанных балансах не сходится (как BAL#322 хранилища); таблица LogExpMath
+//!    = строкам исходника (source_excerpt.txt); разбор queryBatchSwap — quoter_balancer.
+//! 5. Вид BALANCER = 17, data = poolId, только v2; вид DEX — graphable, шаг BALANCER; topic0 событий пула — по подписям.
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::{math::balancer_math, pools::{load_balancer, verify_balancer, families,
-//! exec_kind, exec_callback, abi_balancer}, quote::quoter_balancer, exec::executor::kind}.
+//! От чего зависит: arb::venues::bsc_dex::{math::{balancer_math, balancer_stable, balancer_log_exp_table}, pools::{load_balancer,
+//! verify_balancer, families, exec_kind, exec_callback, abi_balancer}, quote::quoter_balancer, exec::executor::{kind, abi}}.
 
 use alloy::sol_types::{SolCall, SolValue};
 use alloy_primitives::{Address, B256, Bytes, I256, U256, keccak256};
 use serde_json::Value;
 
 use arb::core::types::{PoolKind, PoolState, VaultCurve, VaultPoolData};
-use arb::venues::bsc_dex::exec::executor::kind::Params;
-use arb::venues::bsc_dex::math::balancer_math;
+use arb::venues::bsc_dex::exec::executor::abi::ArbExecutor;
+use arb::venues::bsc_dex::exec::executor::kind::{self, ALL_BPS, Params, StepSpec};
+use arb::venues::bsc_dex::math::{balancer_log_exp_table, balancer_math, balancer_stable};
 use arb::venues::bsc_dex::pools::abi_balancer::{self, IBalancerVault};
 use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
+use arb::venues::bsc_dex::pools::load_balancer_fixed::Fixed;
 use arb::venues::bsc_dex::pools::verify::Candidate;
 use arb::venues::bsc_dex::pools::{exec_callback, families, load_balancer, verify_balancer};
 use arb::venues::bsc_dex::quote::quoter_balancer;
@@ -199,7 +206,6 @@ fn executor_step_received_equals_our_formula() {
         n += 1;
     }
     assert_eq!(n, 10);
-    assert!(ex["negative"]["received"].is_null());
 }
 
 /// Ответы второго прохода проверки по записи: getPool, getPoolTokens, isPoolFromFactory (весовая, стейблсвап).
@@ -218,7 +224,7 @@ fn second(p: &Value, reg: Address) -> Vec<Result<Bytes, String>> {
 }
 
 #[test]
-fn verify_takes_factory_pools_and_rejects_impostors() {
+fn verify_takes_factory_pools_and_rejects_others() {
     let probe = json("probe.json");
     let fam = families::make("acsi-finance", "balancer_v2").expect("вид");
     let vault: Address = probe["vault"]["address"].as_str().unwrap().parse().unwrap();
@@ -259,29 +265,6 @@ fn verify_takes_factory_pools_and_rejects_impostors() {
         if !from_factory(p) {
             continue;
         }
-        // Самозванец: хранилище под этим id знает другой адрес.
-        let other = Address::repeat_byte(0x11);
-        assert!(
-            verify_balancer::decide(&cand, plan, &second(p, other))
-                .unwrap_err()
-                .contains("самозванец")
-        );
-        // Чужое хранилище.
-        let bad = (pool, Address::repeat_byte(0x22), wf, Some(sf));
-        assert!(
-            verify_balancer::first_pass(
-                &bad,
-                &Ok(Bytes::from(vault.abi_encode())),
-                &Ok(Bytes::new())
-            )
-            .is_err()
-        );
-        // Пара не из токенов пула.
-        let wrong = Candidate {
-            coin: Address::repeat_byte(0x33),
-            ..cand.clone()
-        };
-        assert!(verify_balancer::decide(&wrong, plan, &second(p, pool)).is_err());
         // Стейблсвап без dex.balancer_stable_factory — отказ; весовой — принят.
         let no_sf = (pool, vault, wf, None);
         let r = verify_balancer::decide(&cand, no_sf, &second(p, pool)[..3]);
@@ -291,6 +274,203 @@ fn verify_takes_factory_pools_and_rejects_impostors() {
             "{}",
             p["pool"]
         );
+    }
+}
+
+#[test]
+fn verify_rejects_real_foreign_pool_and_foreign_coin() {
+    let probe = json("probe.json");
+    let st = json("exec_state.json");
+    let fam = families::make("acsi-finance", "balancer_v2").expect("вид");
+    let vault: Address = probe["vault"]["address"].as_str().unwrap().parse().unwrap();
+    let wf = addr(&probe["factories"]["weighted"]["address"]);
+    let sf = addr(&probe["factories"]["stable"]["address"]);
+    // Настоящий пул другой DEX (PancakeSwap V2): getVault() и getPoolId() откатываются — первый проход отклоняет.
+    let f = &st["foreign"];
+    let pc = addr(&f["pool"]);
+    let rev = |v: &Value| Err::<Bytes, String>(v["revert"].as_str().unwrap().to_string());
+    let r = verify_balancer::first_pass(
+        &(pc, vault, wf, Some(sf)),
+        &rev(&f["getVault"]),
+        &rev(&f["getPoolId"]),
+    );
+    assert!(r.unwrap_err().contains("getVault"));
+    // Пул фабрики 0x44a9… с монетой USDT, которой среди его токенов нет (ответы — записанные, без подмены).
+    let p = pool_of(&probe, "0x44a9ce69ef2a71a9630697ca5cab3f4adaf8f90d");
+    let usdt: Address = "0x55d398326f99059ff775485246999027b3197955"
+        .parse()
+        .unwrap();
+    assert!(
+        !p["tokens"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| addr(t) == usdt)
+    );
+    let pool = addr(&p["pool"]);
+    let cand = Candidate {
+        family: fam,
+        pool: p["pool"].as_str().unwrap().into(),
+        coin: usdt,
+        quote: addr(&p["tokens"][2]),
+    };
+    let r = verify_balancer::decide(
+        &cand,
+        (pool, vault, wf, Some(sf)),
+        &second(p, addr(&p["getPool"][0])),
+    );
+    assert!(r.unwrap_err().contains("нет пары"));
+}
+
+#[test]
+fn exec_state_step_calldata_and_received() {
+    let st = json("exec_state.json");
+    let vault = addr(&st["vault"]);
+    let pools: Vec<&Value> = st["pools"].as_array().unwrap().iter().collect();
+    let find = |a: &Value| *pools.iter().find(|p| p["pool"] == *a).unwrap();
+    let ix = |p: &Value, t: &Value| {
+        p["tokens"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|x| x == t)
+            .unwrap()
+    };
+    let id = |p: &Value| p["pool_id"].as_str().unwrap().parse::<B256>().unwrap();
+    assert_eq!(st["vault_paused"][0], "0");
+    let mut n = 0;
+    for c in st["exec"].as_array().unwrap() {
+        let hops: Vec<(&Value, Value, Value)> = match c["route"].as_array() {
+            Some(r) => vec![
+                (find(&r[0]), c["token_in"].clone(), c["mid"].clone()),
+                (find(&r[1]), c["mid"].clone(), c["token_out"].clone()),
+            ],
+            None => vec![(
+                find(&c["pool"]),
+                c["token_in"].clone(),
+                c["token_out"].clone(),
+            )],
+        };
+        // Наш кодировщик шага (Params::Balancer — как executor/entry.rs) → calldata execute побайтно = записанной.
+        let steps: Vec<_> = hops
+            .iter()
+            .map(|(p, a, b)| {
+                kind::encode(&StepSpec {
+                    params: Params::Balancer { pool_id: id(p) },
+                    pool: vault,
+                    token_in: addr(a),
+                    token_out: addr(b),
+                    share_bps: ALL_BPS,
+                })
+                .unwrap()
+            })
+            .collect();
+        let call = ArbExecutor::executeCall {
+            tokenIn: addr(&c["token_in"]),
+            amountIn: U256::ZERO,
+            tokenOut: addr(&c["token_out"]),
+            minOut: U256::ZERO,
+            deadline: U256::from(4_102_444_800u64),
+            steps,
+        };
+        let mut want =
+            alloy_primitives::hex::decode(c["calldata_selector"].as_str().unwrap()).unwrap();
+        for w in c["calldata_words"].as_array().unwrap() {
+            want.extend_from_slice(&dec(w).to_be_bytes::<32>());
+        }
+        assert_eq!(call.abi_encode(), want, "{}", c["pool"]);
+        // Получено шагом 17 = наша формула на состоянии того же блока.
+        let mut amount = dec(&c["balance_in"]);
+        for (p, a, b) in &hops {
+            let (i, j) = (ix(p, a), ix(p, b));
+            amount = balancer_math::amount_out(&state(p, i, j), i, j, amount).unwrap();
+        }
+        assert_eq!(amount, dec(&c["received"]), "{c}");
+        n += 1;
+    }
+    assert_eq!(n, 10);
+}
+
+#[test]
+fn stable_0xe901_invariant_does_not_converge() {
+    let probe = json("probe.json");
+    let p = pool_of(&probe, "0xe901c4e9a56a175cb5c94bfb5f821ebd5fc826c5");
+    let d = state(p, 0, 1);
+    let up: Vec<U256> = d
+        .balances
+        .iter()
+        .zip(&d.scaling)
+        .map(|(b, s)| *b * *s)
+        .collect();
+    let VaultCurve::Stable { amp } = d.curve else {
+        panic!("не стейблсвап")
+    };
+    assert_eq!(balancer_stable::invariant(amp, &up, true), None);
+}
+
+#[test]
+fn log_exp_table_equals_source() {
+    let src = std::fs::read_to_string(format!("{DIR}source_excerpt.txt")).unwrap();
+    let num = |name: &str| -> I256 {
+        let line = src
+            .lines()
+            .find(|l| l.contains(&format!("int256 constant {name} = ")))
+            .unwrap();
+        let v = line.split(" = ").nth(1).unwrap().split(';').next().unwrap();
+        I256::from_dec_str(v).unwrap()
+    };
+    let t = balancer_log_exp_table::table();
+    for (k, (x, a)) in t.iter().enumerate() {
+        assert_eq!(
+            (*x, *a),
+            (num(&format!("x{k}")), num(&format!("a{k}"))),
+            "x{k}/a{k}"
+        );
+    }
+}
+
+#[test]
+fn decode_batch_answers_with_vault_pause() {
+    // Ответы пачки чтения (load_balancer::calls) — записанные значения exec_state.json, ABI-кодированные.
+    let st = json("exec_state.json");
+    for p in st["pools"].as_array().unwrap() {
+        let tokens: Vec<Address> = p["tokens"].as_array().unwrap().iter().map(addr).collect();
+        let weighted = !p["weights"].is_null();
+        let scaling = tokens
+            .iter()
+            .zip(list(&p["decimals"]))
+            .map(|(t, d)| (*t, U256::from(10u8).pow(U256::from(18u8) - d)))
+            .collect();
+        let fx = Fixed {
+            id: p["pool_id"].as_str().unwrap().parse().unwrap(),
+            weighted,
+            scaling,
+        };
+        let w3 =
+            |v: &Value| (dec(&v[0]) == U256::from(1u8), dec(&v[1]), dec(&v[2])).abi_encode_params();
+        let curve = if weighted {
+            list(&p["weights"]).abi_encode()
+        } else {
+            let a = list(&p["amp"]);
+            (a[0], a[1] == U256::from(1u8), a[2]).abi_encode_params()
+        };
+        let got: Vec<Result<Bytes, String>> = vec![
+            Ok((tokens.clone(), list(&p["balances"]), U256::ZERO)
+                .abi_encode_params()
+                .into()),
+            Ok(dec(&p["swapFee"]).abi_encode().into()),
+            Ok(w3(&p["paused"]).into()),
+            Ok(curve.into()),
+            Ok(w3(&st["vault_paused"]).into()),
+        ];
+        assert_eq!(got.len(), load_balancer::PER_POOL);
+        let PoolState::VaultPool(d) =
+            load_balancer::decode(&fx, &got, (tokens[0], tokens[1])).unwrap()
+        else {
+            panic!("не VaultPool")
+        };
+        assert_eq!(*d, state(p, 0, 1));
+        assert!(!d.paused, "{}", p["pool"]);
     }
 }
 

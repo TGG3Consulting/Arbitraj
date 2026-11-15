@@ -183,6 +183,22 @@ impl Book {
         usdt_dec: u8,
         p: &Prep,
     ) -> Result<Depth, String> {
+        self.depth_prep_r(ctx, reg, tokens, e, usdt_dec, p, &mut false)
+    }
+
+    /// То же, что depth_prep, и признак `recomputed` (решение 301 д — замер построения графа): true — глубина считалась
+    /// заново (не взята из памяти — ни удачная, ни неудачная). Ошибки: как у depth_prep.
+    #[allow(clippy::too_many_arguments)]
+    pub fn depth_prep_r(
+        &self,
+        ctx: &Ctx,
+        reg: &Registry,
+        tokens: &Tokens,
+        e: &Entry,
+        usdt_dec: u8,
+        p: &Prep,
+        recomputed: &mut bool,
+    ) -> Result<Depth, String> {
         let (band_pct, min, hyst) = (p.band, p.min, p.hyst);
         let key = p.key(reg, e);
         let r = &e.pool.reference;
@@ -196,6 +212,7 @@ impl Book {
             return Err(why);
         }
         self.calcs.fetch_add(1, Ordering::Relaxed);
+        *recomputed = true;
         let units = match depth_band::band_units(e, band_pct) {
             Ok(u) => u,
             Err(why) => {

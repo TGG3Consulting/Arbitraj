@@ -82,6 +82,7 @@ pub mod fee_refresh;
 pub mod fee_watch;
 pub mod graph;
 pub mod graph_cache;
+pub mod graph_timing;
 pub mod group;
 pub mod history_gate;
 pub mod history_start;

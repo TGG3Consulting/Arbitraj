@@ -21,13 +21,15 @@
 //! verify.rs), а не граф.
 //! Решение 301 (в): брошенный расчёт (quote/abandon.rs — срок расчёта вышел) не ждёт замок и не строит: признак
 //! проверяется до ожидания замка и после его получения.
+//! Решение 301 (д): замер построения (ожидание замка, очередь, build, N/R/E) — запись dex.graph_build по
+//! log.graph_timing / log.graph_timing_min_ms (pools/graph_timing.rs).
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (через graph::cached); pools/registry.rs (хранит Cache).
-//! От чего зависит: graph.rs (build), registry.rs, tokens.rs, ctx.rs.
+//! От чего зависит: graph.rs (build_measured), graph_timing.rs, quote/abandon.rs, registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct
-//! [bsc_dex] — часть ключа кэша.
+//! [bsc_dex] — часть ключа кэша; через graph_timing.rs — log.graph_timing, log.graph_timing_min_ms.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -40,7 +42,8 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::quote::abandon;
 use super::super::tokens::Tokens;
-use super::graph::{Graph, build};
+use super::graph::{Graph, build_measured};
+use super::graph_timing::{self, Measure};
 use super::registry::Registry;
 
 /// На чём построен граф (решение 129): версия реестра, dex.route_max_pools_per_edge, настройки глубины (полоса, порог,
@@ -77,6 +80,8 @@ pub struct Cache {
     pinned: Option<Arc<(PathsKey, Arc<Vec<Skeleton>>)>>,
     /// Решение 301: сколько раз граф строился (замер для проверки очереди построений; настроек нет).
     builds: Arc<AtomicU64>,
+    /// Решение 301 (д): сколько построений сейчас ждут замок `building` (замер dex.graph_build).
+    waiting: Arc<AtomicUsize>,
 }
 
 /// Скелет пути (решение 189): по шагам — пул, токен входа, токен выхода. Без состояния пула.
@@ -189,14 +194,33 @@ pub fn cached_as_of(
     abandon::check(ctx, "ожидание построения графа")?;
     // Одно построение за раз; дождавшийся берёт граф, построенный другим, если он не старше запроса (решение 301).
     // Вызывается из счёта котировки вне рабочих потоков tokio (quote/cpu.rs) — ожидание замка рантайм не держит.
+    // Решение 301 (д): замер очереди — сколько ждали при входе, сколько ждут за ним, сколько ждал он.
+    let t0 = Instant::now();
+    let ahead = cache.waiting.fetch_add(1, Ordering::AcqRel);
     let _one = cache.building.lock().unwrap_or_else(|p| p.into_inner());
+    cache.waiting.fetch_sub(1, Ordering::AcqRel);
+    let wait = t0.elapsed();
+    let behind = cache.waiting.load(Ordering::Acquire);
     if let Some(g) = hit() {
         return Ok(g);
     }
     abandon::check(ctx, "построение графа")?;
     cache.builds.fetch_add(1, Ordering::Relaxed);
     let slot = &cache.slot;
-    let g = Arc::new(build(ctx, reg, tokens, usdt_dec)?);
+    let t1 = Instant::now();
+    let (g, stats) = build_measured(ctx, reg, tokens, usdt_dec)?;
+    let g = Arc::new(g);
+    graph_timing::report(
+        ctx,
+        &Measure {
+            wait,
+            ahead,
+            behind,
+            build: t1.elapsed(),
+            stats,
+            edges: g.len(),
+        },
+    );
     let mut m = slot.lock().unwrap_or_else(|p| p.into_inner());
     // Не затираем более новый граф, построенный параллельно.
     if m.as_ref().is_none_or(|(st, _)| st.version <= version) {

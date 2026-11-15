@@ -8,7 +8,9 @@
 //! (б) неудачная глубина пула (расчёт невозможен) считается один раз на ключ глубины: повторные построения графа её не
 //!     пересчитывают (счётчик Book::calcs), причина та же; сменилось состояние пула (ключ) — пересчёт;
 //! (в) брошенный расчёт (признак quote/abandon.rs поднят — срок расчёта вышел) не ждёт замок и не строит граф
-//!     (Timeout, счётчик построений не растёт); живой расчёт в той же обёртке строит как обычно.
+//!     (Timeout, счётчик построений не растёт); живой расчёт в той же обёртке строит как обычно;
+//! (д) счётчики замера построения (graph::build_measured): N — пулов в реестре, R — глубин пересчитано (второе
+//!     построение на том же реестре — 0), граф тот же, что у build.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::{graph, registry}, tests/route_common.
 
@@ -153,4 +155,17 @@ async fn abandoned_calc_does_not_build() {
         live.len(),
         graph::build(&p.ctx, reg, &p.tokens, 18).unwrap().len()
     );
+}
+
+#[tokio::test]
+async fn build_measured_counts_pools_and_recomputed() {
+    let p = route_common::parts().await;
+    let reg = &p.registry;
+    let (g1, s1) = graph::build_measured(&p.ctx, reg, &p.tokens, 18).unwrap();
+    assert_eq!(s1.pools, reg.all().len());
+    let (g2, s2) = graph::build_measured(&p.ctx, reg, &p.tokens, 18).unwrap();
+    assert_eq!(s2.pools, s1.pools);
+    assert_eq!(s2.recomputed, 0, "реестр не менялся — все глубины из памяти");
+    assert_eq!(g1.len(), g2.len());
+    assert_eq!(g2.len(), graph::build(&p.ctx, reg, &p.tokens, 18).unwrap().len());
 }

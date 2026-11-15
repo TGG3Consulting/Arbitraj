@@ -9,18 +9,21 @@
 //! Сторож: размер cpu::scoped не зависит от размера работы (с настоящей работой и с крошечной — одинаков): работа
 //! лежит в куче, на стеке — указатель и обёртки. Убрали Box::pin (scoped принимает работу по значению) — размеры
 //! разойдутся, тест упадёт с понятным текстом, а не процесс со stack overflow.
+//! Расчёт «без потолка» (core/uncapped_queue.rs run, решение 141): uncapped::compute голый, под urgency::scope по
+//! значению (как до правки) и в uncapped_queue::scoped из кучи — по типу; тот же сторож.
 //! Будущие не опрашиваются. Цепочка по значению меряется по типу (ret_size: размер результата функции без вызова) —
 //! в самом тесте она не собирается, чтобы не переполнить стек потока теста.
 //! Данные — запись маршрута CAKE (tests/data/routes_2026-10-29, route_common), как tests/bsc_dex_quote_cpu.rs.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing, abandon}, arb::gateway::{calc_meter, quote_stage,
-//! urgency}, tests/route_common.
+//! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing, abandon}, arb::core::{uncapped, uncapped_queue},
+//! arb::gateway::{calc_meter, quote_stage, urgency}, tests/route_common.
 
 mod route_common;
 
 use std::future::Future;
 use std::io::Write;
 use std::mem::size_of_val;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -28,6 +31,8 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
 use arb::core::types::{Asset, Side, TokenTaxes};
+use arb::core::{uncapped, uncapped_queue};
+use arb::gateway::urgency::Urgency;
 use arb::gateway::{calc_meter, quote_stage, urgency};
 use arb::venues::bsc_dex::quote::{Quoting, abandon, cpu, routing};
 
@@ -109,6 +114,28 @@ fn chain_sizes<W: Future>(_: &W) -> [usize; 4] {
     ]
 }
 
+/// Расчёт «без потолка» (core/uncapped_queue.rs run): работа под urgency::scope по значению — как до правки.
+/// Ошибок нет.
+fn u_val<W: Future>(w: W) -> impl Future<Output = W::Output> {
+    urgency::scope(Urgency::Background, w)
+}
+
+/// То же сейчас: core/uncapped_queue.rs scoped с работой из кучи. Ошибок нет.
+fn u_box<W: Future>(w: Pin<Box<W>>) -> impl Future<Output = W::Output> {
+    uncapped_queue::scoped(w)
+}
+
+/// Размеры по типу будущего расчёта R = uncapped::compute (функция не вызывается — Core не нужен): голое, под
+/// urgency::scope по значению, uncapped_queue::scoped из кучи, scoped с крошечной работой. Ошибок нет.
+fn uncapped_sizes<A, B, C, D, R: Future>(_: fn(A, B, C, D) -> R) -> [usize; 4] {
+    [
+        size_of::<R>(),
+        ret_size(u_val::<R>),
+        ret_size(u_box::<R>),
+        ret_size(u_box::<std::future::Ready<()>>),
+    ]
+}
+
 #[tokio::test]
 async fn future_sizes_t132() {
     let p = route_common::parts().await;
@@ -126,11 +153,14 @@ async fn future_sizes_t132() {
     let (_g2, flag2) = abandon::guard();
     let tiny = cpu::scoped(flag2, None, None, false, Box::pin(std::future::ready(())));
     let tiny_size = size_of_val(&tiny);
+    let [u_bare, u_scope, u_now, u_tiny] = uncapped_sizes(uncapped::compute);
     let ptr = size_of::<usize>();
     let text = format!(
         "t132 размер будущего работы котировки, байт: routing::run {bare}; по значению (dd74d9b9): \
          + final_if {s1}, + calc_meter::scope_opt {s2}, + urgency::scope_opt {s3}, + abandon::scope {s4}; \
-         сейчас cpu::scoped (Box::pin) {now}; cpu::scoped с крошечной работой {tiny_size}; указатель {ptr}"
+         сейчас cpu::scoped (Box::pin) {now}; cpu::scoped с крошечной работой {tiny_size}; указатель {ptr}; \
+         uncapped::compute {u_bare}, + urgency::scope по значению (до правки) {u_scope}, \
+         сейчас uncapped_queue::scoped (Box::pin) {u_now}, с крошечной работой {u_tiny}"
     );
     say(&text);
     // Сторож: работа в куче — на стеке потока счёта указатель и обёртки, размер от работы не зависит.
@@ -140,4 +170,9 @@ async fn future_sizes_t132() {
     );
     // Работа из кучи не крупнее цепочки по значению (иначе замер не показывает выигрыша — нужен иной разбор).
     assert!(now < s4, "{text}");
+    // Тот же сторож для расчёта «без потолка» (core/uncapped_queue.rs).
+    assert_eq!(
+        u_now, u_tiny,
+        "будущее расчёта «без потолка» зависит от размера работы — работа снова по значению (нет Box::pin?): {text}"
+    );
 }

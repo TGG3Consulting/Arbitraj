@@ -76,8 +76,10 @@
   обёрток — cpu::scoped (принимает только Pin<Box<F>>). Замер и сторож — tests/bsc_dex_quote_cpu_stack.rs (числа
   пишутся в журнал прогона и при успехе). Цифры — из прогона коммита с этим тестом: ____ (вписать).
   Открыто: (1) релизная сборка не мерялась — `cargo test --release --test bsc_dex_quote_cpu_stack` (вручную или
-  шагом workflow — решает Тигран); (2) core/uncapped_queue.rs:178 — тот же приём (spawn_blocking + block_on
-  будущего uncapped::compute по значению под urgency::scope), размер не измерен, не менялось.
+  шагом workflow — решает Тигран). Закрыто: core/uncapped_queue.rs (фон «без потолка») — тот же приём был и там;
+  теперь Box::pin внутри замыкания spawn_blocking + uncapped_queue::scoped (только Pin<Box<F>>), размеры и сторож —
+  в том же тесте; до spawn_blocking не перенесено — нужен Send будущего uncapped::compute (по коду не установлен).
+  Других block_on в src нет (DECISIONS 301, дополнение «стек»).
   Открытые пункты ревью t132 — НЕ делаются сейчас:
   1. **В1:** брошенный расчёт прерывает уже начатое построение графа — проверка признака на каждом пуле
      (pools/graph.rs build_measured, abandon::check в цикле по пулам) внутри построения под замком

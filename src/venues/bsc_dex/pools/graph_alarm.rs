@@ -67,7 +67,9 @@ impl Alarm {
     }
 }
 
-pub use super::graph_alarm_owner::{full_failed, full_ok, not_built, owner_failed};
+pub use super::graph_alarm_owner::{
+    full_failed, full_ok, not_built, owner_failed, stage_b_overdue,
+};
 
 /// Запись журнала и (если задан код) событие ядру — отдельной задачей. Ошибок нет.
 pub(super) fn emit(

@@ -8,6 +8,7 @@
 //!   путём t132), запрос полной пересборки с причиной, канал событий ядру (Telegram), пульс круга для сторожа, причина
 //!   отсутствия снимка (не задана настройка и т. п.), счётчики экрана (graph_stats.rs).
 //!
+//! Признак догоняющей сборки, ступень Б и срок повтора — graph_stage_b.rs (методы Bg).
 //! Кто вызывает: graph_cache.rs (хранит), graph_owner.rs, graph_full.rs, graph_guard.rs, graph_read.rs, graph_alarm.rs,
 //! graph_stats.rs, registry.rs (changes), venue.rs (пересборка по кнопке).
 //! От чего зависит: graph.rs (Graph), graph_changes.rs, graph_stats.rs, gateway/events.rs (MarketEvent), tokio.
@@ -68,10 +69,14 @@ pub struct Bg {
     /// Ревью №2 (A, B): накопительной карты нет или она не обновляется (идёт полная сборка после перезапуска,
     /// доводка полной сборки) — действующий снимок отдаётся и отставшим не считается (graph_read.rs); значение — с
     /// какого момента (для предела ступени Б dex.graph_stage_b_max_ms, повторное ревью п. 4).
-    catching_since: Mutex<Option<Instant>>,
+    pub(super) catching_since: Mutex<Option<Instant>>,
     /// Повторное ревью п. 3: не раньше этого момента повторять неудавшуюся полную сборку (dex.graph_retry_pause_s) —
     /// переживает перезапуск владельца.
-    retry_at: Mutex<Option<tokio::time::Instant>>,
+    pub(super) retry_at: Mutex<Option<tokio::time::Instant>>,
+    /// Третье ревью п. 1: перезапуск по пределу ступени Б уже был в этой ступени — второй раз не снимаем (петли нет).
+    pub(super) stage_b_restarted: AtomicBool,
+    /// Третье ревью п. 1: ступень Б просрочена после перезапуска — льгота снята (предохранитель снова действует).
+    pub(super) stage_b_overdue: AtomicBool,
 }
 
 impl Bg {
@@ -127,59 +132,15 @@ impl Bg {
         self.generation.load(Ordering::Acquire) == g
     }
 
-    /// Ревью №2 (A, B): снимок временно не обновляется накопительно (полная сборка без карты, доводка). Ошибок нет.
-    pub fn set_catching_up(&self, on: bool) {
-        let mut c = self
+    /// Новое поколение владельца (сторож — перед каждым запуском). Ошибок нет.
+    pub fn next_gen(&self) -> u64 {
+        // Под замком снимка (как проверка в publish): публикация старого поколения либо уже записана, либо не запишется;
+        // и под замком признака догоняющей сборки (третье ревью п. 4): запись признака старым владельцем — тоже.
+        let _slot = self.snap.write().unwrap_or_else(|p| p.into_inner());
+        let _catching = self
             .catching_since
             .lock()
             .unwrap_or_else(|p| p.into_inner());
-        match (on, c.is_some()) {
-            (true, false) => *c = Some(Instant::now()),
-            (false, true) => *c = None,
-            _ => {}
-        }
-    }
-
-    /// Идёт ли догоняющая полная сборка/доводка (см. set_catching_up). Ошибок нет.
-    pub fn catching_up(&self) -> bool {
-        self.catching_since
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .is_some()
-    }
-
-    /// Сколько длится догоняющая сборка/доводка (None — не идёт). Ошибок нет.
-    pub fn catching_age(&self) -> Option<std::time::Duration> {
-        self.catching_since
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .map(|t| t.elapsed())
-    }
-
-    /// Сколько длится ступень Б (догоняющая сборка/доводка или снимок на прежних настройках, который видят котировки);
-    /// None — ступени нет (повторное ревью п. 4). Ошибок нет.
-    pub fn stage_b_age(&self) -> Option<std::time::Duration> {
-        self.catching_age().max(self.alarm.stage_b_age())
-    }
-
-    /// Назначить (или снять) срок повтора неудавшейся полной сборки. Ошибок нет.
-    pub fn set_retry_at(&self, at: Option<tokio::time::Instant>) {
-        *self.retry_at.lock().unwrap_or_else(|p| p.into_inner()) = at;
-    }
-
-    /// Срок повтора; прошедший — снимается (None). Ошибок нет.
-    pub fn retry_at(&self) -> Option<tokio::time::Instant> {
-        let mut r = self.retry_at.lock().unwrap_or_else(|p| p.into_inner());
-        if r.is_some_and(|t| tokio::time::Instant::now() >= t) {
-            *r = None;
-        }
-        *r
-    }
-
-    /// Новое поколение владельца (сторож — перед каждым запуском). Ошибок нет.
-    pub fn next_gen(&self) -> u64 {
-        // Под замком снимка (как проверка в publish): публикация старого поколения либо уже записана, либо не запишется.
-        let _slot = self.snap.write().unwrap_or_else(|p| p.into_inner());
         self.generation.fetch_add(1, Ordering::AcqRel) + 1
     }
 

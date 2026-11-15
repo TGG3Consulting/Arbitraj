@@ -97,6 +97,7 @@ pub mod graph_publish;
 pub mod graph_read;
 pub mod graph_round;
 pub mod graph_snap;
+pub mod graph_stage_b;
 pub mod graph_stats;
 pub mod graph_step;
 pub mod graph_timing;

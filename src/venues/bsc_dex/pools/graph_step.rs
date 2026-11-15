@@ -48,10 +48,17 @@ pub(super) async fn step(o: &Owner, bg: &Arc<Bg>, st: &mut St) -> Result<(), Str
             }
             st.next_verify = None;
             st.again = None;
-            bg.set_catching_up(false);
+            bg.set_catching_for(o.generation, false);
         }
+        st.mode_on = false;
         let _ = bg.take_full();
         return Ok(());
+    }
+    // Третье ревью п. 6: режим только что включён — переводы в USD могли посчитаться по прежней dex.v2_fee_pct (её смену
+    // при выключенном режиме книга не видела): пересчитать при следующем запросе.
+    if !st.mode_on {
+        st.mode_on = true;
+        o.reg.depth().invalidate();
     }
     bg.changes.track(true);
     let prev = st.work.as_ref().map(|w| w.basis.clone());
@@ -75,7 +82,7 @@ pub(super) async fn step(o: &Owner, bg: &Arc<Bg>, st: &mut St) -> Result<(), Str
             if let Some(j) = st.full.take() {
                 j.stop();
             }
-            bg.set_catching_up(false);
+            bg.set_catching_for(o.generation, false);
             return Ok(());
         }
         // Временный сбой, прежнего подходящего basis нет (карты нет) — повтор на следующем пробуждении.
@@ -118,7 +125,7 @@ pub(super) async fn step(o: &Owner, bg: &Arc<Bg>, st: &mut St) -> Result<(), Str
     }
     // Карты нет, сборка идёт (первая сборка, после перезапуска, смена USDT) — догоняющая сборка: снимок (если есть)
     // отдаётся, сторож её зависанием не считает (предел — dex.graph_stage_b_max_ms).
-    bg.set_catching_up(st.work.is_none() && st.full.is_some());
+    bg.set_catching_for(o.generation, st.work.is_none() && st.full.is_some());
     graph_publish::round(o, bg, st, basis, per_edge).await
 }
 

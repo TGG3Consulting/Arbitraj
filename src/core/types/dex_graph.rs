@@ -80,6 +80,11 @@ pub struct DexGraphState {
     pub stage_b_lag_max_hour_ms: Option<u64>,
     /// Сколько длится текущая ступень Б, мс (None — ступени нет; предел — dex.graph_stage_b_max_ms).
     pub stage_b_now_ms: Option<u64>,
+    /// Наибольшая полная длительность закончившейся ступени Б за час, мс — по ней задаётся dex.graph_stage_b_max_ms
+    /// (третье ревью п. 2).
+    pub stage_b_full_max_hour_ms: Option<u64>,
+    /// Ступень Б просрочена и после перезапуска — льгота снята, снимок под предохранителем (третье ревью п. 1в).
+    pub stage_b_overdue: bool,
     /// Наибольшее отставание в момент публикации накопительного круга за последний час, мс.
     pub publish_lag_max_hour_ms: Option<u64>,
     /// Изменённых пулов ждут круга.

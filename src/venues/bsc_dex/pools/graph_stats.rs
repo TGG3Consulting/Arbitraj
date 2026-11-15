@@ -38,6 +38,7 @@ struct Inner {
     episodes: Buckets,
     reader: Buckets,
     reader_b: Buckets,
+    stage_b: Buckets,
     stale: Buckets,
     lag: Buckets,
     mismatches: u64,
@@ -115,6 +116,12 @@ impl GraphStats {
         self.lock().reader_b.put(ms, true);
     }
 
+    /// Ступень Б закончилась публикацией снимка, собранного с нуля: её полная длительность, мс (третье ревью п. 2).
+    /// Ошибок нет.
+    pub fn stage_b_done(&self, ms: f64) {
+        self.lock().stage_b.put(ms as u64, true);
+    }
+
     /// Отдан снимок на прежних настройках графа (ступень Б). Ошибок нет.
     pub fn stale_settings(&self) {
         self.lock().stale.put(1, false);
@@ -174,6 +181,8 @@ pub fn view(ctx: &Ctx, reg: &Registry) -> DexGraphState {
         reader_lag_max_hour_ms: m.reader.top(HOUR_MIN),
         stage_b_lag_max_hour_ms: m.reader_b.top(HOUR_MIN),
         stage_b_now_ms: bg.stage_b_age().map(ms),
+        stage_b_full_max_hour_ms: m.stage_b.top(HOUR_MIN),
+        stage_b_overdue: bg.stage_b_overdue(),
         publish_lag_max_hour_ms: m.lag.top(HOUR_MIN),
         pending: bg.changes.pending(),
         edges: snap.as_ref().map(|s| s.graph.len()),

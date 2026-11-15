@@ -112,7 +112,8 @@ pub fn current(
         None
     };
     graph_alarm::stage_b(ctx, bg, stage);
-    if stage.is_some() {
+    // Третье ревью п. 1в: ступень Б просрочена и после перезапуска — льготы нет, снимок проверяется предохранителем.
+    if stage.is_some() && !bg.stage_b_overdue() {
         // Повторное ревью п. 6: отставание в ступени Б — отдельной метрикой (предохранитель здесь не действует).
         bg.stats.reader_lag_b(lag_ms);
         graph_alarm::fresh_again(ctx, bg);

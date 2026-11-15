@@ -57,6 +57,10 @@ pub(super) async fn round(
         (w, out)
     })
     .await;
+    // Третье ревью п. 3: снятый владелец не трогает пульс круга нового.
+    if !bg.is_current(o.generation) {
+        return Ok(());
+    }
     bg.round_end();
     let (w, out) = res.map_err(|e| format!("накопительный круг графа упал: {e}"))?;
     let snap_basis = w.basis.clone();

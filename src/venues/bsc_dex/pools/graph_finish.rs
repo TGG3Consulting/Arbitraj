@@ -68,6 +68,10 @@ pub(super) async fn finish(
     st: &mut St,
     r: FullResult,
 ) -> Result<(), String> {
+    // Третье ревью п. 3: снятый владелец не трогает общее состояние (счётчики, признаки, набор изменений).
+    if !bg.is_current(o.generation) {
+        return Ok(());
+    }
     let Some(job) = st.full.take() else {
         return Ok(());
     };
@@ -108,15 +112,22 @@ pub(super) async fn finish(
     let (c, reg, t) = (ctx.clone(), o.reg.clone(), o.tokens.clone());
     let (b2, generation) = (bg.clone(), o.generation);
     let t1 = Instant::now();
-    bg.set_catching_up(true);
+    bg.set_catching_for(o.generation, true);
     let res = tokio::task::spawn_blocking(move || {
         let alive = || b2.is_current(generation);
         graph_full::reconcile(&c, &reg, &t, inc, full, refs, per_edge, &alive)
     })
     .await;
-    // Повторное ревью п. 6: сколько снимок не обновлялся накопительно (догоняющая сборка + доводка) — в dex.graph_build.
-    let stage_b_ms = bg.catching_age().map(|d| d.as_secs_f64() * 1000.0);
-    bg.set_catching_up(false);
+    if !bg.is_current(o.generation) {
+        return Ok(());
+    }
+    // Третье ревью п. 2: полная длительность ступени Б (наибольшее из догоняющей сборки/доводки и «котировки видят снимок
+    // на прежних настройках») — в dex.graph_build и на экране; по ней задаётся dex.graph_stage_b_max_ms.
+    let stage_b_ms = bg.stage_b_age().map(|d| d.as_secs_f64() * 1000.0);
+    if let Some(v) = stage_b_ms {
+        bg.stats.stage_b_done(v);
+    }
+    bg.set_catching_for(o.generation, false);
     let reconcile_ms = ms(t1);
     let rec = match res.map_err(|e| format!("доводка полной пересборки графа упала: {e}"))?
     {

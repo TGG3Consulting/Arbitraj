@@ -63,6 +63,7 @@ fn entry_of(id: &str, kind: &str, pool: Address, a: Address, b: Address, state: 
         synced_log: None,
         valid: true,
         asleep: false,
+        gen: 0,
     }
 }
 

@@ -120,6 +120,7 @@ fn fork_entry(q: &Quoting) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        gen: 0,
     }
 }
 

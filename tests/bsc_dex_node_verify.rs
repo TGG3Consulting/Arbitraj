@@ -380,6 +380,7 @@ fn entry(kind: &str, reference: PoolRef) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        gen: 0,
     }
 }
 

@@ -88,6 +88,8 @@ async fn failed_depth_counted_once_per_key() {
     e.synced_block += 1;
     e.synced_log = None;
     reg.put(e.clone());
+    // Решение 301 (е2): поколение присваивает реестр — запись берём из него.
+    let mut e = reg.get(&r).unwrap();
     let before_fail = book.calcs();
     let why = book.depth(&p.ctx, reg, &p.tokens, &e, 18).unwrap_err();
     assert!(why.contains("карта тиков"), "{why}");
@@ -119,6 +121,7 @@ async fn failed_depth_counted_once_per_key() {
     e.synced_block += 1;
     e.synced_log = None;
     reg.put(e.clone());
+    let e = reg.get(&r).unwrap();
     let before = book.calcs();
     assert!(book.depth(&p.ctx, reg, &p.tokens, &e, 18).is_ok());
     assert_eq!(book.calcs(), before + 1);

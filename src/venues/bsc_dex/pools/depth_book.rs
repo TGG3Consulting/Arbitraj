@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/depth_book.rs
 //! Что делает: глубина пулов по направлениям (решение 73) — в памяти, на текущем состоянии пула, с гистерезисом:
 //! - глубина покупки и продажи в полосе dex.depth_band_pct (quote/depth_band.rs) пересчитывается, когда сменилось
-//!   состояние пула (блок и logIndex последнего учтённого события) или настройки глубины; иначе — из памяти;
+//!   состояние пула (решение 301 е2: поколение состояния записи, pools/state_gen.rs; раньше — блок и logIndex) или настройки глубины; иначе — из памяти;
 //! - направление «глубокое», если его глубина не ниже dex.min_pool_liquidity_usd; глубокое становится мелким, только
 //!   когда глубина упала ниже порога × (1 − dex.depth_hysteresis_pct / 100) — пул не мигает на границе;
 //! - смена «глубокий ↔ мелкий» по направлению — запись в журнал, по пулу не чаще dex.depth_log_min_s; смена внутри
@@ -192,15 +192,14 @@ impl Book {
             None => self.seed.as_ref().and_then(|v| v.get(r).copied()),
         };
         // Решение 301 (б): неудача по состоянию пула на том же ключе — та же причина без пересчёта.
-        let at = e.pool.received_at;
-        if let Some(why) = self.fails.get(r, &key, at) {
+        if let Some(why) = self.fails.get(r, &key) {
             return Err(why);
         }
         self.calcs.fetch_add(1, Ordering::Relaxed);
         let units = match depth_band::band_units(e, band_pct) {
             Ok(u) => u,
             Err(why) => {
-                self.fails.put(r, key, at, why.clone());
+                self.fails.put(r, key, why.clone());
                 return Err(why);
             }
         };

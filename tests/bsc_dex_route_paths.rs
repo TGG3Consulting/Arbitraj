@@ -98,6 +98,7 @@ fn base(kind: &str, fee: Option<u32>, addr: Address, coin: Address, counter: Add
         synced_log: None,
         valid: true,
         asleep: false,
+        gen: 0,
     }
 }
 

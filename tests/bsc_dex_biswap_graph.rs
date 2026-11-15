@@ -84,6 +84,7 @@ fn coin_usdt(id: &str, kind: &str, r0: U256, r1: U256) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        gen: 0,
     }
 }
 

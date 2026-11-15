@@ -181,6 +181,6 @@ async fn incomplete_setup_and_missing_executor_callback() {
     set(&c, "dex.v3_swap_callback", Some("pancakeV3SwapCallback(int256,int256,bytes)")).await;
     assert_eq!(exec_callback::missing(&c, f), None);
     // Пул без пути исполнения — помеха (NoRoute → env), не вердикт: монета «не проверена», не в чёрный список.
-    let out = pool_taxes::outcome(&[], false, &[], (Vec::new(), vec![why], Vec::new()));
+    let out = pool_taxes::outcome(&[], false, &[], (Vec::new(), vec![why], Vec::new()), &[]);
     assert!(matches!(out, Outcome::Wait(_)), "{out:?}");
 }

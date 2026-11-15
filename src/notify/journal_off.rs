@@ -68,6 +68,8 @@ pub static OWN_RECORD: &[&str] = &[
     "risk.low_bnb",              // core.precheck (executor.rs — отказ предпроверки), core.reconcile (reconcile.rs)
     "risk.low_usdt",             // core.low_usdt (low_usdt.rs)
     "dex.receipts_stuck",        // venue.ws (bsc_dex/node/receipts_task.rs — пропуск на голову)
+    "dex.node_stalled",          // venue.head_stall (bsc_dex/node/head_stall.rs, решение 282)
+    "dex.node_resumed",          // venue.head_stall (bsc_dex/node/head_stall.rs, решение 282)
     "venue.feed_conn_blocked",   // core.feed_watch (feed_watch_act.rs)
     "venue.feed_conn_giveup",    // core.feed_watch (feed_watch_act.rs)
     "venue.transfer_status",     // core.transfer_status (registry_sync.rs)

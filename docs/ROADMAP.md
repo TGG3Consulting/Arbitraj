@@ -26,6 +26,7 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 282 (t115): src/venues/bsc_dex/node/heads.rs 246 строк (было 237 — сверх ориентира 200 и до правки: +поле stall и вызов шага уведомления); новые node/head_stall.rs (164) и head_stall_text.rs (60) — в пределах 200; тест tests/bsc_dex_head_stall.rs 246 — сверх ориентира (после rustfmt).
 - Решение 280 (t112): src/venues/bsc_dex/pools/families.rs 499 строк (было 486), check/probe.rs 261 (было 257),
   check/taxes.rs 224 (было 218) — все были сверх ориентира 200 и до правки; новые файлы quote/v2_pair_{quote,sim,probe}.rs
   уложены в 200. Ревью 280: exec/bundle.rs 361 (было 349; отказ ноги без своего пути), check/taxes.rs 228 (было 224);

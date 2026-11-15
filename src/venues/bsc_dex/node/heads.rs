@@ -11,9 +11,10 @@
 //! берётся сразу в опросе, и fresh() отказывает (StaleData), если блок старше порога (node/head_age.rs). Реорги — по removed: true в логах пулов и по квитанциям (send/track.rs).
 //! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
 //! pools/http_wait.rs, pools/session.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs, errors.rs.
+//! Решение 282: каждый круг опроса — уведомление «блок не растёт» / «блоки снова идут» (node/head_stall.rs).
+//! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs, node/head_stall.rs, errors.rs.
 //! Настройки: bsc.blocks_poll_ms (вся система), feed.stale_after_ms, feed.max_block_age_ms [bsc_dex]; узел —
-//! bsc.node_http_url.
+//! bsc.node_http_url; bsc.node_stall_alert_s (node/head_stall.rs).
 //!
 //! Источники: eth_blockNumber, eth_getBlockByNumber (поле timestamp — hex-число) — execution-apis
 //! https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth (block.yaml,
@@ -49,6 +50,8 @@ pub struct Heads {
     time: Arc<Mutex<Option<(u64, super::head_age::BlockTime)>>>,
     /// Один eth_getBlockByNumber на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
+    /// Уведомление «блок не растёт» / «блоки снова идут» (решение 282, node/head_stall.rs); канал — parts.rs.
+    pub stall: super::head_stall::Stall,
 }
 
 impl Default for Heads {
@@ -57,6 +60,7 @@ impl Default for Heads {
             tx: watch::channel(None).0,
             time: Arc::default(),
             flight: Arc::default(),
+            stall: Default::default(),
         }
     }
 }
@@ -213,6 +217,12 @@ impl Heads {
             let age = super::head_age::active(&ctx)
                 .then(|| super::head_age::check(&ctx, self.block_time_ms()));
             age_log.step(&ctx, age.as_ref()).await;
+            // Решение 282: номер стоит дольше bsc.node_stall_alert_s — одно событие; вырос — одно (node/head_stall.rs).
+            let fresh = self.fresh(&ctx).err().map(|e| e.message);
+            let (latest, bt) = (self.latest(), self.block_time_ms());
+            self.stall
+                .step(&ctx, latest, bt, last_err.as_deref(), fresh.as_deref())
+                .await;
             tokio::time::sleep(every).await;
         }
     }

@@ -90,8 +90,8 @@
   в релизной сборке не мерялись — `cargo test --release --test bsc_dex_quote_cpu_stack --test bsc_dex_quote_cpu_depth`
   (вручную или шагом workflow — решает Тигран); (3) **вопрос Тиграну:** рекурсия quote/route_paths.rs dfs / dfs_cycle
   и quote/route_best.rs dfs ограничена dex.route_max_hops и dex_dex.max_cycle_len, у которых в каталоге нет верхнего
-  предела — вводить ли предел; (4) какой из двух тестов bsc_dex_quote_cpu.rs переполнял стек — диагностические
-  прогоны test/diag-stack-* от dd74d9b9 (итог — ____).
+  предела — вводить ли предел; (4) какой из двух тестов bsc_dex_quote_cpu.rs переполнял стек — закрыто: ОБА по
+  отдельности (test/diag-stack-* от dd74d9b9: run 43776962052 — heavy_quote_…, run 43776964914 — big_registry_…).
   Открытые пункты ревью t132 — НЕ делаются сейчас:
   1. **В1:** брошенный расчёт прерывает уже начатое построение графа — проверка признака на каждом пуле
      (pools/graph.rs build_measured, abandon::check в цикле по пулам) внутри построения под замком

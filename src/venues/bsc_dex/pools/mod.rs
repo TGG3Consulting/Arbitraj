@@ -93,6 +93,7 @@ pub mod index_pass;
 pub mod index_watch;
 pub mod invalidated;
 pub mod key;
+pub mod ladder_counter;
 pub mod link;
 pub mod listen;
 pub mod listen_log;

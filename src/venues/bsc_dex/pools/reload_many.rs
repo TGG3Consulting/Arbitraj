@@ -131,7 +131,7 @@ pub async fn load_group(
             },
         })
         .collect();
-    let loaded = load_batch::states(&p.ctx, &p.tokens, &wants, block).await;
+    let loaded = load_batch::states(&p.ctx, &p.tokens, &p.reg, &wants, block).await;
     let mut out = Vec::with_capacity(items.len());
     for (((f, ticker), e), l) in items.iter().zip(&known).zip(loaded) {
         let l = match l {

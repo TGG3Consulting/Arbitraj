@@ -114,7 +114,7 @@ pub async fn run(
         })
         .collect();
     // Один целевой Multicall3-батч по пулам маршрута на свежем блоке (решение 83), с таймаутом.
-    let fetch = load_batch::states(ctx, &v.q.tokens, &wants, block);
+    let fetch = load_batch::states(ctx, &v.q.tokens, &v.q.reg, &wants, block);
     let loaded = match tokio::time::timeout(Duration::from_millis(timeout_ms), fetch).await {
         Ok(v) => v,
         Err(_) => {

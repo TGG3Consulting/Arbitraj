@@ -73,7 +73,7 @@ pub async fn at_head(p: &Pools, e: &Entry) -> Head {
         },
         Err(err) => return no_block(format!("eth_blockNumber: {}", err.message)),
     };
-    match load::refresh(&p.ctx, &p.tokens, e, block).await {
+    match load::refresh(&p.ctx, &p.tokens, &p.reg, e, block).await {
         Ok(entry) => Head::Ready {
             block,
             entry: Box::new(entry),

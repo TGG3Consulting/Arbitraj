@@ -41,14 +41,43 @@ pub const CODE_OWNER: &str = "dex.graph_owner_failed";
 pub struct Alarm {
     in_fuse: AtomicBool,
     stage_b: AtomicBool,
+    /// Повторное ревью п. 4: с какого момента котировки видят ступень Б (для предела и экрана).
+    stage_b_since: Mutex<Option<Instant>>,
     last_sent: Mutex<Option<Instant>>,
-    owner_sent: Mutex<Option<Instant>>,
-    full_said: Mutex<Option<(String, Instant)>>,
-    why_logged: Mutex<Option<String>>,
+    pub(super) owner_sent: Mutex<Option<Instant>>,
+    pub(super) full_said: Mutex<Option<(String, Instant)>>,
+    pub(super) why_logged: Mutex<Option<String>>,
 }
 
+impl Alarm {
+    /// Начать отсчёт ступени Б заново (сторож после перезапуска: у нового владельца свой срок). Ошибок нет.
+    pub fn restart_stage_b(&self) {
+        let mut s = self.stage_b_since.lock().unwrap_or_else(|p| p.into_inner());
+        if s.is_some() {
+            *s = Some(Instant::now());
+        }
+    }
+
+    /// Сколько котировки видят ступень Б (None — не видят). Ошибок нет.
+    pub fn stage_b_age(&self) -> Option<Duration> {
+        self.stage_b_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|t| t.elapsed())
+    }
+}
+
+pub use super::graph_alarm_owner::{full_failed, full_ok, not_built, owner_failed};
+
 /// Запись журнала и (если задан код) событие ядру — отдельной задачей. Ошибок нет.
-fn emit(ctx: &Ctx, bg: &Bg, level: Level, text: String, data: Option<Value>, code: Option<&str>) {
+pub(super) fn emit(
+    ctx: &Ctx,
+    bg: &Bg,
+    level: Level,
+    text: String,
+    data: Option<Value>,
+    code: Option<&str>,
+) {
     let Ok(rt) = tokio::runtime::Handle::try_current() else {
         return;
     };
@@ -124,6 +153,10 @@ pub fn stage_b(ctx: &Ctx, bg: &Bg, why: Option<&str>) {
     if let Some(why) = why {
         bg.stats.stale_settings();
         if !bg.alarm.stage_b.swap(true, Ordering::AcqRel) {
+            *bg.alarm
+                .stage_b_since
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
             let text = format!(
                 "Граф маршрутов: {why} — котировки берут действующий снимок (отставшим он не считается); цена — по \
                  свежему состоянию пулов"
@@ -131,7 +164,16 @@ pub fn stage_b(ctx: &Ctx, bg: &Bg, why: Option<&str>) {
             emit(ctx, bg, Level::Info, text, None, None);
         }
     } else if bg.alarm.stage_b.swap(false, Ordering::AcqRel) {
-        let text = "Граф маршрутов: снимок снова обновляется накопительно".to_string();
+        let took = bg
+            .alarm
+            .stage_b_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
+            .map_or(0, |t| t.elapsed().as_millis());
+        let text = format!(
+            "Граф маршрутов: снимок снова обновляется накопительно (ступень Б длилась {took} мс)"
+        );
         emit(ctx, bg, Level::Info, text, None, None);
     }
 }
@@ -151,82 +193,6 @@ pub fn mismatch(ctx: &Ctx, bg: &Bg, reason: &str, lines: &[String]) {
         None => head,
     };
     emit(ctx, bg, Level::Error, text, Some(data), Some(CODE_MISMATCH));
-}
-
-/// Владелец упал или завис и перезапущен. Ошибок нет.
-pub fn owner_failed(ctx: &Ctx, bg: &Bg, why: &str) {
-    let text = format!(
-        "Фоновая задача графа маршрутов перезапущена: {why}. До нового снимка котировки берут действующий снимок \
-         (идёт полная пересборка; цена — по свежему состоянию пулов)"
-    );
-    // Запись журнала — каждый раз; уведомление — не чаще dex.graph_alert_min_s (не задана — каждый перезапуск).
-    let repeat = ctx
-        .int("dex.graph_alert_min_s")
-        .ok()
-        .map(Duration::from_secs);
-    let send = {
-        let mut last = bg
-            .alarm
-            .owner_sent
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let due = match (repeat, *last) {
-            (Some(r), Some(t)) => t.elapsed() >= r,
-            _ => true,
-        };
-        if due {
-            *last = Some(Instant::now());
-        }
-        due
-    };
-    let code = if send { Some(CODE_OWNER) } else { None };
-    emit(ctx, bg, Level::Error, text, None, code);
-}
-
-/// Снимка нет из-за настройки/USDT — запись на смену причины (None — причина ушла). Ошибок нет.
-pub fn not_built(ctx: &Ctx, bg: &Bg, why: Option<&str>) {
-    let mut w = bg
-        .alarm
-        .why_logged
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    if w.as_deref() == why {
-        return;
-    }
-    *w = why.map(str::to_string);
-    if let Some(why) = why {
-        let text = format!(
-            "Граф маршрутов (фон) не собирается: {why} — маршрутов графа нет, котировки по классике"
-        );
-        emit(ctx, bg, Level::Warn, text, None, None);
-    }
-}
-
-/// Полная пересборка не удалась (действующий снимок остаётся). Ошибок нет.
-pub fn full_failed(ctx: &Ctx, bg: &Bg, reason: &str, why: &str) {
-    // Ревью №1 (O, B): без повторов — та же причина пишется снова не раньше dex.graph_alert_min_s (не задана — только
-    // при смене причины).
-    let repeat = ctx
-        .int("dex.graph_alert_min_s")
-        .ok()
-        .map(Duration::from_secs);
-    {
-        let mut last = bg.alarm.full_said.lock().unwrap_or_else(|p| p.into_inner());
-        let due = match (&*last, repeat) {
-            (Some((w, _)), _) if w != why => true,
-            (Some((_, t)), Some(r)) => t.elapsed() >= r,
-            (Some(_), None) => false,
-            (None, _) => true,
-        };
-        if !due {
-            return;
-        }
-        *last = Some((why.to_string(), Instant::now()));
-    }
-    let text = format!(
-        "Полная пересборка графа маршрутов ({reason}) не удалась: {why}. Действующий снимок остаётся"
-    );
-    emit(ctx, bg, Level::Error, text, None, None);
 }
 
 /// Информационная запись (пересборка по кнопке и т. п.). Ошибок нет.

@@ -9,7 +9,7 @@
 //! Ревью №2 (A, B): на время доводки ставится признак «догоняющая сборка» — читатели берут действующий снимок, отставшим
 //! он не считается; доводка не помечается пульсом круга — сторож зависания её не снимает.
 //! Кто вызывает: graph_owner.rs (run).
-//! От чего зависит: graph_owner.rs (Owner, St, FullResult), graph_step.rs (basis_now), graph_full.rs, graph_eval.rs
+//! От чего зависит: graph_owner.rs (Owner, St, FullResult), graph_basis.rs (basis_or), graph_full.rs, graph_eval.rs
 //! (CANCELLED), graph_snap.rs, graph_alarm.rs, graph_stats.rs, graph_timing.rs, registry.rs.
 //! Настройки: dex.graph_verify_s [bsc_dex] (необязательная).
 
@@ -25,7 +25,7 @@ use super::graph_full;
 use super::graph_owner::{FullResult, Owner, St};
 use super::graph_snap::{Bg, Snapshot};
 use super::graph_timing::{self, BgMeasure};
-use super::{graph_alarm, graph_step};
+use super::{graph_alarm, graph_basis};
 
 /// Миллисекунды с момента `t`. Ошибок нет.
 fn ms(t: Instant) -> f64 {
@@ -34,14 +34,17 @@ fn ms(t: Instant) -> f64 {
 
 /// Неудачная сборка: счётчики экрана и (кроме отмены) Error в журнал (без повторов — graph_alarm.rs) и пауза до
 /// следующей попытки dex.graph_retry_pause_s (ревью №1 O). Ошибок нет.
-fn failed(o: &Owner, bg: &Bg, st: &mut St, reason: &str, build_ms: f64, why: String) {
+/// `key` — причина без изменчивых частей (для дедупа журнала; повторное ревью б). Срок повтора — в Bg: переживает
+/// перезапуск владельца (повторное ревью п. 3).
+fn failed(o: &Owner, bg: &Bg, reason: &str, key: &str, build_ms: f64, why: String) {
     if why != CANCELLED {
-        graph_alarm::full_failed(&o.ctx, bg, reason, &why);
-        st.retry_at = o
-            .ctx
-            .int("dex.graph_retry_pause_s")
-            .ok()
-            .map(|s| tokio::time::Instant::now() + Duration::from_secs(s));
+        graph_alarm::full_failed(&o.ctx, bg, reason, key, &why);
+        bg.set_retry_at(
+            o.ctx
+                .int("dex.graph_retry_pause_s")
+                .ok()
+                .map(|s| tokio::time::Instant::now() + Duration::from_secs(s)),
+        );
     }
     bg.stats.full(DexGraphFull {
         at: Utc::now(),
@@ -68,34 +71,31 @@ pub(super) async fn finish(
     let Some(job) = st.full.take() else {
         return Ok(());
     };
-    // Ревью №2 (E): запрос, пришедший во время сборки, — следующей сборкой (step заберёт его на этом же пробуждении).
-    if let Some(again) = st.again.take() {
-        bg.request_full(again);
-    }
+    // Ревью №2 (E): запрос, пришедший во время сборки, остаётся в st.again — step выполнит его следующей сборкой, после
+    // паузы повтора, если эта сборка не удалась (повторное ревью а).
     let ctx = &o.ctx;
     let build_ms = ms(job.started);
     let (full, pools) = match r {
         Ok(Ok(x)) => x,
         Ok(Err(why)) => {
-            failed(o, bg, st, &job.reason, build_ms, why);
+            let key = why.clone();
+            failed(o, bg, &job.reason, &key, build_ms, why);
             return Ok(());
         }
         Err(e) => {
-            failed(
-                o,
-                bg,
-                st,
-                &job.reason,
-                build_ms,
-                format!("поток сборки упал: {e}"),
-            );
+            let why = format!("поток сборки упал: {e}");
+            failed(o, bg, &job.reason, "поток сборки упал", build_ms, why);
             return Ok(());
         }
     };
-    // Настройки не готовы или сменились за время сборки — итог не годится; step разберётся на этом же пробуждении.
-    let Ok((basis, per_edge)) = graph_step::basis_now(o).await else {
+    // Настройки не заданы или сменились за время сборки — итог не годится; step разберётся на этом же пробуждении.
+    // Временный сбой decimals USDT при тех же настройках — готовая сборка не выбрасывается (повторное ревью ж).
+    let Ok((basis, per_edge, _)) = graph_basis::basis_or(o, Some(&full.basis)).await else {
         return Ok(());
     };
+    if !bg.is_current(o.generation) {
+        return Ok(());
+    }
     if full.basis != basis {
         bg.request_full("настройки графа сменились во время полной пересборки");
         return Ok(());
@@ -114,6 +114,8 @@ pub(super) async fn finish(
         graph_full::reconcile(&c, &reg, &t, inc, full, refs, per_edge, &alive)
     })
     .await;
+    // Повторное ревью п. 6: сколько снимок не обновлялся накопительно (догоняющая сборка + доводка) — в dex.graph_build.
+    let stage_b_ms = bg.catching_age().map(|d| d.as_secs_f64() * 1000.0);
     bg.set_catching_up(false);
     let reconcile_ms = ms(t1);
     let rec = match res.map_err(|e| format!("доводка полной пересборки графа упала: {e}"))?
@@ -122,9 +124,10 @@ pub(super) async fn finish(
         Err(e) => {
             let (inc, refs, why) = *e;
             st.work = inc;
-            // Ревью №1 (N): забранные пулы не применены — обратно в набор, следующий круг их повторит.
-            bg.changes.remark(refs);
-            failed(o, bg, st, &job.reason, build_ms, why);
+            // Ревью №1 (N): забранные пулы не применены — обратно в набор (с исходным временем), следующий круг их повторит.
+            bg.changes.remark(refs, oldest);
+            let key = why.clone();
+            failed(o, bg, &job.reason, &key, build_ms, why);
             return Ok(());
         }
     };
@@ -142,6 +145,7 @@ pub(super) async fn finish(
     if !bg.publish(o.generation, snap) {
         return Ok(());
     }
+    graph_alarm::full_ok(bg);
     st.verify_s = ctx.int("dex.graph_verify_s").ok();
     st.next_verify = st
         .verify_s
@@ -171,6 +175,7 @@ pub(super) async fn finish(
             ms: took,
             build_ms: Some(build_ms),
             reconcile_ms: Some(reconcile_ms),
+            stage_b_ms,
             evaluated: rec.evaluated,
             changed: None,
             pairs: 0,

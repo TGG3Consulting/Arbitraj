@@ -80,22 +80,23 @@ impl Changes {
     }
 
     /// Вернуть в набор пулы, забранные кругом или доводкой, которые не удалось применить (ревью №1 N, №2 E) —
-    /// следующий круг их повторит. Ошибок нет.
-    pub fn remark(&self, refs: impl IntoIterator<Item = PoolRef>) {
+    /// следующий круг их повторит. `since` — когда они были отмечены впервые (из drain): отставание при публикации
+    /// считается от него, а не от возврата (повторное ревью е). Ошибок нет.
+    pub fn remark(&self, refs: impl IntoIterator<Item = PoolRef>, since: Option<Instant>) {
         if !self.tracking() {
             return;
         }
         let mut any = false;
         {
             let mut m = self.lock();
-            let now = Instant::now();
             for r in refs {
                 m.set.insert(r);
                 any = true;
             }
             if any {
-                m.pending_since.get_or_insert(now);
-                m.unpublished_since.get_or_insert(now);
+                let t = since.unwrap_or_else(Instant::now);
+                m.pending_since = Some(m.pending_since.map_or(t, |p| p.min(t)));
+                m.unpublished_since = Some(m.unpublished_since.map_or(t, |p| p.min(t)));
             }
         }
         if any {

@@ -31,7 +31,7 @@ use alloy_primitives::Address;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::pools::graph::{self, Edge, PathsKey, Skeleton};
+use super::super::pools::graph::{Edge, PathsKey, Skeleton};
 use super::super::pools::graph_read;
 use super::super::pools::registry::Registry;
 use super::super::tokens::Tokens;
@@ -82,7 +82,8 @@ pub fn paths(
     {
         return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
     }
-    let g = graph::cached(ctx, reg, tokens, usdt_dec)?;
+    // Повторное ревью (д): режим читается один раз — снимок фонового графа всегда идёт с гидратацией.
+    let (g, hydrated) = graph_read::graph_for(ctx, reg, tokens, usdt_dec)?;
     let found = match s.cap {
         Some(c) => route_best::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, c),
         None => route_paths::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, s.max_paths),
@@ -93,7 +94,7 @@ pub fn paths(
     }
     // Решение 308: в режиме «граф без ожидания» состояние пулов и на промахе кэша путей — свежее из реестра (снимок
     // графа — только топология); в t132 здесь копии записей из графа (как было).
-    if graph_read::active(ctx, reg) {
+    if hydrated {
         return Ok(hydrate(reg, &found));
     }
     Ok(found)

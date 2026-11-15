@@ -37,6 +37,7 @@ struct Inner {
     fuse: Buckets,
     episodes: Buckets,
     reader: Buckets,
+    reader_b: Buckets,
     stale: Buckets,
     lag: Buckets,
     mismatches: u64,
@@ -108,6 +109,12 @@ impl GraphStats {
         self.lock().reader.put(ms, true);
     }
 
+    /// Отставание, которое увидел расчёт в ступени Б (предохранитель там не действует), мс — отдельно (повторное ревью
+    /// п. 6). Ошибок нет.
+    pub fn reader_lag_b(&self, ms: u64) {
+        self.lock().reader_b.put(ms, true);
+    }
+
     /// Отдан снимок на прежних настройках графа (ступень Б). Ошибок нет.
     pub fn stale_settings(&self) {
         self.lock().stale.put(1, false);
@@ -165,6 +172,8 @@ pub fn view(ctx: &Ctx, reg: &Registry) -> DexGraphState {
         age_ms: snap.as_ref().map(|s| ms(s.at.elapsed())),
         lag_ms: bg.changes.lag().map(ms),
         reader_lag_max_hour_ms: m.reader.top(HOUR_MIN),
+        stage_b_lag_max_hour_ms: m.reader_b.top(HOUR_MIN),
+        stage_b_now_ms: bg.stage_b_age().map(ms),
         publish_lag_max_hour_ms: m.lag.top(HOUR_MIN),
         pending: bg.changes.pending(),
         edges: snap.as_ref().map(|s| s.graph.len()),

@@ -66,8 +66,12 @@ pub struct Bg {
     round_since: Mutex<Option<Instant>>,
     why_none: Mutex<Option<String>>,
     /// Ревью №2 (A, B): накопительной карты нет или она не обновляется (идёт полная сборка после перезапуска,
-    /// доводка полной сборки) — действующий снимок отдаётся и отставшим не считается (graph_read.rs).
-    catching_up: AtomicBool,
+    /// доводка полной сборки) — действующий снимок отдаётся и отставшим не считается (graph_read.rs); значение — с
+    /// какого момента (для предела ступени Б dex.graph_stage_b_max_ms, повторное ревью п. 4).
+    catching_since: Mutex<Option<Instant>>,
+    /// Повторное ревью п. 3: не раньше этого момента повторять неудавшуюся полную сборку (dex.graph_retry_pause_s) —
+    /// переживает перезапуск владельца.
+    retry_at: Mutex<Option<tokio::time::Instant>>,
 }
 
 impl Bg {
@@ -125,12 +129,51 @@ impl Bg {
 
     /// Ревью №2 (A, B): снимок временно не обновляется накопительно (полная сборка без карты, доводка). Ошибок нет.
     pub fn set_catching_up(&self, on: bool) {
-        self.catching_up.store(on, Ordering::Release);
+        let mut c = self
+            .catching_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        match (on, c.is_some()) {
+            (true, false) => *c = Some(Instant::now()),
+            (false, true) => *c = None,
+            _ => {}
+        }
     }
 
     /// Идёт ли догоняющая полная сборка/доводка (см. set_catching_up). Ошибок нет.
     pub fn catching_up(&self) -> bool {
-        self.catching_up.load(Ordering::Acquire)
+        self.catching_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_some()
+    }
+
+    /// Сколько длится догоняющая сборка/доводка (None — не идёт). Ошибок нет.
+    pub fn catching_age(&self) -> Option<std::time::Duration> {
+        self.catching_since
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|t| t.elapsed())
+    }
+
+    /// Сколько длится ступень Б (догоняющая сборка/доводка или снимок на прежних настройках, который видят котировки);
+    /// None — ступени нет (повторное ревью п. 4). Ошибок нет.
+    pub fn stage_b_age(&self) -> Option<std::time::Duration> {
+        self.catching_age().max(self.alarm.stage_b_age())
+    }
+
+    /// Назначить (или снять) срок повтора неудавшейся полной сборки. Ошибок нет.
+    pub fn set_retry_at(&self, at: Option<tokio::time::Instant>) {
+        *self.retry_at.lock().unwrap_or_else(|p| p.into_inner()) = at;
+    }
+
+    /// Срок повтора; прошедший — снимается (None). Ошибок нет.
+    pub fn retry_at(&self) -> Option<tokio::time::Instant> {
+        let mut r = self.retry_at.lock().unwrap_or_else(|p| p.into_inner());
+        if r.is_some_and(|t| tokio::time::Instant::now() >= t) {
+            *r = None;
+        }
+        *r
     }
 
     /// Новое поколение владельца (сторож — перед каждым запуском). Ошибок нет.

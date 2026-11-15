@@ -98,6 +98,9 @@ pub struct BgMeasure {
     pub build_ms: Option<f64>,
     /// Полная пересборка: доводка и сверка, мс (ревью №2 C).
     pub reconcile_ms: Option<f64>,
+    /// Полная пересборка: сколько снимок не обновлялся накопительно (догоняющая сборка + доводка; ступень Б), мс;
+    /// None — карта обновлялась кругами (повторное ревью п. 6).
+    pub stage_b_ms: Option<f64>,
     pub evaluated: usize,
     /// Из оценённых — изменённых в реестре (остальные — зависимые по курсу; ревью №1 R). None — полная пересборка.
     pub changed: Option<usize>,
@@ -127,7 +130,7 @@ pub fn report_bg(ctx: &Ctx, m: &BgMeasure) {
     };
     let msg = format!(
         "граф (фон, {}): {:.1} мс; пулов оценено {}{}, пар пересобрано {}, рёбер {}; отставание при публикации {} мс, \
-         ждут следующего круга {}{}{}{}{}",
+         ждут следующего круга {}{}{}{}{}{}",
         m.kind,
         m.ms,
         m.evaluated,
@@ -155,6 +158,9 @@ pub fn report_bg(ctx: &Ctx, m: &BgMeasure) {
             (Some(b), Some(r)) => format!("; сборка {b:.1} мс, доводка {r:.1} мс"),
             _ => String::new(),
         },
+        m.stage_b_ms
+            .map(|v| format!("; ступень Б (снимок без накопительного обновления) {v:.1} мс"))
+            .unwrap_or_default(),
     );
     let data = json!({
         "kind": m.kind,
@@ -162,6 +168,7 @@ pub fn report_bg(ctx: &Ctx, m: &BgMeasure) {
         "ms": m.ms,
         "build_ms": m.build_ms,
         "reconcile_ms": m.reconcile_ms,
+        "stage_b_ms": m.stage_b_ms,
         "evaluated": m.evaluated,
         "changed": m.changed,
         "pairs": m.pairs,

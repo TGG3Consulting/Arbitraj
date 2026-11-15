@@ -55,6 +55,22 @@ fn quiet(ctx: &Ctx, text: String) -> GatewayError {
     ctx.err(ErrorCode::StaleData, format!("{QUIET}{text}"))
 }
 
+/// Повторное ревью (д): граф для расчёта и признак «гидратировать» — режим читается ОДИН раз: включён и есть владелец —
+/// снимок (current) и true; иначе — путь t132 (graph_cache::cached_as_of по текущей версии реестра) и false. Так снимок
+/// без гидратации невозможен (раньше режим читался отдельно в cached и при гидратации). Принимает: окружение, реестр,
+/// токены, знаки USDT. Ошибки: как у current / cached_as_of.
+pub fn graph_for(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+) -> GatewayResult<(Arc<Graph>, bool)> {
+    if active(ctx, reg) {
+        return current(ctx, reg, tokens, usdt_dec).map(|g| (g, true));
+    }
+    super::graph_cache::cached_as_of(ctx, reg, tokens, usdt_dec, reg.version()).map(|g| (g, false))
+}
+
 /// Граф для расчёта — последний опубликованный снимок (ступени — см. шапку). Принимает: окружение, реестр, токены,
 /// знаки USDT. Возвращает: граф снимка. Ошибки: StaleData (текст с QUIET) — снимка нет, другой USDT, предохранитель;
 /// NotConfigured — USDT не известен.
@@ -83,11 +99,8 @@ pub fn current(
             "снимок собран для другого USDT — ждёт пересборки, котировка по классике".into(),
         ));
     }
-    // Ревью №2 (C): отставание, которое видит расчёт, — метрика подбора dex.graph_max_lag_ms (все интервалы, включая
-    // доводку, ступень Б и время после перезапуска).
     let lag = bg.changes.lag();
-    bg.stats
-        .reader_lag(lag.map_or(0, |l| u64::try_from(l.as_millis()).unwrap_or(u64::MAX)));
+    let lag_ms = lag.map_or(0, |l| u64::try_from(l.as_millis()).unwrap_or(u64::MAX));
     // Ступень Б (ревью №2 A, B): прежние настройки графа или догоняющая полная сборка / доводка — действующий снимок
     // отдаётся и отставшим не считается (цена — по свежему состоянию, устаревшая топология — не «вслепую»).
     let stage = if s.basis.settings != graph_settings(ctx) {
@@ -100,9 +113,14 @@ pub fn current(
     };
     graph_alarm::stage_b(ctx, bg, stage);
     if stage.is_some() {
+        // Повторное ревью п. 6: отставание в ступени Б — отдельной метрикой (предохранитель здесь не действует).
+        bg.stats.reader_lag_b(lag_ms);
         graph_alarm::fresh_again(ctx, bg);
         return Ok(s.graph.clone());
     }
+    // Ревью №2 (C), повторное ревью п. 6: отставание, которое видит расчёт в ступени А, — метрика подбора
+    // dex.graph_max_lag_ms (только там, где предохранитель действует).
+    bg.stats.reader_lag(lag_ms);
     if let Some(limit) = max_lag(ctx)
         && let Some(lag) = lag
         && lag > limit

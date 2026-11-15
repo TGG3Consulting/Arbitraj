@@ -35,10 +35,12 @@ use super::super::tokens::Tokens;
 use super::graph_snap::Basis;
 use super::graph_work::Work;
 use super::registry::Registry;
-use super::{graph_finish, graph_guard, graph_step};
+use super::{graph_finish, graph_guard, graph_read, graph_step};
 
 /// Причина выхода «система останавливается» — сторож не перезапускает.
 pub const STOP: &str = "рассылка настроек закрыта — система останавливается";
+/// Причина выхода «уже не текущее поколение» (повторное ревью п. 2) — читать её некому.
+pub const ORPHAN: &str = "поколение владельца сменилось — владелец вышел";
 
 /// Настройки, смена которых будит владельца (имена — те, от которых зависит снимок; как у resubscribe.rs).
 /// Настройка, влияющая на курс встречного токена (ревью №1 P).
@@ -92,8 +94,6 @@ pub(super) struct St {
     pub(super) verify_s: Option<u64>,
     /// Ревью №2 (E): запрос полной пересборки, пришедший во время идущей сборки, — после неё.
     pub(super) again: Option<String>,
-    /// Ревью №1 (O): не раньше этого момента повторять неудавшуюся полную сборку (dex.graph_retry_pause_s).
-    pub(super) retry_at: Option<tokio::time::Instant>,
 }
 
 /// Итог потока полной сборки: карта и пулов в реестре, или причина; JoinError — поток упал.
@@ -141,10 +141,14 @@ pub async fn run(o: Owner) -> String {
         next_verify: None,
         verify_s: None,
         again: None,
-        retry_at: None,
     };
     bg.request_full("запуск фоновой задачи графа");
     loop {
+        // Повторное ревью п. 2: сторож (или новый сторож после паники прежнего) запустил другого владельца — этот выходит
+        // без побочных действий; идущая у него сборка останавливается сама (поколение уже не текущее).
+        if !bg.is_current(o.generation) {
+            return ORPHAN.to_string();
+        }
         if let Err(why) = graph_step::step(&o, &bg, &mut st).await {
             return why;
         }
@@ -163,7 +167,7 @@ pub async fn run(o: Owner) -> String {
             },
             r = full_done(&mut st.full) => Ev::Full(Box::new(r)),
             _ = sleep_until(st.next_verify) => Ev::Verify,
-            _ = sleep_until(st.retry_at) => Ev::Wake,
+            _ = sleep_until(bg.retry_at()) => Ev::Wake,
         };
         match ev {
             Ev::Wake => {}
@@ -171,7 +175,8 @@ pub async fn run(o: Owner) -> String {
             Ev::Settings(fee_changed) => {
                 // Ревью №1 (P): dex.v2_fee_pct входит в курс встречного токена (pool_quote::v2_fee_pct → rate::best_in), а не в
                 // ключ книги глубины: смена — переводы в USD пересчитываются (Book::invalidate) и полная пересборка.
-                if fee_changed {
+                // Только в режиме dex.graph_background = да: при выключенном книга глубины — как в t132.
+                if fee_changed && graph_read::background(&o.ctx) {
                     o.reg.depth().invalidate();
                     bg.request_full("смена dex.v2_fee_pct — курс встречного токена");
                 }

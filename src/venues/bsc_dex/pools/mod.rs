@@ -83,6 +83,8 @@ pub mod fee_refresh;
 pub mod fee_watch;
 pub mod graph;
 pub mod graph_alarm;
+pub mod graph_alarm_owner;
+pub mod graph_basis;
 pub mod graph_cache;
 pub mod graph_changes;
 pub mod graph_diff;

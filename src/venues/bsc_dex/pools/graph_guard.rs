@@ -10,11 +10,14 @@
 //! сборка и доводка зависанием не считаются (их пульс не ставится); брошенная работа останавливается сама на ближайшем
 //! пуле (поколение владельца сменилось — graph_snap.rs is_current); после перезапуска, пока новая полная сборка идёт,
 //! читатели берут действующий снимок (признак «догоняющая сборка», graph_step.rs) — классики на всю сборку нет.
+//! Повторное ревью: поколение сдвигается сразу после снятия/выхода (брошенная работа останавливается до паузы; поток,
+//! зависший ВНУТРИ расчёта одного пула, остановится только по его окончании — alive() проверяется между пулами);
+//! предел ступени Б dex.graph_stage_b_max_ms; пауза повтора неудавшейся сборки — не «простой».
 //! Между перезапусками — пауза dex.graph_retry_pause_s (не задана — перезапуск по следующему изменению реестра или
 //! команде), петли «снять → пересобрать → снять» нет. Ревью №1 (Q): падение самой задачи сторожа — keep перезапускает её.
 //! Кто вызывает: graph_owner.rs (ensure — keep, один раз на реестр).
 //! От чего зависит: graph_owner.rs, graph_snap.rs, graph_alarm.rs, registry.rs, tokens.rs, ctx.rs, settings/live.rs.
-//! Настройки: dex.graph_hang_ms, dex.graph_retry_pause_s [bsc_dex] (необязательные; смена — перечитывается сразу).
+//! Настройки: dex.graph_hang_ms, dex.graph_retry_pause_s, dex.graph_stage_b_max_ms [bsc_dex] (необязательные; смена — перечитывается сразу).
 
 use std::time::Duration;
 
@@ -40,6 +43,13 @@ pub fn hang(ctx: &Ctx) -> Option<Duration> {
     ctx.int("dex.graph_hang_ms").ok().map(Duration::from_millis)
 }
 
+/// Предел ступени Б dex.graph_stage_b_max_ms (повторное ревью п. 4). None — не задан. Ошибок нет.
+pub fn stage_b_max(ctx: &Ctx) -> Option<Duration> {
+    ctx.int("dex.graph_stage_b_max_ms")
+        .ok()
+        .map(Duration::from_millis)
+}
+
 /// Задача сторожа под присмотром: сторож упал (паника) — запись Error и новый сторож. Работает до остановки системы.
 /// Ошибок нет.
 pub async fn keep(ctx: Ctx, reg: Registry, tokens: Tokens) {
@@ -60,7 +70,11 @@ pub async fn supervise(ctx: Ctx, reg: Registry, tokens: Tokens) {
     let bg = reg.graph_cache().bg().clone();
     let mut watch = Watch::new(
         ctx.settings.subscribe(),
-        vec!["dex.graph_hang_ms".into(), "dex.graph_retry_pause_s".into()],
+        vec![
+            "dex.graph_hang_ms".into(),
+            "dex.graph_retry_pause_s".into(),
+            "dex.graph_stage_b_max_ms".into(),
+        ],
     );
     loop {
         let o = Owner {
@@ -72,13 +86,18 @@ pub async fn supervise(ctx: Ctx, reg: Registry, tokens: Tokens) {
         let mut h = tokio::spawn(graph_owner::run(o));
         let why = loop {
             let limit = hang(&ctx);
+            let sb = stage_b_max(&ctx);
+            let tick = match (limit, sb) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
             let ev = tokio::select! {
                 r = &mut h => G::Exit(match r {
                     Ok(w) => w,
                     Err(e) => format!("фоновая задача графа упала: {e}"),
                 }),
                 r = watch.next_batch() => if r.is_some() { G::Again } else { G::Closed },
-                _ = sleep_opt(limit) => G::Check,
+                _ = sleep_opt(tick) => G::Check,
             };
             match ev {
                 G::Exit(w) => break w,
@@ -88,6 +107,18 @@ pub async fn supervise(ctx: Ctx, reg: Registry, tokens: Tokens) {
                     return;
                 }
                 G::Check => {
+                    // Повторное ревью п. 4: ступень Б (догоняющая сборка/доводка, снимок на прежних настройках) длится
+                    // дольше предела — перезапуск по тем же правилам (пауза, без повторов уведомлений).
+                    if let (Some(m), Some(age)) = (sb, bg.stage_b_age())
+                        && age > m
+                    {
+                        h.abort();
+                        break format!(
+                            "ступень Б длится {} мс — дольше dex.graph_stage_b_max_ms = {} мс",
+                            age.as_millis(),
+                            m.as_millis()
+                        );
+                    }
                     let Some(l) = limit else { continue };
                     if let Some(age) = bg.round_age()
                         && age > l
@@ -99,9 +130,11 @@ pub async fn supervise(ctx: Ctx, reg: Registry, tokens: Tokens) {
                             l.as_millis()
                         );
                     }
-                    // Вне круга, сборки и доводки изменения ждут дольше срока — владелец стоит.
+                    // Вне круга, сборки и доводки изменения ждут дольше срока — владелец стоит. Карты нет и действует пауза
+                    // повтора неудавшейся сборки — это ожидание, а не простой (повторное ревью п. 3).
                     if bg.round_age().is_none()
                         && !bg.catching_up()
+                        && bg.retry_at().is_none()
                         && let Some(lag) = bg.changes.lag()
                         && lag > l
                     {
@@ -115,12 +148,18 @@ pub async fn supervise(ctx: Ctx, reg: Registry, tokens: Tokens) {
                 }
             }
         };
-        if why == graph_owner::STOP {
+        if why == graph_owner::STOP || why == graph_owner::ORPHAN {
             return;
         }
+        // Повторное ревью п. 1: брошенная работа (круг, доводка, сборка) останавливается СРАЗУ, а не после паузы —
+        // поколение сдвигается до паузы, alive() у неё становится ложным на ближайшем пуле.
+        bg.next_gen();
         bg.round_end();
-        // Действующий снимок остаётся: до карты новой сборки — ступень Б, а не классика.
+        // Действующий снимок остаётся: до карты новой сборки — ступень Б, а не классика; у нового владельца свой срок
+        // ступени Б (отсчёт заново).
+        bg.set_catching_up(false);
         bg.set_catching_up(true);
+        bg.alarm.restart_stage_b();
         bg.stats.restart(&why);
         graph_alarm::owner_failed(&ctx, &bg, &why);
         if let Ok(s) = ctx.int("dex.graph_retry_pause_s") {

@@ -35,8 +35,8 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::exec::cycle_gate::{self, Form};
 use super::super::num;
+use super::super::pools::graph_read;
 use super::super::pools::registry::Registry;
-use super::super::pools::{graph, graph_read};
 use super::Quoting;
 use super::cycle::{self, CycleSignal};
 use super::{cycle_opt, rate, route_cache, route_paths};
@@ -97,7 +97,8 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     }
     // Решение 131: граф — тот же кэш на состояние реестра, что у котировки (pools/graph.rs cached), а не новое
     // построение на каждый толчок поиска (каждое событие пула). Решение 301 (е): блок в ключ графа не входит.
-    let g = graph::cached(ctx, &q.reg, &q.tokens, usdt_dec)?;
+    // Повторное ревью (д): режим читается один раз — снимок фонового графа всегда идёт с гидратацией.
+    let (g, hydrated) = graph_read::graph_for(ctx, &q.reg, &q.tokens, usdt_dec)?;
     let wbnb = ctx.addr("dex.native_wrapped").ok();
     let tickers = coin_tickers(&q.reg);
     let tip = tip_bnb(ctx);
@@ -105,7 +106,7 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     for base in bases {
         let cycles = route_paths::enumerate_cycles(&g, base, max_len, max_cycles);
         // Решение 308: в режиме «граф без ожидания» состояние пулов цикла — свежее из реестра (снимок — топология).
-        let cycles = if graph_read::active(ctx, &q.reg) {
+        let cycles = if hydrated {
             route_cache::hydrate(&q.reg, &cycles)
         } else {
             cycles

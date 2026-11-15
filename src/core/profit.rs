@@ -245,7 +245,8 @@ pub(super) async fn final_calc(
             let fill = match (fill, fit) {
                 (Ok(f), _) => f,
                 (Err(e), Some(n)) if e.no_route => {
-                    return super::final_fit::shrink(core, cx, qty, &t, budget, step, n).await;
+                    // Будущее уменьшения — в куче и собирается не здесь: кадр расчёта кандидата не растёт.
+                    return super::final_fit::shrink_boxed(core, cx, qty, &t, budget, step, n).await;
                 }
                 (Err(e), _) => return Err(format!("{t}; {}", e.text)),
             };

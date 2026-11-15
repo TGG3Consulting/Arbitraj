@@ -13,12 +13,13 @@
 //! после выкладки записан в docs/TASKS.md.
 //! Здесь же QuoteErr — ошибка котировки с признаком «не помещается» (prices.rs, profit.rs final_fillable) и чтение
 //! необязательного числа попыток (signal.fit_halvings, size.final_fit_steps — final_fit.rs).
-//! Кто вызывает: core/prices.rs (QuoteErr, retry), core/profit.rs (QuoteErr, tries), тесты (halve —
+//! Кто вызывает: core/prices.rs (QuoteErr, retry_boxed), core/profit.rs (QuoteErr, tries), тесты (halve —
 //! tests/core_fit_volume_294.rs).
 //! От чего зависит: costs_quote.rs (classify), signal_probe.rs (floor_of), prices.rs (tick_quotes), settings.
 //! Настройки: signal.fit_halvings (вся система; необязательная).
 
 use std::future::Future;
+use std::pin::Pin;
 
 use rust_decimal::Decimal;
 
@@ -129,11 +130,27 @@ where
     })
 }
 
+/// Будущее повтора сигнала в куче (retry_boxed).
+type Retry<'a> =
+    Pin<Box<dyn Future<Output = Result<(Quote, Quote, Decimal), QuoteErr>> + Send + 'a>>;
+
+/// Что делает: retry в куче — будущее собирается здесь, а не в кадре расчёта сигнала (стек не растёт; как
+/// precheck_fast.rs recalc_boxed). Принимает и ошибки: как retry.
+pub(super) fn retry_boxed<'a>(
+    core: &'a Core,
+    dir: &'a Direction,
+    ref_price: Decimal,
+    want: Decimal,
+    first: QuoteErr,
+) -> Retry<'a> {
+    Box::pin(retry(core, dir, ref_price, want, first))
+}
+
 /// Что делает: сигнал (prices.rs for_direction) — первая котировка направления на объёме проверки не удалась.
 /// Принимает: ядро, направление, опорную цену (> 0), объём проверки, ошибку первой котировки.
 /// Возвращает: (покупка на A, продажа на B, объём, на котором они получены). Ошибки: та же ошибка, если она не
 /// «не помещается» или signal.fit_halvings не задана; иначе — как у halve; настройка в неверном виде — её текст.
-pub(super) async fn retry(
+async fn retry(
     core: &Core,
     dir: &Direction,
     ref_price: Decimal,

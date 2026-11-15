@@ -152,7 +152,8 @@ pub async fn for_direction(
     // Решение 294: не поместилось (NoRoute) и задана signal.fit_halvings — объём проверки вдвое меньше (fit_volume.rs).
     let (qa, qb, want) = match tick_quotes(core, dir, want).await {
         Ok((qa, qb)) => (qa, qb, want),
-        Err(e) => super::fit_volume::retry(core, dir, ref_price, want, e).await?,
+        // Будущее повтора — в куче: кадр расчёта сигнала не растёт, когда настройка не задана.
+        Err(e) => super::fit_volume::retry_boxed(core, dir, ref_price, want, e).await?,
     };
     // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87; решение 260 — не выше объёма
     // проверки). fillable_qty ≤ запрошенного, поэтому меньшая из глубин обеих сторон уже в его пределах. Требовать

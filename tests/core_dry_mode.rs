@@ -229,7 +229,8 @@ async fn precheck_replans_live() {
         Verdict::Reject { reason, .. } => reason,
         Verdict::Accept(_) => panic!("справочник пуст — прохода быть не может"),
     };
-    let dry_reason = reason(profit::decide(&core, &dir, &dry::mode(&s)).await);
+    // Будущее расчёта большое (отладочная сборка) — в кучу, как ниже (решение 294 добавило ветку финального расчёта).
+    let dry_reason = reason(Box::pin(profit::decide(&core, &dir, &dry::mode(&s))).await);
     assert!(dry_reason.contains("dry.budget_usdt"), "{dry_reason}");
     // Будущее большое (отладочная сборка) — в кучу, иначе стек потока теста переполняется.
     let (v, m) = Box::pin(arb::core::step_timing::measure(precheck::replan(

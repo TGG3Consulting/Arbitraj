@@ -5,6 +5,8 @@
 //! Решение 301 (е2): состояние пула и пулов «промежуточная — USDT» — поколение состояния записи (Entry.state_gen,
 //! pools/state_gen.rs) вместо (блок, logIndex): перечитанный на новом блоке пул без смены состояния ключ не меняет.
 //! Поколение 0 (запись вне реестра) — ключ не совпадает ни с каким, глубина считается заново.
+//! Решение 307: Prep отдаёт и сами пулы «промежуточная — USDT» (Rate) — перевод глубины в USDT берёт их отсюда, одним
+//! чтением реестра на встречный токен вместо by_pair на каждый to_usdt; поколения в ключе — из тех же записей.
 //! Кто вызывает: pools/depth_book.rs.
 //! От чего зависит: registry.rs, tokens.rs, ctx.rs.
 //! Настройки: нет (значения даёт вызывающий).
@@ -89,15 +91,25 @@ fn rate_key(
 /// Поколения пулов пары за `Arc` (решение 301 е2).
 type Marks = Arc<Vec<u64>>;
 
+/// Решение 307: пулы «встречный токен X — USDT» на одну подготовку — их поколения (часть ключа глубины) и сами записи
+/// (по ним глубина переводится в USDT, quote/rate.rs best_in). Одно чтение реестра (by_pair): поколения в ключе и пулы
+/// в расчёте курса согласованы по построению. Дешёво клонируется.
+#[derive(Clone)]
+pub struct Rate {
+    pub marks: Marks,
+    pub pools: Arc<Vec<Entry>>,
+}
+
 /// Подготовка к расчёту ключей многих пулов подряд (решение 131: построение графа маршрутов считает ключ КАЖДОГО пула
-/// реестра): настройки глубины прочитаны один раз, USDT — один раз, отметки пулов «встречный токен — USDT» — один раз
-/// на встречный токен, а не на пул. Ключ — тот же, что у Key::new.
+/// реестра): настройки глубины прочитаны один раз, USDT — один раз, пулы «встречный токен — USDT» с их поколениями —
+/// один раз на встречный токен, а не на пул (решение 307: и для перевода в USDT, а не by_pair на каждый to_usdt).
+/// Ключ — тот же, что у Key::new.
 pub struct Prep {
     pub band: Decimal,
     pub min: Decimal,
     pub hyst: Decimal,
     usdt: Option<Address>,
-    rates: RefCell<HashMap<Address, Marks>>,
+    rates: RefCell<HashMap<Address, Rate>>,
 }
 
 impl Prep {
@@ -114,19 +126,7 @@ impl Prep {
 
     /// Ключ пула `e` (как Key::new). Ошибок нет.
     pub fn key(&self, reg: &Registry, e: &Entry) -> Key {
-        let rate = match self.usdt {
-            Some(usdt) if e.usdt != usdt => self
-                .rates
-                .borrow_mut()
-                .entry(e.usdt)
-                .or_insert_with(|| {
-                    let mut v = reg.pair_marks(e.usdt, usdt);
-                    v.sort_unstable();
-                    Arc::new(v)
-                })
-                .clone(),
-            _ => Arc::default(),
-        };
+        let rate = self.rate(reg, e).map(|r| r.marks).unwrap_or_default();
         Key {
             state_gen: e.state_gen,
             band: self.band,
@@ -134,5 +134,30 @@ impl Prep {
             hyst: self.hyst,
             rate,
         }
+    }
+
+    /// Решение 307: пулы «встречный токен пула — USDT» этой подготовки (берутся один раз на встречный токен).
+    /// None — встречный токен и есть USDT или USDT не известен (тогда курс не нужен или считается как раньше).
+    /// Ошибок нет.
+    pub fn rate(&self, reg: &Registry, e: &Entry) -> Option<Rate> {
+        let usdt = self.usdt?;
+        if e.usdt == usdt {
+            return None;
+        }
+        let got = self
+            .rates
+            .borrow_mut()
+            .entry(e.usdt)
+            .or_insert_with(|| {
+                let pools = reg.by_pair(e.usdt, usdt);
+                let mut v: Vec<u64> = pools.iter().map(|p| p.state_gen).collect();
+                v.sort_unstable();
+                Rate {
+                    marks: Arc::new(v),
+                    pools: Arc::new(pools),
+                }
+            })
+            .clone();
+        Some(got)
     }
 }

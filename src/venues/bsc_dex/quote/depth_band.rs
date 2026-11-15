@@ -13,6 +13,7 @@
 //! Комиссия — в котировке и прибыли (quote/pool_quote.rs), их этот файл не трогает.
 //! Algebra (THENA Fusion, Algebra Integral) — quote/depth_band_algebra.rs (решение 205); пустая пара V2 / Solidly — глубина 0
 //! (решение 205), а не ошибка.
+//! Решение 307: band_from_rate — перевод в USDT по пулам, взятым один раз на подготовку (pools/depth_key.rs Rate).
 //! Кто вызывает: pools/depth_book.rs.
 //! От чего зависит: math/swap_cl.rs, math/tick_math.rs, math/v2.rs, quote/pool_quote.rs, quote/rate.rs, num.rs.
 //! Настройки: полосу dex.depth_band_pct [bsc_dex] даёт вызывающий.
@@ -93,6 +94,39 @@ pub fn band_from_units(
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
     let to = |a: U256| -> Result<Decimal, String> {
         let u = rate::to_usdt(ctx, reg, usdt, e.usdt, a).map_err(|e| e.message)?;
+        num::to_decimal(u, usdt_dec).ok_or_else(|| "глубина не переводится в USDT".to_string())
+    };
+    Ok(Band {
+        buy: to(buy)?,
+        sell: to(sell)?,
+        full,
+    })
+}
+
+/// Решение 307: то же, что band_from_units, но пулы «встречный токен — USDT» уже взяты (depth_key.rs Prep::rate — один
+/// раз на подготовку, вместе с их поколениями в ключе глубины), а не by_pair на каждый to_usdt. Перевод — тот же своп
+/// всей суммы через лучший достоверный пул (rate::best_in; смысл решения 73 не меняется). Принимает: как
+/// band_from_units, и пулы встречного токена (None — как band_from_units: встречный USDT или USDT не известен
+/// подготовке). Ошибки: как у band_from_units.
+pub fn band_from_rate(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_dec: u8,
+    units: (U256, U256, bool),
+    rate: Option<&[Entry]>,
+) -> Result<Band, String> {
+    let Some(pools) = rate else {
+        return band_from_units(ctx, reg, tokens, e, usdt_dec, units);
+    };
+    let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
+    if e.usdt == usdt {
+        return band_from_units(ctx, reg, tokens, e, usdt_dec, units);
+    }
+    let (buy, sell, full) = units;
+    let to = |a: U256| -> Result<Decimal, String> {
+        let u = rate::best_in(ctx, pools, e.usdt, e.usdt, a).map_err(|e| e.message)?;
         num::to_decimal(u, usdt_dec).ok_or_else(|| "глубина не переводится в USDT".to_string())
     };
     Ok(Band {

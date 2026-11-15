@@ -44,6 +44,7 @@ pub mod depth_fail;
 pub mod depth_key;
 pub mod depth_log;
 pub mod depth_sync;
+pub mod depth_units;
 pub mod dex_ids;
 pub mod dex_rules;
 pub mod discover;

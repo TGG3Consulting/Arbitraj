@@ -325,10 +325,64 @@ async fn stage_b_limit_does_not_loop() {
         ok,
         "снимок опубликован, несмотря на предел ступени Б меньше времени сборки"
     );
+    // Четвёртое ревью: после публикации снимка на текущих настройках ступень Б кончилась — отсчёт и признаки сброшены.
+    assert!(bg.stage_b_age().is_none(), "отсчёт ступени Б сброшен");
+    assert!(
+        !bg.stage_b_overdue() && !bg.stage_b_restarted(),
+        "признаки ступени Б сброшены"
+    );
     let v = graph_stats::view(&p.ctx, &p.registry);
     assert!(
         v.restarts <= 1,
         "перезапусков по пределу ступени Б не больше одного: {}",
         v.restarts
     );
+}
+
+/// Четвёртое ревью (п. 1): ступень Б «снимок на прежних настройках» началась, котировка увидела её один раз и больше
+/// снимок не читала (как при dex.router_mode = classic) — после публикации снимка на новых настройках отсчёт и признаки
+/// сброшены (их ведёт владелец, а не котировки), перезапуска и «просрочки» нет.
+#[tokio::test]
+async fn stage_b_ends_on_publish_without_quotes() {
+    let p = route_common::parts_from("tests/data/routes_2026-10-29").await;
+    let set = |n: &'static str, v| {
+        let ctx = p.ctx.clone();
+        async move {
+            ctx.settings
+                .set(n, Scope::Venue("bsc_dex".into()), Some(v), "тест")
+                .await
+                .unwrap();
+        }
+    };
+    set("dex.graph_background", json!(true)).await;
+    set("dex.graph_stage_b_max_ms", json!(60000)).await;
+    let (tx, _rx) = tokio::sync::mpsc::channel(64);
+    let _pools = p.pools(tx);
+    let bg = p.registry.graph_cache().bg().clone();
+    let until = |want: Vec<String>| {
+        let bg = bg.clone();
+        async move {
+            for _ in 0..1000 {
+                if bg.load().is_some_and(|s| s.basis.settings == want) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            panic!("снимок на настройках {want:?} не опубликован за 10 с");
+        }
+    };
+    until(graph_settings(&p.ctx)).await;
+    // Настройка графа сменилась — владелец видит снимок на прежних настройках (ступень Б) и пересобирает.
+    set("dex.route_max_pools_per_edge", json!(4)).await;
+    // Одна котировка видит снимок (ступень Б, если новый ещё не готов), дальше котировок нет.
+    let _ = graph::cached(&p.ctx, &p.registry, &p.tokens, 18);
+    until(graph_settings(&p.ctx)).await;
+    assert!(
+        bg.stage_b_age().is_none(),
+        "отсчёт ступени Б сброшен публикацией"
+    );
+    assert!(!bg.stage_b_overdue() && !bg.stage_b_restarted());
+    let v = graph_stats::view(&p.ctx, &p.registry);
+    assert_eq!(v.restarts, 0, "перезапуска нет");
+    assert!(v.stage_b_now_ms.is_none() && !v.stage_b_overdue);
 }

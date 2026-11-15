@@ -190,6 +190,9 @@
    8  
    9      uint256 public constant PRECISION = (10**18);
 
+=== contracts/VolumeTrendRecorder.sol L24
+  24      event UpdateEMA(uint256 shortEMA, uint256 longEMA, uint128 lastBlockVolume, uint256 skipBlock);
+
 === contracts/VolumeTrendRecorder.sol L48-L99
   48      /// @dev records a new trade, update ema and returns current rFactor for this trade
   49      /// @return rFactor in Precision for this trade
@@ -252,6 +255,35 @@
   26          uint32 ampBps,
   27          uint256 totalPool
   28      );
+
+=== contracts/DMMFactory.sol L36-L62
+  36      function createPool(
+  37          IERC20 tokenA,
+  38          IERC20 tokenB,
+  39          uint32 ampBps
+  40      ) external override returns (address pool) {
+  41          require(tokenA != tokenB, "DMM: IDENTICAL_ADDRESSES");
+  42          (IERC20 token0, IERC20 token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+  43          require(address(token0) != address(0), "DMM: ZERO_ADDRESS");
+  44          require(ampBps >= BPS, "DMM: INVALID_BPS");
+  45          // only exist 1 unamplified pool of a pool.
+  46          require(
+  47              ampBps != BPS || getUnamplifiedPool[token0][token1] == address(0),
+  48              "DMM: UNAMPLIFIED_POOL_EXISTS"
+  49          );
+  50          pool = address(new DMMPool());
+  51          DMMPool(pool).initialize(token0, token1, ampBps);
+  52          // populate mapping in the reverse direction
+  53          tokenPools[token0][token1].add(pool);
+  54          tokenPools[token1][token0].add(pool);
+  55          if (ampBps == BPS) {
+  56              getUnamplifiedPool[token0][token1] = pool;
+  57              getUnamplifiedPool[token1][token0] = pool;
+  58          }
+  59          allPools.push(pool);
+  60  
+  61          emit PoolCreated(token0, token1, pool, ampBps, allPools.length);
+  62      }
 
 === contracts/DMMFactory.sol L94-L125
   94      function getPools(IERC20 token0, IERC20 token1)

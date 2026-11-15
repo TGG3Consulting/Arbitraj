@@ -7,9 +7,11 @@
 //!    (amount_in) на этих выходах даёт вход, на котором прямая отдаёт не меньше.
 //! 2. Реестр фабрики getPools(USDT, WBNB) — четыре пула: verify_rules::registered_for принимает пул из списка, чужой —
 //!    отказ; у пары V2 — прежний разбор (registered).
-//! 3. Шаг исполнителя: вид KYBER_DMM = 15, данных нет, только v2; проба на цепи (exec_sim.json): исполнитель v2 шагом 15
-//!    получил ровно ответ роутера во всех 5 случаях (3 пула, обе стороны).
-//! 4. Вид DEX: graphable, без своего пути (tradable = нет), шаг KYBER_DMM, нужны dex.factory и dex.quoter (роутер).
+//! 3. Шаг исполнителя на цепи: выход шага 15 исполнителя v2 (eth_call с подменой кода) = наша формула на записанном
+//!    состоянии пула того же блока — 4 случая блока 133682402 (exec_sim.json + probe.json) и 5 случаев блока 133694765
+//!    (exec_state.json: состояние трёх пулов, шаг и роутер на одном блоке); getPools в обоих порядках токенов — один список.
+//! 4. Вид KYBER_DMM = 15, данных нет, только v2.
+//! 5. Вид DEX: graphable, без своего пути (tradable = нет), шаг KYBER_DMM.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math::dmm, pools::{load_dmm, families, verify_rules, events, exec_callback,
@@ -120,15 +122,91 @@ fn registry_get_pools() {
     assert!(verify_rules::registered_for(v2, pool, &answer).is_err());
 }
 
+/// Выход шага по нашей формуле на записанном состоянии пула (тот же сборщик и та же формула, что у котировки).
+fn ours(p: &Value, token_in: &Value, amount: U256) -> U256 {
+    let dir = if addr(token_in) == addr(&p["token0"]) {
+        0
+    } else {
+        1
+    };
+    let (sd, fee) = side(&state_of(p), dir);
+    dmm::amount_out(amount, sd, fee).expect("формула")
+}
+
 #[test]
-fn executor_step_on_chain_equals_router() {
+fn executor_step_on_chain_equals_formula() {
+    // Блок 133682402: состояние пулов — probe.json; шаг 15 исполнителя v2 (exec_sim.json) на том же блоке. Пятый случай
+    // (пул 0xf81e…cf34) состояния в probe.json не имеет — он во втором наборе ниже (exec_state.json).
+    let probe = json("probe.json");
     let sim = json("exec_sim.json");
-    let cases = sim["execute"].as_array().unwrap();
-    assert_eq!(cases.len(), 5);
-    for c in cases {
+    let mut n = 0;
+    for c in sim["execute"].as_array().unwrap() {
+        let Some(p) = probe["pools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["pool"] == c["pool"])
+        else {
+            continue;
+        };
         assert!(c["balance_set"].as_bool().unwrap());
-        assert_eq!(dec(&c["received"]), dec(&c["router_out"]), "{c}");
+        assert_eq!(
+            ours(p, &c["token_in"], dec(&c["balance_in"])),
+            dec(&c["received"]),
+            "{c}"
+        );
+        n += 1;
     }
+    assert_eq!(n, 4);
+    // Блок 133694765 (финальный код v2): состояние всех трёх пулов и шаг 15 — на одном блоке (exec_state.json).
+    let st = json("exec_state.json");
+    let pools = st["pools"].as_array().unwrap();
+    for c in st["execute"].as_array().unwrap() {
+        let p = pools
+            .iter()
+            .find(|p| p["pool"] == c["pool"])
+            .expect("состояние пула");
+        let tin = if c["dir"].as_u64() == Some(0) {
+            &p["token0"]
+        } else {
+            &p["token1"]
+        };
+        assert!(c["balance_set"].as_bool().unwrap());
+        assert_eq!(
+            ours(p, tin, dec(&c["balance_in"])),
+            dec(&c["received"]),
+            "{c}"
+        );
+        assert_eq!(dec(&c["received"]), dec(&c["router_out"]));
+        n += 1;
+    }
+    assert_eq!(n, 9);
+}
+
+#[test]
+fn registry_get_pools_both_orders() {
+    // getPools(USDT, WBNB) и getPools(WBNB, USDT) на блоке 133694765 — один и тот же список (DMMFactory.sol L52-L53).
+    let st = json("exec_state.json");
+    let a: Vec<Address> = st["getPools"]["USDT_WBNB"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(addr)
+        .collect();
+    let b: Vec<Address> = st["getPools"]["WBNB_USDT"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(addr)
+        .collect();
+    assert_eq!(a, b);
+    let fam = families::make("kyberswap_classic_bsc", "kyber_dmm").expect("вид");
+    let pool = addr(&st["pools"][0]["pool"]);
+    assert!(verify_rules::registered_for(fam, pool, &b.abi_encode()).is_ok());
+}
+
+#[test]
+fn family_and_step() {
     let fam = families::make("kyberswap_classic_bsc", "kyber_dmm").expect("вид");
     assert!(fam.graphable && !fam.tradable && !fam.fork);
     assert_eq!(fam.kind, PoolKind::AmpV2);

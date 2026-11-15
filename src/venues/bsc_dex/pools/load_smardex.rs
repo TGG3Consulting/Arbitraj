@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/load_smardex.rs
 //! Что делает: решение 288 — чтение состояния пары SmarDex на блоке одним try_many (Multicall3): getReserves (баланс минус
 //! доля протокола), getFictiveReserves, getPriceAverage (средняя цена и время её записи), getPairFees, и время этого блока
-//! (Multicall3.getCurrentBlockTimestamp в той же пачке; без dex.multicall3 — eth_getBlockByNumber блока). Собирает
+//! (Multicall3.getCurrentBlockTimestamp в той же пачке; без dex.multicall3 — eth_getBlockByNumber блока, один раз на блок
+//! на все пары — память block_secs). Собирает
 //! PoolState::Fictive. Выход обмена зависит от времени блока (средняя цена) и от баланса пары (резерв) — вид
 //! перечитывается каждым блоком (per_block.rs).
 //! Кто вызывает: pools/load.rs (ветка Proto::Smardex).
@@ -10,6 +11,8 @@
 //!
 //! Источник — SmardexPair.sol (фабрика BSC 0xA8EF…Af33, Sourcify match = SmarDex-Ecosystem/dex-smart-contracts@74d0444
 //! deployments/bsc): getReserves L80-L83, getFictiveReserves L86-L89, getPairFees L98-L101, getPriceAverage L104-L112.
+
+use std::sync::Mutex;
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -56,7 +59,7 @@ pub async fn load(ctx: &Ctx, pool: Address, block: u64) -> GatewayResult<PoolSta
     let fees = call::decode::<P::getPairFeesCall>(ok(3)?)?;
     let ts = match mc {
         Some(_) => call::decode::<IMulticall3Time::getCurrentBlockTimestampCall>(ok(4)?)?,
-        None => U256::from(head_age::fetch(ctx, block, true).await?.secs),
+        None => U256::from(block_secs(ctx, block).await?),
     };
     let raw = Raw {
         reserves: (r.reserve0_, r.reserve1_),
@@ -67,6 +70,24 @@ pub async fn load(ctx: &Ctx, pool: Address, block: u64) -> GatewayResult<PoolSta
         block_ts: ts,
     };
     state(&raw).map_err(|w| bad(w.to_string()))
+}
+
+/// Время последнего запрошенного блока (номер, секунды) — без dex.multicall3 время блока запрашивается один раз на блок
+/// на все пары SmarDex (перечитывание каждым блоком, per_block.rs), а не на каждую пару.
+static BLOCK_TIME: Mutex<Option<(u64, u64)>> = Mutex::new(None);
+
+/// Время блока (секунды Unix): из памяти, если этот блок уже спрашивали, иначе eth_getBlockByNumber (node/head_age.rs).
+/// Принимает: окружение, номер блока. Ошибки: узел; BadResponse (узел не знает блок).
+async fn block_secs(ctx: &Ctx, block: u64) -> GatewayResult<u64> {
+    let hit = *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some((n, t)) = hit
+        && n == block
+    {
+        return Ok(t);
+    }
+    let t = head_age::fetch(ctx, block, true).await?.secs;
+    *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner()) = Some((block, t));
+    Ok(t)
 }
 
 /// Прочитанное с пары (ответы вызовов как есть).

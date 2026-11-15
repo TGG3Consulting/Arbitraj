@@ -19,10 +19,16 @@ eth_call с подменой кода — в сеть ничего не уход
 354e3f81ab111372…): получено ровно getAmountsOut роутера во всех 5 случаях (3 пула, обе стороны); тот же маршрут видом V2
 — откат.
 
+`exec_state.json` (блок 133694765) — состояние и исполнение на ОДНОМ блоке: три пула (0xec30…, усиление 15000;
+0xc3da…, 4000000; 0xf81e106c…, 10000 — пятый случай exec_sim.json, состояния которого нет в probe.json) с getTradeInfo;
+getPools(USDT, WBNB) и getPools(WBNB, USDT) — один и тот же список из 4 пулов (фабрика пишет пул в обе стороны,
+DMMFactory.sol L52-L53); 5 случаев шага 15 исполнителя v2 (eth_call с подменой кода, вход — баланс исполнителя) —
+received и getAmountsOut роутера. Тест сверяет received с НАШЕЙ формулой (math/dmm.rs) на getTradeInfo того же блока.
+
 `source_excerpt.txt` — дословные выдержки официального исходника KyberNetwork/dmm-smart-contracts@e557b57 с номерами строк:
 события и swap пула, getTradeInfo, verifyBalanceAndUpdateEma (проверка K по виртуальным резервам с комиссией блока),
-getFinalFee, DMMLibrary.getAmountOut / getAmountIn, MathExt.PRECISION, VolumeTrendRecorder (комиссия блока не зависит от
-объёма самого обмена), PoolCreated / getPools / isPool фабрики, DMMRouter02.getAmountsOut. Сверка исходника с кодом BSC:
+getFinalFee, событие UpdateEMA (VolumeTrendRecorder L24), DMMLibrary.getAmountOut / getAmountIn, MathExt.PRECISION, VolumeTrendRecorder (комиссия блока не зависит от
+объёма самого обмена), PoolCreated / createPool (запись пула в обе стороны, L52-L53) / getPools / isPool фабрики, DMMRouter02.getAmountsOut. Сверка исходника с кодом BSC:
 тексты MathExt, FeeFomula, VolumeTrendRecorder, DMMFactory из Sourcify совпали с репозиторием без пробелов; DMMPool —
 кроме _mintFee (доля протокола при mint/burn; на обмен не влияет).
 

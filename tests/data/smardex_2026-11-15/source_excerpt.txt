@@ -618,6 +618,9 @@
   86       */
   87      event FeesChanged(uint256 indexed feesLP, uint256 indexed feesPool);
 
+=== contracts/core/interfaces/ISmardexFactory.sol L12
+  12      event PairCreated(address indexed token0, address indexed token1, address pair, uint256 totalPair);
+
 === contracts/core/SmardexFactory.sol L35-L49
   35      function createPair(address _tokenA, address _tokenB) external returns (address pair_) {
   36          require(_tokenA != _tokenB, "SmarDex: IDENTICAL_ADDRESSES");

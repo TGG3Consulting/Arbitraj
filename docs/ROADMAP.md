@@ -41,6 +41,9 @@
   quote/steps.rs 224 (было 220), pools/created_log.rs 334, pools/factory_calls.rs 250, pools/load_batch.rs 233,
   exec/executor/entry.rs 220 (было 211), core/types/pool.rs 377 (было 369), contracts/ArbExecutor.sol 510 (было 502);
   новые файлы кода — в пределах 200.
+- Решение 287 (ревью): котировка пула DMM — по комиссии getTradeInfo блока чтения, исполнение — по комиссии блока
+  исполнения (меняется каждым блоком без событий); от сдвига защищает только minOut маршрута — замерить на живых сделках
+  и при необходимости учесть запас по комиссии (TASKS 287, п. 5).
 - Решение 287 (KyberSwap Classic DMM, t119): (а) пулы KSFactory со статической комиссией (KyberSwap Classic «Static Fee»,
   фабрика 0x1c758af0688502e49140230f6b0ebd376d429be5 по официальной документации; в справочнике GeckoTerminal
   `kyberswap_classic_bsc` их 2 из 13) — другой вид пула (KSPool), не подключён: проверка видом kyber_dmm их отклоняет по

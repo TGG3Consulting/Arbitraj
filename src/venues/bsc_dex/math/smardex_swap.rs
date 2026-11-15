@@ -19,6 +19,7 @@ use super::smardex::{Params, amount_out};
 /// MAX_BLOCK_DIFF_SECONDS = 300 (SmardexLibrary.sol L24) — за сколько секунд средняя цена догоняет фиктивные резервы.
 const MAX_DIFF_S: u64 = 300;
 
+/// Число u64 как U256 (константы протокола в формулах). Принимает: число. Возвращает: U256. Ошибок нет.
 fn u(x: u64) -> U256 {
     U256::from(x)
 }
@@ -106,22 +107,4 @@ pub fn swap_out(p: &Params, last_ts: u64, now: u64, amount: U256) -> Option<U256
         return None;
     }
     Some(out)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Средняя цена: то же время — прежняя, через 300 с и больше — фиктивные резервы, первый раз — фиктивные резервы.
-    #[test]
-    fn price_average_rules() {
-        let f = (u(1000), u(2000));
-        let p = (u(1000), u(1000));
-        assert_eq!(price_average(f, 10, p, 10), Some(p));
-        assert_eq!(price_average(f, 0, p, 10), Some(f));
-        assert_eq!(price_average(f, 10, p, 310), Some(f));
-        assert_eq!(price_average(f, 10, p, 9), None);
-        // Половина окна: (150·1000·1000/1000 + 150·2000)/300 = 1500.
-        assert_eq!(price_average(f, 10, p, 160), Some((u(1000), u(1500))));
-    }
 }

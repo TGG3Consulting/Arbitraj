@@ -1,0 +1,105 @@
+{
+ "block": 133694765,
+ "executor": "eth_call с подменой кода ArbExecutor v2 решения 288 (15 128 байт, sha256 байтов 5ea19113dd5362fa…, = contracts/out) по адресу 0x…e0e0e0 от владельца 0x…0b0b (слот 0), слот 1 = WBNB; вход — баланс исполнителя (amountIn = 0; подмена баланса: USDT, BUSD — слот 1 mapping, WBNB — 3; balance_set — balanceOf под подменой = balance_in); router_out — DMMRouter02.getAmountsOut на том же блоке",
+ "pools": [
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "ampBps": "15000",
+   "getTradeInfo": [
+    "3508052415772152862303",
+    "5684713259817812000",
+    "4165359044913793669035",
+    "7074367866882591695",
+    "2497266621966247"
+   ]
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "ampBps": "4000000",
+   "getTradeInfo": [
+    "287050165626589866422",
+    "224857203047544906493",
+    "88866512846777585122675",
+    "88817250717240817165226",
+    "200511227610694"
+   ]
+  },
+  {
+   "pool": "0xf81e106c5b44ba9a993fc1f456a4c8e54c47cf34",
+   "factory": "0x878dfe971d44e9122048308301f540910bbd934c",
+   "token0": "0x55d398326f99059ff775485246999027b3197955",
+   "token1": "0x633237c6fa30fae46cc5bb22014da30e50a718cc",
+   "ampBps": "10000",
+   "getTradeInfo": [
+    "164724925323435524989",
+    "10236485315294062463372414",
+    "164724925323435524989",
+    "10236485315294062463372414",
+    "1503833623506882"
+   ]
+  }
+ ],
+ "getPools": {
+  "USDT_WBNB": [
+   "0xd754bd4dd62d6bb937848cbaa7ca4fe8b9be0096",
+   "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "0x65bcdbaec11ff86d3da8849af781ca267442ccc5",
+   "0x2732d16a9e106d28266c3f5966590c0f3b1a20f4"
+  ],
+  "WBNB_USDT": [
+   "0xd754bd4dd62d6bb937848cbaa7ca4fe8b9be0096",
+   "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "0x65bcdbaec11ff86d3da8849af781ca267442ccc5",
+   "0x2732d16a9e106d28266c3f5966590c0f3b1a20f4"
+  ],
+  "note": "ответы getPools(USDT, WBNB) и getPools(WBNB, USDT) на блоке побайтно равны"
+ },
+ "execute": [
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "dir": 0,
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "165451826848599507",
+   "router_out": "165451826848599507"
+  },
+  {
+   "pool": "0xec303ce1edbebf7e71fc7b350341bb6a6a7a6381",
+   "dir": 1,
+   "balance_in": "100000000000000000",
+   "balance_set": true,
+   "received": "57915927108983758469",
+   "router_out": "57915927108983758469"
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "dir": 0,
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "99812231628853771672",
+   "router_out": "99812231628853771672"
+  },
+  {
+   "pool": "0xc3dac2049616326e7d596ce52062789d96373b55",
+   "dir": 1,
+   "balance_in": "100000000000000000000",
+   "balance_set": true,
+   "received": "99922920954227406302",
+   "router_out": "99922920954227406302"
+  },
+  {
+   "pool": "0xf81e106c5b44ba9a993fc1f456a4c8e54c47cf34",
+   "dir": 0,
+   "balance_in": "10000000000000000000",
+   "balance_set": true,
+   "received": "585032222317172202347526",
+   "router_out": "585032222317172202347526"
+  }
+ ]
+}

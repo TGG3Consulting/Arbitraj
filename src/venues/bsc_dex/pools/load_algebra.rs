@@ -92,7 +92,9 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
 /// Сырые слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16, где w = tick >> 8 (TickTable.sol:
 /// rowNumber = shr(8, tick)), n = dex.tick_words. Для СЫРОГО тика деления на tickSpacing нет. Решение 296: n не меньше
 /// слов полосы чтения dex.tick_read_band_pct при шаге 1 (слово сырого битмапа — 256 тиков, как слово V3 при
-/// tickSpacing 1); не задана — n = dex.tick_words, как раньше. Ошибки: NotConfigured (dex.tick_words).
+/// tickSpacing 1; окно расширяется у всех пулов Algebra независимо от их tickSpacing и может сделать глубину по окну
+/// полнее, если dex.depth_band_pct шире прежнего окна); не задана — n = dex.tick_words, как раньше. Ошибки:
+/// NotConfigured (dex.tick_words).
 pub fn raw_word_range(ctx: &Ctx, tick: i32) -> GatewayResult<(i16, i16)> {
     let n = ctx.int("dex.tick_words")?.min(i16::MAX as u64) as i32;
     let n = n.max(read_band_words(ctx, 1));

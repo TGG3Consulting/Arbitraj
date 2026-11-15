@@ -10,6 +10,8 @@
 | `heads.rs` | Опрос eth_blockNumber по HTTP раз в `bsc.blocks_poll_ms` (решение 57): последний блок, свежесть (`feed.stale_after_ms`), блок и его время по запросу (eth_getBlockByNumber, раз на блок на всех); при `feed.max_block_age_ms` — и возраст блока (head_age.rs) |
 | `block_ms.rs` | Решение 259: время блока в миллисекундах — timestamp·1000 + доля секунды из mixHash (BEP-520; значение ≥ 1000 — доля 0) |
 | `head_age.rs` | Возраст головы по времени блока (решение 121, A2; решение 259 — в миллисекундах): часы сервера − время блока против `feed.max_block_age_ms` → StaleData; время новой головы в опросе; журнал venue.head_age на переходах «свежо ↔ устарело» |
+| `head_stall.rs` | Решение 282: уведомление «узел BSC: блок не растёт» (dex.node_stalled) — номер из опроса heads.rs не менялся дольше `bsc.node_stall_alert_s`, одно сообщение на простой; «блоки снова идут» (dex.node_resumed) с длительностью простоя; журнал venue.head_stall. Не задана — ничего |
+| `head_stall_text.rs` | Решение 282: текст уведомлений dex.node_stalled / dex.node_resumed (блок, время блока UTC, когда бот его увидел, секунды простоя) |
 | `call.rs` | eth_call к контракту с ABI-кодированием (alloy sol!); пачки — через Multicall3 или пачкой JSON-RPC |
 | `multicall.rs` | Multicall3.aggregate3 (dex.multicall3): пачка чтений одним eth_call, ответ каждого вызова отдельно |
 | `failover.rs` | Резервный провайдер узла: сбой основного (связь, таймаут, 5xx, 429) — запрос на резервный, удержание bsc.node_backup_hold_s |

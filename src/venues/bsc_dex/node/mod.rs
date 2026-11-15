@@ -11,6 +11,8 @@ pub mod call;
 pub mod events_lag;
 pub mod failover;
 pub mod head_age;
+pub mod head_stall;
+pub mod head_stall_text;
 pub mod heads;
 pub mod jsonrpc;
 pub mod log_filter;

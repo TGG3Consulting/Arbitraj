@@ -9,6 +9,7 @@
 //! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
+//! bingx.rs — только BingX (решение 293).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -18,6 +19,7 @@
 
 mod base;
 mod binance;
+mod bingx;
 mod bitget;
 mod coinex;
 pub mod dex;
@@ -113,6 +115,7 @@ static PARTS: &[&[SettingDef]] = &[
     uncapped::UNCAPPED,
     window::WINDOW,
     feed_watch::FEED_WATCH,
+    bingx::BINGX,
     gate::GATE,
     bitget::BITGET,
     okx::OKX,

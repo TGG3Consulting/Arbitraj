@@ -36,6 +36,7 @@ pub mod resolve;
 pub mod rest;
 pub mod subs;
 pub mod symbols;
+pub mod symbols_qty;
 pub mod tap;
 pub mod tap_diff;
 pub mod trade;

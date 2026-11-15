@@ -31,6 +31,7 @@
   вынесен функцией) — сверх ориентира; tests/bsc_dex_stable_list_live.rs 188, tests/bsc_dex_stable_list_sort.rs 144,
   load_saddle.rs 181, load_curve.rs 150. Дробить factory_scan.rs — вынести sort / off / failed в отдельный файл;
   stable_list.rs — вынести sort (разбор пачки) в stable_list_sort.rs.
+- Решение 293 (t124, с двумя ревью; `wc -l` на итоговом коде): src/venues/bingx/symbols.rs — 222 строки (было 215, сверх ориентира 200 и до правки: поле qty_store, вызов take / warn_bad); дальше дробить — вынести parse / api_flag в symbols_parse.rs (как у других бирж). core/sell_unsent.rs — 243 (было 237), core/ledger.rs — 203 (было 211: пауза вынесена в route_pause.rs); тест tests/core_sell_reject_293.rs — 326 (сверх ориентира). В пределах 200 — symbols_qty.rs 166, pairs.rs 155, pairs_watch.rs 127, route_pause.rs 97, settings/catalog/bingx.rs, тесты bingx_minqty_293.rs 128, bingx_minqty_coin_293.rs 143, bingx_293_common/mod.rs 174.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

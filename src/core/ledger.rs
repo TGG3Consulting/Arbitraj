@@ -8,6 +8,7 @@
 //! Решение 236: итог закрытой сделки включает затраты возврата USDT (deal_return_cost.rs); пока возврат идёт,
 //! deal.closed ждёт (deal_closed.rs) — уходит из usdt_return_state::set с фактом после возврата.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, manual.rs; engine.rs (load при запуске — ledger_load.rs).
+//! Пауза направления — route_pause.rs (решение 293: та же у отклонённой продажи на бирже).
 //! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
 //! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
@@ -16,7 +17,6 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal::{Deal, Step};
@@ -145,16 +145,8 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     if !pause {
         return;
     }
-    let cooldown = deps
-        .settings
-        .integer("signal.route_cooldown_s", At::default());
-    match cooldown {
-        Ok(s) => lk(&core.inner.signals).cooldown(d, s, Utc::now()),
-        Err(e) => {
-            deps.log(Level::Warn, "core.ledger", None, e.message, None)
-                .await
-        }
-    }
+    // Пауза направления — route_pause.rs (та же функция у отклонённой продажи на бирже, решение 293).
+    super::route_pause::pause(core, d).await;
     // Замок монеты (решение 118, Я-2) снимает тот, кто его взял (executor.rs, manual_halted.rs): закрытие другой
     // сделки той же монеты (например «Продано вручную» у остановленной) не должно снимать замок идущей.
 }

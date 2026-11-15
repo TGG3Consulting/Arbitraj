@@ -6,11 +6,12 @@
 | --- | --- |
 | `mod.rs` | Короткая запись `d()`, наборы областей, `all()` и `find()` по всем частям |
 | `base.rs` | Деньги и риск, расчёт, сигнал, исполнение, переводы, площадки (биржи), уведомления, безопасность, система |
-| `trade.rs` | Налоги и крючки, возврат USDT, застрявшие монеты, ручной чёрный список (решения 30, 32, 34, 36, 37) |
+| `trade.rs` | Налоги и крючки, возврат USDT, застрявшие монеты, ручной чёрный список (решения 30, 32, 34, 36, 37); решение 293 (ревью) — stuck.reject_route_pause |
 | `dex.rs` | Узел BSC, режим обмена, пулы, умный режим, адреса контрактов вида пула (решения 29, 31, 38) |
 | `index.rs` | Справочник пулов от индексатора: адрес API, сеть, ключ, темп, страницы, частота, порог, подпись (решение 58) |
 | `send.rs` | Отправка транзакций и каналы отправки (решения 33, 41–45) |
 | `signals.rs` | Сигналы и эпизоды: сухой режим, предел поиска максимального объёма, шаблоны ссылок на пару и пул, эпизоды (решение 74) |
 | `uncapped.rs` | Упущено из-за потолка (решение 141): uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max, uncapped.max_evals, uncapped.ladder_usdt, uncapped.episode_gap_ms, uncapped.keep_days; решение 245 — uncapped.maxwin_gap_ms, uncapped.deal_time_min_n |
 | `window.rs` | Окна (решение 125): window.enabled, window.min_hold_ms, window.queue_max, window.max_mb, window.keep_days, window.zstd_level, window.cleanup_s, window.dex_price, window.dex_price_min_ms (решение 241), window.dex_pool_state (решение 255), window.busy_calc, window.busy_calc_min_ms (решение 267), venue.trades_interval, venue.window_depth_interval, venue.window_depth_limit [mexc] |
+| `bingx.rs` | Только BingX (решение 293): venue.ignore_deprecated_qty — не соблюдать устаревшие minQty / maxQty справочника пар |
 | `gate.rs` | Только Gate (решение 135): venue.book_interval, venue.window_diff_interval, venue.rate_limit_pause_ms, venue.order_history_limit |

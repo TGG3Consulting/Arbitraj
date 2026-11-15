@@ -43,7 +43,8 @@ pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<
         let m = "рыночным ордером — только продажа (решение 268)";
         return Err(ctx.tag(GatewayError::new(ErrorCode::NotApplicable, None, m)));
     }
-    let rules = symbols.get(ctx, &req.asset.ticker)?;
+    // Решение 293: те же правила пары, что у лимитного ордера (Symbols::get_for).
+    let rules = symbols.get_for(ctx, &req.asset)?;
     let (qty, price) = order_rules::check_rules(&rules, req.side, req.qty, req.worst_price)
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::OrderRejected, None, m)))?;
     let client_id = order_rules::client_id(false, &req.deal_id);

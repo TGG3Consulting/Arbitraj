@@ -6,10 +6,13 @@
 //! «Продано вручную» — manual.rs, решение 100); у цепочки решения 229 — сначала продажа здесь по порогу
 //! (relay_here.rs, решение 220). Всё остальное (ушедшая в сеть и не исполненная продажа без подтверждённой отмены,
 //! nonce, нет связи) — как раньше, алерт человеку.
+//! Решение 293 (ревью): продажа отклонена биржей (OrderRejected) и ушла человеку, stuck.reject_route_pause = да —
+//! пауза одного направления сделки (монета, площадка покупки, площадка продажи) на signal.route_cooldown_s, только в
+//! памяти (route_pause.rs after_reject). Не задана или «нет» — как раньше.
 //! Кто вызывает: sell.rs.
 //! От чего зависит: op_error.rs, deal.rs, stuck.rs, manual.rs, trade_ops.rs, ledger.rs, deps.rs, relay_here.rs,
 //! remain_fact.rs.
-//! Настройки: stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154); через relay_here.rs —
+//! Настройки: stuck.reject_route_pause и signal.route_cooldown_s (через route_pause.rs, решение 293); stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154); через relay_here.rs —
 //! stuck.relay_max_loss_pct, stuck.no_quote_wait_ms (решение 229).
 //!
 //! Когда повтор:
@@ -217,6 +220,9 @@ pub async fn alert(core: &Core, deal: Deal, e: &OpError, r: &Retry) {
         Retry::Off(off) => format!("продажа не прошла: {e} — {off}"),
         Retry::No | Retry::Go { .. } | Retry::Here { .. } => format!("продажа не прошла: {e}"),
     };
+    // Решение 293 (ревью): биржа отклонила продажу и stuck.reject_route_pause = да — пауза одного направления сделки
+    // (route_pause.rs). Не задана или «нет» — как раньше: паузы нет, записей нет.
+    super::route_pause::after_reject(core, &deal, e).await;
     // Хронологию пишет raise_alert («… — ждём решения человека»): своей строки здесь нет — без дубля (решение 154).
     let value = super::trade_ops::deal_value(core, &deal).await;
     let loss = value.ok().map(|(x, _)| deal.loss_pct_if(x));

@@ -1,0 +1,1 @@
+{"code":0,"msg":"","retryable":0,"data":{"symbols":[{"symbol":"BTC-USDT","minQty":0.0001826,"maxQty":18.2663756,"minNotional":0.5,"maxNotional":7588825.16352942,"maxMarketNotional":7588825.16352942,"status":1,"tickSize":0.01,"stepSize":0.000001,"apiStateSell":true,"apiStateBuy":true,"timeOnline":0,"offTime":0,"maintainTime":0,"displayName":"BTC-USDT"}]}}

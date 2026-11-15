@@ -5,6 +5,14 @@
 
 ## Ждут решения Тиграна
 
+- **Техдолг «ненадёжный тест free_coin_candidate_goes_as_before» (t139, ветка t139/flaky-busy-calc-267 от rel/dex-all)
+  — исправлено, ждёт прогона в GitHub.** Факт логов (runs 43770313465, 43772608878): tests/core_busy_calc_267.rs:408
+  `lk(&core.inner.queued).is_empty()`. Причина (факт кода): тест ждал строку «Кандидатов» (publish внутри calc_one,
+  src/core/candidates.rs:177/259) и сразу проверял очередь, а queued.remove делает задача расчёта после возврата
+  calc_one (candidates.rs:130); между ними await записи журнала отказа (candidates.rs:197–200). Гонка теста, ядро не
+  менялось. Исправлено: пустая очередь ждётся помощником until (срок 10 с), проверка «очередь в итоге пуста» осталась.
+  Другие проверки queued в tests/ (no_candidate_traces) — для занятой монеты, где enqueue в queued не ставит; гонки нет.
+
 - **Техдолг «ненадёжный тест maxwin_watch» (t138, 16.11.2026, ветка t138/flaky-maxwin от rel/dex-all) — исправлено, ждёт
   прогона в GitHub.** Факт логов: tests/uncapped_maxwin (maxwin_watch, maxwin_windows_and_deal_time) падали на
   tests/size_common/dex.rs:74 (Db::open) с SQLite «disk I/O error» (1802 IOERR_FSTAT, 522 IOERR_SHORT_READ), при

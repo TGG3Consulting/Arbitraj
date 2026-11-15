@@ -130,6 +130,15 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 290: пул Liquidity Book V2.1 — шаг без данных (направление контракт берёт по getTokenX пула); без
+        // прочитанного состояния LbBin не строится.
+        ExecKind::Lb => match &e.pool.state {
+            PoolState::LbBin(_) => Params::Lb,
+            _ => {
+                let why = format!("{}: у пула нет состояния Liquidity Book", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

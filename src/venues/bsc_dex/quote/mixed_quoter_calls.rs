@@ -151,6 +151,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Balancer V2 не исполняется умным маршрутом (только шаг BALANCER контракта-исполнителя)",
             ));
         }
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): MixedQuoter их не знает — сверка getSwapOut пула.
+        PoolKind::LbBin => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Liquidity Book не исполняется умным маршрутом (только шаг LB контракта-исполнителя)",
+            ));
+        }
         // Пара с фиктивными резервами (SmarDex, решение 288): MixedQuoter её не знает — сверка виртуальным квотером.
         PoolKind::Fictive => {
             return Err(ctx.err(

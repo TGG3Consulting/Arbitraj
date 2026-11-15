@@ -390,6 +390,18 @@ fn side(
                 .ok_or("расчёт бинов невозможен")?;
             Ok((pick(r.amount_in, r.amount_out), false))
         }
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): как Bin — до края прочитанных бинов, без
+        // комиссии (база и изменчивая часть обнулены в копии состояния), порт getSwapOut (math/lb_swap.rs).
+        (PoolState::LbBin(d), PoolKind::LbBin) => {
+            let bins = e.bins.as_ref().ok_or("бины не прочитаны")?;
+            let mut nf = (**d).clone();
+            nf.base_factor = 0;
+            nf.variable_fee_control = 0;
+            let for_y = (token_in == e.pool.token0) == d.x_is_token0;
+            let r = super::super::math::lb_swap::swap_out(&nf, bins, d.block_ts, for_y, u128::MAX)
+                .ok_or("расчёт бинов Liquidity Book невозможен")?;
+            Ok((pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)), false))
+        }
         _ => Err("вид пула и состояние не совпадают".into()),
     }
 }

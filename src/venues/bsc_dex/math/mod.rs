@@ -15,6 +15,8 @@ pub mod curve_math;
 pub mod dmm;
 pub mod dodo_math;
 pub mod full_math;
+pub mod lb_fee;
+pub mod lb_swap;
 pub mod maverick_math;
 pub mod maverick_swap;
 pub mod maverick_swap_math;

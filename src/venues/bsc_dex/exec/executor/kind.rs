@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -75,6 +75,9 @@ pub enum Params {
     /// Пул Balancer V2 (решение 289; только исполнитель v2): пул шага — хранилище Vault, approve ровно на шаг +
     /// Vault.swap(GIVEN_IN) по id пула; data = abi.encode(bytes32 poolId).
     Balancer { pool_id: B256 },
+    /// Пул Liquidity Book V2.1 (решение 290; только исполнитель v2): вход переводом в пул, swap(swapForY, to);
+    /// направление контракт берёт по getTokenX() пула (порядок X/Y — создателя пула, не адреса). Данных нет.
+    Lb,
 }
 
 impl Params {
@@ -99,6 +102,7 @@ impl Params {
             Params::KyberDmm => 15,
             Params::Smardex => 16,
             Params::Balancer { .. } => 17,
+            Params::Lb => 18,
         }
     }
 

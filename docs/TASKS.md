@@ -84,6 +84,25 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 290 (15.11.2026, ветка t121/exec-lb от rel/dex-all 12040c4c) — сделано, ждёт приёмки.** Liquidity Book V2.1
+  (LFJ / Trader Joe на BSC): вид `lb_v21` (ядро LbBin), точный порт getSwapOut / PairParameterHelper / FeeHelper (= getSwapOut
+  пула в 50 из 50 ответов на блоке 133716961), сверка getSwapOut пула, шаг исполнителя v2 LB = 18 (код в сети v2 16 212 байт;
+  на цепи шаг 18 = getSwapOut = наша формула 10 из 10). **Открыто:**
+  1. Значения настроек (id DEX `traderjoe-v2-1-bsc` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/traderjoe-v2-1-bsc/pools
+     — 3 пула): dex.kind = lb_v21, dex.factory = 0x8e42f2f4101563bf679975178e880fd87d3efd4e, dex.pool_enabled = да; dex.quoter
+     и dex.quoter_virtual не нужны (квотер — сам пул). dex.bin_depth_usd (общая, [bsc_dex]) — уже задаётся для Infinity Bin;
+     dex.multicall3 желательна (состояние — одна пачка на блок).
+  2. Ликвидность малая (GeckoTerminal 15.11): BTC.b/WBNB 428,57 USD, BTCBR/WBNB 62,31, USDC/USDT 58,36 — сумма 549,24 USD.
+     У фабрики 147 пар, с ненулевыми резервами — 61 (в справочнике GeckoTerminal — 3).
+  3. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после решения 290 —
+     940fc099…bc953e61); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/lb_v21_2026-11-15/exec_state.json).
+  4. Не установлено: настоящий пул-самозванец (клон реализации LBPair с выдуманными токенами, не в реестре фабрики) на BSC не
+     найден — отказ проверки «реестр знает другой адрес» тестом на записанных данных не покрыт; покрыты: настоящий пул
+     PancakeSwap V2 (getFactory откатывается) и монета не из пары пула.
+  5. Не установлено: другие фабрики LB на BSC — фабрика LB V2.0 (id GeckoTerminal `traderjoe-v2-bsc`: пулов у GeckoTerminal 0) и
+     V2.2 не проверялись; вид lb_v21 сверен только с исходником v2.1.0.
+  6. Замерить on_head на живом узле после выкладки: все пулы LB за блок — одна пачка (per_block_lb.rs, 3 вызова на пул + время).
 - **Решение 289 (15.11.2026, ветка t120/exec-balancer от rel/dex-all fc06d328) — сделано, ждёт приёмки.** Balancer V2
   (ACSI Finance BSC): вид `balancer_v2` (ядро VaultPool), порт WeightedMath / StableMath / LogExpMath (= Vault.queryBatchSwap
   в 95 из 95 ответов GIVEN_IN и 63 из 63 GIVEN_OUT на блоке 133699740), сверка Vault.queryBatchSwap, шаг исполнителя v2

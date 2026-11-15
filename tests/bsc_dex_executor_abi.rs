@@ -112,6 +112,8 @@ fn kinds_match_contract_constants() {
         ("SMARDEX", Params::Smardex),
         // Решение 289: пул Balancer V2 — только v2.
         ("BALANCER", Params::Balancer { pool_id: B256::ZERO }),
+        // Решение 290: пул Liquidity Book V2.1 — только v2.
+        ("LB", Params::Lb),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

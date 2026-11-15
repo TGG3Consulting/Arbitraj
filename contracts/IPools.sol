@@ -193,3 +193,13 @@ interface IBalancerVault {
         payable
         returns (uint256);
 }
+
+// Liquidity Book V2.1 (решение 290; LFJ BSC, фабрика 0x8e42f2f4101563bf679975178e880fd87d3efd4e, реализации пула
+// 0xee5a90098b270596ec35d637b30d908c862c86df и 0x3e30fdae04c08fc20fa2fe0cf55c95d99a9c2d8f — Sourcify exact_match,
+// исходник = lfj-gg/joe-v2@v2.1.0): src/interfaces/ILBPair.sol — getTokenX (LBPair.sol L132-L134: аргумент клона),
+// swap(bool swapForY, address to) returns (bytes32 amountsOut) (LBPair.sol L483-L557: вход переводится в пул заранее,
+// вызывающий не ограничен — только nonReentrant; выход — transfer `to`).
+interface ILBPair {
+    function getTokenX() external view returns (address);
+    function swap(bool swapForY, address to) external returns (bytes32 amountsOut);
+}

@@ -57,6 +57,10 @@ contract ArbExecutor {
     // Решение 289 (только v2): пул Balancer V2 (ACSI Finance) — обмен в Vault: s.pool = Vault, data = abi.encode(bytes32
     // poolId); approve Vault ровно на шаг → Vault.swap(GIVEN_IN, вход, получатель `to`) → разрешение после шага — 0.
     uint8 internal constant BALANCER = 17;
+    // Решение 290 (только v2): пул Liquidity Book V2.1 (LFJ) — вход переводом в пул, swap(swapForY, to): пул сам считает
+    // вход = баланс − резерв и платит выход `to` по бинам (без обратного вызова); swapForY = (getTokenX() пула == tokenIn)
+    // — порядок X/Y задаёт создатель пула, не адреса. data пусто.
+    uint8 internal constant LB = 18;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -115,7 +119,7 @@ contract ArbExecutor {
 
     // Исполняет маршрут. Вход amountIn токена tokenIn забирается у владельца (нужен approve на этот контракт);
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
-    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
+    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM, LB), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
@@ -322,6 +326,12 @@ contract ArbExecutor {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
             else IDodoPool(s.pool).sellQuote(to);
+        } else if (k == LB) {
+            // LBPair.swap (joe-v2@v2.1.0 src/LBPair.sol L483-L557): вход = баланс пула − резерв (L487, BinHelper.sol
+            // L290-L306), нулевой вход — откат L488, бинов не хватило — откат OutOfLiquidity (L538), нулевой выход — откат
+            // L544; выход — transfer `to` (L552-L556). getTokenX — аргумент клона (L132-L134).
+            _send(s.tokenIn, s.pool, amount, fromOwner > 0);
+            ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -509,7 +519,7 @@ contract ArbExecutor {
 
     // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).
     function _pushed(uint8 k) internal pure returns (bool) {
-        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM;
+        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM || k == LB;
     }
 
     // Вход в пул: с баланса исполнителя или прямо с владельца (первый шаг, весь вход маршрута).

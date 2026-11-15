@@ -89,6 +89,18 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let out = super::super::math::balancer_math::amount_out(&nf, iu.into(), ic.into(), probe)?;
             (!probe.is_zero()).then(|| mul_div(amount, out, probe)).flatten()
         }
+        // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): цена активного бина — сколько Y за 1 X, ·2^128
+        // (PriceHelper.getPriceFromId); X — token0 записи, если x_is_token0. Оценка размера пробы (решение 73.19).
+        PoolState::LbBin(d) => {
+            let price = bin_price::price_from_id(d.active_id, d.bin_step)?;
+            let one = U256::from(1u8) << SCALE_OFFSET;
+            // Монета — X: монет = сумма(Y) / цена; монета — Y: сумма(X) · цена.
+            if coin0 == d.x_is_token0 {
+                (!price.is_zero()).then(|| mul_div(amount, one, price)).flatten()
+            } else {
+                mul_div(amount, price, one)
+            }
+        }
         // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
         PoolState::AmpV2(d) => {
             let (vc, vu) = if coin0 {

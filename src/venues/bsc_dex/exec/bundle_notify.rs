@@ -53,14 +53,25 @@ pub fn sim_reverted_text(reason: &str) -> String {
     format!("Симуляция бандла откатилась — не отправлен: {reason}")
 }
 
-/// Текст «бандл отправлен»: приватные каналы и предел блока maxBlockNumber (за ним бандл истекает). Чистая. Ошибок нет.
-pub fn sent_text(channels: &[String], max_block: u64) -> String {
+/// Текст «бандл отправлен»: приватные каналы, исключённые одиночные каналы (решение 299, send.bundle_skip_single;
+/// пусто — строки нет) и предел блока maxBlockNumber (за ним бандл истекает). Чистая. Ошибок нет.
+pub fn sent_text(channels: &[String], skipped: &[String], max_block: u64) -> String {
     let chans = if channels.is_empty() {
         "—".to_string()
     } else {
         channels.join(", ")
     };
-    format!("Бандл отправлен приватно (каналы: {chans}), предел блока maxBlockNumber {max_block}")
+    let skip = if skipped.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; одиночные исключены (send.bundle_skip_single): {}",
+            skipped.join(", ")
+        )
+    };
+    format!(
+        "Бандл отправлен приватно (каналы: {chans}{skip}), предел блока maxBlockNumber {max_block}"
+    )
 }
 
 /// Текст «бандл включён»: номер блока (если прочитан) и хеши транзакций по порядку. Чистая. Ошибок нет.
@@ -112,9 +123,9 @@ pub fn sim_reverted(stats: &Stats, ctx: &Ctx, reason: &str) {
     emit(stats, ctx, SIM_REVERTED, sim_reverted_text(reason));
 }
 
-/// Бандл отправлен. Ошибок нет.
-pub fn sent(stats: &Stats, ctx: &Ctx, channels: &[String], max_block: u64) {
-    emit(stats, ctx, SENT, sent_text(channels, max_block));
+/// Бандл отправлен (каналы, исключённые одиночные — решение 299). Ошибок нет.
+pub fn sent(stats: &Stats, ctx: &Ctx, channels: &[String], skipped: &[String], max_block: u64) {
+    emit(stats, ctx, SENT, sent_text(channels, skipped, max_block));
 }
 
 /// Бандл включён в блок. Ошибок нет.

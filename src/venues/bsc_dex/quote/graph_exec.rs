@@ -112,7 +112,8 @@ fn exec_router(ctx: &Ctx, f: &Family) -> GatewayResult<Address> {
     }
 }
 
-/// Собирается ли маршрут в бандл (решение 84): все включённые каналы отправки умеют бандл (решение 121 B3), ни одна
+/// Собирается ли маршрут в бандл (решение 84): все включённые каналы отправки умеют бандл (решение 121 B3; решение 299:
+/// при send.bundle_skip_single = да — хотя бы один, send::planned_bundle_ok), ни одна
 /// нога не пересекает роутеры (как exec/bundle::single_router/fork_router) и всего роутеров ≤ dex.bundle_max_routers.
 /// Ошибка — причина несобираемости.
 fn collectable(ctx: &Ctx, legs: &[Path]) -> Result<(), String> {

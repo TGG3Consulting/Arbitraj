@@ -7,6 +7,7 @@
 //! От чего зависит: node/abi_dex.rs, pools/*.
 //! Настройки: dex.router, dex.deadline_s.
 
+pub mod approve_seen;
 pub mod balance_fact;
 pub mod balance_read;
 pub mod bundle;
@@ -51,6 +52,7 @@ pub mod live_hops;
 pub mod native;
 pub mod native_exec;
 pub mod order;
+pub mod permit2_err;
 pub mod plan;
 pub mod precheck;
 pub mod precheck_quoter;

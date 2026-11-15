@@ -99,7 +99,7 @@ pub async fn trade(
             prep = prepare(&v, &req, route, mins.as_deref(), decs, is_native).await?;
             (plan, at) = build(q, &prep, wallet).await?;
             no_new_approvals(ctx, &plan)?;
-            rebuilt_notice(env, &req);
+            rebuilt_notice(env, &req, at.number);
         }
         let router = is_native.then_some(plan.router);
         let entries: Vec<&Entry> = prep

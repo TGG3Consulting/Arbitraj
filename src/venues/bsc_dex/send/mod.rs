@@ -5,6 +5,7 @@
 //! Каждый канал — свой файл по своей официальной документации; общий вид — channel.rs, отправка — ready.rs.
 //! Решение 154: ни один канал не принял — свой узел проверяет, что транзакции нет ни в блоке, ни в пуле (absent.rs);
 //! только тогда ChannelRejected, иначе транзакция считается отправленной «без ясного ответа» и идёт к трекеру.
+//! Решение 299: send.bundle_skip_single = да — одиночные каналы исключаются из отправки бандла (send/bundle_pick.rs).
 //! Кто вызывает: exec/*, wallet/transfer.rs, mod.rs (send_channels, check_send_channel).
 //! От чего зависит: файлы этой папки, ctx.rs.
 //! Настройки: channel.* [канал], send.* [bsc_dex].
@@ -20,6 +21,7 @@ pub mod blockrazor;
 pub mod blockrazor_builder;
 pub mod bloxroute_cloud;
 pub mod bloxroute_protect;
+pub mod bundle_pick;
 pub mod cancel;
 pub mod channel;
 pub mod channels;
@@ -145,6 +147,8 @@ pub async fn dispatch(
 /// остальные. Транзакции идут как есть, по порядку (nonce уже проставлен), revertingTxHashes пуст (всё-или-ничего —
 /// eth_sendBundle без разрешения на откат). Принимает: каналы, подписанные транзакции бандла по порядку, предел блока.
 /// Возвращает: кто принял и кто не ответил ясно. Ошибки: NotConfigured (есть не-бандл канал), ChannelRejected (никто).
+/// Решение 299: при send.bundle_skip_single = да одиночные каналы исключает заранее вызывающий (send/bundle_pick.rs
+/// pick) — сюда они не доходят; проверка ниже остаётся защитой.
 pub async fn dispatch_slice(
     ctx: &Ctx,
     stats: &Stats,
@@ -228,7 +232,9 @@ pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
 
 /// Умеют ли бандл ВСЕ каналы, готовые сейчас (решение 121 B3) — так же, как потребует отправка бандла
 /// (dispatch_slice: любой не-бандловый канал → NotConfigured). Нужна на котировке: маршрут бандлом при таких каналах
-/// неисполним (сигнал есть, сделки нет). Возвращает: Ok или понятную причину. Ошибок нет.
+/// неисполним (сигнал есть, сделки нет). Решение 299: send.bundle_skip_single = да — достаточно хотя бы одного
+/// бандлового канала (одиночные исключаются из отправки бандла, send/bundle_pick.rs). Возвращает: Ok или понятную
+/// причину. Ошибок нет.
 pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
     let ready: Vec<Ready> = channels::ALL
         .iter()
@@ -236,6 +242,9 @@ pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
         .collect();
     if ready.is_empty() {
         return Err("нет ни одного готового канала отправки — бандл некуда отправить".into());
+    }
+    if bundle_pick::enabled(ctx) {
+        return bundle_pick::planned(&ready);
     }
     let single: Vec<&str> = ready
         .iter()
@@ -247,7 +256,8 @@ pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
     }
     Err(format!(
         "маршрут исполняется только бандлом, а включённые каналы отправки {} не в режиме бандла (channel.method) — \
-         сигнал, авто-сделкой не исполняется; оставьте включёнными только бандловые каналы",
+         сигнал, авто-сделкой не исполняется; оставьте включёнными только бандловые каналы или включите \
+         send.bundle_skip_single (одиночные исключаются из отправки бандла, решение 299)",
         single.join(", ")
     ))
 }

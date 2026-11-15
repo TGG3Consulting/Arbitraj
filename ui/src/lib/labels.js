@@ -93,6 +93,10 @@ const CHOICE_BY_SETTING = {
     factory_swap_fee: 'комиссия от фабрики swapFee (SheepDex)',
     pool_fee_each_read: 'fee() пула при каждом чтении (SquadSwap V3)',
   },
+  // Решение 302: запасной источник пополнения в симуляции.
+  'presell.fund_fallback': {
+    singleton: 'держатель-синглтон (Uniswap V4 PoolManager / Infinity Vault)',
+  },
 };
 const POOL_KIND = {
   V2: 'V2',

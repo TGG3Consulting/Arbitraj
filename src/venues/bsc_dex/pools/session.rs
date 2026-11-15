@@ -5,6 +5,8 @@
 //! Не прочитавшийся пул перечитывается на новых блоках (reload.rs); брошенный (попытки исчерпаны) — снова, когда
 //! задали настройку, из-за которой он не прочитался (revive.rs, решения 61, 63). Смена порога или полосы глубины —
 //! пересчёт вердикта пулов сразу (depth_sync.rs). Связь с узлом WS — pools/link.rs.
+//! Решение 298: перечитывание пула по событию опоздало (у узла нет состояния блока) — пул в очередь повтора на новых
+//! блоках (stale_read.rs), без обрыва сессии.
 //! Решение 295: лог контракта пар многомонетного пула (PoolRef::Multi) — listen_site.rs (одна перечитка на контракт).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
@@ -216,7 +218,12 @@ async fn on_log(
             .topic0()
             .is_some_and(|t| events::topics(family).contains(t))
         {
-            listen_log::on_log(p, log).await?;
+            // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше;
+            // пока ждёт — события без перечитывания.
+            let waiting = super::stale_read::waiting(&m.missing, i);
+            if listen_log::on_log(p, log, waiting).await? {
+                super::stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
+            }
         }
         return Ok(());
     }

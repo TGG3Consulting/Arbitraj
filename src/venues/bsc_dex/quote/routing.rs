@@ -10,9 +10,12 @@
 //! Решение 294: при dex.intermediate_partial_fill = да и неполной классике (fillable < qty) в режиме graph — выбор
 //! route_fit.rs merge (исполнимый граф с mids_ok наравне с классикой по pick, неисполнимый — signal_route, ошибка
 //! графа NoRoute — классика без записи журнала, другая ошибка графа — прежняя запись); не задана / «нет» / объём помещается — graph_route::merge, как было.
+//! Решение 300: dex.graph_exec_fallback = да и котировка решения/исполнения (Quoting.exec_quote) — лучший маршрут графа
+//! неисполним → лучший исполнимый маршрут графа (quote/graph_fit.rs) против выбранной котировки (pick); в ветке 271 и
+//! 294 — с той же проверкой mids_ok. Не задана / «нет» — Fit нет, всё как было.
 //! Кто вызывает: quote/mod.rs (Quoting::quote через cpu::run).
 //! От чего зависит: quote/{smart_quote, classic_direct, graph_route, via, steps}.rs, pools/registry.rs, pools/mids.rs.
-//! Настройки: dex.router_mode, dex.intermediate_partial_fill (решение 294; только при неполной классике) [bsc_dex]; через вызываемые — dex.*, smart.* (см. их шапки).
+//! Настройки: dex.router_mode, dex.intermediate_partial_fill (решение 294; только при неполной классике), dex.graph_exec_fallback (решение 300) [bsc_dex]; через вызываемые — dex.*, smart.* (см. их шапки).
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -24,7 +27,7 @@ use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::steps::Names;
 use super::via::Via;
-use super::{Quoting, classic_direct, graph_route, smart_quote};
+use super::{Quoting, classic_direct, graph_fit, graph_route, smart_quote};
 
 /// Всё, что нужно выбору маршрута (владеет данными — работа уходит в другой поток).
 pub struct Input {
@@ -84,13 +87,23 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
         // Берём только ИСПОЛНИМЫЙ граф-маршрут, чьи промежуточные прошли бы проверку исполнения (mids_ok);
         // иначе или ошибка графа — прежняя ошибка классики как есть.
         Err(e) if graph_on && e.code == ErrorCode::NoRoute => {
-            return match graph_route::quote(&v, &names, asset, qty, gas).await {
-                Ok(g)
+            let fit = graph_fit::enabled(&q);
+            return match graph_route::quote_fit(&v, &names, asset, qty, gas, fit).await {
+                Ok((g, _))
                     if g.route
                         .as_ref()
                         .is_some_and(|r| r.executable && mids_ok(&v, r, &i.mids)) =>
                 {
                     Ok(g)
+                }
+                // Решение 300: лучший неисполним — лучший исполнимый маршрут графа (с той же проверкой mids_ok).
+                Ok((_, Some(f)))
+                    if f.quote
+                        .route
+                        .as_ref()
+                        .is_some_and(|r| mids_ok(&v, r, &i.mids)) =>
+                {
+                    Ok(graph_fit::finish(&q, f, i.side, i.usdt_dec).await)
                 }
                 _ => Err(e),
             };
@@ -102,15 +115,26 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
     // (graph_route::merge, решение 84 вариант Б): неисполнимый граф-маршрут на сделку не идёт (остаётся лучшим
     // сигналом для карточки, PR 80.5b), поэтому graph-режим не исполняет хуже классики. Деньги не рискуют.
     if graph_on {
-        let g = graph_route::quote(&v, &names, asset, qty, gas).await;
+        // Решение 300: при dex.graph_exec_fallback = да на котировке решения/исполнения — и лучший исполнимый граф (fit).
+        let fit_on = graph_fit::enabled(&q);
+        let (g, fit) =
+            graph_fit::parts(graph_route::quote_fit(&v, &names, asset, qty, gas, fit_on).await);
         // Решение 294: классика неполная (fillable < qty) и dex.intermediate_partial_fill = да — выбор среди
         // исполнимых; ошибка графа NoRoute — без записи Warn на каждую котировку (route_fit.rs merge). Иначе — merge, как было.
         if out.fillable_qty < qty && ctx.flag("dex.intermediate_partial_fill").unwrap_or(false) {
             let ok = g.as_ref().ok().and_then(|g| g.route.as_ref());
             let ok = ok.is_some_and(|r| r.executable && mids_ok(&v, r, &i.mids));
-            return Ok(super::route_fit::merge(&q, out, g, ok, i.side, i.usdt_dec).await);
+            let fit = fit.filter(|f| {
+                f.quote
+                    .route
+                    .as_ref()
+                    .is_some_and(|r| mids_ok(&v, r, &i.mids))
+            });
+            let out = super::route_fit::merge(&q, out, g, ok, i.side, i.usdt_dec).await;
+            return Ok(graph_fit::merge(&q, out, fit, i.side, i.usdt_dec).await);
         }
         out = graph_route::merge(&q, out, g, i.side, i.usdt_dec).await;
+        out = graph_fit::merge(&q, out, fit, i.side, i.usdt_dec).await;
     }
     Ok(out)
 }

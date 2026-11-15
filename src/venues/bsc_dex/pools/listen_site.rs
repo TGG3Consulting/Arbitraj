@@ -7,10 +7,12 @@
 //! (отметки пар могут разойтись — reload::load_one при пробуждении / повторе читает одну пару); реорг (removed) — все
 //! глубокие пары на текущем блоке, иначе — неучтённые на блоке лога (stale). Пары одного адреса в двух пачках
 //! подписки: каждая пачка получает лог своей подпиской и перечитывает свои пары. Сбой чтения — перечитываемые пары
-//! недостоверны и событие Invalidated по их монетам, конец сессии с причиной.
+//! недостоверны и событие Invalidated по их монетам, конец сессии с причиной; решение 298 — если у всех упавших пар
+//! StaleData (у узла нет состояния блока), сессия не рвётся: упавшие пары — в очередь повтора (stale_read.rs), а пары,
+//! уже ждущие повтора, по логу не читаются (позиция лога отмечается).
 //! Кто вызывает: pools/session.rs (on_log: лог не нашёл пул по Singleton / Contract).
 //! От чего зависит: admit.rs (wake, Members), events.rs, listen_log.rs (latest), reload_many.rs (load_group),
-//! registry.rs, invalidated.rs.
+//! registry.rs, invalidated.rs, stale_read.rs (решение 298).
 //! Настройки: через вызываемые — dex.load_batch и настройки чтения вида.
 
 use alloy::rpc::types::Log;
@@ -23,7 +25,7 @@ use super::events::{self, Applied};
 use super::group::Group;
 use super::listen::{End, Pools};
 use super::registry::Entry;
-use super::{listen_log, reload_many};
+use super::{listen_log, reload_many, stale_read};
 
 /// Что делает: лог контракта пар Multi. Принимает: окружение, пачку, её пулы, лог. Возвращает: false — пар Multi с
 /// этим адресом в пачке нет (лог — не им); true — обработан. Ошибки: End — сбой чтения или ядро закрыло канал.
@@ -92,7 +94,20 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         // У многомонетных видов точечного применения нет (только перечитка) — на всякий случай тоже перечитка.
         Applied::Updated | Applied::Bins(_) => "событие пула".into(),
     };
-    let deep: Vec<usize> = pick.iter().map(|&k| entries[k].0).collect();
+    // Решение 298: пары в очереди повтора не читаются (узел на старом блоке не спрашиваем, журнал не пишем) — позиция
+    // лога отмечается, повтор прочитает их не раньше неё (stale_read::defer).
+    let (wait, deep): (Vec<usize>, Vec<usize>) = pick
+        .iter()
+        .map(|&k| entries[k].0)
+        .partition(|&i| stale_read::waiting(&m.missing, i));
+    if !log.removed {
+        for &i in &wait {
+            stale_read::defer(&p.reg, &m.pools[i].0.reference, block, index);
+        }
+    }
+    if deep.is_empty() {
+        return Ok(true);
+    }
     let msg = format!(
         "{} {addr:#x}: {why} — перечитываю пары пула одним чтением ({})",
         family.title,
@@ -109,12 +124,27 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         .map(|&i| (&m.pools[i].0, m.pools[i].1.as_str()))
         .collect();
     let res = reload_many::load_group(p, &items, at).await?;
-    if let Some(e) = res.into_iter().find_map(Result::err) {
+    // Прочая ошибка (не StaleData) хоть у одной пары — как раньше: все перечитываемые пары недостоверны, конец сессии.
+    if let Some(e) = res
+        .iter()
+        .find_map(|r| r.as_ref().err().filter(|e| !stale_read::is_stale(e)))
+    {
         for (f, t) in &items {
             p.reg.update(&f.reference, |x| x.valid = false);
             super::invalidated::send(p, f.coin, t.to_string());
         }
-        return Err(End::Broken(e.message));
+        return Err(End::Broken(e.message.clone()));
+    }
+    // Решение 298: у узла нет состояния блока — упавшие пары недостоверны и в очередь повтора, сессия идёт дальше.
+    for (k, r) in res.into_iter().enumerate() {
+        let Err(e) = r else { continue };
+        let (f, t) = items[k];
+        p.reg.update(&f.reference, |x| x.valid = false);
+        super::invalidated::send(p, f.coin, t.to_string());
+        if let Some(entry) = p.reg.get(&f.reference) {
+            stale_read::note(p, &entry, at, &e).await;
+        }
+        stale_read::requeue(&mut m.missing, &mut m.abandoned, deep[k]);
     }
     p.signals.pool_ready();
     Ok(true)

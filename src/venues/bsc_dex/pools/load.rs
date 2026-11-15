@@ -227,7 +227,7 @@ pub async fn state(
                 load_inf_stable::load(ctx, f, *a, pair, &tag).await?
             }
             (Proto::WooPP, PoolRef::Member { contract, coin }) => {
-                load_woo::load(ctx, tokens, f, *contract, *coin, pair, usdt, &tag).await?
+                load_woo::load(ctx, tokens, f, *contract, *coin, pair, &tag).await?
             }
             _ => {
                 return Err(ctx.err(

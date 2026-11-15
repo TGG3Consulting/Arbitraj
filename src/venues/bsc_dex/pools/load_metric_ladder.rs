@@ -6,8 +6,10 @@
 //! дельтами), пачкой eth_call с подменой кода на одном блоке. Точка, где пул откатил (протухшая цена провайдера,
 //! пауза, белый список расширения) или взял не весь вход (ликвидность кончилась), — край лесенки. Своих формул нет.
 //! Решение 286: тот же проход для пулов iZiSwap / Biswap V3 (read_with с quoteIzi — load_izi.rs).
+//! Решение 297: лесенка — только у пары, где котируемая = USDT площадки (tokens.rs usdt; load_woo_ladder.rs
+//! usdt_quote), а не встречный токен записи (он бывает промежуточной монетой — WBNB).
 //! Кто вызывает: pools/load_metric.rs, pools/load_izi.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs, tokens.rs, quote/virtual_quoter.rs, load_woo_ladder.rs (usd), core/types.
+//! От чего зависит: ctx.rs, node/rpc.rs, tokens.rs, quote/virtual_quoter.rs, load_woo_ladder.rs (usd, usdt_quote), core/types.
 //! Настройки: dex.pmm_ladder_usd [DEX] (не задана — лесенки нет, пул без котировки).
 
 use alloy_primitives::{Address, Bytes, U256};
@@ -24,9 +26,10 @@ use super::super::quote::virtual_quoter;
 use super::super::tokens::Tokens;
 use super::load_woo_ladder;
 
-/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, пул, монету, котируемую, USDT, token0 САМОГО
-/// пула (порядок пула — для zeroForOne), тег. Возвращает: (котируемая → монета, монета → котируемая); пусто — лесенки
-/// нет (не задана; котируемая не USDT). Ошибки: узел, неверная dex.pmm_ladder_usd, код квотера не сверен (Internal).
+/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, пул, монету, котируемую (встречный токен
+/// пары), token0 САМОГО пула (порядок пула — для zeroForOne), тег. Возвращает: (котируемая → монета, монета →
+/// котируемая); пусто — лесенки нет (не задана; котируемая не USDT площадки — решение 297). Ошибки: узел, неверная
+/// dex.pmm_ladder_usd, код квотера не сверен (Internal).
 #[allow(clippy::too_many_arguments)]
 pub async fn read(
     ctx: &Ctx,
@@ -35,12 +38,11 @@ pub async fn read(
     pool: Address,
     coin: Address,
     quote: Address,
-    usdt: Address,
     pool_token0: Address,
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let q = Quoter { name: "Metric", func: "quoteMetric", data: virtual_quoter::data_metric };
-    read_with(ctx, tokens, id, pool, coin, quote, usdt, pool_token0, tag, q).await
+    read_with(ctx, tokens, id, pool, coin, quote, pool_token0, tag, q).await
 }
 
 /// Вызов виртуального квотера для прохода лесенки: имя вида (в тексте ошибок) и вход вызова (пул, zeroForOne в
@@ -63,13 +65,12 @@ pub async fn read_with(
     pool: Address,
     coin: Address,
     quote: Address,
-    usdt: Address,
     pool_token0: Address,
     tag: &str,
     q: Quoter,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let ladder = load_woo_ladder::usd(ctx, id)?;
-    if ladder.is_empty() || quote != usdt {
+    if ladder.is_empty() || !load_woo_ladder::usdt_quote(tokens.usdt(ctx).ok(), quote) {
         return Ok((Vec::new(), Vec::new()));
     }
     let dec = tokens.decimals(ctx, quote).await?;

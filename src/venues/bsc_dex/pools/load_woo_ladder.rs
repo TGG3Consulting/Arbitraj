@@ -7,6 +7,8 @@
 //! Кто вызывает: pools/load_woo.rs.
 //! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_woo.rs, core/types (LadderPoint).
 //! Настройки: dex.pmm_ladder_usd [DEX] (не задана — лесенки нет, пара остаётся сигналом).
+//! Решение 297: лесенка — только у пары, где встречный токен = USDT площадки (tokens.rs usdt, venue.quote_asset) —
+//! правило usdt_quote, общее для WooFi, Metric, iZiSwap / Biswap V3 (load_metric_ladder.rs).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -48,9 +50,18 @@ pub fn usd(ctx: &Ctx, id: &str) -> GatewayResult<Vec<Decimal>> {
     Ok(out)
 }
 
-/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, контракт, базовую, котируемую, USDT, тег.
-/// Возвращает: (котируемая → базовая, базовая → котируемая); пусто — лесенки нет (не задана; котируемая не USDT).
-/// Ошибки: узел, ответ не по ABI, неверная dex.pmm_ladder_usd.
+/// Решение 297: строится ли лесенка у пары. Суммы dex.pmm_ladder_usd — в USDT, поэтому только встречный токен = сам
+/// USDT площадки. Встречный токен записи реестра (Entry.usdt) — «USDT или промежуточная» (решение 52): у пары
+/// монета / WBNB это WBNB, и суммы стали бы WBNB (живой бот 15.11.2026, пулы CYBER/WBNB и ETC/WBNB — ложная пауза
+/// сверки с квотером). Принимает: USDT площадки (None — не задан / нет в списке монет), встречный токен пары.
+/// Возвращает: true — лесенка строится. Ошибок нет.
+pub fn usdt_quote(usdt: Option<Address>, quote: Address) -> bool {
+    usdt == Some(quote)
+}
+
+/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, контракт, базовую, котируемую (встречный
+/// токен пары), тег. Возвращает: (котируемая → базовая, базовая → котируемая); пусто — лесенки нет (не задана;
+/// котируемая не USDT площадки — usdt_quote, решение 297). Ошибки: узел, ответ не по ABI, неверная dex.pmm_ladder_usd.
 #[allow(clippy::too_many_arguments)]
 pub async fn read(
     ctx: &Ctx,
@@ -59,11 +70,10 @@ pub async fn read(
     pool: Address,
     coin: Address,
     quote: Address,
-    usdt: Address,
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let ladder = usd(ctx, id)?;
-    if ladder.is_empty() || quote != usdt {
+    if ladder.is_empty() || !usdt_quote(tokens.usdt(ctx).ok(), quote) {
         return Ok((Vec::new(), Vec::new()));
     }
     let dec = tokens.decimals(ctx, quote).await?;

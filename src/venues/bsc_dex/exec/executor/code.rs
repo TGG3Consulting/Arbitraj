@@ -43,8 +43,8 @@ const SHA_V1: &str = include_str!(concat!(
     "/contracts/out/v1/ArbExecutor.sha256"
 ));
 
-/// Версия исполнителя по коду в сети (решение 272).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
     V1,

@@ -471,14 +471,16 @@ impl Venue for BscDex {
     }
 
     /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:
-    /// SHA-256 байткода, который он видел в оценке. Ошибки: QuoteMismatch (байткод не тот), ключ, каналы, узел.
+    /// SHA-256 байткода и адрес обёртки (задача t114, 3в), которые он видел в оценке. Ошибки: QuoteMismatch (байткод или
+    /// обёртка не те), ключ, каналы, узел.
     async fn dex_executor_deploy(
         &self,
         sha256: String,
+        wnative: alloy_primitives::Address,
     ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
         self.p.ctx.bound()?;
         let (q, env) = (self.p.quoting(), self.p.env());
-        let run = exec::executor::deploy::deploy(&q, &env, &self.p.nonces, &sha256);
+        let run = exec::executor::deploy::deploy(&q, &env, &self.p.nonces, (&sha256, wnative));
         scope(Class::Trade, run).await
     }
 

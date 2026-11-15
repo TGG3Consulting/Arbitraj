@@ -378,9 +378,13 @@ contract ArbExecutor {
 
     // Обратные вызовы пулов: V3 Uniswap/Slipstream (IUniswapV3SwapCallback.sol L16, ICLSwapCallback.sol L16),
     // PancakeSwap V3 (IPancakeV3SwapCallback.sol L16), Algebra (IAlgebraSwapCallback.sol L18), KyberSwap Elastic
-    // (ISwapCallback.sol L16), Maverick V2 (IMaverickV2SwapCallback.sol L10). Положительная дельта — долг пулу.
+    // (ISwapCallback.sol L16), Maverick V2 (IMaverickV2SwapCallback.sol L10), SquadSwap V3 (решение 281, задача t114:
+    // SquadV3Pool — форк PancakeSwap V3 с тем же swap, зовёт ISquadV3SwapCallback.squadV3SwapCallback(int256,int256,bytes),
+    // селектор 0xc4e21d86; verified-исходник Sourcify partial_match 56/0x9fb9815ca1417b06466aaa86521a28ba83d0bd33,
+    // SquadV3Pool.sol L794, L800 — тот же путь и та же проверка вызывающего _pay, что у V3). Положительная дельта — долг пулу.
     function uniswapV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function pancakeV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
+    function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
 

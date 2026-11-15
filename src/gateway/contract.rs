@@ -606,13 +606,15 @@ pub trait Venue: Send + Sync {
     }
 
     /// Развёртывание своего исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — действие с деньгами, только
-    /// по подтверждению человека. Принимает: SHA-256 байткода из оценки, которую видел человек. Ошибки: NotApplicable —
-    /// не DEX; QuoteMismatch — байткод не тот; ключ, каналы, узел.
+    /// по подтверждению человека. Принимает: SHA-256 байткода и адрес обёртки (аргумент конструктора, задача t114) из
+    /// оценки, которую видел человек. Ошибки: NotApplicable — не DEX; QuoteMismatch — байткод или обёртка не те; ключ,
+    /// каналы, узел.
     async fn dex_executor_deploy(
         &self,
         sha256: String,
+        wnative: alloy_primitives::Address,
     ) -> GatewayResult<crate::core::types::ExecutorDeployed> {
-        let _ = sha256;
+        let _ = (sha256, wnative);
         Err(GatewayError::new(
             ErrorCode::NotApplicable,
             Some(self.id()),

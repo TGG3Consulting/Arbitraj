@@ -19,6 +19,9 @@
 //! Внутри шага STABLE_U256_BNB (пулы с меткой 0xEeee…) BNB есть — контракт разворачивает/заворачивает WBNB сам.
 //! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
 //! предел — по цене самой транзакции (exec/txs.rs send_capped).
+//! Задача t114: отказ нативной монеты — точная причина native_block (не сверен / v1 / обёртка не та); после сверки кода
+//! (onchain::ensure записал версию у кошелька) обратный вызов пулов маршрута ещё раз проверяется по сверенной версии
+//! (pools/exec_callback.rs: версия у кошелька могла быть записана старой сборкой бота).
 //! Кто вызывает: exec/trade.rs (графовый маршрут формы «бандл» при заданном exec.executor_address).
 //! Решение 122 F: хопы через пулы Maverick V2 (порт чужой математики) сверяются с квотером в prepare (exec/precheck_quoter.rs).
 //! От чего зависит: exec/executor/{call, sim, fact, onchain}.rs, exec/{swap_ctx,chain, dry_paths, leg_min, native, order, precheck_quoter, swap_send, txs,
@@ -33,6 +36,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{DexRoute, Side, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::super::pools::exec_callback;
 use super::super::super::quote::path::Path;
 use super::super::super::quote::via::Via;
 use super::super::super::quote::{Quoting, direct, pool_tax};
@@ -66,8 +70,9 @@ pub async fn trade(
     let ctx = &q.ctx;
     worst_positive(ctx, &req)?;
     let is_native = native::is_native(ctx, &req.asset);
-    if is_native && !super::native_capable(ctx) {
-        let why = "нативная монета через исполнитель (решение 122) в v1 не исполняется";
+    // Задача t114 (3а): причина — из native_block (не сверен / v1 / обёртка не та / настройка не задана).
+    if is_native && let Some(why) = super::native_block(ctx) {
+        let why = format!("нативная монета через исполнитель не исполняется: {why}");
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
     // Решение 272: (обёртка, продажа ли) для executeNative; обёртка — dex.native_wrapped (is_native её уже прочитал).
@@ -97,6 +102,14 @@ pub async fn trade(
     let version = onchain::ensure(ctx, executor, wallet).await?;
     // Ревью 272 (Б5): v1 — уведомление один раз на кошелёк и адрес (v1_notice.rs).
     super::v1_notice::once(ctx, &env.stats, version).await;
+    // Задача t114: обратный вызов пулов маршрута — по версии, которую сверка только что записала у кошелька.
+    if let Some(why) = legs
+        .iter()
+        .flatten()
+        .find_map(|s| exec_callback::missing(ctx, s.entry.family))
+    {
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
     if nat.is_some() && version != super::code::Version::V2 {
         let why = format!(
             "исполнитель {executor:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",

@@ -11,7 +11,8 @@
 //!
 //! В3 — неполная настройка (fee_probe::plan): менеджер комиссии без pool_fee_each_read — пулы DEX не берутся; проба
 //! swapFee(0x0, 0) пропускается только при factory_swap_fee. В4 — dex.v3_swap_callback (exec_callback::missing):
-//! squadV3SwapCallback нет в contracts/out/ArbExecutor.bin-runtime — причина «нужен исполнитель новой версии»; пул без
+//! squadV3SwapCallback нет в коде исполнителя v1 (contracts/out/v1/, версия сверена у кошелька — задача t114) — причина
+//! «нужен исполнитель новой версии»; пул без
 //! пути исполнения даёт «не проверено» (pool_taxes::outcome → Wait), а не «проверка не прошла».
 //!
 //! Кто вызывает: cargo test.
@@ -59,9 +60,14 @@ fn addr(v: &Value) -> Address {
     v.as_str().unwrap().parse().unwrap()
 }
 
+/// Номер окружения в процессе: тесты файла идут параллельно — у каждого своя папка (задача t114: общая папка давала
+/// «database is locked», когда один тест удалял её, пока другой открывал базу).
+static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// Окружение на настоящей SQLite (настройки DEX задаёт тест).
 async fn ctx() -> Ctx {
-    let d = std::env::temp_dir().join(format!("arb-fee-race-{}", std::process::id()));
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let d = std::env::temp_dir().join(format!("arb-fee-race-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let db = Db::open(&d.join("t.sqlite")).unwrap();
@@ -171,16 +177,23 @@ async fn incomplete_setup_and_missing_executor_callback() {
     set(&c, "dex.v3_registry_fee_method", None).await;
     let (p, asks) = fee_probe::plan(&c, [f].iter());
     assert!(asks.is_empty() && p.check(DEX).is_ok());
-    // В4: обратный вызов Squad — нет в коде исполнителя; PancakeSwap V3 — есть; не задан — проверки нет.
+    // В4: обратный вызов Squad — нет в коде исполнителя v1; PancakeSwap V3 — есть; не задан — проверки нет. Задача
+    // t114: проверка — по версии, сверенной у кошелька (v2 и «не сверен» — tests/bsc_dex_squadswap_exec_v2.rs).
+    let a = c.settings.accounts();
+    let (id, x) = (a.reserve_id().await.unwrap(), "0x00000000000000000000000000000000000000ee");
+    a.add(&id, "тест", "wallet.test.key", "bsc_dex", "тест").await.unwrap();
+    a.set_executor(&id, Some(x.into()), "тест").await.unwrap();
+    a.map_set(arb::settings::accounts::ROW_PROBE, Some(&id), "тест").await.unwrap();
+    a.set_executor_version(&id, x, Some("v1".into()), None, "тест").await.unwrap();
     assert_eq!(exec_callback::missing(&c, f), None);
     set(&c, "dex.v3_swap_callback", Some("squadV3SwapCallback(int256,int256,bytes)")).await;
-    let why = exec_callback::missing(&c, f).expect("вызова нет в ArbExecutor.bin-runtime");
+    let why = exec_callback::missing(&c, f).expect("вызова нет в коде исполнителя v1");
     assert!(why.contains("0xc4e21d86") && why.contains("нужен исполнитель новой версии"), "{why}");
     assert!(!exec_kind::via_executor(&c, f));
     assert!(exec_kind::describe(&c, f).contains("без пути исполнения"));
     set(&c, "dex.v3_swap_callback", Some("pancakeV3SwapCallback(int256,int256,bytes)")).await;
     assert_eq!(exec_callback::missing(&c, f), None);
     // Пул без пути исполнения — помеха (NoRoute → env), не вердикт: монета «не проверена», не в чёрный список.
-    let out = pool_taxes::outcome(&[], false, &[], (Vec::new(), vec![why], Vec::new()));
+    let out = pool_taxes::outcome(&[], false, &[], (Vec::new(), vec![why], Vec::new()), &[]);
     assert!(matches!(out, Outcome::Wait(_)), "{out:?}");
 }

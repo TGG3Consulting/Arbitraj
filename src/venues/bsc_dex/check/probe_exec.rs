@@ -9,6 +9,8 @@
 //! Здесь же: причина «пробу собрать нечем» (вида шага нет — не настройка; шаг есть, адрес исполнителя не задан —
 //! настройка exec.executor_address; обратного вызова пула dex.v3_swap_callback нет в коде исполнителя — не настройка,
 //! ревью 281, pools/exec_callback.rs) и проверка «кто меняет» для обмена через исполнитель.
+//! Задача t114: после сверки исполнителя (onchain::ensure пишет версию у кошелька) обратный вызов пула ещё раз
+//! проверяется по сверенной версии (pools/exec_callback.rs) — нет: NoRoute (no_path), а не проба с откатом.
 //! Кто вызывает: check/probe.rs (part, emitter).
 //! От чего зависит: exec/executor/{mod, call, entry, onchain}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
 //! wallet/approve_executor.rs, pools/exec_kind.rs, check/emitter.rs, check/simulate.rs (SimLog).
@@ -59,6 +61,10 @@ pub async fn part(
     };
     // Ревью 122, пункт 1: адрес вписан руками — до разрешений код и владелец сверяются с узлом (успех помнится).
     onchain::ensure(ctx, x, wallet).await?;
+    // Задача t114: после сверки версия у кошелька — по коду в сети; обратного вызова нет в ней — не проба (NoRoute).
+    if exec_callback::missing(ctx, e.family).is_some() {
+        return Err(no_path(ctx, e));
+    }
     let step = Step {
         entry: e.clone(),
         order,

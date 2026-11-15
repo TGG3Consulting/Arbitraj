@@ -60,7 +60,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `fee_fresh.rs` | Решение 281: dex.v3_fee_source = pool_fee_each_read — fee() пула с каждой головой V3 (пачка и по одному), свежая комиссия — в запись (Loaded.fee_pips) |
 | `fee_watch.rs` | Решение 281: подписка на события менеджера комиссии (dex.v3_fee_manager: SetCustomFee / ToggleCustomFee) и UpdatePoolManager фабрики — fee() пула перечитывается в реестр |
 | `fee_refresh.rs` | Решение 281 (ревью): перечтение fee() одного пула (событие менеджера) и всех пулов DEX пачкой (начало каждой сессии fee_watch, смена менеджера) в реестр |
-| `exec_callback.rs` | Ревью 281, В4: dex.v3_swap_callback — селектор обратного вызова пула в коде исполнителя (ArbExecutor.bin-runtime); нет — пулы DEX без пути исполнения |
+| `exec_callback.rs` | Ревью 281, В4: dex.v3_swap_callback — селектор обратного вызова пула в коде исполнителя ТОЙ версии, что сверена у кошелька (задача t114: v2 — contracts/out/ArbExecutor.bin-runtime, v1 — contracts/out/v1/; не сверен — нет пути с причиной); нет — пулы DEX без пути исполнения |
 | `abi_squad.rs` | Решение 281: ABI событий комиссии SquadSwap V3, фильтры подписки, пул из события |
 | `load_batch_cl.rs` | Вызовы и разбор ступеней 1–2 CL (Infinity CL у менеджера, Uniswap V4 через StateView) |
 | `load_batch_ticks.rs` | Ступень 3: данные установленных тиков CL всех ждущих пулов вместе |

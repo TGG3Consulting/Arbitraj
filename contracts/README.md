@@ -7,7 +7,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов, обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186: виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле) |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
@@ -38,7 +38,8 @@
   `out/ArbExecutor.abi`) и контракта не могут разойтись по смыслу параметра. Бот читает слот при сверке и сравнивает с
   `dex.native_wrapped`: не совпало — нативный BNB через этот исполнитель не идёт (причина — в «Проверить подключение» и
   на карточке кошелька), ERC-20 путь не затронут. Конструктор v1 — без аргумента: развёрнутые v1 не затрагиваются.
-- **Размер кода в сети v2: 13 285 байт** (было 13 134 до ревью 272; предел EIP-170 — 24 576, запас 11 291 байт).
+- **Размер кода в сети v2: 13 296 байт** (задача t114, + squadV3SwapCallback; было 13 285 после ревью 272, 13 134 до него;
+  предел EIP-170 — 24 576, запас 11 280 байт). Код в сети v1 — 11 117 байт (не меняется).
   Печатает `evmtest/run.mjs` второй строкой.
 
 ## Вызов
@@ -78,7 +79,7 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | Вид | № | Пулы | Как вызывается | Источник интерфейса |
 | --- | --- | --- | --- | --- |
 | `V2` | 0 | PancakeSwap V2, Uniswap V2, форки V2 | перевод входа в пару; выход = формула getAmountOut по резервам и `feePips` (вход = баланс пары − резерв — налог токена учтён); `pair.swap(out0, out1, to, "")` | Uniswap/v2-core@6a9e7c97 `UniswapV2Pair.sol` L38, L159; pancakeswap/pancake-swap-core@3b214306 `PancakePair.sol` L38, L159 |
-| `V3` | 1 | PancakeSwap V3, Uniswap V3, форки V3, Slipstream (Topaz), SheepDex (решение 274: пул зовёт `swapCallback` — он у исполнителя есть, SpePool.sol L2447); SquadSwap V3 (решение 281) — НЕТ: пул зовёт `squadV3SwapCallback` (SquadV3Pool.sol L794, L800), его у ArbExecutor v1 нет — добавить в v2 | `pool.swap(to, zeroForOne, +сумма, MIN+1 / MAX−1, "")` + `uniswapV3SwapCallback` / `pancakeV3SwapCallback` | Uniswap/v3-core@5ea68a77 `IUniswapV3PoolActions.sol` L75-L81, `IUniswapV3SwapCallback.sol` L16; pancakeswap/pancake-v3-contracts@98684794 `IPancakeV3PoolActions.sol` L75-L81, `IPancakeV3SwapCallback.sol` L16; velodrome-finance/slipstream@193a6b85 `ICLPoolActions.sol` L131-L137, `ICLSwapCallback.sol` L16 (имя обратного вызова — `uniswapV3SwapCallback`, `CLPool.sol` L855) |
+| `V3` | 1 | PancakeSwap V3, Uniswap V3, форки V3, Slipstream (Topaz), SheepDex (решение 274: пул зовёт `swapCallback` — он у исполнителя есть, SpePool.sol L2447); SquadSwap V3 (решение 281): пул зовёт `squadV3SwapCallback` (SquadV3Pool.sol L794, L800) — у v1 его нет, в v2 добавлен (задача t114: тот же `_pay`, та же проверка вызывающего, что у V3) | `pool.swap(to, zeroForOne, +сумма, MIN+1 / MAX−1, "")` + `uniswapV3SwapCallback` / `pancakeV3SwapCallback` / `squadV3SwapCallback` (только v2) | Uniswap/v3-core@5ea68a77 `IUniswapV3PoolActions.sol` L75-L81, `IUniswapV3SwapCallback.sol` L16; pancakeswap/pancake-v3-contracts@98684794 `IPancakeV3PoolActions.sol` L75-L81, `IPancakeV3SwapCallback.sol` L16; velodrome-finance/slipstream@193a6b85 `ICLPoolActions.sol` L131-L137, `ICLSwapCallback.sol` L16 (имя обратного вызова — `uniswapV3SwapCallback`, `CLPool.sol` L855) |
 | `ALGEBRA` | 2 | THENA Fusion (Algebra V1.9) | та же подпись `swap` + `algebraSwapCallback` | npm `@cryptoalgebra/v1.9-core@1.0.0` `IAlgebraPoolActions.sol` L96-L102, `IAlgebraSwapCallback.sol` L18 |
 | `SOLIDLY` | 3 | THENA V1 (volatile, stable) | перевод; вход = баланс − резерв; выход = `pair.getAmountOut(вход, tokenIn)`; `pair.swap(…, to, "")` | ThenafiBNB/THENA-Contracts@f5bc742e `contracts/Pair.sol` L239, L379-L413, L459; velodrome-finance/v1 `Pair.sol` L198, L338, L416 |
 | `CURVE` | 4 | Curve / Ellipsis (плоский StableSwap) | общий путь `_stable` (как STABLE_U256 / SADDLE): `approve(pool, сумма)` + `exchange(int128 i, int128 j, сумма, 0)`; выход — исполнителю, выход должен вырасти, затем разрешение = 0 | curvefi/curve-contract@574f4402 `SwapTemplateBase.vy` L447; ellipsis-finance/ellipsis@6bdf7788 `StableSwap.vy` L436 |
@@ -151,6 +152,6 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 не делегировать; если понадобится — сначала новая версия исполнителя.
 
 ## Техдолг
-`ArbExecutor.sol` — 448 строк при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
+`ArbExecutor.sol` — 452 строки (задача t114: + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
 «native step», учёт по разности балансов): контракт не дробится, пока развёртывание — один файл; запись в
 docs/ROADMAP.md (Техдолг).

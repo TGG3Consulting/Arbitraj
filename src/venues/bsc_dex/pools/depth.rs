@@ -86,7 +86,9 @@ pub fn touch(p: &Pools, r: &PoolRef) {
 
 /// Полоса цены вышла за прочитанные слова битмапа (решение 73): цена ушла от тика, вокруг которого карта читалась, и
 /// глубина считалась бы не целиком — карту пора перечитать вокруг нового тика, не дожидаясь переподключения
-/// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Ошибок нет.
+/// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Решение 296:
+/// проверяется только полоса глубины dex.depth_band_pct; полоса чтения dex.tick_read_band_pct сюда не входит (карта
+/// перечитывается вокруг нового тика тем же word_range — уже с полосой чтения). Ошибок нет.
 pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool {
     use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
     use super::super::quote::depth_band::band_ticks;

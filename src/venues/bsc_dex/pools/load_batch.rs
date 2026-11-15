@@ -13,7 +13,7 @@
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
 //! load_v2v3.rs (word_range), ticks.rs, fee_fresh.rs (решение 281: свежая fee() V3 — в Loaded.fee_pips).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex] (без него — пачка JSON-RPC); через вызываемые — dex.tick_words,
-//! dex.tick_lens, dex.state_view, dex.bin_depth_usd.
+//! dex.depth_band_pct, dex.tick_read_band_pct (word_range, решение 296), dex.tick_lens, dex.state_view, dex.bin_depth_usd.
 //!
 //! Функции контрактов — те же, что в load_v2v3.rs и load_cl.rs (их шапки — ссылки на официальные интерфейсы);
 //! Multicall3.aggregate3 — node/multicall.rs.

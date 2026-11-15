@@ -3,7 +3,7 @@
 //! (цена, тик, протокольная и LP-комиссия), liquidity и тики по битмапу в словах вокруг текущего тика.
 //! Кто вызывает: pools/load.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v4.rs, ticks.rs, load_v2v3.rs (word_range).
-//! Настройки: dex.tick_words [bsc_dex]; dex.state_view [uniswap_v4] (для Uniswap; у Infinity геттеры у менеджера).
+//! Настройки: dex.tick_words [bsc_dex]; через word_range — dex.depth_band_pct, dex.tick_read_band_pct (решение 296); dex.state_view [uniswap_v4] (для Uniswap; у Infinity геттеры у менеджера).
 //!
 //! Infinity: getSlot0, getLiquidity, getPoolBitmapInfo, getPoolTickInfo — ICLPoolManager.sol#L89-L108;
 //! Uniswap: StateView getSlot0, getLiquidity, getTickBitmap, getTickLiquidity — StateView.sol#L19-L77

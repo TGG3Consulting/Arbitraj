@@ -5,7 +5,8 @@
 //! Кто вызывает: pools/load.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v2v3.rs, ticks.rs, discover.rs (Found).
 //! Настройки: dex.tick_words, dex.depth_band_pct [bsc_dex] (сколько слов в каждую сторону — больше из двух, решение 73),
-//! dex.tick_lens [вид пула V3].
+//! dex.tick_read_band_pct [bsc_dex] (необязательная, решение 296: полоса цены дальности чтения карты — слова по шагу
+//! тиков пула), dex.tick_lens [вид пула V3].
 //!
 //! getReserves / slot0 / liquidity / TickLens.getPopulatedTicksInWord — research/flow/bsc_dex.md, раздел 3
 //! (IPancakeV3PoolState.sol#L21-L48, IUniswapV3PoolState.sol#L21-L32, ITickLens.sol#L6-L24).
@@ -122,11 +123,22 @@ pub fn band_words(pct: rust_decimal::Decimal, spacing: i32) -> i32 {
     words.min(i64::from(i16::MAX)) as i32
 }
 
+/// Решение 296: слова битмапа в каждую сторону, покрывающие полосу дальности чтения карты dex.tick_read_band_pct (%)
+/// при шаге `spacing` (band_words). Мелкий шаг — больше слов, крупный — меньше (одно слово = 256 · spacing тиков).
+/// Принимает: окружение, шаг битмапа (у сырого битмапа Algebra — 1). Возвращает: число слов; настройка не задана или
+/// не читается — 0 (число слов пула тогда прежнее). Глубину пула и фильтр ликвидности не меняет — только дальность
+/// чтения. Ошибок нет.
+pub fn read_band_words(ctx: &Ctx, spacing: i32) -> i32 {
+    ctx.dec("dex.tick_read_band_pct")
+        .map_or(0, |pct| band_words(pct, spacing))
+}
+
 /// Слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16; n — больше из dex.tick_words и слов,
 /// которые покрывают полосу цены dex.depth_band_pct при tickSpacing пула (решение 73: при tickSpacing 1 одно слово —
 /// 256 тиков ≈ 2,6% цены, и глубина в полосе без них читалась бы не целиком). Полоса не задана — только dex.tick_words
-/// (глубина тогда не считается и сама скажет причину). Ошибки: NotConfigured (dex.tick_words), BadResponse
-/// (tickSpacing ≤ 0).
+/// (глубина тогда не считается и сама скажет причину). Решение 296: ещё не меньше слов полосы чтения
+/// dex.tick_read_band_pct при том же tickSpacing (read_band_words); не задана — n прежнее. Ошибки: NotConfigured
+/// (dex.tick_words), BadResponse (tickSpacing ≤ 0).
 pub fn word_range(ctx: &Ctx, tick: i32, spacing: i32) -> GatewayResult<(i16, i16)> {
     if spacing <= 0 {
         return Err(ctx.err(ErrorCode::BadResponse, format!("tickSpacing {spacing} ≤ 0")));
@@ -136,6 +148,7 @@ pub fn word_range(ctx: &Ctx, tick: i32, spacing: i32) -> GatewayResult<(i16, i16
         Ok(pct) => n.max(band_words(pct, spacing)),
         Err(_) => n,
     };
+    let n = n.max(read_band_words(ctx, spacing));
     let w = i32::from(TickMap::word_of(tick, spacing));
     let lo = (w - n).max(i32::from(i16::MIN)) as i16;
     let hi = (w + n).min(i32::from(i16::MAX)) as i16;

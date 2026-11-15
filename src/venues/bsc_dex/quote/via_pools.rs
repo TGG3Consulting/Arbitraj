@@ -4,11 +4,15 @@
 //! 39; BNB со стороны BNB — только V2/V3, решение 62), лучшая пара пулов по всем промежуточным монетам. Расчёт пути в паре — quote/via.rs.
 //! Кто вызывает: quote/direct_route.rs, quote/smart.rs, exec/live.rs.
 //! От чего зависит: quote/via.rs, quote/select.rs, check/state.rs, pools/registry.rs, pools/mids.rs.
-//! Настройки: через вызываемые — см. их шапки.
+//! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да (не режим graph) — помещающаяся часть
+//! (quote/route_fit.rs) идёт кандидатом пути с coins < qty (как неполная котировка одного пула).
+//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути), dex.router_mode;
+//! через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, Side};
+use crate::gateway::errors::{ErrorCode, GatewayError};
 
 use super::super::exec::native;
 use super::super::pools::mids::Mid;
@@ -101,18 +105,16 @@ impl Via<'_> {
     }
 
     /// Лучший путь через промежуточные монеты среди допущенных пар. Принимает: промежуточные с decimals, количество,
-    /// фильтр пула, можно ли пару (`pair_ok` — например один Universal Router). Возвращает: путь или (причины, был ли
-    /// отказ по объёму — решение 294: шаг пути не помещается, меньший объём может пройти).
+    /// фильтр пула, можно ли пару (`pair_ok` — например один Universal Router). Возвращает: путь или причины.
     pub fn best(
         &self,
         mids: &[(Mid, u8)],
         qty: Decimal,
         keep: &dyn Fn(&Entry) -> bool,
         pair_ok: &dyn Fn(&Entry, &Entry) -> Result<(), String>,
-    ) -> Result<Path, (Vec<String>, bool)> {
+    ) -> Result<Path, Vec<String>> {
         let mut best: Option<Path> = None;
         let mut why = Vec::new();
-        let mut big = false;
         for (m, dec) in mids {
             let (p1, p2) = match self.pools(m, keep) {
                 Ok(x) => x,
@@ -132,18 +134,49 @@ impl Via<'_> {
                             best = Some(p)
                         }
                         Ok(_) => {}
-                        Err(e) => {
-                            big |= e.too_large;
-                            why.push(format!(
+                        Err(e) => match self.partial(&e, m, *dec, a, b, qty) {
+                            // Решение 294: помещающаяся часть пути (route_fit.rs) — кандидат, как полный путь.
+                            Some(p) if best.as_ref().is_none_or(|x| better(&p, x, self.side)) => {
+                                best = Some(p)
+                            }
+                            Some(_) => {}
+                            None => why.push(format!(
                                 "{} → {}: {}",
                                 a.0.family.title, b.0.family.title, e.message
-                            ))
-                        }
+                            )),
+                        },
                     }
                 }
             }
         }
-        best.ok_or((why, big))
+        best.ok_or(why)
+    }
+}
+
+impl Via<'_> {
+    /// Решение 294: путь не исполним целиком — помещающаяся часть (route_fit.rs), только если NoRoute,
+    /// dex.intermediate_partial_fill = да и dex.router_mode не graph (в режиме graph часть по долям отдаёт граф,
+    /// решение 271 — поведение там прежнее). Иначе None без расчётов: включатель читается только в этой ветке ошибки.
+    /// Принимает: ошибку пути, промежуточную, её decimals, P1, P2, количество. Возвращает: путь или None. Ошибок нет.
+    fn partial(
+        &self,
+        e: &GatewayError,
+        m: &Mid,
+        dec: u8,
+        p1: &Ok2,
+        p2: &Ok2,
+        qty: Decimal,
+    ) -> Option<Path> {
+        let ctx = &self.q.ctx;
+        if e.code != ErrorCode::NoRoute
+            || !ctx.flag("dex.intermediate_partial_fill").unwrap_or(false)
+        {
+            return None;
+        }
+        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph") {
+            return None;
+        }
+        self.fit(m, dec, p1, p2, qty)
     }
 }
 

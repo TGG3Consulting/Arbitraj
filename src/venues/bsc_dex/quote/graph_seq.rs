@@ -188,9 +188,7 @@ fn advance(
             pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?
         };
         if !s.complete {
-            // Решение 294: причина — объём (меньший может пройти); код и текст прежние.
-            let e = ctx.err(ErrorCode::NoRoute, "обмен доли не исполним целиком");
-            return Err(e.with_too_large());
+            return Err(ctx.err(ErrorCode::NoRoute, "обмен доли не исполним целиком"));
         }
         if i + 1 < legs.len() {
             let got = num::to_decimal(s.amount_out, leg.dec_out).ok_or_else(bad)?

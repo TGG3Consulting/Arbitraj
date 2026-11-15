@@ -134,12 +134,6 @@ pub struct GatewayError {
     /// ошибка остаётся маленькой (как tx). Читать — approve_gas().
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approve_gas_bnb: Option<Box<rust_decimal::Decimal>>,
-    /// Решение 294: у NoRoute — «объём не помещается» (шаг маршрута не исполним целиком в прочитанном состоянии пула):
-    /// меньший объём может пройти. Ставит адаптер (with_too_large) только там, где причина — объём; у постоянных
-    /// причин (пулов нет, только сигнал, налог забирает всё, пул на паузе) — false. Ядро по нему повторяет котировку на
-    /// меньшем объёме (core/fit_volume.rs, core/final_fit.rs). Код ошибки не меняется (NoRoute).
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub too_large: bool,
 }
 
 impl GatewayError {
@@ -166,7 +160,6 @@ impl GatewayError {
             setting: None,
             pending: None,
             approve_gas_bnb: None,
-            too_large: false,
         }
     }
 
@@ -196,13 +189,6 @@ impl GatewayError {
     /// Решение 236, дополнение: газ разрешений до ошибки (BNB; None — не было). Ошибок нет.
     pub fn approve_gas(&self) -> Option<rust_decimal::Decimal> {
         self.approve_gas_bnb.as_deref().copied()
-    }
-
-    /// Решение 294: помечает NoRoute как «объём не помещается» (см. поле too_large). Возвращает: ту же ошибку.
-    /// Ошибок нет.
-    pub fn with_too_large(mut self) -> Self {
-        self.too_large = true;
-        self
     }
 
     /// Добавляет сырой ответ площадки.

@@ -1,49 +1,39 @@
 //! Файл: tests/core_fit_volume_294.rs
-//! Что проверяет: решение 294 — объём, не помещающийся в путь DEX через промежуточную монету, уменьшается до
-//! помещающегося (потолок — предел, а не обязательный объём), на РЕАЛЬНОЙ записи цепи 15.11.2026
+//! Что проверяет: решение 294 (прямой способ) — путь через промежуточную монету, которому не хватает прочитанной карты
+//! тиков, при dex.intermediate_partial_fill = да отдаёт помещающуюся часть (fillable_qty < qty) одним расчётом по
+//! пулу (quote/route_fit.rs, вызов — quote/via_pools.rs), на РЕАЛЬНОЙ записи цепи 15.11.2026
 //! (tests/data/fit_volume_2026-11-15, блок 133732042): пул PancakeSwap V3 SHOPINX/WBNB (fee 100, tickSpacing 1) и пара
-//! PancakeSwap V2 WBNB/USDT. Пула SHOPINX с USDT нет — котировка идёт только через WBNB (quote/via_pools.rs).
-//! Записано с цепи: состояние пулов и слова битмапа ±12. Задано разработчиком (см. README записи): карта ±2 слова
-//! (dex.tick_words = 2 — значение на сервере 15.11), объём проверки 57000 SHOPINX, бюджет 100 USDT, шаг 1 SHOPINX,
-//! цена газа 1 gwei, нулевые налоги SHOPINX и WBNB, допуск пулов. За край карты шаг пути «не исполним целиком» →
-//! NoRoute с признаком too_large (quote/route_calc.rs). Котировка — выбор маршрута адаптера целиком (quote/routing.rs
+//! PancakeSwap V2 WBNB/USDT. Пула SHOPINX с USDT нет — котировка идёт только через WBNB.
+//! Записано с цепи: состояние пулов и слова битмапа ±12. Задано разработчиком (README записи): карта ±2 слова
+//! (dex.tick_words = 2 — значение на сервере 15.11), объём 57000 SHOPINX (верх живого диапазона 33–57 тыс.), цена газа
+//! 1 gwei, нулевые налоги SHOPINX и WBNB, допуск пулов. Котировка — выбор маршрута адаптера целиком (quote/routing.rs
 //! run, как Quoting::priced до газа разрешений и чаевых; цену газа узла тест не спрашивает).
-//! (1) Сигнал (core/fit_volume.rs halve — тот же код, что зовёт prices.rs): не помещается — признак too_large; без
-//!     signal.fit_halvings — None (повторов нет); с ней — делим пополам до помещающегося (котировка полная, объём не
-//!     больше вместимости, вдвое больший — больше); минимум площадок: половина ниже минимума — одна попытка на минимуме
-//!     (помещается — котировка на нём; нет — одна котировка и отказ); минимум не меньше объёма — котировок нет.
-//! (2) Постоянный NoRoute (промежуточные выключены) — признака нет, ни одной лишней котировки.
-//! (3) Финальный расчёт (core/final_fit.rs largest — тот же код, что зовёт final_fill.rs): наибольший помещающийся
-//!     объём = вместимость (бисекция по настоящим котировкам), на шаг больше — снова «не помещается»; бюджет 100 USDT —
-//!     списание ≤ бюджета; шаг количества дороже бюджета — отказ; значение size.final_fit_steps больше u32 — неверное.
-//!     Пороги прибыли и путь через prices.rs / profit.rs (FinalCurve, costs::evaluate) здесь НЕ проверяются: записей
-//!     стакана, правил пары и сети биржи по SHOPINX нет. Точка кривой — котировка покупки DEX (вложение = средняя
-//!     цена × объём); прибыли нет — поиск границы (size_bounds.rs upper) смотрит только на вид отказа и бюджет.
+//! Время котировки (поле at) при сравнении «1 в 1» не учитывается.
+//! Проверяется: (1) настройка не задана / «нет» — прежний NoRoute, тот же текст; (2) да — fillable = помещающийся
+//! объём: сверка тем же кодом без настройки — на нём котировка полная, на 1 наименьшую единицу SHOPINX больше —
+//! прежний NoRoute; продажа (предел на первом шаге) и покупка (предел на последнем шаге); (3) объём помещается —
+//! котировка 1 в 1 с настройкой и без; (4) режим graph — с настройкой и без одинаково (там часть отдаёт граф, 271);
+//! (5) V2 «выход ≥ резерва» (записанная пара WBNB/USDT) — помещающейся части нет (прежний NoRoute).
+//! Нет записи: предел на втором шаге продажи / первом шаге покупки (нужен путь с узким вторым пулом), налог монеты ≠ 0
+//! — docs/TASKS.md.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core::{fit_volume, fit_settings, final_fit, costs_quote, size},
-//! arb::venues::bsc_dex::quote::routing, tests/route_common (load, v3, v2, ctx).
+//! От чего зависит: arb::venues::bsc_dex::quote::{routing, route_fit, route_calc}, tests/route_common (load, v3, v2, ctx).
 
 mod route_common;
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
 use alloy_primitives::{Address, U256, address};
-use async_trait::async_trait;
 use chrono::Utc;
 use rust_decimal::Decimal;
 use serde_json::json;
 
-use arb::core::costs_quote::classify;
-use arb::core::final_fit::largest;
-use arb::core::fit_settings::read;
-use arb::core::fit_volume::{QuoteErr, halve};
-use arb::core::size::{Curve, Fail, Point};
 use arb::core::types::{Asset, CheckState, CoinCheck, Quote, Side, TokenTaxes, VenueId};
 use arb::gateway::errors::{ErrorCode, GatewayResult};
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::pools::mids::Mid;
-use arb::venues::bsc_dex::quote::{Quoting, routing};
+use arb::venues::bsc_dex::quote::route_calc::{self, Leg};
+use arb::venues::bsc_dex::quote::select::Usable;
+use arb::venues::bsc_dex::quote::{Quoting, route_fit, routing};
 
 const DIR: &str = "tests/data/fit_volume_2026-11-15";
 const BLOCK: u64 = 133_732_042;
@@ -167,201 +157,128 @@ async fn full(q: &Quoting, side: Side, qty: Decimal) -> GatewayResult<Quote> {
     routing::run(q.clone(), input).await
 }
 
-/// Котировка с ошибкой в виде ядра (QuoteErr — то же правило, что у prices.rs).
-async fn quote_err(q: &Quoting, side: Side, qty: Decimal) -> Result<Quote, QuoteErr> {
-    full(q, side, qty)
+/// Включатель решения 294 на площадке bsc_dex (None — снять). Ошибок нет.
+async fn partial(p: &Parts, on: Option<bool>) {
+    let v = Scope::Venue("bsc_dex".into());
+    let val = on.map(|b| json!(b));
+    p.ctx
+        .settings
+        .set("dex.intermediate_partial_fill", v, val, "тест")
         .await
-        .map_err(|e| QuoteErr::of("bsc_dex", &e))
+        .unwrap();
 }
 
-/// Наибольший объём покупки или продажи (шаг 1 SHOPINX), чья котировка полная: бисекция по настоящим котировкам.
-async fn capacity(q: &Quoting, side: Side, over: Decimal) -> Decimal {
-    let (mut lo, mut hi) = (Decimal::ZERO, over);
-    while hi - lo > Decimal::ONE {
-        let mid = ((lo + hi) / Decimal::TWO).floor();
-        match quote_err(q, side, mid).await {
-            Ok(x) if x.fillable_qty == mid => lo = mid,
-            _ => hi = mid,
+/// Котировка в JSON (сравнение «1 в 1»). Ошибок нет.
+fn js(q: &GatewayResult<Quote>) -> serde_json::Value {
+    match q {
+        Ok(q) => {
+            // Время котировки — не часть расчёта.
+            let mut v = serde_json::to_value(q).unwrap();
+            v.as_object_mut().unwrap().remove("at");
+            v
         }
+        Err(e) => json!({"code": format!("{:?}", e.code), "message": e.message}),
     }
-    lo
 }
 
 #[tokio::test]
-async fn signal_halves_volume_until_it_fits() {
+async fn partial_fill_gives_exact_fitting_volume() {
     let p = scene().await;
     let q = p.quoting();
-    let s = &p.ctx.settings;
     let want = d("57000");
-    // Без настройки повторов нет: prices.rs отдаёт первую ошибку как есть (fit_volume.rs retry).
-    assert_eq!(read(s, "signal.fit_halvings").unwrap(), None);
+    let unit = Decimal::new(1, 18);
     for side in [Side::Sell, Side::Buy] {
-        let first = quote_err(&q, side, want).await.unwrap_err();
+        // (1) не задана — прежний NoRoute; «нет» — тот же текст.
+        partial(&p, None).await;
+        let off = full(&q, side, want).await.unwrap_err();
+        assert_eq!(off.code, ErrorCode::NoRoute);
         assert!(
-            first.too_large,
-            "{side:?}: ожидался «не помещается»: {}",
-            first.text
-        );
-        assert!(first.text.contains("не исполним целиком"), "{}", first.text);
-        let cap = capacity(&q, side, want).await;
-        // С настройкой — делим пополам, пока не поместится; котировка полная, объём не больше вместимости.
-        let calls = AtomicU32::new(0);
-        let quote = |x: Decimal| {
-            calls.fetch_add(1, Ordering::Relaxed);
-            quote_err(&q, side, x)
-        };
-        let (got, qty) = halve(want, Decimal::ZERO, 4, first.clone(), quote)
-            .await
-            .unwrap();
-        assert_eq!(
-            got.fillable_qty, qty,
-            "{side:?}: котировка на {qty} неполная"
-        );
-        assert!(
-            qty <= cap && qty * Decimal::TWO > cap,
-            "{side:?}: {qty} при вместимости {cap}"
-        );
-        let n = calls.load(Ordering::Relaxed);
-        println!(
-            "{side:?}: 57000 — не помещается; вместимость {cap}; найдено {qty} за {n} котировок"
-        );
-        // Минимум площадок (решение 294, п. 3 ревью): половина ниже минимума, минимум меньше объёма — одна попытка
-        // на минимуме. Объём проверки — 1,5 вместимости (половина ниже минимума в обоих случаях).
-        let want2 = (cap * d("1.5")).floor();
-        let first2 = quote_err(&q, side, want2).await.unwrap_err();
-        assert!(first2.too_large);
-        // Минимум помещается — котировка на минимуме.
-        let (got, qty) = halve(want2, cap, 4, first2.clone(), |x| quote_err(&q, side, x))
-            .await
-            .unwrap();
-        assert_eq!((qty, got.fillable_qty), (cap, cap));
-        // Минимум не помещается — одна котировка на нём, потом отказ с исходной причиной.
-        let calls = AtomicU32::new(0);
-        let quote = |x: Decimal| {
-            calls.fetch_add(1, Ordering::Relaxed);
-            quote_err(&q, side, x)
-        };
-        let e = halve(want2, cap + Decimal::ONE, 4, first2.clone(), quote)
-            .await
-            .unwrap_err();
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert!(
-            e.text.starts_with(&first2.text) && e.text.contains("пробовали до"),
+            off.message.contains("не исполним целиком"),
             "{}",
-            e.text
+            off.message
         );
-        // Минимум не меньше объёма — котировок нет.
-        let e = halve(want2, want2, 4, first2.clone(), |x| quote_err(&q, side, x))
-            .await
-            .unwrap_err();
-        assert!(e.text.contains("меньше объёма нельзя"), "{}", e.text);
+        partial(&p, Some(false)).await;
+        let no = full(&q, side, want).await.unwrap_err();
+        assert_eq!((no.code, &no.message), (off.code, &off.message));
+        // (2) да — помещающаяся часть.
+        partial(&p, Some(true)).await;
+        let got = full(&q, side, want).await.unwrap();
+        let fit = got.fillable_qty;
+        assert!(fit > Decimal::ZERO && fit < want, "{side:?}: {fit}");
+        println!(
+            "{side:?}: 57000 не помещается — помещается {fit}, средняя {}",
+            got.avg_price
+        );
+        // Сверка тем же кодом без настройки: на помещающемся объёме полная, на единицу больше — прежний NoRoute.
+        partial(&p, None).await;
+        let at = full(&q, side, fit).await.unwrap();
+        assert_eq!(at.fillable_qty, fit);
+        // Часть = полная котировка на этом объёме; отличается только запрошенный объём (qty — 57000).
+        assert_eq!(got.qty, want);
+        let mut part = got.clone();
+        part.qty = fit;
+        assert_eq!(
+            js(&Ok(at)),
+            js(&Ok(part)),
+            "{side:?}: часть = полная котировка на ней"
+        );
+        let over = full(&q, side, fit + unit).await.unwrap_err();
+        assert_eq!(over.code, ErrorCode::NoRoute, "{}", over.message);
+        // (3) помещается — 1 в 1 с настройкой и без.
+        let small = d("1000");
+        let a = full(&q, side, small).await;
+        partial(&p, Some(true)).await;
+        let b = full(&q, side, small).await;
+        assert_eq!(js(&a), js(&b));
+        assert_eq!(a.unwrap().fillable_qty, small);
     }
-    s.set("signal.fit_halvings", Scope::Global, Some(json!(3)), "тест")
-        .await
-        .unwrap();
-    assert_eq!(read(s, "signal.fit_halvings").unwrap(), Some(3));
 }
 
-/// Постоянный NoRoute (промежуточные монеты выключены: «пулов с USDT нет; через промежуточную: …») признака «не
-/// помещается» не несёт — повторов нет, ни одной лишней котировки (п. 2 ревью).
 #[tokio::test]
-async fn permanent_no_route_is_not_retried() {
+async fn graph_mode_is_unchanged() {
     let p = scene().await;
-    p.mids.set(vec![]);
     let q = p.quoting();
+    let v = Scope::Venue("bsc_dex".into());
+    p.ctx
+        .settings
+        .set("dex.router_mode", v, Some(json!("graph")), "тест")
+        .await
+        .unwrap();
     for side in [Side::Sell, Side::Buy] {
-        let e = full(&q, side, d("1000")).await.unwrap_err();
-        assert_eq!(e.code, ErrorCode::NoRoute, "{}", e.message);
-        assert!(!e.too_large, "{}", e.message);
-        let first = QuoteErr::of("bsc_dex", &e);
-        let calls = AtomicU32::new(0);
-        let quote = |x: Decimal| {
-            calls.fetch_add(1, Ordering::Relaxed);
-            quote_err(&q, side, x)
-        };
-        let r = halve(d("1000"), Decimal::ZERO, 4, first.clone(), quote).await;
-        assert_eq!(r.unwrap_err().text, first.text);
-        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        partial(&p, None).await;
+        let a = full(&q, side, d("57000")).await;
+        partial(&p, Some(true)).await;
+        let b = full(&q, side, d("57000")).await;
+        assert_eq!(js(&a), js(&b), "{side:?}");
     }
 }
 
-/// Кривая теста поиска границы: точка — котировка покупки на DEX (вложение — USDT котировки). Прибыли у неё нет —
-/// поиск границы (size_bounds.rs upper) смотрит только на вид отказа и бюджет; пороги прибыли здесь не проверяются.
-struct DexBuy<'a> {
-    q: &'a Quoting,
-}
-
-#[async_trait]
-impl Curve for DexBuy<'_> {
-    type Data = Quote;
-    async fn at(&mut self, qty: Decimal) -> Result<Point<Quote>, Fail> {
-        let r = full(self.q, Side::Buy, qty).await;
-        let c = r.map_err(|e| classify("bsc_dex", &e))?;
-        Ok(Point {
-            qty,
-            invested: c.avg_price * qty,
-            arrive: qty,
-            profit: Decimal::ZERO,
-            data: c,
-        })
-    }
-}
-
+/// V2, покупка, выход ≥ резерва (math/v2.rs amount_in): частичного итога у V2 нет — помещающейся части нет, прежний
+/// NoRoute (резерв − 1 помещается только при бесконечной цене — DECISIONS 294). Записанная пара WBNB/USDT: покупка
+/// WBNB за USDT на весь резерв WBNB.
 #[tokio::test]
-async fn final_calc_shrinks_to_largest_fitting_volume() {
+async fn v2_reserve_limit_keeps_no_route() {
     let p = scene().await;
-    let q = p.quoting();
-    let s = &p.ctx.settings;
-    let qty = d("57000");
-    let step = Decimal::ONE;
-    let over = classify("bsc_dex", &full(&q, Side::Buy, qty).await.unwrap_err());
-    assert!(matches!(over, Fail::TooLarge(_)), "{over}");
-    // Без настройки — отказ, как раньше (final_fill.rs).
-    assert_eq!(read(s, "size.final_fit_steps").unwrap(), None);
-    // С настройкой: 20 шагов бисекции хватает до шага (log2 57000 < 16) — найден наибольший помещающийся.
-    let cap = capacity(&q, Side::Buy, qty).await;
-    let mut c = DexBuy { q: &q };
-    let big = d("1000000");
-    let pt = largest(&mut c, qty, over.clone(), big, step, 20)
-        .await
-        .unwrap();
-    assert_eq!(pt.qty, cap);
-    assert_eq!(
-        pt.data.fillable_qty, pt.qty,
-        "котировка на {} неполная",
-        pt.qty
-    );
-    let next = full(&q, Side::Buy, pt.qty + step).await.unwrap_err();
-    assert!(next.too_large, "{}", next.message);
-    println!(
-        "помещается {} SHOPINX, вложение {} USDT",
-        pt.qty,
-        pt.invested.round_dp(4)
-    );
-    // Бюджет 100 USDT — списание не больше бюджета, на шаг больше — уже больше бюджета.
-    let budget = d("100");
-    let pb = largest(&mut c, qty, over.clone(), budget, step, 20)
-        .await
-        .unwrap();
-    assert!(pb.invested <= budget && pb.qty < pt.qty);
-    let up = c.at(pb.qty + step).await.unwrap();
-    assert!(up.invested > budget, "{} → {}", pb.qty, up.invested);
-    // Один шаг бисекции — середина (28500), помещающаяся сторона только если середина помещается.
-    let p1 = largest(&mut c, qty, over.clone(), big, step, 1).await;
-    match p1 {
-        Ok(x) => assert!(x.qty == d("28500") && cap >= x.qty),
-        Err(_) => assert!(cap < d("28500")),
-    }
-    // Даже один шаг количества дороже бюджета — помещающегося нет, отказ.
-    assert!(
-        largest(&mut c, qty, over, d("0.001"), step, 20)
-            .await
-            .is_err()
-    );
-    // Значение настройки: задано — число; больше u32 — неверное (уменьшения нет, запись Warn — fit_settings.rs tries).
-    let set = |v: serde_json::Value| s.set("size.final_fit_steps", Scope::Global, Some(v), "тест");
-    set(json!(20)).await.unwrap();
-    assert_eq!(read(s, "size.final_fit_steps").unwrap(), Some(20));
-    set(json!(5_000_000_000u64)).await.unwrap();
-    assert!(read(s, "size.final_fit_steps").is_err());
+    let pair = p.registry.by_pair(WBNB, USDT).into_iter().next().unwrap();
+    let reserve_wbnb = match pair.pool.state {
+        arb::core::types::PoolState::V2 { reserve1, .. } => reserve1,
+        _ => panic!("ожидалась пара V2"),
+    };
+    let qty = arb::venues::bsc_dex::num::to_decimal(reserve_wbnb, 18).unwrap();
+    let usable = Usable {
+        gas: 120_000,
+        hook_pct: Decimal::ZERO,
+        tax_pct: Decimal::ZERO,
+    };
+    let legs = vec![Leg {
+        entry: pair,
+        usable,
+        token_in: USDT,
+        token_out: WBNB,
+        dec_in: 18,
+        dec_out: 18,
+    }];
+    let e = route_calc::eval(&p.ctx, &legs, Side::Buy, qty, Decimal::ONE).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NoRoute, "{}", e.message);
+    assert!(route_fit::fit(&p.ctx, &legs, Side::Buy, qty, Decimal::ONE).is_none());
 }

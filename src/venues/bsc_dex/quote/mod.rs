@@ -63,6 +63,7 @@ pub mod rate;
 pub mod route_best;
 pub mod route_cache;
 pub mod route_calc;
+pub mod route_fit;
 pub mod route_gas;
 pub mod route_paths;
 pub mod routing;

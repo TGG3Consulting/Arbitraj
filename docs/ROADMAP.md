@@ -26,13 +26,10 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 294 (t125; `wc -l` после правок ревью): сверх ориентира 200 — src/core/profit.rs 342 (было 354 и до правки;
-  final_fillable вынесен в core/final_fill.rs), src/core/prices.rs 222 (было 209: QuoteErr и вызов fit_volume.rs
-  retry_boxed), src/core/precheck_fast.rs 264 (было 263), src/gateway/errors.rs 217 (было 203: поле too_large и
-  with_too_large), src/venues/bsc_dex/quote/graph_seq.rs 202 (было 200: признак too_large), tests/core_fit_volume_294.rs
-  367, tests/route_common/mod.rs 465 (было 459; load / v3 / v2 / ctx стали pub). В пределах 200 — новые
-  core/fit_volume.rs 164, core/fit_settings.rs 60, core/final_fit.rs 91, core/final_fill.rs 101; quote/smart.rs 106,
-  via_pools.rs 159, direct_route.rs 112, smart_quote.rs 70, smart_ways.rs 108, route_calc.rs 164.
+- Решение 294 (t125; `wc -l`): в пределах 200 — новые quote/route_fit.rs 142, settings/catalog/dex_fit.rs 16;
+  quote/via_pools.rs 192 (было 154); settings/catalog/mod.rs 177 (было 175). Сверх ориентира — tests/route_common/mod.rs
+  465 (было 459: load / v3 / v2 / ctx стали pub), tests/core_fit_volume_294.rs 284. route_fit.rs повторяет сборку
+  хопов Via::calc (8 строк) — via.rs в этой задаче не трогался; общий сборщик хопов — отдельной правкой.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

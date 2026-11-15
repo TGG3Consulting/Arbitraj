@@ -64,32 +64,20 @@ pub async fn quote(
     } else {
         let same = |a: &Entry, b: &Entry| one_router(ctx, a, b);
         v.best(mids, qty, keep, &same)
-            .map_err(|(why, big)| {
-                // Решение 294: отказ по объёму у пути через промежуточную — признак у ошибки.
-                let e = ctx.err(ErrorCode::NoRoute, why.join("; "));
-                if big { e.with_too_large() } else { e }
-            })
+            .map_err(|why| ctx.err(ErrorCode::NoRoute, why.join("; ")))
             .and_then(build)
     };
     match (one, two) {
         (Ok(a), Ok(b)) => Ok(pick::pick(q, a, b, side, v.usdt_dec).await),
         (Ok(a), Err(_)) | (Err(_), Ok(a)) => Ok(a),
         (Err(a), Err(_)) if a.code != ErrorCode::NoRoute => Err(a),
-        (Err(a), Err(b)) => {
-            let e = ctx.err(
-                ErrorCode::NoRoute,
-                format!(
-                    "{}: {}; через промежуточную: {}",
-                    asset.ticker, a.message, b.message
-                ),
-            );
-            // Решение 294: хоть одна сторона не поместилась по объёму — меньший объём может пройти.
-            Err(if a.too_large || b.too_large {
-                e.with_too_large()
-            } else {
-                e
-            })
-        }
+        (Err(a), Err(b)) => Err(ctx.err(
+            ErrorCode::NoRoute,
+            format!(
+                "{}: {}; через промежуточную: {}",
+                asset.ticker, a.message, b.message
+            ),
+        )),
     }
 }
 

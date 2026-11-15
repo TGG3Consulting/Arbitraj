@@ -54,17 +54,9 @@ pub async fn quote(
         (Ok(a), Ok(b)) => Ok(pick::pick(v.q, a, b, v.side, v.usdt_dec).await),
         (Ok(a), Err(_)) | (Err(_), Ok(a)) => Ok(a),
         (Err(a), Err(_)) if a.code != ErrorCode::NoRoute => Err(a),
-        (Err(a), Err(b)) => {
-            let e = ctx.err(
-                ErrorCode::NoRoute,
-                format!("{}; прямая сделка (другие DEX): {}", a.message, b.message),
-            );
-            // Решение 294: хоть одна сторона не поместилась по объёму — меньший объём может пройти.
-            Err(if a.too_large || b.too_large {
-                e.with_too_large()
-            } else {
-                e
-            })
-        }
+        (Err(a), Err(b)) => Err(ctx.err(
+            ErrorCode::NoRoute,
+            format!("{}; прямая сделка (другие DEX): {}", a.message, b.message),
+        )),
     }
 }

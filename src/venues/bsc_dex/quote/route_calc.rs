@@ -123,10 +123,7 @@ fn complete(ctx: &Ctx, swaps: Vec<Option<Swapped>>) -> GatewayResult<Vec<Swapped
     if swaps.iter().all(|s| s.complete) {
         Ok(swaps)
     } else {
-        // Решение 294: причина — объём (меньший может пройти); код и текст прежние.
-        Err(ctx
-            .err(ErrorCode::NoRoute, "шаг маршрута не исполним целиком")
-            .with_too_large())
+        Err(ctx.err(ErrorCode::NoRoute, "шаг маршрута не исполним целиком"))
     }
 }
 

@@ -88,11 +88,10 @@ pub fn calc(v: &Via<'_>, w: &Way, qty: Decimal) -> GatewayResult<Path> {
             let (swapped, coins, usdt) =
                 direct::calc(&v.q.ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
             if !swapped.complete {
-                // Решение 294: причина — объём (меньший может пройти); код и текст прежние.
-                let e =
-                    v.q.ctx
-                        .err(ErrorCode::NoRoute, "пул не исполняет шаг целиком");
-                return Err(e.with_too_large());
+                return Err(v
+                    .q
+                    .ctx
+                    .err(ErrorCode::NoRoute, "пул не исполняет шаг целиком"));
             }
             let c = Candidate {
                 entry: e.clone(),

@@ -168,8 +168,7 @@ pub async fn recalc(
             return None;
         }
     };
-    // Решение 294: без уменьшения до помещающегося (false) — не поместилось, как раньше, полный подбор.
-    let fin = super::profit::final_calc(core, cx, qty, budget, step, false);
+    let fin = super::profit::final_calc(core, cx, qty, budget, step);
     let done = match stage(|| STAGE.into(), fin).await {
         Ok(c) => accept(c, qty, budget, &d.asset.ticker, (min_usd, min_pct)),
         Err(e) => Err(e),

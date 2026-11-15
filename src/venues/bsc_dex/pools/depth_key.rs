@@ -32,12 +32,16 @@ pub struct Key {
     hyst: Decimal,
     /// За `Arc` (решение 131): в одном построении графа ключи пулов с одним встречным токеном делят одну копию.
     rate: Arc<Vec<u64>>,
+    /// Ревью №1 (P): false — ключ помечен устаревшим (Book::invalidate): не равен никакому.
+    fresh: bool,
 }
 
 /// Равенство ключей: поколение 0 (запись вне реестра) не равно никакому — такая глубина всегда считается заново.
 impl PartialEq for Key {
     fn eq(&self, o: &Key) -> bool {
-        self.state_gen != 0
+        self.fresh
+            && o.fresh
+            && self.state_gen != 0
             && self.state_gen == o.state_gen
             && self.band == o.band
             && self.min == o.min
@@ -63,7 +67,18 @@ impl Key {
             min,
             hyst,
             rate: Arc::new(rate_key(ctx, reg, tokens, e)),
+            fresh: true,
         }
+    }
+
+    /// Поколение состояния пула, на котором посчитан ключ (ревью №1 M). Ошибок нет.
+    pub fn state_gen(&self) -> u64 {
+        self.state_gen
+    }
+
+    /// Пометить ключ устаревшим (ревью №1 P, Book::invalidate). Ошибок нет.
+    pub fn invalidate(&mut self) {
+        self.fresh = false;
     }
 }
 
@@ -133,6 +148,7 @@ impl Prep {
             min: self.min,
             hyst: self.hyst,
             rate,
+            fresh: true,
         }
     }
 

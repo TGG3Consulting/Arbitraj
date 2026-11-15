@@ -4,9 +4,11 @@
 //! пул примет (покупка) или отдаст (продажа), пока средняя цена монеты не отойдёт от маржинальной на полосу b. Без
 //! комиссии пула (чистый объём, решение 73). Маржинальная цена — производная инварианта: цена монеты i в монете j =
 //! (∂F/∂x_i)/(∂F/∂x_j) = (Ann + Dr/x_i)/(Ann + Dr/x_j), Dr = D^(n+1)/(n^n·Πx) (F — инвариант StableSwap.vy get_D).
-//! Монотонность → удвоение объёма + двоичный поиск границы.
+//! Монотонность → удвоение объёма + двоичный поиск границы. Решение 304: поиск начинается с пробы — доли баланса
+//! ВХОДА пула (vault_depth::PROBE_DIV, как у Balancer), а не с 1 wei: на объёме в единицы wei средняя цена — шум
+//! округления (`dy = xp[j] − y − 1`, Ньютон |Δ| ≤ 1), и первый шаг «вне полосы» обнулял глубину попеременно.
 //! Кто вызывает: quote/depth_band.rs (ветка StableSwap).
-//! От чего зависит: math/stableswap_v1.rs, math/full_math.rs.
+//! От чего зависит: math/stableswap_v1.rs, math/full_math.rs, quote/vault_depth.rs (PROBE_DIV).
 //! Настройки: полосу даёт вызывающий (dex.depth_band_pct).
 
 use alloy_primitives::U256;
@@ -15,6 +17,7 @@ use crate::core::types::StableData;
 
 use super::super::math::full_math::mul_div;
 use super::super::math::stableswap_v1::{Template, exchange_out_t, get_d_t, precision, xp};
+use super::vault_depth::PROBE_DIV;
 
 /// A для формул шаблона Curve (get_d_t / get_y_t / price: Ann = A·N). Ревью t117, решение 284: у пары Nomiswap Stable
 /// (StableData.input_fee) инвариант считается с N_A = A·4 = A·N^N (NomiswapStablePair.sol L340 `uint256 N_A = A * 4;`,
@@ -63,7 +66,8 @@ fn price(xp: &[U256], amp: U256, i: usize, j: usize, t: &Template) -> Option<U25
 
 /// Глубина одной стороны пула в полосе b (доля 0..1). Принимает: балансы, rates, A, индекс монеты и встречного токена,
 /// полосу, направление (buy — встречный токен в пул), шаблон пула. Возвращает: (сумма во ВСТРЕЧНОМ токене, полоса
-/// целиком). None — пустой пул или расчёт невозможен.
+/// целиком); ноль — средняя цена вышла из полосы уже на пробе (доля 1/PROBE_DIV баланса входа) или проба = 0.
+/// None — пустой пул или расчёт невозможен.
 pub fn side(
     balances: &[U256],
     rates: &[U256],
@@ -112,9 +116,18 @@ pub fn side(
         let avg = mul_div(norm(cnt, iu)?, precision(), coin_n)?;
         Some(Some(if buy { avg <= limit } else { avg >= limit }))
     };
-    // Удвоение: сначала до первого ненулевого выхода, затем, пока в полосе.
+    // Решение 304: старт — проба, доля баланса ВХОДА (покупка — встречный, продажа — монета). Прежний старт с 1 wei:
+    // выход `xp[j] − y − 1` (stableswap_exchange.rs) на единицах wei — 0 или v−1 в зависимости от того, куда попал
+    // Ньютон (|Δ| ≤ 1) при текущих балансах, средняя цена v/(v−1) — далеко вне полосы, и глубина обнулялась при любом
+    // сдвиге резервов на wei (пул Nomiswap USDT/USDC попеременно 212615 / 0). На пробе ошибка в wei ничтожна.
+    let bal_in = *balances.get(if buy { iu } else { ic })?;
+    let probe = bal_in / U256::from(PROBE_DIV);
+    if probe.is_zero() {
+        return Some((U256::ZERO, true));
+    }
+    // Удвоение от пробы: сначала до первого ненулевого выхода, затем, пока в полосе.
     let mut lo = U256::ZERO;
-    let mut hi = U256::from(1u8);
+    let mut hi = probe;
     let mut found_hi = false;
     for _ in 0..MAX_DOUBLE {
         match within(hi).unwrap_or(Some(false)) {

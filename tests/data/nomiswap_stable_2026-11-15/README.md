@@ -21,4 +21,4 @@
 (state override): исполнитель получил ровно getAmountOut пары; тот же маршрут шагом SOLIDLY (вид 3) — откат.
 
 Исходники: Sourcify full match chain 56 — пары (все три — один и тот же NomiswapStablePair.sol, solc 0.8.15) и
-фабрика NomiswapStableFactory. Используется: tests/bsc_dex_nomiswap_stable_live.rs (решение 284).
+фабрика NomiswapStableFactory. Используется: tests/bsc_dex_nomiswap_stable_live.rs (решение 284), tests/bsc_dex_nomiswap_stable_depth.rs (решение 304).

@@ -4,9 +4,11 @@
 //! да — проверка пула этих видов строит ссылку `PoolRef::Multi { контракт, пара }` (одна запись реестра на пару) и
 //! запоминает монеты пула для развёртки остальных пар; не задана / нет — одна ссылка `Contract` на пул, как до решения.
 //! Ключ справочника (status / taken / seen): у DEX в режиме — «пул|монета_меньше|монета_больше», у остальных — строка
-//! пула как есть (то есть у парных пулов ключ не меняется).
+//! пула как есть (то есть у парных пулов ключ не меняется). Решение 305: WooFi (woofi_v2, общий контракт пар) с
+//! dex.multi_pair = да — тоже ключ с парой (woo_pairs; ссылка пары — прежняя Member, развёртки нет).
 //! Кто вызывает: pools/index.rs (take: режим, ключ, развёртка), verify_curve.rs, verify_curve_ng.rs, verify_balancer.rs,
-//! verify_stable_u.rs (adopt), directory/view.rs, created_log.rs, factory_scan.rs (dir_key), market.rs (fits).
+//! verify_stable_u.rs (adopt), directory/view.rs, created_log.rs, factory_scan.rs (dir_key), market.rs (fits),
+//! woo_quote.rs и factory_calls.rs (woo_pairs).
 //! От чего зависит: ctx.rs, families.rs, discover.rs (Found), directory (Snap, IndexedPool), stable_list.rs (pairs).
 //! Настройки: dex.multi_pair [DEX].
 
@@ -20,7 +22,7 @@ use super::super::ctx::Ctx;
 use super::super::directory::Snap;
 use super::super::directory::gt_parse::IndexedPool;
 use super::discover::{Found, sorted};
-use super::families::{self, Family};
+use super::families::{self, Family, Proto};
 use super::registry::Entry;
 use super::stable_list::pairs;
 
@@ -30,12 +32,22 @@ pub fn enabled(ctx: &Ctx, f: &Family) -> bool {
     f.proto.is_multi_coin() && matches!(ctx.dex_flag("dex.multi_pair", f.id), Ok(true))
 }
 
-/// Что делает: id подключённых DEX в режиме «все пары пула». Принимает: окружение. Возвращает: множество id
-/// (пусто — режим нигде не включён: справочник и отбор работают как до решения 295). Ошибок нет.
+/// Что делает: решение 305 — строки справочника WooFi (вид woofi_v2) с ключом-ПАРОЙ: dex.multi_pair = да у этой DEX.
+/// WooPPV2 — один общий контракт на все пары (PoolRef::Member), ссылка пары не меняется (развёртки и Multi нет); меняется
+/// только ключ строки справочника (status / taken / seen). Принимает: окружение, вид DEX. Возвращает: true — вид
+/// woofi_v2 и dex.multi_pair = да; иначе (не задана, нет, не читается) — false, как до решения. Ошибок нет.
+pub fn woo_pairs(ctx: &Ctx, f: &Family) -> bool {
+    f.proto == Proto::WooPP && matches!(ctx.dex_flag("dex.multi_pair", f.id), Ok(true))
+}
+
+/// Что делает: id DEX, у которых строка справочника — ПАРА (ключ «пул|монета|монета», dir_key): DEX в режиме «все пары
+/// пула» и — решение 305 — DEX вида woofi_v2 с dex.multi_pair = да (woo_pairs: с ключом-строкой пула все пары WooFi
+/// одного контракта сливались в одну запись seen / status / taken — проверялась и бралась одна пара на весь контракт).
+/// Принимает: окружение. Возвращает: множество id (пусто — справочник и отбор работают как до решения 295). Ошибок нет.
 pub fn multi_dex(ctx: &Ctx) -> HashSet<String> {
     families::all(ctx)
         .into_iter()
-        .filter(|f| enabled(ctx, f))
+        .filter(|f| enabled(ctx, f) || woo_pairs(ctx, f))
         .map(|f| f.id.to_string())
         .collect()
 }
@@ -79,28 +91,43 @@ pub fn fits(f: &Family, r: &PoolRef, multi: &HashSet<String>) -> bool {
 }
 
 /// Что делает: запись реестра подходит под режим (market.rs, retain при пересборке подписки). Принимает: окружение,
-/// запись. Возвращает: как fits. Ошибок нет.
-pub fn entry_fits(ctx: &Ctx, e: &Entry) -> bool {
+/// запись, ссылки пулов, найденных для этой подписки (взятые справочника после retune и пары через промежуточные).
+/// Возвращает: многомонетный вид — Multi ⇔ DEX в режиме (как fits); решение 305 (ревью В1): WooFi — только если её
+/// пара среди найденных (ссылка Member в обоих режимах dex.multi_pair одна, поэтому вид ссылки режим не выдаёт: после
+/// «да → нет» retune снимает взятые пары с ключом-парой, и запись реестра без этой сверки осталась бы без слушателя —
+/// пачки слушания строятся только из найденного); прочие виды — true. Ошибок нет.
+pub fn entry_fits(ctx: &Ctx, e: &Entry, known: &HashSet<PoolRef>) -> bool {
+    if e.family.proto == Proto::WooPP {
+        return known.contains(&e.pool.reference);
+    }
     !e.family.proto.is_multi_coin() || matches!(e.pool.reference, PoolRef::Multi { .. }) == enabled(ctx, e.family)
 }
 
 /// Что делает: режим справочника на этот проход — запомнить DEX в режиме и снять «взятые», чья ссылка не совпадает с
-/// режимом (их статусы тоже). Принимает: состояние справочника, DEX в режиме. Возвращает: ничего. Ошибок нет.
+/// режимом (их статусы тоже). Решение 305: у WooFi ссылка в обоих режимах одна (Member) — снимаются «взятые», чей ВИД
+/// КЛЮЧА не совпадает с режимом (ключ-пара содержит «|», ключ-строка пула — нет; иначе после смены dex.multi_pair одна
+/// пара осталась бы взятой дважды). Принимает: состояние справочника, DEX в режиме. Возвращает: ничего. Ошибок нет.
 pub fn retune(s: &mut Snap, multi: &HashSet<String>) {
     s.multi_dex = multi.clone();
     let gone: Vec<String> = s
         .taken
         .iter()
-        .filter(|(_, f)| !fits(f.family, &f.reference, multi))
+        .filter(|(k, f)| {
+            !fits(f.family, &f.reference, multi)
+                || (f.family.proto == Proto::WooPP && k.contains('|') != multi.contains(f.family.id))
+        })
         .map(|(k, _)| k.clone())
         .collect();
     for k in gone {
         s.taken.remove(&k);
         s.status.remove(&k);
     }
-    if multi.is_empty() {
-        s.multi.clear();
+    // Строки развёртки DEX, вышедших из режима, — прочь (решение 305: в множестве может быть WooFi, у которой развёртки
+    // нет, — поэтому не «очистить всё при пустом множестве», а по DEX; при пустом множестве — то же, что раньше).
+    for list in s.multi.values_mut() {
+        list.retain(|p| multi.contains(&p.dex_id));
     }
+    s.multi.retain(|_, l| !l.is_empty());
 }
 
 /// Что делает: развёртка — по каждому взятому пулу с ссылкой Multi строит недостающие пары «монета справочника —

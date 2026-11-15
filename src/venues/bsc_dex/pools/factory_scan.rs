@@ -9,7 +9,8 @@
 //! проход по итоговым настройкам, решение 279); часть без ответа узла — повтор через dex.verify_retry_s. Найденное не
 //! стирается (пары у фабрики не удаляются); выключили — справочник фабрик очищается (подключённые пулы слушаются).
 //! Кто вызывает: pools/index.rs (begin — задача рядом с обновлением индексатора).
-//! От чего зависит: ctx.rs, factory_calls.rs, node/call.rs (try_chunks: Multicall3), directory (Snap), settings/live.rs.
+//! От чего зависит: ctx.rs, factory_calls.rs, woo_quote.rs, node/call.rs (try_chunks: Multicall3), directory (Snap), settings/live.rs.
+//! Решение 305: до плана — quoteToken() контрактов WooFi с dex.multi_pair = да (woo_quote.rs read) — в план.
 //! Настройки: index.factory_scan, dex.load_batch, dex.verify_retry_s [bsc_dex]; через factory_calls — dex.factory,
 //! dex.v3_fee_tiers [DEX]; через stable_list.rs — dex.stable_pools [DEX] (решение 292: пулы Saddle / Curve 2020 из
 //! списка — кандидаты без индексатора).
@@ -32,6 +33,7 @@ use super::super::node::call;
 use super::factory_ask::decode_q;
 use super::factory_calls::{self, Plan};
 use super::stable_list;
+use super::woo_quote;
 
 /// Работает, пока жива подписка. Принимает: окружение, монеты подписки (адрес → тикер, с промежуточными),
 /// встречные токены, канал «монета обновлена». Ошибок не возвращает: всё — в журнал и в справочник (интерфейс).
@@ -76,17 +78,24 @@ async fn pass(
     coin_list.sort();
     let mut quote_list: Vec<Address> = quotes.iter().copied().collect();
     quote_list.sort();
-    let plan = match factory_calls::plan(ctx, &coin_list, &quote_list) {
-        Ok(p) => p,
-        Err(e) => return failed(ctx, e.message).await,
-    };
     let size = match ctx.int("dex.load_batch") {
         Ok(n) => n as usize,
+        Err(e) => return failed(ctx, e.message).await,
+    };
+    // Решение 305: quoteToken() контрактов WooFi (dex.multi_pair = да) с цепи — до плана (пара WooFi — монета и этот
+    // встречный); режим не включён — пусто, план как раньше.
+    let (woo, woo_notes, woo_no_answer) = woo_quote::read(ctx, size).await;
+    // У каждого вызова quoteToken() ровно один итог: прочитан, заметка (откат / не по ABI / ноль) или без ответа узла.
+    let woo_calls = woo.len() + woo_notes.len() + woo_no_answer;
+    let plan = match factory_calls::plan(ctx, &coin_list, &quote_list, &woo) {
+        Ok(p) => p,
         Err(e) => return failed(ctx, e.message).await,
     };
     let answers = call::try_chunks(ctx, &plan.calls, "latest", size).await;
     let (mut found, mut notes, mut no_answer) = sort(&plan, answers, coins);
     notes.splice(0..0, plan.notes.iter().cloned());
+    notes.splice(0..0, woo_notes);
+    no_answer += woo_no_answer;
     // Решение 292: пулы StableSwap из dex.stable_pools (Saddle, Curve 2020) — кандидаты по монетам самого пула.
     let extra = stable_list::scan(ctx, coins, &quote_list, size).await;
     for (coin, list) in extra.found {
@@ -94,7 +103,7 @@ async fn pass(
     }
     notes.extend(extra.notes);
     no_answer += extra.no_answer;
-    let n_calls = plan.calls.len() + extra.calls;
+    let n_calls = plan.calls.len() + extra.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

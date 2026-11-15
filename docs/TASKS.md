@@ -7,7 +7,9 @@
 
 - **Задача t122 (15.11.2026, ветка t122/small-fixes от 12040c4c) — малые правки перед сборкой, ждёт приёмки.**
   Сделано: (1) повторная проверка пути исполнения после onchain::ensure — по версии из её результата
-  (exec/executor/callback_at.rs missing_at; trade.rs, check/probe_exec.rs); (2) docs/UI.md — POST …/executor/deploy
+  (exec/executor/callback_at.rs missing_at; trade.rs, check/probe_exec.rs). Исход меняется, только когда запись версии
+  у кошелька говорит «можно», а сверка — «нельзя», или запись не обновилась при сбое onchain.rs remember: первичный
+  отбор пулов (pools/exec_kind.rs via_executor → exec_callback::missing) остаётся по записи (п. 4 ниже); (2) docs/UI.md — POST …/executor/deploy
   {sha256, wnative}; (3) комментарий ошибок api/dex_executor.rs deploy — по коду; (4) exec/dry_build.rs — причина
   нативной монеты через исполнитель — native_block; (5) уведомление узла (решение 282): порог до fresh(), «сообщено» —
   после ушедшего события; (6) 283 п. 3 — формулировка по коду; (7) SettingCard.svelte 201 строка — в ROADMAP «Техдолг»;
@@ -26,6 +28,14 @@
      Change — на отставание изменения нет (выдумать его нельзя); next_batch (9 вызовов) мог бы вернуть пробуждение
      при Lagged без Change, next / try_next (всего Watch::new — 23 места) — нужен новый тип ответа и разбор вызывающих.
      Нужна постановка: только next_batch или все.
+  4. Первичный отбор пулов остаётся по записи версии у кошелька: exec_kind::via_executor (pools/exec_kind.rs) →
+     exec_callback::missing → wallet_version; записи нет — Err «не сверен» → via_executor = нет, и до onchain::ensure
+     / missing_at не доходит (check/probe_exec.rs part, quote/graph_executor.rs all_via, exec/executor/mod.rs takes).
+     Правка — в pools/exec_kind.rs / exec_callback.rs (зона другого разработчика) — после слияния.
+  Ревью t122 (отдельный коммит): уведомление узла — запись журнала с текстом и «не ушло» по одному разу на переход
+  (node/head_stall.rs State.said), повторные попытки отправки — молча каждый круг; отправка вынесена в
+  node/head_stall_send.rs; текст отказа нативной монеты — общий executor::native_refusal (сделка и сухая сделка);
+  комментарий ошибок api/dex_executor.rs deploy — 409 NonceConflict и NotConfigured «нет такого кошелька» (502).
 
 - **Решение 283 (15.11.2026, ветка t116/ui-hide-dex-on-cex от rel/dex-all) — сделано, ждёт приёмки.** Экраны «Площадки»
   и «Настройки» у бирж не показывают настройки, которые читает только площадка DEX (поле схемы `venue_for: "Dex"`, `.dex_venue()` в
@@ -58,8 +68,9 @@
      никто (grep по src) — включённые на экране «Уведомления», они не приходят.
   **Сделано (задача t122, п. 5):** порог bsc.node_stall_alert_s читается ДО fresh() (не задан —
      fresh() для уведомления не зовётся, node/heads.rs); «сообщено» ставится только после ушедшего события
-     (node/head_stall.rs step_with): канала ядру нет или закрыт — следующий круг сообщает снова (журнал venue.head_stall
-     пишет текст и «не ушло» на каждом таком круге). Тест — tests/bsc_dex_head_stall.rs step_retells_after_lost_send.
+     (node/head_stall.rs step_with): канала ядру нет или закрыт — следующий круг молча пробует отправить снова; журнал
+     venue.head_stall — текст и «не ушло» по одному разу на простой / восстановление (ревью t122, State.said); ушло —
+     «сообщено» ставится, журнал не дублируется. Тест — tests/bsc_dex_head_stall.rs step_retells_after_lost_send.
      П. 6 ниже этой правкой НЕ закрыт: он про сборку теста squadswap_review и «database is locked», а не про шаг.
   6. База rel/dex-all f16a0fcf не собирала тест tests/bsc_dex_squadswap_review.rs (вызов pool_taxes::outcome без
      пятого аргумента после решения 280) — в ветке t115 добавлен `&[]` (по комментарию функции — «как раньше»).
@@ -262,8 +273,9 @@
      закрыто задачей t122: причина — native_block, как в сделке (не сверен / v1 — «переразверните исполнитель» /
      обёртка не та).
   3. Повторная проверка обратного вызова после сверки — в сделке BingX ↔ DEX (exec/executor/trade.rs) и пробе налогов
-     (задача t122: версия — прямо из результата onchain::ensure, exec/executor/callback_at.rs missing_at, не из записи
-     у кошелька; вид шага только v2 у исполнителя v1 — та же проверка);
+     (задача t122: повторная проверка — по версии из результата onchain::ensure, exec/executor/callback_at.rs
+     missing_at; вид шага только v2 у исполнителя v1 — та же проверка; первичный отбор пулов — по-прежнему по записи
+     версии у кошелька, см. запись «Задача t122», открытый п. 4);
      в цикле DEX ↔ DEX (exec/cycle_exec.rs) и сухой сделке — нет (там проверка только при выборе пути; при устаревшей
      версии у кошелька — откат транзакции/симуляции, газ, без чёрного списка).
 - **Решение 281 (15.11.2026, ветка t113/squadswap-v3 от rel/dex-all) — сделано, ждёт приёмки.** SquadSwap V3

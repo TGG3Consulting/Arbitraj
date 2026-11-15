@@ -72,8 +72,7 @@ pub async fn trade(
     let is_native = native::is_native(ctx, &req.asset);
     // Задача t114 (3а): причина — из native_block (не сверен / v1 / обёртка не та / настройка не задана).
     if is_native && let Some(why) = super::native_block(ctx) {
-        let why = format!("нативная монета через исполнитель не исполняется: {why}");
-        return Err(ctx.err(ErrorCode::NoRoute, why));
+        return Err(ctx.err(ErrorCode::NoRoute, super::native_refusal(&why)));
     }
     // Решение 272: (обёртка, продажа ли) для executeNative; обёртка — dex.native_wrapped (is_native её уже прочитал).
     let nat = match native::wrapped(ctx) {

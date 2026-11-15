@@ -134,7 +134,8 @@ pub async fn build(
             && mode != DryMode::Executor
             && let Some(why) = executor::native_block(ctx)
         {
-            return Err(ctx.err(ErrorCode::NoRoute, why));
+            // Ревью t122: тот же текст, что в боевой сделке (executor::native_refusal).
+            return Err(ctx.err(ErrorCode::NoRoute, executor::native_refusal(&why)));
         }
         let nat = match native::wrapped(ctx) {
             Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),

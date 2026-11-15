@@ -8,14 +8,11 @@
 //! больше бюджета — «слишком большая»), не больше size.final_fit_steps шагов. Каждая точка — тот же полный финальный
 //! расчёт (все затраты, минимумы и пределы площадок, финальная котировка); пороги прибыли проверяет profit.rs после,
 //! как раньше. Не нашлось — отказ, как раньше (текст с припиской).
-//! Кто вызывает: core/profit.rs (shrink_boxed — только подбор кандидата; пересчёт предпроверки precheck.fast_recalc
+//! Кто вызывает: core/final_fill.rs (shrink — только подбор кандидата; пересчёт предпроверки precheck.fast_recalc
 //! уменьшение не делает — при отказе он, как раньше, уходит в полный подбор), тесты (largest).
 //! От чего зависит: costs.rs (evaluate), size_bounds.rs (upper), size_memo.rs (Memo), size_curve.rs (point),
 //! gateway/quote_stage.rs (final_scope), calc_detail.rs (этап подробного замера).
 //! Настройки: size.final_fit_steps (вся система; необязательная; читает profit.rs).
-
-use std::future::Future;
-use std::pin::Pin;
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -69,26 +66,10 @@ pub async fn largest<C: Curve>(
     m.at(lo).await
 }
 
-/// Что делает: shrink в куче (как precheck_fast.rs recalc_boxed): будущее собирается в этой функции, а не в кадре
-/// финального расчёта — стек расчёта кандидата не растёт (иначе переполнение стека в отладочной сборке, тест
-/// tests/core_dry_mode.rs precheck_replans_live). Принимает и ошибки: как shrink.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn shrink_boxed<'a>(
-    core: &'a Core,
-    cx: &'a DirCtx,
-    qty: Decimal,
-    why: &'a str,
-    budget: Decimal,
-    step: Decimal,
-    steps: u32,
-) -> Pin<Box<dyn Future<Output = Result<Calc, String>> + Send + 'a>> {
-    Box::pin(shrink(core, cx, qty, why, budget, step, steps))
-}
-
 /// Что делает: уменьшение объёма финального расчёта до помещающегося (profit.rs final_calc).
 /// Принимает: ядро, контекст, объём, его отказ (текст), бюджет, шаг количества, size.final_fit_steps.
 /// Возвращает: расчёт на найденном объёме. Ошибки: текст — исходный отказ с причиной, почему меньший не найден.
-async fn shrink(
+pub(super) async fn shrink(
     core: &Core,
     cx: &DirCtx,
     qty: Decimal,

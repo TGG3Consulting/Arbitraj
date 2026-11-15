@@ -1,22 +1,22 @@
 //! Файл: core/fit_volume.rs
 //! Что делает: решение 294 (Тигран 15.11: потолок сделки — предел, а не обязательный объём) — сигнал (шаг 3,
-//! core/prices.rs) при «объём проверки не помещается» у котировки стороны. Котировка стороны на объёме проверки
-//! вернула отказ с кодом шлюза NoRoute (то же правило, что у подбора объёма: costs_quote.rs classify — NoRoute =
-//! «объём слишком большой», TooLarge; у DEX это, например, путь через промежуточную монету, шаг которого не исполним
-//! целиком в прочитанной карте тиков — quote/route_calc.rs) — ядро повторяет котировку обеих сторон на объёме вдвое
-//! меньше, пока объём не меньше минимумов площадок (signal_probe.rs floor_of), не больше signal.fit_halvings попыток.
-//! Первый помещающийся объём — объём сравнения (дальше как при неполной глубине, решение 87). Любая другая ошибка —
-//! как раньше (сигнала нет). Настройка не задана — повторов нет, поведение побайтно прежнее.
-//! Ядро о площадках не знает: признак «не помещается» — только код ошибки шлюза.
-//! Нагрузка (решения 129, 246): повторы — только у направления, чья первая котировка дала NoRoute; памяти «пул не
-//! менялся — не повторять» нет (памяти котировок quote_cache.rs годятся только при том же объёме) — замер нагрузки
-//! после выкладки записан в docs/TASKS.md.
-//! Здесь же QuoteErr — ошибка котировки с признаком «не помещается» (prices.rs, profit.rs final_fillable) и чтение
-//! необязательного числа попыток (signal.fit_halvings, size.final_fit_steps — final_fit.rs).
-//! Кто вызывает: core/prices.rs (QuoteErr, retry_boxed), core/profit.rs (QuoteErr, tries), тесты (halve —
+//! core/prices.rs), когда котировка стороны на объёме проверки «не помещается»: ошибка шлюза NoRoute с признаком
+//! too_large (gateway/errors.rs; адаптер ставит его только там, где причина — объём, например путь DEX через
+//! промежуточную монету, шаг которого не исполним целиком в прочитанной карте тиков — quote/route_calc.rs). Постоянные
+//! NoRoute (пулов нет, только сигнал, налог забирает всё, пул на паузе) признака не несут — повторов нет, ни одной
+//! лишней котировки. Ядро повторяет котировку обеих сторон на объёме вдвое меньше (деление пополам — это и есть
+//! операция, которую считает signal.fit_halvings, «сколько раз делить пополам»; делитель 2 — её определение, не
+//! порог), не больше signal.fit_halvings попыток и не ниже минимумов площадок (signal_probe.rs floor_of): если
+//! очередная половина ниже минимума, а сам минимум меньше текущего объёма, — одна попытка на минимуме, потом отказ.
+//! Первый помещающийся объём — объём сравнения (дальше как при неполной глубине, решение 87). Другие ошибки — как
+//! раньше. Настройка не задана — повторов нет, поведение побайтно прежнее.
+//! Нагрузка (решения 129, 246): повторы — только у направления с NoRoute «не помещается»; памяти «пул не менялся — не
+//! повторять» нет (quote_cache.rs годится только при том же объёме) — замер нагрузки после выкладки в docs/TASKS.md.
+//! Здесь же QuoteErr — ошибка котировки с признаком «не помещается» (prices.rs, final_fit.rs).
+//! Кто вызывает: core/prices.rs (QuoteErr, retry_boxed), core/final_fit.rs (QuoteErr), тесты (halve, QuoteErr —
 //! tests/core_fit_volume_294.rs).
-//! От чего зависит: costs_quote.rs (classify), signal_probe.rs (floor_of), prices.rs (tick_quotes), settings.
-//! Настройки: signal.fit_halvings (вся система; необязательная).
+//! От чего зависит: gateway/errors.rs (too_large), fit_settings.rs, signal_probe.rs (floor_of), prices.rs (tick_quotes).
+//! Настройки: signal.fit_halvings (через fit_settings.rs).
 
 use std::future::Future;
 use std::pin::Pin;
@@ -25,33 +25,24 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{Direction, Quote};
 use crate::gateway::errors::{ErrorCode, GatewayError};
-use crate::settings::read::At;
-use crate::settings::store::Store;
 
 use super::engine::Core;
-use super::size::Fail;
 
 /// Ошибка котировки стороны: текст (как раньше — «площадка: причина») и признак «объём не помещается».
 #[derive(Debug, Clone)]
 pub struct QuoteErr {
     pub text: String,
-    /// true — код шлюза NoRoute (меньший объём может пройти; costs_quote.rs classify → TooLarge).
-    pub no_route: bool,
+    /// true — NoRoute с признаком too_large: меньший объём может пройти.
+    pub too_large: bool,
 }
 
 impl QuoteErr {
-    /// Что делает: ошибка шлюза площадки → QuoteErr тем же правилом, что подбор объёма (costs_quote.rs classify).
+    /// Что делает: ошибка шлюза площадки → QuoteErr. Текст — как раньше («площадка: причина»).
     /// Принимает: площадку (текст), ошибку шлюза. Возвращает: QuoteErr. Ошибок нет.
     pub fn of(venue: &str, e: &GatewayError) -> Self {
-        match super::costs_quote::classify(venue, e) {
-            Fail::TooLarge(text) => QuoteErr {
-                text,
-                no_route: true,
-            },
-            f => QuoteErr {
-                text: f.to_string(),
-                no_route: false,
-            },
+        QuoteErr {
+            text: format!("{venue}: {}", e.message),
+            too_large: e.code == ErrorCode::NoRoute && e.too_large,
         }
     }
 }
@@ -61,32 +52,22 @@ impl From<String> for QuoteErr {
     fn from(text: String) -> Self {
         QuoteErr {
             text,
-            no_route: false,
+            too_large: false,
         }
     }
 }
 
 impl From<QuoteErr> for String {
-    /// Текст причины — как раньше (prices.rs, profit.rs отдают String).
+    /// Текст причины — как раньше (prices.rs отдаёт String).
     fn from(e: QuoteErr) -> Self {
         e.text
     }
 }
 
-/// Что делает: читает необязательное число попыток (вся система). Принимает: хранилище, имя настройки.
-/// Возвращает: Some(n) или None — не задана. Ошибки: текст — значение хранится в неверном виде.
-pub fn tries(s: &Store, name: &str) -> Result<Option<u32>, String> {
-    match s.integer(name, At::default()) {
-        Ok(v) => Ok(Some(u32::try_from(v).unwrap_or(u32::MAX))),
-        Err(e) if e.code == ErrorCode::NotConfigured => Ok(None),
-        Err(e) => Err(e.message),
-    }
-}
-
-/// Что делает: повтор котировки на объёме вдвое меньше, пока не поместится. Принимает: объём, на котором котировка не
-/// поместилась, минимум площадок (монет; 0 — нет), число попыток (> 0), первую ошибку, котировку на объём.
-/// Возвращает: (котировка, объём, на котором она получена). Ошибки: другая ошибка котировки — она как есть; объём
-/// ушёл ниже минимума или попытки кончились — первая ошибка с припиской, до какого объёма пробовали.
+/// Что делает: повтор котировки на меньшем объёме, пока не поместится (см. шапку). Принимает: объём, на котором
+/// котировка не поместилась, минимум площадок (монет; 0 — нет), число попыток (> 0), первую ошибку, котировку на объём.
+/// Возвращает: (котировка, объём, на котором она получена). Ошибки: первая ошибка без признака too_large — она же,
+/// без единой котировки; другая ошибка повтора — она как есть; не нашлось — первая ошибка с припиской.
 pub async fn halve<T, F, Fut>(
     want: Decimal,
     floor: Decimal,
@@ -98,35 +79,48 @@ where
     F: FnMut(Decimal) -> Fut,
     Fut: Future<Output = Result<T, QuoteErr>>,
 {
-    let two = Decimal::TWO;
+    if !first.too_large {
+        return Err(first);
+    }
     let (mut qty, mut tried, mut last) = (want, 0u32, None);
     while tried < tries {
-        let next = qty / two;
-        if next <= Decimal::ZERO || next < floor {
+        // Деление пополам — определение операции signal.fit_halvings (см. шапку).
+        let half = qty / Decimal::TWO;
+        let next = if half >= floor {
+            half
+        } else if floor < qty {
+            floor
+        } else {
+            break;
+        };
+        if next <= Decimal::ZERO {
             break;
         }
         qty = next;
         tried += 1;
         match quote(qty).await {
             Ok(t) => return Ok((t, qty)),
-            Err(e) if e.no_route => last = Some(qty),
+            Err(e) if e.too_large => last = Some(qty),
             Err(e) => return Err(e),
+        }
+        if qty == floor {
+            break;
         }
     }
     let note = match last {
         Some(q) => format!(
-            "; меньший объём не помещается: пробовали до {} (попыток {tried}, signal.fit_halvings / минимум площадок {})",
+            "; меньший объём не помещается: пробовали до {} (попыток {tried}, минимум площадок {})",
             q.normalize(),
             floor.normalize()
         ),
         None => format!(
-            "; половина объёма ниже минимума площадок {} — повторов нет",
+            "; меньше объёма нельзя — минимум площадок {}",
             floor.normalize()
         ),
     };
     Err(QuoteErr {
         text: format!("{}{note}", first.text),
-        no_route: true,
+        too_large: true,
     })
 }
 
@@ -149,7 +143,7 @@ pub(super) fn retry_boxed<'a>(
 /// Что делает: сигнал (prices.rs for_direction) — первая котировка направления на объёме проверки не удалась.
 /// Принимает: ядро, направление, опорную цену (> 0), объём проверки, ошибку первой котировки.
 /// Возвращает: (покупка на A, продажа на B, объём, на котором они получены). Ошибки: та же ошибка, если она не
-/// «не помещается» или signal.fit_halvings не задана; иначе — как у halve; настройка в неверном виде — её текст.
+/// «не помещается» или signal.fit_halvings не задана (в неверном виде — то же, с записью в журнал); иначе — как halve.
 async fn retry(
     core: &Core,
     dir: &Direction,
@@ -157,10 +151,10 @@ async fn retry(
     want: Decimal,
     first: QuoteErr,
 ) -> Result<(Quote, Quote, Decimal), QuoteErr> {
-    if !first.no_route {
+    if !first.too_large {
         return Err(first);
     }
-    let Some(n) = tries(&core.inner.deps.settings, "signal.fit_halvings")? else {
+    let Some(n) = super::fit_settings::tries(core, "signal.fit_halvings").await else {
         return Err(first);
     };
     let floor = super::signal_probe::floor_of(core, dir, ref_price);

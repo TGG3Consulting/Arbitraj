@@ -101,16 +101,18 @@ impl Via<'_> {
     }
 
     /// Лучший путь через промежуточные монеты среди допущенных пар. Принимает: промежуточные с decimals, количество,
-    /// фильтр пула, можно ли пару (`pair_ok` — например один Universal Router). Возвращает: путь или причины.
+    /// фильтр пула, можно ли пару (`pair_ok` — например один Universal Router). Возвращает: путь или (причины, был ли
+    /// отказ по объёму — решение 294: шаг пути не помещается, меньший объём может пройти).
     pub fn best(
         &self,
         mids: &[(Mid, u8)],
         qty: Decimal,
         keep: &dyn Fn(&Entry) -> bool,
         pair_ok: &dyn Fn(&Entry, &Entry) -> Result<(), String>,
-    ) -> Result<Path, Vec<String>> {
+    ) -> Result<Path, (Vec<String>, bool)> {
         let mut best: Option<Path> = None;
         let mut why = Vec::new();
+        let mut big = false;
         for (m, dec) in mids {
             let (p1, p2) = match self.pools(m, keep) {
                 Ok(x) => x,
@@ -130,15 +132,18 @@ impl Via<'_> {
                             best = Some(p)
                         }
                         Ok(_) => {}
-                        Err(e) => why.push(format!(
-                            "{} → {}: {}",
-                            a.0.family.title, b.0.family.title, e.message
-                        )),
+                        Err(e) => {
+                            big |= e.too_large;
+                            why.push(format!(
+                                "{} → {}: {}",
+                                a.0.family.title, b.0.family.title, e.message
+                            ))
+                        }
                     }
                 }
             }
         }
-        best.ok_or(why)
+        best.ok_or((why, big))
     }
 }
 

@@ -5,7 +5,7 @@
 //! от вложенного. Иначе — отказ с причиной и лучшим расчётом (для подбора порогов). В расчёт кладётся объяснение
 //! выбора: «оптимум 7.3 WFI: прибыль 0.41; на бюджете 20 (9.75 WFI) — 0.33».
 //! Кто вызывает: core/candidates.rs (очередь тяжёлого расчёта), core/precheck.rs (пересчёт перед покупкой).
-//! От чего зависит: costs.rs, dirctx.rs, limits.rs, size_curve.rs, size_search.rs, market_state.rs, settings.
+//! От чего зависит: costs.rs, dirctx.rs, limits.rs, size_curve.rs, size_search.rs, market_state.rs, settings, final_fill.rs (решение 294).
 //! Решение 95: найденный оптимум пересчитывается ФИНАЛЬНОЙ котировкой (gateway/quote_stage.rs) — у DEX при
 //! exec.via_kyber это цена KyberSwap (тот, кто исполнит); пороги проверяются по ней. Отказ финальной котировки —
 //! отказ кандидата с причиной. Решение 111: исполнитель даёт маршрут не на весь объём — пересчёт на исполнимый объём.
@@ -19,8 +19,9 @@
 //! объём у исполнителя в финальной котировке — их время видно в «Время по шагам» предпроверки (calc_steps.rs).
 //! Решение 266: пересчёт предпроверки при precheck.fast_recalc = да — сначала один финальный расчёт на объёме кандидата
 //! (precheck_fast.rs recalc_boxed, после параметров подбора и до самого подбора); не прошёл — полный подбор, как раньше.
-//! Решение 294: финальный расчёт не поместился, а исполнимый объём не получен с кодом NoRoute (путь через промежуточную)
-//! и задана size.final_fit_steps — объём уменьшается до помещающегося (final_fit.rs), пороги — как раньше, после.
+//! Решение 294: финальный расчёт не поместился, исполнимый объём не получен с NoRoute «не помещается» (путь через
+//! промежуточную), исполнитель не внешний (не exec.via_kyber) и задана size.final_fit_steps — объём уменьшается до
+//! помещающегося (final_fill.rs → final_fit.rs), пороги — как раньше, после.
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (в т.ч. size.final_fit_steps, решение 294) (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -118,11 +119,6 @@ pub async fn decide_capped(
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
-    // Решение 294: уменьшение объёма финального расчёта до помещающегося (не задана — нет, как раньше).
-    let fit = match super::fit_volume::tries(s, "size.final_fit_steps") {
-        Ok(f) => f,
-        Err(e) => return reject(e, None),
-    };
     // Решение 266: объём кандидата на свежих данных — один финальный расчёт; прошёл пороги — план без подбора, иначе
     // (ошибка, ниже порога, внешний исполнитель) — полный подбор ниже, как раньше. Будущее — в куче и собирается не
     // здесь (recalc_boxed): кадр расчёта кандидата не растёт; объём задан только у пересчёта предпроверки.
@@ -168,6 +164,9 @@ pub async fn decide_capped(
     }
     // Решение 95: объём найден дешёвыми котировками; оптимум пересчитывается ФИНАЛЬНОЙ котировкой (quote_stage) —
     // площадка отдаёт цену того, кто исполнит (у DEX при exec.via_kyber — KyberSwap). Вердикт — по ней.
+    // Решение 294: уменьшение до помещающегося — не у внешнего исполнителя (exec.via_kyber: каждая точка — запрос к
+    // KyberSwap, venue.rs quote при final_scope); size.final_fit_steps читается только при отказе «не помещается».
+    let fit = !final_external(core, d);
     let fin = final_calc(core, &cx, choice.qty, budget, p.step, fit);
     let mut c = match stage(|| "финальная котировка".into(), fin).await {
         Ok(f) => f,
@@ -216,16 +215,16 @@ pub async fn decide_capped(
 /// gateway::quote_stage::final_scope — адаптер отдаёт котировку исполнителя. Списание по худшей цене не должно выйти за
 /// бюджет: если финальная цена хуже и списание вышло за бюджет (объём подобран впритык к бюджету по своей цене) —
 /// объём один раз ужимается пропорционально (qty × бюджет / списание, вниз до шага) и считается заново.
-/// Принимает: ядро, контекст, объём, бюджет, шаг количества, size.final_fit_steps (решение 294; None — без уменьшения
-/// до помещающегося). Возвращает: Calc. Ошибки: текст (отказ расчёта, бюджет).
-/// Решение 266: тем же расчётом считается объём кандидата в быстром пересчёте предпроверки (precheck_fast.rs, fit = None).
+/// Принимает: ядро, контекст, объём, бюджет, шаг количества, можно ли уменьшать до помещающегося (решение 294,
+/// final_fill.rs; false — как раньше). Возвращает: Calc. Ошибки: текст (отказ расчёта, бюджет).
+/// Решение 266: тем же расчётом считается объём кандидата в быстром пересчёте предпроверки (precheck_fast.rs, fit = false).
 pub(super) async fn final_calc(
     core: &Core,
     cx: &DirCtx,
     qty: Decimal,
     budget: Decimal,
     step: Decimal,
-    fit: Option<u32>,
+    fit: bool,
 ) -> Result<Calc, String> {
     let eval =
         |q: Decimal| crate::gateway::quote_stage::final_scope(super::costs::evaluate(core, cx, q));
@@ -235,20 +234,13 @@ pub(super) async fn final_calc(
     let (c, qty) = match eval(qty).await {
         Ok(c) => (c, qty),
         Err(super::size::Fail::TooLarge(t)) => {
-            let fill = stage_detail(
-                || "исполнимый объём у исполнителя".into(),
-                final_fillable(core, cx, qty),
-            )
-            .await;
-            // Решение 294: путь через промежуточную неполной котировки не даёт (NoRoute) — задана size.final_fit_steps:
-            // наибольший помещающийся объём тем же правилом, что граница подбора (final_fit.rs).
-            let fill = match (fill, fit) {
-                (Ok(f), _) => f,
-                (Err(e), Some(n)) if e.no_route => {
-                    // Будущее уменьшения — в куче и собирается не здесь: кадр расчёта кандидата не растёт.
-                    return super::final_fit::shrink_boxed(core, cx, qty, &t, budget, step, n).await;
-                }
-                (Err(e), _) => return Err(format!("{t}; {}", e.text)),
+            // Исполнимый объём у исполнителя (final_fill.rs; будущее в куче — кадр расчёта кандидата не растёт).
+            // Решение 294: путь через промежуточную неполной котировки не даёт (NoRoute «не помещается») — при fit и
+            // заданной size.final_fit_steps там же — наибольший помещающийся объём (final_fit.rs).
+            let fill = super::final_fill::fill_boxed(core, cx, qty, &t, budget, step, fit);
+            let fill = match fill.await? {
+                super::final_fill::Fill::Qty(f) => f,
+                super::final_fill::Fill::Done(c) => return Ok(*c),
             };
             let q = if step > Decimal::ZERO {
                 (fill / step).floor() * step
@@ -310,32 +302,6 @@ pub(super) fn final_external(core: &Core, d: &Direction) -> bool {
             && *k == crate::gateway::contract::VenueKind::Dex
             && crate::gateway::quote_stage::final_external(settings, v)
     })
-}
-
-/// Сколько исполнитель реально исполнит на обеих сторонах (финальная котировка; меньшее из двух). Решение 111.
-/// Ошибки: текст — площадка не подключена, котировка не получена (решение 294: с признаком NoRoute — fit_volume.rs).
-async fn final_fillable(
-    core: &Core,
-    cx: &DirCtx,
-    qty: Decimal,
-) -> Result<Decimal, super::fit_volume::QuoteErr> {
-    let d = &cx.dir;
-    // Решение 132: DEX — кошелёк строки маппинга направления.
-    let deps = &core.inner.deps;
-    let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
-    let b = super::dex_account::venue_dir(deps, d, &d.sell_on).await?;
-    // Решение 211: каждой площадке — её тикер монеты (Presence::ticker в DirCtx).
-    let (on_a, on_b) = (cx.on_a(), cx.on_b());
-    let (qa, qb) = crate::gateway::quote_stage::final_scope(async {
-        tokio::join!(
-            a.quote(&on_a, Side::Buy, qty),
-            b.quote(&on_b, Side::Sell, qty)
-        )
-    })
-    .await;
-    let qa = qa.map_err(|e| super::fit_volume::QuoteErr::of(&d.buy_on.0, &e))?;
-    let qb = qb.map_err(|e| super::fit_volume::QuoteErr::of(&d.sell_on.0, &e))?;
-    Ok(qa.fillable_qty.min(qb.fillable_qty))
 }
 
 /// Почему объём лучший — текст для журнала и «Кандидатов». Принимает: итог подбора, тикер. Ошибок нет.

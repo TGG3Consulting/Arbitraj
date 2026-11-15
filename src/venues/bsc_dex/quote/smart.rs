@@ -58,6 +58,8 @@ pub fn best(
         .collect();
     let unit = qty * step_pct / Decimal::ONE_HUNDRED;
     let mut left = qty;
+    // Решение 294: был ли отказ кандидата по объёму (шаг не помещается) — тогда «нет пригодного» тоже по объёму.
+    let mut big = false;
     while left > Decimal::ZERO {
         let step = unit.min(left);
         let used = slots.iter().filter(|s| s.got.is_some()).count();
@@ -66,8 +68,12 @@ pub fn best(
             if s.got.is_none() && used >= max_splits {
                 continue;
             }
-            let Ok(p) = calc(v, &s.way, s.qty + step) else {
-                continue;
+            let p = match calc(v, &s.way, s.qty + step) {
+                Ok(p) => p,
+                Err(e) => {
+                    big |= e.too_large;
+                    continue;
+                }
             };
             let before = s.got.as_ref().map_or(Decimal::ZERO, |c| c.usdt);
             let delta = p.usdt - before;
@@ -87,13 +93,14 @@ pub fn best(
     }
     let legs: Vec<Path> = slots.into_iter().filter_map(|s| s.got).collect();
     if legs.is_empty() {
-        return Err(ctx.err(
+        let e = ctx.err(
             ErrorCode::NoRoute,
             format!(
                 "{ticker}: умный маршрут — нет пригодного пула PancakeSwap ({})",
                 why.join("; ")
             ),
-        ));
+        );
+        return Err(if big { e.with_too_large() } else { e });
     }
     Ok(legs)
 }

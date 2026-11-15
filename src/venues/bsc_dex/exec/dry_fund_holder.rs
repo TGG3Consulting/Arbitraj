@@ -19,12 +19,14 @@
 //! Значит изъятие монеты у держателя цену обмена не меняет; нехватка у держателя токена, который сделка забирает (take),
 //! может дать только откат (отказ), но не завышенный выход. Честность НЕ гарантируется и держатель НЕ берётся, если в
 //! маршруте есть пул в этом же держателе: (1) не V4 / Infinity CL / Infinity Bin (например Infinity Stable — StableSwap в
-//! крючке), (2) с крючком, вызываемым при обмене (before/after swap, в т. ч. returns delta: код крючка мог бы читать
-//! баланс держателя), (3) держатель пула маршрута не известен (Infinity / Balancer без dex.vault). Налог перевода и
+//! крючке, ссылка — адрес крючка, а токены — в Vault: pools/verify_inf_stable.rs, families.rs), (2) с крючком, вызываемым
+//! при обмене (before/after swap, в т. ч. returns delta: код крючка мог бы читать баланс держателя) или с не прочитанными
+//! крючками (hooks = None), (3) держатель пула маршрута не известен (Infinity / Balancer без dex.vault). Налог перевода и
 //! излишек пары reflection-токена учитываются как у пула-источника (dry_fund::gross, exec/dry_surplus*.rs — замер
 //! пар первого шага вокруг перевода от любого источника).
 //! Кто вызывает: exec/dry_fund.rs (plan).
-//! От чего зависит: ctx.rs, pools/{registry, families, depth_book}.rs, node/call.rs (view_many), node/abi.rs (IERC20).
+//! От чего зависит: ctx.rs, quote/mod.rs (Quoting), pools/{registry, families, depth_book}.rs, node/call.rs (view_many),
+//! node/abi.rs (IERC20).
 //! Настройки: presell.fund_fallback [bsc_dex]; dex.vault [DEX] (Vault Infinity / Balancer — держатель пула).
 
 use alloy_primitives::{Address, U256};
@@ -46,13 +48,13 @@ pub const SETTING: &str = "presell.fund_fallback";
 pub const SINGLETON: &str = "singleton";
 
 /// Что выбор знает о пуле: кто физически держит его токены, считает ли вид обмен по своему состоянию (V4 / Infinity
-/// CL / Bin), есть ли крючок обмена, подпись для журнала.
+/// CL / Bin), есть ли крючок обмена (None — крючки не прочитаны), подпись для журнала.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Site {
     /// None — держатель не известен (Infinity / Balancer без dex.vault).
     pub holder: Option<Address>,
     pub delta_math: bool,
-    pub swap_hook: bool,
+    pub swap_hook: Option<bool>,
     pub label: String,
 }
 
@@ -76,15 +78,16 @@ pub fn holder(proto: Proto, reference: &PoolRef, vault: Option<Address>) -> Opti
     match (reference, proto) {
         (PoolRef::Singleton { manager, .. }, Proto::UniswapV4) => Some(*manager),
         (PoolRef::Singleton { .. }, _) => vault,
-        // Balancer V2: токены пула лежат в хранилище Vault, а не у контракта пула.
-        (_, Proto::BalancerV2) => vault,
+        // Balancer V2 и Infinity Stable (ссылка — адрес крючка): токены пула лежат в Vault, а не у контракта по ссылке.
+        (_, Proto::BalancerV2 | Proto::InfinityStable) => vault,
         (r, _) => Some(r.address()),
     }
 }
 
-/// Крючок вызывается при обмене (флаги before/after swap, в т. ч. returns delta). Ошибок нет.
-pub fn swap_hook(h: Option<&HookInfo>) -> bool {
-    h.is_some_and(|h| {
+/// Крючок вызывается при обмене (флаги before/after swap, в т. ч. returns delta). Принимает: крючки пула (None — не
+/// прочитаны). Возвращает: Some(да/нет) или None — не известно. Ошибок нет.
+pub fn swap_hook(h: Option<&HookInfo>) -> Option<bool> {
+    h.map(|h| {
         !h.address.is_zero()
             && (h.before_swap
                 || h.after_swap
@@ -133,9 +136,15 @@ pub fn route_ok(src: Address, route: &[Site]) -> Result<(), String> {
                     s.label
                 ));
             }
-            Some(_) if s.swap_hook => {
+            Some(_) if s.swap_hook == Some(true) => {
                 return Err(format!(
                     "пул маршрута {} в том же держателе {src:#x} с крючком обмена — крючок мог бы читать баланс держателя",
+                    s.label
+                ));
+            }
+            Some(_) if s.swap_hook.is_none() => {
+                return Err(format!(
+                    "пул маршрута {} в том же держателе {src:#x}: крючки пула не прочитаны — честность не доказать",
                     s.label
                 ));
             }
@@ -179,9 +188,10 @@ pub async fn pick(
 ) -> GatewayResult<Result<(Address, String), String>> {
     let ctx = &q.ctx;
     let mut holders: Vec<(Address, &'static str)> = Vec::new();
-    for e in q.reg.all() {
+    // Снимок без копирования записей; только достоверные пулы (как source в exec/dry_fund.rs).
+    for e in q.reg.snapshot() {
         let single = matches!(e.pool.reference, PoolRef::Singleton { .. });
-        if !single || (e.pool.token0 != token && e.pool.token1 != token) {
+        if !e.valid || !single || (e.pool.token0 != token && e.pool.token1 != token) {
             continue;
         }
         if let Some(h) = site(ctx, &e)?.holder

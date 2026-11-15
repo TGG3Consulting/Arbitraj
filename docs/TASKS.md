@@ -17,8 +17,9 @@
      запрос и ответ eth_simulateV1 предпроверки с presell.fund_fallback = singleton (перевод 3460500000000000000000 GAIB
      от PoolManager на кошелёк → balanceOf → USDT до → разрешения → execute UR → USDT после) — включить настройку и
      сохранить из сырого журнала узла. Сейчас покрыта только чистая логика (tests/bsc_dex_dry_fund_holder.rs).
-  3. Для Infinity CL / Bin нужен `dex.vault` у этих DEX (сейчас обязателен только у Infinity Stable и Balancer) — без него
-     держатель Infinity не известен (отказ с причиной).
+  3. Держатель Infinity берётся из `dex.vault` DEX (обязателен у Infinity CL / Bin / Stable — pools/families.rs; у DEX
+     без dex.vault держатель не известен — отказ с причиной). Пул V4 / CL / Bin маршрута в том же держателе с не
+     прочитанными крючками (hooks = None) — тоже отказ (ревью t133).
 
 - **Решение 297 (15.11.2026, ветка t128/ladder-usdt-only от rel/dex-all) — сделано, ждёт ревью и приёмки.** Лесенка
   dex.pmm_ladder_usd (WooFi, Metric OMM, iZiSwap, Biswap V3) — только у пары, где встречный токен = USDT площадки

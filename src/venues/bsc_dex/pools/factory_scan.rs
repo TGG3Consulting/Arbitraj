@@ -11,7 +11,8 @@
 //! Кто вызывает: pools/index.rs (begin — задача рядом с обновлением индексатора).
 //! От чего зависит: ctx.rs, factory_calls.rs, node/call.rs (try_chunks: Multicall3), directory (Snap), settings/live.rs.
 //! Настройки: index.factory_scan, dex.load_batch, dex.verify_retry_s [bsc_dex]; через factory_calls — dex.factory,
-//! dex.v3_fee_tiers [DEX].
+//! dex.v3_fee_tiers [DEX]; через stable_list.rs — dex.stable_pools [DEX] (решение 292: пулы Saddle / Curve 2020 из
+//! списка — кандидаты без индексатора).
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -30,6 +31,7 @@ use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
 use super::factory_ask::decode_q;
 use super::factory_calls::{self, Plan};
+use super::stable_list;
 
 /// Работает, пока жива подписка. Принимает: окружение, монеты подписки (адрес → тикер, с промежуточными),
 /// встречные токены, канал «монета обновлена». Ошибок не возвращает: всё — в журнал и в справочник (интерфейс).
@@ -83,8 +85,16 @@ async fn pass(
         Err(e) => return failed(ctx, e.message).await,
     };
     let answers = call::try_chunks(ctx, &plan.calls, "latest", size).await;
-    let (found, mut notes, no_answer) = sort(&plan, answers, coins);
+    let (mut found, mut notes, mut no_answer) = sort(&plan, answers, coins);
     notes.splice(0..0, plan.notes.iter().cloned());
+    // Решение 292: пулы StableSwap из dex.stable_pools (Saddle, Curve 2020) — кандидаты по монетам самого пула.
+    let extra = stable_list::scan(ctx, coins, &quote_list, size).await;
+    for (coin, list) in extra.found {
+        found.entry(coin).or_default().extend(list);
+    }
+    notes.extend(extra.notes);
+    no_answer += extra.no_answer;
+    let n_calls = plan.calls.len() + extra.calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();
@@ -103,7 +113,7 @@ async fn pass(
         s.factory_scan = FactoryScan {
             enabled: true,
             at: Some(Utc::now()),
-            calls: plan.calls.len(),
+            calls: n_calls,
             found: s.factory.values().map(Vec::len).sum(),
             taken: 0,
             failed: no_answer,
@@ -113,8 +123,7 @@ async fn pass(
         fresh
     });
     let msg = format!(
-        "Поиск пулов по фабрикам: вызовов {}, пулов в ответах {total}, монет с новыми пулами {}, без ответа узла {no_answer}",
-        plan.calls.len(),
+        "Поиск пулов по фабрикам: вызовов {n_calls}, пулов в ответах {total}, монет с новыми пулами {}, без ответа узла {no_answer}",
         fresh.len()
     );
     ctx.log(Level::Info, "dex.index", msg, None).await;

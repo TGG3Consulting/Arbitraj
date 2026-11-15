@@ -1,0 +1,28 @@
+# Выдержка исходника Ellipsis 3pool (официальный ellipsis-finance/ellipsis 6bdf778 contracts/StableSwap.vy). Развёрнутый Vyper_contract.vy на Sourcify chain 56 0x160CAed03795365F3A589f10C379FfA7d75d4E76 (vyper 0.2.11, full match) = этому файлу, кроме двух вставленных пустых строк (развёрнутые 25 и 58) и последней строки: номера ниже — по официальному файлу (в развёрнутом после L57 — +2).
+
+L78: N_COINS: constant(int128) = 3  # <- change
+L80: FEE_DENOMINATOR: constant(uint256) = 10 ** 10
+L84: RATES: constant(uint256[N_COINS]) = [1000000000000000000, 1000000000000000000, 1000000000000000000]
+L95: coins: public(address[N_COINS])
+L96: balances: public(uint256[N_COINS])
+L405: @view
+L406: @external
+L407: def get_dy(i: int128, j: int128, dx: uint256) -> uint256:
+L408:     # dx and dy in c-units
+L409:     rates: uint256[N_COINS] = RATES
+L410:     xp: uint256[N_COINS] = self._xp()
+L411: 
+L412:     x: uint256 = xp[i] + (dx * rates[i] / PRECISION)
+L413:     y: uint256 = self.get_y(i, j, x, xp)
+L414:     dy: uint256 = (xp[j] - y - 1) * PRECISION / rates[j]
+L415:     _fee: uint256 = self.fee * dy / FEE_DENOMINATOR
+L416:     return dy - _fee
+
+== адрес базового пула — ellipsis-finance/stableswap-factory b0079ba contracts/implementations/meta/MetaUSD.vy
+L89: BASE_POOL: constant(address) = 0x160CAed03795365F3A589f10C379FfA7d75d4E76
+L90: BASE_LP: constant(address) = 0xaF4dE8E872131AE328Ce21D909C74705d3Aaf452
+L91: BASE_COINS: constant(address[3]) = [
+L92:     0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56,  # BUSD
+L93:     0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d,  # USDC
+L94:     0x55d398326f99059fF775485246999027B3197955,  # USDT
+L95: ]

@@ -26,6 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 292 (t123): src/venues/bsc_dex/pools/factory_scan.rs 216 строк (было 207; вызов источника stable_list.rs и
+  счёт вызовов) — сверх ориентира 200 и до правки; новые pools/stable_list.rs 200, tests/bsc_dex_stable_list_live.rs 207
+  (после rustfmt). Дробить factory_scan.rs — вынести sort / off / failed в отдельный файл.
 - Задача t122 (с ревью; `wc -l` после всех правок): ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира
   200; код не менялся); выросли сверх ориентира — exec/dry_build.rs 206 (было 202: причина native_block и общий текст
   native_refusal), tests/bsc_dex_head_stall.rs 296 (было 246: тест «событие не ушло»), node/heads.rs 257 (было 246:

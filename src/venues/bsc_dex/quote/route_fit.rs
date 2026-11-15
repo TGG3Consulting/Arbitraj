@@ -18,9 +18,12 @@
 //! «резерв − 1» помещается только при бесконечной цене (решение 294, DECISIONS).
 //! route_calc::eval не меняется (на неё опираются graph_split.rs, graph_seq.rs, exec/live.rs); via.rs не меняется —
 //! хопы собираются здесь тем же порядком, что Via::calc.
-//! Кто вызывает: quote/via_pools.rs (best — только при «нет маршрута» и dex.intermediate_partial_fill = да), тесты.
+//! Режим graph (merge): неполная классика выбирается наравне с исполнимым графом (pick), неисполнимый граф — только
+//! signal_route, ошибка графа — классика без записи журнала (иначе Warn на каждую котировку).
+//! Кто вызывает: quote/via_pools.rs (fit — только при «нет маршрута» и dex.intermediate_partial_fill = да),
+//! quote/routing.rs (merge — режим graph, неполная классика, включатель «да»), тесты.
 //! От чего зависит: quote/route_calc.rs (eval, Leg, keep), quote/pool_quote.rs, quote/direct.rs (ceil_units),
-//! quote/pool_tax.rs, quote/via.rs, num.rs, pools/registry.rs.
+//! quote/pool_tax.rs, quote/via.rs, quote/pick.rs, num.rs, pools/registry.rs.
 //! Настройки: нет своих (включатель читает via_pools.rs).
 
 use rust_decimal::{Decimal, RoundingStrategy};
@@ -36,6 +39,9 @@ use super::pool_quote;
 use super::pool_tax;
 use super::route_calc::{self, Leg, keep};
 use super::via::{Ok2, Via};
+use super::{Quoting, pick};
+use crate::core::types::{Quote, RouteMode};
+use crate::gateway::errors::GatewayResult;
 
 impl Via<'_> {
     /// Что делает: помещающаяся часть пути через m в паре пулов (хопы — тем же порядком, что Via::calc).
@@ -139,4 +145,32 @@ fn swap_cl(leg: &Leg) -> bool {
         leg.entry.pool.state,
         PoolState::V3 { .. } | PoolState::Cl { .. }
     )
+}
+
+/// Что делает: решение 294, режим graph — выбор между неполной классикой (fillable < qty) и графом при
+/// dex.intermediate_partial_fill = да (зовёт routing.rs). Граф Ok и исполним (`ok` = executable и mids_ok, как ветка
+/// 271) — pick.rs pick(классика, граф): больший fillable, при равном — итог после газа (тот же вызов и порядок, что в
+/// graph_route::merge); граф Ok, но неисполним — классика, граф — signal_route, если pick выбрал бы его (как merge);
+/// граф Err — классика БЕЗ записи Warn «dex.router_graph» (merge писал бы её на каждую котировку). Принимает: расчёт,
+/// классику, итог графа, признак исполнимости, сторону, decimals USDT. Возвращает: котировку. Ошибок нет.
+pub async fn merge(
+    q: &Quoting,
+    classic: Quote,
+    graph: GatewayResult<Quote>,
+    ok: bool,
+    side: Side,
+    usdt_dec: u8,
+) -> Quote {
+    match graph {
+        Ok(g) if ok => pick::pick(q, classic, g, side, usdt_dec).await,
+        Ok(g) => {
+            let mut out = classic;
+            let best = pick::pick(q, out.clone(), g.clone(), side, usdt_dec).await;
+            if best.route.as_ref().map(|r| r.mode) == Some(RouteMode::Graph) {
+                out.signal_route = g.route;
+            }
+            out
+        }
+        Err(_) => classic,
+    }
 }

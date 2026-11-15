@@ -4,9 +4,9 @@
 //! 39; BNB со стороны BNB — только V2/V3, решение 62), лучшая пара пулов по всем промежуточным монетам. Расчёт пути в паре — quote/via.rs.
 //! Кто вызывает: quote/direct_route.rs, quote/smart.rs, exec/live.rs.
 //! От чего зависит: quote/via.rs, quote/select.rs, check/state.rs, pools/registry.rs, pools/mids.rs.
-//! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да (не режим graph) — помещающаяся часть
+//! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да — помещающаяся часть
 //! (quote/route_fit.rs) идёт кандидатом пути с coins < qty (как неполная котировка одного пула).
-//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути), dex.router_mode;
+//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути);
 //! через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
@@ -154,9 +154,9 @@ impl Via<'_> {
 }
 
 impl Via<'_> {
-    /// Решение 294: путь не исполним целиком — помещающаяся часть (route_fit.rs), только если NoRoute,
-    /// dex.intermediate_partial_fill = да и dex.router_mode не graph (в режиме graph часть по долям отдаёт граф,
-    /// решение 271 — поведение там прежнее). Иначе None без расчётов: включатель читается только в этой ветке ошибки.
+    /// Решение 294: путь не исполним целиком — помещающаяся часть (route_fit.rs), только если NoRoute и
+    /// dex.intermediate_partial_fill = да (в обоих режимах dex.router_mode; в режиме graph неполная классика дальше
+    /// идёт в route_fit.rs merge — routing.rs). Иначе None без расчётов: включатель читается только в этой ветке ошибки.
     /// Принимает: ошибку пути, промежуточную, её decimals, P1, P2, количество. Возвращает: путь или None. Ошибок нет.
     fn partial(
         &self,
@@ -171,9 +171,6 @@ impl Via<'_> {
         if e.code != ErrorCode::NoRoute
             || !ctx.flag("dex.intermediate_partial_fill").unwrap_or(false)
         {
-            return None;
-        }
-        if ctx.text("dex.router_mode").ok().as_deref() == Some("graph") {
             return None;
         }
         self.fit(m, dec, p1, p2, qty)

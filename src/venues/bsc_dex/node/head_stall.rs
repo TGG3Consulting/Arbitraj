@@ -9,7 +9,12 @@
 //! второго сообщения о том же простое не будет. Настройка не задана — ничего не отправляется и не пишется (как раньше).
 //! Каждое сообщение пишется и в журнал (вид venue.head_stall) — выключенное событие второй записи не делает
 //! (notify/journal_off.rs OWN_RECORD).
-//! Кто вызывает: node/heads.rs (run — каждый круг опроса, и при сбое опроса тоже); parts.rs (set_out — канал ядру).
+//! Задача t122 (п. 5): круг опроса читает порог ДО проверки свежести (limit → heads.rs: fresh() — только при заданном
+//! пороге); «сообщено» ставится ПОСЛЕ того, как событие ушло в канал ядру (или встало в очередь отдельной задачей):
+//! канала нет или он закрыт — «сообщено» не меняется, следующий круг сообщает снова. Состояние под асинхронным замком
+//! на всё время отправки — две задачи опроса (старая живёт до удачной пересборки подписки) не шлют одно и то же дважды.
+//! Кто вызывает: node/heads.rs (run — каждый круг опроса, и при сбое опроса тоже: limit, step_with); parts.rs (set_out
+//! — канал ядру); tests/bsc_dex_head_stall.rs (step).
 //! От чего зависит: ctx.rs, node/heads.rs (Head), node/head_stall_text.rs (текст), gateway/events.rs
 //! (MarketEvent::Notice), storage/journal.
 //! Настройки: bsc.node_stall_alert_s (вся система, необязательная); включение событий — notify.event.* с областью
@@ -47,8 +52,9 @@ pub enum Change {
 /// Состояние уведомления. Дешёво клонируется (живёт в Heads).
 #[derive(Clone, Default)]
 pub struct Stall {
-    /// Голова, о простое на которой уже сообщено; None — не сообщалось.
-    told: Arc<Mutex<Option<Head>>>,
+    /// Голова, о простое на которой уже сообщено; None — не сообщалось. Асинхронный замок — держится на время
+    /// журнала и отправки (задача t122, п. 5).
+    told: Arc<tokio::sync::Mutex<Option<Head>>>,
     /// Канал событий ядру (задаётся при подписке на рынок).
     out: Arc<Mutex<Option<mpsc::Sender<MarketEvent>>>>,
 }
@@ -98,9 +104,13 @@ impl Stall {
         *self.out.lock().unwrap_or_else(|p| p.into_inner()) = Some(out);
     }
 
-    /// Один круг опроса: переход и, если есть, сообщение в журнал и ядру (Telegram по коду события).
-    /// Принимает: окружение, последнюю голову, время блока (Heads::block_time_ms), последнюю ошибку опроса, ошибку
-    /// проверки свежести. Ошибок не возвращает.
+    /// Порог простоя из настройки (задача t122, п. 5: круг опроса читает его ДО fresh()). Принимает: окружение.
+    /// Возвращает: секунды; None — не задан (или не читается) — функции нет. Ошибок нет.
+    pub fn limit(ctx: &Ctx) -> Option<u64> {
+        ctx.settings.integer(SETTING, At::default()).ok()
+    }
+
+    /// Один круг опроса с порогом из настройки (limit, затем step_with). Принимает и ошибок — как step_with.
     pub async fn step(
         &self,
         ctx: &Ctx,
@@ -109,14 +119,28 @@ impl Stall {
         poll_err: Option<&str>,
         fresh_err: Option<&str>,
     ) {
-        let limit = ctx.settings.integer(SETTING, At::default()).ok();
-        let change = {
-            let mut told = self.told.lock().unwrap_or_else(|p| p.into_inner());
-            let (next, change) = decide(told.as_ref(), latest.as_ref(), limit, Utc::now());
-            *told = next;
-            change
-        };
+        let limit = Self::limit(ctx);
+        self.step_with(ctx, limit, latest, block_time, poll_err, fresh_err)
+            .await;
+    }
+
+    /// Один круг опроса: переход и, если есть, сообщение в журнал и ядру (Telegram по коду события). «Сообщено»
+    /// меняется сразу, если сообщать нечего, и только после ушедшего события, если есть что (задача t122, п. 5).
+    /// Принимает: окружение, порог (Stall::limit), последнюю голову, время блока (Heads::block_time_ms), последнюю
+    /// ошибку опроса, ошибку проверки свежести. Ошибок не возвращает.
+    pub async fn step_with(
+        &self,
+        ctx: &Ctx,
+        limit: Option<u64>,
+        latest: Option<Head>,
+        block_time: Option<(u64, u64)>,
+        poll_err: Option<&str>,
+        fresh_err: Option<&str>,
+    ) {
+        let mut told = self.told.lock().await;
+        let (next, change) = decide(told.as_ref(), latest.as_ref(), limit, Utc::now());
         let (Some(c), Some(limit)) = (change, limit) else {
+            *told = next;
             return;
         };
         let msg = text(&c, limit, block_time, poll_err, fresh_err);
@@ -126,12 +150,15 @@ impl Stall {
         };
         let journal = format!("{head}\n{msg}");
         ctx.log(level, "venue.head_stall", journal, None).await;
-        self.send(ctx, code, msg).await;
+        if self.send(ctx, code, msg).await {
+            *told = next;
+        }
     }
 
     /// Событие ядру без молчаливой потери (как node/receipts_notice.rs): канал полон — отдельной задачей; канала нет
-    /// или закрыт — запись в журнал, что событие не ушло. Принимает: окружение, код, текст. Ошибок нет.
-    async fn send(&self, ctx: &Ctx, code: &str, text: String) {
+    /// или закрыт — запись в журнал, что событие не ушло. Принимает: окружение, код, текст. Возвращает: true — ушло
+    /// в канал или встало в очередь отдельной задачей; false — не ушло (канала нет / закрыт). Ошибок нет.
+    async fn send(&self, ctx: &Ctx, code: &str, text: String) -> bool {
         use tokio::sync::mpsc::error::TrySendError;
         let out = self.out.lock().unwrap_or_else(|p| p.into_inner()).clone();
         let ev = MarketEvent::Notice {
@@ -160,6 +187,8 @@ impl Stall {
         if let Some(why) = lost {
             let msg = format!("Уведомление {code} не ушло — {why}");
             ctx.log(Level::Warn, "venue.head_stall", msg, None).await;
+            return false;
         }
+        true
     }
 }

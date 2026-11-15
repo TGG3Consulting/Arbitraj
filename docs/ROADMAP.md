@@ -26,6 +26,10 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Задача t122: ui/src/components/SettingCard.svelte — 201 строка (сверх ориентира 200; код не менялся); выросли в
+  ветке сверх ориентира — exec/dry_build.rs 205 (было 202: причина native_block), tests/bsc_dex_head_stall.rs 280
+  (было 246: тест «событие не ушло»), node/heads.rs 248 (было 246); exec/executor/trade.rs 272 — без изменения
+  размера. Новый exec/executor/callback_at.rs — 45; node/head_stall.rs — 194.
 - Решение 283 (t116): src/settings/schema.rs 210 строк (было 197; поле venue_for и .dex_venue()). Перечисление VenueFor
   вынесено в settings/venue_for.rs; дальше дробить — вынести билдеры SettingDef (impl) в отдельный файл.
 - Задача t114: exec/executor/trade.rs 268 строк (было 259; причина native_block и повторная проверка обратного вызова

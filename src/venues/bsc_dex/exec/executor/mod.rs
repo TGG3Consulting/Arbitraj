@@ -11,6 +11,7 @@
 
 pub mod abi;
 pub mod call;
+pub mod callback_at;
 pub mod code;
 pub mod deploy;
 pub mod dry;

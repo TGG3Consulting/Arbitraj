@@ -6,7 +6,8 @@
 //!   круга — без второго сообщения; номер вырос — одно «снова идут» с простоем; порог сняли — состояние сброшено;
 //! - текст: последний блок, время блока (UTC, из записанного milliTimestamp), когда бот увидел блок, секунды простоя;
 //! - Stall::step на настоящей SQLite: без bsc.node_stall_alert_s — ни события ядру, ни записи журнала (как раньше);
-//!   с ним — ровно по одному событию dex.node_stalled и dex.node_resumed в канал ядра и записи venue.head_stall.
+//!   с ним — ровно по одному событию dex.node_stalled и dex.node_resumed в канал ядра и записи venue.head_stall;
+//! - задача t122: событие не ушло (канала ядру нет) — «сообщено» не ставится, после появления канала — одно событие.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::node::{heads, head_stall, head_stall_text}, arb::settings, arb::storage. Моков нет.
@@ -242,5 +243,41 @@ async fn step_sends_one_event_each_way() {
         j.iter()
             .any(|m| m.starts_with("Узел BSC: блоки снова идут")),
         "{j:?}"
+    );
+}
+
+/// Задача t122 (п. 5): «сообщено» ставится только после ушедшего события. Канала ядру ещё нет — событие не ушло
+/// (запись «не ушло» в журнале), состояние не меняется; канал появился — следующий круг сообщает тот же простой ровно
+/// один раз. Блок — из живой записи, SQLite настоящая.
+#[tokio::test]
+async fn step_retells_after_lost_send() {
+    let ctx = ctx("lost").await;
+    let bs = blocks();
+    ctx.settings
+        .set(SETTING, Scope::Global, Some(json!(60)), "тест")
+        .await
+        .unwrap();
+    let st = Stall::default();
+    let a = Head {
+        number: bs[0].0,
+        received_at: Utc::now() - Duration::minutes(2),
+    };
+    st.step(&ctx, Some(a.clone()), Some(bs[0]), None, None)
+        .await;
+    let j = said(&ctx).await;
+    assert!(j.iter().any(|m| m.contains("не ушло")), "{j:?}");
+    let (tx, mut rx) = mpsc::channel(8);
+    st.set_out(tx);
+    for _ in 0..3 {
+        st.step(&ctx, Some(a.clone()), Some(bs[0]), None, None)
+            .await;
+    }
+    let MarketEvent::Notice { code, .. } = rx.try_recv().unwrap() else {
+        panic!("не Notice")
+    };
+    assert_eq!(code, CODE_STALLED);
+    assert!(
+        rx.try_recv().is_err(),
+        "одно сообщение после появления канала"
     );
 }

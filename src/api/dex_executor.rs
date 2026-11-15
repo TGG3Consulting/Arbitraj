@@ -55,8 +55,9 @@ pub async fn quote(
         .map_err(ApiError::gateway)
 }
 
-/// Развёртывание (шлюз `dex_executor_deploy`). Ошибки: 400 — не DEX или пустой хеш; 404; 502 — хеш не тот
-/// (QuoteMismatch) или сбой отправки.
+/// Развёртывание (шлюз `dex_executor_deploy`). Ошибки: 400 — пустой sha256; нет wnative или не адрес; не DEX
+/// (NotApplicable); исполнитель развёрнут, но адрес не записан у кошелька; 404 — площадка не подключена
+/// (VenueNotConnected); 502 — хеш или обёртка не те (QuoteMismatch) или сбой отправки (прочие коды шлюза).
 pub async fn deploy(
     State(st): State<AppState>,
     Path(id): Path<String>,

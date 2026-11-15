@@ -5,6 +5,16 @@
 
 ## Ждут решения Тиграна
 
+- **Техдолг «ненадёжный тест maxwin_watch» (t138, 16.11.2026, ветка t138/flaky-maxwin от rel/dex-all) — исправлено, ждёт
+  прогона в GitHub.** Факт логов: tests/uncapped_maxwin (maxwin_watch, maxwin_windows_and_deal_time) падали на
+  tests/size_common/dex.rs:74 (Db::open) с SQLite «disk I/O error» (1802 IOERR_FSTAT, 522 IOERR_SHORT_READ), при
+  перезапуске проходили. Причина (факт кода): size_common::dex::ctx(name) брал каталог `arb-size-{name}-{pid}` и делал
+  remove_dir_all; тесты набора идут потоками одного процесса (один pid), а оба теста вызывают Rec::load("uncapped-maxwin")
+  — один каталог и один t.sqlite: второй тест удалял базу, открытую первым. Тот же общий каталог был у
+  core_start_sell_guard.rs (Rec::load("guard-reason") в двух тестах) и window_deal_price.rs (Rec::load("window-deal")
+  в двух тестах). Исправлено в помощнике: каталог уникален на вызов (pid + счётчик AtomicU64, как tests/route_common).
+  Остальные tests/*_common (каталог `{tag}-{pid}`): повторов одного литерального тега в одном наборе не найдено.
+
 - **Решение 299 (15.11.2026, ветка t130/bundle-skip-single от rel/dex-all) — сделано, ждёт ревью и приёмки.** Новая
   необязательная настройка send.bundle_skip_single: да — одиночные каналы исключаются из отправки бандла (DECISIONS 299;
   живой бот: 6 сигналов отклонены из-за BlockRazor RPC в режиме single). Чтобы заработало на живом боте — задать
